@@ -63,14 +63,12 @@ class LiveFiles{
   public:
     ofstream outVCFFile;
     ofstream filterVCFFile;
-    ofstream consensusFile;
     
     string file_base_name;
     time_t start_time;
     
     LiveFiles();
     void SetBaseName(ExtendParameters &parameters);
-    void ActiveConsensus(ExtendParameters &parameters);
     void ActiveFilterVCF(ExtendParameters &parameters);
     void ActiveOutputVCF(ExtendParameters &parameters);
     void ActivateFiles(ExtendParameters &parameters);
@@ -88,7 +86,7 @@ class RecalibrationHandler{
     map<string, RecalibrationModel> bam_header_recalibration; // look up the proper recalibration handler by run id + block coordinates
     multimap<string,pair<int,int> > block_hash;  // from run id, find appropriate block coordinates available
     
- void ReadRecalibrationFromComments(SamHeader &samHeader);
+ void ReadRecalibrationFromComments(SamHeader &samHeader, int max_flows_protect);
  
 //  vector<vector<vector<float> > > * getAs(string &found_key, int x, int y){return(recalModel.getAs(x,y));};
 //  vector<vector<vector<float> > > * getBs(string &found_key, int x, int y){return(recalModel.getBs(x,y));};
@@ -118,10 +116,12 @@ class InputStructures {
     vector<string> bamFlowOrderVector;
 
     uint16_t       min_map_qv;
+    uint16_t       read_snp_limit;
 
     bool           use_SSE_basecaller;
     bool           apply_normalization;
     bool           do_snp_realignment;
+    bool           resolve_clipped_bases;
     int            DEBUG;
 
     bool flowSigPresent;
@@ -143,7 +143,8 @@ class InputStructures {
     void bam_initialize(vector<string> bams /*, string inputBAMIndex*/);
     void read_fasta(string, map<string, string> &);
     void read_error_motifs(string & fname){ErrorMotifs.load_from_file(fname.c_str());};
-
+    void DetectFlowOrderzAndKeyFromBam(SamHeader &samHeader);
+    void VerifyContigsPresentInReference(SamHeader &samHeader);
 };
 
 // -------------------------------------------------------------------

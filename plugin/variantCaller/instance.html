@@ -55,6 +55,13 @@
         .hot {
             display: none;
         }
+        .parameter-name {
+            font-weight: bold;
+        }
+        .parameter-subname {
+            color: #808080;
+            font-size: 12px;
+        }
 
         .zebra:nth-child(odd) {
             background: -moz-linear-gradient(top, rgba(244, 245, 247, 0.75) 0%, rgba(229, 230, 232, 0.75) 50%, rgba(244, 245, 247, 0.75) 100%);
@@ -147,7 +154,14 @@ $(function () {
             "hotspot_min_variant_score",
             "hotspot_min_allele_freq",
             "hotspot_min_coverage",
-            "hotspot_strand_bias"
+            "hotspot_strand_bias",
+            "snp_beta_bias",
+            "indel_beta_bias",
+            "hotspot_beta_bias",
+            "data_quality_stringency",
+            "filter_unusual_predictions",
+            "filter_insertion_predictions",
+            "filter_deletion_predictions"
         ];
 
         //write the advanced options to the ui
@@ -336,7 +350,6 @@ $(function () {
         pluginAPIJSON = { "plugin": [TB_plugin.fields.name], "pluginconfig": obj };
         pluginAPIJSON = JSON.stringify(pluginAPIJSON);
         pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
-
         $.ajax({
             type: 'POST',
             url: pluginURL,
@@ -460,52 +473,73 @@ $(function () {
             <!-- variationtype Somatic Germ_Line-->
 
             <label class="radio">
-                <input type="radio" name="variationtype" id="germline_high_stringency" value="germline_high_stringency" checked>
+                <input type="radio" name="variationtype" value="germline_low_stringency" checked>
                 <span class="help" style="font-weight:normal"
-                      title="Parameter settings optimized for minimum false positives and high frequency variants on PGM chips">
-                      Germ Line - High Stringency (PGM)</span>
+                      title="Parameter settings optimized for high frequency variants and minimum false negatives on PGM chips">
+                      Germ Line - PGM - Low Stringency</span>
             </label>
 
             <label class="radio">
-                <input type="radio" name="variationtype" value="germline_low_stringency">
+                <input type="radio" name="variationtype" value="germline_high_stringency">
                 <span class="help" style="font-weight:normal"
-                      title="Parameter settings optimized for minimum false negatives and high frequency variants on PGM chips">
-                      Germ Line - Low Stringency (PGM)</span>
-            </label>
-
-            <label class="radio">
-                <input type="radio" name="variationtype" value="somatic_high_stringency">
-                <span class="help" style="font-weight:normal"
-                      title="Parameter settings optimized for minimum false positives and low frequency variants on PGM chips">
-                      Somatic - High Stringency (PGM)</span>
+                      title="Parameter settings optimized for high frequency variants and minimum false positives on PGM chips">
+                      Germ Line - PGM - High Stringency</span>
             </label>
 
             <label class="radio">
                 <input type="radio" name="variationtype" value="somatic_low_stringency">
                 <span class="help" style="font-weight:normal"
-                      title="Parameter settings optimized for minimum false negatives and low frequency variants on PGM chips">
-                      Somatic - Low Stringency (PGM)</span>
+                      title="Parameter settings optimized for low frequency variants and minimum false negatives on PGM chips">
+                      Somatic - PGM - Low Stringency</span>
             </label>
 
             <label class="radio">
-                <input type="radio" name="variationtype" value="germline_high_stringency_proton">
+                <input type="radio" name="variationtype" value="somatic_high_stringency">
                 <span class="help" style="font-weight:normal"
-                      title="Parameter settings optimized for minimum false positives and high frequency variants on Proton chips">
-                      Germ Line - High Stringency (Proton)</span>
+                      title="Parameter settings optimized for low frequency variants and minimum false positives on PGM chips">
+                      Somatic - PGM - High Stringency</span>
             </label>
 
             <label class="radio">
                 <input type="radio" name="variationtype" value="germline_low_stringency_proton">
                 <span class="help" style="font-weight:normal"
-                      title="Parameter settings optimized for minimum false negatives and high frequency variants on Proton chips">
-                      Germ Line - Low Stringency (Proton)</span>
+                      title="Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries and Proton chips">
+                      Germ Line - Proton - Low Stringency</span>
             </label>
 
-            <label class="radio" style="display: none;">
-                <input type="radio" name="variationtype" value="ampliseq_dot_com">
+            <label class="radio">
+                <input type="radio" name="variationtype" value="germline_high_stringency_proton">
                 <span class="help" style="font-weight:normal"
-                      title="Parameters settings downloaded from Ampliseq.com">
-                      Ampliseq.com</span>
+                      title="Parameter settings optimized for high frequency variants and minimum false positives on AmpliSeq libraries and Proton chips">
+                      Germ Line - Proton - High Stringency</span>
+            </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="germline_low_stringency_targetseq">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for high frequency variants and minimum false negatives on TargetSeq libararies and Proton chips">
+                      Germ Line - Proton TargetSeq - Low Stringency</span>
+            </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="germline_high_stringency_targetseq">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for high frequency variants amd minimum false positives on TargetSeq libraries and Proton chips">
+                      Germ Line - Proton TargetSeq - High Stringency</span>
+            </label>
+            
+            <label class="radio">
+                <input type="radio" name="variationtype" value="somatic_low_stringency_proton">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for low frequency variants and minimum false negatives on Proton chips">
+                      Somatic - Proton - Low Stringency</span>
+            </label>
+
+            <label class="radio">
+                <input type="radio" name="variationtype" value="somatic_high_stringency_proton">
+                <span class="help" style="font-weight:normal"
+                      title="Parameter settings optimized for low frequency variants and minimum false positives on Proton chips">
+                      Somatic - Proton - High Stringency</span>
             </label>
 
             <label class="radio">
@@ -532,7 +566,7 @@ $(function () {
 
         <div class="span4">
             <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-7430" target="_blank">
-            Get the latest platform-optimized Parameter Settings from Ion Community</a>
+            Where do I get the latest platform-optimized Parameter Settings?</a>
         </div>
 
     </div>
@@ -553,53 +587,48 @@ $(function () {
         </thead>
         <tbody>
         <tr class="zebra">
-            <td>
-                <span class="help" style="font-weight:normal"
-                      title="Do not call variants where coverage on either strand is below this minimum value.">
-                    min cov each strand
-                </span>
-            </td>
-            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_cov_each_strand"
-                       id="snp_min_cov_each_strand" class="snp plugin_input input-mini"/></td>
-            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_cov_each_strand"
-                       id="indel_min_cov_each_strand" class="indel plugin_input input-mini"/></td>
-            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_cov_each_strand"
-                                   id="hotspot_min_cov_each_strand" class="hotsnp plugin_input hotcol input-mini"/></td>
+          <td>
+              <div class="row-fluid parameter-name">
+              <span class="help"
+                    title="Minimum observed allele frequency required for a non-reference variant call.">
+                    Minimum allele frequency
+              </span>
+              </div>
+              <div class="row-fluid parameter-subname">min_allele_freq</div>
+          </td>
+          <td><input data-key="torrent_variant_caller" data-subkey="snp_min_allele_freq" id="snp_min_allele_freq"
+                     class="snp plugin_input input-mini"/></td>
+          <td><input data-key="torrent_variant_caller" data-subkey="indel_min_allele_freq" id="indel_min_allele_freq"
+                     class="indel plugin_input input-mini"/></td>
+          <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_allele_freq"
+                                 id="hotspot_min_allele_freq" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        <tr class="zebra">
+          <td>
+              <div class="row-fluid parameter-name">
+              <span class="help"
+                    title="Do not call variants where phred-scaled call quality is below this minimum value.">
+                    Minimum quality
+              </span>
+              </div>
+              <div class="row-fluid parameter-subname">min_variant_score</div>
+          </td>
+          <td><input data-key="torrent_variant_caller" data-subkey="snp_min_variant_score" id="snp_min_variant_score"
+                     class="snp plugin_input input-mini"/></td>
+          <td><input data-key="torrent_variant_caller" data-subkey="indel_min_variant_score"
+                     id="indel_min_variant_score" class="indel plugin_input input-mini"/></td>
+          <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_variant_score"
+                                 id="hotspot_min_variant_score" class="hotsnp plugin_input hotcol input-mini"/></td>
         </tr>
         <tr class="zebra">
             <td>
-                <span class="help" style="font-weight:normal"
-                      title="Do not call variants where phred-scaled call quality is below this minimum value.">
-                    min variant score
-                </span>
-            </td>
-            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_variant_score" id="snp_min_variant_score"
-                       class="snp plugin_input input-mini"/></td>
-            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_variant_score"
-                       id="indel_min_variant_score" class="indel plugin_input input-mini"/></td>
-            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_variant_score"
-                                   id="hotspot_min_variant_score" class="hotsnp plugin_input hotcol input-mini"/></td>
-        </tr>
-        <tr class="zebra">
-            <td>
-                <span class="help" style="font-weight:normal"
-                      title="Minimum observed allele frequency required for a non-reference variant call.">
-                    min allele freq
-                </span>
-            </td>
-            <td><input data-key="torrent_variant_caller" data-subkey="snp_min_allele_freq" id="snp_min_allele_freq"
-                       class="snp plugin_input input-mini"/></td>
-            <td><input data-key="torrent_variant_caller" data-subkey="indel_min_allele_freq" id="indel_min_allele_freq"
-                       class="indel plugin_input input-mini"/></td>
-            <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_allele_freq"
-                                   id="hotspot_min_allele_freq" class="hotsnp plugin_input hotcol input-mini"/></td>
-        </tr>
-        <tr class="zebra">
-            <td>
-                <span class="help" style="font-weight:normal"
+                <div class="row-fluid parameter-name">
+                <span class="help"
                     title="Do not call variants where total coverage on both strands is below this minimum value.">
-                    min coverage
+                    Minimum coverage
                 </span>
+                </div>
+                <div class="row-fluid parameter-subname">min_coverage</div>
             </td>
             <td><input data-key="torrent_variant_caller" data-subkey="snp_min_coverage" id="snp_min_coverage"
                        class="snp plugin_input input-mini"/></td>
@@ -609,11 +638,31 @@ $(function () {
                                    id="hotspot_min_coverage" class="hotsnp plugin_input hotcol input-mini"/></td>
         </tr>
         <tr class="zebra">
+          <td>
+              <div class="row-fluid parameter-name">
+              <span class="help"
+                    title="Do not call variants where coverage on either strand is below this minimum value.">
+                    Minimum coverage on either strand
+              </span>
+              </div>
+              <div class="row-fluid parameter-subname">min_cov_each_strand</div>
+          </td>
+          <td><input data-key="torrent_variant_caller" data-subkey="snp_min_cov_each_strand"
+                     id="snp_min_cov_each_strand" class="snp plugin_input input-mini"/></td>
+          <td><input data-key="torrent_variant_caller" data-subkey="indel_min_cov_each_strand"
+                     id="indel_min_cov_each_strand" class="indel plugin_input input-mini"/></td>
+          <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_min_cov_each_strand"
+                                 id="hotspot_min_cov_each_strand" class="hotsnp plugin_input hotcol input-mini"/></td>
+        </tr>
+        <tr class="zebra">
             <td>
-                <span class="help" style="font-weight:normal"
+                <div class="row-fluid parameter-name">
+                <span class="help"
                       title="Do not call variants if the proportion of variant alleles comes overwhelmingly from one strand [STB] (0.5-1.0)">
-                    strand bias
+                      Maximum strand bias
                 </span>
+                </div>
+                <div class="row-fluid parameter-subname">strand_bias</div>
             </td>
             <td><input data-key="torrent_variant_caller" data-subkey="snp_strand_bias" id="snp_strand_bias"
                        class="snp plugin_input input-mini"/></td>
@@ -622,6 +671,65 @@ $(function () {
             <td class="hot"><input data-key="torrent_variant_caller" data-subkey="hotspot_strand_bias"
                                    id="hotspot_strand_bias" class="hotsnp plugin_input hotcol input-mini"/></td>
         </tr>
+
+        <tr class="zebra">
+            <td>
+                <div class="row-fluid parameter-name">
+                <span class="help"
+                      title="Do not call variants if Relative Read Quality is below this threshold.">
+                      Minimum relative read quality
+                </span>
+                </div>
+                <div class="row-fluid parameter-subname">data_quality_stringency</div>
+            </td>
+            <td colspan=2><input data-key="torrent_variant_caller" data-subkey="data_quality_stringency" id="data_quality_stringency"
+                       class="snp plugin_input input-mini" style="width:90px;"/></td>
+            <td class="hot" style="border-left-width:0px;"></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <div class="row-fluid parameter-name">
+                <span class="help"
+                      title="Do not call variants if Common Signal Shift exceeds this threshold.">
+                      Maximum common signal shift
+                </span>
+                </div>
+                <div class="row-fluid parameter-subname">filter_unusual_predictions</div>
+            </td>
+            <td colspan=2><input data-key="torrent_variant_caller" data-subkey="filter_unusual_predictions" id="filter_unusual_predictions"
+                       class="snp plugin_input input-mini" style="width:90px;"/></td>
+            <td class="hot" style="border-left-width:0px;"></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <div class="row-fluid parameter-name">
+                <span class="help"
+                      title="Do not call insertions if Reference or Variant Signal Shift exceeds this threshold.">
+                      Maximum reference/variant signal shift (insertions)
+                </span>
+                </div>
+                <div class="row-fluid parameter-subname">filter_insertion_predictions</div>
+            </td>
+            <td colspan=2><input data-key="torrent_variant_caller" data-subkey="filter_insertion_predictions" id="filter_insertion_predictions"
+                       class="snp plugin_input input-mini" style="width:90px;"/></td>
+            <td class="hot" style="border-left-width:0px;"></td>
+        </tr>
+        <tr class="zebra">
+            <td>
+                <div class="row-fluid parameter-name">
+                <span class="help"
+                      title="Do not call deletions if Reference or Variant Signal Shift exceeds this threshold.">
+                      Maximum reference/variant signal shift (deletions)
+                </span>
+                </div>
+                <div class="row-fluid parameter-subname">filter_deletion_predictions</div>
+            </td>
+            <td colspan=2><input data-key="torrent_variant_caller" data-subkey="filter_deletion_predictions" id="filter_deletion_predictions"
+                       class="snp plugin_input input-mini" style="width:90px;"/></td>
+            <td class="hot" style="border-left-width:0px;"></td>
+        </tr>
+
+        
         </tbody>
     </table>
 
@@ -689,8 +797,8 @@ $(function () {
 <div id="json_result"></div>
 
 <div class="row">
-    <h4>Torrent Variant Caller 3.6</h4>
-    <p>TVC 3.6 analyzes mapped reads covering each individual reference base
+    <h4>Torrent Variant Caller 4.0</h4>
+    <p>TVC 4.0 analyzes mapped reads covering each individual reference base
        to deduce whether there is sufficient statistical evidence to support calling
        a SNP or INDEL at a given position.
        The analysis can be restricted to a subset of the genome by defining targeted regions.

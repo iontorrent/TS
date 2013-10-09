@@ -5,6 +5,7 @@
 #include <vector>
 #include <string>
 #include <armadillo>
+#include <map>
 #include "GridMesh.h"
 #include "Mask.h"
 #include "Image.h"
@@ -83,6 +84,9 @@ class BFReference {
    */
   void CalcReference(const std::string &datFile, Mask &mask, BufferMeasurement bf_type=BFLegacy);
   void CalcReference(const std::string &datFile, Mask &mask, std::vector<float> &metric);
+  void AdjustForT0(int rowStart, int rowEnd, int colStart, int colEnd,
+		   int nCol, std::vector<float> &t0, std::vector<char> &filters,
+		   std::vector<float> &metric);
   void CalcShiftedReference(const std::string &datFile, Mask &mask, std::vector<float> &metric, BufferMeasurement bf_type=BFLegacy);
   void CalcSignalShiftedReference(const std::string &datFile, const std::string &bgFile, Mask &mask, std::vector<float> &metric, float minTraceSd, int bfIntegrationWindow, int bfIntegrationWidth, BufferMeasurement bf_type);
   void CalcDualReference(const std::string &datFile1, const std::string &datFile2, Mask &mask);
@@ -157,6 +161,12 @@ class BFReference {
   void SetThumbnail(bool isThumbnail) { mIsThumbnail = isThumbnail; }
   void SetComparatorCorrect(bool comparatorCorrect) { mDoComparatorCorrect = comparatorCorrect; }
  private:
+  void CalcAvgNeighborBuffering(int rowStart, int rowEnd, int colStart, int colEnd, Mask &mask, int avg_window,
+                                std::vector<float> &metric, std::vector<float> &neighbor_avg);
+  void CalcNeighborDistribution(int rowStart, int rowEnd, int colStart, int colEnd, Mask &mask, int avg_window,
+                                std::vector<float> &metric, std::vector<float> &ksD, std::vector<float> &ksProb,
+                                std::map<std::pair<int,double>,double> &mZDCache);
+  inline bool IsOk(size_t wellIx, Mask &m, std::vector<char> &filt) { return ((m[wellIx] & MaskPinned) == 0 && (m[wellIx] & MaskExclude) == 0 && filt[wellIx] != Filtered); }
   bool LoadImage(Image &img, const std::string &fileName);
   void DebugTraces(const std::string &fileName,  Mask &mask, Image &bfImg);
   bool InSpan(size_t rowIx, size_t colIx,

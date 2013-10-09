@@ -1,0 +1,61 @@
+{% extends "rundb/plan/page_plan/base.html" %}
+{% load url from future %}
+
+{% block main-title %}{% endblock main-title %}
+
+{% block page-plan-content %}
+<div class="row-fluid">
+    <div class="span7">
+        <label for="templateName">Template Name (required): </label>
+        <input style="width: 700px;" type="text" id="templateName" name="templateName" value="{{step.getCurrentSavedFieldDict.templateName|default_if_none:""}}" />
+    </div>
+</div>
+<div class="row-fluid">
+    <div class="span7">
+        <p class="form-label">
+            Set as Favorite:
+            {% if step.getCurrentSavedFieldDict.setAsFavorite %}
+                <input type="checkbox" id="setAsFavorite" name="setAsFavorite" checked="checked"/>
+            {% else %}
+                <input type="checkbox" id="setAsFavorite" name="setAsFavorite"/>
+            {% endif %}
+        </p>
+    </div>
+</div>
+<div class="row-fluid">  
+    {% for key, values in step.validationErrors.items %}
+        {% for value in values %}
+            <h4 style="color: red">{{value}}</h4>
+        {% endfor %}
+    {% endfor %}
+</div>
+{% endblock page-plan-content %}
+
+{% block prevnext-buttons %}
+    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_ionreporter" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save" %}');$('#step_form').submit();return false;">
+        {% if helper.isCopy %}
+            Copy Template
+        {% elif helper.isTemplateBySample %}
+            Save Template            
+        {% elif helper.isEdit %}
+            Update and Finish
+        {% else %}
+            Save and Finish
+        {% endif %}
+    </a>
+{% endblock prevnext-buttons %}
+
+{% block summary-table %}
+    {%include "rundb/plan/page_plan/summary/uploader_summary.html"%}
+{% endblock summary-table %}
+
+{% block post-raw %}
+{{ block.super }}
+<script type="text/javascript">
+    $(document).ready(function () {
+
+    });
+</script>
+{% endblock post-raw %}
+

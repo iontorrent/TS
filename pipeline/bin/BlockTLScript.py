@@ -214,17 +214,6 @@ if __name__=="__main__":
                 printtime("ERROR: Analysis finished with status '%s'" % status)
                 sys.exit(1)
 
-        ########################################################
-        # Make Bead Density Plots                              #
-        ########################################################
-        bfmaskPath = os.path.join(env['SIGPROC_RESULTS'],"analysis.bfmask.bin")
-        bfmaskstatspath = os.path.join(env['SIGPROC_RESULTS'],"analysis.bfmask.stats")
-        try:
-            upload_analysismetrics(bfmaskstatspath)
-            update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, env['SIGPROC_RESULTS'], plot_title=env['shortRunName'])
-            update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, "./", plot_title=env['shortRunName'])
-        except:
-            traceback.print_exc()
 
 
     if args.do_basecalling:
@@ -233,11 +222,21 @@ if __name__=="__main__":
         # some adjustments may be needed
         handle_legacy_report.handle_sigproc(env['SIGPROC_RESULTS'])
 
+        # Generate files needed for regular and fromWells reports
         sigproc.generate_raw_data_traces(
             env['libraryKey'],
             env['tfKey'],
             env['flowOrder'],
             env['SIGPROC_RESULTS'])
+
+        # Update or generate Bead density plots
+        bfmaskPath = os.path.join(env['SIGPROC_RESULTS'],"analysis.bfmask.bin")
+        bfmaskstatspath = os.path.join(env['SIGPROC_RESULTS'],"analysis.bfmask.stats")
+        try:
+            upload_analysismetrics(bfmaskstatspath)
+            update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, "./", plot_title=env['shortRunName'])
+        except:
+            traceback.print_exc()
 
         #make sure pre-conditions for basecaller step are met
         if not os.path.exists(os.path.join(env['SIGPROC_RESULTS'],'1.wells')):
@@ -283,7 +282,8 @@ if __name__=="__main__":
                                                 env['BASECALLER_RESULTS'],
                                                 env['barcodeId'],
                                                 env['barcodeSamples'],
-                                                env['barcodesplit_filter'],
+                                                env.get('barcodesplit_filter',0),
+                                                env.get('barcodesplit_filter_minreads',0),
                                                 env['DIR_BC_FILES'],
                                                 os.path.join("barcodeList.txt"),
                                                 os.path.join(env['BASECALLER_RESULTS'], "barcodeMask.bin"),
@@ -325,7 +325,8 @@ if __name__=="__main__":
                 env['BASECALLER_RESULTS'],
                 env['barcodeId'],
                 env['barcodeSamples'],
-                env['barcodesplit_filter'],
+                env.get('barcodesplit_filter',0),
+                env.get('barcodesplit_filter_minreads',0),
                 env['DIR_BC_FILES'],
                 os.path.join("barcodeList.txt"),
                 os.path.join(env['BASECALLER_RESULTS'], "barcodeMask.bin"),
@@ -405,8 +406,8 @@ if __name__=="__main__":
                 printtime("Error, unfiltered handling")
                 traceback.print_exc()
 
-
-    if args.do_alignment:
+    do_merged_alignment = False
+    if args.do_alignment and not do_merged_alignment:
 
         #make sure pre-conditions for alignment step are met
         # TODO if not os.path.exists(os.path.join(env['BASECALLER_RESULTS'], "rawlib.basecaller.bam")):

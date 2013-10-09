@@ -12,6 +12,7 @@ def ion_readable(value):
         charlist.append(" K")
         charlist.append(" M")
         charlist.append(" G")
+        charlist.append(" T")
 
         charindex = 0
         val = float(value)

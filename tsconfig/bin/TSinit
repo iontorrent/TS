@@ -50,6 +50,17 @@ function migrate_contents()
     rm -rf $mtpoint/*
 }
 
+function get_uuid()
+{
+    device=$1
+    uuid=$(blkid -s UUID | grep "$device" | awk '{print $2}' | sed 's/\"//g')
+    if [ "$uuid" == "" ]; then
+        #Error
+        echo
+    fi
+    echo $uuid
+}
+
 #---                                    ---#
 #--- Variable Declarations              ---#
 #---                                    ---#
@@ -156,8 +167,8 @@ if [ $SETUP_RESULTS_PARTITION -eq 1 -a $SETUP_RAWDATA_PARTITION -eq 1 ]; then
     echo
     echo "WARNING!  Any data on partition ${dev} will be deleted"
     echo "Continue only if you are sure you want to reformat ${dev}"
-    read -p"Type Yes to continue: " usrin
-    if [ "$usrin" != "Yes" ]; then
+    read -p"Type yes to continue: " usrin
+    if [ "${usrin,,}" != "yes" ]; then
         exit
     fi
 
@@ -196,11 +207,13 @@ if [ $SETUP_RESULTS_PARTITION -eq 1 -a $SETUP_RAWDATA_PARTITION -eq 1 ]; then
     echo "${dev}1 has been mounted at $results_mtpt"
 
     #Edit /etc/fstab to automount at boot
-    if ! grep "^${dev}1" /etc/fstab; then
-        echo -e "${dev}1\t${results_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
+    uuid1=$(get_uuid ${dev}1)
+    if ! grep $uuid1 /etc/fstab; then
+        echo -e "$uuid1\t${results_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
     fi
-    if ! grep "^${dev}2" /etc/fstab; then
-        echo -e "${dev}2\t${rawdata_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
+    uuid2=$(get_uuid ${dev}2)
+    if ! grep $uuid2 /etc/fstab; then
+        echo -e "$uuid2\t${rawdata_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
     fi
 
 elif [ $SETUP_RESULTS_PARTITION -eq 1 -a $SETUP_RAWDATA_PARTITION -eq 0 ]; then
@@ -238,8 +251,8 @@ elif [ $SETUP_RESULTS_PARTITION -eq 1 -a $SETUP_RAWDATA_PARTITION -eq 0 ]; then
     echo
     echo "WARNING!  Any data on partition ${dev} will be deleted"
     echo "Continue only if you are sure you want to reformat ${dev}"
-    read -p"Type Yes to continue: " usrin
-    if [ "$usrin" != "Yes" ]; then
+    read -p"Type yes to continue: " usrin
+    if [ "${usrin,,}" != "yes" ]; then
         exit
     fi
 
@@ -265,8 +278,9 @@ elif [ $SETUP_RESULTS_PARTITION -eq 1 -a $SETUP_RAWDATA_PARTITION -eq 0 ]; then
     echo "${dev}1 has been mounted at $results_mtpt"
 
     #Edit /etc/fstab to automount at boot
-    if ! grep "^${dev}1" /etc/fstab; then
-        echo -e "${dev}1\t$results_mtpt\text4\tdefaults\t0 0" >> /etc/fstab
+    uuid1=$(get_uuid ${dev}1)
+    if ! grep $uuid1 /etc/fstab; then
+        echo -e "$uuid1\t${results_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
     fi
 fi
 echo -e "\nTSinit is finished\n"

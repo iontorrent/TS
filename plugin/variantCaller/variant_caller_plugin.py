@@ -132,61 +132,35 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
     basename_variants_vcf = BASENAME_VARIANTS_VCF
     basename_variants_xls = BASENAME_VARIANTS_XLS
     basename_hotspots_xls = BASENAME_HOTSPOTS_XLS
+    basename_alleles_xls  = BASENAME_ALLELES_XLS
     if barcode:
         barcode_modifier = '../'
         basename_variants_vcf = 'TSVC_variants_%s.vcf' % barcode
         basename_variants_xls = 'variants_%s.xls' % barcode
         basename_hotspots_xls = 'allele_counts_%s.xls' % barcode
+        basename_alleles_xls  = 'alleles_%s.xls' % barcode
         
     
-
+    # Execute main variant caller script
+    variantcaller_command        = '%s/variant_caller_pipeline.py' % DIRNAME
+    variantcaller_command   +=     '  --input-bam "%s"' % untrimmed_bam
+    if vc_options['trim_reads']:
+        variantcaller_command   += '  --primer-trim-bam "%s"' % trimmed_bam
+        variantcaller_command   += '  --primer-trim-bed "%s"' % vc_options['targets_bed_unmerged']
+    variantcaller_command       += '  --reference-fasta "%s"' % vc_options['genome_fasta']
+    variantcaller_command       += '  --output-dir "%s"' % results_directory
+    variantcaller_command       += '  --parameters-file "%s"' % os.path.join(results_directory,barcode_modifier+BASENAME_PARAMETERS_JSON)
+    variantcaller_command       += '  --bin-dir "%s"' % DIRNAME
+    if vc_options['has_targets']:
+        variantcaller_command   += '  --region-bed "%s"' % vc_options['targets_bed_merged']
+    if vc_options['has_hotspots']:
+        variantcaller_command   += '  --hotspot-vcf "%s"' % vc_options['hotspots_vcf_gz']
+    
     if PLUGIN_DEV_SKIP_VARIANT_CALLING:
         printtime('Skipping calling variants on mapped reads...')
-    
     else:
-        # Generate primer-trimmed BAM and BAI files
-        if vc_options['trim_reads']:
-            subprocess.call('rm -f "%s"' % trimmed_bam,shell=True)
-            trimp_command = 'java -Xmx8G -cp %s/TRIMP_lib -jar %s/TRIMP.jar' % (DIRNAME,DIRNAME)
-            trimp_command += ' ' + untrimmed_bam
-            trimp_command += ' ' + trimmed_bam
-            trimp_command += ' ' + vc_options['genome_fasta']
-            trimp_command += ' ' + vc_options['targets_bed_unmerged']
-            run_command(trimp_command,'Trimming reads to target regions')
-            run_command('samtools index "%s"' % trimmed_bam,'Generate index for trimmed BAM')
-
-        # Execute main variant caller script
-        variantcaller_command        = '%s/variantCaller.py' % DIRNAME
-        if vc_options['trim_reads']:
-            variantcaller_command   += '  --input-bam "%s"' % trimmed_bam
-        else:
-            variantcaller_command   += '  --input-bam "%s"' % untrimmed_bam
-        variantcaller_command       += '  --reference-fasta "%s"' % vc_options['genome_fasta']
-        variantcaller_command       += '  --output-dir "%s"' % results_directory
-        variantcaller_command       += '  --parameters-file "%s"' % os.path.join(results_directory,barcode_modifier+BASENAME_PARAMETERS_JSON)
-        variantcaller_command       += '  --bin-dir "%s"' % DIRNAME
-        if vc_options['has_targets']:
-            variantcaller_command   += '  --region-bed "%s"' % vc_options['targets_bed_merged']
-        if vc_options['has_hotspots']:
-            variantcaller_command   += '  --hotspot-vcf "%s"' % vc_options['hotspots_vcf_gz']
-        if vc_options['hpmodel_path']:
-            variantcaller_command   += '  --recalibration-hpmodel %s' % vc_options['hpmodel_path']
         run_command(variantcaller_command,'Execute variant caller script')
-
-    # Generate xls tables and statistics from final vcf
-    table_command        = '%s/scripts/generate_variant_tables.py' % DIRNAME
-    table_command       += '  --input-vcf %s'       % os.path.join(results_directory,BASENAME_VARIANTS_VCF)
-    if vc_options['has_targets']:
-        table_command   += '  --region-bed %s'      % vc_options['targets_bed_unmerged']
-    if vc_options['has_hotspots']:
-        table_command   += '  --hotspot-bed %s'     % vc_options['hotspots_bed_unmerged_leftalign']
-    table_command       += '  --output-xls %s'      % os.path.join(results_directory,BASENAME_VARIANTS_XLS)
-    table_command       += '  --alleles-xls %s'     % os.path.join(results_directory,BASENAME_ALLELES_XLS)
-    table_command       += '  --summary-json %s'    % os.path.join(results_directory,'variant_summary.json')
-    table_command       += '  --chromosome-png %s'  % os.path.join(results_directory,'chrom.png')
-    table_command       += '  --scatter-png %s'  % os.path.join(results_directory,'scatter.png')
-    run_command(table_command,'Generate xls tables and statistics from final vcf')
-
+    
 
     # Generate allele counts if hotspots loci BED provided
     if vc_options['has_hotspots']:
@@ -199,7 +173,10 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
             allelecount_command += ' ' + untrimmed_bam
         allelecount_command += ' | %s/scripts/allele_count_mpileup_stdin.py' % DIRNAME
         allelecount_command += ' > ' + os.path.join(results_directory,'allele_counts.txt')
-        run_command(allelecount_command,'Base pileup for hotspot alleles')
+        if PLUGIN_DEV_SKIP_VARIANT_CALLING:
+            printtime('Skipping base pileup for hotspot alleles...')
+        else:
+            run_command(allelecount_command,'Base pileup for hotspot alleles')
         
         allelecount2_command = '%s/scripts/print_allele_counts.py' % DIRNAME
         allelecount2_command += ' ' + os.path.join(results_directory,'allele_counts.txt')
@@ -209,8 +186,20 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
         run_command(allelecount2_command,'Generate hotspots allele coverage')
 
 
-    # Create the html report page
-    printtime('Generating html report...')
+
+    # Generate xls tables and statistics from final vcf
+    table_command        = '%s/scripts/generate_variant_tables.py' % DIRNAME
+    table_command       += '  --input-vcf %s'       % os.path.join(results_directory,BASENAME_VARIANTS_VCF)
+    if vc_options['has_targets']:
+        table_command   += '  --region-bed %s'      % vc_options['targets_bed_unmerged']
+    if vc_options['has_hotspots']:
+        table_command   += '  --hotspots'
+    table_command       += '  --output-xls %s'      % os.path.join(results_directory,BASENAME_VARIANTS_XLS)
+    table_command       += '  --alleles2-xls %s'     % os.path.join(results_directory,BASENAME_ALLELES_XLS)
+    table_command       += '  --summary-json %s'    % os.path.join(results_directory,'variant_summary.json')
+    table_command       += '  --scatter-png %s'  % os.path.join(results_directory,'scatter.png')
+    run_command(table_command,'Generate xls tables and statistics from final vcf')
+
 
     # Create symlinks to js/css folders and php scripts
     subprocess.call('ln -sf "%s/slickgrid" "%s"' % (DIRNAME,results_directory),shell=True)
@@ -224,11 +213,13 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
                                                        os.path.join(results_directory,basename_variants_vcf)),shell=True)
         subprocess.call('ln -s %s %s' % (os.path.join(results_directory,BASENAME_VARIANTS_XLS),
                                          os.path.join(results_directory,basename_variants_xls)),shell=True)
+        subprocess.call('ln -s %s %s' % (os.path.join(results_directory,BASENAME_ALLELES_XLS),
+                                         os.path.join(results_directory,basename_alleles_xls)),shell=True)
         if vc_options['has_hotspots']:
             subprocess.call('ln -s %s %s' % (os.path.join(results_directory,BASENAME_HOTSPOTS_XLS),
                                              os.path.join(results_directory,basename_hotspots_xls)),shell=True)
 
-
+    subprocess.call('touch %s/%s.done' % (results_directory,basename_variants_vcf),shell=True)
 
     render_context = {
         'options'               : vc_options,
@@ -238,6 +229,7 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
         'variants_vcf_gz_link'  : basename_variants_vcf+'.gz',
         'variants_tbi_link'     : basename_variants_vcf+'.gz.tbi',
         'variants_xls_link'     : basename_variants_xls,
+        'alleles_xls_link'      : basename_alleles_xls,
         'hotspots_xls_link'     : basename_hotspots_xls,
         'trimmed_bam_link'      : os.path.basename(trimmed_bam),
         'trimmed_bai_link'      : os.path.basename(trimmed_bam)+'.bai',
@@ -247,6 +239,10 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
     
     if barcode:
         render_context['results_url'] += '/' + barcode
+
+    summary_in = open(os.path.join(results_directory,'variant_summary.json'))
+    render_context['summary'] = json.load(summary_in)
+    summary_in.close()
 
     summary_in = open(os.path.join(results_directory,'variant_summary.json'))
     render_context['summary'] = json.load(summary_in)
@@ -269,8 +265,8 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
     out.write(render_to_string('block_details.html', render_context))
     out.close()
 
-    out = open(results_directory + '/beta.htm','w')
-    out.write(render_to_string('beta.html', render_context))
+    out = open(results_directory + '/deprecated.htm','w')
+    out.write(render_to_string('report_deprecated.html', render_context))
     out.close()
 
 
@@ -282,16 +278,16 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
     fxml.write('        <Resource name="%s.gz" path="{plugin_url}/%s.gz"/>\n' % (basename_variants_vcf,basename_variants_vcf))
     fxml.write('        <Resource name="%s" path="{plugin_url}/%s"/>\n' % (os.path.basename(untrimmed_bam),os.path.basename(untrimmed_bam)))
     if vc_options['has_targets']:
-        fxml.write('        <Resource name="%s" path="{plugin_url}/%s"/>\n' % (render_context['targets_bed_link'],render_context['targets_bed_link']))
+        fxml.write('        <Resource name="%s" path="{plugin_url}/%s"/>\n' % (render_context['targets_bed_link'],barcode_modifier+render_context['targets_bed_link']))
     if vc_options['has_hotspots']:
-        fxml.write('        <Resource name="%s" path="{plugin_url}/%s"/>\n' % (render_context['hotspots_bed_link'],render_context['hotspots_bed_link']))
+        fxml.write('        <Resource name="%s" path="{plugin_url}/%s"/>\n' % (render_context['hotspots_bed_link'],barcode_modifier+render_context['hotspots_bed_link']))
     fxml.write('    </Resources>\n')
     fxml.write('    <Panel name="DataPanel" height="150">\n')
     fxml.write('        <Track displayMode="EXPANDED" id="{plugin_url}/%s.gz" name="Variant Calls" visible="true"/>\n' % basename_variants_vcf)
     if vc_options['has_targets']:
-        fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s" name="%s" visible="true"/>\n' % (render_context['targets_bed_link'],vc_options['targets_name']))
+        fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s" name="%s" visible="true"/>\n' % (barcode_modifier+render_context['targets_bed_link'],vc_options['targets_name']))
     if vc_options['has_hotspots']:
-        fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s" name="%s" visible="true"/>\n' % (render_context['hotspots_bed_link'],vc_options['hotspots_name']))
+        fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s" name="%s" visible="true"/>\n' % (barcode_modifier+render_context['hotspots_bed_link'],vc_options['hotspots_name']))
     fxml.write('    </Panel>\n')
     fxml.write('    <Panel height="525">\n')
     fxml.write('        <Track displayMode="COLLAPSED" id="{plugin_url}/%s_coverage" name="Coverage" visible="true"/>\n' % os.path.basename(untrimmed_bam))
@@ -312,6 +308,7 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
 def options_for_manual_start(startplugin_json):
     ''' Attempt to get plugin options assuming manual start. Returns None if not manual start. '''
 
+    options = {}
     try:
         local_library_type              = startplugin_json['pluginconfig']['meta']['librarytype']
         local_configuration             = startplugin_json['pluginconfig']['meta']['configuration']
@@ -322,23 +319,32 @@ def options_for_manual_start(startplugin_json):
         local_hotspots_name             = startplugin_json['pluginconfig']['meta']['targetloci_id']
         local_hotspots_bed_unmerged     = startplugin_json['pluginconfig']['meta']['targetloci']
         local_hotspots_bed_merged       = startplugin_json['pluginconfig']['meta']['targetloci_merge']
-        local_parameters      = {
-            'freebayes'                 : startplugin_json['pluginconfig']['freebayes'],
-            'long_indel_assembler'      : startplugin_json['pluginconfig']['long_indel_assembler'],
-            'torrent_variant_caller'    : startplugin_json['pluginconfig']['torrent_variant_caller'],
-            'meta'                      : {'tvcargs':startplugin_json['pluginconfig']['meta']['tvcargs']}
-        }
+        
+        reload_parameters_file = '%s/pluginMedia/configs/%s.json' % (DIRNAME, local_configuration)
+        if os.path.exists(reload_parameters_file):
+            f = open(reload_parameters_file,'r')
+            local_parameters = json.load(f)
+            f.close()
+            options['parameters_source'] = reload_parameters_file
+        else:
+            local_parameters      = {
+                'freebayes'                 : startplugin_json['pluginconfig']['freebayes'],
+                'long_indel_assembler'      : startplugin_json['pluginconfig']['long_indel_assembler'],
+                'torrent_variant_caller'    : startplugin_json['pluginconfig']['torrent_variant_caller'],
+            }
+        if 'meta' not in local_parameters:
+            local_parameters['meta'] = {}
+        local_parameters['meta']['tvcargs'] = startplugin_json['pluginconfig']['meta']['tvcargs']
+        
     except:
         return None
 
     if not local_parameters['meta']['tvcargs']:
         local_parameters['meta']['tvcargs'] = 'tvc'
 
-    options = {
-        'start_mode' : 'Manual start',
-        'trim_reads' : local_trim_reads,
-        'parameters' : local_parameters
-    }
+    options['start_mode'] = 'Manual start'
+    options['trim_reads'] = local_trim_reads
+    options['parameters'] = local_parameters
     
     if  local_library_type      == "wholegenome":
         options['library_type'] = "Whole Genome"
@@ -352,17 +358,27 @@ def options_for_manual_start(startplugin_json):
         return None
 
     if local_configuration == "germline_low_stringency":
-        options['configuration'] = "Germ Line - Low Stringency (PGM)"
+        options['configuration'] = "Germ Line - PGM - Low Stringency"
     elif local_configuration == "germline_high_stringency":
-        options['configuration'] = "Germ Line - High Stringency (PGM)"
+        options['configuration'] = "Germ Line - PGM - High Stringency"
     elif local_configuration == "somatic_low_stringency":
-        options['configuration'] = "Somatic - Low Stringency (PGM)"
+        options['configuration'] = "Somatic - PGM - Low Stringency"
     elif local_configuration == "somatic_high_stringency":
-        options['configuration'] = "Somatic - High Stringency (PGM)"
+        options['configuration'] = "Somatic - PGM - High Stringency"
     elif local_configuration == "germline_low_stringency_proton":
-        options['configuration'] = "Germ Line - Low Stringency (Proton)"
+        options['configuration'] = "Germ Line - Proton - Low Stringency"
     elif local_configuration == "germline_high_stringency_proton":
-        options['configuration'] = "Germ Line - High Stringency (Proton)"
+        options['configuration'] = "Germ Line - Proton - High Stringency"
+    elif local_configuration == "germline_low_stringency_targetseq":
+        options['configuration'] = "Germ Line - Proton TargetSeq - Low Stringency"
+    elif local_configuration == "germline_high_stringency_targetseq":
+        options['configuration'] = "Germ Line - Proton TargetSeq - High Stringency"
+    elif local_configuration == "somatic_low_stringency_proton":
+        options['configuration'] = "Somatic - Proton - Low Stringency"
+    elif local_configuration == "somatic_high_stringency_proton":
+        options['configuration'] = "Somatic - Proton - High Stringency"
+    elif local_configuration == "AmpliSeq_Exome_Proton_3.6.2":
+        options['configuration'] = "Ampliseq Exome 3.6.2 (Proton)"
     elif local_configuration == "ampliseq_dot_com":
         options['configuration'] = "AmpliSeq.com (tm) Panel-Optimized"
     elif local_configuration == "custom":
@@ -440,35 +456,56 @@ def options_for_plan_autostart(startplugin_json):
     try:
         local_configuration = startplugin_json['runinfo']['plugin']['userInput']['meta']['configuration']
         if local_configuration == "germline_low_stringency":
-            options['configuration'] = "Germ Line - Low Stringency"
+            options['configuration'] = "Germ Line - PGM - Low Stringency"
         elif local_configuration == "germline_high_stringency":
-            options['configuration'] = "Germ Line - High Stringency"
+            options['configuration'] = "Germ Line - PGM - High Stringency"
         elif local_configuration == "somatic_low_stringency":
-            options['configuration'] = "Somatic - Low Stringency"
+            options['configuration'] = "Somatic - PGM - Low Stringency"
         elif local_configuration == "somatic_high_stringency":
-            options['configuration'] = "Somatic - High Stringency"
+            options['configuration'] = "Somatic - PGM - High Stringency"
         elif local_configuration == "germline_low_stringency_proton":
-            options['configuration'] = "Germ Line - Low Stringency (Proton)"
+            options['configuration'] = "Germ Line - Proton - Low Stringency"
         elif local_configuration == "germline_high_stringency_proton":
-            options['configuration'] = "Germ Line - High Stringency (Proton)"
+            options['configuration'] = "Germ Line - Proton - High Stringency"
+        elif local_configuration == "germline_low_stringency_targetseq":
+            options['configuration'] = "Germ Line - Proton TargetSeq - Low Stringency"
+        elif local_configuration == "germline_high_stringency_targetseq":
+            options['configuration'] = "Germ Line - Proton TargetSeq - High Stringency"
+        elif local_configuration == "somatic_low_stringency_proton":
+            options['configuration'] = "Somatic - Proton - Low Stringency"
+        elif local_configuration == "somatic_high_stringency_proton":
+            options['configuration'] = "Somatic - Proton - High Stringency"
+        elif local_configuration == "AmpliSeq_Exome_Proton_3.6.2":
+            options['configuration'] = "Ampliseq Exome 3.6.2 (Proton)"
         elif local_configuration == "ampliseq_dot_com":
             options['configuration'] = "AmpliSeq.com (tm) Panel-Optimized"
         elif local_configuration == "custom":
             options['configuration'] = "Custom"
         else:
             options['configuration'] = 'Unknown configuration (%s)' % local_configuration
-        options['parameters'] = {
-            'freebayes'                 : startplugin_json['runinfo']['plugin']['userInput']['freebayes'],
-            'long_indel_assembler'      : startplugin_json['runinfo']['plugin']['userInput']['long_indel_assembler'],
-            'torrent_variant_caller'    : startplugin_json['runinfo']['plugin']['userInput']['torrent_variant_caller'],
-            'meta'                      : {'tvcargs':startplugin_json['runinfo']['plugin']['userInput'].get('meta',{}).get('tvcargs','tvc')}
-        }
+        
+        reload_parameters_file = '%s/pluginMedia/configs/%s.json' % (DIRNAME, local_configuration)
+        if os.path.exists(reload_parameters_file):
+            f = open(reload_parameters_file,'r')
+            options['parameters'] = json.load(f)
+            f.close()
+            options['parameters_source'] = reload_parameters_file
+        else:
+            options['parameters'] = {
+                'freebayes'                 : startplugin_json['runinfo']['plugin']['userInput']['freebayes'],
+                'long_indel_assembler'      : startplugin_json['runinfo']['plugin']['userInput']['long_indel_assembler'],
+                'torrent_variant_caller'    : startplugin_json['runinfo']['plugin']['userInput']['torrent_variant_caller'],
+            }
+        if 'meta' not in options['parameters']:
+            options['parameters']['meta'] = {}
+        options['parameters']['meta']['tvcargs'] = startplugin_json['runinfo']['plugin']['userInput'].get('meta',{}).get('tvcargs','tvc')
+        
         if not options['parameters']['meta']['tvcargs']:
             options['parameters']['meta']['tvcargs'] = 'tvc'
         
         options['start_mode'] = 'Autostart with plan configuration'
     except:
-        options['configuration'] = "Germ Line - Low Stringency"
+        options['configuration'] = "Germ Line - PGM"
         f = open(DIRNAME + '/pluginMedia/configs/germline_low_stringency.json','r')
         options['parameters'] = json.load(f)
         f.close()
@@ -524,6 +561,12 @@ def plugin_main():
     vc_options = options_for_manual_start(startplugin_json)
     if not vc_options:
         vc_options = options_for_plan_autostart(startplugin_json)
+
+
+    vc_options['run_name']      = startplugin_json['expmeta'].get('run_name','Current run')
+    vc_options['genome_name']   = startplugin_json['runinfo'].get('library','')
+    vc_options['plugin_name']   = startplugin_json['runinfo'].get('plugin_name','')
+    vc_options['genome_fasta']  = options.genome_fasta   #os.environ['TSP_FILEPATH_GENOME_FASTA']
         
     if 'error' in vc_options:
         printtime(vc_options['error'])
@@ -531,9 +574,6 @@ def plugin_main():
         return 1
 
 
-    vc_options['run_name']      = startplugin_json['expmeta'].get('run_name','Current run')
-    vc_options['genome_name']   = startplugin_json['runinfo'].get('library','')
-    vc_options['genome_fasta']  = options.genome_fasta   #os.environ['TSP_FILEPATH_GENOME_FASTA']
 
     f = open(os.path.join(TSP_FILEPATH_PLUGIN_DIR,BASENAME_PARAMETERS_JSON),'w')
     json.dump(vc_options['parameters'],f,indent=4)
@@ -554,18 +594,12 @@ def plugin_main():
         vc_options['tvc_version'] = vc_options['tvc_version'][:-24].strip()
     
     
-    # Determine if recalibration is enabled based on existence of hpModel.txt file
-    #hpmodel_path = os.path.join(ANALYSIS_DIR,'basecaller_results/recalibration/hpModel.txt')
-    #vc_options['hpmodel_path'] = hpmodel_path if os.path.exists(hpmodel_path) else None
-    vc_options['hpmodel_path'] = None
-    
-    
     # Parameters from plugin customization
     printtime('Variant Caller plugin run options:')
+    printtime('  Plugin name            : ' + vc_options['plugin_name'])
     printtime('  Plugin start mode      : ' + vc_options['start_mode'])
     printtime('  Variant Caller version : ' + vc_options['tvc_version'])
     printtime('  Run is barcoded        : ' + str(vc_options['has_barcodes']))
-    #printtime('  Run is recalibrated    : ' + str(bool(vc_options['hpmodel_path'])))
     printtime('  Genome                 : ' + vc_options['genome_name'])
     printtime('  Library Type           : ' + vc_options['library_type'])
     printtime('  Parameter Settings     : ' + vc_options['configuration'])
@@ -577,6 +611,9 @@ def plugin_main():
     printtime('Used files:')
     printtime('  Reference Genome       : ' + vc_options['genome_fasta'])
     printtime('  Parameters file        : ' + os.path.join(TSP_FILEPATH_PLUGIN_DIR,BASENAME_PARAMETERS_JSON))
+    if 'parameters_source' in vc_options:
+        printtime('  Parameters source file : ' + vc_options['parameters_source'])
+    
     if vc_options['has_targets']:
         printtime('  Target unmerged BED    : ' + vc_options['targets_bed_unmerged'])
         printtime('  Target merged BED      : ' + vc_options['targets_bed_merged'])
@@ -600,6 +637,7 @@ def plugin_main():
     subprocess.call('rm -f %s/allele*' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
     subprocess.call('rm -f %s/*.xls' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
     subprocess.call('rm -f %s/*.log' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
+    subprocess.call('rm -f %s/*.done' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
     subprocess.call('rm -rf %s/lifegrid' % (TSP_FILEPATH_PLUGIN_DIR),shell=True)
     
     if not PLUGIN_DEV_SKIP_VARIANT_CALLING:
@@ -673,8 +711,12 @@ def plugin_main():
         'Target Regions'    : (vc_options['targets_name'] if vc_options['has_targets'] else 'Not using'),
         'Target Loci'       : (vc_options['hotspots_name'] if vc_options['has_hotspots'] else 'Not using'),
         'Trim Reads'        : vc_options['trim_reads'],
-        'barcoded'          : 'false',
+        'barcoded'          : 'false'
     }
+    if vc_options['has_targets']:
+        results_json['targets_bed'] = vc_options['targets_bed_unmerged']
+    if vc_options['has_hotspots']:
+        results_json['hotspots_bed'] = vc_options['hotspots_bed_unmerged']
 
 
     if vc_options['has_barcodes']:      # Run for barcodes or single page
@@ -691,7 +733,8 @@ def plugin_main():
             barcode_entry['bam'] = os.path.join(ANALYSIS_DIR, barcode_entry['name'] + '_rawlib.bam')
             barcode_entry['status'] = 'queued'
 
-            subprocess.call('rm -rf %s/%s' % (TSP_FILEPATH_PLUGIN_DIR,barcode_entry['name']),shell=True)
+            if not PLUGIN_DEV_SKIP_VARIANT_CALLING:
+                subprocess.call('rm -rf %s/%s' % (TSP_FILEPATH_PLUGIN_DIR,barcode_entry['name']),shell=True)
             
             if not os.path.exists(barcode_entry['bam']):
                 continue
@@ -763,7 +806,7 @@ def plugin_main():
         zip_xls_command =   'zip  --junk-paths'
         zip_xls_command +=  '  %s/%s.xls.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
         zip_xls_command +=  '  '
-        zip_xls_command +=  '  '.join(('%s/%s/variants_%s.xls' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) 
+        zip_xls_command +=  '  '.join(('%s/%s/alleles_%s.xls' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) 
                                       for barcode in barcode_data if barcode['status'] == 'completed')
         run_command(zip_xls_command, 'Store per-barcode xls files in a single zip file')
         
@@ -800,7 +843,7 @@ def plugin_main():
     
     out = open(TSP_FILEPATH_PLUGIN_DIR + '/results.json','w')
     json.dump(results_json,out,indent=4)
-    out.close()    
+    out.close()
 
     printtime('')
     printtime('Variant Caller Plugin complete')
@@ -809,7 +852,8 @@ def plugin_main():
     return 0
 
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
+    
     exit(plugin_main())
 
 

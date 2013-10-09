@@ -76,6 +76,7 @@ if __name__=="__main__":
     blocks = explogparser.getBlocksFromExpLogJson(env['exp_json'], excludeThumbnail=True)
     dirs = ['block_%s' % block['id_str'] for block in blocks]
 
+    do_merged_alignment = False
 
     if args.do_sigproc:
 
@@ -137,7 +138,10 @@ if __name__=="__main__":
             if env.get('libraryName','') == 'none':        
                 actually_merge_unmapped_bams = True
             else:
-                actually_merge_unmapped_bams = False
+                if do_merged_alignment:
+                    actually_merge_unmapped_bams = True
+                else:
+                    actually_merge_unmapped_bams = False
             if actually_merge_unmapped_bams:
                 basecaller.merge_basecaller_bam(
                     dirs,
@@ -149,30 +153,101 @@ if __name__=="__main__":
 
     if args.do_alignment and env['libraryName'] and env['libraryName']!='none':
 
-        set_result_status('Merge Alignment Results')
-        # Only merge metrics and generate plots
-        alignment.merge_alignment_stats(
-            dirs,
-            env['BASECALLER_RESULTS'],
-            env['ALIGNMENT_RESULTS'],
-            env['flows'])
+        if do_merged_alignment:
 
-        try:
-            alignment.ionstats2alignstats(env['libraryName'],
-                os.path.join(env['ALIGNMENT_RESULTS'],'ionstats_alignment.json'),
-                os.path.join(env['ALIGNMENT_RESULTS'],'alignment.summary'))
-        except:
-            printtime("ERROR: Failed to create composite alignment.summary")
-            traceback.print_exc()
+            set_result_status('Alignment')
 
-        ## Generate Alignment's composite "Big Data": mapped bam. Totally optional
-        actually_merge_mapped_bams = True
-        if actually_merge_mapped_bams:
-            alignment.merge_alignment_bigdata(
+            #make sure pre-conditions for alignment step are met
+            # TODO if not os.path.exists(os.path.join(env['BASECALLER_RESULTS'], "rawlib.basecaller.bam")):
+            if not os.path.exists(os.path.join(env['BASECALLER_RESULTS'], "ionstats_basecaller.json")):
+                printtime ("ERROR: alignment pre-conditions not met")
+                #add_status("Pre Alignment Step", status=1)
+                sys.exit(1)
+
+            bidirectional = False
+
+            ##################################################
+            # Unfiltered BAM
+            ##################################################
+
+            try:
+                if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed")):
+                    alignment.alignment_unmapped_bam(
+                        os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
+                        os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
+                        env['align_full'],
+                        env['libraryName'],
+                        env['flows'],
+                        env['realign'],
+                        env['aligner_opts_extra'],
+                        env['mark_duplicates'],
+                        bidirectional,
+                        env['sam_parsed'])
+                    #add_status("Alignment", 0)
+            except:
+                traceback.print_exc()
+                #add_status("Alignment", 1)
+
+            try:
+                if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed")):
+                    alignment.alignment_unmapped_bam(
+                        os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
+                        os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
+                        env['align_full'],
+                        env['libraryName'],
+                        env['flows'],
+                        env['realign'],
+                        env['aligner_opts_extra'],
+                        env['mark_duplicates'],
+                        bidirectional,
+                        env['sam_parsed'])
+                    #add_status("Alignment", 0)
+            except:
+                traceback.print_exc()
+                #add_status("Alignment", 1)
+
+            try:
+                alignment.alignment_unmapped_bam(
+                    env['BASECALLER_RESULTS'],
+                    env['ALIGNMENT_RESULTS'],
+                    env['align_full'],
+                    env['libraryName'],
+                    env['flows'],
+                    env['realign'],
+                    env['aligner_opts_extra'],
+                    env['mark_duplicates'],
+                    bidirectional,
+                    env['sam_parsed'])
+#                add_status("Alignment", 0)
+            except:
+                traceback.print_exc()
+#                add_status("Alignment", 1)
+
+        else:
+            set_result_status('Merge Alignment Results')
+            # Only merge metrics and generate plots
+            alignment.merge_alignment_stats(
                 dirs,
                 env['BASECALLER_RESULTS'],
                 env['ALIGNMENT_RESULTS'],
-                env['mark_duplicates'])
+                env['flows'])
+
+            try:
+                alignment.ionstats2alignstats(env['libraryName'],
+                    os.path.join(env['ALIGNMENT_RESULTS'],'ionstats_alignment.json'),
+                    os.path.join(env['ALIGNMENT_RESULTS'],'alignment.summary'))
+            except:
+                printtime("ERROR: Failed to create composite alignment.summary")
+                traceback.print_exc()
+
+            ## Generate Alignment's composite "Big Data": mapped bam. Totally optional
+            actually_merge_mapped_bams = True
+            if actually_merge_mapped_bams:
+                alignment.merge_alignment_bigdata(
+                    dirs,
+                    env['BASECALLER_RESULTS'],
+                    env['ALIGNMENT_RESULTS'],
+                    env['mark_duplicates'])
 
     if args.do_zipping:
         
@@ -233,14 +308,17 @@ if __name__=="__main__":
                 ('basecaller.bam',  env['BASECALLER_RESULTS']),]
 
             for extension,base_dir in zip_task_list:
-                zipname = "%s/%s_%s.barcode.%s.zip" % (download_links, env['expName'], env['resultsName'], extension)
+                if not os.path.exists('/opt/ion/.ion-internal-server'):
+                    zipname = "%s/%s_%s.barcode.%s.zip" % (download_links, env['expName'], env['resultsName'], extension)
                 for prefix in prefix_list:
                     try:
                         filename = "%s/%s_%s_%s.%s" % (download_links, prefix.rstrip('_rawlib'), env['expName'], env['resultsName'], extension)
                         src = os.path.join(base_dir, prefix+'.'+extension)
                         if os.path.exists(src):
                             os.symlink(os.path.relpath(src,os.path.dirname(filename)),filename)
-                            make_zip(zipname, filename, arcname=filename, compressed=False)
+                            if not os.path.exists('/opt/ion/.ion-internal-server'):
+                                # add files to zipfile # print "add file %s to zip file %s" % (filename,zipname)
+                                make_zip(zipname, filename, arcname=filename, compressed=False)
                     except:
                         printtime("ERROR: target: %s" % filename)
                         traceback.print_exc()

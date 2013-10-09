@@ -201,7 +201,7 @@ def merge_hotspot_into_vcf(vcf_record, vcf_hotspot):
                 vcf_record['info_order'].append(hs_info)
                 vcf_record['info'][hs_info] = vcf_hotspot['info'][hs_info]
 
-    original_format_order = vcf_record['format_order']
+    original_format_order = vcf_record['format_order'][:]
     ''' Transfer FORMAT fields from vcf_hotspot to vcf_record '''
     for hs_format in vcf_hotspot['format_order']:
         if type(vcf_hotspot['format'][hs_format]) is list:          # Transfer A field
@@ -379,6 +379,9 @@ def main():
             if not line or line[0] == '#':
                 continue
             vcf_record = parse_vcf_line(line,info_a_list,format_a_list)
+            if 'FR' not in vcf_record['info_order']:
+                vcf_record['info_order'].append('FR')
+                vcf_record['info']['FR'] = '.'
             if vcf_record and vcf_record['chr'] in chr_order:
                 if index(chr_pos[vcf_record['chr']],vcf_record['pos']) is None:
                     chr_vcf_assembly[vcf_record['chr']].append((vcf_record['pos'],vcf_record))

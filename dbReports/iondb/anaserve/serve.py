@@ -41,6 +41,7 @@ with ``sudo apt-get install python-twisted``.
 """
 import datetime
 import json
+import simplejson
 import os
 import uuid
 from os import path
@@ -87,43 +88,8 @@ REFERENCE_LIBRARY_TEMP_DIR = "/results/referenceLibrary/temp/"
 import iondb.anaserve.djangoinit
 import iondb.rundb.models
 
-__version__ = filter(str.isdigit, "$Revision: 61415 $")
+__version__ = filter(str.isdigit, "$Revision: 73367 $")
 
-
-class ProcessExecutionService(service.Service):
-    """a queue to do one thing at a time"""
-    maxActive = 1
-
-    def __init__(self, maxActive=None):
-        if maxActive is not None:
-            self.maxActive = maxActive
-        self.queue = defer.DeferredQueue()
-
-    def getProcessOutput(self, *a, **k):
-        return self.enqueue(utils.getProcessOutput, a, k)
-
-    def getProcessValue(self, *a, **k):
-        return self.enqueue(utils.getProcessValue, a, k)
-
-    def getProcessOutputAndValue(self, *a, **k):
-        return self.enqueue(utils.getProcessOutputAndValue, a, k)
-
-    def startService(self):
-        for i in range(self.maxActive):
-            self.queue.get().addCallback(self.execute)
-
-    def enqueue(self, _callable, args, kwargs):
-        d = defer.Deferred()
-        self.queue.put((d, _callable, args, kwargs))
-        return d
-
-    def execute(self, queueItem):
-        def processNext(result):
-            self.queue.get().addCallback(self.execute)
-            return result
-
-        d, callable, args, kwargs = queueItem
-        callable(*args, **kwargs).addBoth(processNext).chainDeferred(d)
 
 # local settings
 try:
@@ -773,10 +739,9 @@ class AnalysisServer(xmlrpc.XMLRPC):
 
     Built on top of Twisted's XMLRPC server.
     """
-    def __init__(self, analysis_queue, execService):
+    def __init__(self, analysis_queue):
         xmlrpc.XMLRPC.__init__(self)
         self.q = analysis_queue
-        self.execService = execService
 
     def xmlrpc_updatestatus(self,
                             primarykeyPath,
@@ -909,11 +874,28 @@ class AnalysisServer(xmlrpc.XMLRPC):
         server."""
         return os.access(path, os.R_OK | os.W_OK)
 
+    def numBarcodes(self, r):
+        """Count the number of barcodes in this run that weren't filtered out of the views.py output """
+        nBarcodes = 0;
 
-    # Creates a file named TSExperiment-UUID.txt that contains
-    # metrics from the Results of an experiment.
+        try:
+            filename = os.path.join(r.get_report_dir(), 'basecaller_results', 'datasets_basecaller.json')
+            with open(filename) as fp:
+                basecallerDict = simplejson.load(fp)
+                read_groups = basecallerDict['read_groups']
+                for read_group in read_groups:
+                    try:
+                        if not read_groups[read_group]['filtered']:
+                            if "nomatch" not in read_groups[read_group]['barcode_name']: 
+                                nBarcodes = nBarcodes + 1
+                    except:
+                        pass
+        except:
+            pass
+        return nBarcodes 
+
     def xmlrpc_createRSMExperimentMetrics(self, resultId):
-
+        """ Creates a file named TSExperiment-UUID.txt that contains metrics from the Results of an experiment."""
         try:
             r = iondb.rundb.models.Results.objects.get(id=resultId)
             if not r:
@@ -924,12 +906,19 @@ class AnalysisServer(xmlrpc.XMLRPC):
 
             # information from explog
             e = r.experiment
+
+            try:
+                v = e.chipType
+                if v:
+                    metrics.append('chiptype:' + str(v))
+            except:
+                pass
+
             explog = e.log
             keys = [
                       'serial_number',
                       'run_number',
                       'chipbarcode',
-                      'chiptype',
                       'seqbarcode',
                       'flows',
                       'cycles',
@@ -974,13 +963,44 @@ class AnalysisServer(xmlrpc.XMLRPC):
                     pass
 
             try:
-                metrics.append("RunType:" + e.plan.runType);
+                metrics.append("RunType:" + e.plan.runType)
             except Exception as err:
+                pass
+
+            eas = e.get_EAS()
+            try:
+                if (eas.targetRegionBedFile == ""):
+                    eas.targetRegionBedFile = "none"
+                if (eas.hotSpotRegionBedFile == ""):
+                    eas.hotSpotRegionBedFile = "none"
+                metrics.append("targetRegionBedFile:" + eas.targetRegionBedFile);
+                metrics.append("hotSpotRegionBedFile:" + eas.hotSpotRegionBedFile);
+            except Exception as err:
+                pass
+
+            try:
+                #metrics.append("runPlanName:" + e.plan); not wanted 
+                metrics.append("isBarcoded:" + str(e.isBarcoded()));
+                nBarcodes = self.numBarcodes(r)
+                metrics.append("numBarcodes:" + str(nBarcodes));
+            except:
+                pass
+
+            try:
+                # get the names of all Ion Chef kits
+                ion_chef_kit_names = iondb.rundb.models.KitInfo.objects.filter(kitType="IonChefPrepKit").values_list('name', flat=True)
+
+                # if the kit for this run is in the list of Ion Chef kits, then this run was an Ion Chef run.
+                if e.plan.templatingKitName in ion_chef_kit_names:
+                    metrics.append("chef:y");
+                else:
+                    metrics.append("chef:n");
+            except:
                 pass
 
             # write out the metrics
             x = uuid.uuid1()
-            fname = os.path.join("/opt/ion/RSM/",'TSexperiment-' + str(x) + '.txt')
+            fname = os.path.join("/var/spool/ion/",'TSexperiment-' + str(x) + '.txt')
             f = open(fname, 'w' )
 
             try:
@@ -1002,7 +1022,7 @@ class AnalysisServer(xmlrpc.XMLRPC):
         try:
             from iondb.rundb.data import backfill_tasks as tasks
         except:
-            logger.error("Could not import iondb/rundb/tasks.py.  Could not determine disk space.")
+            logger.error("Could not import iondb/rundb/data/tasks.py.  Could not determine disk space.")
         else:
             # Update results directory disk usage
             try:
@@ -1016,133 +1036,26 @@ class AnalysisServer(xmlrpc.XMLRPC):
                 tasks.setRunDiskspace.delay(experiment_pk)
             except:
                 logger.error("setRunDiskspace celery task launch failed")
+
+            # Update the Data Management DMFileStat objects related to this Result object
+            try:
+                from iondb.rundb.data.tasks import update_diskusage
+                update_diskusage.delay(pk)
+            except:
+                logger.warn("update_diskusage celery task failed to launch")
         return 0
 
-
-    def xmlrpc_tmap(self, id, fasta, short, long, version, read_exclude_length, index_version):
-        """ Provides a way to kick off the tmap index generation
-            this should spawn a process that calls the build_genome_index.pl script
-            it may take up to 3 hours.
-            The django server should contacts this method from a view function
-            When the index creation processes has exited, cleanly or other wise
-            a callback will post to a url that will update the record for the library data
-            letting the genome manager know that this now exists
-            until then this genome will be listed in a unfinished state.
-        """
-
-        build_genome_index = '/usr/local/bin/build_genome_index.pl'
-        logger.debug("tmap xml-rpc established")
-
-        tmap_version = settings.TMAP_VERSION
-        logger.debug("tmap version:" + tmap_version)
-
-        args = [
-            "--auto-fix",
-            "--fasta", fasta,
-            "--genome-name-short", short,
-            "--genome-name-long", long,
-            "--genome-version", version
-        ]
-        uuid_path = ''.join([choice(string.letters + string.digits) for i in range(10)])
-
-        #move the fasta to a guaranteed uniq path
-        temp_path = REFERENCE_LIBRARY_TEMP_DIR
-        temp_path_uniq = tempfile.mkdtemp(suffix=short, dir=temp_path)
-        os.chmod(temp_path_uniq, 0777)
-        logger.debug("Temp path created " + temp_path_uniq)
-
-        try:
-            os.rename(os.path.join(temp_path, fasta), os.path.join(temp_path_uniq, fasta))
-        except IOError as err:
-            logger.exception("There was an error moving the temp files to a more unique directory")
-
-        #TODO: break this out into another function
-        #TODO: check for gzip as well
-        #If the uploaded  file was a zip file tell build genome index to uncompress it
-        if zipfile.is_zipfile(os.path.join(temp_path_uniq, fasta)):
-            #here let us open the zip file to find the fasta name
-            zf = zipfile.ZipFile(os.path.join(temp_path_uniq, fasta), mode='r', allowZip64=True)
-            file_list = zf.infolist()
-
-            #removed hidden os x metadata
-            file_list = [file_in_zip.filename for file_in_zip in file_list if not file_in_zip.filename.startswith("__")]
-
-            if len(file_list) != 1:
-                logger.debug("Error with zip file:" + str(fasta) + " zip contains " + str(len(file_list)) + " files. Should have only 1 ")
-                return False, "Error with zip file, zip must contain only one fasta file."
-
-            #if the zip has only 1 file, excluding metadata feed that name to the index builder
-            zipped_fasta_name = file_list[0]
-            args.append('-c')
-            args.append(zipped_fasta_name)
-
-            logger.debug("Unzipped File" + str(fasta) + " Found zipped fasta " + str(zipped_fasta_name))
-
-        logger.debug(args)
-        query_args = {'status': 'started', 'index_version': tmap_version}
-        logger.debug(query_args)
-        encoded_args = urllib.urlencode(query_args)
-        url = 'http://localhost/configure/references/genome/status/' + id
-        logger.debug("Attempting to GET the url: " + url)
-        try:
-            url_read = urllib2.urlopen(url, encoded_args).read()
-            logger.debug(url_read)
-        except Exception as err:
-            logger.exception("failed the update genome status")
-
-        d = execService.getProcessOutputAndValue(build_genome_index, args, path=temp_path_uniq, env=os.environ)
-        d.addCallback(finished, id, fasta, short, temp_path_uniq, tmap_version)
-        logger.debug("genome building was started")
-
-        return True, "Genome Building started"
-
-
-def finished(val, id, temp_fasta, short, temp_path, tmap_version):
-    """This is a callback function that will be called when the build_genome_index.pl
-    script returns"""
-
-    if val[2] == 0:
-
-        logger.debug("genome building returned successful with 0")
-        #open a url that will set the status of the genome index as done.
-
-        query_args = {'status': 'created', 'enabled': True, 'index_version': tmap_version}
-
-        encoded_args = urllib.urlencode(query_args)
-        url = 'http://localhost/configure/references/genome/status/' + id
-        url_read = urllib2.urlopen(url, encoded_args).read()
-        logger.debug(url_read)
-
-        os.umask(0002)
-        shutil.move(os.path.join(temp_path, short), settings.TMAP_DIR)
-        shutil.rmtree(temp_path)
-        logger.debug("removing : " + str(temp_path))
-
-        #TODO: if it worked then add the genome sample size length
-
-    else:
-        logger.debug("genome building returned with an error: " + str(val))
-        #don't provide enabled which will implicitly disable the genome
-        query_args = {'status': 'error', 'verbose_error': json.dumps(val), 'index_version': tmap_version}
-        encoded_args = urllib.urlencode(query_args)
-        url = 'http://localhost/configure/references/genome/status/' + id
-        url_read = urllib2.urlopen(url, encoded_args).read()
-        logger.debug(url_read)
-
-        shutil.rmtree(temp_path)
 
 if __name__ == '__main__':
 
     try:
         logger.info("ionJobServer Started Ver: %s" % __version__)
 
-        execService = ProcessExecutionService()
 
         aq = AnalysisQueue(settings.ANALYSIS_ROOT)
         aq.loop()
 
-        r = AnalysisServer(aq, execService)
-        reactor.callLater(0, r.execService.startService)
+        r = AnalysisServer(aq)
         reactor.listenTCP(settings.JOBSERVER_PORT, server.Site(r))
         reactor.run()
     except Exception as err:

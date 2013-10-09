@@ -1,6 +1,5 @@
 fabric==1.4.3  #http://docs.fabfile.org/en/1.4.3/
 unittest2==0.5.1  #http://pypi.python.org/pypi/unittest2
-django_nose==1.1  #https://github.com/jbalogh/django-nose
 nose==1.2.1  #https://nose.readthedocs.org/en/latest/
 coverage==3.5.3  #http://nedbatchelder.com/code/coverage/
 mockito==0.5.1  #http://pypi.python.org/pypi/mockito/0.5.1

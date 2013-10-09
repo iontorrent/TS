@@ -1,3 +1,4 @@
+{% load url from future %}
 			<div id="pruning_groups" class="control-group {%spaceless%}{%if form.pruneLevel.errors%}error alert alert-error{%endif%}{%endspaceless%}">
     			<label class="control-label" for="id_pruneLevel">Pruning groups</label>
     			<div class="controls">
@@ -22,7 +23,7 @@
 								<tr>
 									<td>{{pruneLevelField}}</td>
 									<td>{% for rule in ruleList %}{% if rule.0 == pruneLevelField.choice_value %}{{ rule.0 }}{% endif %}{% endfor %}</td>
-									<td>{% for rule in ruleList %}{% if rule.0 == pruneLevelField.choice_value %}{% ifequal rule.1 "T" %}<a href='{% url configure_report_data_mgmt_remove_prune_group rule.3 %}' class="btn btn-danger delete_prune_group">Delete</a>{% endifequal %}{%endif%}{% endfor %}</td>
+									<td>{% for rule in ruleList %}{% if rule.0 == pruneLevelField.choice_value %}{% ifequal rule.1 "T" %}<a href='{% url "configure_report_data_mgmt_remove_prune_group" rule.3 %}' class="btn btn-danger delete_prune_group">Delete</a>{% endifequal %}{%endif%}{% endfor %}</td>
 								</tr>
 		    				{% endfor %}
 								</tbody>
@@ -30,8 +31,8 @@
     					</div>
     					<div class="span2">
 					    <div class="btn-group-stacked">
-							<a class="btn btn-primary " href="{% url configure_report_data_mgmt_prune_detail %}" id="add_prune_group" rel="tooltip" title="Add a new pruning group.">Add Prune Group</a>
-							<a class="btn btn-primary " href="{% url configure_report_data_mgmt_edit_prune_groups %}" id="edit_prune_groups" rel="tooltip" title="Edit existing groups.">Edit Prune Groups</a>
+							<a class="btn btn-primary " href="{% url "configure_report_data_mgmt_prune_detail" %}" id="add_prune_group" rel="tooltip" title="Add a new pruning group.">Add Prune Group</a>
+							<a class="btn btn-primary " href="{% url "configure_report_data_mgmt_edit_prune_groups" %}" id="edit_prune_groups" rel="tooltip" title="Edit existing groups.">Edit Prune Groups</a>
 						</div>
     					</div>
     				</div>

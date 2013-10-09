@@ -1,16 +1,23 @@
 {% load ion_readable %}
 {% load humanize %}
-<div>
-    {% if datasets.barcode_config %}
-        <pre class="hide"><code>{{barcodes_json|safe}}</code></pre>
-        <script>
-            function numberWithCommas(x) {
-                var parts = x.toString().split(".");
-                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-                return parts.join(".");
-            }
-           var barcodes_json = {{barcodes_json|safe}};
-        </script>
+<script>
+    function modal_barcode_len(name, url) {
+        console.log(name + " " + url);
+        $("#modal_barcode_len_name").text(name);
+        $("#modal_barcode_len_images").html('<img src="' + url + '"/>');
+        $("#modal_barcode_len").modal('show');
+    }
+    function numberWithCommas(x) {
+        var parts = x.toString().split(".");
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return parts.join(".");
+    }
+</script>
+{% if datasets.barcode_config %}
+<script>
+    var barcodes_json = {{barcodes_json|safe}};
+</script>
+    <div>
         <div class="spacer clear"></div>
         <table id="barcodes" class="">
             <thead>
@@ -22,7 +29,7 @@
                 <th>Reads</th>
                 <th>Mean Read Length</th>
                 <th rel='tooltip' title="Read length for each barcode">Read Length Histogram</th>
-                <th rel='tooltip' title="BAM file for each barcode">BAM</th>
+                <th rel='tooltip' title="Files for each barcode">Files</th>
             </tr>
             </thead>
             <tbody>
@@ -39,18 +46,18 @@
                 <td> #=numberWithCommas(Q20_bases)# </td>
                 <td> #=numberWithCommas(read_count)# </td>
                 <td> ${mean_read_length} </td>
-                <td><img src="{{report.reportWebLink}}/basecaller_results/${file_prefix}.sparkline.png"></td>
+                <td><img onclick="modal_barcode_len('#= (barcode_name) ? barcode_name : "No barcode" #', '{{report.reportWebLink}}/basecaller_results/${file_prefix}.read_len_histogram.png')" src="{{report.reportWebLink}}/basecaller_results/${file_prefix}.sparkline.png"></td>
                 <td>
                     <span class="btn-group">
                         <a class="btn #=!bam_link && 'hide'#" href="${bam_link}">BAM</a>
                         <a class="btn #=!bam_link && 'hide'#" href="${bai_link}">BAI</a>
                     </span>
+                    <a class="btn #=!vcf_link && 'hide'#" href="${vcf_link}">VCF</a>
                 </td>
             </tr>
         </script>
         <div class="spacer clear"></div>
-    {%elif CA_barcodes_json %}
-        <pre class="hide"><code>{{CA_barcodes_json|safe}}</code></pre>
+    {%elif CA_barcodes_json and not CA_barcodes_json == "[]" %}
         <script>
             function numberWithCommas(x) {
                 var parts = x.toString().split(".");
@@ -91,8 +98,19 @@
             </tr>
         </script>
         <div class="spacer clear"></div>
-      
+    </div>
 {% endif %}
+<div id="modal_barcode_len" class="modal hide" style="width: 830px; margin-left: -415px;">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h3 id="modal_barcode_len_name">Barcode Read Lengths</h3>
+    </div>
+    <div class="modal-body">
+        <p id="modal_barcode_len_images"></p>
+    </div>
+    <div class="modal-footer">
+        <a href="#" data-dismiss="modal" class="btn">Close</a>
+    </div>
 </div>
 
 

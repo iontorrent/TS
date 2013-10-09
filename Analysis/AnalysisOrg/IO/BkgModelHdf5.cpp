@@ -3,13 +3,13 @@
 #include <sstream>
 #include "BkgModelHdf5.h"
 #include "BkgFitterTracker.h"
-
+#include "hdf5.h"
 
 
 BkgParamH5::BkgParamH5()
 {
 
-
+  max_frames = 0;
   nFlowBlks = 0;
   blocksOfFlow = 0;
   datacube_numflows = 0;
@@ -172,7 +172,7 @@ void BkgParamH5::TryInitBeads ( H5File &h5_local_ref, int verbosity )
     bead_base_parameter.InitBasicCube ( h5_local_ref, bead_col, bead_row, 5, 5,
                                         "/bead/bead_base_parameters","basic 5: copies, etbR, dmult, gain, deltaTime", "Copies,etbR,dmult,gain,deltaTime" );
 
-    if( verbosity>1 ){ //per flow parameters are only included when debug flag is set
+    if( verbosity>2 ){ //per flow parameters are only included when debug flag is set
         Amplitude.InitBasicCube ( h5_local_ref, bead_col, bead_row, datacube_numflows, blocksOfFlow,
                                   "/bead/amplitude", "mean hydrogens per molecule per flow", "" );
         krate_multiplier.InitBasicCube ( h5_local_ref, bead_col, bead_row, datacube_numflows, blocksOfFlow,
@@ -354,19 +354,49 @@ void BkgParamH5::InitRegionalParamCube ( H5File &h5_local_ref )
 
 void BkgParamH5::InitRegionDebugBead( H5File &h5_local_ref)
 {
-      region_debug_bead.InitBasicCube ( h5_local_ref, region_total, 5, 1, 1,
+    region_debug_bead.InitBasicCube ( h5_local_ref, region_total, 5, 1, 1,
                                       "/region/debug_bead/basic", "basic 5: copies, etbR, dmult, gain, deltaTime", "Copies,etbR,dmult,gain,deltaTime" );
     region_debug_bead_location.InitBasicCube ( h5_local_ref, region_total, 2, 1, 1,
         "/region/debug_bead/location", "col, row", "col,row" );
     region_debug_bead_amplitude_krate.InitBasicCube ( h5_local_ref, region_total, 2, datacube_numflows, blocksOfFlow,
         "/region/debug_bead/amplitude_krate", "Amplitude/krate_multiplier by numflows", "" );
 
-    region_debug_bead_predicted.InitBasicCube ( h5_local_ref, region_total, MAX_COMPRESSED_FRAMES, datacube_numflows, blocksOfFlow,
+    region_debug_bead_predicted.InitBasicCube ( h5_local_ref, region_total, max_frames, datacube_numflows, blocksOfFlow,
         "/region/debug_bead/predicted", "predicted trace for debug bead", "" );
-    region_debug_bead_corrected.InitBasicCube ( h5_local_ref, region_total, MAX_COMPRESSED_FRAMES, datacube_numflows, blocksOfFlow,
+    region_debug_bead_corrected.InitBasicCube ( h5_local_ref, region_total, max_frames, datacube_numflows, blocksOfFlow,
        "/region/debug_bead/corrected", "background-adjusted trace for debug bead", "" );
-    region_debug_bead_xtalk.InitBasicCube ( h5_local_ref, region_total, MAX_COMPRESSED_FRAMES, datacube_numflows, blocksOfFlow,
+    region_debug_bead_xtalk.InitBasicCube ( h5_local_ref, region_total, max_frames, datacube_numflows, blocksOfFlow,
        "/region/debug_bead/xtalk", "local xtalk estimated trace for debug bead", "" );
+}
+
+
+
+void BkgParamH5::InitBeads_BestRegion( H5File &h5_local_ref, int nBeads_live, Region *region)
+{
+    char buff[80];
+    //cout << "BkgParamH5::InitBeads_BestRegion... bestRegion=" << bestRegion.first << "," << bestRegion.second << endl << flush;
+    beads_bestRegion_location.InitBasicCube (h5_local_ref,nBeads_live,2,1,1,"/bestRegion/location", "y(row),x(col) for each bead", "row,col" );
+    beads_bestRegion_predicted.InitBasicCube(h5_local_ref,nBeads_live,max_frames,datacube_numflows,blocksOfFlow,"/bestRegion/predicted","predicted trace","");
+    beads_bestRegion_corrected.InitBasicCube(h5_local_ref,nBeads_live,max_frames,datacube_numflows,blocksOfFlow,"/bestRegion/corrected","background-adjusted trace","");
+    beads_bestRegion_amplitude.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,blocksOfFlow,"/bestRegion/amplitude","amplititude","");
+    beads_bestRegion_residual.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,blocksOfFlow,"/bestRegion/residual","residual error","");
+    beads_bestRegion_kmult.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,blocksOfFlow,"/bestRegion/kmult","kMult","");
+    beads_bestRegion_dmult.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,blocksOfFlow,"/bestRegion/dmult","dMult","");
+    beads_bestRegion_SP.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,blocksOfFlow,"/bestRegion/SP","SP","");
+    beads_bestRegion_R.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,blocksOfFlow,"/bestRegion/R","R","");
+    beads_bestRegion_fittype.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,blocksOfFlow,"/bestRegion/fittype","fittype","");
+    beads_bestRegion_gainSens.InitBasicCube(h5_local_ref,nBeads_live,1,1,1,"/bestRegion/gainSens","gain*sens","");
+    beads_bestRegion_timeframe.InitBasicCube (h5_local_ref,1,max_frames,1,1,"/bestRegion/timeframe", "Time Frame", "frameNumber");
+    sprintf(buff,"%d",nBeads_live);
+    h5_local_ref.CreateAttribute(beads_bestRegion_location.h5_set->getDataSetId(),"nBeads_live",buff);
+    sprintf(buff,"%d",region->h);
+    h5_local_ref.CreateAttribute(beads_bestRegion_location.h5_set->getDataSetId(),"region_h",buff);
+    sprintf(buff,"%d",region->w);
+    h5_local_ref.CreateAttribute(beads_bestRegion_location.h5_set->getDataSetId(),"region_w",buff);
+    sprintf(buff,"%d",region->row);
+    h5_local_ref.CreateAttribute(beads_bestRegion_location.h5_set->getDataSetId(),"region_y(row)",buff);
+    sprintf(buff,"%d",region->col);
+    h5_local_ref.CreateAttribute(beads_bestRegion_location.h5_set->getDataSetId(),"region_x(col)",buff);
 }
 
 
@@ -376,18 +406,15 @@ void BkgParamH5::TryInitRegionParams ( H5File &h5_local_ref, ImageSpecClass &my_
   ///------------------------------------------------------------------------------------------------------------
   /// region parameters
   ///------------------------------------------------------------------------------------------------------------
-
-
   try
   {
-
     empty_trace.InitBasicCube ( h5_local_ref, region_total, my_image_spec.uncompFrames, datacube_numflows, blocksOfFlow,
                                 "/region/empty_trace", "empty trace per frame per flow","" );
     empty_dc.InitBasicCube ( h5_local_ref, region_total, 1, datacube_numflows, blocksOfFlow,
                              "/region/empty_dc", "empty dc offset per flow","" );
 
     // write once items
-    dark_matter_trace.InitBasicCube ( h5_local_ref, region_total, NUMNUC, MAX_COMPRESSED_FRAMES, MAX_COMPRESSED_FRAMES,
+    dark_matter_trace.InitBasicCube ( h5_local_ref, region_total, NUMNUC, max_frames, max_frames,
                                       "/region/darkMatter/missingMass", "dark matter trace by nucleotide","" );
     darkness_val.InitBasicCube ( h5_local_ref, region_total, blocksOfFlow, 1,1,
                                  "/region/darkMatter/darkness","darkness per region per flowbuffer", "" );
@@ -395,26 +422,44 @@ void BkgParamH5::TryInitRegionParams ( H5File &h5_local_ref, ImageSpecClass &my_
     region_init_val.InitBasicCube ( h5_local_ref, region_total, 2, 1, 1,
                                     "/region/region_init_param", "starting values", "t_mid_nuc_start,sigma_start" );
 
-    time_compression.InitBasicCube ( h5_local_ref, region_total, 4, MAX_COMPRESSED_FRAMES, MAX_COMPRESSED_FRAMES,
+    time_compression.InitBasicCube ( h5_local_ref, region_total, 4, max_frames, max_frames,
                                      "/region/time_compression", "Time compression", "frameNumber,deltaFrame,frames_per_point,npt" );
 
     region_offset_val.InitBasicCube ( h5_local_ref, region_total, 2, 1, 1,
                                       "/region/region_location", "smallest corner of region aka offset of beads", "col,row" );
 
     //this is a data-cube per compute block, so need the 'rotating cube' formulation
-    emphasis_val.InitRotatingCube ( h5_local_ref, region_total, MAX_POISSON_TABLE_COL,MAX_COMPRESSED_FRAMES,nFlowBlks,
+    emphasis_val.InitRotatingCube ( h5_local_ref, region_total, MAX_POISSON_TABLE_COL,max_frames,nFlowBlks,
                                     "/region/emphasis","Emphasis vector by HPLen in compute blocks" );
 
     InitRegionalParamCube ( h5_local_ref );
-    InitRegionDebugBead( h5_local_ref);
     // store a "debug bead" as a representative for a region
+    InitRegionDebugBead( h5_local_ref);
 
+    // Note: bestRegion is Init2
   }
   catch ( char * str )
   {
     cout << "Exception raised while creating region datasets in BkgParamH5::Init(): " << str << '\n';
   }
 }
+
+
+void BkgParamH5::TryInitBeads_BestRegion ( H5File &h5_local_ref, int nBeads_live, Region *region )
+{
+  ///------------------------------------------------------------------------------------------------------------
+  /// region parameters
+  ///------------------------------------------------------------------------------------------------------------
+  try
+  {
+    InitBeads_BestRegion( h5_local_ref, nBeads_live, region);
+  }
+  catch ( char * str )
+  {
+    cout << "Exception raised while creating region datasets in BkgParamH5::TryInitBeadBestRegion(): " << str << '\n';
+  }
+}
+
 
 void BkgParamH5::ConstructOneFile ( H5File &h5_local_ref, string &hgLocalFile, string &local_results,char *my_name )
 {
@@ -431,8 +476,11 @@ void BkgParamH5::ConstructOneFile ( H5File &h5_local_ref, string &hgLocalFile, s
 }
 
 
-void BkgParamH5::Init ( char *results_folder, SpatialContext &loc_context, ImageSpecClass &my_image_spec, int numFlows, int write_params_flag )
+void BkgParamH5::Init ( char *results_folder, SpatialContext &loc_context, ImageSpecClass &my_image_spec, int numFlows, int write_params_flag, int _max_frames )
 {
+  cout << "BkgParamH5::Init... _max_frames = " << _max_frames << ", MAX_COMPRESSED_FRAMES = " << MAX_COMPRESSED_FRAMES << endl;
+  //max_frames = MAX_COMPRESSED_FRAMES;
+  max_frames = _max_frames;
   if ( write_params_flag>0 )
   {
     local_results_directory=results_folder;
@@ -468,8 +516,39 @@ void BkgParamH5::Init ( char *results_folder, SpatialContext &loc_context, Image
 }
 
 
+void BkgParamH5::Init2 (int write_params_flag, int nBeads_live, Region *region)
+{
+  if ( write_params_flag>1 )
+  {
+      ConstructOneFile ( h5TraceDbg, hgTraceDbgFile,local_results_directory, "trace.h5" );
+      InitBeads_BestRegion ( h5TraceDbg,nBeads_live,region );
+      saveBestRegionPointers();
+  }
+  else
+  {
+    hgTraceDbgFile = "";
+  }
+}
+
 
 void BkgParamH5::WriteOneFlowBlock ( DataCube<float> &cube, H5DataSet *set, int flow, int chunksize )
+{
+//  fprintf ( stdout, "Writing incremental H5-diagnostics at flow: %d\n", flow );
+  MemUsage ( "BeforeWrite" );
+  size_t starts[3];
+  size_t ends[3];
+  cube.SetStartsEnds ( starts, ends );
+  // here's the actual write
+  set->WriteRangeData ( starts, ends, cube.GetMemPtr() );
+  // set for next iteration
+  int nextflow = flow+1;
+  int nextchunk = min ( chunksize,datacube_numflows- ( flow+1 ) );
+  cube.SetRange ( 0, cube.GetNumX(), 0, cube.GetNumY(), nextflow, nextflow+nextchunk );
+  MemUsage ( "AfterWrite" );
+}
+
+
+void BkgParamH5::WriteOneFlowBlock ( DataCube<int> &cube, H5DataSet *set, int flow, int chunksize )
 {
 //  fprintf ( stdout, "Writing incremental H5-diagnostics at flow: %d\n", flow );
   MemUsage ( "BeforeWrite" );
@@ -497,6 +576,20 @@ void BkgParamH5::IncrementalWriteParam ( DataCube<float> &cube, H5DataSet *set, 
     WriteOneFlowBlock ( cube,set,flow,blocksOfFlow );
   }
 }
+
+
+void BkgParamH5::IncrementalWriteParam ( DataCube<int> &cube, H5DataSet *set, int flow )
+{
+  // please do not do this(!)
+  // there needs to be >one< master routine that controls when we write to files
+  // not several independent implementations of the same logic
+
+  if ( set!=NULL )
+  {
+    WriteOneFlowBlock ( cube,set,flow,blocksOfFlow );
+  }
+}
+
 
 // set to write one compute block
 void BkgParamH5::WriteOneBlock ( DataCube<float> &cube, H5DataSet *set, int iBlk )
@@ -558,6 +651,37 @@ void BkgParamH5::IncrementalWriteBeads ( int flow, int iBlk )
   }
 }
 
+void BkgParamH5::IncrementalWriteBestRegion ( int flow, bool lastflow )
+{
+    IncrementalWriteParam ( beads_bestRegion_predicted.source, beads_bestRegion_predicted.h5_set, flow );
+    IncrementalWriteParam ( beads_bestRegion_corrected.source, beads_bestRegion_corrected.h5_set, flow );
+    IncrementalWriteParam ( beads_bestRegion_amplitude.source, beads_bestRegion_amplitude.h5_set, flow );
+    IncrementalWriteParam ( beads_bestRegion_residual.source, beads_bestRegion_residual.h5_set, flow );
+    IncrementalWriteParam ( beads_bestRegion_fittype.source, beads_bestRegion_fittype.h5_set, flow );
+    IncrementalWriteParam ( beads_bestRegion_kmult.source, beads_bestRegion_kmult.h5_set, flow );
+    IncrementalWriteParam ( beads_bestRegion_dmult.source, beads_bestRegion_dmult.h5_set, flow );
+    IncrementalWriteParam ( beads_bestRegion_SP.source, beads_bestRegion_SP.h5_set, flow );
+    IncrementalWriteParam ( beads_bestRegion_R.source, beads_bestRegion_R.h5_set, flow );
+
+    if ( lastflow ) // do only once at lastflow, for data independant of flow
+    {
+        beads_bestRegion_location.SafeWrite(); // this only has to done once for all flows
+        beads_bestRegion_gainSens.SafeWrite();
+        beads_bestRegion_timeframe.SafeWrite();
+      /*
+      beads_bestRegion_corrected.SafeWrite();
+      beads_bestRegion_predicted.SafeWrite();
+      beads_bestRegion_amplitude.SafeWrite();
+      beads_bestRegion_residual.SafeWrite();
+      beads_bestRegion_fittype.SafeWrite();
+      beads_bestRegion_kmult.SafeWrite();
+      beads_bestRegion_dmult.SafeWrite();
+      beads_bestRegion_SP.SafeWrite();
+      beads_bestRegion_R.SafeWrite();
+     */
+     }
+}
+
 void BkgParamH5::IncrementalWriteRegions ( int flow, int iBlk )
 {
   // write to any live region parameters
@@ -601,6 +725,8 @@ void BkgParamH5::IncrementalWrite ( int flow, bool last_flow )
     int iBlk = CurComputeBlock ( flow );
     IncrementalWriteBeads ( flow,iBlk );
     IncrementalWriteRegions ( flow,iBlk );
+    IncrementalWriteBestRegion ( flow, last_flow );
+    IncrementalWrite_xyflow ( last_flow );
   }
 }
 
@@ -637,10 +763,43 @@ void BkgParamH5::CloseRegion()
   region_debug_bead_predicted.Close();
   region_debug_bead_corrected.Close();
   region_debug_bead_xtalk.Close();
-   region_debug_bead_location.Close();
+  region_debug_bead_location.Close();
   time_compression.Close();
   emphasis_val.Close();
+  beads_bestRegion_location.Close();
+  beads_bestRegion_predicted.Close();
+  beads_bestRegion_corrected.Close();
+  beads_bestRegion_amplitude.Close();
+  beads_bestRegion_residual.Close();
+  beads_bestRegion_kmult.Close();
+  beads_bestRegion_dmult.Close();
+  beads_bestRegion_SP.Close();
+  beads_bestRegion_R.Close();
+  beads_bestRegion_fittype.Close();
+  beads_bestRegion_gainSens.Close();
+  beads_bestRegion_timeframe.Close();
+}
 
+
+void BkgParamH5::CloseTraceXYFlow()
+{
+  beads_xyflow_predicted.Close();
+  beads_xyflow_corrected.Close();
+  beads_xyflow_amplitude.Close();
+  beads_xyflow_location.Close();
+  beads_xyflow_hplen.Close();
+  beads_xyflow_mm.Close();
+  beads_xyflow_kmult.Close();
+  beads_xyflow_dmult.Close();
+  beads_xyflow_SP.Close();
+  beads_xyflow_R.Close();
+  beads_xyflow_fittype.Close();
+  beads_xyflow_timeframe.Close();
+  beads_xyflow_residual.Close();
+  // keys
+  beads_xyflow_predicted_keys.Close();
+  beads_xyflow_corrected_keys.Close();
+  beads_xyflow_location_keys.Close();
 }
 
 
@@ -648,6 +807,7 @@ void BkgParamH5::Close()
 {
   CloseBeads();
   CloseRegion();
+  CloseTraceXYFlow();
   if ( hgBeadDbgFile.length() >0 )
   {
     cout << "bgParamH5 output: " << hgBeadDbgFile << endl;
@@ -655,6 +815,10 @@ void BkgParamH5::Close()
   if ( hgRegionDbgFile.length() >0 )
   {
     cout << "bgParamH5 output: " << hgRegionDbgFile << endl;
+  }
+  if ( hgTraceDbgFile.length() >0 )
+  {
+    cout << "bgParamH5 output: " << hgTraceDbgFile << endl;
   }
 }
 
@@ -700,6 +864,94 @@ void BkgParamH5::savePointers()
 }
 
 
+void BkgParamH5::saveBestRegionPointers()
+{
+  ptrs.m_beads_bestRegion_location = beads_bestRegion_location.Ptr();
+  ptrs.m_beads_bestRegion_corrected = beads_bestRegion_corrected.Ptr();
+  ptrs.m_beads_bestRegion_predicted = beads_bestRegion_predicted.Ptr();
+  ptrs.m_beads_bestRegion_amplitude = beads_bestRegion_amplitude.Ptr();
+  ptrs.m_beads_bestRegion_residual = beads_bestRegion_residual.Ptr();
+  ptrs.m_beads_bestRegion_kmult = beads_bestRegion_kmult.Ptr();
+  ptrs.m_beads_bestRegion_dmult = beads_bestRegion_dmult.Ptr();
+  ptrs.m_beads_bestRegion_SP = beads_bestRegion_SP.Ptr();
+  ptrs.m_beads_bestRegion_R = beads_bestRegion_R.Ptr();
+  ptrs.m_beads_bestRegion_fittype = beads_bestRegion_fittype.Ptr();
+  ptrs.m_beads_bestRegion_gainSens = beads_bestRegion_gainSens.Ptr();
+  ptrs.m_beads_bestRegion_timeframe = beads_bestRegion_timeframe.Ptr();
+}
 
 
+void BkgParamH5::InitBeads_xyflow(int write_params_flag, HashTable_xyflow &xyf_hash)
+{
+    if ( write_params_flag>1 )
+    {
+        int nBeads_xyf = xyf_hash.size(); // for xyflow traces
+        int nBeads_xy = xyf_hash.size_xy(); // for key traces only
+        assert(nBeads_xyf>0);
+        assert(nBeads_xy>0);
+        beads_xyflow_predicted.InitBasicCube(h5TraceDbg,nBeads_xyf,max_frames,1,1,"/xyflow/predicted","predicted trace","");
+        beads_xyflow_corrected.InitBasicCube(h5TraceDbg,nBeads_xyf,max_frames,1,1,"/xyflow/corrected","background-adjusted trace","");
+        beads_xyflow_amplitude.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,1,"/xyflow/amplitude","row:col:flow amplitude","");
+        beads_xyflow_residual.InitBasicCube (h5TraceDbg,nBeads_xyf,1,1,1,"/xyflow/residual", "residual error", "residual");
+        beads_xyflow_location.InitBasicCube(h5TraceDbg,nBeads_xyf,3,1,1,"/xyflow/location","row:col:flow location","");
+        beads_xyflow_hplen.InitBasicCube(h5TraceDbg,nBeads_xyf,2,1,1,"/xyflow/hplen","ACGT:len, homopolymer length of the reference sequence","");
+        beads_xyflow_mm.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,1,"/xyflow/mismatch","mismatch, m/mm=0/1","");
+        beads_xyflow_kmult.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,1,"/xyflow/kmult","kmult","");
+        beads_xyflow_dmult.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,1,"/xyflow/dmult","dmult","");
+        beads_xyflow_SP.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,1,"/xyflow/SP","SP","");
+        beads_xyflow_R.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,1,"/xyflow/R","R","");
+        beads_xyflow_fittype.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,1,"/xyflow/fittype","fittype","");
+        beads_xyflow_timeframe.InitBasicCube (h5TraceDbg,nBeads_xyf,max_frames,1,1,"/xyflow/timeframe", "Time Frame", "frameNumber");
 
+        ptrs.m_beads_xyflow_predicted = beads_xyflow_predicted.Ptr();
+        ptrs.m_beads_xyflow_corrected = beads_xyflow_corrected.Ptr();
+        ptrs.m_beads_xyflow_amplitude = beads_xyflow_amplitude.Ptr();
+        ptrs.m_beads_xyflow_location = beads_xyflow_location.Ptr();
+        ptrs.m_beads_xyflow_hplen = beads_xyflow_hplen.Ptr();
+        ptrs.m_beads_xyflow_mm = beads_xyflow_mm.Ptr();
+        ptrs.m_beads_xyflow_kmult = beads_xyflow_kmult.Ptr();
+        ptrs.m_beads_xyflow_dmult = beads_xyflow_dmult.Ptr();
+        ptrs.m_beads_xyflow_SP = beads_xyflow_SP.Ptr();
+        ptrs.m_beads_xyflow_R = beads_xyflow_R.Ptr();
+        ptrs.m_beads_xyflow_fittype = beads_xyflow_fittype.Ptr();
+        ptrs.m_beads_xyflow_timeframe = beads_xyflow_timeframe.Ptr();
+        ptrs.m_beads_xyflow_residual = beads_xyflow_residual.Ptr();
+
+        ptrs.m_xyflow_hashtable = &xyf_hash;
+
+        // key traces corresponding the the (x,y) locations of xyflow
+        beads_xyflow_location_keys.InitBasicCube(h5TraceDbg,nBeads_xy,2,1,1,"/xyflow/keys_location","row:col:flow location","");
+        beads_xyflow_predicted_keys.InitBasicCube(h5TraceDbg,nBeads_xy,max_frames,4,4,"/xyflow/keys_predicted","predicted trace for keys","");
+        beads_xyflow_corrected_keys.InitBasicCube(h5TraceDbg,nBeads_xy,max_frames,4,4,"/xyflow/keys_corrected","background-adjusted trace for keys","");
+        ptrs.m_beads_xyflow_location_keys = beads_xyflow_location_keys.Ptr();
+        ptrs.m_beads_xyflow_predicted_keys = beads_xyflow_predicted_keys.Ptr();
+        ptrs.m_beads_xyflow_corrected_keys = beads_xyflow_corrected_keys.Ptr();
+
+    }
+}
+
+
+void BkgParamH5::IncrementalWrite_xyflow ( bool lastflow )
+{
+    if ( lastflow ) // do only once at the last flow
+    {
+      beads_xyflow_corrected.SafeWrite();
+      beads_xyflow_predicted.SafeWrite();
+      beads_xyflow_amplitude.SafeWrite();
+      beads_xyflow_location.SafeWrite();
+      beads_xyflow_hplen.SafeWrite();
+      beads_xyflow_mm.SafeWrite();
+      beads_xyflow_kmult.SafeWrite();
+      beads_xyflow_dmult.SafeWrite();
+      beads_xyflow_SP.SafeWrite();
+      beads_xyflow_R.SafeWrite();
+      beads_xyflow_fittype.SafeWrite();
+      beads_xyflow_timeframe.SafeWrite();
+      beads_xyflow_residual.SafeWrite();
+
+      beads_xyflow_location_keys.SafeWrite();
+      beads_xyflow_corrected_keys.SafeWrite();
+      beads_xyflow_predicted_keys.SafeWrite();
+
+     }
+}

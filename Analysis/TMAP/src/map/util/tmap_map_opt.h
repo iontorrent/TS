@@ -199,6 +199,7 @@ typedef struct __tmap_map_opt_t {
     int32_t rand_read_name;  /*!< specifies to randomize based on the read name (-u,--rand-read-name) */
     int32_t prefix_exclude; /*!< specify the number letter excluded from the prefix of read name when doing randomize based on read name */
     int32_t suffix_exclude; /*!< specify the number letter excluded from the suffix of read name when doing randomize based on read name */
+    int32_t use_new_QV;  /*!< A flag to turn on calculation of new mapping QV formula */ 
     int32_t input_compr;  /*!< the input compression type (-j,--input-bz2 and -z,--input-gz) */
     int32_t output_type;  /*!< the output type (0 - SAM, 1 - BAM (compressed), 2 - BAM (uncompressed)) (-o,--output-type) */
     int32_t end_repair; /*!< specifies to perform 5' end repair (0 - disabled, 1 - prefer mismatches, 2 - prefer indels) (--end-repair) */

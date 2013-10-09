@@ -18,6 +18,12 @@
 <link rel="stylesheet" type="text/css" href="./css/demo_table.css"/>
 <link rel="stylesheet" type="text/css" href="./css/stylesheet.css"/>
 
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css">
+<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet">
+<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet">
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css">
+
+
 <script type="text/javascript">
 $(function() {
   $().tipTipDefaults({ delay : 0 });
@@ -50,7 +56,10 @@ $(function() {
     td {text-align:right;width=100%}
     .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
    </style>
-   <table class="noheading" style="table-layout:fixed">
+
+<div class="k-widget k-grid">
+  <table class="table-striped">
+    <thead class="k-grid-header">
     <tr>
      <th><span class="help" title="The barcode ID for each set of reads.">Barcode Name</span></th>
       <th><span class="help" title="Sample name">Sample Name</span></th>
@@ -60,6 +69,7 @@ $(function() {
       {% endif %}
       <th><span class="help" title="Download links">Download Links</span></th>
     </tr>
+    </thead>
     
   {% for barcode in barcode_data %}
     <tr>
@@ -76,8 +86,8 @@ $(function() {
           <td>{{barcode.summary.hotspots_total.variants}}</td>
         {% endif %}
         
-        <td><a href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">[VCF.GZ]</a>
-            <a href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">[VCF.GZ.TBI]</a></td>
+        <td><a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">VCF.GZ</a>
+            <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">VCF.GZ.TBI</a></td>
 
       {% elif barcode.status == "queued" %}
         <td style="text-align:left">{{barcode.name}}</td><td colspan="3" style="text-align:left">Queued</td>
@@ -103,7 +113,9 @@ $(function() {
   {% endfor %}
 
 
-   </table></div>
+   </table>
+ </div>
+</div>
    
   {% if autorefresh %}
     <br/><h3 style="text-align:center;color:red">*** Analysis is not complete ***</h3>

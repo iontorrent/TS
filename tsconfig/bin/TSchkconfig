@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2010-2013 Ion Torrent Systems, Inc. All Rights Reserved
 #
 #	Torrent Server Checking Configuration
 
@@ -29,10 +29,10 @@ log "version "`IonVersionGetMajor`"."`IonVersionGetMinor`"."`IonVersionGetReleas
 #---	check for hostname change		---#
 #------------------------------------------#
 if grep -q "hostname:" $TSCONFIG_DIR/$TSCONFIG_CONF 2>/dev/null; then
-    
+
     prevHostName=$(grep "hostname:" $TSCONFIG_DIR/$TSCONFIG_CONF|cut -f2 -d":")
     currHostName=$(hostname -f)
-    
+
     if [ "$prevHostName" == "" -o "$currHostName" == "" ]; then
         log "Error determining hostnames: prev:$prevHostName curr:$currHostName"
     else
@@ -44,9 +44,9 @@ if grep -q "hostname:" $TSCONFIG_DIR/$TSCONFIG_CONF 2>/dev/null; then
                 # Master Node Name Change
                 invoke-rc.d apache2 stop
                 ion_daemon_ctrl stop
-    
+
                 change_hostname_sge $prevHostName $currHostName > /var/log/ion/TSckconfig.rename 2>&1
-    
+
                 # change_hostname_sge restarts the sge daemons
                 invoke-rc.d apache2 start
                 ion_daemon_ctrl start
@@ -56,7 +56,7 @@ if grep -q "hostname:" $TSCONFIG_DIR/$TSCONFIG_CONF 2>/dev/null; then
                 echo "Hostname changed.  You will have to run TSconfig --configure-compute" > /var/log/ion/TSckconfig.rename 2>&1
                 echo "in order to re-add this hostname to the SGE queue" >> /var/log/ion/TSckconfig.rename 2>&1
             fi
-            
+
             # update conf file with new hostname
             sed -i "s/hostname:.*/hostname:$currHostName/" $TSCONFIG_DIR/$TSCONFIG_CONF
 
@@ -78,7 +78,7 @@ if is_master ; then
     SGE_CELL=${SGE_CELL:-iontorrent}
 	sgeFQDN=$(cat $SGE_ROOT/$SGE_CELL/common/act_qmaster|awk '{print $1}')
     simpleHostName=$(echo $sgeFQDN|cut -f1 -d".")
-    
+
     # check that loopback exists
     if (grep -q "^127.0.1.1" /etc/hosts); then
 	    log "loopback exists in /etc/hosts"
@@ -127,5 +127,6 @@ if is_master; then
 else
 	log "IP address check is not supported on compute nodes"
 fi
+
 
 exit 0

@@ -1,5 +1,7 @@
 //this file has the JavaScript for the default report
 
+api_plugin_show_url = "/rundb/api/v1/plugin/show/";
+
 function htmlEscape(str) {
     return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br/>');
 }
@@ -14,19 +16,29 @@ function resizeiFrames(){
     
     $(".pluginBlock:visible").each(function(){
         var height = $(this).contents().height(),
-            width = $(".pluginGroupList").css("width");
+            width = $(this).parent().css("width");
         if($(this).height() != height) $(this).height(height);
         if($(this).width() != width) $(this).width(width);
     });
 
     $(".pluginMajorBlock:visible").each(function(){
-        var height = $(this).contents().find("body").height() + 10;
+        var height = $(this).contents().find("body").height() + 20;
         //console.log($(this).attr("id") + " " + height);
         var width = parseInt($(".section").css("width"),10) - 20;
         if ($(this).height() != height ) $(this).height(height);
         if ($(this).width() != width)  $(this).width(width);
     });
 
+}
+
+function update_plugin_show(controls) {
+    $.ajax({
+        type: 'POST',
+        url: api_plugin_show_url,
+        data: JSON.stringify(controls),
+        contentType : 'application/json',
+        datType: 'json'
+    });
 }
 
 //get the status of the plugins from the API
@@ -42,6 +54,35 @@ function pluginStatusLoad() {
         padding: '3',
         align: 'left'
     });
+
+    $.ajax({
+        type: 'GET',
+        url: djangoURL + "?major=true",
+        contentType: "application/json; charset=utf-8",
+        dataType: "json",
+        async: false,
+        success: function (data) {
+            $('#major_blocks').html('');
+            iframescroll = ($.browser.msie) ? "yes" : "no";
+            for (var i = 0; i < data.length; i++) {
+                var name_row = plugin_major_template(data[i]);
+                var majorblock = $(name_row).appendTo("#major_blocks");
+                var plugin_links = majorblock.find(".plugin_links")
+                for (var o = 0; o < data[i].Links.length; o++) { 
+                    plugin_links.append('<a href="'+ data[i].URL + data[i].Links[o]+'">'+ data[i].Links[o] +'</a>');
+                }
+                if (data[i].Files.length == 0) {
+                    majorblock.append('<div class="section">No plugin output at this time.</div>');
+                }
+                for (var j = 0; j < data[i].Files.length; j++) {
+                    majorblock.append('<div class="section"><iframe scrolling="'+ iframescroll +'" id="' + data[i].Name + '" class="pluginMajorBlock" src="' + data[i].URL + data[i].Files[j] + '" frameborder="0" height="0px" ></iframe></div>');
+                }
+            }
+        },
+        error: function () {
+            $('#major_blocks').text('Failed to get Plugin Status');
+        }
+    });
     $("#pluginStatusTable").fadeOut();
     $("#pluginStatusTable").html("");
     $.ajax({
@@ -51,18 +92,27 @@ function pluginStatusLoad() {
         dataType: "json",
         async: false,
         success: function (data) {
-            var template = kendo.template($("#pluginStatusTemplate").html())
+            table_plugin_names = [];
             for (var i = 0; i < data.length; i++) {
-                var row = template(data[i]);
-                $("#pluginStatusTable").append(row).find(".plugin-collapse:last").click(function(){
-                    $(this).text($(this).text() == '-' ? '+' : '-');
-                    $(this).closest(".pluginGroup").find(".pluginGroupList").slideToggle(250);
-                    return false;
-                });
+                var row = plugin_status_template(data[i]);
+                var name = data[i].Name;
+                table_plugin_names.push(name);
+                (function(name){
+                    $("#pluginStatusTable").append(row).find(".plugin-collapse:last").click(function(){
+                        $(this).text($(this).text() == '-' ? '+' : '-');
+                        var block = $(this).closest(".pluginGroup").find(".pluginGroupList");
+                        var is_visible = block.is(":visible");
+                        var control = {};
+                        control[name] = !is_visible;
+                        update_plugin_show(control);
+                        block.slideToggle(250);
+                        return false;
+                    });
+                })(name);
             }
         },
         error: function (msg) {
-            $("#pluginStatusTable").text("Failed to get Plugin Status: " + msg);
+            $("#pluginStatusTable").text("Failed to get Plugin Status");
         }
     }); //for ajax call
     $("#pluginStatusTable").fadeIn();
@@ -95,6 +145,10 @@ function progress_load(){
 }
 
 $(document).ready(function(){
+    plugin_status_template = kendo.template($("#pluginStatusTemplate").html());
+    plugin_major_template = kendo.template($("#pluginMajorBlockTemplate").html());
+    console.log("Get ready");
+    plugin_dropdown_template = kendo.template($("#pluginDropdownTemplate").html());
 
     //get the report PK so we can do stuff!    
     djangoPK = $("#report").data("pk");
@@ -210,27 +264,6 @@ $(document).ready(function(){
     //do the initial plugin status load
     pluginStatusLoad();
 
-    $.ajax({
-    type: 'GET',
-    url: djangoURL + "?major=true",
-    contentType: "application/json; charset=utf-8",
-    dataType: "json",
-    async: false,
-    success: function (data) {
-            iframescroll = ($.browser.msie) ? "yes" : "no";
-
-            for (var i = 0; i < data.length; i++) {
-                //if there is a block, show it
-                if (data[i].Files.length > 0){
-                    var majorblock = $('<h2>' + data[i].Name + ' (' + data[i].Version + ') </h2>').appendTo("#major_blocks");
-                    for (var j = 0; j < data[i].Files.length; j++) {
-                        majorblock.append('<div class="section"><iframe scrolling="'+ iframescroll +'" id="' + data[i].Name + '" class="pluginMajorBlock" src="' + data[i].URL + data[i].Files[j] + '" frameborder="0" height="0px" ></iframe></div>');
-                    }
-                }
-            }
-        }
-    });
-
     // Remove plugin result (post delete trigger will delete content)
     // confirm that it should be deleted
     $('.pluginRemove').live("click", function(e) {
@@ -286,20 +319,27 @@ $(document).ready(function(){
     $("#pluginExpandAll").click(function(){
         $("#pluginStatusTable .plugin-collapse").text('-');
         $("#pluginStatusTable .pluginGroupList").slideDown('fast');
+        var controls = {};
+        for (var i=0; i < table_plugin_names.length; i++)
+            controls[table_plugin_names[i]] = true;
+        update_plugin_show(controls);
     });
     $("#pluginCollapseAll").click(function(){
         $("#pluginStatusTable .plugin-collapse").text('+');
         $("#pluginStatusTable .pluginGroupList").slideUp('fast');
+        var controls = {};
+        for (var i=0; i < table_plugin_names.length; i++)
+            controls[table_plugin_names[i]] = false;
+        update_plugin_show(controls);
     });
 
     //the plugin launcher
     $("#pluginDialogButton").click(function () {
         //open the dialog
-
-        $('#plugin-modal').modal('show');
-
+        $("#modal-header").html('Select a plugin');
         $("#modal-body").html("<div id='pluginLoad'></div><div id='pluginList'></div>");
         $("#pluginLoad").html("<span>Loading Plugin List <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
+        $('#plugin-modal').modal('show');
 
         //get the list of plugins from the API
         $.ajax({
@@ -314,7 +354,7 @@ $(document).ready(function(){
                     $("#pluginList").html("<p> There are no plugins what are enabled </p>");
                     return false;
                 }
-                $("#pluginList").html('<ul id="pluginUL" class="expandable"></ul>');
+                $("#pluginList").html('<table id="plugin_table" class="table table-striped"></table>');
                 plugins = data.objects.sort(function (a, b) {
                     return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
                 });
@@ -334,10 +374,22 @@ $(document).ready(function(){
                             val = plugins[i];
                             data = plugin_types[val.id];
                             if (data.input !== undefined) {
-                                $("#pluginUL").append('<li data-id="' + val.id + '" class="plugin_input_class" id="' + val.name + '_plugin"><a href="' + data.input + '?report=' + djangoPK + '" class="plugin_link colorinput">' + val.name + '</a>' + '<span>' + " &#8212; v" + val.version + '</span></li>');
+                                $("#plugin_table").append(
+                                    '<tr><td><a href="' + data.input + 
+                                    '?report=' + djangoPK + 
+                                    '" class="plugin_input_class plugin_link colorinput" data-id="' + val.id + 
+                                    '" id="' + val.name + 
+                                    '_plugin">' + val.name + '</a> <small>&#8212; v' + val.version + '</small></td></tr>'
+                                );
                             }
                             else {
-                                $("#pluginUL").append('<li data-id="' + val.id + '" class="plugin_class" id="' + val.name + '_plugin"><a href="#pluginDialog">' + val.name + '</a>' + '<span>' + " &#8212; v" + val.version + '</span></li>');
+                                $("#plugin_table").append(
+                                    '<tr><td><a href="#pluginDialog" class="plugin_class" data-id="' + val.id + 
+                                    '" id="' + val.name + 
+                                    '_plugin">' + val.name + 
+                                    '</a> <small>&#8212; v' + val.version + 
+                                    '</small></td></tr>'
+                                );
                             }
                         }
                     },
@@ -347,8 +399,6 @@ $(document).ready(function(){
                 });
 
                 $("#pluginLoad").html("");
-                $("#modal-header").html('Select a plugin');
-                $("#pluginList").show();
             }
         });
 
@@ -545,7 +595,6 @@ $(document).ready(function(){
                 rowTemplate: kendo.template($("#barcodesRowTemplate").html())
             });
         }
-
         $("#file_table").kendoGrid({
             dataSource: {
                     pageSize: 10

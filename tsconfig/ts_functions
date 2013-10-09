@@ -5,8 +5,8 @@ function print_help()
 {
     echo
     echo "Usage: TSconfig [options]"
-    echo -e "\t--configure-server            Configure this server as a head node"
-    echo -e "\t--reconfigure                 Re-run Configuration steps"
+    echo -e "\t--configure-server            Configure this server as a head node (WARNING: This will update the Torrent Suite)"
+    echo -e "\t--reconfigure                 Re-run Configuration steps (Without updating the Torrent Suite)"
     #echo -e "\t--configure-compute           Configure this server as a compute node"
     echo -e "\t--configure-pgm-support       Add support for direct connected PGMs"
     #echo -e "\t--remove-pgm-support          Remove support for raw data (PGMs)"
@@ -478,28 +478,6 @@ function ion_daemon_ctrl()
         if [ -e /etc/init.d/ionPlugin  ]; then invoke-rc.d ionPlugin restart 1>&2; fi
         if [ -e /etc/init.d/celeryd  ]; then invoke-rc.d celeryd restart 1>&2; fi
         ;;
-        disable-daemons)
-        # Prevent job server daemon from starting at boot
-        update-rc.d -f ionJobServer remove
-        update-rc.d ionJobServer stop 97 2 3 4 5 .
-        # Prevent data crawler daemon from starting at boot
-        update-rc.d -f ionCrawler remove
-        update-rc.d ionCrawler stop 97 2 3 4 5 .
-        # Prevent archiver daemon from starting at boot
-        if [ -e /etc/init.d/ionArchive  ]; then
-            update-rc.d -f ionArchive remove
-            update-rc.d ionArchive stop 97 2 3 4 5 .
-        fi
-        # Prevent plugin daemon from starting at boot
-        update-rc.d -f ionPlugin remove
-        update-rc.d ionPlugin stop 97 2 3 4 5 .
-        # Prevent celeryd daemon from starting at boot
-        update-rc.d -f celeryd remove
-        update-rc.d celeryd stop 97 2 3 4 5 .
-        # Prevent apache2 daemon from starting at boot
-        update-rc.d -f apache2 remove
-        update-rc.d apache2 stop 91 2 3 4 5 .
-        ;;
     esac
     return 0
 }
@@ -885,8 +863,10 @@ function cleanup_previousInstallations()
         dpkg -P ion-eaplugins 1>&2 || true
     fi
 
-    #---    Clean up /usr/local/lib/python2.6/dist-packages ---#
-    DIR="/usr/local/lib/python2.6/dist-packages/"
+    #---    Clean up old python pages
+    DIR=$(python -c "from distutils.sysconfig import get_python_lib; print get_python_lib(prefix='/usr/local')")
+    DIR2="/usr/local/lib/python2.6/dist-packages/" ## Intentionally hardcoding old path
+
     FILES=(
             drmaa-0.4b3
             django-tastypie-0.9.7
@@ -904,6 +884,7 @@ function cleanup_previousInstallations()
             )
     for f in ${FILES[@]}; do
         rm -rf ${DIR}/${f}*
+        rm -rf ${DIR2}/${f}*
     done
 
     # Some files left in /usr/local/bin from jsonpipe-0.0.7 tarball
@@ -1002,6 +983,9 @@ function cleanup_previousInstallations()
             service tomcat6 restart 1>&2
         fi
     fi
+
+    # File created with TS 4.0
+    rm -f /MegaSAS.log 1>&2 || true
 
     return 0
 }
@@ -1234,15 +1218,12 @@ EOF
 
 function preinst_ion_packages ()
 {
+    # As of TS 4.0, ion-pgmupdates1.1 package is to be removed
+    if dpkg -l ion-pgmupdates1.1|tail -1|grep -q ^ii; then
+        dpkg -r ion-pgmupdates1.1 1>&2
+    fi
     return 0
 }
-
-#Dependency Notes:
-#
-# The matePairIndividualTags plugin requires these packages:
-#	emboss-data,emboss-lib,libnucleus6,libajax6
-# The emboss package itself is not installed because of a filename conflict with
-# /usr/bin/tmap.
 
 function install_system_packages ()
 {
@@ -1353,7 +1334,7 @@ function config_ion_packages ()
     if dpkg -l tmap|tail -1|grep -q ^ii; then
         echo "Removing deprecated package: tmap.  Package ion-analysis now provides tmap." 1>&2
         #apt-get --assume-yes --force-yes remove tmap 1>&2 || true
-        dpkg -P --ignore-depends=ion-dbreports,ion-alignment tmap 1>&2 || true
+        dpkg -P --ignore-depends=ion-dbreports tmap 1>&2 || true
         echo "removal done." 1>&2
     fi
 
@@ -1376,9 +1357,20 @@ function reconfig_ion_packages ()
         pkg_list=( ${server_files[@]} )
     fi
 
+
     for pkg in ${pkg_list[@]}; do
         echo $pkg
-        dpkg-reconfigure $pkg 1>&2 || true
+        if [ "${pkg,,}" == "ion-torrentr" ]; then
+            # skip ion-torrentr pkg because it tries to download files
+            echo -e "\tSkipping $pkg reconfiguration (it attempts to download files)"
+            echo -e "\tYou can manually reconfigure $pkg with: sudo dpkg-reconfigure $pkg"
+        elif [ "$pkg" == "ion-publishers" ]; then
+            # skip ion-publishers because it only restarts celery and apache.
+            echo -e "\tSkipping $pkg reconfiguration (it restarts celeryd and apache2)"
+            echo -e "\tYou can manually reconfigure $pkg with: sudo dpkg-reconfigure $pkg"
+        else
+            dpkg-reconfigure $pkg 1>&2 || true
+        fi
     done
     echo "=================================================================="
 }
@@ -1844,7 +1836,8 @@ EOFdb
     #
     # Allow access to database from apache webserver
     #
-    PGHBACONF=$(find /etc -name pg_hba.conf 2>/dev/null)
+    PGHBACONF=$(find /etc/postgresql -name pg_hba.conf 2>/dev/null)
+    su - postgres -c "sed -i 's/peer/trust/' $PGHBACONF"
     su - postgres -c "sed -i 's/md5/trust/' $PGHBACONF"
     su - postgres -c "sed -i 's/ident/trust/' $PGHBACONF"
     su - postgres -c "sed -i 's/ident sameuser/trust/' $PGHBACONF"
@@ -1852,7 +1845,7 @@ EOFdb
     #
     # Set some sane operational parameter values: postgresql.conf
     #
-    sqlconffile=/etc/postgresql/8.4/main/postgresql.conf
+    sqlconffile=$(find /etc/postgresql -name postgresql.conf 2>/dev/null)
     sqlshmfile=/etc/sysctl.d/10-postgresql-shm.conf
 
     if [ -f $sqlconffile ]; then
@@ -3198,7 +3191,7 @@ function error ()
     log "ERROR ${CODE}"
     if [[ -n $MESSAGE ]]; then log "${MESSAGE}"; fi
     log "LINENO: ${PARENT_LINENO}"
-    exit "${CODE}"
+    exit ${CODE}
 }
 
 #---    Delete a host from SGE configuration    ---#
@@ -3269,7 +3262,7 @@ function log ()
 {
     msg="$@"
     logout=$TSCONFIG_LOG_DIR/$TSCONFIG_LOG_BASENAME
-    echo "$(date +"%F %H:%M:%S") $(basename $0): $msg"  >> $logout
+    echo -e "$(date +"%F %H:%M:%S") $(basename $0): $msg"  >> $logout
 }
 
 #
@@ -3407,7 +3400,7 @@ function is_proton_ts ()
 function updated_mirror_check()
 {
     SRCLIST="/etc/apt/sources.list"
-    APT_ENTRY="deb http://ionupdates.com/updates/software lucid/"
+    APT_ENTRY="deb http://ionupdates.com/updates/software `lsb_release -cs`/"
 
     if [ ! -e $SRCLIST ]; then
         # major problem if this file doesn't exist
@@ -3427,7 +3420,7 @@ function updated_mirror_check()
         else
 
             echo "Found the expected entry:" 1>&2
-            # deb http://updates.iontorrent.com/updates/software lucid/
+            # deb http://updates.iontorrent.com/updates/software <release name>/
             # N.B. use of comma as the sed command delimiter.  Insert desired entry
             # before expected entry
             sed -i "/updates.iontorrent.com/ s,$,\n${APT_ENTRY}," $SRCLIST
@@ -3485,3 +3478,4 @@ function config_apt_cache() {
     #TODO: Can we move existing contents to the new cache directory?
     #This would preserve already downloaded pkg files.
 }
+

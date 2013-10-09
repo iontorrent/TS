@@ -1,16 +1,18 @@
 {% extends "rundb/configure/base.html" %}
+{% load url from future %}
 {% load pagetools %}
+{% load static from staticfiles %}
 {% block sub-nav %}
-  <li><a href="{% url configure_about %}">About</a></li>
-  <li><a href="{% url configure_references %}">References</a></li>
-  <li><a href="{% url configure_services %}">Services</a></li>
-  <li><a href="{% url configure_plugins %}">Plugins</a></li>
-  <li class="active"><a href="{% url configure_configure %}">Configure</a></li>
-  <li><a href="{% url configure_account %}">Accounts</a></li>
+  <li><a href="{% url "configure_about" %}">About</a></li>
+  <li><a href="{% url "configure_references" %}">References</a></li>
+  <li><a href="{% url "configure_services" %}">Services</a></li>
+  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+  <li class="active"><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
     <div class="content clearfix">
-        <form class="form-horizontal" id="contacts_form" enctype="application/x-www-form-urlencoded" action="{% url configure_configure %}" method="POST" >
+        <form class="form-horizontal" id="contacts_form" enctype="application/x-www-form-urlencoded" action="{% url "configure_configure" %}" method="POST" >
             <div>
                 <h1>Customer Support Contact</h1>
                 <p>This is the person in your organization who should be notified during a support request of problems related to the nature of an experiment/run.</p>
@@ -92,7 +94,7 @@
     <div class="content">
         <h1>Customize Site Name</h1>
         <br>
-        <form action="{% url configure_configure %}" method="POST" class="form-inline" id="sitename">
+        <form action="{% url "configure_configure" %}" method="POST" class="form-inline" id="sitename">
             <input type="text" name="site_name" value="{{base_site_name}}">
             <input class="btn btn-primary" type="submit" value="Save Name">
         </form>
@@ -107,7 +109,7 @@
     <div class="content">
         <div class="clearfix">
             <h1 class="pull-left" name="email">Email</h1>
-            <a id="add_email" href="{% url edit_email %}" class="btn btn-primary pull-right">Add Email</a>
+            <a id="add_email" href="{% url "edit_email" %}" class="btn btn-primary pull-right">Add Email</a>
         </div>
         <div id="email_table"></div>
         <div id="no_email_configured" class="centered_message" style="display:none">No Email Addresses Configured.</div>
@@ -121,7 +123,7 @@
     </div>
     </div>
 
-<script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/configure/configure/contacts.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/configure/configure/emails.js"></script>
+<script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/configure/configure/contacts.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/configure/configure/emails.js"%}"></script>
 {% endblock content %}

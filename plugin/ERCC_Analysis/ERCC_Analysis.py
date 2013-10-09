@@ -1,128 +1,84 @@
-# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-from __future__ import division
+#!/usr/bin/python
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+
+import os
 import sys
-sys.path.insert(0, sys.argv[6]+"/code")
-from string import Template
-from math import log
-from proc_coverage import SamCoverage
-from proc_ercc import load_ercc_conc, dose_response, generate_reports
-from ercc_counter import write_output_counts_file
-from jqplot_param_generator import chart_series_params, generate_trendline_points, generate_color_legend
-from create_summary import create_summary_block
+import simplejson as json
+from subprocess import *
+from ion.plugin import *
+from django.utils.datastructures import SortedDict
 
-PLUGIN_NAME = sys.argv[4]
-PLUGIN_DIR = sys.argv[6]
-DATA = PLUGIN_DIR+'/data'
-SRC = PLUGIN_DIR+'/code'
-RAW_SAM_FILE = sys.argv[1] + '/tmap.sam'
-FILTERED_SAM_FILE = sys.argv[1] + '/filtered.sam'
-OUTPUT_DIR = sys.argv[2] + '/plugin_out/'+sys.argv[4]+'_out/'
-COUNTS_FILE = OUTPUT_DIR + 'ercc.counts'
-COUNTS_URL = sys.argv[3] + '/plugin_out/'+sys.argv[4]+'_out/ercc.counts'
-GENOME   = DATA + '/ercc.genome'
-ERCC_CONC = DATA + '/ERCCconcentration.txt'
-ERCC_CONC_COLS = {'ERCC ID': str, 'Pool1': float, 'Pool2': float, 'log2pool1': float, 'log2pool2': float}
-try:
-  MINIMUM_RSQUARED = float(sys.argv[5])
-except ValueError: 
-  MINIMUM_RSQUARED = 0.9
-try:
-  MINIMUM_COUNTS = int(sys.argv[7])
-except ValueError: 
-  MINIMUM_COUNTS = 1
-try:
-  ERCC_POOL_NBR = int(sys.argv[8])
-except:
-  ERCC_POOL_NBR = 1
-try:
-  FASTQ_FILE_CREATED = sys.argv[9]
-except:
-  FASTQ_FILE_CREATED = 'N'
-try:
-  BARCODE_ENTERED = sys.argv[10]
-except:
-  BARCODE_ENTERED = 'none found'
+class ERCC_Analysis(IonPlugin):
+	"""ERCC_Analysis Plugin for use with ERCC RNA Spike-In Control Mixes"""
+	version = "4.0-r%s" % filter(str.isdigit,"$Revision: 72040 $")
+	envDict = dict(os.environ)
+	
+	def ERCCRun(self):
+		self.envDict['OUTFILE'] = '%s/%s.html'%(self.envDict['RESULTS_DIR'], self.envDict['PLUGINNAME'])
+		self.envDict['REFERENCE'] = '%s/ERCC92/ERCC92.fasta'%self.envDict['PLUGIN_PATH']
+		if (not os.path.isfile(self.envDict['REFERENCE'])):
+			print 'ERROR: No fasta reference available.'
+			sys.exit(1)
+		else:
+			print 'Reference is %s'%self.envDict['REFERENCE']
+		
+		# Check whether it's a barcode run.
+		if (os.path.isfile(self.envDict['TSP_FILEPATH_BARCODE_TXT'])):
+			print 'barcoded run\n'
+			self.envDict['INPUT_BAM'] = '%s/%s'%(self.envDict['RESULTS_DIR'], self.envDict.get('PLUGINCONFIG__BARCODE', ""))
+			self.envDict['BARCODING_USED'] = 'Y'
+		else:
+			print 'non-barcoded run\n'
+			self.envDict['INPUT_BAM'] = self.envDict['TSP_FILEPATH_BAM']
+			self.envDict['BARCODING_USED'] = 'N'
+		
+		# Preprocess.
+		preOut = Popen(['python', '%s/code/preproc_fastq.py'%self.envDict['DIRNAME'], self.envDict['INPUT_BAM'], self.envDict['BARCODING_USED'], self.envDict['RESULTS_DIR']], stdout=PIPE, env=self.envDict)
+		print preOut.communicate()[0]
+		
+		# Call tmap to create the sam file.
+		if (os.path.isfile('%s/filtered.fastq'%self.envDict['RESULTS_DIR'])):
+			tmap_out = Popen(['tmap', 'mapall', '-f', self.envDict['REFERENCE'], '-r', '%s/filtered.fastq'%self.envDict['RESULTS_DIR'], '-a', '1', '-g', '0', '-n', '8', 'stage1', 'map1', '--seed-length', '18', 'stage2', 'map2', 'map3', '--seed-length', '18'], stdout=PIPE, env=self.envDict)
+			sam_write = open('%s/tmap.sam'%self.envDict['RESULTS_DIR'], 'w')
+			sam_write.write(tmap_out.communicate()[0])
+			sam_write.close()
+			self.envDict['FASTQ_EXISTS'] = 'Y'
+		else:
+			self.envDict['FASTQ_EXISTS'] = 'N'
+		
+		# Create the html report.
+		htmlRun = Popen(['python', '%s/ERCC_analysis_plugin.py'%self.envDict['DIRNAME'], self.envDict['RESULTS_DIR'], self.envDict['ANALYSIS_DIR'], self.envDict['URL_ROOT'], self.envDict['PLUGINNAME'], self.envDict.get('PLUGINCONFIG__MINRSQUARED', ""), self.envDict['DIRNAME'], self.envDict.get('PLUGINCONFIG__MINCOUNTS', ""), self.envDict.get('PLUGINCONFIG__ERCCPOOL', ""), self.envDict['FASTQ_EXISTS'], self.envDict.get('PLUGINCONFIG__BARCODE', "")], stdout=PIPE, env=self.envDict)
+		htmlOut = open(self.envDict['OUTFILE'], 'w')
+		htmlOut.write(htmlRun.communicate()[0])
+		htmlOut.close()
+		
+		# Delete filtered .bam in RESULTS_DIR, and also tmap.sam.
+		if (os.path.isfile('%s/filtered.fastq'%self.envDict['RESULTS_DIR'])):
+			Popen(['rm', '%s/filtered.fastq'%self.envDict['RESULTS_DIR']], stdout=PIPE, env=self.envDict)
+			# Uncomment if not all filtered fastq's are deleted.
+			#Popen(['rm', '%s/filtered*.fastq'%self.envDict['RESULTS_DIR']], stdout=PIPE, env=self.envDict)
+		if (os.path.isfile('%s/tmap.sam'%self.envDict['RESULTS_DIR'])):
+			Popen(['rm', '%s/tmap.sam'%self.envDict['RESULTS_DIR']], stdout=PIPE, env=self.envDict)
+			
+		
+	def launch(self, data=None):
+		self.envDict['OUTFILE'] = '%s/%s.html'%(self.envDict['RESULTS_DIR'], self.envDict['PLUGINNAME'])
+		self.envDict['REFERENCE'] = '%s/ERCC92/ERCC92.fasta'%self.envDict['PLUGIN_PATH']
+		
+		# Run the plugin.
+		self.ERCCRun()
+		
+		# Exit gracefully.
+		sys.exit(0)
+		
+	def output(self):
+		pass
+	
+	def report(self):
+		pass
+	
+	def metric(self):
+		pass
 
-  
-data_to_display = True
-msg_to_user = ""  
-  
-if FASTQ_FILE_CREATED != 'N':
-  coverage = SamCoverage(GENOME)
-
-  transcript_names = []
-  transcript_sizes = []
-  with open(GENOME) as ercc_genome:
-      for line in ercc_genome:
-          parsed_line = line.split()
-          transcript_names.append(parsed_line[0])
-          transcript_sizes.append(parsed_line[1])
-  counts, all_ercc_counts, total_counts, mean_mapqs = write_output_counts_file(RAW_SAM_FILE,FILTERED_SAM_FILE,COUNTS_FILE,transcript_names) # side-effect is to write counts file, filtered sam file
-  if (total_counts > 0):
-    percent_total_counts_ercc = '%.2f' % (100 * (all_ercc_counts / total_counts))
-    percent_total_counts_non_ercc = 100 - float(percent_total_counts_ercc)
-  
-  coverage.parse_sam(FILTERED_SAM_FILE)
-  
-  ercc_conc = load_ercc_conc(filter = counts.keys(), pool = ERCC_POOL_NBR)
-  ercc_conc.sort()
-  
-  
-  dr = dose_response(coverage,ercc_conc,counts,MINIMUM_COUNTS)
-  trendline_points = generate_trendline_points(dr)
-else:
-  msg_to_user = "The barcode you entered, "+BARCODE_ENTERED+", is not found.  This is most likely to result when the barcode is typed incorrectly, or the run was originally processed with a Torrent Suite version less than 3.4."
-  data_to_display = False
-
-if data_to_display:
-  try:
-    report_components = generate_reports(coverage, dr, counts)
-  except ValueError:
-    msg_to_user = "There does not appear to be any ERCC data to display.  Was the ERCC spike-in mix added to the sample?"
-    data_to_display = False
-
-if data_to_display:
-  if (all_ercc_counts < 250):
-    msg_to_user = "The total number of counts (with acceptable mapping quality), "+str(all_ercc_counts)+", is not sufficient for a reliable correlation to be calculated."
-    data_to_display = False
-  elif (dr[8]<3): 
-    msg_to_user = "The number of transcripts detected, "+str(dr[8])+", is not sufficient for a reliable correlation to be calculated."
-    data_to_display = False
-
-if data_to_display:
-  transcript_names_js, transcript_images_js, transcript_counts_js, transcript_sizes_js, series_params, ercc_points = chart_series_params(counts,transcript_sizes,transcript_names,  mean_mapqs,ercc_conc)
-  color_legend = generate_color_legend()
-  msg_to_user, rsquared = create_summary_block(OUTPUT_DIR,dr,MINIMUM_RSQUARED)
-  template = open(SRC + '/ercc_template.html')
-  page_we_are_making = Template(template.read())
-  if MINIMUM_COUNTS > 1:
-      counts_msg = "All transcripts with fewer than "+str(MINIMUM_COUNTS)+" counts are shown in the above figure (below the dotted line), but not used in calculating R-squared."
-  else:
-      counts_msg = "All transcripts, even those with only 1 count, were used in calculating R-squared."
-  if BARCODE_ENTERED != 'none found' and BARCODE_ENTERED != '':
-    barcode = '('+BARCODE_ENTERED+')'
-  else:
-    barcode = ''
-  print page_we_are_making.substitute(dose_response_image = report_components['dose_response_image'],
-                                    results_divs = report_components['results_divs'],
-                                    ercc_points = ercc_points,
-                                    percent_total_counts_non_ercc = percent_total_counts_non_ercc,
-                                    percent_total_counts_ercc = percent_total_counts_ercc,
-                                    all_ercc_counts = all_ercc_counts,
-                                    rsquared = rsquared,
-                                    slope = '%.2f' % (dr[2]),
-                                    yintercept = '%.2f' % (dr[3]),
-                                    N = str(dr[8]),
-                                    trendline_points = trendline_points,
-                                    color_legend = color_legend,
-                                    counts_file = COUNTS_URL,
-                                    msg_to_user = msg_to_user,
-                                    series = series_params,
-                                    plugin_name = PLUGIN_NAME,
-                                    log2_min_counts = log(MINIMUM_COUNTS,2),
-                                    counts_msg = counts_msg,
-                                    barcode = barcode )
-else:
-  template = open(SRC + '/ercc_error_template.html')
-  page_we_are_making = Template(template.read())
-  print page_we_are_making.substitute(msg_to_user = msg_to_user)
+if __name__ == "__main__":
+	PluginCLI(ERCC_Analysis())

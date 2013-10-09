@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@task
+@task(queue="periodic")
 def cleanup():
     engine = import_module(settings.SESSION_ENGINE)
     SessionStore = engine.SessionStore

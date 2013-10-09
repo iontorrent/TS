@@ -29,6 +29,7 @@ struct Barcode {
   int           num_flows;    // number of flows for the flow-space representation, includes 5' adapter
   int           start_flow;   // calculated from the start base & end base, used for scoring/matching
   int           end_flow;
+  int           adapter_end_flow;
   string        full_barcode;
   vector<float> predicted_signal;
   int           last_homopolymer;
@@ -67,6 +68,7 @@ protected:
   string                    barcode_directory_;
   string                    barcode_mask_filename_;
   double                    barcode_filter_;
+  int                       barcode_filter_minreads_;
   string                    barcode_filter_filename_;
 
   int                       score_mode_;
@@ -76,6 +78,8 @@ protected:
   vector<Barcode>           barcode_;
 
   int                       windowSize_;
+
+  bool						bc_adjust_;
 
 public:
   int                       no_barcode_read_group_;

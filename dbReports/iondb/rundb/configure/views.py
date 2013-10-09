@@ -14,8 +14,11 @@ import httplib2
 import urlparse
 import time
 import datetime
+import glob
+from django.utils import timezone
 from pprint import pformat
 from celery.task import task
+import celery.exceptions
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
@@ -38,7 +41,7 @@ from django.contrib.auth.models import User
 from iondb.rundb.models import dnaBarcode, Plugin, GlobalConfig,\
     EmailAddress, Publisher, Location, dm_reports, dm_prune_group, Experiment,\
     Results, Template, UserProfile, dm_prune_field, FileServer, DMFileSet, DMFileStat,\
-    DownloadMonitor, EventLog, ContentType
+    FileMonitor, EventLog, ContentType
 from iondb.rundb.data import rawDataStorageReport, reportLogStorage
 from iondb.rundb.configure.genomes import search_for_genomes
 from iondb.rundb.plan import ampliseq
@@ -52,7 +55,10 @@ from iondb.rundb.data import dmactions
 import iondb.rundb.data.dmactions_types as dmactions_types
 from iondb.rundb.data.data_management import update_files_in_use
 from iondb.rundb.data import exceptions as DMExceptions
+from iondb.rundb.data.data_import import find_data_to_import, data_import
+from iondb.rundb.report import file_browse
 from iondb.utils.files import disk_attributes
+from iondb.utils.raid import get_raid_status, get_raid_status_json
 logger = logging.getLogger(__name__)
 
 
@@ -69,12 +75,49 @@ def configure_about(request):
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/about.html", context_instance=ctx)
 
+
+def timeout_raid_info():
+    async_result = tasks.get_raid_stats.delay()
+    try:
+        raidinfo = async_result.get(timeout=20)
+        if async_result.failed():
+            raidinfo = None
+    except celery.exceptions.TimeoutError as err:
+        logger.warning("RAID status check timed out, taking longer than 20 seconds.")
+        raidinfo = None
+    return raidinfo
+
+
+def timeout_raid_info_json():
+    async_result = tasks.get_raid_stats_json.delay()
+    try:
+        raidinfo = async_result.get(timeout=20)
+        if async_result.failed():
+            raidinfo = None
+    except celery.exceptions.TimeoutError as err:
+        logger.warning("RAID status check timed out, taking longer than 20 seconds.")
+        raidinfo = None
+    return raidinfo
+
+
 @login_required
 def configure_services(request):
+    def is_mounted(path):
+        try:
+            path = os.path.abspath(path)
+            while path != os.path.sep:
+                if os.path.ismount(path):
+                    return path
+                path = os.path.dirname(path)
+        except:
+            pass
+        return ''
+
     jobs = current_jobs(request)
     crawler = _crawler_status(request)
     processes = process_set()
     fs_stats = disk_usage_stats()
+    gc = GlobalConfig.objects.all().order_by('pk')[0]
 
     if os.path.exists("/opt/ion/.ion-internal-server"):
         # split Data Management tables per fileserver
@@ -90,13 +133,21 @@ def configure_services(request):
             "url": "/rundb/api/v1/compositedatamanagement/?format=json"
         }]
 
-    gc = GlobalConfig.objects.all().order_by('pk')[0]
     dm_filesets = DMFileSet.objects.filter(version=settings.RELVERSION).order_by('pk')
-    archive_paths = []
-    for bdir in set(dm_filesets.values_list('backup_directory', flat=True)):
-        if bdir and bdir != 'None':
+    for dmfileset in dm_filesets:
+        if dmfileset.backup_directory in ['None',None,'']:
+            dmfileset.mounted = False
+        else:
+            dmfileset.mounted = bool( is_mounted(dmfileset.backup_directory) )
+
+    # mounted paths for Disk Usage section
+    archive_stats = {}
+    backup_dirs = get_dir_choices()[1:]
+    for bdir,bdir in backup_dirs:
+        mounted = is_mounted(bdir)
+        if mounted and mounted not in archive_stats and mounted not in fs_stats:
             try:
-                total, availSpace, freeSpace, bsize = disk_attributes(bdir)
+                total, availSpace, freeSpace, bsize = disk_attributes(mounted)
                 total_gb = float(total*bsize)/(1024*1024*1024)
                 avail_gb = float(availSpace*bsize)/(1024*1024*1024)
                 #free_gb = float(freeSpace*bsize)/(1024*1024*1024)
@@ -105,14 +156,14 @@ def configure_services(request):
                 percentfull = ""
                 total_gb = ""
                 avail_gb = ""
-            archive_paths.append({
-                'backup_directory': bdir,
-                'exists':os.path.exists(bdir),
-                'id': dm_filesets.filter(backup_directory=bdir)[0].id,
+
+            archive_stats[mounted] = {
                 'percentfull': percentfull,
                 'disksize': total_gb,
                 'diskfree': avail_gb,
-                })
+            }
+
+    raidinfo = timeout_raid_info_json()
 
     ctxd = {
         "processes": processes,
@@ -122,8 +173,9 @@ def configure_services(request):
         "autoArchiveEnable": gc.auto_archive_enable,
         "dm_filesets": dm_filesets,
         "dm_tables": dm_tables,
-        "archive_paths": archive_paths,
+        "archive_stats": archive_stats,
         "fs_stats": fs_stats,
+        "raid_status": get_raid_status(raidinfo),
         }
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/services.html", context_instance=ctx)
@@ -237,8 +289,8 @@ def dm_actions(request, results_pks):
         dmtasks.update_dmfilestats_diskspace.delay(dmfilestat)
     if len(to_update) > 0:
         time.sleep(2)
-    
-    dm_files_info = []    
+
+    dm_files_info = []
     for category in dmactions_types.FILESET_TYPES:
         info = ''
         for result in results:
@@ -310,33 +362,32 @@ def dm_action_selected(request, results_pks, action):
             dmfilestat_dict[resultPK] = DMFileStat.objects.select_related() \
                 .filter(dmfileset__type__in=data['categories'], result__id=int(resultPK))
 
-            # validate export/archive destination folders
-            if action in ['export', 'archive']:
-                for dmfilestat in dmfilestat_dict[resultPK]:
+            for dmfilestat in dmfilestat_dict[resultPK]:
+                # validate export/archive destination folders
+                if action in ['export', 'archive']:
                     dmactions.destination_validation(dmfilestat, backup_directory, manual_action=True)
 
-            # validate files not in use
-            try:
-                for dmfilestat in dmfilestat_dict[resultPK]:
+                # validate files not in use
+                try:
                     dmactions.action_validation(dmfilestat, action, data['confirmed'])
-            except DMExceptions.FilesInUse as e:
-                # warn if exporting files currently in use, allow to proceed if confirmed
-                if action=='export':
+                except DMExceptions.FilesInUse as e:
+                    # warn if exporting files currently in use, allow to proceed if confirmed
+                    if action=='export':
+                        if not data['confirmed']:
+                            return HttpResponse(json.dumps({'warning':str(e)+'<br>Exporting now may produce incomplete data set.'}), mimetype="application/json")
+                    else:
+                        raise e
+                except DMExceptions.BaseInputLinked as e:
+                    # warn if deleting basecaller files used in any other re-analysis started from BaseCalling
                     if not data['confirmed']:
-                        return HttpResponse(json.dumps({'warning':str(e)+'<br>Exporting now may produce incomplete data set.'}), mimetype="application/json")
-                else:
-                    raise e
-            except DMExceptions.BaseInputLinked as e:
-                # warn if deleting basecaller files used in any other re-analysis started from BaseCalling
-                if not data['confirmed']:
-                    return HttpResponse(json.dumps({'warning':str(e)}), mimetype="application/json")
+                        return HttpResponse(json.dumps({'warning':str(e)}), mimetype="application/json")
 
-            # warn if archiving data marked Keep
-            if action=='archive' and dmfilestat.getpreserved():
-                if not data['confirmed']:
-                    return HttpResponse(json.dumps({'warning':'%s currently marked Keep.' % dmfilestat.dmfileset.type}), mimetype="application/json")
+                # warn if archiving data marked Keep
+                if action=='archive' and dmfilestat.getpreserved():
+                    if not data['confirmed']:
+                        return HttpResponse(json.dumps({'warning':'%s currently marked Keep.' % dmfilestat.dmfileset.type}), mimetype="application/json")
 
-        async_task_result = dmtasks.action_group.delay(request.user, data['categories'], action, dmfilestat_dict, data['comment'], backup_directory, data['confirmed'])
+        async_task_result = dmtasks.action_group.delay(request.user.username, data['categories'], action, dmfilestat_dict, data['comment'], backup_directory, data['confirmed'])
 
         if async_task_result:
             logger.debug(async_task_result)
@@ -345,7 +396,7 @@ def dm_action_selected(request, results_pks, action):
         dmfilestat.setactionstate('DD')
         msg = "Source directory %s no longer exists. Setting action_state to Deleted" % e.message
         logger.info(msg)
-        EventLog.objects.add_entry(filestat.result, msg, username=request.user.username)
+        EventLog.objects.add_entry(dmfilestat.result, msg, username=request.user.username)
     except Exception as e:
         logger.error("dm_action_selected: error: %s" % str(e))
         return HttpResponseServerError("%s" % str(e))
@@ -536,6 +587,11 @@ def get_dir_choices():
     basicChoice = [(None, 'None')]
     for choice in devices.to_media(devices.disk_report()):
         basicChoice.append(choice)
+    # add selected directories to choices
+    for choice in set(DMFileSet.objects.exclude(backup_directory__in=['','None']).values_list('backup_directory', flat=True)):
+        if choice and not (choice,choice) in basicChoice:
+            basicChoice.append( (choice,choice) )
+
     return tuple(basicChoice)
 
 def _configure_report_data_mgmt(request, pk=None):
@@ -1080,13 +1136,11 @@ def configure_system_stats_data(request):
     else:
         stats = []
 
+    disk_check_status = tasks.disk_check_status.delay().get(timeout=5)
+
     # MegaCli64 needs root privilege to access RAID controller - we use a celery task
     # to do the work since they execute with root privilege
-    async_result = tasks.get_raid_stats.delay()
-    #wait for task to complete
-    raid_stats = async_result.get(timeout=20)
-    if async_result.failed():
-        raid_stats = "get_raid_stats task failed"
+    raid_stats = timeout_raid_info()
 
     stats_dm = rawDataStorageReport.storage_report()
 
@@ -1099,6 +1153,7 @@ def configure_system_stats_data(request):
                    "stats_dm": stats_dm,
                    "raid_stats": raid_stats,
                    "reportFilePath": reportFileName,
+                   "disk_check_status": disk_check_status,
                    "use_precontent": True,
                    "use_content2": True,
                    "use_content3": True, })
@@ -1128,37 +1183,14 @@ def configure_system_stats_data(request):
 
     return render_to_response("rundb/configure/configure_system_stats.html", context_instance=ctx)
 
-def raid_info(request):
-    # display RAID info from /usr/bin/ion_raidinfo
-    import re
-    ENTRY_RE = re.compile(r'^(?P<name>[^:]+)[:](?P<value>.*)$')
-    def parse(text):
-        ret = []
-        for line in slot.splitlines():
-            match = ENTRY_RE.match(line)
-            if match is not None:
-                d = match.groupdict()
-                #ret[d['name'].strip()] = d['value'].strip()
-                ret.append((d['name'].strip(), d['value'].strip()))
-        return ret
+def raid_info(request, index=0):
+    # display RAID info for a drives array from saved file /var/spool/ion/raidstatus.json
+    # index is the adapter/enclosure row clicked on services page
+    with open(os.path.join('/var','spool','ion','raidstatus.json'),'r') as f:
+        raid_status = json.load(f)
 
-    # MegaCli64 needs root privilege to access RAID controller - we use a celery task
-    # to do the work since they execute with root privilege
-    async_result = tasks.get_raid_stats.delay()
-    raid_stats = async_result.get(timeout=20)
-    if async_result.failed():
-        raid_stats = "get_raid_stats task failed"
-
-    raid_stats = ' '.join(raid_stats).split("=====")
-    stats = []
-    if len(raid_stats) > 1:
-        for slot in raid_stats:
-            parsed_stats = parse(slot)
-            if len(parsed_stats) > 0:
-                stats.append(parsed_stats)
-
-    ctx = RequestContext(request, {"raid_stats": stats})
-    return render_to_response("rundb/configure/configure_raid_info.html", context_instance=ctx)
+    array_status = raid_status['raid_status'][int(index)]['drives']
+    return render_to_response("rundb/configure/modal_raid_info.html", {"array_status": array_status})
 
 def config_contacts(request, context):
     """Essentially but not actually a context processor to handle user contact
@@ -1600,7 +1632,6 @@ def get_ampliseq_fixed_designs(user, password):
     h.add_credentials(user, password)
     url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/tmpldesign/list/active")
     response, content = h.request(url)
-    logger.warning(response)
     if response['status'] == '200':
         data = json.loads(content)
         fixed = [ampliseq.handle_versioned_plans(d)[1] for d in data.get('TemplateDesigns', [])]
@@ -1631,7 +1662,9 @@ def configure_ampliseq(request, pipeline=None):
             try:
                 response, designs = get_ampliseq_designs(username, password)
                 if response['status'].startswith("40"):
-                    ctx['http_error'] = "Your user name or password is invalid."
+                    request.session.pop('ampliseq_username')
+                    request.session.pop('ampliseq_password')
+                    ctx['http_error'] = 'Your user name or password is invalid.<br> You may need to log in to <a href="https://ampliseq.com/">AmpliSeq.com</a> and check your credentials.'
                     fixed = None
                 else:
                     response, fixed = get_ampliseq_fixed_designs(username, password)
@@ -1652,7 +1685,7 @@ def configure_ampliseq(request, pipeline=None):
             if fixed is not None:
                 form = None
                 ctx['ordered_solutions'] = []
-                ctx['fixed_solutions'] = filter(lambda x: x['status'] == "ORDERABLE" and 
+                ctx['fixed_solutions'] = filter(lambda x: x['status'] == "ORDERABLE" and
                     match(x), fixed)
                 ctx['unordered_solutions'] = []
                 for design in designs:
@@ -1664,6 +1697,7 @@ def configure_ampliseq(request, pipeline=None):
                 ctx['designs_pretty'] = json.dumps(designs, indent=4, sort_keys=True)
                 ctx['fixed_designs_pretty'] = json.dumps(fixed, indent=4, sort_keys=True)
     ctx['form'] = form
+    ctx['ampliseq_account_update'] = timezone.now() < timezone.datetime(2013, 11, 30, tzinfo=timezone.utc)
     return render_to_response("rundb/configure/ampliseq.html", ctx,
         context_instance=RequestContext(request))
 
@@ -1675,22 +1709,17 @@ def configure_ampliseq_download(request):
         password = request.session['ampliseq_password']
         for ids in request.POST.getlist("solutions"):
             design_id, solution_id = ids.split(",")
-            meta = '{}'
+            meta = '{"choice":"%s"}' % request.POST.get(solution_id + "_instrument_choice", "None")
             start_ampliseq_solution_download(design_id, solution_id, meta, (username, password))
         for ids in request.POST.getlist("fixed_solutions"):
             design_id, reference = ids.split(",")
-            meta = '{"reference":"%s"}' % reference.lower()
+            meta = '{"reference":"%s", "choice": "%s"}' % (reference.lower(), request.POST.get(design_id + "_instrument_choice", "None"))
             start_ampliseq_fixed_solution_download(design_id, meta, (username, password))
 
     if request.method == "POST":
         return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq_download"))
 
-    downloads = DownloadMonitor.objects.filter(tags__contains="ampliseq_template").order_by('-created')
-    for download in downloads:
-        if download.size:
-            download.percent_progress = "{0:.2%}".format(float(download.progress) / download.size)
-        else:
-            download.percent_progress = "..."
+    downloads = FileMonitor.objects.filter(tags__contains="ampliseq_template").order_by('-created')
     ctx = {
         'downloads': downloads
     }
@@ -1699,7 +1728,7 @@ def configure_ampliseq_download(request):
 
 def start_ampliseq_solution_download(design_id, solution_id, meta, auth):
     url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/design/{0}/solutions/{1}/download/results".format(design_id, solution_id))
-    monitor = DownloadMonitor(url=url, tags="ampliseq_template", status="Queued")
+    monitor = FileMonitor(url=url, tags="ampliseq_template", status="Queued")
     monitor.save()
     t = tasks.download_something.apply_async(
         (url, monitor.id), {"auth": auth},
@@ -1707,7 +1736,7 @@ def start_ampliseq_solution_download(design_id, solution_id, meta, auth):
 
 def start_ampliseq_fixed_solution_download(design_id, meta, auth):
     url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/tmpldesign/{0}/download/results".format(design_id))
-    monitor = DownloadMonitor(url=url, tags="ampliseq_template", status="Queued")
+    monitor = FileMonitor(url=url, tags="ampliseq_template", status="Queued")
     monitor.save()
     t = tasks.download_something.apply_async(
         (url, monitor.id), {"auth": auth},
@@ -1753,3 +1782,112 @@ def cache_status(request):
         time=datetime.datetime.now()
     )
     return render_to_response("rundb/configure/cache_status.html", ctx)
+
+@login_required
+def browse_backup_dirs(request, path):
+    from iondb.utils import devices
+    def bread_crumbs(path):
+        crumbs = []
+        while path != '/':
+            if os.path.ismount(path):
+                crumbs.insert(0, (path, path))
+                break
+            head, tail = os.path.split(path)
+            crumbs.insert(0, (path, tail))
+            path = head
+        return crumbs
+
+    backup_dirs = get_dir_choices()[1:]
+    breadcrumbs = []
+    dir_info = []
+    file_info = []
+    path_allowed = True
+    if path:
+        if not os.path.isabs(path): path = os.path.join('/',path)
+        # only allow directories inside mount points
+        path_allowed = any([path.startswith(d) for d,n in backup_dirs])
+        if not path_allowed:
+            return HttpResponseServerError("Directory not allowed: %s" % path)
+
+    exclude_archived = request.GET.get('exclude_archived','false')
+    
+    if path and path_allowed:
+        breadcrumbs = bread_crumbs(path)
+        try:
+            dirs, files = file_browse.list_directory(path)
+        except Exception as e:
+            return HttpResponseServerError(str(e))
+        dirs.sort()
+        files.sort()
+        for name, full_dir_path, stat in dirs:
+            dir_path = full_dir_path
+            if exclude_archived == 'true':
+                if name == 'archivedReports' or name == 'exportedReports' or glob.glob(os.path.join(full_dir_path, 'serialized_*.json')):
+                    dir_path = ''
+
+            date = datetime.datetime.fromtimestamp(stat.st_mtime)
+            try:
+                size = file_browse.dir_size(full_dir_path)
+            except:
+                size = ''
+            dir_info.append((name, dir_path, date, size))
+        for name, full_file_path, stat in files:
+            file_path = os.path.join(path, name)
+            date = datetime.datetime.fromtimestamp(stat.st_mtime)
+            try:
+                size = file_browse.format_units(stat.st_size)
+            except:
+                size = ''
+            file_info.append((name, file_path, date, size))
+
+    ctxd = {"backup_dirs": backup_dirs, "selected_path": path, "breadcrumbs": breadcrumbs, "dirs": dir_info, "files": file_info, "exclude_archived": exclude_archived }
+    return render_to_response("rundb/configure/modal_browse_dirs.html", ctxd)
+
+def import_data(request):
+    if request.method == "GET":
+        backup_dirs = get_dir_choices()
+        return render_to_response("rundb/configure/modal_import_data.html", context_instance=RequestContext(request, {"backup_dirs": backup_dirs}) )
+    elif request.method == "POST":
+        postData = json.loads(request.body)
+        for result in postData:
+            name = result.pop('name')
+            copy_all = bool(result.pop('copy_all',False))
+            async_result = data_import.delay(name, result, request.user.username, copy_all)
+        return HttpResponse()
+
+def import_data_find(request, path):
+    # search directory tree for importable data
+    if not os.path.isabs(path): path = os.path.join('/',path.strip())
+    if path and os.path.exists(path):
+        found_results = find_data_to_import(path)
+        if len(found_results) == 0:
+            return HttpResponseNotFound('Did not find any data exported or archived with TS version 4.0 or later in %s.' % path)
+        else:
+            results_list = []
+            for result in found_results:
+                results_list.append({
+                    'name': result['name'],
+                    'report': result['categories'].get(dmactions_types.OUT),
+                    'basecall': result['categories'].get(dmactions_types.BASE),
+                    'sigproc': result['categories'].get(dmactions_types.SIG)
+                })
+            ctxd = {
+                "dm_types": [dmactions_types.OUT, dmactions_types.BASE, dmactions_types.SIG],
+                'results_list':results_list
+            }
+            return render_to_response("rundb/configure/modal_import_data.html", ctxd)
+    else:
+        return HttpResponseNotFound('Cannot access path: %s.' % path)
+
+def import_data_log(request, path):
+    # display log file
+    if not os.path.isabs(path): path = os.path.join('/',path)
+    contents = ''
+    with open(path, 'rb') as f:
+        contents = f.read()
+
+    response = '<div><pre>%s</pre></div>' % contents
+    # add some js to overwrite modal header
+    response += '<script type="text/javascript">$(function() { $("#modal_report_log .modal-header").find("h2").text("Data Import Log");});</script>'
+    return HttpResponse(response, mimetype='text/plain')
+

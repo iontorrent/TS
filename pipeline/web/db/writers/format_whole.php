@@ -28,8 +28,8 @@ if (file_exists("explog.txt")) {
         if (!$key) {
             $value = $blockline[1];
             list($X, $Y) = str_getcsv($value, ",");
-            $X = trim($X, "X");
-            $Y = trim($Y, "Y");
+            $X = trim(ltrim($X), "X");
+            $Y = trim(ltrim($Y), "Y");
             //exclude thumbnail directory
             if ($X == "-1")
                 continue;
@@ -79,7 +79,7 @@ $is_proton_thumbnail = False;
 $is_proton_composite = False;
 $is_proton = False;
 
-if (preg_match('/900/', $meta["Chip Type"])) {
+if ( preg_match('/900/', $meta["Chip Type"]) or preg_match('/^P/', $meta["Chip Type"]) ) {
     $is_proton = True;
 }
 

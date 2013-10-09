@@ -16,7 +16,7 @@ void ExtendedReadInfo::GetUsefulTags(int DEBUG) {
     exit(-1);
   }
   if (!alignment.GetTag("ZP", phase_params)) {
-    cerr << "ERROR in ExtendedReadInfo::GetUsefulTags: Treephaser Params ZP:tag is not present in the BAM file provided" << endl;
+    cerr << "ERROR in ExtendedReadInfo::GetUsefulTags: Phasing Parameters ZP:tag is not present in the BAM file provided" << endl;
     is_happy_read = false;
     exit(-1);
   }
@@ -47,9 +47,10 @@ void ExtendedReadInfo::GetUsefulTags(int DEBUG) {
 
 // -------------------------------------------------------
 
-void ExtendedReadInfo::CreateFlowIndex(string &flowOrder) {
+bool ExtendedReadInfo::CreateFlowIndex(const string &flowOrder) {
 
-  string read_bases = alignment.QueryBases;
+  bool is_happy = true;
+  read_bases = alignment.QueryBases;
   if (!is_forward_strand)
     RevComplementInPlace(read_bases);
 
@@ -62,22 +63,27 @@ void ExtendedReadInfo::CreateFlowIndex(string &flowOrder) {
     flowIndex[base_idx] = flow;
     base_idx++;
   }
-  if (base_idx != read_bases.length())
+  if (base_idx != read_bases.length()) {
     cerr << "WARNING in ExtendedReadInfo::CreateFlowIndex: There are more bases in the read than fit into the flow order.";
+    is_happy = false;
+  }
+  return (is_happy);
 }
 
 // -------------------------------------------------------
 
 // Sets the member variables ref_aln, seq_aln, pretty_aln, startSC, endSC
-void ExtendedReadInfo::UnpackAlignmentInfo(const string &local_contig_sequence, unsigned int aln_start_position) {
+bool ExtendedReadInfo::UnpackAlignmentInfo(const string &local_contig_sequence, unsigned int aln_start_position) {
 
   ref_aln.clear();
   seq_aln.clear();
   pretty_aln.clear();
 
-  startSC = 0;
-  endSC = 0;
+  leftSC = 0;
+  rightSC = 0;
 
+  bool is_happy = true;
+  unsigned int num_query_bases = 0;
   unsigned int read_pos = 0;
   unsigned int ref_pos = aln_start_position;
   bool match_found = false;
@@ -91,6 +97,7 @@ void ExtendedReadInfo::UnpackAlignmentInfo(const string &local_contig_sequence, 
         ref_aln.append(local_contig_sequence, ref_pos, cigar->Length);
         seq_aln.append(alignment.QueryBases, read_pos, cigar->Length);
         pretty_aln.append(cigar->Length, '|');
+        num_query_bases += cigar->Length;
         read_pos += cigar->Length;
         ref_pos  += cigar->Length;
         break;
@@ -99,15 +106,17 @@ void ExtendedReadInfo::UnpackAlignmentInfo(const string &local_contig_sequence, 
         ref_aln.append(cigar->Length,'-');
         seq_aln.append(alignment.QueryBases, read_pos, cigar->Length);
         pretty_aln.append(cigar->Length, '+');
+        num_query_bases += cigar->Length;
         read_pos += cigar->Length;
         break;
 
       case ('S') :
+		num_query_bases += cigar->Length;
         read_pos += cigar->Length;
         if (match_found)
-          endSC = cigar->Length;
+          rightSC = cigar->Length;
         else
-          startSC = cigar->Length;
+          leftSC = cigar->Length;
         break;
 
       case ('D') :
@@ -120,16 +129,47 @@ void ExtendedReadInfo::UnpackAlignmentInfo(const string &local_contig_sequence, 
         break;
     }
   }
-  // Update start flow to flow of first non-soft-clipped base <- splicing only takes mapped bases
+  // Basic alignment sanity check
+  if (num_query_bases != alignment.QueryBases.length()) {
+    cerr << "WARNING in ExtendedReadInfo::UnpackAlignmentInfo: Invalid Cigar String in Read " << alignment.Name << " Cigar: ";
+    for (vector<CigarOp>::const_iterator cigar = alignment.CigarData.begin(); cigar != alignment.CigarData.end(); ++cigar)
+      cerr << cigar->Length << cigar->Type;
+    cerr << " Length of query string: " << alignment.QueryBases.length() << endl;
+    //is_happy = false;
+  }
+
+  return (is_happy);
+}
+
+// -------------------------------------------------------
+// Increase start flow to main flow of first aligned base
+
+void ExtendedReadInfo::IncreaseStartFlow() {
   if (is_forward_strand)
-    start_flow = flowIndex.at(startSC);
+    start_flow = flowIndex.at(leftSC);
   else
-    start_flow = flowIndex.at(endSC);
+    start_flow = flowIndex.at(rightSC);
+}
+
+
+// -------------------------------------------------------
+unsigned int ExtendedReadInfo::GetStartSC() {
+  if (is_forward_strand)
+	return (leftSC);
+  else
+	return (rightSC);
+}
+
+unsigned int ExtendedReadInfo::GetEndSC() {
+  if (is_forward_strand)
+	return (rightSC);
+  else
+	return (leftSC);
 }
 
 // -------------------------------------------------------
 
-bool ExtendedReadInfo::UnpackThisRead(InputStructures &global_context, const string &local_contig_sequence, int DEBUG) {
+bool ExtendedReadInfo::UnpackThisRead(const InputStructures &global_context, const string &local_contig_sequence, int DEBUG) {
 
   //is_happy_read = CheckHappyRead(global_context, variant_start_pos, int DEBUG);
   is_happy_read = true;

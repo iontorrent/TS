@@ -1,0 +1,81 @@
+<div id="modal_planexperiment" class="modal fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_planexperimentLabel" aria-hidden="false">
+	<div class="modal-body">
+		<div class="alert alert-error modal-error-messages hide"></div>
+		<div class="alert alert-info modal-info-messages hide"></div>
+		<div class="alert alert-success modal-success-messages hide"></div>
+		<form class="">
+			<label for="sampleset" class="form-label">Select a Run Template to apply to this experiment</label>
+			<select name="sampleset" class="span4" id="templates">
+				<option value=""></option>
+				<option value="0">&lt;Add new template&gt;</option>
+			</select>
+		</form>
+		<div><input type="checkbox" id="showAllTemplates" onclick="updateTemplateList();" />Show All Templates</div>
+	</div>
+	<div class="modal-footer">
+		<button class="btn" data-dismiss="modal">Cancel</button>
+		<a class="btn btn-primary" id="plan_run">Plan Run</a>
+	</div>
+</div>
+
+<script>
+allTemplatePkToObj = [];
+
+updateTemplateList = function() {
+    while ($('#templates option:nth-child(3)').length > 0) {
+        $('#templates option:nth-child(3)').remove();
+    }
+    
+    $.each(allTemplatePkToObj, function(index, templateMap){
+        var newOpt = $('<option>');
+        newOpt.val(templateMap['pk']);
+        
+        var optText = templateMap['name'];
+        if (templateMap['sg_name'].length > 0) {
+                optText += " (" + templateMap['sg_name'] + ")";
+        }
+        newOpt.text(optText);
+        if ($('#showAllTemplates').is(":checked")) {
+            //show all if checked
+            $('#templates').append(newOpt);
+        } else if('{{sampleSet.SampleGroupType_CV|default_if_none:""}}'.length > 0) {
+            // only show templates with matching sample group if sampleset has one.
+            if ('{{sampleSet.SampleGroupType_CV.displayedName}}' == templateMap['sg_name']){
+                $('#templates').append(newOpt);
+            }
+        } else {
+            // only show templates without a samplegroup if the sampleset does not have one.
+            if (templateMap['sg_name'].length == 0){
+                $('#templates').append(newOpt);
+            }
+        }
+        
+        
+        
+    });
+}
+
+$(document).ready(function(){
+    {% for template in all_templates %}
+        allTemplatePkToObj.push({'pk': '{{template.pk}}', 'name': '{{template.planDisplayedName}}', 'sg_pk': 'template.sampleGrouping', 'sg_name': '{{template.sg_name|default_if_none:""}}'});
+    {% endfor %}
+    
+    {% for template in all_systemTemplates %}
+    	allTemplatePkToObj.push({'pk': '{{template.pk}}', 'name': '{{template.planDisplayedName}}', 'sg_pk': 'template.sampleGrouping', 'sg_name': '{{template.sg_name|default_if_none:""}}'});
+    {% endfor %}
+    
+    updateTemplateList();
+	$("#plan_run").on('click', function(){
+		var template_id = $("#templates option:selected").val();
+		
+		if (template_id == '') {
+			template_id = 0;
+		}
+
+		var sampleset_id = "{{sampleSet.pk}}";
+		var url = "/plan/page_plan_new_plan_by_sample/" + template_id + "/" + sampleset_id;
+
+		window.location.href = url;
+	});
+});
+</script>

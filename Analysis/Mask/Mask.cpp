@@ -11,7 +11,6 @@
 
 Mask::Mask ( int _w, int _h )
 {
-  isHex = false;
   w = ( int32_t ) _w;
   h = ( int32_t ) _h;
   xOffset = 0;
@@ -37,7 +36,6 @@ Mask::Mask ( const char *fileName, bool fillMask )
   //Note, fillMask is optional argument w/ default of true.
   FILE *in = fopen ( fileName, "rb" );
   assert ( in );
-  isHex = false;
   int32_t r,c;
   int elements_read = fread ( &r, sizeof ( r ), 1, in );
   assert ( elements_read == 1 );
@@ -66,13 +64,11 @@ Mask::~Mask()
 
 void Mask::Init ( int _w, int _h )
 {
-  isHex = false;
   Init ( _w,_h,MaskEmpty );
 }
 
 void Mask::Init ( int _w, int _h, MaskType these )
 {
-  isHex = false;
   w = ( int32_t ) _w;
   h = ( int32_t ) _h;
   xOffset = 0;
@@ -90,7 +86,6 @@ void Mask::Init ( int _w, int _h, MaskType these )
 
 void Mask::Init ( Mask *origmask )
 {
-  isHex = false;
   w = origmask->W();
   h = origmask->H();
   xOffset = origmask->Xoffset();
@@ -743,85 +738,3 @@ void Mask::OnlySomeWells(std::vector<int> mWellIdx)
     }
 }*/
 
-void Mask::GetNeighbors ( int row, int col, std::vector<int> &wells ) const
-{
-  bool hex = isHexPack();
-  if ( hex ) {
-    GetHexNeighbors ( row, col, wells );
-  } else {
-    GetSquareNeigbors ( row, col, wells );
-  }
-}
-
-void Mask::AddNeighbor ( int row, int col, int rOff, int cOff, std::vector<int> &wells ) const
-{
-  int r = row + rOff;
-  int c = col + cOff;
-  if ( r >= 0 && r < h && c >= 0 && c < w ) {
-    wells.push_back ( ToIndex ( r,c ) );
-  } else {
-    wells.push_back ( -1 );
-  }
-}
-
-void Mask::GetHexNeighbors ( int row, int col, std::vector<int> &wells ) const
-{
-  wells.resize ( 0 );
-  wells.reserve ( 6 );
-  if ( row % 2 == 0 ) {
-    AddNeighbor ( row, col, -1, -1, wells );
-    AddNeighbor ( row, col,  0, -1, wells );
-    AddNeighbor ( row, col,  1, -1, wells );
-    AddNeighbor ( row, col,  1,  0, wells );
-    AddNeighbor ( row, col,  0,  1, wells );
-    AddNeighbor ( row, col, -1,  0, wells );
-  } else {
-    AddNeighbor ( row, col, -1,  0, wells );
-    AddNeighbor ( row, col,  0, -1, wells );
-    AddNeighbor ( row, col,  1,  0, wells );
-    AddNeighbor ( row, col,  1,  1, wells );
-    AddNeighbor ( row, col,  0,  1, wells );
-    AddNeighbor ( row, col, -1,  1, wells );
-  }
-}
-
-void Mask::GetSquareNeigbors ( int row, int col, std::vector<int> &wells ) const
-{
-  wells.resize ( 0 );
-  wells.reserve ( 8 );
-  AddNeighbor ( row, col, -1, -1, wells );
-  AddNeighbor ( row, col, 0, -1, wells );
-  AddNeighbor ( row, col, 1, -1, wells );
-  AddNeighbor ( row, col, 1, 0, wells );
-  AddNeighbor ( row, col, 1, 1, wells );
-  AddNeighbor ( row, col, 0, 1, wells );
-  AddNeighbor ( row, col, -1, 1, wells );
-  AddNeighbor ( row, col, -1, 0, wells );
-}
-
-
-void Mask::CalculateLiveNeighbors()
-{
-  std::vector<int> wells;
-  if ( numLiveNeighbors.size() != ( size_t ) w*h ) {
-    numLiveNeighbors.resize ( w*h, 0 );
-  }
-  for ( int row = 0; row < h; row++ ) {
-    for ( int col = 0; col < w; col++ ) {
-      GetNeighbors ( row, col, wells );
-      int idx = ToIndex ( row, col );
-      numLiveNeighbors[idx] = 0;
-      for ( size_t wIx = 0; wIx < wells.size(); wIx++ ) {
-        if ( wells[wIx] >= 0 && Match ( wells[wIx], MaskLive ) ) {
-          numLiveNeighbors[idx]++;
-        }
-      }
-    }
-  }
-}
-
-int Mask::GetNumLiveNeighbors ( int row, int col )
-{
-  assert ( !numLiveNeighbors.empty() );
-  return ( int ) numLiveNeighbors[ToIndex ( row,col ) ];
-}

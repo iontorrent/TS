@@ -241,7 +241,8 @@ void SignalProcessingMasterFitter::ExportDataToDataCubes ( bool last )
   }
   // now regional parameters
   // so they are exported >before< we reset(!)
-  global_state.WriteRegionParametersToDataCubes(region_data);
+  int max_frames = global_defaults.signal_process_control.get_max_frames();
+  global_state.WriteRegionParametersToDataCubes(region_data, max_frames);
 }
 
 
@@ -467,8 +468,9 @@ void SignalProcessingMasterFitter::BootUpModel ( double &elapsed_time,Timer &fit
   fit_timer.restart();
   //fit_control.FitInitial
   if ( global_defaults.signal_process_control.regional_sampling ){
-
     ChooseSampledForRegionParamFit();
+    //double sampling_time = fit_timer.elapsed();
+    //printf("====> Time in sampling in bkg model: %.2f\n", sampling_time);
     FirstPassSampledRegionParamFit();
   }
   else {
@@ -476,6 +478,8 @@ void SignalProcessingMasterFitter::BootUpModel ( double &elapsed_time,Timer &fit
   }
 
   elapsed_time += fit_timer.elapsed();
+
+  ////printf("====> Time in booting up bkg model: %.2f\n", elapsed_time);
 }
 
 // choose a sample of beads that will be used for regional parameter fitting
@@ -704,7 +708,7 @@ void SignalProcessingMasterFitter::RemainingFitStepsForInitialFlowBlock()
   }
 }
 
-void SignalProcessingMasterFitter::GuessCrudeAmplitude ( double &elapsed_time, Timer &fit_timer )
+void SignalProcessingMasterFitter::GuessCrudeAmplitude ( double &elapsed_time, Timer &fit_timer, bool sampledOnly)
 {
   region_data->SetCrudeEmphasisVectors();
 
@@ -717,7 +721,7 @@ void SignalProcessingMasterFitter::GuessCrudeAmplitude ( double &elapsed_time, T
 //  if (global_defaults.signal_process_control.generic_test_flag)
 //    my_search.BinarySearchAmplitude (region_data->my_beads, 0.5f,true); // apply search method to current bead list - wrong OO?  Method on bead list?
 //  else
-  my_search.ProjectionSearchAmplitude ( region_data->my_beads, false ); // need all our speed
+  my_search.ProjectionSearchAmplitude ( region_data->my_beads, false, sampledOnly); // need all our speed
   //my_search.GoldenSectionAmplitude(my_beads);
   elapsed_time += fit_timer.elapsed();
 
@@ -743,7 +747,14 @@ void SignalProcessingMasterFitter::RegionalFittingForLaterFlowBlock()
   region_data->my_regions.ResetLocalRegionParams(); // start off with no per flow time shifts
   DoPreComputationFiltering();
 
-  GuessCrudeAmplitude ( elapsed_time,fit_timer );
+  if (global_defaults.signal_process_control.regional_sampling)
+  {
+    GuessCrudeAmplitude (elapsed_time,fit_timer,global_defaults.signal_process_control.amp_guess_on_gpu);
+  }
+  else {
+    GuessCrudeAmplitude (elapsed_time,fit_timer,false);
+  }
+
   FitTimeVaryingRegion ( elapsed_time,fit_timer );
 
   refine_time_fit->RefinePerFlowTimeEstimate ( region_data->my_regions.rp.nuc_shape.t_mid_nuc_shift_per_flow );

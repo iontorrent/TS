@@ -1,4 +1,6 @@
 {% extends "admin/base.html" %}{% load i18n %}
+{% load url from future %}
+{% load static from staticfiles %}
 
 {% block extrahead %}
 <style type="text/css">
@@ -84,10 +86,10 @@
     padding: 0 10px;
   }
 </style>
-<script src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
-  <script src="/site_media/js/underscore.js"></script>
-  <script src="/site_media/js/backbone.js"></script>
-  <script src="/site_media/js/messagebox.js"></script>
+<script src="{% static "jquery/js/jquery-1.7.1.min.js"%}"></script>
+  <script src="{% static "js/underscore.js"%}"></script>
+  <script src="{% static "js/backbone.js"%}"></script>
+  <script src="{% static "js/messagebox.js"%}"></script>
 {% endblock %}
 
 {% block title %}{{ title }} | {% trans 'Ion Web' %}{% endblock %}
@@ -96,7 +98,7 @@
   <h1 id="site-name">{% trans 'Ion Web' %}</h1>
 {% endblock %}
 
-{% block nav-global %}<a id="main_site" href="{% url data %}">Back to Main Site</a>{% endblock %}
+{% block nav-global %}<a id="main_site" href="{% url "data" %}">Back to Main Site</a>{% endblock %}
 
 {% block pretitle %}
 <div id="global_messages"></div>

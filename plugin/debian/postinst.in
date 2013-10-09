@@ -5,31 +5,25 @@ set -e
 
 case "$1" in
     configure)
-	
+
     # Set execute bit on shell scripts
 	find @ION_INSTALL_PREFIX@/plugins -name launch.sh -exec chmod a+x {} \;
 	# Set execute bit on perl scripts
 	find @ION_INSTALL_PREFIX@/plugins -name \*.pl -exec chmod a+x {} \;
-    
+
     # Create scratch space directory, writeable by plugin user for storing
     # files
-    if [ ! -d /results/plugins/scratch ]; then
-        mkdir -m a=rwx -p /results/plugins/scratch
-        chmod a+rwx /results/plugins/scratch
+    if [ ! -d @ION_INSTALL_PREFIX@/plugins/scratch ]; then
+        mkdir -m a=rwx -p @ION_INSTALL_PREFIX@/plugins/scratch
     fi
+    chmod -c a+rwx @ION_INSTALL_PREFIX@/plugins/scratch
 
-    if [ ! -d /results/plugins/implementations ]; then
-        mkdir -m a=rx -p /results/plugins/implementations
+    if [ ! -d @ION_INSTALL_PREFIX@/plugins/implementations ]; then
+        mkdir -m a=rx -p @ION_INSTALL_PREFIX@/plugins/implementations
     fi
     # Perms were wrong in cmake script
-    chmod -c a+rx /results/plugins/implementations
+    chmod -c a+rx @ION_INSTALL_PREFIX@/plugins/implementations
 
-    # Remove after 2.0 release.    
-    # Ensure that renamed variantCalling plugin has not left any traces
-    if [ -d /results/plugins/variantCalling ]; then
-        rm -rf /results/plugins/variantCalling
-    fi
-    
     # Set common owner, if ionadmin user exists
     if getent passwd | grep -q "^ionadmin:"; then
     	chown -R ionadmin.ionadmin @ION_INSTALL_PREFIX@/plugins

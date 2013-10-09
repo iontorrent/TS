@@ -31,14 +31,14 @@ class ShortStack{
   void FillInPredictions(PersistingThreadObjects &thread_objects, StackPlus &my_data, InputStructures &global_context);
   void ResetQualities();
   void InitTestFlow();
-  float PosteriorFrequencyLogLikelihood(float my_freq, float my_reliability, int strand_key);
+  float PosteriorFrequencyLogLikelihood(const vector<float> &hyp_freq, const vector<float> &prior_frequency_weight, float prior_log_normalization, float my_reliability, int strand_key);
   void PropagateTuningParameters(EnsembleEvalTuningParameters &my_params);
     void ResetRelevantResiduals();
   void UpdateRelevantLikelihoods();
   void ResetNullBias();
   // do updates
-  void UpdateResponsibility(float my_freq, float data_reliability);
-  float FrequencyFromResponsibility(int strand_key);
+  void UpdateResponsibility(const vector<float> &hyp_freq, float data_reliability);
+  void MultiFrequencyFromResponsibility(vector<float> &hyp_freq, vector<float> &prior_frequency_weight, int strand_key);
 };
 
 

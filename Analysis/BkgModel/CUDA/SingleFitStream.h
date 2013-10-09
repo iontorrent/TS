@@ -129,9 +129,12 @@ public:
   void serializeInputs();
   void preProcessCpuSteps();
 
-  // implementatin of stream execution methods
+  // implementation of interface stream execution methods
   void ExecuteJob();
   int handleResults();
+
+  void printStatus();
+  //////////////
 
   int getBeadsPerBlock();
   int getL1Setting();

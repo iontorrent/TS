@@ -31,8 +31,11 @@ class GpuControlOpts{
 
     int doGpuOnlyFitting;
 
-    void DefaultGpuControl(void);
+    int gpuAmpGuess; 
 
+    bool gpuVerbose;
+
+    void DefaultGpuControl(void);
 };
 
 #endif // GPUCONTROLOPTS_H

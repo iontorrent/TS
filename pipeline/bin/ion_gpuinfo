@@ -10,7 +10,7 @@ echo
 echo "=================================================================="
 echo "GPU in PCI Slots:"
 
-out=$(lspci | grep 'controller: nVidia')
+out=$(lspci | grep -i 'controller: nVidia')
 if [[ -n $out ]]; then
      rev=$(echo $out | grep 'rev ff')
      if [[ -z $rev ]]; then

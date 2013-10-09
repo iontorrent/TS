@@ -8,7 +8,7 @@
 #include "ErrorMotifs.h"
 
 // This function only works for the 1Base -> 1 Base snp representation
-void AlleleIdentity::SubCategorizeSNP(LocalReferenceContext &reference_context, int min_hp_for_overcall) {
+void AlleleIdentity::SubCategorizeSNP(const LocalReferenceContext &reference_context) {
 
 // This classification only works if allele lengths == 1
   char altBase = altAllele.at(0);
@@ -19,41 +19,18 @@ void AlleleIdentity::SubCategorizeSNP(LocalReferenceContext &reference_context, 
   char refBaseRight = (reference_context.position0 == reference_context.my_hp_start_pos.at(0) + reference_context.my_hp_length.at(0) - 1) ?
 		  reference_context.ref_right_hp_base : reference_context.reference_allele.at(0);
 
-  //in case of SNP test case for possible undercall/overcall leading to FP SNP evidence
   if (altBase == refBaseLeft || altBase == refBaseRight) {
     // Flag possible misalignment for further investigation --- I am an awful hack!
     status.doRealignment = true;
-
-    if (reference_context.my_hp_length.at(0) > 1) {
-      if (altBase == refBaseLeft && reference_context.left_hp_length > min_hp_for_overcall) {
-        status.isOverCallUnderCallSNP = true;
-        // None of these variables is used in ensemble eval
-        underCallLength = reference_context.my_hp_length.at(0) - 1;
-        underCallPosition = reference_context.position0; //going to 0-based anchor position
-        overCallLength = reference_context.left_hp_length + 1;
-        overCallPosition = (reference_context.position0) - (reference_context.left_hp_length);
-        // */
-      }
-      else
-        if (altBase == refBaseRight && reference_context.right_hp_length > min_hp_for_overcall) {
-          status.isOverCallUnderCallSNP = true;
-          // None of these variables is used in ensemble eval
-          underCallLength = reference_context.my_hp_length.at(0) - 1;
-          underCallPosition = (reference_context.position0) - (reference_context.left_hp_length); //going to 0-based anchor position
-          overCallLength = reference_context.left_hp_length + 1;
-          overCallPosition = reference_context.position0;
-          // */
-        }
-    }
   }
   if (DEBUG > 0) {
-    cout << " is a snp. OverUndercall? " << status.isOverCallUnderCallSNP << endl;
+    //cout << " is a snp. OverUndercall? " << status.isOverCallUnderCallSNP << endl;
     if (status.doRealignment)
       cout << "Possible alignment error detected." << endl;
   }
 }
 
-void AlleleIdentity::DetectPotentialCorrelation(LocalReferenceContext& reference_context){
+/*void AlleleIdentity::DetectPotentialCorrelation(const LocalReferenceContext& reference_context){
   // in the case in which we are deleting/inserting multiple different bases
   // there may be extra correlation in the measurements because of over/under normalization in homopolymers
   // we head off this case
@@ -72,80 +49,150 @@ void AlleleIdentity::DetectPotentialCorrelation(LocalReferenceContext& reference
   if (altAllele.length()==3 && reference_context.reference_allele.length()==1 && status.isInsertion)
     if (altAllele[1]!=altAllele[2])
       status.isPotentiallyCorrelated = true;
+}*/
+
+// Test whether this is an HP-InDel
+void AlleleIdentity::IdentifyHPdeletion(const LocalReferenceContext& reference_context) {
+
+  // Get right anchor for better HP-InDel classification
+  right_anchor = 0;
+  // It's a deleltion, so reference allele must be longer than alternative allele
+  int shorter_test_pos = altAllele.length() - 1;
+  int longer_test_pos  = reference_context.reference_allele.length() - 1;
+  while (shorter_test_pos >= anchor_length and
+         altAllele.at(shorter_test_pos) == reference_context.reference_allele.at(longer_test_pos)) {
+    right_anchor++;
+    shorter_test_pos--;
+    longer_test_pos--;
+  }
+
+  if (anchor_length+right_anchor < (int)altAllele.length()){
+    // If the anchors do not add up to the length of the shorter allele,
+    // a more complex substitution happened and we don't classify as HP-InDel
+    status.isHPIndel = false;
+  }
+  else {
+    status.isHPIndel = reference_context.my_hp_length.at(anchor_length) > 1;
+    for (int i_base=anchor_length+1; (status.isHPIndel and i_base<(int)reference_context.reference_allele.length()-right_anchor); i_base++){
+	    status.isHPIndel = status.isHPIndel and (reference_context.my_hp_length.at(anchor_length) > 1);
+    }
+  }
+  inDelLength = reference_context.reference_allele.length() - altAllele.length();
 }
 
-// CK: Newly written function.
-// Old function was problematic; only worked accidentally because of a bug in local context object.
-bool AlleleIdentity::SubCategorizeInDel(LocalReferenceContext& reference_context) {
+// Test whether this is an HP-InDel
+void AlleleIdentity::IdentifyHPinsertion(const LocalReferenceContext& reference_context, const string & local_contig_sequence) {
 
+  char ref_base_right_of_anchor;
+  int ref_right_hp_length = 0;
+  ref_hp_length = 0;
+  status.isHPIndel = false;
+
+  if (anchor_length == (int)reference_context.reference_allele.length()) {
+    ref_base_right_of_anchor = reference_context.ref_right_hp_base;
+    ref_right_hp_length = reference_context.right_hp_length;
+  }
+  else {
+    ref_base_right_of_anchor = reference_context.reference_allele.at(anchor_length);
+    ref_right_hp_length = reference_context.my_hp_length.at(anchor_length);
+  }
+
+  if (anchor_length > 0  and altAllele.at(anchor_length) == altAllele.at(anchor_length - 1)) {
+    status.isHPIndel = true;
+    ref_hp_length = reference_context.my_hp_length.at(anchor_length - 1);
+  }
+  if (altAllele.at(anchor_length) == ref_base_right_of_anchor) {
+    status.isHPIndel = true;
+    ref_hp_length = ref_right_hp_length;
+  }
+  inDelLength  = altAllele.length() - reference_context.reference_allele.length();
+
+  if (status.isHPIndel) {
+    for (int b_idx = anchor_length + 1; b_idx < anchor_length + inDelLength; b_idx++) {
+      if (altAllele.at(b_idx) != altAllele.at(anchor_length))
+        status.isHPIndel = false;
+    }
+  } else if (inDelLength == 1) {
+    status.isHPIndel = IdentifyDyslexicMotive(local_contig_sequence, altAllele.at(anchor_length), reference_context.position0+anchor_length);
+  }
+}
+
+// Identify some special motives
+bool AlleleIdentity::IdentifyDyslexicMotive(const string & local_contig_sequence, char base, int position) {
+
+  status.isDyslexic = false;
+  int  test_position = position-2;
+
+  unsigned int max_hp_distance = 4;
+  unsigned int hp_distance = 0;
+  unsigned int my_hp_length = 0;
+
+  // Test left vicinity of insertion
+  while (!status.isDyslexic and test_position>0 and hp_distance < max_hp_distance) {
+    if (local_contig_sequence.at(test_position) != local_contig_sequence.at(test_position-1)) {
+      hp_distance++;
+      my_hp_length = 0;
+    }
+    else if (local_contig_sequence.at(test_position) == base) {
+      my_hp_length++;
+      if(my_hp_length >= 2) {  // trigger when a 3mer or more is found
+    	  status.isDyslexic = true;
+      }
+    }
+    test_position--;
+  }
+  if (status.isDyslexic) return (true);
+
+  // test right vicinity of insertion
+  hp_distance = 0;
+  my_hp_length = 0;
+  test_position = position+1;
+
+  while (!status.isDyslexic and test_position<(int)local_contig_sequence.length() and hp_distance < max_hp_distance) {
+    if (local_contig_sequence.at(test_position) != local_contig_sequence.at(test_position-1)) {
+      hp_distance++;
+      my_hp_length = 0;
+    }
+    else if (local_contig_sequence.at(test_position) == base) {
+      my_hp_length++;
+      if(my_hp_length >= 2) {  // trigger when a 3mer or more is found
+    	  status.isDyslexic = true;
+      }
+    }
+    test_position++;
+  }
+  return status.isDyslexic;
+}
+
+
+// We categorize InDels
+bool AlleleIdentity::SubCategorizeInDel(const string &local_contig_sequence, const LocalReferenceContext& reference_context) {
+
+  // These fields are set no matter what
   status.isDeletion  = (reference_context.reference_allele.length() > altAllele.length());
   status.isInsertion = (reference_context.reference_allele.length() < altAllele.length());
-  string shorterAllele, longerAllele;
-  ref_hp_length = 1;
-
-  // Sanity checks
-  if (anchor_length == 0) {
-    cerr << "Non-fatal ERROR in InDel classification: InDel needs at least one anchor base. VCF position: "
-    	 << reference_context.contigName << ":" << reference_context.position0+1
-         << " Ref: " << reference_context.reference_allele <<  " Alt: " << altAllele << endl;
-    cout << endl << "Non-fatal ERROR in InDel classification: InDel needs at least one anchor base. VCF position: "
-    	 << reference_context.contigName << ":" << reference_context.position0+1
-         << " Ref: " << reference_context.reference_allele <<  " Alt: " << altAllele << endl;
-    // Function level above turns this into a ",NOCALLxBADCANDIDATE"
-    return (false);
-  }
 
   if (status.isDeletion) {
-    longerAllele  = reference_context.reference_allele;
-    shorterAllele = altAllele;
-    status.isHPIndel = reference_context.my_hp_length.at(anchor_length) > 1;
-    ref_hp_length = reference_context.my_hp_length.at(anchor_length);
+	IdentifyHPdeletion(reference_context);
+	ref_hp_length = reference_context.my_hp_length.at(anchor_length);
   }
   else { // Insertion
-
-    shorterAllele = reference_context.reference_allele;
-    longerAllele  = altAllele;
-    char ref_base_right_of_insertion;
-    int ref_right_hp_length = 0;
-    if (anchor_length == (int)reference_context.reference_allele.length()) {
-      ref_base_right_of_insertion = reference_context.ref_right_hp_base;
-      ref_right_hp_length = reference_context.right_hp_length;
-    }
-    else {
-      ref_base_right_of_insertion = reference_context.reference_allele.at(anchor_length);
-      ref_right_hp_length = reference_context.my_hp_length.at(anchor_length);
-    }
-
-    // Investigate HPIndel -> if length change results in an HP > 1.
-    if (longerAllele.at(anchor_length) == longerAllele.at(anchor_length - 1)) {
-      status.isHPIndel = true;
-      ref_hp_length = reference_context.my_hp_length.at(anchor_length - 1);
-    }
-    if (longerAllele.at(anchor_length) == ref_base_right_of_insertion) {
-      status.isHPIndel = true;
-      ref_hp_length = ref_right_hp_length;
-    }
-    if (!status.isHPIndel) {
-      ref_hp_length = 0; // A new base is inserted that matches neither the right nor the left side
-    }
+    IdentifyHPinsertion(reference_context, local_contig_sequence);
   }
-  inDelLength  = longerAllele.length() - shorterAllele.length();
 
-  // only isHPIndel if all inserted/deleted bases past anchor bases are equal.
-  for (int b_idx = anchor_length + 1; b_idx < anchor_length + inDelLength; b_idx++) {
-    if (longerAllele[b_idx] != longerAllele[anchor_length])
-      status.isHPIndel = false;
+  if (DEBUG > 0){
+    cout << " is an InDel";
+    if (status.isInsertion) cout << ", an Insertion of length " << inDelLength;
+    if (status.isDeletion)  cout << ", a Deletion of length " << inDelLength;
+    if (status.isHPIndel)   cout << ", and an HP-Indel";
+    if (status.isDyslexic)  cout << ", and dyslexic";
+    cout << "." << endl;
   }
-  
-  DetectPotentialCorrelation(reference_context); // am I a very special problem for the likelihood function?
-
-  if (DEBUG > 0)
-    cout << " is an InDel. Insertion?: " << status.isInsertion << " InDelLength: " << inDelLength << " isHPIndel?: " << status.isHPIndel << " ref. HP length: " << ref_hp_length << endl;
   return (true);
 }
 
 
-bool AlleleIdentity::CharacterizeVariantStatus(LocalReferenceContext &reference_context, int min_hp_for_overcall) {
+bool AlleleIdentity::CharacterizeVariantStatus(const string & local_contig_sequence, const LocalReferenceContext &reference_context) {
   //cout << "Hello from CharacterizeVariantStatus; " << altAllele << endl;
   bool is_ok = true;
   status.isIndel       = false;
@@ -166,15 +213,16 @@ bool AlleleIdentity::CharacterizeVariantStatus(LocalReferenceContext &reference_
   if (DEBUG > 0)
     cout << "- Alternative Allele " << altAllele << " (anchor length " << anchor_length << ")";
 
+
   // Change classification to better reflect what we can get with haplotyping
   if (altAllele.length() != reference_context.reference_allele.length()) {
     status.isIndel = true;
-    is_ok = SubCategorizeInDel(reference_context);
+    is_ok = SubCategorizeInDel(local_contig_sequence, reference_context);
   }
   else
     if ((int)altAllele.length() == 1) { // Categorize function only works with this setting
       status.isSNP = true;
-      SubCategorizeSNP(reference_context, min_hp_for_overcall);
+      SubCategorizeSNP(reference_context);
     }
     else {
       status.isMNV = true;
@@ -186,7 +234,7 @@ bool AlleleIdentity::CharacterizeVariantStatus(LocalReferenceContext &reference_
   return (is_ok);
 }
 
-bool AlleleIdentity::CheckValidAltAllele(LocalReferenceContext &reference_context) {
+bool AlleleIdentity::CheckValidAltAllele(const LocalReferenceContext &reference_context) {
 
   for (unsigned int idx=0; idx<altAllele.length(); idx++) {
     switch (altAllele.at(idx)) {
@@ -210,11 +258,11 @@ bool AlleleIdentity::CheckValidAltAllele(LocalReferenceContext &reference_contex
 
 // Entry point for variant classification
 bool AlleleIdentity::getVariantType(
-  string _altAllele,
-  LocalReferenceContext &reference_context,
+  const string _altAllele,
+  const LocalReferenceContext &reference_context,
   const string & local_contig_sequence,
   TIonMotifSet & ErrorMotifs,
-  ClassifyFilters &filter_variant) {
+  const ClassifyFilters &filter_variant) {
 
   altAllele = _altAllele;
   bool is_ok = reference_context.context_detected;
@@ -225,32 +273,27 @@ bool AlleleIdentity::getVariantType(
 
   // We should now be guaranteed a valid variant position in here
   if (is_ok) {
-    is_ok = CharacterizeVariantStatus(reference_context, filter_variant.min_hp_for_overcall);
-
+    is_ok = CharacterizeVariantStatus(local_contig_sequence, reference_context);
     PredictSequenceMotifSSE(reference_context, local_contig_sequence, ErrorMotifs);
-
-    // Just confusing -> refactor away
-    ModifyStartPosForAllele(reference_context.position0 + 1);
   }
   is_ok = is_ok and CheckValidAltAllele(reference_context);
 
   if (!is_ok) {
-    status.isNoCallVariant = true;
-    status.isBadAllele = true;
-    filterReason += ",NOCALLxBADCANDIDATE";
+    status.isProblematicAllele = true;
+    filterReason += ",BADCANDIDATE";
   }
 
   return(is_ok);
 }
 
 
-// Should almost not be called anywhere anymore...
+/*/ Should almost not be called anywhere anymore...
 void AlleleIdentity::ModifyStartPosForAllele(int variantPos) {
   if (status.isSNP || status.isMNV)
     modified_start_pos = variantPos - 1; //0 based position for SNP location
   else
     modified_start_pos = variantPos;
-}
+} //*/
 
 
 // Checks the reference area around variantPos for a multi-nucleotide repeat and it's span
@@ -314,18 +357,18 @@ bool AlleleIdentity::IdentifyMultiNucRepeatSection(const string &local_contig_se
 // -----------------------------------------------------------------
 
 
-void AlleleIdentity::CalculateWindowForVariant(LocalReferenceContext seq_context, const string &local_contig_sequence, int DEBUG) {
+void AlleleIdentity::CalculateWindowForVariant(const LocalReferenceContext &seq_context, const string &local_contig_sequence, int DEBUG) {
 
   // If we have an invalid vcf candidate, set a length zero window and exit
-  if (!seq_context.context_detected or status.isBadAllele) {
+  if (!seq_context.context_detected or status.isProblematicAllele) {
     start_window = seq_context.position0;
     end_window = seq_context.position0;
     return;
   }
 
-  // Check for MNRs first, for InDelLengths 2,3,4
+  // Check for MNRs first, for InDelLengths 2,3,4,5
   if (status.isIndel and !status.isHPIndel and inDelLength < 5)
-    for (int rep_period = 2; rep_period < 5; rep_period++)
+    for (int rep_period = 2; rep_period < 6; rep_period++)
       if (IdentifyMultiNucRepeatSection(local_contig_sequence, seq_context, rep_period)) {
         if (DEBUG > 0) {
           cout << "MNR found in allele " << seq_context.reference_allele << " -> " << altAllele << endl;
@@ -349,11 +392,16 @@ void AlleleIdentity::CalculateWindowForVariant(LocalReferenceContext seq_context
         start_window = seq_context.my_hp_start_pos.at(0) - 1;
 
     if (status.isInsertion) {
-      if (altAllele.at(anchor_length) == altAllele.at(anchor_length - 1) and
-          seq_context.position0 > (seq_context.my_hp_start_pos.at(anchor_length - 1) - 1))
+      if (anchor_length == 0) {
+        start_window = seq_context.my_hp_start_pos.at(0) - 1;
+      }
+      else if (altAllele.at(anchor_length) == altAllele.at(anchor_length - 1) and
+          seq_context.position0 > (seq_context.my_hp_start_pos.at(anchor_length - 1) - 1)) {
         start_window = seq_context.my_hp_start_pos.at(anchor_length - 1) - 1;
-      if (altAllele.at(altAllele.length() - 1) == seq_context.ref_right_hp_base)
+      }
+      if (altAllele.at(altAllele.length() - 1) == seq_context.ref_right_hp_base) {
         end_window += seq_context.right_hp_length;
+      }
     }
 
     // Safety
@@ -380,7 +428,8 @@ void AlleleIdentity::CalculateWindowForVariant(LocalReferenceContext seq_context
 // ------------------------------------------------------------------------------
 // Filtering functions
 
-void AlleleIdentity::PredictSequenceMotifSSE(LocalReferenceContext &reference_context, const  string &local_contig_sequence, TIonMotifSet & ErrorMotifs) {
+void AlleleIdentity::PredictSequenceMotifSSE(const LocalReferenceContext &reference_context,
+                             const  string &local_contig_sequence, TIonMotifSet & ErrorMotifs) {
 
   //cout << "Hello from PredictSequenceMotifSSE" << endl;
   sse_prob_positive_strand = 0;
@@ -397,13 +446,13 @@ void AlleleIdentity::PredictSequenceMotifSSE(LocalReferenceContext &reference_co
     unsigned context_left = var_position >= 10 ? 10 : var_position;
     if (var_position + reference_context.my_hp_length.at(anchor_length) + 10 < (int) local_contig_sequence.length())
       seqContext = local_contig_sequence.substr(var_position - context_left, context_left + (unsigned int)reference_context.my_hp_length.at(anchor_length) + 10);
-    else
+      else
       seqContext = local_contig_sequence.substr(var_position - context_left);
 
     if (seqContext.length() > 0 && context_left < seqContext.length()) {
       sse_prob_positive_strand = ErrorMotifs.get_sse_probability(seqContext, context_left);
 
-      // cout << seqContext << "\t" << context_left << "\t" << sse_prob_positive_strand << "\t";
+       //cout << seqContext << "\t" << context_left << "\t" << sse_prob_positive_strand << "\t";
 
       context_left = seqContext.length() - context_left - 1;
       string reverse_seqContext;
@@ -411,84 +460,35 @@ void AlleleIdentity::PredictSequenceMotifSSE(LocalReferenceContext &reference_co
 
       sse_prob_negative_strand = ErrorMotifs.get_sse_probability(reverse_seqContext, context_left);
 
-      // cout << reverse << "\t" << context_left << "\t" << sse_prob_negative_strand << "\t";
+     // cout << reverse_seqContext << "\t" << context_left << "\t" << sse_prob_negative_strand << "\t";
 
     }
   }
 }
 
-//@TODO Move this to decisiontree!!!!
-void AlleleIdentity::DetectSSEForNoCall(float sseProbThreshold, float minRatioReadsOnNonErrorStrand, float relative_safety_level, map<string, vector<string> > & allele_info, unsigned _altAlleleIndex) {
 
-  if (sse_prob_positive_strand >= sseProbThreshold && sse_prob_negative_strand >= sseProbThreshold) {
-    status.isNoCallVariant = true;
-    filterReason += ",NOCALLxPredictedSSE";
-  }
-  else {
-    // use the >original< counts to determine whether we were affected by this problem 
-    unsigned alt_counts_positive = atoi(allele_info.at("SAF")[_altAlleleIndex].c_str());
-    unsigned alt_counts_negative = atoi(allele_info.at("SAR")[_altAlleleIndex].c_str());
-    // always only one ref count
-   unsigned ref_counts_positive = atoi(allele_info.at("SRF")[0].c_str());
-   unsigned ref_counts_negative = atoi(allele_info.at("SRR")[0].c_str());
-
-    // remember to trap zero-count div by zero here with safety value
-    float safety_val = 0.5f;  // the usual "half-count" to avoid zero
-    unsigned total_depth = alt_counts_positive + alt_counts_negative + ref_counts_positive + ref_counts_negative;
-    float relative_safety_val = safety_val + relative_safety_level * total_depth;
-    
-    float strand_ratio = ComputeTransformStrandBias(alt_counts_positive, alt_counts_positive+ref_counts_positive, alt_counts_negative, alt_counts_negative+ref_counts_negative, relative_safety_val);
-    
-    float transform_threshold = (1-minRatioReadsOnNonErrorStrand)/(1+minRatioReadsOnNonErrorStrand);
-    bool pos_strand_bias_reflects_SSE = (strand_ratio > transform_threshold); // more extreme than we like
-    bool neg_strand_bias_reflects_SSE = (strand_ratio < -transform_threshold); // more extreme
-//    // note: this breaks down at low allele counts
-//    float positive_ratio = (alt_counts_positive+safety_val) / (alt_counts_positive + alt_counts_negative + safety_val);
-//    float negative_ratio = (alt_counts_negative+safety_val) / (alt_counts_positive + alt_counts_negative + safety_val);
-//    bool pos_strand_bias_reflects_SSE = (negative_ratio < minRatioReadsOnNonErrorStrand);
-//    bool neg_strand_bias_reflects_SSE = (positive_ratio < minRatioReadsOnNonErrorStrand);
-    if (sse_prob_positive_strand >= sseProbThreshold &&  pos_strand_bias_reflects_SSE) {
-      status.isNoCallVariant = true;
-      filterReason += ",NOCALLxPositiveSSE";
-    }
-
-    if (sse_prob_negative_strand >= sseProbThreshold && neg_strand_bias_reflects_SSE) {
-      filterReason += ",NOCALLxNegativeSSE";
-      status.isNoCallVariant = true;
-    }
-  }
-  // cout << alt_counts_positive << "\t" << alt_counts_negative << "\t" << ref_counts_positive << "\t" << ref_counts_negative << endl;
-}
-
-
-void AlleleIdentity::DetectLongHPThresholdCases(LocalReferenceContext seq_context, int maxHPLength, int adjacent_max_length) {
+void AlleleIdentity::DetectLongHPThresholdCases(const LocalReferenceContext &seq_context, int maxHPLength) {
   if (status.isIndel && ref_hp_length > maxHPLength) {
-    filterReason += ",NOCALLxHPLEN";
-    status.isNoCallVariant = true;
+    filterReason += "HPLEN";
+    status.isProblematicAllele = true;
   }
-  // Turning off the over- undercall filter, should trigger quality filters if it is too messy to call
-  //if (status.isOverCallUnderCallSNP && (seq_context.left_hp_length > adjacent_max_length || seq_context.right_hp_length > adjacent_max_length))  {
-  //  status.isNoCallVariant = true;
-  //  filterReason+=",NOCALLxADJACENTHPLEN";
-  //}
 }
 
-// XXX Shouldn't this be a reference call and not a no call?
-void AlleleIdentity::DetectNotAVariant(LocalReferenceContext seq_context) {
+
+void AlleleIdentity::DetectNotAVariant(const LocalReferenceContext &seq_context) {
   if (altAllele.compare(seq_context.reference_allele) == 0) {
     //incorrect allele status is passed thru make it a no call
-    status.isNoCallVariant = true;
-    filterReason += ",NOCALLxNOTAVARIANT";
+    status.isProblematicAllele = true;
+    filterReason += "NOTAVARIANT";
   }
 }
 
 
-void AlleleIdentity::DetectCasesToForceNoCall(LocalReferenceContext seq_context, ClassifyFilters &filter_variant, map<string, vector<string> >& info, unsigned _altAlleIndex) {
+void AlleleIdentity::DetectCasesToForceNoCall(const LocalReferenceContext &seq_context, const ClassifyFilters &filter_variant) {
 
   //filterReason = ""; moved up, Classifier might already throw a NoCall for a bad candidate
   DetectNotAVariant(seq_context);
-  DetectLongHPThresholdCases(seq_context, filter_variant.hp_max_length, filter_variant.adjacent_max_length);
-  DetectSSEForNoCall(filter_variant.sseProbThreshold, filter_variant.minRatioReadsOnNonErrorStrand, filter_variant.sse_relative_safety_level, info, _altAlleIndex);
+  DetectLongHPThresholdCases(seq_context, filter_variant.hp_max_length);
 }
 
 // ====================================================================
@@ -504,6 +504,7 @@ void MultiAlleleVariantIdentity::GetMultiAlleleVariantWindow(const string & loca
       window_start = allele_identity_vector[i_allele].start_window;
     if (allele_identity_vector[i_allele].end_window > window_end or window_end == -1)
       window_end = allele_identity_vector[i_allele].end_window;
+    doRealignment = doRealignment or allele_identity_vector[i_allele].status.doRealignment;
   }
   // Hack: pass allele windows back down the object
   for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
@@ -514,7 +515,8 @@ void MultiAlleleVariantIdentity::GetMultiAlleleVariantWindow(const string & loca
 
 // ------------------------------------------------------------
 
-void MultiAlleleVariantIdentity::SetupAllAlleles(vcf::Variant ** candidate_variant, const string & local_contig_sequence, ExtendParameters *parameters, InputStructures &global_context) {
+void MultiAlleleVariantIdentity::SetupAllAlleles(vcf::Variant ** candidate_variant, const string & local_contig_sequence,
+                                                 ExtendParameters *parameters, InputStructures &global_context) {
 
   seq_context.DetectContext(local_contig_sequence, candidate_variant, global_context.DEBUG);
   allele_identity_vector.resize((*candidate_variant)->alt.size());
@@ -543,11 +545,10 @@ void MultiAlleleVariantIdentity::SetupAllAlleles(vcf::Variant ** candidate_varia
 
 // ------------------------------------------------------------
 
-void MultiAlleleVariantIdentity::FilterAllAlleles(vcf::Variant ** candidate_variant, ClassifyFilters &filter_variant) {
+void MultiAlleleVariantIdentity::FilterAllAlleles(const ClassifyFilters &filter_variant) {
   if (seq_context.context_detected) {
-    for (uint8_t i_allele = 0; i_allele < (*candidate_variant)->alt.size(); i_allele++) {
-      allele_identity_vector[i_allele].DetectCasesToForceNoCall(seq_context,
-    		                            filter_variant, (*candidate_variant)->info, i_allele);
+    for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
+      allele_identity_vector[i_allele].DetectCasesToForceNoCall(seq_context, filter_variant);
     }
   }
 }

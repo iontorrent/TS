@@ -252,7 +252,7 @@ float em_diff ( float *X, float *Y, float *em, int len )
 }
 
 
-void SearchAmplitude::ProjectionSearchAmplitude ( BeadTracker &my_beads, bool _rate_fit )
+void SearchAmplitude::ProjectionSearchAmplitude ( BeadTracker &my_beads, bool _rate_fit, bool sampledOnly)
 {
   rate_fit = _rate_fit;
   // should be using a specific region pointer, not the universal one, to match the bead list
@@ -270,9 +270,11 @@ void SearchAmplitude::ProjectionSearchAmplitude ( BeadTracker &my_beads, bool _r
     // want this for all beads, even if they are polyclonal.
     //@TODO this is of course really weird as we have several options for fitting one flow at a time
     // which might be easily parallelizable and not need this weird global level binary search
-    my_scratch->FillObserved ( *my_trace,ibd ); // set scratch space for this bead
+    if (!sampledOnly || (sampledOnly && my_beads.Sampled(ibd))) { 
+      my_scratch->FillObserved ( *my_trace,ibd ); // set scratch space for this bead
 
-    ProjectionSearchOneBead ( &my_beads.params_nn[ibd] );
+      ProjectionSearchOneBead ( &my_beads.params_nn[ibd] );
+    }
   }
   // undo any problems we may have caused for the rest of the code
   pointer_regions->cache_step.Unlock();

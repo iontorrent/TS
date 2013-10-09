@@ -34,12 +34,14 @@ string getVCFHeader(ExtendParameters *parameters, CandidateGenerationHelper &can
   << "##INFO=<ID=FDP,Number=1,Type=Integer,Description=\"Flow Evaluator read depth at the locus\">" << endl
   << "##INFO=<ID=FRO,Number=1,Type=Integer,Description=\"Flow Evaluator Reference allele observations\">" << endl
   << "##INFO=<ID=FAO,Number=A,Type=Integer,Description=\"Flow Evaluator Alternate allele observations\">" << endl
-  
+  << "##INFO=<ID=QD,Number=1,Type=Float,Description=\"QualityByDepth as 4*QUAL/FDP (analogous to GATK) \">" << endl
+
   << "##INFO=<ID=FSRF,Number=1,Type=Integer,Description=\"Flow Evaluator Reference observations on the forward strand\">" << endl
   << "##INFO=<ID=FSRR,Number=1,Type=Integer,Description=\"Flow Evaluator Reference observations on the reverse strand\">" << endl
   << "##INFO=<ID=FSAF,Number=A,Type=Integer,Description=\"Flow Evaluator Alternate allele observations on the forward strand\">" << endl
   << "##INFO=<ID=FSAR,Number=A,Type=Integer,Description=\"Flow Evaluator Alternate allele observations on the reverse strand\">" << endl
-  
+  << "##INFO=<ID=FXX,Number=1,Type=Float,Description=\"Flow Evaluator failed read ratio\">" << endl
+
   << "##INFO=<ID=TYPE,Number=A,Type=String,Description=\"The type of allele, either snp, mnp, ins, del, or complex.\">" << endl
   
   << "##INFO=<ID=LEN,Number=A,Type=Integer,Description=\"allele length\">" << endl
@@ -54,18 +56,20 @@ string getVCFHeader(ExtendParameters *parameters, CandidateGenerationHelper &can
   << "##INFO=<ID=REVB,Number=A,Type=Float,Description=\"Reverse strand bias in prediction.\">" << endl
   << "##INFO=<ID=REFB,Number=A,Type=Float,Description=\"Reference Hypothesis bias in prediction.\">" << endl
   << "##INFO=<ID=VARB,Number=A,Type=Float,Description=\"Variant Hypothesis bias in prediction.\">" << endl
-  << "##INFO=<ID=SSEN,Number=1,Type=Float,Description=\"Strand-specific-error prediction on negative strand.\">" << endl
-  << "##INFO=<ID=SSEP,Number=1,Type=Float,Description=\"Strand-specific-error prediction on positive strand.\">" << endl
+
+  << "##INFO=<ID=SSSB,Number=A,Type=Float,Description=\"Strand-specific strand bias for allele.\">" << endl
+  << "##INFO=<ID=SSEN,Number=A,Type=Float,Description=\"Strand-specific-error prediction on negative strand.\">" << endl
+  << "##INFO=<ID=SSEP,Number=A,Type=Float,Description=\"Strand-specific-error prediction on positive strand.\">" << endl
   
-  << "##INFO=<ID=STB,Number=1,Type=Float,Description=\"Strand bias in variant relative to reference.\">" << endl
-  << "##INFO=<ID=SXB,Number=1,Type=Float,Description=\"Experimental strand bias based on approximate bayesian score for difference in frequency.\">" << endl
+  << "##INFO=<ID=STB,Number=A,Type=Float,Description=\"Strand bias in variant relative to reference.\">" << endl
+//  << "##INFO=<ID=SXB,Number=A,Type=Float,Description=\"Experimental strand bias based on approximate bayesian score for difference in frequency.\">" << endl
   
   << "##INFO=<ID=MLLD,Number=A,Type=Float,Description=\"Mean log-likelihood delta per read.\">" << endl;
 //  << "##INFO=<ID=MXFD,Number=1,Type=Float,Description=\"Mean maximum discrimination per read.\">" << endl;
 //  << "##INFO=<ID=MFDT,Number=1,Type=Float,Description=\"Mean flows per read distinguishing variant above threshold.\">" << endl
 
   headerss << "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Genotype\">" << endl
-  << "##FORMAT=<ID=GQ,Number=1,Type=Float,Description=\"Genotype Quality, the Phred-scaled marginal (or unconditional) probability of the called genotype\">" << endl
+  << "##FORMAT=<ID=GQ,Number=1,Type=Integer,Description=\"Genotype Quality, the Phred-scaled marginal (or unconditional) probability of the called genotype\">" << endl
   << "##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read Depth\">" << endl
   << "##FORMAT=<ID=RO,Number=1,Type=Integer,Description=\"Reference allele observation count\">" << endl
 
@@ -133,7 +137,6 @@ void clearInfoTags(vcf::Variant *var) {
   if (it != var->info.end())
       var->info["DP"].clear();
 
-//  ClearVal("BLL");
   
   it = var->info.find("RBI");
   if (it != var->info.end())
@@ -143,30 +146,23 @@ void clearInfoTags(vcf::Variant *var) {
   if (it != var->info.end())
       var->info["HRUN"].clear();
 
-//  ClearVal("MFDT")
-
   
   it = var->info.find("MLLD");
   if (it != var->info.end())
       var->info["MLLD"].clear();
-  
-//  ClearVal("MXFD");
-  
-  it = var->info.find("SSEN");
-  if (it != var->info.end())
-      var->info["SSEN"].clear();
 
-  it = var->info.find("SSEP");
-  if (it != var->info.end())
-    var->info["SSEP"].clear();
-
+  //SSE compute
+  ClearVal(var,"SSSB");
+  ClearVal(var,"SSEN");
+  ClearVal(var,"SSEP");
+  
   it = var->info.find("STB");
   if (it != var->info.end())
     var->info["STB"].clear();
 
-  it = var->info.find("SXB");
+/*  it = var->info.find("SXB");
   if (it != var->info.end())
-    var->info["SXB"].clear();
+    var->info["SXB"].clear();*/
 
   ClearVal(var,"FDP");
   ClearVal(var,"FRO");
@@ -175,6 +171,8 @@ void clearInfoTags(vcf::Variant *var) {
   ClearVal(var,"FSRR");
   ClearVal(var,"FSAF");
   ClearVal(var,"FSAR");
+  ClearVal(var,"FXX");
+  ClearVal(var,"QD");
 }
 
 void NullInfoFields(vcf::Variant *var){
@@ -194,15 +192,17 @@ void NullInfoFields(vcf::Variant *var){
    var->info["FSRR"].push_back(convertToString(0));
    var->info["FSAF"].push_back(convertToString(0));
    var->info["FSAR"].push_back(convertToString(0));
-  
+   var->info["FXX"].push_back(convertToString(0.0));
+   var->info["QD"].push_back(convertToString(0.0));
    
    var->info["HRUN"].push_back(convertToString(0));
-   
+
+   var->info["SSSB"].push_back(convertToString(0));
    var->info["SSEN"].push_back(convertToString(0));
    var->info["SSEP"].push_back(convertToString(0));
    
     var->info["STB"].push_back(convertToString(0));
-    var->info["SXB"].push_back(convertToString(0));
+//    var->info["SXB"].push_back(convertToString(0));
   
 //   var->info["MFDT"].push_back(convertToString(0));
 //   var->info["MXFD"].push_back(convertToString(0));
@@ -267,3 +267,206 @@ float RetrieveQualityTagValue(vcf::Variant *current_variant, const string &tag_w
   else weight = 0.0f;
   return(weight);
 }
+
+void NullFilterReason(vcf::Variant **candidate_variant){
+  ClearVal(*candidate_variant, "FR");
+  string my_null_filter = ".";
+      AddFilterReason(candidate_variant, my_null_filter);
+}
+
+void AddFilterReason(vcf::Variant **candidate_variant, string &additional_reason){
+  (*candidate_variant)->info["FR"].push_back(additional_reason);
+}
+
+// if, for example, missing data
+void NullGenotypeAllSamples(vcf::Variant ** candidate_variant){
+    vector<string> sampleNames = (*candidate_variant)->sampleNames;
+
+  for (vector<string>::iterator its = sampleNames.begin(); its != sampleNames.end(); ++its) {
+    string& sampleName = *its;
+    map<string, vector<string> >& sampleOutput = (*candidate_variant)->samples[sampleName];
+      sampleOutput["GT"].push_back("./.");
+      sampleOutput["GQ"].push_back(convertToString(0));
+  }
+}
+
+void OverwriteGenotypeForOneSample(vcf::Variant ** candidate_variant, string &my_sample_name, string &my_genotype, float genotype_quality){
+  // will create entry if one does not exist
+
+  map<string, vector<string> >& sampleOutput = (*candidate_variant)->samples[my_sample_name];
+  // clear existing values
+  map<string, vector<string> >::iterator it;
+  it = sampleOutput.find("GT");
+  if (it != sampleOutput.end())    sampleOutput["GT"].clear();
+  it = sampleOutput.find("GQ");
+ if (it != sampleOutput.end())     sampleOutput["GQ"].clear();
+
+
+      sampleOutput["GT"].push_back(my_genotype);
+      // genotype quality should be an "int"
+      int local_quality = genotype_quality;
+      //cout << "Storing Genotype = " << my_genotype << endl;
+      sampleOutput["GQ"].push_back(convertToString(local_quality));
+
+}
+
+void DetectAndSetFilteredGenotype(vcf::Variant **candidate_variant, string &sampleName){
+if ((*candidate_variant)->isFiltered){
+  string no_call_genotype = "./.";
+  float original_quality = (*candidate_variant)->quality;
+  OverwriteGenotypeForOneSample(candidate_variant, sampleName, no_call_genotype, original_quality);
+}
+}
+
+
+void StoreGenotypeForOneSample(vcf::Variant ** candidate_variant, string &my_sample_name, string &my_genotype, float genotype_quality) {
+  vector<string> sampleNames = (*candidate_variant)->sampleNames;
+
+  for (vector<string>::iterator its = sampleNames.begin(); its != sampleNames.end(); ++its) {
+    string& sampleName = *its;
+    //cout << "VariantAssist: SampleName = " << sampleName << " my_sample = " << my_sample_name << endl;
+    map<string, vector<string> >& sampleOutput = (*candidate_variant)->samples[sampleName];
+  map<string, vector<string> >::iterator it;
+  it = sampleOutput.find("GT");
+  if (it != sampleOutput.end())    sampleOutput["GT"].clear();
+  it = sampleOutput.find("GQ");
+   if (it != sampleOutput.end())     sampleOutput["GQ"].clear();
+
+    if (sampleName.compare(my_sample_name) == 0) { //sample of interest
+      //cout << "isNocall " << isNoCall << " genotype = " << my_genotype << endl;
+
+      // if no-call, will reset this entry as a final step, but until then, give me my genotype
+        sampleOutput["GT"].push_back(my_genotype);
+        //cout << "Storing Genotype = " << my_genotype << endl;
+        int local_quality = genotype_quality;
+        sampleOutput["GQ"].push_back(convertToString(local_quality));
+
+    } else { //for all other samples in BAM file just make a no-call at this point.
+      sampleOutput["GT"].push_back("./.");
+      sampleOutput["GQ"].push_back(convertToString(0));
+    }
+    //cout <<"VariantAssist: total genotypes = " << sampleOutput["GT"].size() << endl;
+  }
+
+}
+
+void SetFilteredStatus(vcf::Variant ** candidate_variant, bool isFiltered) {
+   // filtering only sets the column to no-call
+  // choice to put  in filtered file is handled by writing it out
+  // genotype is modified by genotype
+    if (isFiltered) {
+      (*candidate_variant)->filter = "NOCALL" ;
+      (*candidate_variant)->isFiltered = true;
+    } else {
+      (*candidate_variant)->filter = "PASS";
+      (*candidate_variant)->isFiltered = false;
+    }
+
+}
+
+
+
+void AdjustFDPForRemovedAlleles(vcf::Variant ** candidate_variant, int filtered_allele_index, string sampleName){
+
+  // first do the "info" tag as it is easier to find
+    map<string, vector<string> >::iterator it;
+    vcf::Variant *current_variant = *candidate_variant;
+    int total_depth=0;
+
+  it = current_variant->info.find("FDP");
+  if (it != current_variant->info.end())
+    total_depth = atoi(current_variant->info.at("FDP")[0].c_str()); // or is this current sample ident?
+
+  int allele_depth = 0;
+  it = current_variant->info.find("FAO");
+  if (it != current_variant->info.end())
+    allele_depth = atoi(current_variant->info.at("FAO")[filtered_allele_index].c_str());
+
+  total_depth -= allele_depth;
+  if (total_depth<0)
+    total_depth = 0; // how can this happen?
+
+  ClearVal(*candidate_variant, "FDP");
+  (*candidate_variant)->info["FDP"].push_back(convertToString(total_depth));
+
+  if (!sampleName.empty()) {
+      map<string, vector<string> >& sampleOutput = (*candidate_variant)->samples[sampleName];
+      sampleOutput["FDP"].clear();
+      sampleOutput["FDP"].push_back(convertToString(total_depth));
+  }
+}
+
+
+void RemoveFilteredAlleles(vcf::Variant ** candidate_variant, vector<int> &filtered_alleles_index) {
+  //now that all possible alt. alleles are evaluated decide on which allele is most likely and remove any that
+  //that does'nt pass score threshold. Determine Genotype based on alleles that have evidence.
+  (*candidate_variant)->updateAlleleIndexes();
+  string my_healing_glow = "HEALED";
+  vector<string> originalAltAlleles = (*candidate_variant)->alt;
+  if (originalAltAlleles.size() > 1  &&
+      originalAltAlleles.size() > filtered_alleles_index.size()  //remove only when number of alleles more than number of filtered alleles
+      && !(*candidate_variant)->isHotSpot) { //dont remove alleles if it is a HOT SPOT position as alleles might have been provided by the user.
+    //remove filtered alleles with no support
+    string altStr;
+    int index;
+    for (size_t i = 0; i <filtered_alleles_index.size(); i++) {
+
+      index = filtered_alleles_index.at(i);
+      //generate allele index before removing alleles
+      altStr = originalAltAlleles[index];
+      // specify what the alleles removed are
+      //my_healing_glow = "HEALED" + altStr;
+
+      //altStr = (*candidate_variant)->alt[index];
+      // Note: need to update index for adjustments
+      //AdjustFDPForRemovedAlleles(candidate_variant, index, sample_name);
+      //cout << "Removed Fitered allele: index = " << index << " allele = " << altStr << endl;
+      // @TODO: removeAlt wrecks the genotype as well
+      // fix so we don't remove genotype components.
+
+      (*candidate_variant)->removeAlt(altStr);
+      (*candidate_variant)->updateAlleleIndexes();
+      // if we are deleting alleles, indicate data potentially damaged at this location
+      AddFilterReason(candidate_variant, my_healing_glow);
+    }
+  }
+}
+
+// this only needs to know candidate variant, nothing else
+void AdjustAlleles(vcf::Variant ** candidate_variant) {
+  vector<string> types = (*candidate_variant)->info["TYPE"];
+  string refAllele = (*candidate_variant)->ref;
+  vector<string> alts = (*candidate_variant)->alt;
+  long int position = (*candidate_variant)->position;
+  bool snpPosFound = false;
+  string altAllele = alts.at(0);
+  string newRefAllele;
+  string newAltAllele;
+  //nothing to do if there are multiple allels
+
+  if (types.size() != 1)
+    return;
+  else {
+    if ((types.at(0)).compare("snp") == 0 && refAllele.length() > 1 && refAllele.length() == altAllele.length())  {
+      //need to adjust position only in cases where SNP is represent as MNV due to haplotyping - REF= TTC ALT = TTT
+      for (size_t i = 0; i < refAllele.length(); i++) {
+        if (refAllele.at(i) != altAllele.at(i)) {
+          snpPosFound = true;
+          newRefAllele = refAllele.substr(i, 1);
+          newAltAllele = altAllele.substr(i, 1);
+          break;
+        }
+        position++;
+      }
+      //change the ref and alt allele and position of the variant to get to a more traditional snp representation
+      if (snpPosFound) {
+        (*candidate_variant)->position = position;
+        (*candidate_variant)->ref = newRefAllele;
+        (*candidate_variant)->alt.at(0) = newAltAllele;
+      }
+
+    }
+  }
+
+}
+

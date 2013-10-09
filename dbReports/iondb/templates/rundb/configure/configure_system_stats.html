@@ -41,12 +41,11 @@
     	<div class="row-fluid">
 	    <h2>RAID Info</h2>
     	{% if raid_stats %}
-<pre>
-{% for line in raid_stats %}{% spaceless %}
-{{ line }}{% endspaceless %}
-{% endfor %}
-</pre>
+<pre>{{raid_stats}}</pre>
     	{% else %}
       		<p><b>No RAID statistics available</b></p>
     	{% endif %}
 	    </div>
+
+<h2>Disk Check</h2>
+<pre>{{disk_check_status}}</pre>

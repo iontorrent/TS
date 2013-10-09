@@ -1,0 +1,155 @@
+{% load url from future %}
+{% load static from staticfiles %}
+
+<div id="modal_add_attribute_popup" class="modal fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"  aria-hidden="true">&times;</button>
+        <h3 id="modal_addLabel">
+    	{% if intent == "edit" %}Edit Attribute
+    	{% else %}Add Attribute
+    	{% endif %}
+    </h3>        
+    </div>
+    <div class="modal-body">
+        <div class="workflow-step " style="display: block;">
+            <div id="error-messages" style="margin-left: 4%;" class="format-errors alert alert-error hide"></div>
+            
+	        <!--div class="alert alert-error modal-error-messages hide"></div>
+			<div class="alert alert-info modal-info-messages hide"></div>
+			<div class="alert alert-success modal-success-messages hide"></div -->
+
+			<form class="form-horizontal" id="saveAttribute" name="saveAttribute" method="POST" action="">
+        		<input type="hidden" id="intent" name="intent" value="{{intent}}">			
+        		<input type="hidden" id="id" name="id" value="{{sample_attribute.id}}">
+        		
+				<div class="control-group">			
+					<label class="control-label" for="sampleAttributeName">Attribute Name:</label>
+					<div class="controls">
+						{% if intent == "edit" %}
+							<input type="text" maxlength="40" id="sampleAttributeName" name="sampleAttributeName" placeholder="Required" value="{{sample_attribute.displayedName}}">
+						{% else %}
+							<input type="text" maxlength="40" id="sampleAttributeName" name="sampleAttributeName" placeholder="Required">
+						{% endif %}						
+					</div>
+
+					<div class="help-block">
+					</div>
+				</div>
+
+				
+				<div class="control-group">
+					<label class="control-label" for="attributeType">Attribute Type:</label>
+					<div class="controls">
+                    	<select id="attributeType" name="attributeType" style="height:28px;">                    	
+
+                    	{% if intent == "edit" %}
+            				{% for attr_type in attribute_type_list %}
+            					{% ifequal sample_attribute.dataType.id attr_type.id %}
+            						<option SELECTED value="{{attr_type.id}}">{{attr_type.dataType}}</option>  
+            					{% else %}
+            						{% if sample_attribute.samples.count > 0 %}
+            							<option value="{{attr_type.id}}" disabled>{{attr_type.dataType}}</option>  
+            						{% else %}
+            							<option value="{{attr_type.id}}">{{attr_type.dataType}}</option>                        			
+            						{% endif %}
+            					{% endifequal %}
+            				{% endfor %}
+                        {% else %} 
+                			<option value="0" >.....</option>
+                    		{% for attr_type in attribute_type_list %}
+                    			{% if attr_type.isActive %}
+                    				<option value="{{attr_type.id}}" >{{attr_type.dataType}}</option>
+                    			{% endif %}
+                    		{% endfor %}
+                        {% endif %}                    	
+                    	</select>                    	
+
+						<div class="help-block">
+        					{% if sample_attribute.samples.count > 0 %}       					
+        						FYI: Attribute type cannot be changed since it is already used by samples.
+        					{% endif %}
+						</div>
+					</div>
+				</div>
+				
+				<div class="control-group">
+					<label class="control-label" for="attributeDescription">Description:</label>
+					<div class="controls">										
+						{% if intent == "edit" %}
+							<textarea maxlength="1024" id="attributeDescription" name="attributeDescription" placeholder="Optional" value="{{sample_attribute.description}}">{{sample_attribute.description}}</textarea>					
+						{% else %}						
+							<textarea maxlength="1024" id="attributeDescription" name="attributeDescription" placeholder="Optional"></textarea>
+						{% endif %}				
+					</div>
+
+					<div class="help-block">
+					</div>
+	
+				</div>
+			
+				<div class="control-group">
+					<div class="controls">
+						<label class="checkbox">
+							<input  id="is_mandatory" name="is_mandatory" type="checkbox"> Is Mandatory
+						</label>
+					</div>
+				</div>
+		</form>
+		</div>
+	<div class="modal-footer">
+		<button class="btn" data-dismiss="modal">Cancel</button>
+		<a class="btn btn-primary save-attribute-btn">Save</a>
+	</div>
+
+
+    <script type="text/javascript">
+    	$(document).ready(function(){
+    		$('#sampleAttributeName').focus();
+            
+	        $('.save-attribute-btn').click(function(e){
+	            e.preventDefault();
+	            e.stopImmediatePropagation();
+	            
+	            //attribute_name = $("#sampleAttributeName").val();
+	            //attribute_name2 = $('input[id=sampleAttributeName]').val();
+	            //attribute_type = $("#attributeType").val();
+	            //attribute_description = $("#attributeDescription").val();
+	            
+	            //console.log("modal_add_sample_attribute.html - save-attribute-btn - attribute_name=", attribute_name);
+	            //console.log("modal_add_sample_attribute.html - save-attribute-btn - attribute_name2=", attribute_name2);	            
+	            //console.log("modal_add_sample_attribute.html - save-attribute-btn - attribute_type=", attribute_type);
+	            //console.log("modal_add_sample_attribute.html - save-attribute-btn - attribute_description=", attribute_description);
+            
+	            url = "{% url "save_sample_attribute" %}"
+	            data = $('#saveAttribute').serialize();
+	            $.post(url, data, function(data) {
+	                if (data == "true"){
+	                    $( "#modal_add_attribute_popup" ).modal("hide");
+	                    $('body #modal_add_attribute_popup').remove();
+	                    refreshKendoGrid("#samplesetitem_attribute_grid");
+	                }else{
+	                    $('#error-messages').empty();
+	                    
+	                    console.log("modal_add_sample_attribute data=", data);
+	                    $('#error-messages').removeClass('hide');
+	                    for (var i=0;i < data.length;i++){
+	                        $('#error-messages').append('<p class="error">' + data[i] + '</p>');
+	                        console.log("error:", data[i]);
+	                    }
+	                }
+	            }).done(function(data) {
+	                console.log("success:", url);
+	            })
+	            .fail(function(data) {
+	                $('#error-messages').empty();
+                    $('#error-messages').removeClass('hide');
+	                $('#error-messages').append('<p class="error">' + data.responseText + '</p>'); 
+	                console.log("error:", data);
+	            })
+	            .always(function(data) { /*console.log("complete:", data);*/ });
+
+	            return false;
+	        });
+	      });
+    </script>
+</div>

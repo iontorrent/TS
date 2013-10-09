@@ -22,6 +22,10 @@
 
 #include "BkgModelHdf5.h"
 
+//#include <unordered_map>
+#include <map>
+
+
 class BkgFitterTracker
 {
 public:
@@ -47,12 +51,16 @@ public:
   BkgParamH5 all_params_hdf;
   std::vector<int16_t> washout_flow;
 
-  void ThreadedInitialization ( RawWells &rawWells, CommandLineOpts &inception_state, ComplexMask &a_complex_mask,
+
+  bool IsGpuAccelerationUsed() { return analysis_compute_plan.use_gpu_acceleration; }
+
+  void ThreadedInitialization ( GlobalDefaultsForBkgModel &global_defaults, 
+                                RawWells &rawWells, CommandLineOpts &inception_state, ComplexMask &a_complex_mask,
                                 char *results_folder,ImageSpecClass &my_image_spec, std::vector<float> &smooth_t0_est,
                                 std::vector<Region> &regions,
                                 std::vector<RegionTiming> &region_timing,
                                 SeqListClass &my_keys,
-				bool restart);
+  bool restart);
   void InitCacheMath();
   void ExecuteFitForFlow ( int flow, ImageTracker &my_img_set, bool last );
   void SetUpTraceTracking ( SlicedPrequel &my_prequel_setup, CommandLineOpts &inception_state, ImageSpecClass &my_image_spec, ComplexMask &cmask );
@@ -60,7 +68,9 @@ public:
   void SpinUp();
   void UnSpinGpuThreads();
 //  void UnSpinMultiFlowFitGpuThreads();
-  void SetRegionProcessOrder();
+  void SetRegionProcessOrder(CommandLineOpts &inception_state);
+  int findRegion(int x, int y);
+
   BkgFitterTracker ( int numRegions );
   void AllocateRegionData(std::size_t numRegions);
   void DeleteFitters();
@@ -77,9 +87,17 @@ public:
   void DumpBkgModelEmptyTrace ( char *results_folder, int flow );
   void DumpBkgModelRegionParameters ( char *results_folder,int flow );
   // text based diagnostics
-
-
   void DetermineMaxLiveBeadsAndFramesAcrossAllRegionsForGpu();
+
+  // for beads in the bestRegion
+  std::pair<int, int> bestRegion;
+  Region *bestRegion_region;
+  void InitBeads_BestRegion(CommandLineOpts &inception_state);
+  void InitBeads_xyflow(CommandLineOpts &inception_state);
+
+  // xyflow
+  //std::vector<XYFlow_class> xyf_hash;
+  HashTable_xyflow xyf_hash;
 
  private:
   
@@ -87,6 +105,7 @@ public:
     all_emptytrace_track = NULL;
     bkinfo = NULL;
     numFitters = 0;
+    bestRegion_region = NULL;
   }
 
   // Serialization section

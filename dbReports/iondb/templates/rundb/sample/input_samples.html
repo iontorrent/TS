@@ -1,0 +1,225 @@
+{% extends "rundb/sample/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
+{% block extra_head %}
+
+
+<link rel="stylesheet" media="all" href="{% static "resources/bootstrap/css/bootstrap.min.css"%}"/>
+
+<link rel="stylesheet" href="{% static "resources/bootstrap/css/bootstrap-responsive.min.css"%}" >
+<link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap.min.css"%}" >
+<link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap-responsive.min.css"%}" >
+
+<!--In the header of your page, paste the following for Kendo UI Web styles-->
+<link href="{% static "resources/kendo/styles/kendo.common.min.css"%}" rel="stylesheet" />
+<link href="{% static "resources/less/kendo.tb.min.css"%}" rel="stylesheet" />
+
+<link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-layout.css"%}" />
+<link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-styles.min.css"%}" />
+
+<script type="text/javascript" src="{% static "resources/jquery/jquery-1.8.2.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/jquery/jquery.cookie.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/tb.jquery.min.js"%}"></script>
+
+<!-- include in cases browser doesn't natively support JSON.stringify -->
+<script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap-dropdown.js"%}"></script>
+
+<script type="text/javascript" src="{% static "resources/scripts/kendo.custom.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/kendo.grid.override.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/mockup.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/tb.min.js"%}"></script>
+
+<script type="text/javascript" src="{% static "resources/scripts/tb-bootstrap-modal.min.js"%}"></script>
+
+<script type="text/javascript" src="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/js/jasny-bootstrap.min.js"%}"></script>
+
+<!-- Must be last to override the bootstrap modal default behavior -->
+<!--[if (gte IE 6)&(lte IE 8)]>
+<link type="text/css" rel="stylesheet" href="{% static "resources/styles/IE7.min.css"%}" />
+<script type="text/javascript" src="{% static "resources/scripts/IE7.min.js"%}"></script>
+<![endif]-->
+<!--[if lte IE 8]>
+<link type="text/css" rel="stylesheet" href="{% static "resources/styles/browser-warning.css"%}" />
+<script type="text/javascript" src="{% static "resources/scripts/browser-warning.js"%}"></script>
+<![endif]-->
+
+<script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
+<link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
+
+<style>
+
+#input_samplesetitem_grid .k-grid-content {
+	height: 350px;
+}
+</style>
+
+{% endblock extra_head %}
+{% block sub-nav %}
+
+<li><a href="{% url "planRuns" %}">Plan Runs</a></li>
+<li class="active"><a href="{% url "samplesets" %}">Samples</a></li>
+<li><a href="{% url "plans" %}">Templates</a></li>
+<li><a href="{% url "planned" %}">Planned Run List</a></li>
+{% endblock sub-nav %}
+{% block content %}
+
+
+
+<script id="SampleActionColumnTemplate" type="text/x-kendo-template">
+<div class="btn-group">
+	# var _id = pending_id;# 
+	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
+	<ul class="dropdown-menu pull-right">
+		<li>
+			<a href="#= '{% url "edit_pending_sample" 999999 %}'.replace('999999',_id)#" class="edit_sample" data-toggle="modal">Edit</a>
+		</li>
+		<li class="divider"></li>		
+		<li>
+			<a href="#= '{% url "remove_pending_sample" 999999 %}'.replace('999999',_id)#" class="remove_sample" data-toggle="modal">Remove</a>
+		</li>		
+	</ul>
+</div>	
+</script>
+
+
+
+<!--20130712-TODO: NEED TO BE GENERALIZED #= data.attr_value_{{attribute.displayedName}}# -->
+<script id="CustomSampleAttributeTemplate" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[customAttributes_index]; #
+	#= data.attribute_dict[attribute] + " at index=" + customAttributes_index + " json=" + customAttributes_json[customAttributes_index] #
+</script>
+	
+<script id="CustomSampleAttributeTemplate_0" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[0]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_1" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[1]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_2" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[2]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_3" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[3]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_4" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[4]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_5" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[5]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_6" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[6]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_7" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[7]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_8" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[8]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_9" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[9]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_10" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[10]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+	<script id="CustomSampleAttributeTemplate_11" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[11]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_12" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[12]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+	<script id="CustomSampleAttributeTemplate_13" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[13]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_14" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[14]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_15" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[15]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_16" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[16]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_17" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[17]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_18" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[18]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>
+<script id="CustomSampleAttributeTemplate_19" type="text/x-kendo-template">
+	# var attribute = customAttributes_json[19]; #
+	#= getDisplayValue(data.attribute_dict[attribute]) #
+</script>	
+
+
+<div class="main">
+	<div class="container-fluid">
+		<div class="content group">
+			<ul class="breadcrumb">
+				<li>
+					<a href="{% url "samplesets" %}">Sample Sets</a><span class="divider">/</span>
+				<li class="active">
+					Enter Samples
+				</li>
+			</ul>
+
+			<div class="row-fluid">
+				<div class="span12">
+					<div class="pull-left">
+						<h1 style="margin-bottom:5px;">Enter Samples</h1>
+					</div>
+					<div class="pull-right">				
+		            	<a id="enter_sample" href="#" class="btn btn-primary modal_enter_sample" data-toggle="modal">Enter New Sample</a>
+					</div>
+				</div>
+			</div>			
+
+			<div class="row-fluid">
+				<div class="span12">
+					<div id="input_samplesetitem_grid"></div>
+					<div class="pull-right">
+            		<a id="clear_input_samples" href="{% url "clear_input_samples" %}" class="btn btn-danger clear_input_samples">Clear All</a>	
+					<a id="save_samplesetitems" href="#" class="btn btn-primary modal_save_samplesetitems">Save Sample Set</a>	            	
+					</div>
+				</div>
+			</div>
+		</div>
+
+	</div>
+
+<div class="main-push"></div>
+</div>
+
+
+<script type="text/javascript">
+	//20130711-TODO-cleanup
+	var customAttributes = '{{custom_sample_column_list|safe}}';
+	
+	console.log("customAttributes=", customAttributes);	
+	var customAttributes_json = jQuery.parseJSON(customAttributes);
+	var customAttributes_index = -1;
+</script>
+
+<script src="/site_media/resources/scripts/sample/input_samples.js"></script>
+
+{% endblock content %}

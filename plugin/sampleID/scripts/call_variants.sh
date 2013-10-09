@@ -21,19 +21,21 @@ vc_main ()
     local PLUGIN_OUT_BAMFILE=`echo "$BAMFILE" | sed -e 's/^.*\///'`
 
     # Create xml template required for adding IGV links
-    run "\"${DIRNAME}/scripts/create_igv_link.py\" -r ${OUTDIR} -b ${PLUGIN_OUT_BAMFILE} -g ${TSP_LIBRARY} -s igv_session.xml"
+    /usr/bin/python ${DIRNAME}/scripts/create_igv_link.py -r ${OUTDIR} -b ${PLUGIN_OUT_BAMFILE} -g ${TSP_LIBRARY} -s igv_session.xml
 
     # Generate allele counts if hotspots loci BED provided
     echo "Generating base pileup for SNP loci..." >&2
-    run "samtools mpileup -BQ0 -d1000000 -f \"$REFERENCE\" -l ${INPUT_SNP_BED_FILE} ${BAMFILE} $ERROUT | ${SCRIPTSDIR}/allele_from_mpileup.py > ${OUTDIR}/$PLUGIN_OUT_COV_RAW";
-    run "\"${SCRIPTSDIR}/writeAlleles.py\" \"${OUTDIR}/$PLUGIN_OUT_COV_RAW\" \"${OUTDIR}/$PLUGIN_OUT_COV\" \"$PLUGIN_HS_ALIGN_BED\"";
-    rm -rf "${OUTDIR}/$PLUGIN_OUT_COV_RAW"
+    samtools mpileup -BQ0 -d1000000 -f $REFERENCE -l $INPUT_SNP_BED_FILE ${BAMFILE} 2> /dev/null | /usr/bin/python ${SCRIPTSDIR}/allele_from_mpileup.py > ${OUTDIR}/$PLUGIN_OUT_COV_RAW
+    /usr/bin/python ${SCRIPTSDIR}/writeAlleles.py ${OUTDIR}/$PLUGIN_OUT_COV_RAW ${OUTDIR}/$PLUGIN_OUT_COV $PLUGIN_HS_ALIGN_BED
+    rm -rf ${OUTDIR}/$PLUGIN_OUT_COV_RAW
 
 
     # Generate simple coverage statistics, including number of male/female reads
     echo "Generating coverage statistics and sample identification calls..." >&2
-    run "${SCRIPTSDIR}/coverage_analysis.sh $LOGOPT -O \"$PLUGIN_OUT_TARGET_STATS\" -R \"$PLUGIN_OUT_READ_STATS\" -B \"$INPUT_BED_FILE\" -V \"$CHRVARS_TAB\" -D \"$OUTDIR\" \"$REFERENCE\" \"$BAMFILE\""
-    run "${SCRIPTSDIR}/coverage_analysis.sh $LOGOPT -O \"$PLUGIN_OUT_LOCI_STATS\" -B \"$INPUT_SNP_BED_FILE\" -V \"$LOCI_CHRVARS_TAB\" -D \"$OUTDIR\" \"$REFERENCE\" \"$BAMFILE\""
+
+    "bash" ${SCRIPTSDIR}/coverage_analysis.sh $LOGOPT -O $PLUGIN_OUT_TARGET_STATS -R $PLUGIN_OUT_READ_STATS -B $INPUT_BED_FILE -V "$CHRVARS_TAB" -D $OUTDIR $REFERENCE $BAMFILE
+    
+    "bash" ${SCRIPTSDIR}/coverage_analysis.sh $LOGOPT -O $PLUGIN_OUT_LOCI_STATS -B $INPUT_SNP_BED_FILE -V "$LOCI_CHRVARS_TAB" -D $OUTDIR $REFERENCE $BAMFILE
 
     # Make the sample ID call string - including gender
     local HAPLOCODE=`${SCRIPTSDIR}/extractBarcode.pl -R "${OUTDIR}/$PLUGIN_OUT_READ_STATS" "${OUTDIR}/$PLUGIN_OUT_COV"`
@@ -64,7 +66,7 @@ vc_main ()
 
     # Create detailed html report and pass sample ID for collection to barcode summary
     local COVERAGE_HTML="${OUTDIR}/$PLUGIN_OUT_COVERAGE_HTML"
-    run "${SCRIPTSDIR}/coverage_analysis_report.pl -t \"$RUNID\" -B "$HAPLOCODE" -R \"${OUTDIR}/$PLUGIN_OUT_READ_STATS\" -S \"${OUTDIR}/$PLUGIN_OUT_LOCI_STATS\" -T \"${OUTDIR}/$HTML_ROWSUMS\" \"$COVERAGE_HTML\" \"${OUTDIR}/$PLUGIN_OUT_TARGET_STATS\""
+    perl ${SCRIPTSDIR}/coverage_analysis_report.pl -t $RUNID -B "$HAPLOCODE" -R ${OUTDIR}/$PLUGIN_OUT_READ_STATS -S ${OUTDIR}/$PLUGIN_OUT_LOCI_STATS -T ${OUTDIR}/$HTML_ROWSUMS $COVERAGE_HTML ${OUTDIR}/$PLUGIN_OUT_TARGET_STATS
     echo "  \"SampleID\" : \"$HAPLOCODE\"," > "$PLUGIN_OUT_HAPLOCODE"
 
     # Create block.html for summary (non-barcoded run)

@@ -153,6 +153,7 @@ DM_FILE_SETS = [
             'bc_filtered/.*?',
             'download_links/.*?',
             '.[^/]*?eport_layout\.json',
+            'CA_barcode_summary.json',
             ],
         'exclude':[
             '.*?filtered.untrimmed.*?',
@@ -280,6 +281,7 @@ DM_FILE_SETS = [
             'bc_filtered/.*?',
             'download_links/.*?',
             '.[^/]*?eport_layout\.json',
+            'CA_barcode_summary.json',
             ],
         'keepwith':{
             dmactions_types.BASE:[

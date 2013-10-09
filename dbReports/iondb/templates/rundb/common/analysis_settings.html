@@ -1,34 +1,38 @@
 <fieldset>
-		<div class="control-group">
-		    <label for="id_reference" class="control-label">Alignment Reference</label>
+    <div class="control-group">
+        <label for="id_reference" class="control-label">Alignment Reference</label>
         <div class="controls">
-          {{ eas_form.reference }}
-					<p class="help-block"> {{ eas_form.reference.errors }} </p>
-				</div>
-		</div>
-		<div class="control-group">
-		    <label for="id_targetRegionBedFile" class="control-label">Target Regions BED File</label>
+            {{ eas_form.reference }}
+            <p class="help-block"> {{ eas_form.reference.errors }} </p>
+        </div>
+    </div>
+    <div class="control-group">
+        <label for="id_targetRegionBedFile" class="control-label">Target Regions BED File</label>
         <div class="controls">
-          {{ eas_form.targetRegionBedFile }}
-					<p class="help-block"> {{ eas_form.targetRegionBedFile.errors }} </p>
-				</div>
-		</div>
-		<div class="control-group">
-		    <label for="id_hotSpotRegionBedFile" class="control-label">Hotspot Regions BED File</label>
+            {{ eas_form.targetRegionBedFile }}
+            <p class="help-block"> {{ eas_form.targetRegionBedFile.errors }} </p>
+        </div>
+    </div>
+    <div class="control-group">
+        <label for="id_hotSpotRegionBedFile" class="control-label">Hotspot Regions BED File</label>
         <div class="controls">
-          {{ eas_form.hotSpotRegionBedFile }}
-					<p class="help-block"> {{ eas_form.hotSpotRegionBedFile.errors }} </p>
-				</div>
-		</div>
-		<div class="control-group">
-				<label for="id_plugins" class="control-label">Plugins</label>
-				<div id="plugins" class="controls" style="border:1px solid #0981d2;overflow: auto;width:350px;height:175px;padding:5px;">
-				  {{ eas_form.plugins }}
-					<p class="help-block"> {{ eas_form.notes.errors }} </p>
-				</div>
-		</div>
-		
-		<div class="controls" id="plugin_config" align="center" style="display: none;">
+            {{ eas_form.hotSpotRegionBedFile }}
+            <p class="help-block"> {{ eas_form.hotSpotRegionBedFile.errors }} </p>
+        </div>
+    </div>
+    <div class="control-group">
+        <label for="id_plugins" class="control-label">Plugins</label>
+        <div id="plugins" class="controls" style="border:1px solid #0981d2;overflow: auto;width:350px;height:175px;padding:5px;">
+            {{ eas_form.plugins }}
+            <p class="help-block"> {{ eas_form.notes.errors }} </p>
+        </div>
+        <div class="controls">
+            <a style="margin-right:20px;" href="#" id="plugins_select_all" class="btn">Select All</a>
+            <a href="#" id="plugins_clear_selection" class="btn">Clear Selections</a>
+        </div>
+    </div>
+
+    <div class="controls" id="plugin_config" align="center" style="display: none;">
         <div align="right">
             <a href="#" class="btn" id='plugin_config_save' style="border:1px solid #0981d2;"> Save Plugin Settings </a>
             <a href="#" class="btn" id='plugin_config_cancel' style="border:1px solid #0981d2;"> Cancel </a>
@@ -36,21 +40,21 @@
         <iframe id="plugin_iframe" src="" width="100%" height="300px" style="border:1px solid #0981d2;overflow: auto;padding:5px;"></iframe>
     </div>
     
-		<div class="control-group">
-				<label for="id_barcodeKitName" class="control-label">Barcode Set</label>
-				<div class="controls">
-					{{ eas_form.barcodeKitName }}
-					<p class="help-block"> {{ exp_form.barcodeKitName.errors }} </p>
-				</div>
-		</div>
-		<div class="control-group">
-		    <label for="id_threePrimeAdapter" class="control-label">3' Adapter</label>
+    <div class="control-group">
+        <label for="id_barcodeKitName" class="control-label">Barcode Set</label>
         <div class="controls">
-          {{ eas_form.threePrimeAdapter }}
-					<p class="help-block"> {{ eas_form.threePrimeAdapter.errors }} </p>
-				</div>
-		</div>
-		{{ eas_form.pluginsUserInput }}		
+            {{ eas_form.barcodeKitName }}
+            <p class="help-block"> {{ exp_form.barcodeKitName.errors }} </p>
+        </div>
+    </div>
+    <div class="control-group">
+        <label for="id_threePrimeAdapter" class="control-label">3' Adapter</label>
+        <div class="controls">
+            {{ eas_form.threePrimeAdapter }}
+            <p class="help-block"> {{ eas_form.threePrimeAdapter.errors }} </p>
+        </div>
+    </div>
+    {{ eas_form.pluginsUserInput }}
 </fieldset>
 
 <script type="text/javascript">
@@ -62,6 +66,21 @@
         $('#submitButton').bind('mousedown', function(e){
             if ($("#plugin_iframe").attr("src"))
                 save_plugin_config();
+        });
+    });
+    
+    $('#plugins_select_all').click(function(){
+        $('input:checkbox[name=plugins]').each(function(){
+            if (! $(this).prop('disabled')){
+                $(this).prop('checked', true);
+                $("#configure_plugin_"+this.value).show();
+            }
+        });
+    });
+    $('#plugins_clear_selection').click(function(){
+        $('input:checkbox[name=plugins]').each(function(){
+            $(this).prop('checked', false);
+            $("#configure_plugin_"+this.value).hide();
         });
     });
     

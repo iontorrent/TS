@@ -54,27 +54,38 @@ class MultiAB{
   public:
     vector<vector<vector<float> > > * aPtr;
     vector<vector<vector<float> > > * bPtr;
- MultiAB(){aPtr=0; bPtr = 0;};
- void Null(){aPtr=0; bPtr = 0;};
- bool Valid(){return (aPtr != 0 && bPtr != 0);};
+
+    MultiAB(){aPtr=0; bPtr = 0;};
+    void Null(){aPtr=0; bPtr = 0;};
+    bool Valid(){return (aPtr != 0 && bPtr != 0);};
 };
 
 class RecalibrationModel {
 public:
+
+  vector<vector<vector<float> > > * getAs(int x, int y);
+  vector<vector<vector<float> > > * getBs(int x, int y);
   
   RecalibrationModel();
   ~RecalibrationModel();
+
   void Initialize(OptArgs& opts);
-  vector<vector<vector<float> > > * getAs(int x, int y);
-  vector<vector<vector<float> > > * getBs(int x, int y);
+
   void getAB(MultiAB &multi_ab, int x, int y);
+
   bool is_enabled() const { return is_enabled_; };
+
   void suppressEnabled() { is_enabled_ = false;};
-  void InitializeFromJSON(Json::Value &recal_param, string &my_block_key, bool spam_enabled);
+
+  void InitializeFromJSON(Json::Value &recal_param, string &my_block_key, bool spam_enabled, int over_flow_protect);
+
   void SetupStratification(int flowStart, int flowEnd, int flowSpan, 
                                              int xMin, int xMax, int xSpan, 
                                              int yMin, int yMax, int ySpan, int max_hp_calibrated);
-   void FillIndexes(int offsetRegion, int nucInd, int refHP, int flowStart, int flowEnd, float paramA, float paramB);                                          
+
+  void FillIndexes(int offsetRegion, int nucInd, int refHP, int flowStart, int flowEnd, float paramA, float paramB);
+
+
 //protected:
   bool is_enabled_;
   int max_hp_calibrated_;

@@ -63,6 +63,7 @@ public:
    void AddNullUpdate(CrossHypotheses &my_cross);
    void AddOneUpdateForHypothesis(vector<float> &prediction, float responsibility, float skew_estimate, vector<int> &test_flow, vector<float> &residuals);
    void DoLatentUpdate();
+   float RetrieveApproximateWeight(float x_val);
    void PushToPrior();
    void PopFromLatentPrior();
    void AddShiftUpdateForHypothesis(vector<float> &prediction, vector<float> &mod_prediction, 
@@ -74,6 +75,20 @@ public:
  
 };
 
+
+class StrandedSigmaGenerator{
+public:
+  BasicSigmaGenerator fwd,rev;
+  // if want to revert to old-style
+  bool combine_strands;
+
+  StrandedSigmaGenerator(){combine_strands = false;};
+
+  void UpdateSigmaGenerator(ShortStack &total_theory);
+  void UpdateSigmaEstimates(ShortStack &total_theory);
+  void DoStepForSigma(ShortStack &total_theory);
+  void ResetSigmaGenerator();
+};
 
 
 

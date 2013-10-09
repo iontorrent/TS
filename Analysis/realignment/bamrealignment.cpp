@@ -212,6 +212,20 @@ int main (int argc, const char *argv[])
             aligner.verbose_ = false;
         }
       }
+
+      // --- Debug output for Rajesh ---
+      if (debug && aligner.invalid_cigar_in_input) {
+        aligner.verbose_ = true;
+        cout << "Invalid cigar string / md tag pair in read " << alignment.Name << endl;
+        // Rerun reference generation to display error
+        aligner.CreateRefFromQueryBases(alignment.QueryBases, alignment.CigarData, md_tag, anchors);
+
+        aligner.verbose_ = verbose;
+        aligner.invalid_cigar_in_input = false;
+      }
+      // --- --- ---
+
+
     } // end of if isMapped
 
     writer.SaveAlignment(alignment);

@@ -396,8 +396,10 @@ H5DataSet * H5File::CreateDataSet(const std::string &name, arma::Mat<T> &mat, in
   hsize_t rank = 2;
   hsize_t dims[rank];
   hsize_t chunking[rank];
-  chunking[0] = dims[0] = mat.n_rows;
-  chunking[1] = dims[1] = mat.n_cols;
+  chunking[0] = std::min(1000u, mat.n_rows);
+  dims[0] = mat.n_rows;
+  chunking[1] = std::min(1000u, mat.n_cols);
+  dims[1] = mat.n_cols;
   T t = 0;
   hid_t type = GetH5Type(t);
   H5DataSet *ds = CreateDataSet(name, rank, dims, chunking, compression, type);

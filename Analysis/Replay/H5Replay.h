@@ -306,9 +306,18 @@ void H5ReplayRecorder::Write(std::vector<hsize_t>& offset, std::vector<hsize_t>&
 			     std::vector<hsize_t>& offset_in,
 			     std::vector<hsize_t>& count_in, T *buffer_in)
 {
-  assert( mRDataset.GetRank() == offset.size());
-  assert( mRDataset.GetRank() == count.size());
-  assert( count_in.size() == offset_in.size());
+  if (  mRDataset.GetRank() != offset.size() ){
+    fprintf(stderr, "Expected %d rank for offset.size()=%d for dataset %s\n", (int)mRDataset.GetRank(), (int)offset.size(), mRDataset.mName);
+    assert( mRDataset.GetRank() == offset.size());
+  }
+  if( mRDataset.GetRank() != count.size() ){
+    fprintf(stderr, "Expected %d rank for offset,size()=%d for dataset %s\n", (int)mRDataset.GetRank(), (int)count.size(), mRDataset.mName);
+    assert( mRDataset.GetRank() == count.size());
+  }
+  if( count_in.size() != offset_in.size() ){
+    fprintf(stderr, "Expected count_in.size()=%d to match offset_in.size()=%d for dataset %s\n", (int) count_in.size(), (int)offset_in.size(),mRDataset.mName);
+    assert( count_in.size() == offset_in.size());
+  }
 
   Open();
   assert( mRDataset.IsCreated(mHFile) );

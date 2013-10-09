@@ -2178,7 +2178,7 @@ void AlleleParser::updateInputVariants(bool isHaploType) {
                 			
                 			//now subtract the additional 1M at the end of the sequence
                 			vector<pair<int,string> > cigarOper = splitCigar(newCigar);
-                			if (referencePos == 0 && cigarOper.back().second == "M" ) {
+                			if (referencePos == 0 || cigarOper.back().second == "M" ) {
                 				//subtract 1 from the match length
                 				cigarOper.back().first--;
                 				if (cigarOper.back().first == 0)
@@ -2261,7 +2261,7 @@ void AlleleParser::updateInputVariants(bool isHaploType) {
                 			sw.Align(referencePos, newCigar, revRef, revAltSeq);
                 			//now subtract the additional 1M at the end of the sequence
                 			vector<pair<int,string> > cigarOper = splitCigar(newCigar);
-                			if (referencePos == 0 && cigarOper.back().second == "M" ) {
+                			if (referencePos == 0 || cigarOper.back().second == "M" ) {
                 				//subtract 1 from the match length
                 				cigarOper.back().first--;
                 				if (cigarOper.back().first == 0)
@@ -2891,10 +2891,11 @@ bool AlleleParser::toNextTarget(void) {
     if (!parameters.useStdin && !targets.empty()) {
 
         bool ok = false;
-
+        isFirstTarget = false; //set it false by default and if currentTarget is NULL then set it to true
         // try to load the first target if we need to
         if (!currentTarget) {
             ok = loadTarget(&targets.front()) && getFirstAlignment();
+            isFirstTarget = true;
         }
         // step through targets until we get to one with alignments
         // load target will fail if we are processing just input positions and there are no input vcf records within the region
@@ -3104,7 +3105,7 @@ bool AlleleParser::toNextPosition(bool &isLastBaseInTarget, bool isHaploType) {
     if (parameters.processInputPositionsOnly) {
     	    if (!targets.empty() ) { //if regions file is present
     	    	    //current Variant must be the next position. if current Variant is less than current position then just move to next target
-    	    	    if (currentVariant && currentVariant->position - 1 < currentPosition)
+    	    	    if (currentVariant && currentVariant->position - 1 < currentPosition && !isFirstTarget)
     	    	    	    currentPosition = currentTarget->right+1; //just set to end of current target and force move to next target with input variant
     	    	    else if (currentVariant && currentVariant->position - 1 > currentPosition)
     	    	    	    currentPosition = currentVariant->position - 1;

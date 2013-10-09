@@ -13,7 +13,7 @@ from django.shortcuts import render_to_response
 from django.http import HttpResponse
 from django.template import RequestContext
 
-from iondb.rundb.models import GlobalConfig, FileServer
+from iondb.rundb.models import GlobalConfig, FileServer, Rig
 
 
 def showpage(request):
@@ -45,11 +45,14 @@ def showpage(request):
 
                     files[server.name].append([filename.split('.')[0], instName, os.path.join(directory, filename), passVar])
 
+    protonDiags = findProtonDiags(fileservers)
+
     ctxd = {
         "error_state": 0,
         "locations_list": locList,
         "base_site_name": site_name,
         "files": files,
+        "protonDiags": protonDiags,
     }
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/ion_chips.html", context_instance=ctx)
@@ -88,6 +91,7 @@ def getChipZip(request, path):
             "locations_list": [],
             "base_site_name": 'Error',
             "files": [],
+            "protonDiags": [],
         }
         ctx = RequestContext(request, ctxd)
         return render_to_response("rundb/configure/ion_chips.html", context_instance=ctx)
@@ -268,3 +272,56 @@ def getChipPdf(request, path):
     os.unlink(tmppdf)
 
     return response
+
+
+def findProtonDiags(filesvrs):
+    '''Locate Proton diagnostics zip files'''
+    logger = logging.getLogger(__name__)
+    protonDiags = [];
+
+    rigs = Rig.objects.all()
+    rignames = [rig.name for rig in rigs]
+    for fs in filesvrs:
+        #logger.info("Searching for Proton diags in " + fs.filesPrefix)
+        try:
+            filelist = os.listdir(fs.filesPrefix)
+            for rigname in filelist:
+                #logger.info("Searching for Proton diags in " + fs.filesPrefix + rigname)
+
+                if (rigname in rignames):
+                    rigfiles = os.listdir(fs.filesPrefix + "/" + rigname)
+                    for rigfile in rigfiles:
+                        #logger.info("Is " + rigfile + " a Proton diag file?")
+                        if (rigfile.startswith("support_" + rigname)):
+                            logger.info("Found a Proton diag file: " + rigfile)
+                            protonDiags.append(fs.filesPrefix + rigname + "/" + rigfile)
+
+        except OSError:
+            pass
+ 
+    protonDiags.sort()
+    return protonDiags
+
+
+def getProtonDiags(request, path):
+    '''Download the Proton diagnostics zip file'''
+    from django.core.servers.basehttp import FileWrapper
+    logger = logging.getLogger(__name__)
+    path = os.path.join("/", path)
+    try:
+        response = HttpResponse(FileWrapper(open(path)), mimetype='application/zip')
+        response['Content-Disposition'] = 'attachment; filename=%s' % os.path.basename(path)
+        return response
+    except Exception as inst:
+        logger.exception(traceback.format_exc())
+        ctxd = {
+            "error_state": 1,
+            "error": [['Error', '%s' % inst], ['Error type', '%s' % type(inst)]],
+            "locations_list": [],
+            "base_site_name": 'Error',
+            "files": [],
+            "protonDiags": [],
+        }
+        ctx = RequestContext(request, ctxd)
+        return render_to_response("rundb/configure/ion_chips.html", context_instance=ctx)
+

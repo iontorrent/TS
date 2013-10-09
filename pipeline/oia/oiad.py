@@ -13,6 +13,8 @@ import subprocess
 import shlex
 import random
 import fnmatch
+import glob
+import re
 
 import json
 import string
@@ -212,6 +214,26 @@ def instrument_busy():
     return os.path.exists("/software/config/CurExperiment")
 
 
+def get_memory():
+    try:
+        args = shlex.split("/usr/bin/nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits".encode('utf8'))
+        p = subprocess.Popen(args, stdout=subprocess.PIPE)
+        out, err = p.communicate()
+        mem=int(out)
+        if mem < 2000 or mem > 7000:
+            mem=4000
+    except:
+        mem=4000
+    return mem
+
+'''
+# 6 ana jobs are too much for GPU # find . -name sigproc.log | xargs grep -i StreamResources
+# sigproc.log:CUDA 0 StreamManager: No StreamResources could be aquired! retry pending. jobs will he handled by CPU for now!
+'''
+def get_number_max_analysis_jobs():
+    nb_jobs = get_memory()/1000
+    return nb_jobs
+
 def get_run_list(config):
 
     tmp_list = []
@@ -242,6 +264,7 @@ class Run:
         self.dat_path = os.path.join(config.get('global','results'), name)
         self.sigproc_results_path = os.path.join(self.dat_path, "onboard_results", "sigproc_results")
         self.status = 'new'
+        self.last_flow = -1
 
         explog_file = os.path.join(self.dat_path, "explog.txt")
         if not os.path.exists(explog_file):
@@ -262,17 +285,15 @@ class Run:
             self.exp_ecc_enabled = 'yes' in self.explogdict.get('ecc_enabled','no')
             self.exp_planned_run_short_id = self.explogdict.get('planned_run_short_id','')
             self.exp_chiptype = self.explogdict["chiptype"]
-            logger.info('chiptype:-%s-' % self.exp_chiptype)
-            self.exp_runtype = self.explogdict["runtype"]
-            logger.info('runtype:-%s-' % self.exp_runtype)
 
-            '''
-            if os.path.exists(os.path.join(self.dat_path, "chips.json")):
-                chips = json.load(open('os.path.join(self.dat_path, "chips.json")','r'))
-            else:
-                logger.error('use default args /usr/share/ion/oia/chips.json')
-                chips = json.load(open('/usr/share/ion/oia/chips.json','r'))
-            '''
+            self.exp_chipversion = self.explogdict.get('chipversion','')
+            if not self.exp_chipversion or not self.exp_chipversion.startswith('P'):
+                self.exp_chipversion = self.exp_chiptype
+
+            logger.info("planned_run_short_id: '%s'" % self.exp_planned_run_short_id)
+            logger.info("chiptype: '%s'" % self.exp_chiptype)
+            logger.info("chipversion: '%s'" % self.exp_chipversion)
+
 
             if os.path.exists('/software/config/DataCollect.config'):
                 f = open('/software/config/DataCollect.config')
@@ -301,48 +322,66 @@ class Run:
                 "Content-type": "application/json",
                 "Accept": "application/json" }
 
-            # get chip data
-            conn = httplib.HTTPConnection(TSUrl)
-            conn.request("GET", "/rundb/api/v1/chip/?format=json", "", headers)
-            response = conn.getresponse()
-            data = response.read()
-            chips = json.loads(data)
+            try:
+                plan_found = False
+                if self.exp_planned_run_short_id:
+                    # get plan data
+                    conn = httplib.HTTPConnection(TSUrl)
+                    conn.request("GET", "/rundb/api/v1/plannedexperiment/?format=json&planShortID=%s&limit=20" % self.exp_planned_run_short_id, "", headers)
+                    response = conn.getresponse()
+                    logger.info('%s %s' % (response.status, response.reason))
+                    data = response.read()
+                    # Need to limit plans
+                    plans = json.loads(data)
+                    logger.debug("number of plans found on %s: %s" % (TSUrl,len(plans['objects'])))
+                    logger.debug("search for plan with planShortID: '%s'" % self.exp_planned_run_short_id)
 
-            # get plan data
-            conn = httplib.HTTPConnection(TSUrl)
-            conn.request("GET", "/rundb/api/v1/plannedexperiment/?format=json", "", headers)
-            response = conn.getresponse()
-            logger.info('%s %s' % (response.status, response.reason))
-            data = response.read()
-            # Need to limit plans
-            #logger.debug(data)
-            plans = json.loads(data)
+                    plan = [plan for plan in plans['objects'] if plan.get('planShortID','not_available') == self.exp_planned_run_short_id]
+                    logger.debug("number of plans with planShortID '%s' found: %s" % (self.exp_planned_run_short_id,len(plan)))
+                    if plan:
+                        logger.debug("Plan: %s" % plan[0])
+                        self.exp_beadfindArgs = plan[0].get('beadfindargs','justBeadFind')
+                        self.exp_analysisArgs = plan[0].get('analysisargs','Analysis')
+                        self.libraryKey       = plan[0].get('libraryKey','TCAG')
+                        self.tfKey            = plan[0].get('tfKey','ATCG')
+                        plan_found = True
+                    else:
+                        logger.debug("Problem with args in plan '%s'" % self.exp_planned_run_short_id)
 
-            for chip in chips['objects']:
-                logger.info(chip)
-                logger.info('chiptype test: test normal chiptype: [%s]' % self.exp_chiptype)
-                if chip['name']==self.exp_chiptype:
-                    logger.info('chiptype test: found normal chiptype: [%s]' % chip['name'])
-                    self.exp_beadfindArgs = chip['beadfindargs']
-                    self.exp_analysisArgs = chip['analysisargs']
-                logger.info('chiptype test: test special chiptype/runtype: [%s%s]' % (self.exp_chiptype,self.exp_runtype))
-                if chip['name']==self.exp_chiptype+self.exp_runtype:
-                    logger.info('chiptype test: found special chiptype/runtype: [%s]' % chip['name'])
-                    self.exp_beadfindArgs = chip['beadfindargs']
-                    self.exp_analysisArgs = chip['analysisargs']
-                    break
-            logger.info('beadfindArgs:-%s-' % self.exp_beadfindArgs)
-            logger.info('analysisArgs:-%s-' % self.exp_analysisArgs)
+                if not plan_found:
+                    logger.debug("plan not available")
+                    # TODO: user might starts run during TS upgrade
+                    conn = httplib.HTTPConnection(TSUrl)
+                    conn.request("GET", "/rundb/api/v1/analysisargs/?format=json", "", headers)
+                    response = conn.getresponse()
+                    data = response.read()
+                    allanalysisargs = json.loads(data)
 
-            plan = [plan for plan in plans['objects'] if plan.get('planShortID','not_available') == self.exp_planned_run_short_id]
-            if plan:
-                logger.debug("Plan: %s" % plan[0])
-                self.libraryKey=plan[0].get('libraryKey','TCAG') # TODO
-                self.tfKey=plan[0].get('tfKey','ATCG') # TODO
-            else:
-                logger.debug("no plan")
-                self.libraryKey="TCAG"
-                self.tfKey="ATCG"
+                    chip_found = False
+                    logger.info('chipversion test: search for chipversion: [%s]' % self.exp_chipversion)
+
+                    for analysisargs in allanalysisargs['objects']:
+                        logger.info('chipversion test: compare with chipversion: [%s]' % analysisargs['name'])
+                        if analysisargs['name']=="default_"+self.exp_chipversion:
+                            logger.info('chipversion test: found analysis args for chipversion: [%s]' % analysisargs['name'])
+                            logger.info(analysisargs)
+                            self.exp_beadfindArgs = analysisargs['beadfindargs']
+                            self.exp_analysisArgs = analysisargs['analysisargs']
+                            self.libraryKey       = 'TCAG'
+                            self.tfKey            = 'ATCG'
+                            chip_found = True
+                            break
+                    if not chip_found:
+                        raise Exception("Chiptype %s not found" % self.exp_chipversion)
+            except:
+                logger.error(traceback.format_exc())
+                self.exp_beadfindArgs = 'justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 602'
+                self.exp_analysisArgs = 'Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 602'
+                self.libraryKey       = "TCAG"
+                self.tfKey            = "ATCG"
+
+            logger.info("beadfindArgs: '%s'" % self.exp_beadfindArgs)
+            logger.info("analysisArgs: '%s'" % self.exp_analysisArgs)
 
 
         except:
@@ -394,15 +433,10 @@ class Run:
         return s
 
 
-    def killAnalysis(self, skip_nb_flows=-1, skipSSD=False, skipSeparator=False):
+    def killAnalysis(self, skipSeparator=False):
         for block in self.blocks:
             try:
-                if block.storage == "SSD" and skipSSD:
-                    continue
                 if 'justBeadFind' in block.command and skipSeparator:
-                    continue
-                # ignore first flowchunk stored on SSD
-                if block.flow_end == skip_nb_flows-1:
                     continue
                 if block.status == 'processing':
                     logger.debug("kill pid:%s, %s" % (block.process.pid, block))
@@ -421,7 +455,6 @@ class Run:
 
             block_name = 'block_%03d' % i
             block_dir = self.block_name_to_block_dir(block_name)
-            storage = config.get('blocks',block_name).split(',')[0]
             full_block_dat_path = os.path.join(self.dat_path, block_dir)
             full_block_sigproc_results_path = os.path.join(self.sigproc_results_path, "block_"+block_dir)
 
@@ -443,7 +476,6 @@ class Run:
                          self.name,
                          block_dir,
                          block_status,
-                         storage,
                          nb_attempts,
                          self.exp_flows,
                          full_block_dat_path,
@@ -468,7 +500,7 @@ class Run:
         return s
 
 class Block:
-    def __init__(self,run,run_name,name,status,storage,nb_attempts,flows_total,dat_path,sigproc_results_path):
+    def __init__(self,run,run_name,name,status,nb_attempts,flows_total,dat_path,sigproc_results_path):
         self.name = name
         self.status = status
         self.process = None
@@ -476,8 +508,8 @@ class Block:
         self.ret = 0
         self.run = run
         self.run_name = run_name
-        self.successful_processed = -1
-        self.storage = storage
+        self.beadfind_done = False
+        self.successful_processed = 0
         self.nb_attempts = nb_attempts
         self.flows_total = flows_total
         self.flow_start = -1
@@ -492,7 +524,6 @@ class Block:
     def __str__(self):
         s  = "  block:" + self.name
         s += "  status:" + str(self.status)
-        s += "  storage:" + str(self.storage)
         s += "  flows_processed:" + str(self.flow_end+1)
         s += "  nb_attempts:" + str(self.nb_attempts)
         s += "\n"
@@ -521,13 +552,13 @@ class App():
     def __init__(self):
 
         self.nb_max_jobs = config.getint('global','nb_max_jobs')
-        logger.info('nb_max_jobs %s' % self.nb_max_jobs)
+        logger.info('nb_max_jobs: %s' % self.nb_max_jobs)
 
-        self.nb_max_analysis_jobs = config.getint('global','nb_max_analysis_jobs')
-        logger.info('nb_max_analysis_jobs %s' % self.nb_max_analysis_jobs)
+        self.nb_max_analysis_jobs = get_number_max_analysis_jobs()
+        logger.info('nb_max_analysis_jobs: %s' % self.nb_max_analysis_jobs)
 
         self.nb_max_beadfind_jobs = config.getint('global','nb_max_beadfind_jobs')
-        logger.info('nb_max_beadfind_jobs %s' % self.nb_max_beadfind_jobs)
+        logger.info('nb_max_beadfind_jobs: %s' % self.nb_max_beadfind_jobs)
 
         self.flowblocks = config.getint('global','flowblocks')
 
@@ -540,6 +571,16 @@ class App():
 
     def printStatus(self):
         logger.debug("\n***** STATUS: blocks to process: %d *****" % len(self.blocks_to_process))
+
+    def update_oiastatus_file(self):
+        try:
+            with open("/software/config/OIAStatus",'w') as f:
+                f.write("# this is a comment\n")
+                f.write("Timestamp:%s\n" % time.strftime("%Y_%m_%d_%H_%M_%S", time.localtime()))
+                f.write("# Processes can be Analysis or justBeadFind\n")
+                f.write("Processes:%s\n" % str(self.pool.beadfind_counter + self.pool.analysis_counter))
+        except:
+            logger.error(traceback.format_exc())
 
     def get_run_dirs(self):
 
@@ -578,72 +619,49 @@ class App():
             # full queues
             return anablock
 
-        # Separator
-        for block in self.blocks_to_process:
+        for run in self.runs_in_process:
+
+          runblocks = [block for block in self.blocks_to_process if block.run.name==run.name]
+
+          rev=True
+          # run in progress
+          if run.last_flow == run.exp_flows-1:
+              rev=False
+
+          sorted_blocks = sorted(runblocks, key=lambda block: block.run.last_flow-block.successful_processed, reverse=rev)
+
+          for block in sorted_blocks:
 
             if block.status != 'idle':
                 #logger.debug('idle')
                 continue
 
-            if beadfind_request and block.successful_processed == -1:
-                block.command = getSeparatorCommand(config, block)
-                anablock=block
-                return anablock
-
-        # Analysis
-        for block in self.blocks_to_process:
-
-            if block.status != 'idle':
-                #logger.debug('idle')
-                continue
-
-            if analysis_request and block.successful_processed != -1:
+            # Analysis
+            if analysis_request and block.beadfind_done:
 
                 # how far can I go?
-                new_flow_end = -1
+
                 # check for last flow
-                if os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (block.flows_total-1) )):
+                if block.run.last_flow == block.flows_total-1:
                     new_flow_end = block.flows_total-1
-                # check for first flowchunk
-                elif os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (self.flowblocks-1) )) and block.successful_processed == 0 and block.flows_total < 2*self.flowblocks:
-                    new_flow_end = self.flowblocks-1
+                # run in progress and support odd number of flows (e.g. 396)
                 else:
-                    test_flow_end = block.successful_processed-1
-                    while True:
-                        test_flow_end += self.flowblocks
-                        logger.debug('test new flowend ' + block.name + " " + str(test_flow_end))
-                        if not os.path.exists(os.path.join(block.dat_path, 'acq_%04d.dat' % (test_flow_end) )):
-                            break
-                        new_flow_end = test_flow_end
+                    new_flow_end = ( (block.run.last_flow+1) / self.flowblocks ) * self.flowblocks - 1
+                    if block.flows_total - 1 - new_flow_end < self.flowblocks or new_flow_end <= block.successful_processed-1:
+                        logger.debug('new flowend for %s: (%s/%s/%s) filtered out' % (block.name, block.successful_processed-1,new_flow_end,block.flows_total-1))
+                        continue
 
-                # not enough flows for chunk
-                if new_flow_end <= block.successful_processed-1:
-                    logger.debug('new flowend for %s: (%s/%s/%s) filtered out' % (block.name, block.successful_processed-1,new_flow_end,block.flows_total-1))
-                    continue
-                # support odd number of flows (e.g. 396)
-                elif new_flow_end < block.flows_total-1 and block.flows_total-1-new_flow_end < self.flowblocks:
-                    logger.debug('new flowend for %s: (%s/%s/%s) filtered out' % (block.name, block.successful_processed-1,new_flow_end,block.flows_total-1))
-                    continue
-                else:
-                    logger.debug('new flowend for %s: (%s/%s/%s)' % (block.name, block.successful_processed-1,new_flow_end,block.flows_total-1))
-                    pass
-
-                # allow first 20 flows
-                if new_flow_end == self.flowblocks-1:
-                    pass
-                elif block.successful_processed == 0 and new_flow_end > self.flowblocks-1 and instr_busy and block.storage == 'HD':
-                    new_flow_end = self.flowblocks-1
-                    pass
-                elif not instr_busy and block.storage == 'HD':
-                    pass
-                elif block.storage == 'SSD':
-                    pass
-                else:
-                    continue
+                logger.debug('new flowend for %s: (%s/%s/%s)' % (block.name, block.successful_processed-1,new_flow_end,block.flows_total-1))
 
                 block.flow_start = block.successful_processed
                 block.flow_end = new_flow_end
                 block.command = getAnalysisCommand(config, block)
+                anablock=block
+                return anablock
+
+            # Separator
+            if beadfind_request and not block.beadfind_done:
+                block.command = getSeparatorCommand(config, block)
                 anablock=block
                 return anablock
 
@@ -671,9 +689,21 @@ class App():
                 # abort all HD jobs if run in progress
                 for run in self.runs_in_process:
                     logger.info('kill %s' % run.name)
-                    run.killAnalysis(skip_nb_flows=self.flowblocks,skipSSD=True,skipSeparator=True)
+                    #run.killAnalysis(skipSeparator=True)
                     #TODO set correct block status
 
+            # update flow status
+            logger.debug('runs in p: %s' % self.runs_in_process)
+            for run in self.runs_in_process:
+                # check for last flow
+                logger.debug('runs in p: %s' % os.path.join(run.dat_path,'thumbnail','acq_*.dat'))
+                files = glob.glob(os.path.join(run.dat_path,'thumbnail','acq_*.dat'))
+                files.sort()
+                #logger.debug('all files: %s' % files)
+                if files:
+                    s = int(re.match('acq_([0-9]*).dat',os.path.split(files[-1])[1]).group(1))
+                    logger.debug('last file number: %d' % s)
+                    run.last_flow = s
 
             # check for deleted runs
             # TODO
@@ -682,7 +712,7 @@ class App():
             for run in self.runs_in_process:
                 if run.aborted():
                     logger.info('run aborted %s' % run.name)
-                    run.killAnalysis(skip_nb_flows=-1,skipSSD=False,skipSeparator=False)
+                    run.killAnalysis(skipSeparator=False)
                     for block in run.blocks:
                         if block in self.blocks_to_process:
                             self.blocks_to_process.remove(block)
@@ -739,6 +769,9 @@ class App():
 
             new_run_dirs = list(set(all_run_dirs) - set(processed_run_dirs) - set(in_process_run_dirs))
             logger.debug('RUNS NEW: %s' % new_run_dirs)
+
+            # update /software/config/OIAStatus
+            self.update_oiastatus_file()
 
             for run in self.runs_in_process:
                 run.update_status_file()
@@ -799,11 +832,7 @@ class App():
                 logger.info("ADD %s blocks" % arun.name)
                 for block in arun.blocks:
                     if block.status != 'done':
-                        if block.storage == "SSD":
-                            # process SSD blocks first, might want to use collections.deque
-                            self.blocks_to_process.insert(0,block)
-                        else:
-                            self.blocks_to_process.append(block)
+                        self.blocks_to_process.append(block)
 
             self.printStatus()
 
@@ -828,14 +857,18 @@ class App():
                     if block.status == 'processed':
                         block.status = "idle"
                         if block.ret == 0:
-                            block.successful_processed = block.flow_end+1
+                            if block.flow_end == -1:
+                                block.beadfind_done = True
+                            else:
+                                block.successful_processed = block.flow_end+1
                             if block.successful_processed == block.flows_total:
                                 block.status = 'sigproc_done'
                         else:
                             logger.error('Block %s failed with return code %s' % (block.name, block.ret))
                             block.nb_attempts += 1
                             block.sigproc_results_path_tmp = block.sigproc_results_path + "." + str(block.nb_attempts)
-                            block.successful_processed = -1
+                            block.beadfind_done = False
+                            block.successful_processed = 0
                             block.flow_start = -1
                             block.flow_end = -1
                             block.status = "idle"

@@ -56,6 +56,9 @@ document.write('\
 </div>\
 <div id="TC-tooltip" style="display:none">\
   <div><span id="TC-tooltip-close" title="Close" class="help-box ui-icon ui-icon-close"></span></div>\
+  <div><span id="TC-tooltip-zoomout" title="Zoom out from this region" class="help-box ui-icon ui-icon-zoomout"></span></div>\
+  <div><span id="TC-tooltip-center" title="Center view on this region" class="help-box ui-icon ui-icon-arrowthick-2-e-w"></span></div>\
+  <div><span id="TC-tooltip-zoomin" title="Zoom in on this region" class="help-box ui-icon ui-icon-zoomin"></span></div>\
   <div id="TC-tooltip-body"></div>\
   <div id="TC-tooltip-controls" class="controlbox" style="display:none">\
     <input type="button" id="TC-OpenInIGV" value="View in IGV">\
@@ -216,49 +219,86 @@ $(function () {
   });
 
   $('#TC-placeholder').dblclick(function(e) {
-    if( plotStats.numPlots <= 0 ) return;
-    var binNum = lastHoverBar.binNum;
+    if( zoomViewOnBin( lastHoverBar.binNum, true ) ) hideTooltip();
+  });
+
+  function zoomViewOnBin(binNum,zoomIn) {
+    // Always perform zoom out if binNum < 0
+    if( plotStats.numPlots <= 0 ) return false;
+    var overzoom = plotStats.minX > 0 || plotStats.maxX < plotStats.numPoints;
     var srt = tsvFilter.clipleft;
     var end = tsvFilter.clipright;
     var siz = end - srt;
-    if( binNum >= 0 ) {
+    if( binNum >= 0 && zoomIn ) {
+      if( overzoom ) return false;
       if( plotStats.binnedData ) {
-        // zoom into to view coverage by this bin
         zoomToRange( binNum, binNum+1 );
-        return;
+        return true;
       }
-      // recenter current view to the selected bin
-      srt -= siz * (0.5 - binNum / plotStats.numPoints);
+      return centerViewOnBin(binNum);
     } else {
-      if( !plotStats.zoom ) return;
-      // if in overzoom zoom out back to max bins
-      if( plotStats.minX > 0 || plotStats.maxX < plotStats.numPoints ) {
+      if( !plotStats.zoom ) return false;
+      // return to previous view if in over-zoom
+      if( overzoom ) {
         plotStats.minX = 0;
         plotStats.maxX = plotStats.numPoints;
         plotStats.targetsRepresented = plotStats.numPoints;
         updatePlot();
-        return;
+        return true;
+      } else if( binNum >= 0 ) {
+        // override limits by selected bin if provided
+        var cbin = (plotStats.numPoints-1) >> 1;
+        var csrt = dataTable[binNum][DataField.pos_start];
+        var cend = dataTable[binNum][DataField.pos_end];
+        var csiz = cend - csrt - 1;
+        csrt -= cbin * csiz;
+        cend += (cbin * siz) - 1;
+        if( csrt > 0 && cend <= plotStats.chromLength ) {
+          srt = csrt;
+          end = cend;
+          siz = csiz;
+        }
       }
       // zoomout to dblclickUnzoomFac from center of current view
       siz *= dblclickUnzoomFac;
       srt = 0.5*(end+srt-siz);
     }
-    // modify zoomout region to account for maximum zoomout boundaries
+    return windowView(srt,end,siz);
+  };
+
+  function centerViewOnBin(binNum) {
+    if( plotStats.numPlots <= 0 || binNum < 0 ) return false;
+    if( !plotStats.zoom ) return false;
+    // binNum 0-based so 49 (bin#50) is center of 100 bins and 50 (bin#51) is center of 101 bins
+    var cbin = (plotStats.numPoints-1) >> 1;
+    if( binNum == cbin ) return true;
+    var srt = tsvFilter.clipleft;
+    var end = tsvFilter.clipright;
+    var siz = end - srt;
+    srt += (binNum - cbin) * (siz / plotStats.numPoints);
+    return windowView(srt,end,siz);
+  }
+
+  function windowView(srt,end,siz) {
+    // ensure new view of data is within range and correct flags are set, etc.
     if( srt < 0 ) srt = 0;
     end = srt + siz;
     if( end > 100 ) {
       end = 100;
       srt = end - siz;
-      if( siz < 0 ) siz = 0;
+      if( srt < 0 ) srt = 0;
     }
-    if( srt <= 0 && end >= 100 ) {
+    if( tsvFilter.clipleft == srt && tsvFilter.clipright == end ) {
+      return false; // no update needed
+    } else if( srt <= 0 && end >= 100 ) {
       unzoomData();
     } else {
       tsvFilter.clipleft = srt;
       tsvFilter.clipright = end;
       zoomData();
     }
-  });
+    return true;
+  }
 
   //$('#TC-chart').noContext();
 
@@ -311,7 +351,7 @@ $(function () {
     numPoints : def_numPoints,
     aveBase : 1,
     barAxis : urlEnablePlotOptions ? 1 : 0,
-    overPlot : amplicons == 1 ? 2 : 0,
+    overPlot : amplicons == 1 ? 1 : 0,
     zoomMode : 1
   };
 
@@ -336,8 +376,8 @@ $(function () {
     gene_id : 4,
     target_gc : 5,
     cov_length : 6,
-    uncov_3p : 7,
-    uncov_5p : 8,
+    uncov_5p : 7,
+    uncov_3p : 8,
     reads_mean : 9,
     reads_fwd : 10,
     reads_rev : 11,
@@ -467,10 +507,11 @@ $(function () {
       "s on this chromosome, or to set to no filter by selecting the 'ALL' value. If there is only one chromosome in your "+
       "reference this value is set and cannot be changed." );
     $("#TC-filterGeneSymLabel").attr( "title",
-      "Type in the full gene symbol in to filter the data to just "+trg+"s in that gene. Note that the plot will become " +
-      "empty if there were no such targets are annotated with this gene symbol in your specified targets file. Note that " +
-      "filters are additive so your particular gene may not be found if filtered out by chromosome or read depth.\n" +
-      "The Reference Coverage Chart automatically zooms to view all "+trg+"s in the selected gene." );
+      "Type in the gene symbol in to filter the view to just "+trg+"s in that gene. The value must match the symbol "+
+      "exactly but is not case-sensitive. The plot will become empty if no "+trg+" has this gene symbol. Otherwise these "+trg+
+      "s will be presented and the Reference Coverage Chart will automatically zoom to view all "+trg+"s in the selected gene. "+
+      "Note that filters are additive so your particular gene may not be found if filtered out by chromosome or read depth.\n"+
+      "You may also filter by any other single attribute by prefixing its name, e.g. 'pool=1'." );
     $("#TC-clearFilters").attr( "title",
       "Click this button to clear all specified filters: Coverage data is presented for all "+trg+"s." );
     $("#TC-help").attr( "title", "Click for help." );
@@ -626,7 +667,8 @@ $(function () {
     }
     // resolve issues for near/overlapping points selection
     // note: item not reliable when they may be multiple sections in each bar point
-    var binNum = item && !dataBar(label) ? item.dataIndex : Math.floor(pos.x);
+    var clickBar = dataBar(label);
+    var binNum = item && !clickBar ? item.dataIndex : Math.floor(pos.x);
     if( binNum >= plotStats.numPoints ) binNum = plotStats.numPoints-1;
     // do not output the same message (e.g. if move cursor)
     if( lastHoverBar.binNum == binNum && lastHoverBar.sticky == sticky &&
@@ -637,9 +679,11 @@ $(function () {
     lastHoverBar.sticky = sticky;
     lastHoverBar.label = label;
     $('#TC-tooltip-body').html( sticky ? tooltipMessage(label,binNum) : tooltipHint(label,binNum) );
-    var posx = pos.pageX+12;
+    var posx = pos.pageX+10;
     var posy = pos.pageY-10;
+    var minTipWidth = 0;
     if( sticky ) {
+      if( clickBar ) minTipWidth = plotParams.barAxis ? 230 : 210;
       var cof = $('#TC-chart').offset();
       var ht = $('#TC-tooltip').height();
       var ymax = cof.top + $('#TC-chart').height() - ht;
@@ -647,10 +691,10 @@ $(function () {
       if( posy > ymax ) posy = ymax;
       if( posy < cof.top-4 ) posy = cof.top-4;
       var xmid = cof.left + $('#TC-chart').width()/2;
-      if( pos.pageX > xmid ) posx = pos.pageX - $('#TC-tooltip').width() - 16;
+      if( pos.pageX > xmid ) posx = pos.pageX - $('#TC-tooltip').width() - 26;
     }
     $('#TC-tooltip').css({
-      position: 'absolute', left: posx, top: posy, maxWidth: 320,
+      position: 'absolute', left: posx, top: posy, minWidth: minTipWidth,
       background: bgColor, padding: (sticky ? 3 : 4)+'px',
       border: (sticky ? 2 : 1)+'px solid #444',
       opacity: sticky ? 1: 0.7
@@ -662,6 +706,18 @@ $(function () {
 
   $('#TC-tooltip-close').click( function() {
     hideTooltip();
+  });
+
+  $('#TC-tooltip-zoomout').click( function() {
+    if( zoomViewOnBin( lastHoverBar.binNum, false ) ) hideTooltip();
+  });
+
+  $('#TC-tooltip-center').click( function() {
+    if( centerViewOnBin( lastHoverBar.binNum ) ) hideTooltip();
+  });
+
+  $('#TC-tooltip-zoomin').click( function() {
+    if( zoomViewOnBin( lastHoverBar.binNum, true ) ) hideTooltip();
   });
 
   function binBar(bin) {
@@ -684,6 +740,9 @@ $(function () {
 
   function tooltipHint(id,bin) {
     $('#TC-tooltip-close').hide();
+    $('#TC-tooltip-zoomout').hide();
+    $('#TC-tooltip-center').hide();
+    $('#TC-tooltip-zoomin').hide();
     if( dataBar(id) ) {
       var br = "<br/>";
       if( binBar(bin) ) {
@@ -714,7 +773,10 @@ $(function () {
   }
 
   function tooltipMessage(id,bin) {
-    // raw data
+    $('#TC-tooltip-close').show();
+    $('#TC-tooltip-zoomout').show();
+    $('#TC-tooltip-center').show();
+    $('#TC-tooltip-zoomin').show();
     var targLen = binBar(bin) ? dataTable[bin][DataField.bin_length] :
       dataTable[bin][DataField.pos_end]-dataTable[bin][DataField.pos_start]+1;
     var lenCov = dataTable[bin][DataField.cov_length];  // or number of read overlaps with target
@@ -759,7 +821,7 @@ $(function () {
     }
     // compose message
     var br = "<br/>";
-    var msg = id+" in bin#"+(bin+1)+"."+br;
+    var msg = "<span style='white-space:nowrap'>"+id+" in bin#"+(bin+1)+".</span>"+br;
     var contigType = transcriptBed ? "Transcript: " : "Contig: ";
     if( binBar(bin) && dataTable[bin][DataField.bin_size] > 1 ) {
       msg += contigType+dataTable[bin][DataField.contig_id]+br;
@@ -769,7 +831,8 @@ $(function () {
         msg += "Average "+LegendLabels.targType.toLowerCase()+" length: "+sigfig(targLen/nbins)+br;
       }
     } else {
-      msg += "Gene Sym: "+dataTable[bin][DataField.gene_id]+br;
+      gstr = dataTable[bin][DataField.gene_id]
+      msg += (gstr.indexOf('=') > 0 ? "Attributes" : "Gene Sym")+": "+gstr+br;
       var i, targID = dataTable[bin][DataField.target_id];
       while( (i = targID.indexOf(',')) > 0 ) {
         targID = targID.substr(0,i)+br+'+  '+targID.substr(i+1);
@@ -796,17 +859,25 @@ $(function () {
     }
     if( id === LegendLabels.fwdReads || id === LegendLabels.fwdBaseReads ) {
       msg += "Percent "+readStr+sigfig(pcFwd)+'%'+br;
-      msg += baseCoverage ? "Uncovered target 3' length: " : e2eStr+readStr;
-      msg += pcU3p+"%"+br;
+      if( baseCoverage ) {
+        msg += "Uncovered target 5' length: "+sigfig(pcU5p)+"%"+br;
+        msg += "Uncovered target 3' length: "+sigfig(pcU3p)+"%"+br;
+      } else {
+        msg += e2eStr+readStr+sigfig(pcU3p)+"%"+br;
+      }
     } else if( id === LegendLabels.revReads || id === LegendLabels.revBaseReads ) {
       msg += "Percent "+readStr+sigfig(100-pcFwd)+'%'+br;
-      msg += baseCoverage ? "Uncovered target 5' length: " : e2eStr+readStr;
-      msg += pcU5p+"%"+br;
+      if( baseCoverage ) {
+        msg += "Uncovered target 5' length: "+sigfig(pcU5p)+"%"+br;
+        msg += "Uncovered target 3' length: "+sigfig(pcU3p)+"%"+br;
+      } else {
+        msg += e2eStr+readStr+sigfig(pcU5p)+"%"+br;
+      }
     } else if( id === LegendLabels.allReads || id === LegendLabels.allBaseReads ) {
       msg += "Percent forward "+readType+"s: "+sigfig(pcFwd)+'%'+br;
       if( baseCoverage ) {
-        msg += "Uncovered target 3' length: "+sigfig(pcU3p)+"%"+br;
         msg += "Uncovered target 5' length: "+sigfig(pcU5p)+"%"+br;
+        msg += "Uncovered target 3' length: "+sigfig(pcU3p)+"%"+br;
       } else {
         pcU3p = totalReads > 0 ? sigfig(100 * (uc3p+uc5p) / totalReads) : 0;
         msg += e2eStr+readStr+sigfig(pcU3p)+"%"+br;
@@ -835,7 +906,6 @@ $(function () {
     } else {
       $('#TC-tooltip-controls').hide();
     }
-    $('#TC-tooltip-close').show();
     return msg;
   }
 

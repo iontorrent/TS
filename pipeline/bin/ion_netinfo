@@ -1,14 +1,14 @@
 #!/bin/bash
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
-#clear 
+#clear
 
-#================Look up the MAC address for eth0 ========================= 
+#================Look up the MAC address for eth0 =========================
 echo "=================================================================="
 echo "-----Looking up the MAC address for the server-----"
 macaddress=`/sbin/ifconfig eth0 | grep HWaddr|cut -d' ' -f11`
 echo "MAC Address = $macaddress"
 
-#================Test that server has an IP Address========================= 
+#================Test that server has an IP Address=========================
 echo
 echo "=================================================================="
 echo "-----Checking that that server has acquired an IP Address-----"
@@ -27,9 +27,9 @@ if [ "$stat" = "0" ]
 then
 	echo "GOOD - this server has an IP address: $ipaddress"
 else
-    echo "***ERROR***"	
+    echo "***ERROR***"
 	echo "Could not locate an IP address.  Make sure the network cable is connected."
-    echo	
+    echo
 	echo "If the green light on the ethernet port is on, then perhaps this network"
 	echo "does not supply an IP address with DHCP?  If that is the case then"
 	echo "the IT department may need to configure the server with a STATIC address."
@@ -41,7 +41,7 @@ echo
 echo "=================================================================="
 echo "-----Checking network connection-----"
 if (/sbin/ifconfig eth0 | grep UP | grep MTU &> /dev/null)
-then 
+then
 	echo "GOOD - the 'eth0' ethernet port is UP"
 else
 	echo "***ERROR***"
@@ -54,7 +54,7 @@ echo
 echo "=================================================================="
 echo "-----Checking route-----"
 if (/bin/netstat -r | grep default &> /dev/null)
-then 
+then
 	echo "GOOD - we can connect to the local network"
 else
 	echo "a little trouble...  we're not able to find a default route to the local network."
@@ -67,19 +67,19 @@ fi
 
 
 #===================Test for reverse lookup of IP in the DNS==================
-echo 
+echo
 echo "=================================================================="
-echo "-----Looking up this Server's URL in the Domain Name Server-----" 
+echo "-----Looking up this Server's URL in the Domain Name Server-----"
 
 dnshostname=`host $ipaddress | grep pointer | cut -d' ' -f5|awk '{print $1}'`
-if [ "$dnshostname" = "" ] 
-then 
+if [ "$dnshostname" = "" ]
+then
     echo "Could not retrieve the hostname from the domain name server"
 	echo
     echo "You may need to check with the IT Department to find out the"
 	echo "Correct URL for the users to reach the server from their browser."
-    echo "It depends on how their IP domain names are configured."	
-	echo	
+    echo "It depends on how their IP domain names are configured."
+	echo
 	echo "In the meanwhile, try connecting with http://$ipaddress"
 else
 	echo "GOOD - The DNS Server replied with this URL: http://$dnshostname"
@@ -95,15 +95,15 @@ echo
 echo "=================================================================="
 echo "-----Testing connectivity to the internet-----"
 if ping -c 2 www.google.com &> /dev/null
-then 
+then
 	echo "GOOD - It appears this machine can reach The Internet."
-else 
+else
 	echo "hmmm...  doesn't seem like we can get out to The Internet."
-	echo 
+	echo
 	echo "You may need to check with the IT Dept to find out if"
 	echo "this machine has permissions to get out.  Could be a firewall"
-	echo "blocking the connection?" 
-fi	
+	echo "blocking the connection?"
+fi
 
 #================Test that we can connect to the update server=================
 echo
@@ -116,10 +116,10 @@ then
 	rm -f Packages.gz 2>/dev/null
     rm -f /tmp/log 2>/dev/null
 else
-    echo "uh-oh.... We can't reach 'updates.iontorrent.com' " 
+    echo "uh-oh.... We can't reach 'updates.iontorrent.com' "
 	echo
 	echo "Try again in a little while, the server needs to reach http://updates.iontorrent.com"
-	echo "or we won't be able to get software patches for the Server or PGMs" 
+	echo "or we won't be able to get software patches for the Server or Sequencers"
 
 fi
 
@@ -131,16 +131,16 @@ function valid_port ()
 	return $valid
 }
 
-#=================Test if we can ping the PGMs ==================================
+#=================Test if we can ping the Sequencers ==================================
 echo
 echo "=================================================================="
-echo "-----Checking to see if PGMs are connected to this server-----"
+echo "-----Checking to see if Sequencers are connected to this server-----"
 if (valid_port eth1); then
 	if ping -c 2 192.168.201.10 &> /dev/null
     then
-	    echo "PGM1 - connected"
+	    echo "Slot1 - connected"
     else
-	    echo "PGM1 - not connected"
+	    echo "Slot1 - not connected"
     fi
 else
 	echo "no eth1"
@@ -150,9 +150,9 @@ fi
 if (valid_port eth2); then
     if ping -c 2 192.168.202.10 &> /dev/null
     then
-	    echo "PGM2 - connected"
+	    echo "Slot2 - connected"
     else
-	    echo "PGM2 - not connected"
+	    echo "Slot2 - not connected"
     fi
 else
 	echo "no eth2"
@@ -161,9 +161,9 @@ fi
 if (valid_port eth3); then
     if ping -c 2 192.168.203.10 &> /dev/null
     then
-	    echo "PGM3 - connected"
+	    echo "Slot3 - connected"
     else
-	    echo "PGM3 - not connected"
+	    echo "Slot3 - not connected"
     fi
 else
 	echo "no eth3"
@@ -172,9 +172,9 @@ fi
 if (valid_port eth4); then
     if ping -c 2 192.168.204.10 &> /dev/null
     then
-	    echo "PGM4 - connected"
+	    echo "Slot4 - connected"
     else
-	    echo "PGM4 - not connected"
+	    echo "Slot4 - not connected"
     fi
 else
 	echo "no eth4"

@@ -26,12 +26,12 @@ using namespace std;
 
 int SimpleSingleFitStream::_bpb = -1;
 int SimpleSingleFitStream::_l1type = -1;
-int SimpleSingleFitStream::_fittype = -1;  //0 GaussNewton, 1 LevMar, 2 Hybrid
+int SimpleSingleFitStream::_fittype = -1;  //0 GaussNewton, 1 LevMar, 2 Hybrid, 3 Relaxing Kmult Gauss Newton
 int SimpleSingleFitStream::_hybriditer = -1; // LevMar after N iter of Gauss newton
 
 int SimpleSingleFitStream::l1DefaultSetting()
 {
-  // 0: Equal, 1: Shared prefered, 2: L1 prefered
+  // 0: Equal, 1: Shared preferred, 2: L1 preferred
   if(_computeVersion == 20 ) return 2;
   if(_computeVersion >= 35 ) return 0;
   return 0;
@@ -41,7 +41,7 @@ int SimpleSingleFitStream::BlockSizeDefaultSetting()
 {
   if(_computeVersion == 20 ) return 128;
   if(_computeVersion >= 35 ) return 256;
-  return 0;
+  return 128;
 }
 //for Monitor
 //int * SimpleSingleFitStream::_IterBuffer = NULL;
@@ -90,7 +90,7 @@ void SimpleSingleFitStream::resetPointers()
 
 
   if(!_Device->checkMemory( getMaxDeviceMem(_F,_N)))
-    cout << getLogHeader() << " succesfully reallocated device memory to handle Job" << endl;
+    cout << getLogHeader() << " Successfully reallocated device memory to handle Job" << endl;
 
   _padN = _myJob.getPaddedN();
 
@@ -105,13 +105,13 @@ void SimpleSingleFitStream::resetPointers()
        
   _HostConstP  = (ConstParams*)_Host->getSegment(sizeof(ConstParams)); CUDA_ALLOC_CHECK(_HostConstP);  
 
-  if(ChipIdDecoder::GetGlobalChipId() < ChipId900){
+  if(_myJob.performCrossTalkCorrection()){
     _HostConstXtalkP  = (ConstXtalkParams*)_Host->getSegment(sizeof(ConstXtalkParams)); CUDA_ALLOC_CHECK(_HostConstXtalkP); 
   }
 
   _HostFgBuffer = (FG_BUFFER_TYPE*)_Host->getSegment(_myJob.getFgBufferSizeShort(true)); CUDA_ALLOC_CHECK(_HostFgBuffer); 
 
-  if(ChipIdDecoder::GetGlobalChipId() < ChipId900){
+  if(_myJob.performCrossTalkCorrection()){
     _HostNeiIdxMap = (int*)_Host->getSegment(_myJob.getXtalkNeiIdxMapSize(true)); CUDA_ALLOC_CHECK(_HostNeiIdxMap); 
   }
     //DEVICE ALLOCS
@@ -135,7 +135,7 @@ void SimpleSingleFitStream::resetPointers()
   _h_pBeadState = (bead_state*) _Host->getSegment( _myJob.getBeadStateSize(true));
   _d_pBeadState = (bead_state*) _Device->getSegment( _myJob.getBeadStateSize(true));
 
-  //bead Params and State are our outputs. therefor:  
+  //bead Params and State are our outputs. therefore:
   _copyOutSize = _Host->getCurrentSegGroupSize();
   
   _h_pDarkMatter = (float*)_Host->getSegment(_myJob.getDarkMatterSize(true)); // NUMNUC*F 
@@ -213,7 +213,7 @@ void SimpleSingleFitStream::serializeInputs()
   _HostConstP->useDarkMatterPCA = _myJob.useDarkMatterPCA();
 //  cout << getLogHeader() << " useDarkMatterPCA: " << _myJob.useDarkMatterPCA() << endl;
 
-if(ChipIdDecoder::GetGlobalChipId() < ChipId900 && _myJob.performCrossTalkCorrection()) {
+if(_myJob.performCrossTalkCorrection()) {
   // copy neighbour map for xtalk
     _HostConstXtalkP->neis = _myJob.getNumXtalkNeighbours();
     memcpy( _HostConstXtalkP->multiplier, _myJob.getXtalkNeiMultiplier(),sizeof(float)*_myJob.getNumXtalkNeighbours());
@@ -269,9 +269,9 @@ void SimpleSingleFitStream::copyToDevice()
 
  //cudaMemcpyToSymbolAsync ( CP, _HostConstP, sizeof(ConstParams), getId()*sizeof(ConstParams),cudaMemcpyHostToDevice, _stream);CUDA_ERROR_CHECK();
 
-  // copy xtalk neighbour map
+  // copy xtalk neighbor map
 
-if(ChipIdDecoder::GetGlobalChipId() < ChipId900 && _myJob.performCrossTalkCorrection()) {
+if(_myJob.performCrossTalkCorrection()) {
       copyXtalkConstParamAsync(_HostConstXtalkP, getStreamId() ,_stream);CUDA_ERROR_CHECK();
       cudaMemcpyAsync(_d_pNeiIdxMap, _HostNeiIdxMap, sizeof(int)*_myJob.getNumBeads()*_myJob.getNumXtalkNeighbours(),
       cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK();
@@ -354,7 +354,7 @@ if (_myJob.performCrossTalkCorrection()) {
 	  _d_pGain, // N
 	  _d_pShiftedBkg + fnum*_F,
 	  _d_pDarkMatter, // FLxF
-    _d_pPCA_Vals,
+          _d_pPCA_Vals,
 	  _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
 	  getStreamId());
     }
@@ -379,6 +379,24 @@ else {
   false,
   getStreamId());
 }
+
+  // perform projection search for amplitude estimation
+  if ((_myJob.getAbsoluteFlowNum() > 19) && _myJob.InitializeAmplitude()) {
+    ProjectionSearch_Wrapper(
+      grid,
+      block,
+      0,
+      _stream,
+      _DevFgBufferFloat,
+      _d_pEmphVector,
+      _d_pNucRise,
+      _d_pCopies,
+      _d_fval,
+      _myJob.getAbsoluteFlowNum(),
+      _N,
+      _F,
+      getStreamId());
+  }
 
   // perform exponential tail fitting
   if (_myJob.performExpTailFitting()) {
@@ -443,6 +461,8 @@ else {
       _myJob.getAmpLowLimit(),
       _myJob.getkmultHighLimit(),
       _myJob.getkmultLowLimit(),
+      _myJob.getkmultAdj(),
+      _myJob.fitkmultAlways(), 
       _myJob.getAbsoluteFlowNum() , // real flow number 
       _myJob.getNumBeads(), // 4
       _myJob.getNumFrames(), // 4
@@ -470,11 +490,41 @@ else {
       _myJob.getAmpLowLimit(),
       _myJob.getkmultHighLimit(),
       _myJob.getkmultLowLimit(),
+      _myJob.getkmultAdj(),
+      _myJob.fitkmultAlways(), 
       _myJob.getAbsoluteFlowNum() , // real flow number 
       _myJob.getNumBeads(), // 4
       _myJob.getNumFrames(), // 4
       _myJob.useDynamicEmphasis(),
       // _DevMonitor, //TODO Monitor
+      getStreamId()  // stream id for offset in const memory
+    );
+    break;
+  case 3:
+    PerFlowRelaxKmultGaussNewtonFit_Wrapper(getL1Setting(), grid, block, sharedMem, _stream,
+      // inputs
+      _DevFgBufferFloat, 
+      _d_pEmphVector,
+      _d_pNucRise,
+      // bead params
+      _d_pCopies,
+      _d_pBeadState,
+      // scratch space in global memory
+      _d_err, //
+      _d_fval, // NxF
+      _d_tmp_fval, // NxF
+      _d_jac, //NxF 
+      _d_pMeanErr, 
+      // other inputs
+      _myJob.getAmpLowLimit(),
+      _myJob.getkmultHighLimit(),
+      _myJob.getkmultLowLimit(),
+      _myJob.getkmultAdj(),
+      _myJob.fitkmultAlways(), 
+      _myJob.getAbsoluteFlowNum() , // real flow number 
+      _myJob.getNumBeads(), // 4
+      _myJob.getNumFrames(), // 4
+      _myJob.useDynamicEmphasis(),
       getStreamId()  // stream id for offset in const memory
     );
     break;
@@ -498,6 +548,8 @@ else {
       _myJob.getAmpLowLimit(),
       _myJob.getkmultHighLimit(),
       _myJob.getkmultLowLimit(),
+      _myJob.getkmultAdj(),
+      _myJob.fitkmultAlways(), 
       _myJob.getAbsoluteFlowNum() , // real flow number 
       _myJob.getNumBeads(), // 4
       _myJob.getNumFrames(), // 4
@@ -596,6 +648,21 @@ int SimpleSingleFitStream::getL1Setting()
   return _l1type;
 }
 
+void SimpleSingleFitStream::printStatus()
+{
+
+	cout << getLogHeader()  << " status: " << endl
+	<< " +------------------------------" << endl
+	<< " | block size: " << getBeadsPerBlock()  << endl
+	<< " | l1 setting: " << getL1Setting() << endl
+	<< " | state: " << _state << endl;
+	if(_resources->isSet())
+		cout << " | streamResource acquired successfully"<< endl;
+	else
+		cout << " | streamResource not acquired"<< endl;
+    _myJob.printJobSummary();
+    cout << " +------------------------------" << endl;
+}
 
 
 /////////////////////////////////////////////////////////////////////////
@@ -617,7 +684,7 @@ size_t SimpleSingleFitStream::getMaxHostMem()
 
   size_t ret = 0;
 
-if(ChipIdDecoder::GetGlobalChipId() < ChipId900){
+if(Job.performCrossTalkCorrection()){
     ret += sizeof(ConstXtalkParams); 
     ret += Job.getXtalkNeiIdxMapSize(true);
 }
@@ -640,7 +707,7 @@ size_t SimpleSingleFitStream::getScratchSpaceAllocSize(WorkSet Job)
   ScratchSize += 7 * Job.getPaddedN() * Job.getNumFrames();  
   ScratchSize += 1* Job.getPaddedN() * NUMFB;
 
-  if(ChipIdDecoder::GetGlobalChipId() < ChipId900){
+  if(Job.performCrossTalkCorrection()){
     ScratchSize += MAX_XTALK_NEIGHBOURS* Job.getPaddedN() * Job.getNumFrames();  
   }
 
@@ -698,10 +765,11 @@ void SimpleSingleFitStream::setHybridIter(int hybridIter)
 
 
 
+
 void SimpleSingleFitStream::printSettings()
 {
 
-  cout << "CUDA SingleFitStream SETTINGS: blocksize " << _bpb  << " l1setting " << _l1type ;   
+  cout << "CUDA SingleFitStream SETTINGS: block size " << _bpb  << " l1setting " << _l1type ;
   switch(_l1type){
     case 0:
       cout << " (cudaFuncCachePreferEqual" << endl;;

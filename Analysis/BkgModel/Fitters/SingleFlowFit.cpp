@@ -24,6 +24,8 @@ single_flow_optimizer::single_flow_optimizer()
     use_fval_cache = false; // really?  should this be true or does it break lev-mar?
 
     retry_limit = 0;
+
+    gauss_newton_fit = false;
 }
 
 void single_flow_optimizer::Delete()
@@ -50,6 +52,8 @@ void single_flow_optimizer::SetLowerLimitAmplFit (float AmplLim,float krateLim)
 
     min_param[AMPLITUDE] = AmplLim;
     min_param[KMULT] = krateLim;
+    pmin_param[AMPLITUDE] = AmplLim;
+    pmin_param[KMULT] = krateLim;
 
     oneFlowFit->SetParamMin (&min_param[0]);
     oneFlowFitKrate->SetParamMin (&min_param[0]);
@@ -62,7 +66,8 @@ void single_flow_optimizer::SetUpperLimitAmplFit (float AmplLim,float krateLim)
 
     max_param[AMPLITUDE] = AmplLim;
     max_param[KMULT] = krateLim;
-
+    pmax_param[AMPLITUDE] = AmplLim;
+    pmax_param[KMULT] = krateLim;  
     oneFlowFit->SetParamMax (&max_param[0]);
     oneFlowFitKrate->SetParamMax (&max_param[0]);
 }
@@ -113,12 +118,67 @@ void single_flow_optimizer::FitKrateOneFlow (int fnum, float *evect, bead_params
 
 // float start_guess = p->Ampl[fnum];
     oneFlowFitKrate->calc_trace.ResetEval();
-    oneFlowFitKrate->Fit (NUMSINGLEFLOWITER,signal_corrected);
+    
+    int max_fit_iter = gauss_newton_fit ? NUMSINGLEFLOWITER_GAUSSNEWTON : NUMSINGLEFLOWITER_LEVMAR;
+    oneFlowFitKrate->Fit (gauss_newton_fit, max_fit_iter, signal_corrected);
     cur_hits = oneFlowFitKrate->calc_trace.GetEvalCount();
     p->Ampl[fnum] = oneFlowFitKrate->ReturnNthParam (AMPLITUDE);
     p->kmult[fnum] = oneFlowFitKrate->ReturnNthParam (KMULT);
 
 
+    // store output for later
+    oneFlowFitKrate->SetWeightVector (emphasis_data.EmphasisVectorByHomopolymer[emphasis_data.numEv-1]);
+    err_t->mean_residual_error[fnum] = sqrt (oneFlowFitKrate->GetMeanSquaredError (signal_corrected,use_fval_cache)); // backwards compatibility
+    oneFlowFitKrate->ReturnPredicted(signal_predicted, use_fval_cache);
+}
+
+void single_flow_optimizer::FitKrateOneFlow2 (int fnum, float *evect, bead_params *p, error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
+        flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions)
+{
+
+    oneFlowFitKrate->SetWeightVector (evect);
+    oneFlowFitKrate->SetLambdaStart (1E-20);
+    oneFlowFitKrate->calc_trace.SetWellRegionParams (p,&my_regions.rp,fnum,
+            NucID,my_flow.buff_flow[fnum],
+            l_i_start,lnucRise);
+
+    oneFlowFitKrate->SetFvalCacheEnable (use_fval_cache);
+  
+    p->kmult[fnum] = min_param[KMULT];
+    oneFlowFitKrate->InitParams();
+ 
+// float start_guess = p->Ampl[fnum];
+    oneFlowFitKrate->calc_trace.ResetEval();
+    
+    int max_fit_iter = gauss_newton_fit ? NUMSINGLEFLOWITER_GAUSSNEWTON : NUMSINGLEFLOWITER_LEVMAR;
+    oneFlowFitKrate->Fit (gauss_newton_fit, max_fit_iter, signal_corrected);
+   // cur_hits = oneFlowFitKrate->calc_trace.GetEvalCount();
+    p->Ampl[fnum] = oneFlowFitKrate->ReturnNthParam (AMPLITUDE);
+    p->kmult[fnum] = oneFlowFitKrate->ReturnNthParam (KMULT);
+    oneFlowFitKrate->ReturnPredicted(signal_predicted, use_fval_cache);
+    //float  posf=0.0f, negf=0.0f;
+    
+       if(fabs( p->kmult[fnum]-min_param[KMULT])<0.01f){
+          float errx=sqrt (oneFlowFitKrate->GetMeanSquaredError (signal_corrected,use_fval_cache));
+          if (errx>20.f){ //if the fit error is  high it could be a slow incorporation
+
+          //fprintf(stdout,"/n>mapx=%f,%f,%f\n",errx, p->kmult[fnum],p->Ampl[fnum]);
+          //oneFlowFitKrate->InitParams();
+          oneFlowFitKrate->calc_trace.ResetEval();
+          max_param[KMULT] =min_param[KMULT];
+          p->kmult[fnum] = 0.4;
+          min_param[KMULT]=min_param[KMULT]/2;
+          oneFlowFitKrate->SetParamMin (&min_param[0]);
+          oneFlowFitKrate->SetParamMax (&max_param[0]);
+          emphasis_data.CustomEmphasis (evect, p->Ampl[fnum]+2.0f);
+          oneFlowFitKrate->Fit (gauss_newton_fit, max_fit_iter, signal_corrected);
+        }
+    }   
+    cur_hits = oneFlowFitKrate->calc_trace.GetEvalCount();
+    p->Ampl[fnum] = oneFlowFitKrate->ReturnNthParam (AMPLITUDE);
+    p->kmult[fnum] = oneFlowFitKrate->ReturnNthParam (KMULT);
+    
+    
     // store output for later
     oneFlowFitKrate->SetWeightVector (emphasis_data.EmphasisVectorByHomopolymer[emphasis_data.numEv-1]);
     err_t->mean_residual_error[fnum] = sqrt (oneFlowFitKrate->GetMeanSquaredError (signal_corrected,use_fval_cache)); // backwards compatibility
@@ -139,7 +199,8 @@ void single_flow_optimizer::FitThisOneFlow (int fnum, float *evect, bead_params 
     oneFlowFit->SetFvalCacheEnable (use_fval_cache);
     oneFlowFit->InitParams();
     oneFlowFit->calc_trace.ResetEval();
-    oneFlowFit->Fit (NUMSINGLEFLOWITER,signal_corrected); // Not enough evidence to warrant krate fitting to this flow, do the simple thing.
+    int max_fit_iter = gauss_newton_fit ? NUMSINGLEFLOWITER_GAUSSNEWTON : NUMSINGLEFLOWITER_LEVMAR;
+    oneFlowFit->Fit (gauss_newton_fit, max_fit_iter, signal_corrected); // Not enough evidence to warrant krate fitting to this flow, do the simple thing.
     cur_hits = oneFlowFit->calc_trace.GetEvalCount();
     p->Ampl[fnum] = oneFlowFit->ReturnNthParam (AMPLITUDE);
 
@@ -217,22 +278,30 @@ void single_flow_optimizer::FitAlt (int fnum, float *evect, bead_params *p,  err
 }
 
 
-void single_flow_optimizer::FitStandardPath (int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
+int single_flow_optimizer::FitStandardPath (int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
         flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions)
 {
     float A_start = p->Ampl[fnum];
+    float kmult_adj=0;
+    float delta2=0;
     bool done = false;
     int retry = 0;
+    int fitType = 0;
+    SetLowerLimitAmplFit (pmin_param[0],pmin_param[1]);
+    SetUpperLimitAmplFit (pmax_param[0],pmax_param[1]);
 
-    while (!done && (retry <= retry_limit))
+    while (!done && (retry <=retry_limit)) 
     {
         if (retry > 0)
-            emphasis_data.CustomEmphasis (evect, p->Ampl[fnum]);
+            kmult_adj = (1.0f/(p->kmult[fnum]+0.15f)-1.0f);
+            if (kmult_adj < 0.0)  kmult_adj =0.0f;
+            emphasis_data.CustomEmphasis (evect, p->Ampl[fnum]+kmult_adj);
 
         bool krate_fit = ( ( (p->Copies*p->Ampl[fnum]) > decision_threshold)); // this may not be the best way of deciding this
         krate_fit = krate_fit || var_kmult_only;
+        fitType = krate_fit ? 1:0;
 
-
+        //printf("single_flow_optimizer::FitStandardPath... krate_fit=%d\n",krate_fit);
         if (krate_fit)
         {
             FitKrateOneFlow (fnum,evect,p,err_t, signal_corrected,signal_predicted, NucID, lnucRise, l_i_start,my_flow,time_c,emphasis_data,my_regions);
@@ -247,28 +316,33 @@ void single_flow_optimizer::FitStandardPath (int fnum, float *evect, bead_params
 
 
         float delta = A_start - p->Ampl[fnum];
+        delta2 = (p->kmult[fnum]-min_param[KMULT]);
 
-        if (fabs(delta) > 0.1)
+        if ((fabs(delta) > 0.1)||((fabs(delta2)<0.1)&&krate_fit))
             A_start = p->Ampl[fnum];
         else
             done = true;
 
         retry++;
     }
+    return (fitType);
 }
 
-void single_flow_optimizer::FitOneFlow (int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
+int single_flow_optimizer::FitOneFlow (int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
                                         flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions)
 {
+	int fitType = 0;
+    //printf("single_flow_optimizer::FitOneFlow... fit_alt=%d\n",fit_alt);
     if (!fit_alt)
     {
-        FitStandardPath(fnum,evect,p,err_t,signal_corrected, signal_predicted,NucID, lnucRise,l_i_start,my_flow,time_c, emphasis_data,my_regions);
+        fitType = FitStandardPath(fnum,evect,p,err_t,signal_corrected, signal_predicted,NucID, lnucRise,l_i_start,my_flow,time_c, emphasis_data,my_regions);
     }
     else
     {
         bool krate_fit = ( ( (p->Copies*p->Ampl[fnum]) > decision_threshold)); // this may not be the best way of deciding this
         krate_fit = krate_fit || var_kmult_only;
         FitAlt (fnum,evect,p, err_t, signal_corrected,signal_predicted, NucID, lnucRise, l_i_start,my_flow,time_c,emphasis_data,my_regions,krate_fit);
+        fitType = krate_fit ? 1:0;
     }
-
+	return (fitType);
 }

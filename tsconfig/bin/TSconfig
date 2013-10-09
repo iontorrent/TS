@@ -1,11 +1,9 @@
 #!/bin/bash
-# Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2011-2013 Ion Torrent Systems, Inc. All Rights Reserved
 #
-#  Developer Notes.
-#       Usage design is that the ion-tsconfig package is installed on a ubuntu
-#       server.  Then TSconfig --update-torrent-suite is executed.  On a new system
-#       where .computenode or .masternode files are missing, there should be a
-#       prompt to ask which type to install.
+# Purpose: Configure an ubuntu (currently 10.04 lucid distribution) server for
+# use as a Torrent Server.
+#
 set -e
 
 #---                                    ---#
@@ -41,7 +39,7 @@ INITIAL_CONFIG=1        # Flags interactive configuration settings - only for in
 CHANGE_PASSWORD=0       # Change ionadmin password.
 PURGE_ALL_DEB=0         # Delete all deb package files in apt cache
 RECONFIGURE=0           # Re-run configuration steps only
-version=`echo '$Revision: 62409 $'|awk '{print $2}'`
+version=`echo '$Revision: 68610 $'|awk '{print $2}'`
 
 #---                                    ---#
 #---    Command Line Options Parsing    ---#
@@ -175,7 +173,6 @@ fi
 if [ $EXECUTE -eq 0 ]; then
     needs_root
 	rotate_log
-	#$0 -g $OPTARGS 2>&1 | tee $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG
     exec 3>&2   # fd 3 opened and directed to stderr; 'stores' original stderr fd
     exec 2>$TSCONFIG_LOG_DIR/$TSCONFIG_DEBUG_LOG    # Redirect stderr to a file
 	$0 -g $OPTARGS | tee $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG
@@ -189,7 +186,7 @@ fi
 # Need to acquire the lock file to proceed
 #-----------------------------------------
 if mkdir $LOCK_FILE; then
-  trap 'rm -rf "$LOCK_FILE"; exit $?' 0
+  trap 'rm -rf "$LOCK_FILE"' 0
   PID_LOCKED=1
   echo "Locking succeeded"
 else
@@ -322,7 +319,7 @@ if [ $UPDATE_SOFTWARE == 1 ]; then
     echo "=================================================================="
     log "TSconfig process completed successfully"
 
-    exit 0
+    exit
 fi
 
 #---

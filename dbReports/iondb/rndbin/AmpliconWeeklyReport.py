@@ -25,13 +25,14 @@ smtp_port = 25
 auth = ("ionadmin","ionadmin") # Authentication for API queries
 
 def get_recips():
-  ret = ["alla.shundrovsky@lifetech.com"]
-  #ret = ["tony.xu@lifetech.com"]
-  #ret = ["c-Daniel.Cuevas2@lifetech.com"]
-  #ret = ["c-Daniel.Cuevas2@lifetech.com","!ION-Amplicon@lifetech.com"]
-  return ret
+    ret = ["!ION-Amplicon@lifetech.com"]
+    ret+= ["Mike.Lelivelt@lifetech.com", "Tommie.Lincecum@lifetech.com", "Daniel.Mazur@lifetech.com", \
+        "Anup.Parikh@lifetech.com", "Jonathan.Rothberg@lifetech.com", "Yongming.Sun@lifetech.com"]
+    ret+= ["alla.shundrovsky@lifetech.com"]
+    return ret
 
 RECIPS = get_recips()
+#RECIPS = ["alla.shundrovsky@lifetech.com"]
 SENDER = "donotreply@iontorrent.com"
 
 SiteList = {
@@ -175,6 +176,20 @@ def latex(text):
     text = text.replace('_', '\\_').replace('%','\\%')
     return text
 
+def format_row(values_list):
+    row = []
+    for value in values_list:
+        if isinstance(value, int):
+            row.append('%d' % value)
+        elif isinstance(value, float):
+            row.append('%.2f' % value)
+        else:
+            try:
+                row.append('%s' % latex(value))
+            except:
+                print 'Error: unable to format', value
+    return ' & '.join(row)
+
 ################
 
 def generate_content(binList, binOrder, resultsList, sortedList, scoreList, sortedScoreList, aq20List, sortedAQ20List):
@@ -212,20 +227,19 @@ def generate_content(binList, binOrder, resultsList, sortedList, scoreList, sort
             runDict = resultsList[bin][currRun]
             if dev:  print runDict
             
-            rowText = '%d.%s & %s & %s & %s & %s & %s & %s & %s & %.4f & %s & %s' % (
-                count+1,
-                latex('\\href{' +runDict["sitelink"]+ '}{' +currRun+ '}'),
+            rowText = format_row([
+                '%d.\\href{%s}{%s}' % (count+1, runDict["sitelink"], currRun),
                 runDict["site"],
                 runDict["timeStamp"].strftime("%Y-%m-%d"),
-                str(runDict["numTargets"]),
-                latex(runDict["target_coverage_at_20x_-_norm_100"]),
-                latex(runDict["per_base_accuracy"]),
-                latex(runDict["percent_all_reads_on_target"]),
-                latex(runDict["percent_no_strand_bias_of_all_bases"]),
+                runDict["numTargets"],
+                runDict["target_coverage_at_20x_-_norm_100"],
+                runDict["per_base_accuracy"],
+                runDict["percent_all_reads_on_target"],
+                runDict["percent_no_strand_bias_of_all_bases"],
                 runDict["score"],
-                latex(str(runDict["vvcCombSAP"])),
-                latex(str(runDict["vvcCombPPV"])),
-            )
+                runDict["vvcCombSAP"],
+                runDict["vvcCombPPV"],
+            ])
             if runDict["timeStamp"] >= timeRangeNew:
                 f.write('\\rowcolor{yellow!50}\n')
             f.write(''+rowText+' \\\\\n')
@@ -249,18 +263,17 @@ def generate_content(binList, binOrder, resultsList, sortedList, scoreList, sort
         runDict = aq20List[currRun]
         if dev:  print runDict
         
-        rowText = '%d.%s & %s & %s & %s & %.2f &l %s & %s & %s & %s' % (
-            count+1,
-            latex('\\href{' +runDict["sitelink"]+ '}{' +currRun+ '}'),
+        rowText = format_row([
+            '%d.\\href{%s}{%s}' % (count+1, runDict["sitelink"], currRun),
             runDict["site"],
             runDict["timeStamp"].strftime("%Y-%m-%d"),
-            str(runDict["numReads"]),
-            float(float(runDict["aq20bp"])/1000000.0),
-            str(runDict["aq20align"]),
-            latex(runDict["hp6mer"]),
-            latex(str(runDict["vvcCombSAP"])),
-            latex(str(runDict["vvcCombPPV"])),
-        )
+            runDict["numReads"],
+            float(runDict["aq20bp"])/1000000.0,
+            runDict["aq20align"],
+            runDict["hp6mer"],
+            runDict["vvcCombSAP"],
+            runDict["vvcCombPPV"],
+        ])
         if runDict["timeStamp"] >= timeRangeNew:
             f.write('\\rowcolor{yellow!50}\n')
         f.write(''+rowText+' \\\\\n')
@@ -284,20 +297,19 @@ def generate_content(binList, binOrder, resultsList, sortedList, scoreList, sort
         runDict = scoreList[currRun]
         if dev:  print runDict
         
-        rowText = '%d.%s & %s & %s & %s & %s & %s & %s & %s & %.4f & %s & %s' % (
-            count+1,
-            latex('\\href{' +runDict["sitelink"]+ '}{' +currRun+ '}'),
+        rowText = format_row([
+            '%d.\\href{%s}{%s}' % (count+1, runDict["sitelink"], currRun),
             runDict["site"],
             runDict["timeStamp"].strftime("%Y-%m-%d"),
-            str(runDict["numTargets"]),
-            latex(runDict["target_coverage_at_20x_-_norm_100"]),
-            latex(runDict["per_base_accuracy"]),
-            latex(runDict["percent_all_reads_on_target"]),
-            latex(runDict["percent_no_strand_bias_of_all_bases"]),
+            runDict["numTargets"],
+            runDict["target_coverage_at_20x_-_norm_100"],
+            runDict["per_base_accuracy"],
+            runDict["percent_all_reads_on_target"],
+            runDict["percent_no_strand_bias_of_all_bases"],
             runDict["score"],
-            latex(str(runDict["vvcCombSAP"])),
-            latex(str(runDict["vvcCombPPV"])),
-        )
+            runDict["vvcCombSAP"],
+            runDict["vvcCombPPV"],
+        ])
         if runDict["timeStamp"] >= timeRangeNew:
             f.write('\\rowcolor{yellow!50}\n')
         f.write(''+rowText+' \\\\\n')
@@ -748,7 +760,8 @@ if __name__== "__main__":
     
     sites = ['ioneast', 'ionwest', 'socal']
     #sites = ['ionwest']
-    print 'AmpliconWeeklyReport started.\nSites:', ', '.join([SiteList[site]['HOST'] for site in sites])
+    print 'AmpliconWeeklyReport started %s' % str(datetime.datetime.now())
+    print 'Sites:', ', '.join([SiteList[site]['HOST'] for site in sites])
     
     # Results analyzed within this number of days will be highlighted as new.
     numDaysNew = 7
@@ -758,7 +771,7 @@ if __name__== "__main__":
     amplicon_plugins = ['AmpliconStats','ampliconGeneralAnalysis']
     extra_plugins = ['1_Torrent_Accuracy','variantCaller','validateVariantCaller']
     results_fields = ('pk', 'resultsName', 'timeStamp', 'experiment_id')
-    libmetrics_fields = ("results__pk", "q20_mapped_bases", "q20_alignments", "totalNumReads")
+    libmetrics_fields = ("report__pk", "q20_mapped_bases", "q20_alignments", "totalNumReads")
 
     ''' Here we will gather all needed data in minimal number of queries to optimize DB access '''
     records = {}
@@ -791,9 +804,9 @@ if __name__== "__main__":
             pluginPath = 'http://'+host+pr.result.reportLink+'plugin_out/'+pr.plugin.name+'_out/'
             records[record_key]["pluginStore"][pr.plugin.name]['pluginPath'] = pluginPath
     
-        libmetrics = LibMetrics.objects.using(site).filter(results__pk__in=result_pks).values(*libmetrics_fields)
+        libmetrics = LibMetrics.objects.using(site).filter(report__pk__in=result_pks).values(*libmetrics_fields)
         for libmetric in libmetrics:
-            record_key = site + '_' + str(libmetric['results__pk'])
+            record_key = site + '_' + str(libmetric['report__pk'])
             records[record_key]['LibMetrics'] = libmetric
         #print json.dumps(records[records.keys()[0]], indent=2)
         extra = PluginResult.objects.using(site).select_related().filter(result__pk__in=result_pks, state='Completed', plugin__name__in=extra_plugins)

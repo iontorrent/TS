@@ -8,6 +8,13 @@ if ionpath not in sys.path:
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "iondb.settings")
 os.environ["CELERY_LOADER"] = "django"
 
+## Preload Django.
+# -- avoids delay for lazy loading at each thread restart
+import django.core.management
+utility = django.core.management.ManagementUtility()
+command = utility.fetch_command('runserver')
+command.validate()
+
 # This application object is used by any WSGI server configured to use this
 # file. This includes Django's development server, if the WSGI_APPLICATION
 # setting points here.
@@ -45,12 +52,7 @@ def check_password(environ, username, password):
             user = User.objects.get(username=username, is_active=True)
         except User.DoesNotExist:
             return None
-
-        # verify the password for the given user
-        if user.check_password(password):
-            return True
-        else:
-            return False
+        return user.check_password(password)
     finally:
         db.close_connection()
 

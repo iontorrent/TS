@@ -12,6 +12,7 @@
 
 #include "CommandLineOpts.h"
 #include "IonErr.h"
+#include "mixed.h"
 
 using namespace std;
 
@@ -173,6 +174,9 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"beadfind-sep-ref",    required_argument,  NULL,               0},
     {"beadfind-gain-correction",    required_argument,  NULL,               0},
     {"beadfind-blob-filter",    required_argument,  NULL,               0},
+    {"beadfind-zero-flows",    required_argument,  NULL,               0},
+    {"beadfind-predict-start",    required_argument,  NULL,               0},
+    {"beadfind-predict-end",    required_argument,  NULL,               0},
     {"bead-washout",            no_argument,    NULL,       0},
     {"use-beadmask",      required_argument,  NULL,       0},
     {"bkg-use-duds",  required_argument, NULL, 0},
@@ -186,6 +190,7 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"wells-compression",       required_argument,  NULL,             0},
     {"gpuWorkLoad",             required_argument,  NULL,             0},
     {"numcputhreads",           required_argument,  NULL,       0},
+    {"gpu-amp-guess",           required_argument,  NULL,       0},
     {"gpu-single-flow-fit",     required_argument,  NULL,       0},
     {"gpu-single-flow-fit-blocksize",     required_argument,  NULL,       0},
     {"gpu-single-flow-fit-l1config",     required_argument,  NULL,       0},
@@ -197,6 +202,7 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"gpu-partial-deriv-blocksize",      required_argument,  NULL,       0},
     {"gpu-partial-deriv-l1config",      required_argument,  NULL,       0},
     {"gpu-fitting-only",        no_argument,  &bkg_control.gpuControl.doGpuOnlyFitting,  1},
+    {"gpu-verbose",   no_argument,    NULL, 0},
     {"bkg-record",     no_argument,    &bkg_control.recordBkgModelData,  1},
     {"bkg-replay",     no_argument,    &bkg_control.replayBkgModelData,   1},
     {"restart-from",        required_argument,    NULL,   0},
@@ -205,6 +211,10 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"trim-ref-trace",    required_argument,    NULL,   0},
     {"region-list",    required_argument,    NULL,   0},
     {"bkg-debug-param",     required_argument,    NULL,   0},
+    {"bkg-debug-region",     required_argument,    NULL,   0},
+    {"bkg-debug-trace-sse",     required_argument,    NULL,   0},
+    {"bkg-debug-trace-rcflow",     required_argument,    NULL,   0},
+    {"bkg-debug-trace-xyflow",     required_argument,    NULL,   0},
     {"debug-all-beads",         no_argument,    &bkg_control.debug_bead_only,              0}, // turn off what is turned on
     {"region-vfrc-debug",         no_argument,    &bkg_control.region_vfrc_debug,              1}, 
     {"n-unfiltered-lib",        required_argument,        &bkg_control.unfiltered_library_random_sample,    1},
@@ -241,6 +251,8 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"var-kmult-only",          no_argument,        &bkg_control.var_kmult_only, 1},
     {"generic-test-flag",          no_argument,        &bkg_control.generic_test_flag, 1},
     {"bkg-single-alternate",          no_argument,        &bkg_control.fit_alternate, 1},
+    {"bkg-single-gauss-newton", required_argument,  NULL,               0},
+    {"bkg-single-lev-mar",          no_argument,        &bkg_control.fit_gauss_newton, 1},
     {"bkg-dont-emphasize-by-compression",          no_argument,        &bkg_control.emphasize_by_compression,0},
     {"time-half-speed",     no_argument,    NULL,   0},
     {"pass-tau",            required_argument,  NULL,             0},
@@ -248,6 +260,9 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"nokey",         required_argument,  NULL,       0}, // experimental
     {"vectorize", required_argument,  NULL,       0},
     {"bkg-debug-files", no_argument,  &bkg_control.bkg_debug_files,      1},
+    {"mixed-first-flow", required_argument, NULL, 0},
+    {"mixed-last-flow", required_argument, NULL, 0},
+    {"max-iterations", required_argument, NULL, 0},
 
 
 //-----------------spatial control
@@ -302,6 +317,7 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
   int c;
   int option_index = 0;
 
+
   while ( ( c = getopt_long ( argc, argv, "b:c:f:hi:k:m:p:R:v", long_options, &option_index ) ) != -1 )
   {
     switch ( c )
@@ -344,6 +360,22 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
 
           // All bkg_control options in this section, please ------------------------
           SetAnyLongSignalProcessingOption ( lOption, long_options[option_index].name );
+
+          //mixed
+          //mixed::mixed_first_flow = 52;
+          //mixed::mixed_last_flow = 112;
+          if ( strcmp (lOption, "mixed-first-flow" ) == 0 )
+          {
+            mixed::mixed_first_flow = atoi(optarg);
+          }
+          if ( strcmp (lOption, "mixed-last-flow" ) == 0 )
+          {
+            mixed::mixed_last_flow = atoi(optarg);
+          }
+          if ( strcmp (lOption, "max-iterations" ) == 0 )
+          {
+            mixed::max_iterations = atoi(optarg);
+          }
 
           free ( lOption );
 
@@ -492,9 +524,6 @@ void CommandLineOpts::SetProtonDefault()
     if ( !radio_buttons.empty_well_normalization_set )
       bkg_control.empty_well_normalization = false;
 
-    if ( !radio_buttons.single_flow_fit_max_retry_set )
-      bkg_control.single_flow_fit_max_retry = 4;
-
     if ( !radio_buttons.gain_correct_images_set )
       img_control.gain_correct_images = true;
 
@@ -521,11 +550,64 @@ void CommandLineOpts::SetProtonDefault()
       bkg_control.pca_dark_matter = true;
     fprintf ( stdout, "Option %s: %s\n", "--bkg-pca-dark-matter",(bkg_control.pca_dark_matter)?"on":"off");
 
+    if ( !radio_buttons.bkg_single_gauss_newton_set )
+      bkg_control.fit_gauss_newton = true;
+    fprintf ( stdout, "Option %s: %s\n", "--bkg-fit_gauss_newton",(bkg_control.fit_gauss_newton)?"on":"off");
+
+    if ( !radio_buttons.single_flow_fit_max_retry_set )
+      bkg_control.single_flow_fit_max_retry = bkg_control.fit_gauss_newton ? 0 : 4;
+
     if ( !radio_buttons.use_proton_correction_set )
     {
       bkg_control.proton_dot_wells_post_correction = true;
       bkg_control.enableXtalkCorrection = false;
     }
+    if (!radio_buttons.clonal_solve_bkg_set)
+    {
+      bkg_control.enableBkgModelClonalFilter = false;
+    }
+
+    // maybe we should actually do this via the gopt file?
+    if ( !radio_buttons.amplitude_lower_limit_set )
+    {
+      bkg_control.AmplLowerLimit = -0.5;
+    }
+  }
+
+
+  if ( ChipIdDecoder::GetGlobalChipId() == ChipId910 )
+  {
+    if ( !radio_buttons.use_dud_reference_set )
+      bkg_control.use_dud_and_empty_wells_as_reference = false;
+
+    if ( !radio_buttons.empty_well_normalization_set )
+      bkg_control.empty_well_normalization = false;
+
+    if ( !radio_buttons.single_flow_fit_max_retry_set )
+      bkg_control.single_flow_fit_max_retry = 4;
+
+    if ( !radio_buttons.gain_correct_images_set )
+      img_control.gain_correct_images = true;
+
+    if ( !radio_buttons.col_flicker_correct_set )
+      img_control.col_flicker_correct = true;
+
+    if ( !radio_buttons.per_flow_t_mid_nuc_tracking_set )
+      bkg_control.per_flow_t_mid_nuc_tracking = true;
+
+    if ( !radio_buttons.regional_sampling_set )
+      bkg_control.regional_sampling = true;
+
+    if ( !radio_buttons.col_flicker_correct_aggressive_set )
+      img_control.aggressive_cnc = false;
+    fprintf ( stdout, "Option %s: %s\n", "--col-flicker-correct-aggressive",(img_control.aggressive_cnc)?"on":"off");
+
+
+    //if ( !radio_buttons.use_proton_correction_set )
+    //{
+     // bkg_control.proton_dot_wells_post_correction = true;
+    //  bkg_control.enableXtalkCorrection = false;
+    //}
     if (!radio_buttons.clonal_solve_bkg_set)
     {
       bkg_control.enableBkgModelClonalFilter = false;
@@ -963,6 +1045,18 @@ void CommandLineOpts::SetAnyLongBeadFindOption ( char *lOption, const char *orig
   {
     bfd_control.blobFilter = atoi( optarg );
   }
+  if ( strcmp ( original_name, "beadfind-predict-start" ) == 0 )
+  {
+    bfd_control.predictFlowStart = atoi( optarg );
+  }
+  if ( strcmp ( original_name, "beadfind-predict-end" ) == 0 )
+  {
+    bfd_control.predictFlowEnd = atoi( optarg );
+  }
+  if ( strcmp ( original_name, "beadfind-zero-flows" ) == 0 )
+  {
+    bfd_control.doubleTapFlows = optarg;
+  }
   if ( strcmp ( original_name, "beadfind-num-threads" ) == 0 )
   {
     bfd_control.numThreads = atoi ( optarg );
@@ -1091,6 +1185,24 @@ void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const ch
     }
     radio_buttons.bkg_pca_dark_matter_set = true;
   }
+  if ( strcmp ( lOption, "bkg-single-gauss-newton" ) == 0 )
+  {
+    if ( !strcmp ( optarg,"off" ) )
+    {
+      bkg_control.fit_gauss_newton = false;
+    }
+    else if ( !strcmp ( optarg,"on" ) )
+    {
+      bkg_control.fit_gauss_newton = true;
+    }
+    else
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+    radio_buttons.bkg_single_gauss_newton_set = true;
+  }
+
   if ( strcmp ( lOption, "regional-sampling" ) == 0 )
   {
     if ( !strcmp ( optarg,"off" ) )
@@ -1244,6 +1356,48 @@ void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const ch
   if ( strcmp ( original_name, "bkg-debug-param" ) == 0 )
   {
     bkg_control.bkgModelHdf5Debug = atoi ( optarg );
+  }
+  if ( strcmp ( original_name, "bkg-debug-region" ) == 0 )
+  {
+    //(x,y) = split(optarg)
+    vector<string> tokens;
+    split(optarg,':',tokens);
+    //assert(tokens.size()==2);
+    if (tokens.size()==2)
+    {
+        bkg_control.bkgModelHdf5Debug_region_r = atoi(tokens[0].c_str());
+        bkg_control.bkgModelHdf5Debug_region_c = atoi(tokens[1].c_str());
+    }
+    else
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
+
+  if ( strcmp ( original_name, "bkg-debug-trace-sse" ) == 0 )
+  {
+    bkg_control.bkgModel_xyflow_output = true;
+    bkg_control.bkgModel_xyflow_fname_in = optarg;
+    bkg_control.bkgModel_xyflow_fname_in_type = 1;
+  }
+
+  if ( strcmp ( original_name, "bkg-debug-trace-rcflow" ) == 0 )
+  {
+      bkg_control.bkgModel_xyflow_output = true;
+      bkg_control.bkgModel_xyflow_fname_in = optarg;
+      bkg_control.bkgModel_xyflow_fname_in_type = 2;
+  }
+
+  if ( strcmp ( original_name, "bkg-debug-trace-xyflow" ) == 0 )
+  {
+      bkg_control.bkgModel_xyflow_output = true;
+      bkg_control.bkgModel_xyflow_fname_in = optarg;
+      bkg_control.bkgModel_xyflow_fname_in_type = 3;
+  }
+
+  if ( strcmp ( original_name, "bkg-record" ) == 0 )
+  {
   }
 
   if ( strcmp ( original_name, "bkg-record" ) == 0 )
@@ -1509,6 +1663,20 @@ void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const ch
       exit ( EXIT_FAILURE );
     }
   }
+  if ( strcmp ( lOption, "gpu-amp-guess" ) == 0 )
+  {
+    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuAmpGuess );
+    if ( stat != 1 )
+    {
+      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+    else if ( bkg_control.gpuControl.gpuAmpGuess != 0 && bkg_control.gpuControl.gpuAmpGuess != 1 )
+    {
+      fprintf ( stderr, "Option Error: %s must be either 0 or 1 (%s invalid).\n", original_name,optarg );
+      exit ( EXIT_FAILURE );
+    }
+  }
   if ( strcmp ( lOption, "gpu-single-flow-fit" ) == 0 )
   {
     int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuSingleFlowFit );
@@ -1626,6 +1794,11 @@ void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const ch
       exit ( EXIT_FAILURE );
     }
   }
+  if ( strcmp ( lOption, "gpu-verbose" ) == 0 )
+  {
+    bkg_control.gpuControl.gpuVerbose = true;
+  }
+
 
 
   if ( strcmp ( lOption, "numcputhreads" ) == 0 )

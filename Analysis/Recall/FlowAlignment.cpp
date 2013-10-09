@@ -508,3 +508,52 @@ mat fitFirstOrder(const vector<double> & predictions, const vector<double> & mea
         return mat();
     }
 }
+
+mat fitFirstOrder(const std::vector<double> & predictions, const std::vector<double> & measurements, int refHP,  const std::vector<int> & calledHPs, int nucIndex){
+
+    //create the matrix A from predictions
+    try{
+        int numRows = predictions.size();
+        //assign predictions vec to first column and ones to second column
+        mat pmat_matched(numRows, 2);
+        mat mmat_matched(numRows, 1);
+        int samples_matched = 0;
+
+        for(int ind = 0; ind < numRows; ++ind){
+            if(measurements[ind] - predictions[ind] > 1 || predictions[ind] - measurements[ind]>1) continue;
+            if(refHP!=calledHPs[ind]) continue;
+            pmat_matched.at(samples_matched, 0) = predictions[ind];
+            pmat_matched.at(samples_matched, 1) = 1;
+            mmat_matched.at(samples_matched, 0) = measurements[ind];
+            samples_matched++;
+        }
+
+        pmat_matched.resize(samples_matched,2);
+        mmat_matched.resize(samples_matched,1);
+
+        mat results;
+        //pinv might throw runtime_error
+        results = pinv(pmat_matched) * mmat_matched;
+        //throw std::runtime_error("runtime error probe");
+        int numSamples_used = 0;
+        float total_offset = 0;
+
+        for(int ind=0; ind < numRows; ++ind){
+            if(nucIndex==0 || nucIndex==3){
+               if(measurements[ind] - predictions[ind] > 2 || predictions[ind] - measurements[ind]>2) continue;
+            }
+            if(nucIndex==1 || nucIndex==2){
+               if(measurements[ind] - predictions[ind] > 1 || predictions[ind] - measurements[ind]>1) continue;
+            }
+            total_offset  = total_offset + (measurements[ind] - predictions[ind]*results[0]);
+            numSamples_used++;
+        }
+        if(numSamples_used>0) results[1] = total_offset/numSamples_used;
+
+        return results;
+
+    }catch (std::exception &e) {
+        printf("Exception caught during fitting: %s; empty matrix is returned.\n", e.what());
+        return mat();
+    }
+}

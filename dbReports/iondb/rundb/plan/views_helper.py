@@ -64,7 +64,7 @@ def dict_bed_hotspot():
     return data
 
 
-def is_valid_chars(value, validChars=r'^[a-zA-Z0-9-_\.\s\,]+$'):
+def is_valid_chars(value, validChars=r'^[a-zA-Z0-9-_\.\s]+$'):
     ''' Determines if value is valid: letters, numbers, spaces, dashes, underscores, dots only '''
     return bool(re.compile(validChars).match(value))
 
@@ -89,3 +89,14 @@ def get_available_plan_count():
     
     return PlannedExperiment.objects.filter(isReusable = False, planExecuted = False).exclude(planStatus = "voided").count()
 
+
+
+def getPlanDisplayedName(plan):
+    '''
+    return the plan displayed name in ascii format (in case the original name has e.g. trademark unicode in it
+    '''
+    planDisplayedName = ""
+    if plan:        
+        planDisplayedName = plan.planDisplayedName.encode("ascii", "ignore")
+        
+    return planDisplayedName

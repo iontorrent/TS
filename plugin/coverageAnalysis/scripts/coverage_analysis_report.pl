@@ -21,6 +21,7 @@ my $OPTIONS = "Options:
   -i Output sample Identification tracking reads in summary statistics.
   -r AmpliSeq RNA report. No output associated with base coverage and uniformity of coverage. (Overrides -a)
   -w Indicates to put a warning banner for missing targets file.
+  -W <msg> General Warning message to be output to the report (after -w). Default: ''
   -D <dir> Directory path for working directory where input files are found and output files saved.
   -N <title> Name prefix for any output files for display and links. Default: 'tca_auxillary'.
   -A <file> Auxillary help text file defining fly-over help for HTML titles. Default: <script dir>/help_tags.txt.
@@ -41,6 +42,7 @@ my $rnacoverage = 0;
 my $trgcoverage = 0;
 my $sampleid = 0;
 my $warnBanner = 0;
+my $warnMessage = '';
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -60,6 +62,7 @@ while( scalar(@ARGV) > 0 )
   elsif($opt eq '-s') {$tabhead = shift;}
   elsif($opt eq '-t') {$title = shift;}
   elsif($opt eq '-w') {$warnBanner = 1;}
+  elsif($opt eq '-W') {$warnMessage = shift;}
   elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
   else
   {
@@ -136,6 +139,9 @@ if( $title ne "" ) {
 }
 if( $warnBanner ) {
   print OUTFILE "<h4 style='color:red'><center>Warning: No targets region specified as expected for Library Type.</center></h4>\n";
+}
+if( $warnMessage ne '' ) {
+  print OUTFILE "$warnMessage\n";
 }
 
 # overview plot

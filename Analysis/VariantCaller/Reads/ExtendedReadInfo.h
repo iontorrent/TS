@@ -36,7 +36,7 @@
 
 #include <Variant.h>
 
-#include "FlowDist.h"
+
 #include "InputStructures.h"
 #include "MiscUtil.h"
 
@@ -49,15 +49,15 @@ class ExtendedReadInfo{
   public:
   BamTools::BamAlignment     alignment;         //!< BamTools Alignment Information
   bool                       is_forward_strand; //!< Indicates whether read is from the forward or reverse strand
-  //string                     read_seq;          //!< Read sequence as base called (minus hard clips)
+  string                     read_bases;        //!< Read sequence as base called (minus hard but including soft clips)
   string                     ref_aln;           //!< Gap padded read sequence
   string                     seq_aln;           //!< Gap padded reference sequence
   string                     pretty_aln;        //!< pretty alignment string displaying matches, insertions, deletions
   vector<float>              measurementValue;  //!< The measurement values for this read
   vector<int>                flowIndex;         //!< Main Incorporating flow for each base
   vector<float>              phase_params;      //!< cf, ie, droop parameters of this read
-  int                        startSC;           //!< Number of soft clipped bases at the start of the read
-  int                        endSC;             //!< Number of soft clipped bases at the start of the read
+  int                        leftSC;            //!< Number of soft clipped bases at the start of the alignment
+  int                        rightSC;           //!< Number of soft clipped bases at the end of the alignment
   int                        start_flow;        //!< Flow corresponding to the first base in read_seq
   int                        start_pos;         //!< Start position of the alignment as reported in BAM
   bool                       is_happy_read;
@@ -79,7 +79,7 @@ class ExtendedReadInfo{
 
   void Default(){
     phase_params.resize(3,0);
-    startSC = endSC = 0;
+    leftSC = rightSC = 0;
     is_forward_strand = true;
     start_flow = 0;
     start_pos = 0;
@@ -88,7 +88,7 @@ class ExtendedReadInfo{
   };
 
   //! @brief  Populates object variables
-  bool UnpackThisRead( InputStructures &global_context, const string &local_contig_sequence, int DEBUG);
+  bool UnpackThisRead(const InputStructures &global_context, const string &local_contig_sequence, int DEBUG);
 
   //! @ brief  Loading BAM tags into internal variables
   void GetUsefulTags(int DEBUG);
@@ -96,10 +96,17 @@ class ExtendedReadInfo{
   //! @brief  Sets member variables containing alignment information
   //! @brief [in]  local_contig_sequence    reference sequence
   //! @brief [in]  aln_start_position       start position of the alignment
-  void UnpackAlignmentInfo(const string &local_contig_sequence, unsigned int aln_start_position);
+  bool UnpackAlignmentInfo(const string &local_contig_sequence, unsigned int aln_start_position);
 
   //! @brief  Populates object members flowIndex and read_seq
-  void CreateFlowIndex(string &flowOrder);
+  bool CreateFlowIndex(const string &flowOrder);
+
+  //! @brief  Increases the start flow to match the flow of the first aligned base
+  void IncreaseStartFlow();
+
+  unsigned int GetStartSC();
+
+  unsigned int GetEndSC();
 
   //! @brief Has this read been nicely unpacked and is it useful?
   // Moved all functionality into StackPlus object

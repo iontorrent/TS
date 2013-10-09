@@ -542,8 +542,9 @@ bool getNextAlignment(BamTools::BamAlignment &alignment, BamTools::BamReader &ba
 		while(bamReader.GetNextAlignment(alignment)) {
 			if(groupID.size() > 0) {
 				std::string thisReadGroupID = "";
-				if( !alignment.GetTag("RG", thisReadGroupID) || (groupID.find(thisReadGroupID)==groupID.end()) );
+				if( !alignment.GetTag("RG", thisReadGroupID) || (groupID.find(thisReadGroupID)==groupID.end()) ) {
 					continue;
+				}
 			}
 			storeRead=true;
 			if(wellIndex.size() > 0) {

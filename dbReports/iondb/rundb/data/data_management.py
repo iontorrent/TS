@@ -70,20 +70,22 @@ def manage_manual_action():
         # These jobs should execute even when auto action is disabled.
         # Note: manual actions will not be executed in the order they are selected, but by age.
         #
-        user_comment = "Manual Action"
         manualSelects = DMFileStat.objects.filter(action_state__in=['SA','SE','SD']).order_by('created')
         if manualSelects.exists():
             actiondmfilestat = manualSelects[0]
+            user = actiondmfilestat.user_comment.get('user', 'dm_agent')
+            user_comment = actiondmfilestat.user_comment.get('user_comment', 'Manual Action')
+
             dmfileset = actiondmfilestat.dmfileset
             if actiondmfilestat.action_state == 'SA':
                 logger.info("Manual Archive Action: %s from %s" % (dmfileset.type,actiondmfilestat.result.resultsName))
-                archive_action('dm_agent', user_comment, actiondmfilestat, lock_id, msg_banner = True)
+                archive_action(user, user_comment, actiondmfilestat, lock_id, msg_banner = True)
             elif actiondmfilestat.action_state == 'SE':
                 logger.info("Manual Export Action: %s from %s" % (dmfileset.type,actiondmfilestat.result.resultsName))
-                export_action('dm_agent', user_comment, actiondmfilestat, lock_id, msg_banner = True)
+                export_action(user, user_comment, actiondmfilestat, lock_id, msg_banner = True)
             elif actiondmfilestat.action_state == 'SD':
                 logger.info("Delete Action: %s from %s" % (dmfileset.type,actiondmfilestat.result.resultsName))
-                delete_action('dm_agent', "Continuing delete action after being suspended", actiondmfilestat, lock_id, msg_banner = True)
+                delete_action(user, "Continuing delete action after being suspended", actiondmfilestat, lock_id, msg_banner = True)
             else:
                 logger.warn("Dev Error: we don't handle this '%s' here" % actiondmfilestat.action_state)
 
@@ -107,11 +109,10 @@ def manage_manual_action():
         actiondmfilestat.setactionstate('L')
     except DMExceptions.SrcDirDoesNotExist as e:
         applock.unlock()
-        if actiondmfilestat.dmfileset.type == dmactions_types.SIG:
-            msg = "Src Dir not found: %s. Setting action_state to Deleted" % e.message
-            EventLog.objects.add_entry(actiondmfilestat.result,msg,username='dm_agent')
-            actiondmfilestat.setactionstate('DD')
-            logger.info(msg)
+        msg = "Src Dir not found: %s. Setting action_state to Deleted" % e.message
+        EventLog.objects.add_entry(actiondmfilestat.result,msg,username='dm_agent')
+        actiondmfilestat.setactionstate('DD')
+        logger.info(msg)
     except Exception as e:
         applock.unlock()
         msg = "action error on %s " % actiondmfilestat.result.resultsName
@@ -128,7 +129,7 @@ def manage_manual_action():
 def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_action_enabled):
     logger.debug("manage_data: %s %s %s" % (dmfileset['auto_action'], hex(deviceid),dmfileset['type']))
 
-    def getfirstnotpreserved(dmfilestats, action):
+    def getfirstnotpreserved(dmfilestats, action, threshdate):
         '''QuerySet of DMFileStat objects.  Returns first instance of an object
         with preserve_data set to False and passes the action_validation test'''
         logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
@@ -138,8 +139,16 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                 try:
                     dmactions.action_validation(archiveme,action)
                     return archiveme
-                except(DMExceptions.FilesInUse,DMExceptions.FilesMarkedKeep,DMExceptions.BaseInputLinked):
+                except(DMExceptions.FilesInUse,DMExceptions.FilesMarkedKeep):
                     logger.debug("%s Failed action_validation.  Try next fileset" % archiveme.result.resultsName)
+                except DMExceptions.BaseInputLinked:
+                    # want to allow Basecalling Input delete if all results are expired
+                    relatedObjs = DMFileStat.objects.filter(result__experiment=archiveme.result.experiment, dmfileset__type=dmactions_types.BASE)
+                    if relatedObjs.count() == relatedObjs.filter(created__lt=threshdate).count():
+                        archiveme.allow_delete = True
+                        return archiveme
+                    else:
+                        logger.debug("%s Failed action_validation.  Try next fileset" % archiveme.result.resultsName)
                 except:
                     logger.error(traceback.format_exc())
             else:
@@ -182,22 +191,28 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
         # Select objects that are old enough
         threshdate = datetime.now(pytz.UTC) - timedelta(days=dmfileset['auto_trigger_age'])
         dmfilestats = dmfilestats.filter(created__lt=threshdate)
+        logger.info("(%s)Total %s: %d Expired: %d" %(hex(deviceid),dmfileset['type'],tot_obj,dmfilestats.count()))
 
         # Select objects stored on the deviceid
         query = Q()
         for path in pathlist:
             if dmfileset['type'] == dmactions_types.SIG:
                 query |= Q(result__experiment__expDir__startswith=path)
+            elif dmfileset['type'] == dmactions_types.INTR:
+                query |= Q(result__experiment__expDir__startswith=path)
+                query |= Q(result__reportstorage__dirPath__startswith=path)
             else:
                 query |= Q(result__reportstorage__dirPath__startswith=path)
 
         dmfilestats = dmfilestats.filter(query)
+        logger.info("(%s)Total %s: %d On '%s' path: %d" %(hex(deviceid),dmfileset['type'],tot_obj,path,dmfilestats.count()))
 
         # Exclude objects marked 'Keep' upfront to optimize db access
         if dmfileset['type'] == dmactions_types.SIG:
             dmfilestats = dmfilestats.exclude(result__experiment__storage_options="KI")
         else:
             dmfilestats = dmfilestats.exclude(preserve_data=True)
+        logger.info("(%s)Total %s: %d Not Preserved: %d" %(hex(deviceid),dmfileset['type'],tot_obj,dmfilestats.count()))
 
 
         #---------------------------------------------------------------------------
@@ -223,7 +238,7 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
 
             # Select first object stored on the deviceid
             try:
-                actiondmfilestat = getfirstnotpreserved(dmfilestats, dmactions.ARCHIVE)
+                actiondmfilestat = getfirstnotpreserved(dmfilestats, dmactions.ARCHIVE, threshdate)
                 logger.info("(%s)Picked: %s" % (hex(deviceid),actiondmfilestat.result.resultsName))
             except DMExceptions.NoDMFileStat:
                 logger.debug("No filesets to archive on this device: %s" % hex(deviceid))
@@ -263,7 +278,7 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                     #already acknowledged but recently enabled auto-acknowledge as well.
                     #deleteme = A_list[0]
                     try:
-                        actiondmfilestat = getfirstnotpreserved(A_list, dmactions.DELETE)
+                        actiondmfilestat = getfirstnotpreserved(A_list, dmactions.DELETE, threshdate)
                         logger.info("(%s)Picked: %s" % (hex(deviceid),actiondmfilestat.result.resultsName))
                     except DMExceptions.NoDMFileStat:
                         logger.info("(%s) No filesets to delete on this device" % hex(deviceid))
@@ -278,7 +293,7 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                     # Select oldest fileset regardless if its 'L','S','N','A'.  This covers situation where user
                     # recently enabled auto-acknowledge
                     try:
-                        actiondmfilestat = getfirstnotpreserved(dmfilestats, dmactions.DELETE)
+                        actiondmfilestat = getfirstnotpreserved(dmfilestats, dmactions.DELETE, threshdate)
                         logger.info("(%s)Picked: %s" % (hex(deviceid),actiondmfilestat.result.resultsName))
                     except DMExceptions.NoDMFileStat:
                         logger.info("(%s) No filesets to delete on this device" % hex(deviceid))
@@ -334,7 +349,7 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                                 EventLog.objects.add_entry(dmfilestat.result, "Notification for Deletion Sent", username='dm_agent')
 
                     try:
-                        actiondmfilestat = getfirstnotpreserved(dmfilestats.filter(action_state='A'), dmactions.DELETE)
+                        actiondmfilestat = getfirstnotpreserved(dmfilestats.filter(action_state='A'), dmactions.DELETE, threshdate)
                         logger.info("(%s)Picked: %s" % (hex(deviceid),actiondmfilestat.result.resultsName))
                     except DMExceptions.NoDMFileStat:
                         logger.info("(%s) No filesets to delete on this device" % hex(deviceid))
@@ -347,7 +362,7 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
 
                 else:
                     try:
-                        actiondmfilestat = getfirstnotpreserved(dmfilestats, dmactions.DELETE)
+                        actiondmfilestat = getfirstnotpreserved(dmfilestats, dmactions.DELETE, threshdate)
                         logger.info("(%s)Picked: %s" % (hex(deviceid),actiondmfilestat.result.resultsName))
                     except DMExceptions.NoDMFileStat:
                         logger.info("(%s) No filesets to delete on this device" % hex(deviceid))
@@ -366,7 +381,7 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                 return
 
             if actiondmfilestat is not None:
-                delete_action('dm_agent', user_comment, actiondmfilestat, lock_id)
+                delete_action('dm_agent', user_comment, actiondmfilestat, lock_id, confirmed=getattr(actiondmfilestat,'allow_delete',False) )
 
         else:
             logger.error("Unknown or unhandled action: %s" % dmfileset['auto_action'])
@@ -386,11 +401,10 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
             EventLog.objects.add_entry(actiondmfilestat.result,"%s - %s" % (dmfileset['type'], e.message),username='dm_agent')
     except DMExceptions.SrcDirDoesNotExist as e:
         applock.unlock()
-        if actiondmfilestat.dmfileset.type == dmactions_types.SIG:
-            msg = "Src Dir not found: %s. Setting action_state to Deleted" % e.message
-            EventLog.objects.add_entry(actiondmfilestat.result,msg,username='dm_agent')
-            actiondmfilestat.setactionstate('DD')
-            logger.info(msg)
+        msg = "Src Dir not found: %s. Setting action_state to Deleted" % e.message
+        EventLog.objects.add_entry(actiondmfilestat.result,msg,username='dm_agent')
+        actiondmfilestat.setactionstate('DD')
+        logger.info(msg)
     except Exception as inst:
         applock.unlock()
         msg = ''
@@ -780,7 +794,11 @@ def update_files_in_use():
     running = conn.running()
     active = []
     for item in running:
-        result = Results.objects.get(pk=item[2])
+        try:
+            result = Results.objects.get(pk=item[2])
+        except ObjectDoesNotExist:
+            logger.warn("Results object does not exist: %d" % (item[2]))
+            continue
         # check the status - completed results still show up on the running list for a short time
         if result.status == 'Completed' or result.status == 'TERMINATED':
             continue

@@ -55,10 +55,27 @@ Proton = {
         'USER': 'ion',
         'PASSWORD': 'ion',
         'HOST': 'blackbird.bev'
+    },
+    'Proton_Pringle':{
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'iondb',
+        'USER': 'ion',
+        'PASSWORD': 'ion',
+        'HOST': 'pringle.ite'
+    },
+    'Proton_Bluth':{
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'iondb',
+        'USER': 'ion',
+        'PASSWORD': 'ion',
+        'HOST': 'bluth.itw'
     }
 }
 for site in Proton:
     settings.DATABASES[site] = Proton[site]
+
+chipListLookup = models.Chip.objects.all().values_list('name', 'description')
+chipDictLookup = dict(i for i in chipListLookup)
 
 def lookupSite(site):
     printName = ''
@@ -87,6 +104,7 @@ def ion_readable(value):
         charlist.append("K ")
         charlist.append("M ")
         charlist.append("G ")
+        charlist.append("T ")
 
         charindex = 0
         val = float(value)
@@ -127,7 +145,7 @@ def ion_table_number(text):
 
 
 #define a function to make nice tables
-def initdoc(f):
+def initdoc(f, titleTxt):
     f.write('\\documentclass{article}\n')
     f.write('\\usepackage{booktabs}\n')
     f.write('\\usepackage{colortbl}\n')
@@ -171,9 +189,11 @@ def initdoc(f):
 
     f.write(''
         '\\fancypagestyle{mystyle}{%\n'
-        '\\fancyhead{}                                                    % clears all header fields.\n'
-        '\\fancyhead[C]{\\large Weekly Proton Report}                     % title of the report, centered\n'
-        '\\fancyfoot{}                                                    % clear all footer fields\n'
+        '\\fancyhead{}\n'
+        '\\fancyhead[C]{\\large ')
+    f.write(titleTxt);
+    f.write('}\n'
+        '\\fancyfoot{}\n'
         '\\fancyfoot[L]{\\thepage}\n'
         '\\fancyfoot[R]{\\includegraphics[width=20mm]{/opt/ion/iondb/media/IonLogo.png}}\n'
         '\\renewcommand{\\headrulewidth}{1pt}                             % the header rule\n'
@@ -279,7 +299,7 @@ def GetWebRoot(site):
     return webRoot
 
 class MetricRecord:
-    def __init__(self, metricName, numBest, chip):
+    def __init__(self, metricName, numBest, chip=None):
         self.metricName = metricName		# name of metric to track (from models.py in LibMetrics class)
         self.numBest = numBest			# numBest is an integer indicating how many top records of a given type to maintain in the list
         self.chip = chip			# chip is a string containing part of the chip name to match
@@ -326,6 +346,40 @@ class MetricRecord:
         self.historyPeriods = numPeriods
         self.historyValue = [0]*self.historyPeriods
 
+def isChipMatch(chipName, exp):
+    global chipDictLookup
+
+    match = False
+
+    chipVersion = exp.chipType
+
+    if chipVersion == '900': # see if we can get name from stored explog file for older proton runs
+        try:
+            chipVersion = exp.log['chipversion']
+        except:
+            chipVersion = 'P1.1.17'
+
+    if len(chipVersion) > 0 and len(chipVersion) < 7:
+        if chipVersion[0] == 'P' or chipVersion[0] == '1': # intermediate style naming, assume P1 chip
+            chipVersion = 'P1.1.17'
+
+    # chip might have been a P0 chip run in advAvg mode 1 so it reports 164M sensors, treat as a P1
+    try:
+        if chipVersion == 'P1.0.19' and int(exp.log['columns']) > 15000:
+            chipVersion = 'P1.1.17'
+    except:
+        pass
+
+    try:
+        chipDescription = chipDictLookup[chipVersion]
+    except:
+        chipDescription = ''
+
+    if chipName == chipDescription:
+        match = True
+
+    return match
+
 
 def BuildTrackingMetrics(metricRecordList, site):
     for metricRecord in metricRecordList:
@@ -353,24 +407,31 @@ def BuildTrackingMetrics(metricRecordList, site):
             bestVal = 0
             bestResult = None
             bestLib = None
-            for rep in repList:
-                try:
-                    libmetrics = rep.libmetrics_set.all()[0] # ok, there's really only one libmetrics set per result, but we still need to get at it
-                    # MGD - speedup here - we can re-use the hash lookup we created per site below so avoid the database query per record here
-                except IndexError:
-                    libmetrics = None
-    
-                if libmetrics is not None:
-                    if libmetrics.align_sample == 0:
-                        valtext = getattr(libmetrics, metricRecord.metricName)
-                        if metricRecord.floatval:
-                            val = float(valtext)
-                        else:
-                            val = int(valtext)
-                        if val > bestVal:
-                            bestVal = val
-                            bestResult = rep
-                            bestLib = libmetrics
+
+            # optional filters
+            ok = True
+            if ok and metricRecord.chip is not None:
+                ok = isChipMatch(metricRecord.chip, exp)
+
+            if ok:
+                for rep in repList:
+                    try:
+                        libmetrics = rep.libmetrics_set.all()[0] # ok, there's really only one libmetrics set per result, but we still need to get at it
+                        # MGD - speedup here - we can re-use the hash lookup we created per site below so avoid the database query per record here
+                    except IndexError:
+                        libmetrics = None
+        
+                    if libmetrics is not None:
+                        if libmetrics.align_sample == 0:
+                            valtext = getattr(libmetrics, metricRecord.metricName)
+                            if metricRecord.floatval:
+                                val = float(valtext)
+                            else:
+                                val = int(valtext)
+                            if val > bestVal:
+                                bestVal = val
+                                bestResult = rep
+                                bestLib = libmetrics
     
             if bestResult is not None:
                 metricRecord.count = metricRecord.count + 1
@@ -405,15 +466,20 @@ def BuildMetrics(metricRecordList, site):
     # some init
 
     # filters we can use to ignore/keep records of interest while looping over all of them
-    chipFilter = True
     # projectFilter = True
     projectFilter = False
     project = 'ava'
     dateFilter = False
 
+    #today = datetime.date.today()
+    #timeEnd = datetime.datetime(today.year, today.month, today.day)
+    #timeStart = timeEnd - datetime.timedelta(days=14)
+    #repList = models.Results.objects.using(site).filter(timeStamp__range=(timeStart, timeEnd)).select_related()
+
     # select all result records (maybe here would be a good place to just get them all into memory fast?)
     # and on performance, we will hit this site's report list many times, looking for a specific chip, metric, etc so would be good to keep this around
     repList = models.Results.objects.using(site).select_related()  # or we can filter by date for example: filter(timeStamp__range=(queryStart,queryEnd))
+
     if projectFilter:
         repList = repList.filter(projects__name__icontains=project)
 
@@ -424,7 +490,7 @@ def BuildMetrics(metricRecordList, site):
     print "forcing libmetrics loading"
     theLen = len(libList) # force load of database table across net
 
-    # make a lookup table of library metrics pcsRecord.chip, k
+    # make a lookup table of library metrics pk's
     print 'Building library metrics hash...'
     libpk_hash = []
     num = 0
@@ -441,7 +507,7 @@ def BuildMetrics(metricRecordList, site):
         if libpk_hash[pk] == -1:
             libpk_hash[pk] = num
         else:
-            # see if this new libmterics assosiated with a report is 'better' than the current one
+            # see if this new libmterics associated with a report is 'better' than the current one
             if lib.q17_mapped_bases > libList[libpk_hash[pk]].q17_mapped_bases:
                 libpk_hash[pk] = num
         num = num + 1
@@ -503,25 +569,32 @@ def BuildMetrics(metricRecordList, site):
                     libmetrics = None
 
                 val = 0
-                if metricRecord.plugin:
-                    try:
-                        pluginDict = rep.pluginStore[metricRecord.pluginStore]
-                    except:
-                        pluginDict = None
-                    if pluginDict is not None:
-                        try:
-                            valtext = pluginDict[metricRecord.pluginMetric]
-                            val = float(valtext.rstrip('%'))
-                        except:
-                            val = 0
-                else:
-                    if libmetrics is not None:
-                        valtext = getattr(libmetrics, metricRecord.metricName)
-                        if metricRecord.floatval:
-                            val = float(valtext)
-                        else:
-                            val = int(valtext)
 
+                # optional filters
+                ok = True
+                if ok and metricRecord.chip is not None:
+                    ok = isChipMatch(metricRecord.chip, rep.experiment)
+
+                if ok:
+                    if metricRecord.plugin:
+                        try:
+                            pluginDict = rep.pluginStore[metricRecord.pluginStore]
+                        except:
+                            pluginDict = None
+                        if pluginDict is not None:
+                            try:
+                                valtext = pluginDict[metricRecord.pluginMetric]
+                                val = float(valtext.rstrip('%'))
+                            except:
+                                val = 0
+                    else:
+                        if libmetrics is not None:
+                            valtext = getattr(libmetrics, metricRecord.metricName)
+                            if metricRecord.floatval:
+                                val = float(valtext)
+                            else:
+                                val = int(valtext)
+    
                 # if this value is better than the current stored value, replace it
                 if val > 0:
                     if ((metricRecord.reverse == False and val > metricRecord.historyValue[period]) or (metricRecord.reverse == True and val < metricRecord.historyValue[period])):
@@ -546,10 +619,8 @@ def BuildMetrics(metricRecordList, site):
             if libmetrics is not None:
                 # optional filters
                 ok = True
-                if ok and chipFilter:
-                    ok = False
-                    if (metricRecord.chip in rep.experiment.chipType):
-                        ok = True
+                if ok and metricRecord.chip is not None:
+                    ok = isChipMatch(metricRecord.chip, rep.experiment)
 
                 if ok and metricRecord.dateFilter:
                     ok = False
@@ -689,102 +760,60 @@ def sendMail(attachmentName):
 
 
 
+def table_make(f, header, formatText, metricRecord):
+    table_begin(f, header, formatText)
+    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in metricRecord.recordReportList:
+        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
+        dateStr = str(recordReport.experiment.date).split(' ')[0]
+        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
+        table_addrow(f, rowText)
+    table_end(f)
+
+
+def add_links(f, titleText, metricRecord):
+
+    f.write('\\subsection*{%s}\n' % titleText)
+    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in metricRecord.recordReportList:
+        linkName = ion_pretty(recordValue) + ' ' + recordReport.resultsName
+        linkURL = webRoot + '/report/' + str(recordReport.pk)
+        text = ion_latex_safe('\\href{' + linkURL + '}{' + linkName + '}\\\\\n')
+        f.write(text)
+
+
 if __name__=="__main__":
-    siteList = ['Proton_East', 'Proton_West', 'Proton_Carlsbad']
+    siteList = ['Proton_East', 'Proton_West', 'Proton_Carlsbad', 'Proton_Bluth']
     #siteList = ['Proton_East']
+    #siteList = ['Proton_Pringle']
     #siteList = ['Proton_Carlsbad']
     #siteList = ['Proton_West']
+    #siteList = ['Proton_Bluth']
 
     metricRecords = []
-    histRec = MetricRecord('q17_mapped_bases', 1, '9')
-    histRec.History(7,26)
-    metricRecords.append(histRec)
 
-    metricRecords.append(MetricRecord('i50Q17_reads', 5, '9'))
-    metricRecords.append(MetricRecord('i100Q17_reads', 5, '9'))
-    IonStats_Q10 = MetricRecord('q10_longest_alignment', 5, '9')
+    #
+    # Capture a bunch of company-wide records
+    #
+
+    metricRecords.append(MetricRecord('i50Q17_reads', 5))
+    metricRecords.append(MetricRecord('i100Q17_reads', 5))
+    IonStats_Q10 = MetricRecord('q10_longest_alignment', 5)
     metricRecords.append(IonStats_Q10)
-    IonStats_Q17 = MetricRecord('q17_longest_alignment', 5, '9')
+    IonStats_Q17 = MetricRecord('q17_longest_alignment', 5)
     metricRecords.append(IonStats_Q17)
-    IonStats_Q20 = MetricRecord('q20_longest_alignment', 5, '9')
+    IonStats_Q20 = MetricRecord('q20_longest_alignment', 5)
     metricRecords.append(IonStats_Q20)
-    IonStats_Q47 = MetricRecord('q47_longest_alignment', 5, '9')
+    IonStats_Q47 = MetricRecord('q47_longest_alignment', 5)
     metricRecords.append(IonStats_Q47)
-    metricRecords.append(MetricRecord('q7_mapped_bases', 10, '9'))
-    metricRecords.append(MetricRecord('q10_mapped_bases', 10, '9'))
-    metricRecords.append(MetricRecord('q17_mean_alignment_length', 10, '9'))
-    snr_stats = MetricRecord('sysSNR', 10, '9')
+    metricRecords.append(MetricRecord('q7_mapped_bases', 10))
+    metricRecords.append(MetricRecord('q10_mapped_bases', 10))
+    metricRecords.append(MetricRecord('q17_mean_alignment_length', 10))
+    snr_stats = MetricRecord('sysSNR', 10)
     snr_stats.floatval = True
     metricRecords.append(snr_stats)
 
-    totalMappedBases = MetricRecord('total_mapped_target_bases', 5, '9')
-    metricRecords.append(totalMappedBases)
-
-    aq17bases = MetricRecord('q17_mapped_bases', 5, '9')
-    metricRecords.append(aq17bases)
-
-    aq20bases = MetricRecord('q20_mapped_bases', 5, '9')
-    metricRecords.append(aq20bases)
-
-    totalMappedBases_hg19 = MetricRecord('total_mapped_target_bases', 5, '9')
-    totalMappedBases_hg19.ref = 'hg19'
-    totalMappedBases_hg19.refMatchMode = 1 # 1 = contains, 2 = does not contain
-    metricRecords.append(totalMappedBases_hg19)
-
-    totalMappedBases_other = MetricRecord('total_mapped_target_bases', 5, '9')
-    totalMappedBases_other.ref = 'hg19'
-    totalMappedBases_other.refMatchMode = 2 # 1 = contains, 2 = does not contain
-    metricRecords.append(totalMappedBases_other)
-
-    totalMappedBases_hg19_default = MetricRecord('total_mapped_target_bases', 5, '9')
-    totalMappedBases_hg19_default.ref = 'hg19'
-    totalMappedBases_hg19_default.refMatchMode = 3 # 1 = contains, 2 = does not contain, 3 = contains and default, 4 = does not contain and default
-    metricRecords.append(totalMappedBases_hg19_default)
-
-    totalMappedBases_other_default = MetricRecord('total_mapped_target_bases', 5, '9')
-    totalMappedBases_other_default.ref = 'hg19'
-    totalMappedBases_other_default.refMatchMode = 4 # 1 = contains, 2 = does not contain, 3 = contains and default, 4 = does not contain and default
-    metricRecords.append(totalMappedBases_other_default)
-
-    aq17bases_hg19 = MetricRecord('q17_mapped_bases', 5, '9')
-    aq17bases_hg19.ref = 'hg19'
-    aq17bases_hg19.refMatchMode = 1
-    metricRecords.append(aq17bases_hg19)
-
-    aq17bases_other = MetricRecord('q17_mapped_bases', 5, '9')
-    aq17bases_other.ref = 'hg19'
-    aq17bases_other.refMatchMode = 2
-    metricRecords.append(aq17bases_other)
-
-    aq17bases_hg19_default = MetricRecord('q17_mapped_bases', 5, '9')
-    aq17bases_hg19_default.ref = 'hg19'
-    aq17bases_hg19_default.refMatchMode = 3
-    metricRecords.append(aq17bases_hg19_default)
-
-    aq17bases_other_default = MetricRecord('q17_mapped_bases', 5, '9')
-    aq17bases_other_default.ref = 'hg19'
-    aq17bases_other_default.refMatchMode = 4
-    metricRecords.append(aq17bases_other_default)
-
-    aq20bases_hg19 = MetricRecord('q20_mapped_bases', 5, '9')
-    aq20bases_hg19.ref = 'hg19'
-    aq20bases_hg19.refMatchMode = 1
-    metricRecords.append(aq20bases_hg19)
-
-    aq20bases_other = MetricRecord('q20_mapped_bases', 5, '9')
-    aq20bases_other.ref = 'hg19'
-    aq20bases_other.refMatchMode = 2
-    metricRecords.append(aq20bases_other)
-
-    aq20bases_hg19_default = MetricRecord('q20_mapped_bases', 5, '9')
-    aq20bases_hg19_default.ref = 'hg19'
-    aq20bases_hg19_default.refMatchMode = 3
-    metricRecords.append(aq20bases_hg19_default)
-
-    aq20bases_other_default = MetricRecord('q20_mapped_bases', 5, '9')
-    aq20bases_other_default.ref = 'hg19'
-    aq20bases_other_default.refMatchMode = 4
-    metricRecords.append(aq20bases_other_default)
+    #
+    # set up some useful vars for use later on
+    #
 
     today = datetime.date.today()
     timeStart = datetime.datetime(today.year, today.month, today.day)
@@ -794,28 +823,80 @@ if __name__=="__main__":
         daysFromMonday = daysFromMonday + 7
     timeStart = timeStart - datetime.timedelta(days=daysFromMonday)
     timeEnd = timeStart + datetime.timedelta(days=lengthOfReport)
-    # timeEnd = timeEnd - datetime.timedelta(seconds=1)
 
-    for site in siteList:
-        # weeklySite = MetricRecord('i100Q17_reads', 1, '9')
-        weeklySite = MetricRecord('q17_mapped_bases', 1, '9')
-        weeklySite.track = True
-        weeklySite.dateFilter = True
-        weeklySite.dateMin = timeStart
-        weeklySite.dateMax = timeEnd
-        weeklySite.site = site
-        weeklySite.siteFilter = True
-        metricRecords.append(weeklySite)
+    #
+    # Capture P0, P1 metrics
+    # For each metric, we capture per chip, and have 4 variations: hg19-default, other-default, hg19-record, other-record
+    #
+
+    # chipList = ['P1.0.19', 'P1.1.17']
+    chipList = ['P0', 'PI']
+    chipListDesc = ["P0", "P1"]
+    metricList = ['total_mapped_target_bases', 'q17_mapped_bases', 'q20_mapped_bases']
+    metricListDesc = ['Mapped Bases', 'AQ17 Bases', 'AQ20 Bases']
+    protonMetrics = {}
+    for chip in chipList:
+        protonMetrics[chip] = {}
+        for metric in metricList:
+            protonMetrics[chip][metric] = []
+            for var in range(0,4):
+                item = MetricRecord(metric, 5, chip)
+                item.ref = 'hg19'
+                item.refMatchMode = var + 1 # 1 = contains, 2 = does not contain, 3 = contains and default, 4 = does not contain and default
+                metricRecords.append(item)
+                protonMetrics[chip][metric].append(item)
+
+        # chips each store some fun historical records also
+        protonMetrics[chip]['hist'] = {}
+
+        # a 6 month (26 week) weekly record for AQ17 bases
+        protonMetrics[chip]['hist']['6m-q17_mapped_bases'] = MetricRecord('q17_mapped_bases', 1, chip)
+        protonMetrics[chip]['hist']['6m-q17_mapped_bases'].History(7,26)
+        metricRecords.append(protonMetrics[chip]['hist']['6m-q17_mapped_bases'])
+
+        # a 6 month (26 week) weekly record for AQ20 bases
+        protonMetrics[chip]['hist']['6m-q20_mapped_bases'] = MetricRecord('q20_mapped_bases', 1, chip)
+        protonMetrics[chip]['hist']['6m-q20_mapped_bases'].History(7,26)
+        metricRecords.append(protonMetrics[chip]['hist']['6m-q20_mapped_bases'])
+
+        # a 30 day history for AQ17 bases
+        protonMetrics[chip]['hist']['30d-q17_mapped_bases'] = MetricRecord('q17_mapped_bases', 1, chip)
+        protonMetrics[chip]['hist']['30d-q17_mapped_bases'].History(1,30)
+        metricRecords.append(protonMetrics[chip]['hist']['30d-q17_mapped_bases'])
+
+        # a 30 day history for AQ20 bases
+        protonMetrics[chip]['hist']['30d-q20_mapped_bases'] = MetricRecord('q20_mapped_bases', 1, chip)
+        protonMetrics[chip]['hist']['30d-q20_mapped_bases'].History(1,30)
+        metricRecords.append(protonMetrics[chip]['hist']['30d-q20_mapped_bases'])
+
+        # Capture the last full week's runs to sumarize
+        for site in siteList:
+            # weeklySite = MetricRecord('i100Q17_reads', 1, '9')
+            weeklySite = MetricRecord('q17_mapped_bases', 1, chip)
+            weeklySite.track = True
+            weeklySite.dateFilter = True
+            weeklySite.dateMin = timeStart
+            weeklySite.dateMax = timeEnd
+            weeklySite.site = site
+            weeklySite.siteFilter = True
+            metricRecords.append(weeklySite)
+            protonMetrics[chip][site] = weeklySite
+
+    #
+    # Do the heavy-lifting of data mining
+    #
 
     for site in siteList:
         BuildMetrics(metricRecords, site)
         BuildTrackingMetrics(metricRecords, site)
 
+    #
+    # dump out all the raw metrics into an html file
+    #
+
     html = open("top-" + str(datetime.date.today())+ ".html",'w')
     html.write('<html><body>\n')
 
-    #print 'Weekly metrics captured from %s to %s' % (timeStart, timeEnd)
-    #html.write('Weekly metrics captured from %s to %s<br>' % (timeStart, timeEnd))
     print 'Multi-site metrics'
     html.write('Multi-site metrics')
 
@@ -828,258 +909,128 @@ if __name__=="__main__":
     html.write('</body></html>\n')
     html.close()
 
+    #
     # dump out a metrics file for use with PGM IonStats screensaver
-    IonStats = open("metrics.txt", 'w')
+    #
+
+    IonStats = open("Proton_metrics.txt", 'w')
     IonStats.write('%s,%s,%s\n' % (IonStats_Q10.metricName, IonStats_Q10.recordValue, 0))
     IonStats.write('%s,%s,%s\n' % (IonStats_Q17.metricName, IonStats_Q17.recordValue, 0))
     IonStats.write('%s,%s,%s\n' % (IonStats_Q20.metricName, IonStats_Q20.recordValue, 0))
     IonStats.write('%s,%s,%s\n' % (IonStats_Q47.metricName, IonStats_Q47.recordValue, 0))
+    IonStats.close()
 
-    # generate the 26 week AQ17 trend chart
+    #
+    # Generate trend chart png files
+    #
+
     today = datetime.date.today()
     trendStart = datetime.datetime(today.year, today.month, today.day)
-    plotdataVals = []
-    plotdataDate = []
-    for i in range(0, histRec.historyPeriods):
-        gig = float(histRec.historyValue[histRec.historyPeriods-i-1]) / (1000.0*1000.0*1000.0)
-        plotdataVals.append(gig)
-        daysago = (histRec.historyPeriods-i-1)*histRec.historyDaysPerPeriod
-        plotDate = trendStart - datetime.timedelta(days=daysago)
-        plotdataDate.append(plotDate)
-        #plotdataDate.append(i)
-    plt.xlabel('Date')
-    plt.ylabel('AQ17 bases (G)')
-    plt.title('Weekly Best AQ17 Bases Run')
-    plt.plot(plotdataDate, plotdataVals)
-    plt.legend(['AQ17 bases'],loc = 'best')
-    plt.savefig('weekly_aq17_bases.png')
-    plt.close()
+
+    for chip in chipList:
+        for histRecName in protonMetrics[chip]['hist']:
+            histRec = protonMetrics[chip]['hist'][histRecName]
+            plotdataVals = []
+            plotdataDate = []
+            for i in range(0, histRec.historyPeriods):
+                gig = float(histRec.historyValue[histRec.historyPeriods-i-1]) / (1000.0*1000.0*1000.0)
+                plotdataVals.append(gig)
+                daysago = (histRec.historyPeriods-i-1)*histRec.historyDaysPerPeriod
+                plotDate = trendStart - datetime.timedelta(days=daysago)
+                plotdataDate.append(plotDate)
+                #plotdataDate.append(i)
+            Qtxt = 'AQ17'
+            if '20' in histRec.metricName:
+                Qtxt = 'AQ20'
+            plt.xlabel('Date')
+            plt.ylabel('%s bases (G)' % Qtxt)
+            plt.title('Historical Best %s Bases Run' % Qtxt)
+            plt.plot(plotdataDate, plotdataVals)
+            plt.legend([Qtxt + ' bases'],loc = 'best')
+	    pngName = '%s_%s.png' % (chip.replace('.', '_'), histRecName)
+            plt.savefig(pngName)
+            plt.close()
 
 
-    # generate the LaTeX page & PDF version of this page
+    #
+    # generate the LaTeX layout report
+    #
+
     reportName = 'WeeklyReport-' + str(datetime.date.today()) + '.tex'
     f = open(reportName, 'w')
-    initdoc(f)
+    titleTxt = 'Weekly Proton Report %s to %s' % (str(timeStart).split(' ')[0], str(timeEnd).split(' ')[0])
+    initdoc(f, titleTxt)
 
     #
-    # Section 1 - Summary Charts
+    # Generate basically the same report, but one per chip
     #
 
-    f.write('\\section*{Summary Charts}\n')
-    f.write('Weekly run summary from %s to %s\n\\\\' % (str(timeStart).split(' ')[0], str(timeEnd).split(' ')[0]))
+    for (chipID, chip) in enumerate(chipList):
 
-    # add table of site tracking
-    # table_begin(f,'Site & Total \\newline 100AQ17 Reads & Total \\newline AQ17 Bases & Full \\newline Analyses & Best Run \\newline 100AQ17 Reads & Best Run \\newline AQ17 Bases & Best Run', 'l p{2cm} p{2cm} p{2cm} p{2cm} p{2cm} p{3cm}')
-    table_begin(f,'Site & Total \\newline 100AQ17 Reads & Total \\newline AQ17 Bases & Full \\newline Analyses & Best Run \\newline 100AQ17 Reads & Best Run \\newline AQ17 Bases & Best Run', 'L{2cm} R{2cm} R{2cm} R{2cm} R{2cm} R{2cm} L{3cm}')
-    for metricRecord in metricRecords:
-        if metricRecord.track:
+        f.write('\\section*{Proton Summary for chip: %s}\n' % chipListDesc[chipID])
+
+        # Section 1 - Summary Charts
+        f.write('Weekly run summary from %s to %s\n\\\\' % (str(timeStart).split(' ')[0], str(timeEnd).split(' ')[0]))
+
+        # add table of site tracking
+        table_begin(f,'Site & Total \\newline 100AQ17 Reads & Total \\newline AQ17 Bases & Full \\newline Analyses & Best Run \\newline 100AQ17 Reads & Best Run \\newline AQ17 Bases & Best Run', 'L{2cm} R{2cm} R{2cm} R{2cm} R{2cm} R{2cm} L{3cm}')
+        for site in siteList:
+            metricRecord = protonMetrics[chip][site]
             rowText = '%s & %s & %s & %s & ' % (ion_latex_safe(metricRecord.site), ion_pretty(metricRecord.i100Q17_reads), ion_readable(metricRecord.q17bases), metricRecord.count)
             try:
                 recordReport, recordValue, i100Q17_reads, q17bases, webRoot = metricRecord.recordReportList[0]
-                # rowText = rowText + '%s & %s & %s' % (i100Q17_reads, ion_readable(q17bases), ion_latex_safe('\\href{' + webRoot + recordReport.reportLink + '}{' + recordReport.resultsName + '}'))
-                # rowText = rowText + '%s & %s & %s' % (i100Q17_reads, ion_readable(q17bases), ion_latex_safe('\\href{' + webRoot + recordReport.reportLink + '}{' + recordReport.experiment.pretty_print().replace('user ', '') + '}'))
                 rowText = rowText + '%s & %s & %s' % (ion_pretty(i100Q17_reads), ion_readable(q17bases), ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + recordReport.resultsName.replace('Auto_user_', '') + '}'))
             except:
                 rowText = rowText + 'none & none & none'
             table_addrow(f, rowText)
 
-    table_end(f)
-    f.write('\\\\\\\\\n')
+        table_end(f)
+        f.write('\\\\\\\\\n')
 
-    # f.write('\\subsection*{HG19 runs}\n')
-    # f.write('\\subsection*{all other runs}\n')
+        # add list of default analysis runs hg19 & other
+        f.write('\\subsection*{Default Analysis Runs}\n')
+        f.write('\\begin{minipage}[t]{0.5\\textwidth}\n\\centerline{\\textbf{HG19 runs}}\n\\end{minipage}\n')
+        f.write('\\begin{minipage}[t]{0.5\\textwidth}\n\\centerline{\\textbf{Other runs}}\n\\end{minipage}\n')
 
-    f.write('\\subsection*{Top-5 Tables}\n')
-    f.write('\\begin{minipage}[t]{0.5\\textwidth}\n\\centerline{\\textbf{HG19 runs}}\n\\end{minipage}\n')
-    f.write('\\begin{minipage}[t]{0.5\\textwidth}\n\\centerline{\\textbf{Other runs}}\n\\end{minipage}\n')
+        for (i, metric) in enumerate(metricList):
+            table_multi_begin(f, 2)
+            table_make(f, '%s & Date & Site' % metricListDesc[i], 'rrr', protonMetrics[chip][metric][2])
+            table_make(f, '%s & Date & Site' % metricListDesc[i], 'rrr', protonMetrics[chip][metric][3])
+            table_multi_end(f)
 
-    #
-    # Mapped Bases - HG19 & Other
-    #
+        # add list of custom analysis runs hg19 & other
+        f.write('\\newpage\n')
+        f.write('\\subsection*{Custom Analysis Runs}\n')
+        f.write('\\begin{minipage}[t]{0.5\\textwidth}\n\\centerline{\\textbf{HG19 runs}}\n\\end{minipage}\n')
+        f.write('\\begin{minipage}[t]{0.5\\textwidth}\n\\centerline{\\textbf{Other runs}}\n\\end{minipage}\n')
 
-    # add table for top-5 mapped base runs
-    table_multi_begin(f, 2)
-    table_begin(f,'Mapped Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in totalMappedBases_hg19.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
+        for (i, metric) in enumerate(metricList):
+            table_multi_begin(f, 2)
+            table_make(f, '%s & Date & Site' % metricListDesc[i], 'rrr', protonMetrics[chip][metric][0])
+            table_make(f, '%s & Date & Site' % metricListDesc[i], 'rrr', protonMetrics[chip][metric][1])
+            table_multi_end(f)
 
-    # add table for top-5 mapped base runs
-    table_begin(f,'Mapped Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in totalMappedBases_other.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
-    table_multi_end(f)
+        # add trend charts
+        f.write('\\newpage\n')
+        f.write('\\subsection*{Historical Performance Graphs}\n')
 
-    #
-    # AQ17 Bases - HG19 & Other
-    #
+        # add plot of AQ17 & AQ20 26 week trend
+        f.write('6 month view\n')
+        figure_add(f, ['%s_6m-q17_mapped_bases.png' % chip.replace('.', '_'), '%s_6m-q20_mapped_bases.png' % chip.replace('.', '_')], False)
+        f.write('\\\\\n')
+        f.write('30 day view\n')
+        figure_add(f, ['%s_30d-q17_mapped_bases.png' % chip.replace('.', '_'), '%s_30d-q20_mapped_bases.png' % chip.replace('.', '_')], False)
+        f.write('\\clearpage\n')
 
-    # add table for top-5 AQ17 base runs
-    table_multi_begin(f, 2)
-    table_begin(f,'AQ17 Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in aq17bases_hg19.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
+        # add links to top runs
+        #f.write('\\newpage\n')
 
-    # add table for top-5 AQ17 base runs
-    table_begin(f,'AQ17 Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in aq17bases_other.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
-    table_multi_end(f)
-
-    #
-    # AQ20 Bases - HG19 & Other
-    #
-
-    # add table for top-5 AQ20 base runs
-    table_multi_begin(f, 2)
-    table_begin(f,'AQ20 Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in aq20bases_hg19.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
-
-    # add table for top-5 AQ20 base runs
-    table_begin(f,'AQ20 Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in aq20bases_other.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
-    table_multi_end(f)
-
-    #
-    # Section for default analysis runs
-    #
-
-    f.write('\\newpage\n\\section*{Default Analysis Runs}\n')
-    f.write('\\begin{minipage}[t]{0.5\\textwidth}\n\\centerline{\\textbf{Default HG19 runs}}\n\\end{minipage}\n')
-    f.write('\\begin{minipage}[t]{0.5\\textwidth}\n\\centerline{\\textbf{Default Other runs}}\n\\end{minipage}\n')
-
-    #
-    # Mapped Bases - HG19 & Other
-    #
-
-    # add table for top-5 mapped base runs
-    table_multi_begin(f, 2)
-    table_begin(f,'Mapped Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in totalMappedBases_hg19_default.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
-
-    # add table for top-5 mapped base runs
-    table_begin(f,'Mapped Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in totalMappedBases_other_default.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
-    table_multi_end(f)
-
-    #
-    # AQ17 Bases - HG19 & Other
-    #
-
-    # add table for top-5 AQ17 base runs
-    table_multi_begin(f, 2)
-    table_begin(f,'AQ17 Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in aq17bases_hg19_default.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
-
-    # add table for top-5 AQ17 base runs
-    table_begin(f,'AQ17 Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in aq17bases_other_default.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
-    table_multi_end(f)
-
-    #
-    # AQ20 Bases - HG19 & Other
-    #
-
-    # add table for top-5 AQ20 base runs
-    table_multi_begin(f, 2)
-    table_begin(f,'AQ20 Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in aq20bases_hg19_default.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
-
-    # add table for top-5 AQ20 base runs
-    table_begin(f,'AQ20 Bases & Date & Site', 'rrr')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in aq20bases_other_default.recordReportList:
-        site = ion_latex_safe('\\href{' + webRoot + '/report/' + str(recordReport.pk) + '}{' + lookupSite(webRoot) + '}')
-        dateStr = str(recordReport.experiment.date).split(' ')[0]
-        rowText = ion_pretty(recordValue) + ' & ' + dateStr + ' & ' + site
-        table_addrow(f, rowText)
-    table_end(f)
-    table_multi_end(f)
-
-    #
-    # Section 2 - Historical Performance Graphs
-    #
-
-    f.write('\\newpage\n\\section*{Historical Performance Graphs}\n')
-
-    # add plot of AQ17 26 week trend
-    figure_add(f, ['weekly_aq17_bases.png'], False)
-
-    #
-    # Section 3 - Links to top runs
-    #
-
-    f.write('\\newpage\n\\section*{Links to top runs}\n')
-
-    f.write('\\subsection*{Top 5 AQ17 runs}\n')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in aq17bases.recordReportList:
-        linkName = ion_pretty(recordValue) + ' ' + recordReport.resultsName
-        linkURL = webRoot + '/report/' + str(recordReport.pk)
-        text = ion_latex_safe('\\href{' + linkURL + '}{' + linkName + '}\\\\\n')
-        f.write(text)
-
-    f.write('\\subsection*{Top 5 AQ20 runs}\n')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in aq20bases.recordReportList:
-        linkName = ion_pretty(recordValue) + ' ' + recordReport.resultsName
-        linkURL = webRoot + '/report/' + str(recordReport.pk)
-        text = ion_latex_safe('\\href{' + linkURL + '}{' + linkName + '}\\\\\n')
-        f.write(text)
-
-    f.write('\\subsection*{Top 5 aligned base runs}\n')
-    for recordReport, recordValue, i100Q17_reads, q17bases, webRoot in totalMappedBases.recordReportList:
-        linkName = ion_pretty(recordValue) + ' ' + recordReport.resultsName
-        linkURL = webRoot + '/report/' + str(recordReport.pk)
-        text = ion_latex_safe('\\href{' + linkURL + '}{' + linkName + '}\\\\\n')
-        f.write(text)
+        #f.write('\\newpage\n\\section*{Links to top runs}\n')
+        #titleTextList = ['Top 5 aligned base runs', 'Top 5 AQ17 runs', 'Top 5 AQ20 runs']
+        #i = 0
+        #for metric in metricList:
+            #add_links(f, titleTextList[i], protonMetrics[chip][metric][3])
+            #i = i + 1
 
     f.write('\\end{document}\n')
     f.close()

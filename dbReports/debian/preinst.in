@@ -14,6 +14,8 @@ case "$1" in
 	if [ -e	"/etc/init.d/ionPlugin" ]; then
 		invoke-rc.d ionPlugin stop
 	fi
+	
+        invoke-rc.d apache2 stop
     
     # ionArchive is removed as of this version - make sure sysv links are gone
     update-rc.d -f ionArchive remove

@@ -39,6 +39,9 @@ class BeadfindControlOpts{
     float minTfPeakMax;
     float minLibPeakMax;
     int blobFilter;
+    std::string doubleTapFlows;
+    int predictFlowStart;
+    int predictFlowEnd;
     void DefaultBeadfindControl();
     ~BeadfindControlOpts();
 };

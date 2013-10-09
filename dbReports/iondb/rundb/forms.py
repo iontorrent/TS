@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 from django.utils.safestring import mark_safe
 class Plugins_SelectMultiple(forms.CheckboxSelectMultiple):
-    def render(self, name, value, attrs=None): 
+    def render(self, name, value, attrs=None):
         csm = super(Plugins_SelectMultiple, self).render(name, value, attrs=None)
         csm = csm.replace(u'<ul>', u'').replace(u'</ul>', u'').replace(u'<label>',u'').replace(u'</label>',u'')
         # add 'configure' button for plugins
@@ -38,8 +38,14 @@ class Plugins_SelectMultiple(forms.CheckboxSelectMultiple):
                 plugin = models.Plugin.objects.get(pk=pk)
                 if plugin.isPlanConfig():
                     output += btn_html.replace('XXX',pk)
-                output += '</p>'            
-        
+                output += '</p>'
+                # disable IRU if not configured
+                if 'IonReporterUploader' == plugin.name:
+                    if 'checked' in line:
+                        output = output.replace('/> IonReporterUploader', '/><span rel="tooltip" title="Edit run to configure IonReporterUploader"> IonReporterUploader</span>')
+                    else:
+                        output = output.replace('/> IonReporterUploader', 'disabled /><span rel="tooltip" title="Edit run to configure IonReporterUploader"> IonReporterUploader not configured</span>')
+
         return mark_safe(output)
 
 class DataSelect(djangoWidget.Widget):
@@ -106,6 +112,10 @@ class RunParamsForm(forms.Form):
     basecallerArgs = forms.CharField(max_length=1024,
                            required=False,
                            widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
+    
+    alignmentArgs = forms.CharField(max_length=1024,
+                           required=False,
+                           widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
 
     thumbnailBeadfindArgs = forms.CharField(max_length=1024,
                                      required=False,
@@ -122,6 +132,11 @@ class RunParamsForm(forms.Form):
     thumbnailBasecallerArgs = forms.CharField(max_length=1024,
                                      required=False,
                                      widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
+
+    thumbnailAlignmentArgs = forms.CharField(max_length=1024,
+                                     required=False,
+                                     widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
+
 
     blockArgs = forms.CharField(max_length=128,
                            required=False,
@@ -145,9 +160,6 @@ class RunParamsForm(forms.Form):
 
     realign = forms.BooleanField(required=False)
 
-    aligner_opts_extra = forms.CharField(max_length=100000,
-                                         required=False,
-                                         widget=forms.Textarea(attrs={'cols': 50, 'rows': 4, 'class': 'input-xlarge'}))
     mark_duplicates = forms.BooleanField(required=False, initial=False)
 
     previousReport = forms.CharField(required=False,widget=DataSelect(attrs={'class': 'input-xlarge'}
@@ -159,7 +171,7 @@ class RunParamsForm(forms.Form):
     project_names = forms.CharField(max_length=1024,
                            required=False,
                            widget=forms.TextInput(attrs={'size':'60','class':'textInput input-xlarge'}))
-    
+
     def clean_report_name(self):
         """
         Verify that the user input doesn't have chars that we don't want
@@ -243,7 +255,7 @@ class RunParamsForm(forms.Form):
                   logger.error("Project name has invalid characters. The valid values are letters, numbers, underscore and period.")
                   raise forms.ValidationError(("Project name has invalid characters. The valid values are letters, numbers, underscore and period."))
         return ','.join(names)
-            
+
 
 from iondb.rundb.plan.views_helper import dict_bed_hotspot
 
@@ -264,40 +276,42 @@ class AnalysisSettingsForm(forms.ModelForm):
         references = models.ReferenceGenome.objects.filter(index_version=settings.TMAP_VERSION, enabled=True)
         self.fields['reference'].choices= [('none','none')] + [(v[0],"%s (%s)" % (v[0],v[1])) for v in references.values_list('short_name', 'name')]
         bedfiles = dict_bed_hotspot()
-        self.fields['targetRegionBedFile'].choices= [('','')] + [(v.file,v.path) for v in bedfiles.get('bedFiles',[])]
-        self.fields['hotSpotRegionBedFile'].choices= [('','')] + [(v.file,v.path) for v in bedfiles.get('hotspotFiles',[])]
+        self.fields['targetRegionBedFile'].choices= [('','')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('bedFiles',[])]
+        self.fields['hotSpotRegionBedFile'].choices= [('','')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('hotspotFiles',[])]
         self.fields['barcodeKitName'].choices= [('','')]+list(models.dnaBarcode.objects.order_by('name').distinct('name').values_list('name','name'))
         adapters = models.ThreePrimeadapter.objects.all().order_by('-isDefault', 'name')
         self.fields['threePrimeAdapter'].choices= [(v[1],"%s (%s)" % (v[0],v[1])) for v in adapters.values_list('name', 'sequence')]
-    
+
     class Meta:
         model = models.ExperimentAnalysisSettings
         fields = ('reference', 'targetRegionBedFile', 'hotSpotRegionBedFile', 'barcodeKitName', 'threePrimeAdapter')
-        
+
 class ExperimentSettingsForm(forms.ModelForm):
 
     sample = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
     barcodedSamples = forms.CharField(required=False, widget=forms.HiddenInput())
-    runtype = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'})) 
+    runtype = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
     libraryKitname = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
-    sequencekitname = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))    
+    sequencekitname = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}))
     chipBarcode = forms.CharField(required=False, max_length=64, widget=forms.TextInput(attrs={'class':'textInput input-xlarge validateAlphaNumNoSpace'}) )
     libraryKey = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
     notes = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class':'textInput input-xlarge'}) )
-
+    mark_duplicates = forms.BooleanField(required = False, initial = False)
+    sampleTubeLabel = forms.CharField(required=False, max_length=512, widget=forms.TextInput(attrs={'class':'textInput input-xlarge'}) )    
+    
     def __init__(self, *args, **kwargs):
         super(ExperimentSettingsForm, self).__init__(*args, **kwargs)
         # initialize sample and key choices when form instance created
         self.fields['sample'].choices = [('','')]+ list(models.Sample.objects.filter().values_list('id', 'displayedName'))
         self.fields['libraryKey'].choices = [(v[0],"%s (%s)" % (v[0],v[1])) for v in models.LibraryKey.objects.filter().values_list('sequence', 'description')]
-        self.fields['runtype'].choices = [(v[0], "%s (%s)" % (v[1],v[0])) for v in models.RunType.objects.all().order_by("id").values_list('runType','description')] 
+        self.fields['runtype'].choices = [(v[0], "%s (%s)" % (v[1],v[0])) for v in models.RunType.objects.all().order_by("id").values_list('runType','description')]
         self.fields['libraryKitname'].choices = [('','')] + list(models.KitInfo.objects.filter(kitType='LibraryKit').values_list('name','name'))
-        self.fields['sequencekitname'].choices = [('','')]+list(models.KitInfo.objects.filter(kitType='SequencingKit').values_list('name','name')) 
-    
+        self.fields['sequencekitname'].choices = [('','')]+list(models.KitInfo.objects.filter(kitType='SequencingKit').values_list('name','name'))
+
     class Meta:
         model = models.Experiment
         fields = ('sample', 'sequencekitname', 'chipBarcode', 'notes')
-        
+
 
 def getLevelChoices():
     #try:
@@ -491,7 +505,6 @@ class NetworkConfigForm(forms.Form):
     proxy_port = forms.CharField(required=False)
     proxy_username = forms.CharField(required=False)
     proxy_password = forms.CharField(required=False)
-    collab_ip = forms.IPAddressField(required=False)
 
     def get_network_settings(self):
         """Usage: ./TSquery [options]
@@ -519,7 +532,6 @@ class NetworkConfigForm(forms.Form):
                 "proxy_port": "",
                 "proxy_username": "",
                 "proxy_password": "",
-                "collab_ip": "",
                 }
         cmd = ["/usr/sbin/TSquery"]
         try:
@@ -553,7 +565,6 @@ class NetworkConfigForm(forms.Form):
         self.fields['proxy_port'].initial = settings["proxy_port"]
         self.fields['proxy_username'].initial = settings["proxy_username"]
         self.fields['proxy_password'].initial = settings["proxy_password"]
-        self.fields['collab_ip'].initial = settings["collab_ip"]
 
     def __init__(self, *args, **kw):
         super(NetworkConfigForm, self).__init__(*args, **kw)

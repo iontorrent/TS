@@ -1,4 +1,4 @@
-# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 import os
 from django.db.models.aggregates import Count, Max
 from tastypie.api import Api
@@ -19,6 +19,7 @@ from tastypie.serializers import Serializer
 from django.core import serializers, urlresolvers
 
 import json
+import imp
 
 #auth
 from tastypie.authentication import BasicAuthentication, ApiKeyAuthentication, Authentication
@@ -53,7 +54,8 @@ from ion.utils.TSversion import findVersions
 from ion.plugin import remote
 
 #custom query
-from django.db.models.sql.constants import QUERY_TERMS, LOOKUP_SEP
+from django.db.models.sql.constants import QUERY_TERMS
+
 from django.db import transaction
 from django.db.models import Q
 
@@ -64,6 +66,9 @@ from operator import itemgetter
 
 import httplib2
 from iondb.utils import toBoolean
+import urllib
+import re
+from subprocess import Popen, PIPE
 
 try:
     import lxml
@@ -79,7 +84,12 @@ except ImportError:
 
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseNotFound, HttpResponseRedirect, Http404
-from django.conf.urls.defaults import url
+
+try:
+    from django.conf.urls import url
+except ImportError:
+    # Compat Django 1.4
+    from django.conf.urls.defaults import url
 
 import tasks
 from iondb.rundb.data import dmactions_types
@@ -93,7 +103,9 @@ from iondb.plugins.launch_utils import get_plugins_dict
 import ast
 import simplejson
 import traceback
-    
+
+from iondb.utils import toBoolean
+
 logger = logging.getLogger(__name__)
 
 def field_dict(field_list):
@@ -282,6 +294,19 @@ class GlobalConfigResource(ModelResource):
         authorization = DjangoAuthorization()
 
 
+class MonitorDataResource(ModelResource):
+    class Meta:
+        queryset = models.MonitorData.objects.all()
+
+        #allow ordering and filtering by all fields
+        field_list = models.MonitorData._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+
 class TFMetricsResource(ModelResource):
     report = fields.ToOneField("iondb.rundb.api.ResultsResource", 'report', full=False)
     class Meta:
@@ -345,7 +370,8 @@ class BaseMetadataResource(ModelResource):
         return self.dispatch('metadata', request, **kwargs)
 
     def get_metadata(self, request, **kwargs):
-        results = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        results = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if results is None:
             return HttpGone()
 
@@ -406,7 +432,8 @@ class UserResource(ModelResource):
     def post_reject(self, request, **kwargs):
         if not request.user.is_superuser:
             raise HttpUnauthorized()
-        user = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        user = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if user is None:
             return HttpGone()
 
@@ -416,7 +443,8 @@ class UserResource(ModelResource):
     def post_activate(self, request, **kwargs):
         if not request.user.is_superuser:
             raise HttpUnauthorized()
-        user = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        user = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if user is None:
             return HttpGone()
 
@@ -475,6 +503,7 @@ class ProjectResource(ModelResource):
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
 
+
 class ResultsResource(BaseMetadataResource):
 
 
@@ -506,7 +535,8 @@ class ResultsResource(BaseMetadataResource):
         Will return a list of the html files for all the plugs that a report has
         this is going to be based on the file system output
         """
-        results = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        results = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if results is None:
             return HttpGone()
 
@@ -547,6 +577,7 @@ class ResultsResource(BaseMetadataResource):
 
         deserialized = self.deserialize(request, request.raw_post_data, format=request.META.get('CONTENT_TYPE', 'application/json'))
         data=dict_strip_unicode_keys(deserialized)
+        # data: 'plugin', 'pluginconfig', 'owner'
         plugins = data["plugin"]
 
         config = {}
@@ -554,7 +585,7 @@ class ResultsResource(BaseMetadataResource):
         if "pluginconfig" in data:
             config = data["pluginconfig"]
 
-        result = self.get_object_list(request).get(pk=kwargs["pk"])
+        result = self.get_object_list(request=request).get(pk=kwargs["pk"])
         if result is None:
             return HttpGone()
 
@@ -596,6 +627,15 @@ class ResultsResource(BaseMetadataResource):
 
         plugin_basefolder = "plugin_out"
 
+        # Get the user specified in the POST, fallback to request.user (probably ionadmin)
+        try:
+            user = User.objects.get(username=data["username"])
+        except KeyError:
+            user = request.user
+        except User.DoesNotExist:
+            logger.exception("Invalid owner specified for plugin launch: %s", data["username"])
+        env['username'] = user.username
+
         log = logging.getLogger('iondb.rundb.api.ResultsResource')
         for plugin_name in plugins:
             try:
@@ -620,7 +660,11 @@ class ResultsResource(BaseMetadataResource):
 
             # Set Started status before launching to avoid race condition
             # Set here so it appears immediately in refreshed plugin status list
-            (pluginresult, created) = result.pluginresult_set.get_or_create(plugin=plugin_orm)
+
+            (pluginresult, created) = result.pluginresult_set.get_or_create(
+                plugin=plugin_orm,
+                defaults={'owner': user}
+            )
             pluginresult.prepare()
             pluginresult.save()
 
@@ -678,20 +722,37 @@ class ResultsResource(BaseMetadataResource):
 
         deserialized = self.deserialize(request, request.raw_post_data, format=request.META.get('CONTENT_TYPE', 'application/json'))
         data=dict_strip_unicode_keys(deserialized)
-        results = self.get_object_list(request).get(pk=kwargs["pk"])
-        if results is None:
+        result = self.get_object_list(request).get(pk=kwargs["pk"])
+        if result is None:
             return HttpGone()
         #we are only doing to use the first value of the dict
         if len(data) != 1:
             return HttpBadRequest()
 
+        # Get user from metadata, or from request
+        user = request.user
+        if "metadata" in data:
+            try:
+                user = User.objects.get(username=data["metadata"]["username"])
+            except KeyError:
+                pass
+            except User.DoesNotExist:
+                logger.exception("Invalid owner specified for plugin launch: %s", data["metadata"]["username"])
+
         try:
             with transaction.commit_on_success():
                 for (key, value) in data.items():
+                    if key == "metadata": continue ## NOTE: Can never be a plugin named metadata...
+
                     # Note: If multiple plugins exist, use one with last install date.
                     # FIXME Must uniquely identify plugins
                     plugin = models.Plugin.objects.get(name=key,active=True)
-                    (pluginresult, created) = results.pluginresult_set.get_or_create(plugin=plugin)
+
+                    (pluginresult, created) = result.pluginresult_set.get_or_create(
+                        plugin=plugin,
+                        defaults={'owner': user}
+                    )
+
                     # Call trigger methods for special states
                     # - Started, Complete, Error
                     if value == 'Completed' or value=='Error':
@@ -731,22 +792,26 @@ class ResultsResource(BaseMetadataResource):
         return None
 
     def get_pluginresults(self, request, **kwargs):
-        results = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        results = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if results is None:
             return HttpGone()
 
         #filter for just the major blocks
-        major = request.GET.get('major',False)
+        major = request.GET.get('major', None)
 
         # In the order they were generated, newest plugin entry first.
         pluginresults = results.pluginresult_set.all().order_by('-starttime')
-        if major:
+        if major == 'true':
             pluginresults = pluginresults.filter(plugin__majorBlock=True)
             major_blocks = [pluginresult.plugin.name for pluginresult in pluginresults]
+        elif major == 'false':
+            pluginresults = pluginresults.filter(plugin__majorBlock=False)
 
         # Iterate through DB results first, find matching directories
         pluginArray = []
         seen = {}
+        show_plugins = request.session.setdefault("show_plugins", {})
         for pr in pluginresults:
             prpath = pr.path()
             candidates = [
@@ -785,16 +850,19 @@ class ResultsResource(BaseMetadataResource):
 
             if outputpath:
                 # Got a matching path, populate list of files
-                outputfiles = [pfile for pfile in os.listdir(outputpath) if (pfile.endswith(".html") or pfile.endswith(".php"))]
-                if major:
+                all_files = [pfile for pfile in os.listdir(outputpath) if (pfile.endswith(".html") or pfile.endswith(".php"))]
+                outputfiles = all_files
+                if major == 'true':
                     def onlyBlocks(s):
                         return "_block" in s
-                    outputfiles = filter(onlyBlocks, outputfiles)
+                    outputfiles = filter(onlyBlocks, all_files)
                 seen[os.path.basename(outputpath)] = True
+                link_files = filter(lambda x: "_block" not in x, all_files)
             else:
                 # Missing Output, or unknown version
                 outputpath = prpath ## assume default path, let link be broken
                 outputfiles = [] # but mask files
+                link_files = []
 
             data = {
                 'Name': pr.plugin.name,
@@ -803,10 +871,12 @@ class ResultsResource(BaseMetadataResource):
                 'Path': outputpath,
                 'URL': "%splugin_out/%s/" % (results.reportLink, os.path.basename(outputpath)),
                 'Files': outputfiles,
+                'Links': link_files,
                 'Major' : pr.plugin.majorBlock,
                 'Size': pr.size,
                 'inodes': pr.inodes,
-                'id': pr.id
+                'id': pr.id,
+                'show': show_plugins.get(pr.plugin.name, True)
             }
             pluginArray.append(data)
 
@@ -840,7 +910,8 @@ class ResultsResource(BaseMetadataResource):
                     'Major' : False, # NB: Plugins without DB record cannot be major
                     'Size': -1,
                     'inodes': -1,
-                    'id': None
+                    'id': None,
+                    'show': show_plugins.get(name, True)
                 }
                 logger.info("Plugin folder with no db record: %s v%s at '%s'", name, version, path)
                 pluginArray.append(data)
@@ -859,7 +930,8 @@ class ResultsResource(BaseMetadataResource):
         """
         Returns pluginStore for all plugins
         """
-        results = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        results = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if results is None:
             return HttpGone()
 
@@ -872,6 +944,7 @@ class ResultsResource(BaseMetadataResource):
         """
         deserialized = self.deserialize(request, request.raw_post_data, format=request.META.get('CONTENT_TYPE', 'application/json'))
         data=dict_strip_unicode_keys(deserialized)
+
         results = self.get_object_list(request).get(pk=kwargs["pk"])
         if results is None:
             return HttpGone()
@@ -912,7 +985,8 @@ class ResultsResource(BaseMetadataResource):
 
     def get_pluginresult_set(self, request, **kwargs):
         try:
-            obj = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+            bundle = self.build_bundle(request=request)
+            obj = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         except ObjectDoesNotExist:
             return HttpGone()
         except MultipleObjectsReturned:
@@ -1063,12 +1137,218 @@ class ExperimentResource(BaseMetadataResource):
 class SampleResource(ModelResource):
     #associated experiment & sample
     experiments = fields.ToManyField(ExperimentResource, 'experiments', full=False, null=True, blank=True)
+    sampleSets = fields.ToManyField('iondb.rundb.api.SampleSetItemResource', 'sampleSets', full=False, null=True, blank=True)
+
 
     class Meta:
         queryset = models.Sample.objects.all()
 
         #allow ordering and filtering by all fields
         field_list = models.Sample._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+
+class SampleSetResource(ModelResource):
+    SampleGroupType_CV = fields.ToOneField('iondb.rundb.api.SampleGroupType_CVResource', 'SampleGroupType_CV', full=False, null=True, blank=True)
+    samples = fields.ToManyField('iondb.rundb.api.SampleSetItemResource', 'samples', full=False, null=True, blank=True)
+
+    sampleCount = fields.IntegerField(readonly = True)
+    sampleGroupTypeName = fields.CharField(readonly = True, attribute="sampleGroupTypeName", null=True, blank=True)
+
+    def dehydrate(self, bundle):
+        sampleSetItems = bundle.obj.samples
+        bundle.data['sampleCount'] = sampleSetItems.count() if sampleSetItems else 0
+
+        groupType = bundle.obj.SampleGroupType_CV
+        bundle.data['sampleGroupTypeName'] = groupType.displayedName if groupType else ""
+
+        return bundle
+
+
+    class Meta:
+        queryset = models.SampleSet.objects.all().select_related(
+                'SampleGroupType_CV__displayedName'
+            ).prefetch_related(
+                'samples'
+            ).all()
+
+        resource_name = 'sampleset'
+
+        #allow ordering and filtering by all fields
+        field_list = models.SampleSet._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+
+class SampleSetItemResource(ModelResource):
+    sampleSet = fields.ToOneField('iondb.rundb.api.SampleSetResource', 'sampleSet', full=False, null=True, blank=True)
+    sample = fields.ToOneField('iondb.rundb.api.SampleResource', 'sample', full=False, null=True, blank=True)
+
+    class Meta:
+        queryset = models.SampleSetItem.objects.all().select_related('sampleSet', 'sample')
+
+        resource_name = 'samplesetitem'
+
+        #allow ordering and filtering by all fields
+        field_list = models.SampleSetItem._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+        filtering = {
+            'sampleSet' : ALL_WITH_RELATIONS
+        }
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+
+class SampleSetItemInfoResource(SampleSetItemResource):
+    sampleSetPk = fields.IntegerField(readonly = True, attribute="sampleSetPk", null=True, blank=True)
+    sampleSetStatus = fields.CharField(readonly = True, attribute="sampleSetStatus", null=True, blank=True)
+
+    samplePk = fields.IntegerField(readonly = True, attribute="samplePk", null=True, blank=True)
+    sampleExternalId = fields.CharField(readonly = True, attribute="sampleExternalId", null=True, blank=True)
+    sampleDisplayedName = fields.CharField(readonly = True, attribute="sampleDisplayedName", null=True, blank=True)
+    sampleDescription = fields.CharField(readonly = True, attribute="sampleDescription", null=True, blank=True)
+    relationshipRole = fields.CharField(readonly = True, attribute="relationshipRole", null=True, blank=True)
+    relationshipGroup = fields.IntegerField(readonly = True, attribute="relationshipGroup", null=True, blank=True)
+
+    def dehydrate(self, bundle):
+        sampleSet = bundle.obj.sampleSet
+        sample = bundle.obj.sample
+
+        bundle.data['sampleSetPk'] = sampleSet.id if sampleSet else 0
+        bundle.data['sampleSetStatus'] = sampleSet.status if sampleSet else ""
+
+        bundle.data['samplePk'] = sample.id if sample else 0
+        bundle.data['sampleExternalId'] = sample.externalId if sample else ""
+        bundle.data['sampleDisplayedName'] = sample.displayedName if sample else ""
+        bundle.data['sampleDescription'] = sample.description if sample else ""
+
+        bundle.data['relationshipRole'] = bundle.obj.relationshipRole
+        bundle.data['relationshipGroup'] = bundle.obj.relationshipGroup
+
+        sampleAttribute_list = models.SampleAttribute.objects.filter(isActive = True).order_by('id')
+
+        attribute_dict = {}
+        for attribute in sampleAttribute_list:
+            try:
+                sampleAttributeValue = models.SampleAttributeValue.objects.get(sample_id = sample, sampleAttribute_id = attribute)
+
+            except:
+                ##logger.debug("api - sampleAttributeValue NONE OK #1 for sample=%s; attribute=%s" %(str(sample), str(attribute)))
+
+                sampleAttributeValue = None
+                bundle.data[attribute.displayedName] = ""
+
+            attr_value =  "attr_value_%s" % attribute.displayedName
+            if sampleAttributeValue and sampleAttributeValue.value and sampleAttributeValue.value != 'None':
+                bundle.data[attribute.displayedName] = sampleAttributeValue.value
+                attribute_dict[attribute.displayedName] = sampleAttributeValue.value
+
+            else:
+                ##logger.debug("api - sampleAttributeValue NONE OK #2 for sample=%s; attribute=%s" %(str(sample), str(attribute)))
+
+                bundle.data[attribute.displayedName] = ""
+                attribute_dict[attribute.displayedName] = ""
+
+        bundle.data["attribute_dict"] = attribute_dict
+
+        return bundle
+
+    class Meta:
+        queryset = models.SampleSetItem.objects.all()
+
+        #allow ordering and filtering by all fields
+        field_list = models.SampleSetItem._meta.get_all_field_names()
+
+        fields = field_list + ['sampleSetPk',
+                               'sampleSetStatus',
+                               'samplePk',
+                               'sampleExternalId',
+                               'sampleDisplayedName',
+                               'sampleDescription',
+                               'relationshipRole',
+                               'relationshipGroup']
+        ordering = fields
+        filtering = field_dict(fields)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+        allowed_methods = ['get']
+
+
+class SampleGroupType_CVResource(ModelResource):
+    sampleSets = fields.ToManyField('iondb.rundb.api.SampleSetResource', 'sampleSets', full=False, null=True, blank=True)
+    sampleAnnotation_set = fields.ToManyField('iondb.rundb.api.SampleAnnotation_CVResource', 'sampleAnnotation_set', full=False, null=True, blank=True)
+
+    class Meta:
+        queryset = models.SampleGroupType_CV.objects.all()
+
+        #allow ordering and filtering by all fields
+        field_list = models.SampleGroupType_CV._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+class SampleAnnotation_CVResource(ModelResource):
+    sampleGroupType_CV = fields.ToOneField('iondb.rundb.api.SampleGroupType_CVResource', "sampleGroupType_CV", full=False, null=True, blank=True)
+
+    class Meta:
+        queryset = models.SampleAnnotation_CV.objects.all()
+
+        #allow ordering and filtering by all fields
+        field_list = models.SampleAnnotation_CV._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+
+class SampleAttributeResource(ModelResource):
+    dataType = fields.ToOneField('iondb.rundb.api.SampleAttributeDataTypeResource', "dataType", full=False, null=True, blank=True)
+
+    sampleCount = fields.IntegerField(readonly = True)
+    dataType_name = fields.CharField(readonly = True, attribute="dataType_name", null=True, blank=True)
+
+    def dehydrate(self, bundle):
+        samplesWithAttribute = bundle.obj.samples
+        bundle.data['sampleCount'] = samplesWithAttribute.count() if samplesWithAttribute else 0
+
+        dataType = bundle.obj.dataType
+        bundle.data['dataType_name'] = dataType.dataType if dataType else ""
+
+        return bundle
+
+    class Meta:
+        queryset = models.SampleAttribute.objects.all()
+
+        #allow ordering and filtering by all fields
+        field_list = models.SampleAttribute._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+
+class SampleAttributeDataTypeResource(ModelResource):
+
+    class Meta:
+        queryset = models.SampleAttributeDataType.objects.all()
+
+        #allow ordering and filtering by all fields
+        field_list = models.SampleAttributeDataType._meta.get_all_field_names()
         ordering = field_list
         filtering = field_dict(field_list)
 
@@ -1089,7 +1369,7 @@ class ExperimentAnalysisSettingsResource(ModelResource):
         ordering = field_list
         filtering = field_dict(field_list)
 
-    
+
 class ReferenceGenomeResource(ModelResource):
     def apply_filters(self, request, applicable_filters):
         base_object_list = super(ReferenceGenomeResource, self).apply_filters(request, applicable_filters)
@@ -1180,7 +1460,8 @@ class RigResource(ModelResource):
         return self.dispatch('status', request, **kwargs)
 
     def get_status(self, request, **kwargs):
-        rig = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        rig = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if rig is None:
             return HttpGone()
 
@@ -1217,7 +1498,8 @@ class RigResource(ModelResource):
         return self.dispatch('config', request, **kwargs)
 
     def get_config(self, request, **kwargs):
-        rig = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        rig = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if rig is None:
             return HttpGone()
 
@@ -1242,7 +1524,7 @@ class RigResource(ModelResource):
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
         status_allowed_methods = ['get', 'put']
-        config_allowed_methods = ['get',]
+        config_allowed_methods = ['get']
 
 class PluginResource(ModelResource):
     """Get a list of plugins"""
@@ -1256,6 +1538,8 @@ class PluginResource(ModelResource):
         #this is meant for internal use only
         urls = [url(r"^(?P<resource_name>%s)/set/(?P<keys>\w[\w/-;]*)/type%s$" % (self._meta.resource_name,
                     trailing_slash()),self.wrap_view('get_type_set'), name="api_get_type_set"),
+                url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/extend/(?P<extend>\w[\w/-;]*)%s$" % (self._meta.resource_name,
+                    trailing_slash()),self.wrap_view('dispatch_extend'), name="api_dispatch_extend"),
                 url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/type%s$" % (self._meta.resource_name,
                     trailing_slash()), self.wrap_view('dispatch_type'), name="api_dispatch_type"),
                 url(r"^(?P<resource_name>%s)/install%s$" % (self._meta.resource_name,
@@ -1268,6 +1552,8 @@ class PluginResource(ModelResource):
                     trailing_slash()), self.wrap_view('dispatch_rescan'), name="api_dispatch_rescan"),
                 url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/info%s$" % (self._meta.resource_name,
                     trailing_slash()), self.wrap_view('dispatch_info'), name="api_dispatch_info"),
+                url(r"^(?P<resource_name>%s)/show%s$" % (self._meta.resource_name,
+                    trailing_slash()), self.wrap_view('dispatch_show'), name="api_plugins_show")
         ]
 
         return urls
@@ -1286,6 +1572,9 @@ class PluginResource(ModelResource):
 
     def dispatch_info(self, request, **kwargs):
         return self.dispatch('info', request, **kwargs)
+
+    def dispatch_show(self, request, **kwargs):
+        return self.dispatch('show', request, **kwargs)
 
     def _get_type(self, plugin):
         if plugin is None:
@@ -1307,7 +1596,8 @@ class PluginResource(ModelResource):
         return type
 
     def get_type(self, request, **kwargs):
-        plugin = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        plugin = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         return self.create_response(request, self._get_type(plugin))
 
     def get_type_set(self, request, **kwargs):
@@ -1316,12 +1606,41 @@ class PluginResource(ModelResource):
         """
         request_method = self.method_check(request, ['get']) # raises MethodNotAllowed
         plugin_set = kwargs['keys'].split(";")
-        queryset = self.cached_obj_get_list(request).filter(pk__in=plugin_set)
+        bundle = self.build_bundle(request=request)
+        queryset = self.cached_obj_get_list(bundle).filter(pk__in=plugin_set)
         types = dict((p.pk, self._get_type(p)) for p in queryset)
         if any(isinstance(t, HttpGone) for t in types.values()):
             return HttpGone()
         else:
             return self.create_response(request, types)
+
+    def dispatch_extend(self, request, **kwargs):
+
+        bundle = self.build_bundle(request=request)
+        extend_function= kwargs['extend']
+
+        #if the PK was a int lookup by PK, if it was the name of a Plugin use the name instead.
+        if kwargs["pk"].isdigit():
+            plugin = self.cached_obj_get(bundle, pk=kwargs["pk"])
+        else:
+            plugin = self.cached_obj_get(bundle, name=kwargs["pk"])
+
+        bucket = {}
+        bucket["request_get"] = request.GET
+        #assume json
+        if request.method == "POST":
+            bucket["request_post"] = json.loads(request.body)
+        bucket["user"] = request.user
+        bucket["request_method"] = request.method
+        #not sure if we want this or not, keep it for now
+        bucket["config"] = plugin.config
+
+        module = imp.load_source(plugin.name, os.path.join(plugin.path,"extend.py"))
+        #maybe make these classes instead with a set of methods to use
+        func = getattr(module,extend_function)
+        result = func(bucket)
+
+        return self.create_response(request, result)
 
     def post_install(self, request, **kwargs):
         try:
@@ -1360,7 +1679,8 @@ class PluginResource(ModelResource):
         return HttpAccepted()
 
     def delete_uninstall(self, request, **kwargs):
-        obj = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        obj = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
 
         killed = pluginmanager.uninstall(obj)
 
@@ -1392,13 +1712,21 @@ class PluginResource(ModelResource):
         return HttpAccepted()
 
     def get_info(self, request, **kwargs):
-        plugin = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        plugin = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if not plugin:
             return HttpGone()
         info = plugin.info(use_cache=toBoolean(request.GET.get('use_cache', True)))
         if not info:
             return HttpGone()
         return self.create_response(request, info)
+
+    def post_show(self, request, **kwargs):
+        plugins = self.deserialize(request, request.body)
+        logger.info(plugins)
+        show_plugins = request.session.setdefault("show_plugins", {})
+        show_plugins.update(plugins)
+        request.session.modified = True
 
     class Meta:
         # Note API only sees active plugins
@@ -1416,10 +1744,12 @@ class PluginResource(ModelResource):
         uninstall_allowed_methods = ['delete']
         rescan_allowed_methods = ['get',]
         info_allowed_methods = ['get',]
+        show_allowed_methods = ['post']
 
 class PluginResultResource(ModelResource):
     result = fields.ToOneField(ResultsResource,'result')
     plugin = fields.ToOneField(PluginResource, 'plugin', full=True)
+    owner = fields.ToOneField(UserResource, 'owner', full=True)
 
     path = fields.CharField(readonly=True, attribute='path')
     duration = fields.CharField(readonly=True, attribute='duration')
@@ -1438,7 +1768,8 @@ class PluginResultResource(ModelResource):
         return self.dispatch('rescan', request, **kwargs)
 
     def get_rescan(self, request, **kwargs):
-        obj = self.cached_obj_get(request=request, **self.remove_api_resource_names(kwargs))
+        bundle = self.build_bundle(request=request)
+        obj = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         try:
             size, inodes = obj._calc_size()
             if size > 0:
@@ -1464,7 +1795,22 @@ class PluginResultResource(ModelResource):
 
         rescan_allowed_methods = ['get',]
 
+class ApplicationGroupResource(ModelResource):
+    applications = fields.ToManyField('iondb.rundb.api.RunTypeResource', 'applications', full=True, null = True)
+
+    class Meta:
+        queryset = models.ApplicationGroup.objects.all()
+
+        #allow ordering and filtering by all fields
+        field_list = models.ApplicationGroup._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+
 class RunTypeResource(ModelResource):
+    applicationGroups = fields.ToManyField('iondb.rundb.api.ApplicationGroupResource', 'applicationGroups', full = False, null = True)
 
     class Meta:
         queryset = models.RunType.objects.all()
@@ -1531,13 +1877,15 @@ class PlannedExperimentDbResource(ModelResource):
     childPlans = fields.ListField(default=[])
     experiment = fields.ToOneField(ExperimentResource, 'experiment', full=False, null=True, blank=True)
 
+    sampleSet = fields.ToOneField(SampleSetResource, 'sampleSet', full=False, null=True, blank=True)
+    applicationGroup = fields.ToOneField(ApplicationGroupResource, 'applicationGroup', full=False, null=True, blank=True)
 
-    def hydrate_m2m(self, bundle):        
+    def hydrate_m2m(self, bundle):
         # Promote projects from names to something tastypie recognizes in hydrate_m2m
         projects_list = []
         for k in ["projects", "project"]:
             value = bundle.data.get(k, [])
-                        
+
             if isinstance(value, basestring):
                 value = [value]
             for p in value:
@@ -1551,7 +1899,7 @@ class PlannedExperimentDbResource(ModelResource):
 
         bundle.data['projects'] = project_objs
         bundle.data['project'] = None
-        
+
         return super(PlannedExperimentDbResource, self).hydrate_m2m(bundle)
 
 
@@ -1610,6 +1958,11 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
     selectedPlugins = fields.CharField(blank=True, null=True)
     sequencekitname = fields.CharField(blank=True, null=True)
     variantfrequency = fields.CharField(readonly = True)
+    isDuplicateReads = fields.BooleanField()
+    flowsInOrder = fields.CharField(blank=True, null=True)
+
+    sampleSetDisplayedName = fields.CharField(readonly = True, blank = True, null = True)
+    sampleSetGroupType = fields.CharField(readonly = True, blank = True, null = True)
 
     def dehydrate_autoAnalyze(self, bundle):
         experiment = bundle.obj.experiment
@@ -1621,7 +1974,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
     def dehydrate(self, bundle):
         experiment = bundle.obj.experiment
         if experiment:
-            latest_eas = experiment.get_EAS()            
+            latest_eas = experiment.get_EAS()
 
             bundle.data['barcodedSamples'] = latest_eas.barcodedSamples if latest_eas else ""
             bundle.data['barcodeId'] = latest_eas.barcodeKitName if latest_eas else ""
@@ -1631,7 +1984,19 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['libraryKey'] = latest_eas.libraryKey if latest_eas else ""
             bundle.data['librarykitname'] = latest_eas.libraryKitName if latest_eas else ""
             bundle.data['regionfile'] = latest_eas.hotSpotRegionBedFile if latest_eas else ""
-                        
+            bundle.data['isDuplicateReads'] = latest_eas.isDuplicateReads if latest_eas else False
+
+            bundle.data['beadfindargs'] = latest_eas.beadfindargs if latest_eas else ""
+            bundle.data['thumbnailbeadfindargs'] = latest_eas.thumbnailbeadfindargs if latest_eas else ""
+            bundle.data['analysisargs'] = latest_eas.analysisargs if latest_eas else ""
+            bundle.data['thumbnailanalysisargs'] = latest_eas.thumbnailanalysisargs if latest_eas else ""
+            bundle.data['prebasecallerargs'] = latest_eas.prebasecallerargs if latest_eas else ""
+            bundle.data['prethumbnailbasecallerargs'] = latest_eas.prethumbnailbasecallerargs if latest_eas else ""
+            bundle.data['basecallerargs'] = latest_eas.basecallerargs if latest_eas else ""
+            bundle.data['thumbnailbasecallerargs'] = latest_eas.thumbnailbasecallerargs if latest_eas else ""
+            bundle.data['alignmentargs'] = latest_eas.alignmentargs if latest_eas else ""
+            bundle.data['thumbnailalignmentargs'] = latest_eas.thumbnailalignmentargs if latest_eas else ""
+
             if latest_eas and latest_eas.barcodeKitName:
                 bundle.data['sample'] = ""
                 bundle.data['sampleDisplayedName'] = ""
@@ -1642,9 +2007,9 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                 else:
                     bundle.data['sample'] = ""
                     bundle.data['sampleDisplayedName'] = ""
-             
+
             bundle.data['selectedPlugins'] = latest_eas.selectedPlugins if latest_eas else ""
-            
+
             if latest_eas:
                 selectedPlugins = latest_eas.selectedPlugins
 
@@ -1658,9 +2023,9 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                     bundle.data['variantfrequency'] = ""
             else:
                 bundle.data['variantfrequency'] = ""
-            
+
         else:
-            bundle.data['barcodedSamples'] = ""  
+            bundle.data['barcodedSamples'] = ""
             bundle.data['barcodeId'] = ""
             bundle.data['bedfile'] = ""
             bundle.data['forward3primeadapter'] = ""
@@ -1672,31 +2037,44 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['sampleDisplayedName'] = ""
             bundle.data['selectedPlugins'] = ""
             bundle.data['variantfrequency'] = ""
+            bundle.data['isDuplicateReads'] = False
+            bundle.data['beadfindargs'] = ""
+            bundle.data['thumbnailbeadfindargs'] = ""
+            bundle.data['analysisargs'] = ""
+            bundle.data['thumbnailanalysisargs'] = ""
+            bundle.data['prebasecallerargs'] = ""
+            bundle.data['prethumbnailbasecallerargs'] = ""
+            bundle.data['basecallerargs'] = ""
+            bundle.data['thumbnailbasecallerargs'] = ""
+            bundle.data['alignmentargs'] = ""
+            bundle.data['thumbnailalignmentargs'] = ""
 
+        sampleSet = bundle.obj.sampleSet
+        bundle.data['sampleSetDisplayedName'] = sampleSet.displayedName if sampleSet else ""
+
+        if sampleSet:
+            bundle.data['sampleSetGroupType'] = sampleSet.SampleGroupType_CV.displayedName if sampleSet.SampleGroupType_CV else ""
+        
         return bundle
-    
+
 
     def dehydrate_chipType(self, bundle):
         experiment = bundle.obj.experiment
-        if experiment:
-            return experiment.chipType
-        else:
-            return ""
+        return experiment.chipType if experiment else ""
 
     def dehydrate_flows(self, bundle):
         experiment = bundle.obj.experiment
-        if experiment:
-            return experiment.flows
-        else:
-            return "0"
+        return experiment.flows if experiment else "0"
+
+    def dehydrate_flowsInOrder(self, bundle):
+        experiment = bundle.obj.experiment
+        return experiment.flowsInOrder if experiment else ""
+
 
 
     def dehydrate_notes(self, bundle):
         experiment = bundle.obj.experiment
-        if experiment:
-            return experiment.notes
-        else:
-            return ""
+        return experiment.notes if experiment else ""
 
 
     def dehydrate_reverse3primeadapter(self, bundle):
@@ -1707,14 +2085,11 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
     def dehydrate_sequencekitname(self, bundle):
         experiment = bundle.obj.experiment
-        if experiment:
-            return experiment.sequencekitname
-        else:
-            return ""
+        return experiment.sequencekitname if experiment else ""
 
 
     def hydrate_autoAnalyze(self, bundle):
-        bundle.data['x_autoAnalyze'] = bundle.data.get('autoAnalyze', True)
+        bundle.data['x_autoAnalyze'] = toBoolean(bundle.data.get('autoAnalyze', True))
         return bundle
 
     def hydrate_barcodedSamples(self, bundle):
@@ -1724,22 +2099,25 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         valid = True
         if barcodedSamples:
             barcodedSamples_dict  = barcodedSamples
-            
-            if isinstance(barcodedSamples, str):
+
+            #for both string and unicode
+            if isinstance(barcodedSamples, basestring):
                 #example: "barcodedSamples":"{'s1':{'barcodes': ['IonSet1_01']},'s2': {'barcodes': ['IonSet1_02']},'s3':{'barcodes': ['IonSet1_03']}}"
                 barcodedSamples_dict = ast.literal_eval(barcodedSamples)
                 barcodedSamples = simplejson.dumps(barcodedSamples_dict)
-                
+
             try:
                 for k,v in barcodedSamples_dict.items():
                     if isinstance(v['barcodes'],list):
                         for bc in v['barcodes']:
                             if not isinstance(bc,str):
+                                logger.debug("api.PlannedExperiment.hydrate_barcodedSamples() - INVALID bc - NOT an str - bc=%s" %(bc))
                                 valid = False
                     else:
+                        logger.debug("api.PlannedExperiment.hydrate_barcodedSamples() -  INVALID v[barcodes] - NOT a list!!! v[barcodes]=%s" %(v['barcodes']))
                         valid = False
             except:
-                logger.error(traceback.format_exc())                             
+                logger.error(traceback.format_exc())
                 valid = False
 
         bundle.data['x_barcodedSamples'] = barcodedSamples if valid else ""
@@ -1834,6 +2212,52 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         return bundle
 
 
+    def hydrate_isDuplicateReads(self, bundle):
+        bundle.data['x_isDuplicateReads'] = toBoolean(bundle.data.get('isDuplicateReads', models.GlobalConfig.objects.all()[0].mark_duplicates), False)
+
+        return bundle
+
+
+    def hydrate_sampleSet(self, bundle):
+        sampleSetDisplayedName = bundle.data.get('sampleSetDisplayedName', "")
+
+        logger.debug("api.PlannedExperimentResource.hydrate_sampleSet() sampleSetDisplaydName=%s" %(sampleSetDisplayedName))
+
+        if sampleSetDisplayedName:
+            sampleSets = models.SampleSet.objects.filter(displayedName = sampleSetDisplayedName)
+            if sampleSets:
+                bundle.data['sampleSet'] = sampleSets[0]
+
+        return bundle
+
+
+
+    def hydrate(self, bundle):        
+        #boolean handling for API posting
+        bundle.data['planExecuted'] = toBoolean(bundle.data.get('planExecuted', False), False)
+        bundle.data['isReverseRun'] = toBoolean(bundle.data.get('isReverseRun', False), False)
+        bundle.data['isReusable'] = toBoolean(bundle.data.get('isReusable', False), False)
+        bundle.data['isFavorite'] = toBoolean(bundle.data.get('isFavorite', False), False)
+        bundle.data['isSystem'] = toBoolean(bundle.data.get('isSystem', False), False)
+        bundle.data['isSystemDefault'] = toBoolean(bundle.data.get('isSystemDefault', False), False)
+        bundle.data['isPlanGroup'] = toBoolean(bundle.data.get('isPlanGroup', False), False)
+
+        bundle.data['preAnalysis'] = toBoolean(bundle.data.get('preAnalysis', True))
+        bundle.data['usePreBeadfind'] = toBoolean(bundle.data.get('usePreBeadfind', True))
+        bundle.data['usePostBeadfind'] = toBoolean(bundle.data.get('usePostBeadfind', True))
+
+        applicationGroupName = bundle.data.get('applicationGroupName', "")
+
+        #logger.debug("api.PlannedExperimentResource.hydrate() going to handle applicationGroup() applicationGroupName=%s" %(applicationGroupName))
+
+        if applicationGroupName:
+            applicationGroups = models.ApplicationGroup.objects.filter(name__iexact = applicationGroupName.strip())
+            if applicationGroups:
+                bundle.data['applicationGroup'] = applicationGroups[0]
+
+        return bundle
+
+
     def obj_create( self, bundle, request = None, **kwargs ):
         """
         A ORM-specific implementation of ``obj_create``.
@@ -1844,14 +2268,14 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         for key, value in kwargs.items():
             setattr(bundle.obj, key, value)
 
+        #logger.debug("PDD at PlannedExperimentResource.obj_create()...bundle.data=%s" %(bundle.data))
+
         bundle = self.full_hydrate(bundle)
+
+        logger.debug("PDD at PlannedExperimentResource.obj_create()...AFTER full_hydrate() bundle.data=%s" %(bundle.data))
 
         # Save FKs just in case.
         self.save_related(bundle)
-
-        logger.debug("PDD at PlannedExperimentResource.obj_create after save_related()...")
-        logger.debug("PDD ...obj_create() after save_related() bundle.data.keys=%s" %(bundle.data.keys()))
-        logger.debug("PDD ...obj_create() after save_related() bundle.data.values=%s" %(bundle.data.values()))
 
         id = -1
         isNewPlan = True
@@ -1861,21 +2285,22 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         bundle.obj.save()
         bundle.obj.save_plannedExperiment_association(isNewPlan, **bundle.data)
+        bundle.obj.update_plan_qcValues(**bundle.data)
 
         # Now pick up the M2M bits.
         m2m_bundle = self.hydrate_m2m(bundle)
         self.save_m2m(m2m_bundle)
         return bundle
 
-    def obj_update( self, bundle, request = None, skip_errors = False, **kwargs ):
+    def obj_update( self, bundle, **kwargs ):
         logger.debug("PDD ENTER PlannedExperimentResource.obj_update() bundle.data=%s" %(bundle.data))
 
-        return super(PlannedExperimentResource, self).obj_update(bundle, request, skip_errors, **kwargs)
+        return super(PlannedExperimentResource, self).obj_update(bundle, **kwargs)
 
 
 class AvailableIonChefPlannedExperimentResource(PlannedExperimentResource):
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")])
+        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['pending'], isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")])
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -1886,15 +2311,15 @@ class AvailableIonChefPlannedExperimentResource(PlannedExperimentResource):
 
 class AvailableIonChefPlannedExperimentSummaryResource(ModelResource):
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")])
-        
+        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['pending'], isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")])
+
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
-                
+
         ordering = field_list
         filtering = field_dict(field_list)
         authentication = IonAuthentication()
-        authorization = DjangoAuthorization()        
+        authorization = DjangoAuthorization()
 
         metadata_allowed_methods = ['get',]
 
@@ -1920,12 +2345,12 @@ class IonChefPlanTemplateSummaryResource(ModelResource):
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
 
-        metadata_allowed_methods = ['get',]        
+        metadata_allowed_methods = ['get',]
 
 
 class AvailableOneTouchPlannedExperimentResource(PlannedExperimentResource):
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")])
+        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['', 'planned'], isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")])
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -1947,11 +2372,11 @@ class OneTouchPlanTemplateResource(PlannedExperimentResource):
 
 class AvailableOneTouchPlannedExperimentSummaryResource(ModelResource):
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")])
+        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['', 'planned'], isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")])
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
-        
+
         ordering = field_list
         filtering = field_dict(field_list)
         authentication = IonAuthentication()
@@ -1971,15 +2396,15 @@ class OneTouchPlanTemplateSummaryResource(ModelResource):
         authorization = DjangoAuthorization()
 
         metadata_allowed_methods = ['get',]
-        
+
 
 class AvailablePlannedExperimentSummaryResource(ModelResource):
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(isReusable = False, planExecuted = False)
+        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['', 'planned'], isReusable = False, planExecuted = False)
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
-        
+
         ordering = field_list
         filtering = field_dict(field_list)
         authentication = IonAuthentication()
@@ -1994,12 +2419,12 @@ class PlanTemplateSummaryResource(ModelResource):
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
-        
+
         ordering = field_list
         filtering = field_dict(field_list)
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
-        
+
         metadata_allowed_methods = ['get',]
 
 
@@ -2512,7 +2937,7 @@ class CompositeResultResource(ModelResource):
         #allow ordering and filtering by all fields
         field_list = ['id', 'resultsName', 'processedflows', 'timeStamp',
             'projects', 'status', 'reportLink', 'representative', 'eas',
-            'reportStatus', 'autoExempt', 'analysismetrics', 
+            'reportStatus', 'autoExempt', 'analysismetrics',
             'libmetrics', 'qualitymetrics']
         fields = field_list
         ordering = field_list
@@ -2574,7 +2999,7 @@ class CompositeDataManagementResource(ModelResource):
             state_filter = request.GET.get('%s_filter' % t, None)
             if state_filter:
                 qset = Q(dmfilestat__dmfileset__type=dm_type)
-                if state_filter == "K":                    
+                if state_filter == "K":
                     if dm_type == dmactions_types.SIG:
                         qset = qset & Q(experiment__storage_options='KI')
                     else:
@@ -2584,7 +3009,7 @@ class CompositeDataManagementResource(ModelResource):
                     qset = qset &  Q(dmfilestat__action_state__in=['AG','DG','EG','SA','SE','S','N','A'])
                 else:
                     qset = qset &  Q(dmfilestat__action_state__in=[state_filter])
-                
+
                 base_object_list = base_object_list.filter(qset)
 
         return base_object_list.distinct()
@@ -2604,10 +3029,10 @@ class CompositeDataManagementResource(ModelResource):
         authorization = DjangoAuthorization()
 
 class DataManagementHistoryResource(ModelResource):
-    resultsName = fields.CharField(readonly=True, attribute='content_object__resultsName', null=True)    
+    resultsName = fields.CharField(readonly=True, attribute='content_object__resultsName', null=True)
 
     def apply_filters(self, request, applicable_filters):
-        name = applicable_filters.pop('content_object__resultsName__exact', None)        
+        name = applicable_filters.pop('content_object__resultsName__exact', None)
         base_object_list = super(DataManagementHistoryResource, self).apply_filters(request, applicable_filters)
 
         if name is not None:
@@ -2663,7 +3088,7 @@ class MonitorExperimentResource(ModelResource):
         else:
             bundle.data['chipDescription'] = bundle.obj.chipType
             bundle.data['chipInstrumentType'] = ""
-        
+
         try:
             qcThresholds = dict((qc.qcType.qcName, qc.threshold) for qc in
                             bundle.obj.plan.plannedexperimentqc_set.all())
@@ -2678,10 +3103,10 @@ class MonitorExperimentResource(ModelResource):
 
     def get_object_list(self, request):
         one_week_ago = datetime.datetime.now() - datetime.timedelta(weeks=1)
-        one_day_ago = datetime.datetime.now() - datetime.timedelta(days=1)
+        two_days_ago = datetime.datetime.now() - datetime.timedelta(days=2)
         return super(MonitorExperimentResource, self).get_object_list(
             request).filter(
-                Q(resultDate__gte=one_day_ago) |
+                Q(resultDate__gte=two_days_ago) |
                 (
                     ~(  Q(ftpStatus="Complete") |
                         Q(ftpStatus="Completed") |
@@ -2742,6 +3167,15 @@ class CompositeExperimentResource(ModelResource):
     plan = fields.ToOneField(CompositePlannedExperimentResource, 'plan',
         full=True, null=True, blank=True)
 
+    def prepend_urls(self):
+        #this is meant for internal use only
+        urls = [url(r"^(?P<resource_name>%s)/show%s$" % (self._meta.resource_name,
+                trailing_slash()), self.wrap_view('dispatch_show'), name="api_data_show")]
+        return urls
+
+    def dispatch_show(self, request, **kwargs):
+        return self.dispatch('show', request, **kwargs)
+
     def dehydrate(self, bundle):
         status = bundle.request.GET.get('result_status', None)
         if status is not None:
@@ -2779,7 +3213,7 @@ class CompositeExperimentResource(ModelResource):
         else:
             bundle.data['chipDescription'] = bundle.obj.chipType
             bundle.data['chipInstrumentType'] = ""
-                
+
         samples = bundle.obj.samples.all()
         bundle.data['sample'] = samples[0].name if samples else ""
         if bundle.data['results']:
@@ -2795,6 +3229,12 @@ class CompositeExperimentResource(ModelResource):
             bundle.data['archived'] = False
         bundle.data['keep'] = bundle.obj.storage_options == 'KI'
 
+        if bundle.obj.plan:
+            sampleSet = bundle.obj.plan.sampleSet
+            bundle.data['sampleSetName'] = sampleSet.displayedName if sampleSet else ""
+        else:
+            bundle.data['sampleSetName'] = ""
+            
         return bundle
 
 
@@ -2867,6 +3307,11 @@ class CompositeExperimentResource(ModelResource):
 
         return base_object_list.distinct()
 
+    def post_show(self, request, **kwargs):
+        state = 'full' if request.body.strip() == 'full' else 'table'
+        logger.info("show data state: " + state)
+        request.session['show_data_tab'] = state
+
     class Meta:
         queryset = models.Experiment.objects.select_related(
             'plan',
@@ -2899,6 +3344,8 @@ class CompositeExperimentResource(ModelResource):
         # This query is expensive, and used on main data tab.
         # Cache frequent access
         cache = SimpleCache(timeout=17)
+
+        show_allowed_methods = ['post']
 
 
 class TemplateResource(ModelResource):
@@ -2984,6 +3431,29 @@ class EventLogResource(ModelResource):
 
 class ChipResource(ModelResource):
 
+    def dehydrate(self, bundle):
+        # backwards compatibility: provide default args from AnalysisArgs table
+        args = models.AnalysisArgs.objects.filter(chipType=bundle.obj.name, chip_default=True)
+        if args:
+            args_dict = args[0].get_args()
+        else:
+            args_dict = {
+                'beadfindargs':   'justBeadFind',
+                'analysisargs':   'Analysis',
+                'basecallerargs': 'BaseCaller',
+                'prebasecallerargs': 'BaseCaller',
+                'alignmentargs': '',
+                'thumbnailbeadfindargs':    'justBeadFind',
+                'thumbnailanalysisargs':    'Analysis',
+                'thumbnailbasecallerargs':  'BaseCaller',
+                'prethumbnailbasecallerargs':  'BaseCaller',
+                'thumbnailalignmentargs': ''
+            }
+        for key,value in args_dict.items():
+            bundle.data[key] = value
+        
+        return bundle
+
     class Meta:
         queryset = models.Chip.objects.all()
 
@@ -2998,12 +3468,16 @@ class ChipResource(ModelResource):
 
 class AccountObject(object):
     def __init__(self, user=None):
-        self.uid = user.pk
-        self.username = user.username
-        self.admin = user.is_superuser
+        self.uid = None
+        self.username = None
+        self.admin = False
         self.api_key = None
-        if user.is_authenticated():
-            self.api_key = user.api_key.key
+        if user:
+            self.uid = user.pk
+            self.username = user.username
+            self.admin = user.is_superuser
+            if user.is_authenticated():
+                self.api_key = user.api_key.key
 
     def to_dict(self):
         return self.__dict__
@@ -3032,8 +3506,78 @@ class AccountResource(Resource):
         # Return a list of one element for current user
         return [ AccountObject(request.user) ]
 
-    def obj_get_list(self, request=None, **kwargs):
-        return self.get_object_list(request)
+    def obj_get_list(self, bundle, **kwargs):
+        return self.get_object_list(bundle.request)
 
-    def obj_get(self, request=None, **kwargs):
-        return AccountObject(request.user)
+    def obj_get(self, bundle, **kwargs):
+        return AccountObject(bundle.request.user)
+
+class NetworkResource(ModelResource):
+    """Get external network info"""
+
+    def prepend_urls(self):
+        urls = [url(r"^(?P<resource_name>%s)%s$" % (self._meta.resource_name, trailing_slash()),
+                    self.wrap_view('dispatch_update'), name="api_dispatch_update")
+        ]
+
+        return urls
+
+    def dispatch_update(self, request, **kwargs):
+        return self.dispatch('update', request, **kwargs)
+
+    def get_update(self, request, **kwargs):
+
+
+        def script(script_text, shell_bool = True):
+            """run system commands"""
+            p = Popen(args=script_text, shell=shell_bool, stdout=PIPE, stdin=PIPE)
+            output, errors = p.communicate()
+            return output, errors
+
+        result = {
+            "eth0": None,
+            "route": None,
+            "internal_ip": None,
+            }
+        try:
+            stdout, stderr = script("/sbin/ifconfig eth0")
+            for line in stdout.splitlines():
+                m = re.search(r"inet addr:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", line)
+                if m:
+                    result["internal_ip"] = m.group(1)
+                elif "UP" in line and "MTU" in line:
+                    result["eth0"] = True
+            stdout, stderr = script("/bin/netstat -r")
+            result["route"] = "default" in stdout
+        except Exception as err:
+            logger.error("Exception raised during network self exam, '%s'" % err)
+
+        try:
+            remote = urllib.urlopen(settings.EXTERNAL_IP_URL)
+            data = remote.read()
+            remote.close()
+        except Exception as complaint:
+            logger.warn(complaint)
+            data = ""
+
+        result["external_ip"] = data.strip()
+
+        return self.create_response(request, result)
+
+    class Meta:
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+        update_allowed_methods = ['get']
+
+class AnalysisArgsResource(ModelResource):
+
+    class Meta:
+        queryset = models.AnalysisArgs.objects.all()
+
+        #allow ordering and filtering by all fields
+        field_list = models.AnalysisArgs._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()

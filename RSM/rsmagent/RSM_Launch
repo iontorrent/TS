@@ -10,17 +10,26 @@
 # Description:       Enable RSMAgent service
 ### END INIT INFO
 
+PROGNAME=RSMAgent_TS
+LOGFILE=/var/log/$PROGNAME.log
+
 function start()
 {
   pid=`pidof RSMAgent_TS`
   if [ "$pid" == "" ]
   then
     echo -n "Starting service: RSMAgent_TS"
-    echo serialnumber:`dmidecode -s system-serial-number` > /opt/ion/RSM/serial_number.alt
+    echo serialnumber:`dmidecode -s system-serial-number` > /var/spool/ion/serial_number.alt
     # Note multiline input into product_info.alt
-    echo hardwarename:`dmidecode -s system-product-name` > /opt/ion/RSM/product_info.alt
-    echo biosversion:`dmidecode -s bios-version` >> /opt/ion/RSM/product_info.alt
-    start-stop-daemon --start --chuid ionadmin --background --chdir "/opt/ion/RSM" --exec "/opt/ion/RSM/RSMAgent.sh"
+    echo hardwarename:`dmidecode -s system-product-name` > /var/spool/ion/product_info.alt
+    echo biosversion:`dmidecode -s bios-version` >> /var/spool/ion/product_info.alt
+    
+    # create log file while we have root priv, make it writable by agent
+	touch $LOGFILE
+	chown ionadmin:ionadmin $LOGFILE
+	chmod 664 $LOGFILE
+    
+    start-stop-daemon --start --chuid ionadmin --background --chdir "/var/spool/ion" --exec "/opt/ion/RSM/RSMAgent.sh"
   else
     echo "RSMAgent_TS already running?"
   fi
@@ -90,4 +99,3 @@ esac
 
 echo                                        # Force a linefeed.
 exit $result
-

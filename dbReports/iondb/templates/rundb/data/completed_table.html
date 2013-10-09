@@ -1,11 +1,13 @@
 {% extends "rundb/data/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
 {% block sub-nav %}
-    <li class="active"><a href="{% url data %}">Data</a></li>
-    <li><a href="{% url projects %}">Projects</a></li>               
+    <li class="active"><a href="{% url "data" %}">Data</a></li>
+    <li><a href="{% url "projects" %}">Projects</a></li>
 {% endblock sub-nav %}
 {% block extra_head %}
-<link href="/site_media/css/chosen.css" rel="stylesheet"/>
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />  <link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
+<link href="{% static "css/chosen.css"%}" rel="stylesheet"/>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />  <link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
 <style type="text/css">
     .search-field {
         display: inline-block;
@@ -36,9 +38,9 @@
   $(document).ready(function () {
   });
 </script>
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
-<script src="/site_media/js/chosen.jquery.js"></script>
-<script src="/site_media/js/jquery.daterangepicker.js"></script>
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script src="{% static "js/chosen.jquery.js"%}"></script>
+<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
 {% endblock extra_head %}
 {% block content %}
 <div id="data_view" class="content group">

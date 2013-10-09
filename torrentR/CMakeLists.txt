@@ -57,7 +57,7 @@ add_custom_target(LIBTORRENTRCLEAN ALL
 
 add_custom_target(LIBTORRENTR ALL
            COMMAND "mkdir" "-p" "rlib"
-           COMMAND "TS_BUILD_ROOT=${PROJECT_BINARY_DIR}/.." "TS_SOURCE_ROOT=${PROJECT_SOURCE_DIR}/.." "R" "CMD" "INSTALL" "-l" "rlib" "${PROJECT_SOURCE_DIR}"
+           COMMAND "TS_BUILD_ROOT=${PROJECT_BINARY_DIR}/.." "TS_SOURCE_ROOT=${PROJECT_SOURCE_DIR}/.." MAKE="make -j4" "R" "CMD" "INSTALL" "-l" "rlib" "${PROJECT_SOURCE_DIR}"
            WORKING_DIRECTORY "${PROJECT_BINARY_DIR}")
 
 add_dependencies(LIBTORRENTR LIBTORRENTRCLEAN)
@@ -78,9 +78,9 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "g++,
     r-cran-boot (>= 1.3-5-1lucid0),
     r-cran-class (>= 7.3-2-2lucid0),
     r-cran-cluster (>= 1.14.2-1lucid0),
-    r-cran-codetools (>= 0.2-8-1lucid0),
+    r-cran-codetools (>= 0.2-8-1),
     r-cran-foreign (>= 0.8.50-1lucid0),
-    r-cran-kernsmooth (>= 2.23-8-1lucid0),
+    r-cran-kernsmooth (>= 2.23-8-1),
     r-cran-lattice (>= 0.20-6-1lucid0),
     r-cran-mass (>= 7.3-19-1lucid0),
     r-cran-matrix (>= 1.0-6-1lucid0),
@@ -90,15 +90,16 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "g++,
     r-cran-rpart (>= 3.1.54-1lucid0),
     r-cran-spatial (>= 7.3-2-1lucid0),
     r-cran-survival (>= 2.36-14-1lucid0),
-    libatlas3gf-base, 
-    libblas3gf, 
+    libblas3gf,
     libc6,
     libhdf5-serial-dev,
-    libgcc1, 
-    libgfortran3, 
-    liblapack3gf, 
+    libgcc1,
+    libgfortran3,
+    liblapack3gf,
     libstdc++6,
-    gfortran")
+    gfortran,
+    libcurl4-openssl-dev,
+    libxml2-dev")
 
 set(CPACK_DEBIAN_PACKAGE_CONFLICTS "r-cran-bitops, r-cran-catools, r-cran-gdata, r-cran-gplots, r-cran-gtools, r-cran-rocr")
 set(CPACK_DEBIAN_PACKAGE_REPLACES "r-cran-bitops, r-cran-catools, r-cran-gdata, r-cran-gplots, r-cran-gtools, r-cran-rocr")

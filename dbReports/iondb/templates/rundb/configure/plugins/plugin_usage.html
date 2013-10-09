@@ -1,11 +1,13 @@
 {% extends "rundb/configure/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
 {% block extra_head_styles %}
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
 {% endblock extra_head_styles %}
 {% block extra_head_js %}
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
-<script type="text/javascript" src="/site_media/resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js"></script>
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js"%}"></script>
 <script type="text/javascript">
 // Copied from data_model.js - needs new home
 function precisionUnits(num, div) {
@@ -30,17 +32,18 @@ function precisionUnits(num, div) {
 
 {% endblock extra_head_js %}
 {% block sub-nav %}
-  <li><a href="{% url configure_about %}">About</a></li>
-  <li><a href="{% url configure_references %}">References</a></li>
-  <li><a href="{% url configure_services %}">Services</a></li>
-  <li class="active"><a href="{% url configure_plugins %}">Plugins</a></li>
-  <li><a href="{% url configure_configure %}">Configure</a></li>
-  <li><a href="{% url configure_account %}">Accounts</a></li>
+  <li><a href="{% url "configure_about" %}">About</a></li>
+  <li><a href="{% url "configure_references" %}">References</a></li>
+  <li><a href="{% url "configure_services" %}">Services</a></li>
+  <li class="active"><a href="{% url "configure_plugins" %}">Plugins</a></li>
+  <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
 <div class="content clearfix">
     <div class="clearfix">
         <h1 class="pull-left clearfix">{{ plugin.name }} -- v{{ plugin.version }}</h1>
+
         <p><!-- Description: -->{{ plugin.description }}</p>
         <p>Script: {{ plugin.script }}</p>
         {% if plugin.hasAbout %}<iframe src="{{plugin.hasAbout}}"
@@ -55,6 +58,9 @@ function precisionUnits(num, div) {
 <div class="content clearfix">
     <div class="clearfix">
         <h1 class="pull-left">Recent Plugin Results</h1>
+        <a title="Refresh Plugin Usage" href="#" id="refreshUsage" class="pull-right">
+            <i class="icon-refresh"></i>
+        </a>
     </div>
     {% if not pluginresults.count %}
     <div class="alert alert-info">No instances of plugin results found.</div>
@@ -81,7 +87,7 @@ function precisionUnits(num, div) {
 
 <script id="ResultColumnTemplate" type="text/x-kendo-template">
     # var _result = data.result.match(/(\d+)(?=\/$)/)[0]; #
-    <a href="#= "{% url report 999999 %}".replace('999999', _result)#\#PluginOutput">#=data.resultName#</a>
+    <a href="#= "{% url "report" 999999 %}".replace('999999', _result)#\#PluginOutput">#=data.resultName#</a>
 </script>
 <script id="SizeColumnTemplate" type="text/x-kendo-template">
     <span rel='tooltip' title="Size (bytes): #=data.size#, Inode Count: #=data.inodes#" >
@@ -94,7 +100,10 @@ function precisionUnits(num, div) {
     <a class="pluginLog ui-icon ui-icon-script"
         data-title="Log for {{plugin.name}} result #=data.id #"
         title="Log File for {{plugin.name }} result #=data.id#"
-        href="{% url report 9999 %}/plugin_out/{{plugin.name}}_out/drmaa_stdout.txt"/>
+        href="{% url "report" 9999 %}/plugin_out/{{plugin.name}}_out/drmaa_stdout.txt"/>
+</script>
+<script id="EndTimeTemplate" type="text/x-kendo-template">
+    # if (data.endtime === null || data.endtime == 'null' ) { # N/A # } else { # #= kendo.toString(new Date(Date.parse(data.endtime)),"yyyy/MM/dd hh:mm tt") # # } #
 </script>
 
 <script type="text/javascript">
@@ -105,19 +114,17 @@ $(document).ready(function(){
             type: "json"
             , transport: {
                 read: {
-                    url: "{% url api_dispatch_list resource_name="pluginresult" api_name="v1" %}"
+                    url: "{% url "api_dispatch_list" resource_name="pluginresult" api_name="v1" %}"
                     , contentType: 'application/json; charset=utf-8'
                     , type: 'GET'
                     , dataType: 'json'
                 }
                 , parameterMap: function(options, action) {
-                    $.extend({ "plugin__name": "{{ plugin.name|escapejs }}",
-                               "endtime__isnull": true }, options);
-                    return buildParameterMap(options)
+                    return buildParameterMap(options);
                 }
                 , destroy: {
                     url: function(params) {
-                       return "{% url api_dispatch_list resource_name="pluginresult" api_name="v1" %}" + params.id + "/";
+                       return "{% url "api_dispatch_list" resource_name="pluginresult" api_name="v1" %}" + params.id + "/";
                     }
                     , contentType: 'application/json; charset=utf-8'
                     , type: "DELETE"
@@ -146,7 +153,8 @@ $(document).ready(function(){
             , serverPaging: true
             , pageSize: 20
             , serverFiltering: true
-            , filter: [ {field: "plugin__name", operator:"", value:"{{ plugin.name|escapejs }}"} ]
+            , filter: [ {field: "plugin__name", operator:"__exact", value:"{{ plugin.name|escapejs }}"}
+                        ,{ field: "starttime", operator: "__isnull", value: "false"} ]
             , autoSync: true
         }
         , height: '446'
@@ -172,7 +180,7 @@ $(document).ready(function(){
             } , {
                 field: "endtime"
                 ,title: "End"
-                ,template: '#= kendo.toString(new Date(Date.parse(endtime)),"yyyy/MM/dd hh:mm tt") #'
+                ,template: kendo.template($("#EndTimeTemplate").html())
             } , {
                 field: "duration"
                 ,title: "Duration"
@@ -193,6 +201,11 @@ $(document).ready(function(){
         ]
     });
 
+   $('#refreshUsage').click(function (e) {
+        e.preventDefault();
+        refreshKendoGrid("#grid");
+    });
+
    $('iframe.auto-height').iframeAutoHeight({minHeight: 400, heightOffset: 20});
 
 });
@@ -202,12 +215,10 @@ $(document).ready(function(){
         var pr = this.dataItem($(e.currentTarget).closest("tr"));
         console.log(JSON.stringify(pr));
         $.ajax({
-             url: "{% url api_dispatch_rescan resource_name="pluginresult" api_name="v1" pk="999999" %}".replace("999999", pr.id)
+             url: "{% url "api_dispatch_rescan" resource_name="pluginresult" api_name="v1" pk="999999" %}".replace("999999", pr.id)
              , contentType: 'application/json; charset=utf-8'
         }).success(function () {
-            var grid = $("#grid").data("kendoGrid");
-            grid.dataSource.sync();
-            grid.refresh();
+            refreshKendoGrid("#grid");
         });
    }
 </script>

@@ -330,6 +330,9 @@ void reg_params_setStandardValue(reg_params *cur, float t_mid_nuc_start, float s
   cur->fit_taue = _fit_taue;
   cur->tshift = 0.4f;
   cur->nuc_shape.sigma  = sigma_start;
+  // This is correct Nuc flow time. We need it logged in explog so that 
+  // we use whatever timing is used for the experiment
+  //cur->nuc_shape.nuc_flow_span = 16.5f;
   cur->nuc_shape.nuc_flow_span = 22.5f;
   cur->CopyDrift    = 0.9987f;
 

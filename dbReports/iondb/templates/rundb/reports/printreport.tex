@@ -99,10 +99,10 @@ Run Report for {{report.resultsName|latexsafe}}
 %%%%%%%%%%third column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% 
  \begin{minipage}[t]{55mm}
  \fcolorbox{gray}{white}{\parbox[t][62mm]{50mm}{\setlength{\parindent}{0mm}\small\centering%%
- \begin{tabular}{P{40mm}}
+ \begin{tabular}{P{13.3mm}P{13.3mm}P{13.3mm}}
  %column1
- \bfseries {{quality|bracket:"Mean Read Length at Q0"|float2int}} bp \\
- \footnotesize Mean Read Length
+ \bfseries {{quality|bracket:"Mean Read Length at Q0"|float2int}} bp  &  \bfseries {{read_stats.median_length|float2int}} bp  &  \bfseries  {{read_stats.mode_length|float2int}} bp \\
+ \footnotesize Mean   &   \footnotesize Median   &   \footnotesize Mode
  \end{tabular} 
  \rule{40mm}{0.5pt}\\
  \bfseries\small
@@ -159,7 +159,7 @@ Run Report for {{report.resultsName|latexsafe}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%part row3 starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 {% if datasets.barcode_config %}
- \begin{longtable}{E{28mm}E{47mm}E{13mm}E{13mm}E{13mm}E{30mm}}
+ \begin{longtable}{E{28mm}E{32mm}E{18mm}E{18mm}E{18mm}E{30mm}}
  Barcode Name		& Sample	& Bases					& \geq Q20	& Reads		& Mean Read Length\\
  \midrule
  {% for barcode in barcodes %}
@@ -170,7 +170,7 @@ Run Report for {{report.resultsName|latexsafe}}
  \bottomrule
  \end{longtable}
 {% elif CA_barcodes %}
- \begin{longtable}{E{28mm}E{13mm}E{13mm}E{13mm}}
+ \begin{longtable}{E{18mm}E{23mm}E{23mm}E{23mm}}
  Barcode Name & Aligned Output & Reads & Mean Aligned Read Length\\
  \midrule
  {% for barcode in CA_barcodes %}

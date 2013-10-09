@@ -5,31 +5,46 @@ IF(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
    SET(CMAKE_BUILD_TYPE Release)
 ENDIF()
 
-# Compiler flags
-# -Wpointer-arith -Wstrict-aliasing=2 -march=native
-# http://gcc.gnu.org/onlinedocs/gcc-4.7.0/gcc/i386-and-x86_002d64-Options.html#i386-and-x86_002d64-Options
-# GCC depresses SSEx instructions when -mavx is used. Instead, it generates new AVX instructions or AVX equivalence for all SSEx instructions when needed. 
-if (${LSB_RELEASE_CODENAME} STREQUAL "oneiric" OR ${LSB_RELEASE_CODENAME} STREQUAL "precise")
-    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Werror -mavx -fPIC")
+# Common compiler flags
+if (${LSB_RELEASE_CODENAME} STREQUAL "lucid" OR ${LSB_RELEASE_CODENAME} STREQUAL "raring")
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Werror -fPIC")
 else()
-    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Werror -msse3 -fPIC")
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -fPIC")
+endif()
+
+# can be removed with 2.8.10, use CMAKE_C_COMPILER_VERSION instead
+execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_C_VERSION)
+execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_CXX_VERSION)
+
+# http://gcc.gnu.org/onlinedocs/gcc-4.7.0/gcc/i386-and-x86_002d64-Options.html#i386-and-x86_002d64-Options
+# GCC depresses SSEx instructions when -mavx is used. Instead, it generates new AVX instructions or AVX equivalence for all SSEx instructions when needed.
+if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
+    if(GCC_C_VERSION VERSION_EQUAL 4.4 OR (GCC_C_VERSION VERSION_GREATER 4.4))
+        if (NOT ${LSB_RELEASE_CODENAME} STREQUAL "lucid")
+            set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -mavx")
+        endif()
+    endif()
+elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -axavx")
+else()
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
 endif()
 
 message(STATUS "C compiler: ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
 message(STATUS "CXX compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+message(STATUS "common compiler flags: ${ION_COMMON_FLAGS}")
 
 
 # Add any C specific flags here
-set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-unused-result")
+set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter")
 
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     set(ION_C_FLAGS "${ION_C_FLAGS}") # -ansi -pedantic
-    execute_process(COMMAND ${CMAKE_C_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_C_VERSION)
-    #if (CMAKE_C_COMPILER_VERSION VERSION_GREATER 4.6 and ..)# needs new cmake ~2.8.10
-    if (GCC_C_VERSION VERSION_GREATER 4.6 OR GCC_C_VERSION VERSION_EQUAL 4.6)
+    if(GCC_C_VERSION VERSION_EQUAL 4.4 OR (GCC_C_VERSION VERSION_GREATER 4.4))
+        set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-unused-result")
+    endif()
+    if(GCC_C_VERSION VERSION_EQUAL 4.6 OR (GCC_C_VERSION VERSION_GREATER 4.6))
         set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-error=unused-but-set-variable")
-    else()
-        set(ION_C_FLAGS "${ION_C_FLAGS}")
     endif()
 endif()
 
@@ -37,6 +52,8 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
     # undefined reference to inline function`tmap_reverse_compliment', http://clang.llvm.org/compatibility.html#inline
     set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu89")
     set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-gnu")
+    set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-tautological-compare")
+    set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-static-in-inline")
 endif()
 
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
@@ -50,17 +67,18 @@ set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-parameter -Wno-write-strings")
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     # GNU specific flags
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS}") # -ansi -pedantic
-    execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_CXX_VERSION)
-    #if (CMAKE_C_COMPILER_VERSION VERSION_GREATER 4.6 and ..)# needs new cmake ~2.8.10
-    if (GCC_CXX_VERSION VERSION_GREATER 4.6 OR GCC_CXX_VERSION VERSION_EQUAL 4.6)
+    if (GCC_CXX_VERSION VERSION_EQUAL 4.6 OR (GCC_CXX_VERSION VERSION_GREATER 4.6))
         set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-variable")
         set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-parameter")
-#        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=attributes")
-#        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=narrowing")
-#        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=narrowing")
-#        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=delete-non-virtual-dtor")
-    else()
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS}")
+    endif()
+    if(GCC_CXX_VERSION VERSION_EQUAL 4.7 OR (GCC_CXX_VERSION VERSION_GREATER 4.7))
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=attributes")
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=narrowing")
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=delete-non-virtual-dtor")
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-function")
+    endif()
+    if(GCC_CXX_VERSION VERSION_EQUAL 4.8 OR GCC_CXX_VERSION VERSION_GREATER 4.8)
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=sizeof-pointer-memaccess")
     endif()
 endif()
 
@@ -71,6 +89,8 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-mismatched-tags")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-overloaded-virtual")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-char-subscripts")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-function")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-variable")
 
     #TODO, remove asap
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-format")
@@ -81,13 +101,13 @@ if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
 endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
-#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -axavx") # causes gcc error: unrecognized option ‘-axavx’. CMake Error at CMakeFiles/cuda_compile_generated_StreamManager.cu.o.cmake
 #    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++0x") # causes boost? error: more than one instance of overloaded function "isnan" matches the argument list:
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd10006") # 10006: ignoring unknown option '-Wno-unused-result'
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd171")  # 171: invalid type conversion: "__m128" to "v8hi"
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd192")  # 192: unrecognized character escape sequence
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd2089") #2089: definition of base class type not completed yet
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd1011") #1011: missing return statement at end of non-void function
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd488") #488: template parameter "eT2" is not used in declaring the parameter types of function template
 endif()
 
 

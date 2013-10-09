@@ -1,0 +1,169 @@
+{% extends "rundb/configure/base.html" %}
+{% load static from staticfiles %}
+
+{% block extra_head %}
+  <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
+  <style type="text/css">
+
+    #file_item {
+      display: inline;
+      margin-left: 10px;
+    }
+    </style>
+{% endblock extra_head %}
+
+{% block content %}
+<div class="content">
+
+  <div class="modal-header">
+  {% if hotspot %}
+  <h1>New Hotspots</h1>
+  {% else %}
+  <h1>New Target Regions</h1>
+  {% endif %}
+  </div>
+  
+  <div>
+    <form class="form-horizontal" id="modal_references_new_genome_form" method="POST">
+      <fieldset>
+        <div id="bedPublish" class="control-group">
+          {% if hotspot %}
+          <label for="pickfile" class="control-label">Hotspots File</label>
+          {% else %}
+          <label for="pickfile" class="control-label">Target Regions File</label>
+          {% endif %}
+          <div class="controls">
+            <div><a id="pickfile" name="pickfile" class="btn">Select File</a><div id="file_item"></div></div>
+            <div id="upload-help" class="help-block" >
+              In order to provide a better uploading experience either
+              Adobe Flash or Microsoft Silverlight plugins are required
+              for file uploading.
+              <ul>
+                <li>Silverlight can be found at <a href="http://www.microsoft.com/getsilverlight/">microsoft.com</a></li>
+                <li>Adobe Flash can be found at <a href="http://get.adobe.com/flashplayer/">adobe.com</a></li>
+              </ul>
+              You may need to contact your local system administrator for assistance.
+            </div>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <label for="reference" class="control-label">Reference</label>
+          <div class="controls">
+            <select class="input-xlarge" name="reference" id="reference" style="width:400px;">
+              {% for ref in references %}
+              <option value="{{ref.short_name}}" {% if ref.selected %}selected="selected"{% endif %}>{{ref.long_name}}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <label for="description" class="control-label">Description</label>
+          <div class="controls">
+            <textarea name="description" id="description" placeholder='optional' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required"></textarea>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <label for="notes" class="control-label">Notes</label>
+          <div class="controls">
+            <textarea name="notes" id="notes" placeholder='optional' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required"></textarea>
+          </div>
+        </div>
+      </fieldset>
+      <div id="update"></div>
+      <input name="target_file" id="target_file" type="hidden"/>
+    </form>
+  </div>
+  
+  <div class="modal-footer">    
+    {% if hotspot %}
+    <a id="uploadfile" class="btn btn-primary pull-left" href="#">Upload Hotspots File</a>
+    <a class="btn pull-left" href="/configure/references/#hotspots">Cancel</a>
+    {% else %}
+    <a id="uploadfile" class="btn btn-primary pull-left" href="#">Upload Target Regions File</a>
+    <a class="btn pull-left" href="/configure/references/#target-regions">Cancel</a>
+    {% endif %}
+  </div>
+
+
+  <script type="text/javascript">
+    $(function() {
+      uploader = new plupload.Uploader({
+        container : 'bedPublish',
+        max_file_size : '1000mb',
+        runtimes: 'html5,flash,silverlight',
+        browse_button: 'pickfile',
+        url: '/rundb/publish/plupload/BED/',  // Will depend on hotspot
+        chunk_size: '10mb',
+        unique_names: false,
+        multi_selection: false,
+        multiple_queues: false,
+        multipart_params: {meta: '{}'},
+        silverlight_xap_url: '{% static "resources/plupload/js/plupload.silverlight.xap"%}',
+        flash_swf_url: '{% static "resources/plupload/js/plupload.flash.swf"%}'
+      });
+
+      var valid_file_selected = false;
+      $('#uploadfile').attr("disabled","disabled");
+      
+
+      uploader.bind('Init', function (up, params) {
+        $("#pickfile").show();
+        {% if hotspot %}
+        $('#upload-help').html("<p>Please select a BED or VCF file to upload.</p>");
+        {% else %}
+        $('#upload-help').html("<p>Please select a BED file to upload.</p>");
+        {% endif %}
+      });
+      
+      
+      uploader.bind('FilesAdded', function(up, files) {
+        if (up.files.length > 1) {
+          up.removeFile(up.files[0]);
+        }
+        var file = files[0];
+        $('#file_item').html(file.name + ' (' + plupload.formatSize(file.size) + ') <b></b>');
+        up.refresh(); // Reposition Flash/Silverlight
+        $("#uploadfile").removeAttr('disabled');
+      });
+      
+      $('#uploadfile').click(function (e) {
+        e.preventDefault();
+        if (uploader.files.length != 1)
+          return false;
+        uploader.settings.multipart_params.meta = JSON.stringify({
+          hotspot: {% if hotspot %} true {% else %} false {% endif %},
+          reference: $("#reference").val(),
+          description: $("#description").val(),
+          notes: $("#notes").val(),
+          enabled: true
+        });
+        uploader.start();
+        $('#pickfile').attr("disabled","disabled");
+        $("#uploadfile").attr("disabled","disabled");
+        return false;
+      });       
+
+      uploader.bind('UploadProgress', function (up, file) {
+        $("#file_item b").html(file.percent + "%");
+      });    
+
+      uploader.bind('FileUploaded', function(up, file, response) {
+        $("#file_item b").html("100%");
+        window.location.href = '/rundb/uploadstatus/' + JSON.parse(response.response).contentupload_id;
+      });
+
+      uploader.init();
+      uploader.refresh();
+    });      
+      
+      
+      
+  </script>
+
+
+</div>
+{% endblock %}
+

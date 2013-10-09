@@ -21,6 +21,7 @@ inline float mixed_pos_threshold()
 {
   return 0.25;
 }
+/*
 inline int   mixed_first_flow()
 {
   return 12;
@@ -29,6 +30,15 @@ inline int   mixed_last_flow()
 {
   return 72;
 }
+*/
+
+struct mixed{
+  static int mixed_first_flow;
+  static int mixed_last_flow;
+  static int max_iterations;
+};
+
+
 
 template <class T>
 bool all_finite (T first, T last)

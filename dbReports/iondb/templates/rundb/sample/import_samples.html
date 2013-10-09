@@ -1,0 +1,225 @@
+{% extends "rundb/sample/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
+{% block extra_head %}
+
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/wizard.css"%}" />
+
+<link rel="stylesheet" media="all" href="{% static "resources/bootstrap/css/bootstrap.min.css"%}"/>
+
+<link rel="stylesheet" href="{% static "resources/bootstrap/css/bootstrap-responsive.min.css"%}" >
+<link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap.min.css"%}" >
+<link rel="stylesheet" href="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/css/jasny-bootstrap-responsive.min.css"%}" >
+
+<!--In the header of your page, paste the following for Kendo UI Web styles-->
+<link href="{% static "resources/kendo/styles/kendo.common.min.css"%}" rel="stylesheet" />
+<link href="{% static "resources/less/kendo.tb.min.css"%}" rel="stylesheet" />
+
+<link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-layout.css"%}" />
+<link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-styles.min.css"%}" />
+
+<script type="text/javascript" src="{% static "resources/jquery/jquery-1.8.2.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/jquery/jquery.cookie.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/tb.jquery.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
+
+<script type="text/javascript" src="{% static "resources/bootstrap-2.1.1-j2/jasny-bootstrap/js/jasny-bootstrap.min.js"%}"></script>
+
+<script type="text/javascript" src="{% static "resources/scripts/kendo.custom.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/kendo.grid.override.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/mockup.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/tb.min.js"%}"></script>
+
+<script type="text/javascript" src="{% static "resources/scripts/tb-bootstrap-modal.min.js"%}"></script>
+
+<script src="{% static "resources/jquery/jQuery.download.min.js"%}"></script>
+<script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script> <!-- for ajaxForm -->
+<script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script> <!-- Using updated uni-form JS -->
+
+{% endblock extra_head %}
+{% block sub-nav %}
+
+<li><a href="{% url "planRuns" %}">Plan Runs</a></li>
+<li class="active"><a href="{% url "samplesets" %}">Samples</a></li>
+<li><a href="{% url "plans" %}">Templates</a></li>
+<li><a href="{% url "planned" %}">Planned Run List</a></li>
+{% endblock sub-nav %}
+{% block content %}
+
+<div class="main">
+<div class="container-fluid">
+	<div class="content group">
+		<ul class="breadcrumb">
+            <li><a href="{% url "samplesets" %}">Sample Sets</a> <span class="divider">/</span></li>
+			<li class="active">Import Samples</li>
+		</ul>
+		
+		<div class="row-fluid">
+		
+			<div class="span8">			
+	        	<form class="form-horizontal" id="import_sample_upload" name="import_sample_upload" method="post" enctype="multipart/form-data" action="{% url "save_import_samples" %}">			
+				<!--form class="form-horizontal" -->
+					<legend><h1>Import Samples</h1></legend>
+               
+					<div id="modal-error-messages" class="alert alert-error hide"></div>	
+
+					<div class="control-group">
+						<label class="control-label" for="file"><span class="badge">1</span></label>
+						<div class="controls">
+							<label for="postedfile" class="form-label">Select Sample File to Import</label>
+							<div class="fileupload fileupload-new" data-provides="fileupload"><input type="hidden">
+				                <div class="input-append">
+				                  <div class="uneditable-input span3"><i class="icon-file fileupload-exists"></i> 
+				                  <span class="fileupload-preview" style=""></span></div>
+				                  <span class="btn btn-file">
+				                  <span class="fileupload-new">Select file</span>
+				                  <span class="fileupload-exists">Change</span>
+				                  <input type="file" id="postedfile" name="postedfile" class="input-xxlarge input-file required"></span>
+				                  <a href="#" class="btn fileupload-exists" data-dismiss="fileupload">Remove</a>
+				                </div>
+				            </div>
+							<!--div class="help-block">Sample File (csv, tsv, xls)</div -->
+							<div class="help-block">Sample File (csv)</div>
+	                    	<a class="btn sample_fileupload_format" href="{% url "download_samplefile_format" %}">Sample File Format</a>
+							<div class="help-block">Click button to download sample file format</div>
+						</div>
+					</div>
+					<div class="control-group">
+						<label class="control-label" for="sampleset"><span class="badge">2</span></label>
+						<div class="controls">
+							<label for="sampleset" class="form-label">Select a Sample Set to Receive Samples</label>
+							<select id="sampleset" name="sampleset" multiple="multiple" class="span6" style="margin-bottom: 10px;">
+                				{% for sampleSet in sampleSet_list %}
+                					<option value="{{sampleSet.id}}" >{{sampleSet.displayedName}} ({{sampleSet.SampleGroupType_CV.displayedName}})</option>
+                				{%endfor%}
+							</select>
+							<div>
+								<div class="input-append">								
+									<input class="span10" id="sampleset_search_text" type="text" placeholder="Search sample set names">
+									<button class="btn modal_addSampleSet">Add Sample Set...</button>
+								</div>
+							</div>
+							<div class="help-block"></div>
+							
+
+					        <div class="add_sample_set_info row-fluid optional_section" style="display: none;">
+					        <!--div class="add_sample_set_info row-fluid" style="display: none; background-color: #E1EFFA;" -->					        
+					            <table class="plan-table">
+									<tbody>
+				                	<tr>
+										<div class="control-group">
+											<label class="control-label" for="new_sampleSetName">Sample Set Name:</label>
+											<div class="span6">
+												<input  maxlength="127" type="text" id="new_sampleSetName" name="new_sampleSetName" placeholder="Required">
+											</div>
+										</div>
+									</tr>
+									
+									<tr>
+										<div class="control-group">
+											<label class="control-label" for="new_sampleSet_groupType">Group Type:</label>
+											<div class="span6">
+					                    		<select id="new_sampleSet_groupType" name="new_sampleSet_groupType"style="height:28px;">
+					                    			<option value="0" >.....</option>
+					                    			{% for groupType in sampleGroupType_list %}
+					                    				<option value="{{groupType.id}}" >{{groupType.displayedName}}</option>
+					                    			{%endfor%}
+					                    		</select>
+					                    	</div>
+					                    </div>
+									</tr>
+									
+									<tr>
+										<div class="control-group">
+											<label class="control-label" for="new_sampleSetDescription">Description:</label>
+											<div class="span6">
+												<textarea  maxlength="1024" id="new_sampleSetDescription" name="new_sampleSetDescription" placeholder="Optional"></textarea>
+											</div>
+										</div>
+					                </tr>
+					                <tr><p id="new_sampleset_error"></p>
+			                        </tr>
+			                        </tbody>
+					              </table>
+					          </div>
+					          
+						</div>
+					</div>
+
+					<div class="control-group">
+						<label class="control-label" for="sampleset"><span class="badge">3</span></label>
+						<div class="controls">
+							<a href="#" id="submitUpload" class="btn btn-primary submitUpload" >Save & Finish</a>
+							<div class="help-block" style="margin-top: 10px;">Uploads, parses & validates file, and saves if no errors found</div>				        
+							<!--span class="help-inline">No samples imported yet</span -->
+							<div class="help-block" id="import_sample_info" name="import_sample_info">No samples imported yet</div>
+						</div>
+					</div>
+				</form>
+			</div>
+			
+			<div class="span4">
+			
+				<div class="summary-section">
+					<h3>Summary</h3>
+
+					<hr class="summary">
+					<p>
+						Create sample set(s) with samples in the imported sample sheet
+					</p>
+					<dl class="dl">
+						<dt class="summaryfile hide">Import File:</dt>
+						<dd class="summaryfile hide" id="summary_selectedFileName" name="summary_selectedFileName">2012-11-02_TrialCohort_001.xls</dd>
+						
+						<dt class="summarysampleset hide">Sample Set(s):</dt>
+						<dd class="summarysampleset hide" id="summary_selectedSampleSets" name="summary_selectedSampleSets">CFTR Trio Study</dd>
+						
+						<dt class="summarysampleinfo hide">6 samples:</dt>
+						<dd class="summarysampleinfo hide">
+							<ul class="unstyled">
+								<li><strong>Grouping: </strong>2 Trios</li>
+								<li>7 columns of annotation data</li>
+							</ul>
+						</dd>
+					</dl>
+					<!-- Alternate approach
+					<table>
+						<tr>
+							<td><strong>Import File:</strong></td>
+							<td>2012-11-02_TrialCohort_001.xls</td>
+						</tr>
+						<tr>
+							<td><strong>Sample Set:</strong></td>
+							<td>CFTR Trio Study</td>
+						</tr>
+						<tr class="summarysampleinfo hide">
+							<td><strong>6 Samples:</strong></string></td>
+							<td>
+								<ul class="unstyled">
+									<li><strong>Grouping: </strong>2 Trios</li>
+									<li>7 columns of annotation data</li>
+								</ul>
+							</td>
+						</tr>
+					</table> -->
+				</div>
+			</div>
+		</div>
+	</div>
+	<script>
+		sampleset_items = {};
+		{% for sampleSet in sampleSet_list %}
+			sampleset_items["{{sampleSet.id}}"] = "{{sampleSet.displayedName}} ({{sampleSet.SampleGroupType_CV.displayedName}})";
+		{%endfor%}
+	</script>
+	<script src="/site_media/resources/scripts/sample/import_samples.js"></script>
+	
+    <script type="text/javascript">
+    TB.sample.batchupload.ready("{% url "samplesets" %}");</script>
+    
+</div>
+<div class="main-push"></div>
+</div>
+
+
+{% endblock content %}

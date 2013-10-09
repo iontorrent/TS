@@ -332,10 +332,12 @@ sub outputStats
     $sum_reads += $reads;
     $sum_dreads += $depth * $reads;
   }
-  # have to address the element directly, since dist is a copy (?)
-  #$dist[0] = $targSize - $cumcov;
-  ${$_[1]}[0] = $targSize - $cumcov;
+  # have to address the element directly, since dist is a copy
+  my $cov0x = $targSize - $cumcov;
+  ${$_[1]}[0] = $cov0x;
   $cumd[0] = $targSize;
+  # adjust no stand bias reads to include bases at 0x coverage
+  $noBiasReads += $cov0x;
   # mean read depth
   my $abc = $sum_reads / $targSize;
   # mean and stddev for reads with at least 1x coverage ($cumcov == $cumd[1])

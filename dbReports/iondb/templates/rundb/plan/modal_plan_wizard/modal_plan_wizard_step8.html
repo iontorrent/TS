@@ -1,3 +1,4 @@
+{% load url from future %}
 <!-- SAVE -->
 <div id="ws-8" class="workflow-step " style="display: none;">
     <div class="workflow-step-content">
@@ -12,6 +13,9 @@
 
         <input value=""  id="bcSamples_workaround" name="bcSamples_workaround" type="hidden"/>
 
+        <input value=""  id="irSampleTubeLabels_workaround" name="irSampleTubeLabels_workaround" type="hidden"/>
+        <input value=""  id="nonIrSampleTubeLabels_workaround" name="nonIrSampleTubeLabels_workaround" type="hidden"/>
+        
         {% if intent == "Plan Run" or intent == "Plan Run New" or intent == "EditPlan" or intent = "CopyPlan" %}
         <div id="ws-8_planRun" class="ws-8_planRun">
         <table class="plan-grid">
@@ -42,15 +46,22 @@
             <tr>
                 <td>
                 <div id="ws-8_barcodedSamples" class="ws-8_barcodedSamples" style="display: none;">
+                	<p class="form-label">Sample Tube Label (optional):   <input type="text" id="sampleTubeLabel" name="sampleTubeLabel" class="validateAlphaNumAndSpace" value="" style="width:180px;"></p>
+                
                     <table id="ws-8_barcodedSampleTableContainer" class="plan-grid">
                     <tr>
                     <td>
                         <p class="form-label bcSample_hideable_basic">Enter a sample name for each barcode used (required at least one sample):
                     {% for uploader in planTemplateData.uploaders %}
                         {% ifequal uploader.name "IonReporterUploader"%}
-                        <a id="ws-8-barcoded-refresh-uploader-information" href="{% url configure_plugins_plugin_refresh uploader.id %}" class="refresh-uploader-information hide" title="Refresh Plugin {{uploader.name}} Information"><i class="icon-refresh"></i></a>
+                        <a id="ws-8-barcoded-refresh-uploader-information" href="{% url "configure_plugins_plugin_refresh" uploader.id %}" class="refresh-uploader-information hide" title="Refresh Plugin {{uploader.name}} Information"><i class="icon-refresh"></i></a>
                         {% endifequal %}
-                    {% endfor%}</p>
+                    {% endfor%}
+
+                    <a id="ws-8-barcoded-autogen-sample-names" href="#" class="btn autogen_sample_names" title="Auto generate sample names"><i class="icon-plane"></i></a>
+                    <a id="ws-8-barcoded-clear-autogen-sample-names" href="#" class="btn clear_autogen_sample_names" title="Clear sample names"><i class="icon-trash"></i></a>                    
+                    </p>
+                    
                         <div style="border:1px solid #0981d2;overflow: auto;width:880px;height:225px;padding:5px">
                             <span class="option-group">
                             <table id="ws-8_barcodedSampleTable" class="ws-8_barcodedSampleTable">
@@ -61,11 +72,15 @@
                                     <div id="ws-8_barcodedSampleTableHeader_basic" class="bcSample_hideable_basic" style="display: none;">
                                         <th class="bcSample_hideable_basic" style="width:150px; text-align: left; font-weight: bold;">BC #</th>
                                         <th class="bcSample_hideable_basic" style="width:150px; text-align: left; font-weight: bold;">Sequence</th>
-                                        <th class="bcSample_hideable_basic" style="width:100px; text-align: center; font-weight: bold;"></th>
+                                        <th class="bcSample_hideable_basic" style="width:100px; text-align: center; font-weight: bold;"></th>                                                                              
+                                        <!--th class="bcSample_hideable_basic" style="width:150px; text-align: center; font-weight: bold;">Sample ID</th -->                                        
                                         <th class="bcSample_hideable_basic" style="width:150px; text-align: center; font-weight: bold;">Sample Name</th>
+                                        <!--th class="bcSample_hideable_basic" style="width:150px; text-align: center; font-weight: bold;">Sample Description</th -->  
+                                        
                                     </div>
 
                                     <div id="ws-8_barcodedSampleTableHeader_IRConfig" class="bcSample_hideable_IRConfig" style="display: none;">
+                                    	<!--th class="bcSample_hideable_IRConfig" style="width:100px; text-align: center; font-weight: bold;"></th-->                                    
                                    		<th class="bcSample_hideable_IRConfig" style="width:100px; text-align: center; font-weight: bold;">Gender</th>   
                                         <th class="bcSample_hideable_IRConfig" style="width:200px; text-align: center; font-weight: bold;">Workflow</th>
                                         <th class="bcSample_hideable_IRConfig" style="width:120px; text-align: center; font-weight: bold;">Relation</th>
@@ -83,7 +98,7 @@
                                         <div id="ws-8_barcodedSampleTableContent_{{barcode.name}}_basic" class="bcSample_hideable_basic" style="display: none;">
                                             <td class="bcSample_hideable_basic" style="width:150px;" id="bcSample_index_{{barcode.name}}_{{barcode.index}}" name="bcId" value="{{barcode.pk}}">{{barcode.id_str}}</td>
                                             <td class="bcSample_hideable_basic" style="width:150px;" id="bcSample_seq_{{barcode.index}}" name="bcSeq" value="{{barcode.sequence}}">{{barcode.sequence}}<td>
-                                            <td class="bcSample_hideable_basic" style="width:150px; text-align: left;"><input id="bcSample_sample_{{barcode.name}}_{{barcode.index}}" type="text" name="bcKey|{{barcode.name}}|{{barcode.id_str}}" value="" style="width:150px;"></p></td>
+                                            <td class="bcSample_hideable_basic" style="width:150px; text-align: left;"><input id="bcSample_sample_{{barcode.name}}_{{barcode.index}}" type="text" name="bcKey|{{barcode.name}}|{{barcode.id_str}}" value="" style="width:150px;" class="bcSample_autogenable_{{barcode.name}}"></p></td>
                                         </div>
 
                                         <div id="ws-8_barcodedSampleTableContent_{{barcode.name}}_IRConfig"  class="bcSample_hideable_IRConfig" style="display: none;">
@@ -134,17 +149,21 @@
                     <p class="form-label" rel="tooltip" title="Create one run plan for each sample entered">Enter a sample name for each plan (required at least one sample):
                     {% for uploader in planTemplateData.uploaders %}
                         {% ifequal uploader.name "IonReporterUploader"%}
-                        <a href="{% url configure_plugins_plugin_refresh uploader.id %}" class="refresh-uploader-information" title="Refresh Plugin {{uploader.name}} Information"><i class="icon-refresh"></i></a>
+                        <a href="{% url "configure_plugins_plugin_refresh" uploader.id %}" class="refresh-uploader-information" title="Refresh Plugin {{uploader.name}} Information"><i class="icon-refresh"></i></a>
                         {% endifequal %}
                     {% endfor%}</p>
-                    <div style="border:1px solid #0981d2;overflow: auto;width:770px;height:225px;padding:5px">
+                    <div style="border:1px solid #0981d2;overflow: auto;width:950px;height:225px;padding:5px">
                         <span class="option-group">
                         <table id="ws-8_nonBarcodedSampleTable" class="ws-8_nonBarcodedSampleTable">
                             <tbody>
 
                             <tr class="nonBarcodedSampleTableHeader">
-                                <th style="width:150px; text-align: center; font-weight: bold;">Sample Name</th>
-
+                        		<th style="width:30px; text-align: center; font-weight: bold;">Chip #</th>                              
+                            	<!--th style="width:150px; text-align: center; font-weight: bold;">Sample ID</th -->                            
+                                <th style="width:150px; text-align: center; font-weight: bold;">Sample Name (required)</th>
+                                <th style="width:150px; text-align: center; font-weight: bold;">Sample Tube Label</th>                                
+                                <!--th style="width:150px; text-align: center; font-weight: bold;">Sample Description</th -->
+                                
                                 <div id="ws-8_nonBarcodedSampleTableHeader_IRConfig" style="display: none;">
                                 	<th style="width:100px; text-align: center; font-weight: bold;">Gender</th>     
                                     <th style="width:200px; text-align: center; font-weight: bold;">Workflow</th>
@@ -158,7 +177,15 @@
                             {% for i in planTemplateData.nonBarcodedSamples_irConfig_loopCounter %}
                                 <tr id="row_{{forloop.counter}}" class="ws-8_nonBarcodedSampleTableRow">
 
+                                <td style="width:30px; text-align: left;"><input id="sample_irChipCount_{{forloop.counter}}" type="text" name="sample_irChipCountConfig" value="{{forloop.counter}}" style="width:30px;"  disabled></p></td>
+                                
+                                <!--td style="width:150px; text-align: left;"><input id="sample_irSampleId_{{forloop.counter}}" type="text" name="sample_irSampleIdConfig" value="" style="width:150px;"></p></td -->
+
                                 <td style="width:150px; text-align: left;"><input id="sample_irSample_{{forloop.counter}}" type="text" name="sample_irConfig" value="" style="width:150px;"></p></td>
+                                <td style="width:150px; text-align: left;"><input id="sample_irSampleTubeLabel_{{forloop.counter}}" type="text" name="sample_irSampleTubeLabel" value="" style="width:150px;"></p></td>
+
+                                <!--td style="width:150px; text-align: left;"><input id="sample_irSampleDesc_{{forloop.counter}}" type="text" name="sample_irSampleDescConfig" value="" style="width:150px;"></p></td -->
+
                                 	<td style="width:100px;" id="sample_irGender_{{forloop.counter}}" name="bcIrGender">
                                 		<select id="sample_irGender_select_{{forloop.counter}}" name="irGender_select" class="irGender_select select-group" style="width:100px;">
                                 		<option value=""></option>
@@ -201,15 +228,19 @@
                 <div id="ws-8_nonBarcodedSamples" class="ws-8_nonBarcodedSamples" style="display: none;">
                     <p class="form-label" rel="tooltip" title="Create one run plan for each sample entered">Enter a sample name for each plan (required at least one sample):
 
-                     <div style="border:1px solid #0981d2;overflow: auto;width:500px;height:225px;padding:5px">
+                     <div style="border:1px solid #0981d2;overflow: auto;width:600px;height:225px;padding:5px">
                         <span class="option-group">
                       
                         <table id="ws-8_nonBarcodedNonIrSampleTable" class="ws-8_nonBarcodedNonIrSampleTable">
                         	<tbody>
 
                         	<tr class="nonBarcodedSampleNonIrTableHeader">
-                        		<th style="width:30px; text-align: center; font-weight: bold;">Chip #</th>                        	
-                            	<th style="width:50px; text-align: center; font-weight: bold;">Sample Name</th>
+                        		<th style="width:30px; text-align: center; font-weight: bold;">Chip #</th>  
+                            	<!--th style="width:150px; text-align: center; font-weight: bold;">Sample ID</th -->                        		
+                                <th style="width:50px; text-align: center; font-weight: bold;">Sample Name (required)</th>
+                                <th style="width:150px; text-align: center; font-weight: bold;">Sample Tube Label</th>                                
+                                <!--th style="width:300px; text-align: center; font-weight: bold;">Sample Description</th -->
+                                
                             	<!--th style="width:100px; text-align: center; font-weight: bold;">Ext ID (optional)</th>
                             	<th style="width:100px; text-align: center; font-weight: bold;">Gender (optional)</th -->                                  
                             </tr>
@@ -218,8 +249,12 @@
                             	<tr id="row_{{forloop.counter}}" class="ws-8_nonBarcodedNonIrSampleTableRow">
 
                             	<td style="width:30px; text-align: center;"><input id="sample_nonIr_chipCount_{{forloop.counter}}" type="text" name="sample_nonIrConfig_chipCount" value="{{forloop.counter}}" style="width:30px;" disabled></p></td>
+                            	<!--td style="width:150px; text-align: left;"><input id="sample_nonIr_sampleId_{{forloop.counter}}" type="text" name="sample_nonIrConfig_sampleId" value="" style="width:150px;"></p></td -->
 
                             	<td style="width:300px; text-align: left;"><input id="sample_nonIr_sampleName_{{forloop.counter}}" type="text" name="sample_nonIrConfig_sampleName" value="" style="width:300px;"></p></td>
+                                <td style="width:150px; text-align: left;"><input id="sample_nonIr_sampleTubeLabel_{{forloop.counter}}" type="text" name="sample_nonIrConfig_sampleTubeLabel" value="" style="width:150px;"></p></td>
+
+                            	<!--td style="width:300px; text-align: left;"><input id="sample_nonIr_sampleDesc_{{forloop.counter}}" type="text" name="sample_nonIrConfig_sampleDesc" value="" style="width:300px;"></p></td -->
                             	</tr>
                             {% endfor %}
                             </tbody>

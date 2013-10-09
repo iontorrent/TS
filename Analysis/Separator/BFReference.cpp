@@ -26,6 +26,7 @@ using namespace arma;
 #define THUMBNAIL_STEP 100
 #define NUM_EIGEN_FILTER 3
 #define MIN_PERCENT_OK_BEADS .3
+#define MIN_GOOD_ROWS 50
 BFReference::BFReference() {
   mDoRegionalBgSub = false;
   mMinQuantile = -1;
@@ -118,6 +119,7 @@ void BFReference::FilterRegionOutliers(Image &bfImg, Mask &mask, float iqrThresh
       }
     }
   }
+
   int numEmptiesPerRegion = max(mNumEmptiesPerRegion, (int)(MIN_PERCENT_OK_BEADS * (rowEnd - rowStart) * (colEnd-colStart) / (mRegionXSize * mRegionYSize)));
   /* If not enough, just mark them all as bad. */
   //  if ((mNumEmptiesPerRegion <= 0 && okCount <= MIN_OK_WELLS) || (mNumEmptiesPerRegion > 0 && okCount <= numEmptiesPerRegion)) {
@@ -176,16 +178,31 @@ void BFReference::FilterRegionOutliers(Image &bfImg, Mask &mask, float iqrThresh
   }
 }
 
+int CountFiltered(std::vector<char> &wells) {
+  int count = 0;
+  for (size_t i = 0; i < wells.size(); i++) {
+    if (wells[i] == BFReference::Filtered) {
+      count++;
+    }
+  }
+  return count;
+}
+        
+
 void BFReference::FilterForOutliers(Image &bfImg, Mask &mask, float iqrThreshold, int rowStep, int colStep) {
   const RawImage *raw = bfImg.GetImage();
   GridMesh<float> grid;
   grid.Init(raw->rows, raw->cols, rowStep, colStep);
   int numBin = grid.GetNumBin();
   int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
+  int filteredCountBefore = 0, filteredCountAfter = 0;
+  filteredCountBefore = CountFiltered(mWells);
   for (int binIx = 0; binIx < numBin; binIx++) {
     grid.GetBinCoords(binIx, rowStart, rowEnd, colStart, colEnd);
     FilterRegionOutliers(bfImg, mask, iqrThreshold, rowStart, rowEnd, colStart, colEnd);
   }
+  filteredCountAfter = CountFiltered(mWells);
+  cout << "FilterForOutliers() - Filtered: " << filteredCountAfter - filteredCountBefore << " wells." << endl;
 }
 
 void BFReference::CalcReference(const std::string &datFile, Mask &mask, BufferMeasurement bf_type) {
@@ -304,7 +321,209 @@ void BFReference::CalcReference(const std::string &datFile, Mask &mask, std::vec
   bfImg.Close();
 }
 
+// void BFReference::CalcAvgNeighborBuffering(int rowStart, int rowEnd, int colStart, int colEnd, Mask &mask, int avg_window,
+//                                            std::vector<float> &metric, std::vector<float> &neighbor_avg) {
+
+//   size_t size = (colEnd - colStart) * (rowEnd - rowStart);
+//   size_t width = (colEnd - colStart);
+//   vector<double> metric_sum(size);
+//   vector<int> metric_count(size);
+//   fill(metric_sum.begin(), metric_sum.end(), 0.0);
+//   fill(metric_counts.begin(), metric_counts.end(), 0.0);
+//   for (int row = rowStart; row < rowEnd; row++) {
+//     for (int col = colStart; col < colEnd; col++) {
+//       size_t wellIx = row * mask.W() + col;
+//       int above = row > rowStart ? (row - rowStart - 1) * width + col - colStart : 0;
+//       int behind = col > colStart ? (row - rowStart) * width + col - colStart - 1 : 0;
+//       int corner = col > colStart && row > rowStart ?  (row - rowStart - 1) * width + col - colStart - 1 : 0;
+//       int patchIx = (row - rowStart) * width + (col - colStart);
+//       float current = 0.0f;
+//       int current_count = 0;
+//       if (IsOk(wellIx, mask)) {
+//         current =  metric[wellIx];
+//         current_count = 1;
+//       }
+//       metric_sum[patchIx] = current + metric_sum[above] + metric_sum[behind] - metric_sum[corner]; 
+//       metric_count[patchIx] = current_count + metric_count[above] + metric_count[behind] - metric_count[corner]; 
+//     }
+//   }
+
+//   for (int row = rowStart; row < rowEnd; row++) {
+//     for (int col = colStart; col < colEnd; col++) {
+//       size_t wellIx = row * mask.W() + col;
+//       int lower_corner;
+//       int upper_corner;
+//       int top_right;
+//       int lower_left;
+//       int patchIx = (row - rowStart) * width + (col - colStart);
+//       float current = 0.0f;
+//       int current_count = 0;
+//     }
+//   }
+// }
+
+void BFReference::CalcAvgNeighborBuffering(int rowStart, int rowEnd, int colStart, int colEnd, Mask &mask, int avg_window,
+                                           std::vector<float> &metric, std::vector<float> &neighbor_avg) {
+
+  for (int row = rowStart; row < rowEnd; row++) {
+    for (int col = colStart; col < colEnd; col++) {
+      int r_avg_start = max(rowStart, row - avg_window);
+      int r_avg_end = min(rowEnd - 1, row + avg_window);
+      int count = 0;
+      double sum = 0.0;
+      for (int r = r_avg_start; r <= r_avg_end; r++) {
+        int c_avg_start = max(colStart, col - avg_window);
+        int c_avg_end = min(colEnd - 1, col + avg_window);
+        for (int c = c_avg_start; c <= c_avg_end; c++) {
+          size_t wellIx = r * mask.W() + c;
+          if (IsOk(wellIx, mask, mWells)) {
+            sum += metric[wellIx];
+            count++;
+          }
+        }
+      }
+      if (count == 0) {
+        sum = 0;
+      }
+      else {
+        sum /= count;
+      }
+      neighbor_avg[row *mask.W() + col] = sum;
+    }
+  }
+}
+
+void BFReference::CalcNeighborDistribution(int rowStart, int rowEnd, int colStart, int colEnd, Mask &mask, int avg_window,
+                                           std::vector<float> &metric, std::vector<float> &ksD, std::vector<float> &ksProb,
+                                           std::map<std::pair<int,double>,double> &mZDCache) {
+
+  int size = (rowEnd - rowStart) * (colEnd - colStart);
+  float desiredSize = 1000;
+  int step = max(1, (int)floor(size/desiredSize));
+  vector<double> region_sample;
+  region_sample.reserve(desiredSize);
+  size_t minSize = 10;
+  int count = 0;
+  for (int row = rowStart; row < rowEnd; row++) {
+    for (int col = colStart; col < colEnd; col++) {
+      size_t wellIx = row * mask.W() + col;
+      if(count++ % step == 0 && IsOk(wellIx, mask, mWells)) {
+        region_sample.push_back(metric[wellIx]);
+      }
+    }
+  }
+  std::sort(region_sample.begin(),region_sample.end());
+  vector<double> local_sample;
+  local_sample.reserve((2 * avg_window + 1) * (2 * avg_window + 1));
+  
+  for (int row = rowStart; row < rowEnd; row++) {
+    for (int col = colStart; col < colEnd; col++) {
+      double prob = -1.0;
+      double D = std::numeric_limits<double>::quiet_NaN();
+      size_t wellIx = row * mask.W() + col;
+      if( IsOk(wellIx, mask, mWells) ) {
+        local_sample.clear();
+        int r_avg_start = max(rowStart, row - avg_window);
+        int r_avg_end = min(rowEnd - 1, row + avg_window);
+        for (int r = r_avg_start; r <= r_avg_end; r++) {
+          int c_avg_start = max(colStart, col - avg_window);
+          int c_avg_end = min(colEnd - 1, col + avg_window);
+          for (int c = c_avg_start; c <= c_avg_end; c++) {
+            size_t wellIx = r * mask.W() + c;
+            if (IsOk(wellIx, mask, mWells)) {
+              local_sample.push_back(metric[wellIx]);
+            }
+          }
+        }
+        if (local_sample.size() > minSize && region_sample.size() > minSize) {
+          
+          std::pair<int,double> m_pair;
+          std::sort(local_sample.begin(), local_sample.end());
+          D =  ionStats::KolmogorovTest(local_sample.size(), &local_sample[0], 
+                                        region_sample.size(), &region_sample[0], 1);
+          int N = min(local_sample.size(), region_sample.size());
+          //        prob = ionStats::K(N,D);
+          if (isfinite(D)) {
+            m_pair.first = N;
+            m_pair.second = D;
+            std::map<std::pair<int,double>,double>::iterator cacheP = mZDCache.find(m_pair);
+            if (cacheP != mZDCache.end()) {
+              prob =  cacheP->second;
+            }
+            else {
+              // assume that N is the smaller local sample
+              prob = ionStats::SmirnovK(N,D);
+              mZDCache[m_pair] = prob;
+            }
+          }
+          else {
+            prob = -1.0f;
+          }
+        }
+      }
+      ksD[row *mask.W() + col] = D;
+      ksProb[row *mask.W() + col] = prob;
+    }
+  }
+}
+
+
+/*
+ * wells at later t0 often have less beadfind due to solution buffering and dillution,
+ * adjust for this as a linear effect over the region.
+ */
+void BFReference::AdjustForT0(int rowStart, int rowEnd, int colStart, int colEnd,
+			      int nCol, std::vector<float> &t0, std::vector<char> &filters,
+			      std::vector<float> &metric) {
+
+  /* Solve using OLS
+     Good proof from wikipedia...
+     \hat\beta & = \frac{ \sum_{i=1}^{n} (x_{i}-\bar{x})(y_{i}-\bar{y}) }{ \sum_{i=1}^{n} (x_{i}-\bar{x})^2 }
+                 = \frac{ \sum_{i=1}^{n}{x_{i}y_{i}} - \frac1n \sum_{i=1}^{n}{x_{i}}\sum_{j=1}^{n}{y_{j}}}{ \sum_{i=1}^{n}({x_{i}^2}) - \frac1n (\sum_{i=1}^{n}{x_{i}})^2 } \\[6pt]
+               & = \frac{ \overline{xy} - \bar{x}\bar{y} }{ \overline{x^2} - \bar{x}^2 }   
+     
+      \hat\alpha & = \bar{y} - \hat\beta\,\bar{x},
+  */
+  int count = 0;
+  double xy = 0, x = 0, y = 0, x2 = 0;
+  for (int row = rowStart; row < rowEnd; row++) {
+    for (int col = colStart; col < colEnd; col++) {
+      int idx = row * nCol + col;
+      if (filters[idx] != Filtered && filters[idx] != Exclude && t0[idx] > 0) {
+	count++;
+	xy += (metric[idx] * t0[idx]);
+	x += (t0[idx]);
+	x2 += (t0[idx] * t0[idx]);
+	y += metric[idx];
+      }
+    }
+  }
+  if (count < MIN_OK_WELLS) {
+    return; // no correction
+  }
+
+  xy /= count;
+  x /= count;
+  x2 /= count;
+  y /= count;
+  if (x == 0 || x2 == 0) {
+    return;
+  }
+
+  double beta =  (xy - x *y) / (x2 - x*x);
+  double alpha = y - (beta * x);
+
+  for (int row = rowStart; row < rowEnd; row++) {
+    for (int col = colStart; col < colEnd; col++) {
+      int idx = row * nCol + col;
+      metric[idx] -= (beta * t0[idx] + alpha);
+    }
+  }
+}
+
 void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, std::vector<float> &metric, BufferMeasurement bf_type) {
+  // cache to avoid looking up the same values over and over
+  std::map<std::pair<int,double>,double> mZDCache;
   Image bfImg;
   bfImg.SetImgLoadImmediate (false);
   bool loaded = LoadImage(bfImg, datFile);
@@ -329,7 +548,7 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
   if (ImageTransformer::gain_correction != NULL) {
     ImageTransformer::GainCorrectImage(bfImg.raw);
   }
-
+  ClockTimer timer;
   // Filter for odd wells based on response to wash
   FilterForOutliers(bfImg, mask, mIqrOutlierMult, mRegionYSize, mRegionXSize);
   GridMesh<float> grid;
@@ -343,14 +562,25 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
   double region_avg[raw->uncompFrames]; // average of unfiltered wells in region
   vector<SampleStats<double> > region_stats(raw->uncompFrames);
   Mat<float> data(num_frames, num_wells); // frames x wells for a region
+  Mat<float> data_trans(num_wells, num_frames); // frames x wells for a region
   Mat<int> sample_data_dbg; // if debugging some sample data filled in here to be output at end
   Mat<float> buffer_metrics_dbg; // if debugging mode save some extra info about each well
+  int sd_filtered = 0;
+  vector<float> neighbor_avg_metric(metric.size(),0);
+  vector<float> ks_D(metric.size(),std::numeric_limits<double>::quiet_NaN());
+  fill(ks_D.begin(), ks_D.end(), std::numeric_limits<double>::quiet_NaN());
+  vector<float> ks_prob(metric.size(),-1);
+  fill(ks_prob.begin(), ks_prob.end(), -1.0f);
   if (!mDebugH5File.empty()) {
     sample_data_dbg.resize(SAMPLE_PER_REGION * numBin, num_frames + 4);
     sample_data_dbg.fill(0);
-    buffer_metrics_dbg.resize(raw->rows * raw->cols, 5);
+    buffer_metrics_dbg.resize(raw->rows * raw->cols, 9);
+    // Initialize as these might not end up being calculated with sparse regions.
+    for(size_t i =0; i < buffer_metrics_dbg.n_rows; i++) {
+      buffer_metrics_dbg(i,7) = std::numeric_limits<double>::quiet_NaN();
+      buffer_metrics_dbg(i,8) = -1;
+    }
   }
-
 
   for (int binIx = 0; binIx < numBin; binIx++) {
     // cleanup buffers for this chip.
@@ -405,16 +635,29 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
         }
         mTraceSd[idx] = sd.GetSD();
         copy(shifted, shifted+raw->uncompFrames, data.begin_col(data_idx));
-        if (!(mask[idx] & (MaskPinned | MaskExclude)) && mWells[idx] != Filtered && mTraceSd[idx] > MIN_TRACE_SD) {
+        if (mTraceSd[idx] < MIN_TRACE_SD) {
+          mWells[idx] = Filtered;
+          sd_filtered++;
+        }
+      }
+    }
+   //    data_trans = data.t();
+    //    FilterOutlierSignalWells(rowStart, rowEnd, colStart, colEnd, mask.W(), data_trans, mWells);
+
+    for (int row = rowStart; row < rowEnd; row++) {
+      for (int col = colStart; col < colEnd; col++) {
+        int idx = row * raw->cols + col;
+        int data_idx = (row-rowStart) * mRegionXSize + (col-colStart);
+        if (!(mask[idx] & (MaskPinned | MaskExclude)) && mWells[idx] != Filtered) {
           for (int i = 0; i < raw->uncompFrames; i++) {
-            region_avg[i] += shifted[i];
-            region_stats[i].AddValue(shifted[i]);
+            region_avg[i] += data(i,data_idx);
+            region_stats[i].AddValue(data(i,data_idx));
           }
           well_count++;
         }
       }
     }
-
+    
     // Capture debug information if necessary
     if (sample_data_dbg.n_rows > 0) {
       int region_wells = (rowEnd - rowStart) * (colEnd - colStart);
@@ -476,13 +719,14 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
 
         // Try an integrated value looking at the frames in traces with most variation
         start_frame = max(0, max_sd_idx - BF_INTEGRATION_WIDTH);
-        end_frame = min(num_frames, max_sd_idx + BF_INTEGRATION_WIDTH);
+        //        end_frame = min((num_frames - 1), max_sd_idx + BF_INTEGRATION_WIDTH);
+        end_frame = min((num_frames), max_sd_idx + BF_INTEGRATION_WIDTH);
         float integrated_val = 0;
         for (int frame = start_frame; frame < end_frame; frame++) {
           integrated_val += data(frame, data_idx) - region_avg[frame];
         }
 
-        // Fill in the metric based on that requested
+        // Fill In the metric based on that requested
         if (bf_type == BFLegacy) {
           metric[idx] = max_val - abs ( min_val );
         }
@@ -507,13 +751,58 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
         }
       }
     }
+    AdjustForT0(rowStart, rowEnd, colStart, colEnd, raw->cols, mT0, mWells, metric);
+    if (buffer_metrics_dbg.n_rows > 0) {
+      CalcAvgNeighborBuffering(rowStart, rowEnd, colStart, colEnd, mask, 2, metric, neighbor_avg_metric);
+      CalcNeighborDistribution(rowStart, rowEnd, colStart, colEnd, mask, 3, metric, ks_D, ks_prob, mZDCache);
+      int last_col = buffer_metrics_dbg.n_cols - 1;
+      for (int row = rowStart; row < rowEnd; row++) {
+        for (int col = colStart; col < colEnd; col++) {
+          int idx = row * raw->cols + col;
+          buffer_metrics_dbg(idx,last_col-3) = neighbor_avg_metric[idx];
+          buffer_metrics_dbg(idx,last_col-2) = metric[idx];
+          buffer_metrics_dbg(idx,last_col-1) = ks_D[idx];
+          buffer_metrics_dbg(idx,last_col) = ks_prob[idx];
+        }
+      }
+    }
   }
-
+  if (buffer_metrics_dbg.n_rows > 0) {
+    size_t diffLoaded = 0;
+    size_t excluded = 0;
+    size_t why = 0;
+    for (size_t i = 0; i < buffer_metrics_dbg.n_rows; i++) {
+      double value = buffer_metrics_dbg(i,buffer_metrics_dbg.n_cols-1);
+      if ((mask[i] & MaskExclude) != 0) {
+        excluded++;
+      }
+      if (fabs(value) < .001 && value >= 0) {
+        diffLoaded++;
+      }
+      if (fabs(value) < .001 && value >= 0 && ((mask[i] & MaskExclude) != 0)) {
+        why++;
+      }
+    }
+    cout << "Got: " << why << " impossible results..." << endl;
+    cout << "Diff loaded: " << diffLoaded << " of " << (buffer_metrics_dbg.n_rows-excluded) << " (" << 100.0f * diffLoaded/(buffer_metrics_dbg.n_rows - excluded) << "%)" << endl;
+      
+  }
   if (!mDebugH5File.empty()) {
     H5File::WriteMatrix(mDebugH5File + ":/beadfind/sample_traces", sample_data_dbg, false);
     H5File::WriteMatrix(mDebugH5File + ":/beadfind/buffer_metrics", buffer_metrics_dbg, false);
   }
   bfImg.Close();
+  int filteredCount = 0;
+  int excludeCount = 0;
+  for (size_t i = 0; i < metric.size(); i++) {
+    if ((mask[i] & (MaskPinned | MaskExclude)) > 0) { excludeCount++; }
+    else { if (mWells[i] == Filtered) { filteredCount++; }
+    }
+  }
+  char buff[32];
+  snprintf(buff, sizeof(buff), "( %.2f %%)", (filteredCount*100.0)/(metric.size() - excludeCount));
+  cout << "Filtered: " << filteredCount << " of " << metric.size() - excludeCount << " possible wells. " << buff << endl;
+  timer.PrintSeconds(cout, "Beadfind stats took: ");
 }
 
 void BFReference::GetNEigenScatter(arma::Mat<float> &YY, arma::Mat<float> &E, int nEigen) {
@@ -579,9 +868,10 @@ void BFReference::FilterOutlierSignalWells(int rowStart, int rowEnd, int colStar
   
   // Get the smoothed/filtered version of traces
   Mat<float> proj;
+  if (goodRows.n_rows < MIN_GOOD_ROWS) { return; }
   GetEigenProjection(data, goodRows, NUM_EIGEN_FILTER, proj);
   // Calculate the mean absolute difference
-  Col<float> mad = mean(abs(data - proj), 1);
+  Col<float> mad = mean(square(data - proj), 1);
   Col<float> mad_filt = mad.elem(goodRows); // only set threshold on the wells we know are ok
   sort(mad_filt.begin(), mad_filt.end());
   double med = ionStats::quantile_sorted(mad_filt.memptr(), mad_filt.n_rows, .5);

@@ -59,6 +59,7 @@ class TraceCurry
     float GuessAmplitude(float *red_obs);
     float GetStartKmult(){return(p->kmult[fnum]);};
     void IntegrateRedObserved(float *red, float *red_obs);
+    void ErrorSignal(float *obs,float *fit, float *posptr, float *negptr);
     void ResetEval(){eval_count = 0;};
     int GetEvalCount(){return(eval_count);};
   private:

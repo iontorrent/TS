@@ -1,12 +1,14 @@
 {% extends "rundb/configure/base.html" %}
+{% load url from future %}
 {% load pagetools %}
+{% load static from staticfiles %}
 {% block sub-nav %}
-  <li><a href="{% url configure_about %}">About</a></li>
-  <li class="active"><a href="{% url configure_references %}">References</a></li>
-  <li><a href="{% url configure_services %}">Services</a></li>
-  <li><a href="{% url configure_plugins %}">Plugins</a></li>
-  <li><a href="{% url configure_configure %}">Configure</a></li>
-  <li><a href="{% url configure_account %}">Accounts</a></li>
+  <li><a href="{% url "configure_about" %}">About</a></li>
+  <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+  <li><a href="{% url "configure_services" %}">Services</a></li>
+  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+  <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block extra_head %}
 
@@ -25,7 +27,7 @@
                             {{ ref.name }}
                         </td>
                         <td>
-                            <form action="{% url references_genome_download %}" method="post">
+                            <form action="{% url "references_genome_download" %}" method="post">
                                 <input type="hidden" name="reference_meta" value="{{ ref.meta }}" />
                                 <input type="hidden" name="reference_url" value="{{ ref.url }}" />
                                 <input type="submit" class="btn btn-primary" value="Download" />
@@ -36,13 +38,13 @@
             </table>
         {% endif %}
         <p>Note: these downloads are larger than the tranditional zipped fasta file because they are pre-indexed for your convenience.  If you prefer a smaller total download, please visit the <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-7185"> Ion Community</a></p>
-        <h2>References Downloading <a href="{% url references_genome_download %}" class="btn"><i class="icon-refresh"></i> Refresh list</a></h2>
+        <h2>References Downloading <a href="{% url "references_genome_download" %}" class="btn"><i class="icon-refresh"></i> Refresh list</a></h2>
         {% if downloads %}
             <table class="table table-striped">
                 <thead>
                     <tr>
                         <th>Name</th>
-                        <th>Progress</th>
+                        <th>Progress (%)</th>
                         <th>Status</th>
                     </tr>
                 </thead>

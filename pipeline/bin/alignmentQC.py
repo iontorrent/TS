@@ -6,6 +6,7 @@ import os
 import sys
 import subprocess
 import datetime
+import multiprocessing
 from optparse import OptionParser
 
 
@@ -19,24 +20,16 @@ def execute_output(cmd):
         traceback.print_exc()
         return ''
 
-def num_cores():
 
+def getIndexVersion(aligner):
     try:
-        num_cores = int(execute_output("cat /proc/cpuinfo | grep \"core id\" | sort -u | wc -l"))
-        num_processors = int(execute_output("cat /proc/cpuinfo | grep \"physical id\" | sort -u | wc -l"))
-        if num_cores*num_processors < 1:
-            return 1
+        if aligner == "tmap":
+            command = "tmap index --version"
+            return execute_output(command).strip()
+        elif aligner == "bowtie2":
+            return "bowtie2"
         else:
-            return num_cores*num_processors
-    except:
-        sys.stderr.write("%s: ERROR: cannot determine the number of cores\n" % sys.argv[0])
-        exit(1)
-
-
-def getIndexVersion():
-    try:
-        command = "tmap index --version"
-        return execute_output(command).strip()
+            return None
     except:
         sys.stderr.write("%s: ERROR: Problem encountered determining tmap format version\n" % sys.argv[0])
         exit(1)
@@ -71,11 +64,18 @@ def findReference(genomePath,genome,aligner,indexVersion):
             sys.stderr.write("%s: ERROR:  - %s \n" % (sys.argv[0],refLocation))
         exit(1)
 
-
-    fastaFile = refLocation + '/' + genome + '.fasta'
-    if not os.path.exists(fastaFile):
-        sys.stderr.write("%s: ERROR:  unable to find reference fasta file %s\n" % (sys.argv[0],fastaFile))
+    if aligner == 'tmap':
+        fastaFile = refLocation + '/' + genome + '.fasta'
+    elif aligner == 'bowtie2':
+        fastaFile = refLocation + '/' + genome
+    else:
+        sys.stderr.write("%s: ERROR: unknown aligner %s\n" % (sys.argv[0], aligner))
         exit(1)
+
+    if aligner == 'tmap':
+        if not os.path.exists(fastaFile):
+            sys.stderr.write("%s: ERROR:  unable to find reference fasta file %s\n" % (sys.argv[0],fastaFile))
+            exit(1)
 
     return (refLocation,"",fastaFile,"")
 
@@ -91,9 +91,9 @@ if __name__ == '__main__':
     parser.add_option('-l', '--filter-length',      help='Obsolete', dest='filter_length') 
     parser.add_option('-m', '--max-plot-read-len',  help='Obsolete', dest='max_plot_read_len')
     parser.add_option('-q', '--qscores',            help='Obsolete', dest='qscores') 
-    parser.add_option('-b', '--threads',            help='Number of tmap threads', dest='threads', type="int", default=num_cores()) 
+    parser.add_option('-b', '--threads',            help='Number of tmap threads', dest='threads', type="int", default=multiprocessing.cpu_count()) 
     parser.add_option('-k', '--server-key',         help='Server key for tmap', dest='server_key') 
-    parser.add_option('-d', '--aligner',            help='Aligner', dest='aligner') 
+    parser.add_option('-d', '--aligner',            help='Aligner', dest='aligner', default='tmap') 
     parser.add_option(      '--aligner-opts-rg',    help='??', dest='aligner_opts_rg') 
     parser.add_option(      '--aligner-opts-extra', help='??', dest='aligner_opts_extra', default="stage1 map4") 
     parser.add_option(      '--aligner-opts-pairing',help='??', dest='aligner_opts_pairing') 
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     parser.add_option('-a', '--genome-path',        help='??', dest='genome_path',default="/referenceLibrary:/results/referenceLibrary:/opt/ion/referenceLibrary")
     parser.add_option('-p', '--sam-parsed',         help='??', dest='sam_parsed', action="store_true", default=False) 
     parser.add_option(      '--realign',            help='Enable realignment', dest='realign', action="store_true", default=False)
-    parser.add_option(      '--aligner-format-version',help='Server key for tmap', dest='aligner_format_version') 
+    parser.add_option(      '--aligner-format-version',help='aligner format version e.g. tmap-f3', dest='aligner_format_version') 
     parser.add_option(      '--output-dir',         help='??', dest='output_dir', default='.') 
     parser.add_option(      '--logfile',            help='??', dest='logfile', default='alignmentQC_out.txt') 
     
@@ -126,8 +126,6 @@ if __name__ == '__main__':
         sys.stderr.write("%s: WARNING: --qscores is obsolete: Never run alignStats\n" % sys.argv[0])
     if options.sample_size is not None:
         sys.stderr.write("%s: WARNING: --sample-size is obsolete: Always align all reads\n" % sys.argv[0])
-    if options.aligner is not None:
-        sys.stderr.write("%s: WARNING: --aligner is ignored: Always align with tmap\n" % sys.argv[0])
     if options.skip_alignStats:
         sys.stderr.write("%s: WARNING: --skip-alignStats is obsolete: Never run alignStats\n" % sys.argv[0])
     if options.align_all_reads:
@@ -167,13 +165,13 @@ if __name__ == '__main__':
     if options.aligner_format_version:
         index_version = options.aligner_format_version
     else:
-        index_version = getIndexVersion()
+        index_version = getIndexVersion(options.aligner)
     
     
     (refDir,refInfo,refFasta,infoFile) = findReference(options.genome_path, options.genome, options.aligner, index_version)
 
     
-    print "Aligning to reference genome in " + refDir
+    print "Aligning to reference genome in " + str(refDir)
 
     
     # If out base name was not specified then derive from the base name of the input file
@@ -183,26 +181,35 @@ if __name__ == '__main__':
     bamBase = options.output_dir + "/" + options.out_base_name
     bamFile = bamBase + ".bam"
     alignStartTime = datetime.datetime.now()
-    
-    command = "tmap mapall"
-    command += " -n %d" % options.threads
-    if options.server_key:
-        command += " -k %s" % options.server_key
+
+    if options.aligner == 'tmap':
+        command = "tmap mapall"
+        command += " -n %d" % options.threads
+        if options.server_key:
+            command += " -k %s" % options.server_key
+        else:
+            command += " -f %s" % refFasta
+
+        command += " -r %s" % options.readFile
+        command += " -v"
+        command += " -Y"
+        if options.bidirectional:
+            command += " --bidirectional"
+        if options.aligner_opts_rg:
+            command += " " + options.aligner_opts_rg
+        command += " -u --prefix-exclude 5"  # random seed based on read name after ignoring first 5 characters
+        command += " -o 2" # -o 0: SAM, -o 2: uncomp BAM
+        command += " " + options.aligner_opts_extra
+        command += " 2>> " + options.logfile
+    elif options.aligner == 'bowtie2':
+        fastqpipe = bamBase + '.fastqfifo'
+        command="java -Xmx8g -jar /opt/picard/picard-tools-current/SamToFastq.jar I=%s F=%s" % (options.readFile, fastqpipe)
+        command+=" | /results/plugins/bowtielauncher/bowtie2 -p%d -x %s -U %s" % (options.threads, refFasta, fastqpipe)
+        command+=" | samtools view -ubS -"
     else:
-        command += " -f %s" % refFasta    
-    
-    command += " -r %s" % options.readFile
-    command += " -v"
-    command += " -Y"
-    if options.bidirectional:
-        command += " --bidirectional"
-    if options.aligner_opts_rg:
-        command += " " + options.aligner_opts_rg
-    command += " -u --prefix-exclude 5"  # random seed based on read name after ignoring first 5 characters
-    command += " -o 2" # -o 0: SAM, -o 2: uncomp BAM
-    command += " " + options.aligner_opts_extra
-    command += " 2>> " + options.logfile
-    
+        print "unknown aligner '%s'" % options.aligner
+        sys.exit(1)
+
     if options.realign:
         pipe1 = bamBase + '.fifo1'
         pipe2 = bamBase + '.fifo2'
@@ -223,20 +230,27 @@ if __name__ == '__main__':
     if options.skip_sorting:
         command += ".bam"
     
-    if options.realign:
-        makepipe_cmd = "mkfifo %s %s" % (pipe1,pipe2)
-        rmpipe_cmd = "rm %s %s" % (pipe1,pipe2)
+    if options.aligner == 'bowtie2':
+        makepipe_cmd = "mkfifo %s" % (fastqpipe)
         print makepipe_cmd
         subprocess.call(makepipe_cmd,shell=True)
-        print command
-        subprocess.call(command,shell=True)
+    if options.realign:
+        makepipe_cmd = "mkfifo %s %s" % (pipe1,pipe2)
+        print makepipe_cmd
+        subprocess.call(makepipe_cmd,shell=True)
+
+    print command
+    subprocess.call(command,shell=True)
+
+    # cleanup
+    if options.aligner == 'bowtie2':
+        rmpipe_cmd = "rm %s" % (fastqpipe)
         print rmpipe_cmd
         subprocess.call(rmpipe_cmd,shell=True)
-    
-    else:
-        print command
-        subprocess.call(command,shell=True)
-
+    if options.realign:
+        rmpipe_cmd = "rm %s %s" % (pipe1,pipe2)
+        print rmpipe_cmd
+        subprocess.call(rmpipe_cmd,shell=True)
 
     if options.mark_duplicates:
         command = "BamDuplicates"

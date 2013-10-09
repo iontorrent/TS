@@ -14,8 +14,11 @@
 				<thead>
 					<tr>
 						<th>File Type</th>
-						<th>Reads</th>
+						<th>Unaligned Reads</th>
 						<th>Aligned Reads</th>
+						{% if output_file_groups.0.vcf.exists %}
+							<th>Variants</th>
+						{% endif %}
 					</tr>
 				</thead>
 				<tbody>
@@ -27,18 +30,6 @@
 			              <a class="btn" rel="tooltip" title="Unaligned reads in the BAM format" href="{{out.basecaller_bam.link}}">BAM</a>
 						{% else %}
 			              <a class="btn disabled" rel="tooltip" title="For full-chip Proton runs the unmapped BAM is only produced if there is no genomic reference. When there is a reference the mapped BAM contains all the information that would have been present in the unmapped BAM. Producing only one BAM enables faster report generation and reduces storage burden.">BAM</a>
-						{% endif %}
-
-						{% if out.sff.exists %}
-			              <a class="btn" rel="tooltip" title="Reads in SFF format. SFF format is deprecated and may be omitted entirely in future Torrent Suite releases" href="{{out.sff.link}}">SFF</a>
-						{% else %}
-			              <a class="btn disabled" rel="tooltip" title="The SFF file is not produced by default. It can be made with the SFFCreator plugin.">SFF</a>
-						{% endif %}
-
-						{% if out.fastq.exists %}
-			              <a class="btn" rel="tooltip" title="Reads in FASTQ format.  FASTQ is deprecated and may be omitted entirely in future Torrent Suite releases" href="{{out.fastq.link}}">FASTQ</a>
-						{% else %}
-			              <a class="btn disabled" rel="tooltip" title="The FASTQ file is not produced by default. It can be made with the FastqCreator plugin.">FASTQ</a>
 						{% endif %}
 						</td>
 						<td>
@@ -56,6 +47,15 @@
 						{% endif %}
 				            </span>
 						</td>
+						{% if output_file_groups.0.vcf.exists %}
+							<td>
+								{% if out.vcf.exists %}
+					              <a class="btn" rel="tooltip" title="Variants in a gzipped VCF file" href="{{out.vcf.link}}">VCF</a>
+								{% else %}
+					              <a class="btn disabled" rel="tooltip" title="The VCF file is not produced by default. It can be made with the VariantCaller plugin.">VCF</a>
+								{% endif %}
+							</td>
+						{% endif %}
 					</tr>
 				{% endfor %}
 				</tbody>

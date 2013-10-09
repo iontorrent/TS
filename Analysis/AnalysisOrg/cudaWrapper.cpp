@@ -168,9 +168,13 @@ void configureKernelExecution(GpuControlOpts opts)
   SimpleSingleFitStream::setBeadsPerBLock(opts.gpuThreadsPerBlockSingleFit);
   SimpleSingleFitStream::setL1Setting(opts.gpuL1ConfigSingleFit);
   SimpleSingleFitStream::setFitType(opts.gpuSingleFlowFitType); 
-  SimpleSingleFitStream::setHybridIter(opts.gpuHybridIterations); 
+  //SimpleSingleFitStream::setHybridIter(opts.gpuHybridIterations); 
 
   SimpleSingleFitStream::printSettings();
+
+  cudaSimpleStreamManager::setVerbose(opts.gpuVerbose); 
+  cudaSimpleStreamExecutionUnit::setVerbose(opts.gpuVerbose);
+  
 #endif 
 }
 
@@ -180,13 +184,13 @@ void SimpleFitStreamExecutionOnGpu(WorkerInfoQueue* q) {
   int dev_id;
 
   cudaGetDevice( &dev_id );
-  std::cout << "CUDA " << dev_id << ": Creating GPU workers" << std::endl;
+  std::cout << "CUDA " << dev_id << ": Creating GPU StreamManager" << std::endl;
 
-  cudaSimpleStreamManager  sM( q, 2);
+  cudaSimpleStreamManager  sM( q, NUM_CUDA_FIT_STREAMS);
 
   sM.DoWork();
 
-  std::cout << "CUDA " << dev_id << ": Destroying GPU workers" << std::endl;
+  std::cout << "CUDA " << dev_id << ": Destroying GPU StreamManager" << std::endl;
 
 #endif
 }

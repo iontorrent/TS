@@ -130,7 +130,15 @@ while( <BEDFILE> )
       print STDERR "ERROR: Bed file incorrectly formatted: Contains targets before first track statement.\n";
       exit 1;
     }
-    $headerLine = $_ if( $bedout );
+    if( $bedout ) {
+      $headerLine = $_;
+    } elsif( m/ionVersion=([\S\.]*)/ ) {
+      my $tsv = $1;
+      if( $tsv =~ m/^(\d+\.\d+)(\..*)?$/ ) {
+        $tsv = $1;
+        $headerLine =~ s/gene_id/attributes/ if( $tsv >= 4 );
+      }
+    }
     next;
   }
   if( !defined($chromIndex{$chrid}) )
@@ -244,7 +252,7 @@ while( <BEDFILE> )
   }
   $fcov5p = $fcov5p ? $fcov5p-$targSrt : $len;
   $lcov3p = $lcov3p ? $targEnd-$lcov3p : $len;
-  printf "%d\t%d\t%d\t%.3f\t%d\t%d\n", $tcov, $fcov3p, $lcov5p, $depth, $nfwd, $nrev;
+  printf "%d\t%d\t%d\t%.3f\t%d\t%d\n", $tcov, $fcov5p, $lcov3p, $depth, $nfwd, $nrev;
 }
 close( BEDFILE );
 

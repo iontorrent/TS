@@ -74,6 +74,12 @@ def generate_http_post(exp, data_path, thumbnail_analysis=False):
         mark_duplicates = False
         realign = False
 
+    #instead of relying on globalConfig, user can now set isDuplicateReads for the experiment
+    eas = exp.get_EAS()
+    if (eas):
+        ##logger.errors.info("from_well_analysis.generate_http_post() exp.name=%s; id=%s; isDuplicateReads=%s" %(exp.expName, str(exp.pk), str(eas.isDuplicateReads)))
+        mark_duplciates = eas.isDuplicateReads
+
     #default_args = get_default_cmdline_args(exp.chipType)
     #if thumbnail_analysis:
     #    analysisArgs = default_args['thumbnailAnalysisArgs']
@@ -140,8 +146,11 @@ def newExperiment(explog_path, plan_json=''):
         explog = parse_log(text)
         explog["planned_run_short_id"] = '' # don't allow getting plan by shortId - other plans may exist with that id
         try:
-            planObj, expObj, easObj = get_planned_exp_objects(explog,folder)
-            newExp = update_exp_objects_from_log(explog,folder, planObj, expObj, easObj)
+            planObj, expObj, easObj = get_planned_exp_objects(explog,folder,logger)
+            newExp = update_exp_objects_from_log(explog,folder, planObj, expObj, easObj, logger)
+            # TEST CODE: Append to expName to indicate imported dataset.
+            newExp.expName += "_foreign"
+            newExp.save()
             if plan_json:
                 update_plan_info(plan_json, planObj, easObj)
         except:
@@ -201,7 +210,7 @@ if __name__ == '__main__':
         print "Does not exist: %s" % args.directory
         sys.exit(1)
     src_dir = args.directory
-    
+
     # Validate existence of prerequisite files
     explog_path = os.path.join(src_dir,'explog.txt')
     if not os.path.isfile(explog_path):
@@ -281,6 +290,8 @@ if __name__ == '__main__':
         print ("Could not start a new analysis")
         print "STATUS: Error"
         sys.exit(1)
+    else:
+        print ("DEBUG: Report Name is %s" % report_name)
 
     # Test for Report Object
     count = 0

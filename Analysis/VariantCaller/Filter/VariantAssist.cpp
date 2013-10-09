@@ -6,248 +6,110 @@
 
 #include "VariantAssist.h"
 
-void InsertBayesianScoreTag(vcf::Variant ** candidate_variant, float BayesianScore) {
-  stringstream bayss;
-  bayss << BayesianScore;
-  vector<string> bayInfoString(1);
-  bayInfoString.push_back(bayss.str());
-  pair<map<string, vector<string> >::iterator, bool> ret;
-  ret = (*candidate_variant)->info.insert(pair<string,vector<string> >("Bayesian_score",bayInfoString));
-  if (ret.second == false) {
-    cerr << "ERROR: Failed to Insert INFO tag Bayesian score in VCF" << endl;
-    //exit(-1);
+MultiBook::MultiBook(){
+  invalid_reads = 0;
+}
+
+void MultiBook::Allocate(int num_hyp){
+  my_book.resize(2);
+  for (unsigned int i_strand=0; i_strand <my_book.size(); i_strand++){
+    my_book.at(i_strand).resize(num_hyp);
   }
 }
 
-void InsertGenericInfoTag(vcf::Variant ** candidate_variant, bool isNoCallVariant, string &noCallReason, string &infoss) {
-  //vector<string> hpInfoString(1);
-  //hpInfoString.push_back(infoss);
-  if (isNoCallVariant){
-    (*candidate_variant)->info["FR"].push_back(noCallReason);
-  }
-  // even if .nocall. append other reasons for this occurrence to be filtered
-    // always have an FR tag no matter what to make parsing easy
-    if (infoss.empty() ) infoss = "."; //make sure string is not empty even if the variant is not filtered
-      (*candidate_variant)->info["FR"].push_back(infoss);
+int MultiBook::NumAltAlleles(){
+  return(my_book.at(0).size()-1); // not counting Ref =0
 }
 
-// if, for example, missing data
-void NullGenotypeAllSamples(vcf::Variant ** candidate_variant){
-    vector<string> sampleNames = (*candidate_variant)->sampleNames;
-
-  for (vector<string>::iterator its = sampleNames.begin(); its != sampleNames.end(); ++its) {
-    string& sampleName = *its;
-    map<string, vector<string> >& sampleOutput = (*candidate_variant)->samples[sampleName];
-      sampleOutput["GT"].push_back("./.");
-      sampleOutput["GQ"].push_back(convertToString(0));
-  }
+void MultiBook::SetCount(int i_strand, int i_hyp, int count){
+  my_book.at(i_strand).at(i_hyp) = count;
 }
 
-
-void StoreGenotypeForOneSample(vcf::Variant ** candidate_variant, bool isNoCall, string &my_sample_name, string &my_genotype, float genotype_quality) {
-  vector<string> sampleNames = (*candidate_variant)->sampleNames;
-
-  for (vector<string>::iterator its = sampleNames.begin(); its != sampleNames.end(); ++its) {
-    string& sampleName = *its;
-    //cout << "VariantAssist: SampleName = " << sampleName << " my_sample = " << my_sample_name << endl;
-    map<string, vector<string> >& sampleOutput = (*candidate_variant)->samples[sampleName];
-  map<string, vector<string> >::iterator it;
-  it = sampleOutput.find("GT");
-  if (it != sampleOutput.end())    sampleOutput["GT"].clear();
-  it = sampleOutput.find("GQ");
-   if (it != sampleOutput.end())     sampleOutput["GQ"].clear();
-   
-    if (sampleName.compare(my_sample_name) == 0) { //sample of interest
-      //cout << "isNocall " << isNoCall << " genotype = " << my_genotype << endl;
-      if (isNoCall) {
-        sampleOutput["GT"].push_back("./.");
-        sampleOutput["GQ"].push_back(convertToString(100));
-        //cout << "Storing No-call Genotype = " << "./." << endl;
-      } else {
-        sampleOutput["GT"].push_back(my_genotype);
-        //cout << "Storing Genotype = " << my_genotype << endl;
-        sampleOutput["GQ"].push_back(convertToString(genotype_quality));
-      }
-    } else { //for all other samples in BAM file just make a no-call at this point.
-      sampleOutput["GT"].push_back("./.");
-      sampleOutput["GQ"].push_back(convertToString(0));
-    }
-    //cout <<"VariantAssist: total genotypes = " << sampleOutput["GT"].size() << endl;
-  }
-
-}
-
-void SetFilteredStatus(vcf::Variant ** candidate_variant, bool isNoCall, bool isFiltered, bool suppress_no_calls) {
-  if (isNoCall ) {
-    (*candidate_variant)->filter = "NOCALL" ;
-    (*candidate_variant)->isFiltered = suppress_no_calls;
-  } else {
-    if (isFiltered) {
-      (*candidate_variant)->filter = "FAIL" ;
-      (*candidate_variant)->isFiltered = true;
-    } else {
-      (*candidate_variant)->filter = "PASS";
-      (*candidate_variant)->isFiltered = false;
+void MultiBook::ResetCounter(){
+  invalid_reads = 0;
+  for (int i_strand=0; i_strand<2; i_strand++){
+    for (unsigned int i_hyp=0; i_hyp<my_book[i_strand].size(); i_hyp++){
+      my_book[i_strand][i_hyp]=0;
     }
   }
 }
 
-bool PrefilterSummaryStats(VariantBook &summary_stats, ControlCallAndFilters &my_controls, bool *isFiltered, string *filterReason, stringstream &infoss) {
-  stringstream filterReasonStr;
-  if (summary_stats.getStrandBias(my_controls.sbias_tune) > my_controls.filter_hp_indel.strand_bias_threshold) {
-    *isFiltered = true;
-    filterReasonStr << "STDBIAS>";
-    filterReasonStr << my_controls.filter_hp_indel.strand_bias_threshold;
-    //infoss << "FAIL-" << *filterReason;
-    //return(true);
+void MultiBook::DigestHardClassifiedReads(vector<bool> &strand_id, vector<int> &read_id){
+  // reset counter
+  ResetCounter();
+  for (unsigned int i_read = 0; i_read < read_id.size(); i_read++) {
+     int _allele_index = read_id[i_read];
+     int i_strand = 1;
+     if (strand_id.at(i_read))
+       i_strand = 0;
+     if (_allele_index>-1){
+       my_book.at(i_strand).at(_allele_index)+=1;
+     }
+     if (_allele_index==-1){
+       invalid_reads++;
+     }
+       // otherwise no deal - doesn't count for this alternate at all
+   }
+}
+
+
+int MultiBook::GetDepth(int i_strand, int i_alt){
+  int retval=0;
+  if (i_strand<0){
+    retval += my_book.at(0).at(i_alt+1)+my_book.at(0).at(0);
+    retval += my_book.at(1).at(i_alt+1)+my_book.at(1).at(0);
+  }else
+    retval = my_book.at(i_strand).at(i_alt+1)+my_book.at(i_strand).at(0);
+  return(retval);
+}
+
+float MultiBook::GetFailedReadRatio(){
+  int tdepth=0;
+  for (unsigned int i_strand =0; i_strand<2; i_strand++){
+    for (unsigned int i_hyp=0; i_hyp<my_book.at(i_strand).size(); i_hyp++){
+      tdepth+= my_book.at(i_strand).at(i_hyp);
+    }
   }
-  if (summary_stats.getPlusDepth() < my_controls.filter_hp_indel.min_cov_each_strand || summary_stats.getNegDepth() < my_controls.filter_hp_indel.min_cov_each_strand) {
-    *isFiltered = true;
-    filterReasonStr << "MINCOVEACHSTRAND<" ;
-    filterReasonStr << my_controls.filter_hp_indel.min_cov_each_strand;
-    //infoss << "FAIL-" << *filterReason;
-    //return(true);
-  }
-
-  if (summary_stats.getAlleleFreq() < my_controls.filter_hp_indel.min_allele_freq/2) { //prefilter only when allele freq is less than half the min req else allow evaluation to proceed
-    *isFiltered = true;
-    filterReasonStr << "MinAlleleFreq<";
-    filterReasonStr << my_controls.filter_hp_indel.min_allele_freq;
-  }
-
-  if (summary_stats.getDepth() < my_controls.filter_hp_indel.min_cov) {
-    *isFiltered = true;
-    filterReasonStr << "MINCOV<";
-    filterReasonStr << my_controls.filter_hp_indel.min_cov;
-    //infoss << "FAIL-" << *filterReason;
-    //return(true);
-  }
-
-  *filterReason = filterReasonStr.str();
-  if (*isFiltered)
-    infoss << "FAIL: " << *filterReason;
-  // hit no prefilters
-  return(*isFiltered);
+  // all divisions need a safety factor
+  float retval = 1.0f*invalid_reads/(1.0f*tdepth+1.0f*invalid_reads+0.01f);
+  return(retval);
 }
 
-uint16_t VariantBook::getDepth() {
-  return depth;
-};
-
-uint16_t VariantBook::getRefAllele(){
-  return depth-plusVariant-negVariant;
-};
-
-uint16_t VariantBook::getVarAllele(){
-  return plusVariant+negVariant;
-};
-
-uint16_t VariantBook::getPlusDepth() {
-  return plusDepth;
-};
-
-uint16_t VariantBook::getNegDepth() {
-  return (depth-plusDepth);
-};
-
-uint16_t VariantBook::getPlusBaseVariant() {
-  return plusBaseVariant;
-};
-
-uint16_t VariantBook::getNegBaseVariant() {
-  return negBaseVariant;
-};
-
-uint16_t VariantBook::getPlusRef(){
-  return(plusDepth-plusVariant);
+float MultiBook::OldStrandBias(int i_alt, float tune_bias){
+  float full_strand_bias = fabs(ComputeTransformStrandBias(my_book.at(0).at(i_alt+1), GetDepth(0,i_alt), my_book.at(1).at(i_alt+1), GetDepth(1,i_alt), tune_bias));
+//@TODO: revert to full range parameters
+// this ugly transformation makes the range 0.5-1, just like the old strand bias
+// so we don't have to change parameter files
+float old_style_strand_bias = (full_strand_bias+1.0f)/2.0f;
+return(old_style_strand_bias);
 }
 
-uint16_t VariantBook::getNegRef(){
-  return(depth-plusDepth-negVariant);
+float MultiBook::GetXBias(int i_alt, float tune_xbias){
+  return(ComputeTunedXBias(my_book.at(0).at(i_alt+1), GetDepth(0,i_alt), my_book.at(1).at(i_alt+1), GetDepth(1,i_alt), tune_xbias));
 }
 
-uint16_t VariantBook::getPlusBaseDepth() {
-  return plusBaseDepth;
-};
-
-uint16_t VariantBook::getNegBaseDepth() {
-  return negBaseDepth;
-};
-
-void VariantBook::setBasePlusDepth(uint16_t _plusBaseDepth) {
-  plusBaseDepth = _plusBaseDepth;
-};
-
-void VariantBook::setBaseNegDepth(uint16_t _negBaseDepth) {
-  negBaseDepth = _negBaseDepth;
-};
-
-void VariantBook::setBasePlusVariant(uint16_t _plusBaseVariant) {
-  plusBaseVariant = _plusBaseVariant;
-};
-
-void VariantBook::setBaseNegVariant(uint16_t _negBaseVariant) {
-  negBaseVariant = _negBaseVariant;
-};
-
-void VariantBook::incrementPlusMean(int flowValue) {
-  plusMean += flowValue;
-};
-
-void VariantBook::incrementNegMean(int flowValue) {
-  negMean += flowValue;
-};
-
-double VariantBook::getPlusMean() {
-  if (plusDepth ==0)
-    return 0;
-
-  return ((float)plusMean)/plusDepth;
-};
-void VariantBook::setDepth(uint16_t dep) {
-  depth = dep;
-};
-
-void VariantBook::incrementDepth() {
-  depth++;
-};
-
-void VariantBook::incrementPlusDepth() {
-  plusDepth++;
-};
-
-void VariantBook::setPlusDepth(uint16_t dep) {
-  plusDepth = dep;
-};
-
-double VariantBook::getNegMean() {
-  if (negMean == 0)
-    return 0;
-
-  return ((float)negMean)/(depth-plusDepth);
-};
-void VariantBook::incrementPlusVariant() {
-  plusVariant++;
-}
-
-uint16_t VariantBook::getPlusVariant() {
-  return plusVariant;
-}
-
-void VariantBook::incrementNegVariant() {
-  negVariant++;
-}
-
-uint16_t VariantBook::getNegVariant() {
-  return negVariant;
-}
-
-float VariantBook::getAlleleFreq() {
-  if (depth == 0)
-    return 0.0;
+int MultiBook::GetAlleleCount(int strand_key, int i_hyp){
+  int retval;
+  if (strand_key<0)
+    retval = my_book.at(0).at(i_hyp)+my_book.at(1).at(i_hyp);
   else
-    return ((float)(plusVariant+negVariant))/depth;
+    retval= my_book.at(strand_key).at(i_hyp);
+  return(retval);
 }
+
+int MultiBook::TotalCount(int strand_key){
+  int retval=0;
+  if (strand_key<0){
+    for (unsigned int i_hyp=0; i_hyp<my_book.at(0).size(); i_hyp++)
+      retval += my_book.at(0).at(i_hyp)+my_book.at(1).at(i_hyp);
+  } else {
+    for (unsigned int i_hyp=0; i_hyp<my_book.at(0).size(); i_hyp++)
+      retval += my_book.at(strand_key).at(i_hyp);
+  }
+  return(retval);
+}
+
+
 
 // pretend beta distribution on each strand
 // pretend quantity of interest is variant-frequency difference between strands
@@ -318,80 +180,3 @@ float ComputeTransformStrandBias(long int plus_var, long int plus_depth, long in
   return(strand_bias);
 }
 
-
-// revised strand bias
-// runs from 0 = unbiased
-// to 1 = total bias to one strand or the other
-// with a safety value this time to prevent "1 allele" from causing enormous strand bias
-float VariantBook::getStrandBias(float tune_bias){
-  float full_strand_bias = fabs(ComputeTransformStrandBias(plusVariant, getPlusDepth(), negVariant, getNegDepth(), tune_bias));
-  //@TODO: revert to full range parameters
-  // this ugly transformation makes the range 0.5-1, just like the old strand bias
-  // so we don't have to change parameter files
-  float old_style_strand_bias = (full_strand_bias+1.0f)/2.0f;
-  return(old_style_strand_bias);
-}
-
-
-/*float VariantBook::getStrandBias() {
-  strandBias = ComputeStrandBias(plusVariant,getPlusDepth(),negVariant,getNegDepth());
-  
-  return strandBias;
-}*/
-
-float VariantBook::getBaseStrandBias() {
-  float stdBias = ComputeStrandBias(plusBaseVariant,getPlusBaseDepth(),negBaseVariant,getNegBaseDepth());
-
-  return stdBias;
-}
-
-float VariantBook::getRefStrandBias() {
-  float refBias = ComputeStrandBias(getPlusDepth()-plusVariant,getPlusDepth(),getNegDepth()-negVariant,getNegDepth());
-
-  return refBias;
-
-}
-
-float VariantBook::GetXBias(float tune_xbias){
-  return(ComputeTunedXBias(plusVariant,getPlusDepth(),negVariant,getNegDepth(), tune_xbias));
-}
-
-void VariantBook::setAltAlleleFreq(float altFreq) {
-  altAlleleFreq = altFreq;
-  isAltAlleleFreqSet = true;
-}
-
-float VariantBook::getAltAlleleFreq() {
-  if (depth == 0)
-    return 0;
-  else
-    if (isAltAlleleFreqSet)
-      return altAlleleFreq;
-
-  return ((float)(plusVariant+negVariant))/depth;
-}
-
-int VariantBook::StatsCallGenotype(float threshold) {
-
-  float altAlleleFreq = getAltAlleleFreq();
-  if ((altAlleleFreq>=threshold) & (altAlleleFreq<(1.0f-threshold)))
-    return 1;
-  if (altAlleleFreq>=(1.0f-threshold))
-    return(2);
-  return(0);
-}
-
-void VariantBook::UpdateSummaryStats(bool strand, bool variant_evidence, int tracking_val) {
-  incrementDepth();
-  if (strand) {
-    incrementPlusDepth();
-    incrementPlusMean(tracking_val);
-    if (variant_evidence)
-      incrementPlusVariant();
-  } else {
-    //flowDist->incrementNegDepth();
-    incrementNegMean(tracking_val);
-    if (variant_evidence)
-      incrementNegVariant();
-  }
-}

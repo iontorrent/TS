@@ -4,35 +4,53 @@
 #include "SpliceVariantHypotheses.h"
 
 
-bool SpliceVariantHypotheses(const ExtendedReadInfo &current_read, const AlleleIdentity &variant_identity,
+bool SpliceVariantHypotheses(ExtendedReadInfo &current_read, const MultiAlleleVariantIdentity &variant_identity,
                         const LocalReferenceContext &local_context, PersistingThreadObjects &thread_objects,
-                        vector<string> &my_hypotheses, const InputStructures &global_context) {
+                        int &splice_start_flow, int &splice_end_flow, vector<string> &my_hypotheses,
+                        const InputStructures &global_context) {
 
-  // Three hypotheses: 1) Null; read as called 2) Reference Hypothesis 3) Variant Hypothesis
-  my_hypotheses.resize(3);
+  // Hypotheses: 1) Null; read as called 2) Reference Hypothesis 3-?) Variant Hypotheses
+  my_hypotheses.resize(variant_identity.allele_identity_vector.size()+2);
 
-  // 1) Aligned portion of read as called
-  unsigned int null_hyp_length = current_read.alignment.QueryBases.length() - current_read.startSC - current_read.endSC;
-  my_hypotheses[0] = current_read.alignment.QueryBases.substr(current_read.startSC, null_hyp_length);
+  // Set up variables to log the flows we splice into
+  splice_start_flow = -1;
+  splice_end_flow = -1;
+  int splice_start_idx = -1;
+  vector<int> splice_end_idx;
+  splice_end_idx.assign(my_hypotheses.size(), -1);
 
-  // Initialize variables
-  my_hypotheses[1].reserve(current_read.pretty_aln.length() + local_context.reference_allele.length());
-  my_hypotheses[1].clear();
-  my_hypotheses[2].reserve(current_read.pretty_aln.length() + local_context.reference_allele.length());
-  my_hypotheses[2].clear();
+  // 1) Null hypothesis is read as called
+  if (global_context.resolve_clipped_bases) {
+    unsigned int null_hyp_length = current_read.alignment.QueryBases.length() - current_read.leftSC - current_read.rightSC;
+    unsigned int startSC = (current_read.is_forward_strand) ? current_read.leftSC : current_read.rightSC;
+    my_hypotheses[0] = current_read.read_bases.substr(startSC, null_hyp_length);
+    current_read.IncreaseStartFlow(); // Increment start flow to first aligned base
+  }
+  else
+    my_hypotheses[0] = current_read.read_bases;
 
-  int read_idx = current_read.startSC;
+  // Initialize hypotheses variables for splicing
+  for (unsigned int i_hyp = 1; i_hyp < my_hypotheses.size(); i_hyp++) {
+    my_hypotheses[i_hyp].reserve(current_read.alignment.QueryBases.length() + 20 + local_context.reference_allele.length());
+    my_hypotheses[i_hyp].clear();
+    // Add soft clipped bases on the left side of alignment if desired
+    if (!global_context.resolve_clipped_bases)
+      my_hypotheses[i_hyp] += current_read.alignment.QueryBases.substr(0, current_read.leftSC);
+  }
+
+  int read_idx = current_read.leftSC;
   int ref_idx  = current_read.alignment.Position;
-  int read_idx_max = null_hyp_length + current_read.startSC;
+  int read_idx_max = current_read.alignment.QueryBases.length() - current_read.rightSC;
   bool did_splicing = false;
+  bool just_did_splicing = false;
   string pretty_alignment;
 
   // do realignment of a small region around snp variant if desired
-  if (global_context.do_snp_realignment and variant_identity.status.doRealignment) {
+  if (global_context.do_snp_realignment and variant_identity.doRealignment) {
     pretty_alignment = SpliceDoRealignement(thread_objects, current_read,
     		                                local_context.position0, global_context.DEBUG);
-    if (pretty_alignment.empty() and global_context.DEBUG > 1)
-      cout << "Realignment returned an empty string!" << endl;
+    if (pretty_alignment.empty() and global_context.DEBUG > 0)
+      cerr << "Realignment returned an empty string in read " << current_read.alignment.Name << endl;
   }
 
   if (pretty_alignment.empty())
@@ -42,74 +60,118 @@ bool SpliceVariantHypotheses(const ExtendedReadInfo &current_read, const AlleleI
 
   for (unsigned int pretty_idx = 0; pretty_idx < pretty_alignment.length(); pretty_idx++) {
 
-    bool outside_of_window = ref_idx < variant_identity.start_window or ref_idx >= variant_identity.end_window;
+    bool outside_of_window = ref_idx < variant_identity.window_start or ref_idx >= variant_identity.window_end;
     bool outside_ref_allele = (long)ref_idx < local_context.position0 or ref_idx >= (int)(local_context.position0 + local_context.reference_allele.length());
 
-    // Sanity checks
-    if (read_idx >= read_idx_max or (unsigned int)ref_idx >= thread_objects.local_contig_sequence.length()) {
+    // Basic sanity checks
+    if (read_idx >= read_idx_max
+        or  (unsigned int)ref_idx >  thread_objects.local_contig_sequence.length()
+        or ((unsigned int)ref_idx == thread_objects.local_contig_sequence.length() and pretty_alignment.at(pretty_idx) != '+')) {
       did_splicing = false;
       break;
     }
 
     // --- Splice ---
     if (ref_idx == local_context.position0 and !did_splicing and !outside_of_window) {
-      // New school way: treat insertions before SNPs & MNVs as if they were outside of window
-      if (variant_identity.status.isSNP or variant_identity.status.isMNV) {
-        while (pretty_idx < pretty_alignment.length() and pretty_alignment.at(pretty_idx) == '+') {
-          my_hypotheses[1].push_back(current_read.alignment.QueryBases.at(read_idx));
-          my_hypotheses[2].push_back(current_read.alignment.QueryBases.at(read_idx));
-          read_idx++;
-          pretty_idx++;
-        }
+      // Add insertions before variant window
+      while (pretty_idx < pretty_alignment.length() and pretty_alignment.at(pretty_idx) == '+') {
+    	for (unsigned int i_hyp = 1; i_hyp < my_hypotheses.size(); i_hyp++)
+          my_hypotheses[i_hyp].push_back(current_read.alignment.QueryBases.at(read_idx));
+        read_idx++;
+        pretty_idx++;
       }
-
       did_splicing = SpliceAddVariantAlleles(current_read, pretty_alignment, variant_identity,
     		                    local_context, my_hypotheses, pretty_idx, global_context.DEBUG);
-      /* // Old school way
-      my_hypotheses[1] += local_context.reference_allele;
-      my_hypotheses[2] += variant_identity.altAllele;
-      did_splicing = true;
-      // */
-    }
+      just_did_splicing = did_splicing;
+    } // --- ---
 
     // Have reference bases inside of window but outside of span of reference allele
     if (outside_ref_allele and !outside_of_window and pretty_alignment.at(pretty_idx) != '+') {
-      my_hypotheses[1].push_back(thread_objects.local_contig_sequence.at(ref_idx));
-      my_hypotheses[2].push_back(thread_objects.local_contig_sequence.at(ref_idx));
+      for (unsigned int i_hyp = 1; i_hyp < my_hypotheses.size(); i_hyp++)
+        my_hypotheses[i_hyp].push_back(thread_objects.local_contig_sequence.at(ref_idx));
     }
 
     // Have read bases as called outside of variant window
     if (outside_of_window and pretty_alignment.at(pretty_idx) != '-') {
-      my_hypotheses[1].push_back(current_read.alignment.QueryBases.at(read_idx));
-      my_hypotheses[2].push_back(current_read.alignment.QueryBases.at(read_idx));
+      for (unsigned int i_hyp = 1; i_hyp < my_hypotheses.size(); i_hyp++)
+        my_hypotheses[i_hyp].push_back(current_read.alignment.QueryBases.at(read_idx));
+
+      // --- Information to log flows. Indices are w.r.t. aligned portion of the read
+      if (!did_splicing) { // Log index of the last base left of window which is the same for all hypotheses.
+        splice_start_idx = read_idx - current_read.leftSC;
+      }
+      else if (just_did_splicing) { // Log length of hypothesis after splicing
+    	splice_end_idx[0] = read_idx  - current_read.leftSC;
+    	int clipped_bases = 0;
+    	if (!global_context.resolve_clipped_bases)
+    	  clipped_bases = current_read.leftSC;
+        for (unsigned int i_hyp=1; i_hyp<my_hypotheses.size(); i_hyp++)
+          splice_end_idx[i_hyp] = my_hypotheses[i_hyp].length()-1 - clipped_bases; // Hyp length depends on whether there is resolving!
+        just_did_splicing = false;
+      }
+      // --- ---
     }
 
     IncrementAlignmentIndices(pretty_alignment.at(pretty_idx), ref_idx, read_idx);
 
   } // end of for loop over extended pretty alignment
 
-  if (!current_read.is_forward_strand)
-    for (int idx = 0; idx<3; idx++)
-      RevComplementInPlace(my_hypotheses[idx]);
-
   // Check whether the whole reference allele fit
-  if (ref_idx < (int)(local_context.position0 + local_context.reference_allele.length()))
+  if (ref_idx < (int)(local_context.position0 + local_context.reference_allele.length())) {
     did_splicing = false;
+    cout << "Warning in Splicing: Reference allele "<< local_context.reference_allele << " did not fit into read " << current_read.alignment.Name << endl;
+  }
 
-  // Fail safe for hypotheses and verbose
+  if (did_splicing) {
+    // --- Add soft clipped bases to the right of the alignment and reverse complement ---
+    for (unsigned int i_hyp = 1; i_hyp<my_hypotheses.size(); i_hyp++) {
+      if (!global_context.resolve_clipped_bases)
+        my_hypotheses[i_hyp] += current_read.alignment.QueryBases.substr(current_read.alignment.QueryBases.length()-current_read.rightSC, current_read.rightSC);
+
+      if (!current_read.is_forward_strand)
+        RevComplementInPlace(my_hypotheses[i_hyp]);
+    }
+
+    // Get the main flows before and after splicing
+    splice_end_flow = GetSpliceFlows(current_read, global_context, my_hypotheses,
+                                     splice_start_idx, splice_end_idx, splice_start_flow);
+    if (splice_start_flow < 0 or splice_end_flow <= splice_start_flow) {
+      did_splicing = false;
+      cout << "Warning in Splicing: Splice flows are not valid in read " << current_read.alignment.Name
+           << ". splice start flow: "<< splice_start_flow << " splice end flow " << splice_end_flow << endl;
+    }
+  }
+
+  // --- Fail safe for hypotheses and verbose
   if (!did_splicing) {
-    my_hypotheses[1] = my_hypotheses[0];
-    my_hypotheses[2] = my_hypotheses[0];
-    if (global_context.DEBUG > 1)
-      cout << "Failed to splice " << local_context.reference_allele << "->" << variant_identity.altAllele
-           << " into read " << current_read.alignment.Name << endl;
+	for (unsigned int i_hyp=1; i_hyp<my_hypotheses.size(); i_hyp++)
+      my_hypotheses[i_hyp] = my_hypotheses[0];
+    if (global_context.DEBUG > 1) {
+      cout << "Failed to splice " << local_context.reference_allele << "->";
+      for (unsigned int i_alt = 0; i_alt<variant_identity.allele_identity_vector.size(); i_alt++) {
+    	cout << variant_identity.allele_identity_vector[i_alt].altAllele;
+        if (i_alt < variant_identity.allele_identity_vector.size()-1)
+          cout << ",";
+      }
+      cout << " into read " << current_read.alignment.Name << endl;
+    }
   }
   else if (global_context.DEBUG > 1) {
-	  cout << "Spliced " << local_context.reference_allele << "->" << variant_identity.altAllele
-	             << " into read " << current_read.alignment.Name << endl;
-	  cout << "Read as called: " << my_hypotheses[0] << endl;
-	  cout << "Reference Hyp.: " << my_hypotheses[1] << endl;
-	  cout << "Variant Hyp.  : " << my_hypotheses[2] << endl;
+	cout << "Spliced " << local_context.reference_allele << "->";
+    for (unsigned int i_alt = 0; i_alt<variant_identity.allele_identity_vector.size(); i_alt++) {
+      cout << variant_identity.allele_identity_vector[i_alt].altAllele;
+      if (i_alt < variant_identity.allele_identity_vector.size()-1)
+        cout << ",";
+    }
+    cout << " into ";
+    if (current_read.is_forward_strand) cout << "forward ";
+    else cout << "reverse ";
+    cout <<	"strand read read " << current_read.alignment.Name << endl;
+    cout << "- Read as called: " << my_hypotheses[0] << endl;
+    cout << "- Reference Hyp.: " << my_hypotheses[1] << endl;
+    for (unsigned int i_hyp = 2; i_hyp<my_hypotheses.size(); i_hyp++)
+      cout << "- Variant Hyp. " << (i_hyp-1) << ": " << my_hypotheses[i_hyp] << endl;
+    cout << "- Splice start flow: " << splice_start_flow << " Splice end flow: " << splice_end_flow << endl;
   }
 
   return did_splicing;
@@ -149,43 +211,156 @@ void DecrementAlignmentIndices(const char aln_symbol, int &ref_idx, int &read_id
   }
 }
 
+void IncrementFlow(const ion::FlowOrder &flow_order, const char &nuc, int &flow) {
+  while (flow < flow_order.num_flows() and flow_order.nuc_at(flow) != nuc)
+    flow++;
+}
+
+void IncrementFlows(const ion::FlowOrder &flow_order, const char &nuc, vector<int> &flows) {
+  for (unsigned int idx = 1; idx < flows.size(); idx++)
+    while (flows[idx] < flow_order.num_flows() and flow_order.nuc_at(flows[idx]) != nuc)
+      flows[idx]++;
+}
+
 // -------------------------------------------------------------------
 
 // This function is useful in the case that insertion count towards reference index before them.
 bool SpliceAddVariantAlleles(const ExtendedReadInfo &current_read, const string pretty_alignment,
-                             const AlleleIdentity &variant_identity, const LocalReferenceContext &local_context,
-                             vector<string> &my_hypotheses, unsigned int pretty_idx, int DEBUG) {
+                             const MultiAlleleVariantIdentity &variant_identity,
+                             const LocalReferenceContext &local_context, vector<string> &my_hypotheses,
+                             unsigned int pretty_idx, int DEBUG) {
 
   int shifted_position = 0;
+  // Splice reference Hypothesis
   my_hypotheses[1] += local_context.reference_allele;
 
-  // Special SNP splicing to not accidentally split HPs in the presence of insertions at start of HP
-  if (variant_identity.status.isSNP) {
+  for (unsigned int i_hyp=2; i_hyp<my_hypotheses.size(); i_hyp++) {
+    int my_allele_idx = i_hyp-2;
 
-	unsigned int splice_idx = my_hypotheses[2].length();
-    my_hypotheses[2] += local_context.reference_allele;
-
-    // move left if there are insertions of the same base as the reference hypothesis base
-    while (pretty_idx > 0 and pretty_alignment.at(pretty_idx-1)=='+' and splice_idx > 0
+	// Special SNP splicing to not accidentally split HPs in the presence of insertions at start of HP
+    if (variant_identity.allele_identity_vector[my_allele_idx].status.isSNP) {
+      unsigned int splice_idx = my_hypotheses[i_hyp].length();
+      my_hypotheses[i_hyp] += local_context.reference_allele;
+      // move left if there are insertions of the same base as the reference hypothesis base
+      while (pretty_idx > 0 and pretty_alignment.at(pretty_idx-1)=='+' and splice_idx > 0
             and current_read.alignment.QueryBases.at(splice_idx-1)==local_context.reference_allele.at(0)) {
-      pretty_idx--;
-      splice_idx--;
-      shifted_position++;
+        pretty_idx--;
+        splice_idx--;
+        shifted_position++;
+      }
+      if (DEBUG > 1 and shifted_position > 0) {
+        // printouts
+        cout << "Shifted splice position by " << shifted_position << " in " << current_read.alignment.Name
+             << " " << local_context.position0 << local_context.reference_allele
+             << "->" << variant_identity.allele_identity_vector[my_allele_idx].altAllele << endl;
+        cout << my_hypotheses[i_hyp] << endl;
+      }
+      my_hypotheses[i_hyp].at(splice_idx) = variant_identity.allele_identity_vector[my_allele_idx].altAllele.at(0);
     }
-    if (DEBUG > 1 and shifted_position > 0) {
-      // printouts
-      cout << "Shifted splice position by " << shifted_position << " in " << current_read.alignment.Name
-           << " " << local_context.position0 << local_context.reference_allele
-           << "->" << variant_identity.altAllele << endl;
-      cout << my_hypotheses[2] << endl;
+    else { // Default splicing
+      my_hypotheses[i_hyp] += variant_identity.allele_identity_vector[my_allele_idx].altAllele;
     }
-
-    my_hypotheses[2].at(splice_idx) = variant_identity.altAllele.at(0);
-  }
-  else { // Default splicing
-    my_hypotheses[2] += variant_identity.altAllele;
-  }
+  } // end looping over hypotheses
   return true;
+}
+
+// -------------------------------------------------------------------
+
+
+int GetSpliceFlows(ExtendedReadInfo &current_read, const InputStructures &global_context,
+                   vector<string> &my_hypotheses, int splice_start_idx,
+                   vector<int> splice_end_idx, int &splice_start_flow) {
+
+  int splice_end_flow = -1;
+  splice_start_flow = -1;
+  int my_start_idx = splice_start_idx;
+  vector<int> splice_length(my_hypotheses.size());
+  bool error_occurred = false;
+
+  // Hypotheses have already been reverse complemented by the time we call this function
+  // Set relevant indices
+  int added_SC_bases = 0;
+  if (!global_context.resolve_clipped_bases) {
+	// We added the soft clipped bases to our hypotheses to be simulated
+    added_SC_bases = current_read.leftSC + current_read.rightSC;
+  }
+  for (unsigned int i_hyp = 0; i_hyp < my_hypotheses.size(); i_hyp++) {
+    if (splice_end_idx.at(i_hyp) == -1) { // We did not splice another base after the variant window
+      // splice start & end indices are w.r.t the aligned portion of the read
+      splice_end_idx.at(i_hyp) = my_hypotheses.at(i_hyp).length() - added_SC_bases;
+    }
+    splice_length.at(i_hyp) = splice_end_idx.at(i_hyp) - splice_start_idx -1;
+  }
+  if (!current_read.is_forward_strand) { // The same number of bases have been added beyond the window
+    my_start_idx = my_hypotheses[0].length() - added_SC_bases -1 - splice_end_idx.at(0);
+    if (global_context.DEBUG>2)
+      cout << "--> reverse strand splicing:" << endl;
+  }
+  else if (global_context.DEBUG>2) {
+    cout << "--> forward strand splicing:" << endl;;
+  }
+
+  // --- Get splice start flow and adjust index of first spliced base
+  if (my_start_idx < 0) { // Our variant window started from the first base of the alignment
+    if (current_read.GetStartSC() > 0) { // We have trimmed bases that can act as an anchor to get the flows right
+      splice_start_flow = current_read.flowIndex.at(current_read.GetStartSC()-1);
+      // splice_start_idx remains at -1;
+	}
+    else { // Test if all allele windows start with the same base
+      bool have_anchor = true;
+      for (unsigned int i_hyp=1; i_hyp<my_hypotheses.size(); i_hyp++)
+        have_anchor = have_anchor and (my_hypotheses[i_hyp].at(0) == my_hypotheses[0].at(0));
+      if (have_anchor) {
+        my_start_idx = 0;
+        splice_start_flow = current_read.start_flow;
+	for (unsigned int i_hyp = 0; i_hyp < my_hypotheses.size(); i_hyp++) {
+          // We shrank the size of the splicing window by one
+          splice_length.at(i_hyp)--;
+        }
+      }
+      else { // In this case, the splice_start_flow depends on the prefix (key+barcode) of the read, which we solve later
+             // Prediction generation is doing the right thing, even though we botch things up a bit here.
+             // And we are giving a bit of leeway in the test flow window to compensate for our botching.
+        splice_start_flow = current_read.start_flow-1;
+        // splice_start_idx remains at -1;
+      }
+    }
+  } // the above block handles the my_start_idx == -1 exception
+  else
+    splice_start_flow = current_read.flowIndex.at(current_read.GetStartSC() + my_start_idx);
+  // ---
+
+  if (!global_context.resolve_clipped_bases)
+    my_start_idx += current_read.GetStartSC(); // Add soft clipped start to index
+  my_start_idx++; // my_start_idx is now pointing at the first spliced base
+
+  // Computing splice_end_flow
+  for (unsigned int i_hyp=0; i_hyp<my_hypotheses.size(); i_hyp++) {
+    int my_flow = splice_start_flow;
+    int my_end_idx = my_start_idx + splice_length.at(i_hyp);
+    for (int i_base=my_start_idx; i_base<my_end_idx; i_base++) {
+      if (i_base >= (int)my_hypotheses[i_hyp].length()) {
+        error_occurred = true;
+        break;
+      }
+      IncrementFlow(global_context.treePhaserFlowOrder,my_hypotheses[i_hyp].at(i_base), my_flow);
+    }
+    if (my_flow > splice_end_flow)
+      splice_end_flow = my_flow;
+    // reverse verbose
+    if (global_context.DEBUG>2)
+      cout << "Hypothesis " << i_hyp << " splice_end_idx " << splice_end_idx.at(i_hyp) << " splice_length " << splice_length.at(i_hyp)
+           << " my_start_idx " << my_start_idx << " my_end_idx " << my_end_idx
+           << " splice_start_flow " << splice_start_flow << " my_end_flow " << my_flow << endl;
+  }
+
+  if (error_occurred)
+    splice_end_flow = -1;
+  // verbose
+  if (global_context.DEBUG>2)
+    cout << "Splice_end_flow: " << splice_end_flow << endl;;
+
+  return splice_end_flow;
 }
 
 // -------------------------------------------------------------------
@@ -201,7 +376,7 @@ string SpliceDoRealignement (PersistingThreadObjects &thread_objects, const Exte
 
 
   // --- Get index positions at snp variant position
-  int read_idx = current_read.startSC;
+  int read_idx = current_read.leftSC;
   int ref_idx  = current_read.alignment.Position;
   unsigned int pretty_idx = 0;
 
@@ -214,7 +389,7 @@ string SpliceDoRealignement (PersistingThreadObjects &thread_objects, const Exte
 
   if (pretty_idx >= current_read.pretty_aln.length()
        or ref_idx  >= (int)thread_objects.local_contig_sequence.length()
-       or read_idx >= (int)current_read.alignment.QueryBases.length() - current_read.endSC)
+       or read_idx >= (int)current_read.alignment.QueryBases.length() - current_read.rightSC)
     return new_alignment;
 
   // --- Get small sequence context for very local realignment ------------------------

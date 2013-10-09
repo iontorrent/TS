@@ -1,12 +1,13 @@
 {% extends "rundb/configure/base.html" %}
+{% load url from future %}
 {% block current_tab %}about{% endblock %}
 {% block sub-nav %}
-  <li><a href="{% url configure_about %}">About</a></li>
-  <li><a href="{% url configure_references %}">References</a></li>
-  <li><a href="{% url configure_services %}">Services</a></li>
-  <li><a href="{% url configure_plugins %}">Plugins</a></li>
-  <li><a href="{% url configure_configure %}">Configure</a></li>
-  <li class="active"><a href="{% url configure_account %}">Accounts</a></li>
+  <li><a href="{% url "configure_about" %}">About</a></li>
+  <li><a href="{% url "configure_references" %}">References</a></li>
+  <li><a href="{% url "configure_services" %}">Services</a></li>
+  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+  <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li class="active"><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 
 {% block extra_head_js %}
@@ -168,10 +169,10 @@ $(document).ready(function() {
                 <td>{{ user.email }}</td>
                 <td>{{ user.get_full_name }}</td>
                 <td>{{ user.date_joined }}</td>
-                <td><a href="{% url api_dispatch_activate resource_name="user" api_name="v1" pk=user.id %}" 
+                <td><a href="{% url "api_dispatch_activate" resource_name="user" api_name="v1" pk=user.id %}"
                        class="btn btn-success approve-user" id="approve-user-{{user.id}}"
                         data-id="{{ user.id }}" data-username="{{ user.username }}">Approve</a>
-                    <a href="{% url api_dispatch_reject resource_name="user" api_name="v1" pk=user.id %}" 
+                    <a href="{% url "api_dispatch_reject" resource_name="user" api_name="v1" pk=user.id %}"
                        class="btn btn-danger reject-user" id="reject-user-{{user.id}}"
                         data-id="{{ user.id }}" data-username="{{ user.username }}">Reject</a>
                 </td>

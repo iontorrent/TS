@@ -122,12 +122,13 @@ class ZeromerDiff
       mSignals.set_size (length,2);
       SampleStats<double> mTauB;
       
-      double sumX2 = 0;
-      double sumXY = 0;
+
       tauB.resize(numNucs);
       fill(tauB.begin(), tauB.end(), -1);
       // for each nuc do the fit
       for (int nucIx = 0; nucIx < numNucs; nucIx++) {
+        double sumX2 = 0;
+        double sumXY = 0;
         for (size_t flowIx = 0; flowIx < zeroFlows.n_rows; flowIx++) {
           double previous = 0.0;
           int zIx = zeroFlows.at (flowIx); 
@@ -136,6 +137,7 @@ class ZeromerDiff
           int minFrame = min(ZD_START_FRAME, (int)wellFlows.n_rows);
           int maxFrame = min(ZD_END_FRAME, (int)wellFlows.n_rows);
           if (nucFlows[zIx] == nucIx) {
+
             for (int frameIx = minFrame; frameIx < maxFrame; frameIx++) {
               double diff = refFlows.at(frameIx, zIx) - wellFlows.at(frameIx, zIx);
               double tauES = refFlows.at(frameIx, zIx) * tauE;

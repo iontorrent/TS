@@ -9,23 +9,22 @@
             <small>Total Bases</small>
         </div>
         <div class="span6">
-            <a data-toggle="modal" class="usable-sequence-link showImg" href="#keySignalModal">
+            <a id="key-signal" data-toggle="modal" class="usable-sequence-link showImg" href="#keySignalModal" style="display: block;">
               <h2>{{key_signal}}</h2>
-              <small rel='tooltip' title="Average 1-mer signal in library key">Key Signal</small>
+              <small>Key Signal</small>
+              <i class="icon-zoom-in"></i>
             </a>
         </div>
     </div>
-    
-    <div id="bead-signal" data-beadloading="{{bead_loading}}"></div>
- 
-    <h2>ISP Density</h2>
     <a data-toggle="modal" href="#beadfindModal" class="report-metric-visual bead-loading-link">
-        <img src="{{source_files|bracket:'Bead_density_1000.png'}}" class="show" style="max-height: 350px;">    
+        <div id="bead-signal" data-beadloading="{{bead_loading}}"></div>
+        <h2><abbr title="Ion Sphere Particles">ISP</abbr> Density</h2>
+        <img src="{{source_files|bracket:'Bead_density_1000.png'}}" class="show" style="max-height: 350px;"> <i class="icon-zoom-in"></i>
     </a>
     <div class="modal hide" id="beadfindModal">
         <div class="modal-header">
             <button type="button" class="close" data-dismiss="modal">&times;</button>
-            <h3>ISP Density</h3>
+            <h3><abbr title="Ion Sphere Particles">ISP</abbr> Density</h3>
         </div>
         <div class="modal-body" id="beadfind_body">
             <img src="{{source_files|bracket:'Bead_density_contour.png'}}" style="height: 400px;">
@@ -53,5 +52,19 @@ $(function(){
                         '{{bead_loading_threshold}}',
                         '{{bead_loading}}',
                         'ISP Loading');
+    $("#bead-signal").popover({
+        title: "ISP Loading",
+        content: "Your quality threshold is <strong>{{bead_loading_threshold}}%</strong><br/>The colored bars indicate the quality threshold set in your plan, blue is above and red is under.",
+        html: true,
+        trigger: "hover",
+        container: "body"
+    });
+    $("#key-signal").popover({
+        title: "Key Signal",
+        content: "Your quality threshold is <strong>{{key_signal_threshold}}</strong><br/>Average 1-mer signal in library key<br/>The colored bars indicate the quality threshold set in your plan, blue is above and red is under.",
+        html: true,
+        trigger: "hover",
+        container: "body"
+    });
 });
 </script>

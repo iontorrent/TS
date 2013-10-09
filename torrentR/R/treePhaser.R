@@ -5,7 +5,8 @@ treePhaser <- function(
   ie,
   dr,
   keySeq="",
-  basecaller=c("treephaser-swan", "dp-treephaser", "treephaser-adaptive")
+  basecaller=c("treephaser-swan", "dp-treephaser", "treephaser-adaptive"),
+  terminatorChemistryRun=0
 ) {
 
   basecaller <- match.arg(basecaller)
@@ -21,7 +22,7 @@ treePhaser <- function(
   } else {
     keyFlow <- seqToFlow(keySeq,flowOrder,finishAtSeqEnd=TRUE)
   }
-  val <- .Call("treePhaser", signal, keyFlow, flowOrder, cf, ie, dr, basecaller, PACKAGE="torrentR")
+  val <- .Call("treePhaser", signal, keyFlow, flowOrder, cf, ie, dr, basecaller, terminatorChemistryRun, PACKAGE="torrentR")
 
   return(val)
 }

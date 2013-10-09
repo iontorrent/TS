@@ -1,0 +1,30 @@
+{% extends "admin/base_site.html" %}
+{% load url from future %}
+{% load i18n l10n %}
+{% load admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+<a href="{% url 'admin:index' %}">{% trans 'Home' %}</a>
+&rsaquo; <a href="{% url 'admin:app_list' app_label=app_label %}">{{ app_label|capfirst|escape }}</a>
+&rsaquo; <a href="{% url opts|admin_urlname:'changelist' %}">{{ opts.verbose_name_plural|capfirst }}</a>
+&rsaquo; {% trans 'Delete and restart with Plan info' %}
+</div>
+{% endblock %}
+
+{% block content %}
+  <div id="content-main">
+    <h1>Are you sure?</h1>
+    <p>{% blocktrans %}Are you sure you want to delete the selected experiment? All of the following results and their related items will be deleted:
+    {% endblocktrans %}</p>
+    {% for deletable_object in deletable_objects %}
+        <ul>{{ deletable_object|unordered_list }}</ul>
+    {% endfor %}
+    <form action="" method="post">
+    <div>
+    <input type="submit" value="Yes, I'm sure" />
+    </div>
+    </form>
+    
+  </div>
+{% endblock %}

@@ -11,6 +11,9 @@ import traceback
 import math
 from ion.utils.blockprocessing import printtime
 
+color_front = "#2D4782"
+color_back = "#822e71"
+
 def group(n):
 
     SYMBOLS = ('K', 'M', 'G', 'T', 'P',)
@@ -140,6 +143,7 @@ def old_read_length_histogram(ionstats_basecaller_filename, output_png_filename,
         fig = plt.figure(figsize=(8,4),dpi=100)
         ax = fig.add_subplot(111)
         ax.bar(histogram_x, histogram_y, width=2, color="#2D4782",linewidth=0)
+        ax.set_xlim(0, max_length)
         ax.set_title('Read Length Histogram')
         ax.set_xlabel('Read Length')
         ax.set_ylabel('Count')
@@ -240,8 +244,8 @@ def alignment_rate_plot(alignStats, ionstats_basecaller_filename, output_png_fil
         ax.yaxis.set_major_formatter(mticker.FuncFormatter(square_braces))
 
 
-    ax.fill_between(histogram_x[1:], nread, color="#808080", zorder=1)
-    ax.fill_between(read_length, aligned, color="#2D4782", zorder=2)
+    ax.fill_between(histogram_x[1:], nread, color=color_back, zorder=1)
+    ax.fill_between(read_length, aligned, color=color_front, zorder=2)
 
     ax.set_xlabel('Position in Read')
     ax.set_ylabel('Reads')
@@ -254,17 +258,15 @@ def alignment_rate_plot(alignStats, ionstats_basecaller_filename, output_png_fil
         map_percent = 0.0
         unmap_percent = 0.0
 
-    color_blue = "#2D4782"
-    color_gray = "#808080"
     fontsize_big = 15
     fontsize_small = 10
     fontsize_medium = 8
 
-    ax.text(0.8*max_x,0.95*max_y,'Aligned Bases',horizontalalignment='center',verticalalignment='center', fontsize=fontsize_small, zorder=4, color=color_blue,weight='bold',stretch='condensed')
-    ax.text(0.8*max_x,1.05*max_y,' %d%%'%map_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_blue,weight='bold',stretch='condensed')
+    ax.text(0.8*max_x,0.95*max_y,'Aligned Bases',horizontalalignment='center',verticalalignment='center', fontsize=fontsize_small, zorder=4, color=color_front,weight='bold',stretch='condensed')
+    ax.text(0.8*max_x,1.05*max_y,' %d%%'%map_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_front,weight='bold',stretch='condensed')
     ax.text(0.8*max_x,0.7*max_y,'Unaligned',horizontalalignment='center',verticalalignment='center',
-            fontsize=fontsize_small, zorder=4, color=color_gray,weight='bold',stretch='condensed')
-    ax.text(0.8*max_x,0.8*max_y,' %d%%'%unmap_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_gray,weight='bold',stretch='condensed')
+            fontsize=fontsize_small, zorder=4, color=color_back,weight='bold',stretch='condensed')
+    ax.text(0.8*max_x,0.8*max_y,' %d%%'%unmap_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_back,weight='bold',stretch='condensed')
     if not y_ticks:
         
         ax.text(-0.06*max_x,1.02*max_y,intWithCommas(max_y),horizontalalignment='left',verticalalignment='bottom',  zorder=4, color="black")
@@ -342,9 +344,8 @@ def alignment_rate_plot2(ionstats_alignment_filename, output_png_filename, graph
             ax = fig.add_subplot(111,frame_on=False,yticks=yticks, position=[0.14,0.15,0.8,0.89])
             ax.yaxis.set_major_formatter(mticker.FuncFormatter(square_braces))
 
-
-        ax.fill_between(histogram_range, histogram_full, color="#808080", zorder=1)
-        ax.fill_between(histogram_range, histogram_aligned, color="#2D4782", zorder=2)
+        ax.fill_between(histogram_range, histogram_full, color=color_back, zorder=1)
+        ax.fill_between(histogram_range, histogram_aligned, color=color_front, zorder=2)
     
         ax.set_xlabel('Position in Read')
         ax.set_ylabel('Reads')
@@ -357,17 +358,15 @@ def alignment_rate_plot2(ionstats_alignment_filename, output_png_filename, graph
             map_percent = 0.0
             unmap_percent = 0.0
     
-        color_blue = "#2D4782"
-        color_gray = "#808080"
         fontsize_big = 15
         fontsize_small = 10
         fontsize_medium = 8
     
-        ax.text(0.8*max_x,0.95*max_y,'Aligned Bases',horizontalalignment='center',verticalalignment='center', fontsize=fontsize_small, zorder=4, color=color_blue,weight='bold',stretch='condensed')
-        ax.text(0.8*max_x,1.05*max_y,' %d%%'%map_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_blue,weight='bold',stretch='condensed')
+        ax.text(0.8*max_x,0.95*max_y,'Aligned Bases',horizontalalignment='center',verticalalignment='center', fontsize=fontsize_small, zorder=4, color=color_front,weight='bold',stretch='condensed')
+        ax.text(0.8*max_x,1.05*max_y,' %d%%'%map_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_front,weight='bold',stretch='condensed')
         ax.text(0.8*max_x,0.7*max_y,'Unaligned',horizontalalignment='center',verticalalignment='center',
-                fontsize=fontsize_small, zorder=4, color=color_gray,weight='bold',stretch='condensed')
-        ax.text(0.8*max_x,0.8*max_y,' %d%%'%unmap_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_gray,weight='bold',stretch='condensed')
+                fontsize=fontsize_small, zorder=4, color=color_back,weight='bold',stretch='condensed')
+        ax.text(0.8*max_x,0.8*max_y,' %d%%'%unmap_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_back,weight='bold',stretch='condensed')
         if not y_ticks:
             ax.text(-0.06*max_x,1.02*max_y,intWithCommas(max_y),horizontalalignment='left',verticalalignment='bottom',  zorder=4, color="black")
            
@@ -616,11 +615,12 @@ if __name__=="__main__":
     stats = json.load(open(ionstats_file))
     l = stats['full']['max_read_length']        
     graph_max_x = int(round(l + 49, -2)) 
-    
-    a = alignment_rate_plot(
-        'alignStats_err.json',
-        'basecaller_results/ionstats_basecaller.json',
-        'alignment_rate_plot.png', int(graph_max_x))
+
+    a = alignment_rate_plot2(
+        'ionstats_alignment.json',
+        'alignment_rate_plot.png', 
+        int(graph_max_x)
+    )
 
     print "made graph"
     print a

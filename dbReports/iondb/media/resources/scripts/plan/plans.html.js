@@ -272,6 +272,10 @@ $(document).ready(function() {
         basePlannedExperimentUrl + "&runType=AMPS_EXOME" + orderByOptions,
         'No Ampliseq Exome templates yet'));
 
+    var targetSeq_16s = $("#16sTargetSeq").kendoGrid(commonKendoGrid("#16sTargetSeq",
+        basePlannedExperimentUrl + "&runType=TARS_16S" + orderByOptions,
+        'No 16S Target Sequencing templates yet'));
+
     $('.add-new-plan').click(function(e) {
         $('body').css("cursor", "wait");
         e.preventDefault();

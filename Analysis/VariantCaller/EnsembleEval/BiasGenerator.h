@@ -15,29 +15,54 @@
 #include "CrossHypotheses.h"
 #include "ShortStack.h"
 
+class BiasChecker{
+public:
+  vector<float> variant_bias_v;
+  vector<float> ref_bias_v;
+  vector<float> update_variant_bias_v;
+  vector<float> update_ref_bias_v;
+  vector<float> weight_variant_v;
+  vector<float> weight_ref_v;
+  float damper_bias;
+  float soft_clip;
+  BiasChecker(){
+    // number of >hypotheses<
+    Init(3);
+  }
+  void ResetUpdate();
+  void Init(int num_hyp_no_null);
+  void DoUpdate();
+  void UpdateBiasChecker(ShortStack &my_theory);
+  void AddCrossUpdate(CrossHypotheses &my_cross);
+  void AddOneUpdate(HiddenBasis &delta_state, const vector<vector<float> > &residuals,
+                    const vector<int> &test_flow, const vector<float> &responsibility);
+};
+
 // fixes predictions for each read of interest
 class BasicBiasGenerator{
 public:
   // used to predict bias
-  vector<float> latent_bias;
-  vector<float> latent_bias_v;
+  // strand x basis vectors
+  vector<vector <float> > latent_bias;
 // track updates to bias
-  vector<float> update_latent_bias;
-  vector<float> weight_update;
-  vector<float> update_latent_bias_v;
-  vector<float> weight_update_v;
+  vector<vector<float> > update_latent_bias;
+
+  vector<vector<float> > weight_update;
+
 // implicit prior
   float damper_bias;
   float pseudo_sigma_base;
 
   BasicBiasGenerator(){
-   InitForStrand();
+    int num_alt = 1;
+   InitForStrand(num_alt);
   }
- 
-  void GenerateBiasByStrand(vector<float> &delta, vector<int> &test_flow, int strand_key, vector<float> &new_residuals, vector<float> &new_predictions);
+
+  void GenerateBiasByStrand(int i_hyp, HiddenBasis &delta_state, vector<int> &test_flow, int strand_key, vector<float> &new_residuals, vector<float> &new_predictions);
   void UpdateResiduals(CrossHypotheses &my_cross);
   void ResetUpdate();
-  void AddOneUpdate(vector<float> &delta, vector<vector<float> >&residuals, vector<int> &test_flow, int strand_key, vector<float> &responsibility);
+  void AddOneUpdate(HiddenBasis &delta_state, const vector<vector<float> >&residuals,
+                    const vector<int> &test_flow, int strand_key, const vector<float> &responsibility);
   void AddCrossUpdate(CrossHypotheses &my_cross);
   void UpdateBiasGenerator(ShortStack &my_theory);
     // change predictions
@@ -47,12 +72,11 @@ public:
   void ResetActiveBias(ShortStack &total_theory);
 
   void DoUpdate();
-  void InitForStrand();
+  void InitForStrand(int num_alt);
   float BiasLL();
   float BiasHypothesisLL();
-  float RadiusOfBias();
+  float RadiusOfBias(int o_alt);
   float RadiusOfHypothesisBias();
-  float LikelihoodOfRadius(float radius);
 };
 
 

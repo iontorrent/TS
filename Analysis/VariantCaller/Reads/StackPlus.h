@@ -59,7 +59,9 @@ public:
 
   int                      baseDepth;     //!< Read depth at variant as recorded in vcf variant object
   int                      read_counter;  //!< Gives the number of validly unpacked candidate reads that we have encountered
-  int                      num_map_qv_filtered;  //!< Gives the number of reads that where filtered due to mapping qv.
+  int                      num_map_qv_filtered;    //!< Gives the number of reads that where filtered due to mapping qv.
+  int                      num_snp_limit_filtered; //!< The number of reads that had more mismatches than allowed.
+  int                      num_terminate_early; //!< number of reads terminated before completing the variant
 
   //! @brief  Creates a stack of reads that provide evidence in the case of our candidate variant
   //void StackUpOneVariant(BamMultiReader * bamReader, const string & local_contig_sequence,
@@ -74,12 +76,17 @@ public:
   //! @param[out] false             if we should not read in any more reads
   bool CheckValidAlignmentPosition(const InputStructures &global_context, const BamTools::BamAlignment &alignment, string seqName, int variant_start_pos);
 
+  //! @brief   Computes the absolute number of mismatches in alignment
+  //! @param[in]  const BamTools alignment object
+  //! @param[out] Absolute number of mismatches in alignment
+  int  GetNumberOfMismatches(const BamTools::BamAlignment &alignment);
+
   //! @brief  Filters reads based on read span and alignment quality.
   //! @param[in]  global_context   Globally useful data structures
   //! @param[in]  alignment        Alignment information of current read from BAM
   //! @param[in]  variant_end_pos  End (inclusive) of window of influence of this variant
   //! @param[out] false            if read is filtered out
-  bool AlignmentReadFilter(const InputStructures &global_context, const BamTools::BamAlignment &alignment, int variant_end_pos);
+  bool AlignmentReadFilters(const InputStructures &global_context, const BamTools::BamAlignment &alignment, int variant_end_pos);
 
 
   //! @brief  Performing reservoir sampling on reads
@@ -92,6 +99,8 @@ public:
     baseDepth = 0;
     read_counter = 0;
     num_map_qv_filtered = 0;
+    num_snp_limit_filtered = 0;
+    num_terminate_early = 0;
   };
 };
 

@@ -1,0 +1,101 @@
+{% extends "rundb/plan/page_plan/base.html" %}
+{% load url from future %}
+
+{% block main-title %}Select the application and target technique, then hit next.{% endblock main-title %}
+
+{% block page-plan-content %}
+<div class="row-fluid">
+    <div class="span4">
+        <h4>Application</h4>
+        <div class="control-group offset1">
+            <div class="applicationGroupOptionsContent">
+                {% for application in step.prepopulatedFields.applicationGroups %}
+                    {% if application.pk|stringformat:'s' == step.savedFields.applicationGroup|stringformat:'s' %}
+                        <label class="radio">
+                            <input type="radio" name="applicationGroup" value="{{application.pk}}" checked="checked">
+                            {{application.name}}
+                        </label>
+                    {% else %}
+                        <label class="radio">
+                            <input type="radio" name="applicationGroup" value="{{application.pk}}">
+                            {{application.name}}
+                        </label>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div id="runTypeHolder" class="span4" style="display: none;">
+        <h4>Target Technique</h4>
+        <div class="control-group offset1">
+            <div class="runTypeOptionsContent">
+            
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock page-plan-content %}
+
+{% block prevnext-buttons %}
+    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_ionreporter" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_kits" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+{% endblock prevnext-buttons %}
+
+{% block summary-table %}
+    {%include "rundb/plan/page_plan/summary/application_summary.html"%}
+{% endblock summary-table %}
+
+{% block post-raw %}
+{{ block.super }}
+<script type="text/javascript">
+
+    updateRuntypeFromApplication = function(applicationId, selectedRuntypeId) {
+        var runTypeIds = applicationToRuntype[applicationId];
+        $('.runTypeOptionsContent').empty();
+        $.each(runTypeIds, function(indexInArray, valueOfElement){
+            var inputHolder = $('<label>');
+            inputHolder.attr('class', 'radio');
+            
+            var input = $('<input>');
+            input.attr('type', 'radio');
+            input.attr('name', 'runType');
+            input.val(valueOfElement);
+            if(valueOfElement == selectedRuntypeId){
+                input.attr('checked', 'checked');
+            }
+
+            input.on('click', function(){
+                $("#selectedTechnique").text($(this).parent().text().trim());
+            });
+            
+            inputHolder.append(input);
+            inputHolder.append(runTypeIdToAltName[valueOfElement]);
+            $('.runTypeOptionsContent').append(inputHolder);
+
+        });
+        $('#runTypeHolder').show();
+    };
+
+    $(document).ready(function () {
+
+        $(".runTypeOptionsContent input").change(function()  {
+            $("#selectedApplication").text(runTypeIdToAltName[$(this).val()]);
+        });
+        
+        
+        
+        $(".applicationGroupOptionsContent input").change(function()  {
+            var applicationId = $(this).val();
+            updateRuntypeFromApplication(applicationId);
+        });
+        
+        updateRuntypeFromApplication('{{step.savedFields.applicationGroup}}', '{{step.savedFields.runType}}');
+
+        //display the application in the summary
+        $("input[name=applicationGroup]").on('click', function(){
+            $("#selectedApplication").text($(this).parent().text().trim());   
+        });
+
+    });
+</script>
+{% endblock post-raw %}

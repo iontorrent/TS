@@ -6,5 +6,29 @@ if [ -e "/etc/init.d/RSM_Launch" ]; then
 fi
 
 # remove any files we might have generated
+rm -f /var/spool/ion/InstrumentList.txt
+rm -f /var/spool/ion/RsmAlarmCache
+rm -f /var/spool/ion/ContactInfo.txt
+rm -f /var/spool/ion/ip.txt
+rm -f /var/spool/ion/loc.txt
+rm -f /var/spool/ion/product_info.alt
+rm -f /var/spool/ion/serial_number.alt
+rm -f /var/spool/ion/TSConfig.txt
+rm -f /var/spool/ion/TSexperiments.txt
+rm -f /var/spool/ion/TSFileServers.txt
+rm -f /var/spool/ion/TSnetwork.txt
+rm -f /var/spool/ion/TSServers.txt
+
+# remove any files the previous version of the agent might have generated
+rm -f /opt/ion/RSM/PGM_list.txt
+rm -f /opt/ion/RSM/ContactInfo.txt
+rm -f /opt/ion/RSM/ip.txt
+rm -f /opt/ion/RSM/loc.txt
+rm -f /opt/ion/RSM/product_info.alt
+rm -f /opt/ion/RSM/serial_number.alt
 rm -f /opt/ion/RSM/TSConfig.txt
+rm -f /opt/ion/RSM/TSexperiments.txt
+rm -f /opt/ion/RSM/TSFileServers.txt
+rm -f /opt/ion/RSM/TSnetwork.txt
+rm -f /opt/ion/RSM/TSServers.txt
 

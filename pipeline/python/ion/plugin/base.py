@@ -105,7 +105,10 @@ class IonPluginMeta(type):
         # Set docstring - cls.__doc__
         docstr = getattr(cls,'__doc__')
         if docstr is None:
-            docstr = "[ Please update python class documentation to provide a short description and documentation for your plugin. ]"
+            import warnings
+            warnings.warn("NO DOCSTRING: Please update python class documentation to provide a short description and documentation for your plugin.")
+            #docstr = "[ Please update python class documentation to provide a short description and documentation for your plugin. ]"
+            docstr = ""
         k = {
             'name': cls.__name__, 
             'version': cls.__version__,

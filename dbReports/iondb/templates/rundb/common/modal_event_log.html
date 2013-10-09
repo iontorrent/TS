@@ -1,3 +1,5 @@
+{% load url from future %}
+{% load static from staticfiles %}
 <div id="modal_event_log" title="" class="modal modal-800 hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">x</button>
@@ -25,8 +27,8 @@
         <a href="#" class="btn" data-dismiss="modal">Close</a>
     </div>
 
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
-<script src="/site_media/js/date.min.js"></script>
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script src="{% static "js/date.min.js"%}"></script>
 <script type="text/javascript">
 $('#modal_event_log').on('hidden', function() {
     $('body #modal_event_log').remove();
@@ -45,7 +47,7 @@ $(document).ready(function(){
             type: "json",
             transport: {
                 read: {
-                    url: '{% url api_dispatch_list resource_name="eventlog" api_name="v1" %}?object_pk={{pk}}&content_type_id={{cttype}}',
+                    url: '{% url "api_dispatch_list" resource_name="eventlog" api_name="v1" %}?object_pk={{pk}}&content_type_id={{cttype}}',
                     contentType: 'application/json; charset=utf-8',
                     type: 'GET',
                     dataType: 'json'

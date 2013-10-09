@@ -1,0 +1,19 @@
+#!/bin/bash
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+
+set -e
+
+case "$1" in
+    upgrade|remove)
+
+    # Delete these aftermarket files: *.pyc
+    # This code is placed here to clean up after previous versions of this package
+    # Similar code is placed in prerm.
+    if [ -d @ION_INSTALL_PREFIX@/plugins ]; then
+        find @ION_INSTALL_PREFIX@/plugins -name \*.pyc -exec rm -f {} \;
+    fi
+
+    ;;
+esac
+
+exit 0

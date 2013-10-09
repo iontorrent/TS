@@ -1,17 +1,17 @@
 {% extends "rundb/ion_base_template.html" %}
-
+{% load static from staticfiles %}
 {% block pagination_holder %}{% endblock %}
 {% block current_tab %}{{ tab }}{% endblock %}
 {% block controls_holder %}{% endblock %}
 
 {% block extra_head %}
-<link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen" />
-<script type="text/javascript" src="/site_media/jquery/colorbox/jquery.colorbox-min.js"></script>
-<script type="text/javascript" src="/site_media/jquery/js/jquery.tools.min.js"></script>
-<script type="text/javascript" src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
+<link rel="stylesheet" type="text/css" href="{% static "jquery/colorbox/colorbox.css"%}" media="screen" />
+<script type="text/javascript" src="{% static "jquery/colorbox/jquery.colorbox-min.js"%}"></script>
+<script type="text/javascript" src="{% static "jquery/js/jquery.tools.min.js"%}"></script>
+<script type="text/javascript" src="{% static "jquery/js/jquery.activity-indicator-1.0.0.min.js"%}"></script>
 
 <!-- style for the reports -->
-<link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="{% static "report.css"%}" media="screen" />
 {% endblock extra_head %}
 
 

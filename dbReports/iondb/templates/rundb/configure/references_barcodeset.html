@@ -1,11 +1,13 @@
 {% extends "rundb/configure/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
 {% block sub-nav %}
-  <li><a href="{% url configure_about %}">About</a></li>
-  <li class="active"><a href="{% url configure_references %}">References</a></li>
-  <li><a href="{% url configure_services %}">Services</a></li>
-  <li><a href="{% url configure_plugins %}">Plugins</a></li>
-  <li><a href="{% url configure_configure %}">Configure</a></li>
-  <li><a href="{% url configure_account %}">Accounts</a></li>
+  <li><a href="{% url "configure_about" %}">About</a></li>
+  <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+  <li><a href="{% url "configure_services" %}">Services</a></li>
+  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+  <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block extra_head %}
 {% endblock extra_head %}
@@ -17,8 +19,8 @@
 			<div class="clearfix">
 				<h1 class="pull-left">Barcodes in {{name}}</h1>
 				<div class="pull-right">
-					<a href="{% url references_barcode_add barCodeSetId %}" class="btn btn-primary add_barcode">Add Barcode</a>
-					<a href="{% url references_barcodeset_delete barCodeSetId %}" class="btn delete_barcodeset" >Delete Barcode Set</a>
+					<a href="{% url "references_barcode_add" barCodeSetId %}" class="btn btn-primary add_barcode">Add Barcode</a>
+					<a href="{% url "references_barcodeset_delete" barCodeSetId %}" class="btn delete_barcodeset" >Delete Barcode Set</a>
 				</div>
 			</div>
 			<div id="barcodes"></div>
@@ -26,20 +28,20 @@
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
 <div class="btn-group">
 	# var _id = id;# 
-	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="/site_media/resources/img/gear-active.png" border="0"><span class="caret"></span></a>
+	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
-			<a href="#= '{% url references_barcode_edit barCodeSetId '99999' %}'.replace('99999',_id)#" class="edit_barcode">Edit</a>
+			<a href="#= '{% url "references_barcode_edit" barCodeSetId '99999' %}'.replace('99999',_id)#" class="edit_barcode">Edit</a>
 		</li>
 		<li>
-			<a href="#= '{% url references_barcode_delete barCodeSetId '99999' %}'.replace('99999',_id)#" class="delete_barcode">Delete</a>
+			<a href="#= '{% url "references_barcode_delete" barCodeSetId '99999' %}'.replace('99999',_id)#" class="delete_barcode">Delete</a>
 		</li>
 	</ul>
 </div>	
 </script>		
 <script id="barcodeNameCellTemplate" type="text/x-kendo-template">
 	# var _id = id;# 
-	<a href="#= '{% url references_barcode_edit barCodeSetId '99999' %}'.replace('99999', _id)#" class="edit_barcode">#= id_str#</a>
+	<a href="#= '{% url "references_barcode_edit" barCodeSetId '99999' %}'.replace('99999', _id)#" class="edit_barcode">#= id_str#</a>
 </script>		
 <script type="text/javascript">
 $(document).ready(function(){
@@ -159,9 +161,9 @@ $(document).ready(function(){
 			});
 			$(document).bind('delete_barcode_done', function(e){
 				if($('#barcodes').data("kendoGrid").dataSource.total() == 1) {
-					window.location = '{% url configure_references %}';
+					window.location = '{% url "configure_references" %}';
 				} else {
-					window.location = '{% url references_barcodeset barCodeSetId %}';
+					window.location = '{% url "references_barcodeset" barCodeSetId %}';
 				}
 			});
         }
@@ -214,7 +216,7 @@ $(document).ready(function(){
 		
 	});
 	$(document).bind('delete_barcodeset_done', function(e){
-		window.location = '{% url configure_references %}#DNABarcodes'
+		window.location = '{% url "configure_references" %}#DNABarcodes'
 	});
 	$(document).bind('modal_references_addedit_barcode_done', function(e) {
     	console.log(e.target, e.relatedTarget);

@@ -25,8 +25,8 @@ import re
 
 if __name__=="__main__":
 
-    # save results in same directory as where this scrips resides - better way?
-    f = open( os.path.join(os.path.dirname(os.path.abspath(sys.argv[0])),'ContactInfo.txt'), 'w' )
+    # save results in spool directory
+    f = open('/var/spool/ion/ContactInfo.txt', 'w')
 
     user_list = ["lab_contact", "it_contact"]
     for user in User.objects.filter(username__in=user_list):
@@ -41,4 +41,3 @@ if __name__=="__main__":
             f.write("\t".join(values) + "\n")
         except ObjectDoesNotExist:
             continue
-        

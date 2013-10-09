@@ -104,11 +104,18 @@ $maxMrgSep -= $endOvlp;
 
 #--------- End command arg parsing ---------
 
-my $samopt= ($nondupreads ? "-F 0x404" : "-F 0x704").($uniquereads ? " -q 1" : "");
+my $samopt= ($nondupreads ? "-F 0x704" : "-F 0x304").($uniquereads ? " -q 1" : "");
 
+# make quick test to see if this is a valid bam file
+open( BAMTEST, "samtools view \"$bamfile\" |" ) || die "Cannot open BAM file '$bamfile'.";
+unless(<BAMTEST>) {
+  print STDERR "Error: BAM file missing, empty or badly formatted.\n";
+  exit 1;
+}
+close(BAMTEST);
+
+# read target regions from BED file
 open( BEDFILE, "$bedfile" ) || die "Cannot open targets file $bedfile.\n";
-
-# Try to open output file and add header line according to options
 my $headerLine = "track type=bedDetail";
 if( !$bedout ) {
   $headerLine = sprintf "%s\t%s\t%s\t%s\t%s\t%s\toverlaps\t%s\t%s\tfwd_reads\trev_reads",
@@ -136,7 +143,14 @@ while(<BEDFILE>) {
     if( $bedout ) {
       print "$_\n";
       $headerLine = "";
+    } elsif( m/ionVersion=([\S\.]*)/ ) {
+      my $tsv = $1;
+      if( $tsv =~ m/^(\d+\.\d+)(\..*)?$/ ) {
+        $tsv = $1;
+        $headerLine =~ s/gene_id/attributes/ if( $tsv >= 4 );
+      }
     }
+
     next;
   }
   ++$bsrt;
@@ -161,7 +175,15 @@ if( $headerLine ne "" ) {
   $headerLine = "";
 }
 
+# Check for BAI file existence as this will cause the individual samtools command calls to fail
+my $nobai = 0;
+unless( -e "${bamfile}.bai" ) {
+  $nobai = 1;
+  print STDERR "WARNING: Required BAM index (BAI) file not found. Coverage for all targets assigned as 0 reads.\n";
+}
+
 # Outer loop is to allow the last line read to be used as the next merged region and to group mutiple merged regions
+$bsrt = 0;  # indicates last read if there was only one!
 while(1) {
   # For performance, the BAM file will be read for individual targets
   # The BED file is assumed to well ordered, etc., and have overlapping targets
@@ -197,83 +219,78 @@ while(1) {
     $bsrt = 0;
     next;
   }
-  if( $logopt && $nTrgs > 3 ) {
-    print STDERR "Merged $nTrgs targets to region $lastChr:$mrgSrt-$mrgEnd:\n";
-    for( my $i = 0; $i < $nTrgs; ++$i ) {
-      print STDERR "  $targSrts[$i]-$targEnds[$i]";
-    }
-    print STDERR "\n";
-  }
-  # process BAM reads covering these merged targets
-  open( MAPPINGS, "samtools view $samopt \"$bamfile\" $lastChr:$mrgSrt-$mrgEnd |" )
-    || die "Failed to pipe reads from $bamfile for regions in $bedfile\n";
   my (@targFwdReads,@targRevReads,@targFwdE2E,@targRevE2E,@targOvpReads);
-  my $firstRegion = 0, $lastEnd = $targEnds[$nTrgs-1];
-  while( <MAPPINGS> ) {
-    next if(/^@/);
-    my ($rid,$flag,$chrid,$srt,$scr,$cig) = split('\t',$_);
-    $srt += 0;
-    last if( $srt > $lastEnd );  # skip remaining off-target reads in merge buffer
-    my $end = $srt-1;
-    my $rev = $flag & 16;
-    while( $cig =~ s/^(\d+)(.)// ) {
-      $end += $1 if( $2 eq "M" || $2 eq "D" || $2 eq "X" || $2 eq "=" );
-    }
-    my $maxOvlp = -1;
-    my $bestTn = $0;
-    my ($maxEndDist,$bestTrgLen);
-    for( my $tn = $firstRegion; $tn < $nTrgs; ++$tn ) {
-      # safe to looking when read end is prior to start of target
-      my $tSrt = $targSrts[$tn];
-      last if( $end < $tSrt );
-      # no match if read start is after target end, but ends can overlap therefore need to carry on searching
-      my $tEnd = $targEnds[$tn];
-      if( $srt > $tEnd ) {
-        # adjust start of list for further reads if no earlier target end found
-        $firstRegion = $tn+1 if( $maxOvlp < 0 );
-        next;
+  unless( $nobai ) {
+    # process BAM reads covering these merged targets
+    open( MAPPINGS, "samtools view $samopt \"$bamfile\" $lastChr:$mrgSrt-$mrgEnd |" )
+      || die "Failed to pipe reads from $bamfile for regions in $bedfile\n";
+    my $firstRegion = 0, $lastEnd = $targEnds[$nTrgs-1];
+    while( <MAPPINGS> ) {
+      next if(/^@/);
+      my ($rid,$flag,$chrid,$srt,$scr,$cig) = split('\t',$_);
+      $srt += 0;
+      last if( $srt > $lastEnd );  # skip remaining off-target reads in merge buffer
+      my $end = $srt-1;
+      my $rev = $flag & 16;
+      while( $cig =~ s/^(\d+)(.)// ) {
+        $end += $1 if( $2 eq "M" || $2 eq "D" || $2 eq "X" || $2 eq "=" );
       }
-      my $trgLen = $tEnd - $tSrt;
-      # record a hit for any read overlap
-      ++$targOvpReads[$tn];
-      $dSrt = $srt - $tSrt;
-      $dEnd = $tEnd - $end;
-      # test if this can be assigned to an amplicon
-      if( $ampreads ) {
-        my $aSrt = $rev ? $dEnd : $dSrt;
-        next if( $aSrt < $usLimit || $aSrt > $dsLimit );
-      }
-      # save region number for max overlap
-      $dSrt = 0 if( $dSrt < 0 );
-      $dEnd = 0 if( $dEnd < 0 );
-      $tSrt = $tEnd - $tSrt - $dSrt - $dEnd; # actually 1 less than overlap
-      # in case of a tie, keep the most 3' match for backwards-compatibility to old 3.6 version
-      if( $tSrt >= $maxOvlp ) {
-        $maxOvlp = $tSrt;
-        $bestTn = $tn;
-        $maxEndDist = $dSrt > $dEnd ? $dSrt : $dEnd;
-        $bestTrgLen = $trgLen;
-      }
-    }
-    if( $maxOvlp >= 0 ) {
-      if( $rev ) {
-        ++$targRevReads[$bestTn];
-        if( $usePcCov ) {
-          ++$targRevE2E[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
-        } else {
-          ++$targRevE2E[$bestTn] if( $maxEndDist <= $e2eLimit );
+      my $maxOvlp = -1;
+      my $bestTn = $0;
+      my ($maxEndDist,$bestTrgLen);
+      for( my $tn = $firstRegion; $tn < $nTrgs; ++$tn ) {
+        # safe to looking when read end is prior to start of target
+        my $tSrt = $targSrts[$tn];
+        last if( $end < $tSrt );
+        # no match if read start is after target end, but ends can overlap therefore need to carry on searching
+        my $tEnd = $targEnds[$tn];
+        if( $srt > $tEnd ) {
+          # adjust start of list for further reads if no earlier target end found
+          $firstRegion = $tn+1 if( $maxOvlp < 0 );
+          next;
         }
-      } else {
-        ++$targFwdReads[$bestTn];
-        if( $usePcCov ) {
-          ++$targFwdE2E[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
-        } else {
-          ++$targFwdE2E[$bestTn] if( $maxEndDist <= $e2eLimit );
+        my $trgLen = $tEnd - $tSrt;
+        # record a hit for any read overlap
+        ++$targOvpReads[$tn];
+        $dSrt = $srt - $tSrt;
+        $dEnd = $tEnd - $end;
+        # test if this can be assigned to an amplicon
+        if( $ampreads ) {
+          my $aSrt = $rev ? $dEnd : $dSrt;
+          next if( $aSrt < $usLimit || $aSrt > $dsLimit );
+        }
+        # save region number for max overlap
+        $dSrt = 0 if( $dSrt < 0 );
+        $dEnd = 0 if( $dEnd < 0 );
+        $tSrt = $tEnd - $tSrt - $dSrt - $dEnd; # actually 1 less than overlap
+        # in case of a tie, keep the most 3' match for backwards-compatibility to old 3.6 version
+        if( $tSrt >= $maxOvlp ) {
+          $maxOvlp = $tSrt;
+          $bestTn = $tn;
+          $maxEndDist = $dSrt > $dEnd ? $dSrt : $dEnd;
+          $bestTrgLen = $trgLen;
         }
       }
+      if( $maxOvlp >= 0 ) {
+        if( $rev ) {
+          ++$targRevReads[$bestTn];
+          if( $usePcCov ) {
+            ++$targRevE2E[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
+          } else {
+            ++$targRevE2E[$bestTn] if( $maxEndDist <= $e2eLimit );
+          }
+        } else {
+          ++$targFwdReads[$bestTn];
+          if( $usePcCov ) {
+            ++$targFwdE2E[$bestTn] if( ($maxOvlp+1)/$bestTrgLen >= $tcovLimit );
+          } else {
+            ++$targFwdE2E[$bestTn] if( $maxEndDist <= $e2eLimit );
+          }
+        }
+      }
     }
+    close( MAPPINGS );
   }
-  close( MAPPINGS );
   # output assigned coverage for this group of targets
   for( my $i = 0; $i < $nTrgs; ++$i ) {
     my $tLen = $targEnds[$i]-$targSrts[$i]+1;

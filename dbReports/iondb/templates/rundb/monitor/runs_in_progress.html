@@ -1,7 +1,9 @@
 {% extends "rundb/monitor/base.html" %}
+{% load url from future %}
 {% load pagetools %}
+{% load static from staticfiles %}
 {% block extra_head %}
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <style type="text/css">
     .run-metric-box {
         background: #EEE;
@@ -43,18 +45,18 @@
     <div id="data_panel"></div>
     <div id="pager" style="text-align: center;"></div>
 </div><!-- content -->
-<script src="/site_media/js/underscore.js"></script>
-<script src="/site_media/js/backbone.js"></script>
-<script src="/site_media/js/chosen.jquery.js"></script>
-<script src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
+<script src="{% static "js/underscore.js"%}"></script>
+<script src="{% static "js/backbone.js"%}"></script>
+<script src="{% static "js/chosen.jquery.js"%}"></script>
+<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
 <!-- iso8601.min.js MUST BE BEFORE date.js so that date.js will place the existing 
 	iso8601 Date.parse into Date._parse and we're going to use Date._parse within our KendoGrid inside data_tab.js -->
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script> 
-<script src="/site_media/js/date.js"></script>
-<script src="/site_media/js/jquery.daterangepicker.js"></script>
-<script src="/site_media/js/template.js"></script>
-<script src="/site_media/js/compiler.js"></script>
-<script src="/site_media/js/messagebox.js"></script>
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script> 
+<script src="{% static "js/date.js"%}"></script>
+<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
+<script src="{% static "js/template.js"%}"></script>
+<script src="{% static "js/compiler.js"%}"></script>
+<script src="{% static "js/messagebox.js"%}"></script>
 {% raw %}
 <script type="text/template" id="monitor_experiment_template">
     <div class="row-fluid">
@@ -63,10 +65,10 @@
                 <div class="run-name">
                     <div class="run-instrument">
                         {{#is_proton}}
-                            <img src="/site_media/resources/img/proton_jumbo_icon.png" />
+                            {% endraw %}<img src="{% static "resources/img/proton_jumbo_icon.png"%}" />{% raw %}
                         {{/is_proton}}
                         {{^is_proton}}
-                            <img src="/site_media/resources/img/pgm_jumbo_icon.png" />
+                            {% endraw %}<img src="{% static "resources/img/pgm_jumbo_icon.png"%}" />{% raw %}
                         {{/is_proton}}
                     </div>
                     <div style="float:left;">
@@ -190,15 +192,15 @@
 <script id="favoriteColumnTemplate" type="text/x-kendo-template">
 	# var _id = data.id;# 
     # if (data.star) { #
-        <a href="#= '{% url api_dispatch_detail resource_name="experiment" api_name="v1" pk=999999 %}'.replace('999999', _id)#" class="toggle-star" data-id="#=data.id#" data-star="#=data.star#"><img src="/site_media/resources/img/star-blue.png" border="0" class="completedrun-star" width="18"></a>
+        <a href="#= '{% url "api_dispatch_detail" resource_name="experiment" api_name="v1" pk=999999 %}'.replace('999999', _id)#" class="toggle-star" data-id="#=data.id#" data-star="#=data.star#"><img src="{% static "resources/img/star-blue.png"%}" border="0" class="completedrun-star" width="18"></a>
 	# } else { #
-        <a href="#= '{% url api_dispatch_detail resource_name="experiment" api_name="v1" pk=999999 %}'.replace('999999', _id)#" class="toggle-star" data-id="#=data.id#" data-star="#=data.star#"><img src="/site_media/resources/img/star_off.png" border="0" class="completedrun-star" width="18"></a> 
+        <a href="#= '{% url "api_dispatch_detail" resource_name="experiment" api_name="v1" pk=999999 %}'.replace('999999', _id)#" class="toggle-star" data-id="#=data.id#" data-star="#=data.star#"><img src="{% static "resources/img/star_off.png"%}" border="0" class="completedrun-star" width="18"></a> 
 	# } # 
 </script>		
 <script id="statusColumnTemplate" type="text/x-kendo-template">
 	# var in_progress = !isNaN(parseInt(data.ftpStatus)); #
-	# var progress_percent = (data.ftpStatus == "Complete") ? 100 : data.ftpStatus; #
-	# var progress_flows = Math.round((data.ftpStatus == "Complete" ? 1: data.ftpStatus / 100.0) * data.flows); #
+	# var progress_percent = (data.ftpStatus == "Complete") ? 100 : 100 * data.ftpStatus / data.flows; #
+	# var progress_flows = (data.ftpStatus == "Complete") ? data.flows : data.ftpStatus; #
 	# var king_report = (data.results && data.results.length > 0) ? data.results[0] : null; # 
 	# if (in_progress) { #
 	#= progress_flows # / #= data.flows # 
@@ -288,12 +290,12 @@ var key_counts = context.king_report && context.king_report.libmetrics && contex
 		#= value #
 	# } #
 </script>	
-<script src="/site_media/js/data_models.js"></script>
-<script src="/site_media/js/monitor_tab.js"></script>
+<script src="{% static "js/data_models.js"%}"></script>
+<script src="{% static "js/monitor_tab.js"%}"></script>
 <script>
 var initial_runs = {{ initial_runs|safe }};
 var pageSize = {{pageSize}};
 </script>
-<script src="/site_media/resources/scripts/monitor/runs_in_progress.html.js" type="text/javascript"></script>
-<script src="/site_media/resources/scripts/signal.min.js" type="text/javascript"></script>
+<script src="{% static "resources/scripts/monitor/runs_in_progress.html.js"%}" type="text/javascript"></script>
+<script src="{% static "resources/scripts/signal.min.js"%}" type="text/javascript"></script>
 {% endblock content %}

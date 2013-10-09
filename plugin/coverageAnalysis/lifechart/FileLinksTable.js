@@ -61,7 +61,9 @@ var disableTitleBar = false;
   function formatData(text,link,help,fmat,row) {
     if( text == null || text == '' ) return '';
     var fmatTitle = text.replace( /\.$/, '' );
-    text = "Download the " + text.charAt(0).toLowerCase() + text.substring(1);
+    if( text.substring(0,4).toLowerCase() != "link" ) {
+      text = "Download the " + text.charAt(0).toLowerCase() + text.substring(1);
+    }
     if( help == undefined || help == '' ) help = text;
     help = help.replace( /#/g, '\n' );
     if( link == 'IGV' ) {

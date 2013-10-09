@@ -9,7 +9,7 @@ def toBoolean(val, default=True):
     if they have an empty string - default to true unless specified otherwise
     """
     if default:
-        trueItems = ["true", "t", "yes", "y", "1", "" ]
+        trueItems = ["true", "t", "yes", "y", "1", "on", "" ]
         falseItems = ["false", "f", "no", "n", "none", "0" ]
     else:
         trueItems = ["true", "t", "yes", "y", "1", "on"]

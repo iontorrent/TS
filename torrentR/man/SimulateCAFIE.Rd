@@ -18,13 +18,15 @@
     dr,
     nflows,
     hpScale      = 1,
-    simModel     = c("CafieSolver","PhaseSim"),
+    simModel     = c("treePhaserSim","CafieSolver","PhaseSim"),
     hpSignal     = 0:7,
     sigMult      = 1,
     conc         = diag(4),
     maxAdvances  = 2,
     droopType    = c("ONLY_WHEN_INCORPORATING","EVERY_FLOW"),
-    extraTaps    = 0
+    extraTaps    = 0,
+    getStates    = 0,
+    terminatorChemistryRun = 0
   )
 }
 \arguments{
@@ -47,9 +49,8 @@
     case of the latter it is interpreted as a vector of per-nuc values in the order A,C,G,T.
   }
   \item{simModel}{
-    The simulation engine to use - can be either "CafieSolver" or "PhaseSim".  In the case of the
-    former, simulation is performed by CafieSolver::SimulateCAFIE(), for the latter
-    PhaseSim::simulate() is used.
+    The simulation engine to use - can be either "CafieSolver" or "PhaseSim" or "treePhaserSim".  In the case of the
+    first, simulation is performed by CafieSolver::SimulateCAFIE(), for the second PhaseSim::simulate() is used.
   }
   \item{hpSignal}{
     The homopolymer response - only used when simModel="CafieSolver".  Can be used to model
@@ -75,6 +76,12 @@
     Controls the amount of extra flows to apply after each nuc flow.  The idea is to model situations where
     extra flows are applied to try drive to complete extension, though signal isn't actually collected on these
     flows.
+  }
+    \item{getStates}{
+    Advanced simulation that also logs the state of each incorporating homopolymer.
+  }
+    \item{terminatorChemistryRun}{
+    Switch to simulate a run with terminator chemistry (only with treephaser simulator).
   }
 }
 \value{

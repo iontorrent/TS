@@ -12,8 +12,17 @@ void ReadOptimizedDefaultsForBkgModel (GlobalDefaultsForBkgModel &global_default
 
   if ( (strcmp (bkg_control.gopt, "default") == 0) || (strcmp (bkg_control.gopt, "opt") == 0) ){
     //load defaults for normal run or optimization
-    char filename[64] = "";    
-    sprintf (filename, "gopt_%s.param", chipType);
+    char filename[64] = "";
+    //Temporary fix for 910
+    if (strcmp(chipType,"910")==0){
+      sprintf (filename, "gopt_p1.0.19.param");
+    }
+    else if (strcmp(chipType,"900")==0) {
+      sprintf (filename, "gopt_p1.1.17.param");
+    }
+    else{
+      sprintf (filename, "gopt_%s.param", chipType);
+    }
     char *tmp_config_file = NULL;
     tmp_config_file = GetIonConfigFile (filename);
     global_defaults.SetGoptDefaults(tmp_config_file);
@@ -66,6 +75,8 @@ void OverrideDefaultsForBkgModel (GlobalDefaultsForBkgModel &global_defaults,Bkg
     global_defaults.SetGenericTestFlag (true);
   if (bkg_control.fit_alternate>0)
     global_defaults.SetFitAlternate(true);
+  if (bkg_control.fit_gauss_newton)
+    global_defaults.SetFitGaussNewton(true);
   if (bkg_control.emphasize_by_compression<1)
     global_defaults.SetEmphasizeByCompression(false);
   if (bkg_control.var_kmult_only>0)

@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>Twitter Bootstrap</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="">
+    <meta name="author" content="">
+
+    <!-- Le styles -->
+    <link href="assets/css/bootstrap.css" rel="stylesheet">
+    <link href="assets/css/bootstrap-responsive.css" rel="stylesheet">
+    <link href="assets/css/docs.css" rel="stylesheet">
+    <link href="assets/js/google-code-prettify/prettify.css" rel="stylesheet">
+
+    <!-- Le HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="http://html5shim.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <!-- Le fav and touch icons -->
+    <link rel="shortcut icon" href="assets/ico/favicon.ico">
+    <link rel="apple-touch-icon-precomposed" sizes="144x144" href="assets/ico/apple-touch-icon-144-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="114x114" href="assets/ico/apple-touch-icon-114-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" sizes="72x72" href="assets/ico/apple-touch-icon-72-precomposed.png">
+    <link rel="apple-touch-icon-precomposed" href="assets/ico/apple-touch-icon-57-precomposed.png">
+
+  </head>
+
+  <body data-spy="scroll" data-target=".bs-docs-sidebar">
+
+    <!-- Navbar
+    ================================================== -->
+    <div class="navbar navbar-inverse navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+          <button type="button" class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </button>
+          <a class="brand" href="./index.html">Bootstrap</a>
+          <div class="nav-collapse collapse">
+            <ul class="nav">
+              <li class="active">
+                <a href="./index.html">Home</a>
+              </li>
+              <li class="">
+                <a href="./getting-started.html">Get started</a>
+              </li>
+              <li class="">
+                <a href="./scaffolding.html">Scaffolding</a>
+              </li>
+              <li class="">
+                <a href="./base-css.html">Base CSS</a>
+              </li>
+              <li class="">
+                <a href="./components.html">Components</a>
+              </li>
+              <li class="">
+                <a href="./javascript.html">Javascript</a>
+              </li>
+              <li class="">
+                <a href="./customize.html">Customize</a>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+<div class="jumbotron masthead">
+  <div class="container">
+    <h1>Bootstrap</h1>
+    <p>Sleek, intuitive, and powerful front-end framework for faster and easier web development.</p>
+    <p>
+      <a href="assets/bootstrap.zip" class="btn btn-primary btn-large" >Download Bootstrap<small><br/>Includes all Jasny extensions</small></a>
+      <a href="assets/jasny-bootstrap.zip" class="btn btn-warning btn-large" >Extend Bootstrap<small><br/>Download extensions only</small></a>
+    </p>
+    <ul class="masthead-links">
+      <li><a href="http://twitter.github.com/bootstrap" >Original by Twitter</a></li>
+      <li><a href="http://github.com/jasny/bootstrap" >GitHub project</a></li>
+      <li><a href="./extend.html" >Extend</a></li>
+      <li>Version 2.1.1-j2</li>
+    </ul>
+  </div>
+  <img class="extended-badge" src="assets/img/extended-by-jasny.png">
+</div>
+
+<div class="bs-docs-social">
+  <div class="container">
+    <ul class="bs-docs-social-buttons">
+      <li>
+        <iframe class="github-btn" src="http://ghbtns.com/github-btn.html?user=jasny&repo=bootstrap&type=watch&count=true" allowtransparency="true" frameborder="0" scrolling="0" width="100px" height="20px"></iframe>
+      </li>
+      <li>
+        <iframe class="github-btn" src="http://ghbtns.com/github-btn.html?user=jasny&repo=bootstrap&type=fork&count=true" allowtransparency="true" frameborder="0" scrolling="0" width="98px" height="20px"></iframe>
+      </li>
+      <li class="follow-btn">
+        <a href="https://twitter.com/ArnoldDaniels" class="twitter-follow-button" data-width="155px" data-link-color="#0069D6" data-show-count="false">Follow @ArnoldDaniels</a>
+      </li>
+      <li class="follow-btn">
+        <a href="https://twitter.com/twbootstrap" class="twitter-follow-button" data-width="145px" data-link-color="#0069D6" data-show-count="false">Follow @twbootstrap</a>
+      </li>
+      <li class="tweet-btn">
+        <a href="https://twitter.com/share" class="twitter-share-button" data-url="http://jasny.github.com/bootstrap/" data-count="horizontal" data-via="ArnoldDaniels" data-related="twbootstrap:Original Twitter Bootstrap project">Tweet</a>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<div class="container">
+  <div class="changes">
+    <h1>What's different?</h1>
+    <p class="marketing-byline">How can a fantastic library become any better? Check it out.</p>
+    <div class="row">
+      <div class="span3">
+        <h3><a href="./base-css.html#action-links">Action links</a></h3>
+        <p>Sometimes a button will pull to much attention to an action. In those cases, you can use action links instead.</p>
+        <p>Action links look distinctly different than normal links.</p>
+      </div>
+      <div class="span3">
+        <h3><a href="./javascript.html#inputmask">Input mask</a></h3>
+        <p>Force the user to enter data conform a specific format.</p>
+        <p>Unlike validation, the user can't enter any other key than the ones specified by the mask.</p>
+      </div>
+      <div class="span3">
+        <h3><a href="./javascript.html#rowlink">Row link</a></h3>
+        <p>Don't like when can only click on one column in a table?</p>
+        <p>Row link is a simple javascript plugin that makes the whole row clickable.</p>
+      </div>
+      <div class="span3">
+        <h3><a href="./javascript.html#fileupload">File upload</a></h3>
+        <p>With the file upload plugin you can create visually appealing file or image upload widgets.</p>
+        <p>The image upload widget shows a preview of the selected image even before it's uploaded.</p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="span3">
+        <h3><a href="./base-css.html#iconic-icons">Iconic icons</a></h3>
+        <p>The iconic font set adds 170 new icons to Bootstrap. These icons can be used with buttons, menus, links, etc.</p>
+        <p>Because these icons are a font, they can be styled just like text.</p>
+      </div>
+      <div class="span3">
+        <h3><a href="./components.html#alerts">Page alerts</a></h3>
+        <p>Know those nice little alerts after you save your profile? With .page-alert the alert will be shown on top op your page.</p>
+      </div>
+      <div class="span3">
+        <h3><a href="./scaffolding.html#layouts">Semi-fluid layout</a></h3>
+        <p>Get the best of both worlds with a semi-fluid layout. It acts as a fixed layout for big screens. For smaller screens, it behaves like a fluid layout.</p>
+      </div>
+      <div class="span3">
+        <h3><a href="./scaffolding.html#responsive">Desktop rows</a></h3>
+        <p>By default columns of a row are show next to each other for tablets and desktops and not for phones. A desktop row displays acts like a row for desktops only and not for tablets or phones.</p>
+      </div>
+    </div>
+    <div class="row">
+      <div class="span3">
+        <h3><a href="./base-css.html#forms">Form elements</a></h3>
+        <p>Go beyond uneditable input and create a full uneditable form, with disabled and uneditable elements.</p>
+        <p>Add .editor to a textarea to create a larger field for content editing.</p>
+      </div>
+      <div class="span3">
+        <h3><a href="./base-css.html#forms">Form styles</a></h3>
+        <p>Combine horizontal and vertical forms. Using wells in horizontal forms now looks clean.</p>
+        <p>Use smaller labels to fit more input fields on one screen.</p>
+      </div>
+      <div class="span3">
+        <h3><a href="./components.html#navs">Tabbable</a></h3>
+        <p>Tabs work better than ever. You now have a bordered tabbable available. Also, a container can be turned into a tabbable.</p>
+      </div>
+      <div class="span3">
+        <h3>More</h3>
+        <ul>
+          <li>Action area for header <code>.header-actions</code></li>
+          <li>Action area for tables <code>.table-actions</code></li>
+          <li>Fixed margin for modal forms</li>
+        </ul>
+      </div>
+    </div><!--/row-->
+  </div>
+
+  <hr class="soften">
+
+  <div class="marketing">
+    <h1>Introducing Bootstrap.</h1>
+    <p class="marketing-byline">Need reasons to love Bootstrap? Look no further.</p>
+
+    <div class="row-fluid">
+      <div class="span4">
+        <img src="assets/img/bs-docs-twitter-github.png">
+        <h2>By nerds, for nerds.</h2>
+        <p>Built at Twitter by <a href="http://twitter.com/mdo">@mdo</a> and <a href="http://twitter.com/fat">@fat</a>, Bootstrap utilizes <a href="http://lesscss.org">LESS CSS</a>, is compiled via <a href="http://nodejs.org">Node</a>, and is managed through <a href="http://github.com">GitHub</a> to help nerds do awesome stuff on the web.</p>
+      </div>
+      <div class="span4">
+        <img src="assets/img/bs-docs-responsive-illustrations.png">
+        <h2>Made for everyone.</h2>
+        <p>Bootstrap was made to not only look and behave great in the latest desktop browsers (as well as IE7!), but in tablet and smartphone browsers via <a href="./scaffolding.html#responsive">responsive CSS</a> as well.</p>
+      </div>
+      <div class="span4">
+        <img src="assets/img/bs-docs-bootstrap-features.png">
+        <h2>Packed with features.</h2>
+        <p>A 12-column responsive <a href="./scaffolding.html#grid">grid</a>, dozens of components, <a href="./javascript.html">javascript plugins</a>, typography, form controls, and even a <a href="./customize.html">web-based Customizer</a> to make Bootstrap your own.</p>
+      </div>
+    </div>
+
+    <hr class="soften">
+
+    <h1>Built with Bootstrap.</h1>
+    <p class="marketing-byline">For even more sites built with Bootstrap, <a href="http://builtwithbootstrap.tumblr.com/" target="_blank">visit the unofficial Tumblr</a> or <a href="./getting-started.html#examples">browse the examples</a>.</p>
+    <div class="row-fluid">
+      <ul class="thumbnails example-sites">
+        <li class="span3">
+          <a class="thumbnail" href="http://soundready.fm/" target="_blank">
+            <img src="assets/img/example-sites/soundready.png" alt="SoundReady.fm">
+          </a>
+        </li>
+        <li class="span3">
+          <a class="thumbnail" href="http://kippt.com/" target="_blank">
+            <img src="assets/img/example-sites/kippt.png" alt="Kippt">
+          </a>
+        </li>
+        <li class="span3">
+          <a class="thumbnail" href="http://www.fleetio.com/" target="_blank">
+            <img src="assets/img/example-sites/fleetio.png" alt="Fleetio">
+          </a>
+        </li>
+        <li class="span3">
+          <a class="thumbnail" href="http://www.jshint.com/" target="_blank">
+            <img src="assets/img/example-sites/jshint.png" alt="JS Hint">
+          </a>
+        </li>
+      </ul>
+     </div>
+
+  </div>
+
+</div>
+
+
+
+    <!-- Footer
+    ================================================== -->
+    <footer class="footer">
+      <div class="container">
+        <p class="pull-right"><a href="#">Back to top</a></p>
+        <p>Designed and built with all the love in the world <a href="http://twitter.com/twitter" target="_blank">@twitter</a> by <a href="http://twitter.com/mdo" target="_blank">@mdo</a> and <a href="http://twitter.com/fat" target="_blank">@fat</a>.</p>
+        <p>Extended with pride by <a href="http://twitter.com/ArnoldDaniels" target="_blank">@ArnoldDaniels</a> of <a href="http://www.jasny.net/" target="_blank">Jasny Software solutions</a>.</p>
+        <p>Code licensed under the <a href="http://www.apache.org/licenses/LICENSE-2.0" target="_blank">Apache License v2.0</a>. Documentation licensed under <a href="http://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a>.</p>
+        <p>Icons from <a href="http://glyphicons.com">Glyphicons Free</a>, licensed under <a href="http://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a>.</p>
+        <p><a href="http://somerandomdude.com/work/iconic/">Iconic icon set font</a>, licensed under the <a href="http://scripts.sil.org/cms/scripts/page.php?site_id=nrsi&id=OFL">SIL Open Font License</a>.</p>
+        <ul class="footer-links">
+          <li><a href="http://blog.getbootstrap.com">Read the blog</a></li>
+          <li><a href="https://github.com/twitter/bootstrap/issues?state=open">Submit issues</a></li>
+          <li><a href="https://github.com/twitter/bootstrap/wiki">Roadmap and changelog</a></li>
+        </ul>
+      </div>
+    </footer>
+
+
+
+    <!-- Le javascript
+    ================================================== -->
+    <!-- Placed at the end of the document so the pages load faster -->
+    <script type="text/javascript" src="http://platform.twitter.com/widgets.js"></script>
+    <script src="assets/js/jquery.js"></script>
+    <script src="assets/js/google-code-prettify/prettify.js"></script>
+    <script src="assets/js/bootstrap-transition.js"></script>
+    <script src="assets/js/bootstrap-alert.js"></script>
+    <script src="assets/js/bootstrap-modal.js"></script>
+    <script src="assets/js/bootstrap-dropdown.js"></script>
+    <script src="assets/js/bootstrap-scrollspy.js"></script>
+    <script src="assets/js/bootstrap-tab.js"></script>
+    <script src="assets/js/bootstrap-tooltip.js"></script>
+    <script src="assets/js/bootstrap-popover.js"></script>
+    <script src="assets/js/bootstrap-button.js"></script>
+    <script src="assets/js/bootstrap-collapse.js"></script>
+    <script src="assets/js/bootstrap-carousel.js"></script>
+    <script src="assets/js/bootstrap-typeahead.js"></script>
+    <script src="assets/js/bootstrap-affix.js"></script>
+    <script src="assets/js/bootstrap-inputmask.js"></script>
+    <script src="assets/js/bootstrap-rowlink.js"></script>
+    <script src="assets/js/bootstrap-fileupload.js"></script>
+    <script src="assets/js/application.js"></script>
+
+  </body>
+</html>

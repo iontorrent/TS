@@ -3,6 +3,7 @@
   // Torrent Browser provides TB_plugin which is a JSON object with plugin information.
   TB_plugin = {{ plugin|safe }};
   TB_pluginMedia = "/pluginMedia/" + TB_plugin["fields"]["name"] + "/";
+  TB_user = "{{ request.user.username }}";
 
   {% if report %}
     TB_result = {{ report }};

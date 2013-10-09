@@ -47,6 +47,7 @@ class CrossTalkSpecification
     // are we hex_packed?
     bool hex_packed;
     bool three_series; // are we one clas of chips
+    int initialPhase;
     //do we do this at all?
     bool do_xtalk_correction;
     bool simple_model;
@@ -59,6 +60,7 @@ class CrossTalkSpecification
     void SetHexGrid();
     void SetAggressiveHexGrid();
     void SetNewHexGrid();
+    void SetNewHexGridP0();
     float ClawBackBuffering ( int nei_total );
     void ReadCrossTalkFromFile ( const char * );
     // different chips unfortunately have different layouts

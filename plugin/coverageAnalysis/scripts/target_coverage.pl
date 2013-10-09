@@ -35,7 +35,7 @@ if( scalar(@ARGV) < 8 )
 }
 my $dataFile = shift;
 my $chrom = shift;
-my $gene = uc(shift);
+my $gene = uc(shift);  # assume case insensitive for user convenience - later this could be an issue
 my $covmin = shift;
 my $covmax = shift;
 my $maxrows = shift;
@@ -72,10 +72,32 @@ if( !TSVFILE || eof(TSVFILE) ) {
 my %chrid;
 my $chrList = '';
 my $numHits = $numrec;
+my $checkGene = 0;
+my $checkNVP = 0;
+my $keyswp = '';
 if( $numrec <= 0 )
 {
   $numHits = 0;
-  <TSVFILE>;
+  # check if this had gene id column of old format - if not assume it is the ionVersion=4.0 KVP fields
+  my $line = <TSVFILE>;
+  my $genq = $gene;
+  if( $genq ne "" ) {
+    $checkGene = ($line =~ m/\sgene_id\s/);
+    $checkNVP = !$checkGene;
+    if( $checkNVP ) {
+      # make default key GENE_ID
+      my $i = index($genq,"=");
+      if( $i < 0 ) {
+        $genq = "GENE_ID=".$genq;
+        $keyswp = ";GENE_ID=";
+      } else {
+        $keyswp = ";".substr($genq,0,$i+1);
+      }
+      # for performance - allows for direct string search rather than complex regex
+      $genq = ';'.$genq if( $genq !~ /^;/ );
+      $genq .= ';' if( $genq !~ /;$/ );
+    }
+  }
   while( <TSVFILE> )
   {
     my @fields = split('\t',$_);
@@ -85,9 +107,17 @@ if( $numrec <= 0 )
       $chrid{$fields[0]} = 1;
     }
     next if( $chrom ne "" && $chrom ne $fields[0] );
-    next if( $gene ne "" && $gene ne uc($fields[4]) );
     next if( $covmin > $fields[9] );
     next if( $covmax < $fields[9] );
+    if( $checkNVP ) {
+      # allow to work on merged fields by replacing merge separator character (@) with a key match
+      my $fld = ';'.uc($fields[4]).';';
+      $fld =~ s/&/$keyswp/g;
+      next if( index( $fld, $genq ) < 0 );
+    } elsif( $checkGene ) {
+      # support for pre-4.0 format
+      next if( $genq ne uc($fields[4]) );
+    }
     ++$numHits;
   }
   # rewind for re-read
@@ -110,6 +140,22 @@ if( $genome ne '' )
 # output header line with extra first field for numHits to query
 # - also output all chromosomes as extra field if asked for by supplying $numrec < 0
 my $line = <TSVFILE>;
+# code is repeated here since earlier pre-scan might not have been perfomed
+if( $gene ne "" ) {
+  $checkGene = ($line =~ m/\sgene_id\s/);
+  $checkNVP = !$checkGene;
+  if( $checkNVP ) {
+    my $i = index($gene,"=");
+    if( $i < 0 ) {
+      $gene = "GENE_ID=".$gene;
+      $keyswp = ";GENE_ID=";
+    } else {
+      $keyswp = ";".substr($gene,0,$i+1);
+    }
+    $gene = ';'.$gene if( $gene !~ /^;/ );
+    $gene .= ';' if( $gene !~ /;$/ );
+  }
+}
 if( !$allout ) {
   print "$numHits\t";
   print "$chrList\t" if( $chrret && $numrec < 0 );
@@ -149,9 +195,18 @@ while( <TSVFILE> )
 {
   @fields = split('\t',$_);
   next if( $chrom ne "" && $chrom ne $fields[0] );
-  next if( $gene ne "" && $gene ne uc($fields[4]) );
   next if( $covmin > $fields[9] );
   next if( $covmax < $fields[9] );
+  if( $checkNVP ) {
+    # allow to work on merged fields by replacing merge separator character (@)
+    my $fld = ';'.uc($fields[4]).';';  # do not want to affect output string!
+    $fld =~ s/&/$keyswp/g;
+    next if( index( $fld, $gene ) < 0 );
+  } elsif( $checkGene ) {
+    # support for pre-4.0 format
+    next if( $gene ne uc($fields[4]) );
+  }
+  # to get to correct window this must be done after all filters
   next if( ++$nrec < $skipStart );
   if( $allout ) {
     if( $bedout ) {

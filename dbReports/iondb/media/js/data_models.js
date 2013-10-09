@@ -1,3 +1,5 @@
+var api_data_show_url = "/rundb/api/v1/compositeexperiment/show/";
+
 function addCommas(nStr) {
     nStr += '';
     var x = nStr.split('.');
@@ -11,7 +13,6 @@ function addCommas(nStr) {
 }
 
 function precisionUnits(num, div) {
-    // console.log(num + ' ' + typeof(num));
     if (typeof div === "undefined") div = 1000;
     num = parseFloat(num);
     var postfix = "";
@@ -50,7 +51,6 @@ $(function(){
         },
 
         fetch: function(options) {
-            console.log("Fetching");
             typeof(options) != 'undefined' || (options = {});
             //this.trigger("fetching");s
             var self = this;
@@ -63,7 +63,6 @@ $(function(){
         },
 
         parse: function(resp) {
-            console.log("Parsing response");
             this.offset = resp.meta.offset;
             this.limit = resp.meta.limit;
             this.total = resp.meta.total_count;
@@ -147,7 +146,6 @@ $(function(){
                 if (dups[i]) {
                     model.change();
                 } else {
-                    console.log("Add");
                     model.trigger('add', model, this, options);
                 }
             }
@@ -161,7 +159,6 @@ $(function(){
                 urlparams = $.extend(urlparams, {order_by: this.sort_field});
             }
             var full_url = this.baseUrl + '?' + $.param(urlparams);
-            console.log(full_url);
             return full_url;
         },
 
@@ -235,7 +232,6 @@ $(function(){
         },
 
         filtrate: function (options) {
-            console.log("Filtering");
             this.filter_options = options || {};
             this.offset = 0;
             return this.fetch();
@@ -270,8 +266,6 @@ $(function(){
         render: function () {
             var page_info = this.collection.pageInfo();
             page_info.page_numbers = this.pageRange(page_info);
-            console.log("Pagination");
-            console.log(page_info);
             this.$el.html(this.template.render(page_info));
         },
 
@@ -325,7 +319,6 @@ $(function(){
         },
 
         destroy_view: function() {
-            console.log("Destroying report view");
             //COMPLETELY UNBIND THE VIEW
             this.undelegateEvents();
             $(this.el).removeData().unbind(); 
@@ -402,20 +395,27 @@ $(function(){
     RunRouter = Backbone.Router.extend({
         routes: {
             'full': 'full_view',
-            'table': 'table_view',
-            'old_table': 'old_table'
+            'table': 'table_view'
+        },
+
+        initialize: function(options) {
+            typeof(options) != 'undefined' || (options = {});
+            options.server_state == "full" || (options.server_state = 'table');
+            this.server_state = options.server_state;
         },
 
         full_view: function () {
-            console.log("Full view!");
+            if (this.server_state != "full") {
+                $.post(api_data_show_url, "full");
+                this.server_state = "full";
+            }
         },
 
         table_view: function () {
-            console.log("Table view!");
-        },
-
-        old_table: function () {
-            console.log("Development view!");
+            if (this.server_state != "table") {
+                $.post(api_data_show_url, "table");
+                this.server_state = "table";
+            }
         }
     });
     

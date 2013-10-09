@@ -1,0 +1,926 @@
+{% extends "rundb/monitor/base.html" %}
+{% load url from future %}
+{% load pagetools %}
+{% load static from staticfiles %}
+{% block extra_head %}
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<link href="{% static "styles/kendo.common.min.css" rel="stylesheet" %}" />
+<link href="{% static "styles/kendo.default.min.css" rel="stylesheet" %}" />
+<!--
+<script src="{% static "jquery/js/jquery-1.6.1.min.js" %}"></script>
+-->
+<script src="{% static "resources/kendo/js/jquery.min.js" %}"></script>
+<script src="{% static "resources/kendo/js/kendo.web.min.js" %}"></script>
+<style type="text/css">
+    .run-metric-box {
+        background: #EEE;
+    }
+    .signal {
+    	margin: 0;
+    }
+    .k-grid tr td:first-child a img {
+    	float:none;
+    	clear:both;
+    	margin:0;
+    }
+    .k-grid tr td:first-child  {
+    	text-align: center;
+	}
+	.metrics-row  [class*="span"] {
+	}
+    .run-details {
+        max-width: 50%;
+    }
+    #update_status {
+        color: gray;
+        padding: 5px 0;
+        vertical-align: middle;
+    }
+</style>
+
+<script type='text/javascript'>
+	// The scripts governing most of the page's functionality are here.
+	
+	// 'Global' variable to hold the current tree configuration's json data.
+	var jsonDat = {};
+	
+	// Things to do once the page has loaded.
+	$(document).ready(function(){
+		// Set the tree's configuration from json data.
+		jsonDat = setJsonDat();
+		newDataSource = [];
+		for (item in jsonDat)
+		{
+			// The tree data is stored in a nested structure with a value of 'n' indicating a child node. Example:
+			// { "Example1" : { "Example2" : "n", "Example3" : { "Example4" : "n" } } }
+			// Results in:
+			// - Example1
+			//   | - Example2
+			//   | - Example3
+			//       | - Example4
+			// Looking in hindsight, it may be simpler just to save the whole dataSource object of the tree, but I'm not sure if it is safe to assume that that will be valid json.
+			// Anyways, this recursively goes through the list so there is no maximum depth.
+			if (jsonDat[item] != "n")
+			{
+				newDataSource.push(parseItem(jsonDat[item], item));
+			}
+			else
+			{
+				newDataSource.push({text:item});
+			}
+		}
+		// Set the dataSource of the treeView.
+		treeview_left.setDataSource(kendo.observableHierarchy(newDataSource));
+	});
+	
+	// Get json data from the currently selected configuration.
+	function setJsonDat(){
+		// Get the selected configuration's name, match it to a database field, then retrieve the data.
+		var configSelect = document.getElementById("config_select").value;
+		{% for monitor in extra_data %}
+			testAgainst = "{{monitor.name}}";
+			if (testAgainst == configSelect)
+			{
+				jsonDat = {{ monitor.treeDat|safe }};
+			}
+		{% endfor %}
+		return jsonDat;
+	}
+	
+	// Function to post the treeView's configuration.
+	function postJson(jsonData){
+		// Prepare the json for sending.
+		sendJson = {};
+		sendJson["treeDat"] = jsonData;
+		// Use the configuration's name to determine which ID to post to.
+		id = "@";
+		var configName = document.getElementById("ConfigName").value;
+		{% for monitor in extra_data %}
+			var testVal = "{{monitor.name}}";
+			if (testVal == configName)
+			{
+				id = "{{monitor.id}}";
+			}
+		{% endfor %}
+		// If the name is unused, use POST to create a new field.
+		if (id == "@")
+		{
+			toUrl = '/rundb/api/v1/monitordata/';
+			var outType = 'POST';
+			sendJson["name"] = configName;
+			sendJson = JSON.stringify(sendJson);
+		}
+		// If the name is used, use PUT to update the existing field.
+		else
+		{
+			toUrl = '/rundb/api/v1/monitordata/' + id;
+			var outType = 'PUT';
+			sendJson = JSON.stringify(sendJson);
+		}
+		// Make the actual ajax call.
+		$.ajax({
+			url:toUrl,
+			type: outType,
+			data: sendJson,
+			dataType: 'json',
+			contentType: 'application/json',
+			username: 'ionadmin',
+			password: 'ionadmin',
+			success: function()
+			{
+				alert("Configuration saved.");
+			},
+			error: function(xhr)
+			{
+				//Why does it think 201 is an error?
+				if (xhr.status != 201) {alert("Failure: configuration not saved.");}
+				else {alert("Configuration saved.");}
+			}
+		});
+		//$("#DebugOut").html("ID: " + id + ", NAME: " + configName + ", TEST: " + testVal);
+	}
+	
+	// Helper function for converting the current treeView's dataSource into the json format specified above.
+	function unParse(jsonObj, headText) {
+		var curDat = {};
+		curDat[headText] = {};
+		// Recursively add nested nodes to the json output. Start at the top, and if the node is not a child (!='n'), call again with the current value.
+		for (item in jsonObj)
+		{
+			if (jsonObj[item]["items"] == undefined)
+			{
+				var exJson = {};
+				exJson[jsonObj[item]["text"]] = "n";
+				$.extend(curDat[headText], exJson);
+			}
+			else if (jsonObj[item]["items"][0] == undefined)
+			{
+				var exJson = {};
+				exJson[jsonObj[item]["text"]] = "n";
+				$.extend(curDat[headText], exJson);
+			}
+			else
+			{
+				$.extend(curDat[headText], unParse(jsonObj[item]["items"], jsonObj[item]["text"]));
+			}
+		}
+		return curDat;
+	}
+	
+	// Function to produce json data for tree configuration in the format specified above.
+	function jsonFromTree() {
+		// Get the current treeView dataSource.
+		treeJson = treeview_left.dataSource.data().toJSON();
+		//$("#DebugOut").html(JSON.stringify(treeJson));
+		parsedJSON = {};
+		for (item in treeJson)
+		{
+			// if the node has no children, mark it as a child node with 'n' and add it to the current json.
+			if (treeJson[item]["items"][0] == undefined)
+			{
+				var exJson = {};
+				exJson[treeJson[item]["text"]] = "n";
+				$.extend(parsedJSON, exJson);
+			}
+			// Otherwise, call unParse on the node, which will construct an appropriate structure.
+			else
+			{
+				$.extend(parsedJSON, unParse(treeJson[item]["items"], treeJson[item]["text"]));
+			}
+		}
+		//$("#DebugOut").html(JSON.stringify(parsedJSON));
+		// Post the new configuration.
+		jsonDat = parsedJSON;
+		postJson(jsonDat);
+	}
+	
+	// Helper method to produce a treeView dataSource from user configuration json.
+	// Similar to unParse, but in reverse.
+	function parseItem(jsonObj, headText) {
+		var curDat = { text:headText, expanded:true, items:[] };
+		for (item in jsonObj)
+		{
+			if (jsonObj[item] != "n")
+			{
+				curDat.items.push(parseItem(jsonObj[item], item));
+			}
+			else
+			{
+				curDat.items.push({text:item});
+			}
+		}
+		return curDat;
+	}
+	
+	// Apply the selected configuration; the value will be taken from the button's adjacent drop-down menu.
+	$(function() {
+	$('#ApplyConfig').click(function() {
+		// Get the configuration data from the field associated with menu's currently selected value.
+		var jsonDat = setJsonDat();
+		newDataSource = [];
+		
+		// Produce a dataSource by recursively calling parseItem.
+		for (item in jsonDat)
+		{
+			//$("#DebugOut").html(document.getElementById("DebugOut").innerHTML + ", " + item);
+			if (jsonDat[item] != "n")
+			{
+				newDataSource.push(parseItem(jsonDat[item], item));
+			}
+			else
+			{
+				newDataSource.push({text:item});
+			}
+		}
+		// Set the new dataSource as the treeView's source.
+		treeview_left.setDataSource(kendo.observableHierarchy(newDataSource));
+	});
+	})
+	
+	// Save the current tree configuration.
+	$(function() {
+	$('#SaveConfig').click(function() {
+		curTree = jsonFromTree();
+	});
+	})
+	
+	// Create and display the System tab.
+	$(function() {
+	$('#button_system').click(function() {
+		$("#sys-div").show();
+		$("#soft-div").hide();
+		$("#opt-div").hide();
+		var sysMsg = "";
+		// Produce desired output for each selected instrument.
+		var nodes = treeview_left.dataSource.view();
+		for (var i = 0; i < nodes.length; i++)
+		{
+			// If the node is checked, the instrument should be displayed.
+			if (nodes[i].checked)
+			{
+				{% for rig in rigs %}
+					var rig_name = "{{ rig.name }}";
+					if (nodes[i].text == rig_name)
+					{
+						// Currently, the System tab only displays comments.
+						sysMsg += "<i>" + rig_name + ":</i><br/>";
+						sysMsg += "Comments: {{ rig.comments }}<br/>";
+						sysMsg += "<br/>";
+					}
+				{% endfor %}
+			}
+		}
+		// Set the dynamic System tab div's html to the produced value.
+		$("#extra-sys").html(sysMsg);
+	});
+	})
+	
+	// Debugging, call to make something pop up.
+	thisFunct = function(data)
+	{
+		alert(data);
+	};
+	
+	// Create and display the Software tab.
+	$(function() {
+	$('#button_software').click(function() {
+		$("#sys-div").hide();
+		$("#soft-div").show();
+		$("#opt-div").hide();
+		
+		// Get the software versions list information.
+		var softUrl = '/monitor/getSoftware';
+		var outDat = '';
+		$.ajax({
+			url:softUrl,
+			async: false,
+			type: 'GET',
+			username: 'ionadmin',
+			password: 'ionadmin',
+			success: function(data) { outDat = data; },
+			error: function(xhr)
+			{
+				if (xhr.status != 200)
+					alert("Error receiving options.");
+				else
+					outDat = xhr;
+			}
+		});
+		
+		// Display the relevant information for each selected rig.
+		var outList = outDat.split("\n");
+		var softMsg = "<hr><div id=\"soft-left\" style=\"float:left; padding-right:50px; overflow:visible;\">";
+		var nodes = treeview_left.dataSource.view();
+		var versions = {};
+		for (var i = 0; i < nodes.length; i++)
+		{
+			// If the node is checked, the instrument should be displayed.
+			if (nodes[i].checked)
+			{
+				{% for rig in rigs %}
+					var rig_name = "{{ rig.name }}";
+					if (nodes[i].text == rig_name)
+					{
+						versions = {{ rig.version|safe }}
+						softMsg += "<i>" + rig_name + ":</i><br/>";
+						
+						// Check whether the current versions match an existing package.
+						var curTag = '';
+						var softList = '';
+						var matching = true;
+						var matchTag = '';
+						for (line in outList)
+						{
+							if (outList[line].substring(0,2) == '##')
+							{
+								if (curTag == '')
+								{
+									curTag = outList[line].substring(2,outList[line].indexOf(' '));
+								}
+								else if (curTag != outList[line].substring(2,outList[line].indexOf(' ')))
+								{
+									if (matching)
+									{
+										matchTag = curTag;
+										break;
+									}
+									else
+									{
+										curTag = outList[line].substring(2,outList[line].indexOf(' '));
+										matching = true;
+									}
+								}
+								lineList = outList[line].split(" ");
+								// Not everything matches up perfectly...handle the differences between the versions json and the names in the file here.
+								if (lineList[1] != 'rsmagent' && lineList[1] != 'datacollect' && lineList[1] != 'Scripts' && lineList[1] != 'package')
+								{
+									if (lineList[2] != versions[lineList[1]])
+									{
+										matching = false;
+									}
+								}
+								else if (lineList[1] == 'rsmagent')
+								{
+									if (lineList[2] != versions['RSM'])
+										matching = false;
+								}
+								else if (lineList[1] == 'datacollect')
+								{
+									if (lineList[2] != versions['Datacollect'])
+										matching = false;
+								}
+								else if (lineList[1] == 'Scripts')
+								{
+									if (lineList[2] != versions['Script'])
+										matching = false;
+								}
+							}
+						}
+						// Display the matching configuration. If no configurations match, display a full list of the installed packages.
+						if (matching)
+							matchTag = curTag;
+						
+						if (matchTag == '')
+							matchTag = 'None recognized:';
+						softMsg += "<br/>Current package: <span id=\"packageSpan\">" + matchTag + "</span><br/>";
+						if (matchTag == 'None recognized:')
+							softMsg += JSON.stringify(versions).replace(/,/g, ",<br/>");
+					}
+				{% endfor %}
+			}
+		}
+		// Process and create a dropdown list to selecte a new software package. Also make a simple list of available packages.
+		softMsg += "</div><div id=\"soft-right\" style=\"float:left; overflow:visible;\">";
+		softMsg += "<i>Available packages:</i><br/>";
+		var curTag = '';
+		var tagList = [];
+		// Process data before actually adding the list to the html var.
+		// That way a drop-down can be included above the long text list.
+		var softList = '';
+		for (line in outList)
+		{
+			if (outList[line].substring(0,2) == '##')
+			{
+				// These if's just add line breaks between different package groups.
+				if (curTag == '')
+				{
+					curTag = outList[line].substring(2,outList[line].indexOf(' '));
+					softList += curTag + "<br/>";
+					tagList.push(curTag);
+				}
+				else if (curTag != outList[line].substring(2,outList[line].indexOf(' ')))
+				{
+					softList += '<br/>';
+					curTag = outList[line].substring(2,outList[line].indexOf(' '));
+					softList += curTag + "<br/>";
+					tagList.push(curTag);
+				}
+				
+				//softList += outList[line].substring(2) + '<br/>';
+			}
+		}
+		
+		// Create the drop-down menu for selecting which software package to update to.
+		var softSelect = "<select name=\"softwareSelect\" id=\"softwareSelect\">";
+		for (val in tagList)
+		{
+			softSelect += "<option value=\""+tagList[val]+"\">"+tagList[val]+"</option>";
+		}
+		// This next line is for debugging only. It creates a 'custom' field, for individually-defined software versions.
+		softSelect += "<option value=\"custom\">custom</option>";
+		softSelect += "</select><br/>"
+		
+		softMsg += softSelect;
+		softMsg += softList + "<br/>";
+		// This table is also for debugging only. It allows the setting of values for the 'custom' field.
+		softMsg += "Custom: (FOR DEBUGGING ONLY)<br/>";
+		softMsg += "<table id=\"soft_custom_table\" border=\"1\" cellpadding=\"5\">";
+		softMsg += "<tr><td>LiveView</td><td><input id=\"LiveView_in\" type=\"text\" value="+versions['LiveView']+"></td>";
+		softMsg += "<tr><td>dataCollect</td><td><input id=\"Datacollect_in\" type=\"text\" value="+versions['Datacollect']+"></td>";
+		softMsg += "<tr><td>Scripts</td><td><input id=\"Script_in\" type=\"text\" value="+versions['Script']+"></td>";
+		softMsg += "<tr><td>Graphics</td><td><input id=\"Graphics_in\" type=\"text\" value="+versions['Graphics']+"></td>";
+		softMsg += "<tr><td>rsmagent</td><td><input id=\"RSM_in\" type=\"text\" value="+versions['RSM']+"></td>";
+		softMsg += "<tr><td>OS</td><td><input id=\"OS_in\" type=\"text\" value="+versions['OS']+"></td>";
+		softMsg += "<tr><td>OIA</td><td><input id=\"OIA_in\" type=\"text\" value="+versions['OIA']+"></td>";
+		softMsg += "</table><br/>";
+		softMsg += "</div>";
+		// Set the generated software tab to the appropriate part of the page.
+		$("#extra-soft").html(softMsg);
+	});
+	})
+	
+	// Produce and display the options tab.
+	$(function() {
+	$('#button_options').click(function() {
+		$("#sys-div").hide();
+		$("#soft-div").hide();
+		$("#opt-div").show();
+		var optMsg = "";
+		// Again, produce a version of the core display for each checked instrument.
+		var nodes = treeview_left.dataSource.view();
+		for (var i = 0; i < nodes.length; i++)
+		{
+			if(nodes[i].checked)
+			{
+				{% for rig in rigs %}
+					var rig_name = "{{ rig.name }}";
+					if (nodes[i].text == rig_name)
+					{
+						// Write the new html.
+						optMsg += "<hr><i>" + rig_name + ":</i><br/>";
+						// The 'writable' table contains values which should be available for changing. It will contain 3 columns: key, value, new value.
+						optMsg += "Writable:<br/>";
+						
+						optMsg += "<table id=\"{{rig.name}}_table\" border=\"1\" cellpadding=\"5\">";
+						optMsg += "<tr><td>Name:</td><td>{{ rig.name }}</td><td><input id=\"{{rig.name}}_name\" type=\"text\" value=\"{{rig.name}}\"></td></tr>";
+						// (Location likely needs its own table, but I'm not sure what it will realistically contain or how that should be handled.)
+						optMsg += "<tr><td>Comments:</td><td>{{ rig.comments }}</td><td><input id=\"{{rig.name}}_comments\" type=\"text\" value=\"{{rig.comments}}\"></td></tr>";
+						optMsg += "<tr><td>Ftpserver:</td><td>{{ rig.ftpserver }}</td><td><input id=\"{{rig.name}}_ftpserver\" type=\"text\" value=\"{{rig.ftpserver}}\"></td></tr>";
+						optMsg += "<tr><td>Ftpusername:</td><td>{{ rig.ftpusername }}</td><td><input id=\"{{rig.name}}_ftpusername\" type=\"text\" value=\"{{rig.ftpusername}}\"></td></tr>";
+						optMsg += "<tr><td>Ftppassword:</td><td>{{ rig.ftppassword }}</td><td><input id=\"{{rig.name}}_ftppassword\" type=\"text\" value=\"{{rig.ftppassword}}\"></td></tr>";
+						optMsg += "<tr><td>Ftprootdir:</td><td>{{ rig.ftprootdir }}</td><td><input id=\"{{rig.name}}_ftprootdir\" type=\"text\" value=\"{{rig.ftprootdir}}\"</td></tr>";
+						optMsg += "<tr><td>Updatehome:</td><td>{{ rig.updatehome }}</td><td><input id=\"{{rig.name}}_updatehome\" type=\"text\" value=\"{{rig.updatehome}}\"</td></tr>";
+						var updateFlagVal = "{{ rig.updateflag }}";
+						if (updateFlagVal == "True")
+						{
+							optMsg += "<tr><td>Updateflag:</td><td>{{ rig.updateflag }}</td><td>True: <input id=\"{{rig.name}}_updateflagTrue\" type=\"radio\" name=\"{{rig.name}}_updateflag\" checked><br/>False: <input id=\"{{rig.name}}_updateflagFalse\" type=\"radio\" name=\"{{rig.name}}_updateflag\"></td></tr>";
+						}
+						else
+						{
+							optMsg += "<tr><td>Updateflag:</td><td>{{ rig.updateflag }}</td><td>True: <input id=\"{{rig.name}}_updateflagTrue\" type=\"radio\" name=\"{{rig.name}}_updateflag\"><br/>False: <input id=\"{{rig.name}}_updateflagFalse\" type=\"radio\" name=\"{{rig.name}}_updateflag\" checked></td></tr>";
+						}
+						optMsg += "</table><br/>";
+						// The 'read-only' table is for values that may not be edited. It will contain 2 columns: key, value.
+						optMsg += "Read-only:<br/>";
+						optMsg += "<table border=\"1\" cellpadding=\"5\">";
+						optMsg += "<tr><td>Serial:</td><td>{{ rig.serial }}</td></tr>";
+						optMsg += "<tr><td>State:</td><td>{{ rig.state }}</td></tr>";
+						var versions = JSON.stringify({{rig.version|safe}}).replace(/,/g, ',<br/>');
+						optMsg += "<tr><td>Version:</td><td>"+versions+"</td></tr>";
+						var alarms = JSON.stringify({{rig.alarms|safe}}).replace(/,/g, ',<br/>');
+						optMsg += "<tr><td>Alarms:</td><td>{{ rig.alarms }}</td></tr>";
+						optMsg += "<tr><td>Last init date:</td><td>{{ rig.lastinitdate }}</td></tr>";
+						optMsg += "<tr><td>Last clean date:</td><td>{{ rig.lastcleandate }}</td></tr>";
+						optMsg += "<tr><td>Last experiment:</td><td>{{ rig.lastexperiment }}</td></tr>";
+						optMsg += "</table><br/>";
+					}
+				{% endfor %}
+			}
+		}
+		// Set the generated html to the appropriate location on the page.
+		$("#extra-opt").html(optMsg);
+	});
+	})
+	
+	$(function() {
+	$('#soft-submit').click(function() {
+		// Produce yet another alert that software changes shouldn't be made unless you know what you're getting. It's in bold at the top of the software tab, but this makes it pretty difficult to ignore the warning; you need to hit 'okay'.
+		if (confirm('Are you sure that you want to apply software changes? This action will alter the software installed on your instrument.'))
+		{
+			// base URL to get the rig data from. The for loop just finds the appropriate name and adds it to the url. This part of the page currently only supports one checked rig, as most of the buttons do. I wasn't entirely sure how multiple ones should be handled, and wanted to get it to a working and fully-featured state.
+			var toUrl = "/rundb/api/v1/rig/?format=json&name=";
+			var id = "";
+			var nodes = treeview_left.dataSource.view();
+			for (var i = 0; i < nodes.length; i++)
+			{
+				if (nodes[i].checked)
+				{
+					id = nodes[i].text;
+				}
+			}
+			toUrl = toUrl + id;
+			var getJson = {};
+			// Get json to check that nothing has changed since the db data was passed.
+			// We don't want to unwittingly overwrite changes if we can avoid it.
+			$.ajax({
+				url:toUrl,
+				async: false,
+				type: 'GET',
+				dataType: 'json',
+				contentType: 'application/json',
+				username: 'ionadmin',
+				password: 'ionadmin',
+				success: function(data) { getJson = data; },
+				error: function(xhr)
+				{
+					if (xhr.status != 200)
+						alert("Error receiving options.");
+					else
+						getJson = xhr;
+				}
+			});
+			getJson = getJson["objects"][0];
+			
+			// This links to a django method which grabs the software list from the updates site. AJAX cannot make get requests to the site, so rather than mess around with the updates site's server configuration (probably bad), I just had python do it (easy and not messy).
+			// Anyways, see dbReports/iondb/rundb/monitor/views.py, but it's only a 3-line method.
+			var softUrl = '/monitor/getSoftware';
+			var outDat = '';
+			
+			$.ajax({
+				url:softUrl,
+				async: false,
+				type: 'GET',
+				username: 'ionadmin',
+				password: 'ionadmin',
+				success: function(data) { outDat = data; },
+				error: function(xhr)
+				{
+					if (xhr.status != 200)
+						alert("Error receiving options.");
+					else
+						outDat = xhr;
+				}
+			});
+			
+			// Parse the software list. Start by putting it into a list, then run through and figure out which package, if any, is being used.
+			var outList = outDat.split("\n");
+			var curTag = '';
+			var softList = '';
+			for (line in outList)
+			{
+				if (outList[line].substring(0,2) == '##')
+				{
+					curTag = outList[line].substring(2,outList[line].indexOf(' '));
+					if (curTag == document.getElementById("softwareSelect").value)
+					{
+						// Put the values into 'version'.
+						lineList = outList[line].split(" ");
+						// Not everything matches up perfectly...
+						if (lineList[1] != 'rsmagent' && lineList[1] != 'datacollect' && lineList[1] != 'Scripts' && lineList[1] != 'package')
+							getJson["version"][lineList[1]] = lineList[2];
+						else if (lineList[1] == 'rsmagent')
+							getJson["version"]['RSM'] = lineList[2];
+						else if (lineList[1] == 'datacollect')
+							getJson["version"]['Datacollect'] = lineList[2];
+						else if (lineList[1] == 'Scripts')
+							getJson["version"]['Script'] = lineList[2];
+					}
+					$("#DebugOut").html(JSON.stringify(getJson["version"]));
+					softList += outList[line].substring(2) + '<br/>';
+				}
+			}
+			// For debugging. No need to keep this 'if' around once things are finalized.
+			if (document.getElementById("softwareSelect").value == "custom")
+			{
+				var fields = ["RSM", "LiveView", "Datacollect", "Script", "Graphics", "OS", "OIA"];
+				for (field in fields)
+				{
+					$("#DebugOut").html(fields[field]);
+					getJson["version"][fields[field]] = document.getElementById(fields[field] + "_in").value;
+				}
+			}
+			// To keep track of which package is desired, I just added a new key to the 'version' json already found in the rigs table. I figure, it makes sense and is simpler than changing the database.
+			getJson["version"]["package"] = document.getElementById('softwareSelect').value;
+			getJson = JSON.stringify(getJson);
+			toUrl = toUrl.replace('?format=json&name=', '');
+			toUrl = toUrl + '/';
+			
+			// Finally, if everything checks out, update the database with a put request to the rest api.
+			$.ajax({
+				url:toUrl,
+				async: false,
+				type: 'PUT',
+				data: getJson,
+				dataType: 'json',
+				contentType: 'application/json',
+				username: 'ionadmin',
+				password: 'ionadmin',
+				success: function(data)
+				{
+					alert("Configuration saved.");
+					window.location.reload();
+				},
+				error: function(xhr)
+				{
+					if (xhr.status != 201)
+						alert("Error receiving options.");
+					else
+					{
+						alert("Configuration saved.");
+						window.location.reload();
+					}
+				}
+			});
+		}
+	});
+	})
+	
+	// Post changes made to the options.
+	$(function() {
+	$('#opt-submit').click(function() {
+		// Submission steps:
+		// 1. Get current rig's json.
+		// 2. Make sure no changes were made since the page was loaded.
+		// 3. If everything looks good, PUT changes.
+		// 4. If successful, reload page.
+		// First, init variables and ID the correct url to get json from.
+		if (confirm('Are you sure you want to send these options to the instrument?'))
+		{
+			var toUrl = "/rundb/api/v1/rig/?format=json&name=";
+			var id = "";
+			var nodes = treeview_left.dataSource.view();
+			for (var i = 0; i < nodes.length; i++)
+			{
+				if (nodes[i].checked)
+				{
+					id = nodes[i].text;
+				}
+			}
+			toUrl = toUrl + id;
+			var getJson = {};
+			// Get json to check that nothing has changed since the db data was passed.
+			// We don't want to unwittingly overwrite changes if we can avoid it.
+			$.ajax({
+				url:toUrl,
+				async: false,
+				type: 'GET',
+				dataType: 'json',
+				contentType: 'application/json',
+				username: 'ionadmin',
+				password: 'ionadmin',
+				success: function(data) { getJson = data; },
+				error: function(xhr)
+				{
+					if (xhr.status != 200)
+						alert("Error receiving options.");
+					else
+						getJson = xhr;
+				}
+			});
+			getJson = getJson["objects"][0]
+			//$("#DebugOut").html("Get JSON: " + JSON.stringify(getJson));
+			// I wish I could do this more programmatically, but it looks like using too much logic in django template is discouraged so using something like {{ rig.variable }} is a no-no.
+			// Check for changes.
+			var hasChanged = false;
+			{% for rig in rigs %}
+				if (id == "{{rig.name}}")
+				{
+					// This could be one very large if statement, but this is more readable and can report which value changed, so for the purpose of debugging and future-proofing I've broken it up.
+					$("#DebugOut").html('No changes detected; ready to proceed.');
+					if (getJson["name"] != "{{rig.name}}")
+					{
+						$("#DebugOut").html('name changed.');
+						hasChanged = true;
+					}
+					if (getJson["comments"] != "{{rig.comments}}")
+					{
+						$("#DebugOut").html('comments changed.');
+						hasChanged = true;
+					}
+					if (getJson["ftpserver"] != "{{rig.ftpserver}}")
+					{
+						$("#DebugOut").html('ftpserver changed.');
+						hasChanged = true;
+					}
+					if (getJson["ftpusername"] != "{{rig.ftpusername}}")
+					{
+						$("#DebugOut").html('ftpusername changed.');
+						hasChanged = true;
+					}
+					if (getJson["ftppassword"] != "{{rig.ftppassword}}")
+					{
+						$("#DebugOut").html('ftppassword changed.');
+						hasChanged = true;
+					}
+					if (getJson["ftprootdir"] != "{{rig.ftprootdir}}")
+					{
+						$("#DebugOut").html('ftprootdir changed.');
+						hasChanged = true;
+					}
+					if (getJson["updatehome"] != "{{rig.updatehome}}")
+					{
+						$("#DebugOut").html('updatehome changed.');
+						hasChanged = true;
+					}
+					if (getJson["updateflag"].toString() != "{{rig.updateflag}}".toLowerCase())
+					{
+						$("#DebugOut").html('updateflag changed.');
+						hasChanged = true;
+					}
+				}
+			{% endfor %}
+			// If nothing has changed, PUT changes.
+			if (!hasChanged)
+			{
+				for (var i in getJson)
+				{
+					// updateflag, being a bool instead of a string, is a special case.
+					if (i != "updateflag")
+					{
+						if (document.getElementById(id + "_" + i) != null)
+						{
+							getJson[i] = document.getElementById(id + "_" + i).value;
+						}
+					}
+					else
+					{
+						var flagVal = getJson["updateflag"].toString();
+						if (document.getElementById(id + "_" + "updateflagTrue").checked)
+						{
+							//if (flagVal == "false")
+								//$("#DebugOut").html("change detected in updateflag");
+							getJson['updateflag'] = true;
+						}
+						else
+						{
+							//if (flagVal == "true")
+								//$("#DebugOut").html("change detected in updateflag");
+							getJson['updateflag'] = false;
+						}
+					}
+				}
+				$("#DebugOut").html(JSON.stringify(getJson));
+				// aaand, do the actual PUT, alerting and reloading the page upon success.
+				outType = 'PUT'
+				toUrl = toUrl.replace('?format=json&name=', '');
+				toUrl = toUrl + '/';
+				// DEBUG: set up test versions for software tab debugging.
+				/*var testVersion = { "Datacollect":"2730", "Graphics":"30", "LiveView":"1670", "OIA":"66", "OS":"17", "RSM":"13", "Script":"020090" };
+				testVersion = JSON.stringify(testVersion);
+				getJson["version"] = testVersion;*/
+				getJson = JSON.stringify(getJson);
+				$.ajax({
+					url:toUrl,
+					type: outType,
+					data: getJson,
+					dataType: 'json',
+					contentType: 'application/json',
+					username: 'ionadmin',
+					password: 'ionadmin',
+					success: function()
+					{
+						alert("Configuration saved.");
+						window.location.reload();
+					},
+					error: function(xhr)
+					{
+						//Why does it think 201 is an error? It isn't, as far as I know.
+						if (xhr.status != 201)
+						{
+							alert("Failure: configuration not saved.");
+						}
+						else
+						{
+							alert("Configuration saved.");
+							window.location.reload();
+						}
+					}
+				});
+			}
+		}
+	});
+	})
+	
+	// Find available rigs. Just read the rigs table passed in by django, and exclude PGM_test because it's not real but pretty much always exists. Then make a 1-depth treeView out of the names.
+	// I thought originally that the treeview system would be deeper, so I made it a bit bigger and more complicated than it really needed to be. Still, it should at least be robust enough to allow features like folders to be produced without too much more code.
+	$(function() {
+	$('#button_find').click(function() {
+		$("#DeubgOut").html("Rigs: ")
+		var newDataSource = []
+		{% for rig in rigs %}
+			var rig_name = "{{ rig.name }}"
+			$("#DebugOut").html(document.getElementById("DebugOut").innerHTML + rig_name + ", ")
+			if (rig_name != "PGM_test")
+				newDataSource.push({text:rig_name})
+		{% endfor %}
+		treeview_left.setDataSource(kendo.observableHierarchy(newDataSource));
+	});
+	})
+</script>
+{% endblock extra_head %}
+
+<!-- Static page content. -->
+{% block content %}
+	<!-- Buttons/selections for applying and sacving treeview configurations. -->
+	<div id="postContent">
+		<input id="ApplyConfig" type="submit" value="Apply configuration: ">
+		<select name="config_select" id="config_select">
+			{% for monitor in extra_data %}
+				<option value={{monitor.name}}>{{monitor.name}}</option>
+			{% endfor %}
+		</select>
+		<br/>
+		<input id="SaveConfig" type="submit" value="Save configuration as: ">
+		<input id="ConfigName" type="text" value="Debug">
+	</div>
+	
+	<!-- Simple little area to produce debug output just above the main page area. It's pretty convenient. -->
+	<div id="DebugOut">
+		Debug Output:<br/>
+	</div>
+	
+	<!-- The actual content area. -->
+	<div id="instrumentsPanel" class="k-content">
+	<div class="instruments-section">
+		<!-- Split into two panels. On the left, we have the list of rigs treeview. On the right, we have the tab content. The left panel starts empty but is quickly populated. -->
+		<div id="treeview-left"></div>
+		<div id="content-right">
+			<!-- 'content-links' = buttons to select a certain tab. System, software, options. -->
+			<div id="content-links">
+				<input id="button_system" type="submit" value="System">
+				<input id="button_software" type="submit" value="Software">
+				<input id="button_options" type="submit" value="Options">
+			</div>
+			<!-- Differentiating between 'x-div' and 'extra-x' allows submission buttons and titles to be permanently placed in the top of the tab while still allowing dynamic html to be produced from the appropriate rigs db table. -->
+			<span id="sys-div">
+				<b>System config panel.</b><br/>
+				<span id="extra-sys"></span>
+			</span>
+			<span id="soft-div" style="display:none">
+				<b>Software config panel.</b><br/><br/>
+				<!-- An extra warning for the software config panel, because changing it could mess things up. -->
+				<b>This page will change your instrument software.</b><br/>
+				<b>Do not make changes from this page without<br/>fully understanding what is being altered.</b><br/>
+				<input id="soft-submit" type="submit" value="Send package changes."><br/>
+				<span id="extra-soft"></span>
+			</span>
+			<span id="opt-div" style="display:none">
+				<b>Options config panel.</b><br/><input id="opt-submit" type="submit" value="Apply changes."><br/>
+				<span id="extra-opt"></span>
+			</span>
+		</div>
+	</div>
+	<br/>
+	<!-- And down at the bottom, the button to populate the treeview with known rigs. -->
+	<div class="tree_buttons">
+		<input id="button_find" type="submit" value="Find available rig(s)">
+		<br/>
+	</div>
+	
+	<!-- Produce the initial treeview. -->
+	<script>
+		var treeview_left = $("#treeview-left").kendoTreeView({
+			dragAndDrop: true,
+			checkboxes: { checkChildren: true },
+			dataSource: kendo.observableHierarchy([
+				{ text: "Select a configuration."}]),
+		}).data("kendoTreeView");
+	</script>
+	
+	<!-- Set the panels' styles. -->
+	<style scoped>
+		#treeview-left
+		{
+			float: left;
+			width: 220px;
+			overflow: visible;
+		}
+		#content-right
+		{
+			float: left;
+			width: 760px;
+			overflow: visible;
+		}
+		.instruments-section {
+			width: 1280px;
+		}
+		.instruments-section:after {
+			content: ".";
+			display: block;
+			height: 0;
+			clear: both;
+			visibility: hidden;
+		}
+	</style>
+</div>	
+{% endblock content %}

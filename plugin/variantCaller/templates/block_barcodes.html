@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
 <base target="_parent"/>
+<link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css">
+<link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet">
+<link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet">
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css">
+
 <style type="text/css">
-table {font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif; font-size: 12px; cellspacing: 0; cellpadding: 0}
-td{border: 0px solid #BBB;overflow: visible;color: black}
-th{border: 1px solid #BBB;overflow: visible;background-color: #E4E5E4;}
 p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
 .zebra {  background-color: #E1EFFA;}
 .table_hover{    color: #009;    background-color: #6DBCEE;}
@@ -26,22 +28,23 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
 	    <tr><td>Hotspot regions:</td>     <td>None</td></tr>
 	  {% endif %}
 	  <tr><td>Configuration:</td>         <td>{{options.configuration}}</td></tr>
-    <tr><td>Download all barcodes:</td> <td><a href="{{options.run_name}}.vcf.zip">[VCF.ZIP]</a>
-                                            <a href="{{options.run_name}}.xls.zip">[XLS.ZIP]</a></td></tr>
+    <tr><td>Download all barcodes:</td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
+                                            <a class="btn" href="{{options.run_name}}.xls.zip">XLS.ZIP</a></td></tr>
 	</table>
 
-  <table class="noheading" style="table-layout:fixed">
-      
-    <tr>
-      <th><span class="help" title="The barcode ID for each set of reads.">Barcode Name</span></th>
-      <th><span class="help" title="Sample name">Sample Name</span></th>
-      <th><span class="help" title="Number of called variants">Variants</span></th>
-      {% if options.has_hotspots %}
-      <th><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
-      {% endif %}
-      <th><span class="help" title="Download links">Download Links</span></th>
-    </tr>
-
+<div class="k-widget k-grid">
+  <table class="table-striped">
+    <thead class="k-grid-header">
+      <tr>
+        <th><span class="help" title="The barcode ID for each set of reads.">Barcode Name</span></th>
+        <th><span class="help" title="Sample name">Sample Name</span></th>
+        <th><span class="help" title="Number of called variants">Variants</span></th>
+        {% if options.has_hotspots %}
+        <th><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
+        {% endif %}
+        <th><span class="help" title="Download links">Download Links</span></th>
+      </tr>
+    </thead>
     {% for barcode in barcode_data %}
       {% if barcode.status == "completed" %}
        <tr>      
@@ -57,14 +60,15 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
             <td>{{barcode.summary.hotspots_total.variants}}</td>
           {% endif %}
           
-          <td><a href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">[VCF.GZ]</a>
-              <a href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">[VCF.GZ.TBI]</a>
-              <a href="{{barcode.name}}/variants_{{barcode.name}}.xls">[XLS]</a></td>
+          <td><a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz">VCF.GZ</a>
+              <a class="btn" href="{{barcode.name}}/TSVC_variants_{{barcode.name}}.vcf.gz.tbi">VCF.GZ.TBI</a>
+              <a class="btn" href="{{barcode.name}}/alleles_{{barcode.name}}.xls">XLS</a></td>
         </tr>      
       {% endif %}
     {% endfor %}
- 
   </table>
+</div>
+
 </body>
 </html>
 

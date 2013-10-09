@@ -19,13 +19,11 @@
 #include "StackEngine.h"
 #include "DecisionTreeData.h"
 #include "SpliceVariantHypotheses.h"
-#include "json/json.h"
 
 using namespace std;
 
 //void GlueInVariants(StackPlus &my_data, HypothesisStack &hypothesis_stack, AlleleIdentity &variant_identity, const string &local_contig_sequence);
 void GlueOutputVariant(EnsembleEval &my_ensemble, ExtendParameters *parameters, int _alt_allele_index);
-void JustOneDiagnosis(EnsembleEval &my_ensemble, string &out_dir);
 // in case we have multiple alleles as candidates
 int TrySolveAllAllelesVsRef(EnsembleEval &my_ensemble, PersistingThreadObjects &thread_objects, InputStructures &global_context);
 

@@ -21,8 +21,8 @@
       toolTipOn: "Deselect All",
       toolTipOff: "Select All",
       toolTipDisabled: "Selected",
-      checkColumnOn: "<img src='lifegrid/images/checkbox_tick.png'>",
-      checkColumnOff: "<img src='lifegrid/images/checkbox_empty.png'>",
+      checkColumnOn: "<img id='checkAll' src='lifegrid/images/checkbox_tick.png'>",
+      checkColumnOff: "<img id='checkAll' src='lifegrid/images/checkbox_empty.png'>",
       checkColumnDisabled: "",
       width: 28
     };

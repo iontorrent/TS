@@ -70,7 +70,8 @@
 // >can be any float smaller than this<
 //#define MAXAMPL LAST_POISSON_TABLE_COL
 
-#define NUMSINGLEFLOWITER 40
+#define NUMSINGLEFLOWITER_LEVMAR 40
+#define NUMSINGLEFLOWITER_GAUSSNEWTON 8
 
 #define MAX_BOUND_CHECK(param) {if (bound->param < cur->param) cur->param = bound->param;}
 #define MIN_BOUND_CHECK(param) {if (bound->param > cur->param) cur->param = bound->param;}
@@ -124,7 +125,9 @@ typedef int16_t FG_BUFFER_TYPE;
 #define MEAN_PER_FLOW 997
 
 // time compression
-#define MAX_COMPRESSED_FRAMES 41
+//#define MAX_COMPRESSED_FRAMES 41
+// Incrase MAX_COMPRESSED_FRAMES to 51 to make sure it works. Will remove MAX_COMPRESSED_FRAMES eventually and use max_frames
+#define MAX_COMPRESSED_FRAMES 61
 // to accommodate exponential tail fit large number of frames in GPU code
 #define MAX_COMPRESSED_FRAMES_GPU 61
 #define MAX_PREALLOC_COMPRESSED_FRAMES_GPU 48
@@ -147,7 +150,6 @@ typedef int16_t FG_BUFFER_TYPE;
 
 #define MAX_CUDA_DEVICES 4
 #define NUM_CUDA_FIT_STREAMS 2
-
 
 
 #endif // BKGMAGICDEFINES_H

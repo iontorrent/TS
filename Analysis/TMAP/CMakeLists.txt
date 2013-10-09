@@ -56,7 +56,7 @@ set (GLOBAL_SOURCES              config.h
 				 src/sw/lib/Solution6.cpp src/sw/lib/Solution6.h 
 				 #src/sw/lib/Solution7.cpp src/sw/lib/Solution7.h 
 				 #src/sw/lib/Solution8.cpp src/sw/lib/Solution8.h 
-				 src/sw/lib/Solution9.cpp src/sw/lib/Solution9.h 
+				 #src/sw/lib/Solution9.cpp src/sw/lib/Solution9.h 
 				 src/sw/lib/Solution10.cpp src/sw/lib/Solution10.h 
 				 src/sw/lib/AffineSWOptimization.cpp src/sw/lib/AffineSWOptimization.h 
 				 src/sw/lib/AffineSWOptimizationHash.cpp src/sw/lib/AffineSWOptimizationHash.h 

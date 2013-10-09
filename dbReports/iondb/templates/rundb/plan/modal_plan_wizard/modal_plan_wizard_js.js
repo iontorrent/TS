@@ -1,3 +1,4 @@
+{% load url from future %}
 {% spaceless %}
 $.irConfigSelection_1 = jQuery.parseJSON('{{planTemplateData.irConfigSelection_1|escapejs}}');
 $.irConfigSelection = jQuery.parseJSON('{{planTemplateData.irConfigSelection|escapejs}}');
@@ -5,13 +6,13 @@ $.irConfigSelection = jQuery.parseJSON('{{planTemplateData.irConfigSelection|esc
 var INTENT = '{{intent}}';
 var submitUrl = null;
 {% if selectedPlanTemplate and intent == "Edit" %}
-submitUrl = "{% url save_plan_or_template selectedPlanTemplate.id %}";
+submitUrl = "{% url "save_plan_or_template" selectedPlanTemplate.id %}";
 {% endif %}
 {% if selectedPlanTemplate and intent == "EditPlan" %}
-submitUrl = "{% url save_plan_or_template selectedPlanTemplate.id %}";
+submitUrl = "{% url "save_plan_or_template" selectedPlanTemplate.id %}";
 {% endif %}
 
-var PLANNED_URL = '{% url planned %}';
+var PLANNED_URL = '{% url "planned" %}';
 
 var selectedPlanTemplate = null;
 {% if selectedPlanTemplate %}
@@ -24,6 +25,7 @@ selectedPlanTemplate.notes = "{{selectedPlanTemplate.notes}}";
 selectedPlanTemplate.isIonChef = "{{selectedPlanTemplate.isIonChef}}";
 selectedPlanTemplate.reference = "{{selectedPlanTemplate.library}}";
 selectedPlanTemplate.runType = "{{selectedPlanTemplate.runType}}";
+selectedPlanTemplate.sampleTubeLabel = "{{selectedPlanTemplate.sampleTubeLabel}}";
 {% endif %}
 
 var selectedApplProductData = null;
@@ -39,6 +41,8 @@ selectedApplProductData.reference = "{{selectedApplProductData.reference}}";
 selectedApplProductData.defaultSamplePrepKit = "{{selectedApplProductData.defaultSamplePrepKit}}";
 {% endif %}
 
+
+var globalConfig_isDuplicateReads = "{{globalConfig_isDuplicateReads}}";
 
 var planTemplateData = null;
 {% if planTemplateData %}

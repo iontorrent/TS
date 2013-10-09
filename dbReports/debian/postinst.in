@@ -9,9 +9,7 @@ case "$1" in
 
     #MegaCli64 library support
     if [ -e /lib/libsysfs.so.2.0.1 ]; then
-        if [ -h /usr/lib64/libsysfs.so.2.0.2 ]; then
-            echo `ls -l /usr/lib64/libsysfs.so.2.0.2`
-        else
+        if [ ! -h /usr/lib64/libsysfs.so.2.0.2 ]; then
             ln -s /lib/libsysfs.so.2.0.1 /usr/lib64/libsysfs.so.2.0.2 || true
         fi
     fi
@@ -20,14 +18,6 @@ case "$1" in
 
     DJANGOADMIN=@ION_INSTALL_PREFIX@/manage.py
     chmod ugo+x ${DJANGOADMIN}
-
-    #remove OneTouch update temp files
-	if [ -e /tmp/OTstatus ]; then
-        rm /tmp/OTstatus
-    fi
-	if [ -e /tmp/OTlock ]; then
-        rm /tmp/OTlock
-    fi
 
     ## Early trigger of python support
     #  This normally runs at the end of an apt-get run
@@ -75,12 +65,9 @@ case "$1" in
     #create hard-coded credentials to handle <Location "/basicauthlogout"> within torrent-server.in
     htpasswd -b -c /etc/apache2/users logout logout
 
-    # Enable mod_wsgi, mod_rewrite, mod_expires
-    /usr/sbin/a2enmod wsgi
-    /usr/sbin/a2enmod rewrite
-    /usr/sbin/a2enmod expires
-    /usr/sbin/a2enmod ssl
-    /usr/sbin/a2enmod headers
+    # Enable required apache modules
+    /usr/sbin/a2enmod wsgi headers ssl setenvif deflate filter expires rewrite include
+    # Note: wsgi and ssl are non-core and installed separately. Check depends list
 
     # Switch to the torrent-server apache vhost - remove stock ubuntu vhosts
     /usr/sbin/a2dissite default
@@ -103,8 +90,10 @@ case "$1" in
     #	------------------------------------------
     mkdir -p /results/analysis/output
     mkdir -p /results/analysis/output/disabled
+    mkdir -p /results/chef_logs
     chown www-data.www-data /results/analysis/output
     chown www-data.www-data /results/analysis/output/disabled
+    chown www-data.www-data /results/chef_logs
 
     # some systems export a different /results for reports
     # don't want to squash that link.
@@ -113,12 +102,25 @@ case "$1" in
         ln -s -f /results/analysis/output /var/www/output
     fi
 
-    # Note, was a symlink, now a folder
-    rm -rf /var/www/media
-    mkdir -p /var/www/media
+    if [ ! -h /var/www/chef_logs ]; then
+        # link does not exist...but it might be a file or dir.
+        ln -s -f /results/chef_logs /var/www/chef_logs
+    fi
 
-    rm -f /var/www/site_media
-    ln -s -f @ION_INSTALL_PREFIX@/iondb/media /var/www/site_media
+    # Note, was a symlink, now a folder
+    [ ! -d /var/www/media ] && rm -f /var/www/media
+    mkdir -p /var/www/media
+    chown www-data:www-data /var/www/media
+
+    # Populated by collectstatic now
+    #ln -s -f @ION_INSTALL_PREFIX@/iondb/media /var/www/site_media
+    [ ! -d /var/www/site_media ] && rm -f /var/www/site_media
+    mkdir -p /var/www/site_media
+
+    # Delete broken, circular symlinks that used to live here. TS-7013
+    # Must be cleaned up or collectstatic hangs
+    [ -h /opt/ion/iondb/media/media ] && rm -f /opt/ion/iondb/media/media
+    [ -h /var/www/site_media/media ] && rm -f /var/www/site_media/media
 
     #symLink for plugin media
     rm -f /var/www/pluginMedia
@@ -130,25 +132,22 @@ case "$1" in
     rm -f /results/analysis/output/disabled/tmap-*
     ln -s -f /results/referenceLibrary/disabled/tmap-* /results/analysis/output/disabled
 
-    #---														---#
-    #---	Configure runlevels to start the daemons at boot	---#
-    #---														---#
+    #---									        				---#
+    #---	Configure runlevels to start the Ion daemons at boot	---#
+    #---										    				---#
     DAEMONS=(
         ionCrawler
         ionJobServer
         ionPlugin
-        rabbitmq-server
         celeryd
         )
     for DAEMON in ${DAEMONS[@]}; do
-        CMD="update-rc.d ${DAEMON} defaults 97"
-        FOUND=`find /etc/rc?.d -type l | grep ${DAEMON} | wc -l`
-        if [ "$FOUND" -ne 0 ]; then
-            echo "using existing $DAEMON daemon configuration"
-            echo "to reset to default use '$CMD'"
-        else
-            $CMD
+        # Need to fix the start/kill priority for the daemons
+        # If any priority is K97, reset it
+        if [ `find /etc/rc?.d -name \*${DAEMON}|grep -c K97` -gt 0 ]; then
+            update-rc.d -f ${DAEMON} remove
         fi
+        update-rc.d ${DAEMON} defaults 97 03
     done
 
 
@@ -158,6 +157,9 @@ case "$1" in
     mkdir -p /var/log/ion
     chown www-data.www-data /var/log/ion
     chmod a+w /var/log/ion
+    chown www-data.ionadmin /var/spool/ion  # created in CMakeLists.txt
+    chmod g+w /var/spool/ion    # set in CMakeLists.txt but want to be certain
+    
     #special for ionPlugin who used to run as www-data
     if [ -e /var/log/ion/ionPlugin.log ]; then
         chmod a+w /var/log/ion/ionPlugin.log || true
@@ -179,7 +181,7 @@ case "$1" in
     # ------------------------------------------
     SUDOFILE=/etc/sudoers
     sed -i '/www-data/ d' ${SUDOFILE}
-    echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig, @ION_INSTALL_PREFIX@/onetouch/findHosts.py" >> ${SUDOFILE}
+    echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig, @ION_INSTALL_PREFIX@/onetouch/findHosts.py, /opt/ion/iondb/bin/wkhtmltopdf-amd64, /usr/bin/pdftk, /usr/bin/pdflatex, /opt/ion/iondb/bin/wkhtmltoimage-amd64" >> ${SUDOFILE}
 
     #--------------------------------------------------#
     #---	Remove possible stale ion packages      ---#
@@ -213,6 +215,9 @@ case "$1" in
         # Loads Test Fragment entries into database
         /usr/bin/python ${DJANGOADMIN} loaddata template_init.json
 
+        # Collect static files (eg. admin pages css/js). No --clear, preserve md5 hashed versions
+        /usr/bin/python ${DJANGOADMIN} collectstatic --verbosity=0 --noinput --link
+
         # Creates default report templates with site-specific content
         /usr/bin/python ./bin/base_template.py
         /bin/chown www-data:www-data @ION_INSTALL_PREFIX@/iondb/templates/rundb/php_base.html
@@ -223,9 +228,6 @@ case "$1" in
 
         # Loads DMFileSet entries into database
         /usr/bin/python ./bin/install_dmfilesets.py
-
-        # Collect static files (eg. admin pages css/js)
-        /usr/bin/python ${DJANGOADMIN} collectstatic --verbosity=0 --noinput --clear --link
 
         cd -
     )
@@ -280,9 +282,10 @@ EOF
     python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_pluginresult_diskusage.apply_async(countdown=40)'
 
     #TS-6081: Create DMFileStat objs for existing Results objs without them.
-    echo "Migrating to new Data Management..."
+    echo -n "Migrating to new Data Management..."
     python -c 'import iondb.bin.djangoinit, iondb.rundb.data.data_management as dm; dm.backfill_create_dmfilestat()'
-
+    echo "done"
+    
     # Now that prerequisite tasks have been run or scheduled, restart crawler.
     invoke-rc.d ionJobServer restart
     invoke-rc.d ionPlugin restart

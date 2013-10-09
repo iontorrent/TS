@@ -1,3 +1,5 @@
+{% load url from future %}
+{% load static from staticfiles %}
 <div id="modal_plan_wizard" title="" class="modal modal-900 hide">
 <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -18,7 +20,7 @@
         {% endif %}
     </div>
     <div class="modal-body">
-        <form id="planTemplateWizard" name="planTemplateWizard" method="POST" action="{% url save_plan_or_template 0 %}">
+        <form id="planTemplateWizard" name="planTemplateWizard" method="POST" action="{% url "save_plan_or_template" 0 %}">
 
         <div class="workflow">
             <ul class="workflow-menu group">
@@ -119,7 +121,7 @@
             <a href="#" class="btn btn-primary submitPlanRun" >Plan Run</a>
         {% endif %}
     </div>
-<script id="reviewWorkflowTemplate" type="text/x-kendo-template" src="/site_media/template/review_plan.kendo.template"></script>
+<script id="reviewWorkflowTemplate" type="text/x-kendo-template" src="{% static "template/review_plan.kendo.template"%}"></script>
 
 <script type="text/javascript">
 {% include 'rundb/plan/modal_plan_wizard/modal_plan_wizard_js.js'%}

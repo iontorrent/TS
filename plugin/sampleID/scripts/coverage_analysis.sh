@@ -176,4 +176,3 @@ if [ -n "$READSTATS" ]; then
     echo "Female sample ID region reads: $XREADS" >> "${WORKDIR}/$READSTATS"
   fi
 fi
-

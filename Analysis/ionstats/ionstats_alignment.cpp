@@ -4,6 +4,7 @@
 
 #include <string>
 #include <fstream>
+#include <map>
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
@@ -19,7 +20,11 @@
 using namespace std;
 using namespace BamTools;
 
-
+struct BarcodeInfo {
+  vector<int>   flow_seq;     // flow-space vector representation for the barcode
+  int           start_flow;   // calculated from the start base & end base, used for scoring/matching
+  int           end_flow;
+};
 
 void IonstatsAlignmentHelp()
 {
@@ -34,10 +39,9 @@ void IonstatsAlignmentHelp()
   printf ("  -o,--output                FILE       output json file [ionstats_alignment.json]\n");
   printf ("  -h,--histogram-length      INT        read length histogram cutoff [400]\n");
   printf ("  -m,--minimum-aq-length     INT        minimum AQ read length [21]\n");
+  printf ("  -b,--bc-adjust				BOOL       adjust barcode alignment result with key sequence\n");
   printf ("\n");
 }
-
-
 
 // Metrics in ionstats_alignment.json should carry the following data:
 //
@@ -56,6 +60,7 @@ int IonstatsAlignment(int argc, const char *argv[])
   string output_json_filename = opts.GetFirstString('o', "output", "ionstats_alignment.json");
   int histogram_length        = opts.GetFirstInt   ('h', "histogram-length", 400);
   int minimum_aq_length       = opts.GetFirstInt   ('m', "minimum-aq-length", 21);
+  bool bc_adjust			  = opts.GetFirstBoolean('-', "bc-adjust", false);
 
   if(argc < 2 or input_bam_filename.empty()) {
     IonstatsAlignmentHelp();
@@ -66,10 +71,86 @@ int IonstatsAlignment(int argc, const char *argv[])
   // Prepare for metric calculation
   //
 
+  map<string, string> flow_orders;
+  map<string, string> keys;
+  map<string, int> keyBases;
+  map<string, BarcodeInfo> bcInfos;
   BamReader input_bam;
   if (!input_bam.Open(input_bam_filename)) {
     fprintf(stderr, "[ionstats] ERROR: cannot open %s\n", input_bam_filename.c_str());
     return 1;
+  }
+
+  if(bc_adjust)
+  {
+	  bool hasBc = false;
+	  SamHeader samHeader = input_bam.GetHeader();
+	  if(!samHeader.HasReadGroups())
+	  {
+		input_bam.Close();
+		fprintf(stderr, "[ionstats] ERROR: there is no read group in %s\n", input_bam_filename.c_str());
+		return 1;
+	  }
+
+	  for (SamReadGroupIterator itr = samHeader.ReadGroups.Begin(); itr != samHeader.ReadGroups.End(); ++itr )
+	  {
+		if(!itr->HasKeySequence())
+		{
+			keys[itr->ID] = "";
+			keyBases[itr->ID] = 0;
+		}
+		else
+		{
+			keys[itr->ID] = itr->KeySequence;
+			int len = (itr->KeySequence).length() - 4;
+			if(len < 1)
+			{
+				len = 0;
+			}
+			else
+			{
+				hasBc = true;
+			}
+			keyBases[itr->ID] = len;
+		}
+
+		flow_orders[itr->ID] = itr->FlowOrder;
+	    
+		int flow = 0;
+		int curBase = 0;
+		BarcodeInfo bcInfo;
+		bcInfo.start_flow = -1;
+		bcInfo.end_flow = -1;
+		bcInfo.flow_seq.assign((itr->FlowOrder).length(), 0);
+
+		while(curBase < (int)(itr->KeySequence).length() && flow < (int)(itr->FlowOrder).length())
+		{
+			while(curBase < (int)(itr->KeySequence).length() && itr->KeySequence[curBase] == itr->FlowOrder[flow])
+			{
+				bcInfo.flow_seq[flow]++;
+				++curBase;
+			}
+			// grab the next flow after we sequence through the key, this will be the first flow we will want to count towards barcode matching/scoring, even if its a 0-mer flow
+			if(bcInfo.start_flow == -1 && curBase >= 4)
+			{
+				bcInfo.start_flow = flow + 1;
+			}
+			// grab the last positive incorporating flow for the barcode, any 0-mer flows after this and before the insert or adapter would not be counted in the barcode matching/scoring
+			if(bcInfo.end_flow == -1 && curBase >= (int)(itr->KeySequence).length())
+			{
+				bcInfo.end_flow = flow - 3;
+			}
+
+			++flow;
+		}
+		if(bcInfo.end_flow == -1)
+		{
+			bcInfo.end_flow = flow - 1;
+		}
+
+		bcInfos[itr->ID] = bcInfo;
+	  }
+	  
   }
 
   ReadLengthHistogram called_histogram;
@@ -92,6 +173,26 @@ int IonstatsAlignment(int argc, const char *argv[])
   AQ47_histogram.Initialize(histogram_length);
   error_by_position.Initialize(histogram_length);
 
+  ReadLengthHistogram called_histogram_bc;
+  ReadLengthHistogram aligned_histogram_bc;
+  ReadLengthHistogram AQ7_histogram_bc;
+  ReadLengthHistogram AQ10_histogram_bc;
+  ReadLengthHistogram AQ17_histogram_bc;
+  ReadLengthHistogram AQ20_histogram_bc;
+  ReadLengthHistogram AQ30_histogram_bc;
+  ReadLengthHistogram AQ47_histogram_bc;
+  if(bc_adjust)
+  {
+	  called_histogram_bc.Initialize(histogram_length);
+	  aligned_histogram_bc.Initialize(histogram_length);
+	  AQ7_histogram_bc.Initialize(histogram_length);
+	  AQ10_histogram_bc.Initialize(histogram_length);
+	  AQ17_histogram_bc.Initialize(histogram_length);
+	  AQ20_histogram_bc.Initialize(histogram_length);
+	  AQ30_histogram_bc.Initialize(histogram_length);
+	  AQ47_histogram_bc.Initialize(histogram_length);
+  }
+
   BamAlignment alignment;
   vector<char>  MD_op;
   vector<int>   MD_len;
@@ -99,14 +200,97 @@ int IonstatsAlignment(int argc, const char *argv[])
   MD_len.reserve(1024);
   string MD_tag;
 
+  long sumReads = 0;
+  long sumBcErrReads = 0;
+
   //
   // Main loop over mapped reads in the input BAM
   //
 
-  while(input_bam.GetNextAlignment(alignment)) {
+  while(input_bam.GetNextAlignment(alignment)) 
+  {
+	++sumReads;
+
+    int bcBases = 0;
+	int bcErrors = 0;
+	if(bc_adjust)
+	{
+		int rgind = alignment.Name.find(":");
+		string rgname = alignment.Name;
+		if(rgind > 0)
+		{
+		  rgname = alignment.Name.substr(0, rgind);
+		}
+		if(alignment.HasTag("RG"))
+		{
+		  string rgname2;
+		  if(alignment.GetTag("RG", rgname2))
+		  {
+			rgname = rgname2;
+		  }
+		}
+
+		if(keyBases.find(rgname) != keyBases.end())
+		{
+			bcBases = keyBases[rgname];
+		}
+
+		if(alignment.HasTag("XB"))
+		{
+			alignment.GetTag("XB", bcErrors);
+		}
+		/*else
+		{
+			vector<int16_t> new_flow_signal;
+			vector<int> base_to_flow;
+			base_to_flow.reserve(flow_orders[rgname].length());
+
+			if(alignment.GetTag("ZM", new_flow_signal))
+			{
+				for(int pos = 0; pos < (int)new_flow_signal.size(); ++pos)
+				{
+					int n = max(0,(int)new_flow_signal[pos]);
+					float v = (float)n / 256.0 + 0.5;
+					n = (int)v;
+					while(n > 0)
+					{
+						base_to_flow.push_back(pos);
+						--n;
+					}
+				}
+		  
+				for(int flow = 0, base = 0; flow <= bcInfos[rgname].end_flow; ++flow)
+				{
+					int hp_length = 0;
+					while(base < (int) base_to_flow.size() && base_to_flow[base] == flow) 
+					{
+						++base;
+						++hp_length;
+					}
+					if(flow >= bcInfos[rgname].start_flow)
+					{
+						bcErrors += abs(bcInfos[rgname].flow_seq[flow] - hp_length);
+					}
+				}
+			}
+		}*/
+
+		if(bcErrors > bcBases)
+		{
+			bcErrors = bcBases;
+		}
+		if(bcErrors > 0)
+		{
+			++sumBcErrReads;
+		}
+	}
 
     // Record read length
     called_histogram.Add(alignment.Length);
+	if(bc_adjust)
+	{
+		called_histogram_bc.Add(alignment.Length + bcBases);
+	}
 
     if (!alignment.IsMapped() or !alignment.GetTag("MD",MD_tag))
       continue;
@@ -152,7 +336,16 @@ int IonstatsAlignment(int argc, const char *argv[])
     int AQ30_bases = 0;
     int AQ47_bases = 0;
     int num_bases = 0;
-    int num_errors = 0;
+	int num_errors = 0;
+
+    int AQ7_bases_bc = 0;
+    int AQ10_bases_bc = 0;
+    int AQ17_bases_bc = 0;
+    int AQ20_bases_bc = 0;
+    int AQ30_bases_bc = 0;
+    int AQ47_bases_bc = 0;
+    int num_bases_bc = 0;
+	int num_errors_bc = 0;   
 
     while (cigar_idx < (int)alignment.CigarData.size() and MD_idx < (int) MD_op.size() and cigar_idx >= 0 and MD_idx >= 0) {
 
@@ -215,6 +408,19 @@ int IonstatsAlignment(int argc, const char *argv[])
       if (num_errors*100 <= num_bases)  AQ20_bases = num_bases;
       if (num_errors*1000 <= num_bases) AQ30_bases = num_bases;
       if (num_errors == 0)              AQ47_bases = num_bases;
+
+	  if(bc_adjust)
+	  {
+		  num_bases_bc = num_bases + bcBases;
+		  num_errors_bc = num_errors + bcErrors;
+
+		  if (num_errors_bc*5 <= num_bases_bc)    AQ7_bases_bc = num_bases_bc;
+		  if (num_errors_bc*10 <= num_bases_bc)   AQ10_bases_bc = num_bases_bc;
+		  if (num_errors_bc*50 <= num_bases_bc)   AQ17_bases_bc = num_bases_bc;
+		  if (num_errors_bc*100 <= num_bases_bc)  AQ20_bases_bc = num_bases_bc;
+		  if (num_errors_bc*1000 <= num_bases_bc) AQ30_bases_bc = num_bases_bc;
+		  if (num_errors_bc == 0)				  AQ47_bases_bc = num_bases_bc;
+	  }
     }
 
     //
@@ -228,10 +434,22 @@ int IonstatsAlignment(int argc, const char *argv[])
     if (AQ20_bases >= minimum_aq_length)    AQ20_histogram.Add(AQ20_bases);
     if (AQ30_bases >= minimum_aq_length)    AQ30_histogram.Add(AQ30_bases);
     if (AQ47_bases >= minimum_aq_length)    AQ47_histogram.Add(AQ47_bases);
+
+	if(bc_adjust)
+	{
+		aligned_histogram_bc.Add(num_bases_bc);
+		if (AQ7_bases_bc >= minimum_aq_length)     AQ7_histogram_bc.Add(AQ7_bases_bc);
+		if (AQ10_bases_bc >= minimum_aq_length)    AQ10_histogram_bc.Add(AQ10_bases_bc);
+		if (AQ17_bases_bc >= minimum_aq_length)    AQ17_histogram_bc.Add(AQ17_bases_bc);
+		if (AQ20_bases_bc >= minimum_aq_length)    AQ20_histogram_bc.Add(AQ20_bases_bc);
+		if (AQ30_bases_bc >= minimum_aq_length)    AQ30_histogram_bc.Add(AQ30_bases_bc);
+		if (AQ47_bases_bc >= minimum_aq_length)    AQ47_histogram_bc.Add(AQ47_bases_bc);
+	}
   }
 
   input_bam.Close();
 
+  cout << endl << input_bam_filename << " has " << sumReads << " reads and " << sumBcErrReads << " reads have bc errors." << endl;
 
   //
   // Processing complete, generate ionstats_alignment.json
@@ -242,14 +460,38 @@ int IonstatsAlignment(int argc, const char *argv[])
   output_json["meta"]["format_name"] = "ionstats_alignment";
   output_json["meta"]["format_version"] = "1.0";
 
-  called_histogram.SaveToJson(output_json["full"]);
-  aligned_histogram.SaveToJson(output_json["aligned"]);
-  AQ7_histogram.SaveToJson(output_json["AQ7"]);
-  AQ10_histogram.SaveToJson(output_json["AQ10"]);
-  AQ17_histogram.SaveToJson(output_json["AQ17"]);
-  AQ20_histogram.SaveToJson(output_json["AQ20"]);
-  AQ30_histogram.SaveToJson(output_json["AQ30"]);
-  AQ47_histogram.SaveToJson(output_json["AQ47"]);
+  if(bc_adjust)
+  {
+	  called_histogram_bc.SaveToJson(output_json["full"]);
+	  aligned_histogram_bc.SaveToJson(output_json["aligned"]);
+	  AQ7_histogram_bc.SaveToJson(output_json["AQ7"]);
+	  AQ10_histogram_bc.SaveToJson(output_json["AQ10"]);
+	  AQ17_histogram_bc.SaveToJson(output_json["AQ17"]);
+	  AQ20_histogram_bc.SaveToJson(output_json["AQ20"]);
+	  AQ30_histogram_bc.SaveToJson(output_json["AQ30"]);
+	  AQ47_histogram_bc.SaveToJson(output_json["AQ47"]);
+
+	  called_histogram.SaveToJson(output_json["Original"]["full"]);
+	  aligned_histogram.SaveToJson(output_json["Original"]["aligned"]);
+	  AQ7_histogram.SaveToJson(output_json["Original"]["AQ7"]);
+	  AQ10_histogram.SaveToJson(output_json["Original"]["AQ10"]);
+	  AQ17_histogram.SaveToJson(output_json["Original"]["AQ17"]);
+	  AQ20_histogram.SaveToJson(output_json["Original"]["AQ20"]);
+	  AQ30_histogram.SaveToJson(output_json["Original"]["AQ30"]);
+	  AQ47_histogram.SaveToJson(output_json["Original"]["AQ47"]);  
+	  error_by_position.SaveToJson(output_json["Original"]["error_by_position"]);
+  }
+  else
+  {
+	  called_histogram.SaveToJson(output_json["full"]);
+	  aligned_histogram.SaveToJson(output_json["aligned"]);
+	  AQ7_histogram.SaveToJson(output_json["AQ7"]);
+	  AQ10_histogram.SaveToJson(output_json["AQ10"]);
+	  AQ17_histogram.SaveToJson(output_json["AQ17"]);
+	  AQ20_histogram.SaveToJson(output_json["AQ20"]);
+	  AQ30_histogram.SaveToJson(output_json["AQ30"]);
+	  AQ47_histogram.SaveToJson(output_json["AQ47"]);  
+  }
   error_by_position.SaveToJson(output_json["error_by_position"]);
 
   ofstream out(output_json_filename.c_str(), ios::out);
@@ -263,12 +505,6 @@ int IonstatsAlignment(int argc, const char *argv[])
 
   return 0;
 }
-
-
-
-
-
-
 
 int IonstatsAlignmentReduce(const string& output_json_filename, const vector<string>& input_jsons)
 {

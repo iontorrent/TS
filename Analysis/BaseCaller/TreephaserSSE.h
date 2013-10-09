@@ -72,6 +72,8 @@ public:
 
   TreephaserSSE();
   TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize);
+  
+  void InitializeVariables();
 
   //! @brief  Set flow order and initialize internal variables
   //! @param[in]  flow_order  Flow order object
@@ -103,15 +105,18 @@ public:
 
   //! @brief     Enables the use of recalibration if a model is available
   bool EnableRecalibration() {
-    if (pm_model_available_)
+    if (pm_model_available_) {
       pm_model_enabled_ = true;
+      recalibrate_predictions_ = true;
+    }
     return pm_model_available_;
   };
 
-  //! @brief     Diasbles the use of recalibration.
+  //! @brief     Disables the use of recalibration.
   void DisableRecalibration() {
     pm_model_available_ = false;
     pm_model_enabled_   = false;
+    recalibrate_predictions_ = false;
   };
 
   //! @brief  Perform a more advanced simulation to generate QV predictors
@@ -160,7 +165,9 @@ protected:
   vector< vector< vector<float> > > *Bs_;
   bool pm_model_available_;
   bool pm_model_enabled_;
-  bool state_inphase_enabled;
+  bool recalibrate_predictions_;
+  bool retain_recalibration_values_;  //!< Works slightly differently in SSE version than in C++
+  bool state_inphase_enabled_;
 
 };
 

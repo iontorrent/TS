@@ -10,6 +10,7 @@ document.write('\
      <option value=3>Pass/Fail vs. Target Length</option>\
      <option value=0>Representation vs. Target G/C Content</option>\
      <option value=1>Representation vs. Target Length</option>\
+     <option value=4>Mean Target Reads vs. Pool</option>\
     </select>\
     <span id="PF-message" class="message"></span>\
   </div>\
@@ -37,12 +38,14 @@ $(function () {
   if( fedoraFile === undefined ) fedoraFile = '';
   var fedlenFile = $("#PictureFrame").attr("fedlenfile");
   if( fedlenFile === undefined ) fedlenFile = '';
+  var poolcovFile = $("#PictureFrame").attr("poolcovfile");
+  if( poolcovFile === undefined ) poolcovFile = '';
 
   var startCollapsed = $("#PictureFrame").attr("collapse");
   startCollapsed = (startCollapsed != undefined);
 
 
-  if( gccovFile === '' && lencovFile === '' && fedoraFile === '' && fedlenFile === '' ) {
+  if( gccovFile === '' && lencovFile === '' && fedoraFile === '' && fedlenFile === '' && poolcovFile === '' ) {
     alert("ERROR on page: PictureFrame widget requires a file attribute set.");
     return;
   }
@@ -50,6 +53,7 @@ $(function () {
   if( lencovFile === '' ) $("#PF-display option[value=1]").hide();
   if( fedoraFile === '' ) $("#PF-display option[value=2]").hide();
   if( fedlenFile === '' ) $("#PF-display option[value=3]").hide();
+  if( poolcovFile === '' ) $("#PF-display option[value=4]").hide();
 
   var tmp = $('#PictureFrame').width();
   if( tmp < def_minWidth ) tmp = def_minWidth;
@@ -102,6 +106,8 @@ $(function () {
       setFramePicture(fedoraFile);
     } else if( sel == 3 ) {
       setFramePicture(fedlenFile);
+    } else if( sel == 4 ) {
+      setFramePicture(poolcovFile);
     }
   });
 
@@ -126,6 +132,8 @@ $(function () {
     setFramePicture(fedlenFile);
   } else if( lencovFile != '' ) {
     setFramePicture(lencovFile);
+  } else if( poolcovFile != '' ) {
+    setFramePicture(poolcovFile);
   }
   customizeChart();
 

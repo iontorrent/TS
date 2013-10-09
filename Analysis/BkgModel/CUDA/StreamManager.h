@@ -49,6 +49,7 @@ class TimeKeeper{
   double _timesum;
   int _activeCnt;
   int _jobCnt;
+  int _errCnt;
 
 public:
   
@@ -56,9 +57,11 @@ public:
 
   void start();
   void stop();
+  void stopAfterError();
   double getTime();
   double getAvgTime();
   int getJobCnt();
+  int getErrorCnt();
 
 };
 
@@ -121,6 +124,9 @@ public:
 
   bool InitValidateJob(); 
 
+  int getNumFrames();
+  int getNumBeads();
+
 ////////////////////////
 // virtual interface functions needed for Stream Execution
 
@@ -144,9 +150,10 @@ public:
   virtual int handleResults() = 0; 
 
 
+  virtual void printStatus() = 0;
 ////////////////////////
 // static helpers   
-  static void setVerbose(bool flag);
+  static void setVerbose(bool v);
   static bool Verbose();
 
 };
@@ -160,6 +167,7 @@ class cudaSimpleStreamManager
 {
 
   static bool _verbose;
+  int _executionErrorCount;
 
   WorkerInfoQueue * _inQ;
 
@@ -176,7 +184,12 @@ class cudaSimpleStreamManager
   
   bool _GPUerror;  
 
-
+  // max and sum of all beads/frames of all jobs handled
+  size_t _sumBeads;
+  int _maxBeads;
+  size_t _sumFrames;
+  int  _maxFrames;
+    
 protected:
 
   size_t getMaxHostSize();
@@ -193,6 +206,10 @@ protected:
   void moveToCPU();
   
   bool executionComplete(cudaSimpleStreamExecutionUnit* seu );
+
+  //bookkeeping
+  void recordBeads(int n);
+  void recordFrames(int n);
  
 public:
 
@@ -214,6 +231,10 @@ public:
 */
 
   string getLogHeader();
+
+////////////////////////
+// static helpers   
+  static void setVerbose(bool v);
 
 
 };

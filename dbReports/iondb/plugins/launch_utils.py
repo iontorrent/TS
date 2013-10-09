@@ -3,6 +3,15 @@
 import json
 from iondb.rundb.models import Plugin, PluginResult
 
+def find_IRU_account(pluginconfig, accountId):
+    if accountId:
+        for username,configs in pluginconfig.get('userconfigs',{}).items():
+            for config in configs:
+                if accountId == config.get('id'):
+                    return config
+    return {}
+    
+
 def get_plugins_dict(pg, selectedPlugins=''):
     """
     Build a list containing dictionaries of plugin information.
@@ -21,6 +30,14 @@ def get_plugins_dict(pg, selectedPlugins=''):
             
             if selectedPlugins:
                 params['userInput'] = selectedPlugins.get(p.name, {}).get('userInput','')
+                # with TS4.0 need to get IRU config based on selected account
+                if "IonReporterUploader" in p.name:
+                    try:
+                        accountId = params['userInput'].get('accountId')
+                    except:
+                        accountId = ""
+                    if accountId:
+                        params['pluginconfig'] = find_IRU_account(p.config, accountId)
                   
             for key in p.pluginsettings.keys():
                 params[key] = p.pluginsettings[key]
@@ -65,7 +82,10 @@ def depsolve(plugins, pk):
     active_plugins = Plugin.objects.filter(selected=True,active=True).exclude(path='')
     active_plugins_deps = {}
     for name,settings in active_plugins.values_list('name','pluginsettings'):
-        settings = json.loads(settings)
+        try:
+            settings = json.loads(settings)
+        except:
+            settings = {}
         active_plugins_deps[name] = settings.get('depends') if settings.get('depends') else []
     
     plugin_names = plugins.keys()

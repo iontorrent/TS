@@ -4,8 +4,8 @@
 host lifelink.corp.life
 if [ "$?" = "0" ]
 then
-  ./RSMAgent_TS https://drmdev.appliedbiosystems.com/eMessage
+	/opt/ion/RSM/RSMAgent_TS https://drmdev.appliedbiosystems.com/eMessage >> /var/log/RSMAgent_TS.log &
 else
-  ./RSMAgent_TS https://drm.appliedbiosystems.com/eMessage
+	/opt/ion/RSM/RSMAgent_TS https://drm.appliedbiosystems.com/eMessage >> /var/log/RSMAgent_TS.log &
 fi
 

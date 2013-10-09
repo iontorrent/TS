@@ -1,0 +1,175 @@
+{% extends "rundb/plan/page_plan/base.html" %}
+{% load url from future %}
+
+{% block main-title %}Select the version of Ion Reporter you are using, then hit next.{% endblock main-title %}
+
+{% block page-plan-content %}
+<div class="row-fluid">
+        <div class="span12">
+            <div class="controls irOptionsContent" id="ir_accounts">
+            </div>
+            <input type="hidden" name="irAccountId" value="{{helper.getStepDict.Export.getCurrentSavedFieldDict.irAccountId}}"/>
+            <input type="hidden" name="sampleset_id" value="{{helper.getStepDict.Export.getCurrentSavedFieldDict.sampleset_id}}"/>
+            <input type="hidden" name="irAccountName" value="{{helper.getStepDict.Export.getCurrentSavedFieldDict.irAccountName}}"/>
+            <div id="irAccountDoesNotExistError" style="color:red;font-weight:bold; display: none;">
+                The IR account {{helper.getStepDict.Export.getCurrentSavedFieldDict.irAccountName}} no longer exists or is inaccessible. Please select a valid IR account.
+            </div>
+        </div>
+</div>
+{% endblock page-plan-content %}
+
+{% block prevnext-buttons %}
+<button class="btn btn-primary btn-100 pull-right" onclick="$('#step_form').attr('action', '{% url "page_plan_application" %}');$('#step_form').submit();">Next &rarr;</button>
+{% endblock prevnext-buttons %}
+
+{% block summary-table %}
+<table cellpadding="5">
+    <tr>
+        <td width="140"><b>Ion Reporter:</b></td>
+        <td id="selectedIR">{{step.getCurrentSavedFieldDict.irAccountName}}</td>
+    </tr>
+</table>
+{% endblock summary-table %}
+
+{% block post-raw %}
+{{ block.super }}
+<script type="text/javascript">
+
+    var ion_accounts_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/configs/";
+
+    var prev_ir_account_name = "{{helper.getStepDict.Export.getCurrentSavedFieldDict.irOptions}}";
+    var prev_account_id = "{{helper.getStepDict.Export.getCurrentSavedFieldDict.irAccountId}}";
+
+    var $div = $("#ir_accounts");
+    var $none_lbl = $("<label></label>");;
+    $none_lbl.addClass('radio');
+    $none_lbl.text("None");
+
+    var $none_input = $("<input type='radio'/>");
+    $none_input.attr({'name' : 'irOptions', 'value' : '0'});
+    $none_input.on('click', function(){
+        $("#Ionreporter").hide();
+        $('input[name="irAccountId"]').val('0');
+        $('input[name="irAccountName"]').val('None');
+        $("#selectedIR").text('None');
+    });
+
+    $none_lbl.append($none_input);
+    $div.append($none_lbl);
+
+    function get_ir_accounts() {
+        var jqhxhr = $.get(ion_accounts_url, {"format" : "json"}, function(data){
+            if (data != "undefined") {
+                $("#Ionreporter").show();
+                $("#error").text("");
+                var accounts = data;            
+                
+                var matched_prev = false;
+                if (prev_account_id.length == 0 || prev_account_id == '0') {
+                    matched_prev = true;
+                }
+                
+                $.each(accounts, function(i){
+                    var account = accounts[i];
+                    var id = account["id"];
+                    var version = account["version"];
+                    var checked = account["default"];
+                    var name = account["name"];
+                    
+                    if (prev_account_id == id){
+                        matched_prev = true;
+                    }
+                    
+                    version = version.substring(2, version.length);
+                    version = version.substring(0, 1) + "." + version.substring(1, version.length);
+                    
+                    var fullName = name + " " + version;
+                    
+                    //add orgname, firstname, lastname if they are there.
+                    var detailsStr = "";
+                    if ('details' in account){
+                        detailsStr += " (";
+                        if ('orgname' in account['details']){
+                            detailsStr += account['details']['orgname'] + ", "
+                        }
+                        
+                        if ('firstname' in account['details'] && 'lastname' in account['details']){
+                            detailsStr += account['details']['firstname'] + " " + account['details']['lastname'];
+                        } else {
+                            detailsStr = detailsStr.substring(0, detailsStr.length-2);
+                        }
+                        
+                        detailsStr += ")";
+                    }
+                    
+                    if (detailsStr != " ()") {
+                        fullName += detailsStr;
+                    }
+                    
+                    var $lbl = $("<label></label>");
+                    $lbl.addClass('radio');
+                    $lbl.text(fullName);
+                    
+                    var $input = $("<input type='radio'/>");
+                    $input.attr({'name' : 'irOptions', 'value' : version});
+                    $input.on('click', function(){
+                        $("#Ionreporter").show();
+                        $('input[name="irAccountId"]').val(id);
+                        $('input[name="irAccountName"]').val(fullName);
+                        $("#selectedIR").text(fullName);
+                    });
+                    $lbl.append($input);
+
+                    $div.append($lbl);
+
+                    if(prev_account_id == id) {
+                        $input.attr('checked', true);
+                        $("input[name=irAccountId]").val(id);
+                        $('input[name="irAccountName"]').val(fullName);
+                        $("#selectedIR").text(fullName);
+                    } else {
+                        $input.attr('checked', false);
+                    }
+
+                });
+                
+                if (!matched_prev) {
+                    $none_input.attr('checked', true);
+                    $("#Ionreporter").hide();
+                    $("input[name=irAccountId]").val('0');
+                    $('input[name="irAccountName"]').val('None');
+                    $("#selectedIR").text('None');
+                    $("#irAccountDoesNotExistError").show();
+                }
+                
+            }
+            if ($("input[name=irOptions]").length == 1) {
+                $none_input.attr('checked', true);
+                $("#Ionreporter").hide();
+                $("input[name=irAccountId]").val('0');
+                $('input[name="irAccountName"]').val('None');
+                $("#selectedIR").text('None');
+            }
+
+            if (prev_account_id == '0') {
+                $none_input.attr('checked', true);
+                $("#Ionreporter").hide();
+                $("input[name=irAccountId]").val('0');
+                $('input[name="irAccountName"]').val('None');
+                $("#selectedIR").text('None');
+            }
+        } , "json").fail(function(){
+                $none_input.attr('checked', true);
+                $("#Ionreporter").hide();
+                $("input[name=irAccountId]").val('0');
+                $('input[name="irAccountName"]').val('None');
+                $("#selectedIR").text('None');
+        });
+
+    }
+
+    $(document).ready(function () {
+        get_ir_accounts();
+    });
+</script>
+{% endblock post-raw %}

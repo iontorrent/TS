@@ -165,7 +165,7 @@ void H5DataSet::CloseDataSet()
     mDataspace = H5_NULL;
     H5Tclose ( mDatatype );
     mDatatype = H5_NULL;
-    if ( mGroup != mParent->GetFileId() )
+    if ( mGroup != mParent->GetFileId() && mGroup >= 0 ) // mgroup is -1 for root, can't close that one
     {
       H5Gclose ( mGroup );
       mGroup = H5_NULL;

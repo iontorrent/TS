@@ -22,7 +22,7 @@ from ion.utils.blockprocessing import write_version
 from ion.utils import ionstats
 
 def submit_job(script, args, sge_queue = 'all.q', hold_jid = None):
-    cwd = os.getcwd()    
+    cwd = os.getcwd()
     #SGE    
     jt_nativeSpecification = "-pe ion_pe 1 -q " + sge_queue
 
@@ -54,7 +54,7 @@ def submit_job(script, args, sge_queue = 'all.q', hold_jid = None):
     except:
         traceback.print_exc()
         printtime("FAILED submitting %s job" % script)
-        sys.exit()   
+        sys.exit()
 
 def wait_on_jobs(jobIds, jobName, status = "Processing"):
     try:
@@ -63,20 +63,20 @@ def wait_on_jobs(jobIds, jobName, status = "Processing"):
       traceback.print_exc()
 
     # wait for job to finish
-    while len(jobIds) > 0:  
-        for jid in jobIds:
+    while len(jobIds) > 0:
+        printtime("waiting for %s job(s) to finish ..." % jobName)
+        for jobid in jobIds:
             try:
-                jobstatus = jobserver.jobstatus(jobId)
+                jobstatus = jobserver.jobstatus(jobid)
             except:
                 traceback.print_exc()
                 continue
                 
             if jobstatus=='done' or jobstatus=='failed' or jobstatus=="DRMAA BUG":
-                printtime("DEBUG: Job %s has ended with status %s" % (str(jid),jobstatus))
-                jobIds.remove(jid)
+                printtime("DEBUG: Job %s has ended with status %s" % (str(jobid),jobstatus))
+                jobIds.remove(jobid)
                 
-        printtime("waiting for %s job(s) to finish ..." % jobName)    
-        time.sleep(10)    
+        time.sleep(20)
 
 def get_barcode_files(parent_folder, datasets_path, bcSetName):
     # try to get barcode names from datasets json, fallback on globbing for older reports
@@ -146,7 +146,8 @@ if __name__ == '__main__':
   with open('ion_params_00.json', 'r') as f:
     env = json.loads(f.read())
   
-  script = '/usr/lib/python2.6/dist-packages/ion/reports/combineReports_jobs.py'
+  from distutils.sysconfig import get_python_lib
+  script = os.path.join(get_python_lib(), 'ion', 'reports', 'combineReports_jobs.py')
   
   try:
     jobserver = xmlrpclib.ServerProxy("http://%s:%d" % (JOBSERVER_HOST, JOBSERVER_PORT), verbose=False, allow_none=True)
@@ -202,9 +203,11 @@ if __name__ == '__main__':
       traceback.print_exc()
     
     bc_jobs = []    
-    zipname = '_'+ env['resultsName']+ '.barcode.bam.zip'
-    zip_args = ['--zip', zipname]    
-    # launch merge and alignstats jobs, one per barcode  
+    #zipname = '_'+ env['resultsName']+ '.barcode.bam.zip'
+    #zip_args = ['--zip', zipname]
+    stats_args = ['--align-stats']
+    
+    # launch merge jobs, one per barcode
     for filename in bcfile_count.keys():        
         jobId = ""
         if bcfile_count[filename] > 1:
@@ -221,16 +224,27 @@ if __name__ == '__main__':
         else:          
             printtime("DEBUG: copy barcode %s" % filename)
             shutil.copy(bcfile_files[filename][0], filename)
+            if os.path.exists(bcfile_files[filename][0]+'.bai'):
+                shutil.copy(bcfile_files[filename][0]+'.bai', filename+'.bai')
+        
+        stats_args.append('--add-file')
+        stats_args.append(filename)
         
         # add bam files to be zipped                       
-        zip_args.append('--add-file')
-        zip_args.append(filename)
-        
+        #zip_args.append('--add-file')
+        #zip_args.append(filename)
+    
     # zip barcoded files        
     #jobId = submit_job(script, zip_args, 'all.q', bc_jobs)  
     #printtime("DEBUG: Submitted %s job %s" % ('zip barcodes', jobId))
     
     wait_on_jobs(bc_jobs, 'barcode', 'Processing barcodes')
+    
+    # generate barcoded ionstats json files
+    jobId = submit_job(script, stats_args, 'all.q', bc_jobs)
+    printtime("DEBUG: Submitted %s job %s" % ('barcode stats', jobId))
+    wait_on_jobs([jobId], 'barcode stats', 'Processing barcodes')
+    
         
   # *** END Barcodes ***
   
@@ -261,8 +275,14 @@ if __name__ == '__main__':
   
   jobId = submit_job(script, merge_args)  
   printtime("DEBUG: Submitted %s job %s" % ('BAM merge', jobId))
-
-  wait_on_jobs([jobId], 'BAM merge', 'Merging BAM files')  
+  wait_on_jobs([jobId], 'BAM merge', 'Merging BAM files')
+  
+  # generate ionstats json file
+  if os.path.exists(bamfile):
+    stats_args = ['--align-stats','--add-file',bamfile]
+    jobId = submit_job(script, stats_args, 'all.q')
+    printtime("DEBUG: Submitted %s job %s" % ('BAM alignment stats', jobId))
+    wait_on_jobs([jobId], 'BAM alignment stats', 'Merging BAM files')
 
   # Generate files needed to display Report
   if do_barcodes:

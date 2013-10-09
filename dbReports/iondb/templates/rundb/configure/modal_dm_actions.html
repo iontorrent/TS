@@ -1,3 +1,5 @@
+{% load url from future %}
+{% load static from staticfiles %}
 <div id="modal_dm_actions" title="" class="modal hide" style="width:auto">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -16,7 +18,7 @@
 		<div class="modal-body">
 			<div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
 			<form class="form-horizontal" id="modal_dm_actions_form">
-			<table id="dm_actions_table" class="data-table" cellpadding="5px">
+			<table id="dm_actions_table" class="table">
 				<thead>
 					<th></th>
 					<th><input id="select_all" type="checkbox"/></th>
@@ -30,15 +32,15 @@
 				<tr>
 					<td>
 						{%if entry.action_state == "Local"%}
-							<img src="/site_media/images/Prune_Blue.png">
+							<img src="{% static "images/Prune_Blue.png"%}">
 						{%elif entry.action_state == "Deleted" %}
-							<img src="/site_media/images/Export_Blue.png">
+							<img src="{% static "images/Export_Blue.png"%}">
 						{%elif entry.action_state == "Archived"%}
-							<img src="/site_media/images/Archive_Blue.png">
+							<img src="{% static "images/Archive_Blue.png"%}">
 						{% elif entry.in_process %}
-							<img src="/site_media/resources/kendo/styles/Uniform/loading.gif">
+							<img src="{% static "resources/kendo/styles/Uniform/loading.gif"%}">
 						{%elif entry.action_state == "Error"%}
-							<img src="/site_media/images/Failure_Red.png">
+							<img src="{% static "images/Failure_Red.png"%}">
 						{%endif%}
 					</td>
 					<td>
@@ -65,11 +67,11 @@
 		</div>
 		<div class="modal-footer">
 			{% if isDMDebug %}
-				<a href="{% url dm_action_selected results_pks 'test' %}" name="Test" class="btn dm_action_btn" title="Show files in the log file">Print Selected</a>
+				<a href="{% url "dm_action_selected" results_pks 'test' %}" name="Test" class="btn dm_action_btn" title="Show files in the log file">Print Selected</a>
 			{% endif %}
-			<a href="{% url dm_action_selected results_pks 'delete' %}" name="Delete" class="btn dm_action_btn" title="Delete all files in selected categories">Delete Selected</a>
-			<a href="{% url dm_action_selected results_pks 'archive' %}" name="Archive" class="btn dm_action_btn" title="Move all files in selected categories off local filesystem">Archive Selected</a>
-			<a href="{% url dm_action_selected results_pks 'export' %}" name="Export" class="btn dm_action_btn" title="Copies all files in selected categories">Export Selected</a>
+			<a href="{% url "dm_action_selected" results_pks 'delete' %}" name="Delete" class="btn dm_action_btn" title="Delete all files in selected categories">Delete Selected</a>
+			<a href="{% url "dm_action_selected" results_pks 'archive' %}" name="Archive" class="btn dm_action_btn" title="Move all files in selected categories off local filesystem">Archive Selected</a>
+			<a href="{% url "dm_action_selected" results_pks 'export' %}" name="Export" class="btn dm_action_btn" title="Copies all files in selected categories">Export Selected</a>
 			<a class="btn" href="#" data-dismiss="modal">Cancel</a>
 		</div>
 		<div id="confirm_action" style="text-align:center; display: none;">
@@ -77,12 +79,13 @@
 				<h2></h2>
 				<div id="backup_directory" class="control-group">
 					<label for="select_backup_dir" class="control-label">Archive Directory:</label>
-					<select id="select_backup_dir" style="width:350px">
+					<select id="select_backup_dir" style="width:270px">
 						<option value="default">Use Configured Archive Directories</option>
 						{% for dir in backup_dirs %}
 						<option value={{dir.0}}>{{dir.1}}</option>
 						{% endfor %}
 					</select>
+					<a href='{% url "browse_backup_dirs" "" %}' class="btn" id='browse_backup_dirs'>Browse</a>
 				</div>
 				<div class="control-group">
 					<label for="dm_comment" class="control-label">Comment:</label>
@@ -119,6 +122,22 @@
 		});
 	});
 
+	$('#browse_backup_dirs').click(function(e){
+		e.preventDefault();
+		var elem = '#select_backup_dir';
+		$.get( $(this).attr('href'), function(data) {
+			$('body').append(data);
+			$( "#modal_browse_dirs").modal("show");
+			$('body #modal_browse_dirs').on('modal_browse_dirs_done', function(e, data){
+				if(data.path) {
+					if ($(elem +' option[value="'+data.path+'"]').length == 0)
+						$(elem).append('<option value="' + data.path + '">' + data.path + '</option>');
+					$(elem).val(data.path);
+				}
+			});
+		});
+	});
+	
 	$('.dm_action_btn').click(function(e){
 		e.preventDefault();
 		var url = $(this).attr('href');
@@ -215,5 +234,7 @@
 		return ($.isNumeric(value1) && $.isNumeric(value2)) ? value1+value2 : NaN;
 	}
 	
+	// allow second modal popup window
+	$.fn.modal.Constructor.prototype.enforceFocus = function () {};
 </script>
 </div>

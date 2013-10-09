@@ -1,0 +1,23 @@
+<style type="text/css">
+	.raid_table {
+		table-layout: fixed;
+		word-wrap: break-word;
+	}
+	.raid_well{
+		border: 1px solid;
+		background-color:#EEEEEE;
+		padding:5px;
+		margin:5px;
+	}
+</style>
+<div>
+	<table class="table table-condensed raid_table">
+	{% for drive in array_status %}
+		{% cycle '<tr><td>' '<td>' '<td>' '<td>' '<td>' '<td>'%}
+			<div class="text-{{drive.status}} raid_well">
+				Slot {{drive.slot}}: {{drive.firmware_state}}
+			</div>
+		{% cycle '</td>' '</td>' '</td>' '</td>' '</td>' '</td></tr>'%}
+	{% endfor %}
+	</table>
+</div>

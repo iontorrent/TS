@@ -8,6 +8,7 @@
 #define DPTREEPHASER_H
 
 #include <string>
+#include <iostream>
 #include <vector>
 #include "BaseCallerUtils.h"
 #include "SystemMagicDefines.h"
@@ -20,6 +21,8 @@ using namespace std;
 //! @ingroup  BaseCaller
 
 struct BasecallerRead {
+
+  void SetData(const vector<float> &measurements, int num_flows);
   void SetDataAndKeyNormalize(const float *measurements, int num_flows, const int *key_flows, int num_key_flows);
   void SetDataAndKeyNormalizeNew(const float *measurements, int num_flows, const int *key_flows, int num_key_flows, const bool phased = false);
 
@@ -120,12 +123,9 @@ public:
   //! @param[in]  max_flows         Number of flows to process
   void  Simulate(BasecallerRead& read, int max_flows);
 
-  //! @brief  Generate predicted signal from base sequence and apply signal distortion according to HP recalibration model.
-  //! @param[in]  read.sequence     Base sequence
-  //! @param[out] read.prediction   Predicted signal
-  //! @param[in]  max_flows         Number of flows to process
-  //! @param[in]  readname          Name of the read as written in BAM file
-  void SimulateRecalibrated(BasecallerRead& data, int max_flows);
+  //! @brief  Applies signal recalibration to previously computed predicted sequence
+  //! @param[in/out] read.predictions
+  void RecalibratePredictions(BasecallerRead& data);
 
   //! @brief  Computes the state vector at a query main incorporating flow
   //! @param[in]  read.sequence     Base sequence
@@ -176,13 +176,15 @@ public:
   void SetAsBs(vector<vector< vector<float> > > *As, vector<vector< vector<float> > > *Bs,  bool pm_model_available){
     As_ = As;
     Bs_ = Bs;
-    pm_model_available_ =  pm_model_available;
+    pm_model_available_ =  pm_model_available and (As_ != NULL) and (Bs_ != NULL);
   };
 
   //! @brief     Enables the use of recalibration if a model is available
   bool EnableRecalibration() {
-    if (pm_model_available_)
+    if (pm_model_available_) {
       pm_model_enabled_ = true;
+      recalibrate_predictions_ = true;
+    }
     return pm_model_available_;
   };
 
@@ -190,7 +192,17 @@ public:
   void DisableRecalibration() {
     pm_model_available_ = false;
     pm_model_enabled_   = false;
+    recalibrate_predictions_ = false;
   };
+
+  //! @brief    Reset recalibration model
+  void FlushRecalValues() {
+    //retain_recalibration_values_ = false;
+    for (int i_path=0; i_path<kNumPaths; i_path++) {
+      path_[i_path].calibA.assign(flow_order_.num_flows(), 1.0f);
+      path_[i_path].calibB.assign(flow_order_.num_flows(), 0.0f);
+    }
+  }
 
   //! @brief    Treephaser's slot for partial base sequence, complete with tree search metrics and state for extending
   struct TreephaserPath {
@@ -215,8 +227,10 @@ public:
     PIDloop           pidOffsetState;           //!< State of the pidOffset_ loop at window_start;
     PIDloop           pidGainState;             //!< State of the pidGain_ loop at window_start;
 
-    vector<int>       flow2base_pos;
-    int               base_pos;
+    //vector<int>       flow2base_pos;          // These 2 variables are used for the recalibration model
+    //int               base_pos;               // in the c++ version of the code
+    vector<float>       calibA;                 // Bringing recalibration more in line with the SSE algorithms
+    vector<float>       calibB;                 // by purposefully introducing bad programming and mem overflow
   };
 
   TreephaserPath& path(int idx) { return path_[idx]; }
@@ -239,6 +253,10 @@ public:
   //! @param[in]     max_flow  Do not read/write past this flow
   void AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_flow) const;
 
+  //! @brief  Switch to turn on analysis for a terminator chemistry run
+  //! @param[in]  is_terminator_chemistry_run settign the internal variable terminator_chemistry_run_
+  void SetTerminatorChemistry(bool is_terminator_chemistry_run)
+  { terminator_chemistry_run_ = is_terminator_chemistry_run; };
 
 
 protected:
@@ -276,6 +294,9 @@ protected:
   vector< vector< vector<float> > > *Bs_;
   bool pm_model_available_;
   bool pm_model_enabled_;
+  bool recalibrate_predictions_;
+  bool retain_recalibration_values_;   //!< Switch to purposefully create a memory overrun to mimic SSE version
+  bool terminator_chemistry_run_;
 };
 
 #endif // DPTREEPHASER_H

@@ -1,33 +1,35 @@
 {% extends "rundb/configure/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
 {% block extra_head_styles %}
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
 {% endblock extra_head_styles %}
 {% block extra_head_js %}
-<script type="text/javascript" src="/site_media/resources/scripts/configure/plugins/modal_refresh.js"></script>
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
-<script type="text/javascript" src="/site_media/resources/plupload/js/plupload.full.js"></script>
+<script type="text/javascript" src="{% static "resources/scripts/configure/plugins/modal_refresh.js"%}"></script>
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
 
-<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modalmanager.js"></script>
-<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modal.js"></script>
+<script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
 
-<script type="text/javascript" src="/site_media/resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js"></script>
+<script type="text/javascript" src="{% static "resources/jquery/jquery.iframe-auto-height.plugin.1.7.1.min.js"%}"></script>
 
-<script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.min.js"></script> <!-- Using updated uni-form JS -->
+<script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
 {% endblock extra_head_js %}
 {% block sub-nav %}
-  <li><a href="{% url configure_about %}">About</a></li>
-  <li><a href="{% url configure_references %}">References</a></li>
-  <li><a href="{% url configure_services %}">Services</a></li>
-  <li class="active"><a href="{% url configure_plugins %}">Plugins</a></li>
-  <li><a href="{% url configure_configure %}">Configure</a></li>
-  <li><a href="{% url configure_account %}">Accounts</a></li>
+  <li><a href="{% url "configure_about" %}">About</a></li>
+  <li><a href="{% url "configure_references" %}">References</a></li>
+  <li><a href="{% url "configure_services" %}">Services</a></li>
+  <li class="active"><a href="{% url "configure_plugins" %}">Plugins</a></li>
+  <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
     <div class="content clearfix">
         <div class="clearfix">
             <h1 class="pull-left">Plugins</h1>
-            <a href="{% url configure_plugins_plugin_install %}" class="btn pull-right install_upgrade_plugin">Install or Upgrade Plugin</a>
+            <a href="{% url "configure_plugins_plugin_install" %}" class="btn pull-right install_upgrade_plugin">Install or Upgrade Plugin</a>
         </div>
         <form class="well well-small clearfix">
             <div class="filter-item">
@@ -120,7 +122,7 @@
     </div>
     <div class="modal-footer">
         <!-- <a onclick="$(this).iframeAutoHeight({minHeight: 200, heightOffset: 20});" href="#" class="btn">Resize Modal</a> -->
-        <a data-dismiss="modal" href="#" class="btn">Cancel</a>
+        <a data-dismiss="modal" href="#" class="btn">Close</a>
     </div>
 </div>
 <script id="EnabledTemplate" type="text/x-kendo-template">
@@ -146,21 +148,21 @@
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
 <div class="btn-group">
     # var _id = id;#
-    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="/site_media/resources/img/gear-active.png" border="0"><span class="caret"></span></a>
+    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
     <ul class="dropdown-menu pull-right">
         # if (data.isConfig) { #
         <li>
-            <a href="#= '{% url configure_plugins_plugin_configure 999999 'config' %}'.replace('999999', _id)#" class="configure-plugin">Configure</a>
+            <a href="#= '{% url "configure_plugins_plugin_configure" 999999 'config' %}'.replace('999999', _id)#" class="configure-plugin">Configure</a>
         </li>
         # } #
         <li>
-            <a href="#= '{% url configure_plugins_plugin_usage 999999 %}'.replace('999999',_id)#" class="usage-plugin">Usage</a>
+            <a href="#= '{% url "configure_plugins_plugin_usage" 999999 %}'.replace('999999',_id)#" class="usage-plugin">Usage</a>
         </li>
         <li>
-            <a href="#= '{% url configure_plugins_plugin_refresh 999999 %}'.replace('999999',_id)#" class="refresh-plugin">Refresh</a>
+            <a href="#= '{% url "configure_plugins_plugin_refresh" 999999 %}'.replace('999999',_id)#" class="refresh-plugin">Refresh</a>
         </li>
         <li>
-            <a href="#= '{% url configure_plugins_plugin_uninstall 999999 %}'.replace('999999',_id)#" class="uninstall-plugin">Uninstall</a>
+            <a href="#= '{% url "configure_plugins_plugin_uninstall" 999999 %}'.replace('999999',_id)#" class="uninstall-plugin">Uninstall</a>
         </li>
     </ul>
 </div>
@@ -168,7 +170,7 @@
 <script id="NameColumnTemplate" type="text/x-kendo-template">
     # var _id = id;#
     # if (data.hasAbout) { #
-        <a class='about-plugin' href="#= '{% url configure_plugins_plugin_configure 999999 'about' %}'.replace('999999',_id)#"> #= data.name # </a>
+        <a class='about-plugin' href="#= '{% url "configure_plugins_plugin_configure" 999999 'about' %}'.replace('999999',_id)#"> #= data.name # </a>
     # } else { #
         #= data.name #
     # } #

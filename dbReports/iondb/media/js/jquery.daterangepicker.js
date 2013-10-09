@@ -33,15 +33,17 @@
             //presetRanges: array of objects for each menu preset.
             //Each obj must have text, dateStart, dateEnd. dateStart, dateEnd accept date.js string or a function which returns a date object
             presets: {
-                dateRange: 'Date Range'
+                dateRange: 'Date Range',
+                allDatesBefore: 'Older than Date',
+                allDatesAfter: 'Newer than Date'
             },
             rangeStartTitle: 'Start date',
             rangeEndTitle: 'End date',
             nextLinkText: 'Next',
             prevLinkText: 'Prev',
             doneButtonText: 'Done',
-            earliestDate: false,
-            latestDate: false,
+            earliestDate: Date.parse('1/1/2010'),
+            latestDate: today,
             constrainDates: false,
             rangeSplitter: ' - ', //string to use between dates in single input
             dateFormat: $.datepicker.ISO_8601, // Available formats: http://docs.jquery.com/UI/Datepicker/%24.datepicker.formatDate

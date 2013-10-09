@@ -1,14 +1,15 @@
+{% load static from staticfiles %}
 <html>
 <head>
   <script type="text/javascript"
-          src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+          src="{% static "jquery/js/jquery-1.7.1.min.js"%}"></script>
   <script type="text/javascript"
-          src="/site_media/jquery/js/protovis/dm.protovis.js"></script>
+          src="{% static "jquery/js/protovis/dm.protovis.js"%}"></script>
   <script type="text/javascript"
-          src="/site_media/jquery/js/protovis/jquery.tipsy.js"></script>
+          src="{% static "jquery/js/protovis/jquery.tipsy.js"%}"></script>
   <script type="text/javascript"
-          src="/site_media/jquery/js/protovis/tipsy.js"></script>
-  <link href="/site_media/jquery/js/protovis/tipsy.css" type="text/css"
+          src="{% static "jquery/js/protovis/tipsy.js"%}"></script>
+  <link href="{% static "jquery/js/protovis/tipsy.css"%}" type="text/css"
         rel="stylesheet"/>
 </head>
 <body>

@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-
-  <!--java script for interacting with the RESTful API-->
+    <!-- java script required for interacting with the RESTful API -->
   <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
-  <script type="text/javascript" src="/pluginMedia/IonCloud/bootstrap-scrollspy.js"></script>
-  <link href="/pluginMedia/IonCloud/bootstrap.min.css" rel="stylesheet">
+  <script type="text/javascript" src="/pluginMedia/TorrentSuiteCloud/bootstrap-scrollspy.js"></script>
+  <link href="/pluginMedia/TorrentSuiteCloud/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" type="text/css" href="/site_media/report.css" media="screen" />
   <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
   <link type="text/css" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" rel="Stylesheet" />
@@ -50,26 +49,38 @@
 
        $.each(pluginGET.config, function(key,val){
         if(key == "ip"){
-           document.getElementById("ip").value = val;
+            document.getElementById("ip").value = val;
           }
 
           //set the vlaue of user_name
           else if(key == "user_name"){
-           document.getElementById("user_name").value = val;
+            document.getElementById("user_name").value = val;
           }
 
           //set the vlaue of user_password
           else if(key == "user_password"){
-           document.getElementById("user_password").value = val;
+            document.getElementById("user_password").value = val;
           }
 
-          //set the vlaue of upload_path
+          //set the value of upload_path
           else if(key == "upload_path"){
-           document.getElementById("upload_path").value = val;
+            document.getElementById("upload_path").value = val;
+          }
+
+          //set the value of thumbnail_only checkbox
+          else if(key == "thumbnailonly"){
+            if (val == "off") {
+              $("#thumbnailonly").prop('checked', false);
+            } else {
+              $("#thumbnailonly").prop('checked', true);
+            }
           }
        });
       }
      });
+      if(document.getElementById("upload_path").value == ""){
+       document.getElementById("upload_path").value = "/results/uploads/";
+      }
     });
 
     //process form to grab html objects and turn them into json objects
@@ -79,6 +90,7 @@
       var a = this.serializeArray();
 
       $.each(a, function() {
+        console.log(this.name);
        if (o[this.name] != null) {
         if (!o[this.name].push) {
          o[this.name] = [o[this.name]];
@@ -102,22 +114,22 @@
      $('#postbutton').click(function() {
 
       //check that values were given
-      if(document.getElementById("ip").val == ""){
+      if(document.getElementById("ip").value == ""){
         alert("Please provide IP address");
         return(false);
       }
 
-      if(document.getElementById("user_name").val == ""){
+      if(document.getElementById("user_name").value == ""){
         alert("Please provide user name");
         return(false);
       }
 
-      if(document.getElementById("user_password").val == ""){
+      if(document.getElementById("user_password").value == ""){
         alert("Please provide user password");
         return(false);
       }
 
-      if(document.getElementById("upload_path").val == ""){
+      if(document.getElementById("upload_path").value == ""){
         alert("Please provide upload_path");
         return(false);
       }
@@ -145,7 +157,7 @@
   </script>
 </head>
 
-<!--build the html page for what the user sees-->
+  <!-- set up the html page that the user interacts with -->
 <body>
   <div>
     <!-- the form name here, in this case "inputform" should match the one used in the put java script -->
@@ -171,7 +183,7 @@
             </tr><tr>
               <td align=right>Upload Path: </td><td align=left><input id="upload_path" name="upload_path" value=""/></td>
             <tr>
-              <td align=right>Thumbnail-only: </td><td><input type="checkbox" size="50" id="thumbnailonly" name="thumbnailonly" checked
+              <td align=right>Thumbnail-only: </td><td><input type="checkbox" size="50" id="thumbnailonly" name="thumbnailonly" unchecked
                                                               title="Only affects Proton datasets"/></td>
             </tr></table>
           </fieldset>

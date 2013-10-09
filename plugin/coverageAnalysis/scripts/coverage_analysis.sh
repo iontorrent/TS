@@ -21,6 +21,7 @@ OPTIONS="OPTIONS:
   -C <name> Original name for BED targets selected for reporting (pre-padding, etc.)
   -D <dirpath> Path to Directory where results are written.
   -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
+  -N <name> Sample name for use in summary output. Default: 'None'
   -O <file> Output file name for text data (per analysis). Default: '' => <BAMROOT>.stats.cov.txt.
   -P <file> Padded targets BED file for padded target coverage analysis.
   -S <file> SampleID tracking regions file. Default: '' (=> no tageted reads statistic created)"
@@ -48,8 +49,9 @@ TRGSID=""
 PLOTREPLEN=0
 RNABED=0
 TRACKINGBED=""
+SAMPLENAME="None"
 
-while getopts "hladurp:s:A:B:C:G:D:O:P:S:" opt
+while getopts "hladurp:s:A:B:C:G:D:N:O:P:S:" opt
 do
   case $opt in
     a) AMPLICONS=1;;
@@ -64,6 +66,7 @@ do
     C) TRGSID=$OPTARG;;
     D) WORKDIR=$OPTARG;;
     G) GENOME=$OPTARG;;
+    N) SAMPLENAME=$OPTARG;;
     O) OUTFILE=$OPTARG;;
     P) PADBED=$OPTARG;;
     S) TRACKINGBED=$OPTARG;;
@@ -220,6 +223,7 @@ PLOTERROR=0
 ########### Capture Title & User Options to Summary Text #########
 
 echo -e "Coverage Analysis Report\n" > "$OUTFILE"
+echo "Sample Name: $SAMPLENAME" >> "$OUTFILE"
 REFNAME=`echo "$REFERENCE" | sed -e 's/^.*\///' | sed -e 's/\.[^.]*$//'`
 echo "Reference (File): $REFNAME" >> "$OUTFILE"
 if [ -n "$BEDFILE" ]; then
@@ -395,9 +399,10 @@ elif [ -n "$ANNOBEDOPT" ]; then
     TARGETCOV_LEN_PNG=`echo $TARGETCOVFILE | sed 's/\.xls$/.len.png/'`
     TARGETCOV_REP_PNG=`echo $TARGETCOVFILE | sed 's/\.xls$/.fedora.png/'`
     TARGETCOV_RPL_PNG=`echo $TARGETCOVFILE | sed 's/\.xls$/.fedlen.png/'`
-    PLOTOPT="FG"
+    TARGETCOV_RPP_PNG=`echo $TARGETCOVFILE | sed 's/\.xls$/.pool.png/'`
+    PLOTOPT="FGp"
     if [ $REPLENPLOT -eq 1 ]; then
-      PLOTOPT="FGKL"
+      PLOTOPT="FGKLp"
     fi
     if [ $AMPLICONS -ne 0 ]; then
       PLOTOPT="${PLOTOPT}a"
@@ -410,6 +415,9 @@ elif [ -n "$ANNOBEDOPT" ]; then
     elif [ $SHOWLOG -eq 1 ]; then
       echo "> $TARGETCOV_REP_PNG" >&2
       echo "> $TARGETCOV_GC_PNG" >&2
+      if [ -e "$TARGETCOV_RPP_PNG" ];then
+        echo "> $TARGETCOV_RPP_PNG" >&2
+      fi
       if [ $REPLENPLOT -eq 1 ]; then
         echo "> $TARGETCOV_RPL_PNG" >&2
         echo "> $TARGETCOV_LEN_PNG" >&2
@@ -441,9 +449,6 @@ elif [ $AMPLICONS -ne 0 -o $TRGCOVBYBASE -eq 1 ]; then
   if [ $TRACK -eq 1 ]; then
     echo "(`date`) Analyzing depth of $TARGETMSG coverage..." >&2
   fi
-  # For now there is no point in creating the DOC distribution file since this is useless for
-  # Depth of Coverage plots with few amplicons (targets). Most read depths are only covered once
-  # and this information is given in the fine coverage file.
   if [ $AMPLICONS -ne 0 ]; then
     COVERAGE_ANALYSIS="$RUNDIR/targetReadStats.pl $AMPSTSOPTS -M $MAPPED_READS \"$TARGETCOVFILE\""
   else
@@ -537,6 +542,10 @@ elif [ -n "$BEDFILE" ]; then
     TARGETCOV_REP_PNG=`echo $TARGETCOV_REP_PNG | sed -e 's/^.*\///'`
     TARGETCOV_RPL_PNG=`echo $TARGETCOV_RPL_PNG | sed -e 's/^.*\///'`
     REPOPT="gccovfile='$TARGETCOV_GC_PNG' fedorafile='$TARGETCOV_REP_PNG'"
+    if [ -e "$TARGETCOV_RPP_PNG" ];then
+      TARGETCOV_RPP_PNG=`echo $TARGETCOV_RPP_PNG | sed -e 's/^.*\///'`
+      REPOPT="$REPOPT poolcovfile='$TARGETCOV_RPP_PNG'"
+    fi
     if [ $REPLENPLOT -eq 1 ]; then
       REPOPT="$REPOPT fedlenfile='$TARGETCOV_RPL_PNG' lencovfile='$TARGETCOV_LEN_PNG'"
     fi

@@ -13,9 +13,12 @@ Clonality::Clonality()
   // npoints = 128;
   npoints = 512;
   cutoff = .05;
+  datasize = 4000; // how much data to use for density fit, 0 => all
 
   // bandwidth
-  bw_fac = .035; //.05;
+  bw_fac = .035; //.05, tuned for 10000 points
+  tuning_count = 10000.0;
+  convergence_rate = -.33;
 
   // outlier trimming
   range_limit_low = -2.0f;
@@ -116,6 +119,8 @@ void Clonality::AddClonalPenalty(std::vector<float> const& signalInFlow, std::ve
   GetPeaks(signalInFlow, peaks);
   scprint( this, "adjusted_peaks=%d;\n", (int)peaks.size());
 
+  // debug_peaks.assign(peaks.begin(), peaks.end());
+
   size_t npeaks = peaks.size();
   if (npeaks < 2) {  // this flow needs to have at least 2 peaks to be used
     return;
@@ -209,8 +214,19 @@ double Clonality::GetBandWidth(std::vector<double> const& data)
   size_t o90 = (int)(data.size()*.9 +.5) -1; // should be 1-mer
   //double bw = .2 * (data.at(order.at(o90)) - data.at(order.at(o05)));
   double bw = bw_fac * (data.at(order.at(o90)) - data.at(order.at(o33)));
-  return (bw);
+
+  // TODO: for the case of a 50/50 mix of 2 barcodes we
+  // should be using 25th percentile & 75th percentile, does this matter?
+
+  // tuning done for 10000 points (regions of a Proton thumbnail)
+  // optimal bandwidth probably order n**(-1/3) using histogram bin sizes
+  // eg Freedman-Diaconis rule
+  if (data.size() < tuning_count){
+    bw = bw * pow(data.size()/tuning_count, convergence_rate);
   }
+
+  return (bw);
+}
 
 /**
  * XLimits finds the range of the data to accommodate density bandwidth
@@ -238,6 +254,39 @@ void Clonality::XLimits(vector<double> const& data, double const bandwidth, vect
   out[1] = to;
 }
 
+bool RelativelyPrime (size_t a, size_t b) { // Assumes a, b > 0
+  assert( (a > 0) && (b > 0) );
+  for ( ; ; ) {
+    if (!(a %= b)) return b == 1 ;
+    if (!(b %= a)) return a == 1 ;
+  }
+}
+
+/**
+ * Given target_count number to sample from data_count members
+ * find a sampling rate that when used to increment an index 
+ * more or less evenly picks modulo data_count.
+ * Making the rate relatively prime wrapping means that if an increment
+ * wraps back to the beginning of the vector it will find different
+ * indices.
+ */
+size_t SamplingRate(size_t target_count, size_t data_count)
+{
+  assert( (target_count > 0) && (data_count > 0) );
+  size_t rate = 1;
+
+  if (target_count >= data_count)
+    return(rate);
+
+  if (target_count < data_count){ 
+    rate = (data_count/target_count) + 1;
+    while ( (rate<data_count) && !RelativelyPrime (data_count, rate)){
+      rate++;
+    }
+  }
+  return(rate);
+}
+
 /** usage: GetPeaks(in_data, peaks);
  * output in peaks correspond to the sorted positions of peaks of a density
  * will be fit using bandwith bw to input vector in_data.
@@ -245,12 +294,21 @@ void Clonality::XLimits(vector<double> const& data, double const bandwidth, vect
  * values in peaks are ordered low to high
  */
 void Clonality::GetPeaks(vector<float> const& in_data, vector<double>& peaks){
-  vector<double> data(in_data.size(), 0);
-  size_t cnt = 0;
-  for (size_t i=0; i < in_data.size(); i++)
-    if ( ! isnan (in_data[i]) )
-      data[cnt++] = in_data[i];
+  if (datasize == 0)
+    datasize = in_data.size();
 
+  size_t nn = (datasize < in_data.size()) ? datasize : in_data.size();
+  size_t rate=SamplingRate(nn, in_data.size());
+  
+  vector<double> data(nn, 0);
+  size_t cnt = 0;
+  size_t ix = 0;;
+  for (size_t i=0; i < nn; i++) {
+    ix += rate;
+    int iix = ix % in_data.size();
+    if ( ! isnan (in_data[iix]) )
+      data[cnt++] = in_data[iix];
+  }
   if (cnt > 2) { // this flow has to have beads with usable values to be used
     data.resize(cnt);
     double bw = GetBandWidth(data);
@@ -263,7 +321,7 @@ void Clonality::GetPeaks(vector<float> const& in_data, vector<double>& peaks){
   }
   
   // no usable bandwidth or count too low, return a single peak
-  scprint( this,"bw=0; cnt=%d;\n", cnt);
+  scprint( this,"bw=0; cnt=%d;\n", (int)cnt);
   peaks.resize(1);
   peaks[0] = 0;
   size_t n = 0;
@@ -306,7 +364,7 @@ void Clonality::getpeaksInternal(vector<double>& data, double const _cutoff, dou
   vector<double> xlimits(2,0);
   // FitDensity::XLimits(data, bw, xlimits, range_limit, bw_increment);
   XLimits(data, bw, xlimits, range_limit_low, range_limit_high, bw_increment);
-  scprint( this,"ksdensity, from = %f, to = %f, ", xlimits[0], xlimits[1]);
+  scprint( this,"ksdensity, from = %f, to = %f\n", xlimits[0], xlimits[1]);
 
   // call density and return density in xi, density
   FitDensity::kdensity(data, density, xi, weights, bw, xlimits[0], xlimits[1]);
@@ -320,10 +378,16 @@ void Clonality::getpeaksInternal(vector<double>& data, double const _cutoff, dou
   int npeak1 = FitDensity::findpeaks(valleyIndex, peakIndex, density, 0.046*overallSignal, xi);
   assert( npeak1 > 0 );
 
+  scprint( this,"before trim, npeak=%d; ", npeak1);  
+  for (size_t i=0; i<peakIndex.size(); i++) {
+    scprint( this,"f(%f)=%f ", xi[peakIndex[i]],density[peakIndex[i]]);
+  }
+  scprint( this,"\n");    
+
   // trim off any peaks in extremes of data,
   // these are meaningless wiggles in the density estimation
   int npeak = TrimExtremalPeaks(data, xi, _cutoff, valleyIndex, peakIndex);
-  scprint( this,"npeak=%d; ", npeak);  
+  scprint( this,"after trim, npeak=%d; ", npeak);  
   if (npeak > 0) {
     for (size_t i=0; i<peakIndex.size(); i++) {
       scprint( this,"f(%f)=%f ", xi[peakIndex[i]],density[peakIndex[i]]);
@@ -332,6 +396,9 @@ void Clonality::getpeaksInternal(vector<double>& data, double const _cutoff, dou
     // apply ad hoc rules here
     npeak = ApplyAdHocPeakRemoval( xi, density, valleyIndex, peakIndex );
   }
+  // debug_density.assign(density.begin(), density.end());
+  // debug_xi.assign(xi.begin(), xi.end());
+
   {
     scprint( this,"xi=[ ");
     for (size_t i=0; i<density.size(); i++)
@@ -420,7 +487,7 @@ bool Clonality::AdHoc_2 (std::vector<double> const& xi, std::vector<double> cons
       scprint( this,"Adhoc 2: 0 peaks because peak[1]=%f at %f < peak[2]=%f at %f\n", density[peakIndex[1]], xi[peakIndex[1]], density[peakIndex[2]], xi[peakIndex[2]]);
       return (false);
     }
-    scprint( this,"Adhoc 2 ok: peak[1]=%f at %f >= peak[2]=%f at %f\n", density1, xi1, density2, xi2);
+    scprint( this,"Adhoc 2 ok: peak[1]=%f at %f >= peak[2]=%f at %f\n",  density[peakIndex[1]], xi[peakIndex[1]], density[peakIndex[2]], xi[peakIndex[2]]);
   }
   return (true);
 }
@@ -453,7 +520,7 @@ bool Clonality::AdHoc_4 (std::vector<double> const& xi, std::vector<double> cons
       TrimValleys(peakIndex, valleyIndex);
       return ( false );
     }
-    scprint( this,"Adhoc 4 ok: x0=%f, x1=%f x2=%f |log((x1-x0)/(x2-x1))| = %f <= %f\n", xi0, xi1, xi2, lr, too_close);
+    scprint( this,"Adhoc 4 ok: x0=%f, x1=%f x2=%f |log((x1-x0)/(x2-x1)) = %f| > %f\n", xi[peakIndex[0]], xi[peakIndex[1]], xi[peakIndex[2]], lr, too_close);
   }
   return (true);
 }
@@ -469,7 +536,7 @@ bool Clonality::AdHoc_5 (std::vector<double> const& xi, std::vector<double> cons
       TrimValleys(peakIndex, valleyIndex);
       return ( false );
     }
-    scprint( this,"Adhoc 5 ok: peak[2] f(%f)=%f because peak-valley ratio=%f >= %f\n", xi2, density2, peak_valley_ratio, min_separation_1_2);
+      scprint( this,"Adhoc 5 ok: 2 peaks after removing peak[2] f(%f)=%f because peak-valley ratio=%f < %f\n", xi[peakIndex[2]], density[peakIndex[2]], peak_valley_ratio, min_separation_1_2);
   }
   return (true);
 }

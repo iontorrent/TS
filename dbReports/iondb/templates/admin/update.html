@@ -1,4 +1,5 @@
 {% extends "admin/base_site.html" %}
+{% load url from future %}
 
 {% block title %}Management Options{% endblock %}
 
@@ -48,6 +49,7 @@
               <strong>Torrent Suite</strong>
             </th>
             <th align="left"><strong>{{ meta }}</strong></th>
+            {% if show_available %} <th align="left"><strong>Available</strong></th>{% endif %}
           </tr>
           </thead>
           <tbody>
@@ -56,7 +58,10 @@
             <td>
               {{ label }}
             </td>
-            <td align="left">{{ version }}</td>
+            <td align="left">{{ version.0 }}</td>
+            {% if show_available %}
+                <td align="left">{% ifnotequal version.0 version.1 %}{{ version.1 }}{% endifnotequal %}</td>
+            {% endif %}
           </tr>
           {% endfor %}
           </tbody>
@@ -98,27 +103,31 @@
           <div id="update_failure" style="display: none;">
             <p>There was a problem checking for updates.
               Try again or check you network settings.</p>
-              <li><a href="{% url iondb.rundb.admin.tsconfig_log %}">View tsconfig log</a></li>
-              <li><a href="{% url iondb.rundb.admin.get_zip_logs %}">Download logs archive</a></li>
+              <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
+              <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
           </div>
           <div id="download_failure" style="display: none;">
             <p>The upgrade did not download completely.
               Click Update Server to try again or check your network settings.</p>
-              <li><a href="{% url iondb.rundb.admin.tsconfig_log %}">View tsconfig log</a></li>
-              <li><a href="{% url iondb.rundb.admin.get_zip_logs %}">Download logs archive</a></li>
+              <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
+              <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
           </div>
           <div id="install_failure" style="display: none;">
             <p>There were errors during installation.
               You may click Update Server to try again: contact support,
               if this does not work.</p>
-              <li><a href="{% url iondb.rundb.admin.tsconfig_log %}">View tsconfig log</a></li>
-              <li><a href="{% url iondb.rundb.admin.get_zip_logs %}">Download logs archive</a></li>              
+              <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
+              <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
           </div>
           <div id="unknown" style="display: none;">
             <p>The status of your system is unknown at this time.
               Check this page again in a few minutes or contact support.</p>
           </div>
         </div>
+      </div>
+      <div id=software_version title="Check box to disable all software updates. (Default is unchecked.)">
+        <h3>Disable software updates</h3>
+        <div><input type="checkbox" id="version_lock" /> Lock current TS software version.</div>
       </div>
       <div id="release_memo">
         <h3>Torrent Suite Release Notes</h3>
@@ -135,7 +144,7 @@
     </div>
   </div>
   <script>
-    var global_config_initial = {{ global_config|safe }};
+    var global_config_initial = {{ global_config_json|safe }};
     $(function(){
       var Config = Backbone.Model.extend({
         url: function() {
@@ -151,12 +160,14 @@
           'click #auto_download': 'toggle_auto_download',
           'click #check_update': 'check_update',
           'click #confirm_update': 'confirm_update',
-          'click #cancel': 'no_update_thx'
+          'click #cancel': 'no_update_thx',
+          'click #version_lock': 'toggle_version_lock'
         },
 
         initialize: function(){
           _.bindAll(this, 'render', 'start_update', 'toggle_auto_download',
-            'poll', 'check_update', 'confirm_update', 'no_update_thx');
+            'poll', 'check_update', 'confirm_update', 'no_update_thx',
+            'toggle_version_lock');
           _.each(this.handle_status, function(func, name, list){
             this.handle_status[name] = _.bind(func, this);
           }, this);
@@ -170,6 +181,7 @@
 
         render: function(){
           this.$("#auto_download").attr("checked", this.config.get("enable_auto_pkg_dl"));
+          this.$("#version_lock").attr("checked", this.config.get("enable_version_lock"));
           var status_text = this.config.get("ts_update_status");
           this.$("#update_status").html(status_text);
           var status = status_text.split(":", 1)[0];
@@ -192,6 +204,11 @@
           "Available": function() {
             this.$("#confirm_update").removeAttr("disabled");
             this.$("#update_actions").slideDown();
+            if (this.previous_status != null) {
+              setTimeout(function(){
+                window.location.reload(true);
+              }, 1000);
+            }
           },
           "No updates": function() {
             this.$("#confirm_update").attr("disabled", "disabled");
@@ -274,6 +291,17 @@
           this.config.save({
             "enable_auto_pkg_dl": checked
           });
+        },
+
+        toggle_version_lock: function(){
+          var checked = this.$("#version_lock").attr("checked") || false;
+          this.config.save({
+            "enable_version_lock": checked
+          });
+          if (checked)
+            $.post("/admin/update/version_lock/enable_lock");
+          else
+            $.post("/admin/update/version_lock/disable_lock");
         }
       });
 

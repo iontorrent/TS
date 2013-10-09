@@ -23,10 +23,10 @@ TEXT_WARN_MSG=( "#\n",
 "# may not surface till a later software update.  Resolution of problems\n",
 "# will likely be delayed because of custom modifications to this file.\n"
 )
-TSCONFIG_ION_UPDATE_URL="http://updates.iontorrent.com"
-#TSCONFIG_ION_UPDATE_URL="http://ionupdates.com"
+TSCONFIG_ION_UPDATE_URL="http://ionupdates.com"
 TSCONFIG_UBUNTU_UPDATE_URL="http://us.archive.ubuntu.com"
 TSCONFIG_PACKAGELIST_FILE=${TSCONFIG_SRC_DIR}/torrentsuite-packagelist.json
+TSCONFIG_CARD_ID="PERC H810"
 
 # Source any local edits
 if [ -r ./ts_params.local ]; then

@@ -20,9 +20,16 @@ void GpuControlOpts::DefaultGpuControl()
     gpuSingleFlowFit = 1;
     gpuThreadsPerBlockSingleFit = -1;
     gpuL1ConfigSingleFit = -1; // actual default is set hardware specific in SingleFitStream.cu
-    gpuSingleFlowFitType = 0; // 0: GaussNewton, 1: LevMar 2:Hybrid (gpuHybridIterations Gauss Newton, then rest LevMar)
+
+    // 0: GaussNewton, 1: LevMar 2:Hybrid (gpuHybridIterations Gauss Newton, then rest LevMar)
+    // 3: Relaxing Kmult (two pass Gauss Newton)
+    gpuSingleFlowFitType = 0; 
     gpuHybridIterations = 3;
 
     doGpuOnlyFitting = 1;
+
+    gpuAmpGuess = 1;
+
+    gpuVerbose = false;
 }
 

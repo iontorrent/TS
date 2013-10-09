@@ -1,0 +1,53 @@
+{% extends "rundb/plan/page_plan/base.html" %}
+{% load url from future %}
+
+{% block main-title %}Select the monitoring threshold preferences and then hit next.{% endblock main-title %}
+
+{% block page-plan-content %}
+    {% for qcTypeName,qcValue in step.getCurrentSavedFieldDict.items %}
+        {% if forloop.counter0|divisibleby:"3" %}
+            <div class="row-fluid">
+        {% endif %}
+            <div class="span4">
+                <h4>{{qcTypeName}}:</h4>
+                <h3 style="font-size: 20px; float:left; margin-right:10px; margin-top:0px;">≤</h3>
+                <input id="qcValues_{{forloop.counter0}}" name="{{qcTypeName}}" style="width:35px;" value="{{qcValue}}">
+             </div>
+        {% if forloop.counter|divisibleby:"3" or forloop.last %}
+            </div>
+        {% endif %}
+    {% endfor %}
+    <div class="row-fluid">
+        {% for key, value in step.validationErrors.items %}
+            <h4 style="color: red">{{value}}</h4>
+        {% endfor %}
+    </div>
+{% endblock page-plan-content %}
+
+{% block prevnext-buttons %}
+    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_kits" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_reference" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+{% endblock prevnext-buttons %}
+
+{% block summary-table %}
+    {%include "rundb/plan/page_plan/summary/monitoring_summary.html"%}
+{% endblock summary-table %}
+
+{% block post-raw %}
+{{ block.super }}
+<script type="text/javascript">
+    $(document).ready(function () {
+        {% for qcType in step.getPrePopulatedFieldDict.qcTypes %}
+            var minThreshold = {{qcType.minThreshold}};
+            var maxThreshold = {{qcType.maxThreshold}};
+            $('#qcValues_{{forloop.counter0}}').spinner({min: minThreshold, max: maxThreshold});
+            $('#qcValues_{{forloop.counter0}}').on("spinchange", function(event, ui){
+                $("#selected__{{forloop.counter0}}").text($('#qcValues_{{forloop.counter0}}').spinner("value"));
+            });
+            $('#qcValues_{{forloop.counter0}}').on("spinstop", function(event, ui) {
+                $("#selected__{{forloop.counter0}}").text($('#qcValues_{{forloop.counter0}}').spinner("value"));
+            });
+        {% endfor %}
+    });
+</script>
+{% endblock post-raw %}

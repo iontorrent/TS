@@ -6,6 +6,7 @@
 #include <cstddef>  // NULL defined here
 //#include <armadillo>
 #include "DataCube.h"
+#include "BkgControlOpts.h"
 
 
 class BkgDataPointers {
@@ -41,12 +42,46 @@ class BkgDataPointers {
       m_region_debug_bead_corrected = NULL;
       m_region_debug_bead_xtalk = NULL;
       m_time_compression = NULL;
+
+      m_beads_bestRegion_location = NULL;
+      m_beads_bestRegion_predicted = NULL;
+      m_beads_bestRegion_corrected = NULL;
+      m_beads_bestRegion_amplitude = NULL;
+      m_beads_bestRegion_residual = NULL;
+      m_beads_bestRegion_kmult = NULL;
+      m_beads_bestRegion_dmult = NULL;
+      m_beads_bestRegion_SP = NULL;
+      m_beads_bestRegion_R = NULL;
+      m_beads_bestRegion_fittype = NULL;
+      m_beads_bestRegion_gainSens = NULL;
+      m_beads_bestRegion_timeframe = NULL;
+
+      m_beads_xyflow_predicted = NULL;
+      m_beads_xyflow_corrected = NULL;
+      m_beads_xyflow_amplitude = NULL;
+      m_beads_xyflow_residual = NULL;
+      m_beads_xyflow_kmult = NULL;
+      m_beads_xyflow_dmult = NULL;
+      m_beads_xyflow_SP = NULL;
+      m_beads_xyflow_R = NULL;
+      m_beads_xyflow_fittype = NULL;
+      m_beads_xyflow_location = NULL;
+      m_beads_xyflow_hplen = NULL;
+      m_beads_xyflow_mm = NULL;
+      m_beads_xyflow_timeframe = NULL;
+      m_xyflow_hashtable = NULL;
+
+      // key signals
+      m_beads_xyflow_predicted_keys = NULL;
+      m_beads_xyflow_corrected_keys = NULL;
+      m_beads_xyflow_location_keys = NULL;
+
   }
 
   ~BkgDataPointers() {};
 
 public: // functions to set the values
-  void copyCube_element(DataCube<int> *ptr, int x, int y, int j, int v);
+   void copyCube_element(DataCube<int> *ptr, int x, int y, int j, int v);
    void copyCube_element(DataCube<float> *ptr, int x, int y, int j, float v);
 //  void copyMatrix_element(arma::Mat<float> *ptr, int x, int j, float v);
 //  void copyMatrix_element(arma::Mat<int> *ptr, int x, int j, int v);
@@ -73,7 +108,7 @@ public: // should be private eventually and use set/get to access them
   DataCube<float> *m_nuc_shape_param;
   DataCube<float> *m_enzymatics_param;
   DataCube<float> *m_buffering_param;
-   DataCube<float> *m_derived_param;
+  DataCube<float> *m_derived_param;
   DataCube<float> *m_region_debug_bead;
   DataCube<float> *m_region_debug_bead_ak;
   DataCube<float> *m_region_debug_bead_predicted;
@@ -83,10 +118,50 @@ public: // should be private eventually and use set/get to access them
   
   DataCube<float> *mRegionInitParam;
   
- DataCube<float> *mEmphasisParam;
+  DataCube<float> *mEmphasisParam;
  
   DataCube<int> *mRegionOffset;
 
+  // bestRegion beads
+  DataCube<int> *m_beads_bestRegion_location;
+  DataCube<int> *m_beads_bestRegion_fittype;
+  DataCube<float> *m_beads_bestRegion_corrected;
+  DataCube<float> *m_beads_bestRegion_predicted;
+  DataCube<float> *m_beads_bestRegion_amplitude;
+  DataCube<float> *m_beads_bestRegion_residual;
+  DataCube<float> *m_beads_bestRegion_kmult;
+  DataCube<float> *m_beads_bestRegion_dmult;
+  DataCube<float> *m_beads_bestRegion_SP;
+  DataCube<float> *m_beads_bestRegion_R;
+  DataCube<float> *m_beads_bestRegion_gainSens;
+  DataCube<float> *m_beads_bestRegion_timeframe;
+
+  // traceOutput for positions specified in sse/xyf/rcf files
+  DataCube<float> *m_beads_xyflow_predicted;
+  DataCube<float> *m_beads_xyflow_corrected;
+  DataCube<float> *m_beads_xyflow_amplitude;
+  DataCube<float> *m_beads_xyflow_kmult;
+  DataCube<float> *m_beads_xyflow_dmult;
+  DataCube<float> *m_beads_xyflow_SP;
+  DataCube<float> *m_beads_xyflow_R;
+  DataCube<float> *m_beads_xyflow_timeframe;
+  DataCube<float> *m_beads_xyflow_residual;
+  DataCube<int> *m_beads_xyflow_location;
+  DataCube<int> *m_beads_xyflow_hplen;
+  DataCube<int> *m_beads_xyflow_mm;
+  DataCube<int> *m_beads_xyflow_fittype;
+  HashTable_xyflow *m_xyflow_hashtable;
+  int id_xy(int x, int y, HashTable_xyflow *xyf_hash) {return (xyf_hash->id_xy(x,y));};
+  int id_rc(int r, int c, HashTable_xyflow *xyf_hash) {return (xyf_hash->id_rc(r,c));};
+  int id_xyflow(int x, int y, int flow, HashTable_xyflow *xyf_hash) {return (xyf_hash->id_xyflow(x,y,flow));};
+  int id_rcflow(int r, int c, int flow, HashTable_xyflow *xyf_hash) {return (xyf_hash->id_rcflow(r,c,flow));};
+  int mm_xyflow(int x, int y, int flow, HashTable_xyflow *xyf_hash) {return (xyf_hash->mm_xyflow(x,y,flow));};
+  std::string hp_xyflow(int x, int y, int flow, HashTable_xyflow *xyf_hash) {return (xyf_hash->hp_xyflow(x,y,flow));};
+
+  // key signals
+  DataCube<float> *m_beads_xyflow_predicted_keys;
+  DataCube<float> *m_beads_xyflow_corrected_keys;
+  DataCube<int> *m_beads_xyflow_location_keys;
 };
 
 

@@ -1,0 +1,428 @@
+{% extends "rundb/plan/page_plan/base.html" %}
+{% load url from future %}
+
+{% block main-title %}
+<div style="float:left;">Select the IonReporter workflow to use:</div>
+<div style="float:left;">
+    <img src="/site_media/img/loading.gif" width="35" height="35" id="loading"/>
+    <a title="Refresh Plugin IonReporterUploader Information" class="refresh-uploader-information" id="refresh" href="#"><i class="icon-refresh"></i></a>
+</div>
+{% endblock main-title %}
+
+{% block page-plan-content %}
+
+<div class="row-fluid">
+    <div class="span6">
+        <div class="span12" style="margin-bottom:25px;margin-left:10px;">
+            <div class="controls irOptionsContent" id="ir_accounts">
+            </div>
+            
+            <input type="hidden" name="irAccountId" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}"/>
+            <input type="hidden" name="sampleset_id" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.sampleset_id}}"/>
+            <input type="hidden" name="applicationType" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.applicationType}}"/>
+            <input type="hidden" name="irVersion" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irVersion}}"/>
+            <input type="hidden" name="irAccountName" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}"/>
+            <div id="irAccountDoesNotExistError" style="color:red;font-weight:bold; display: none;">
+                The IR account {{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}} no longer exists or is inaccessible. Please select a valid IR account.
+            </div>
+        </div>
+        <div id="error" style="color:red;font-weight:bold"></div>
+        <div class="span12" id="workflows" style="display:none;">
+            <label>
+                Existing Workflow
+            </label>
+            <div style="overflow:auto;">
+                <div style="float:left;">
+                    <input type="hidden" id="trigger" value="1"/>
+                    <select name="irworkflow">
+                        <option value=""></option>
+                    </select>
+                </div>
+            </div>
+            <label id="new_workflow">
+                <a class="btn btn-100" href="#" onclick="goToCreateWorkflowUrl(); return false;">Create New Workflow</a>
+            </label>
+        </div>
+    </div>
+    <div class="span6">
+        <div class="span4" id="sample_grouping">
+                <h4>Sample Grouping</h4>
+                <div class="control-group offset1">
+                    <div class="sampleGroupOptionsContent">
+                    </div>
+                </div>
+        </div>
+    </div>
+</div>
+{% endblock page-plan-content %}
+
+{% block prevnext-buttons %}
+    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_application" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+    
+{% endblock prevnext-buttons %}
+
+{% block summary-table %}
+    {%include "rundb/plan/page_plan/summary/application_summary.html"%}
+{% endblock summary-table %}
+
+{% block post-raw %}
+{{ block.super }}
+<script type="text/javascript">
+
+    var workflow_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/workflows/";
+    var ion_accounts_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/configs/";
+    var prev_ir_account_name = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irOptions}}";
+    var prev_account_id = "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}";
+
+    var ir_rel_type_to_sample_group_map = {};
+    var sample_group_to_pk_map = {};
+    var workflow_to_sample_group_map = {};
+    var ir_rel_type_pk_map = {};
+    var sample_group_to_workflow_map = {};
+    var default_sample_grouping = [];
+    var workflow_to_application_type_map = {};
+
+    {%for sample_group in step.prepopulatedFields.sampleGroupings %}
+        var ir_term = "{{sample_group.iRValue}}";
+        var ir_terms = ir_term.split("|");
+        $.each(ir_terms, function(i) {
+            var term = ir_terms[i];
+            ir_rel_type_to_sample_group_map[term] = "{{sample_group.displayedName}}";
+            ir_rel_type_pk_map[term] = "{{sample_group.pk}}";
+            sample_group_to_pk_map["{{sample_group.displayedName}}"] = "{{sample_group.pk}}";
+            if ($.inArray("{{sample_group.displayedName}}", default_sample_grouping) == -1) {
+                default_sample_grouping.push("{{sample_group.displayedName}}");
+            }
+        });
+    {%endfor%}
+
+    var $div = $("#ir_accounts");
+    var $none_lbl = $("<label></label>");;
+    $none_lbl.addClass('radio');
+    $none_lbl.text("None");
+
+    var $none_input = $("<input type='radio'/>");
+    $none_input.attr({'name' : 'irOptions', 'value' : '0'});
+    $none_input.on('click', function(){
+        
+        $("#error").text("");
+        $('input[name="irAccountId"]').val('0');
+        $('input[name="irAccountName"]').val('None');
+        $("#selectedIR").text('None');
+        $("#selectedWorkflow").text('');
+        $("#selectedGroup").text('');
+        $("input[name=irVersion]").val('0');
+        $("#workflows").hide();
+        var $div = $(".sampleGroupOptionsContent");
+        $div.html('');
+        $.each(default_sample_grouping, function(i){
+            sample_group = default_sample_grouping[i];
+            var $label = $("<label></label>", {'class' : 'radio', 'width' : '150px'});
+            
+            $label.text(sample_group);
+            var $input = $("<input/>", {'type' : 'radio', 'name' : 'sampleGrouping', 'value' : sample_group_to_pk_map[sample_group]});
+            if ("{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.sampleGrouping}}" == sample_group_to_pk_map[sample_group]) {
+                $input.attr('checked', true);
+            }
+            $input.on('click', function(){
+                $("#selectedGroup").text($input.parent().text().trim());
+            });
+            $label.append($input);
+            $div.append($label);
+
+        });
+                
+    });
+
+    $none_lbl.append($none_input);
+    $div.append($none_lbl);
+
+    function get_workflow_and_sample_groupings(id, fullName) {
+
+        var all_workflows = [];
+        $("#loading").show();
+        $('input[name="irAccountId"]').val(id);
+        $('input[name="irAccountName"]').val(fullName);
+        $("#selectedIR").text(fullName);
+        $("#error").text("");
+
+        // all_relationship_types = get_workflows(id);
+        $.when($.ajax(workflow_url+"?format=json&id="+id)).then(function(data){
+
+            var workflows = data["userWorkflows"];
+            var all_relationship_types = [];
+            sample_group_to_workflow_map = {};
+            var $select = $("select[name=irworkflow]");
+            $select.empty();
+            $select.append($("<option></option>"));
+                
+            if (typeof workflows != 'undefined') {
+                $.each(workflows, function(i){
+                    var $opt = $("<option></option>");
+                    var workflowName = workflows[i]["Workflow"];
+                    workflow_to_application_type_map[workflowName] = workflows[i]["ApplicationType"];
+                    all_workflows.push(workflowName);
+                    workflow_to_sample_group_map[workflowName] = workflows[i]["RelationshipType"];
+                    if ($.inArray(workflows[i]["RelationshipType"], all_relationship_types) == -1) {
+                        all_relationship_types.push(workflows[i]["RelationshipType"]);
+                    }
+                    if (typeof sample_group_to_workflow_map[workflows[i]["RelationshipType"]] == 'undefined') {
+                        sample_group_to_workflow_map[workflows[i]["RelationshipType"]] = [];
+                    }
+                    if ($.inArray(workflowName, sample_group_to_workflow_map[workflows[i]["RelationshipType"]]) == -1) {
+                        sample_group_to_workflow_map[workflows[i]["RelationshipType"]].push(workflowName);
+                    }
+                    if (workflowName == '{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}'){
+                        $opt.attr('selected', 'selected');
+                    }
+                    $opt.attr('value', workflowName);
+                    $opt.text(workflowName);
+                    $select.append($opt);
+                });
+                
+            } else {
+                $("#error").text("Error connecting to IR Server");
+                $("#loading").hide();
+                $('#selectedWorkflow').text('');
+                $("#sample_grouping").hide();
+                $("#workflows").hide();
+                return;
+            }
+
+            $("#workflows").show();
+            $('#selectedWorkflow').text($('select[name=irworkflow]').val());
+
+            found_workflow = false;
+            $.each(all_workflows, function(i){
+                if (all_workflows[i] == "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}") {
+                    found_workflow = true;
+                }
+            });
+
+            if (!found_workflow && "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}".length > 0 && "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}" != "-1" ) {
+                $("#error").text("The previous workflow for this plan is no longer available.  Please select another workflow");
+            }
+
+            var sample_groups = [];
+            var $div = $(".sampleGroupOptionsContent");
+            $div.html('');
+            $.each(all_relationship_types, function(i){
+                var term = all_relationship_types[i];
+                if ($.inArray(term, sample_groups) == -1) {
+                    sample_groups.push(term);
+                }
+            });
+            $.each(sample_groups, function(i){
+                sample_group = sample_groups[i];
+                var $label = $("<label></label>", {'class' : 'radio', 'width' : '150px'});
+                $div.append($label);
+                $label.text(sample_group);
+                if (typeof sample_group_to_pk_map[sample_group] == 'undefined') {
+                    $("#error").text("The sample group " + sample_group + " is not supported in TSS");
+                } else {
+                var $input = $("<input/>", {'type' : 'radio', 'name' : 'sampleGrouping', 'value' : sample_group_to_pk_map[sample_group]});
+                $label.append($input);
+                $input.on('click', function(){
+                    $("#selectedGroup").text($input.parent().text().trim());
+                    var self = $(this);
+                    var $select = $("select[name=irworkflow]");
+                    $select.empty();
+                    $select.append($("<option></option>"));
+                    $.each(ir_rel_type_pk_map, function(term, pk){
+                        if (pk == self.val()) {
+                            var workflows = sample_group_to_workflow_map[term];
+                            if (typeof workflows != 'undefined') {
+                                $.each(workflows, function(i){
+                                    var workflow = workflows[i];
+                                    var $opt = $("<option></option>", {'value' : workflow, 'text' : workflow});
+                                    if (workflow == "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}") {
+                                        $opt.attr('selected', true);
+                                    }
+                                    $select.append($opt);
+                                });
+                            }
+                        }
+                    });
+                    $select.change();
+                });
+                }
+                if (sample_group_to_pk_map[sample_group] == "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.sampleGrouping}}") {
+                    $input.attr('checked', true);
+                    $input.click();
+                }
+                
+                
+            });
+
+            $("#sample_grouping").show();
+            $("#loading").hide();
+        
+        });
+        
+    }
+
+    function get_ir_accounts() {
+        var jqhxhr = $.get(ion_accounts_url, {"format" : "json"}, function(data){
+            if (data != "undefined") {
+                $("#error").text("");
+                var accounts = data;            
+                
+                var matched_prev = false; 
+                
+                $.each(accounts, function(i){
+                    var account = accounts[i];
+                    var id = account["id"];
+                    var version = account["version"];
+                    var checked = account["default"];
+                    var name = account["name"];
+
+                    
+                    if (prev_account_id == id){
+                        matched_prev = true;
+                    }
+                    
+                    version = version.substring(2, version.length);
+                    version = version.substring(0, 1) + "." + version.substring(1, version.length);
+                    
+                    var fullName = name + " " + version;
+                    
+                    //add orgname, firstname, lastname if they are there.
+                    var detailsStr = "";
+                    if ('details' in account){
+                        detailsStr += " (";
+                        if ('orgname' in account['details']){
+                            detailsStr += account['details']['orgname'] + ", "
+                        }
+                        
+                        if ('firstname' in account['details'] && 'lastname' in account['details']){
+                            detailsStr += account['details']['firstname'] + " " + account['details']['lastname'];
+                        } else {
+                            detailsStr = detailsStr.substring(0, detailsStr.length-2);
+                        }
+                        
+                        detailsStr += ")";
+                    }
+                    
+                    if (detailsStr != " ()") {
+                        fullName += detailsStr;
+                    }
+                    
+                    var $lbl = $("<label></label>");
+                    $lbl.addClass('radio');
+                    $lbl.text(fullName);
+                    
+                    var $input = $("<input type='radio'/>");
+                    $input.attr({'name' : 'irOptions', 'value' : version});
+                    $input.on('click', function(){
+                        
+                        $("input[name=irAccountId]").val(id);
+                        $('input[name="irAccountName"]').val(fullName);
+                        $('input[name=irVersion]').val(version);
+                        get_workflow_and_sample_groupings(id, fullName);
+                        if (version == "1.6") {
+                            $("#new_workflow").hide();
+                        } else {
+                            $("#new_workflow").show();
+                        }
+                    });
+                    $lbl.append($input);
+
+                    $div.append($lbl);
+
+                    if(prev_account_id == id) {
+                        $input.attr('checked', true);
+                        $("input[name=irAccountId]").val(id);
+                        $('input[name="irAccountName"]').val(fullName);
+                        $("#selectedIR").text(fullName);
+                        $input.click();
+
+                    } else {
+                        if (checked && !matched_prev) {
+                            
+                            $input.attr('checked', true);
+                            $("input[name=irAccountId]").val(id);
+                            $('input[name="irAccountName"]').val(fullName);
+                            $("#selectedIR").text(fullName);   
+                            $('input[name=irVersion]').val(version);
+                            if (prev_account_id == "-1") {
+                                $input.click();
+                            }
+
+                        } else {
+                            $input.attr('checked', false);
+                        }
+                        
+                    }
+
+                });
+
+                if (!matched_prev && prev_account_id != "-1") {
+                    $none_input.attr('checked', true);
+                    $none_input.click();
+
+                    $("input[name=irAccountId]").val('0');
+                    $('input[name="irAccountName"]').val('None');
+                    $("#selectedIR").text('None');
+                    if (prev_account_id != "0" && prev_account_id != "-1"){$("#irAccountDoesNotExistError").show();}
+                }
+                
+            }
+            $("#loading").hide();
+        } , "json").fail(function(){
+                $none_input.attr('checked', true);
+                $("input[name=irAccountId]").val('0');
+                $('input[name="irAccountName"]').val('None');
+                $("#selectedIR").text('None');
+                $("#loading").hide();
+        });
+
+    }
+    
+    function goToCreateWorkflowUrl() {
+        var url = '/rundb/api/v1/plugin/IonReporterUploader/extend/newWorkflow/'; 
+        $.get(url,
+              {"format" : "json", "id" : "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}"},
+              function(data){
+                  window.open(data["workflowCreationLandingPageURL"], '_blank');
+              },"json").fail(function(){
+                  alert("Failed to retrieve the workflow creation url, make sure you are able to connect to IR.");
+              });
+    }
+
+    function load_workflow_and_sample_groups() {
+        var accountId = $('input[name="irAccountId"]').val();
+        if (accountId != "0") {
+            get_workflow_and_sample_groupings($('input[name="irAccountId"]').val(), $('input[name="irAccountName"]').val());
+        }
+    }
+    
+    $(document).ready(function () {
+        $("#loading").parent().parent().css('overflow', 'auto');
+        get_ir_accounts();
+        
+        $('select[name=irworkflow]').click(function(){
+            $('#selectedWorkflow').text($(this).val());
+        });
+
+        $("#refresh").on('click', function(){
+            get_workflow_and_sample_groupings($('input[name="irAccountId"]').val(), $('input[name="irAccountName"]').val());
+        });
+
+
+        $("select[name=irworkflow]").on('change', function(e){
+            $("input[name=applicationType]").val(workflow_to_application_type_map[$(this).val()]);
+            $("#selectedWorkflow").text($(this).val());
+            if ($(this).val().length > 0) {
+                var pk = sample_group_to_pk_map[workflow_to_sample_group_map[$(this).val()]];
+                $.each($("input[name=sampleGrouping]"), function(){
+                    if ($(this).val() == pk) {
+                        $(this).attr('checked', true);
+                        $("#selectedGroup").text($(this).parent().text().trim());
+                    }
+                });
+            }
+        });
+
+    });
+</script>
+{% endblock post-raw %}

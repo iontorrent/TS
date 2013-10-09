@@ -3,6 +3,7 @@
 import os
 import re
 import sys
+import time
 import shutil
 import errno
 import tempfile
@@ -10,26 +11,26 @@ import traceback
 import urllib
 import subprocess
 from datetime import datetime
-from iondb.utils.files import getSpaceMB, getSpaceKB
+from iondb.utils.files import getSpaceMB, getSpaceKB, ismountpoint
 from iondb.utils import makePDF
 from ion.utils import makeCSA
-from iondb.rundb.models import EventLog, DMFileStat
 from iondb.utils.TaskLock import TaskLock
 from celery.task import task
 from celery.utils.log import get_task_logger
 from iondb.rundb.data import dmactions_types
-from iondb.rundb.models import DMFileStat, Results
+from iondb.rundb.models import DMFileStat, DMFileSet, Results, EventLog
 from iondb.utils.files import getdiskusage
 from iondb.rundb.data import exceptions as DMExceptions
 from iondb.rundb.data.project_msg_banner import project_msg_banner
+from django.core import serializers
 
 #Send logging to data_management log file
 logger = get_task_logger('data_management')
 
-ARCHIVE='archive'
-EXPORT='export'
-DELETE='delete'
-TEST='test'
+ARCHIVE = 'archive'
+EXPORT = 'export'
+DELETE = 'delete'
+TEST = 'test'
 
 
 def delete(user, user_comment, dmfilestat, lockfile, msg_banner, confirmed=False):
@@ -67,6 +68,7 @@ def export(user, user_comment, dmfilestat, lockfile, msg_banner, backup_director
         raise
     try:
         _process_fileset_task(dmfilestat, EXPORT, user, user_comment, lockfile, msg_banner)
+        write_serialized_json(dmfilestat.result, dmfilestat.archivepath)
     except:
         dmfilestat.setactionstate('E')
         raise
@@ -91,7 +93,7 @@ def archive(user, user_comment, dmfilestat, lockfile, msg_banner, backup_directo
             if dmfilestat.dmfileset.type == dmactions_types.OUT:
                 _create_archival_files(dmfilestat)
             _process_fileset_task(dmfilestat, ARCHIVE, user, user_comment, lockfile, msg_banner)
-
+        write_serialized_json(dmfilestat.result, dmfilestat.archivepath)
     except:
         dmfilestat.setactionstate('E')
         raise
@@ -108,7 +110,7 @@ def test(user, user_comment, dmfilestat, lockfile, msg_banner, backup_directory=
 
 
 def update_diskspace(dmfilestat):
-    logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
+    logger.info("Function: %s()" % sys._getframe().f_code.co_name)
     try:
         # search both results directory and raw data directory
         search_dirs = [dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir]
@@ -123,9 +125,9 @@ def update_diskspace(dmfilestat):
             to_process = []
             if os.path.isdir(start_dir):
                 to_process, to_keep = _file_selector(start_dir,
-                                            dmfilestat.dmfileset.include,
-                                            dmfilestat.dmfileset.exclude,
-                                            kpatterns)
+                                                     dmfilestat.dmfileset.include,
+                                                     dmfilestat.dmfileset.exclude,
+                                                     kpatterns)
 
                 #process files in list
                 for j, path in enumerate(to_process, start=1):
@@ -161,10 +163,19 @@ def destination_validation(dmfilestat, backup_directory=None, manual_action=Fals
 
     # check for valid destination
     try:
-        if backup_directory in [None, 'None', '']:
+        if backup_directory in [None, 'None', '', '/']:
             raise DMExceptions.MediaNotSet("Backup media for %s is not configured. Please use Data Management Configuration page." % dmfilestat.dmfileset.type)
+
         if not os.path.isdir(backup_directory):
             raise DMExceptions.MediaNotAvailable("Backup media for %s is not available: %s" % (dmfilestat.dmfileset.type, backup_directory))
+
+        # check if destination is external filesystem
+        # ie, catch the error of writing to a mountpoint which is unmounted.
+        # Use the tool 'mountpoint' which returns 0 if its mountpoint and mounted
+        # If its a subdirectory to a mountpoint, then the isdir() test will fail when not mounted.
+        if ismountpoint(backup_directory):
+            raise DMExceptions.MediaNotAvailable("Backup media for %s is not available: %s" % (dmfilestat.dmfileset.type, backup_directory))
+
     except Exception as e:
         logger.error("%s" % e)
         raise
@@ -182,6 +193,7 @@ def destination_validation(dmfilestat, backup_directory=None, manual_action=Fals
             # add up all objects that will be processed before this one
             exp_ids = []
             for obj in DMFileStat.objects.filter(action_state__in=['AG','EG','SA','SE']):
+              try:
                 if obj.archivepath and not os.path.normpath(obj.archivepath).startswith(os.path.normpath(backup_directory)):
                     continue
                 elif not os.path.normpath(obj.dmfileset.backup_directory).startswith(os.path.normpath(backup_directory)):
@@ -192,6 +204,8 @@ def destination_validation(dmfilestat, backup_directory=None, manual_action=Fals
                         pending += obj.diskspace
                 else:
                     pending += obj.diskspace
+              except:
+                  pass
 
             logger.debug("Required %dMB, pending %dMB, free %dMB" % (diskspace, pending, freespace))
 
@@ -323,20 +337,27 @@ def _create_destination(dmfilestat, action, filesettype, backup_directory=None):
                                                       'exportedReports',
                                                       dest_dir)
 
-        if not os.path.isdir(dmfilestat.archivepath):
-            src_st = os.stat(src_dir)
-            old_umask = os.umask(0000)
+        try:
             os.makedirs(dmfilestat.archivepath)
-            try:
-                os.chown(dmfilestat.archivepath, src_st.st_uid, src_st.st_gid)
-                os.utime(dmfilestat.archivepath, (src_st.st_atime, src_st.st_mtime))
-            except Exception as e:
-                if e.errno == errno.EPERM:
-                    pass
-                else:
-                    raise
-            os.umask(old_umask)
             logger.debug("Created dir: %s" % dmfilestat.archivepath)
+        except Exception as e:
+            if e.errno == errno.EEXIST:
+                pass
+            else:
+                raise
+
+        src_st = os.stat(src_dir)
+        old_umask = os.umask(0000)
+
+        try:
+            os.chown(dmfilestat.archivepath, src_st.st_uid, src_st.st_gid)
+            os.utime(dmfilestat.archivepath, (src_st.st_atime, src_st.st_mtime))
+        except Exception as e:
+            if e.errno == errno.EPERM:
+                pass
+            else:
+                raise
+        os.umask(old_umask)
     except:
         raise
 
@@ -348,7 +369,7 @@ def _file_selector(start_dir, ipatterns, epatterns, kpatterns, add_linked_sigpro
     separate list.
     '''
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
-
+    starttime = time.time()  # debugging time of execution
     to_include = []
     to_exclude = []
     to_keep = []
@@ -400,17 +421,9 @@ def _file_selector(start_dir, ipatterns, epatterns, kpatterns, add_linked_sigpro
             if match:
                 to_exclude.append(filename)
 
-    for item in to_include:
-        logger.debug("Inc: %s" % item)
-
-    for item in to_keep:
-        logger.debug("Keep: %s" % item)
-
-    for item in to_exclude:
-        logger.debug("Excl: %s" % item)
-
     selected = list(set(to_include) - set(to_exclude))
-
+    endtime = time.time()
+    logger.info("%s(): %f seconds" % (sys._getframe().f_code.co_name,(endtime - starttime)))
     return selected, to_keep
 
 
@@ -440,7 +453,11 @@ def _copy_to_dir(filepath,_start_dir,_destination):
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = proc.communicate()
         if proc.returncode != 0:
-            logger.error(stderr)
+            errordump = stderr.splitlines()[0].split(":")[2]
+            errordetail = stderr.splitlines()[0].split(":")[1]
+            errstr = errordump.split('(')[0].strip()
+            errnum = int(errordump.split('(')[1].strip(')'))
+            raise DMExceptions.RsyncError(errstr+" "+errordetail,errnum)
 
     else:
         try:
@@ -456,7 +473,6 @@ def _copy_to_dir(filepath,_start_dir,_destination):
         except:
             raise
     return True
-
 
 
 def _process(filepath, action, destination, _start_dir, to_keep):
@@ -497,7 +513,7 @@ def _process_fileset_task(dmfilestat, action, user, user_comment, lockfile, msg_
     celery task function.  The recursion continues until the list is empty.  The calling
     function exits immediately.
     '''
-    logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
+    logger.info("Function: %s()" % sys._getframe().f_code.co_name)
 
     if dmfilestat.isdisposed():
         errmsg = "The %s for %s are deleted/archived" % (dmfilestat.dmfileset.type,dmfilestat.result.resultsName)
@@ -524,10 +540,10 @@ def _process_fileset_task(dmfilestat, action, user, user_comment, lockfile, msg_
         logger.debug("Searching: %s" % start_dir)
         if os.path.isdir(start_dir):
             to_process, to_keep = _file_selector(start_dir,
-                                        dmfilestat.dmfileset.include,
-                                        dmfilestat.dmfileset.exclude,
-                                        kpatterns,
-                                        add_linked_sigproc)
+                                                 dmfilestat.dmfileset.include,
+                                                 dmfilestat.dmfileset.exclude,
+                                                 kpatterns,
+                                                 add_linked_sigproc)
             logger.info("%d files to process at %s" % (len(list(set(to_process) - set(to_keep))),start_dir))
             list_of_file_dict.append(
                 {
@@ -547,7 +563,7 @@ def _process_fileset_task(dmfilestat, action, user, user_comment, lockfile, msg_
                 }
             )
 
-    pfilename = set_action_param_file(list_of_file_dict)
+    pfilename = set_action_param_var(list_of_file_dict,prefix=action)
 
     # Call the recursive celery task function to process the list
     celery_result = _process_task.delay(pfilename)
@@ -564,15 +580,15 @@ def _process_task(pfilename):
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     logger.debug("Task ID: %s" % _process_task.request.id)
 
-
     #catch all unhandled exceptions and clean up
     try:
-        list_of_file_dict = get_action_param_file(pfilename)
+        list_of_file_dict = get_action_param_var(pfilename)
         os.unlink(pfilename)
 
         dmfilestat = DMFileStat.objects.get(id=list_of_file_dict[0]['pk'])
         terminate = True   # flag to indicate recursion termination
         total_processed = 0
+        fstatus = "Success"
 
         start_time = datetime.now()
         max_time_delta = timedelta(seconds=10)
@@ -581,6 +597,7 @@ def _process_task(pfilename):
         for q,dict in enumerate(list_of_file_dict):
             # The dictionary contains an element named 'to_process' which is a list variable to iterate over
             logger.debug("%d, start_dir: %s" % (q,dict['start_dir']))
+            logger.info("%6d %s %s" %(len(dict['to_process']),dmfilestat.dmfileset.type,dmfilestat.result.resultsName))
 
             while (datetime.now() - start_time) < max_time_delta:
                 # If there are no files left to process, (all to_process lists are empty), the recursion ends
@@ -600,15 +617,17 @@ def _process_task(pfilename):
                         if _process(path, dict['action'], dict['archivepath'], dict['start_dir'], dict['to_keep']):
                             dict['processed_cnt'] = j
                             dict['total_size'] += this_file_size
-                            logger.info("%04d/%04d %s %10d %s" % (j, dict['total_cnt'], dict['action'], dict['total_size'], path))
+                            logger.debug("%04d/%04d %s %10d %s" % (j, dict['total_cnt'], dict['action'], dict['total_size'], path))
 
-                    except (OSError,IOError) as e:
+                    except (OSError,IOError,DMExceptions.RsyncError) as e:
                         #IOError: [Errno 28] No space left on device:
                         if e.errno == errno.ENOSPC:
                             raise
                         elif e.errno == errno.ENOENT:
                             logger.warn("%04d No longer exists %s" % (j,path))
                             continue
+                        else:
+                            raise
                     except:
                         errmsg = "%04d/%04d %s %10d %s" % (j, dict['total_cnt'], dict['action'], dict['total_size'], path)
                         logger.error(errmsg)
@@ -635,29 +654,69 @@ def _process_task(pfilename):
 
             # only expect to execute this line when no files to process
             total_processed += dict['total_size']
-    except:
+
+    except Exception as e:
+        fstatus = "Error"
+        terminate = True
         dmfilestat.setactionstate('E')
         logger.error("DM Action failure on %s for %s report." % (dmfilestat.dmfileset.type,dmfilestat.result.resultsName))
         logger.error("This %s action will need to be manually completed." % (dict['action']))
         logger.error("The following is the exception error:\n"+traceback.format_exc())
-        EventLog.objects.add_entry(dmfilestat.result,"%s - %s" % (dmfilestat.dmfileset.type, msg),username='dm_agent')
-        if dict['lockfile']:
-            applock = TaskLock(dict['lockfile'])
-            applock.unlock()
+        EventLog.objects.add_entry(dmfilestat.result,"%s - %s. Action not completed.  User intervention required." % (fstatus, e),username='dm_agent')
+
+        # Release the task lock
+        try:
+            if dict['lockfile']:
+                applock = TaskLock(dict['lockfile'])
+                applock.unlock()
+        except:
+            logger.error(traceback.format_exc())
+
+        # Do the user notification
+        try:
+            # pop up a message banner
+            if dict['msg_banner']:
+                dmfileset = dmfilestat.dmfileset
+                project_msg = {}
+                msg_dict = {}
+                msg_dict[dmfileset.type] = fstatus
+                project_msg[dmfilestat.result_id] = msg_dict
+                project_msg_banner('', project_msg, dict['action'])
+        except:
+            logger.error(traceback.format_exc())
+
+        # ====================================================================
+        # Exit function here on error
+        # ====================================================================
         return
 
-    #logger.debug("Sleep for 1")
-    #import time
-    #time.sleep(1)
-    if terminate:
+
+    if not terminate:
+        # ====================================================================
+        # Launch next task
+        # ====================================================================
         try:
-            # No more files to process.  Do the clean up.
+            action = dict.get('action','unk')
+            pfilename = set_action_param_var(list_of_file_dict,prefix=action)
+            celery_result = _process_task.delay(pfilename)
+        except:
+            logger.error(traceback.format_exc())
+
+    else:
+        # ====================================================================
+        # No more files to process.  Clean up and exit.
+        # ====================================================================
+        try:
             dmfilestat.diskspace = float(total_processed)/(1024*1024)
             dmfilestat.save()
             logger.info("%0.1f MB %s processed" % (dmfilestat.diskspace, dmfilestat.dmfileset.type))
             if dict['action'] in [ARCHIVE, DELETE]:
                 _emptydir_delete(dmfilestat)
+        except:
+            logger.error(traceback.format_exc())
 
+        # Do the user notification
+        try:
             _action_complete_update(dict['user'], dict['user_comment'], dmfilestat, dict['action'])
 
             # pop up a message banner
@@ -665,20 +724,17 @@ def _process_task(pfilename):
                 dmfileset = dmfilestat.dmfileset
                 project_msg = {}
                 msg_dict = {}
-                msg_dict[dmfileset.type] = "Success"
+                msg_dict[dmfileset.type] = fstatus
                 project_msg[dmfilestat.result_id] = msg_dict
                 project_msg_banner('', project_msg, dict['action'])
+        except:
+            logger.error(traceback.format_exc())
 
+        # Release the task lock
+        try:
             if dict['lockfile']:
                 applock = TaskLock(dict['lockfile'])
                 applock.unlock()
-        except:
-            logger.exception(traceback.format_exc())
-    else:
-        # Launch next task
-        try:
-            pfilename = set_action_param_file(list_of_file_dict)
-            celery_result = _process_task.delay(pfilename)
         except:
             logger.error(traceback.format_exc())
 
@@ -742,13 +798,15 @@ def _emptydir_delete(dmfilestat):
     for start_dir in search_dirs:
         for root, dirs, files in os.walk(start_dir,topdown=True):
             for name in dirs:
+                #if "plugin_out" in name:    #Never remove an empty plugin_out directory
+                #    continue
                 filepath = os.path.join(root,name)
                 try:
                     emptyDir = True if len(os.listdir(filepath)) == 0 else False
                 except:
                     continue
                 if emptyDir:
-                    logger.debug("Removing Directory: %s" % filepath)
+                    logger.debug("Removing Empty Directory: %s" % filepath)
                     #this fancy bit is to not trip on a soft link (TS-6600)
                     try:
                         os.rmdir(filepath)
@@ -757,11 +815,11 @@ def _emptydir_delete(dmfilestat):
                             try:
                                 os.unlink(filepath)
                             except:
-                                pass
+                                logger.warn(e)
                         elif e.errno == errno.ENOENT:   # no such file or directory
                             pass
                         else:
-                            raise e
+                            logger.warn(e)
 
 
 def _update_diskusage(dmfilestat):
@@ -780,7 +838,7 @@ def _update_diskusage(dmfilestat):
 
 def _update_related_objects(user, user_comment, dmfilestat, action, msg, action_state=None):
     '''When category is signal processing, make sure that all related results must be updated'''
-    logger.info("Function: %s()" % sys._getframe().f_code.co_name)
+    logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
 
     if action_state is None: action_state = dmfilestat.action_state
 
@@ -811,7 +869,7 @@ def _update_related_objects(user, user_comment, dmfilestat, action, msg, action_
 
 
 def _action_complete_update(user, user_comment, dmfilestat, action):
-    logger.info("Function: %s()" % sys._getframe().f_code.co_name)
+    logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
 
     if action == ARCHIVE:
         action_state = 'AD'
@@ -843,6 +901,8 @@ def set_action_pending(user, user_comment, action, dmfilestat, backup_directory)
             msg += " to %s" % backup_directory
         else:
             dmfilestat.archivepath = None
+        # save username and comment to be used when action is run
+        dmfilestat.user_comment = {'user': user, 'user_comment':user_comment }
         dmfilestat.save()
         msg+= ".<br>User Comment: %s" % user_comment
 
@@ -850,7 +910,7 @@ def set_action_pending(user, user_comment, action, dmfilestat, backup_directory)
             # update all realated dmfilestats
             exp_id = dmfilestat.result.experiment_id
             DMFileStat.objects.filter(dmfileset__type=dmactions_types.SIG, result__experiment__id=exp_id) \
-                .update(action_state = dmfilestat.action_state, archivepath=dmfilestat.archivepath)
+                .update(action_state = dmfilestat.action_state, archivepath=dmfilestat.archivepath, user_comment=dmfilestat.user_comment)
 
         add_eventlog(dmfilestat, msg, user)
         return "scheduled"
@@ -892,28 +952,56 @@ def slugify(something):
     return re.sub(r'\W+','-',something.lower())
 
 
-def set_action_param_file(list_of_dict_files):
+def set_action_param_var(list_of_dict_files, **kwargs):
     '''
     Argument is dictionary to be pickled.  Return value is name of file.
     '''
     from cPickle import Pickler
     import tempfile
-    action = list_of_dict_files[0].get('action','unk')
-    fileh = tempfile.NamedTemporaryFile(dir='/tmp',delete=False,mode='w+b',prefix=action)
-    #fileh = open(fileh.name,'wb')
-    pickle = Pickler(fileh)
-    pickle.dump(list_of_dict_files)
-    fileh.close()
+    with tempfile.NamedTemporaryFile(dir='/tmp',delete=False,mode='w+b',**kwargs) as fileh:
+        pickle = Pickler(fileh)
+        pickle.dump(list_of_dict_files)
     return fileh.name
+    '''
+    TODO: Store the variable in the task lock.
+    '''
 
 
-def get_action_param_file(pfilename):
+def get_action_param_var(pfilename):
     '''
     Argument is name of file to unpickle.  Return value is dictionary value.
     '''
     from cPickle import Unpickler
-    fileh = open(pfilename,'rb')
-    pickle = Unpickler(fileh)
-    list_of_dict_files = pickle.load()
-    fileh.close()
+    with open(pfilename,'rb') as fileh:
+        pickle = Unpickler(fileh)
+        list_of_dict_files = pickle.load()
     return list_of_dict_files
+    '''
+    TODO: Get the variable from the task lock.
+    '''
+
+
+def write_serialized_json(result, destination):
+    sfile = os.path.join(destination, "serialized_%s.json" % result.resultsName)
+    #skip if already exists
+    if os.path.exists(sfile):
+        return
+
+    serialize_objs = [result, result.experiment]
+    for obj in [result.experiment.plan, result.eas, result.analysismetrics, result.libmetrics, result.qualitymetrics]:
+        if obj:
+            serialize_objs.append(obj)
+    serialize_objs += list(result.pluginresult_set.all())
+
+    try:
+        with open(sfile,'wt') as f:
+            obj_json = serializers.serialize('json', serialize_objs, indent=2, use_natural_keys=True)
+
+            dmfilesets = DMFileSet.objects.filter(dmfilestat__result = result)
+            obj_json = obj_json.rstrip(' ]\n') + ','
+            obj_json += serializers.serialize('json', dmfilesets, indent=2, fields=('type','version')).lstrip('[')
+
+            f.write(obj_json)
+    except:
+        logger.error("Unable to save serialized.json for %s(%d)" % (result.resultsName, result.pk) )
+        logger.error(traceback.format_exc())

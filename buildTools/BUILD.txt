@@ -15,7 +15,8 @@ QUICK START on Ubuntu 10.04 (=Lucid)
         libgsl0-dev \
         libbz2-dev \
         libcurl4-openssl-dev \
-        libncurses-dev
+        libncurses-dev \
+        libboost-serialization-dev
 
 
    ./buildTools/build.sh
@@ -53,6 +54,32 @@ QUICK START on Ubuntu 11.10 (=Oneiric) (EXPERIMENTAL)
 
    ./buildTools/build.sh
 
+QUICK START on Ubuntu 13.04 (=Raring) (EXPERIMENTAL)
+
+     Activate Ubuntu's universe in /etc/apt/sources.list to get libatlas-base-dev
+
+     apt-get update
+
+     apt-get install \
+        build-essential \
+        git-core \
+        cmake \
+        liblapack-dev \
+        liblapack3gf \
+        libblas-dev \
+        libblas3gf \
+        libatlas-base-dev \
+        gfortran \
+        zlib1g-dev \
+        libgsl0-dev \
+        libbz2-dev \
+        libcurl4-openssl-dev \
+        libncurses5-dev \
+        libboost-serialization-dev \
+        libfftw3-dev \
+        libhdf5-dev
+
+
 
 
 EXTERNAL DEPENDENCIES
@@ -81,9 +108,6 @@ Instructions for lapack++ on Ubuntu can be found at:
 
 	https://help.ubuntu.com/community/Lapack%2B%2B
     
-torrentR will fail to build unless additional installation steps are taken.  See
-https://iontorrent.jira.com/wiki/display/TS/HOWTO+-+TorrentR+Server+Installation+Steps
-
 BUILD EVERYTHING
 
 From the top level folder (where buildTools, Analysis, and others 
@@ -105,7 +129,7 @@ are listed as subfolders) run:
    MODULES="FOO BAR" ./buildTools/build.sh
 
 where FOO and BAR are particular modules to build. 
-(eg alignTools, Analysis). 
+(eg Analysis). 
 
 WORK ON SINGLE MODULE
 

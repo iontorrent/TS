@@ -31,6 +31,7 @@ void RefineFit::InitSingleFlowFit()
   my_single_fit.FillDecisionThreshold (bkg.global_defaults.signal_process_control.krate_adj_limit);
   my_single_fit.SetRetryLimit (bkg.global_defaults.signal_process_control.single_flow_fit_max_retry);
   my_single_fit.fit_alt = bkg.global_defaults.signal_process_control.fit_alternate;
+  my_single_fit.gauss_newton_fit = bkg.global_defaults.signal_process_control.fit_gauss_newton;
 }
 
 void RefineFit::SupplyMultiFlowSignal (float *block_signal_corrected, int ibd)
@@ -67,6 +68,7 @@ void RefineFit::SupplyMultiFlowSignal (float *block_signal_corrected, int ibd)
 // For refining "time" shifts, we want to use sampled beads, so don't do bkg subtraction on everything and munge the buffers.
 void RefineFit::FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step)
 {
+  int fitType[NUMFB];
   bead_params *p = &bkg.region_data->my_beads.params_nn[ibd];
   float block_signal_corrected[bkg.region_data->my_scratch.bead_flow_t];
   float block_signal_predicted[bkg.region_data->my_scratch.bead_flow_t];
@@ -86,9 +88,12 @@ void RefineFit::FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step)
     float *signal_corrected = &block_signal_corrected[fnum*bkg.region_data->time_c.npts()];
     float *signal_predicted = &block_signal_predicted[fnum*bkg.region_data->time_c.npts()];
     int NucID = bkg.region_data->my_flow.flow_ndx_map[fnum];
-
+	fitType[fnum] = 
     my_single_fit.FitOneFlow (fnum,evect,p,&err_t, signal_corrected,signal_predicted, NucID,cache_step.NucFineStep (fnum),cache_step.i_start_fine_step[fnum],bkg.region_data->my_flow,bkg.region_data->time_c,bkg.region_data->emphasis_data,bkg.region_data->my_regions);
   }
+  //int reg = bkg.region_data->region->index;
+  //printf("RefineFit::FitAmplitudePerBeadPerFlow... (r,b)=(%d,%d) predicted[10]=%f corrected[10]=%f\n",reg,ibd,block_signal_predicted[10],block_signal_corrected[10]);
+  // note: predicted[0:7]=0 most of the time, my_start=8 or 9
 
 // do things with my error vector for this bead
 
@@ -101,9 +106,46 @@ void RefineFit::FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step)
   // if necessary, send the errors to HDF5
   bkg.global_state.SendErrorVectorToHDF5 (p,err_t, bkg.region_data->region,bkg.region_data->my_flow);
   // send prediction to hdf5 if necessary
-  bkg.global_state.SendPredictedToHDF5(ibd, block_signal_predicted, *bkg.region_data);
-  bkg.global_state.SendCorrectedToHDF5(ibd, block_signal_corrected, *bkg.region_data);
-  bkg.global_state.SendXtalkToHDF5(ibd, bkg.region_data->my_scratch.cur_xtflux_block, *bkg.region_data);
+  int max_frames = bkg.global_defaults.signal_process_control.get_max_frames();
+  //printf ("RefineFit::FitAmplitudePerBeadPerFlow... max_frames=%d\n",max_frames);
+  bkg.global_state.SendPredictedToHDF5(ibd, block_signal_predicted, *bkg.region_data, max_frames);
+  bkg.global_state.SendCorrectedToHDF5(ibd, block_signal_corrected, *bkg.region_data, max_frames);
+
+  bkg.global_state.SendXyflow_Timeframe_ToHDF5(ibd, *bkg.region_data, max_frames);
+  bkg.global_state.SendXyflow_R_ToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendXyflow_SP_ToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendXyflow_FitType_ToHDF5(ibd, *bkg.region_data, fitType);
+  bkg.global_state.SendXyflow_Dmult_ToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendXyflow_Kmult_ToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendXyflow_HPlen_ToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendXyflow_MM_ToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendXyflow_Location_ToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendXyflow_Amplitude_ToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendXyflow_Residual_ToHDF5(ibd, err_t, *bkg.region_data);
+  bkg.global_state.SendXyflow_Predicted_ToHDF5(ibd, block_signal_predicted, *bkg.region_data, max_frames);
+  bkg.global_state.SendXyflow_Corrected_ToHDF5(ibd, block_signal_corrected, *bkg.region_data, max_frames);
+  bkg.global_state.SendXyflow_Location_Keys_ToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendXyflow_Predicted_Keys_ToHDF5(ibd, block_signal_predicted, *bkg.region_data, max_frames);
+  bkg.global_state.SendXyflow_Corrected_Keys_ToHDF5(ibd, block_signal_corrected, *bkg.region_data, max_frames);
+
+  bkg.global_state.SendXtalkToHDF5(ibd, bkg.region_data->my_scratch.cur_xtflux_block, *bkg.region_data, max_frames);
+  // send beads_bestRegion predicted to hdf5 if necessary
+  if (bkg.region_data->isBestRegion)
+  {
+  //printf("RefineFit::FitAmplitudePerBeadPerFlow... region %d is the bestRegion...sending bestRegion data to HDF5 for bead %d\n",bkg.region_data->region->index,ibd);
+  bkg.global_state.SendBestRegion_PredictedToHDF5(ibd, block_signal_predicted, *bkg.region_data, max_frames);
+  bkg.global_state.SendBestRegion_CorrectedToHDF5(ibd, block_signal_corrected, *bkg.region_data, max_frames);
+  bkg.global_state.SendBestRegion_AmplitudeToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendBestRegion_ResidualToHDF5(ibd, err_t, *bkg.region_data);
+  bkg.global_state.SendBestRegion_LocationToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendBestRegion_GainSensToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendBestRegion_FitType_ToHDF5(ibd, *bkg.region_data, fitType);
+  bkg.global_state.SendBestRegion_KmultToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendBestRegion_DmultToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendBestRegion_SPToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendBestRegion_RToHDF5(ibd, *bkg.region_data);
+  bkg.global_state.SendBestRegion_TimeframeToHDF5(*bkg.region_data, max_frames);
+  }
 }
 
 //  This is testing what the cross-talk routine produces
@@ -124,15 +166,15 @@ void RefineFit::TestXtalk()
     int i;
     for ( i=0; i<npts; i++)
       fprintf(fp, "%f\t", xtalk_signal_typical[i+fnum*npts]);
-    for (; i<MAX_COMPRESSED_FRAMES; i++)
-      fprintf(fp,"0.0\t");
+    //for (; i<MAX_COMPRESSED_FRAMES; i++)
+    //  fprintf(fp,"0.0\t");
     fprintf(fp,"\n");
     
-        fprintf(fp,"%d\t%d\t%d\tsource\t", bkg.region_data->region->row, bkg.region_data->region->col, bkg.region_data->my_flow.buff_flow[fnum]);
+    fprintf(fp,"%d\t%d\t%d\tsource\t", bkg.region_data->region->row, bkg.region_data->region->col, bkg.region_data->my_flow.buff_flow[fnum]);
     for ( i=0; i<npts; i++)
       fprintf(fp, "%f\t", xtalk_source_typical[i+fnum*npts]);
-    for (; i<MAX_COMPRESSED_FRAMES; i++)
-      fprintf(fp,"0.0\t");
+    //for (; i<MAX_COMPRESSED_FRAMES; i++)
+    //  fprintf(fp,"0.0\t");
     fprintf(fp,"\n");
   }
   fclose(fp);
@@ -155,6 +197,8 @@ void RefineFit::FitAmplitudePerFlow ()
 
   //SpecializedEmphasisFunctions();
   //TestXtalk();
+  
+  my_single_fit.SetUpEmphasisForLevMarOptimizer(&(bkg.region_data->emphasis_data));
 
   for (int ibd = 0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
   {

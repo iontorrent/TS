@@ -1,0 +1,51 @@
+{%include "rundb/plan/page_plan/summary/application_summary.html"%}
+<tr>
+    <td><b>Sample Preparation Kit:</b></td>
+    <td id="selectedSamplePreparationKit">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.samplePreparationKit|default_if_none:""}}</td>
+</tr>       
+<tr>
+    <td><b>Library Kit Type:</b></td>
+    <td id="selectedLibraryKitType"></td>
+</tr>
+<tr>
+	<td><b>Library Key:</b></td>
+	<td id="selectedLibraryKey">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.templatekitname}}</td>
+</tr>             
+<tr>
+    <td><b>Template Kit:</b></td>
+    <td id="selectedTemplatingKitName">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.templatekitname}}</td>
+</tr>                                                                       
+<tr>
+    <td><b>Sequencing Kit:</b></td>
+    <td id="selectedSequenceKit"></td>
+</tr>                                                                       
+<tr>
+    <td><b>Flows:</b></td>
+    <td id="selectedFlows">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.flows}}</td>
+</tr>                                                                       
+<tr>
+    <td><b>Control Sequence:</b></td>
+    <td id="selectedControlSequence">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.controlsequence|default_if_none:""}}</td>
+</tr>                                                                       
+<tr>
+    <td><b>Chip Type:</b></td>
+    <td id="selectedChipType"></td>
+</tr>
+<tr>
+	<td><b>3' Adapter:</b></td>
+	<td id="selected3PrimeAdapter">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.templatekitname}}</td>
+</tr>         
+<tr>
+    <td><b>Barcode:</b></td>
+    <td id="selectedBarcode">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.barcodeId|default_if_none:""}}</td>
+</tr>
+<tr>
+    <td><b>Mark as PCR Duplicates:</b></td>
+    <td id="selectedMarkAsPcrDuplicates">
+    {% if helper.getStepDict.Kits.getCurrentSavedFieldDict.isDuplicateReads %}
+        True
+    {% else %}
+        False
+    {% endif %}
+    </td>
+</tr>

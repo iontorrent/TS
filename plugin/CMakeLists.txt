@@ -21,12 +21,14 @@ configure_file (
 	"${PROJECT_SOURCE_DIR}/debian/prerm.in"
 	"${PROJECT_BINARY_DIR}/debian/prerm" @ONLY
 )
+configure_file (
+	"${PROJECT_SOURCE_DIR}/debian/preinst.in"
+	"${PROJECT_BINARY_DIR}/debian/preinst" @ONLY
+)
 
 set(PLUGINS
 Alignment
 RunRecognitION
-FastqCreator
-SFFCreator
 coverageAnalysis
 sampleID
 variantCaller
@@ -34,6 +36,7 @@ IonReporterUploader
 ERCC_Analysis
 TorrentSuiteCloud
 FilterDuplicates
+FileExporter
 )
 
 foreach(PLUGIN ${PLUGINS})
@@ -58,15 +61,18 @@ install(FILES "${PROJECT_SOURCE_DIR}/plugin_functions" DESTINATION "plugins")
 # ZeroInstall alternate application root - set systemwide store to
 # /results/plugins/implementations (or whatever is top of implementation-dirs)
 file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/implementations)
-install(DIRECTORY "${PROJECT_BINARY_DIR}/implementations" DESTINATION "plugins" 
+install(DIRECTORY "${PROJECT_BINARY_DIR}/implementations" DESTINATION "plugins"
         DIRECTORY_PERMISSIONS OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE SETGID WORLD_READ WORLD_EXECUTE)
 install(FILES "${PROJECT_SOURCE_DIR}/implementation-dirs" DESTINATION "/etc/xdg/0install.net/injector/")
+
+file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/scratch)
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "perl, python, ion-torrentr, ion-samita, ion-pipeline, ion-dbreports, ion-igv, python-pysam (>= 0.7)")
 set(CPACK_PACKAGE_DESCRIPTION "Plugins for the Torrent Browser. These plugins, when present will be executed, post analysis pipeline run, to generate additional results.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+	${CMAKE_CURRENT_BINARY_DIR}/debian/preinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/prerm
 )

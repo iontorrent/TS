@@ -74,14 +74,12 @@ def remember_me_login(request, template_name='registration/login.html',
     request.session.set_test_cookie()
 
     current_site = get_current_site(request)
-    browser = request.META['HTTP_USER_AGENT']
 
     context = {
         'form': form,
         redirect_field_name: redirect_to,
         'site': current_site,
         'site_name': current_site.name,
-        'prompt_chromeframe': 'MSIE' in browser and 'chromeframe' not in browser
     }
     if extra_context is not None:
         context.update(extra_context)

@@ -1,6 +1,8 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 # This script handles optionally creating different plots at the same time.
 # A single script is used to avoid having to re-read the data and making similar transformations.
+library(stringr)
+
 args <- commandArgs(trailingOnly=TRUE)
 
 nFileIn  <- ifelse(is.na(args[1]),"fine_coverage.xls",args[1])
@@ -11,6 +13,7 @@ nFileIn  <- ifelse(is.na(args[1]),"fine_coverage.xls",args[1])
 # "g" or "G" output cov vs. gc plot: "G" for log axis
 # "k" or "K" output pass/fail (>=0.2 of Mean) counts vs. target length plot: "K" for 4-color plot
 # "l" or "L" output cov vs. length plot: "L" for log axis
+# "p" or "P" output mead reads vs. pool ID: "P" for log axis
 option <- ifelse(is.na(args[2]),"",args[2])
 
 if( !file.exists(nFileIn) ) {
@@ -52,6 +55,35 @@ pcgc <- 100 * rcov$gc / tlen
 aver <- mean(yprop)
 av02 <- 0.2 * aver
 
+# test for presence of NVP attributes field
+NVP <- rcov$attributes
+if( is.null(NVP) ) NVP <- rcov$gene_id
+haveNVP <- !is.null(NVP)
+
+get_ymax <- function(ydata) {
+  ymax = max(ydata)
+  ykp = ymax
+  if( ymax < 0 ) return(0)
+  # exception for specific integer limits 
+  if( ymax == as.integer(ymax) && ymax > 6 && ymax < 10 ) {
+    return(ymax + (ymax %% 2))
+  }
+  blog = 10^(as.integer(log10(ymax+1)))
+  sft = 1
+  rng = ymax/blog
+  if( rng < 1.0001 ) {
+    return(ymax)  # ~ integer log10
+  } else if( rng < 2 ) {
+    sft = 0.2
+  } else if( rng < 5 ) {
+    sft = 0.5
+  }
+  blog = blog * sft
+  ymax = blog*as.integer((ymax+blog)/blog)
+  #write(sprintf("ymax %.4f (%.4f -> %.1f) -> %.2f",ykp,rng,sft,ymax),stderr())
+  return(ymax)
+}
+
 # Create GC vs. coverage scatter plot
 if( grepl("g",option,ignore.case=TRUE) ) {
   nFileOut <- sub(".xls$",".gc.png",nFileIn)
@@ -79,10 +111,11 @@ if( grepl("g",option,ignore.case=TRUE) ) {
     laver <- aver
     lav02 <- av02
   }
-  plot( pcgc, ydata, pch=4, xlab=xaxisTitle, ylab=yaxisTitle, main=title, cex.main=1.6, cex.lab=1.4 )
+  ymax = get_ymax(ydata)
+  plot( pcgc, ydata, pch=4, xlab=xaxisTitle, ylab=yaxisTitle, main=title, ylim=c(0,ymax), cex.main=1.6, cex.lab=1.4 )
   abline(h=laver,col="green")
   abline(h=lav02,col="red")
-  legend(legoff*max(pcgc), max(ydata), legend=c(legendTitle,"0.2 x Mean"), cex=1.2, bty="n", col=c("green","red"), lty=1)
+  legend(legoff*max(pcgc), max(ymax), legend=c(legendTitle,"0.2 x Mean"), cex=1.2, bty="n", col=c("green","red"), lty=1)
 }
   
 # Create GC vs. length scatter plot
@@ -111,10 +144,11 @@ if( grepl("l",option,ignore.case=TRUE) ) {
     laver <- aver
     lav02 <- av02
   }
-  plot( tlen, ydata, pch=4, xlab=xaxisTitle, ylab=yaxisTitle, main=title, cex.main=1.6, cex.lab=1.4 )
+  ymax = get_ymax(ydata)
+  plot( tlen, ydata, pch=4, xlab=xaxisTitle, ylab=yaxisTitle, main=title, ylim=c(0,ymax), cex.main=1.6, cex.lab=1.4 )
   abline(h=laver,col="green")
   abline(h=lav02,col="red")
-  legend(legoff*max(tlen), max(ydata), legend=c(legendTitle,"0.2 x Mean"), cex=1.2, bty="n", col=c("green","red"), lty=1)
+  legend(legoff*max(tlen), max(ymax), legend=c(legendTitle,"0.2 x Mean"), cex=1.2, bty="n", col=c("green","red"), lty=1)
 }
   
 # Create GC vs. pass/fail plot
@@ -140,7 +174,8 @@ if( grepl("f",option,ignore.case=TRUE) ) {
   xdata <- xmin:xmax
   yall <- as.vector(table(factor(bgc,levels=xdata)))
   ylow  <- as.vector(table(factor(bgc[yprop < av02],levels=xdata)))
-  ymax = max(yall)+1
+  ymax = get_ymax(yall)
+  #ymax = max(yall)+1
   if( grepl("F",option) ) {
     ybad <- as.vector(table(factor(bgc[yprop == 0],levels=xdata)))
     yhigh <- as.vector(table(factor(bgc[yprop < 5*aver],levels=xdata)))
@@ -187,7 +222,8 @@ if( grepl("k",option,ignore.case=TRUE) ) {
   xdata <- xmin:xmax
   yall <- as.vector(table(factor(tlen,levels=xdata)))
   ylow  <- as.vector(table(factor(tlen[yprop < av02],levels=xdata)))
-  ymax = max(yall)+1
+  ymax = get_ymax(yall)
+  #ymax = max(yall)+1
   if( grepl("K",option) ) {
     ybad <- as.vector(table(factor(tlen[yprop == 0],levels=xdata)))
     yhigh <- as.vector(table(factor(tlen[yprop < 5*aver],levels=xdata)))
@@ -212,5 +248,69 @@ if( grepl("k",option,ignore.case=TRUE) ) {
   legend("topright", rev(legendTitle), cex=1.2, bty="n", fill=rev(lcols))
 } 
 
+# Create Pool representartion plots
+if( haveNVP && grepl("p",option,ignore.case=TRUE) ) {
+  # extract pool information from NVP strings
+  pools <- toupper(paste(NVP,";",sep=""))
+  pools <- str_extract(pools,"POOL=.*?;")
+  # only create plot if pooling info is there for at least one target
+  if( sum(!is.na(pools)) > 0 ) {
+    # replace no POOL key targets with '?' as pool
+    pools[is.na(pools)] <- "?"
+    # this assumes vlaues of NVP's are merged by '@', not vectors
+    pools <- sub("POOL=(.*?);","\\1",pools)
+    # treat merged regions as also assigned to multiple pools (or even the same pools)
+    pools <- gsub("&",",",pools)
+    # add extra "," to list since R ignores last emply value in strsplit()
+    spools <- paste(pools,",",sep="")
+    spools <- strsplit(spools,",")
+    # (again) replace empty values with '?'
+    spools <- sapply(spools,function(x){x[x==""]<-"?";x})
+    # assume targets belonging to multiple pools have coverage divided evenly between pools
+    npools <- sapply(spools,length)
+    cov <- yprop / npools
+    # modify and add the extra elements from splitting pools
+    idx <- length(pools)
+    while(idx) {
+      if( npools[idx] > 1 ) {
+        pools[idx] <- spools[[idx]][1]
+        for( p in 2:npools[idx] ) {
+          cov <- c(cov,cov[idx])
+          pools <- c(pools,spools[[idx]][p])
+        }
+      }
+      idx <- idx-1
+    }
+    # check if pools (factors) should be converted to numeric for better plot axis
+    poolns <- suppressWarnings(as.numeric(pools))
+    if( sum(is.na(poolns)) == 0 ) pools = poolns
+    # get average target coverage vs. pool
+    dt <- aggregate(cov~pools,data.frame(cov,pools),mean)
+    # make plot of average cov vs. pool IF there is more than one Pool
+    if( length(dt$pools) > 1 ) {
+      xaxisTitle <- "Primer Pool"
+      if( grepl("a",option) ) {
+        title <- "Average Amplicon Reads by Primer Pool"
+        yaxisTitle <- "Mean Reads per Amplicon"
+      } else {
+        title <- "Average Target Base Reads by Primer Pool"
+        yaxisTitle <- "Mean Base Reads per Target"
+      }
+      if( grepl("P",option) ) {
+        dt$cov <- log10(1+dt$cov)
+        yaxisTitle <- sprintf("Log10(%s)", yaxisTitle)
+      }
+      nFileOut <- sub(".xls$",".pool.png",nFileIn)
+      png(nFileOut,width=picWidth,height=picHeight)
+      par(mar=(c(4,4,2,0.2)+0.3))
+      ymax = get_ymax(dt$cov)
+      barplot( dt$cov, names.arg=dt$pools, yaxs='i', ylim=c(0,ymax), 
+        xlab=xaxisTitle, ylab=yaxisTitle, main=title, cex.main=1.6, cex.lab=1.4 )
+    } else {
+      write("- Coverage distribution by Primer Pool omitted for all targets in a single pool.\n",stderr())
+    }
+  } 
+}
+  
 q()
 

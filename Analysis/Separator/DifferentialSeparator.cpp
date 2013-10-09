@@ -32,6 +32,7 @@
 #include "Stats.h"
 #include "ComparatorNoiseCorrector.h"
 #include "BkgTrace.h"
+#include "RawWells.h"
 #define DIFFSEP_ERROR 3
 // Amount in frames back from estimated t0 to use for dc offset estimation 
 // @hack - Note this must be kept in synch with VFC_T0_OFFSET in BkgMagicDefines.h
@@ -993,6 +994,8 @@ void DifferentialSeparator::CheckFirstAcqLagOne (DifSepOpt &opts)
 void DifferentialSeparator::CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, const std::string &file) {
   string bfFile = opts.resultsDir + "/" + file;
   Image img;
+  img.SetImgLoadImmediate (false);
+  img.SetIgnoreChecksumErrors (opts.ignoreChecksumErrors);
   bool loaded =   img.LoadRaw(bfFile.c_str());
   if (!loaded) { ION_ABORT ("Couldn't load file: " + bfFile); }
   const RawImage *raw = img.GetImage(); 
@@ -1731,6 +1734,7 @@ void DifferentialSeparator::LoadKeyDats(PJobQueue &jQueue, TraceStoreMatrix<doub
   mFilteredWells.resize(numWells);
   fill(mFilteredWells.begin(), mFilteredWells.end(), GoodWell);
   size_t loadMinFlows = max (9, opts.maxKeyFlowLength+2);
+  loadMinFlows = max(loadMinFlows, (size_t)(zeroFlows[zeroFlows.n_rows-1] + 1));
   traceStore.SetSize(T0_RIGHT_OFFSET);
   traceStore.SetT0(t0);
   Mask cncMask(&mask);
@@ -2188,6 +2192,77 @@ void DifferentialSeparator::PredictFlow(const std::string &datFile, const std::s
   }
 }
 
+void DifferentialSeparator::PredictWellsFlow(DifSepOpt &opts, Mask &mask,
+                                             Mat<float> &raw_frames,
+                                             Mat<float> &predicted_frames,
+                                             Mat<float> &reference_frames,
+                                             RawWells &sep_wells,
+                                             int flow,
+                                             ZeromerModelBulk<double> &zBulk,
+                                             Col<double> &time) {
+  TraceStoreMatrix<double> traceStore (mask, T0_RIGHT_OFFSET, opts.flowOrder.c_str(), 
+                                       1, 1,
+				       opts.referenceStep, opts.referenceStep);
+  traceStore.SetMinRefProbes (opts.percentReference * opts.referenceStep * opts.referenceStep);
+  traceStore.SetMeshDist (opts.useMeshNeighbors);
+  traceStore.SetSize(T0_RIGHT_OFFSET);
+  traceStore.SetT0(t0);
+  traceStore.SetFlowIndex (0, 0);
+  size_t num_wells = mask.H() * mask.W();
+  vector<float> traceSd(num_wells);
+  fill(traceSd.begin(), traceSd.end(), 0);
+  string resultsRoot = opts.resultsDir + "/acq_";
+  string resultsSuffix = ".dat";
+
+  cout << "Checking lag one: " << endl;
+  vector<float> t;
+  size_t i = 0;
+  char buff[resultsSuffix.size() + resultsRoot.size() + 20];
+  const char *p = resultsRoot.c_str();
+  const char *s = resultsSuffix.c_str();
+  snprintf (buff, sizeof (buff), "%s%.4d%s", p, (int) flow, s);
+  LoadDatJob::LoadDat(buff, &opts, &traceStore, &t0, &mask, &mask, 0, &traceSd[0]);
+  for (i = 0; i < mRefWells.size(); i++) {
+    traceStore.SetReference(i, mRefWells[i] == 1);
+  }
+  traceStore.PrepareReference (0);
+  Mat<double> wellFlows, refFlows;
+  Mat<float> incorps;
+  Col<double> diff, predicted;
+  ZeromerDiff<double> bg;
+  int region_wells = opts.predictHeight * opts.predictWidth;
+  int nucIx = traceStore.GetNucForFlow(flow);
+  for (size_t i = 0; i < num_wells; i++) {
+    int row = i / mask.W();
+    int col = i % mask.W();
+    fill(diff.begin(), diff.end(), 0);
+    if (zBulk.HaveModel(i)) {
+      KeyBulkFit &kbf = zBulk.GetFit(i);
+      TauEBulkErr<double>::FillInData(traceStore, wellFlows, refFlows, predicted, 1, i);
+      bg.PredictZeromer(refFlows.unsafe_col(0), zBulk.mTime, kbf.param.at(nucIx,0), kbf.param.at(nucIx,1), predicted);
+      Col<double> &dm = zBulk.GetDarkMatter(i);
+      predicted = predicted + dm;
+      diff = wellFlows.col(0) - predicted;
+    }
+    if (raw_frames.n_rows > 0 &&
+        row >= opts.predictRow && row < opts.predictRow + opts.predictHeight &&
+        col >= opts.predictCol && col < opts.predictCol + opts.predictHeight) {
+      //        size_t row_index = flow * num_wells + i;
+      size_t row_index = flow * region_wells + ((row - opts.predictRow) * opts.predictWidth + col - opts.predictCol);
+      raw_frames(row_index, 0) = reference_frames(row_index, 0) = predicted_frames(row_index, 0)= row;
+      raw_frames(row_index, 1) = reference_frames(row_index, 1) = predicted_frames(row_index, 1)= col;
+      raw_frames(row_index, 2) = reference_frames(row_index, 2) = predicted_frames(row_index, 2)= flow;
+      for (size_t fIx = 0; fIx < predicted.n_rows; fIx++) {
+        raw_frames.at(row_index, fIx+3) = wellFlows.at(fIx, 0);
+        reference_frames(row_index, fIx+3) = refFlows.at(fIx, 0);
+        predicted_frames(row_index, fIx+3) = predicted[fIx];
+      }
+    }
+    float val = sum(diff);
+    sep_wells.Set(row, col, flow, val);
+  }
+}
+
 int DifferentialSeparator::Run(DifSepOpt opts) {
   ClockTimer totalTimer;
   // --- Fill in the beadfind reference and buffering
@@ -2299,23 +2374,6 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     opts.maxKeyFlowLength = max ( (unsigned int) opts.maxKeyFlowLength, keys[kIx].usableKeyFlows);
     cout << "key: " << kIx << " min snr is: " << keys[kIx].minSnr << endl;
   }
-
-  // --- Load up the key flows into our data
-  cout << "Loading: " << opts.maxKeyFlowLength << " traces...";
-  cout.flush();
-  // TraceStoreMatrix<double> traceStore (mask, T0_RIGHT_OFFSET, opts.flowOrder.c_str(), 
-  //                                      opts.maxKeyFlowLength+2, opts.maxKeyFlowLength+2,
-  //       			       opts.bfMeshStep, opts.bfMeshStep);
-  TraceStoreMatrix<double> traceStore (mask, T0_RIGHT_OFFSET, opts.flowOrder.c_str(), 
-                                       opts.maxKeyFlowLength+2, opts.maxKeyFlowLength+2,
-				       opts.referenceStep, opts.referenceStep);
-  traceStore.SetMinRefProbes (opts.percentReference * opts.referenceStep * opts.referenceStep);
-  std::string firstFile = opts.resultsDir + "/acq_0000.dat";
-  if (H5File::IsH5File(firstFile.c_str())) {
-    opts.doSdat = true;
-    opts.sdatSuffix = "dat";
-  }
-  vector<float> traceSdMin(numWells);
   Col<int> zeroFlows;
   vector<int> flowsAllZero;
   for (int i = 0; i < opts.maxKeyFlowLength; i++) {
@@ -2336,7 +2394,37 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   for (size_t i = 0; i < zeroFlows.size(); i++) {
     cout << zeroFlows[i] << ",";
   }
+  if (!opts.doubleTapFlows.empty()) {
+    vector<std::string> dts;
+    split(opts.doubleTapFlows, ',', dts);
+    zeroFlows.set_size(dts.size());
+    for (size_t i = 0; i < zeroFlows.n_rows; i++) {
+      zeroFlows[i] = atoi(dts[i].c_str());
+    }
+  }
   cout << "}" <<  endl;
+  // --- Load up the key flows into our data
+  cout << "Loading: " << opts.maxKeyFlowLength << " traces...";
+  cout.flush();
+  // TraceStoreMatrix<double> traceStore (mask, T0_RIGHT_OFFSET, opts.flowOrder.c_str(), 
+  //                                      opts.maxKeyFlowLength+2, opts.maxKeyFlowLength+2,
+  //       			       opts.bfMeshStep, opts.bfMeshStep);
+  // TraceStoreMatrix<double> traceStore (mask, T0_RIGHT_OFFSET, opts.flowOrder.c_str(), 
+  //                                      opts.maxKeyFlowLength+2, opts.maxKeyFlowLength+2,
+  //       			       opts.referenceStep, opts.referenceStep);
+  int maxFlow = max(zeroFlows.n_rows > 0 ? zeroFlows[zeroFlows.n_rows -1] + 1 : 0, opts.maxKeyFlowLength+2);
+  TraceStoreMatrix<double> traceStore (mask, T0_RIGHT_OFFSET, opts.flowOrder.c_str(), 
+                                       maxFlow, maxFlow,
+         			       opts.referenceStep, opts.referenceStep);
+
+  traceStore.SetMinRefProbes (opts.percentReference * opts.referenceStep * opts.referenceStep);
+  std::string firstFile = opts.resultsDir + "/acq_0000.dat";
+  if (H5File::IsH5File(firstFile.c_str())) {
+    opts.doSdat = true;
+    opts.sdatSuffix = "dat";
+  }
+  vector<float> traceSdMin(numWells);
+
   totalTimer.PrintMilliSeconds(cout, "Total Timer: Before Loading Dats.");
   if (opts.doSdat) {
     LoadKeySDats (jQueue, traceStore, reference, opts);
@@ -2369,16 +2457,91 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
    // CountReference("Before Zeromers", mFilteredWells);
   ClockTimer zeromerTimer;
   zModelBulk.SetTime (mTime);
-
-
+  
+  string h5tau_file = opts.outData + ".tau.h5";
+  H5File h5_tau_file(h5tau_file);
+  h5_tau_file.Open(true);
+  Mat<float> taub_mat(numWells,zeroFlows.n_rows);
+  taub_mat.fill(0);
+  Mat<float> taue_mat(numWells,zeroFlows.n_rows);
+  taue_mat.fill(0);
   cout << "Starting fitting zeromers." << endl;
+  for (size_t i = 0; i < zeroFlows.n_rows; i++) {
+    Col<int> z_flow(1);
+    z_flow[0] = zeroFlows[i];
+    zModelBulk.FitWellZeromers (jQueue,
+                                traceStore,
+                                keyAssignments,
+                                z_flow,
+                                keys);
+    for (size_t r = 0; r < numWells; r++) {
+      if (zModelBulk.HaveModel(r)) {
+        KeyBulkFit &kbf = zModelBulk.GetFit(r);
+        taub_mat(r,i) = kbf.param.at(0,0);
+        taue_mat(r,i) = kbf.param.at(0,1);
+      }
+    }
+  }
+  h5_tau_file.WriteMatrix("/tau_e", taue_mat);
+  h5_tau_file.WriteMatrix("/tau_b", taub_mat);
+  h5_tau_file.Close();
+
   zModelBulk.FitWellZeromers (jQueue,
                               traceStore,
                               keyAssignments,
                               zeroFlows,
                               keys);
+  vector<KeyBulkFit> zeromerTauFit(numWells);
   for (size_t i = 0; i < numWells; i++) {
+    if (zModelBulk.HaveModel(i)) {
+      zeromerTauFit[i] = zModelBulk.GetFit(i);
+    }
+  }
+  vector<string> words;
+  split(opts.predictRegion, ',', words);
+  ION_ASSERT(words.size() == 4, "Must specify row, height, col, width");
+  opts.predictRow = atoi(words[0].c_str());
+  opts.predictHeight = atoi(words[1].c_str());
+  opts.predictCol = atoi(words[2].c_str());
+  opts.predictWidth = atoi(words[3].c_str());
+  if (opts.predictFlowStart >= 0 && opts.predictFlowEnd >= 0 && opts.predictFlowEnd > opts.predictFlowStart) {
+    int num_flows = opts.predictFlowEnd - opts.predictFlowStart;
+    int wells_save = opts.predictHeight * opts.predictWidth;
+    int num_frames = traceStore.GetNumFrames();
+    //    size_t total_rows = wells_save * num_flows;
+    size_t total_rows = wells_save * num_flows;
+    string wells_path = opts.outData + ".wells";
+    // sep_wells.SetCols(mask.W());
+    // sep_wells.SetRows(mask.H());
+    RawWells sep_wells(wells_path.c_str(), mask.H(), mask.W());
+    sep_wells.SetCols(mask.W());
+    sep_wells.SetRows(mask.H());
+    sep_wells.SetFlows(num_flows);
+    sep_wells.SetFlowOrder(opts.flowOrder);
+    sep_wells.SetChunk(0, sep_wells.NumRows(), 0, sep_wells.NumCols(),  opts.predictFlowStart, opts.predictFlowEnd);
+    sep_wells.OpenForWrite();
+    Mat<float> raw_frames(total_rows, num_frames), predicted_frames(total_rows, num_frames), reference_frames(total_rows, num_frames);
+    raw_frames.fill(-1.0f);
+    predicted_frames.fill(-1.0f);
+    reference_frames.fill(-1.0f);
+    for (int flowIx = opts.predictFlowStart; flowIx < opts.predictFlowEnd; flowIx++) {
+      cout << "Doing prediction for flow: " << flowIx << endl;
+      PredictWellsFlow(opts, mask, raw_frames, predicted_frames, reference_frames, sep_wells, flowIx, zModelBulk, mTime);
+    }
+    string traces_file = opts.outData + ".traces.h5";
+    H5File h5file_traces(traces_file);
+    h5file_traces.Open(true);
+    h5file_traces.WriteMatrix("/traces/raw", raw_frames);
+    h5file_traces.WriteMatrix("/traces/ref", reference_frames);
+    h5file_traces.WriteMatrix("/traces/predicted", predicted_frames);
+    h5file_traces.Close();
+    sep_wells.WriteWells();
+    sep_wells.WriteInfo();
+    sep_wells.WriteRanks();
+    sep_wells.Close();
+  }
 
+  for (size_t i = 0; i < numWells; i++) {
     if (zModelBulk.HaveModel(i)) {
       KeyBulkFit kf = zModelBulk.GetFit(i);
       wells[i].tauB = kf.param.at(0,0);
@@ -2389,7 +2552,6 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       wells[i].tauE = -1;
     }
   }
-
 
   // ofstream zout("zeromer-dump.txt");
   // zModelBulk.Dump(zout);
@@ -2594,7 +2756,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       wells[i].bfMetric = wells[i].bufferMetric = reference.GetBfMetricVal (i);
     }
   }
-    //  }
+  
   if (opts.signalBased) {
     opts.doRecoverSdFilter = false;
   }
@@ -3120,7 +3282,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       wellMatrix.at (i, currentCol++) = kf.isRef;                                        // 13
       wellMatrix.at (i, currentCol++) = kf.bufferMetric;                                 // 14
       wellMatrix.at (i, currentCol++) = kf.traceSd;                                      // 15
-      wellMatrix.at (i, currentCol++) = kf.acqT0;                                      // 17
+      wellMatrix.at (i, currentCol++) = kf.acqT0;                                      // 16
       wellMatrix.at (i, currentCol++) = mFilteredWells[i];                                      // 17
     }
 

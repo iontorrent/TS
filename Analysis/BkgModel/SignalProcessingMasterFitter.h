@@ -217,9 +217,9 @@ class SignalProcessingMasterFitter
     {
       region_data->DumpTimeAndEmphasisByRegion (my_fp);
     };
-    void DumpTimeAndEmphasisByRegionH5 (int r)
+    void DumpTimeAndEmphasisByRegionH5 (int r, int max_frames)
     {
-      global_state.DumpTimeAndEmphasisByRegionH5 (r,region_data->time_c,region_data->emphasis_data);
+      global_state.DumpTimeAndEmphasisByRegionH5 (r,region_data->time_c,region_data->emphasis_data, max_frames);
     };
     void DumpBkgModelBeadFblkInfo (int r);
 
@@ -331,7 +331,7 @@ class SignalProcessingMasterFitter
     void FirstPassSampledRegionParamFit();
     void FirstPassRegionParamFit();
     void PickRepresentativeHighQualityWells();
-    void GuessCrudeAmplitude (double &elapsed_time, Timer &fit_timer);
+    void GuessCrudeAmplitude (double &elapsed_time, Timer &fit_timer, bool sampledOnly);
     void FitTimeVaryingRegion (double &elapsed_time, Timer &fit_timer);
     void RegionalFittingForInitialFlowBlock();
     void RegionalFittingForLaterFlowBlock();

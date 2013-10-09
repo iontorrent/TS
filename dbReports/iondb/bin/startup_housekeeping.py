@@ -17,7 +17,8 @@ def expire_messages():
     until the server is restarted and never be seen again.
     """
     expired = models.Message.objects.filter(expires="startup")
-    logger.debug("Deleting %d messages on startup" % len(expired))
+    if len(expired):
+        logger.info("Deleting %d messages on startup" % len(expired))
     expired.delete()
 
 

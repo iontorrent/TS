@@ -1,442 +1,436 @@
 {% extends "rundb/reports/base.html" %}
+{% load url from future %}
 {% load pagetools %}
+{% load static from staticfiles %}
 {% block content %}
 <script type="text/javascript">
-	$(document).ready(function() {
-		
-		function blockoldfromSFF(){
-			var version = ($("#id_previousReport :selected").data("version"));
-			if ($("#fromSFF").prop("checked") && version <= 2.2){
-				$("#previousReport").addClass("alert alert-error");
-				$("#previousReportError").html("As of TorrentSuite 3.0, re-anlaysis from alignment will not work on a report generated with TorrentSuite 2.2 or earlier. In such situations re-analysis from BaseCalling is the recommended workaround.");
-				$("html, body").animate({ scrollTop: 0 }, "slow");
-				return false;
-			}else{
-				$("#previousReport").removeClass("alert alert-error");
-				$("#previousReportError").html("");
-				return true;
-			}
-		}
+    $(document).ready(function() {
+        
+        function blockoldfromSFF(){
+            var version = ($("#id_previousReport :selected").data("version"));
+            if ($("#fromSFF").prop("checked") && version <= 2.2){
+                $("#previousReport").addClass("alert alert-error");
+                $("#previousReportError").html("As of TorrentSuite 3.0, re-anlaysis from alignment will not work on a report generated with TorrentSuite 2.2 or earlier. In such situations re-analysis from BaseCalling is the recommended workaround.");
+                $("html, body").animate({ scrollTop: 0 }, "slow");
+                return false;
+            }else{
+                $("#previousReport").removeClass("alert alert-error");
+                $("#previousReportError").html("");
+                return true;
+            }
+        }
 
-		$("#id_previousReport").bind("change keypress", blockoldfromSFF);
-		
-		// $('form').uniform({
-			// holder_class : 'control-group'
-			// , msg_selector: 'p.help-block'
-			// , error_class : 'alert alert-error'
-		// });
-		$('#submitButton').click(function(e){
-			e.preventDefault();
-			blockoldfromSFF();
-			$('#report_analyze_form').submit();
-		});
+        $("#id_previousReport").bind("change keypress", blockoldfromSFF);
+        
+        // $('form').uniform({
+            // holder_class : 'control-group'
+            // , msg_selector: 'p.help-block'
+            // , error_class : 'alert alert-error'
+        // });
+        $('#submitButton').click(function(e){
+            e.preventDefault();
+            blockoldfromSFF();
+            $('#report_analyze_form').submit();
+        });
 
-		change_pipetype = function () {
-			var type = $('input[name=pipetype]:checked').val(),
-				thumb = $('#id_do_thumbnail').prop('checked'),
-				use_args = use_base = use_prev = use_thumb = null;
+        change_pipetype = function () {
+            var type = $('input[name=pipetype]:checked').val(),
+                thumb = $('#id_do_thumbnail').prop('checked'),
+                use_args = use_base = use_prev = use_thumb = null;
 
-			switch (type) {
-				case "fromRaw": 
-					use_args = use_base = !(use_targs = use_tbase = thumb);
-					use_prev = use_tprev = false;
-					break;
-				case "fromWells": 
-					use_base = use_prev = !(use_tbase = use_tprev = thumb);
-					use_targs = use_args = false;
-					break;
-				case "fromSFF": 
-					use_prev = !(use_tprev = thumb);
-					use_args = use_base = use_targs = use_tbase = false;
-					break;
-			}
-			$("#id_blockArgs").val(type);
+            switch (type) {
+                case "fromRaw": 
+                    use_args = use_base = !(use_targs = use_tbase = thumb);
+                    use_prev = use_tprev = false;
+                    break;
+                case "fromWells": 
+                    use_base = use_prev = !(use_tbase = use_tprev = thumb);
+                    use_targs = use_args = false;
+                    break;
+                case "fromSFF": 
+                    use_prev = !(use_tprev = thumb);
+                    use_args = use_base = use_targs = use_tbase = false;
+                    break;
+            }
+            $("#id_blockArgs").val(type);
 
-			$("#id_beadfindArgs").attr("disabled", !use_args);
-			$("#id_beadfindArgs").css("opacity", use_args? 1 : 0.2);
-			$("#id_analysisArgs").attr("disabled", !use_args);
-			$("#id_analysisArgs").css("opacity", use_args? 1 : 0.2);
-			$("#id_basecallerArgs").attr("disabled", !use_base);
-			$("#id_basecallerArgs").css("opacity", use_base? 1 : 0.2);
-            $("#id_prebasecallerArgs").attr('disabled', !use_base);
+            $("#id_beadfindArgs").attr("readonly", !use_args);
+            $("#id_beadfindArgs").css("opacity", use_args? 1 : 0.2);
+            $("#id_analysisArgs").attr("readonly", !use_args);
+            $("#id_analysisArgs").css("opacity", use_args? 1 : 0.2);
+            $("#id_basecallerArgs").attr("readonly", !use_base);
+            $("#id_basecallerArgs").css("opacity", use_base? 1 : 0.2);
+            $("#id_prebasecallerArgs").attr('readonly', !use_base);
             $("#id_prebasecallerArgs").css("opacity", use_base? 1 : 0.2);
-			$("#id_previousReport").attr('disabled', !use_prev);
-			$("#id_previousReport").css("opacity", use_prev? 1 : 0.2);
+            $("#id_alignmentArgs").attr("readonly", !use_base);
+            $("#id_alignmentArgs").css("opacity", use_base? 1 : 0.2);
+            $("#id_previousReport").attr('disabled', !use_prev);
+            $("#id_previousReport").css("opacity", use_prev? 1 : 0.2);
 
-			$("#id_thumbnailBeadfindArgs").attr("disabled", !use_targs);
-			$("#id_thumbnailBeadfindArgs").css("opacity", use_targs? 1 : 0.2);
-			$("#id_thumbnailAnalysisArgs").attr("disabled", !use_targs);
-			$("#id_thumbnailAnalysisArgs").css("opacity", use_targs? 1 : 0.2);
-            $("#id_prethumbnailBasecallerArgs").attr("disabled", !use_tbase);
+            $("#id_thumbnailBeadfindArgs").attr("readonly", !use_targs);
+            $("#id_thumbnailBeadfindArgs").css("opacity", use_targs? 1 : 0.2);
+            $("#id_thumbnailAnalysisArgs").attr("readonly", !use_targs);
+            $("#id_thumbnailAnalysisArgs").css("opacity", use_targs? 1 : 0.2);
+            $("#id_prethumbnailBasecallerArgs").attr("readonly", !use_tbase);
             $("#id_prethumbnailBasecallerArgs").css("opacity", use_tbase? 1 : 0.2);
-			$("#id_thumbnailBasecallerArgs").attr("disabled", !use_tbase);
-			$("#id_thumbnailBasecallerArgs").css("opacity", use_tbase? 1 : 0.2);
-			$("#id_previousThumbReport").attr('disabled', !use_tprev);
-			$("#id_previousThumbReport").css("opacity", use_tprev? 1 : 0.2);
-			blockoldfromSFF();
-		};
+            $("#id_thumbnailBasecallerArgs").attr("readonly", !use_tbase);
+            $("#id_thumbnailBasecallerArgs").css("opacity", use_tbase? 1 : 0.2);
+            $("#id_thumbnailAlignmentArgs").attr("readonly", !use_tbase);
+            $("#id_thumbnailAlignmentArgs").css("opacity", use_tbase? 1 : 0.2);
+            $("#id_previousThumbReport").attr('disabled', !use_tprev);
+            $("#id_previousThumbReport").css("opacity", use_tprev? 1 : 0.2);
+            blockoldfromSFF();
+        };
 
-		function submitHandler() {
-			oldsff = blockoldfromSFF();
-			if (!oldsff){
-				return false;
-			}
+        function submitHandler() {
+            oldsff = blockoldfromSFF();
+            if (!oldsff){
+                return false;
+            }
 
-			formData = $("#report_analyze_form").serialize();
-			formData += "&re-analysis=on" // a way to distinguish user input from crawler post
-			URL = $("#report_analyze_form").attr('action')
-			METHOD = $("#report_analyze_form").attr('method')
-			$('#modal_report_analyze_started').remove();
-			$.ajax({
-				type : METHOD,
-				url : URL,
-				async : false,
-				dataType : "html",
-				data : formData,
-				success : function(data, textStatus, jqXHR) {
-					var found = $(data).find('#modal_report_analyze_started')
-					if (found.exists()) {
-						$('body').append(data);
-						$('#modal_report_analyze_started').modal("show");
-						$('#modal_report_analyze_started').on('hidden', function(){
-							$('body #modal_report_analyze_started').parent().remove();
-							window.location.reload(true);
-						});
-						$(".parentError").parent().parent().removeClass("error alert alert-error invalid");
-						$(".parentError").empty();
-						analysis_live_ready_cb();
-					} else {
-						var newForm = $(data).find('#report_analyze_form');
-						var parent = $("#report_analyze_form").parent().empty().append(newForm);
-						$(".parentError").parent().parent().addClass("error alert alert-error invalid");
-						$('#report_analyze_form').submit(submitHandler);
-						$("input[name=pipetype]").click(change_pipetype);
-						$("#id_do_thumbnail").click(change_pipetype);
-						change_pipetype();
-						$("#advancedSec").slideDown();
-						
-						$(data).find('#start_error').prependTo('#report_analyze_form');
-					}
-					return true;
-				},
-				error : function(data) {
-					console.error(data);
-					$('#modal-error-messages').empty();
-			    	$('#modal-error-messages').append('<p class="error">Error saving Run!</p>'); 
-			    	$('#modal-error-messages').append('<p class="error">ERROR: ' + data + '</p>'); 
-				}
-			});
-			//always return false because the POSTing is done to the API.
-			return false;
-		}
-		$('#report_analyze_form').submit(submitHandler);
-		$(".openPanel").click(function() {
-			if (this.id == 'advanced')
-				$("#advancedSec").slideToggle();
-			if (this.id == 'analysis') {
-				$("#analysis_reminder_panel").slideToggle();
-				$("#analysis_panel").slideToggle();	
-			}
-		
-			i = $(this).find('i')
-			if (i.hasClass('icon-plus')) {
-				i.removeClass('icon-plus').addClass('icon-minus');
-			} else {
-				i.removeClass('icon-minus').addClass('icon-plus');
-			}
-		});
+            formData = $("#report_analyze_form").serialize();
+            formData += "&re-analysis=on" // a way to distinguish user input from crawler post
+            URL = $("#report_analyze_form").attr('action')
+            METHOD = $("#report_analyze_form").attr('method')
+            $('#modal_report_analyze_started').remove();
+            $.ajax({
+                type : METHOD,
+                url : URL,
+                async : false,
+                dataType : "html",
+                data : formData,
+                success : function(data, textStatus, jqXHR) {
+                    var found = $(data).find('#modal_report_analyze_started')
+                    if (found.exists()) {
+                        $('body').append(data);
+                        $('#modal_report_analyze_started').modal("show");
+                        $('#modal_report_analyze_started').on('hidden', function(){
+                            $('body #modal_report_analyze_started').parent().remove();
+                            window.location.reload(true);
+                        });
+                        $(".parentError").parent().parent().removeClass("error alert alert-error invalid");
+                        $(".parentError").empty();
+                        analysis_live_ready_cb();
+                    } else {
+                        var newForm = $(data).find('#report_analyze_form');
+                        var parent = $("#report_analyze_form").parent().empty().append(newForm);
+                        $(".parentError").parent().parent().addClass("error alert alert-error invalid");
+                        $('#report_analyze_form').submit(submitHandler);
+                        $("input[name=pipetype]").click(change_pipetype);
+                        $("#id_do_thumbnail").click(change_pipetype);
+                        change_pipetype();
+                        $("#advancedSec").slideDown();
+                        
+                        $(data).find('#start_error').prependTo('#report_analyze_form');
+                    }
+                    return true;
+                },
+                error : function(data) {
+                    console.error(data);
+                    $('#modal-error-messages').empty();
+                    $('#modal-error-messages').append('<p class="error">Error saving Run!</p>'); 
+                    $('#modal-error-messages').append('<p class="error">ERROR: ' + data + '</p>'); 
+                }
+            });
+            //always return false because the POSTing is done to the API.
+            return false;
+        }
+        $('#report_analyze_form').submit(submitHandler);
+        $(".openPanel").click(function() {
+            if (this.id == 'advanced')
+                $("#advancedSec").slideToggle();
+            if (this.id == 'analysis') {
+                $("#analysis_reminder_panel").slideToggle();
+                $("#analysis_panel").slideToggle();    
+            }
+        
+            i = $(this).find('i')
+            if (i.hasClass('icon-plus')) {
+                i.removeClass('icon-plus').addClass('icon-minus');
+            } else {
+                i.removeClass('icon-minus').addClass('icon-plus');
+            }
+        });
 
-		//mark errors where they happen
-		$(".parentError").parent().parent().addClass("error alert alert-error invalid");
+        //mark errors where they happen
+        $(".parentError").parent().parent().addClass("error alert alert-error invalid");
 
-		$("input[name=pipetype]").click(change_pipetype);
-		$("#id_do_thumbnail").click(change_pipetype);
-		change_pipetype();
-		{{javascript|safe}}
-	}); 
+        $("input[name=pipetype]").click(change_pipetype);
+        $("#id_do_thumbnail").click(change_pipetype);
+        change_pipetype();
+        {{javascript|safe}}
+    }); 
 </script>
-<script language="javascript" type="text/javascript" src="/site_media/runliveness.min.js"></script>
+<script language="javascript" type="text/javascript" src="{% static "runliveness.min.js"%}"></script>
 
 <div class="content group" id="analyzeDiv">
-	<h1>Run Name : {{ expName }}</h1>
-	{% for warning in warnings %}
-		<div class="alert alert-block">
-	    <button type="button" class="close" data-dismiss="alert">&times;</button>
-		    {{ warning }}
-	    </div>
-	{% endfor %}
-	{% if start_error %}
-	<div id="start_error" class="alert alert-block alert-error">
-	    <p><b>Error:</b> {{ start_error }}</p>
-	</div>
-	{% endif %}
-	<div id="report_analyze_form_container">
-	<form id="report_analyze_form" action="{% url report_analyze pk reportpk %}" method='POST' enctype="multipart/form-data" class="form-horizontal">
-		<fieldset>
-			<div class="control-group">
-				<label for="id_report_name" class="control-label">Report Name</label>
-				<div class="controls">
-					{{ rpf.report_name }}
-					{% if  rpf.report_name.errors %}
-					{% for error in rpf.report_name.errors %}
-					<p class="help-block parentError">
-						{{error|escape}}
-					</p>
-					{% endfor %}
-					{% endif %}
-				</div>
-			</div>
-
-		<div id="advancedSec" style="display: none;">
-			<div class="control-group">
-				<label for="id_blockArgs" class="control-label">Start reanalysis from</label>
-				<div class="controls">
-					{{ rpf.blockArgs }}
-					<label for="fromRaw" class="checkbox inline">
-						<input type="radio" id="fromRaw" name="pipetype" value="fromRaw" checked="checked"/ >
-						Signal Processing</label>
-					<label for="fromWells" class="checkbox inline">
-						<input type="radio" id="fromWells" name="pipetype" value="fromWells" />
-						Base Calling</label>
-					<p class="help-block">
-						{{ rpf.blockArgs.errors }}
-					</p>
-				</div>
-			</div>
-			{% if isProton %}
-			<div class="control-group">
-				<label for="id_do_thumbnail" class="control-label">Thumbnail only</label>
-				<div class="controls">
-					{{ rpf.do_thumbnail }}
-					<p class="help-block">
-						{{ rpf.do_thumbnail.errors }}
-					</p>
-				</div>
-			</div>
-			{% endif %}
-			<div class="control-group" id="previousReport" >
-				<label for="id_previousReport" class="control-label">Use data from previous result</label>
-				<div class="controls">
-					{{ rpf.previousReport }}
-					<p class="help-block" id="previousReportError">
-						{{ rpf.previousReport.errors }}
-					</p>
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_beadfindArgs" class="control-label">Beadfind args</label>
-				<div class="controls">
-					{{ rpf.beadfindArgs }}
-
-					{% if rpf.beadfindArgs.errors %}
-						{% for error in rpf.beadfindArgs.errors %}
-							<p class="help-block parentError">
-								{{error|escape}}
-							</p>
-						{% endfor %}
-					{% endif %}
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_analysisArgs" class="control-label">Analysis args</label>
-				<div class="controls">
-					{{ rpf.analysisArgs }}
-
-					{% if rpf.analysisArgs.errors  %}
-						{% for error in rpf.analysisArgs.errors  %}
-							<p class="help-block parentError">
-								{{error|escape}}
-							</p>
-						{% endfor %}
-					{% endif %}
-
-				</div>
-			</div>
+    <h1>Run Name : {{ expName }}</h1>
+    {% for warning in warnings %}
+        <div class="alert alert-block">
+        <button type="button" class="close" data-dismiss="alert">&times;</button>
+            {{ warning }}
+        </div>
+    {% endfor %}
+    {% if start_error %}
+    <div id="start_error" class="alert alert-block alert-error">
+        <p><b>Error:</b> {{ start_error }}</p>
+    </div>
+    {% endif %}
+    <div id="report_analyze_form_container">
+    <form id="report_analyze_form" action="{% url "report_analyze" pk reportpk %}" method='POST' enctype="multipart/form-data" class="form-horizontal">
+        <fieldset>
             <div class="control-group">
-                <label for="id_prebasecallerArgs" class="control-label">Pre Basecaller Args for calibration</label>
+                <label for="id_report_name" class="control-label">Report Name</label>
                 <div class="controls">
-                    {{ rpf.prebasecallerArgs }}
-
-                    {% if rpf.prebasecallerArgs.errors   %}
-                        {% for error in rpf.prebasecallerArgs.errors   %}
-                            <p class="help-block parentError">
-                                {{error|escape}}
-                            </p>
+                    {{ rpf.report_name }}
+                    {% if  rpf.report_name.errors %}
+                        {% for error in rpf.report_name.errors %}
+                            <p class="help-block parentError">{{error|escape}}</p>
                         {% endfor %}
                     {% endif %}
                 </div>
             </div>
-			<div class="control-group">
-				<label for="id_basecallerArgs" class="control-label">Basecaller Args</label>
-				<div class="controls">
-					{{ rpf.basecallerArgs }}
 
-					{% if rpf.basecallerArgs.errors   %}
-						{% for error in rpf.basecallerArgs.errors   %}
-							<p class="help-block parentError">
-								{{error|escape}}
-							</p>
-						{% endfor %}
-					{% endif %}
-
-
-				</div>
-			</div>
-
-			{% if isProton %}
-			<div class="control-group" id="previousThumbReport" >
-				<label for="id_previousThumbReport" class="control-label">Use data from previous thumbnail</label>
-				<div class="controls">
-					{{ rpf.previousThumbReport }}
-					<p class="help-block" id="previousThumbReportError">
-						{{ rpf.previousThumbReport.errors }}
-					</p>
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_thumbnailBeadfindArgs" class="control-label">Thumbnail Beadfind args</label>
-				<div class="controls">
-					{{ rpf.thumbnailBeadfindArgs }}
-					<p class="help-block">
-						{{ rpf.thumbnailBeadfindArgs.errors }}
-					</p>
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_thumbnailAnalysisArgs" class="control-label">Thumbnail Analysis args</label>
-				<div class="controls">
-					{{ rpf.thumbnailAnalysisArgs }}
-					<p class="help-block">
-						{{ rpf.thumbnailAnalysisArgs.errors }}
-					</p>
-				</div>
-			</div>
+        <div id="advancedSec" style="display: none;">
             <div class="control-group">
-                <label for="id_prethumbnailBasecallerArgs" class="control-label">Thumbnail Pre Basecaller args for calibration</label>
+                <label for="id_blockArgs" class="control-label">Start reanalysis from</label>
                 <div class="controls">
-                    {{ rpf.prethumbnailBasecallerArgs }}
-                    <p class="help-block">
-                        {{ rpf.prethumbnailBasecallerArgs.errors }}
-                    </p>
+                    {{ rpf.blockArgs }}
+                    <label for="fromRaw" class="checkbox inline">
+                        <input type="radio" id="fromRaw" name="pipetype" value="fromRaw" checked="checked"/ >
+                        Signal Processing</label>
+                    <label for="fromWells" class="checkbox inline">
+                        <input type="radio" id="fromWells" name="pipetype" value="fromWells" />
+                        Base Calling</label>
+                    <p class="help-block">{{ rpf.blockArgs.errors }}</p>
                 </div>
             </div>
-			<div class="control-group">
-				<label for="id_thumbnailBasecallerArgs" class="control-label">Thumbnail Basecaller args</label>
-				<div class="controls">
-					{{ rpf.thumbnailBasecallerArgs }}
-					<p class="help-block">
-						{{ rpf.thumbnailBasecallerArgs.errors }}
-					</p>
-				</div>
-			</div>
-			{% endif %}
-			<div class="control-group">
-				<label for="id_do_base_recal" class="control-label">Enable Base Recalibration</label>
-				<div class="controls">
-					{{ rpf.do_base_recal }}
-					<p class="help-block">
-						{{ rpf.do_base_recal.errors }}
-					</p>
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_libraryKey" class="control-label">Library Key</label>
-				<div class="controls">
-					{{ rpf.libraryKey }}
-					{% if  rpf.libraryKey.errors %}
-					<p class="help-block parentError">
-						{{ rpf.libraryKey.errors }}
-					</p>
-					{% endif %}
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_tfKey" class="control-label">TF Key</label>
-				<div class="controls">
-					{{ rpf.tfKey }}
-					{% if  rpf.tfKey.errors %}
-					<p class="help-block parentError">
-						{{ rpf.tfKey.errors }}
-					</p>
-					{% endif %}
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_tf_config" class="control-label">TF Config</label>
-				<div class="controls">
-					{{ rpf.tf_config }}
-					<p class="help-block">
-						{{ rpf.tf_config.errors }}
-					</p>
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_aligner_opts_extra" class="control-label">TMAP args</label>
-				<div class="controls">
-					{{ rpf.aligner_opts_extra }}
-					<p class="help-block">
-						{{ rpf.aligner_opts_extra.errors }}
-					</p>
-				</div>
-			</div>
-			<div class="control-group">
-				<label for="id_mark_duplicates" class="control-label">Mark PCR duplicates <br>(beta feature)</label>
-				<div class="controls">
-					{{ rpf.mark_duplicates }}
-					<p class="help-block">
-						{{ rpf.mark_duplicates.errors }}
-					</p>
-				</div>
-			</div>
+            {% if isProton %}
+            <div class="control-group">
+                <label for="id_do_thumbnail" class="control-label">Thumbnail only</label>
+                <div class="controls">
+                    {{ rpf.do_thumbnail }}
+                    <p class="help-block">{{ rpf.do_thumbnail.errors }}</p>
+                </div>
+            </div>
+            {% endif %}
+            <div class="row-fluid">
+                <div class="span6">
+                    <div class="control-group" id="previousReport" >
+                        <label for="id_previousReport" class="control-label">Use data from previous result</label>
+                        <div class="controls">
+                            {{ rpf.previousReport }}
+                            <p class="help-block" id="previousReportError">{{ rpf.previousReport.errors }}</p>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="id_beadfindArgs" class="control-label">Beadfind args</label>
+                        <div class="controls">
+                            {{ rpf.beadfindArgs }}
+        
+                            {% if rpf.beadfindArgs.errors %}
+                                {% for error in rpf.beadfindArgs.errors %}
+                                    <p class="help-block parentError">{{error|escape}}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="id_analysisArgs" class="control-label">Analysis args</label>
+                        <div class="controls">
+                            {{ rpf.analysisArgs }}
+        
+                            {% if rpf.analysisArgs.errors  %}
+                                {% for error in rpf.analysisArgs.errors  %}
+                                    <p class="help-block parentError">{{error|escape}}</p>
+                                {% endfor %}
+                            {% endif %}
+        
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="id_prebasecallerArgs" class="control-label">Pre Basecaller Args for calibration</label>
+                        <div class="controls">
+                            {{ rpf.prebasecallerArgs }}
+        
+                            {% if rpf.prebasecallerArgs.errors   %}
+                                {% for error in rpf.prebasecallerArgs.errors   %}
+                                    <p class="help-block parentError">{{error|escape}}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="id_basecallerArgs" class="control-label">Basecaller Args</label>
+                        <div class="controls">
+                            {{ rpf.basecallerArgs }}
+        
+                            {% if rpf.basecallerArgs.errors   %}
+                                {% for error in rpf.basecallerArgs.errors   %}
+                                    <p class="help-block parentError">{{error|escape}}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="id_alignmentArgs" class="control-label">Alignment Args</label>
+                        <div class="controls">
+                            {{ rpf.alignmentArgs }}
+        
+                            {% if rpf.alignmentArgs.errors   %}
+                                {% for error in rpf.alignmentArgs.errors   %}
+                                    <p class="help-block parentError">{{error|escape}}</p>
+                                {% endfor %}
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                <div class="span6">
+                    {% if isProton %}
+                    <div class="control-group" id="previousThumbReport" >
+                        <label for="id_previousThumbReport" class="control-label">Use data from previous thumbnail</label>
+                        <div class="controls">
+                            {{ rpf.previousThumbReport }}
+                            <p class="help-block" id="previousThumbReportError">{{ rpf.previousThumbReport.errors }}</p>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="id_thumbnailBeadfindArgs" class="control-label">Thumbnail Beadfind args</label>
+                        <div class="controls">
+                            {{ rpf.thumbnailBeadfindArgs }}
+                            
+                            {% if rpf.thumbnailBeadfindArgs.errors   %}
+                                <p class="help-block">{{ rpf.thumbnailBeadfindArgs.errors }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="id_thumbnailAnalysisArgs" class="control-label">Thumbnail Analysis args</label>
+                        <div class="controls">
+                            {{ rpf.thumbnailAnalysisArgs }}
+                            
+                            {% if rpf.thumbnailAnalysisArgs.errors   %}
+                                <p class="help-block">{{ rpf.thumbnailAnalysisArgs.errors }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="id_prethumbnailBasecallerArgs" class="control-label">Thumbnail Pre Basecaller args for calibration</label>
+                        <div class="controls">
+                            {{ rpf.prethumbnailBasecallerArgs }}
+                            
+                            {% if rpf.prethumbnailBasecallerArgs.errors   %}
+                                <p class="help-block">{{ rpf.prethumbnailBasecallerArgs.errors }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="id_thumbnailBasecallerArgs" class="control-label">Thumbnail Basecaller args</label>
+                        <div class="controls">
+                            {{ rpf.thumbnailBasecallerArgs }}
+                            
+                            {% if rpf.thumbnailBasecallerArgs.errors   %}
+                                <p class="help-block">{{ rpf.thumbnailBasecallerArgs.errors }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <label for="id_thumbnailAlignmentArgs" class="control-label">Thumbnail Alignment args</label>
+                        <div class="controls">
+                            {{ rpf.thumbnailAlignmentArgs }}
+                            
+                            {% if rpf.thumbnailAlignmentArgs.errors   %}
+                                <p class="help-block">{{ rpf.thumbnailAlignmentArgs.errors }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>    
+            <div class="control-group">
+                <label for="id_do_base_recal" class="control-label">Enable Base Recalibration</label>
+                <div class="controls">
+                    {{ rpf.do_base_recal }}
+                    <p class="help-block">{{ rpf.do_base_recal.errors }}</p>
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="id_libraryKey" class="control-label">Library Key</label>
+                <div class="controls">
+                    {{ rpf.libraryKey }}
+                    {% if  rpf.libraryKey.errors %}
+                    <p class="help-block parentError">{{ rpf.libraryKey.errors }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="id_tfKey" class="control-label">TF Key</label>
+                <div class="controls">
+                    {{ rpf.tfKey }}
+                    {% if  rpf.tfKey.errors %}
+                    <p class="help-block parentError">{{ rpf.tfKey.errors }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="id_tf_config" class="control-label">TF Config</label>
+                <div class="controls">
+                    {{ rpf.tf_config }}
+                    {% if  rpf.tf_config.errors %}
+                    <p class="help-block">{{ rpf.tf_config.errors }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="control-group">
+                <label for="id_mark_duplicates" class="control-label">Mark as Duplicate Reads</label>
+                <div class="controls">
+                    {{ rpf.mark_duplicates }}
+                </div>
+            </div>
             <div class="control-group">
                 <label for="id_realign" class="control-label">Realign</label>
                 <div class="controls">
                     {{ rpf.realign}}
-                    <p class="help-block">
-                        {{ rpf.realign.errors }}
-                    </p>
                 </div>
             </div>
-			<div class="control-group">
-				<label for="id_project_names" class="control-label">Project name(s) <br>(comma-separated)</label>
-				<div class="controls">
-					{{ rpf.project_names }}
-          {% if  rpf.project_names.errors %}
-					<p class="help-block parentError">
-						{{ rpf.project_names.errors }}
-					</p>
-					{% endif %}
-				</div>
-			</div>
-		</div>
-		
-		<div id="analysis_panel" style="display: none;">
-			{% include "rundb/common/analysis_settings.html" %}
-		</div>
+            <div class="control-group">
+                <label for="id_project_names" class="control-label">Project name(s) <br>(comma-separated)</label>
+                <div class="controls">
+                    {{ rpf.project_names }}
+                    {% if  rpf.project_names.errors %}
+                    <p class="help-block parentError">{{ rpf.project_names.errors }}</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div id="analysis_panel" style="display: none;">
+            {% include "rundb/common/analysis_settings.html" %}
+        </div>
 
-		<div id="analysis_reminder_panel" style="display: none;">
-			<p>Note: Analysis settings entered here are effective for this reanalysis only. For permanent change to the analysis settings, please use Edit Run.</p> 
-		</div>
-		
-		</fieldset>
-		{{ rpf.path }}
-	</form>
-	</div>
-	<div class="clearfix">
-		<a id="advanced" href="#" class="btn pull-left openPanel">Advanced <i class="icon-plus"></i></a>
-		<a id="analysis" href="#" class="btn pull-left openPanel">Analysis Settings <i class="icon-plus"></i></a>
-		<a id="submitButton" class="btn btn-primary pull-right">Start Analysis</a>
-	</div>
+        <div id="analysis_reminder_panel" style="display: none;">
+            <p>Note: Analysis settings entered here are effective for this reanalysis only. For permanent change to the analysis settings, please use Edit Run.</p> 
+        </div>
+        
+        </fieldset>
+        {{ rpf.path }}
+    </form>
+    </div>
+    <div class="clearfix">
+        <a id="submitButton" class="btn btn-primary pull-right">Start Analysis</a>
+        <a id="advanced" href="#" class="btn openPanel">Advanced <i class="icon-plus"></i></a>
+        <a id="analysis" href="#" class="btn openPanel">Analysis Settings <i class="icon-plus"></i></a>
+    </div>
 </div>
 
 
 
 <style type="text/css" media="screen">
-	.form-horizontal .control-label {
-		width: 200px;
-	}
-	.form-horizontal .controls {
-		margin-left: 220px; 
-	}
+    .form-horizontal .control-label {
+        width: 200px;
+    }
+    .form-horizontal .controls {
+        margin-left: 220px; 
+    }
 </style>
 {% endblock content %}

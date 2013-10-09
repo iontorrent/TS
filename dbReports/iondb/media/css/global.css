@@ -163,10 +163,10 @@ p { color:#333; line-height: 1.25em }
 	height: 16px;
 }
 .gear-inactive {
-	background: url("/site_media/images/gear-inactive.png") no-repeat center top transparent;
+	background: url("../images/gear-inactive.png") no-repeat center top transparent;
 }
 .gear-active {
-	background: url("/site_media/images/gear-active.png") no-repeat center top transparent;
+	background: url("../images/gear-active.png") no-repeat center top transparent;
 }
 
 .subNav {
@@ -236,7 +236,7 @@ a[dynamic-navbar-section] {
 
 
 .main, .login {
-	background: url("/site_media/images/bg-gradient3.png") repeat-x scroll center 130px transparent;
+	background: url("../images/bg-gradient3.png") repeat-x scroll center 130px transparent;
 	background-color: #fff;
   min-height: 100%; /*sticky footer*/
   height: auto !important; /*sticky footer*/

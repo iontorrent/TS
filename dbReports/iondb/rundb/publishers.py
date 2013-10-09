@@ -19,18 +19,23 @@ import logging
 import traceback
 import os
 import os.path
+import time
 import httplib
 import mimetypes
 import shutil
+import time
+import dateutil
 
 from tastypie.bundle import Bundle
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import render_to_response
-from django.http import HttpResponse
+from django.http import HttpResponse, StreamingHttpResponse
 from django.http import HttpResponseRedirect
 from django import forms
 from django.contrib.auth.decorators import login_required
+from django.template import RequestContext, Context
+from django.conf import settings
 
 from iondb.rundb import models
 from celery.task import task
@@ -175,23 +180,34 @@ def write_plupload(request, pub_name):
                 logger.debug("content chunk = '%d'" % len(content))
                 f.write(content)
 
+        my_contentupload_id = None
         if int(chunk) + 1 >= int(chunks):
             try:
                 upload = move_upload(pub, dest_path, name, request.REQUEST['meta'])
                 async_upload = run_pub_scripts.delay(pub, upload)
+                my_contentupload_id = upload.id
             except Exception as err:
                 logger.exception("There was a problem during upload of a file for a publisher.")
             else:
                 logger.info("Successfully pluploaded %s" % name)
 
         logger.debug("plupload done")
-        return render_to_json({"chunk posted": debug})
+        return render_to_json({"chunk posted": debug, "contentupload_id": my_contentupload_id})
 
     else:
         return render_to_json({"method":"only post here"})
 
 
 def new_upload(pub, file_name, meta_data=None):
+    
+    #try:
+    meta_data_dict = json.loads(meta_data)
+    meta_data_dict['upload_date'] = dateutil.parser.parse(time.asctime()).isoformat()
+    meta_data = json.dumps(meta_data_dict)
+    #except:
+    #    pass
+        
+    
     upload = models.ContentUpload()
     upload.status = "Saving"
     upload.publisher = pub
@@ -199,12 +215,18 @@ def new_upload(pub, file_name, meta_data=None):
     upload.save()
     pub_uploads = os.path.join("/results/uploads", pub.name)
     upload_dir = os.path.join(pub_uploads, str(upload.pk))
-    os.makedirs(upload_dir)
     upload.file_path = os.path.join(upload_dir, file_name)
     # TODO: Any path's defined here should really be persisted with the Content Upload
     meta_path = os.path.join(upload_dir, "meta.json")
-    open(meta_path, 'w').write(meta_data)
     upload.save()
+    try:
+        os.makedirs(upload_dir)
+        open(meta_path, 'w').write(meta_data)
+    except OSError as err:
+        logger.exception("File error while saving new %s upload" % pub)
+        upload.status = "Error: %s" % err
+        upload.save()
+        return None
     return upload
 
 
@@ -233,17 +255,12 @@ def run_script(working_dir, script_path, upload_id, upload_dir, upload_path, met
     """
     script = os.path.basename(script_path)
     cmd = [script_path, upload_id, upload_dir, upload_path, meta_path]
-    print(str(cmd))
+    logpath = os.path.join(upload_dir, "publisher.log")
     # Spawn the test subprocess and wait for it to complete.
     try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=working_dir)
-        stdout, stderr = proc.communicate()
-        result = proc.returncode
-        stdout_log = os.path.join(upload_dir, "%s_standard_output.log" % script)
-        stderr_log = os.path.join(upload_dir, "%s_standard_error.log" % script)
-        open(stdout_log, 'w').write(stdout)
-        if stderr:
-            open(stderr_log, 'w').write(stderr)
+        log_out = open(logpath, 'a')
+        proc = subprocess.Popen(cmd, stdout=log_out, stderr=subprocess.STDOUT, cwd=working_dir)
+        result = proc.wait()
     except Exception as err:
         print("Publisher error in upload %s: %s" % (upload_id, str(cmd)))
         raise
@@ -369,11 +386,191 @@ def upload_status(request, contentupload_id, frame=False):
                 {"go": "/rundb/uploadstatus/%s/" % contentupload_id,
                  "contentupload_id": contentupload_id})
     upload = models.ContentUpload.objects.get(pk=contentupload_id)
-    filename = os.path.basename(upload.file_path)
+    
+    def intWithCommas(x):
+        if type(x) not in [type(0), type(0L)]:
+            raise TypeError("Parameter must be an integer.")
+        if x < 0:
+            return '-' + intWithCommas(-x)
+        result = ''
+        while x >= 1000:
+            x, r = divmod(x, 1000)
+            result = ",%03d%s" % (r, result)
+        return "%d%s" % (x, result)
+    
+    
     logs = list(upload.logs.all())
     logs.sort(key=lambda x: x.timeStamp)
+        
+    upload_type = 'Target Regions'
+    if upload.meta.get('hotspot',False):
+        upload_type = 'Hotspots'
+    if upload.meta.get('is_ampliseq',False):
+        upload_type = 'AmpliSeq ZIP'
+    
+    upload_date = upload.meta.get('upload_date','Unknown')
+    
+    try:
+        file_size_string = '(%s bytes)' % intWithCommas(os.stat(upload.file_path).st_size)
+        if 'upload_date' not in upload.meta:
+            upload_date = time.ctime(os.stat(upload.file_path).st_mtime)
+    except:
+        file_size_string = ''
+
+    status_line = upload.status
+    
+    processed_uploads = []
+    
+    for content in models.Content.objects.filter(contentupload=contentupload_id):
+        if 'unmerged/detail' not in content.file:
+            continue
+        
+        try:
+            content_file_size_string = '(%s bytes)' % intWithCommas(os.stat(content.file).st_size)
+        except:
+            content_file_size_string = ''
+        
+        bonus_fields = []
+        if content.meta['hotspot']:
+            if 'reference' in content.meta:
+                bonus_fields.append({'title': 'Reference', 'value': content.meta['reference']})
+            if 'num_loci' in content.meta:
+                bonus_fields.append({'title': 'Number of Loci', 'value': intWithCommas(content.meta['num_loci'])})
+            content_type = 'Hotspots'
+            content_type_hash = 'hotspots'
+        else:
+            if 'reference' in content.meta:
+                bonus_fields.append({'title': 'Reference', 'value': content.meta['reference']})
+            if 'num_targets' in content.meta:
+                bonus_fields.append({'title': 'Number of Targets', 'value': intWithCommas(content.meta['num_targets'])})
+            if 'num_genes' in content.meta:
+                bonus_fields.append({'title': 'Number of Genes', 'value': intWithCommas(content.meta['num_genes'])})
+            if 'num_bases' in content.meta:
+                bonus_fields.append({'title': 'Covered Bases', 'value': intWithCommas(content.meta['num_bases'])})
+            content_type = 'Target Regions'
+            content_type_hash = 'target-regions'
+        
+        enabled = content.meta.get('enabled',True)
+        
+        processed_uploads.append({'file_name' : content.file,
+                                  'file_size_string': content_file_size_string,
+                                  'content_name': os.path.basename(content.file),
+                                  'content_type': content_type,
+                                  'content_type_hash': content_type_hash,
+                                  'description': content.meta.get('description',''),
+                                  'notes': content.meta.get('notes',''),
+                                  'enabled': enabled,
+                                  'bonus_fields': bonus_fields,
+                                  'content_id': content.id})
+    
     return render_to_response('rundb/ion_publisher_upload_status.html',
-                {"contentupload": upload, "logs": logs, "filename": filename})
+                {"contentupload": upload,
+                 "upload_name": os.path.basename(upload.file_path),
+                 "logs" : logs,
+                 "upload_type": upload_type,
+                 "upload_date": upload_date,
+                 "file_size_string": file_size_string,
+                 "status_line": status_line,
+                 "processed_uploads": processed_uploads
+                 },
+                context_instance = RequestContext(request))
+
+
+@login_required
+def content_details(request, content_id):
+
+    content = models.Content.objects.get(pk=content_id)
+    
+    def intWithCommas(x):
+        if type(x) not in [type(0), type(0L)]:
+            raise TypeError("Parameter must be an integer.")
+        if x < 0:
+            return '-' + intWithCommas(-x)
+        result = ''
+        while x >= 1000:
+            x, r = divmod(x, 1000)
+            result = ",%03d%s" % (r, result)
+        return "%d%s" % (x, result)
+    
+    content_date =  content.meta.get('upload_date','Unknown')
+        
+    try:
+        file_size_string = '(%s bytes)' % intWithCommas(os.stat(content.file).st_size)
+    except:
+        file_size_string = ''
+    
+    bonus_fields = []
+    if content.meta['hotspot']:
+        content_type = 'Hotspots'
+        bonus_fields.append({'title': 'Reference', 'value': content.meta.get('reference','unknown')})
+        bonus_fields.append({'title': 'Upload Date', 'value': content.meta.get('upload_date','unknown')})
+        bonus_fields.append({'title': 'Number of Loci', 'value': content.meta.get('num_loci','unknown')})
+    else:
+        content_type = 'Target Regions'
+        bonus_fields.append({'title': 'Reference', 'value': content.meta['reference']})
+        bonus_fields.append({'title': 'Upload Date', 'value': content.meta.get('upload_date','unknown')})
+        if 'num_targets' in content.meta:
+            bonus_fields.append({'title': 'Number of Targets', 'value': intWithCommas(content.meta['num_targets'])})
+        if 'num_genes' in content.meta:
+            bonus_fields.append({'title': 'Number of Genes', 'value': intWithCommas(content.meta['num_genes'])})
+        if 'num_bases' in content.meta:
+            bonus_fields.append({'title': 'Covered Bases', 'value': intWithCommas(content.meta['num_bases'])})
+    
+    
+    if request.method == "POST":
+        content.meta['description'] = request.POST.get('description','')
+        content.meta['notes'] = request.POST.get('notes','')
+        content.meta['enabled'] = request.POST.get('enabled','true') == 'true'
+        content.save()
+    
+    return render_to_response('rundb/ion_publisher_content_details.html',
+                {"content": content,
+                 "file_size_string": file_size_string,
+                 "content_type": content_type,
+                 'bonus_fields': bonus_fields
+                 },
+                context_instance = RequestContext(request))
+
+
+
+@login_required
+def content_download(request, content_id):
+    content = models.Content.objects.get(pk=content_id)
+    response = StreamingHttpResponse(open(content.file,'r'))
+    response['Content-Type'] = "application/octet-stream"
+    response['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(content.file)
+    return response
+
+@login_required
+def upload_download(request, contentupload_id):
+    upload = models.ContentUpload.objects.get(pk=contentupload_id)
+    response = StreamingHttpResponse(open(upload.file_path,'r'))
+    response['Content-Type'] = "application/octet-stream"
+    response['Content-Disposition'] = 'attachment; filename="%s"' % os.path.basename(upload.file_path)
+    return response
+
+
+@login_required
+def content_add(request, hotspot=False):
+
+    active_ref = None
+    if request.method == "GET":
+        active_ref = request.GET.get('reference',None)
+
+    references = []
+    
+    #for ref in models.ReferenceGenome.objects.all():
+    for ref in models.ReferenceGenome.objects.filter(index_version = settings.TMAP_VERSION):
+        references.append({"long_name": ref.short_name+" - "+ref.name,
+                           "short_name": ref.short_name,
+                           "selected": ref.short_name==active_ref})
+    
+    return render_to_response('rundb/ion_publisher_content_add.html',
+                {'hotspot': hotspot, 'references': references},
+                context_instance = RequestContext(request))
+
+
+
 
 @login_required
 def list_content(request):

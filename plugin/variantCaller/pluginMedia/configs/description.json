@@ -31,11 +31,6 @@
                                "Allowed values: Decimal numbers between 0.5 and 1.0",
                                "Recommended 0.95"],
 
-        "snp_beta_bias": ["Filter if the beta-distribution for alleles on each strand is signficantly different.",
-                              "Related VCF field: SXB",
-                              "Allowed values: Decimal numbers >= 0",
-                              "Recommended value: 8.0 (approximate chi-square significant threshold)"],
-
         "indel_min_cov_each_strand":["Filter: Minimum coverage required on each strand",
                                      "Allowed values: Integers >= 0",
                                      "Recommended >= 3" ],
@@ -56,11 +51,6 @@
                                "Related VCF field: STB",
                                "Allowed values: Decimal numbers between 0.5 and 1.0",
                                "Recommended 0.95"],
-
-        "indel_beta_bias": ["Filter if the beta-distribution for alleles on each strand is signficantly different.",
-                              "Related VCF field: SXB",
-                              "Allowed values: Decimal numbers >= 0",
-                              "Recommended value: 8.0 (approximate chi-square significant threshold)"],
         
         "hotspot_min_cov_each_strand":["Filter: Minimum coverage required on each strand",
                                      "Allowed values: Integers >= 0",
@@ -82,11 +72,6 @@
                                "Related VCF field: STB",
                                "Allowed values: Decimal numbers between 0.5 and 1.0",
                                "Recommended 0.95"],
-
-        "hotspot_beta_bias": ["Filter if the beta-distribution for alleles on each strand is signficantly different.",
-                              "Related VCF field: SXB",
-                              "Allowed values: Decimal numbers >= 0",
-                              "Recommended value: 8.0 (approximate chi-square significant threshold)"],
         
         "prediction_precision":["Number of pseudo-data-points suggesting our predictions match the measurements without bias",
                                 "Allowed values: Decimal numbers >= 0  ",
@@ -155,7 +140,12 @@
             "Enable MNPs in FreeBayes hypothesis generator.",
             "Allowed values: 1 = generate MNP hypotheses, 0 = don't generate",
             "Recommended value: 1"],
-                        
+            
+        "allow_complex":[
+            "Enable complex variants in FreeBayes hypothesis generator.",
+            "Allowed values: 1 = generate MNP hypotheses, 0 = don't generate",
+            "Recommended value: 1"],            
+                                    
         "min_mapping_qv":[
             "Minimum mapping QV value required for reads to be allowed into the pileup (both freebayes and evaluator)",
             "Allowed values: Integers >= 0",
@@ -234,6 +224,11 @@
             "Allowed values: Decimal numbers between 0.0 and 1.0",
             "Recommended values: between 0.6 and 1.0",
             "Impact: Increasing values make indel calls more sensitive but less specific. "]
+            
+        "output_mnv":[
+            "Enables reporting of complex variants.",
+            "Allowed values: 1 = report complex variants, 0 = don't report",
+            "Recommended value: 0"],
             
     }
 }

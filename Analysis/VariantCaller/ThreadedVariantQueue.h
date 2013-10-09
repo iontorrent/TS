@@ -34,7 +34,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <levmar.h>
+
 #include <Variant.h>
 #include <Fasta.h>
 #include <Allele.h>
@@ -45,15 +45,13 @@
 #include <BedReader.h>
 #include <ResultData.h>
 
-#include "peakestimator.h"
 #include "stats.h"
 
 #include "CountingSemaphore.h"
 #include "HypothesisEvaluator.h"
 
-#include "FlowDist.h"
+
 #include "InputStructures.h"
-#include "AlignmentAssist.h"
 #include "HandleVariant.h"
 #include "ExtendParameters.h"
 #include "MiscUtil.h"
@@ -201,6 +199,7 @@ class VariantJobServer {
     void KillMeNow(int DEBUG);
     void NewVariant(vcf::VariantCallFile &vcfFile);
     void SetupJobServer(ExtendParameters *parameters);
+    void RefreshThreadPool();
     ~VariantJobServer();
 };
 
@@ -209,7 +208,7 @@ class VariantJobServer {
 // the actual worker function
 void *ProcessSetOfVariantsWorker(void *ptr);
 // the guy that orchestrates the dance
-void ThreadedVariantCaller(ofstream &outVCFFile, ofstream &filterVCFFile, ofstream &consensusFile, InputStructures &global_context, ExtendParameters *parameters);
+void ThreadedVariantCaller(ofstream &outVCFFile, ofstream &filterVCFFile,  InputStructures &global_context, ExtendParameters *parameters);
 void justProcessInputVCFCandidates(CandidateGenerationHelper &candidate_generator, ExtendParameters *parameters);
 
 

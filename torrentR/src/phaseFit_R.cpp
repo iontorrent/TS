@@ -199,8 +199,8 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // Set max parameter estimates
         CfIeParam param_max;
-        param_max.cf = (float) 0.5;
-        param_max.ie = (float) 0.5;
+        param_max.cf = (float) 0.9;
+        param_max.ie = (float) 0.9;
         pFit.SetParamMax(param_max);
 
         // Do the fit
@@ -244,9 +244,9 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // Set max parameter estimates
         CfIeDrParam param_max;
-        param_max.cf = (float) 0.5;
-        param_max.ie = (float) 0.5;
-        param_max.dr = (float) 0.5;
+        param_max.cf = (float) 0.9;
+        param_max.ie = (float) 0.9;
+        param_max.dr = (float) 0.9;
         pFit.SetParamMax(param_max);
 
         // Do the fit
@@ -293,9 +293,9 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // Set max parameter estimates
         CfIeDrHpScaleParam param_max;
-        param_max.cf      = (float) 0.5;
-        param_max.ie      = (float) 0.5;
-        param_max.dr      = (float) 0.5;
+        param_max.cf      = (float) 0.9;
+        param_max.ie      = (float) 0.9;
+        param_max.dr      = (float) 0.9;
         param_max.hpScale = (float) 1.5;
         pFit.SetParamMax(param_max);
 
@@ -392,9 +392,9 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // Set max parameter estimates
         CfIeDrHpScale4Param param_max;
-        param_max.cf       = (float) 0.5;
-        param_max.ie       = (float) 0.5;
-        param_max.dr       = (float) 0.5;
+        param_max.cf       = (float) 0.9;
+        param_max.ie       = (float) 0.9;
+        param_max.dr       = (float) 0.9;
         param_max.hpScaleA = (float) 1.5;
         param_max.hpScaleC = (float) 1.5;
         param_max.hpScaleG = (float) 1.5;
@@ -612,7 +612,7 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // Set max parameter estimates
         NucContamIeParam param_max;
-        param_max.ie     = 0.5;
+        param_max.ie     = 0.9;
         param_max.C_in_A = 0.5;
         param_max.G_in_A = 0.5;
         param_max.T_in_A = 0.5;
@@ -694,11 +694,11 @@ RcppExport SEXP phaseFit(SEXP RseqString, SEXP RseqFlow, SEXP Rsig, SEXP RflowCy
 
         // Set max parameters
         CfIe4Param param_max;
-        param_max.cf  = 0.5;
-        param_max.ieA = 0.5;
-        param_max.ieC = 0.5;
-        param_max.ieG = 0.5;
-        param_max.ieT = 0.5;
+        param_max.cf  = 0.9;
+        param_max.ieA = 0.9;
+        param_max.ieC = 0.9;
+        param_max.ieG = 0.9;
+        param_max.ieT = 0.9;
         pFit.SetParamMax(param_max);
 
         // Do the fit

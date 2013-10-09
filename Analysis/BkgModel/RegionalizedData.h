@@ -30,13 +30,11 @@
 
 class RegionalizedData
 {
-
-
   public:
     int fitters_applied;
     // the subregion that contains regionalized data
+    bool isBestRegion;
     Region *region;
-
     flow_buffer_info my_flow;  // specific to the buffers in my_trace that are filled, also supplies flow order
 
     TimeCompression time_c; // region specific
@@ -75,6 +73,10 @@ class RegionalizedData
     void AdaptiveEmphasis();
     void NoData();
 
+    Region *get_region()
+    {
+      return region;
+    }
     int get_region_col()
     {
       return region->col;
@@ -159,7 +161,6 @@ class RegionalizedData
     void CalculateFirstBlockClonalPenalty(float nuc_flow_frame_width, std::vector<float>& penalty, const int penalty_type);
 
  private:
-
     // Serialization section
     friend class boost::serialization::access;
     template<typename Archive>

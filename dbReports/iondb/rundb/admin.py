@@ -10,6 +10,7 @@ from django.forms import TextInput, Textarea
 from django.template import RequestContext
 from django.template.defaultfilters import filesizeformat
 from django.shortcuts import render_to_response
+from django.http import HttpResponseRedirect
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.sessions.models import Session
 
@@ -28,7 +29,7 @@ import re
 import logging
 import urllib
 
-from ion.utils.TSversion import findVersions
+from ion.utils.TSversion import findUpdates
 
 logger = logging.getLogger(__name__)
 
@@ -246,7 +247,7 @@ def update(request):
         data = json.dumps({"lockBlocked" : updateLocked })
         return http.HttpResponse(data, content_type="application/json")
     elif request.method=="GET":
-        about, meta_version = findVersions()
+        about, meta_version = findUpdates()
         config = GlobalConfig.get()
         from iondb.rundb.api import GlobalConfigResource
         resource = GlobalConfigResource()
@@ -257,9 +258,29 @@ def update(request):
         return render_to_response(
             "admin/update.html",
             {"about": about, "meta": meta_version,
-             "global_config": serialized_config},
+             "show_available": config.ts_update_status not in ['No updates', 'Finished installing'],
+             "global_config_json": serialized_config},
             RequestContext(request, {}),
         )
+
+
+@staff_member_required
+def version_lock(request, enable):
+
+    if enable == "enable_lock":
+        # hide repository list file /etc/apt/sources.list
+        async_result = tasks.hide_apt_sources.delay()
+    else:
+        # restore repository list file /etc/apt/sources.list
+        async_result = tasks.restore_apt_sources.delay()
+
+    try:
+        async_result.get(timeout=20)
+        tasks.check_updates.delay()
+    except celery.exceptions.TimeoutError as err:
+        logger.warning("version_lock timed out, taking longer than 20 seconds.")
+
+    return render_to_response("admin/update.html")
 
 
 def ot_log(request):
@@ -325,6 +346,56 @@ class ExperimentAdmin(admin.ModelAdmin):
     list_filter = ('status',)
     search_fields = ['expName' ]
     ordering = ('-date', 'expName', )
+    actions = ['redo_from_scratch']
+
+    # custom admin action to delete all results and reanalyze with Plan data intact
+    def redo_from_scratch(self, request, queryset):
+        selected = request.POST.getlist(admin.ACTION_CHECKBOX_NAME)
+        return HttpResponseRedirect("/admin/experiment/exp_redo_from_scratch/?ids=%s" % (",".join(selected)))
+
+    redo_from_scratch.short_description = "Delete and restart with Plan info"
+
+@staff_member_required
+def exp_redo_from_scratch(request):
+    pks = list( request.GET.get('ids').split(',') )
+    exps = Experiment.objects.filter(id__in=pks)
+
+    if request.method=="GET":
+
+        deletable_objects = []
+        for exp in exps:
+            results_names = ['Results: %s' % result for result in exp.results_set.values_list('resultsName',flat=True)]
+            deletable_objects.append( ['Experiment: %s' % exp, results_names ] )
+
+        opts = Experiment._meta
+        context = {
+            "app_label": opts.app_label,
+            "opts": opts,
+            "deletable_objects": deletable_objects,
+            "url": request.get_full_path()
+        }
+        return render_to_response("admin/experiment_redo_from_scratch.html", RequestContext(request, context))
+
+    if request.method=="POST":
+        results = Results.objects.filter(experiment__in=pks)
+        results.delete()
+        # modify experiment to make crawler pick it up again
+        for exp in exps:
+            exp.unique = exp.plan.planGUID
+            exp.ftpStatus = ''
+            exp.status = 'planned'
+            exp.save()
+            # remove all but the original EAS
+            if exp.eas_set.count() > 0:
+                eas = exp.eas_set.order_by('pk')[0]
+                eas.isEditable = True
+                eas.isOneTimeOverride = False
+                eas.save()
+                exp.eas_set.exclude(id=eas.id).delete()
+
+        admin.site._registry[Experiment].message_user(request, "%s experiments were deleted." % len(pks))
+        return HttpResponseRedirect("/admin/rundb/experiment/")
+
 
 class PluginResultAdmin(admin.ModelAdmin):
     def total_size(self,obj):
@@ -484,6 +555,7 @@ class ExperimentAnalysisSettingsAdmin(admin.ModelAdmin):
     list_filter = ('status',)
     search_fields = ['experiment__expName' ]
     ordering = ( "-id", )
+    formfield_overrides = { models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})} }
 
 class DMFileSetAdmin(admin.ModelAdmin):
     list_display = ('type','include','exclude','version')
@@ -500,6 +572,11 @@ class EventLogAdmin(admin.ModelAdmin):
     date_hierarchy = 'created'
     search_fields = ['text']
 
+class AnalysisArgsAdmin(admin.ModelAdmin):
+    list_display = ('name','chipType','chip_default', 'sequenceKitName', 'templateKitName', 'libraryKitName', 'samplePrepKitName')
+    formfield_overrides = {
+        models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}
+    }
 
 admin.site.register(Experiment, ExperimentAdmin)
 admin.site.register(Results, ResultsAdmin)
@@ -551,6 +628,9 @@ admin.site.register(ExperimentAnalysisSettings, ExperimentAnalysisSettingsAdmin)
 admin.site.register(DMFileSet, DMFileSetAdmin)
 admin.site.register(DMFileStat, DMFileStatAdmin)
 admin.site.register(EventLog, EventLogAdmin)
+admin.site.register(FileMonitor)
+admin.site.register(NewsPost)
+admin.site.register(AnalysisArgs,AnalysisArgsAdmin)
 
 # Add sessions to admin
 class SessionAdmin(admin.ModelAdmin):

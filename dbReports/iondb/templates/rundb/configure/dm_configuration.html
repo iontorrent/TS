@@ -1,4 +1,5 @@
 {% extends "rundb/configure/base.html" %}
+{% load url from future %}
 {% block content %}
 
 <div class="content">
@@ -6,7 +7,7 @@
         <small>
         </small>
     </h1>
-	<div id="error-messages" class="alert alert-error" style="display:none;"></div>
+    <div id="error-messages" class="alert alert-error" style="display:none;"></div>
     <div id="config_table">
         <table class="data-table" cellpadding="5px">
             <thead>
@@ -50,11 +51,11 @@
                 </td>
                 <td>
                     <input type=number min=0 id='trigger_age_{{forloop.counter}}' name='auto_trigger_age' data-type='{{entry.type}}' class="input-small filesets validate"
-						   value={{entry.auto_trigger_age|default:'0'}} >
+                           value={{entry.auto_trigger_age|default:'0'}} >
                 </td>
                 <td>
                     <input type=number min=0 max=100 id='trigger_usage_{{forloop.counter}}' name='auto_trigger_usage' data-type='{{entry.type}}' class="input-small filesets validate"
-							value={{entry.auto_trigger_usage|default:'0'}}>
+                            value={{entry.auto_trigger_usage|default:'0'}}>
                 </td>
                 <td>
                     <select id='backup_dir_{{forloop.counter}}' data-type='{{entry.type}}' name='backup_directory' class='filesets'>
@@ -64,6 +65,7 @@
                         </option>
                         {% endfor %}
                     </select>
+                <a href='{% url "browse_backup_dirs" "" %}' class='btn browse_backup_dirs' id='browse_{{forloop.counter}}' style="vertical-align:top;">Browse</a>
                 </td>
             </tr>
             {% endfor %}
@@ -73,7 +75,7 @@
     <div>
         <form class="form-horizontal" id="config_form" style="margin-top:40px;">
             <fieldset>
-				<div class="control-group">
+                <div class="control-group">
                     <label class="control-label" for="enable_archive" style="font-size:large"> Enabled </label>
                     <div class="controls">
                         <input {% if config.auto_archive_enable %}checked{% endif %} type='checkbox' id="enable_archive">
@@ -104,9 +106,9 @@
                 </div>
             </fieldset>
         </form>
-		<div class="clearfix">
-                <a href= {% url dm_configuration %} id="saveConfig" class="btn btn-primary btn-100 pull-right">Save</a>
-                <a href="{% url configure_services %}" class="btn btn-100 pull-right" id='cancel' style="margin-right:10px;">Cancel</a>
+        <div class="clearfix">
+                <a href='{% url "dm_configuration" %}' id="saveConfig" class="btn btn-primary btn-100 pull-right">Save</a>
+                <a href="{% url "configure_services" %}" class="btn btn-100 pull-right" id='cancel' style="margin-right:10px;">Cancel</a>
         </div>
     </div>
 </div>
@@ -114,67 +116,67 @@
 
 $(document).ready(function() {
 
-	$('#saveConfig').click(function(e){
-		e.preventDefault();
+    $('#saveConfig').click(function(e){
+        e.preventDefault();
 
-		if ($("#config_table *").hasClass("error")) {
-		    $('.error').trigger('change');
+        if ($("#config_table *").hasClass("error")) {
+            $('.error').trigger('change');
         return false;
-    }
+        }
 
-		var filesets = {};
-		var types = {{categories|safe}};
-		$(".filesets").each(function(){
-			var el = $(this);
-			var type = el.data('type');
-			if (!filesets.hasOwnProperty(type))
-				filesets[type] = {};
-			filesets[type][el.attr('name')] = el.val();
-		});
+        var filesets = {};
+        var types = {{categories|safe}};
+        $(".filesets").each(function(){
+            var el = $(this);
+            var type = el.data('type');
+            if (!filesets.hasOwnProperty(type))
+                filesets[type] = {};
+            filesets[type][el.attr('name')] = el.val();
+        });
 
-		var json = {
-				"filesets": filesets,
-				"email": $('#email').val(),
-				"auto_archive_ack": $('#auto_archive_ack').is(':checked') ? "True":"False"
-			}
-		var url = $(this).attr('href');
-		console.log('POST:', url, json);
-		$.ajax({
-			url: url,
-			dataType: 'html',
-			type: 'POST',
-			async: false,
-			contentType: "application/json",
-			data: JSON.stringify(json),
-		})
-		.done(function(data){
-			console.log('success:', data);
-			window.location.href = '{% url configure_services %}';
-		})
-		.fail(function(data) {
-			$('#error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
-			console.log("error:", data);
-		});
+        var json = {
+                "filesets": filesets,
+                "email": $('#email').val(),
+                "auto_archive_ack": $('#auto_archive_ack').is(':checked') ? "True":"False"
+            }
+        var url = $(this).attr('href');
+        console.log('POST:', url, json);
+        $.ajax({
+            url: url,
+            dataType: 'html',
+            type: 'POST',
+            async: false,
+            contentType: "application/json",
+            data: JSON.stringify(json),
+        })
+        .done(function(data){
+            console.log('success:', data);
+            window.location.href = '{% url "configure_services" %}';
+        })
+        .fail(function(data) {
+            $('#error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+            console.log("error:", data);
+        });
 
-	});
+    });
 
-	$("#enable_archive").change(function(){
-		var enabled = $(this).is(':checked');
-		$.ajax({
-			type: "PATCH",
-			dataType: 'json',
-			url: "/rundb/api/v1/globalconfig/1/",
-			data: '{"auto_archive_enable":'+enabled+'}',
-			contentType: 'application/json'
-		}).done(function(data) {
-			if (enabled) {
-				var log_entry = 'ENABLED Data Management automatic action';
-			} else {
-				var log_entry = 'DISABLED Data Management automatic action';
-			}
-			$.post('{% url dm_configuration_log %}', {log: log_entry});
-		});
-	});
+    $("#enable_archive").change(function(){
+        var enabled = $(this).is(':checked');
+        $.ajax({
+            type: "PATCH",
+            dataType: 'json',
+            url: "/rundb/api/v1/globalconfig/1/",
+            data: '{"auto_archive_enable":'+enabled+'}',
+            contentType: 'application/json'
+        }).done(function(data) {
+            if (enabled) {
+                var log_entry = 'ENABLED Data Management automatic action';
+            } else {
+                var log_entry = 'DISABLED Data Management automatic action';
+            }
+            $.post('{% url "dm_configuration_log" %}', {log: log_entry});
+        });
+    });
 
 });
 
@@ -206,6 +208,22 @@ $('.validate').change(function(e){
     }
 });
 
+$('.browse_backup_dirs').click(function(e){
+    e.preventDefault();
+    var elem = '#' + this.id.replace('browse', 'backup_dir');
+    var url = $(this).attr('href') + '?exclude_archived=true';
+    $.get( url, function(data) {
+        $('body').append(data);
+        $( "#modal_browse_dirs").modal("show");
+        $('body #modal_browse_dirs').on('modal_browse_dirs_done', function(e, data){
+            if(data.path) {
+                if ($(elem +' option[value="'+data.path+'"]').length == 0)
+                    $('[id^=backup_dir]').append('<option value="' + data.path + '">' + data.path + '</option>');
+                $(elem).val(data.path);
+            }
+        });
+    });
+});
 </script>
 
 {% endblock content %}

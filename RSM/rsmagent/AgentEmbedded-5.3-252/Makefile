@@ -1,7 +1,4 @@
-# $Id: Makefile,v 1.20.2.3 2010/11/05 17:59:34 dkhodos Exp $
-
 # Specify target platform settings and set of features
-
 
 ifdef WIND_PLATFORM
 #PPC 8560 cross-compile settings
@@ -62,7 +59,6 @@ endif
 #	-DENABLE_FILE_TRANSFER		- file transfer support
 
 FEATURES = -D_REENTRANT -DENABLE_REMOTE_SESSION -DENABLE_FILE_TRANSFER -DENABLE_SSL
-#FEATURES = -D_REENTRANT -DENABLE_REMOTE_SESSION -DENABLE_FILE_TRANSFER
 
 CONFIG =
 ifeq ($(BIG_ENDIAN),yes)
@@ -83,16 +79,13 @@ TOP_DIR = $(shell pwd)
 AE_SRC_DIR = Cobf
 LIB_SRC_DIR = Libsrc
 LIB_DIR = lib
-#DEMO_DIR = Demo
 LIB_SRC_DIRS = $(LIB_SRC_DIR)/expat $(LIB_SRC_DIR)/zlib
 ifneq ($(HAVE_OPENSSL),yes)
 	LIB_SRC_DIRS += $(LIB_SRC_DIR)/libdes
 endif
-#SUBDIRS = $(LIB_SRC_DIRS) $(DEMO_DIR)
 SUBDIRS = $(LIB_SRC_DIRS)
 EXTRA_CFLAGS +=  -I$(TOP_DIR)/Sysdeps/Unix
-#CFLAGS = -O2 -Wall -I. -I$(TOP_DIR)/$(AE_SRC_DIR) -I$(TOP_DIR)/Include -I$(TOP_DIR)/Compat -I$(TOP_DIR)/Sysdeps/Unix -I$(LIB_DIR)/include $(EXTRA_CFLAGS) $(CONFIG) $(FEATURES)
-CFLAGS = -g -Wall -I. -I$(TOP_DIR)/$(AE_SRC_DIR) -I$(TOP_DIR)/Include -I$(TOP_DIR)/Compat -I$(TOP_DIR)/Sysdeps/Unix -I$(LIB_DIR)/include $(EXTRA_CFLAGS) $(CONFIG) $(FEATURES)
+CFLAGS = -g -Wall -I. -I$(TOP_DIR)/$(AE_SRC_DIR) -I$(TOP_DIR)/Include -I$(TOP_DIR)/Compat -I$(TOP_DIR)/Sysdeps/Unix -I$(LIB_DIR)/include -ILibsrc/expat/xmlparse -ILibsrc/zlib $(EXTRA_CFLAGS) $(CONFIG) $(FEATURES)
 LDFLAGS = -g $(EXTRA_LDFLAGS) -L$(LIB_DIR)/lib
 
 CC = $(CROSS_COMPILE)gcc
@@ -113,16 +106,17 @@ AE_LIB = libAgentEmbedded.a
 
 all:
 	for n in $(LIB_SRC_DIRS); do \
-		$(MAKE) -C $$n $(MAKE_FLAGS) install || exit 1; \
+		$(MAKE) -C $$n $(MAKE_FLAGS) || exit 1; \
 	done
 	$(CC) -MM $(CFLAGS) $(AE_SRC_DIR)/*.c > .dep
 	$(MAKE) -C . $(AE_LIB)
-#	$(MAKE) -C $(DEMO_DIR) $(MAKE_FLAGS) all
 
 clean:
 	rm -f *.o *.a .dep
 	rm -rf $(LIB_DIR)
-#	$(MAKE) -C $(DEMO_DIR) $(MAKE_FLAGS) $@
+	for n in $(LIB_SRC_DIRS); do \
+		$(MAKE) -C $$n $(MAKE_FLAGS) clean || exit 1; \
+	done
 
 distclean: clean
 	for n in $(LIB_SRC_DIRS); do \

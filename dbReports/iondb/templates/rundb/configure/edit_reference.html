@@ -1,26 +1,28 @@
 {% extends "rundb/configure/base.html" %}
+{% load url from future %}
 {% load pagetools %}
+{% load static from staticfiles %}
 {% load humanize %}
 {% block sub-nav %}
-  <li><a href="{% url configure_about %}">About</a></li>
-  <li class="active"><a href="{% url configure_references %}">References</a></li>
-  <li><a href="{% url configure_services %}">Services</a></li>
-  <li><a href="{% url configure_plugins %}">Plugins</a></li>
-  <li><a href="{% url configure_configure %}">Configure</a></li>
-  <li><a href="{% url configure_account %}">Accounts</a></li>
+  <li><a href="{% url "configure_about" %}">About</a></li>
+  <li class="active"><a href="{% url "configure_references" %}">References</a></li>
+  <li><a href="{% url "configure_services" %}">Services</a></li>
+  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+  <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block extra_head %}
-    <script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
-    <script type="text/javascript" src="/site_media/resources/plupload/js/plupload.full.js"></script>
-    <link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
-    <script type="text/javascript" src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
+    <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/plupload/js/plupload.full.js"%}"></script>
+    <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+    <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
     
-    <script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.min.js"></script> <!-- Using updated uni-form JS -->
-    <script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script> <!-- for ajaxForm -->
-    <script src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
+    <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script> <!-- Using updated uni-form JS -->
+    <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script> <!-- for ajaxForm -->
+    <script src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
     <link rel="stylesheet" type="text/css"
-        href="/site_media/jquery/colorbox/colorbox.css" media="screen"/>
-    <link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css"
+        href="{% static "jquery/colorbox/colorbox.css"%}" media="screen"/>
+    <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}"
         type="text/css"/>
     <style type="text/css">
     th > input {
@@ -103,7 +105,7 @@
       {% endif %}
 
     <div class="form-actions">
-        <a href="{% url configure_references %}" class="btn btn-primary">Back</a>
+        <a href="{% url "configure_references" %}" class="btn btn-primary">Back</a>
         <button class="btn pull-right" id="delete">Delete Genome</button>
         <div id="ask_delete_genome" style="display: none; margin-top:12px;">
           <p>Are you sure you want to delete {{ name }}?  Once you delete this, it can not be recovered.</p>
@@ -139,14 +141,14 @@
               <p>
                 We recommend you rebuild all indices as a group at the end of the work day:
                 You will find controls to do this on the 
-                <a href="{% url configure_references %}">Reference tab</a>.
+                <a href="{% url "configure_references" %}">Reference tab</a>.
               </p>
               <p>
                 <button id="rebuild">Rebuild {{ name }} Now</button>
               </p>
             </div>
           </div>
-          <script src="/site_media/jquery/js/alert.js"></script>
+          <script src="{% static "jquery/js/alert.js"%}"></script>
           <script>
             $(function(){ $("#rebuild").click(function(){
               $.get("/configure/references/genome/rebuild/{{ key }}", function(){
@@ -232,7 +234,7 @@
               <td colspan="2">
                 <div class="form-actions">
                   <input class="btn btn-primary" type="submit" value="Save Changes" name="submit" />
-                  <a href="{% url configure_references %}" class="btn">Cancel</a>
+                  <a href="{% url "configure_references" %}" class="btn">Cancel</a>
                   <button class="btn pull-right" id="delete">Delete Genome</button>
                   <div id="ask_delete_genome" style="display: none; margin-top:12px;">
                     <p>Are you sure you want to delete {{ name }}?  Once you delete this, it can not be recovered.</p>
@@ -300,8 +302,8 @@
                         multi_selection: false,
                         multiple_queues: false,
                         multipart_params: {meta: '{}'},
-                        silverlight_xap_url: '/site_media/jquery/js/plupload/plupload.silverlight.xap',
-                        flash_swf_url: '/site_media/jquery/js/plupload/plupload.flash.swf'
+                        silverlight_xap_url: '{% static "jquery/js/plupload/plupload.silverlight.xap"%}',
+                        flash_swf_url: '{% static "jquery/js/plupload/plupload.flash.swf"%}'
                       });
 
                       $("#bedUpload").click(function(){
@@ -495,9 +497,9 @@
     $("#confirm_delete_genome").click(function () {
       $("#ask_delete_genome").slideUp();
       $("#status_delete_genome").html("<p>Deleting</p>");
-      $.post("{% url references_genome_delete key %}", function (data) {
+      $.post("{% url "references_genome_delete" key %}", function (data) {
         $("#status_delete_genome").html(data.status);
-        setTimeout(function(){window.location = "{% url configure_references %}";}, 1000);
+        setTimeout(function(){window.location = "{% url "configure_references" %}";}, 1000);
       });
       return false;
     });
@@ -505,15 +507,15 @@
     $("#confirm_delete_genome_with_dir").click(function () {
       $("#ask_delete_genome").slideUp();
       $("#status_delete_genome").html("<p>Deleting</p>");
-      $.post("{% url references_genome_delete key %}?with_dir=True", function (data) {
+      $.post("{% url "references_genome_delete" key %}?with_dir=True", function (data) {
         $("#status_delete_genome").html(data.status);
-        setTimeout(function(){window.location = "{% url configure_references %}";}, 1000);
+        setTimeout(function(){window.location = "{% url "configure_references" %}";}, 1000);
       });
       return false;
     });
 
     $("#with_dir").click(function () {
-      build_genome_dialogue('{% url references_genome_delete key %}?with_dir=True');
+      build_genome_dialogue('{% url "references_genome_delete" key %}?with_dir=True');
     });
 
     $(".deleteBed").click(delete_bed);

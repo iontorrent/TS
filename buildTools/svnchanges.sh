@@ -8,7 +8,6 @@ reportfile="${PWD}/latest_changes"
 if [ -f $reportfile ]; then rm -f $reportfile; fi
 
 MODULES=(
-	alignTools
 	Analysis	
 	dbReports	
 	gpu	

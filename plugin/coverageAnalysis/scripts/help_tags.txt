@@ -110,6 +110,7 @@ The percentage of target bases covered by at least five hundred reads.
 The percentage of all target bases that did not show a bias towards forward or reverse strand
 read alignments. An individual target base is considered to have read bias if it has at least 10 
 reads and the fraction of forward or reverse reads to total reads is greater than 70%.
+Target bases with no reads are considered to have no strand bias.
 
 @Amplicon Read Coverage
 Summary statistics for reads assigned to specific amplicons.
@@ -187,6 +188,7 @@ The percentage of all amplicons that had at least one hundred thousand reads.
 The percentage of all amplicons that did not show a bias towards forward or reverse strand
 read alignments. An individual amplicon is considered to have read bias if it has at least 10
 reads and the fraction of forward or reverse reads to total reads is greater than 70%.
+Amplicons with no reads are considered to have no strand bias.
 
 @Amplicons reading end-to-end
 The percentage of all amplicons that were considered to have a sufficient proportion of
@@ -231,6 +233,7 @@ The percentage of reference genome bases covered by at least five hundred reads.
 The percentage of all reference genome bases that did not show a bias towards forward or reverse strand
 read alignments. An individual reference base is considered to have read bias if it has at least 10 
 reads and the fraction of forward or reverse reads to total reads is greater than 70%.
+Genome bases that have no reads are considered to have no strand bias.
 
 @Target Read Coverage
 Summary statistics for reads assigned to specific targets.
@@ -346,6 +349,7 @@ Note that this does not mean all bases across the whole length of any particular
 The percentage of targets that did not show a bias towards forward or reverse strand base read alignments.
 An individual target is considered to show strand bias if it has an average base read coverage depth of at least 10 and
 the fraction of forward or reverse base reads to total base reads is greater than 70%.
+Traget regions with no reads are considered to have no strand bias.
 
 @Targets with full coverage
 The percentage of targets that had at least 98% of their length covered by at least one base read. This definition allows some

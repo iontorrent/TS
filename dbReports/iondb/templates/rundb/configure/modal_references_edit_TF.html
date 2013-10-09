@@ -1,3 +1,5 @@
+{% load url from future %}
+{% load static from staticfiles %}
 <div id="modal_references_edit_TF" title="" class="modal hide" data-width="550">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -71,13 +73,13 @@
     </div>
     <div class="modal-footer">
         {% if id %}
-        <a id="delete" class="btn" href="{% url references_TF_delete id %}" style="float:left;">Delete</a>
+        <a id="delete" class="btn" href="{% url "references_TF_delete" id %}" style="float:left;">Delete</a>
         {% endif %}
         <a class="btn" href="#" data-dismiss="modal">Cancel</a>
         <a id="save" class="btn btn-primary" href="#">Save</a>
     </div>
 
-    <script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.js"></script>
+    <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script>
     <script type="text/javascript">
         jQuery.fn.uniform.language.required = '%s is required';
         $('#modal_references_edit_TF_form').uniform({

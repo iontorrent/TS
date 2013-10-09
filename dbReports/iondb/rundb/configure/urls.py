@@ -1,6 +1,10 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
-from django.conf.urls.defaults import patterns, url
+try:
+    from django.conf.urls import patterns, url, include
+except ImportError:
+    # Compat Django 1.4
+    from django.conf.urls.defaults import patterns, url, include
 
 urlpatterns = patterns(
     'iondb.rundb.configure',
@@ -60,6 +64,10 @@ urlpatterns = patterns(
     url(r'^services/dmconfig_log/$', 'views.dm_configuration_log', name="dm_configuration_log"),
     url(r'^services/dm_history/$', 'views.dm_history', name="dm_history"),
     url(r'^services/cache/$', 'views.cache_status', name='cache_status'),
+    url(r'^services/browse_backup_dirs/(?P<path>.*)', 'views.browse_backup_dirs', name='browse_backup_dirs'),
+    url(r'^services/import_data/', 'views.import_data', name="import_data"),
+    url(r'^services/import_data_find/(?P<path>.*)', 'views.import_data_find', name="import_data_find"),
+    url(r'^services/import_data_log/(?P<path>.*)', 'views.import_data_log', name="import_data_log"),
 
     url(r'^configure/$', 'views.configure_configure', name="configure_configure"),
     url(r'^configure/editemail/(\d+)?$', 'views.edit_email', name="edit_email"),
@@ -67,18 +75,19 @@ urlpatterns = patterns(
 
     (r'^services/arch_gone.png$', 'graphs.archive_graph_bar'),
     (r'^services/(.+)/file_server_status.png/$', 'graphs.fs_statusbar'),
-    (r'^services/(\d+)/archive_drivespace.png$', 'graphs.archive_drivespace_bar'),
+    (r'^services/archive_drivespace.png/$', 'graphs.archive_drivespace_bar'),
     (r'^services/residence_time.png$', 'graphs.residence_time'),
     url(r'^services/controljob/(\d+)/((?:term)|(?:stop)|(?:cont))$', 'views.control_job', name='control_job'),
     (r'^chips/$', 'chips.showpage'),
     url(r'^info/$', 'views.configure_system_stats', name="configure_system_stats"),
     url(r'^info/data$', 'views.configure_system_stats_data', name="configure_system_stats_data"),
     url(r'^info/SSA.zip', 'views.system_support_archive', name='configure_support_archive'),
-    url(r'^raid_info/$', 'views.raid_info'),
+    url(r'^raid_info/(\d+)/$', 'views.raid_info'),
     url(r'^services/queueStat/$', 'views.queueStatus'),
     url(r'^services/jobStat/(\d+)/$', 'views.jobStatus'),
     url(r'^services/sgejob/(\d+)/$', 'views.jobDetails'),
     (r'^getZip/(.+)$', 'chips.getChipZip'),
     (r'^getChipLog/(.+)$', 'chips.getChipLog'),
     (r'^getChipPdf/(.+)$', 'chips.getChipPdf'),
+    (r'^getProtonDiags/(.+)$', 'chips.getProtonDiags'),
 )

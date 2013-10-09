@@ -22,6 +22,7 @@ void BarcodeClassifier::PrintHelp()
   printf ("     --barcode-cutoff        FLOAT      minimum score to call a barcode [2\n" );
   printf ("     --barcode-separation    FLOAT      minimum difference between best and second best scores [0.5]\n" );
   printf ("     --barcode-filter        FLOAT      barcode freq. threshold, if >0 writes output-dir/barcodeFilter.txt [0.0 = off]\n" );
+  printf ("     --barcode-filter-minreads FLOAT      barcode reads threshold, if >0 writes output-dir/barcodeFilter.txt [0 = off]\n" );
   printf ("\n");
 }
 
@@ -39,9 +40,12 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
 
   barcode_directory_              = opts.GetFirstString ('-', "barcode-directory", output_directory+"/bc_files");
   barcode_filter_                 = opts.GetFirstDouble ('-', "barcode-filter", 0.0);
+  barcode_filter_minreads_        = opts.GetFirstInt 	('-', "barcode-filter-minreads", 0);
   windowSize_                     = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
 
-  if (barcode_filter_ > 0.0)
+  bc_adjust_				      = opts.GetFirstBoolean('-', "bc-adjust", false);
+
+  if (barcode_filter_ > 0.0 || barcode_filter_minreads_ > 0)
     barcode_filter_filename_ = output_directory+"/barcodeFilter.txt";
 
 
@@ -76,6 +80,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
     barcode_.back().flow_seq.assign(flow_order_.num_flows(), 0);
     barcode_.back().start_flow = -1;
     barcode_.back().end_flow = -1;
+	barcode_.back().adapter_end_flow = -1;
 
     barcode_.back().full_barcode = keys[0].bases();
     int key_length = barcode_.back().full_barcode.length();
@@ -102,6 +107,9 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
       // grab the last positive incorporating flow for the barcode, any 0-mer flows after this and before the insert or adapter would not be counted in the barcode matching/scoring
       if (curBase >= key_barcode_length and barcode_.back().end_flow == -1)
         barcode_.back().end_flow = flow;
+
+      if (curBase >= key_barcode_adapter_length and barcode_.back().adapter_end_flow == -1)
+        barcode_.back().adapter_end_flow = flow;
 
       flow++;
     }
@@ -137,6 +145,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
   printf("   Scoring mode             : %d\n", score_mode_);
   printf("   Scoring threshold        : %1.1lf\n", score_cutoff_);
   printf("   Barcode filter threshold : %1.4f (0.0 = disabled)\n", barcode_filter_);
+  printf("   Barcode filter minreads :  %d (0 = disabled)\n", barcode_filter_minreads_);
   printf("   Barcode filter filename  : %s\n", barcode_filter_filename_.c_str());
   printf("\n");
 
@@ -178,19 +187,23 @@ void BarcodeClassifier::BuildPredictedSignals(float cf, float ie, float dr)
 void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &processed_read, const BasecallerRead& basecaller_read,
     const vector<int>& base_to_flow)
 {
-
   int best_barcode = -1;
   int best_errors = 1 + (int)score_cutoff_; // allows match with this many errors minimum when in bc_score_mode 1
 
   float best_distance = 1 + score_cutoff_;
   float second_best_distance = 1e20;
 
+  int baseAdapter = 0;
+  int flowAdapter = 0;
+
   if (score_mode_ == 1) { // looks at flow-space absolute error counts, not ratios
 
     for (int bc = 0; bc < num_barcodes_; ++bc) {
 
       int num_errors = 0;
-      for (int flow = 0, base = 0; flow <= barcode_[bc].end_flow; ++flow) {
+	  int flow = 0;
+	  int base = 0;
+      for (; flow <= barcode_[bc].end_flow; ++flow) {
         int hp_length = 0;
         while (base < processed_read.filter.n_bases and base_to_flow[base] == flow) {
           base++;
@@ -203,6 +216,8 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
       if (num_errors < best_errors) {
         best_errors = num_errors;
         best_barcode = bc;
+		baseAdapter = base;
+		flowAdapter = flow;
       }
     }
   }
@@ -255,6 +270,22 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
   processed_read.read_group_index = bce.read_group_index;
 
   processed_read.barcode_n_errors = best_errors;
+  if(bc_adjust_)
+  {
+	  processed_read.barcode_adjust_errors = best_errors;
+	        
+	  /*for (int flow = flowAdapter, base = baseAdapter; flow <= barcode_[best_barcode].adapter_end_flow; ++flow)
+	  {
+        int hp_length = 0;
+        while (base < processed_read.filter.n_bases and base_to_flow[base] == flow) 
+		{
+          base++;
+          hp_length++;
+        }
+
+        processed_read.barcode_adjust_errors += abs(barcode_[best_barcode].flow_seq[flow] - hp_length);
+      }*/
+  }
 
   processed_read.filter.n_bases_prefix = 0;
   while (processed_read.filter.n_bases_prefix < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_prefix] < bce.num_flows-1)
@@ -276,7 +307,7 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
 
   // Generate barcodeFilter.txt file
 
-  if (barcode_filter_ > 0.0) {
+  if (barcode_filter_ > 0.0 || barcode_filter_minreads_ > 0) {
 
     vector<int> read_counts;
     for (Json::Value::iterator rg = datasets.read_groups().begin(); rg != datasets.read_groups().end(); ++rg)
@@ -284,13 +315,16 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
         read_counts.push_back((*rg)["read_count"].asInt());
     sort (read_counts.begin(), read_counts.end(), std::greater<int>());
 
-    int read_threshold = 20;
-    for (int i = 1; i < (int)read_counts.size(); ++i) {
-      if (read_counts[i] / (read_counts[i-1] + 0.001) < barcode_filter_) {
-        read_threshold = max(read_threshold, read_counts[i-1]);
-        break;
-      }
-    }
+    int read_threshold = (barcode_filter_minreads_ > 0) ? barcode_filter_minreads_ : 20;
+	
+	if (barcode_filter_ > 0.0) {
+	  for (int i = 1; i < (int)read_counts.size(); ++i) {
+		if (read_counts[i] / (read_counts[i-1] + 0.001) < barcode_filter_) {
+		  read_threshold = max(read_threshold, read_counts[i-1]);
+		  break;
+		}
+	  }
+	}
 
     //datasets.barcode_config()["filter_threshold"] = read_threshold;
 

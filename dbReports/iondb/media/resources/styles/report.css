@@ -13,27 +13,15 @@
 
 .pluginGroupHead{
 
-	background-image: linear-gradient(bottom, #D6D6D6 29%, #F5F5F5 82%);
-	background-image: -o-linear-gradient(bottom, #D6D6D6 29%, #F5F5F5 82%);
-	background-image: -moz-linear-gradient(bottom, #D6D6D6 29%, #F5F5F5 82%);
-	background-image: -webkit-linear-gradient(bottom, #D6D6D6 29%, #F5F5F5 82%);
-	background-image: -ms-linear-gradient(bottom, #D6D6D6 29%, #F5F5F5 82%);
-
-	background-image: -webkit-gradient(
-		linear,
-		left bottom,
-		left top,
-		color-stop(0.29, #D6D6D6),
-		color-stop(0.82, #F5F5F5)
-	);
+	background-color: #F5F5F5;
 
 }
 
-.pluginLog{
+div > .pluginLog{
 	float: right;
 }
 
-.pluginRemove {
+div > .pluginRemove {
     float: right;
 }
 
@@ -42,11 +30,23 @@
 }
 
 .pluginGroup{
-    border-radius: 2px 2px 2px 2px;
-    border-style: solid;
-    border-width: 1px;
-    margin: 6px;
-    margin-top: 10px;
+    border-radius: 4px;
+    border: 1px solid #E3E3E3;
+    margin: 20px 0 10px 0;
+}
+
+.plugin-controls {
+  margin: 0 0 0 12px;
+}
+
+#major_blocks .pluginGroup {
+    border: none;
+    margin: 0;
+}
+
+#major_blocks .pluginGroup .section {
+    border-radius: 4px;
+    border-color: #E3E3E3;
 }
 
 .pluginGroupHeadInner{
@@ -60,11 +60,6 @@
 #pluginStatusTable{
 	margin-top: 20px;
 }
-
-.pluginState{
-	float: right;
-}
-
 
 #barcodes tr:hover {
     background-color: #E5E7ED;
@@ -112,4 +107,14 @@ hr{
 
 #resultList {
     width: auto;
+}
+
+.majorNameRow .plugin_links a {
+    margin-left: 10px;
+    line-height: 48px;
+}
+
+#tabs .tab-content {
+    border-width: 1px 0 0 0;
+    padding: 20px 0 0 0;
 }

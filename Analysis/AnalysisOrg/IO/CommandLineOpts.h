@@ -61,6 +61,7 @@ struct RadioButtonOptions{
   bool col_flicker_correct_aggressive_set;
   bool bkg_exp_tail_fit_set;
   bool bkg_pca_dark_matter_set;
+  bool bkg_single_gauss_newton_set;
   RadioButtonOptions(){
     use_dud_reference_set = false;
     empty_well_normalization_set = false;
@@ -75,6 +76,7 @@ struct RadioButtonOptions{
     col_flicker_correct_aggressive_set = false;
     bkg_exp_tail_fit_set = false;
     bkg_pca_dark_matter_set = false;
+    bkg_single_gauss_newton_set = false;
   };
 };
 

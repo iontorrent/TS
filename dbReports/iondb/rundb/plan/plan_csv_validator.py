@@ -22,7 +22,7 @@ import simplejson
 
 
 class MyPlan:
-    def __init__(self, selectedTemplate):        
+    def __init__(self, selectedTemplate, selectedExperiment, selectedEAS):        
         if not selectedTemplate:
             self.planObj = None
             self.expObj = None
@@ -40,12 +40,13 @@ class MyPlan:
             self.planObj.planName = ""
             self.planObj.planExecuted = False                
 
-            self.expObj = copy.copy(selectedTemplate.experiment)
+            self.expObj = copy.copy(selectedExperiment)
             self.expObj.pk = None
             self.expObj.unique = None
             self.expObj.plan = None
 
-            self.easObj = copy.copy(selectedTemplate.experiment.get_EAS())
+            # copy EAS
+            self.easObj = copy.copy(selectedEAS)
             self.easObj.pk = None
             self.easObj.experiment = None
             self.easObj.isEditable = True
@@ -79,6 +80,10 @@ def validate_csv_plan(csvPlanDict):
     planDict = {}
 
     isToSkipRow = False
+
+    selectedTemplate = None
+    selectedExperiment = None
+    selectedEAS = None
     
     #skip this row if no values found (will not prohibit the rest of the files from upload
     skipIfEmptyList = [plan_csv_writer.COLUMN_TEMPLATE_NAME]
@@ -106,12 +111,18 @@ def validate_csv_plan(csvPlanDict):
 
     if templateName:
         selectedTemplate, errorMsg = _get_template(templateName)
-        if errorMsg:  
+
+        if selectedTemplate:
+            selectedExperiment = selectedTemplate.experiment
+            selectedEAS = selectedTemplate.experiment.get_EAS()
+        
+        if errorMsg:
             failed.append((plan_csv_writer.COLUMN_TEMPLATE_NAME, errorMsg))  
             return failed, planDict, rawPlanDict, isToSkipRow
 
-        planObj = _init_plan(selectedTemplate)
-    else:
+        planObj = _init_plan(selectedTemplate, selectedExperiment, selectedEAS)
+
+    else:        
         return failed, planDict, rawPlanDict, isToSkipRow
 
     errorMsg = _validate_sample_prep_kit(csvPlanDict.get(plan_csv_writer.COLUMN_SAMPLE_PREP_KIT), selectedTemplate, planObj)  
@@ -121,7 +132,7 @@ def validate_csv_plan(csvPlanDict):
     errorMsg = _validate_lib_kit(csvPlanDict.get(plan_csv_writer.COLUMN_LIBRARY_KIT), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_LIBRARY_KIT, errorMsg))
-        
+         
     errorMsg = _validate_template_kit(csvPlanDict.get(plan_csv_writer.COLUMN_TEMPLATING_KIT), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_TEMPLATING_KIT, errorMsg))
@@ -209,12 +220,13 @@ def validate_csv_plan(csvPlanDict):
     
     except:
         logger.exception(format_exc())
-        errorMsg = "Internal error while processing selected plugins info. " 
+        errorMsg = "Internal error while processing selected plugins info. " + format_exc()
         failed.append(("selectedPlugins", errorMsg))        
 
-    barcodeKitName = selectedTemplate.experiment.get_EAS().barcodeKitName
+    barcodeKitName = selectedEAS.barcodeKitName
     if barcodeKitName:
         errorMsg, barcodedSampleJson = _validate_barcodedSamples(csvPlanDict, selectedTemplate, barcodeKitName, planObj)
+
         if errorMsg:
             failed.append(("barcodedSample", errorMsg))
         else:            
@@ -231,7 +243,6 @@ def validate_csv_plan(csvPlanDict):
     #   errorMsg = _validate_IR_workflow_v1_x(csvPlanDict.get(plan_csv_writer.COLUMN_IR_V1_X_WORKFLOW), selectedTemplate, planObj, uploaderJson)
     #   if errorMsg:
     #       failed.append((plan_csv_writer.COLUMN_IR_V1_X_WORKFLOW, errorMsg))                        
-
     
     logger.debug("EXIT plan_csv_validator.validate_csv_plan() rawPlanDict=%s; " %(rawPlanDict))
     
@@ -245,18 +256,27 @@ def validate_csv_plan(csvPlanDict):
     return failed, planDict, rawPlanDict, isToSkipRow
 
 
-def _get_template(templateName):
+def _get_template(templateName):    
     templates = PlannedExperiment.objects.filter(planDisplayedName = templateName.strip(), isReusable=True).order_by("-date")
     
     if templates:
         return templates[0], None
     else:
+        #original template name could have unicode (e.g., trademark)
+        templates = PlannedExperiment.objects.filter(isReusable=True, isSystemDefault = False).order_by("-date")
+        if templates:
+            inputTemplateName = templateName.strip()
+            for template in templates:
+                templateDisplayedName = template.planDisplayedName.encode("ascii", "ignore")
+                if templateDisplayedName == inputTemplateName:
+                    return template, None
+
         logger.debug("plan_csv_validator._get_template() NO template found. ")       
         return None, "Template name: " + templateName + " cannot be found to create plans from"
 
 
-def _init_plan(selectedTemplate):
-    return MyPlan(selectedTemplate)
+def _init_plan(selectedTemplate, selectedExperiment, selectedEAS):
+    return MyPlan(selectedTemplate, selectedExperiment, selectedEAS)
 
 
 def _validate_sample_prep_kit(input, selectedTemplate, planObj):
@@ -344,8 +364,8 @@ def _validate_flows(input, selectedTemplate, planObj):
     if input:
         try:
             flowCount = int(input)
-            if (flowCount <= 0 or flowCount > 1000):
-                errorMsg = flowCount + " should be a positive whole number within range [1, 1000)."
+            if (flowCount <= 0 or flowCount > 2000):
+                errorMsg = flowCount + " should be a positive whole number within range [1, 2000)."
             else:
                 planObj.get_expObj().flows = flowCount
         except:
@@ -579,7 +599,7 @@ def _validate_sample(input, selectedTemplate, planObj):
 def _validate_barcodedSamples(input, selectedTemplate, barcodeKitName, planObj):
     errorMsg = None
     barcodedSampleJson = {}
-    
+        
     #{"bc10_noPE_sample3":{"26":"IonXpress_010"},"bc04_noPE_sample1":{"20":"IonXpress_004"},"bc08_noPE_sample2":{"24":"IonXpress_008"}}
     #20121122-new JSON format
     #{"bcSample1":{"barcodes":["IonXpress_001","IonXpress_002"]},"bcSample2":{"barcodes":["IonXpress_003"]}}
@@ -625,7 +645,7 @@ def _validate_barcodedSamples(input, selectedTemplate, barcodeKitName, planObj):
                                                "barcodes" : [barcode["id_str"]]
                                                }
 
-                                barcodedSampleJson[sample.strip()] = barcodeDict
+                                barcodedSampleJson[sample.strip()] = barcodeDict                                
     except:
         logger.exception(format_exc())  
         errorMsg = "Internal error during barcoded sample processing"

@@ -1,0 +1,302 @@
+<html>
+<head>
+	<script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+	
+	<style type="text/css">
+	#formwrap {
+		line-height: 2em;
+		background: #eef;
+		margin: 10px;
+		padding: 10px;
+	}
+
+	body {
+		font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+		font-size: 14px;
+	}
+	</style>
+
+	<script type='text/javascript'>
+		var extraCount = 1;
+		// barcode check.
+		var selectCode = 'Field %NUMNUM: <select name="select_dialog" id="select_dialog_id" onchange="report(this.value)"><option value="">Select option</option><option value="TSP_RUN_NAME">Run Name</option><option value="TSP_ANALYSIS_NAME">Report Name</option><option value="TSP_ANALYSIS_DATE">Report Date</option><option value="TSP_CHIPTYPE">Chip Type</option><option value="TSP_PGM_NAME">Sequencer Name</option><option value="TSP_SAMPLE">Sample ID</option><option value="OPT_BARCODE">Barcode Info. (if applicable)</option></select>, ';
+		var selectCodeDefault = 'Field 1: <select name="select_dialog" id="select_dialog_id" onchange="report(this.value)"><option value="">Select option</option><option value="TSP_RUN_NAME" selected="selected">Run Name</option><option value="TSP_ANALYSIS_NAME">Report Name</option><option value="TSP_ANALYSIS_DATE">Report Date</option><option value="TSP_CHIPTYPE">Chip Type</option><option value="TSP_PGM_NAME">Sequencer Name</option><option value="TSP_SAMPLE">Sample ID</option><option value="OPT_BARCODE">Barcode Info. (if applicable)</option></select>, ';
+		pluginGET = "";
+		
+		$(document).ready(function(){
+			$.ajax({
+			url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json",
+			dataType:"json",
+			type: "GET",
+			async: false,
+			success:function(data){
+				//get the plugin data
+				pluginGET = data;
+				
+				//delete the resource_uri
+				delete pluginGET.resource_uri;
+				
+				$.each(pluginGET.config, function(key,val){
+					//set the value of the html object
+					if (key == "sffCreate")
+					{
+						if (val == "on")
+						{
+							document.getElementById("sffCreate").checked = true;
+						}
+					}
+					if(key == "fastqCreate")
+					{
+						if (val == "on")
+						{
+							document.getElementById("fastqCreate").checked = true;
+						}
+					}
+					if (key == "vcCreate")
+					{
+						if (val == "on")
+						{
+							document.getElementById("vcCreate").checked = true;
+						}
+					}
+					if(key == "zipCreate")
+					{
+						if (val == "on")
+						{
+							document.getElementById("zipCreate").checked = true;
+						}
+					}
+					if(key == "delimiter_select")
+					{
+						document.getElementById("delimiter_select").value = val;
+					}
+					if (key == "select_dialog")
+					{
+						totalCode = "";
+						extraCount = 0
+						if (typeof(val) == "string")
+							val = new Array(val);
+						for (var valList in val)
+						{
+							extraCount = extraCount + 1;
+							addCode = selectCode.replace("%NUMNUM", parseInt(valList)+1);
+							addCode = addCode.replace('value="' + val[valList] + '"', 'value="' + val[valList] + '" selected="selected"')
+							totalCode += addCode;
+						}
+						$("#addloc").html(totalCode);
+						report("");
+					}
+				});
+			}
+		});
+		});
+		
+       //turn the html objects into json objects
+       $.fn.serializeObject = function(){
+        var o = {};
+        var a = this.serializeArray();
+
+        $.each(a, function() {
+         if (o[this.name] != null) {
+          if (!o[this.name].push) {
+           o[this.name] = [o[this.name]];
+          }
+
+          o[this.name].push(this.value || '');
+         } else {
+           o[this.name] = this.value || '';
+         }
+        });
+
+       return o;
+      };
+
+		// Note: I don't know if I'll end up using the option arg; keep it for now just in case.
+		function report(optGiven) {
+			// Avoid printing a delimiter too early.
+			var delimPrint = 0;
+			selectOptions = $('#bamform').serializeObject();
+			// I don't know why, but it just returns nothing if it isn't json and stringified first.
+			selectJSON = { "field" : selectOptions };
+			selectJSON = JSON.stringify(selectJSON["field"]["select_dialog"]);
+			selectJSON = selectJSON.replace("[","");
+			selectJSON = selectJSON.replace("]","");
+			selectJSON = selectJSON.split(",");
+			previewOut = "";
+			for (var val in selectJSON)
+			{
+				// Too many if statements but hey, it's just displaying a preview and it works.
+				processedVal = selectJSON[val].split('"').join('');
+				if (processedVal != '')
+				{
+					if (val != 0)
+					{
+						if (delimPrint == 1)
+						{
+							previewOut += document.getElementById("delimiter_select").value;
+						}
+						else
+						{
+							delimPrint = 1;
+						}
+					}
+					else
+					{
+						delimPrint = 1;
+					}
+					previewOut += processedVal;
+				}
+			}
+			previewOut += ".bam";
+			$("#previewplace").html(previewOut);
+		}
+		
+		$(function() {
+		$('#add_select').click(function() {
+			extraCount = extraCount + 1;
+			var totalCode = '';
+			// Get stringified JSON list of selected values.
+			selOpts = $('#bamform').serializeObject();
+			selJSON = { "field" : selOpts }
+			selJSON = JSON.stringify(selJSON["field"]["select_dialog"]);
+			selJSON = selJSON.replace("[","");
+			selJSON = selJSON.replace("]","");
+			selJSON = selJSON.split(",");
+			// Define a new array that can be accessed with int indices.
+			var structArr = new Array();
+			var ind = 0;
+			for (var val in selJSON)
+			{
+				structArr[ind] = selJSON[val];
+				ind = ind + 1;
+			}
+			for (var i=0;i<extraCount;i++)
+			{
+				addCode = selectCode.replace("%NUMNUM", i+1);
+				// It won't have an entry for every element, namely the newly-added one. Handle that.
+				if (structArr[i] != undefined)
+				{
+					// Select the previously selected option. Man, that was a bit messy.
+					selStr = structArr[i];
+					addCode = addCode.replace(selStr, selStr + ' selected="selected"');
+				}
+				totalCode += addCode;
+			}
+			$("#addloc").html(totalCode);
+			report("");
+		});
+		})
+		
+		$(function() {
+		$('#rem_select').click(function() {
+			// don't let users remove all fields
+			if (extraCount <= 1)
+				return;
+
+			extraCount = extraCount - 1;
+			var totalCode = '';
+			// Get stringified JSON list of selected values.
+			selOpts = $('#bamform').serializeObject();
+			selJSON = { "field" : selOpts }
+			selJSON = JSON.stringify(selJSON["field"]["select_dialog"]);
+			selJSON = selJSON.replace("[","");
+			selJSON = selJSON.replace("]","");
+			selJSON = selJSON.split(",");
+			// Define a new array that can be accessed with int indices.
+			var structArr = new Array();
+			var ind = 0;
+			for (var val in selJSON)
+			{
+				structArr[ind] = selJSON[val];
+				ind = ind + 1;
+			}
+			for (var i=0;i<extraCount;i++)
+			{
+				addCode = selectCode.replace("%NUMNUM", i+1);
+				if (structArr[i] != undefined)
+				{
+					// Select the previously selected option. Man, that was a bit messy.
+					selStr = structArr[i];
+					addCode = addCode.replace(selStr, selStr + ' selected="selected"');
+				}
+				totalCode += addCode;
+			}
+			$("#addloc").html(totalCode);
+			report("");
+		});
+		})
+
+		$(function() {
+		$('#def_select').click(function() {
+			extraCount = 1;
+			$("#addloc").html(selectCodeDefault);
+			report("");
+		});
+		})
+
+		$(function() {
+		$('#postbutton').click(function() {
+			obj = $('#bamform').serializeObject();
+			pluginGET.config = obj;
+			pluginAPIJSON = JSON.stringify(pluginGET);
+			pluginURL = "/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json"
+			
+			$.ajax({
+				type: 'PUT',
+				url: pluginURL,
+				contentType: "application/json; charset=utf-8",
+				success: function() { parent.$.fn.colorbox.close(); },
+				data: pluginAPIJSON,
+				dataType: "json"
+			});
+		});
+		})
+	</script>
+
+</head>
+<body>
+	<div id="formwrap" align="left">
+		<form id="bamform" name="bamform" align="left">
+			<h1>Output File Options</h1>
+			Create SFF?  <input type="checkbox" id="sffCreate" name="sffCreate" /><br>
+			Create FASTQ? <input type="checkbox" id="fastqCreate" name="fastqCreate" /><br>
+			Include Variant Caller Files (if available)? <input type="checkbox" id="vcCreate" name="vcCreate" /><br>
+			Zip results? <input type="checkbox" id="zipCreate" name="zipCreate" /><br>
+			<h1>Customize file names</h1>
+			<p>Delimiter selection:
+				<select name="delimiter_select" id="delimiter_select" onchange="report(this.value)">
+					<option value=".">.</option>
+					<option value="-">-</option>
+					<option value="_">_</option>
+				</select>
+			</p>
+			<span id="addloc">
+			Field 1: 
+				<select name="select_dialog" id="select_dialog" onchange="report(this.value)">
+					<option value="">Select option</option>
+					<option value="TSP_RUN_NAME">Run Name</option>
+					<option value="TSP_ANALYSIS_NAME">Report Name</option>
+					<option value="TSP_ANALYSIS_DATE">Report Date</option>
+					<option value="TSP_CHIPTYPE">Chip Type</option>
+					<option value="TSP_PGM_NAME">Sequencer Name</option>
+					<option value="TSP_SAMPLE">Sample ID</option>
+					<option value="OPT_BARCODE">Barcode Info. (if applicable)</option>
+				</select>
+			</span>
+		</form>
+		</p>
+		<input id="add_select" type="submit" value="Add another field...">
+		<input id="rem_select" type="submit" value="Remove last field...">
+		<input id="def_select" type="submit" value="Reset to default naming">
+		<br>
+		<h1>Example name string</h1>
+		<span id="previewplace"></span>
+		<br>
+		<br>
+		<input id="postbutton" type="submit" value="Save Configuration">
+		<br>
+		<div id="infoDiv" align="left">Note: if a barcoded run is not provided with at least one 'Barcode Info.' field, it will be prepended to the beginning of the file name.</div>
+		<br>
+	</div>
+</body>
+</html>

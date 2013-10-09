@@ -40,6 +40,7 @@
     function gotoFirst() {
       if (getNavState().canGotoFirst) {
         dataView.setPagingOptions({pageNum: 0});
+        $("#checkAll").attr("src","lifegrid/images/checkbox_empty.png");
       }
     }
 
@@ -47,6 +48,7 @@
       var state = getNavState();
       if (state.canGotoLast) {
         dataView.setPagingOptions({pageNum: state.lastPage});
+        $("#checkAll").attr("src","lifegrid/images/checkbox_empty.png");
       }
     }
 
@@ -54,6 +56,7 @@
       var state = getNavState();
       if (state.canGotoPrev) {
         dataView.setPagingOptions({pageNum: state.pagingInfo.pageNum - 1});
+        $("#checkAll").attr("src","lifegrid/images/checkbox_empty.png");
       }
     }
 
@@ -61,24 +64,26 @@
       var state = getNavState();
       if (state.canGotoNext) {
         dataView.setPagingOptions({pageNum: state.pagingInfo.pageNum + 1});
+        $("#checkAll").attr("src","lifegrid/images/checkbox_empty.png");
       }
     }
 
     function constructPagerUI() {
       $container.empty();
+      $('<span class="btn" id="export">Export Selected</span>').appendTo($container);
 
-      var bulbID = $container.attr('id')+'-settings-expanded';
+      //var bulbID = $container.attr('id')+'-settings-expanded';
       var $nav = $("<span class='slick-pager-nav' />").appendTo($container);
-      var $settings = $("<span class='slick-pager-settings' />").appendTo($container);
+      //var $settings = $("<span class='slick-pager-settings' />").appendTo($container);
       $status = $("<span class='slick-pager-status' />").appendTo($container);
 
-      $settings
-          .append("<span id='"+bulbID+"' style='display:none'>Show: <a data='-1'>Auto</a><a data=25>25</a><a data=50>50</a><a data=100>100</a><a data=0>All</a></span>");
+      //$settings
+      //    .append("<span id='"+bulbID+"' style='display:none'>Show: <a data='-1'>Auto</a><a data=25>25</a><a data=50>50</a><a data=100>100</a><a data=0>All</a></span>");
 
         var vp = grid.getViewport();
         setPageSize(20);
 
-        console.log("bugg");
+        /*
       $settings.find("a[data]").click(function (e) {
         var pagesize = $(e.target).attr("data");
         if (pagesize != undefined) {
@@ -90,6 +95,7 @@
           }
         }
       });
+      */
 
       var icon_prefix = "<span class='ui-state-default ui-corner-all ui-icon-container'><span class='ui-icon ";
       var icon_suffix = "' /></span>";
@@ -101,11 +107,13 @@
           .appendTo($nav);
       }
 
+        /*
       $(icon_prefix + "ui-icon-lightbulb" + icon_suffix)
           .click(function () {
             $("#"+bulbID).toggle()
           })
           .appendTo($settings);
+          */
 
       $(icon_prefix + "ui-icon-seek-first" + icon_suffix)
           .click(gotoFirst)
@@ -157,7 +165,7 @@
 
     init();
 
-    $(".slick-pager-settings").find(".ui-icon-lightbulb").attr('title','Toggle paging options.');
+    //$(".slick-pager-settings").find(".ui-icon-lightbulb").attr('title','Toggle paging options.');
   }
 
   // Slick.Controls.Pager

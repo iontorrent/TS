@@ -39,7 +39,7 @@
 
 #include <sys/time.h>
 #include <pthread.h>
-#include <semaphore.h>
+#include </usr/include/semaphore.h>
 
 #define DEBUG 0
 #define debug_print(fmt, ...) \

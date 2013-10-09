@@ -2,6 +2,9 @@
 #!/usr/bin/env python
 import os
 import statvfs
+import zipfile
+import os.path
+import subprocess
 
 from ion.utils.timeout import timeout
 
@@ -94,3 +97,73 @@ def getdiskusage(directory):
         return total
     # Returns size in MB
     return dir_size(directory)/(1024*1024)
+
+
+def get_common_prefix(files):
+    """For a list of files, a common path prefix and a list file names with
+    the prefix removed.
+
+    Returns a tuple (prefix, relative_files):
+        prefix: Longest common path to all files in the input. If input is a
+                single file, contains full file directory.  Empty string is
+                returned of there's no common prefix.
+        relative_files: String containing the relative paths of files, skipping
+                        the common prefix.
+    """
+    # Handle empty input
+    if not files or not any(files):
+        return '', []
+    # find the common prefix in the directory names.
+    directories = [os.path.dirname(f) for f in files]
+    prefix = os.path.commonprefix(directories)
+    start = len(prefix)
+    if all(f[start] == "/" for f in files):
+        start += 1
+    relative_files = [f[start:] for f in files]
+    return prefix, relative_files
+
+
+def valid_files(files):
+    black_list = [lambda f: "__MACOSX" in f]
+    absolute_paths = [os.path.isabs(d) for d in files]
+    if any(absolute_paths) and not all(absolute_paths):
+        raise ValueError("Archive contains a mix of absolute and relative paths.")
+    return [f for f in files if not any(reject(f) for reject in black_list)]
+
+
+def make_relative_directories(root, files):
+    directories = [os.path.dirname(f) for f in files]
+    for directory in directories:
+        path = os.path.join(root, directory)
+        if not os.path.exists(path):
+            os.makedirs(path)
+
+
+def unzip_archive(root, data):
+    zip_file = zipfile.ZipFile(data, 'r')
+    namelist = zip_file.namelist()
+    namelist = valid_files(namelist)
+    prefix, files = get_common_prefix(namelist)
+    make_relative_directories(root, files)
+    out_names = [(n, f) for n, f in zip(namelist, files) if
+                                                    os.path.basename(f) != '']
+    for key, out_name in out_names:
+        if os.path.basename(out_name) != "":
+            full_path = os.path.join(root, out_name)
+            contents = zip_file.open(key, 'r')
+            try:
+                output_file = open(full_path, 'wb')
+                output_file.write(contents.read())
+                output_file.close()
+            except IOError as err:
+                print("For zip's '%s', could not open '%s'" % (key, full_path))
+    return [f for n, f in out_names]
+
+
+def ismountpoint(directory):
+    # Call shell command to run mountpoint tool
+    cmd = ['/bin/mountpoint',directory]
+    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = p1.communicate()
+    return p1.returncode
+

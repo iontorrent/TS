@@ -15,7 +15,8 @@
     ie,
     dr,
     keySeq      = "",
-    basecaller  = c("treephaser-swan","dp-treephaser", "treephaser-adaptive")
+    basecaller  = c("treephaser-swan","dp-treephaser", "treephaser-adaptive"),
+    terminatorChemistryRun=0
   )
 }
 \arguments{
@@ -36,6 +37,9 @@
   \item{basecaller}{
     The variant of treePhaser to be used - options are "treephaser-swan" (the
     default), "dp-treephaser" and "treephaser-adaptive"
+  }
+  \item{terminatorChemistryRun}{
+    Switch to analyze a run with terminator chemistry.
   }
 }
 \value{

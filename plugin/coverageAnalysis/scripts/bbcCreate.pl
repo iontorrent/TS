@@ -114,11 +114,11 @@ loadBedRegions() if( $haveTargets );
 
 print STDERR "Analyzing forward and reverse read depths...\n" if( $logopt );
 
-my $samopt= ($nondupreads ? "-F 0x714" : "-F 0x314").($uniquereads ? " -Q 1" : "");
+my $samopt= ($nondupreads ? "-G 0x714" : "-G 0x314").($uniquereads ? " -Q 1" : "");
 my $fwdcov = "samtools depth $samopt \"$bamfile\" 2> /dev/null |";
 open(FWDCOV,$fwdcov) || die "Could not open forward coverage pipe '$fwdcov'.";
 
-$samopt= ($nondupreads ? "-F 0x704" : "-F 0x304 ").($uniquereads ? " -Q 1" : "");
+$samopt= ($nondupreads ? "-G 0x704" : "-G 0x304 ").($uniquereads ? " -Q 1" : "");
 my $bamcov = "samtools depth $samopt \"$bamfile\" 2> /dev/null |";
 open(BAMCOV,$bamcov) || die "Could not open total coverage pipe '$bamcov'.";
 
@@ -216,6 +216,11 @@ close(FWDCOV);
 close(BAMCOV);
 set_chrom("");
 close(BBCFILE);
+# assume if there were no reads then somethig was wrong with the bam file (samtools don't return error code)
+unless( $totalReads ) {
+  print STDERR "Error: BAM file missing, empty or badly formatted.\n";
+  exit 1;
+}
 if( $logopt )
 {
   print STDERR "Output $totalReads base reads to $bbcfile\n";

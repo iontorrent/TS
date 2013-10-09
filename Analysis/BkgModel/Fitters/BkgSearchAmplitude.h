@@ -66,7 +66,7 @@ class SearchAmplitude{
     SearchAmplitude();
     ~SearchAmplitude();
     // second method
-    void ProjectionSearchAmplitude(BeadTracker &my_beads, bool _rate_fit);
+    void ProjectionSearchAmplitude(BeadTracker &my_beads, bool _rate_fit, bool sampledOnly);
     void ProjectionSearchOneBead(bead_params *p);
 
     

@@ -1,12 +1,13 @@
 {% load url from future %}
+{% load static from staticfiles %}
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
     <title>Torrent Browser | Life Technologies</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
-    <link rel="stylesheet" href="/site_media/resources/bootstrap/css/bootstrap-responsive.min.css" >
+    <link rel="stylesheet" media="all" href="{% static "resources/bootstrap/css/bootstrap.min.css"%}" />
+    <link rel="stylesheet" href="{% static "resources/bootstrap/css/bootstrap-responsive.min.css"%}" >
     <script type="text/javascript">
     if (!window.console) {
         (function() {
@@ -21,15 +22,15 @@
     </script>
     <!--Generate the Torrent Browser CSS using less js-->
 
-    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.min.css" />
-    <script type="text/javascript" src="/site_media/resources/less/less-1.3.0.min.js"></script>
-    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+    <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-layout.min.css"%}" />
+    <script type="text/javascript" src="{% static "resources/less/less-1.3.0.min.js"%}"></script>
+    <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-styles.min.css"%}" />
 
-    <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
-    <script type="text/javascript" src="/site_media/resources/jquery/jquery.cookie.js"></script>
-    <script type="text/javascript" src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
-    <script type="text/javascript" src="/site_media/resources/bootstrap/js/bootstrap.min.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/tb.min.js"></script>
+    <script type="text/javascript" src="{% static "resources/jquery/jquery-1.8.2.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/jquery/jquery.cookie.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/tb.min.js"%}"></script>
     <style>
         .nav-pills > li > span {
             margin-bottom: 4px;
@@ -59,40 +60,59 @@
         .nav > li > span {
             display: block;
         }
+        .login {
+            background: transparent;
+        }
+        .login-form {
+            background-color: white;
+        }
+        .jumbo-brand-block {
+            position: absolute;
+            top: 140px;
+            left: 0px;
+            width: 100%;
+            height: 589px;
+            background-color: black;
+            z-index: -1;
+            background-image: url('/site_media/img/login_jumbo_block.jpg');
+            background-repeat: no-repeat;
+            background-position: center top;
+        }
     </style>
 </head>
 <body>
     <div class="login">
         <div class="container">
-            {% if prompt_chromeframe %}
-                <div class="row" style="margin-top:20px;">
-                    <div class="span 12">
-                        <div class="alert">
-                            <strong>Hello,</strong>
-                            <p>You now need to install this simple compatibility plugin: <a class="btn btn-primary" href="http://www.google.com/chromeframe" title="Get the Google Chrome Frame compatibility plugin">Google Chrome Frame</a></p>
-                            <p>
-                                This is because you're using Internet Explorer, which is only supported with this plugin.  
-                                Alternatively, you can also switch to Firefox or Chrome instead.  
-                                Downloading the Google Chrome Frame plugin for Internet Explorer or switching to Firefox or Chrome will 
-                                provide a higher quality, fully supported experience.
-                            </p>
-                        </div>
+            <noscript>
+                <style type="text/css">
+                    .login-form {
+                        display:none;
+                        backround-color: white;
+                        min-height: 100px;
+                    }
+                    .splash-workflow{
+                        display:none;
+                        height: 0px;
+                    }
+                    .alert{
+                        margin-top: 100px;
+                    }
+                </style>
+                <div class="noscriptmsg">
+                    <div class="alert alert-block">
+                        <h1>Warning!</h1>
+                        <h3>The Torrent Browser requires JavaScript. Please ensure that your browser has JavaScript enabled.</h3>
                     </div>
                 </div>
-            {% endif %}
+            </noscript>
             <div class="row login-form">
-                <div class="span4 logo"><img src="/site_media/resources/img/tb-logo3.png" border="0"></div>
+                <div class="span4 logo"><img src="{% static "img/iontorrent_logo.png"%}" border="0"></div>
                 <div class="span8" id="login_html">
 {% comment %}{% include 'rundb/login/login.html' %}{% endcomment %}
                 </div>
             </div><!-- row -->
-            
-            <div class="splash-workflow visible-desktop">
-                <div class="login-sample" data-select="#plan" data-href="{% url 'plans' %}"></div>
-                <div class="login-sequence" data-select="#monitor" data-href="{% url 'monitor' %}"></div>
-                <div class="login-report" data-select="#data" data-href="{% url 'data' %}"></div>
-                <div class="login-plugin" data-select="#export" data-href="{% url 'data' %}"></div>
-            </div>
+            <div style="height: 589px;"></div>
+            <div class="jumbo-brand-block"></div>
         </div><!-- container -->
         
         <div class="main-push"></div>
@@ -102,7 +122,7 @@
     <div class="footer">
         <div class="container">
             <div class="span2">
-                <img src="/site_media/resources/img/ion-logo2.png" border="0">
+                <img src="{% static "resources/img/ion-logo2.png"%}" border="0">
             </div>
             <div class="span8 pull-left">
                 <p>FOR RESEARCH USE ONLY. NOT INTENDED FOR ANY ANIMAL OR HUMAN THERAPEUTIC OR DIAGNOSTIC USE.</p>
@@ -141,13 +161,6 @@ $(document).ready(function(){
         $('#login_html').append(data.form);
         TB.utilities.form.focus();
         $('#login-form').submit(submitHandler);
-    });
-    
-    $('.splash-workflow div').hover(function(e){
-        $($(this).data('select')).fadeIn();
-    }, 
-    function(e){
-        $($(this).data('select')).hide();
     });
 });
 </script>

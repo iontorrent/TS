@@ -9,9 +9,11 @@ import glob
 import traceback
 import subprocess
 from ion.plugin import *
+ 
+
 
 class TorrentSuiteCloud(IonPlugin):
-    version = "3.6.58782"
+    version = "4.0-r%s" % filter(str.isdigit,"$Revision: 72612 $")
     DEBUG = False
     author = "bernard.puc@lifetech.com"
 
@@ -38,6 +40,9 @@ class TorrentSuiteCloud(IonPlugin):
         ],
         "4":[
             'avgNukeTrace_*.txt',
+            'analysis_return_code.txt',
+            'processParameters.txt',
+            'MD5SUMS',
         ],
     }
 
@@ -116,16 +121,12 @@ class TorrentSuiteCloud(IonPlugin):
         for k,a in self.wells_files.iteritems():
             for filename in a:
                 filename = os.path.join(sigproc_dir,filename)
-                self.set_upload_status(k,filename)
-                destination_path = os.path.join(upload_path)
-                cmd = 'pscp -pw %s %s %s@%s:%s' % (self.user_password,filename,self.user_name,self.server_ip,destination_path)
-                if self.DEBUG: print "Execute: %s" % cmd
-                p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
-                stdout, stderr = p1.communicate()
-                if p1.returncode == 0:
-                    print(stdout)
+                if not os.path.exists(filename):
+                    print ("Does Not Exist: %s" % (filename))
                 else:
-                    raise Exception(stderr)
+                    self.set_upload_status(k,filename)
+                    destination_path = os.path.join(upload_path)
+                    self.file_transport_rsync(filename,destination_path)
 
         for k,a in sorted(self.sigproc_files.iteritems(), key=lambda k: int(k[0])):
             for file in a:
@@ -140,16 +141,12 @@ class TorrentSuiteCloud(IonPlugin):
                         destination_path = os.path.join(upload_path,file)
                     else:
                         destination_path = os.path.join(upload_path)
-                    self.set_upload_status(k,filename)
-                    cmd = 'pscp -pw %s %s %s@%s:%s' % (self.user_password,filename,self.user_name,self.server_ip,destination_path)
-                    if self.DEBUG: print "Execute: %s" % cmd
-                    p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
-                    stdout, stderr = p1.communicate()
-                    if p1.returncode == 0:
-                        print(stdout)
+                        
+                    if not os.path.exists(filename):
+                        print ("Does Not Exist: %s" % (filename))
                     else:
-                        raise Exception(stderr)
-
+                        self.set_upload_status(k,filename)
+                        self.file_transport_rsync(filename,destination_path)
 
     def copy_explog(self):
         print ("Function: %s()" % sys._getframe().f_code.co_name)
@@ -180,31 +177,13 @@ class TorrentSuiteCloud(IonPlugin):
                         filename = from_pgm_zip(self.results_dir)
                     except:
                         print traceback.format_exc()
-        self.set_upload_status("5",filename)    # Hardcoded status for status page
-        destination_path = os.path.join(self.upload_path)
-        cmd = 'pscp -pw %s %s %s@%s:%s' % (self.user_password,filename,self.user_name,self.server_ip,destination_path)
-        if self.DEBUG: print "Execute: %s" % cmd
-        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
-        stdout, stderr = p1.communicate()
-        if p1.returncode == 0:
-            print(stdout)
+                        
+        if not os.path.exists(filename):
+            print ("Does Not Exist: explog.txt")
         else:
-            raise Exception(stderr)
-
-    def bonk_analysis_return_code(self):
-        print ("Function: %s()" % sys._getframe().f_code.co_name)
-        '''We may need this file to exist, so create it in same directory as 1.wells.
-        This can be removed once the BlockTLScript.py is updated to no longer require the file'''
-        filename = "analysis_return_code.txt"
-        destination_dir = os.path.join(self.upload_path,"sigproc_results",filename)
-        cmd = 'sshpass -p %s ssh %s@%s \"echo 0 > %s\"' % (self.user_password,self.user_name,self.server_ip,destination_dir)
-        if self.DEBUG: print "Execute: %s" % cmd
-        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
-        stdout, stderr = p1.communicate()
-        if p1.returncode == 0:
-            print(stdout)
-        else:
-            raise Exception(stderr)
+            self.set_upload_status("5",filename)    # Hardcoded status for status page
+            destination_path = os.path.join(self.upload_path)
+            self.file_transport_rsync(filename,destination_path)
 
     def transfer_plan(self):
         print ("Function: %s()" % sys._getframe().f_code.co_name)
@@ -212,15 +191,7 @@ class TorrentSuiteCloud(IonPlugin):
         # write file with plan info
         with open(filename,'w') as f:
             json.dump(self.plan, f)
-
-        cmd = 'pscp -pw %s %s %s@%s:%s' % (self.user_password,filename,self.user_name,self.server_ip,self.upload_path)
-        if self.DEBUG: print "Execute: %s" % cmd
-        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
-        stdout, stderr = p1.communicate()
-        if p1.returncode == 0:
-            print(stdout)
-        else:
-            raise Exception(stderr)
+        self.file_transport_rsync(filename,self.upload_path)
 
     def transfer_pgm(self):
         print ("Function: %s()" % sys._getframe().f_code.co_name)
@@ -229,7 +200,7 @@ class TorrentSuiteCloud(IonPlugin):
         # Copy files
         self.copy_files(self.sigproc_dir,os.path.join(self.upload_path,"sigproc_results"))
         self.copy_explog()
-        self.bonk_analysis_return_code()
+        self.set_file_permissions()
 
         return
 
@@ -246,12 +217,59 @@ class TorrentSuiteCloud(IonPlugin):
             target_dir = os.path.join("onboard_results","sigproc_results",block_dir)
             self.create_upload_dir(target_dir)
             print "######\nINFO: processing %s (%d)\n######" % (block_dir,self.transferred_blocks)
-            self.copy_files(os.path.join(self.raw_data_dir,target_dir),os.path.join(self.upload_path,target_dir))
             sys.stdout.flush()
+            self.copy_files(os.path.join(self.raw_data_dir,target_dir),os.path.join(self.upload_path,target_dir))
         self.copy_files(os.path.join(self.raw_data_dir,"onboard_results","sigproc_results"),os.path.join(self.upload_path,"onboard_results","sigproc_results"))
         self.copy_explog()
-        self.bonk_analysis_return_code()
+        self.set_file_permissions()
 
+        return
+
+
+    def file_transport(self,filename,destination_path):
+        #NOTE: -p option does not preserve file permissions
+        cmd = 'pscp -pw %s %s %s@%s:%s' % (self.user_password,filename,self.user_name,self.server_ip,destination_path)
+        if self.DEBUG: print "Execute: %s" % cmd
+        sys.stdout.flush()
+        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
+        stdout, stderr = p1.communicate()
+        if p1.returncode == 0:
+            print(stdout)
+        else:
+            print(stderr)
+        sys.stdout.flush()
+        return
+
+
+    def file_transport_rsync(self, filename,destination_path):
+        print ("Function: %s()" % sys._getframe().f_code.co_name)
+        cmd = 'expect %s/scripts/rsync_connection.sh %s %s %s %s %s' % (self.plugin_dir,self.user_name,self.user_password,self.server_ip,filename,destination_path)
+        if self.DEBUG: print "Execute: %s" % cmd
+        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
+        stdout, stderr = p1.communicate()
+        if p1.returncode == 0:
+            print(stdout)
+        else:
+            print(stderr)
+        sys.stdout.flush()
+        return
+
+
+    def set_file_permissions(self):
+        print ("Function: %s()" % sys._getframe().f_code.co_name)
+        launchy = "chmod -R a+w %s" % self.upload_path
+        cmd = "sshpass -p %s ssh %s@%s \"cd %s; %s > stdout.log 2>&1\""% (self.user_password,
+                                                                          self.user_name,
+                                                                          self.server_ip,
+                                                                          self.upload_path,
+                                                                          launchy)
+        if self.DEBUG: print "Execute: %s" % cmd
+        p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,shell=True)
+        stdout, stderr = p1.communicate()
+        if p1.returncode == 0:
+            print(stdout)
+        else:
+            print(stderr)
         return
 
     def start_reanalysis(self):
@@ -349,18 +367,65 @@ class TorrentSuiteCloud(IonPlugin):
 
         return
 
+    # method to clear initial status view (if previously run, previous status is cleared)
+    def init_status_page(self, stat_line):
+        print ("Function: %s()" % sys._getframe().f_code.co_name)
+        stat_fs_path = os.path.join(self.output_dir, 'status_block.html')
+        try:
+            display_fs = open(stat_fs_path, "wb")
+        except:
+            print ("Could not write status report")
+            print traceback.format_exc()
+            raise
+
+        display_fs.write("<html><head>\n")
+        display_fs.write("<link href=\"/pluginMedia/IonCloud/bootstrap.min.css\" rel=\"stylesheet\">\n")
+        display_fs.write("</head><body>\n")
+        display_fs.write("<center>\n")
+        display_fs.write("<p> %s </p>" % stat_line)
+        display_fs.write("</center></body></html>\n")
+        display_fs.close()
+
+        return
+
+    def plugin_not_configured_error(self):
+        print ("Function: %s()" % sys._getframe().f_code.co_name)
+        #print report
+        stat_fs_path = os.path.join(self.output_dir, 'status_block.html')
+        try:
+            display_fs = open(stat_fs_path, "wb")
+        except:
+            print ("Could not write status report")
+            print traceback.format_exc()
+            raise
+
+        display_fs.write("<html><head>\n")
+        display_fs.write("<link href=\"/pluginMedia/IonCloud/bootstrap.min.css\" rel=\"stylesheet\">\n")
+        display_fs.write("</head><body>\n")
+        display_fs.write("<center>\n")
+        display_fs.write("<p> %s </p>" % "PLUGIN IS NOT CONFIGURED.")
+        display_fs.write("<p> %s </p>" % "Run the global configuration for this plugin from the <a href=\"/configure/plugins\" target=\"_blank\">Plugins page</a>.")
+        display_fs.write("</center></body></html>\n")
+        display_fs.close()
+
+
+
     # main method of plugin execution
     def launch(self, data=None):
 
         try:
             # Start-up activities (from old launch.sh)
             #clean up old keys just in case user has brought down the vm and then spun it up again and want to avoid ssh warning
-            if os.path.exists(os.path.expanduser('~/.ssh/known_hosts')):
-                os.unlink(os.path.expanduser('~/.ssh/known_hosts'))
+            #if os.path.exists(os.path.expanduser('~/.ssh/known_hosts')):
+            #    os.unlink(os.path.expanduser('~/.ssh/known_hosts'))
+            #if os.path.exists(os.path.expanduser('~/.putty/sshhostkeys')):
+            #    os.unlink(os.path.expanduser('~/.putty/sshhostkeys'))
+            # FST-783: user ionian's ssh keys get wiped out - not good if other plugins setup ssh keys.
 
-            if os.path.exists(os.path.expanduser('~/.putty/sshhostkeys')):
-                os.unlink(os.path.expanduser('~/.putty/sshhostkeys'))
-
+            # Other class variables
+            self.total_blocks = None
+            self.transferred_blocks = None
+            self.is_proton = False
 
             # Gather variables
             with open('startplugin.json', 'r') as fh:
@@ -374,17 +439,24 @@ class TorrentSuiteCloud(IonPlugin):
                 self.sigproc_dir     = spj['runinfo']['sigproc_dir']
                 self.analysis_dir    = spj['runinfo']['analysis_dir']
                 self.plugin_dir      = spj['runinfo']['plugin_dir']
-                self.server_ip       = spj['pluginconfig']['ip']
-                self.user_name       = spj['pluginconfig']['user_name']
-                self.user_password   = spj['pluginconfig']['user_password']
+                try:
+                    self.server_ip       = spj['pluginconfig']['ip']
+                    self.user_name       = spj['pluginconfig']['user_name']
+                    self.user_password   = spj['pluginconfig']['user_password']
+                    upload_path_local    = spj['pluginconfig']['upload_path']
+                    if self.server_ip == "" or self.user_name == "" or self.user_password == "" or upload_path_local == "":
+                        raise Exception()
+                except:
+                    # If these fail, then plugin is not configured
+                    self.plugin_not_configured_error()
+                    return True
+
                 self.upload_path     = os.path.join(spj['pluginconfig']['upload_path'],self.results_dir_base+'_foreign')
                 self.thumbnail_only  = spj['pluginconfig'].get('thumbnailonly', 'off')
                 self.plan            = spj.get('plan','')
 
-            # Other class variables
-            self.total_blocks = None
-            self.transferred_blocks = None
-            self.is_proton = False
+            # Initialize output status page
+            self.init_status_page("Hold on...")
 
             print("=====\nParameters used in this plugin:\n")
             print("plugin_name = %s" % self.plugin_name)
@@ -423,7 +495,7 @@ class TorrentSuiteCloud(IonPlugin):
             self.show_standard_status("Starting")
 
             # Determine Dataset Type
-            if self.chipType in ['900','fubar']:
+            if self.chipType in ['900','fubar'] or self.chipType.startswith('P'):
                 self.is_proton = True
             else:
                 self.is_proton = False

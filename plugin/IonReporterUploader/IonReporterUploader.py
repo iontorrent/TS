@@ -16,22 +16,29 @@ import ast
 import shutil
 from ion.plugin import *
 
- 
-####### 
-###  global variables 
+import extend
+
+
+#######
+###  global variables   
 pluginName = ""
 plugin_dir = ""
- 
+
 class IonReporterUploader(IonPlugin):
-	version = "3.6.2-r%s" % filter(str.isdigit,"$Revision: 62833 $")
+	version = "4.0-r%s" % filter(str.isdigit,"$Revision: 72326 $")
 	runtypes = [ RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE ]
 	runlevels = [ RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST ]
 	features = [ Feature.EXPORT ]
+
+	#JIRA [TS-7563]
+	allow_autorun = False
 
 	global pluginName , plugin_dir, launchOption, commonScratchDir
 	pluginName = "IonReporterUploader"
 	plugin_dir = os.getenv("RUNINFO__PLUGIN_DIR") or os.path.dirname(__file__)
 	launchOption = "upload_and_launch"
+	extend.setPluginName(pluginName)
+	extend.setPluginDir(plugin_dir)
 
 	#print "plugin dir is " + os.getenv("RUNINFO__PLUGIN_DIR") 
 	#print "plugin name is " + os.getenv("RUNINFO__PLUGIN_NAME") 
@@ -39,12 +46,14 @@ class IonReporterUploader(IonPlugin):
 
 	def pre_launch(self):
 		return True
-	
+
 	#Launches script with parameter jsonfilename. Assumes data is a dict
 	def launch(self,data=None):
 		global launchOption, commonScratchDir
 		print pluginName + ".py launch()"
-		data = open(os.getenv("RESULTS_DIR") + "/startplugin.json").read()
+		startpluginjsonfile = os.getenv("RESULTS_DIR") + "/startplugin.json"
+		print "input file is " + startpluginjsonfile
+		data = open(startpluginjsonfile).read()
 		commonScratchDir = self.get_commonScratchDir(data)
 		runtype = self.get_runinfo("run_type", data)
 		runlevel = self.get_runinfo("runlevel", data)
@@ -162,23 +171,7 @@ class IonReporterUploader(IonPlugin):
 		d = json.loads(f.read())
 		objects = d["objects"]
 		config = objects[0]["config"]
-		server = config["server"]
-		token = config["token"]
-		protocol = config["protocol"]
-		port = config["port"]
-		# Srikanth Jandhyala 
-		try:
-			url = protocol + "://"+server+":"+port+"/grws_1_2/data/versionList/"
-			versions_list_req = urllib2.Request(url)
-			versions_list_req.add_header("Authorization",token)
-			versions_list_fp = urllib2.urlopen(versions_list_req, None,90)
-			versions_list_data = versions_list_fp.read().strip()
-		except urllib2.HTTPError, e:
-			raise Exception("Error Code " + str(e.code))
-		except urllib2.URLError, e:
-			raise Exception("Error Reason " + e.reason.args[1])
-
-		return versions_list_data
+		return extend.get_versions({"irAccount":config})
 
 
 	# Returns Sample Relationship Fields used in TS 3.0. First invokes java program to save workflows to JSON file. Then reads.
@@ -192,65 +185,17 @@ class IonReporterUploader(IonPlugin):
 		if not objects : 
 			return None
 		config = objects[0]["config"]
-		server = config["server"]
-		token = config["token"]
-		protocol = config["protocol"]
-		port = config["port"]
-		version = config["version"]
-		version = version.split("IR")[1]
+		return {"status": "false", "error": ""}
 
-		try:
-			url = protocol + "://"+server+":"+port+"/grws_1_2/data/workflowList/"
-			sample_relationship_req = urllib2.Request(url)
-			sample_relationship_req.add_header("Authorization",token)
-			sample_relationship_req.add_header("Version", version)
-
-			sample_relationship_fp = urllib2.urlopen(sample_relationship_req,None,90)
-			sample_relationship_data = sample_relationship_fp.read().strip()
-		except urllib2.HTTPError, e:
-				raise Exception("Error Code " + str(e.code))
-		except urllib2.URLError, e:
-			raise Exception(" Error Reason " + e.reason.args[1])
-
-		# Srikanth Jandhyala
-		columnsMapStr = sample_relationship_data.strip()
-		columnsMapList = eval(columnsMapStr)
-
-		sampleRelationshipDict = {}
-		sampleRelationshipDict["column-map"] = columnsMapList
-		sampleRelationshipDict["columns"] = []
-
-		genderDict = {"Name":"Gender", "order":"1", "Type":"list", "ValueType":"String","Values":["Male","Female","Unknown"]}
-		workflowDict = {"Name":"Workflow", "order":"2", "Type":"list", "ValueType":"String"}
-		relationshipTypeDict = {"Name":"RelationshipType", "Order":"3", "Type":"list","ValueType": "String", "Values":["Self","Tumor_Normal","Sample_Control","Trio"]}
-		setIDDict = {"Name":"SetID", "Order":"4", "Type":"input", "ValueType":"Integer"}
-		relationDict = {"Name": "Relation", "Order":"5","Type":"list","ValueType":"String","Values":["Sample", "Control","Tumor","Normal","Father","Mother","Self"]}
-
-		workflowDictValues = []
-		for entry in columnsMapList:
-			workflowName = entry["Workflow"]
-			workflowDictValues.append(workflowName)
-		workflowDict["Values"] = workflowDictValues
-
-		sampleRelationshipDict["columns"].append(genderDict)
-		sampleRelationshipDict["columns"].append(workflowDict)
-		sampleRelationshipDict["columns"].append(relationshipTypeDict)
-		sampleRelationshipDict["columns"].append(setIDDict)
-		sampleRelationshipDict["columns"].append(relationDict)
-
-		restrictionRulesList = []
-		#restrictionRulesList.append({"For":{"Name": "RelationShipType", "Value":"Self"}, "Disabled":{"Name":"SetID"}})
-		restrictionRulesList.append({"For":{"Name": "RelationShipType", "Value":"Self"}, "Disabled":{"Name":"Relation"}})
-		restrictionRulesList.append({"For":{"Name": "RelationshipType", "Value":"Tumor_Normal"}, "Valid":{"Name":"Relation", "Values":["Tumor", "Normal"]}})
-		restrictionRulesList.append({"For":{"Name": "RelationshipType", "Value":"Sample_Control"}, "Valid":{"Name":"Relation", "Values":["Sample", "Control"]}})
-		restrictionRulesList.append({"For":{"Name": "RelationshipType", "Value":"Trio"}, "Valid":{"Name":"Relation", "Values":["Father", "Mother", "Self"]}})
-
-		restrictionRulesList.append({"For":{"Name": "ApplicationType", "Value":"Tumor Normal Sequencing"}, "Valid":{"Name":"RelationshipType", "Values":["Tumor_Normal"]}})
-		restrictionRulesList.append({"For":{"Name": "ApplicationType", "Value":"Paired Sample Ampliseq Sequencing"}, "Valid":{"Name":"RelationshipType", "Values":["Sample_Control"]}})
-		restrictionRulesList.append({"For":{"Name": "ApplicationType", "Value":"Genetic Disease Screening"}, "Valid":{"Name":"RelationshipType", "Values":["Trio"]}})
-		sampleRelationshipDict["restrictionRules"] = restrictionRulesList
-		#print sampleRelationshipDict
-		return sampleRelationshipDict
+	    #return extend.getUserInput({"irAccount":config})
+		#return extend.get_versions({"irAccount":config})
+		#return extend.authCheck({"irAccount":config})
+		#return extend.getWorkflowList({"irAccount":config})
+		#return extend.getUserDataUploadPath({"irAccount":config})
+		#return extend.sampleExistsOnIR({"sampleName":"Sample_100","irAccount":config})        # always returning false?
+		#return extend.getUserDetails({"userid":"vipinchandran_n@persistent.co.in","password":"123456","irAccount":config})
+		#return extend.validateUserInput({"userInput":{},"irAccount":config})
+		#return extend.getWorkflowCreationLandingPageURL({"irAccount":config})
 
 
 	def get_commonScratchDir(self,data):
@@ -274,7 +219,7 @@ class IonReporterUploader(IonPlugin):
 		submissionfileWriter.write(str(newCount))
 		submissionfileWriter.close()
                 return newCount
-		
+	
 	# Returns timestamp from system
 	def get_timestamp(self):
 		now = datetime.datetime.now()

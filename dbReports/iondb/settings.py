@@ -1,4 +1,4 @@
-# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 # Django settings for iondb project.
 
 from os import path
@@ -20,7 +20,7 @@ TEMPLATE_DEBUG = DEBUG
 
 # This is the URL for the AmpliSeq website
 AMPLISEQ_URL = "https://ampliseq.com/"
-
+NEWS_FEED = "http://ionupdates.com/news/ion_news_feed.xml"
 
 # Set ADMINS in local_settings
 ADMINS = ()
@@ -84,22 +84,29 @@ USE_I18N = False
 # calendars according to the current locale.
 USE_L10N = False
 
-# Absolute path to the directory that holds media.
-# Example: "/home/media/media.lawrence.com/"
-MEDIA_ROOT = ((TEST_INSTALL and path.join(LOCALPATH, "media"))
-              or '/opt/ion/iondb/media/')
+# Absolute filesystem path to the directory that will hold user-uploaded files.
+# Example: "/home/media/media.lawrence.com/media/"
+MEDIA_ROOT = ''
 
 # URL that handles the media served from MEDIA_ROOT. Make sure to use a
-# trailing slash if there is a path component (optional in other cases).
-# Examples: "http://media.lawrence.com", "http://example.com/media/"
+# trailing slash.
+# Examples: "http://media.lawrence.com/media/", "http://example.com/media/"
 MEDIA_URL = ''
 
-# URL prefix for admin media -- CSS, JavaScript and images. Make sure to use a
-# trailing slash.
-# Examples: "http://foo.com/media/", "/media/".
-#ADMIN_MEDIA_PREFIX = '/media/'
-STATIC_URL = '/media/'
-STATIC_ROOT = '/var/www/media'
+# Absolute path to the directory static files should be collected to.
+# Don't put anything in this directory yourself; store your static files
+# in apps' "static/" subdirectories and in STATICFILES_DIRS.
+# Example: "/home/media/media.lawrence.com/static/"
+STATIC_ROOT = '/var/www/site_media'
+
+# URL prefix for static files.
+# Example: "http://media.lawrence.com/static/"
+STATIC_URL = '/site_media/'
+
+# Additional locations of static files
+STATICFILES_DIRS = (
+    path.join(LOCALPATH, "media"),
+)
 
 # List of finder classes that know how to find static files in
 # various locations.
@@ -108,6 +115,8 @@ STATICFILES_FINDERS = (
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 #    'django.contrib.staticfiles.finders.DefaultStorageFinder',
 )
+# Generate static paths with cache busting md5 names
+STATICFILES_STORAGE='django.contrib.staticfiles.storage.CachedStaticFilesStorage'
 
 # Make this unique, and don't share it with anybody.
 SECRET_KEY = 'mlnpl3nkj5(iu!517y%pr=gbcyi=d$^la)px-u_&i#u8hn0o@$'
@@ -193,6 +202,7 @@ CELERY_IMPORTS = (
     "iondb.rundb.data.backfill_tasks",
     "iondb.rundb.session_cleanup.tasks",
     "iondb.rundb.data.data_management",
+    "iondb.rundb.data.data_import",
 )
 
 # Allow tasks the generous run-time of six hours before they're killed.
@@ -308,6 +318,7 @@ DRMAA_LIBRARY_PATH = "/usr/lib/libdrmaa.so.1.0"
 
 TMAP_VERSION = dj_config.get_tmap_version()
 TMAP_DIR = '/results/referenceLibrary/%s/' % TMAP_VERSION
+TMAP_DISABLED_DIR = '/results/referenceLibrary/disabled/%s/' % TMAP_VERSION
 TEMP_PATH = "/results/referenceLibrary/temp/"
 PLUGIN_PATH = "/results/plugins/"
 
@@ -362,6 +373,8 @@ CACHES = {
         'LOCATION': '127.0.0.1:11211'
     }
 }
+
+ALLOWED_HOSTS = ['*']
 
 # import from the local settings file
 try:

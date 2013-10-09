@@ -1,7 +1,7 @@
 (function($) {    
     if ($.fn.modalmanager) {
         $.fn.modal.defaults = {
-            keyboard: false, 
+            keyboard: true, 
             backdrop: 'static',
             loading: false,
             show: true,
@@ -19,7 +19,7 @@
     } else {
         $.fn.modal.defaults = {
               backdrop: 'static'
-            , keyboard: false
+            , keyboard: true
             , show: true
         }
     }

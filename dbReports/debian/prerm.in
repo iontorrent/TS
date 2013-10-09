@@ -21,7 +21,7 @@ case "$1" in
 	    #--- Remove symbolic links	---#
 	    rm -f /var/www/output
         rm -rf /var/www/media
-        rm -f /var/www/site_media
+        rm -rf /var/www/site_media
         rm -f /results/analysis/output/tmap-*
         rm -f /results/analysis/output/disabled/tmap-*
     fi

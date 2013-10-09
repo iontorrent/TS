@@ -10,6 +10,8 @@ import logging
 import json
 import base64
 import httplib2
+import tempfile
+import zipfile
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render_to_response, get_object_or_404
@@ -21,19 +23,19 @@ from django.core import urlresolvers
 from iondb.rundb.ajax import render_to_json
 from iondb.anaserve import client
 from iondb.rundb.forms import EditReferenceGenome
-from iondb.rundb.models import ReferenceGenome, ContentUpload, DownloadMonitor
+from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor
 from iondb.rundb import tasks
 from iondb.rundb.tasks import build_tmap_index
 from iondb.rundb.configure.util import plupload_file_upload
+from iondb.utils import files as file_utils
 
 logger = logging.getLogger(__name__)
 
 JOBSERVER_HOST = "127.0.0.1"
-REFERENCE_LIBRARY_TEMP_DIR = "/results/referenceLibrary/temp/"
 
 
 def file_upload(request):
-    return plupload_file_upload(request, REFERENCE_LIBRARY_TEMP_DIR)
+    return plupload_file_upload(request, settings.TEMP_PATH)
 
 
 @login_required
@@ -116,21 +118,14 @@ def _read_genome_info(info_path):
     here we will find and return that as a string
     if False is returned the genome can be considered broken
     """
-
     try:
-        genome_info = open(info_path).readlines()
-
         #build a dict with the values from the info.txt
-        genome_dict = {"genome_name": False, "genome_version": False, "index_version": False}
-        for line in genome_info:
+        genome_dict = {"genome_name": None, "genome_version": None, "index_version": None}
+        for line in open(info_path):
             line = line.strip().split("\t")
-            try:
-                genome_dict[line[0]] = line[1]
-            except IndexError:
-                genome_dict = False
-                return genome_dict
-    except IOError:
-        genome_dict = False
+            genome_dict[line[0]] = line[1]
+    except (IOError, IndexError):
+        genome_dict = {}
 
     return genome_dict
 
@@ -143,19 +138,15 @@ def _genome_get_fasta(pk):
 
     try:
         rg = ReferenceGenome.objects.get(pk=pk)
-    except:
+    except Exception as err:
+        logger.exception("Error reading finding genome_fasta path")
         return False
 
     genome_fasta = os.path.join(rg.reference_path, rg.short_name + ".fasta")
-
-    size = False
-
-    try:
-        os.path.exists(genome_fasta)
+    size = None
+    if os.path.exists(genome_fasta):
         size = os.path.getsize(genome_fasta)
-    except IOError:
-        genome_fasta = False
-    except os.error:
+    else:
         genome_fasta = False
 
     return genome_fasta, size
@@ -221,15 +212,9 @@ def edit_genome(request, pk_or_name):
 
             #Update the reference path
             if rg.enabled:
-                enabled_path = os.path.join(settings.TMAP_DIR, rg.short_name)
                 rg.enable_genome()
             else:
-                base_path = os.path.split(os.path.split(rg.reference_path)[0])[0]
-                enabled_path = os.path.join(base_path, "disabled", rg.index_version, rg.short_name)
                 rg.disable_genome()
-
-            rg.reference_path = enabled_path
-
             rg.save()
 
             url = urlresolvers.reverse("configure_references")
@@ -257,7 +242,7 @@ def edit_genome(request, pk_or_name):
         temp.fields['genome_key'].initial = rg.pk
         temp.fields['index_version'].initial = rg.index_version
 
-        genome_dict = _read_genome_info(rg.info_text())
+        genome_dict = _read_genome_info(rg.info_text()) or {}
         genome_fasta, genome_size = _genome_get_fasta(rg.pk)
 
         verbose_error = _verbose_error_trim(rg.verbose_error)
@@ -332,7 +317,6 @@ def search_for_genomes():
             libs = os.listdir(os.path.join(ref_dir, lib_version))
             for lib in libs:
                 genome_info_text = os.path.join(ref_dir, lib_version, lib, lib + ".info.txt")
-                logger.debug("Parsing reference genome info %s" % genome_info_text)
                 genome_dict = _read_genome_info(genome_info_text)
                 #TODO: we have to take into account the genomes that are queue for creation of in creation
 
@@ -342,15 +326,14 @@ def search_for_genomes():
                         short_name=lib).order_by("-index_version")[:1]
                     if existing_reference:
                         rg = existing_reference[0]
-                        logger.debug("Found existing genome %s id=%d index=%s" % (
-                            str(rg), rg.id, rg.index_version))
                         if rg.index_version != genome_dict["index_version"]:
-                            logger.debug("Updating genome status to 'found'")
+                            logger.debug("Updating genome status to 'found' for %s id=%d index=%s" % (
+                            str(rg), rg.id, rg.index_version))
                             rg.status = "found"
                             rg = set_common(rg, genome_dict, ref_dir, lib)
                             rg.save()
                     else:
-                        logger.debug("Found new genome %s index=%s" % (
+                        logger.info("Found new genome %s index=%s" % (
                             lib, genome_dict["genome_version"]))
                         #the reference was not found, add it to the db
                         rg = ReferenceGenome()
@@ -372,12 +355,11 @@ def search_for_genomes():
 
 @login_required
 def new_genome(request):
-    """This is the page to create a new genome. The XML-RPC server is ionJobServer.
+    """This is the page to create a new genome. 
     """
 
     if request.method == "POST":
         # parse the data sent in
-
         #required
         name = request.POST.get('name', False)
         short_name = request.POST.get('short_name', False)
@@ -390,10 +372,7 @@ def new_genome(request):
 
         #URL download
         url = request.POST.get('url', False)
-
-        error_status = ""
-        reference_path = REFERENCE_LIBRARY_TEMP_DIR + fasta
-
+        reference_path = os.path.join(settings.TEMP_PATH, fasta)
         why_delete = ""
 
         #if any of those were false send back a failed message
@@ -418,13 +397,27 @@ def new_genome(request):
 
             if not (fasta.lower().endswith(".fasta") or fasta.lower().endswith(".zip")):
                 why_delete = "The file you uploaded does not have a .fasta or .zip extension.  It must be a plain text fasta file or a Zip compressed fasta."
+        is_zip = zipfile.is_zipfile(reference_path)
+        if is_zip:
+            zip_file = zipfile.ZipFile(reference_path, 'r')
+            files = zip_file.namelist()
+            zip_file.close()
+        else:
+            files = [fasta]
+        fasta_files = filter(lambda x: x.endswith('.fa') or x.endswith('.fasta'), files)
 
-            if why_delete:
-                try:
-                    os.remove(reference_path)
-                except OSError:
-                    why_delete += " The FASTA file could not be deleted."
-                return render_to_json({"status": why_delete, "error": True})
+        if len(fasta_files) != 1:
+            why_delete = "Error: upload must contain exactly one fasta file"
+        else:
+            target_fasta_file = fasta_files[0]
+
+        if why_delete:
+            try:
+                os.remove(reference_path)
+            except OSError:
+                why_delete += " The FASTA file could not be deleted."
+            logger.warning("User uploaded bad fasta file: " + str(why_delete))
+            return render_to_json({"status": why_delete, "error": True})
 
         #Make an genome ref object
         if ReferenceGenome.objects.filter(short_name=short_name, index_version=settings.TMAP_VERSION):
@@ -434,42 +427,41 @@ def new_genome(request):
         ref_genome.name = name
         ref_genome.short_name = short_name
         ref_genome.version = version
-        ref_genome.date = datetime.datetime.now()
         ref_genome.notes = notes
-        ref_genome.status = "queued"
+        ref_genome.status = "preprocessing"
         ref_genome.enabled = False
         ref_genome.index_version = settings.TMAP_VERSION
-
-        #before the object is saved we should ping the xml-rpc server to see if it is alive.
-        try:
-            conn = client.connect(JOBSERVER_HOST, settings.JOBSERVER_PORT)
-            #just check uptime to make sure the call does not fail
-            conn.uptime()
-            logger.debug('Connected to ionJobserver process.')
-        except (socket.error, xmlrpclib.Fault):
-            return render_to_json({"status": "Unable to connect to ionJobserver process.  You may need to restart ionJobserver", "error": True})
-
-        #if the above didn't fail then we can save the object
-        #this object must be saved before the tmap call is made
         ref_genome.save()
-        logger.debug('Saved ReferenceGenome %s' % ref_genome.__dict__)
+        logger.debug("Created new reference: %d/%s" % (ref_genome.pk, ref_genome))
 
-        #kick off the anaserve tmap xmlrpc call
-        import traceback
-        try:
-            conn = client.connect(JOBSERVER_HOST, settings.JOBSERVER_PORT)
-            tmap_bool, tmap_status = conn.tmap(str(ref_genome.id), fasta, short_name, name, version,
-                                               read_exclude_length, settings.TMAP_VERSION)
-            logger.debug('ionJobserver process reported %s %s' % (tmap_bool, tmap_status))
-        except (socket.error, xmlrpclib.Fault):
-            #delete the genome object, because it was not sucessful
-            ref_genome.delete()
-            return render_to_json({"status": "Error with index creation", "error": traceback.format_exc()})
+        temp_dir = tempfile.mkdtemp(suffix=short_name, dir=settings.TEMP_PATH)
+        temp_upload_path = os.path.join(temp_dir, fasta)
+        os.chmod(temp_dir, 0777)
+        os.rename(reference_path, temp_upload_path)
+        monitor = FileMonitor(
+            local_dir=temp_dir,
+            name=fasta
+        )
+        monitor.save()
+        ref_genome.file_monitor = monitor
+        ref_genome.reference_path = temp_upload_path
+        ref_genome.save()
 
-        if not tmap_bool:
-            ref_genome.delete()
-            return render_to_json({"status": tmap_status, "error": True})
 
+        index_task = tasks.build_tmap_index.subtask((ref_genome.id,), immutable=True)
+        if is_zip:
+            result = tasks.unzip_reference.apply_async(
+                args=(ref_genome.id, target_fasta_file),
+                link=index_task
+            )
+        else:
+            result = tasks.copy_reference.apply_async(
+                args=(ref_genome.id,), 
+                link=index_task
+            )
+        ref_genome.status = "queued"
+        ref_genome.celery_task_id = result.task_id
+        ref_genome.save()
         return render_to_json({"status": "The genome index is being created.  This might take a while, check the status on the references tab. \
                                 You are being redirected there now.", "error": False})
 
@@ -485,8 +477,9 @@ def start_index_rebuild(request, reference_id):
         """
         logger.info("Queuing TMAP reference index rebuild of %s" % reference.short_name)
         reference.status = "Rebuilding index"
+        result = build_tmap_index.delay(reference.id)
+        reference.celery_task_id = result.task_id
         reference.save()
-        build_tmap_index.delay(reference)
     data = {"references": []}
     if reference_id == "all":
         references = ReferenceGenome.objects.exclude(index_version=settings.TMAP_VERSION)
@@ -524,16 +517,11 @@ def download_genome(request):
             reference_args = json.loads(base64.b64decode(reference_meta))
             reference = ReferenceGenome(**reference_args)
             reference.save()
-            start_reference_download(url, reference.id)
+            start_reference_download(url, reference)
         return HttpResponseRedirect(urlresolvers.reverse("references_genome_download"))
 
     references = get_references() or []
-    downloads = DownloadMonitor.objects.filter(tags__contains="reference").order_by('-created')
-    for download in downloads:
-        if download.size:
-            download.percent_progress = "{0:.2%}".format(float(download.progress) / download.size)
-        else:
-            download.percent_progress = "..."
+    downloads = FileMonitor.objects.filter(tags__contains="reference").order_by('-created')
     ctx = {
         'downloads': downloads,
         'references': references
@@ -541,14 +529,15 @@ def download_genome(request):
     return render_to_response("rundb/configure/reference_download.html", ctx,
         context_instance=RequestContext(request))
 
-def start_reference_download(url, reference_id):
-    url = url
-    monitor = DownloadMonitor(url=url, tags="reference")
+def start_reference_download(url, reference):
+    monitor = FileMonitor(url=url, tags="reference")
     monitor.save()
+    reference.file_monitor = monitor
+    reference.save()
     try:
-        t = tasks.download_something.apply_async(
-            (url, monitor.id),
-            link=tasks.install_reference.subtask((reference_id,)))
+        download_args = (url, monitor.id, settings.TEMP_PATH)
+        install_callback = tasks.install_reference.subtask((reference.id,))
+        t = tasks.download_something.apply_async(download_args, link=install_callback)
     except Exception as err:
         monitor.status = "System Error: " + str(err)
         monitor.save()

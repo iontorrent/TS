@@ -7,6 +7,8 @@ from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, \
     LibraryKey, ThreePrimeadapter, Chip, QCType, Project, Plugin, \
     PlannedExperimentQC
 
+from iondb.rundb.plan.views_helper import getPlanDisplayedName
+    
 from traceback import format_exc
 
 import logging
@@ -312,7 +314,7 @@ def get_template_data_for_batch_planning(templateId):
                , COLUMN_NOTES
                ]
     
-        body = [ template.planDisplayedName
+        body = [ getPlanDisplayedName(template)
                , ""
                ]
         

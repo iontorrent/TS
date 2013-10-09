@@ -40,36 +40,34 @@ using namespace std;
 
 class VarButton {
   public:
-    bool isHPIndel;
-    bool isSNP ;
-    bool isOverCallUnderCallSNP;
-    bool isInsertion ;
-    bool isDeletion ;
-    bool isPotentiallyCorrelated;
-    //bool isHP;
-    bool isMNV;
-    bool isIndel;
-    bool isHotSpot;
-    bool isNoCallVariant;
-    bool isReferenceCall;
-    bool isBadAllele;
-    bool doRealignment;
+	// Describes the basic identity and sub-classification of our allele
+	bool isSNP;              // Single base substitution
+	bool isMNV;              // Multiple base substitution
+
+	bool isIndel;            // Anchor base + one or more copies of the same base in the longer allele
+    bool isInsertion;        // Alternative allele longer than reference allele
+    bool isDeletion;         // Alternative allele shorter than reference allele
+    bool isHPIndel;          // InDel occurs in a reference HP of length > 1
+    bool isDyslexic;
+
+    //bool isComplex;          // A complex allele is anything but snp, mnv and Indel
+    //bool isComplexHP;        // This complex allele involves a ref. HP of length > 1
+
+    bool isHotSpot;           // Signifies a hotspot variant (set per variant for all alleles, regardless of their specific origin)
+    bool isProblematicAllele; // There is something wrong with this allele, we should filter it.
+    bool doRealignment;       // Switch to turn realignment on or off
 
     VarButton() {
-      isHPIndel = false;
-      isSNP = false;
-      isOverCallUnderCallSNP = false;
-      isInsertion = false;
-      isDeletion = false;
-      isPotentiallyCorrelated = false;
-      //isHP = false;
-      isMNV = false;
-      isIndel = false;
-      isHotSpot=false;
-      isNoCallVariant = false;
-      isReferenceCall = false;
-      isBadAllele = false;
-      doRealignment = false;
+      isHPIndel      = false;
+      isSNP          = false;
+      isInsertion    = false;
+      isDeletion     = false;
+      isDyslexic     = false;
+      isMNV          = false;
+      isIndel        = false;
+      isHotSpot      = false;
+      isProblematicAllele = false;
+      doRealignment  = false;
     }
 };
 
@@ -83,44 +81,28 @@ class AlleleIdentity {
     int           DEBUG;
 
     // useful context
-    int anchor_length;
-    int inDelLength; // Used in Splice
-    int ref_hp_length;
-    int start_window;
-    int end_window;
-    int modified_start_pos; // This is just confusing
+    int anchor_length;        //!< Number of left bases that are common between the ref. and alt. allele
+    int right_anchor;         //!< Number of right bases that are common between the ref. and alt. allele
+                              //   anchor_length + right_anchor <= shorter allele length
+    int inDelLength;          //!< Differnence in length between longer and shorter allele
+    int ref_hp_length;        //!< First base change is occurring in an HP of length ref_hp_length
+    int start_window;         //!< Start of window of interest for this variant
+    int end_window;           //!< End of window of interest for this variant
 
     // need to know when I do filtering
     float  sse_prob_positive_strand;
     float  sse_prob_negative_strand;
     string filterReason;
 
-    // None of these variables is used in ensemble eval -> refactor away
-    int underCallPosition;
-    int overCallPosition;
-    int underCallLength;
-    int overCallLength; // */
-
-    // Deleted member variables -> Do not create multiple copies of the same variables, pass them instead.
-    //string refAllele;  <- in LocalReferenceContext & vcf variant
-    //int refHpLen; <- in LocalReferenceContext
-    //long int hp_start_position; <- in LocalReferenceContext
-    //long int hp_end_position; <- in LocalReferenceContext
-    //int left_hp_length; <- in LocalReferenceContext
-    //int right_hp_length; <- in LocalReferenceContext
-
     AlleleIdentity() {
 
       inDelLength = 0;
       ref_hp_length = 0;
-      modified_start_pos = 0;
+      //modified_start_pos = 0;
       anchor_length = 0;
+      right_anchor = 0;
       start_window = 0;
       end_window = 0;
-      underCallPosition = 0;
-      underCallLength = 0;
-      overCallPosition = 0;
-      overCallLength = 0;
       DEBUG = 0;
       
       // filterable statuses
@@ -138,30 +120,31 @@ class AlleleIdentity {
     bool ActAsHPIndel(){
       return(status.isIndel && status.isHPIndel);
     }
-    void DetectPotentialCorrelation(LocalReferenceContext &reference_context);
-    bool SubCategorizeInDel(LocalReferenceContext &reference_context);
-    void SubCategorizeSNP(LocalReferenceContext &reference_context, int min_hp_for_overcall);
-    bool getVariantType(string _altAllele, LocalReferenceContext &reference_context,
+    //void DetectPotentialCorrelation(const LocalReferenceContext &reference_context);
+    bool SubCategorizeInDel(const string & local_contig_sequence, const LocalReferenceContext &reference_context);
+    void IdentifyHPdeletion(const LocalReferenceContext& reference_context);
+    void IdentifyHPinsertion(const LocalReferenceContext& reference_context, const string & local_contig_sequence);
+    bool IdentifyDyslexicMotive(const string & local_contig_sequence, char base, int position);
+
+    void SubCategorizeSNP(const LocalReferenceContext &reference_contextl);
+    bool getVariantType(const string _altAllele, const LocalReferenceContext &reference_context,
                         const string &local_contig_sequence, TIonMotifSet & ErrorMotifs,
-                        ClassifyFilters &filter_variant);
-    bool CharacterizeVariantStatus(LocalReferenceContext &reference_context, int min_hp_for_overcall);
-    bool CheckValidAltAllele(LocalReferenceContext &reference_context);
-    void ModifyStartPosForAllele(int variantPos);
+                        const ClassifyFilters &filter_variant);
+    bool CharacterizeVariantStatus(const string & local_contig_sequence, const LocalReferenceContext &reference_context);
+    bool CheckValidAltAllele(const LocalReferenceContext &reference_context);
+    //void ModifyStartPosForAllele(int variantPos);
 
     bool IdentifyMultiNucRepeatSection(const string &local_contig_sequence, const LocalReferenceContext &seq_context, unsigned int rep_period);
-    void CalculateWindowForVariant(LocalReferenceContext seq_context, const string &local_contig_sequence, int DEBUG);
+    void CalculateWindowForVariant(const LocalReferenceContext &seq_context, const string &local_contig_sequence, int DEBUG);
 
-    void DetectCasesToForceNoCall(LocalReferenceContext seq_context, ClassifyFilters &filter_variant,
-                                  map<string, vector<string> > & info, unsigned _altAlleIndex);
-    void DetectSSEForNoCall(float sseProbThreshold, float minRatioReadsOnNonErrorStrand, float relative_safety_level, map<string, vector<string> > & info, unsigned _altAlleIndex);
-    void DetectLongHPThresholdCases(LocalReferenceContext seq_context, int maxHPLength, int adjacent_max_length);
-    void DetectNotAVariant(LocalReferenceContext seq_context);
-    void PredictSequenceMotifSSE(LocalReferenceContext &reference_context, const  string &local_contig_sequence, TIonMotifSet & ErrorMotifs);
+    void DetectCasesToForceNoCall(const LocalReferenceContext &seq_context, const ClassifyFilters &filter_variant);
+    void DetectLongHPThresholdCases(const LocalReferenceContext &seq_context, int maxHPLength);
+    void DetectNotAVariant(const LocalReferenceContext &seq_context);
+    void PredictSequenceMotifSSE(const LocalReferenceContext &reference_context, const  string &local_contig_sequence, TIonMotifSet & ErrorMotifs);
 };
 
 // ------------------------------------------------------------------------
 // Trying to make more clear what is variant (entry in vcf) and what is an allele property.
-
 
 // This class stores general information about the variant as well as information about each allele
 class MultiAlleleVariantIdentity{
@@ -172,6 +155,7 @@ class MultiAlleleVariantIdentity{
     vector<AlleleIdentity> allele_identity_vector;  //!< Detailed information for each candidate allele
     int window_start;
     int window_end;
+    bool doRealignment;
 
     //! @brief  Default constructor
     MultiAlleleVariantIdentity() {
@@ -188,12 +172,13 @@ class MultiAlleleVariantIdentity{
     void SetInitialValues() {
         window_start = -1;
         window_end = -1;
+        doRealignment = false;
     };
 
     //! @brief  Create a detailed picture about this variant and all its alleles
     void SetupAllAlleles(vcf::Variant ** candidate_variant, const string & local_contig_sequence, ExtendParameters *parameters, InputStructures &global_context);
 
-    void FilterAllAlleles(vcf::Variant ** candidate_variant,ClassifyFilters &filter_variant);
+    void FilterAllAlleles(const ClassifyFilters &filter_variant);
 
     void GetMultiAlleleVariantWindow(const string & local_contig_sequence, int DEBUG);
 };

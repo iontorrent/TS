@@ -148,3 +148,15 @@ tmap_sam_get_zb(tmap_sam_t *sam)
   if(NULL != tag) return bam_aux2i(tag);
   else return -1;
 }
+
+int32_t
+tmap_sam_get_za(tmap_sam_t *sam)
+{
+  uint8_t *tag = NULL;
+  // ZA
+  if(NULL == sam->b) tmap_bug();
+  tag = bam_aux_get(sam->b, "ZA");
+  if(NULL != tag) return bam_aux2i(tag);
+  else return -1;
+}
+

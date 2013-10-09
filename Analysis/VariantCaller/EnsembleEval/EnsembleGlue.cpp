@@ -2,77 +2,54 @@
 
 #include "EnsembleGlue.h"
 
-// Function "GlueOneRead" not necessary any more; functionality replaced by "SpliceVariantHypotheses"
-// glue function temporarily here
-void GlueOneRead(CrossHypotheses &my_set, ExtendedReadInfo &current_read, AlleleIdentity &variant_identity,
-                 string refAllele, const string &local_contig_sequence, int DEBUG) {
-  //int DEBUG = 0;
-
-  vector<string> my_tmp_hypotheses;
-
-  // this function call is of course horrible and needs refactoring and/or replacement
-  int evaluate_splicing = HypothesisSpliceVariant(my_tmp_hypotheses,
-                          current_read,
-                          variant_identity,
-                          refAllele,
-                          local_contig_sequence,
-                          DEBUG);
-
-  // routine outputs in the wrong order
-  my_set.instance_of_read_by_state.resize(3);
-  // if failed to splice, >no tmp hypotheses<
-  if (evaluate_splicing == 0) {
-    my_set.instance_of_read_by_state[0] = my_tmp_hypotheses[2];  // read
-    my_set.instance_of_read_by_state[1] = my_tmp_hypotheses[0];  // reference
-    my_set.instance_of_read_by_state[2] = my_tmp_hypotheses[1];  // variant
-  }
-  else {
-    my_set.instance_of_read_by_state[0] = current_read.alignment.QueryBases;  // CK: Why???
-    my_set.instance_of_read_by_state[1] = current_read.alignment.QueryBases;
-    my_set.instance_of_read_by_state[2] = current_read.alignment.QueryBases;
-  }
-  my_set.success = (evaluate_splicing == 0);
-
-}
-
 
 void BootUpAllAlleles(EnsembleEval &my_ensemble, PersistingThreadObjects &thread_objects, InputStructures &global_context) {
-  // set up all variants
-  for (unsigned int i_allele = 0; i_allele < my_ensemble.multi_allele_var.allele_identity_vector.size(); i_allele++) {
 
-    // build a unique identifier -> Unnecessary variable duplication
-    // but need local information to write out diagnostics
-    my_ensemble.allele_eval[i_allele].variant_position = my_ensemble.multi_allele_var.allele_identity_vector[i_allele].modified_start_pos;
-    my_ensemble.allele_eval[i_allele].ref_allele = (*(my_ensemble.multi_allele_var.variant))->ref;
-    my_ensemble.allele_eval[i_allele].var_allele = (*(my_ensemble.multi_allele_var.variant))->alt[i_allele];
+    int num_hyp_no_null=0; // guarantee problems if the following does not happen
+    num_hyp_no_null = my_ensemble.multi_allele_var.allele_identity_vector.size()+1; // num alleles +1 for ref
+
+    // build a unique identifier to write out diagnostics
+    my_ensemble.allele_eval.variant_position = (*(my_ensemble.multi_allele_var.variant))->position;
+    my_ensemble.allele_eval.ref_allele = (*(my_ensemble.multi_allele_var.variant))->ref;
+    my_ensemble.allele_eval.var_allele = (*(my_ensemble.multi_allele_var.variant))->alt.at(0);
+    for (unsigned int i_allele=1; i_allele<(*(my_ensemble.multi_allele_var.variant))->alt.size(); i_allele++) {
+    	my_ensemble.allele_eval.var_allele += ',';
+    	my_ensemble.allele_eval.var_allele += (*(my_ensemble.multi_allele_var.variant))->alt.at(i_allele);
+    }
     // unique identifier built
 
-    // generate null+two hypotheses per read
-    my_ensemble.allele_eval[i_allele].total_theory.my_hypotheses.resize(my_ensemble.my_data.read_stack.size());
-    for (unsigned int i_read = 0; i_read < my_ensemble.allele_eval[i_allele].total_theory.my_hypotheses.size(); i_read++) {
-      // Wrapper for legacy splicing function
-      /* GlueOneRead(my_ensemble.allele_eval[i_allele].total_theory.my_hypotheses[i_read],
-                  my_ensemble.my_data.read_stack[i_read],
-                  my_ensemble.multi_allele_var.allele_identity_vector[i_allele],
-                  (*(my_ensemble.multi_allele_var.variant))->ref,
-                  local_contig_sequence,
-                  global_context.DEBUG);*/
+    my_ensemble.allele_eval.total_theory.my_hypotheses.resize(my_ensemble.my_data.read_stack.size());
+    // generate null+ref+nr.alt hypotheses per read in the case of do_multiallele_eval
+    //int my_allele_index = -1;
+
+
+    for (unsigned int i_read = 0; i_read < my_ensemble.allele_eval.total_theory.my_hypotheses.size(); i_read++) {
       // --- New splicing function ---
-      my_ensemble.allele_eval[i_allele].total_theory.my_hypotheses[i_read].success =
-          SpliceVariantHypotheses(my_ensemble.my_data.read_stack[i_read],
-                                  my_ensemble.multi_allele_var.allele_identity_vector[i_allele],
+      my_ensemble.allele_eval.total_theory.my_hypotheses.at(i_read).success =
+        SpliceVariantHypotheses(my_ensemble.my_data.read_stack.at(i_read),
+                                  my_ensemble.multi_allele_var,
                                   my_ensemble.multi_allele_var.seq_context,
                                   thread_objects,
-                                  my_ensemble.allele_eval[i_allele].total_theory.my_hypotheses[i_read].instance_of_read_by_state,
+                                  my_ensemble.allele_eval.total_theory.my_hypotheses.at(i_read).splice_start_flow,
+                                  my_ensemble.allele_eval.total_theory.my_hypotheses.at(i_read).splice_end_flow,
+                                  my_ensemble.allele_eval.total_theory.my_hypotheses.at(i_read).instance_of_read_by_state,
                                   global_context);
-      // update this read if we need to handle the likelihood computation differently
-      my_ensemble.allele_eval[i_allele].total_theory.my_hypotheses[i_read].use_correlated_likelihood = my_ensemble.multi_allele_var.allele_identity_vector[i_allele].status.isPotentiallyCorrelated;
-    }
-    // fill in quantities derived from predictions
-    my_ensemble.allele_eval[i_allele].InitForInference(thread_objects, my_ensemble.my_data, global_context);
 
-  }
+      // if we need to compare likelihoods across multiple possibilities
+      if (num_hyp_no_null>2)
+        my_ensemble.allele_eval.total_theory.my_hypotheses.at(i_read).use_correlated_likelihood = false;
+
+    }
+
+    if (global_context.DEBUG>1) cout << "Finished splicing all alleles!" << endl; // XXX
+    // fill in quantities derived from predictions
+
+    my_ensemble.allele_eval.InitForInference(thread_objects, my_ensemble.my_data, global_context, num_hyp_no_null);
+
+
+  if (global_context.DEBUG>1) cout << "All alleles booted up." << endl; // XXX
 }
+
 
 // handle the unfortunate case in which we must try multiple alleles to be happy
 // try only ref vs alt allele here
@@ -80,11 +57,10 @@ void BootUpAllAlleles(EnsembleEval &my_ensemble, PersistingThreadObjects &thread
 int TrySolveAllAllelesVsRef(EnsembleEval &my_ensemble, PersistingThreadObjects &thread_objects, InputStructures &global_context) {
 
   BootUpAllAlleles(my_ensemble, thread_objects, global_context);
-  // join information across multi-alleles
 
-  my_ensemble.UnifyTestFlows();
   // do inference
   my_ensemble.ExecuteInferenceAllAlleles();
+  if (global_context.DEBUG>1) cout << "Inference finished." << endl; // XXX
   // now we're in the guaranteed state of best index
   return(my_ensemble.DetectBestAllele());
 }
@@ -95,18 +71,7 @@ void EnsembleSummaryStats(EnsembleEval &my_ensemble, DecisionTreeData &my_decisi
   vector<bool> strand_id;
   // pretend we can classify reads across multiple alleles
   my_ensemble.ApproximateHardClassifierForReads(read_id, strand_id);
-  // each read goes to a summary place for the right alternative
-  for (unsigned int i_read = 0; i_read < read_id.size(); i_read++) {
-    int _allele_index = read_id[i_read];
-    for (unsigned int i_alt = 0; i_alt < my_decision.summary_stats_vector.size(); i_alt++) {
-      if (_allele_index == (int)(i_alt + 1))
-        my_decision.summary_stats_vector[i_alt].UpdateSummaryStats(strand_id[i_read], true, 0.0f);
-      else
-        if (_allele_index == 0)
-          my_decision.summary_stats_vector[i_alt].UpdateSummaryStats(strand_id[i_read], false, 0.0f);
-      // otherwise no deal - doesn't count for this alternate at all
-    }
-  }
+  my_decision.all_summary_stats.DigestHardClassifiedReads(strand_id, read_id);
 }
 
 void SummarizeInfoFieldsFromEnsemble(EnsembleEval &my_ensemble, vcf::Variant ** candidate_variant, int _cur_allele_index) {
@@ -114,22 +79,30 @@ void SummarizeInfoFieldsFromEnsemble(EnsembleEval &my_ensemble, vcf::Variant ** 
   float mean_ll_delta;
 
   my_ensemble.ScanSupportingEvidence(mean_ll_delta, _cur_allele_index);
-//   (*candidate_variant)->info["MFDT"].push_back(convertToString(mean_flows_disrupted));
-//   (*candidate_variant)->info["MXFD"].push_back(convertToString(max_flow_discrimination));
+
   (*candidate_variant)->info["MLLD"].push_back(convertToString(mean_ll_delta));
 
-//   float biasLL =  my_ensemble.allele_eval[_cur_allele_index].cur_state.bias_generator.BiasLL();
-//   (*candidate_variant)->info["BLL"].push_back(convertToString(biasLL));
+  float radius_bias, fwd_bias, rev_bias, ref_bias,var_bias;
+  int fwd_strand = 0;
+   int rev_strand = 1;
 
-  float radius_bias = my_ensemble.allele_eval[_cur_allele_index].cur_state.bias_generator.RadiusOfBias();
+   int var_hyp = 1;
+
+    // get bias terms from cur_allele within a single multi-allele structure
+
+    var_hyp = _cur_allele_index+1;
+    radius_bias = my_ensemble.allele_eval.cur_state.bias_generator.RadiusOfBias(_cur_allele_index);
+    fwd_bias = my_ensemble.allele_eval.cur_state.bias_generator.latent_bias.at(fwd_strand).at(_cur_allele_index);
+    rev_bias = my_ensemble.allele_eval.cur_state.bias_generator.latent_bias.at(rev_strand).at(_cur_allele_index);
+    //@TODO: note the disconnect in indexing; inconsistent betwen objects
+    ref_bias = my_ensemble.allele_eval.cur_state.bias_checker.ref_bias_v.at(var_hyp);
+     var_bias = my_ensemble.allele_eval.cur_state.bias_checker.variant_bias_v.at(var_hyp);
+
   (*candidate_variant)->info["RBI"].push_back(convertToString(radius_bias));
-
-  float fwd_bias = my_ensemble.allele_eval[_cur_allele_index].cur_state.bias_generator.latent_bias[0];
-  float rev_bias = my_ensemble.allele_eval[_cur_allele_index].cur_state.bias_generator.latent_bias[1];
-  float ref_bias = my_ensemble.allele_eval[_cur_allele_index].cur_state.bias_generator.latent_bias_v[0];
-  float var_bias = my_ensemble.allele_eval[_cur_allele_index].cur_state.bias_generator.latent_bias_v[1];
+// this is by strand
   (*candidate_variant)->info["FWDB"].push_back(convertToString(fwd_bias));
   (*candidate_variant)->info["REVB"].push_back(convertToString(rev_bias));
+  // this is by hypothesis
   (*candidate_variant)->info["REFB"].push_back(convertToString(ref_bias));
   (*candidate_variant)->info["VARB"].push_back(convertToString(var_bias));
   
@@ -141,175 +114,52 @@ void SummarizeInfoFieldsFromEnsemble(EnsembleEval &my_ensemble, vcf::Variant ** 
 void GlueOutputVariant(EnsembleEval &my_ensemble, ExtendParameters *parameters, int _best_allele_index) {
 
   DecisionTreeData my_decision;
-  my_decision.tune_xbias = parameters->my_controls.xbias_tune; // transfer in from command defaults for tuning this filter
   my_decision.tune_sbias = parameters->my_controls.sbias_tune;
 
   my_decision.SetupFromMultiAllele(my_ensemble.multi_allele_var);
-  my_decision.SetupSummaryStatsFromCandidate(my_ensemble.multi_allele_var.variant);
+
   EnsembleSummaryStats(my_ensemble, my_decision);
 
+  float smallest_allele_freq = 1.0f;
   for (unsigned int _alt_allele_index = 0; _alt_allele_index < my_decision.multi_allele.allele_identity_vector.size(); _alt_allele_index++) {
     // for each alt allele, do my best
     // thresholds here can vary by >type< of allele
-    float local_min_allele_freq = FreqThresholdByType(my_ensemble.multi_allele_var.allele_identity_vector[_alt_allele_index], parameters->my_controls);
+    float local_min_allele_freq = FreqThresholdByType(my_ensemble.multi_allele_var.allele_identity_vector.at(_alt_allele_index), parameters->my_controls);
+    if (local_min_allele_freq<smallest_allele_freq)
+      smallest_allele_freq = local_min_allele_freq;  // choose least-restrictive amongst multialleles
 
-    my_ensemble.allele_eval[_alt_allele_index].CallGermline(local_min_allele_freq,
-        my_decision.summary_info_vector[_alt_allele_index].genotype_call,
-        my_decision.summary_info_vector[_alt_allele_index].gt_quality_score,
-        my_decision.summary_info_vector[_alt_allele_index].alleleScore);
+      my_ensemble.ComputePosteriorGenotype(_alt_allele_index, local_min_allele_freq,
+            my_decision.summary_info_vector.at(_alt_allele_index).genotype_call,
+            my_decision.summary_info_vector.at(_alt_allele_index).gt_quality_score,
+            my_decision.summary_info_vector.at(_alt_allele_index).variant_qual_score);
     
-        // push back for each allele the appropriate tags
     SummarizeInfoFieldsFromEnsemble(my_ensemble, my_ensemble.multi_allele_var.variant, _alt_allele_index);
   }
-  
-  // alleleScore does not 
+
   my_decision.best_allele_index = _best_allele_index;
   my_decision.best_allele_set = true;
-  // extract useful fields from the evaluator
+
+  // tell the evaluator to do a genotype
+  // choose a diploid genotype
+  // return it and set it so that decision tree cannot override
+
+    //@TODO: fix this frequency to be sensible
+    float local_min_allele_freq = smallest_allele_freq; // must choose a qual score relative to some frequency
+
+    my_ensemble.MultiAlleleGenotype(local_min_allele_freq,
+                                    my_decision.eval_genotype.genotype_component,
+                                    my_decision.eval_genotype.evaluated_genotype_quality,
+                                    my_decision.eval_genotype.evaluated_variant_quality);
+    my_decision.eval_genotype.genotype_already_set = true; // because we computed it here
+    // and I must also set for each allele
+    // so that the per-allele  filter works
+    for (unsigned int i_allele =0; i_allele<my_decision.multi_allele.allele_identity_vector.size(); i_allele++){
+      my_decision.summary_info_vector.at(i_allele).variant_qual_score = my_decision.eval_genotype.evaluated_variant_quality;
+    }
+
 
 // now that all the data has been gathered describing the variant, combine to produce the output
   my_decision.DecisionTreeOutputToVariant(my_ensemble.multi_allele_var.variant, parameters);
-
-}
-
-//----------------------output some diagnostic information below---------------
-
-void DiagnosticWriteJson(const Json::Value & json, const std::string& filename_json) {
-  std::ofstream outJsonFile(filename_json.c_str(), std::ios::out);
-  if (outJsonFile.good())
-    outJsonFile << json.toStyledString();
-  else
-    std::cerr << "[tvc] diagnostic unable to write JSON file " << filename_json << std::endl;
-  outJsonFile.close();
-}
-
-void DiagnosticJsonReadStack(Json::Value &json, StackPlus &read_stack) {
-  json["FlowOrder"] = read_stack.flow_order;
-  for (unsigned int i_read = 0; i_read < read_stack.read_stack.size(); i_read++) {
-    if ( ! read_stack.read_stack[i_read].well_rowcol.empty() ) {
-      json["Row"][i_read] = read_stack.read_stack[i_read].well_rowcol[0];
-      json["Col"][i_read] = read_stack.read_stack[i_read].well_rowcol[1];
-    }
-    json["MapQuality"][i_read] = read_stack.read_stack[i_read].map_quality;
-  }
-}
-
-void DiagnosticJsonFrequency(Json::Value &json, PosteriorInference &cur_posterior) {
-
-  json["MaxFreq"] = cur_posterior.max_freq;
-  json["MaxLL"] = cur_posterior.max_ll;
-  json["ParamLL"] = cur_posterior.params_ll;
-  for (unsigned int i_val = 0; i_val < cur_posterior.log_posterior_by_frequency.size(); i_val++) {
-    json["LogPosterior"][i_val] = cur_posterior.log_posterior_by_frequency[i_val];
-    json["EvalFrequency"][i_val] = cur_posterior.eval_at_frequency[i_val];
-  }
-}
-
-void DiagnosticJsonCrossHypotheses(Json::Value &json, CrossHypotheses &my_cross) {
-  // output relevant data from the individual read hypothesis tester
-
-  json["strand"] = my_cross.strand_key;
-  json["success"] = my_cross.success ? 1 : 0;
-  json["usecorr"] = my_cross.use_correlated_likelihood ? 1: 0;
-  
-  json["heavy"] = my_cross.heavy_tailed;
-  json["lastrelevantflow"] = my_cross.max_last_flow;
-  json["correlation"] = my_cross.delta_correlation;
-
-// difference between allele predictions for this read
-  for (unsigned int i_flow = 0; i_flow < my_cross.delta.size(); i_flow++) {
-    json["delta"][i_flow] = my_cross.delta[i_flow];
-  }
-
-  // active flows over which we are testing
-  for (unsigned int i_test = 0; i_test < my_cross.test_flow.size(); i_test++)
-    json["testflows"][i_test] = my_cross.test_flow[i_test];
-
-// hold some intermediates size data matrix hyp * nFlows (should be active flows)
-
-  for (unsigned int i_hyp = 0; i_hyp < my_cross.predictions.size(); i_hyp++) {
-    for (unsigned int i_flow = 0; i_flow < my_cross.predictions[0].size(); i_flow++) {
-      json["predictions"][i_hyp][i_flow] = my_cross.predictions[i_hyp][i_flow];
-      json["modpred"][i_hyp][i_flow] = my_cross.mod_predictions[i_hyp][i_flow];
-      json["normalized"][i_hyp][i_flow] = my_cross.normalized[i_hyp][i_flow];
-      json["residuals"][i_hyp][i_flow] = my_cross.residuals[i_hyp][i_flow];
-      json["sigma"][i_hyp][i_flow] = my_cross.sigma_estimate[i_hyp][i_flow];
-      json["basiclikelihoods"][i_hyp][i_flow] = my_cross.basic_likelihoods[i_hyp][i_flow];
-    }
-  }
-  // sequence, responsibility (after clustering), etc
-  for (unsigned int i_hyp = 0; i_hyp < my_cross.responsibility.size(); i_hyp++) {
-    json["instancebystate"][i_hyp] = my_cross.instance_of_read_by_state[i_hyp];
-    json["responsibility"][i_hyp] = my_cross.responsibility[i_hyp];
-    json["loglikelihood"][i_hyp] = my_cross.log_likelihood[i_hyp];
-    json["scaledlikelihood"][i_hyp] = my_cross.scaled_likelihood[i_hyp];
-  }
-}
-
-void DiagnosticJsonCrossStack(Json::Value &json, HypothesisStack &hypothesis_stack) {
-  for (unsigned int i_read = 0; i_read < hypothesis_stack.total_theory.my_hypotheses.size(); i_read++) {
-    DiagnosticJsonCrossHypotheses(json["Cross"][i_read], hypothesis_stack.total_theory.my_hypotheses[i_read]);
-  }
-}
-
-void DiagnosticJsonBias(Json::Value &json, BasicBiasGenerator &bias_generator) {
-  for (unsigned int i_latent = 0; i_latent < bias_generator.latent_bias.size(); i_latent++) {
-    json["latentbias"][i_latent] = bias_generator.latent_bias[i_latent];
-  }
-}
-
-void DiagnosticJsonSkew(Json::Value &json, BasicSkewGenerator &skew_generator) {
-  for (unsigned int i_latent = 0; i_latent < skew_generator.latent_skew.size(); i_latent++) {
-    json["latentskew"][i_latent] = skew_generator.latent_skew[i_latent];
-  }
-}
-
-void DiagnosticJsonSigma(Json::Value &json, BasicSigmaGenerator &sigma_generator) {
-  for (unsigned int i_latent = 0; i_latent < sigma_generator.latent_sigma.size(); i_latent++) {
-    json["latentsigma"][i_latent] = sigma_generator.latent_sigma[i_latent];
-    json["priorsigma"][i_latent] = sigma_generator.prior_latent_sigma[i_latent];
-  }
-}
-
-void DiagnosticJsonMisc(Json::Value &json, LatentSlate &cur_state) {
-  json["iterdone"] = cur_state.iter_done;
-  json["maxiterations"] = cur_state.max_iterations;
-  for (unsigned int i_iter = 0; i_iter < cur_state.ll_at_stage.size(); i_iter++) {
-    json["llatstage"][i_iter] = cur_state.ll_at_stage[i_iter];
-  }
-  json["startfreq"] = cur_state.start_freq_of_winner;
-}
-
-void RichDiagnosticOutput(StackPlus &my_data, HypothesisStack &hypothesis_stack, string  &out_dir) {
-  string outFile;
-  Json::Value diagnostic_json;
-
-  outFile = out_dir + hypothesis_stack.variant_contig + "."
-            + convertToString(hypothesis_stack.variant_position) + "."
-            + hypothesis_stack.ref_allele + "." + hypothesis_stack.var_allele + ".diagnostic.json";
-
-  diagnostic_json["MagicNumber"] = 10;
-  DiagnosticJsonFrequency(diagnostic_json["TopLevel"], hypothesis_stack.cur_state.cur_posterior);
-  DiagnosticJsonFrequency(diagnostic_json["FwdStrand"], hypothesis_stack.cur_state.fwd_posterior);
-  DiagnosticJsonFrequency(diagnostic_json["RevStrand"], hypothesis_stack.cur_state.rev_posterior);
-  DiagnosticJsonReadStack(diagnostic_json["ReadStack"], my_data);
-  DiagnosticJsonCrossStack(diagnostic_json["CrossHypotheses"], hypothesis_stack);
-  DiagnosticJsonBias(diagnostic_json["Latent"], hypothesis_stack.cur_state.bias_generator);
-  DiagnosticJsonSigma(diagnostic_json["Latent"], hypothesis_stack.cur_state.sigma_generator);
-  DiagnosticJsonSkew(diagnostic_json["Latent"], hypothesis_stack.cur_state.skew_generator);
-  DiagnosticJsonMisc(diagnostic_json["Misc"], hypothesis_stack.cur_state);
-
-//  DiagnosticJsonFrequency(diagnostic_json["RefLevel"], hypothesis_stack.ref_state.cur_posterior);
-//  DiagnosticJsonFrequency(diagnostic_json["VarLevel"], hypothesis_stack.var_state.cur_posterior);
-  DiagnosticWriteJson(diagnostic_json, outFile);
-}
-
-void JustOneDiagnosis(EnsembleEval &my_ensemble, string &out_dir) {
-  //diagnose one particular variant
-  // check against a list?
-  // only do this if using a small VCF for input of variants
-  for (unsigned int i_allele = 0; i_allele < my_ensemble.allele_eval.size(); i_allele++)
-    RichDiagnosticOutput(my_ensemble.my_data, my_ensemble.allele_eval[i_allele], out_dir);
 
 }
 

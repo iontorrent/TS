@@ -79,7 +79,7 @@ float ExpTailFitter::CorrectTraces(float *incorporation_traces,float *bkg_traces
          exp_fitter.params.tau = my_tauB;
          exp_fitter.params.dc_offset = 0.0f;
          exp_fitter.SetStartAndEndPoints(i_start,npts);
-         exp_fitter.Fit(200,avg_trc);
+         exp_fitter.Fit(false, 200, avg_trc);
 
          tau_adj = exp_fitter.params.tau/my_tauB;
       }

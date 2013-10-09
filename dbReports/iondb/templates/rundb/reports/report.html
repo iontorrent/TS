@@ -1,4 +1,5 @@
 {% extends "rundb/reports/base.html" %}
+{% load static from staticfiles %}
 
 {%block title %}
     <title> {{report.resultsName}} | {% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent Browser</title>
@@ -10,24 +11,24 @@
 	{% endblock responsive %}
 
 {% block extra_head %}
-	<link rel="stylesheet" type="text/css" href="/site_media/jquery/colorbox/colorbox.css" media="screen" />
-	<script type="text/javascript" src="/site_media/jquery/colorbox/jquery.colorbox.js"></script>
-	<script type="text/javascript" src="/site_media/resources/scripts/report.js"></script>
-	<script type="text/javascript" src="/site_media/jquery/js/jquery.tools.min.js"></script>
-	<script type="text/javascript" src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
-    <script type="text/javascript" src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
-	<script type="text/javascript" src="/site_media/resources/scripts/signal.min.js"></script>
-	<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script> 
-	<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/print.css" media="print" />
-	<link rel="stylesheet" type="text/css" href="/site_media/resources/styles/report.css" media="screen" />
-    <link type="text/css" rel="stylesheet" media="screen" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
+	<link rel="stylesheet" type="text/css" href="{% static "jquery/colorbox/colorbox.css"%}" media="screen" />
+	<script type="text/javascript" src="{% static "jquery/colorbox/jquery.colorbox.js"%}"></script>
+	<script type="text/javascript" src="{% static "resources/scripts/report.js"%}"></script>
+	<script type="text/javascript" src="{% static "jquery/js/jquery.tools.min.js"%}"></script>
+	<script type="text/javascript" src="{% static "jquery/js/jquery.activity-indicator-1.0.0.min.js"%}"></script>
+	<script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+	<script type="text/javascript" src="{% static "resources/scripts/signal.min.js"%}"></script>
+	<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+	<link rel="stylesheet" type="text/css" href="{% static "resources/styles/print.css"%}" media="print" />
+	<link rel="stylesheet" type="text/css" href="{% static "resources/styles/report.css"%}" media="screen" />
+    <link type="text/css" rel="stylesheet" media="screen" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 
 	{%if not noheader  %}
-	 	<link rel="stylesheet" href="/site_media/resources/bootstrap/css/bootstrap-responsive.min.css" >
+		<link rel="stylesheet" href="{% static "resources/bootstrap/css/bootstrap-responsive.min.css"%}" >
 	{%endif%}
-	<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modalmanager.js"></script>
-	<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modal.js"></script>
-	<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
+	<script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
+	<script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
+	<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
 {% endblock extra_head %}
 		
 {% block report-header %}
@@ -44,7 +45,7 @@ report
 				<ul class="nav nav-pills dynamic-navbar pull-left" style="margin: 0"></ul>
 				{%if plan %}
 					<a href="#" id="review_plan" data-pk="{{plan}}" class="btn review-plan">Review Plan</a>
-					<a href="#" id="copy_plan" data-pk="{{plan}}" class="btn copy-plan">Copy Plan</a>
+					<a href='{% url "page_plan_copy_plan" plan %}' class="btn">Copy</a>
 				{% endif %}
 	        	<a href="/report/analyze/{{report.experiment.pk}}/0/" rel='tooltip' title="Reanalyze this run" class="btn">Reanalyze</a>
 				<div class="btn-group">
@@ -66,14 +67,11 @@ report
 				</div>
 			{% endif %}
 
-			{#barcodes#}
-			{% include "rundb/reports/blocks/barcodes.html" %}
-
 			<section id="RunSummary" {%spaceless%} {%if not datasets.barcode_config %} class="no_barcodes" {%endif%} {%endspaceless%}>
 				<div class="row-fluid">
 		            <div id="nameRow" class="span12">
 						<div id="resultSet" class="pull-right">
-			                <label class="form-label" style="margin-left: 10px;">
+			                <label style="margin-left: 10px;">
 			                    Reports
 			                    <select id="resultList">
 			                        	<option value="{{report.pk}}" selected="selected">{{report}} ({{report.pk}})</option>
@@ -98,7 +96,7 @@ report
 
 				<div id="runSection" class="section">
           {% if report.resultsType == "CombinedAlignments" %}
-            <h3><span rel='tooltip' title="Links to parent reports">Alignments Merged From:</span></h3>
+            <h2><span rel='tooltip' title="Links to parent reports">Alignments Merged From:</span></h2>
               {% for pk,name in parents %}
                   <ul><a href=/report/{{pk}}/> {{name}} </a></ul>
               {% endfor %}              
@@ -115,8 +113,8 @@ report
 				      </div>
 				      {% endif %}
           {% else %}
-					<h3><span rel='tooltip' data-placement="right" title="Metrics for sequence data without alignment to a reference
-">Unaligned</span></h3>			
+					<h2><span rel='tooltip' data-placement="right" title="Metrics for sequence data without alignment to a reference
+">Read Summary: Unaligned</span></h2>
 					<div class="row-fluid unaligned">
 						{#beadfind#}
 						{% include "rundb/reports/blocks/beadfind.html" %}
@@ -130,8 +128,8 @@ report
           {% endif %}
 					
 					{% if reference != "none" %}
-					<h3><span rel='tooltip' data-placement="right" title="Metrics for sequence data after aligning reads to a reference sequence  
-">Aligned to {{reference.name}}</span></h3>
+					<h2><span rel='tooltip' data-placement="right" title="Metrics for sequence data after aligning reads to a reference sequence  
+">Aligned to {{reference.name}}</span></h2>
 					
 					<div class="row-fluid aligned">		
 						{#map#}
@@ -145,8 +143,8 @@ report
 
 					</div><!-- row-fluid -->
           {% else %}
-          <h3><span rel='tooltip' title="Metrics for sequence data after aligning reads to a reference sequence  
-">No Alignment Reference selected</span></h3>
+          <h2><span rel='tooltip' title="Metrics for sequence data after aligning reads to a reference sequence  
+">No Alignment Reference selected</span></h2>
           {% endif %}
 
 				</div><!-- section -->
@@ -159,7 +157,7 @@ report
 
 	{%if report.isProton %}
 	{%if isInternalServer %}
-		<h2>Proton ISP Map</h2> (on internal server only)
+		<h2>Proton <abbr title="Ion Sphere Particles">ISP</abbr> Map</h2> (on internal server only)
 		<div id="proton">
 
 		</div>
@@ -170,16 +168,17 @@ report
 	{#output files#}
 	{% include "rundb/reports/blocks/output.html" %}	
 
+	{#barcodes#}
+	{% include "rundb/reports/blocks/barcodes.html" %}
+
 	{#tabs#}
 	{% include "rundb/reports/blocks/tabs.html" %}	
 
 		
 </div>
 
-<!--20130313kchoi -->
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/styles/wizard.css" /> 
-<script type="text/javascript" src="/site_media/resources/scripts/wizard.min.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/modal_plan_wizard.html.js"></script>
-
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/wizard.css"%}" />
+<script type="text/javascript" src="{% static "resources/scripts/wizard.min.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/plan/modal_plan_wizard.html.js"%}"></script>
 
 {% endblock content %}

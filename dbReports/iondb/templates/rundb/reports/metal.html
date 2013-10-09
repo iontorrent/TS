@@ -1,8 +1,10 @@
+{% load url from future %}
+{% load static from staticfiles %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <title>{{pk}} {{path}} {{ base_site_name }}</title>
-    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" media="all" href="{% static "resources/bootstrap/css/bootstrap.min.css"%}" />
     <style type="text/css">
         .path-name {
             min-width: 400px;
@@ -32,10 +34,10 @@
 <div id="file_browse">
 
 <h3>
-    <a class="btn" href="{% url report report.id %}">Back to Report</a> 
-    <a href="{% url report_metal report.id '' %}">Root</a> / 
+    <a class="btn" href="{% url "report" report.id %}">Back to Report</a>
+    <a href="{% url "report_metal" report.id '' %}">Root</a> /
     {% for path, name in breadcrumbs %}
-        <a href="{% url report_metal report.id path %}">{{name}}</a> / 
+        <a href="{% url "report_metal" report.id path %}">{{name}}</a> /
     {% endfor %}
 </h3>
 
@@ -55,7 +57,7 @@
         <tbody>
         {% for dir, dir_path, dir_mtime, dir_size in dirs %}
             <tr>
-                <td><a href="{% url report_metal report.id dir_path %}">{{dir}}</a></td>
+                <td><a href="{% url "report_metal" report.id dir_path %}">{{dir}}</a></td>
                 <td>{{dir_mtime|date:"d M Y H:i:s"}}</td>
                 <td>{{dir_size}}</td>
             </tr>
@@ -84,7 +86,7 @@
     </thead>
     {% for file, file_path, file_mtime, file_size in files %}
         <tr>
-            <td><a href="{% url report_metal report.id file_path %}">{{file}}</a></td>
+            <td><a href="{% url "report_metal" report.id file_path %}">{{file}}</a></td>
             <td>{{file_mtime|date:"d M Y H:i:s"}}</td>
             <td>{{file_size}}</td>
         </tr>

@@ -149,7 +149,7 @@ int PrepareHotspots(int argc, const char *argv[])
   while (fgets(line, 1024, fai) != NULL) {
     Reference ref_entry;
     long chr_start;
-    if (5 != sscanf(line, "%s\t%ld\t%ld\t%d\t%d", chrom_name, &ref_entry.size, &chr_start,
+    if (5 != sscanf(line, "%1020s\t%ld\t%ld\t%d\t%d", chrom_name, &ref_entry.size, &chr_start,
                     &ref_entry.bases_per_line, &ref_entry.bytes_per_line))
       continue;
     ref_entry.chr = chrom_name;

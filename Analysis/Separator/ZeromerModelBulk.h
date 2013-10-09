@@ -912,22 +912,27 @@ class ZeromerModelBulk : public ZeromerModel<T>
     }
 
     virtual void FitWellZeromer (size_t wellIdx,
-                          TraceStore<T> &store,
-                          KeySeq &key,
-                          Col<T> &weights,
-			  Col<T> &trace,
-			  Col<T> &traceIntegral,
-			  Col<T> &bulk,
-			  Col<T> &bulkTrace,
+                                 TraceStore<T> &store,
+                                 KeySeq &key,
+                                 Col<T> &weights,
+                                 Col<T> &trace,
+                                 Col<T> &traceIntegral,
+                                 Col<T> &bulk,
+                                 Col<T> &bulkTrace,
                                  Col<T> &bulkIntegral,
                                  Col<int> &zeroFlows,
-                          std::vector<double> &dist,
-                          std::vector<std::vector<double> *> &values)
+                                 Col<T> &residual,
+                                 std::vector<double> &dist,
+                                 std::vector<std::vector<double> *> &values)
     {
       KeyBulkFit &fit = mFits[mIndexes[wellIdx]];
       // @todo - Don't reallocate these arrays over and over
+      uvec zflows(zeroFlows.n_rows);
+      for (size_t i =0 ; i < zflows.n_rows; i++) {
+        zflows[i] = zeroFlows[i];
+      }
       fit.wellIdx = wellIdx;
-      int numFrames = min((int)NUM_ZMODELBULK_FRAMES, (int)store.GetNumFrames());
+      //      int numFrames = min((int)NUM_ZMODELBULK_FRAMES, (int)store.GetNumFrames());
       //int numFrames = store.GetNumFrames();
       /* Col<T> trace (store.GetNumFrames()); */
       /* Col<T> traceIntegral (numFrames); */
@@ -938,40 +943,39 @@ class ZeromerModelBulk : public ZeromerModel<T>
       Mat<double> wellFlows;
       Mat<double> refFlows;
       Mat<double> predicted;
-      Col<double> time;
       Col<double> zeromer;
       Col<T> diff;
-      time.set_size(numFrames);
-      // @todo - 
-      for (size_t i = 0; i < (size_t)numFrames; i++) {
-	time[i] = 1;
-      }
-      //      double tauB;
-      vector<char> nucs(key.usableKeyFlows);
+
+      vector<char> nucs(store.GetFlowBuff());
       for (size_t i = 0; i < nucs.size(); i++) {
         nucs[i] = store.GetNucForFlow(i);
       }
-      double tauB = -1;
+      vector<double> tauB(store.GetNumNucs(), -1);//      double tauB = -1;
       ZeromerDiff<double> bg;
-      for (size_t flowIx = 0; flowIx < key.zeroFlows.n_rows; flowIx++)
-      {
-        size_t fIx = key.zeroFlows.at (flowIx);
-        double bulkTau  = 0;
-        int ok = CalcTauEForWell (wellIdx, fIx, store, dist, values, bulkTau);
-        if (ok != TraceStore<T>::TS_OK)
-        {
-          continue;
+      double bulkTau  = 0;
+      int ok = CalcTauEForWell (wellIdx, zeroFlows.at(0), store, dist, values, bulkTau);
+      if (ok == TraceStore<T>::TS_OK) {
+        TauEBulkErr<double>::FillInData(store, wellFlows, refFlows, predicted, store.GetFlowBuff(), wellIdx);
+        int err = bg.FitZeromerKnownTauPerNuc(wellFlows, refFlows, zeroFlows, mTime, nucs,store.GetNumNucs(), bulkTau, tauB);
+        if (residual.n_rows == wellFlows.n_rows) { 
+          for (size_t flowIx = 0; flowIx < zeroFlows.n_rows; flowIx++) {
+            int nucIx =  store.GetNucForFlow (zeroFlows(flowIx));
+            Col<double> ref =  refFlows.unsafe_col(zeroFlows(flowIx));
+            Col<double> p = predicted.unsafe_col(zeroFlows(flowIx));
+            bg.PredictZeromer(ref, mTime, tauB[nucIx], bulkTau, p);
+          }
+          Mat<double> diff = wellFlows - predicted;
+          Mat<double> zdiff = diff.cols(zflows);
+          residual = median(zdiff, 1);
         }
-	TauEBulkErr<double>::FillInData(store, wellFlows, refFlows, predicted, key.usableKeyFlows, wellIdx);
-	int err = bg.FitZeromerKnownTau(wellFlows, refFlows, zeroFlows, time, bulkTau, tauB);
         fit.ok = !err;
-	for (size_t i = 0; i < 4; i++) {
-	  fit.param.at (i, 0) = tauB;
-	  fit.param.at (i, 1) = bulkTau;
-	}
+      }
+      for (size_t i = 0; i < 4; i++) {
+        fit.param.at (i, 0) = tauB[i];
+        fit.param.at (i, 1) = bulkTau;
       }
     }
-
+    
     void SetFiltered(std::vector<char> &filtered) {
       mFiltered = filtered;
     }
@@ -1051,7 +1055,18 @@ class ZeromerModelBulk : public ZeromerModel<T>
       Col<T> bulk (numFrames);
       Col<T> bulkTrace (numFrames);
       Col<T> bulkIntegral (numFrames);
+      Col<T> residual (NUM_ZMODELBULK_FRAMES - NUM_ZMODELBULK_START);
       ClockTimer timer;
+      GridMesh<vector<SampleQuantiles<float> > > residualMesh;
+      residualMesh.Init (traceStore.GetNumRows(), traceStore.GetNumCols(),
+                      mRowStep, mColStep);
+      for (size_t i = 0; i < residualMesh.GetNumBin(); i++) {
+        vector<SampleQuantiles<float> > &x = residualMesh.GetItem(i);
+        x.resize(residual.n_rows);
+        for (size_t r = 0; r < x.size(); r++) {
+          x[r].Init(1000);
+        }
+      }
       for (size_t i = 0; i < mIndexes.size(); i++)
       {
         if (mIndexes[i] < 0)
@@ -1064,7 +1079,14 @@ class ZeromerModelBulk : public ZeromerModel<T>
           keyIx = 0;
         }
         // @todo - make this parallel?
-        FitWellZeromer (i, traceStore, keys[keyIx], weights, trace, traceIntegral, bulk, bulkTrace, bulkIntegral, zeroFlows, mDist, mValues);
+        FitWellZeromer (i, traceStore, keys[keyIx], weights, trace, traceIntegral, bulk, bulkTrace, bulkIntegral, zeroFlows, residual, mDist, mValues );
+        float residual_sum = arma::sum(residual);
+        if (isfinite(residual_sum)) {
+          vector<SampleQuantiles<float> > &r = residualMesh.GetItem(residualMesh.GetBin(i));
+          for (size_t rIx = 0; rIx < residual.n_rows; rIx++) {
+            r[rIx].AddValue(residual(rIx));
+          }
+        }
         if (mFitOut.is_open())
         {
           KeyBulkFit &fit = mFits[mIndexes[i]];
@@ -1079,7 +1101,25 @@ class ZeromerModelBulk : public ZeromerModel<T>
           mFitOut << endl;
         }
       }
+      // @todo - should this be nuc based?
+      mDarkMatter.Init (traceStore.GetNumRows(), traceStore.GetNumCols(),
+                         mRowStep, mColStep);
+      for (size_t i = 0; i < mDarkMatter.GetNumBin(); i++) {
+        Col<double> &d = mDarkMatter.GetItem(i);
+        vector<SampleQuantiles<float> > &s = residualMesh.GetItem(i);
+        d.set_size(s.size());
+        d.fill(0);
+        if (s.size() > 0 && s[0].GetNumSeen() > 100 ) {
+          for (size_t r = 0; r < s.size(); r++) {
+            d[r] = s[r].GetMedian();
+          }
+        }  
+      }
       timer.PrintMilliSeconds(std::cout, "ZeromerModelBulkJob:: Param fitting took");
+    }
+
+    Col<double> & GetDarkMatter(size_t index) {
+      return mDarkMatter.GetItem(mDarkMatter.GetBin(index));
     }
 
     void SetMeshDist (int size) { mUseMeshNeighbors = size; }
@@ -1173,6 +1213,7 @@ class ZeromerModelBulk : public ZeromerModel<T>
     std::ofstream mFitOut;
     std::vector<char> mFiltered;
     int mUseMeshNeighbors;
+    GridMesh<Col<double> > mDarkMatter;
 };
 
 #endif // ZEROMERMODELBULK_H

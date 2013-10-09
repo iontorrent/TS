@@ -1,5 +1,10 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
-from django.conf.urls.defaults import patterns, url, include
+try:
+    from django.conf.urls import patterns, url, include
+except ImportError:
+    # Compat Django 1.4
+    from django.conf.urls.defaults import patterns, url, include
+
 
 from tastypie.api import Api
 
@@ -46,8 +51,10 @@ v1_api.register(api.ThreePrimeadapterResource())
 v1_api.register(api.TemplateResource())
 
 v1_api.register(api.MessageResource())
+v1_api.register(api.MonitorDataResource())
 
 v1_api.register(api.TorrentSuite())
+v1_api.register(api.NetworkResource())
 v1_api.register(api.IonReporter())
 
 v1_api.register(api.ProjectResource())
@@ -88,6 +95,19 @@ v1_api.register(api.OneTouchPlanTemplateSummaryResource())
 v1_api.register(api.AvailablePlannedExperimentSummaryResource())
 v1_api.register(api.PlanTemplateSummaryResource())
 
+v1_api.register(api.ApplicationGroupResource())
+v1_api.register(api.SampleGroupType_CVResource())
+v1_api.register(api.SampleAnnotation_CVResource())
+
+v1_api.register(api.SampleSetResource())
+v1_api.register(api.SampleSetItemResource())
+v1_api.register(api.SampleSetItemInfoResource())
+
+v1_api.register(api.SampleAttributeResource())
+v1_api.register(api.SampleAttributeDataTypeResource())
+
+v1_api.register(api.AnalysisArgsResource())
+
 urlpatterns = patterns(
     'iondb.rundb',
     url(r'^$', 'data.views.rundb_redirect'),
@@ -117,6 +137,11 @@ urlpatterns = patterns(
     (r'^published/$', 'publishers.list_content'),  #REFACTOR: move to rundb/configure 
     (r'^uploadstatus/(\d+)/$', 'publishers.upload_status'),  #REFACTOR: move to rundb/configure 
     (r'^uploadstatus/frame/(\d+)/$', 'publishers.upload_status', {"frame": True}),  #REFACTOR: move to rundb/configure 
+    (r'^uploadstatus/download/(\d+)/$', 'publishers.upload_download'),  #REFACTOR: move to rundb/configure 
+    (r'^content/(\d+)/$', 'publishers.content_details'),  #REFACTOR: move to rundb/configure 
+    (r'^content/download/(\d+)/$', 'publishers.content_download'),  #REFACTOR: move to rundb/configure 
+    (r'^content/targetregions/add/$', 'publishers.content_add', {'hotspot': False}),  #REFACTOR: move to rundb/configure 
+    (r'^content/hotspots/add/$', 'publishers.content_add', {'hotspot': True}),  #REFACTOR: move to rundb/configure 
 
     (r'^demo_consumer/?(?P<name>\w+)', 'events.demo_consumer'),
 

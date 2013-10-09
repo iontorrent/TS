@@ -95,9 +95,11 @@ $basedepths = 0 if( $ampopt );
 
 die "Cannot find depth file $trdfile" unless( -e $trdfile );
 
-# open TRDFILE and read away header string
+# open TRDFILE and read header string to detect BED format (ionVersion)
 open( TRDFILE, $trdfile ) || die "Failed to open target reads file $trdfile\n";
 chomp( my $fieldIDs = <TRDFILE> );
+my @fieldNames = split('\t',$fieldIDs);
+my $haveNVP = ($fieldName[4] ne "gene_id");
 
 # set defaults for anticipated required field ID indecies
 my ($contig_srt,$contig_end,$region_id,$overlaps,$fwd_e2e,$rev_e2e,$cov_dpt,$fwd_reads,$rev_reads) = (1,2,3,6,7,8,9,10,11);
@@ -124,7 +126,7 @@ while(<TRDFILE>)
   my $rBias = $depth > 0 ? $fields[$fwd_reads]/($fields[$fwd_reads]+$fields[$rev_reads]) : 0.5; 
   $targetMaxDepth = $depth if( $depth > $targetMaxDepth );
   if( $basedepths ) {
-    my $ntrgs = 1+($fields[$region_id] =~ tr/,/,/);
+    my $ntrgs = 1+($haveNVP ? ($fields[$region_id] =~ tr/&/&/) : ($fields[$region_id] =~ tr/,/,/));
     $sumBaseDepth += $depth * $ntrgs;
     $numTargets += $ntrgs;
     $targetDist[int($depth)] += $ntrgs;

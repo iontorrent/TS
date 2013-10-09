@@ -3,6 +3,7 @@
 import os
 import math
 from django import http
+from django.conf import settings
 os.environ['MPLCONFIGDIR'] = '/tmp'
 import matplotlib
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -98,21 +99,20 @@ def fs_statusbar(request, percentFull):
     '''Creates graph of percent disk space used'''
 
     full = float(percentFull)
-    #threshold = float(models.BackupConfig.get().backup_threshold)
     try:
-        threshold = models.DMFileSet.objects.filter(type=dmactions_types.SIG).order_by('-pk')
-        threshold = float(threshold[0].auto_trigger_usage)
+        dmfilesets = models.DMFileSet.objects.exclude(auto_trigger_usage=None).filter(version=settings.RELVERSION)
+        thresholds = dmfilesets.values_list('auto_trigger_usage', 'type')
+        min_threshold = min([t[0] for t in thresholds]) or 0.01
     except:
-        threshold = 0
-    if threshold == 0:
-        threshold = float(0.01)
+        thresholds = []
+        min_threshold = 0.01
 
     # Define colors for the used disk space area based on threshold setting
-    if full <= threshold * 0.85:
+    if full <= min_threshold * 0.85:
         color = IONGREEN
-    elif full <= threshold * 0.90:
+    elif full <= min_threshold * 0.90:
         color = IONYELLOW
-    elif full < threshold:
+    elif full < min_threshold:
         color = IONORANGE
     else:
         color = IONRED
@@ -120,7 +120,7 @@ def fs_statusbar(request, percentFull):
     # create figure
     fig, ax = bargraph()
 
-    ax.set_title('File Server Space')
+    ax.set_title('File Server Space', y=1.1)
     ax.set_xlabel('% Capacity')
 
     frac = [full, 100 - full]
@@ -130,22 +130,32 @@ def fs_statusbar(request, percentFull):
         i += fr
         color = IONBLUE
 
-    # Place vertical bar indicating threshold level.  Threshold label is moved
-    # up when its close to the bar graph right edge.
-    if threshold >= 88:
-        textHeight = 1.2
-        textHoriz = 0.90
-    else:
-        textHeight = 0.85
-        textHoriz = float(threshold) / 100 + 0.02
+    # Place vertical bar indicating threshold level for each dmfileset
+    types = {}
+    for threshold,fileset_type in thresholds:
+        ax.axvline(threshold, 0, 1, color='#000000', linewidth=3, marker='d', markersize=14)
+        if types.has_key(threshold):
+            types[threshold]+= ','+fileset_type[0]
+        else:
+            types[threshold]= fileset_type[0]
 
-    ax.axvline(threshold, 0, 1, color='#000000', linewidth=3, marker='d', markersize=14)
-    ax.text(textHoriz,
-            textHeight,
-            'Threshold',
-            transform=ax.transAxes,
-            fontsize=10,
-            verticalalignment='center')
+    for threshold,text in types.items():
+        textHoriz = float(threshold) / 100
+        halign = 'center'
+        if len(text) > 1:
+            text = '('+text+')'
+        if threshold <= min_threshold:
+            text = 'Thresholds: ' + text
+            halign = 'left' if threshold < 10 else 'right'
+            textHoriz = textHoriz - 0.01 if threshold < 10 else textHoriz + 0.01
+
+        ax.text(textHoriz,
+                1.1,
+                text,
+                transform=ax.transAxes,
+                fontsize=10,
+                verticalalignment='center',
+                horizontalalignment=halign)
 
     # Fill in bar graph with colors representing disk capacity use
     ax.text(float(full) / 200,
@@ -171,32 +181,26 @@ def fs_statusbar(request, percentFull):
     return response
 
 
-def archive_drivespace_bar(request, pk):
+def archive_drivespace_bar(request):
     '''Displays as a horizontal bar chart, the free vs used space
     on the archive drive.  Will only display if it is mounted'''
+    
     try:
-        bk = models.DMFileSet.objects.get(pk=pk)
+        directory = request.GET.get('path')
         # create figure
         fig, ax = bargraph()
 
-        if bk.backup_directory == 'None':
-            #return http.HttpResponse()
-            used_frac = 0
+        try:
+            totalSpace, availSpace, f, b = disk_attributes(directory)
+            used_frac = (float(totalSpace - availSpace) / float(totalSpace))
+            free_frac = 1 - used_frac
+            title = '%s' % directory
+            labels = ['Used', 'Free']
+        except:
+            used_frac = 1
             free_frac = 0
-            title = "<Archive not Configured>"
-            labels = ['', '']
-        else:
-            try:
-                totalSpace, availSpace, f, b = disk_attributes(bk.backup_directory)
-                used_frac = (float(totalSpace - availSpace) / float(totalSpace))
-                free_frac = 1 - used_frac
-                title = 'Archive: %s' % bk.backup_directory
-                labels = ['Used', 'Free']
-            except:
-                used_frac = 1
-                free_frac = 0
-                title = 'Archive: %s' % bk.backup_directory
-                labels = ["Error: Could not get drive statistics",""]
+            title = '%s' % directory
+            labels = ["Error: Could not get drive statistics",""]
 
         frac = [used_frac * 100, free_frac * 100]
 
@@ -234,7 +238,7 @@ def archive_drivespace_bar(request, pk):
         canvas.print_png(response)
         return response
     except Exception as inst:
-        open('/tmp/graphProblemLog.txt', 'w').write('problem: %s\n%s' % (inst, bk))
+        open('/tmp/graphProblemLog.txt', 'w').write('problem: %s\n' % (inst))
 
 
 def residence_time(request):

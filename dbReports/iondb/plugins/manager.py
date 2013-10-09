@@ -323,6 +323,8 @@ class PluginManager(object):
                 p.autorun = False
             else:
                 p.autorun = oldp.autorun
+            # Merge stock config with previous config, preserving user settings
+            p.config.update(oldp.config)
 
         # Be careful with path handling -- FIXME
         if not p.path:

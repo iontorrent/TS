@@ -3,6 +3,7 @@
 import os
 import traceback
 import json
+from iondb.rundb.models import Chip
 
 DEBUG = False
 
@@ -54,8 +55,15 @@ def get_runinfo(env,plugin,primary_key,basefolder,plugin_out,url_root):
             "tmap_version":env['tmap_version'],
             "library": env.get('libraryName'),
             "chipType": env.get('chipType',''),
-            "barcodeId": env.get('barcodeId','')
+            "barcodeId": env.get('barcodeId',''),
+            "username": env.get('username','')
         }
+    try:
+        chipDescription = Chip.objects.filter(name=env.get('chipType','')).values_list('description',flat=True)[0]
+    except:
+        chipDescription = ''
+    dict['chipDescription'] = chipDescription
+        
     return dict
     
 def get_runplugin(env):
@@ -149,6 +157,13 @@ def get_plan(env):
         "samplePrepKitName": plan.get('samplePrepKitName'),
         "templatingKitName": plan.get('templatingKitName',''),
         "username": plan.get('username'),
+        
+        "sampleGrouping": plan.get("sampleGrouping"),
+        "sampleTubeLabel": plan.get("sampleTubeLabel"),
+        "sampleSet_name": plan.get("sampleSet_name"),
+        "sampleSet_planIndex": plan.get("sampleSet_planIndex"),
+        "sampleSet_planTotal": plan.get("sampleSet_planTotal"),
+        "sampleSet_uid": plan.get("sampleSet_uid"),
         
         "sequencekitname": exp.get('sequencekitname',''), 
     }

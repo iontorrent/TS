@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
+{% load url from future %}
 {% load pagetools %}
+{% load static from staticfiles %}
 <head>
     {% block head %}
 
@@ -26,46 +28,64 @@
             }());
     }
     </script>
-    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
+    <link rel="stylesheet" media="all" href="{% static "resources/bootstrap/css/bootstrap.min.css"%}" />
 
     {% block responsive %}
-        <link rel="stylesheet" href="/site_media/resources/bootstrap/css/bootstrap-responsive.min.css" >
+        <link rel="stylesheet" href="{% static "resources/bootstrap/css/bootstrap-responsive.min.css"%}" >
     {% endblock responsive %}
 
     <!--In the header of your page, paste the following for Kendo UI Web styles-->
-    <link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
-    <link href="/site_media/resources/less/kendo.tb.min.css" rel="stylesheet" />
+    <link href="{% static "resources/kendo/styles/kendo.common.min.css"%}" rel="stylesheet" />
+    <link href="{% static "resources/less/kendo.tb.min.css"%}" rel="stylesheet" />
     {% block extra_head_styles %}{% endblock extra_head_styles %}
 
-    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
-    <link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+    <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-layout.css"%}" />
+    <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-styles.min.css"%}" />
 
-    <script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
-    <script type="text/javascript" src="/site_media/resources/jquery/jquery.cookie.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/tb.jquery.min.js"></script> 
-    <script type="text/javascript" src="/site_media/js/json2.min.js"></script> <!-- include in cases browser doesn't natively support JSON.stringify -->
-    <script type="text/javascript" src="/site_media/resources/bootstrap/js/bootstrap.min.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/kendo.custom.min.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/kendo.grid.override.min.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/mockup.min.js"></script> 
-    <script type="text/javascript" src="/site_media/resources/scripts/tb.min.js"></script> 
-    <script src="/site_media/js/underscore.min.js"></script>
-    <script src="/site_media/js/backbone.min.js"></script>
-    <script src="/site_media/js/messagebox.min.js"></script>  
+    <script type="text/javascript" src="{% static "resources/jquery/jquery-1.8.2.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/jquery/jquery.cookie.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/tb.jquery.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "js/json2.min.js"%}"></script> <!-- include in cases browser doesn't natively support JSON.stringify -->
+    <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/kendo.custom.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/kendo.grid.override.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/mockup.min.js"%}"></script>
+    <script type="text/javascript" src="{% static "resources/scripts/tb.min.js"%}"></script>
+    <script src="{% static "js/underscore.min.js"%}"></script>
+    <script src="{% static "js/backbone.min.js"%}"></script>
+    <script src="{% static "js/messagebox.min.js"%}"></script>
 
     {% block extra_head_js %}{% endblock extra_head_js %}
 
     {% endblock head %}
 
     {% block extra_head %}{% endblock extra_head %}
-    <script type="text/javascript" src="/site_media/resources/scripts/tb-bootstrap-modal.min.js"></script> <!-- Must be last to override the bootstrap modal default behavior -->
+    <script type="text/javascript" src="{% static "resources/scripts/tb-bootstrap-modal.min.js"%}"></script> <!-- Must be last to override the bootstrap modal default behavior -->
 </head>
 <body>
+<noscript>
+    <style type="text/css">
+        .header{display:none;}
+        .sub-nav{display:none;}
+        .main{display:none;}
+        .footer{display:none;}
+        .alert{
+            margin-top: 100px;
+        }
+    </style>
+    <div class="container">
+        <div class="alert alert-block">
+            <h1>Warning!</h1>
+            <h3>The Torrent Browser requires JavaScript. Please ensure that your browser has JavaScript enabled.</h3>
+        </div>
+    </div>
+</noscript>
 <div class="header">
     <div class="container-fluid">
         <div class="row-fluid">
             <div class="span12">
-                <h1 class="logo pull-left">{{base_site_name}}</h1>
+                {% comment %} <!-- Display a via referer_site_name if planning wizard is embedded or setup to postback --> {% endcomment %}
+                <h1 class="logo pull-left">{{base_site_name}}{% if referer_site_name %} <small>via {{referer_site_name}}</small>{% endif %}</h1>
                 <ul class="nav nav-pills utility-menu pull-right">
                 {% if user.is_authenticated %} 
                     <li><span>Hi, {{ user.get_full_name|default:user.username }}</span></li>
@@ -86,7 +106,7 @@
                         </ul>
                     </li>
                 {% if user.is_authenticated %} 
-                    <li><a href="{% url logout %}">Sign Out</a></li>
+                    <li><a href="{% url "logout" %}">Sign Out</a></li>
                 {% endif %}
                 </ul>
             </div>
@@ -135,7 +155,7 @@
     <div class="container">
         <div class="row">
             <div class="span12">
-                <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+                <img class="pull-left" src="{% static "resources/img/ion-logo2.png"%}" border="0">
                 <div class="pull-right">
                     <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
                     <p><span class="copyright">&copy; 2013 Life Technologies Corporation. All Rights Reserved.</span>

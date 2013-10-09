@@ -3,10 +3,13 @@
 //#include <armadillo>
 #include "LevMarFitterV2.h"
 #include "BkgFitLevMarDat.h"
+#include <float.h>
+#include <cblas.h>
 
 using namespace arma;
 
-int LevMarFitterV2::Fit (int max_iter,
+int LevMarFitterV2::Fit (bool gauss_newton,
+                         int max_iter,
                          float *y,
                          float *params,
                          float *std_err)
@@ -31,8 +34,9 @@ int LevMarFitterV2::Fit (int max_iter,
   
   r_start = CalcResidual (y, fval, npts, &err_vect[0]);
   r_start += EvaluateParamFromPrior (params); // account for prior
-
-  while (!DoneTest (iter,max_iter,data,lambda,done_cnt,r_start,r_chg) and !ForceQuit(iter,max_iter, lambda))
+   
+  bool converged = false;
+  while (!(converged = DoneTest (iter,max_iter,data,lambda,done_cnt,r_start,r_chg)) and !ForceQuit(iter,max_iter, lambda))
   {
 
     // remember the last residual for comparison later
@@ -45,10 +49,15 @@ int LevMarFitterV2::Fit (int max_iter,
     // attempts with larger values of lambda would succeed.  In this case, a new value of lambda
     // can be attempted, but the jtj and rhs matricies did not actually change and do not
     // need to be re-computed
-    TryLevMarStep (y, &fval[0], params, &err_vect[0], &bfjtj[0], &bfrhs[0], done_cnt, r_start, r_chg);
+
+    if (gauss_newton)
+      TryGaussNewtonStep(y, &fval[0], params, &err_vect[0], &bfjtj[0], &bfrhs[0], done_cnt, r_start, r_chg);
+    else 
+      TryLevMarStep (y, &fval[0], params, &err_vect[0], &bfjtj[0], &bfrhs[0], done_cnt, r_start, r_chg);
     iter++;
   }
 
+  SetConverged(converged);
   residual = r_start;
 
   // compute parameter std errs
@@ -371,6 +380,124 @@ void LevMarFitterV2::TryLevMarStep (float *y,
   }
   // bailed out of loop
 }
+
+void LevMarFitterV2::TryGaussNewtonStep(float *y,
+                                    float *fval,
+                                    float *params,
+                                    float *err_vect,
+                                    double *bfjtj,
+                                    double *bfrhs,
+                                    int done_cnt,
+                                    float &r_start,
+                                    float &r_chg)
+{
+  float r_trial;
+  float tmp[npts];
+  float params_new[nparams];
+
+  {
+    
+    // can actually check against zero here because that is the problem
+    if ((nparams==1) & (bfjtj[0]==0.0f)) // one entry, it is zero, and our regularizer is zero armadillo does not throw exception but NaN
+      regularizer += REGULARIZER_VAL;  // this is a problem with our derivative calculation when we hit the top of the box
+      
+    // add regularizer in case we have trouble
+    for (int i=0;i < nparams;i++)
+      bfjtj[i*nparams+i] += regularizer;
+    
+    // solve for delta
+    try
+    {
+      for (int r=0;r < nparams;r++)
+      {
+        data->rhs->at (r) = bfrhs[r];
+
+        for (int c=0;c < nparams;c++)
+          data->lhs->at (r,c) = bfjtj[r*nparams+c];
+      }
+
+      * (data->delta) = solve (* (data->lhs),* (data->rhs));
+
+      bool NaN_detected = false;
+      for (int i=0;i < nparams;i++)
+      {
+        double tmp_eval = data->delta->at(i);
+        
+        // test for NaN
+        if (tmp_eval != tmp_eval)
+        {
+          NaN_detected = true;
+          data->delta->at (i) = 0.0;
+          tmp_eval = 0.0;
+        }
+        // if tmp_eval out of range for float, it's a disaster all around
+        tmp_eval += params[i]; // safe promotion from float to double
+        if ((tmp_eval>FLT_MAX) or (tmp_eval<-FLT_MAX)) // no adjust if disaster
+        {
+          tmp_eval = params[i]; 
+          data->delta->at(i) = 0.0;
+        }
+        // adjust parameter from current baseline
+        params_new[i] = tmp_eval; // demotion from double to float
+      }
+      // make this virtual in case constraints need to be non-orthogonal boxes
+      ApplyMoveConstraints (params_new);
+      // apply limits if necessary
+
+      if (!NaN_detected)
+      {
+        // re-calculate error
+        Evaluate (tmp,params_new);
+        // dynamic emphasis
+        DetermineAndSetWeightVector(params_new[0]);
+
+        // calculate error bw function and data
+        r_trial = CalcResidual (y, tmp, npts, &err_vect[0]);
+        r_trial += EvaluateParamFromPrior (params_new);
+        r_chg = r_trial - r_start;
+      }
+      else{
+          char my_message[1024];
+          sprintf(my_message,"LevMarFitterV2.cpp: NaN in TrygaussNewtonStep matrix solve - at %f %f", regularizer,params[0]);
+          LinSolveErrMessage(my_message);
+      }
+
+      if (!NaN_detected && (r_trial < r_start))
+      {
+        memcpy (params,params_new,sizeof (float[nparams]));
+        memcpy (fval,tmp,sizeof (float[npts]));
+        r_start = r_trial;
+        if (enable_fval_cache)
+          memcpy (fval_cache,fval,sizeof (float[npts]));
+      }
+      else {
+        DetermineAndSetWeightVector(params[0]);
+      }
+
+      if (debug_trace)
+        printf ("lambda = %f, done = %d\n",lambda,done_cnt);
+
+    }
+    catch (std::runtime_error &le)
+    {
+      // a failed solution of the matrix should be treated just like a failed attempt
+      // at improving the fit...increase lambda and try again
+      if (2.0*regularizer>REGULARIZER_VAL)
+      {
+        // you're not an exception until you're an exception with a probably nonzero determinant
+        numException++;
+        LinSolveErrMessage("LevMarFitterV2.cpp: Fit - exception runtime ...");
+      }
+      data->delta->set_size (nparams);
+      data->delta->zeros (nparams);
+      regularizer += REGULARIZER_VAL; // keep adding until we're nonzero on the diagonal
+    }
+
+    if (debug_trace)
+      printf ("lambda = %f, done = %d\n",lambda,done_cnt);
+  }
+}
+
 
 
 void LevMarFitterV2::CalculateJTJ (double *bfjtj, float *bfjac)

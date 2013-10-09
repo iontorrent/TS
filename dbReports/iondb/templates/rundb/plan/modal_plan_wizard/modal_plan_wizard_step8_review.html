@@ -152,7 +152,20 @@
                     </tr>
                 </table>
                 </p>
-
+                <!--20130520kchoi -->
+                <p>
+                <table class="plan-grid">
+                    <tr>
+                        <td width="50%" style="line-height:100%; font-weight: bold;">Mark as PCR Duplicates: </td>
+                        {% if selectedApplProductData %}
+                            <td width="100%" id="review_isDuplicateReads" style="line-height:100%;" ></td>
+                        {% else %}
+                            <td width="70%" id="review_isDuplicateReads" style="line-height:100%;" >{{selectedPlanTemplate.isDuplicateReads}}</td>
+                        {% endif %}
+                    </tr>
+                </table>
+                
+                </p>
             {% else %}
                 <h3>Kits</h3>
                 <p>
@@ -222,8 +235,22 @@
                             {% endif %}
                         {% endif %}
                     </tr>
-                </table>
+                </table>                
                 </p>
+
+                <p>
+                <table class="plan-grid">
+                    <tr>
+                        <td width="50%" style="line-height:100%; font-weight: bold;">Mark as PCR Duplicates: </td>
+                        {% if selectedApplProductData %}
+                            <td width="100%" id="review_isDuplicateReads" style="line-height:100%;" ></td>
+                        {% else %}
+                            <td width="70%" id="review_isDuplicateReads" style="line-height:100%;" >{{selectedPlanTemplate.isDuplicateReads}}</td>
+                        {% endif %}
+                    </tr>
+                </table>
+                
+                </p>                
             {% endif %}
             <br>
         </div>

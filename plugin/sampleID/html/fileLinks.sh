@@ -32,4 +32,5 @@ fi
 if [ -f "${OUTDIR}/$PLUGIN_OUT_BAIFILE" ]; then
   echo -e "Download the mapped reads index file. (binaryfile.bai)\t${PLUGIN_OUT_BAIFILE}" >> "$OUTFILE"
 fi
+echo "<div id=\"fileLinksTable\" fileurl=\"${PLUGIN_OUT_FILELINKS}\" class=\"center\"></div>" >> $HTMLOUT
 }

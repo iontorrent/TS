@@ -4,9 +4,9 @@
 TEST=0  # Set to 1 to go into debug and not make changes to svn or apt
 
 USER=aptadmin
-SERVER=updates.ite
+SERVER=updates.itw
 PUBDIR=${PUBDIR-"lucid-alpha"}
-PUBPATH=/home/aptadmin/public_html/updates_server_root/updates/software/$PUBDIR
+PUBPATH=/rhome/aptadmin/public_html/updates_server_root/updates/software/$PUBDIR
 
 for arg in "$@"; do
 
@@ -105,9 +105,10 @@ done
 # Update the Packages.gz file
 echo "Writing new Packages.gz file"
 if [ $TEST -eq 1 ]; then
-    echo "TESTING: file would have been uploaded and Packages.gz would have been updated"
+    echo "TESTING: file would have been uploaded to ${PUBDIR} and Packages.gz would have been updated"
 else
-    ssh $USER@$SERVER "cd $PUBPATH/.. && rm -f $PUBDIR/Packages.gz && apt-ftparchive packages $PUBDIR | gzip > $PUBDIR/Packages.gz"
+	dbfile=${PUBDIR}.db
+    ssh $USER@$SERVER "cd $PUBPATH/.. && rm -f $PUBDIR/Packages.gz && apt-ftparchive -d $dbfile packages $PUBDIR | gzip > $PUBDIR/Packages.gz"
     if [ $? -ne 0 ]
     then
         echo "There was an error creating the Packages.gz file"

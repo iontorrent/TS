@@ -6,6 +6,7 @@
         "system": {
             "allservers": [
                 "traceroute",
+                "ethtool",
                 "arp-scan",
                 "nmap",
                 "links",
@@ -20,6 +21,7 @@
                 "imagemagick",
                 "emacs23",
                 "vcftools",
+                "bedtools",
                 "vim",
                 "nano",
                 "curl",
@@ -44,6 +46,7 @@
                 "samba",
                 "zip",
                 "libz-dev",
+                "libxml2-dev",
                 "postfix",
                 "python-pysam",
                 "python-simplejson",
@@ -52,18 +55,18 @@
                 "python-rpy2",
                 "python-django",
                 "python-gnuplot",
+                "python-requests",
                 "perl",
                 "perl-doc",
-                "emboss-data",
-                "emboss-lib",
-                "libnucleus6",
-                "libajax6",
                 "openjdk-6-jre",
                 "gnuplot-x11",
                 "putty-tools",
                 "gawk",
                 "tmpreaper",
-                "timelimit"
+                "timelimit",
+                "dkms",
+                "megaraid-sas-dkms",
+                "lvm2"
             ],
             "master": [
                 "gridengine-master",
@@ -89,7 +92,6 @@
             "allservers": [
                 "ion-gpu",
                 "ion-analysis",
-                "ion-alignment",
                 "ion-pipeline",
                 "samtools",
                 "ion-rsmts",

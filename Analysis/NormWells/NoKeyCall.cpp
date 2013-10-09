@@ -62,11 +62,11 @@ float NoKeyCall::Incorporation(size_t const t0_ix, const size_t t_end_ix, vector
   return incorporation;
 }
 
-void NoKeyCall::NormalizeBeadSignal(std::vector<float> const& signal, std::vector<double>& peaks, std::vector<float>& normedSignal)
+void NoKeyCall::NormalizeBeadSignal(std::vector<float> const& signal, std::vector<double>& peaks, std::vector<float>& normedSignal, float failure_val)
 {
   if (peaks.size() < 2){
     // give up and do nothing
-    normedSignal.assign(signal.begin(), signal.end());
+    normedSignal.assign(normedSignal.size(), failure_val);
     return;
   }
   for (size_t i=0; i< peaks.size()-1; i++)

@@ -1,10 +1,26 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
+find_program(LSB_RELEASE_COMMAND lsb_release)
+if(LSB_RELEASE_COMMAND)
+    execute_process(COMMAND ${LSB_RELEASE_COMMAND} -s -c
+        OUTPUT_VARIABLE TMP_LSB_RELEASE_CODENAME
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    string(TOLOWER ${TMP_LSB_RELEASE_CODENAME} LSB_RELEASE_CODENAME)
+    message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
+endif(LSB_RELEASE_COMMAND) 
+
 option(ION_USE_MKL "Using Intel MKL" OFF)
 mark_as_advanced(ION_USE_MKL)
 
 option(ION_USE_SYSTEM_CUDA "Use CUDA system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_CUDA)
+
+if (${LSB_RELEASE_CODENAME} STREQUAL "sid")
+  option(ION_USE_CUDA "Compile CUDA code" ON)
+else()
+  option(ION_USE_CUDA "Compile CUDA code" ON)
+endif()
+mark_as_advanced(ION_USE_CUDA)
 
 option(ION_USE_SYSTEM_SAMTOOLS "Use samtools system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_SAMTOOLS)
@@ -12,10 +28,24 @@ mark_as_advanced(ION_USE_SYSTEM_SAMTOOLS)
 option(ION_USE_SYSTEM_BAMTOOLS "Use bamtools system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
 
-option(ION_USE_SYSTEM_FFTW "Use fftw system libraries" OFF)
+if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "raring")
+  option(ION_USE_SYSTEM_FFTW "Use fftw system libraries" ON)
+else()
+  option(ION_USE_SYSTEM_FFTW "Use fftw system libraries" OFF)
+endif()
 mark_as_advanced(ION_USE_SYSTEM_FFTW)
 
-option(ION_USE_SYSTEM_HDF5 "Use hdf5 system libraries" OFF)
+if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "raring")
+  option(ION_USE_SYSTEM_HDF5 "Use hdf5 system libraries" ON)
+else()
+  option(ION_USE_SYSTEM_HDF5 "Use hdf5 system libraries" OFF)
+endif()
 mark_as_advanced(ION_USE_SYSTEM_HDF5)
 
 option(ION_USE_SYSTEM_ARMADILLO "Use armadillo system libraries" OFF)
@@ -47,7 +77,7 @@ ExternalProject_add(${cuda_toolkit}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
     INSTALL_COMMAND ""
-    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/cuda_toolkit-5.0.35.patch" 
+#    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/cuda_toolkit-5.0.35.patch" 
 )
 
 
@@ -156,14 +186,6 @@ else()
 endif()
 
 
-set(LIBKMEANSFILE "${PROJECT_SOURCE_DIR}/../external/kmeans-1.7/libkmeans.a")
-add_custom_command(OUTPUT ${LIBKMEANSFILE}
-    COMMAND "make"
-    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}/../external/kmeans-1.7")
-add_library(LIBKMEANS STATIC IMPORTED)
-set_property(TARGET LIBKMEANS PROPERTY IMPORTED_LOCATION ${LIBKMEANSFILE})
-include_directories("${PROJECT_SOURCE_DIR}/../external/kmeans-1.7")
-
 if(NOT ION_USE_SYSTEM_BOOST)
   set(proj_name "boost")
   set(proj_version "1.49.0")
@@ -192,10 +214,10 @@ endif()
 
 if(NOT ION_USE_SYSTEM_UNWIND)
   set(proj_name "unwind")
-  set(proj_version "1.0.1")
+  set(proj_version "1.1")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/libunwind-1.0.1.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/libunwind-1.1.tar.gz"
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
     BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
@@ -225,10 +247,10 @@ include_directories("${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.
 
 if (NOT ION_USE_SYSTEM_SAMTOOLS)
   set(proj_name "samtools")
-  set(proj_version "0.1.18+git20130201+ion3")
+  set(proj_version "0.1.19+ion1")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/samtools-0.1.18+git20130201.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/samtools-0.1.19.tar.gz"
     #URL_MD5 7373854ca343ebee6a52874fcfc3a4a4
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
@@ -236,7 +258,7 @@ if (NOT ION_USE_SYSTEM_SAMTOOLS)
     CMAKE_ARGS
        -DBUILD_SHARED_LIBS:BOOL=OFF
        -DCMAKE_INSTALL_PREFIX:PATH=${PROJECT_BINARY_DIR}/../${proj_name_version}-install
-    PATCH_COMMAND patch -p0 -t -N < "${ION_TS_EXTERNAL}/samtools-0.1.18+git20130201+ion3.patch"
+    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/samtools-0.1.19+ion1.patch"
   )
   include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include")
   set(ION_SAMTOOLS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libbam.a")
@@ -248,10 +270,10 @@ endif()
 
 if (NOT ION_USE_SYSTEM_PICARD)
   set(proj_name "picard")
-  set(proj_version "1.77")
+  set(proj_version "1.96")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
-    URL "http://updates.iontorrent.com/updates/software/external/picard-tools-1.77.tar.gz"
+    URL "http://updates.iontorrent.com/updates/software/external/picard-tools-1.96.tar.gz"
     #URL_MD5 
     # in source build
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
@@ -308,3 +330,18 @@ else()
   set(ION_LEVMAR_LIBS ${LEVMAR_LIBRARIES})
 endif()
 
+
+  set(proj_name "kmeans_proj")
+  set(proj_version "1.7")
+  set(proj_name_version "${proj_name}-${proj_version}")
+  ExternalProject_add(${proj_name}
+    URL             "http://updates.iontorrent.com/updates/software/external/kmlocal-1.7.2.tar.gz"
+    PREFIX          ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
+    SOURCE_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}
+    BINARY_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
+#    CMAKE_ARGS      
+    INSTALL_COMMAND ""
+    PATCH_COMMAND patch -p0 -t -N < "${ION_TS_EXTERNAL}/kmeans-1.7+ion1.patch"
+  )
+  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}/src")
+  set(ION_KMEANS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-build/libkmeans.a")

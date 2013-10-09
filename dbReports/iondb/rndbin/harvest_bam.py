@@ -33,16 +33,16 @@ def main(project_names, destination):
         logfilename = "prjlog__%s.csv" % project_name
         make_log_entry("Date: "+datetime.now().strftime("%Y-%m-%d"))
         make_log_entry("Project: %s" % project_name)
-        make_log_entry("Project,Result,BAM,BAI,Copied")
+        make_log_entry("Project,Result,Version,BAM,BAI,Copied")
         print "Processing Project: %s" % project_name
 
         for result in get_desired_results(project_name):
             #print "Result Name: %s" % result.resultsName
             bampath,baipath = get_desired_filepaths(result)
-
+            analysisVersion = get_analysis_version(result)
             if bampath is None or baipath is None:
                 print "Error. BAM and/or BAI is missing"
-                make_log_entry("%s,%s,%s,%s" % (project_name,result.resultsName,bampath,baipath))
+                make_log_entry("%s,%s,%s,%s,%s" % (project_name,result.resultsName,analysisVersion,bampath,baipath))
                 continue
 
             src_size = os.stat(bampath).st_size
@@ -58,16 +58,31 @@ def main(project_names, destination):
                         os.makedirs(dest_dir)
 
                     print "Copying %d bytes to available %d bytes" %(src_size,dst_size)
-                    try:
-                        shutil.copy2(bampath,dest_dir)
-                        shutil.copy2(baipath,dest_dir)
-                    except:
-                        traceback.print_exc()
-                    make_log_entry("%s,%s,%s,%s,%s" % (project_name,result.resultsName,bampath,baipath,dest_dir))
+                    faster = True
+                    if faster:
+                        try:
+                            status = os.system("rsync -tLv %s %s" % (bampath, dest_dir))
+                            if status:
+                                print(sys.exc_info()[0])
+
+                            status = os.system("rsync -tLv %s %s" % (baipath, dest_dir))
+                            if status:
+                                print(sys.exc_info()[0])
+
+                        except Exception, err:
+                            print(sys.exc_info()[0])
+                            print(err)
+                    else:
+                        try:
+                            shutil.copy2(bampath,dest_dir)
+                            shutil.copy2(baipath,dest_dir)
+                        except:
+                            traceback.print_exc()
+                    make_log_entry("%s,%s,%s,%s,%s,%s" % (project_name,result.resultsName,analysisVersion,bampath,baipath,dest_dir))
                 else:
                     print "Error: Not enough disk space to complete"
             else:
-                make_log_entry("%s,%s,%s,%s" % (project_name,result.resultsName,bampath,baipath))
+                make_log_entry("%s,%s,%s,%s,%s" % (project_name,result.resultsName,analysisVersion,bampath,baipath))
 
     print "\nProject Requires %0.3f MB" % (float(project_space_total)/(1024*1024))
 
@@ -102,6 +117,20 @@ def get_desired_filepaths(result):
         return (None,None)
 
     return (full_path,full_path+'.bai')
+
+
+def get_analysis_version(report):
+    def getElementContaining(theList, text):
+        try:
+            for item in theList.split(','):
+                elements = item.split(':')
+                if text == elements[0]:
+                    return elements[1]
+        except:
+            pass
+        return ''
+    versionString = getElementContaining(report.analysisVersion, 'an')
+    return versionString
 
 
 def get_desired_results(project_name):

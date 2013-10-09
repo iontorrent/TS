@@ -23,17 +23,58 @@ bool StackPlus::CheckValidAlignmentPosition(const InputStructures &global_contex
 
 // ------------------------------------------------------------
 
+int StackPlus::GetNumberOfMismatches(const BamTools::BamAlignment &alignment) {
+
+  int num_mismatches = 0;
+  string md_tag;
+
+  if (!alignment.GetTag("MD", md_tag))
+    return 0;
+
+  unsigned int md_idx = 0;
+  bool is_deletion = false;
+
+  while (md_idx < md_tag.length()) {
+    if (md_tag.at(md_idx) >= '0' and md_tag.at(md_idx) <='9') {  // it's a match
+      is_deletion = false;
+    } else if (md_tag.at(md_idx) == '^') {                       // it's a deletion
+      is_deletion = true;
+    } else if (md_tag.at(md_idx) >= 'A' and md_tag.at(md_idx) <= 'Z') {
+      if (!is_deletion)
+        num_mismatches++;
+    }
+    md_idx++;
+  }
+  return num_mismatches;
+}
+
+// ------------------------------------------------------------
+
 // See if read spans variant or mapping qv is too low
-bool StackPlus::AlignmentReadFilter(const InputStructures &global_context, const BamTools::BamAlignment &alignment, int variant_end_pos) {
+bool StackPlus::AlignmentReadFilters(const InputStructures &global_context, const BamTools::BamAlignment &alignment, int variant_end_pos) {
 
   // Check whether this read should be skipped
-  if (alignment.GetEndPosition() < variant_end_pos)
+  if (alignment.GetEndPosition() < variant_end_pos) {
+  num_terminate_early++;
+	if (global_context.DEBUG>2)
+	cout << "Stackplus:: Alignment End Pos. " << alignment.GetEndPosition() << " < " << variant_end_pos << " variant end pos." << endl;
     return (false);
+  }
 
+  // Mapping quality filter
   if (alignment.MapQuality < global_context.min_map_qv) {
 	num_map_qv_filtered++;
     return (false);
   }
+
+  // Absolute number of mismatches filter
+  if (GetNumberOfMismatches(alignment) > global_context.read_snp_limit) {
+    num_snp_limit_filtered++;
+    return (false);
+  }
+
+
+
   return (true);
 }
 
@@ -48,7 +89,7 @@ void StackPlus::ReservoirSampleReads(ExtendedReadInfo &current_read, unsigned in
     if (DEBUG>2)
       cout << "Read no. " << read_stack.size() << ": " << current_read.alignment.Name
            << " Start: " << current_read.alignment.Position << " End: " << current_read.alignment.GetEndPosition()
-           << " start SC: " << current_read.startSC << " end SC: " << current_read.endSC << " Forw.Strand: " << current_read.is_forward_strand
+           << " left SC: " << current_read.leftSC << " right SC: " << current_read.rightSC << " Forw.Strand: " << current_read.is_forward_strand
            << " Start Flow: " << current_read.start_flow << endl << current_read.alignment.QueryBases << endl;
   }
   else {
@@ -77,8 +118,10 @@ void StackPlus::StackUpOneVariant(PersistingThreadObjects & thread_objects,
   ExtendedReadInfo current_read(global_context.nFlows);
   string readGroup;
   bool validReadGroup = false;
-  read_counter = 0;
-  num_map_qv_filtered = 0;
+  read_counter           = 0;
+  num_map_qv_filtered    = 0;
+  num_snp_limit_filtered = 0;
+  num_terminate_early = 0;
 
   while (thread_objects.bamMultiReader.GetNextAlignment(current_read.alignment)) {
 
@@ -100,12 +143,21 @@ void StackPlus::StackUpOneVariant(PersistingThreadObjects & thread_objects,
     if (!CheckValidAlignmentPosition(global_context, current_read.alignment, (*candidate_variant)->sequenceName, variant_start_pos))
       break;
     // Go to next read if we're within range of the variant position but read group is not the desired one.
-    if (!validReadGroup)
+    if (!validReadGroup) {
+      if (global_context.DEBUG>2)
+        cout << "Read " << current_read.alignment.Name << " does not belong to valid read group " << readGroup << endl;
       continue;
-    if (!AlignmentReadFilter(global_context, current_read.alignment, variant_end_pos))
+    }
+    if (!AlignmentReadFilters(global_context, current_read.alignment, variant_end_pos)) {
+      if (global_context.DEBUG>2)
+        cout << "Read " << current_read.alignment.Name << " failed Alignment filters!" << endl;
       continue;
+    }
+    // Only if read unpacks and passes base quality filters consider it in down sampling
     if (current_read.UnpackThisRead(global_context, thread_objects.local_contig_sequence, global_context.DEBUG))
       ReservoirSampleReads(current_read, parameters->my_controls.downSampleCoverage, global_context.DEBUG);
+    else if (global_context.DEBUG>2)
+      cout << "Read " << current_read.alignment.Name << " did not unpack properly!" << endl;
   }
   if (read_stack.size()==0) {
     cerr << "Nonfatal: No reads found for " << (*candidate_variant)->sequenceName << "\t" << variant_start_pos << endl;
@@ -115,6 +167,8 @@ void StackPlus::StackUpOneVariant(PersistingThreadObjects & thread_objects,
   flow_order = global_context.flowOrder;
   if (global_context.DEBUG>0)
     cout <<"Stacked up " << read_stack.size() << " reads for variant " << (*candidate_variant)->sequenceName << ":"
-         <<  (*candidate_variant)->position << ". Base Depth: " << baseDepth << ". "
-         << num_map_qv_filtered << " of " << read_counter << " reads had too low map qv." << endl;
+         <<  (*candidate_variant)->position << ". Candidate Generation Read Depth: " << baseDepth << ". Filtered "
+         << num_map_qv_filtered << " reads with map qv < " << global_context.min_map_qv
+         << ", " << num_snp_limit_filtered << " reads with more than " << global_context.read_snp_limit << " snps."
+         << "reads terminated before variant " << num_terminate_early << endl;
 }

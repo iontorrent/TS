@@ -34,7 +34,7 @@ void AttemptClonalFilter(Mask& mask, const char* results_folder, std::vector<Reg
 
 void ApplyClonalFilter (Mask& mask, const char* results_folder, std::vector<RegionalizedData *>& sliced_chip, bool doClonalFilter, int flow)
 {
-  int applyFlow = ceil(1.0*mixed_last_flow() / NUMFB) * NUMFB - 1;
+  int applyFlow = ceil(1.0*mixed::mixed_last_flow / NUMFB) * NUMFB - 1;
   if (flow == applyFlow and doClonalFilter)
   {
     // Never give up just because filter failed.

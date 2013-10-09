@@ -286,7 +286,6 @@
       var libName = document.getElementById('librarytype')[libn].text;
       var tarn = document.coverageAnalysis.targetregions.selectedIndex;
       var useBcTargets = $('#barcodebeds').attr("checked");
-      var useSampleIDs = $('#sampleid').attr("checked");
       var bcTargetList = "";
       if( useBcTargets ) {
         bcTargetList = checkBarcodeTargets( $("#bctextarea").val() );
@@ -328,23 +327,26 @@
        if( !confirm(msg) ) return false;
        padval = document.coverageAnalysis.padtargets.value = 0;
       }
+      // force invisible options to be unchecked
+      if( libType == "wholegenome" ) {
+       //$("#trimreads").attr("checked",false);
+       $("#padtargets").attr("value","0");
+       $('#sampleid').attr("checked",false);
+      } else if( libType.substr(0,8) == "ampliseq" ) {
+       $("#nonduplicates").attr("checked",false);
+       $("#padtargets").attr("value","0");
+      } else if( libType == "targetseq" ) {
+       //$("#trimreads").attr("checked",false);
+       $('#sampleid').attr("checked",false);
+      }
       // safety code: targets are required for AmpliSeq runs
+      var useSampleIDs = $('#sampleid').attr("checked");
       if( useSampleIDs && tarn == 0 && bcTargetList == "" ) {
        var msg = "SampleID Tracking is typically used to account for additional targets in AmpliSeq runs.";
        msg += "\n(It is expected that Targeted Regions selection is made.)";
        msg += "\nTo look at coverage for just tracking targets it is recommended to use the sampleID plugin.";
        msg += "\n\nDo you wish to continue?";
        if( !confirm(msg) ) return false;
-      }
-      // force invisible options to be unchecked
-      if( libType == "wholegenome" ) {
-       //$("#trimreads").attr("checked",false);
-       $("#padtargets").attr("value","0");
-      } else if( libType.substr(0,8) == "ampliseq" ) {
-       $("#nonduplicates").attr("checked",false);
-       $("#padtargets").attr("value","0");
-      } else if( libType == "targetseq" ) {
-       //$("#trimreads").attr("checked",false);
       }
       // pass user selection with spaces translated to underscores
       var usrSel = document.getElementById('librarytype')[libn].text;

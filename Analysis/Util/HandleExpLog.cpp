@@ -312,8 +312,11 @@ char * GetChipId (const char *filepath)
 {
   // Method using the explog.txt
   char *argument = NULL;
+  char *chipversion = NULL;
   
   argument = GetExpLogParameter (filepath,"ChipType");
+  chipversion = GetExpLogParameter (filepath,"ChipMainVersion");
+   fprintf(stderr,"Returned  Chip Version %s from explog\n",chipversion);
   if (argument)
   {
     char *chip = (char *) malloc (10);
@@ -325,6 +328,11 @@ char * GetChipId (const char *filepath)
       if (isdigit (argument[i]))
         chip[y++] = argument[i];
     }
+    if (chipversion){
+           if(strncmp("900",argument,3)==0 && strncmp("P1.0",chipversion,4)==0) chip[1]='1'; 
+    }
+
+
     // Now if a chip is  316v2 or 316DEM
     if (((len>5)&& (strncmp ("316dem",argument,6) == 0))||((len>4)&&(strncmp ("316v2",argument,5) == 0))){
         chip[3]='v';
@@ -332,6 +340,7 @@ char * GetChipId (const char *filepath)
     }
     chip[y] = '\0';
     free (argument);
+    free (chipversion);
     fprintf(stderr,"Returned  ChipId %s from explog\n",chip);
     return (chip);
   } else {
@@ -370,7 +379,7 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
       dims[0] = 3392;
       dims[1] = 3792;
     }
-    else if (strncmp ("900",type,4) == 0)
+    else if ((strncmp ("900",type,4) == 0)|| (strncmp("910",type,4)==0))
     {
 
       // Method using the explog.txt

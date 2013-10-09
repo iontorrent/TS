@@ -648,8 +648,8 @@ void BaseCallerFilters::FilterHighPPFAndPolyclonal (int read_index, int read_cla
   if (read_class != 0 and !filter_clonal_enabled_tfs_)  // Filter disabled for TFs?
     return;
 
-  vector<float>::const_iterator first = measurements.begin() + mixed_first_flow();
-  vector<float>::const_iterator last  = measurements.begin() + mixed_last_flow();
+  vector<float>::const_iterator first = measurements.begin() + mixed::mixed_first_flow;
+  vector<float>::const_iterator last  = measurements.begin() + mixed::mixed_last_flow;
   float ppf = percent_positive(first, last);
   float ssq = sum_fractional_part(first, last);
 

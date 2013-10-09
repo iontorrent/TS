@@ -21,7 +21,7 @@ class NoKeyCall {
   int nbuffer;
 
   float Incorporation(size_t const t0_ix, size_t const tend_ix, std::vector<float> const& trace);
-  void NormalizeBeadSignal(std::vector<float> const& signal, std::vector<double>& peaks, std::vector<float>& normedSignal);
+  void NormalizeBeadSignal(std::vector<float> const& signal, std::vector<double>& peaks, std::vector<float>& normedSignal, float failure_val);
   void AddClonalPenalty(std::vector<float> const& signalInFlow, std::vector<float>& penalty, std::vector<int>& flowCount, int fnum, std::vector<int>& keyLen);
 
   void GetPeaks(std::vector<float> const& dat, std::vector<double>& out);

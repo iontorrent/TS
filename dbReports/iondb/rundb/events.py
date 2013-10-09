@@ -82,7 +82,6 @@ def logging_omni_handler(*args, **kwargs):
 
 
 def api_serializer(model_resource):
-    logger.debug("Setting up %s producer" % model_resource)
     resource = model_resource()
     def producer(sender, instance):
         logger.debug("Running %s producer" % resource)
@@ -116,7 +115,6 @@ event_handlers = []
 
 def register_events(event_consumers):
     "Read the settings' event config and attach to the relevant django signals"
-    logger.info("Starting event registration")
     global event_handlers
     event_handlers = []
     for (sender, when), consumers in event_consumers.items():

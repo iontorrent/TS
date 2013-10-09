@@ -10,6 +10,7 @@ typedef enum
   ChipId316v2 = 3,        
   ChipId318 = 4,
   ChipId900 = 5,
+  ChipId910 = 6,
 } ChipIdEnum;
 
 typedef struct

@@ -84,6 +84,7 @@ install(DIRECTORY iondb DESTINATION .
     PATTERN "*.pyo" EXCLUDE
 	PATTERN "iondb/backup" EXCLUDE
 )
+install(DIRECTORY DESTINATION /var/spool/ion DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
 install(PROGRAMS iondb/bin/ionCrawler DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionJobServer DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionPlugin DESTINATION /etc/init.d)
@@ -144,7 +145,7 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     libapache2-mod-gnutls,
     ssl-cert,
     python-celery (>= 3.0.12),
-    python-django (>= 1.4.4),
+    python-django (>= 1.5.1),
     python-django-celery (>= 3.0.11),
     python-django-south (>=0.7.6),
 	python-matplotlib,
@@ -159,9 +160,11 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     python-setuptools,
     python-httplib2 (>=0.7.2),
     python-dateutil,
+    python-requests,
     python-argparse,
-    python-tastypie (>= 0.9.11+ion1),
+    python-tastypie (>= 0.9.15),
 	python-drmaa,
+    python-feedparser,
     memcached,
     python-memcache,
     samtools (>= 0.1.18),

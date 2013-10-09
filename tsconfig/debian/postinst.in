@@ -11,8 +11,8 @@ case "$1" in
 
     # To add a Perl module, do 3 steps: add the *.tar.gz file itself
     # to external/perl directory, add *.tar.gz file name to
-    # alignTools/debian/postinst.in (this file), and add *.tar.gz file
-    # name to alignTools/CMakeLists.txt
+    # tsconfig/debian/postinst.in (this file), and add *.tar.gz file
+    # name to tsconfig/CMakeLists.txt
     
     # Keep this order to staisfy prerequesites:
     # IPC-System-Simple-1.21.tar.gz autodie-2.10.tar.gz

@@ -121,7 +121,10 @@ void ReplayH5DataSet::CreateDataset(hid_t hFile, hsize_t *chunk_dims)
     H5Pclose(dapl);
     H5Pclose(linkpl);
     mCreated = true;
-    fprintf(stdout, "H5: Created dataset: %s\n", mName);
+    fprintf(stdout, "H5: Created dataset: %s of rank %d with chunk dims = [", mName, (int)mRank);
+    for (int i=0; i<mRank; i++)
+      fprintf(stdout, " %llu ", chunk_dims[i]);
+    fprintf(stdout, "]\n");
   }
 }
 
@@ -200,7 +203,15 @@ void ReplayH5DataSet::Extend(hsize_t *size)
   herr_t status;
   if (extend){
     status = H5Dset_extent(mDataset, size);
-    fprintf(stdout, "H5: Extending %s from [%d, %d, %d] to [%d, %d, %d]\n", mName, (int)dims[0], (int)dims[1], (int)dims[2], (int)size[0], (int)size[1], (int)size[2]);
+
+    fprintf(stdout, "H5: Extending %s from [\n", mName);
+    for (int i=0; i<mRank; i++)
+      fprintf(stdout, " %llu ", dims[i]);
+    fprintf(stdout, "] to [ ");
+    for (int i=0; i<mRank; i++)
+      fprintf(stdout, " %llu ", size[i]);
+    fprintf(stdout, "]\n");
+
     assert (status >= 0);
     // redefine the dataspace
     H5Sclose(mDataspace);
@@ -415,7 +426,13 @@ H5ReplayRecorder::H5ReplayRecorder(std::string& h5File)
  * recorder to an already existing dataset
  */
 H5ReplayRecorder::H5ReplayRecorder(std::string& h5File, char *datasetname)
-  : H5Replay(h5File, datasetname) {}
+  : H5Replay(h5File, datasetname)
+{
+  if (datasetname != NULL){
+    Open();
+    Close();
+  }
+}
 
 /**
  * recorder to a possibly new dataset in a possibly new file

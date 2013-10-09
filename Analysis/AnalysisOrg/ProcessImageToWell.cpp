@@ -199,12 +199,20 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
   // plan (this happens whether we're from-disk or not):
   GlobalFitter.PlanComputation ( inception_state.bkg_control );
 
+  // tweaking global defaults for bkg model if GPU is used
+  if (GlobalFitter.IsGpuAccelerationUsed()) {
+      GlobalFitter.global_defaults.signal_process_control.amp_guess_on_gpu = 
+          (inception_state.bkg_control.gpuControl.gpuSingleFlowFit & 
+          inception_state.bkg_control.gpuControl.gpuAmpGuess);
+  }
+
   // do we have a wells file?
   ION_ASSERT( isFile(wellsFile.c_str()), "Wells file "+ wellsFile + " does not exist" );
 
   RawWells rawWells ( inception_state.sys_context.wellsFilePath, inception_state.sys_context.wellsFileName );
   // plan (this happens whether we're from-disk or not):
-  GlobalFitter.ThreadedInitialization ( rawWells, inception_state, from_beadfind_mask, inception_state.sys_context.GetResultsFolder(), my_image_spec,
+  GlobalFitter.ThreadedInitialization ( GlobalFitter.global_defaults,
+                                        rawWells, inception_state, from_beadfind_mask, inception_state.sys_context.GetResultsFolder(), my_image_spec,
 					my_prequel_setup.smooth_t0_est,my_prequel_setup.region_list, my_prequel_setup.region_timing, my_keys, restart);
 
   MemUsage ( "AfterBgInitialization" );
@@ -229,7 +237,13 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
 
   GlobalFitter.SpinUp();
   // need to have initialized the regions for this
-  GlobalFitter.SetRegionProcessOrder ();
+  GlobalFitter.SetRegionProcessOrder (inception_state);
+
+  // init h5 for the bestRegion, this could be done in ThreadedInitialization(), and had to wait until setRegionProcessOrder
+  GlobalFitter.InitBeads_BestRegion(inception_state);
+
+  // init trace-output for the --bkg-debug-trace-sse/xyflow/rcflow options
+  GlobalFitter.InitBeads_xyflow(inception_state);
 
   // determine maximum beads in a region for gpu memory allocations
   GlobalFitter.DetermineMaxLiveBeadsAndFramesAcrossAllRegionsForGpu();
@@ -277,6 +291,10 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
     signal_proc_timer.elapsed(); 
     fprintf ( stdout, "SigProc: pure compute time for flow %d: %.1f sec.\n", flow, signal_proc_timer.elapsed());
     MemUsage ( "Memory_Flow: " + ToStr ( flow ) );
+    if (inception_state.bkg_control.bkg_debug_files) {
+      GlobalFitter.DumpBkgModelRegionInfo ( inception_state.sys_context.GetResultsFolder(),flow,last_flow );
+      GlobalFitter.DumpBkgModelBeadInfo ( inception_state.sys_context.GetResultsFolder(),flow,last_flow, inception_state.bkg_control.debug_bead_only>0 );
+    }
 
     // hdf5 dump of bead and regional parameters in bkgmodel
     if (inception_state.bkg_control.bkg_debug_files)

@@ -2,13 +2,23 @@
 {% load ion_readable %}
 
 <div id="readlength" class="span4 well centered read-length">
-    <a data-toggle="modal" class="report-metric-visual showImg" href="#readLengthModal">
-        <div class="number-chunk">
+    <div class="number-chunk row-fluid">
+        <div class="span4">
             <h2>{{quality|bracket:"Mean Read Length at Q0"|float2int}} bp</h2>
-            <small rel='tooltip' title="Average length of called reads">Mean Read Length</small>
+            <small rel='tooltip' title="Mean length of called reads">Mean</small>
         </div>
+        <div class="span4">
+            <h2>{{read_stats.median_length|float2int}} bp</h2>
+            <small rel='tooltip' title="Median length of called reads">Median</small>
+        </div>
+        <div class="span4">
+            <h2>{{read_stats.mode_length|float2int}} bp</h2>
+            <small rel='tooltip' title="Mode length of called reads">Mode</small>
+        </div>
+    </div>
+    <a data-toggle="modal" class="report-metric-visual showImg" href="#readLengthModal">
         <h2>Read Length</h2>
-        <img class="showImg" src="{{report.reportWebLink}}/basecaller_results/readLenHisto2.png">
+        <img class="showImg" src="{{report.reportWebLink}}/basecaller_results/readLenHisto2.png"> <i class="icon-zoom-in"></i>
     </a>
 
     <div class="modal hide" id="readLengthModal" style="width: 830px; margin-left: -415px;">

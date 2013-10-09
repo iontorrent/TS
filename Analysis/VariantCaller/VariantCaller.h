@@ -32,17 +32,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <levmar.h>
+
 #include <Variant.h>
-#include "peakestimator.h"
+
 #include "stats.h"
+#include <armadillo>
 
 
 #include "HypothesisEvaluator.h"
 #include "ExtendParameters.h"
-#include "FlowDist.h"
+
 #include "InputStructures.h"
-#include "AlignmentAssist.h"
 #include "HandleVariant.h"
 #include "ThreadedVariantQueue.h"
 #include "Splice/ErrorMotifs.h"

@@ -9,42 +9,23 @@ from iondb.bin import djangoinit
 from iondb.rundb import models
 from django.db.models import Q
 
+# Convert list of lists into dictionary
+storage = {}
+for item in models.Experiment.STORAGE_CHOICES:
+    storage[item[0]] = item[1]
 
-def main(list):
-    '''main function'''
+def show_keepers():
+    # All SigProc Stat objects
+    sigprocstats = models.DMFileStat.objects.filter(dmfileset__type="Signal Processing Input").order_by('created')
+    print "All SigProc objects count: %d" % sigprocstats.count()
 
-    # Convert list of lists into dictionary
-    storage = {}
-    for item in models.Experiment.STORAGE_CHOICES:
-        storage[item[0]] = item[1]
+    # Limit to objects marked keep
+    sigprocstats = sigprocstats.filter(result__experiment__storage_options = 'KI')
+    print "All SigProc objects Local marked Keep count: %d" % (sigprocstats.count())
 
-    #dbase query
-    query = None
-    for item in list:
-        if query:
-            query |= Q(storage_options=item)
-        else:
-            query = Q(storage_options=item)
-    runs = models.Experiment.objects.filter(query).order_by('date')
-
-    #------------------
-    # Prints to stdout
-    #------------------
-    for i, run in enumerate(runs, start=1):
-        print ("(%d) RUN: %s" % (i, run.expName))
-        print ("DATE: %s" % run.date.strftime("%B %d, %Y"))
-        print ("STORAGE: %s" % storage[run.storage_options])
-        print ("SIZE: %s mb" % run.diskusage)
-        print ("NOTES: %s" % run.notes)
-        try:
-            projects = run.results_set.values_list(
-                'projects__name', flat=True).distinct()
-            projects = [project for project in projects if project is not None]
-            print ("PROJECTS: %s" % ",".join(projects))
-        except:
-            print ("PROJECTS: %s" % projects)
-        print ("DIRECTORY: %s" % os.path.dirname(run.expDir))
-        print ("-----")
+    # Limit to objects with files on filesystem
+    sigprocstats = sigprocstats.filter(action_state='L')
+    print "All SigProc objects Local count: %d" % sigprocstats.count()
 
     #--------------------
     # Writes to csv file
@@ -52,19 +33,32 @@ def main(list):
     with open('runlist.csv', 'w') as fout:
         print ("Writing output file: runlist.csv")
         fout.write("DATE,NAME,STORAGE,SIZE,NOTE,PROJECT,DIRECTORY\n")
-        for i, run in enumerate(runs, start=1):
+
+        dupes_list = []
+
+        for stat in sigprocstats:
+
+            run = stat.result.experiment
+
+            # Only need single instance of a Run Name in the output
+            if run.expName in dupes_list:
+                continue
+            else:
+                dupes_list.append(run.expName)
 
             projects = run.results_set.values_list(
-                'projects__name', flat=True).distinct()
+                    'projects__name', flat=True).distinct()
             projects = [project for project in projects if project is not None]
 
             fout.write("%s,%s,%s,%s,%s,%s,%s\n" %
                        (run.date.strftime("%Y-%m-%d"),
-                        run.expName, storage[run.storage_options],
+                        run.expName,
+                        'Keep',
                         run.diskusage,
-                        run.notes.replace(',', ' '),
+                        run.notes.replace(',', ' ') if run.notes != None else '',
                         ";".join(projects),
                         os.path.dirname(run.expDir)))
+
 
     #-----------------
     # Writes xls file
@@ -87,26 +81,32 @@ def main(list):
         sheet1.write(0, 5, "PROJECT")
         sheet1.write(0, 6, "DIRECTORY")
 
-        for i, run in enumerate(runs, start=1):
+        dupes_list = []
 
-            projects = run.results_set.values_list(
-                'projects__name', flat=True).distinct()
-            projects = [project for project in projects if project is not None]
+        num_items = 0
+        for stat in sigprocstats:
 
-            sheet1.write(i, 0, (run.date.strftime("%Y-%m-%d")))
-            sheet1.write(i, 1, run.expName)
-            sheet1.write(i, 2, storage[run.storage_options])
-            sheet1.write(i, 3, run.diskusage)
-            sheet1.write(i, 4, run.notes.replace(',', ' '))
-            sheet1.write(i, 5, ";".join(projects))
-            sheet1.write(i, 6, os.path.dirname(run.expDir))
+            run = stat.result.experiment
+
+            # Only need single instance of a Run Name in the output
+            if run.expName in dupes_list:
+                continue
+            else:
+                num_items += 1
+                dupes_list.append(run.expName)
+                projects = run.results_set.values_list(
+                    'projects__name', flat=True).distinct()
+                projects = [project for project in projects if project is not None]
+
+                sheet1.write(num_items, 0, (run.date.strftime("%Y-%m-%d")))
+                sheet1.write(num_items, 1, run.expName)
+                sheet1.write(num_items, 2, storage[run.storage_options])
+                sheet1.write(num_items, 3, run.diskusage)
+                sheet1.write(num_items, 4, run.notes.replace(',', ' ') if run.notes != None else '')
+                sheet1.write(num_items, 5, ";".join(projects))
+                sheet1.write(num_items, 6, os.path.dirname(run.expDir))
         print ("Writing output file: runlist.xls")
         book.save("runlist.xls")
 
 if __name__ == '__main__':
-    '''
-    Pass in a list of potential storage designation keywords.
-    The possible keywords are: 'KI', 'A', 'D' corresponding to
-    Keep Indefinitely, Archive Raw, Delete
-    '''
-    sys.exit(main(['KI', 'A']))
+    sys.exit(show_keepers())

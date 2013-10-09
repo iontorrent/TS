@@ -22,6 +22,26 @@ run ()
 }
 export -f run
 
+# Copies the contents of the COVERAGE_HTML file to the sampleID one.
+copy_coverage_html ()
+{
+    cat $OUTDIR/$PLUGIN_OUT_COVERAGE_HTML >> $HTMLOUT
+    echo "<div id=\"sampleIDalleleCoverageTable\" fileurl=\"${PLUGIN_OUT_COV}\" class=\"center\"></div>" >> $HTMLOUT
+}
+
+# Write the header for the partial html file.
+write_partial_header()
+{
+    awk '$0!~/fileLinksTable/ {print}' $HTMLOUT > $HTMLTMP
+    echo '</div></body></html>' >> $HTMLTMP
+}
+
+# Add a comma delimiter to json results.
+write_json_comma()
+{
+    echo "," >> "$JSON_RESULTS"
+}
+
 # produces a title with fly-over help showing users parameters
 write_page_title ()
 {
@@ -74,7 +94,7 @@ write_html_header ()
     echo '<html>' >> "$HTML"
     print_html_head $REFRESHRATE >> "$HTML"
     if [ "$HTML_TORRENT_WRAPPER" -eq 1 ]; then
-      echo '<title>Torrent Coverage Analysis Report</title>' >> "$HTML"
+      echo '<title>Torrent Sample Identification Report</title>' >> "$HTML"
       echo '<body>' >> "$HTML"
       print_html_logo >> "$HTML";
     else
@@ -88,6 +108,7 @@ write_html_header ()
     if [ "$HTML_TORRENT_WRAPPER" -eq 1 ]; then
       write_page_title "$HTML";
     fi
+    echo "<h3><center>$PLUGIN_RUN_NAME</center></h3>" >> $HTML
 }
 
 write_html_footer ()

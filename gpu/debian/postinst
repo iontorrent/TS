@@ -74,6 +74,7 @@ case "$1" in
             --accept-license \
             --no-questions \
             --ui=none \
+            --dkms \
             --run-nvidia-xconfig >> /tmp/nvidiadriver_install.log
         cd - >/dev/null
 

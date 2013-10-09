@@ -6,6 +6,7 @@
 #include <map>
 #include <stdio.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <dirent.h>
 #include <errno.h>
 #include <set>
@@ -27,6 +28,7 @@
 #include "boost/make_shared.hpp"
 #include "boost/algorithm/string.hpp"
 #include "boost/lexical_cast.hpp"
+#include "json/json.h"
 
 #include <pthread.h>
 #include <semaphore.h>
@@ -47,6 +49,42 @@ bool quit[MAX_NUM_THREADS];
 int notDone[MAX_NUM_THREADS];
 BamAlignment bamAlignmentIn[MAX_NUM_THREADS];
 
+bool dump4Plugin = false;
+const int DEFAULT_NUM_HP = 10;
+pthread_mutex_t mutexAddRecord;
+map<string, vector<float>*> mapMeasureGoodA;
+map<string, vector<float>*> mapPredictGoodA;
+map<string, vector<float>*> mapMeasureGoodC;
+map<string, vector<float>*> mapPredictGoodC;
+map<string, vector<float>*> mapMeasureGoodG;
+map<string, vector<float>*> mapPredictGoodG;
+map<string, vector<float>*> mapMeasureGoodT;
+map<string, vector<float>*> mapPredictGoodT;
+map<string, vector<float>*> mapMeasureBadA;
+map<string, vector<float>*> mapPredictBadA;
+map<string, vector<float>*> mapMeasureBadC;
+map<string, vector<float>*> mapPredictBadC;
+map<string, vector<float>*> mapMeasureBadG;
+map<string, vector<float>*> mapPredictBadG;
+map<string, vector<float>*> mapMeasureBadT;
+map<string, vector<float>*> mapPredictBadT;
+vector<double> vMeasureA[DEFAULT_NUM_HP];
+vector<double> vPredictA[DEFAULT_NUM_HP];
+vector<double> vMeasureC[DEFAULT_NUM_HP];
+vector<double> vPredictC[DEFAULT_NUM_HP];
+vector<double> vMeasureG[DEFAULT_NUM_HP];
+vector<double> vPredictG[DEFAULT_NUM_HP];
+vector<double> vMeasureT[DEFAULT_NUM_HP];
+vector<double> vPredictT[DEFAULT_NUM_HP];
+vector<unsigned int> vCountA[DEFAULT_NUM_HP];
+vector<unsigned int> vCountC[DEFAULT_NUM_HP];
+vector<unsigned int> vCountG[DEFAULT_NUM_HP];
+vector<unsigned int> vCountT[DEFAULT_NUM_HP];
+vector<unsigned int> vCountAccA[DEFAULT_NUM_HP];
+vector<unsigned int> vCountAccC[DEFAULT_NUM_HP];
+vector<unsigned int> vCountAccG[DEFAULT_NUM_HP];
+vector<unsigned int> vCountAccT[DEFAULT_NUM_HP];
+
 typedef boost::multi_array<int, 3> int_3D_array;
 typedef int_3D_array::index int_3D_index;
 
@@ -55,6 +93,38 @@ typedef int_2D_array::index int_2D_index;
 
 typedef boost::multi_array<double, 2> double_2D_array;
 typedef double_2D_array::index double_2D_index;
+
+int glbXMin, glbXSpan, glbYMin, glbYSpan, glbFlowSpan;
+
+string GetRegionStr(const int flow, const int x, const int y)
+{
+	int flow1 = 0;
+	int flow2 = glbFlowSpan - 1;
+	while(flow > flow2)
+	{
+		flow1 = flow2 + 1;
+		flow2 += glbFlowSpan;
+	}
+	int x1 = glbXMin;
+	int x2 = glbXSpan - 1;
+	while(x > x2)
+	{
+		x1 = x2 + 1;
+		x2 += glbXSpan;
+	}
+	int y1 = glbYMin;
+	int y2 = glbYSpan - 1;
+	while(y > y2)
+	{
+		y1 = y2 + 1;
+		y2 += glbYSpan;
+	}
+
+	char buf[100];
+	sprintf(buf, "Flow_%d_%d-X_%d_%d-Y_%d_%d", flow1, flow2, x1, x2, y1, y2);
+	string s(buf);
+	return s;
+}
 
 int PrintHelp()
 {
@@ -108,13 +178,16 @@ struct HPPMDistribution{
   const static int MINIMUM_FIT_THRESHOLD = 50;
   vector<vector<double> > predictions;
   vector<vector<double> > measurements;
+  vector<vector<int> > calledHPs;
   vector<mat > models;
   HPPMDistribution(int hps, int rLimit):numHPs(hps), recordsLimit(rLimit){
       predictions.resize(numHPs, vector<double>());
       measurements.resize(numHPs, vector<double>());
+      calledHPs.resize(numHPs, vector<int>());
       for(int hp=0; hp < numHPs; ++hp){
           predictions[hp].reserve(recordsLimit);
           measurements[hp].reserve(recordsLimit);
+          calledHPs[hp].reserve(recordsLimit);
       }
   }
 
@@ -124,6 +197,7 @@ struct HPPMDistribution{
       for(int hp=0; hp < numHPs; ++hp){
           predictions[hp].reserve(recordsLimit);
           measurements[hp].reserve(recordsLimit);
+          calledHPs[hp].reserve(recordsLimit);
       }
   }
 
@@ -134,11 +208,17 @@ struct HPPMDistribution{
   //should no-op be handled in higher level
   void add(int calledHP, int refHP, double prediction, double measurement){
     ////ignore dramtic shift observation; handle non-correct HP calls (effect?)
-    if(prediction - measurement > 1 || measurement - prediction > 1)
-      return;
+
+    //disabled the two lines below to collect all samples, decide what to use for fitting later.
+    //this also makes it easier to test for barcode data, for which data are saved first and final fitting is done in merge step
+
+    //if(prediction - measurement > 1 || measurement - prediction > 1)
+      //return;
+
     if(refHP >0 && refHP < numHPs && (int)predictions[refHP].size() < recordsLimit){
         predictions[refHP].push_back(prediction);
         measurements[refHP].push_back(measurement);
+        calledHPs[refHP].push_back(calledHP);
     }
   }
 
@@ -150,6 +230,19 @@ struct HPPMDistribution{
         if((int)predictions[refHP].size() < recordsLimit - 1){
           predictions[refHP].push_back(ps[refHP][ind]);
           measurements[refHP].push_back(ms[refHP][ind]);
+        }
+      }
+    }
+  }
+
+  void add(vector<vector<double> >& ps,  vector<vector<double> >& ms, vector<vector<int> >& called_hps){
+    for(int refHP=0; refHP < numHPs; ++refHP){
+      int size = ps[refHP].size();
+      for(int ind = 0; ind < size; ++ind){
+        if((int)predictions[refHP].size() < recordsLimit - 1){
+          predictions[refHP].push_back(ps[refHP][ind]);
+          measurements[refHP].push_back(ms[refHP][ind]);
+          calledHPs[refHP].push_back(called_hps[refHP][ind]);
         }
       }
     }
@@ -174,6 +267,20 @@ struct HPPMDistribution{
     for(int hp = 0; hp < numHPs; ++hp){
         if((int)predictions[hp].size() > MINIMUM_FIT_THRESHOLD)
             models.push_back(fitFirstOrder(predictions[hp], measurements[hp]));
+        else
+          models.push_back(defaultModel);
+    }
+  }
+
+
+  void process(int nucIndex){
+    mat defaultModel(2, 1);
+    defaultModel(0, 0) = 1;
+    defaultModel(1, 0) = 0;
+
+    for(int hp = 0; hp < numHPs; ++hp){
+        if((int)predictions[hp].size() > MINIMUM_FIT_THRESHOLD)
+          models.push_back(fitFirstOrder(predictions[hp], measurements[hp], hp, calledHPs[hp], nucIndex));
         else
           models.push_back(defaultModel);
     }
@@ -552,7 +659,9 @@ struct HPTable{
 
     //add records to   std::vector<boost::shared_ptr<HPPMDistribution> > hpPMDistributionList;
     for(int ind = 0; ind < (int)hpPMDistributionList.size(); ++ind){
-        hpPMDistributionList[ind]->add(hpTablePtr->hpPMDistributionList[ind]->predictions, hpTablePtr->hpPMDistributionList[ind]->measurements);
+        //hpPMDistributionList[ind]->add(hpTablePtr->hpPMDistributionList[ind]->predictions, hpTablePtr->hpPMDistributionList[ind]->measurements);
+        hpPMDistributionList[ind]->add(hpTablePtr->hpPMDistributionList[ind]->predictions, hpTablePtr->hpPMDistributionList[ind]->measurements, hpTablePtr->hpPMDistributionList[ind]->calledHPs);
+
     }
 
 
@@ -659,7 +768,9 @@ struct HPTable{
     //stratification handling
     for(int regionInd = 0; regionInd < numRegions; ++regionInd){
         hpPerturbationDistributionList[regionInd] -> process(aggregatedHPPerturbationDistribution[NucToInt( regionList[regionInd].nuc)]);
-        hpPMDistributionList[regionInd]->process();
+        //hpPMDistributionList[regionInd]->process();
+        //nuc_dependent_process
+        hpPMDistributionList[regionInd]->process(NucToInt(regionList[regionInd].nuc));
     }
 
     //low complexity handling
@@ -720,7 +831,9 @@ struct HPTable{
               if(records != 0)
               for(int ind = 0; ind < records; ++ind){
                   file.write(reinterpret_cast<const char *>(&(hpPMDist->predictions[refHP][ind])), sizeof(double));
-                file.write(reinterpret_cast<const char *>(&(hpPMDist->measurements[refHP][ind])), sizeof(double));
+                  file.write(reinterpret_cast<const char *>(&(hpPMDist->measurements[refHP][ind])), sizeof(double));
+                  file.write(reinterpret_cast<const char *>(&(hpPMDist->calledHPs[refHP][ind])), sizeof(int));
+
               }
           }
       }
@@ -956,7 +1069,10 @@ HPTable* loadHPTable(const char* hpTableFile){
                     hpPMDist->predictions[refHP].push_back(prediction);
                     double measurement;
                     file.read(reinterpret_cast<char *>(&measurement), sizeof(double));
-                    hpPMDist->measurements[refHP].push_back(measurement);
+                    hpPMDist->measurements[refHP].push_back(measurement);                    
+                    int calledHP;
+                    file.read(reinterpret_cast<char *>(&calledHP), sizeof(int));
+                    hpPMDist->calledHPs[refHP].push_back(calledHP);
                   }
               }
           }
@@ -1273,7 +1389,92 @@ void* RecallFunc(void* arg0)
                   if(ignorePM || pos > (int)qseq.size() - 32) //ignore last 32 alignments for model fitting
                     arg->hptable->addAlignmentRecord(qseq[pos], tseq[pos], perturbation[pos], AlignmentInfo(refID, position), flowOrder[pos], flowPosition, x, y );
                   else
-                    arg->hptable->addAlignmentRecord(qseq[pos], tseq[pos], perturbation[pos], bcRead.prediction[flowPosition], zm_tag[flowPosition] * 0.00390625, AlignmentInfo(refID, position), flowOrder[pos], flowPosition, x, y ); //zm_tag[flowPosition] * 0.00390625
+				  {
+					double measureVal = zm_tag[flowPosition] * 0.00390625;
+						arg->hptable->addAlignmentRecord(qseq[pos], tseq[pos], perturbation[pos], bcRead.prediction[flowPosition], measureVal, AlignmentInfo(refID, position), flowOrder[pos], flowPosition, x, y ); //zm_tag[flowPosition] * 0.00390625
+
+					if(dump4Plugin)
+					{
+						int nHp = tseq[pos];
+						if(nHp < DEFAULT_NUM_HP)
+						{		
+							pthread_mutex_lock(&mutexAddRecord);	
+
+							string s = GetRegionStr(flowPosition, x, y);
+
+							if(flowOrder[pos] == 'A')
+							{
+								vMeasureA[nHp][flowPosition] += measureVal;
+								vPredictA[nHp][flowPosition] += bcRead.prediction[flowPosition];
+								++vCountA[nHp][flowPosition];
+								if(qseq[pos] == tseq[pos])
+								{
+									++vCountAccA[nHp][flowPosition];
+									mapMeasureGoodA[s][nHp].push_back(measureVal);
+									mapPredictGoodA[s][nHp].push_back(bcRead.prediction[flowPosition]);
+								}
+								else
+								{
+									mapMeasureBadA[s][nHp].push_back(measureVal);
+									mapPredictBadA[s][nHp].push_back(bcRead.prediction[flowPosition]);
+								}
+							}
+							else if(flowOrder[pos] == 'C')
+							{
+								vMeasureC[nHp][flowPosition] += measureVal;
+								vPredictC[nHp][flowPosition] += bcRead.prediction[flowPosition];
+								++vCountC[nHp][flowPosition];
+								if(qseq[pos] == tseq[pos])
+								{
+									++vCountAccC[nHp][flowPosition];
+									mapMeasureGoodC[s][nHp].push_back(measureVal);
+									mapPredictGoodC[s][nHp].push_back(bcRead.prediction[flowPosition]);
+								}
+								else
+								{
+									mapMeasureBadC[s][nHp].push_back(measureVal);
+									mapPredictBadC[s][nHp].push_back(bcRead.prediction[flowPosition]);
+								}
+							}
+							else if(flowOrder[pos] == 'G')
+							{
+								vMeasureG[nHp][flowPosition] += measureVal;
+								vPredictG[nHp][flowPosition] += bcRead.prediction[flowPosition];
+								++vCountG[nHp][flowPosition];
+								if(qseq[pos] == tseq[pos])
+								{
+									++vCountAccG[nHp][flowPosition];
+									mapMeasureGoodG[s][nHp].push_back(measureVal);
+									mapPredictGoodG[s][nHp].push_back(bcRead.prediction[flowPosition]);
+								}
+								else
+								{
+									mapMeasureBadG[s][nHp].push_back(measureVal);
+									mapPredictBadG[s][nHp].push_back(bcRead.prediction[flowPosition]);
+								}
+							}
+							else if(flowOrder[pos] == 'T')
+							{
+								vMeasureT[nHp][flowPosition] += measureVal;
+								vPredictT[nHp][flowPosition] += bcRead.prediction[flowPosition];
+								++vCountT[nHp][flowPosition];
+								if(qseq[pos] == tseq[pos])
+								{
+									++vCountAccT[nHp][flowPosition];
+									mapMeasureGoodT[s][nHp].push_back(measureVal);
+									mapPredictGoodT[s][nHp].push_back(bcRead.prediction[flowPosition]);
+								}
+								else
+								{
+									mapMeasureBadT[s][nHp].push_back(measureVal);
+									mapPredictBadT[s][nHp].push_back(bcRead.prediction[flowPosition]);
+								}
+							}
+
+							pthread_mutex_unlock(&mutexAddRecord);
+						}
+					}
+				  }
 			  }
 
               //update position
@@ -1372,8 +1573,14 @@ int main (int argc, const char *argv[])
     }
 
     while ((dirp = readdir(dp)) != NULL) {
-      if(dirp->d_type == 0x4 and dirp->d_name[0] != '.')
-         arcFolders.push_back(string(dirp->d_name));
+      if(dirp->d_name[0] != '.'){
+         struct stat statbuf;
+         string fileName = mergeParentDir+"/" + string(dirp->d_name);
+         stat(fileName.c_str(), &statbuf);
+         if(S_ISDIR(statbuf.st_mode)){
+           arcFolders.push_back(string(dirp->d_name));
+         }
+      }
     }
     closedir(dp);
 
@@ -1521,6 +1728,12 @@ int main (int argc, const char *argv[])
       int numHPs        = opts.GetFirstInt    ('-', "numHPs", 12);
       int numPerturbs   = opts.GetFirstInt    ('-', "numPerturbations", 99);
       int numThreads    = opts.GetFirstInt    ('-', "numThreads", DEFAULT_NUM_THREADS);
+	  string dump_dir   = opts.GetFirstString ('-', "dump4Plugin", "");
+
+	  if(dump_dir.length() > 0)
+	  {
+		  dump4Plugin = true;
+	  }
 
       if(numThreads > MAX_NUM_THREADS)
       {
@@ -1573,6 +1786,241 @@ int main (int argc, const char *argv[])
           pthread_mutex_init(&mutexQuit, NULL);
           pthread_mutex_init(&mutexNotDone, NULL);
 
+	  	  int startFlowA[DEFAULT_NUM_HP];
+		  int endFlowA[DEFAULT_NUM_HP];
+		  int startFlowC[DEFAULT_NUM_HP];
+		  int endFlowC[DEFAULT_NUM_HP];
+		  int startFlowG[DEFAULT_NUM_HP];
+		  int endFlowG[DEFAULT_NUM_HP];
+		  int startFlowT[DEFAULT_NUM_HP];
+		  int endFlowT[DEFAULT_NUM_HP];
+
+		  string filename_json(dump_dir);
+		  filename_json += "/flow_data.json";	  
+		  string filename_json2(dump_dir);
+		  filename_json2 += "/scatter_data.json";
+
+		  if(dump4Plugin)
+		  {
+			  pthread_mutex_init(&mutexAddRecord, NULL);
+
+			  for(int nHp = 0; nHp < DEFAULT_NUM_HP; ++nHp)
+			  {
+				  startFlowA[nHp] = 2000;
+				  endFlowA[nHp] = 0;
+				  startFlowC[nHp] = 2000;
+				  endFlowC[nHp] = 0;
+				  startFlowG[nHp] = 2000;
+				  endFlowG[nHp] = 0;
+				  startFlowT[nHp] = 2000;
+				  endFlowT[nHp] = 0;
+				  vMeasureA[nHp].resize(numFlows, 0.0);
+				  vPredictA[nHp].resize(numFlows, 0.0);
+				  vMeasureC[nHp].resize(numFlows, 0.0);
+				  vPredictC[nHp].resize(numFlows, 0.0);
+				  vMeasureG[nHp].resize(numFlows, 0.0);
+				  vPredictG[nHp].resize(numFlows, 0.0);
+				  vMeasureT[nHp].resize(numFlows, 0.0);
+				  vPredictT[nHp].resize(numFlows, 0.0);
+				  vCountA[nHp].resize(numFlows, 0);
+				  vCountC[nHp].resize(numFlows, 0);
+				  vCountG[nHp].resize(numFlows, 0);
+				  vCountT[nHp].resize(numFlows, 0);
+				  vCountAccA[nHp].resize(numFlows, 0);
+				  vCountAccC[nHp].resize(numFlows, 0);
+				  vCountAccG[nHp].resize(numFlows, 0);
+				  vCountAccT[nHp].resize(numFlows, 0);
+			  }
+
+			  Json::Value jsoni;
+			  ifstream ifs(filename_json.c_str());
+			  if(ifs)
+			  {			  	  
+				  ifs >> jsoni;
+				  
+				  char buf[10];
+				  for(int nHp = 1; nHp < DEFAULT_NUM_HP; ++nHp)
+				  {
+					  sprintf(buf, "%d", nHp);
+					  string sHp = buf;
+
+					  startFlowA[nHp] = jsoni["StartFlow"]["A"][sHp].asInt() - 1;
+					  endFlowA[nHp] = jsoni["EndFlow"]["A"][sHp].asInt() - 1;
+					  startFlowC[nHp] = jsoni["StartFlow"]["C"][sHp].asInt() - 1;
+					  endFlowC[nHp] = jsoni["EndFlow"]["C"][sHp].asInt() - 1;
+					  startFlowG[nHp] = jsoni["StartFlow"]["G"][sHp].asInt() - 1;
+					  endFlowG[nHp] = jsoni["EndFlow"]["G"][sHp].asInt() - 1;
+					  startFlowT[nHp] = jsoni["StartFlow"]["T"][sHp].asInt() - 1;
+					  endFlowT[nHp] = jsoni["EndFlow"]["T"][sHp].asInt() - 1;
+
+					  for(int nFlow = 0; nFlow < numFlows; ++nFlow)
+					  {
+						  vMeasureA[nHp][nFlow] = jsoni["MeasurementSum"]["A"][sHp][nFlow].asDouble();
+						  vPredictA[nHp][nFlow] = jsoni["PredictionSum"]["A"][sHp][nFlow].asDouble();
+						  vCountA[nHp][nFlow] = jsoni["TotalCount"]["A"][sHp][nFlow].asUInt();
+						  vCountAccA[nHp][nFlow] = jsoni["MatchCount"]["A"][sHp][nFlow].asUInt();
+						  vMeasureC[nHp][nFlow] = jsoni["MeasurementSum"]["C"][sHp][nFlow].asDouble();
+						  vPredictC[nHp][nFlow] = jsoni["PredictionSum"]["C"][sHp][nFlow].asDouble();
+						  vCountC[nHp][nFlow] = jsoni["TotalCount"]["C"][sHp][nFlow].asUInt();
+						  vCountAccC[nHp][nFlow] = jsoni["MatchCount"]["C"][sHp][nFlow].asUInt();
+						  vMeasureG[nHp][nFlow] = jsoni["MeasurementSum"]["G"][sHp][nFlow].asDouble();
+						  vPredictG[nHp][nFlow] = jsoni["PredictionSum"]["G"][sHp][nFlow].asDouble();
+						  vCountG[nHp][nFlow] = jsoni["TotalCount"]["G"][sHp][nFlow].asUInt();
+						  vCountAccG[nHp][nFlow] = jsoni["MatchCount"]["G"][sHp][nFlow].asUInt();
+						  vMeasureT[nHp][nFlow] = jsoni["MeasurementSum"]["T"][sHp][nFlow].asDouble();
+						  vPredictT[nHp][nFlow] = jsoni["PredictionSum"]["T"][sHp][nFlow].asDouble();
+						  vCountT[nHp][nFlow] = jsoni["TotalCount"]["T"][sHp][nFlow].asUInt();
+						  vCountAccT[nHp][nFlow] = jsoni["MatchCount"]["T"][sHp][nFlow].asUInt();
+					  }
+				  }
+
+				  ifs.close();
+			  }
+
+			  glbXMin = xMin;
+			  glbXSpan = (xMax - xMin + 2) / xCuts;
+			  glbYMin = yMin;
+			  glbYSpan =  (yMax - yMin + 2) / yCuts;
+			  glbFlowSpan = numFlows / flowCuts;
+
+			  int f = 0;
+			  for(int nf = 0; nf < flowCuts; nf++, f += glbFlowSpan)
+			  {
+				  int x = glbXMin;
+				  for(int nx = 0; nx < xCuts; ++nx, x += glbXSpan)
+				  {
+					  int y = glbYMin;
+					  for(int ny = 0; ny < yCuts; ++ny, y += glbYSpan)
+					  {
+							string s = GetRegionStr(f, x, y);
+
+							vector<float>* vMeasureGoodA = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vPredictGoodA = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vMeasureGoodC = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vPredictGoodC = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vMeasureGoodG = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vPredictGoodG = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vMeasureGoodT = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vPredictGoodT = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vMeasureBadA = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vPredictBadA = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vMeasureBadC = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vPredictBadC = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vMeasureBadG = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vPredictBadG = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vMeasureBadT = new vector<float>[DEFAULT_NUM_HP];
+							vector<float>* vPredictBadT = new vector<float>[DEFAULT_NUM_HP];
+							
+							for(int nHp = 0; nHp < DEFAULT_NUM_HP; ++nHp)
+							{
+								  vMeasureGoodA[nHp].reserve(10000);
+								  vPredictGoodA[nHp].reserve(10000);
+								  vMeasureGoodC[nHp].reserve(10000);
+								  vPredictGoodC[nHp].reserve(10000);
+								  vMeasureGoodG[nHp].reserve(10000);
+								  vPredictGoodG[nHp].reserve(10000);
+								  vMeasureGoodT[nHp].reserve(10000);
+								  vPredictGoodT[nHp].reserve(10000);
+								  vMeasureBadA[nHp].reserve(10000);
+								  vPredictBadA[nHp].reserve(10000);
+								  vMeasureBadC[nHp].reserve(10000);
+								  vPredictBadC[nHp].reserve(10000);
+								  vMeasureBadG[nHp].reserve(10000);
+								  vPredictBadG[nHp].reserve(10000);
+								  vMeasureBadT[nHp].reserve(10000);
+								  vPredictBadT[nHp].reserve(10000);
+							}
+			  						  
+							string filename_json2(dump_dir);
+							filename_json2 += "/scatter_data-";
+							filename_json2 += s;
+							filename_json2 += ".json";
+
+							Json::Value jsoni2;
+						  ifstream ifs2(filename_json2.c_str(), ifstream::in);
+						  if(ifs2)
+						  {
+							  ifs2 >> jsoni2;
+						  
+							  char buf[10];
+							  for(int nHp = 1; nHp < DEFAULT_NUM_HP; ++nHp)
+							  {
+								  sprintf(buf, "%d", nHp);
+								  string sHp = buf;
+
+								  unsigned int sz = jsoni2["GoodMeasurement"]["A"][sHp].size();
+								  for(unsigned int i = 0; i < sz; ++i)
+								  {
+									  vMeasureGoodA[nHp].push_back(jsoni2["GoodMeasurement"]["A"][sHp][i].asFloat());
+									  vPredictGoodA[nHp].push_back(jsoni2["GoodPrediction"]["A"][sHp][i].asFloat());
+								  }
+								  sz = jsoni2["GoodMeasurement"]["C"][sHp].size();
+								  for(unsigned int i = 0; i < sz; ++i)
+								  {
+									  vMeasureGoodC[nHp].push_back(jsoni2["GoodMeasurement"]["C"][sHp][i].asFloat());
+									  vPredictGoodC[nHp].push_back(jsoni2["GoodPrediction"]["C"][sHp][i].asFloat());
+								  }
+								  sz = jsoni2["GoodMeasurement"]["G"][sHp].size();
+								  for(unsigned int i = 0; i < sz; ++i)
+								  {
+									  vMeasureGoodG[nHp].push_back(jsoni2["GoodMeasurement"]["G"][sHp][i].asFloat());
+									  vPredictGoodG[nHp].push_back(jsoni2["GoodPrediction"]["G"][sHp][i].asFloat());
+								  }
+								  sz = jsoni2["GoodMeasurement"]["T"][sHp].size();
+								  for(unsigned int i = 0; i < sz; ++i)
+								  {
+									  vMeasureGoodT[nHp].push_back(jsoni2["GoodMeasurement"]["T"][sHp][i].asFloat());
+									  vPredictGoodT[nHp].push_back(jsoni2["GoodPrediction"]["T"][sHp][i].asFloat());
+								  }
+								  sz = jsoni2["BadMeasurement"]["A"][sHp].size();
+								  for(unsigned int i = 0; i < sz; ++i)
+								  {
+									  vMeasureBadA[nHp].push_back(jsoni2["BadMeasurement"]["A"][sHp][i].asFloat());
+									  vPredictBadA[nHp].push_back(jsoni2["BadPrediction"]["A"][sHp][i].asFloat());
+								  }
+								  sz = jsoni2["BadMeasurement"]["C"][sHp].size();
+								  for(unsigned int i = 0; i < sz; ++i)
+								  {
+									  vMeasureBadC[nHp].push_back(jsoni2["BadMeasurement"]["C"][sHp][i].asFloat());
+									  vPredictBadC[nHp].push_back(jsoni2["BadPrediction"]["C"][sHp][i].asFloat());
+								  }
+								  sz = jsoni2["BadMeasurement"]["G"][sHp].size();
+								  for(unsigned int i = 0; i < sz; ++i)
+								  {
+									  vMeasureBadG[nHp].push_back(jsoni2["BadMeasurement"]["G"][sHp][i].asFloat());
+									  vPredictBadG[nHp].push_back(jsoni2["BadPrediction"]["G"][sHp][i].asFloat());
+								  }
+								  sz = jsoni2["BadMeasurement"]["T"][sHp].size();
+								  for(unsigned int i = 0; i < sz; ++i)
+								  {
+									  vMeasureBadT[nHp].push_back(jsoni2["BadMeasurement"]["T"][sHp][i].asFloat());
+									  vPredictBadT[nHp].push_back(jsoni2["BadPrediction"]["T"][sHp][i].asFloat());
+								  }
+							  }
+							  ifs2.close();
+						  }
+
+							mapMeasureGoodA[s] = vMeasureGoodA;
+							mapPredictGoodA[s] = vPredictGoodA;
+							mapMeasureGoodC[s] = vMeasureGoodC;
+							mapPredictGoodC[s] = vPredictGoodC;
+							mapMeasureGoodG[s] = vMeasureGoodG;
+							mapPredictGoodG[s] = vPredictGoodG;
+							mapMeasureGoodT[s] = vMeasureGoodT;
+							mapPredictGoodT[s] = vPredictGoodT;
+							mapMeasureBadA[s] = vMeasureBadA;
+							mapPredictBadA[s] = vPredictBadA;
+							mapMeasureBadC[s] = vMeasureBadC;
+							mapPredictBadC[s] = vPredictBadC;
+							mapMeasureBadG[s] = vMeasureBadG;
+							mapPredictBadG[s] = vPredictBadG;
+							mapMeasureBadT[s] = vMeasureBadT;
+							mapPredictBadT[s] = vPredictBadT;
+					  }
+				  }
+			  }
+		  }
+
           loadArg argLoad;
           argLoad.numThreads = numThreads;
           argLoad.bamReader = &reader;
@@ -1611,7 +2059,7 @@ int main (int argc, const char *argv[])
 
           pthread_mutex_destroy(&mutexQuit);
           pthread_mutex_destroy(&mutexNotDone);
-
+		  
           for(threadIndex = 0; threadIndex < numThreads; ++threadIndex)
           {
               numAlignedReads += nReads[threadIndex];
@@ -1652,6 +2100,329 @@ int main (int argc, const char *argv[])
         hpTablePtr->saveToFile(archiveFile.c_str());
 
       delete hpTablePtr;
+
+	  if(numAlignedReads >= 1000 && dump4Plugin)
+	  {
+		  pthread_mutex_destroy(&mutexAddRecord);
+
+		  Json::Value json(Json::objectValue);
+
+		  vector<float>::iterator iterm;
+		  vector<float>::iterator iterp;
+		  vector<float>::iterator itere;
+
+		  char buf[10];
+		  for(int nHp = 1; nHp < DEFAULT_NUM_HP; ++nHp)
+		  {
+			  sprintf(buf, "%d", nHp);
+			  string sHp = buf;
+
+			  for(int nFlow = 0; nFlow < numFlows; ++nFlow)
+			  {
+				  json["MeasurementSum"]["A"][sHp][nFlow] = vMeasureA[nHp][nFlow];
+				  json["PredictionSum"]["A"][sHp][nFlow] = vPredictA[nHp][nFlow];
+				  json["TotalCount"]["A"][sHp][nFlow] = vCountA[nHp][nFlow];
+				  json["MatchCount"]["A"][sHp][nFlow] = vCountAccA[nHp][nFlow];
+				  if(vCountA[nHp][nFlow] > 0)
+				  {					  
+					  if(startFlowA[nHp] > nFlow)
+					  {
+						  startFlowA[nHp] = nFlow;
+					  }
+					  if(endFlowA[nHp] < nFlow)
+					  {
+						  endFlowA[nHp] = nFlow;
+					  }
+				  }
+
+				  json["MeasurementSum"]["C"][sHp][nFlow] = vMeasureC[nHp][nFlow];
+				  json["PredictionSum"]["C"][sHp][nFlow] = vPredictC[nHp][nFlow];
+				  json["TotalCount"]["C"][sHp][nFlow] = vCountC[nHp][nFlow];
+				  json["MatchCount"]["C"][sHp][nFlow] = vCountAccC[nHp][nFlow];
+				  if(vCountC[nHp][nFlow] > 0)
+				  {					  
+					  if(startFlowC[nHp] > nFlow)
+					  {
+						  startFlowC[nHp] = nFlow;
+					  }
+					  if(endFlowC[nHp] < nFlow)
+					  {
+						  endFlowC[nHp] = nFlow;
+					  }
+				  }
+
+				  json["MeasurementSum"]["G"][sHp][nFlow] = vMeasureG[nHp][nFlow];
+				  json["PredictionSum"]["G"][sHp][nFlow] = vPredictG[nHp][nFlow];
+				  json["TotalCount"]["G"][sHp][nFlow] = vCountG[nHp][nFlow];
+				  json["MatchCount"]["G"][sHp][nFlow] = vCountAccG[nHp][nFlow];
+				  if(vCountG[nHp][nFlow] > 0)
+				  {					  
+					  if(startFlowG[nHp] > nFlow)
+					  {
+						  startFlowG[nHp] = nFlow;
+					  }
+					  if(endFlowG[nHp] < nFlow)
+					  {
+						  endFlowG[nHp] = nFlow;
+					  }
+				  }
+
+				  json["MeasurementSum"]["T"][sHp][nFlow] = vMeasureT[nHp][nFlow];
+				  json["PredictionSum"]["T"][sHp][nFlow] = vPredictT[nHp][nFlow];
+				  json["TotalCount"]["T"][sHp][nFlow] = vCountT[nHp][nFlow];
+				  json["MatchCount"]["T"][sHp][nFlow] = vCountAccT[nHp][nFlow];
+				  if(vCountT[nHp][nFlow] > 0)
+				  {					  
+					  if(startFlowT[nHp] > nFlow)
+					  {
+						  startFlowT[nHp] = nFlow;
+					  }
+					  if(endFlowT[nHp] < nFlow)
+					  {
+						  endFlowT[nHp] = nFlow;
+					  }
+				  }
+			  }
+			  if(startFlowA[nHp] < 0)
+			  {
+				  startFlowA[nHp] = 0;
+			  }
+			  json["StartFlow"]["A"][sHp] = startFlowA[nHp];
+			  json["EndFlow"]["A"][sHp] = endFlowA[nHp];
+			  if(startFlowC[nHp] < 0)
+			  {
+				  startFlowC[nHp] = 0;
+			  }
+			  json["StartFlow"]["C"][sHp] = startFlowC[nHp];
+			  json["EndFlow"]["C"][sHp] = endFlowC[nHp];
+			  if(startFlowG[nHp] < 0)
+			  {
+				  startFlowG[nHp] = 0;
+			  }
+			  json["StartFlow"]["G"][sHp] = startFlowG[nHp];
+			  json["EndFlow"]["G"][sHp] = endFlowG[nHp];
+			  if(startFlowT[nHp] < 0)
+			  {
+				  startFlowT[nHp] = 0;
+			  }
+			  json["StartFlow"]["T"][sHp] = startFlowT[nHp];
+			  json["EndFlow"]["T"][sHp] = endFlowT[nHp];
+
+			  ofstream ofs(filename_json.c_str(), ofstream::out);
+			  ofs << json.toStyledString();
+			  ofs.flush();
+			  ofs.close();
+		  }
+
+	  	  int f = 0;
+		  for(int nf = 0; nf < flowCuts; nf++, f += glbFlowSpan)
+		  {
+			  int x = glbXMin;
+			  for(int nx = 0; nx < xCuts; ++nx, x += glbXSpan)
+			  {
+				  int y = glbYMin;
+				  for(int ny = 0; ny < yCuts; ++ny, y += glbYSpan)
+				  {
+						string s = GetRegionStr(f, x, y);
+
+						vector<float>* vMeasureGoodA = mapMeasureGoodA[s];
+						vector<float>* vPredictGoodA = mapPredictGoodA[s];
+						vector<float>* vMeasureGoodC = mapMeasureGoodC[s];
+						vector<float>* vPredictGoodC = mapPredictGoodC[s];
+						vector<float>* vMeasureGoodG = mapMeasureGoodG[s];
+						vector<float>* vPredictGoodG = mapPredictGoodG[s];
+						vector<float>* vMeasureGoodT = mapMeasureGoodT[s];
+						vector<float>* vPredictGoodT = mapPredictGoodT[s];
+						vector<float>* vMeasureBadA = mapMeasureBadA[s];
+						vector<float>* vPredictBadA = mapPredictBadA[s];
+						vector<float>* vMeasureBadC = mapMeasureBadC[s];
+						vector<float>* vPredictBadC = mapPredictBadC[s];
+						vector<float>* vMeasureBadG = mapMeasureBadG[s];
+						vector<float>* vPredictBadG = mapPredictBadG[s];
+						vector<float>* vMeasureBadT = mapMeasureBadT[s];
+						vector<float>* vPredictBadT = mapPredictBadT[s];
+
+						Json::Value json2(Json::objectValue);
+
+						  for(int nHp = 1; nHp < DEFAULT_NUM_HP; ++nHp)
+						  {
+							  sprintf(buf, "%d", nHp);
+							  string sHp = buf;
+							  iterm = vMeasureGoodA[nHp].begin();
+							  iterp = vPredictGoodA[nHp].begin();
+							  itere = vMeasureGoodA[nHp].end();
+							  unsigned int n = 0;
+							  for(; iterm != itere; ++iterm, ++iterp, ++n)
+							  {
+								  json2["GoodMeasurement"]["A"][sHp][n] = (*iterm);
+								  json2["GoodPrediction"]["A"][sHp][n] = (*iterp);
+							  }
+
+							  iterm = vMeasureGoodC[nHp].begin();
+							  iterp = vPredictGoodC[nHp].begin();
+							  itere = vMeasureGoodC[nHp].end();
+							  n = 0;
+							  for(; iterm != itere; ++iterm, ++iterp, ++n)
+							  {
+								  json2["GoodMeasurement"]["C"][sHp][n] = (*iterm);
+								  json2["GoodPrediction"]["C"][sHp][n] = (*iterp);
+							  }
+
+							  iterm = vMeasureGoodG[nHp].begin();
+							  iterp = vPredictGoodG[nHp].begin();
+							  itere = vMeasureGoodG[nHp].end();
+							  n = 0;
+							  for(; iterm != itere; ++iterm, ++iterp, ++n)
+							  {
+								  json2["GoodMeasurement"]["G"][sHp][n] = (*iterm);
+								  json2["GoodPrediction"]["G"][sHp][n] = (*iterp);
+							  }
+
+							  iterm = vMeasureGoodT[nHp].begin();
+							  iterp = vPredictGoodT[nHp].begin();
+							  itere = vMeasureGoodT[nHp].end();
+							  n = 0;
+							  for(; iterm != itere; ++iterm, ++iterp, ++n)
+							  {
+								  json2["GoodMeasurement"]["T"][sHp][n] = (*iterm);
+								  json2["GoodPrediction"]["T"][sHp][n] = (*iterp);
+							  }
+
+							  iterm = vMeasureBadA[nHp].begin();
+							  iterp = vPredictBadA[nHp].begin();
+							  itere = vMeasureBadA[nHp].end();
+							  n =0;
+							  for(; iterm != itere; ++iterm, ++iterp, ++n)
+							  {
+								  json2["BadMeasurement"]["A"][sHp][n] = (*iterm);
+								  json2["BadPrediction"]["A"][sHp][n] = (*iterp);
+							  }
+
+							  iterm = vMeasureBadC[nHp].begin();
+							  iterp = vPredictBadC[nHp].begin();
+							  itere = vMeasureBadC[nHp].end();
+							  n = 0;
+							  for(; iterm != itere; ++iterm, ++iterp, ++n)
+							  {
+								  json2["BadMeasurement"]["C"][sHp][n] = (*iterm);
+								  json2["BadPrediction"]["C"][sHp][n] = (*iterp);
+							  }
+
+							  iterm = vMeasureBadG[nHp].begin();
+							  iterp = vPredictBadG[nHp].begin();
+							  itere = vMeasureBadG[nHp].end();
+							  n = 0;
+							  for(; iterm != itere; ++iterm, ++iterp, ++n)
+							  {
+								  json2["BadMeasurement"]["G"][sHp][n] = (*iterm);
+								  json2["BadPrediction"]["G"][sHp][n] = (*iterp);
+							  }
+
+							  iterm = vMeasureBadT[nHp].begin();
+							  iterp = vPredictBadT[nHp].begin();
+							  itere = vMeasureBadT[nHp].end();
+							  n = 0;
+							  for(; iterm != itere; ++iterm, ++iterp, ++n)
+							  {
+								  json2["BadMeasurement"]["T"][sHp][n] = (*iterm);
+								  json2["BadPrediction"]["T"][sHp][n] = (*iterp);
+							  }
+						  }
+						  		
+						  string filename_json2(dump_dir);
+						  filename_json2 += "/scatter_data-";
+						  filename_json2 += s;
+						  filename_json2 += ".json";
+						  ofstream ofs2(filename_json2.c_str(), ofstream::out);
+						  ofs2 << json2.toStyledString();
+						  ofs2.flush();
+						  ofs2.close();
+					}
+				}
+			}
+		  
+		  map<string, vector<float>*>::iterator iter0 = mapMeasureGoodA.begin();
+		  for(; iter0 != mapMeasureGoodA.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }		  
+		  for(iter0 = mapPredictGoodA.begin(); iter0 != mapPredictGoodA.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }		  
+		  for(iter0 = mapMeasureGoodC.begin(); iter0 != mapMeasureGoodC.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }		  
+		  for(iter0 = mapPredictGoodC.begin(); iter0 != mapPredictGoodC.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }
+		  for(iter0 = mapMeasureGoodG.begin(); iter0 != mapMeasureGoodG.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }		  
+		  for(iter0 = mapPredictGoodG.begin(); iter0 != mapPredictGoodG.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }
+		  for(iter0 = mapMeasureGoodT.begin(); iter0 != mapMeasureGoodT.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }		  
+		  for(iter0 = mapPredictGoodT.begin(); iter0 != mapPredictGoodT.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }
+		  for(iter0 = mapMeasureBadA.begin(); iter0 != mapMeasureBadA.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }		  
+		  for(iter0 = mapPredictBadA.begin(); iter0 != mapPredictBadA.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }		  
+		  for(iter0 = mapMeasureBadC.begin(); iter0 != mapMeasureBadC.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }		  
+		  for(iter0 = mapPredictBadC.begin(); iter0 != mapPredictBadC.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }
+		  for(iter0 = mapMeasureBadG.begin(); iter0 != mapMeasureBadG.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }		  
+		  for(iter0 = mapPredictBadG.begin(); iter0 != mapPredictBadG.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }
+		  for(iter0 = mapMeasureBadT.begin(); iter0 != mapMeasureBadT.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }		  
+		  for(iter0 = mapPredictBadT.begin(); iter0 != mapPredictBadT.end(); ++iter0)
+		  {
+			  delete [] iter0->second;
+			  iter0->second = 0;
+		  }
+	  }
   }
   return 0;
 }

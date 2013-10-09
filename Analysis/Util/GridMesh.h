@@ -123,6 +123,46 @@ public:
     }
   }
 
+  /**
+   * Fill in the values vector with the T from the bins surrounding row,col
+   * up to bin distance binDist (minimum 1). Each values entry has a corresponding
+   * distance entry in the distances vector which is the distance of row,col to the
+   * center of the bucket containing the T value in values.
+   */
+void GetClosestNeighborsWithinGrid(C row, C col, C binDist, C rowMod, C colMod,
+                                     std::vector<double> &distances,
+                                     std::vector<T *> &values) {
+    C rowBucket = row / mRowStep;
+    C colBucket = col / mColStep;
+    distances.clear();
+    values.clear();
+    // search out the 6 neigboring 
+    C rowIx = rowBucket >= binDist ? rowBucket - binDist : 0;
+    for (; rowIx <= rowBucket + binDist && rowIx < mRowBin; rowIx++) {
+      C colIx = colBucket >= binDist ? colBucket - binDist : 0;
+      for (; colIx <= colBucket + binDist && colIx < mColBin; colIx++) {
+	// Ingore items off the edge of the grid
+	if (rowIx >= 0 && rowIx < mRowBin && colIx >= 0 && colIx < mColBin) {
+          C candRow = (rowIx * mRowStep);
+          C candCol = (colIx * mColStep);
+          if (row / rowMod == candRow / rowMod &&
+              col / colMod == candCol / colMod) {
+            // Compare from current row to middle of bin
+            double rowDist = static_cast<double>(row) - (rowIx * static_cast<double>(mRowStep) + mRowStep/2);
+            double colDist = static_cast<double>(col) - (colIx * static_cast<double>(mColStep) + mColStep/2);
+            double dist = sqrt(rowDist * rowDist + colDist * colDist);
+            distances.push_back(dist);
+            values.push_back(&GetItem(rowIx, colIx));
+          }
+          /* else { */
+          /*   std::cout << "Outside of grid for: " << row << "," << col << " with " << candRow << "," << candCol << std::endl; */
+          /* } */
+        }
+      }
+    }
+  }
+
+
   size_t GetNumBin() const { return (size_t)(mRowBin * mColBin); }
 
   void GetBinCoords(C regionIdx, C &rowStart, C &rowEnd, C &colStart, C &colEnd) {

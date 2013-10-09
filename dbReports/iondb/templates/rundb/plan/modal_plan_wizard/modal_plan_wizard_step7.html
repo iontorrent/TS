@@ -1,3 +1,4 @@
+{% load url from future %}
 <!-- EXPORT -->
 <div id="ws-7" class="workflow-step " style="display: none;">
     <div class="workflow-step-content">
@@ -46,14 +47,14 @@
             -->
         </table>
 
-        <div id="ws-7_ir1_IRConfig"  class="ir1_hideable_IRConfig" style="display: none;">
+        <!--div id="ws-7_ir1_IRConfig"  class="ir1_hideable_IRConfig" style="display: none;">
             <table class="plan-grid">
                 <tr>
                     <td>
                         <p class="form-label">IonReporter v1.0 Workflow Configuration:
                         {% for uploader in planTemplateData.uploaders %}
                             {% ifequal uploader.name "IonReporterUploader_V1_0"%}
-                            <a href="{% url configure_plugins_plugin_refresh uploader.id %}" class="refresh-uploader-information" title="Refresh Plugin {{uploader.name}} Information"><i class="icon-refresh"></i></a>
+                            <a href="{% url "configure_plugins_plugin_refresh" uploader.id %}" class="refresh-uploader-information" title="Refresh Plugin {{uploader.name}} Information"><i class="icon-refresh"></i></a>
                             {% endifequal %}
                         {% endfor%}</p>
                         <select id="ir1_irWorkflow" name="ir1_irWorkflow_select" class="ir1_irWorkflow_select select-group" style="width:150px;">
@@ -62,7 +63,7 @@
                     </td>
                 </tr>
             </table>
-        </div>
+        </div -->
 
     </div>
 </div>

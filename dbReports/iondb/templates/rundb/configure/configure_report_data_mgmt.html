@@ -1,15 +1,17 @@
 {% extends "rundb/configure/base.html" %}
+{% load url from future %}
 {% load pagetools %}
+{% load static from staticfiles %}
 {% block extra_head_js %}
-<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modalmanager.js"></script>
-<script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modal.js"></script>
-<script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.min.js"></script>
+<script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.min.js"%}"></script>
 
-<script type="text/javascript" src="/site_media/resources/scripts/configure/reportdatamgmt/modal_configure_report_data_mgmt_edit_pruning_config.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/configure/reportdatamgmt/modal_configure_report_data_mgmt_add_prune_group.js"></script>
+<script type="text/javascript" src="{% static "resources/scripts/configure/reportdatamgmt/modal_configure_report_data_mgmt_edit_pruning_config.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/scripts/configure/reportdatamgmt/modal_configure_report_data_mgmt_add_prune_group.js"%}"></script>
 {% endblock extra_head_js %}
 {% block extra_head_styles %}
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
 <style>
 .errorlist {
     margin-left: 0;
@@ -18,12 +20,12 @@
 </style>
 {% endblock extra_head_styles %}
 {% block sub-nav %}
-  <li><a href="{% url configure_about %}">About</a></li>
-  <li><a href="{% url configure_references %}">References</a></li>
-  <li><a href="{% url configure_services %}">Services</a></li>
-  <li><a href="{% url configure_plugins %}">Plugins</a></li>
-  <li class="active"><a href="{% url configure_configure %}">Configure</a></li>
-  <li><a href="{% url configure_account %}">Accounts</a></li>
+  <li><a href="{% url "configure_about" %}">About</a></li>
+  <li><a href="{% url "configure_references" %}">References</a></li>
+  <li><a href="{% url "configure_services" %}">Services</a></li>
+  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+  <li class="active"><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
 <script type="text/javascript">
@@ -102,7 +104,7 @@ $(function () {
 
 function loadPruneGroups() {
     checkedVal = $('#pruning_groups input:checked').val();
-    url = '{% url configure_report_data_mgmt_prunegroups %}'
+    url = '{% url "configure_report_data_mgmt_prunegroups" %}'
     $.get(url, function(data){
         $('#pruning_groups').replaceWith(data);
         $('#pruning_groups').find('input[type="radio"][value="' + checkedVal + '"]').attr('checked',true);
@@ -207,7 +209,7 @@ function loadPruneGroups() {
             </div>
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary btn-100 pull-right">Save</button>
-                <a href="{% url configure_configure %}" class="btn btn-100 pull-right" id='cancel' style="margin-right:10px;">Cancel</a>
+                <a href="{% url "configure_configure" %}" class="btn btn-100 pull-right" id='cancel' style="margin-right:10px;">Cancel</a>
             </div>
         </fieldset>
     </form>

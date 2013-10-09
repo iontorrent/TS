@@ -14,7 +14,7 @@ export DJANGO_SETTINGS_MODULE="iondb.settings"
 export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
 
 # Name of nodes to start, here we have a single node
-CELERYD_NODES="w1 plugins periodic"
+CELERYD_NODES="w1 plugins periodic slowlane transfer"
 
 # Where to chdir at start.
 CELERYD_CHDIR="/opt/ion"
@@ -34,7 +34,7 @@ CELERYD_REQ="$CELERYD_REQ --logfile=/var/log/ion/celery_%n.log"
 
 CELERYBEAT="$CELERYD_CHDIR/manage.py celery beat"
 CELERYBEAT_PID_FILE="/var/run/celery/celerybeat.pid"
-
+CELERYBEAT_SCHEDULE_FILE="/var/run/celery/celerybeat-schedule"
 
 if [ -n "$2" ]; then
     CELERYD_OPTS="$CELERYD_OPTS $2"
@@ -94,6 +94,7 @@ start_beat () {
         --pidfile="$CELERYBEAT_PID_FILE"        \
         --logfile="/var/log/ion/celerybeat.log" \
         --loglevel=INFO                         \
+        --schedule="$CELERYBEAT_SCHEDULE_FILE"  \
         --detach
 }
 
@@ -105,7 +106,11 @@ multi_command () {
         --concurrency:plugins=2     \
         --queue:plugins=plugins     \
         --concurrency:periodic=6    \
-        --queue:periodic=periodic
+        --queue:periodic=periodic   \
+        --concurrency:slowlane=1    \
+        --queue:slowlane=slowlane   \
+        --concurrency:transfer=1    \
+        --queue:transfer=transfer
 }
 
 start_workers () {

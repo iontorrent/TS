@@ -40,8 +40,11 @@ class Clonality {
 
   int npoints;
   double cutoff;
+  size_t datasize;
 
   double bw_fac;
+  double convergence_rate;
+  double tuning_count;
 
   double range_limit_low;
   double range_limit_high;
@@ -53,6 +56,11 @@ class Clonality {
   double min_separation_1_2;
 
   size_t max_allowable_peaks;
+
+  // debugging convenience
+  // vector<double> debug_density;
+  // vector<double> debug_xi;
+  // vector<double> debug_peaks;
 
  private:
   std::vector<float> shifted_bkg;
@@ -73,6 +81,7 @@ class Clonality {
   bool AdHoc_5 (std::vector<double> const& xi, std::vector<double> const& density, std::vector<size_t>& valleyIndex, std::vector<size_t>& peakIndex );
   bool AdHoc_6 (std::vector<double> const& xi, std::vector<double> const& density, std::vector<size_t>& valleyIndex, std::vector<size_t>& peakIndex );
   double too_close;
+
 };
 
 #endif // SAMPLECLONALITY_H

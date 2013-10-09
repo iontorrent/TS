@@ -71,6 +71,8 @@ void RegionalizedData::NoData()
 {
   // I cannot believe I have to do this to make cppcheck happy
   // data branch
+  isBestRegion = false;
+
   region = NULL;
   emptyTraceTracker = NULL;
   emptytrace = NULL;
@@ -437,7 +439,8 @@ void RegionalizedData::CalculateFirstBlockClonalPenalty(float nuc_flow_frame_wid
       penalty[ibd] = numeric_limits<float>::infinity();
     }
   }
-  fprintf(stdout, "region=%d ... valid = %d out of %d\n", region->index, valid, my_beads.numLBeads);
+  float pct = 100 * valid/float(my_beads.numLBeads);
+  fprintf(stdout, "region=%d ... valid = %d/%d = %.2g%%\n", region->index, valid, my_beads.numLBeads,pct);
 
   delete sc;
 }

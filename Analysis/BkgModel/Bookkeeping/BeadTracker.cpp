@@ -444,9 +444,11 @@ void BeadTracker::UpdateClonalFilter (int flow, const vector<float>& copy_multip
   }
 
   // all blocks used by clonal filter:
-  int lastBlock = ceil(1.0 * mixed_last_flow() / NUMFB);
+  int lastBlock = ceil(1.0 * mixed::mixed_last_flow / NUMFB);
   int lastFlow  = lastBlock * NUMFB;
-  if ((flow+1)%NUMFB==0 and flow<lastFlow)
+  int firstBlock = floor(1.0 * mixed::mixed_first_flow / NUMFB);
+  int firstFlow  = firstBlock * NUMFB;
+  if (flow > firstFlow and flow<lastFlow)
     UpdatePPFSSQ (flow, copy_multiplier);
 
   // last block used by clonal filter:
@@ -464,9 +466,9 @@ void BeadTracker::UpdatePPFSSQ (int flow, const vector<float>& copy_multiplier)
     transform (ampl.begin(), ampl.end(), ampl.begin(), bind2nd (divides<float>(),p.my_state->key_norm));
 
     // Update ppf and ssq:
-    assert(mixed_first_flow() < NUMFB);
-    int first = max (flow+1-NUMFB, mixed_first_flow()) % NUMFB;
-    int last  = min (flow, mixed_last_flow()-1) % NUMFB;
+    //assert(mixed::mixed_first_flow < NUMFB);
+    int first = max (flow+1-NUMFB, mixed::mixed_first_flow) % NUMFB;
+    int last  = min (flow, mixed::mixed_last_flow - 1) % NUMFB;
     for (int i=first; i<=last; ++i)
     {
       if (ampl[i] > mixed_pos_threshold())
@@ -485,7 +487,7 @@ void BeadTracker::FinishClonalFilter()
   for (int bead=0; bead<numLBeads; ++bead)
   {
     bead_params& p = params_nn[bead];
-    p.my_state->ppf /= (mixed_last_flow() - mixed_first_flow());
+    p.my_state->ppf /= (mixed::mixed_last_flow - mixed::mixed_first_flow);
   }
 }
 int BeadTracker::NumHighPPF() const

@@ -1,16 +1,18 @@
 {% extends "rundb/configure/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
 {% block sub-nav %}
-  <li><a href="{% url configure_about %}">About</a></li>
-  <li><a href="{% url configure_references %}">References</a></li>
-  <li class="active"><a href="{% url configure_services %}">Services</a></li>
-  <li><a href="{% url configure_plugins %}">Plugins</a></li>
-  <li><a href="{% url configure_configure %}">Configure</a></li>
-  <li><a href="{% url configure_account %}">Accounts</a></li>
+  <li><a href="{% url "configure_about" %}">About</a></li>
+  <li><a href="{% url "configure_references" %}">References</a></li>
+  <li class="active"><a href="{% url "configure_services" %}">Services</a></li>
+  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+  <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
-<link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css"/>
-<link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
+<link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
+<link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
 <style type="text/css">
     .search-field {
         display: inline-block;
@@ -42,11 +44,11 @@
 	}
 </style>
 
-<script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
-<script src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
-<script src="/site_media/js/date.min.js"></script>
-<script src="/site_media/js/jquery.daterangepicker.js"></script>
+<script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+<script src="{% static "js/date.min.js"%}"></script>
+<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
 
 <script type="text/javascript">
 function terminate_job(url,name){
@@ -125,18 +127,47 @@ function refresh_grid_timer(source, refresh){
 		grid.update_timer = setInterval(function(){ grid.dataSource.read(); }, 10000);
 }
 
+function showModal(elem, modal_id){
+	var url = $(elem).attr('href');
+	console.log('showModal', modal_id, url);
+	$( 'body #'+modal_id ).remove();
+	$.get(url, function(data) {
+	   $('body').append(data);
+	   $( "#"+modal_id ).modal("show");
+	});
+}
 
 $(document).ready(function () {
 
 	$('.queueStat').live('click',function(e){
-		    e.preventDefault();
-		    url = $(this).attr('href');
-		    $('body #modal_queuestat').remove();
-		    $.get(url, function(data) {
-		       $('body').append(data);
-		       $( "#modal_queuestat" ).modal("show");
-		       return false;
-		    })
+		e.preventDefault();
+		showModal(this, 'modal_queuestat');
+		return false;
+	});
+	
+	$('.raid_details').click(function(e){
+		e.preventDefault();
+		e.stopPropagation();
+		showModal(this, 'modal_raid_info');
+	});
+	
+	$('.raid_status').click(function(){
+		$(this).next('tr').toggle();
+		$(this).find('i').toggleClass('icon-minus').toggleClass('icon-plus');
+		return false;
+	});
+	
+	$('#data_import').click(function(e){
+		e.preventDefault();
+		$.get($(this).attr('href'), function(data) {
+			$('body').append(data);
+			$( "#modal_import_data" ).modal("show");
+		 }).done(function(){
+			$('body #modal_import_data').on('modal_import_data_done', function (e, data) {
+				console.log('modal_import_data_done', data);
+				$('#data_import_status').html(data).show();
+			});
+		});
 	});
 
 	$("#enable_archive").change(function(){
@@ -153,18 +184,13 @@ $(document).ready(function () {
 			} else {
 				var log_entry = 'DISABLED Data Management automatic action';
 			}
-			$.post('{% url dm_configuration_log %}', {log: log_entry});
+			$.post('{% url "dm_configuration_log" %}', {log: log_entry});
 		});
 	});
 
 	$("#dm_config_log").click(function(e){
 		e.preventDefault();
-		$('body #modal_event_log').remove();
-		$.get($(this).attr('href'), function(data) {
-			$('body').append(data);
-			$( "#modal_event_log" ).modal("show");
-			return false;
-		});
+		showModal(this, 'modal_event_log');
 	});
 	
 	$('[name=rangeA]').each(function(){ $(this).daterangepicker({dateFormat: 'yy-mm-dd'}); });
@@ -283,7 +309,7 @@ $(document).ready(function () {
 					field: "output_state",
 					title: "Output",
 					sortable: false,
-					width: '60px',
+					width: '70px',
 				} , {
 					field: "misc_keep",
 					title: "Keep",
@@ -322,52 +348,29 @@ $(document).ready(function () {
 
 				$(source + " .dm-log").click(function(e){
 					e.preventDefault();
-					$('body #modal_event_log').remove();
-					$.get($(this).attr('href'), function(data) {
-						$('body').append(data);
-						$( "#modal_event_log" ).modal("show");
-						return false;
-					});
+					showModal(this, 'modal_event_log');
 				});
 
-				$(".autoExempt").change(function () {
+				$(".autoExempt").click(function (e) {
+					e.preventDefault();
 					var pk = $(this).attr('data-pk');
 					var type = $(this).attr('data-type');
 					var checked = $(this).is(':checked');
-
-					$.ajax({
-						url: 'preserve_data/',
-						dataType: 'json',
-						type: 'POST',
-						async: false,
-						contentType: "application/json; charset=utf-8",
-						data: "reportpk=" + pk + "&keep=" + checked + "&type=" + type,
-						success: function (data) {
-							console.log(data);
-							refreshKendoGrid(source);
-						}
+					$.post('preserve_data/', "reportpk=" + pk + "&keep=" + checked + "&type=" + type, function(data){
+						console.log(data);
+						refreshKendoGrid(source);
 					});
-
 				});
 
-				$(".acknowledge").change(function (e) {
-				  e.stopPropagation();
+				$(".acknowledge").click(function (e) {
+					e.preventDefault();
 					var pk = $(this).attr('data-pk');
 					var runstate = $(this).is(':checked') ? "A":"S";
-
-					$.ajax({
-						url: 'ack/',
-						dataType: 'json',
-						type: 'POST',
-						async: false,
-						contentType: "application/json; charset=utf-8",
-						data: "runpk=" + pk + "&runstate=" + runstate,
-						success: function (data) {
-							console.log(data);
-							refreshKendoGrid(source);
-						}
+					$.post('ack/', "runpk=" + pk + "&runstate=" + runstate, function(data){
+					    console.log(data);
+						refreshKendoGrid(source);
+						return false;
 					});
-
 				});
 
 				var gridDataArray = this._data;
@@ -394,13 +397,13 @@ $(document).ready(function () {
 
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
 	<div class="btn-group">
-    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="/site_media/resources/img/gear-active.png" border="0"></img></a>
+    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"></img></a>
 		<ul class="dropdown-menu pull-right">
 			<li>
-				<a class="dm-actions" href="#= '{% url dm_actions '99999' %}'.replace('99999',id)#" title="Data Management Actions">Actions</a>
+				<a class="dm-actions" href="#= '{% url "dm_actions" '99999' %}'.replace('99999',id)#" title="Data Management Actions">Actions</a>
 			</li>
 			<li>
-				<a class="dm-log" href="#= '{% url dm_log '99999' %}'.replace('99999',id)#" title="Data Management Log">View Log</a>
+				<a class="dm-log" href="#= '{% url "dm_log" '99999' %}'.replace('99999',id)#" title="Data Management Log">View Log</a>
 			</li>
 
 		</ul>
@@ -526,14 +529,14 @@ $(document).ready(function () {
 					  {#only provide links to the report if they exist#}
 					  {% if report.report_exist %}
 						<td>
-						  <a href="{% url report report.pk %}">{{ report.resultsName }}</a>
+						  <a href="{% url "report" report.pk %}" target="_blank">{{ report.resultsName }}</a>
 						</td>
 						{% else %}
 						<td>{{ report.resultsName }}</td>
 					  {% endif %}
 
 					  <td class="termtd">
-						<a href="javascript:terminate_job('{% url control_job report.pk "term" %}', '{{ report.resultsName }}')">
+						<a href="javascript:terminate_job('{% url "control_job" report.pk "term" %}', '{{ report.resultsName }}')">
 						  Terminate
 						</a>
 					  </td>
@@ -599,6 +602,31 @@ $(document).ready(function () {
 		{% endif %}
 	</div>
 	<div class="content clearfix">
+		<h1>RAID Info</h1>
+		{% if raid_status %}
+			<table class="table table-condensed table-hover">
+				{% for entry in raid_status %}
+				<tr class="{{entry.status}} raid_status">
+					<td>
+						{% if forloop.first %}<i class="icon-minus"></i>{% else %}<i class="icon-plus"></i>{% endif %}
+						<a>{{entry.adapter_id}} / {{entry.enclosure_id}}</a> ({{entry.status}})
+					</td>
+					<td>
+						<a href="/configure/raid_info/{{forloop.counter0}}/" class="raid_details">View Details</a>
+					</td>
+				</tr>
+				<tr {% if not forloop.first %}class="hide"{% endif %}>
+					<td colspan=2 style="border:none;">
+						{% include "rundb/configure/raid_info.html" with array_status=entry.drives %}
+					</td>
+				</tr>
+				{% endfor %}
+			</table>
+		{% else %}
+			<p>No RAID information available.</p>
+		{% endif %}
+	</div>
+	<div class="content clearfix">
 		<h1>Data Management</h1>
 		<div class="content">
 			<h2>Configuration</h2>
@@ -606,23 +634,17 @@ $(document).ready(function () {
 			<table class="data-table" border="0">
 				<thead>
 					<tr>
-						<th rowspan="2"></th>
-						<th rowspan="2">Enabled</th>
-						<th rowspan="2">Auto-Acknowledge</th>
-						<th colspan="4" style="text-align:center;">Default Storage Settings</th>
-						<th rowspan="2"></th>
-					</tr>
-					<tr>
-						{%for entry in dm_filesets %}
-							<th>{{entry.type}}</th>
-						{% endfor %}
+						<th></th>
+						<th>Enabled</th>
+						<th>Auto-Acknowledge</th>
+						<th></th>
 					</tr>
 				</thead>
 				<tbody>
 					{% spaceless %}
 					<tr class="{% cycle 'row1' 'row2' %}">
 						<td>
-							<a href="{% url dm_configuration %}">Configure</a>
+							<a href="{% url "dm_configuration" %}">Configure</a>
 						</td>
 						<td class='archive_td'>
 							<input {% if autoArchiveEnable %}checked{% endif %} type='checkbox' id="enable_archive">
@@ -630,12 +652,9 @@ $(document).ready(function () {
 						<td>
 							{% if autoArchive %}Enabled{% else %}Disabled{% endif %}
 						</td>
-						{%for entry in dm_filesets %}
-							<td>{{entry.get_auto_action_display}}</td>
-						{% endfor %}
 						<td>
-							<a href= {% url dm_configuration_log %} id="dm_config_log" class="btn">Configuration Log</a>
-							<a href= {% url dm_history %} id="dm_history" class="btn" style="margin-left:5px">History</a>
+							<a href= {% url "dm_configuration_log" %} id="dm_config_log" class="btn">Configuration Log</a>
+							<a href= {% url "dm_history" %} id="dm_history" class="btn" style="margin-left:5px">History</a>
 						</td>
 					</tr>
 					{% endspaceless %}
@@ -645,28 +664,35 @@ $(document).ready(function () {
 			<table class="data-table" border="0">
 				<thead>
 					<tr>
-					<th>Data Archive</th>
-					<th>Mounted</th>
-					<th></th>
+						<th>File Category</th>
+						<th>Auto Action</th>
+						<th>Data Age Threshold (days)</th>
+						<th>Disk Full Threshold (Percent)</th>
+						<th>Archive Directory</th>
+						<th>Mounted</th>
 					</tr>
 				</thead>
 				<tbody>
-					{% for entry in archive_paths %}{% spaceless %}
+					{% for entry in dm_filesets %}
+					{% spaceless %}
 						<tr class="{% cycle 'row1' 'row2' %}">
+							<td>{{ entry.type }}</td>
+							<td>{{ entry.get_auto_action_display }}</td>
+							<td>{{ entry.auto_trigger_age }}</td>
+							<td>{{ entry.auto_trigger_usage }}</td>
 							<td>{{ entry.backup_directory }}</td>
-							{% if entry.exists %}
-								<td>Mounted</td>
-							{% else %}
-								<td>Not Mounted</td>
-							{% endif %}
-							<td></td>
+							<td>{% if entry.mounted %} Mounted {% else %} Not Mounted {% endif %}</td>
 						</tr>
 					{% endspaceless %}
 					{% endfor %}
 				</tbody>
 			</table>
 		</div>
-
+		<div class="content">
+			<h2>Data Import</h2>
+			<a href="{% url "import_data" %}" id="data_import" class="btn">Import</a>
+			<div id="data_import_status" class="alert" style="display: none; margin-top: 10px"></div>
+		</div>
 		<div id="advancedSec" class="content">
 			<h2>Disk Usage</h2>
 			<div class="">
@@ -687,7 +713,7 @@ $(document).ready(function () {
 						{% for key,v in fs_stats.items %}
 							<tr>
 								<td align="center">{{ key }}</td>
-								<td align="left"><img title="Threshold shown is for Signal Processing Input"
+								<td align="left"><img title="Thresholds shown for: S=Signal Processing Input, B=Basecalling Input, O=Output Files, I=Intermediate Files"
 													  src="{{ v.percentfull|floatformat:1 }}/file_server_status.png"></td>
 								<td>{{ v.percentfull|floatformat:1 }}%</td>
 								<td>{{ v.disksize|floatformat:1 }}</td>
@@ -697,19 +723,17 @@ $(document).ready(function () {
 								<td>{{ v.other|floatformat:1 }}</td>
 							</tr>
 						{% endfor %}
-						{% for entry in archive_paths %}
-							{% if entry.exists %}
+						{% for key,v in archive_stats.items %}
 							<tr>
-								<td>{{ entry.backup_directory }}</td>
-								<td><img src="{{ entry.id }}/archive_drivespace.png"></td>
-								<td>{{ entry.percentfull|floatformat:1 }}%</td>
-								<td>{{ entry.disksize|floatformat:1 }}</td>
-								<td>{{ entry.diskfree|floatformat:1 }}</td>
+								<td>{{ key }}</td>
+								<td><img src="archive_drivespace.png/?path={{ key }}"></td>
+								<td>{{ v.percentfull|floatformat:1 }}%</td>
+								<td>{{ v.disksize|floatformat:1 }}</td>
+								<td>{{ v.diskfree|floatformat:1 }}</td>
 								<td></td>
 								<td></td>
 								<td></td>
 							</tr>
-							{% endif %}
 						{% endfor %}<br />
 					</tbody>
 				</table>

@@ -1,0 +1,593 @@
+{% extends "rundb/plan/page_plan/base.html" %}
+{% load url from future %}
+
+{% block main-title %}Select the sequencing kits and then hit next.{% endblock main-title %}
+
+{% block page-plan-content %}
+<div class="row-fluid">
+    <div class="span6">
+        <label>Sample Preparation Kit:</label>
+        <select id="samplePreparationKit" name="samplePreparationKit" style="width: 350px;">
+            <option value=""></option>
+            {% for spk in step.getPrePopulatedFieldDict.samplePrepKits %}
+                {% ifequal spk.name step.getCurrentSavedFieldDict.samplePreparationKit %}
+                    <option SELECTED value="{{spk.name}}">{{spk}}</option>
+                {% else %}
+                    <option value="{{spk.name}}">{{spk}}</option>
+                {% endifequal %}
+            {% endfor %}
+        </select>
+    </div>
+    <div class="span6">
+        <label>Control Sequence (optional):</label>
+        <select id="controlsequence" name="controlsequence">
+            <option value=""></option>
+            {% for kit in step.getPrePopulatedFieldDict.controlSeqKits %}
+                {% ifequal kit.name step.getCurrentSavedFieldDict.controlsequence %}
+                    <option SELECTED value="{{kit.name}}">{{kit.name}}</option>
+                {% else %}
+                    <option value="{{kit.name}}">{{kit.name}}</option>
+                {% endifequal %}
+            {% endfor %}
+        </select>
+    </div>
+</div>
+<div class="row-fluid">
+    <div class="span6">
+        <label>Library Kit Type:  <a class="btn btn-mini extra-kit-inline">Details +</a></label>
+        <select id="libraryKitType" name="librarykitname" style="width: 350px;">
+            <option value=""></option>
+            {% for libKit in step.getPrePopulatedFieldDict.libKits %}
+                {% ifequal libKit.name step.getCurrentSavedFieldDict.librarykitname %}
+                    <option SELECTED value="{{libKit.name}}">{{libKit.description}}</option>
+                {% else %}
+                    <option value="{{libKit.name}}">{{libKit.description}}</option>
+                {% endifequal %}
+            {% endfor %}
+        </select>
+    </div>
+    <div class="span6">                                     
+        <label>Chip Type (required):</label>
+        <select id="chipType" name="chipType">
+            {% if not helper.isEditRun %}<option value=""></option>{% endif %}
+            {% for chipType in step.getPrePopulatedFieldDict.chipTypes %}
+                {% if chipType.name == step.getCurrentSavedFieldDict.chipType or chipType.name == helper.getStepDict.Application.savedObjects.applProduct.defaultChipType %}
+                    <option SELECTED value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+                {% elif not helper.isEditRun %}
+                    <option value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+                {% endif %}
+            {% endfor %}
+        </select>
+    </div>
+</div>                  
+<div class="extra_kit_forward_info row-fluid hide" style="display: block;">
+    <div class="span6">
+        <label>Forward Library Key:</label>
+        <select id="libraryKey" name="libraryKey" value="" class="select-group"  style="width:350px;">
+            <option value=""></option>
+            {% for libKey in step.getPrePopulatedFieldDict.forwardLibKeys %}
+                {% ifequal libKey.sequence step.getCurrentSavedFieldDict.libraryKey %}
+                    <option SELECTED value="{{libKey.sequence}}">{{libKey}}</option>
+                {% else %}
+                    <option value="{{libKey.sequence}}">{{libKey}}</option>
+                {% endifequal %}
+            {% endfor %}
+        </select>
+    </div>
+    <div class="span6">                                     
+        <label>Forward 3' Adapter:</label>
+        <select id="forward3primeAdapter" name="forward3primeAdapter" value="" class="select-group">
+            <option value=""></option>
+            {% for adapter in step.getPrePopulatedFieldDict.forward3Adapters %}
+                {% ifequal adapter.sequence step.getCurrentSavedFieldDict.forward3primeAdapter %}
+                    <option SELECTED value="{{adapter.sequence}}">{{adapter}}</option>
+                {% else %}
+                    <option value="{{adapter.sequence}}">{{adapter}}</option>
+                {% endifequal %}
+            {% endfor %}
+        </select>
+    </div>
+</div>                      
+<div class="row-fluid">
+    <div class="span6">
+        <p class="form-label">Template Kit
+        <span class="option-group">
+        <small style="font-weight: normal; font-size: 75%;">
+            {% for kitTypeName in step.getPrePopulatedFieldDict.templateKitTypes.keys %}
+                {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
+                	{% ifequal kitTypeName "Avalanche" %}
+                	{% else %}
+                    	<input checked="checked" type="radio" name="templatekitType" value="{{kitTypeName}}" />{{kitTypeName}}
+                    {% endifequal %}
+                {% else %}
+            		{% ifequal kitTypeName "Avalanche" %}
+             		{% else %}
+                    	<input type="radio" name="templatekitType" value="{{kitTypeName}}" />{{kitTypeName}}
+                    {% endifequal  %}
+                {% endifequal %}
+            {% endfor %}
+            
+            <!--
+            {% for kitTypeName in step.getPrePopulatedFieldDict.templateKitTypes.keys %}
+	            {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
+	            	{% ifequal kitTypeName "Avalanche" %}
+	            		<input checked="checked" type="checkbox" id="templatekitSubType" name="templatekitSubType" value="{{kitTypeName}}" />{{kitTypeName}}
+	                {% endifequal %}
+	            {% else %}
+	        		{% ifequal kitTypeName "Avalanche" %}
+	        			<input type="checkbox" id="templatekitSubType" name="templatekitSubType" value="{{kitTypeName}}" />{{kitTypeName}}
+	                {% endifequal  %}
+	            {% endifequal %}
+	        {% endfor %}   
+	        -->
+        </p>      
+        </small>
+        </span>
+        </p>
+        <div id="templateKitHolder">
+            {% for kitTypeName, kitDict in step.getPrePopulatedFieldDict.templateKitTypes.items %}
+                {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
+                    <select id="{{kitTypeName}}__templatingKit" name="templatekitname" style="width: 350px;">
+                {% else %}
+                    <select id="{{kitTypeName}}__templatingKit" name="{{kitTypeName}}__templatekitname" style="width: 350px; display: none;">
+                {% endifequal %}
+                
+                <option value=""></option>
+                {% for kit in kitDict.kit_values %}
+                    {% if kit.name == step.getCurrentSavedFieldDict.templatekitname %}
+                        <option SELECTED value="{{kit.name}}">{{kit}}</option>
+                    {% elif kit.name == kitDict.applDefault.name %}
+                        {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
+                            <option {{step.getCurrentSavedFieldDict.templatekitname|yesno:",,SELECTED"}} value="{{kit.name}}">{{kit}}</option>
+                        {% else %}
+                            <option SELECTED value="{{kit.name}}">{{kit}}</option>
+                        {% endifequal %}
+                    {% else %}
+                        <option value="{{kit.name}}">{{kit}}</option>
+                    {% endif %}
+                {% endfor %}
+                </select>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="span6">                                     
+        <label>Barcode Set (optional):</label>
+        <select id="barcodeId" name="barcodeId" {% if helper.isPlanBySample %}disabled="disabled"{% endif %}>
+            <option value=""></option>
+            {% for kit in step.getPrePopulatedFieldDict.barcodes %}
+                {%if helper.isPlanBySample%}
+                    {% ifequal kit.name helper.getStepDict.Barcode_by_sample.getCurrentSavedFieldDict.barcodeId %}
+                        <option SELECTED value="{{kit.name}}">{{kit.name}}</option>
+                    {% else %}
+                        <option value="{{kit.name}}">{{kit.name}}</option>
+                    {% endifequal %}
+                {%else%}
+                    {% ifequal kit.name step.getCurrentSavedFieldDict.barcodeId %}
+                        <option SELECTED value="{{kit.name}}">{{kit.name}}</option>
+                    {% else %}
+                        <option value="{{kit.name}}">{{kit.name}}</option>
+                    {% endifequal %}
+                {%endif%}
+            {% endfor %}
+        </select>
+    </div>
+</div>
+<div class="row-fluid">
+    <div class="span6">
+        <label>Sequencing Kit:</label>
+        <select id="sequenceKit" name="sequencekitname" style="width: 350px;">
+            <option value=""></option>
+            {% for kit in step.getPrePopulatedFieldDict.seqKits %}
+                {% ifequal kit.name step.getCurrentSavedFieldDict.sequencekitname %}
+                    <option SELECTED value="{{kit.name}}">{{kit.description}}</option>
+                {% else %}
+                    <option value="{{kit.name}}">{{kit.description}}</option>
+                {% endifequal %}
+            {% endfor %}
+        </select>
+    </div>
+    <div class="span6">
+        <p class="form-label">Mark as PCR Duplicates 
+            {% if step.getCurrentSavedFieldDict.isDuplicateReads %}
+                <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads"  checked="checked" style="vertical-align:top;">
+            {% else %}
+                <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads" style="vertical-align:top;">
+            {% endif %}
+        </p>      
+    </div>
+</div>
+<div class="row-fluid">
+    <div class="span6">
+        <label for="flows" class="form-label">Flows</label>
+        <input value="{{step.getCurrentSavedFieldDict.flows}}" style="width:50px;" name="flows" id="flows" {% if helper.isEditRun %} readonly {% endif %}>
+    </div>
+    <div class="span6">
+    </div>
+</div>
+<div class="row-fluid">
+    {% for key, value in step.validationErrors.items %}
+        <h4 style="color: red">{{value}}</h4>
+    {% endfor %}
+</div>
+{% endblock page-plan-content %}
+
+{% block prevnext-buttons %}
+    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_application" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_monitoring" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+{% endblock prevnext-buttons %}
+
+{% block summary-table %}
+    {%include "rundb/plan/page_plan/summary/kit_summary.html"%}
+{% endblock summary-table %}
+
+{% block post-raw %}
+{{ block.super }}
+<script type="text/javascript">
+
+    $(document).ready(function () {
+
+        $("form").submit(function(){
+            $("select[name=barcodeId]").attr('disabled', false);
+        });
+
+        var seq_kits_to_flows_map = {};
+
+        {%for kitinfoobj in step.getPrePopulatedFieldDict.seqKits %}
+            seq_kits_to_flows_map["{{kitinfoobj.name}}"] = "{{kitinfoobj.flowCount}}";
+        {%endfor%}
+
+
+        var template_kits_to_flows_map = {};        
+
+        {%for templateKitInfoObj in step.getPrePopulatedFieldDict.templateKits %}
+            template_kits_to_flows_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.flowCount}}";
+        {%endfor%}
+
+        
+        var defaultAvalancheTemplateKitObj = "{{step.getPrePopulatedFieldDict.templateKitTypes.Avalanche.applDefault}}";
+        var defaultAvalancheTemplateKitName = "{{step.getCurrentSavedFieldDict.avalancheTemplateKitName}}";
+        //this can be the previously selected template kit name
+        var defaultOneTouchTemplateKitName = "{{step.getCurrentSavedFieldDict.templatekitname}}";
+        if (defaultOneTouchTemplateKitName === '' ||  defaultOneTouchTemplateKitName === null) {
+        	console.log("BLANK OR NULL step.getCurrentSavedFieldDict.templatekitname.  User prePopulatedFieldDict!!");
+        	
+        	defaultOneTouchTemplateKitName = "{{step.getPrePopulatedFieldDict.templateKitTypes.OneTouch.applDefault}}";
+        }    
+        
+        var defaultAvalancheSequenceKitObj = "{{step.getCurrentSavedFieldDict.avalancheSequencekitname}}";
+        var defaultAvalanche3PrimeAdapterObj = "{{step.getCurrentSavedFieldDict.avalancheForward3PrimeAdapter}}";
+        
+        //var defaultAvalancheFlowCount = template_kits_to_flows_map["{{step.getPrePopulatedFieldDict.templateKitTypes.Avalanche.applDefault.name}}"];
+        var defaultAvalancheFlowCount = template_kits_to_flows_map["{{step.getCurrentSavedFieldDict.avalancheTemplateKitName}}"];
+        
+        var defaultNonAvalanche3PrimeAdapter = "{{step.getCurrentSavedFieldDict.nonAvalancheForward3PrimeAdapter}}";
+        var defaultNonAvalancheTemplateKitName = "{{step.getCurrentSavedFieldDict.nonAvalancheTemplateKitName}}";
+        var defaultNonAvalancheSequenceKitName = "{{step.getCurrentSavedFieldDict.nonAvalancheSequencekitname}}";
+
+    	function updateForAvalanche() {
+    		updateAvalanche3PrimeAdapter();
+    		updateAvalancheTemplateKit();
+    		updateAvalancheSeqKit();
+    		updateAvalancheFlowCount();
+    	}
+    	
+    	function updateAvalanche3PrimeAdapter() {
+    		//no-op
+    		
+//            {% for adapter in step.getPrePopulatedFieldDict.forward3Adapters %}
+//        		{% ifequal adapter.sequence  step.getCurrentSavedFieldDict.avalancheForward3PrimeAdapter %}
+//            	 	$("select[name$='forward3primeAdapter']").val("{{adapter.sequence}}");
+//            	 	$("#selected3PrimeAdapter").text(threePrimeAdapterSeqToNameAndSeq[$("select[name$='forward3primeAdapter']").val()]); 
+//            	{% endifequal %}
+//            {% endfor %}
+    	}
+
+    	function updateNonAvalanche3PrimeAdapter() {    		
+            {% for adapter in step.getPrePopulatedFieldDict.forward3Adapters %}
+        		{% ifequal adapter.sequence  step.getCurrentSavedFieldDict.nonAvalancheForward3PrimeAdapter %}
+        	 		$("select[name$='forward3primeAdapter']").val("{{adapter.sequence}}");
+        	 		$("#selected3PrimeAdapter").text(threePrimeAdapterSeqToNameAndSeq[$("select[name$='forward3primeAdapter']").val()]);             	 	
+            	{% endifequal %}
+            {% endfor %}		
+    	}
+    	
+    	function updateAvalancheTemplateKit() {
+    		//no-op
+    		
+        	//$("select[name='templatekitname']").val("{{step.getPrePopulatedFieldDict.templateKitTypes.Avalanche.applDefault}}");
+    		//console.log("updateAvalancheTemplateKit() defaultAvalancheTemplateKitName=", defaultAvalancheTemplateKitName);
+    		
+//        	$("select[name='templatekitname']").val(defaultAvalancheTemplateKitName);
+//        	$("#selectedTemplatingKitName").text($("select[name='templatekitname']").find("option:selected").val());		
+    	}
+
+    	function updateOneTouchTemplateKit() {
+    		//console.log("updateOneTouchTemplateKit() defaultOneTouchTemplateKitName=", defaultOneTouchTemplateKitName, "; defaultNonAvalancheTemplateKitName=", defaultNonAvalancheTemplateKitName);
+
+        	$("select[name$='templatekitname']").val(defaultNonAvalancheTemplateKitName);
+        	$("#selectedTemplatingKitName").text($("select[name='templatekitname']").find("option:selected").val());		
+    	}
+
+    	function updateAvalancheSeqKit() {
+    		//no-op
+    		
+//            {% for kit in step.getPrePopulatedFieldDict.seqKits %}
+//    	    	{% ifequal kit.name step.getCurrentSavedFieldDict.avalancheSequencekitname %}
+//    	        	$("select[name$='sequencekitname']").val("{{kit.name}}");
+//    	            $("#selectedSequenceKit").text(seqKitNameToDesc["{{kit.name}}"]);
+//    	        {% endifequal %}
+//    	    {% endfor %}		
+    	}
+    	
+
+    	function updateAvalancheFlowCount() {
+    		//no-op
+    		
+//            if (!$("#flows").prop('readonly')){
+//            	//$('input[name = "flows"]').val(template_kits_to_flows_map["{{step.getPrePopulatedFieldDict.templateKitTypes.Avalanche.applDefault.name}}"]); 
+//            	//$('input[name = "flows"]').val(template_kits_to_flows_map["{{step.getCurrentSavedFieldDict.avalancheTemplateKitName}}"]);
+//            	$('input[name = "flows"]').val(defaultAvalancheFlowCount);
+//            	$("#selectedFlows").text($('input[name = "flows"]').val());
+//    		}		
+    	}
+    	
+
+    	function updateNonAvalancheFlowCount() {
+            if (!$("#flows").prop('readonly')){
+            	$('input[name = "flows"]').val(seq_kits_to_flows_map[$("select[name$='sequencekitname']").val()]);
+            	$("#selectedFlows").text($('input[name = "flows"]').val());
+            }            
+    	}
+
+    	function refreshTemplateKitSelectionList() {
+    		var templateType = $('input[name="templatekitType"]').val();
+    		
+    		console.log("refreshTemplateKitSelectionList() templateType=", templateType);
+    		
+	        $("#templateKitHolder select").each(function(){
+	            var currentSelect = $(this);
+	            
+	    		console.log("refreshTemplateKitSelectionList() LOOP currentSelect=", currentSelect);
+	    		
+	            if (currentSelect.attr('id') == templateType + '__templatingKit') {
+	                currentSelect.attr('style', 'width: 350px;');
+	                currentSelect.attr('name', 'templatekitname');
+	                $("#selectedTemplatingKitName").text(currentSelect.find("option:selected").val());
+	            } else {
+	                currentSelect.attr('style', 'width: 350px; display: none;');
+	                currentSelect.attr('name', currentSelect.attr('id').replace('__templatingKit', '') + '__templatekitname');
+	            }
+	        });
+    	}
+
+    	function handleAvalancheForPreviousSelection() {
+    		//no-op
+    		
+//    		var prevSelectedTemplateKitName = $("select[name$='templatekitname']").find("option:selected").val();
+//    		var prevSelected3PrimeAdapter = $("#forward3primeAdapter").val();
+//    		
+//    		if ((prevSelectedTemplateKitName == defaultAvalancheTemplateKitName) || (prevSelected3PrimeAdapter == defaultAvalanche3PrimeAdapterObj)) {
+//        		$('input[name = "templatekitSubType"]').removeAttr('disabled');
+//    			$('input[name = "templatekitSubType"]').attr('checked', true);
+//    		}
+//    		else {
+//    			$('input[name = "templatekitSubType"]').removeAttr('checked');
+//    			
+//    			var prevSelectedTemplateKitType = $('input[name="templatekitType"]').val();
+//    			if (prevSelectedTemplateKitType == "IonChef") {
+//                	$('input[name = "templatekitSubType"]').attr("disabled", true);    				
+//    			}
+//    		}
+    	}
+
+    	//at document.ready...
+    	handleAvalancheForPreviousSelection();
+
+        
+        $("#sequenceKit").on('change', function(){
+            if (!$("#flows").prop('readonly')){
+                var flowCount = seq_kits_to_flows_map[$(this).val()];
+                $("#flows").val(flowCount);
+                $("#selectedFlows").text(flowCount);
+            }
+        });
+
+        $("#samplePreparationKit").change(function()  {
+            $("#selectedSamplePreparationKit").text($(this).val());
+        });
+        
+        $("#libraryKitType").change(function()  {
+        	$("#selectedLibraryKitType").text(libKitNameToDesc[$(this).val()]);
+        });
+
+        //logic to support avalanche 
+        //1) If IonChef is selected, uncheck and disable Avalanche checkbox, 
+        //   auto-select default non-Avalanche 3' adapter, set flowcount to selected sequencing kit's flow count
+        //2) If Avalanche checkbox is selected, 
+        //   auto-select Avalanche templating kit, 3' adapter, sequencing kit and flow count according to applProduct specification
+        //3) If Avalanche 3' adapter is selected, 
+        //   auto-select Avalanche checkbox, templating kit, sequencing kit and flow count according to applProduct specification
+        //4) If Avalanche templating kit is selected, 
+        //   auto-check Avalanche checkbox, auto-select Avalanche 3' adapter, sequencing kit and flow count
+        //5) If Avalanche checkbox is unchecked (and OneTouch is selected), 
+        //   auto-select non-Avalanche templating kit, and non-Avalanche 3' adapter, and set flow count according to sequencing kit's
+
+        
+        $('input[name="templatekitType"]').change(function () {
+            var checkedRadioButton = $(this)
+            
+
+            console.log("templatekitType - checkedRadioButton=", checkedRadioButton);
+            
+            var templateType = checkedRadioButton.val();
+
+            if (templateType == "IonChef") {
+            	$('input[name = "templatekitSubType"]').removeAttr('checked');
+            	$('input[name = "templatekitSubType"]').attr("disabled", true);
+                
+                updateNonAvalanche3PrimeAdapter();
+                updateNonAvalancheFlowCount();
+            	$("#selectedTemplatingKitName").text($("select[name='templatekitname']").find("option:selected").val());
+
+            }
+            else {
+            	$('input[name = "templatekitSubType"]').removeAttr('disabled'); 
+               	
+            	var selectedTemplateKit = $("select[name='templatekitname']").val();
+            	
+            	//avalanche templating kit could have been previously selected prior to switching to IonChef
+            	if (!$('input[name = "templatekitSubType"]').is(':checked')) {            		
+            		updateOneTouchTemplateKit();
+            	}
+            }
+            
+            //20130827-TODO-retest-why OT or IC template kit is not auto-selected
+            //refreshTemplateKitSelectionList();
+            
+
+            $("#templateKitHolder select").each(function(){
+                var currentSelect = $(this);
+                if (currentSelect.attr('id') == templateType + '__templatingKit') {
+                    currentSelect.attr('style', 'width: 350px;');
+                    currentSelect.attr('name', 'templatekitname');
+                    $("#selectedTemplatingKitName").text(currentSelect.find("option:selected").val());
+                } else {
+                    currentSelect.attr('style', 'width: 350px; display: none;');
+                    currentSelect.attr('name', currentSelect.attr('id').replace('__templatingKit', '') + '__templatekitname');
+                }
+            });
+
+        });
+        
+
+        //id="{{kitTypeName}}__templatingKit" name="templatekitname"
+
+        $("select[name$='templatekitname']").change(function()  {
+
+        	var selectedVal = $(this).find("option:selected").val();
+        	
+        	//console.log("templateKitName... selectedVal=", selectedVal+"; defaultAvalancheTemplateKitName=", defaultAvalancheTemplateKitName);
+        	
+        	if (selectedVal == defaultAvalancheTemplateKitName) {
+            	$('input[name = "templatekitSubType"]').attr('checked', true);
+                
+            	updateAvalanche3PrimeAdapter();            	                                
+            	updateAvalancheSeqKit();                
+            	updateAvalancheFlowCount();
+        	}
+        	else {
+        		//select non-Avalanche 3' adapter and update flow count
+            	$('input[name = "templatekitSubType"]').removeAttr('checked');
+            	
+        		updateNonAvalanche3PrimeAdapter();
+        		
+        		var previousFlowCount = $('input[name = "flows"]').val();
+        		if (previousFlowCount == defaultAvalancheFlowCount) {
+        			updateNonAvalancheFlowCount();        			
+        		}
+        	}
+        	
+            $("#selectedTemplatingKitName").text($(this).find("option:selected").val());
+        });
+        
+
+        $('input[name = "templatekitSubType"]').change(function () {
+        	var checkBox = $(this);
+
+        	if( checkBox.is(':checked')) {
+            	//console.log("CHECKED at templatekitSubType!!");
+            	
+            	updateAvalancheTemplateKit();            	
+            	updateAvalanche3PrimeAdapter(); 
+            	updateAvalancheSeqKit();                
+            	updateAvalancheFlowCount();
+        	}
+        	else {
+            	//console.log("UNCHECKED at templatekitSubType!!");
+            	
+            	//need to work for copy or edit as well
+        		updateNonAvalanche3PrimeAdapter();
+        		
+                updateOneTouchTemplateKit();
+            	updateNonAvalancheFlowCount();
+
+        	}
+        });
+
+
+        $("#libraryKey").change(function() {
+            $("#selectedLibraryKey").text(libraryKeySeqToNameAndSeq[$(this).val()]);        	
+        });
+        
+
+        $("#forward3primeAdapter").change(function() {
+        	var value = $(this).val();
+        	
+            $("#selected3PrimeAdapter").text(threePrimeAdapterSeqToNameAndSeq[$(this).val()]);        
+
+            if (value == "{{step.getCurrentSavedFieldDict.avalancheForward3PrimeAdapter}}") {
+            	$('input[name = "templatekitSubType"]').removeAttr('disabled');             	
+            	$('input[name = "templatekitSubType"]').attr('checked', true);
+
+            	$('input[name="templatekitType"][value="OneTouch"]').attr('checked', true);
+                
+            	//if user changes to Avalanche 3' adapter while IonChef is selected
+            	refreshTemplateKitSelectionList();
+                
+            	updateAvalancheTemplateKit();            	
+            	updateAvalancheSeqKit();               
+            	updateAvalancheFlowCount();       	
+            }
+        });
+        
+        $("#sequenceKit").change(function()  {
+        	updateNonAvalancheFlowCount();
+            $("#selectedSequenceKit").text(seqKitNameToDesc[$(this).val()]);
+        });
+                
+        var flowsSpinner = $("#flows").spinner({min: 0, max: 10000});
+        flowsSpinner.spinner("value", '{{step.getCurrentSavedFieldDict.flows}}');
+        $("#flows").on("spinchange", function(event, ui){
+            $("#selectedFlows").text(flowsSpinner.spinner("value"));
+        });
+        $("#flows").on("spinstop", function(event, ui) {
+            $("#selectedFlows").text(flowsSpinner.spinner("value"));
+        });
+        if ($("#flows").prop('readonly'))
+            flowsSpinner.spinner("disable").prop('disabled',false);
+    
+        $("#controlsequence").change(function()  {
+            $("#selectedControlSequence").text($(this).val());
+        });     
+
+        $("#chipType").change(function()  {
+            $("#selectedChipType").text(chipNameToDisplayName[$(this).val()]);
+        });     
+        
+        $("#barcodeId").change(function()  {
+            $("#selectedBarcode").text($(this).val());
+        });
+        
+        $(".extra_kit_forward_info").hide();
+        $(".extra-kit-inline").click(function() {
+            if (($(".extra_kit_forward_info").is(":visible"))) {
+                $(".extra-kit-inline").text("Details +");
+                $(".extra_kit_forward_info").hide();
+            } else {
+                $(".extra-kit-inline").text("Details -");
+                $(".extra_kit_forward_info").show();
+            }
+        });
+        
+        $('#isDuplicateReads').change(function(){
+            if($(this).is(':checked')) {
+                $('#selectedMarkAsPcrDuplicates').text('True');
+            } else {
+                $('#selectedMarkAsPcrDuplicates').text('False');
+            }
+            
+        });
+    });
+</script>
+{% endblock post-raw %}

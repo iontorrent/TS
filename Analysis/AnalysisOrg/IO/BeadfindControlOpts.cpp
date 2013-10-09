@@ -33,6 +33,8 @@ void BeadfindControlOpts::DefaultBeadfindControl()
     bfOutputDebug = 2;
   }
   beadfindType = "differential";
+  predictFlowStart = -1;
+  predictFlowEnd = -1;
 }
 
 BeadfindControlOpts::~BeadfindControlOpts()

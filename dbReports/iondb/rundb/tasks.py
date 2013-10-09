@@ -19,6 +19,7 @@ from celery.utils.log import get_task_logger
 from celery.schedules import crontab
 import urllib2
 import os
+import signal
 import string
 import random
 import subprocess
@@ -38,10 +39,15 @@ import time
 import tempfile
 import urllib
 import traceback
+import requests
+import feedparser
+import dateutil
 
 import urlparse
 from ion.utils.timeout import timeout
 from iondb.utils.files import percent_full
+from iondb.utils import raid as raid_utils
+from iondb.utils import files as file_utils
 
 logger = get_task_logger(__name__)
 
@@ -143,7 +149,7 @@ def extract_zip(archive, dest, prefix=None, auto_prefix=False, logger=None):
         ## prefix is a string to extract from zipfile
         offset = 0
         if auto_prefix and not prefix:
-            prefix, _ = get_common_prefix(zfobj.namelist())
+            prefix, _ = file_utils.get_common_prefix(zfobj.namelist())
         if prefix is not None:
             offset = len(prefix) + 1
             logger.debug("ZIP extract prefix '%s'", prefix)
@@ -284,36 +290,6 @@ def unzipPlugin(zipfile, logger=None):
         "files": files,
     }
 
-def get_common_prefix(files):
-    """For a list of files, a common path prefix and a list file names with
-    the prefix removed.
-
-    Returns a tuple (prefix, relative_files):
-        prefix: Longest common path to all files in the input. If input is a
-                single file, contains full file directory.  Empty string is
-                returned of there's no common prefix.
-        relative_files: String containing the relative paths of files, skipping
-                        the common prefix.
-    """
-    # Handle empty input
-    if not files or not any(files):
-        return '', []
-    # find the common prefix in the directory names.
-    directories = [os.path.dirname(f) for f in files if '__MACOSX' not in f]
-    prefix = os.path.commonprefix(directories)
-    start = len(prefix)
-    if all(f[start] == "/" for f in files):
-        start += 1
-    relative_files = [f[start:] for f in files]
-    return prefix, relative_files
-
-
-def make_relative_directories(root, files):
-    directories = ( os.path.dirname(f) for f in files )
-    for directory in directories:
-        path = os.path.join(root, directory)
-        if not os.path.exists(path):
-            os.makedirs(path)
 
 @task
 def echo(message, wait=0):
@@ -667,8 +643,45 @@ def updateOneTouch():
     return False
 
 
-@task
-def build_tmap_index(reference):
+def make_reference_paths(reference):
+    reference.reference_path = os.path.join(settings.TMAP_DISABLED_DIR, reference.short_name)
+    os.mkdir(reference.reference_path)
+    reference.save()
+    return os.path.join(reference.reference_path, reference.short_name + ".fasta")
+
+
+@task(queue="slowlane")
+def unzip_reference(reference_id, reference_file=None):
+    from iondb.rundb import models
+    reference = models.ReferenceGenome.objects.get(pk=reference_id)
+    zip_path = reference.file_monitor.full_path()
+    destination = make_reference_paths(reference)
+    try:
+        archive =  zipfile.ZipFile(zip_path)
+        source_file = archive.open(reference_file, 'rU')
+        dest_file = open(destination, 'w')
+        shutil.copyfileobj(source_file, dest_file)
+        archive.close()
+    except Exception as err:
+        logger.error("Could extract fasta zipped reference id=%d at %s" % (reference.pk, zip_path))
+        raise err
+    reference.file_monitor.delete()
+    return destination
+
+
+@task(queue="slowlane")
+def copy_reference(reference_id):
+    from iondb.rundb import models
+    reference = models.ReferenceGenome.objects.get(pk=reference_id)
+    fasta_path = reference.file_monitor.full_path()
+    destination = make_reference_paths(reference)
+    shutil.move(fasta_path, destination)
+    reference.file_monitor.delete()
+    return destination
+
+
+@task(queue="slowlane")
+def build_tmap_index(reference_id):
     """ Provides a way to kick off the tmap index generation
         this should spawn a process that calls the build_genome_index.pl script
         it may take up to 3 hours.
@@ -678,7 +691,10 @@ def build_tmap_index(reference):
         letting the genome manager know that this now exists
         until then this genome will be listed in a unfinished state.
     """
-
+    from iondb.rundb import models
+    reference = models.ReferenceGenome.objects.get(pk=reference_id)
+    reference.status = "indexing"
+    reference.save()
     fasta = os.path.join(reference.reference_path , reference.short_name + ".fasta")
     logger.debug("TMAP %s rebuild, for reference %s(%d) using fasta %s"%
          (settings.TMAP_VERSION, reference.short_name, reference.pk, fasta))
@@ -692,19 +708,30 @@ def build_tmap_index(reference):
         "--genome-version", reference.version
     ]
 
-    ret, stdout, stderr = call(*cmd, cwd=settings.TMAP_DIR)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=settings.TMAP_DIR, preexec_fn=os.setsid)
+
+    def termiante_handler(signal, frame):
+        if proc.poll() is None:
+            proc.terminate()
+        raise SystemExit
+    signal.signal(signal.SIGTERM, termiante_handler)
+    stdout, stderr = proc.communicate()
+    ret = proc.returncode
+
     if ret == 0:
         logger.debug("Successfully built the TMAP %s index for %s" %
                     (settings.TMAP_VERSION, reference.short_name))
         reference.status = 'created'
-        reference.enabled = True
         reference.index_version = settings.TMAP_VERSION
-        reference.reference_path = os.path.join(settings.TMAP_DIR, reference.short_name)
+        reference.enabled = True
+        reference.enable_genome()
     else:
         logger.error('TMAP index rebuild "%s" failed:\n%s' %
                      (" ".join(cmd), stderr))
         reference.status = 'error'
         reference.verbose_error = json.dumps((stdout, stderr, ret))
+        reference.enabled = False
+        reference.disable_genome()
     reference.save()
 
     return ret == 0
@@ -901,18 +928,16 @@ def install_updates():
 def update_diskusage(fs):
     if os.path.exists(fs.filesPrefix):
         try:
-            fs.percentfull = percent_full(fs.filesPrefix)
-        except:
-            logger.exception("Failed to compute percent full")
-            fs.percentfull = None
-
-        if fs.percentfull is not None:
+            fs.percentfull=percent_full(fs.filesPrefix)
             fs.save()
             #logger.debug("Used space: %s %0.2f%%" % (fs.filesPrefix,fs.percentfull))
-        else:
-            logger.warning ("could not determine size of %s" % fs.filesPrefix)
+        except Exception as e:
+            logger.warning ("could not update size of %s" % fs.filesPrefix)
+            logger.error(e)
     else:
         logger.warning("directory does not exist on filesystem: %s" % fs.filesPrefix)
+        fs.percentfull=0
+        fs.save()
 
 
 # Expires after 5 minutes; is scheduled every 10 minutes
@@ -1081,7 +1106,7 @@ def backfill_pluginresult_diskusage():
 def download_something(url, download_monitor_pk=None, dir="/tmp/", name="", auth=None):
     from iondb.rundb import models
     logger.debug("Downloading " + url)
-    monitor, created = models.DownloadMonitor.objects.get_or_create(id=download_monitor_pk)
+    monitor, created = models.FileMonitor.objects.get_or_create(id=download_monitor_pk)
     monitor.url = url
     monitor.status = "Starting"
     monitor.celery_task_id = download_something.request.id
@@ -1137,7 +1162,7 @@ def download_something(url, download_monitor_pk=None, dir="/tmp/", name="", auth
     monitor.save()
 
     full_path = os.path.join(local_dir, name)
-    # if not None, log the progress to the DownloadMonitor objects
+    # if not None, log the progress to the FileMonitor objects
     if monitor:
         monitor.status = "Downloading"
         monitor.save()
@@ -1183,7 +1208,7 @@ def ampliseq_zip_upload(args, meta):
     from iondb.rundb import models
     pub = models.Publisher.objects.get(name="BED")
     full_path, monitor_id = args
-    monitor = models.DownloadMonitor.objects.get(id=monitor_id)
+    monitor = models.FileMonitor.objects.get(id=monitor_id)
     upload = publishers.move_upload(pub, full_path, monitor.name, meta)
     publishers.run_pub_scripts(pub, upload)
 
@@ -1193,18 +1218,19 @@ def install_reference(args, reference_id):
     from iondb.rundb import models
     from iondb.anaserve import client
     full_path, monitor_id = args
-    monitor = models.DownloadMonitor.objects.get(id=monitor_id)
+    monitor = models.FileMonitor.objects.get(id=monitor_id)
     reference = models.ReferenceGenome.objects.get(id=reference_id)
     extracted_path = os.path.join(monitor.local_dir, "reference_contents")
     extract_zip(full_path, extracted_path)
     reference.reference_path = extracted_path
-    reference.enabled = True
-    reference.enable_genome()
-    reference.save()
-    if reference.index_version != settings.TMAP_VERSION:
+    if reference.index_version == settings.TMAP_VERSION:
+        reference.enabled = True
+        reference.enable_genome()
+    else:
         reference.status = "Rebuilding index"
-        reference.save()
-        build_tmap_index.delay(reference)
+        result = build_tmap_index.delay(reference.id)
+        reference.celery_task_id = result.task_id
+    reference.save()
 
 
 @task
@@ -1213,8 +1239,93 @@ def get_raid_stats():
     q = subprocess.Popen(raidCMD, shell=True, stdout=subprocess.PIPE)
     stdout, stderr = q.communicate()
     if q.returncode == 0:
-        raid_stats = stdout.splitlines(True)
+        raid_stats = stdout
     else:
-        raid_stats = ['There was an error executing %s' % raidCMD[0]]
-        raid_stats += stdout.splitlines(True)
+        raid_stats = None
     return raid_stats
+
+
+@task
+def get_raid_stats_json():
+    raidCMD = ["/usr/bin/ion_raidinfo_json"]
+    q = subprocess.Popen(raidCMD, shell=True, stdout=subprocess.PIPE)
+    stdout, stderr = q.communicate()
+    if q.returncode == 0:
+        raid_stats = stdout
+    else:
+        raid_stats = None
+    return raid_stats
+
+@periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic")
+def check_raid_status():
+    # check RAID state and alert user with message banner of any problems
+    from iondb.rundb.models import Message
+
+    async_result = get_raid_stats_json.apply_async(queue="periodic")
+    raidinfo = async_result.get(timeout=600)
+    if async_result.failed():
+        logger.debug("Failed getting RAID info.")
+        return
+
+    raid_status = raid_utils.get_raid_status(raidinfo)
+    if len(raid_status) > 0:
+        message = Message.objects.filter(tags="raid_alert")
+        # show alert for primary internal storage RAID
+        if raid_utils.ERROR in [r.get('status') for r in raid_status]:
+            if not message:
+                msg = 'WARNING: RAID storage disk error.'
+                golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
+                Message.warn(msg+"   %s" % golink,tags="raid_alert")
+        else:
+            message.delete()
+
+@task
+def disk_check_status():
+    status, stdout, stderr = call("tune2fs", "-l", "/dev/sda1")
+    if status != 0:
+        logger.error("tune2fs error: " + stderr)
+    return stdout
+
+
+@periodic_task(run_every=timedelta(days=1), queue="periodic")
+def update_news_posts():
+    from iondb.rundb import models
+    if not models.GlobalConfig.get().check_news_posts:
+        return
+
+    response = requests.get(settings.NEWS_FEED)
+    if response.ok:
+        feed = feedparser.parse(response.content)
+        for article in feed['entries']:
+            post_defaults = {
+                "updated": dateutil.parser.parse(article['updated']),
+                "summary": article.get('summary', ''),
+                "title": article.get('title', 'Untitled'),
+                "link": article.get('link', '')
+            }
+            post, created = models.NewsPost.objects.get_or_create(guid=article.get('id', None), defaults=post_defaults)
+        now = timezone.now()
+        one_month = timedelta(days=30)
+        # Delete all posts after #15 which are at least a month old.
+        # i.e. all posts are kept for at least one month, and the newest 15 are always kept.
+        for article in models.NewsPost.objects.order_by('-updated')[15:]:
+            if now - article.updated > one_month:
+                article.delete()
+    else:
+        logger.error("Could not get Ion Torrent news feed.")
+
+
+@task
+def hide_apt_sources():
+    filename = "/etc/apt/sources.list"
+    hidden = filename+".hide"
+    os.rename(filename, hidden)
+    return
+
+
+@task
+def restore_apt_sources():
+    filename = "/etc/apt/sources.list"
+    hidden = filename+".hide"
+    os.rename(hidden, filename)
+    return

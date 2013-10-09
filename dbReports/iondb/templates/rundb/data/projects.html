@@ -1,7 +1,9 @@
 {% extends "rundb/data/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
 {% block extra_head %}
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />  
-<link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
 <style type="text/css">
     .search-field {
         display: inline-block;
@@ -30,19 +32,19 @@
         filter: alpha(opacity=100);
     }
 </style>
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
 {% endblock extra_head %}
 {% block content %}
 	<div class="content group">
 	{%spaceless%}
 		<div class="clearfix">
 			<h1 class="pull-left">Projects</h1>
-			<a href="{% url project_add %}" class="btn btn-primary pull-right add_project">Create a New Project</a>
+			<a href="{% url "project_add" %}" class="btn btn-primary pull-right add_project">Create a New Project</a>
 		</div>
 		<div id="search_bar" class="well">
 			<div class="search-field">
 				<label for="rangeA" class="hide">Date</label>
-				<input type="text" value="" id="rangeA"/>
+				<input type="text" value="" id="rangeA" placeholder="Last Modified"/>
 			</div>
 			<div class="input-append search-field">
 				<label for="search_text" class="hide">Search Names</label>
@@ -58,9 +60,9 @@
 		<div id="grid"></div>
 	{%endspaceless%}
 	</div>
-<script src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
-<script src="/site_media/js/date.js"></script>
-<script src="/site_media/js/jquery.daterangepicker.js"></script>
+<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+<script src="{% static "js/date.js"%}"></script>
+<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
 <script type="text/javascript">			
 function initialize_search () {			
     $('#rangeA').daterangepicker({dateFormat: 'yy-mm-dd'});
@@ -70,12 +72,13 @@ function initialize_search () {
 function filter(e){
 	e.preventDefault();
 	e.stopPropagation();			    
-    var daterange;	
-    if ($("#rangeA").val().split(/ - /).length < 2)			      
-		daterange = $("#rangeA").val() + " 00:00," + $("#rangeA").val() + " 23:59"; // single date range hack
-    else
-        daterange = $("#rangeA").val().replace(/ - /," 00:00,") + " 23:59";
-			    
+  var daterange = $("#rangeA").val();
+  if (daterange) {
+      if (!/ - /.test(daterange)) {
+          daterange = daterange + ' - ' + daterange;
+      }
+      daterange = daterange.replace(/ - /," 00:00,") + " 23:59";
+  }
 	$("#grid").data("kendoGrid").dataSource.filter([
 		{
 			field: "modified",
@@ -92,7 +95,7 @@ function filter(e){
            
 function clear_filters(){
 	$("#grid").data("kendoGrid").dataSource.filter({});
-	$('#rangeA').val(Date.parse('2005-07-16').toString('yyyy-MM-dd') + ' - ' + Date.parse('today').toString('yyyy-MM-dd'));    
+	$('#rangeA').val('');    
 	$("#search_text").val('');
 }
 		      

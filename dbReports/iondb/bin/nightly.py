@@ -19,11 +19,7 @@ settings.EMAIL_USE_TLS = False
 
 def get_recips():
     emails = models.EmailAddress.objects.filter(selected=True)
-    if len(emails) > 0:
-        ret = [i.email for i in emails]
-    else:
-        sys.exit(0)
-    return ret
+    return [i.email for i in emails]
 
 RECIPS = get_recips()
 #RECIPS = ['Mel.Davey@Lifetech.com']
@@ -136,7 +132,8 @@ def send_nightly():
 
             # track the status of the covereage plugin
             try:
-                pluginDict = ast.literal_eval(pstore["coverageAnalysis"])
+                # pluginDict = ast.literal_eval(pstore["coverageAnalysis"])
+                pluginDict = pstore["coverageAnalysis"]
                 if pluginDict is not None:
                     extraInfo["cov"] = pluginDict["Target base coverage at 20x"]
             except:
@@ -144,7 +141,8 @@ def send_nightly():
 
             # track the duplicate rate
             try:
-                pluginDict = ast.literal_eval(pstore["duplicateReads_useAdapter"])
+                # pluginDict = ast.literal_eval(pstore["duplicateReads_useAdapter"])
+                pluginDict = pstore["duplicateReads_useAdapter"]
                 if pluginDict is not None:
                     val = float(pluginDict["duplicate_rate_chr1"])
                     val = val * 100.0
@@ -154,7 +152,8 @@ def send_nightly():
 
             # track the variant caller SNP & InDel accuracy
             try:
-                pluginDict = ast.literal_eval(pstore["validateVariantCaller"])
+                # pluginDict = ast.literal_eval(pstore["validateVariantCaller"])
+                pluginDict = pstore["validateVariantCaller"]
                 if pluginDict is not None:
                     SNPAccuracy = round(float(pluginDict["InDel_ConsensusAccuracy-AllPos"]) * 100.0, 4)
                     InDelAccuracy = round(float(pluginDict["SNP_ConsensusAccuracy-AllPos"]) * 100.0, 4)
@@ -164,28 +163,70 @@ def send_nightly():
 
             # track the systematic error
             try:
-                pluginDict = ast.literal_eval(pstore["SystematicErrorAnalysis"])
+                # pluginDict = ast.literal_eval(pstore["SystematicErrorAnalysis"])
+                pluginDict = pstore["SystematicErrorAnalysis"]
                 if pluginDict is not None:
-                    print 'Got syserr plugin info: %s' % pluginDict
-                    print 'object is type: %s' % type(pluginDict)
+                    # print 'Got syserr plugin info: %s' % pluginDict
+                    # print 'object is type: %s' % type(pluginDict)
                     if pluginDict["barcoded"]:
-                        print 'it is barcoded'
+                        # print 'it is barcoded'
                         bc = pluginDict["barcodes"]
                         val = 1.0
                         for name in bc:
                             if '-' not in bc[name]["positions-with-sse"]:
                                 bcval = float(bc[name]["positions-with-sse"])
-                                if bcval < val:
+                                if bcval < val and bcval > 0.0:
                                     val = bcval
                     else:
-                        print 'it is not barcoded'
+                        # print 'it is not barcoded'
                         val = float(pluginDict["positions-with-sse"])
-                    print 'plugin val: %s' % val
-                    val = val * 100.0
-                    extraInfo["syserr"] = str(val) + "%"
-                    print 'plugin syserr is: %s' % extraInfo["syserr"]
+                    # print 'plugin val: %s' % val
+                    if val > 0.0:
+                        val = val * 100.0
+                        extraInfo["syserr"] = str(val) + "%"
+                    else:
+                        extraInfo["syserr"] = " "
+                    # print 'plugin syserr is: %s' % extraInfo["syserr"]
             except:
                 extraInfo["syserr"] = " "
+
+            # track coverage uniforimity & 20x coverage
+            try:
+                # pluginDict = ast.literal_eval(pstore["SystematicErrorAnalysis"])
+                pluginDict = pstore["coverageAnalysisLite"]
+                if pluginDict is not None:
+                    bestCov20 = 0.0
+                    bestUnif = 0.0
+                    if pluginDict["barcoded"]:
+                        # print 'it is barcoded'
+                        bc = pluginDict["barcodes"]
+                        for name in bc:
+                            cov20txt = bc[name]["Target base coverage at 20x"]
+                            cov20 = float(cov20txt.rstrip('%'))
+                            uniftxt = bc[name]["Uniformity of base coverage"]
+                            unif = float(uniftxt.rstrip('%'))
+                            if (unif < 100.0) and (unif > 0.0):
+                                if cov20 > bestCov20:
+                                    bestCov20 = cov20
+                                    bestUnif = unif
+                                
+                    else:
+                        # print 'it is not barcoded'
+                        cov20txt = pluginDict["Target base coverage at 20x"]
+                        bestCov20 = float(cov20txt.rstrip('%'))
+                        uniftxt = pluginDict["Uniformity of base coverage"]
+                        bestUnif = float(uniftxt.rstrip('%'))
+                    # print 'plugin val: %s' % val
+                    if bestCov20 > 0.0:
+                        extraInfo["cov20"] = str(bestCov20) + "%"
+                        extraInfo["unif"] = str(bestUnif) + "%"
+                    else:
+                        extraInfo["cov20"] = " "
+                        extraInfo["unif"] = " "
+                    # print 'plugin syserr is: %s' % extraInfo["syserr"]
+            except:
+                extraInfo["cov20"] = " "
+                extraInfo["unif"] = " "
 
             info.append(extraInfo)
 
@@ -253,7 +294,8 @@ def send_nightly():
     return send_html(SENDER,RECIPS,subject,html,text)
     
 def main(args):
-    send_nightly()
+    if RECIPS:
+        send_nightly()
 
 if __name__ == '__main__':
     main(sys.argv)

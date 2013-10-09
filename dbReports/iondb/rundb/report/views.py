@@ -23,9 +23,10 @@ import math
 import urllib
 import ConfigParser
 import logging
+import subprocess
 from cStringIO import StringIO
 from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpResponsePermanentRedirect, HttpResponseRedirect, HttpResponse
+from django.http import HttpResponsePermanentRedirect, HttpResponseRedirect, HttpResponse, StreamingHttpResponse
 from django.core import serializers
 from django.core.serializers.json import DjangoJSONEncoder
 from django.core.exceptions import ObjectDoesNotExist
@@ -203,24 +204,15 @@ def getBlockStatus(report,blockdir,namespace="global"):
     return STATUS
 
 
-def load_json(report,subpath,filename):
+def load_json(report, *subpaths):
     """shortcut to load the json"""
-    try:
-        if subpath:
-            f =  open(os.path.join(report.get_report_dir(), subpath , filename), mode='r')
-        else:
-            f =  open(os.path.join(report.get_report_dir() , filename), mode='r')
-        return json.loads(f.read())
-    except:
-        return False
-
-
-def datasets_read(report):
-    datasets = load_json(report,"basecaller_results","datasets_basecaller.json")
-    if not datasets:
-        return None
-    else:
-        return datasets
+    path = os.path.join(report.get_report_dir(), *subpaths)
+    if os.path.exists(path):
+        try:
+            return json.load(open(path))
+        except Exception:
+            logger.exception("Failed to read JSON: %s" % path)
+    return None
 
 
 def testfragments_read(report):
@@ -346,25 +338,6 @@ def report_plan(report):
         plan = False
     return plan
 
-def alignStats_read(report):
-    """read the alignStats json file"""
-    #alignStats = load_json(report, "" ,"alignTable.json")
-    alignStats = load_json(report, "" ,"alignStats_err.json")
-    if not alignStats:
-        return False
-    else:
-        return alignStats
-
-
-
-def ionstats_alignment_read(report):
-    ionstats_alignment = load_json(report,"","ionstats_alignment.json")
-    if not ionstats_alignment:
-        return None
-    else:
-        return ionstats_alignment
-
-
 
 # From beadDensityPlot.py
 def getFormatForVal(value):
@@ -386,7 +359,6 @@ def report_version(report):
     simple_version = re.compile(r"^(\d+\.?\d*)")
     try:
         versions = dict(v.split(':') for v in report.analysisVersion.split(",") if v)
-        logger.debug(str(versions))
         version = simple_version.match(versions['db']).group(1)
     except Exception as err:
         try:
@@ -460,6 +432,7 @@ def find_output_file_groups(report, datasets, barcodes):
     current_group["fastq"]          = "%s%s/%s_%s.fastq" % prefix_tuple
     current_group["bam"]            = "%s%s/%s_%s.bam" % prefix_tuple
     current_group["bai"]            = "%s%s/%s_%s.bam.bai" % prefix_tuple
+    current_group["vcf"]            = "%s/plugin_out/variantCaller_out/TSVC_variants.vcf.gz" % (web_link,)
     output_file_groups.append(current_group)
 
     #Barcodes
@@ -480,6 +453,7 @@ def find_output_file_groups(report, datasets, barcodes):
             else:
                 barcode['bam_link'] = "%s/basecaller_results/%s.basecaller.bam" % (web_link, barcode['file_prefix'])
                 barcode['bai_link'] = "%s/basecaller_results/%s.basecaller.bam.bai" % (web_link, barcode['file_prefix'])
+            barcode['vcf_link'] = None
 
     #Dim buttons if files don't exist
     for output_group in output_file_groups:
@@ -500,6 +474,30 @@ def find_source_files(report, files, subfolders):
                 source_files[filename] =  os.path.normpath(os.path.join(reportWebLink,folder,filename))
                 break
     return source_files
+
+
+def ionstats_histogram_median(data):
+    cumulative_reads = numpy.cumsum(data)
+    half = cumulative_reads[-1] / 2.0
+    median_index = numpy.searchsorted(cumulative_reads, half, 'right')
+    return median_index + 1
+
+
+def ionstats_histogram_mode(data):
+    return numpy.argmax(data) + 1
+
+
+def ionstats_read_stats(report):
+    ionstats = load_json(report, "basecaller_results", "ionstats_basecaller.json") or {}
+    full = ionstats.get("full", {})
+    data = full.get("read_length_histogram", None)
+    read_stats = {
+        'mean_length': full.get("mean_read_length", None),
+        'median_length': data and ionstats_histogram_median(data),
+        'mode_length': data and ionstats_histogram_mode(data),
+    }
+    return read_stats
+
 
 @login_required
 def report_display(request, report_pk):
@@ -585,8 +583,9 @@ def report_display(request, report_pk):
     #TODO: encapuslate all vars into their parent block to make it easy to build the API maybe put
     #all of this in the model?
     basecaller = basecaller_read(report)
+    read_stats = ionstats_read_stats(report)
     barcodes = barcodes_read(report)
-    datasets = datasets_read(report)
+    datasets = load_json(report, "basecaller_results", "datasets_basecaller.json")
     testfragments = testfragments_read(report)
 
     software_versions = report_version_display(report)
@@ -615,7 +614,7 @@ def report_display(request, report_pk):
         CA_barcodes_json = json.dumps(CA_barcodes_json)
 
         try:
-            paramsJson = load_json(report, "" ,"ion_params_00.json")
+            paramsJson = load_json(report ,"ion_params_00.json")
             parents = [(pk,name) for pk,name in zip(paramsJson["parentIDs"],paramsJson["parentNames"])]
             CA_warnings = paramsJson.get("warnings","")
         except:
@@ -681,11 +680,11 @@ def report_display(request, report_pk):
 
 
     # Special alignment backward compatibility code
-    ionstats_alignment = ionstats_alignment_read(report)
+    ionstats_alignment = load_json(report,"ionstats_alignment.json")
 
     if not ionstats_alignment:
         ionstats_alignment = {}
-        alignStats = alignStats_read(report)
+        alignStats = load_json(report, "alignStats_err.json")
         alignment_ini = load_ini(report,".","alignment.summary")
         if alignStats and alignment_ini:
             ionstats_alignment['aligned'] = {'num_bases' : alignStats["total_mapped_target_bases"] }
@@ -941,67 +940,29 @@ def create_tf_conf(tfConfig):
         return (fname, "\n".join(lines))
 
 
-def get_default_cmdline_args(chipType, plan=None):
-    chips = models.Chip.objects.all()
-    chipType = chipType.replace('"','')
-    chips_filtered = None
-
-    # scan for special run type/application type
+def get_default_cmdline_args(plan):
     if plan:
-        if plan.runType:
-            chips_filtered = [c for c in chips if c.name == chipType+plan.runType]
-
-    if not chips_filtered:
-        chips_filtered = [c for c in chips if chipType.startswith(c.name)]
-
-    if chips_filtered:
-        chip = chips_filtered[0]
-
-        beadfindArgs    = chip.beadfindargs
-        analysisArgs    = chip.analysisargs
-        basecallerArgs  = chip.basecallerargs
-        prebasecallerArgs  = chip.prebasecallerargs
-        thumbnailBeadfindArgs   = chip.thumbnailbeadfindargs
-        thumbnailAnalysisArgs   = chip.thumbnailanalysisargs
-        prethumbnailBasecallerArgs = chip.prethumbnailbasecallerargs
-        thumbnailBasecallerArgs = chip.thumbnailbasecallerargs
-    # loop finished without finding chipType: provide basic defaults
+        args = plan.get_default_cmdline_args()
     else:
-        beadfindArgs = thumbnailBeadfindArgs = 'justBeadFind'
-        analysisArgs = thumbnailAnalysisArgs = 'Analysis'
-        basecallerArgs = thumbnailBasecallerArgs = 'BaseCaller'
-        prebasecallerArgs = prethumbnailBasecallerArgs = 'BaseCaller'
-
-    args = {
-      'beadfindArgs':   beadfindArgs,
-      'analysisArgs':   analysisArgs,
-      'basecallerArgs': basecallerArgs,
-      'prebasecallerArgs': prebasecallerArgs,
-      'thumbnailBeadfindArgs':    thumbnailBeadfindArgs,
-      'thumbnailAnalysisArgs':    thumbnailAnalysisArgs,
-      'thumbnailBasecallerArgs':  thumbnailBasecallerArgs,
-      'prethumbnailBasecallerArgs':  prethumbnailBasecallerArgs
-    }
-
-    if plan:
-        try:
-            runtype = models.RunType.objects.get(runType=plan.runType)
-        except models.RunType.DoesNotExist:
-            return args
-
-        #if the runtype has meta data with a key of cmdline, use update the args dict to get those values
-        cmdline = runtype.meta.get("cmdline",False)
-        if cmdline:
-            args.update(cmdline)
-
+        args = {
+                'beadfindargs':   'justBeadFind',
+                'analysisargs':   'Analysis',
+                'basecallerargs': 'BaseCaller',
+                'prebasecallerargs': 'BaseCaller',
+                'alignmentargs': '',
+                'thumbnailbeadfindargs':    'justBeadFind',
+                'thumbnailanalysisargs':    'Analysis',
+                'thumbnailbasecallerargs':  'BaseCaller',
+                'prethumbnailbasecallerargs':  'BaseCaller',
+                'thumbnailalignmentargs': ''
+        }
     return args
 
 
-def makeParams(exp, result, beadfindArgs, analysisArgs, basecallerArgs, blockArgs, doThumbnail, align_full,
-                                url_path, aligner_opts_extra, mark_duplicates,
+def makeParams(exp, result, blockArgs, doThumbnail, align_full,
+                                url_path, mark_duplicates,
                                 pathToData, previousReport,tfKey, plugins_list,
-                                thumbnailBeadfindArgs, thumbnailAnalysisArgs, thumbnailBasecallerArgs, doBaseRecal,
-                                prebasecallerArgs, prethumbnailBasecallerArgs, realign):
+                                doBaseRecal, realign, username):
     """Build a dictionary of analysis parameters, to be passed to the job
     server when instructing it to run a report.  Any information that a job
     will need to be run must be constructed here and included inside the return.
@@ -1062,9 +1023,7 @@ def makeParams(exp, result, beadfindArgs, analysisArgs, basecallerArgs, blockArg
     try:
         if exp.plan:
             planObj = [exp.plan]
-            exp_plan = exp.plan
         else:
-            exp_plan = None
             # Fallback to explog data... crawler should be setting this up
 
             #check plan's GUId in explog first
@@ -1086,24 +1045,28 @@ def makeParams(exp, result, beadfindArgs, analysisArgs, basecallerArgs, blockArg
         plan_json = serializers.serialize("json", planObj)
         plan_json = json.loads(plan_json)
         plan = plan_json[0]["fields"]
+        # add SampleSet name to be passed to plugins
+        if planObj[0].sampleSet:
+            plan['sampleSet_name'] = planObj[0].sampleSet.displayedName
+        
     else:
         plan = {}
 
     # Plugins
     plugins = get_plugins_dict(plugins_list, eas.selectedPlugins)
 
-    #if args are passed use them, if not use global defaults
-    default_args = get_default_cmdline_args(exp.chipType,exp_plan)
     if doThumbnail:
-        beadfindArgs = thumbnailBeadfindArgs if thumbnailBeadfindArgs else default_args['thumbnailBeadfindArgs']
-        analysisArgs = thumbnailAnalysisArgs if thumbnailAnalysisArgs else default_args['thumbnailAnalysisArgs']
-        basecallerArgs = thumbnailBasecallerArgs if thumbnailBasecallerArgs else default_args['thumbnailBasecallerArgs']
-        prebasecallerArgs = prethumbnailBasecallerArgs if prethumbnailBasecallerArgs else default_args['prethumbnailBasecallerArgs']
+        beadfindArgs = eas.thumbnailbeadfindargs
+        analysisArgs = eas.thumbnailanalysisargs
+        basecallerArgs = eas.thumbnailbasecallerargs
+        prebasecallerArgs = eas.prethumbnailbasecallerargs
+        alignmentArgs = eas.thumbnailalignmentargs
     else:
-        beadfindArgs = beadfindArgs if beadfindArgs else default_args['beadfindArgs']
-        analysisArgs = analysisArgs if analysisArgs else default_args['analysisArgs']
-        basecallerArgs = basecallerArgs if basecallerArgs else default_args['basecallerArgs']
-        prebasecallerArgs = prebasecallerArgs if prebasecallerArgs else default_args['prebasecallerArgs']
+        beadfindArgs = eas.beadfindargs
+        analysisArgs = eas.analysisargs
+        basecallerArgs = eas.basecallerargs
+        prebasecallerArgs = eas.prebasecallerargs
+        alignmentArgs = eas.alignmentargs
 
     ret = {'pathToData':pathToData,
            'beadfindArgs':beadfindArgs,
@@ -1131,7 +1094,7 @@ def makeParams(exp, result, beadfindArgs, analysisArgs, basecallerArgs, blockArg
            'url_path':url_path,
            'reverse_primer_dict':adapter_primer_dict,
            'rawdatastyle':exp.rawdatastyle,
-           'aligner_opts_extra':aligner_opts_extra,
+           'aligner_opts_extra':alignmentArgs,
            'mark_duplicates' : mark_duplicates,
            'plan': plan,
            'flows':exp.flows,
@@ -1145,7 +1108,8 @@ def makeParams(exp, result, beadfindArgs, analysisArgs, basecallerArgs, blockArg
            'sam_parsed' : True if os.path.isfile('/opt/ion/.ion-internal-server') else False,
            'doBaseRecal':doBaseRecal,
            'realign':realign,
-           'experimentAnalysisSettings': eas_json
+           'experimentAnalysisSettings': eas_json,
+           'username':username,
     }
 
     return ret
@@ -1162,8 +1126,6 @@ def build_result(experiment, name, server, location):
     # reportLink is used in calls to dirname, which would otherwise resolve to parent dir
     link = os.path.join(server.webServerPath, location.name, "%s_%%03d" % name, "")
     j = lambda l: os.path.join(link, l)
-    storages = models.ReportStorage.objects.all()
-    storage = storages.filter(default=True)[0]   #Select default ReportStorage obj.
 
     kwargs = {
         "experiment":experiment,
@@ -1180,7 +1142,7 @@ def build_result(experiment, name, server, location):
         "processedflows":"0",
         "framesProcessed":"0",
         "timeToComplete":0,
-        "reportstorage":storage,
+        "reportstorage":server,
         }
     ret = models.Results(**kwargs)
     ret.save()
@@ -1196,14 +1158,38 @@ def update_experiment_analysis_settings(eas, **kwargs):
     Check whether ExperimentAnalysisSettings need to be updated:
     if settings were changed on re-analysis page save a new EAS with isOneTimeOverride = True
     """
+    
+    analysisArgs = ['beadfindargs','thumbnailbeadfindargs','analysisargs','thumbnailanalysisargs','prebasecallerargs',
+        'prethumbnailbasecallerargs','basecallerargs','thumbnailbasecallerargs','alignmentargs','thumbnailalignmentargs']
+
     override = False
-    for key, value in kwargs.items():
-        if not value == getattr(eas,key):
-            override = True
-            setattr(eas,key,value)
+    fill_in_args = True
+    
+    for key, new_value in kwargs.items():
+        value = getattr(eas,key)
+        if key in analysisArgs and value:
+            fill_in_args = False
+        if value != new_value:
+            setattr(eas,key,new_value)
+            if key in analysisArgs:
+                # set isOneTimeOverride only if old args were not blank
+                if value:
+                    override = True
+                else:
+                    pass
+            else:
+                override = True
 
     if override:
         eas.isOneTimeOverride = True
+        eas.isEditable = False
+        eas.date = datetime.now()
+        eas.pk = None # this will create a new instance
+        eas.save()
+    elif fill_in_args:
+        # special case to reduce duplication when args were not saved with Plan
+        # if no change other than filling in empty args: create new EAS and allow it to be reused
+        eas.isOneTimeOverride = False
         eas.isEditable = False
         eas.date = datetime.now()
         eas.pk = None # this will create a new instance
@@ -1372,8 +1358,8 @@ def _createReport(request, pk, reportpk):
 
     javascript = ""
 
-    isProton = True if exp.chipType == "900" else False
-
+    isProton = exp.isProton
+    
     #get the list of report addresses
     resultList = models.Results.objects.filter(experiment=exp).order_by("timeStamp")
     previousReports = []
@@ -1460,18 +1446,20 @@ def _createReport(request, pk, reportpk):
             analysisArgs = flattenString(rpf.cleaned_data['analysisArgs'])
             prebasecallerArgs = flattenString(rpf.cleaned_data['prebasecallerArgs'])
             basecallerArgs = flattenString(rpf.cleaned_data['basecallerArgs'])
+            alignmentArgs = flattenString(rpf.cleaned_data['alignmentArgs'])
             thumbnailBeadfindArgs = flattenString(rpf.cleaned_data['thumbnailBeadfindArgs'])
             thumbnailAnalysisArgs = flattenString(rpf.cleaned_data['thumbnailAnalysisArgs'])
             prethumbnailBasecallerArgs = flattenString(rpf.cleaned_data['prethumbnailBasecallerArgs'])
             thumbnailBasecallerArgs = flattenString(rpf.cleaned_data['thumbnailBasecallerArgs'])
+            thumbnailAlignmentArgs = flattenString(rpf.cleaned_data['thumbnailAlignmentArgs'])
 
             #do a full alignment?
             align_full = True
             #ionCrawler may modify the path to raw data in the path variable passed thru URL
             exp.expDir = rpf.cleaned_data['path']
-            aligner_opts_extra = rpf.cleaned_data['aligner_opts_extra']
             mark_duplicates = rpf.cleaned_data['mark_duplicates']
             result.runid = create_runid(resultsName + "_" + str(result.pk))
+            username = request.user.username
 
             # don't allow libraryKey to be blank
             libraryKey = rpf.cleaned_data['libraryKey']
@@ -1496,7 +1484,6 @@ def _createReport(request, pk, reportpk):
                         }
                 else:
                     selectedPlugins = eas.selectedPlugins
-                    # TODO: add plugin configuration (userInput) on page
 
                 eas_kwargs = {
                     'libraryKey': libraryKey,
@@ -1505,12 +1492,36 @@ def _createReport(request, pk, reportpk):
                     'hotSpotRegionBedFile': eas_form.cleaned_data['hotSpotRegionBedFile'],
                     'barcodeKitName': eas_form.cleaned_data['barcodeKitName'],
                     'threePrimeAdapter': eas_form.cleaned_data['threePrimeAdapter'],
-                    'selectedPlugins': selectedPlugins
+                    'selectedPlugins': selectedPlugins,
+                    'isDuplicateReads': mark_duplicates,
+                    'beadfindargs': beadfindArgs,
+                    'thumbnailbeadfindargs': thumbnailBeadfindArgs,
+                    'analysisargs': analysisArgs,
+                    'thumbnailanalysisargs': thumbnailAnalysisArgs,
+                    'prebasecallerargs': prebasecallerArgs,
+                    'prethumbnailbasecallerargs': prethumbnailBasecallerArgs,
+                    'basecallerargs': basecallerArgs,
+                    'thumbnailbasecallerargs': thumbnailBasecallerArgs,
+                    'alignmentargs': alignmentArgs,
+                    'thumbnailalignmentargs': thumbnailAlignmentArgs
                 }
                 eas = update_experiment_analysis_settings(eas, **eas_kwargs)
             else:
                 # this POST comes from crawler, which should update ExperimentAnalysisSettings directly
-                pass
+                if exp.plan and exp.plan.username:
+                    username = exp.plan.username
+
+            # make sure we have a set of cmdline args for analysis
+            if doThumbnail:
+                have_args = bool(eas.thumbnailbeadfindargs) and bool(eas.thumbnailanalysisargs) and bool(eas.thumbnailbasecallerargs)
+            else:
+                have_args = bool(eas.beadfindargs) and bool(eas.analysisargs) and bool(eas.basecallerargs)
+            if not have_args:
+                default_args = get_default_cmdline_args(exp.plan)
+                for key,value in default_args.items():
+                    if not getattr(eas,key):
+                        setattr(eas, key, value)
+                eas.save()
 
             # Don't allow EAS to be edited once analysis has started
             if eas.isEditable:
@@ -1522,7 +1533,6 @@ def _createReport(request, pk, reportpk):
 
             #attach project(s)
             projectNames = get_project_names(rpf, exp)
-            username = request.user.username
             for name in projectNames.split(','):
               if name:
                 try:
@@ -1530,18 +1540,20 @@ def _createReport(request, pk, reportpk):
                 except models.Project.DoesNotExist:
                   p = models.Project()
                   p.name = name
-                  p.creator = models.User.objects.get(username=username)
+                  p.creator = models.User.objects.get(username='ionadmin')
                   p.save()
-                  models.EventLog.objects.add_entry(p, "Created project name= %s during report creation." % p.name, request.user.username)
+                  models.EventLog.objects.add_entry(p, "Created project name= %s during report creation." % p.name, 'ionadmin')
                 result.projects.add(p)
-                models.EventLog.objects.add_entry(p, "Add result (%s) during report creation." % result.pk, request.user.username)
+                models.EventLog.objects.add_entry(p, "Add result (%s) during report creation." % result.pk, username)
 
             result.save()
             try:
                 # Default control script definition
                 scriptname='TLScript.py'
 
-                scriptpath=os.path.join('/usr/lib/python2.6/dist-packages/ion/reports',scriptname)
+                from distutils.sysconfig import get_python_lib;
+                python_lib_path=get_python_lib()
+                scriptpath=os.path.join(python_lib_path,'ion/reports',scriptname)
                 try:
                     with open(scriptpath,"r") as f:
                         script=f.read()
@@ -1549,18 +1561,15 @@ def _createReport(request, pk, reportpk):
                     bail(result,"Error reading %s\n%s" % (scriptpath,error.args))
 
                 pathToData = os.path.join(exp.expDir)
-                if doThumbnail and exp.chipType == "900":
+                if doThumbnail and isProton:
                     pathToData = os.path.join(pathToData,'thumbnail')
 
                 #------------------------------------------------
                 # Determine if data has been archived or deleted:
                 #------------------------------------------------
-                dmfilestat = None
-                if rpf.cleaned_data['blockArgs'] == "fromRaw":
-                    dmactions_type = dmactions_types.SIG
-                    dmfilestat = result.get_filestat(dmactions_type)
-                elif rpf.cleaned_data['blockArgs'] == "fromWells":
+                if blockArgs == "fromWells":
                     dmactions_type = dmactions_types.BASE
+                    dmfilestat = result.get_filestat(dmactions_type)
                     selected_previous_pk = None
                     try:
                         selected_previous_pk = int(previousReport.strip('/').split('_')[-1])
@@ -1576,31 +1585,36 @@ def _createReport(request, pk, reportpk):
                         dmfilestat.pk = None
                         dmfilestat.result = result
                         dmfilestat.save()
+                else:
+                    dmactions_type = dmactions_types.SIG
+                    dmfilestat = result.get_filestat(dmactions_type)
                 
                 # handle special case of Proton on-instrument analysis fullchip data:
-                #   all reanalyses start from files in expDir/onboard_results/sigproc_results/
+                #   both fromRaw and fromWells start from Basecalling Input in expDir/onboard_results/sigproc_results/
+                #   if fromRaw also need to find and copy previous fullchip dmfilestat to correctly handle archived data
                 if exp.log.get('oninstranalysis','') == "yes" and not doThumbnail:
                     dmactions_type = "On-Instrument Analysis"
-                    previous_obj = exp.results_set.exclude(pk=result.pk)
-                    if previous_obj:
-                        dmfilestat = previous_obj[0].get_filestat(dmactions_types.BASE)
-                        # replace dmfilestat
-                        result.dmfilestat_set.filter(dmfileset__type=dmactions_types.BASE).delete()
-                        dmfilestat.pk = None
-                        dmfilestat.result = result
-                        dmfilestat.save()
+                    if blockArgs == "fromRaw":
+                        previous_obj = exp.results_set.exclude(pk=result.pk).exclude(metaData__contains='thumb')
+                        if previous_obj:
+                            dmfilestat = previous_obj[0].get_filestat(dmactions_types.BASE)
+                            # replace dmfilestat
+                            result.dmfilestat_set.filter(dmfileset__type=dmactions_types.BASE).delete()
+                            dmfilestat.pk = None
+                            dmfilestat.result = result
+                            dmfilestat.save()
 
-                if dmfilestat and dmfilestat.action_state in ['DG','DD']:
+                if dmfilestat.action_state in ['DG','DD']:
                     bail(result, "The analysis cannot start because %s data has been deleted." % dmactions_type)
                     logger.warn("The analysis cannot start because %s data has been deleted." % dmactions_type)
-                elif dmfilestat and dmfilestat.action_state in ['AG','AD']:
+                elif dmfilestat.action_state in ['AG','AD']:
                     # replace paths with archived locations
                     try:
                         datfiles = os.listdir(dmfilestat.archivepath)
                         logger.debug("Got a list of files in %s" % dmfilestat.archivepath)
                         if dmactions_type == dmactions_types.SIG:
                             pathToData = dmfilestat.archivepath
-                            if doThumbnail and exp.chipType == "900":
+                            if doThumbnail and isProton:
                                 pathToData = os.path.join(pathToData,'thumbnail')
                         elif dmactions_type == dmactions_types.BASE:
                             previousReport = dmfilestat.archivepath
@@ -1611,6 +1625,9 @@ def _createReport(request, pk, reportpk):
                         bail(result,"Analysis cannot start because %s data has been archived to %s.  Please mount that drive to make the data available."
                                 % (dmactions_type, dmfilestat.archivepath) )
 
+                msg = 'Started from %s %s %s.' % (dmfilestat.get_action_state_display(), dmactions_type, previousReport or pathToData)
+                models.EventLog.objects.add_entry(result, msg, username)
+            
                 logger.debug("Start Analysis on %s" % exp.expDir)
                 files = []
 
@@ -1634,11 +1651,10 @@ def _createReport(request, pk, reportpk):
                 if eas.barcodeKitName and eas.barcodeKitName is not '':
                     files.append(create_bc_conf(eas.barcodeKitName,"barcodeList.txt"))
                 # tell the analysis server to start the job
-                params = makeParams(exp, result, beadfindArgs, analysisArgs, basecallerArgs, blockArgs, doThumbnail, align_full,
-                                                        os.path.join(storage.webServerPath, loc.name), aligner_opts_extra,
+                params = makeParams(exp, result, blockArgs, doThumbnail, align_full,
+                                                        os.path.join(storage.webServerPath, loc.name),
                                                         mark_duplicates, pathToData, previousReport, tfKey, plugins_list,
-                                                        thumbnailBeadfindArgs, thumbnailAnalysisArgs, thumbnailBasecallerArgs, doBaseRecal,
-                                                        prebasecallerArgs,prethumbnailBasecallerArgs,realign)
+                                                        doBaseRecal, realign, username)
                 chip_dict = {}
                 try:
                     chips = models.Chip.objects.all()
@@ -1660,30 +1676,29 @@ def _createReport(request, pk, reportpk):
 
     if request.method == 'GET':
 
-        if exp.plan:
-            plan = exp.plan
-        else:
-            plan = None
         rpf = forms.RunParamsForm()
         rpf.fields['path'].initial = os.path.join(exp.expDir)
         rpf.fields['align_full'].initial = True
 
-        # initialize with default cmdline arguments for Analysis and BaseCaller
-        default_args = get_default_cmdline_args(exp.chipType,plan)
-        rpf.fields['beadfindArgs'].initial = default_args['beadfindArgs']
-        rpf.fields['analysisArgs'].initial = default_args['analysisArgs']
-        rpf.fields['prebasecallerArgs'].initial = default_args['prebasecallerArgs']
-        rpf.fields['basecallerArgs'].initial = default_args['basecallerArgs']
-        rpf.fields['thumbnailBeadfindArgs'].initial = default_args['thumbnailBeadfindArgs']
-        rpf.fields['thumbnailAnalysisArgs'].initial = default_args['thumbnailAnalysisArgs']
-        rpf.fields['thumbnailBasecallerArgs'].initial = default_args['thumbnailBasecallerArgs']
-        rpf.fields['prethumbnailBasecallerArgs'].initial = default_args['prethumbnailBasecallerArgs']
+        # initialize with default cmdline arguments
+        default_args = get_default_cmdline_args(exp.plan)
+        rpf.fields['beadfindArgs'].initial = default_args['beadfindargs']
+        rpf.fields['analysisArgs'].initial = default_args['analysisargs']
+        rpf.fields['prebasecallerArgs'].initial = default_args['prebasecallerargs']
+        rpf.fields['basecallerArgs'].initial = default_args['basecallerargs']
+        rpf.fields['alignmentArgs'].initial = default_args['alignmentargs']
+        rpf.fields['thumbnailBeadfindArgs'].initial = default_args['thumbnailbeadfindargs']
+        rpf.fields['thumbnailAnalysisArgs'].initial = default_args['thumbnailanalysisargs']
+        rpf.fields['thumbnailBasecallerArgs'].initial = default_args['thumbnailbasecallerargs']
+        rpf.fields['prethumbnailBasecallerArgs'].initial = default_args['prethumbnailbasecallerargs']
+        rpf.fields['thumbnailAlignmentArgs'].initial = default_args['thumbnailalignmentargs']
 
         rpf.fields['previousReport'].widget.choices = previousReports
         rpf.fields['previousThumbReport'].widget.choices = previousThumbReports
         rpf.fields['project_names'].initial = get_project_names(rpf, exp)
         rpf.fields['do_base_recal'].initial = models.GlobalConfig.objects.all()[0].base_recalibrate
-        rpf.fields['mark_duplicates'].initial = models.GlobalConfig.objects.all()[0].mark_duplicates
+        rpf.fields['mark_duplicates'].initial = eas.isDuplicateReads
+
         rpf.fields['realign'].initial = models.GlobalConfig.objects.all()[0].realign
         rpf.fields['libraryKey'].initial = eas.libraryKey
 
@@ -1878,6 +1893,8 @@ def metal(request, pk, path):
     report = get_object_or_404(models.Results, pk=pk)
     root = report.get_report_dir()
     full_path = os.path.join(root, path)
+    if not os.path.exists(full_path):
+        return http.HttpResponseNotFound("This path no longer exists:<br/>" + full_path)
     if os.path.isdir(full_path):
         return show_directory(report, pk, path, root, full_path)
     else:
@@ -1907,3 +1924,87 @@ def report_action(request, pk, action):
         logger.info(async_task_result)
 
     return http.HttpResponse()
+
+def getZip(request, pk):
+	try:
+		# Goal: zip up the target pk's _bamOut directory and send it over.
+		# Later goal: zip up a certain subdirectory of _bamOut and send it.
+		prePath = '/results/analysis/output/'
+		prePathList = os.listdir(prePath)
+		fullPath = ""
+		for prePathEntry in prePathList:
+			pathList = os.listdir(os.path.join(prePath, prePathEntry))
+			for path in pathList:
+				if (('%s'%path).endswith('%s'%pk)):
+					fullPath = os.path.join(prePath, prePathEntry, path)
+		fullPath = os.path.join(fullPath, 'plugin_out', 'FileExporter_out', 'downloads.zip')
+		if not os.path.isfile(fullPath):
+			causeException = 19/0
+		zipFile = open(fullPath, 'r')
+		zip_filename = 'bamFiles_%s.zip'%pk
+		#ctx = template.RequestContext(request, {"pk" : pk, "path" : fullPath})
+		#response = StreamingHttpResponse(zs)
+		response = HttpResponse(zipFile)
+		response['Content-type'] = 'application/zip'
+		response['Content-Disposition'] = 'attachment; filename="%s"'%zip_filename
+		return response
+		#return render_to_response("rundb/data/zipGet.html", context_instance=ctx)
+	except:
+		# Just return nothing if it fails.
+		return http.HttpResponseRedirect("/report/%s"%pk)
+
+def locate(pattern, root):
+	for path, dirs, files in os.walk(os.path.abspath(root)):
+		#for filename in fnmatch.filter(files, pattern):
+		for fileName in files:
+			#sys.stderr.write('LOC: %s\n'%fileName)
+			if fileName == pattern:
+				yield os.path.join(path, fileName)
+
+def getVCF(request, pk):
+	prePath = '/results/analysis/output/'
+	prePathList = os.listdir(prePath)
+	fullPath = ""
+	for prePathEntry in prePathList:
+		pathList = os.listdir(os.path.join(prePath, prePathEntry))
+		for path in pathList:
+			if (('%s'%path).endswith('%s'%pk)):
+				fullPath = os.path.join(prePath, prePathEntry, path)
+	fullPath = os.path.join(fullPath, 'plugin_out')
+	plStr = ''
+	VCPaths = []
+	VCNames = []
+	if (os.path.isdir(os.path.join(fullPath, 'FileExporter_out'))):
+		nameFile = open(os.path.join(fullPath, 'FileExporter_out', 'FN.log'), 'r')
+		nameVals = nameFile.read().split('\n')
+		toName = nameVals[0]
+		toDelim = nameVals[1]
+		#plStr += '%s<br/>%s<br/><br/>\n'%(toName, toDelim)
+	pluginPaths = os.listdir(fullPath)
+	for path in pluginPaths:
+		if 'variantCaller' in path:
+			VCPaths.append(os.path.join(fullPath, path))
+			VCNames.append(path)
+	for V in VCNames:
+		plStr += '<b>%s:</b><br/>\n'%V
+		for VC in VCPaths:
+			if V in VC:
+				mkCmd = subprocess.Popen(['mkdir', os.path.join(fullPath, 'FileExporter_out', V)])
+				mkOut, mkErr = mkCmd.communicate()
+				for fn in locate('TSVC_variants.vcf', VC):
+					useablePath = fn[len(fullPath)+1:]
+					useablePath = useablePath[len(V)+1:]
+					if '/' in useablePath:
+						useablePath = useablePath.split('/')
+						outFP = toName.replace('@BARINFO@', useablePath[0])
+						newFP = os.path.join(fullPath, 'FileExporter_out', V, useablePath[0], '%s.vcf'%outFP)
+						mkCmd = subprocess.Popen(['mkdir', os.path.join(fullPath, 'FileExporter_out', V, useablePath[0])])
+						mkOut, mkErr = mkCmd.communicate()
+					else:
+						outFP = toName.replace('@BARINFO@', '')
+						outFP = outFP.replace('%s%s'%(toDelim, toDelim), toDelim)
+						newFP = os.path.join(fullPath, 'FileExporter_out', V, '%s.vcf'%outFP)
+					lnCmd = subprocess.Popen(['ln', '-sf', fn, newFP])
+					lnOut, lnErr = lnCmd.communicate()
+					plStr += 'VCF Link: <a href=%s>%s</a><br/>\n'%(newFP[newFP.find('/results/analysis')+len('/results/analysis'):], newFP[len(fullPath):])
+	return HttpResponse(plStr)

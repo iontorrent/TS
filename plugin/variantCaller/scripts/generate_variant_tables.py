@@ -15,15 +15,93 @@ from matplotlib import use
 use("Agg",warn=False)
 import matplotlib.pyplot as plt
 
+def write_alleles2_line(fid, **kwargs):
+    header = kwargs.get('header', False)
+    allele = kwargs.get('data',{})
+
+    fid.write(('Chrom'                  if header else allele['chrom'])                 + '\t')
+    fid.write(('Position'               if header else allele['pos'])                   + '\t')
+    fid.write(('Ref'                    if header else allele['ref'])                   + '\t')
+    fid.write(('Variant'                if header else allele['alt'])                   + '\t')
+    fid.write(('Allele Call'            if header else allele['call'])                  + '\t')
+    fid.write(('Filter'                 if header else allele['call_filter'])           + '\t')
+    fid.write(('Frequency'              if header else allele['freq'])                  + '\t')
+    fid.write(('Quality'                if header else allele['qual'])                  + '\t')
+    fid.write(('Filter'                 if header else allele['qual_filter'])           + '\t')
+
+    # Extra fields displayed only in Allele Search view
+    fid.write(('Type'                   if header else allele['type'])                  + '\t')
+    fid.write(('Allele Source'          if header else allele['source'])                + '\t')
+    fid.write(('Allele Name'            if header else allele['name'])                  + '\t')
+    fid.write(('Gene ID'                if header else allele['gene'])                  + '\t')
+    fid.write(('Region Name'            if header else allele['submitted_region'])      + '\t')
+    fid.write(('VCF Position'           if header else allele['pos_vcf'])               + '\t')
+    fid.write(('VCF Ref'                if header else allele['ref_vcf'])               + '\t')
+    fid.write(('VCF Variant'            if header else allele['alt_vcf'])               + '\t')
+    
+    # Extra fields displayed only in Coverage Filters view
+    fid.write(('Original Coverage'      if header else allele['cov_total'])             + '\t')
+    fid.write(('Coverage'               if header else allele['cov_total_downsampled']) + '\t')
+    fid.write(('Filter'                 if header else allele['cov_total_filter'])      + '\t')
+    fid.write(('Coverage+'              if header else allele['cov_total_plus'])        + '\t')
+    fid.write(('Filter'                 if header else allele['cov_total_plus_filter']) + '\t')
+    fid.write(('Coverage-'              if header else allele['cov_total_minus'])       + '\t')
+    fid.write(('Filter'                 if header else allele['cov_total_minus_filter'])+ '\t')
+    fid.write(('Allele Cov'             if header else allele['cov_allele'])            + '\t')
+    fid.write(('Allele Cov+'            if header else allele['cov_allele_plus'])       + '\t')
+    fid.write(('Allele Cov-'            if header else allele['cov_allele_minus'])      + '\t')
+    fid.write(('Strand Bias'            if header else allele['strand_bias'])           + '\t')
+    fid.write(('Filter'                 if header else allele['strand_bias_filter'])    + '\t')
+
+    # Extra fields displayed only in Quality Filters view
+    fid.write(('Common Signal Shift'    if header else allele['rbi'])                   + '\t')
+    fid.write(('Filter'                 if header else allele['rbi_filter'])            + '\t')
+    fid.write(('Reference Signal Shift' if header else allele['refb'])                  + '\t')
+    fid.write(('Filter'                 if header else allele['varb_filter'])           + '\t')
+    fid.write(('Variant Signal Shift'   if header else allele['varb'])                  + '\t')
+    fid.write(('Filter'                 if header else allele['varb_filter'])           + '\t')
+    fid.write(('Relative Read Quality'  if header else allele['mlld'])                  + '\t')
+    fid.write(('Filter'                 if header else allele['mlld_filter'])           + '\t')
+    fid.write(('HP Length'              if header else allele['hp_length'])             + '\t')
+    fid.write(('Filter'                 if header else allele['hp_length_filter'])      + '\t')
+    fid.write(('Context Error+'         if header else allele['sse_plus'])              + '\t')
+    fid.write(('Filter'                 if header else allele['sse_plus_filter'])       + '\t')
+    fid.write(('Context Error-'         if header else allele['sse_minus'])             + '\t')
+    fid.write(('Filter'                 if header else allele['sse_minus_filter'])      + '\t')
+    fid.write(('Context Strand Bias'    if header else allele['sssb'])                  + '\t')
+    fid.write(('Filter'                 if header else allele['sssb_filter'])           + '\n')
+
+
+                    
+    
+        
+def num_get(my_dict, my_key, default):
+    try:
+        return float(my_dict[my_key])
+    except:
+        return default
+
+
+def num_get_list(my_dict, my_key, default):
+    value = copy.copy(default)
+    for idx,txt in enumerate(my_dict.get(my_key,'').split(',')):
+        try:
+            value[idx] = float(txt)
+        except:
+            pass
+    return value
+
+
 
 def main():
     
     parser = OptionParser()
     parser.add_option('-i', '--input-vcf',      help='Input vcf file to be sorted', dest='input') 
     parser.add_option('-r', '--region-bed',     help='Region bed file (optional)', dest='region') 
-    parser.add_option('-s', '--hotspot-bed',    help='Hotspot bed file', dest='hotspot') 
+    parser.add_option('-s', '--hotspots',       help='Generate hotspot ID column', dest='hotspot', action="store_true", default=False)
     parser.add_option('-o', '--output-xls',     help='Variant table tab-delimited file', dest='output')
     parser.add_option('-a', '--alleles-xls',    help='Alleles table tab-delimited file', dest='alleles')
+    parser.add_option('-b', '--alleles2-xls',   help='Extended alleles table tab-delimited file', dest='alleles2')
     parser.add_option('-c', '--chromosome-png', help='Bar plot of # variants per chromosome', dest='chrom_png')
     parser.add_option('-S', '--scatter-png',    help='Scatterplot of coverage vs. frequency for variants', dest='scatter_png')
     parser.add_option('-j', '--summary-json',   help='Variant summary in json file', dest='summary')
@@ -47,16 +125,29 @@ def main():
     
     if options.region:
         region_bed_file = open(options.region,'r')
+        is_ion_version_4 = False
         for line in region_bed_file:
-            if not line or line.startswith('track '):
+            if not line:
                 continue
+            if line.startswith('track '):
+                if 'torrentSuiteVersion=3.6' in line or 'ionVersion=4.0' in line:
+                    is_ion_version_4 = True
             fields = line.split('\t')
             if len(fields) < 6:
                 continue
             chrom = fields[0].strip()
             region_start.setdefault(chrom,[]).append(int(fields[1]) + 1)
             region_end.setdefault(chrom,[]).append(int(fields[2]))
-            region_ids.setdefault(chrom,[]).append((fields[3].strip(), fields[-1].strip()))
+            if is_ion_version_4:
+                gene_id = 'unknown'
+                for subfield in fields[-1].strip().split(';'):
+                    key_val = subfield.split('=')
+                    if len(key_val) == 2 and key_val[0] == 'GENE_ID':
+                        gene_id = key_val[1]
+                        break
+            else:
+                gene_id = fields[-1].strip()
+            region_ids.setdefault(chrom,[]).append((fields[3].strip(), gene_id))
         region_bed_file.close()
     
     
@@ -71,9 +162,9 @@ def main():
         output_xls.write("\tHotSpot ID")
     output_xls.write("\n")
 
-    if options.alleles:
-        alleles_xls = open(options.alleles,'w')
-        alleles_xls.write('Chrom\tPosition\tAllele ID\tAllele Source\tRef\tVariant\tType\tAllele Call\tCall Details\tFreq\tAllele Cov\tDownsampled Cov\tTotal Cov\tVCF Record\n')
+    if options.alleles2:
+        alleles2_xls = open(options.alleles2,'w')
+        write_alleles2_line(alleles2_xls,header=True)
 
     observed_chr_order = []
     chr_calls_total = {}
@@ -101,7 +192,52 @@ def main():
     nc_freq = []
     nc_cov = []
     
-    sample_name = ''
+    summary_json = {
+        'sample_name' : '',
+        'variants_total' : {
+            'variants' : 0,
+            'het_snps' : 0,
+            'homo_snps' : 0,
+            'het_indels' : 0,
+            'homo_indels' : 0,
+            'other' : 0,
+            'no_call' : 0
+        },
+        'variants_by_chromosome' : [],
+        'variants_by_call' : {
+            'absent' : 0,
+            'heterozygous' : 0,
+            'homozygous' : 0,
+            'no_call' : 0
+        },
+        'variants_by_source' : {
+            'novel' : 0,
+            'hotspot' : 0
+        },
+        'variants_by_type' : {
+            'snp' : 0,
+            'ins' : 0,
+            'del' : 0,
+            'mnp' : 0,
+            'complex' : 0
+        },
+        'filters' : {
+            'min_coverage' : { 'present':0, 'absent':0, 'filtered':0 },
+            'min_cov_each_strand' : { 'present':0, 'absent':0, 'filtered':0 },
+            'strand_bias' : { 'present':0, 'absent':0, 'filtered':0 },
+            'beta_bias' : { 'present':0, 'absent':0, 'filtered':0 },
+            'min_variant_score' : { 'present':0, 'absent':0, 'filtered':0 },
+            'hp_max_length' : { 'present':0, 'absent':0, 'filtered':0 },
+            'data_quality_stringency' : { 'present':0, 'absent':0, 'filtered':0 },
+            'sse_one_strand' : { 'present':0, 'absent':0, 'filtered':0 },
+            'sse_both_strands' : { 'present':0, 'absent':0, 'filtered':0 },
+            'rejection' : { 'present':0, 'absent':0, 'filtered':0 },
+            'filter_x_predictions' : { 'present':0, 'absent':0, 'filtered':0 },
+            'filter_unusual_predictions' : { 'present':0, 'absent':0, 'filtered':0 }
+        }
+                    
+    }
+    
     
     for line in input_vcf:
         if not line:
@@ -110,7 +246,7 @@ def main():
         if line.startswith('#CHROM'):
             fields = line.split('\t')
             if len(fields) > 9:
-                sample_name = fields[9].strip()
+                summary_json['sample_name'] = fields[9].strip()
         if line[0]=='#':
             continue
 
@@ -173,41 +309,45 @@ def main():
             genotype1_int = None
             genotype2_int = None
 
+        # Coverages
+        RO  = num_get(info, 'RO', 0)
+        FRO = num_get(info, 'FRO', RO)
+        AO  = num_get_list(info, 'AO', [0]*len(alt))
+        FAO = num_get_list(info, 'FAO', AO)
+        SRF  = num_get(info, 'SRF', 0)
+        FSRF = num_get(info, 'FSRF', SRF)
+        SRR  = num_get(info, 'SRR', 0)
+        FSRR = num_get(info, 'FSRR', SRR)
+        SAF  = num_get_list(info, 'SAF', [0]*len(alt))
+        FSAF = num_get_list(info, 'FSAF', SAF)
+        SAR  = num_get_list(info, 'SAR', [0]*len(alt))
+        FSAR = num_get_list(info, 'FSAR', SAR)
+        
+        #Fiters
+        SSEN  = num_get_list(info, 'SSEN', [0]*len(alt))
+        SSEP  = num_get_list(info, 'SSEP', [0]*len(alt))
+        SSSB  = num_get_list(info, 'SSSB', [0]*len(alt))
+        STB  = num_get_list(info, 'STB', [0]*len(alt))
+        SXB  = num_get_list(info, 'SXB', [0]*len(alt))
+        RBI  = num_get_list(info, 'RBI', [0]*len(alt))
+        REFB = num_get_list(info, 'REFB', [0]*len(alt))
+        VARB = num_get_list(info, 'VARB', [0]*len(alt))
+        HRUN = num_get_list(info, 'HRUN', [0]*len(alt))
+        MLLD = num_get_list(info, 'MLLD', [0]*len(alt))
+        FR = info.get('FR','')
+        
 
-        try:
-            ref_cov = int(format['RO'])
-        except:
-            ref_cov = 0
-
-        try:
-            ref_cov2 = int(format['FRO'])
-        except:
-            ref_cov2 = ref_cov
-
-        var_cov = [0] * len(alt)
-        for alt_idx,var_cov_txt in enumerate(format.get('AO','').split(',')):
-            try:
-                var_cov[alt_idx] = int(var_cov_txt)
-            except:
-                pass
-        var_cov2 = copy.copy(var_cov)
-        for alt_idx,var_cov_txt in enumerate(format.get('FAO','').split(',')):
-            try:
-                var_cov2[alt_idx] = int(var_cov_txt)
-            except:
-                pass
-
-        total_cov = ref_cov + sum(var_cov)
-        total_cov2 = ref_cov2 + sum(var_cov2)
+        total_cov = RO + sum(AO)
+        total_cov2 = FRO + sum(FAO)
         
         var_freq = []
-        for v in var_cov:
+        for v in AO:
             if total_cov > 0:
                 var_freq.append(float(v)/float(total_cov)*100.0)
             else:
                 var_freq.append(0.0)
         var_freq2 = []
-        for v in var_cov2:
+        for v in FAO:
             if total_cov2 > 0:
                 var_freq2.append(float(v)/float(total_cov2)*100.0)
             else:
@@ -217,7 +357,7 @@ def main():
         output_xls.write("%s\t%s\t" % (gene_name,region_id)) # Gene Sym, Target ID
         output_xls.write("%s\t%s\t%s\t" % (variant_type,ploidy,genotype_actual)) # Type, Zygosity
         output_xls.write("%s\t%s\t" % (fields[3],fields[4])) # Ref, Variant
-        output_xls.write("%s\t%s\t%s\t%s\t%s" % (sum(var_freq2),qual,total_cov2,ref_cov2,sum(var_cov2)))
+        output_xls.write("%s\t%s\t%s\t%s\t%s" % (sum(var_freq2),qual,total_cov2,FRO,sum(FAO)))
         
         is_hotspot = 0
         if options.hotspot:
@@ -230,62 +370,196 @@ def main():
         
         output_xls.write("\n")
 
-        if options.alleles:
-                        
-            all_oid     = info['OID'].split(',')
-            all_opos    = info['OPOS'].split(',')
-            all_oref    = info['OREF'].split(',')
-            all_oalt    = info['OALT'].split(',')
-            all_omapalt = info['OMAPALT'].split(',')
-            filtering_reason = info.get('FR','.').lstrip('.,')
-            if not filtering_reason:
-                filtering_reason = '---'
-        
-            for oid,opos,oref,oalt,omapalt in zip(all_oid,all_opos,all_oref,all_oalt,all_omapalt):
-                if omapalt not in alt:
-                    continue
-                idx = alt.index(omapalt)
-                
-                xref = oref.strip('-')
-                xalt = oalt.strip('-')
-                
-                alleles_xls.write('%s\t%s\t' % (chr,opos))
-                if oid == '.':
-                    alleles_xls.write('---\tNovel\t')
-                else:
-                    alleles_xls.write('%s\tHotspot\t' % oid)
-                alleles_xls.write('%s\t%s\t' % (oref,oalt))
-                if len(xref) == 1 and len(xalt) == 1:
-                    alleles_xls.write('SNP\t')
-                elif len(xref) == len(xalt):
-                    alleles_xls.write('MNP\t')
-                elif len(xref) == 0:
-                    alleles_xls.write('INS\t')
-                elif len(xalt) == 0:
-                    alleles_xls.write('DEL\t')
-                else:
-                    alleles_xls.write('COMPLEX\t')
+                    
+        all_oid     = info['OID'].split(',')
+        all_opos    = info['OPOS'].split(',')
+        all_oref    = info['OREF'].split(',')
+        all_oalt    = info['OALT'].split(',')
+        all_omapalt = info['OMAPALT'].split(',')
+    
+        for oid,opos,oref,oalt,omapalt in zip(all_oid,all_opos,all_oref,all_oalt,all_omapalt):
+            if omapalt not in alt:
+                continue
+            idx = alt.index(omapalt)
 
-                if genotype1_int is None or genotype2_int is None:
-                    alleles_xls.write('No Call\t%s\t' % filtering_reason)
-                    nc_freq.append(var_freq2[idx])
-                    nc_cov.append(total_cov)
-                elif genotype1_int == (idx+1) and genotype2_int == (idx+1):
-                    alleles_xls.write('Present\tHomozygous\t')
-                    hom_freq.append(var_freq2[idx])
-                    hom_cov.append(total_cov)
-                elif genotype1_int == (idx+1) or genotype2_int == (idx+1):
-                    alleles_xls.write('Present\tHeterozygous\t')
-                    het_freq.append(var_freq2[idx])
-                    het_cov.append(total_cov)
+            allele = {}
+            allele['chrom']             = chr
+            allele['pos']               = opos
+            allele['ref']               = oref
+            allele['alt']               = oalt
+            allele['pos_vcf']           = pos
+            allele['ref_vcf']           = ref
+            allele['alt_vcf']           = alt[idx]
+            allele['name']              = '---' if oid == '.' else oid
+            allele['source']            = 'Novel' if oid == '.' else 'Hotspot'
+            allele['gene']              = gene_name
+            allele['submitted_region']  = region_id
+            allele['qual']              = qual
+
+
+            ref_len = len(oref.strip('-'))
+            alt_len = len(oalt.strip('-'))
+            if ref_len == 1 and alt_len == 1:
+                allele['type'] = 'SNP'
+                summary_json['variants_by_type']['snp'] += 1
+            elif ref_len == alt_len:
+                allele['type'] = 'MNP'
+                summary_json['variants_by_type']['mnp'] += 1
+            elif ref_len == 0:
+                allele['type'] = 'INS'
+                summary_json['variants_by_type']['ins'] += 1
+            elif alt_len == 0:
+                allele['type'] = 'DEL'
+                summary_json['variants_by_type']['del'] += 1
+            else:
+                allele['type'] = 'COMPLEX'
+                summary_json['variants_by_type']['complex'] += 1
+
+            if genotype1_int is None or genotype2_int is None:
+                allele['call'] = 'No Call'
+                summary_json['variants_by_call']['no_call'] += 1
+            elif genotype1_int == (idx+1) and genotype2_int == (idx+1):
+                allele['call'] = 'Homozygous'
+                summary_json['variants_by_call']['homozygous'] += 1
+            elif genotype1_int == (idx+1) or genotype2_int == (idx+1):
+                allele['call'] = 'Heterozygous'
+                summary_json['variants_by_call']['heterozygous'] += 1
+            else:
+                allele['call'] = 'Absent'
+                summary_json['variants_by_call']['absent'] += 1
+            
+            if oid == '.':
+                summary_json['variants_by_source']['novel'] += 1
+            else:
+                summary_json['variants_by_source']['hotspot'] += 1
+
+            allele['freq']                      = '%1.1f'   % (100.0 * FAO[idx] / (FRO+sum(FAO)) if (FRO+sum(FAO)) > 0.0 else 0)
+            allele['cov_total']                 = '%d'      % (RO + sum(AO))
+            allele['cov_total_downsampled']     = '%d'      % (FRO+sum(FAO))
+            allele['cov_total_plus']            = '%d'      % (FSRF + sum(FSAF))
+            allele['cov_total_minus']           = '%d'      % (FSRR + sum(FSAR))
+            allele['cov_allele']                = '%d'      % (FAO[idx])
+            allele['cov_allele_plus']           = '%d'      % (FSAF[idx])
+            allele['cov_allele_minus']          = '%d'      % (FSAR[idx])
+            allele['strand_bias']               = '%1.4f'   % (STB[idx])
+            allele['beta_bias']                 = '%1.4f'   % (SXB[idx])
+            allele['sse_plus']                  = '%1.4f'   % (SSEP[idx])
+            allele['sse_minus']                 = '%1.4f'   % (SSEN[idx])
+            allele['sssb']                      = '%1.4f'   % (SSSB[idx])
+            allele['rbi']                       = '%1.4f'   % (RBI[idx])
+            allele['refb']                      = '%1.4f'   % (REFB[idx])
+            allele['varb']                      = '%1.4f'   % (VARB[idx])
+            allele['mlld']                      = '%1.4f'   % (MLLD[idx])
+            allele['hp_length']                 = '%d'      % (HRUN[idx])
+
+            if oid != '.':
+                allele_prefix = 'Hotspot'
+            elif allele['type'] == 'SNP':
+                allele_prefix = 'SNP'
+            else:
+                allele_prefix = 'INDEL'
+
+            # Filters:
+            allele['cov_total_filter']      = ('Minimum coverage ('+allele_prefix+')') if 'MINCOV' in FR or 'NODATA' in FR else '-'
+            allele['cov_total_plus_filter'] = ('Minimum coverage on either strand ('+allele_prefix+')') if 'PosCov' in FR or 'NODATA' in FR else '-'
+            allele['cov_total_minus_filter'] = ('Minimum coverage on either strand ('+allele_prefix+')')  if 'NegCov' in FR or 'NODATA' in FR else '-'
+            allele['strand_bias_filter'] = ('Maximum strand bias ('+allele_prefix+')')  if 'STDBIAS' in FR else '-'
+            allele['beta_bias_filter'] = '-'
+            allele['qual_filter'] = ('Minimum quality ('+allele_prefix+')')  if 'QualityScore' in FR else '-'
+            allele['hp_length_filter'] = 'Maximum homopolymer length' if 'HPLEN' in FR else '-'
+            allele['mlld_filter'] = 'Minimum relative read quality' if 'STRINGENCY' in FR else '-'
+            allele['varb_filter'] = 'Maximum reference/variant signal shift' if 'PREDICTIONHypSHIFT' in FR else '-'
+            allele['rbi_filter'] = 'Maximum common signal shift' if 'PREDICTIONSHIFT' in FR else '-'
+            allele['sse_plus_filter'] = '-'
+            allele['sse_minus_filter'] = '-'
+            allele['sssb_filter'] = '-'
+            if 'PositiveSSE' in FR:
+                allele['sse_plus_filter'] = 'Context error on one strand'
+                allele['sssb_filter'] = 'Context error on one strand'
+            if 'NegaitveSSE' in FR:
+                allele['sse_minus_filter'] = 'Context error on one strand'
+                allele['sssb_filter'] = 'Context error on one strand'
+            if 'PredictedSSE' in FR:
+                allele['sse_plus_filter'] = 'Context error on both strands'
+                allele['sse_minus_filter'] = 'Context error on both strands'
+                
+            filter_list = ['-']
+            for k,v in allele.iteritems():
+                if k.endswith('_filter') and v not in filter_list:
+                    filter_list.append(v)
+            if 'REJECTION' in FR:
+                filter_list.append('Excess outlier reads')
+            
+            allele['call_filter'] = ','.join(filter_list[1:]) if len(filter_list) > 1 else '-'
+
+
+            
+            # Filter stats:
+            if allele_prefix == 'Hotspot':
+                if 'MINCOV' in FR or 'NODATA' in FR:
+                    summary_json['filters']['min_coverage']['filtered'] += 1
                 else:
-                    alleles_xls.write('Absent\t---\t')
-                    abs_freq.append(var_freq2[idx])
-                    abs_cov.append(total_cov)
+                    summary_json['filters']['min_coverage']['present'] += 1
+    
+                if 'PosCov' in FR or 'NegCov' in FR or 'NODATA' in FR:
+                    summary_json['filters']['min_cov_each_strand']['filtered'] += 1
+                else:
+                    summary_json['filters']['min_cov_each_strand']['present'] += 1
                 
-                alleles_xls.write('%1.1f%%\t%d\t%d\t%d\t' % (var_freq2[idx],var_cov2[idx],total_cov2,total_cov))
-                alleles_xls.write('%s:%s\n' % (chr,pos))
+                if 'STDBIAS' in FR:
+                    summary_json['filters']['strand_bias']['filtered'] += 1
+                else:
+                    summary_json['filters']['strand_bias']['present'] += 1
                 
+                if 'XBIAS' in FR:
+                    summary_json['filters']['beta_bias']['filtered'] += 1
+                else:
+                    summary_json['filters']['beta_bias']['present'] += 1
+                
+                if 'QualityScore' in FR:
+                    summary_json['filters']['min_variant_score']['filtered'] += 1
+                else:
+                    summary_json['filters']['min_variant_score']['present'] += 1
+    
+                if 'HPLEN' in FR:
+                    summary_json['filters']['hp_max_length']['filtered'] += 1
+                else:
+                    summary_json['filters']['hp_max_length']['present'] += 1
+                
+                if 'STRINGENCY' in FR:
+                    summary_json['filters']['data_quality_stringency']['filtered'] += 1
+                else:
+                    summary_json['filters']['data_quality_stringency']['present'] += 1
+                
+                if 'PositiveSSE' in FR or 'NegativeSSE' in FR:
+                    summary_json['filters']['sse_one_strand']['filtered'] += 1
+                else:
+                    summary_json['filters']['sse_one_strand']['present'] += 1
+
+                if 'PredictedSSE' in FR:
+                    summary_json['filters']['sse_both_strands']['filtered'] += 1
+                else:
+                    summary_json['filters']['sse_both_strands']['present'] += 1
+    
+                if 'PREDICTIONHypSHIFT' in FR:
+                    summary_json['filters']['filter_x_predictions']['filtered'] += 1
+                else:
+                    summary_json['filters']['filter_x_predictions']['present'] += 1
+    
+                if 'PREDICTIONSHIFT' in FR:
+                    summary_json['filters']['filter_unusual_predictions']['filtered'] += 1
+                else:
+                    summary_json['filters']['filter_unusual_predictions']['present'] += 1
+                
+                if 'REJECTION' in FR:
+                    summary_json['filters']['rejection']['filtered'] += 1
+                else:
+                    summary_json['filters']['rejection']['present'] += 1
+            
+            if options.alleles2:
+                write_alleles2_line(alleles2_xls,data=allele)
+            
+        
         
         if chr not in observed_chr_order:
             observed_chr_order.append(chr)
@@ -328,88 +602,44 @@ def main():
             
     input_vcf.close()
     output_xls.close()
-    if options.alleles:
-        alleles_xls.close()
+    if options.alleles2:
+        alleles2_xls.close()
 
+
+    for chr in observed_chr_order:
+        summary_json['variants_total']['variants']      += chr_calls_total[chr]
+        summary_json['variants_total']['het_snps']      += chr_calls_het_snp[chr]
+        summary_json['variants_total']['homo_snps']     += chr_calls_hom_snp[chr]
+        summary_json['variants_total']['het_indels']    += chr_calls_het_indel[chr]
+        summary_json['variants_total']['homo_indels']   += chr_calls_hom_indel[chr]
+        summary_json['variants_total']['other']         += chr_calls_other[chr]
+        summary_json['variants_total']['no_call']       += chr_calls_none[chr]
+        summary_json['variants_by_chromosome'].append({
+            'chromosome'    : chr,
+            'variants'      : chr_calls_total[chr],
+            'het_snps'      : chr_calls_het_snp[chr],
+            'homo_snps'     : chr_calls_hom_snp[chr],
+            'het_indels'    : chr_calls_het_indel[chr],
+            'homo_indels'   : chr_calls_hom_indel[chr],
+            'other'         : chr_calls_other[chr],
+            'no_call'       : chr_calls_none[chr]
+        })
+
+    if options.hotspot:
+        summary_json['hotspots_total'] = {
+            'variants'      : hotspot_total,
+            'het_snps'      : hotspot_het_snp,
+            'homo_snps'     : hotspot_hom_snp,
+            'het_indels'    : hotspot_het_indel,
+            'homo_indels'   : hotspot_hom_indel,
+            'other'         : hotspot_other,
+            'no_call'       : hotspot_none
+        }
 
     if options.summary:
-        summary_json = {
-            'sample_name' : sample_name,
-            'variants_total' : {
-                'variants' : 0,
-                'het_snps' : 0,
-                'homo_snps' : 0,
-                'het_indels' : 0,
-                'homo_indels' : 0,
-                'other' : 0,
-                'no_call' : 0
-            },
-            'variants_by_chromosome' : []
-        }
-        for chr in observed_chr_order:
-            summary_json['variants_total']['variants']      += chr_calls_total[chr]
-            summary_json['variants_total']['het_snps']      += chr_calls_het_snp[chr]
-            summary_json['variants_total']['homo_snps']     += chr_calls_hom_snp[chr]
-            summary_json['variants_total']['het_indels']    += chr_calls_het_indel[chr]
-            summary_json['variants_total']['homo_indels']   += chr_calls_hom_indel[chr]
-            summary_json['variants_total']['other']         += chr_calls_other[chr]
-            summary_json['variants_total']['no_call']       += chr_calls_none[chr]
-            summary_json['variants_by_chromosome'].append({
-                'chromosome'    : chr,
-                'variants'      : chr_calls_total[chr],
-                'het_snps'      : chr_calls_het_snp[chr],
-                'homo_snps'     : chr_calls_hom_snp[chr],
-                'het_indels'    : chr_calls_het_indel[chr],
-                'homo_indels'   : chr_calls_hom_indel[chr],
-                'other'         : chr_calls_other[chr],
-                'no_call'       : chr_calls_none[chr]
-            })
-
-        if options.hotspot:
-            summary_json['hotspots_total'] = {
-                'variants'      : hotspot_total,
-                'het_snps'      : hotspot_het_snp,
-                'homo_snps'     : hotspot_hom_snp,
-                'het_indels'    : hotspot_het_indel,
-                'homo_indels'   : hotspot_hom_indel,
-                'other'         : hotspot_other,
-                'no_call'       : hotspot_none
-            }
         summary_file = open(options.summary,'w')
         json.dump(summary_json,summary_file)
         summary_file.close()
-
-        if options.chrom_png:
-            try:
-                fig = plt.figure(figsize=(12,3.5),dpi=100)
-                ax = fig.add_subplot(111,frame_on=False,position=[0.1,0.22,0.85,0.72])
-
-                plot_chr = []
-                plot_calls = []
-                for idx,chr in enumerate(observed_chr_order):
-                    if chr_calls_total[chr] > 0:
-                        plot_chr.append(chr)
-                        plot_calls.append(chr_calls_total[chr])
-
-                plot_range = range(len(plot_chr))
-                
-                ax.bar(plot_range,plot_calls,color="#2D4782",linewidth=0,align='center')
-                ax.set_xticks(plot_range)
-                if len(plot_chr) < 6:
-                    ax.set_xticklabels(plot_chr)
-                else:
-                    ax.set_xticklabels(plot_chr,rotation=45)
-            
-                ax.set_xlim(-0.9,len(plot_chr)-1.0+0.9)
-                #ax.set_ylim(0,1.1*alt_max)
-                ax.set_xlabel("Number of variant calls by chromosome")
-                fig.patch.set_alpha(0.0)
-                fig.savefig(options.chrom_png)
-        
-            except:
-                print 'Unable to generate plot %s' % options.chrom_png
-                traceback.print_exc()
-        
         
         if options.scatter_png and options.alleles:
             try:

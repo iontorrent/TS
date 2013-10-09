@@ -125,6 +125,16 @@ write_html_header ()
     if [ "$HTML_TORRENT_WRAPPER" -eq 1 ]; then
       write_page_title "$HTML";
     fi
+    echo "<h3><center>${PLUGIN_RUN_NAME}</center></h3>" >> "$HTML"
+}
+
+write_html_error ()
+{
+	local HTML="${TSP_FILEPATH_PLUGIN_DIR}/error"
+	if [ -n "$1" ]; then
+		HTML="$1"
+	fi
+	echo "<br/><h3 style=\"text-align:center;color:red\">*** An error occured - check Log File for details *** </h3><br/>" >> "$HTML"
 }
 
 write_html_footer ()
@@ -139,6 +149,31 @@ write_html_footer ()
       echo '<br/><br/>' >> "$HTML"
     fi
     echo '</div></body></html>' >> "$HTML"
+}
+
+print_options ()
+{
+    echo -e "\nSelected run options:" >&2
+    echo "  Library Type:      $PLUGINCONFIG__LIBRARYTYPE_ID" >&2
+    echo "  Target Regions:    $PLUGINCONFIG__TARGETREGIONS_ID" >&2
+    echo "  Target Padding:    $PLUGINCONFIG__PADTARGETS" >&2
+    echo "  SampleID Tracking: $PLUGINCONFIG__SAMPLEID" >&2
+    echo "  Barcoded Targets:  $PLUGIN_MULTIBED" >&2
+    echo "  Trim Reads:        $PLUGINCONFIG__TRIMREADS" >&2
+    echo "  Uniquely Mapped:   $PLUGINCONFIG__UNIQUEMAPS" >&2
+    echo "  Non-duplicate:     $PLUGINCONFIG__NONDUPLICATES" >&2
+
+    echo -e "\nEmployed run options:" >&2
+    echo "  Reference Genome:  $REFERENCE" >&2
+    echo "  Aligned Reads:     $TSP_FILEPATH_BAM" >&2
+    echo "  Library Type:      $PLUGIN_RUNTYPE" >&2
+    echo "  Target Regions:    $PLUGIN_DETAIL_TARGETS" >&2
+    echo "  Merged Regions:    $PLUGIN_TARGETS" >&2
+    echo "  SampleID Tracking: $PLUGIN_SAMPLEID" >&2
+    echo "  Target Padding:    $PLUGIN_PADSIZE" >&2
+    echo "  Trim Reads:        $PLUGIN_TRIMREADS" >&2
+    echo "  Uniquely Mapped:   $PLUGIN_UMAPS" >&2
+    echo "  Non-duplicates:    $PLUGIN_NONDUPS" >&2
 }
 
 display_static_progress ()
@@ -241,6 +276,8 @@ create_padded_targets ()
       fi
     fi
   fi
+  # Return the value to python. I really wish there was a better way to do this...
+  echo "RVAL:$CREATE_PADDED_TARGETS:END"
 }
 
 # Create GC annotated BED file and return to filename $GC_ANNOTATE_BED
@@ -251,7 +288,7 @@ gc_annotate_bed ()
   local GCANNOCMD
   GC_ANNOTATE_BED="$BEDFILE"
   if [ -n "$BEDFILE" ]; then
-    echo "(`date`) Adding GC count information to annotated targets file..." >&2
+    echo -e "\n(`date`) Adding GC count information to annotated targets file..." >&2
     GC_ANNOTATE_BED="${OUTDIR}/tca_auxiliary.gc.bed"
     GCANNOCMD="${SCRIPTSDIR}/gcAnnoBed.pl -s -w -t \"$OUTDIR\" $PLUGIN_ANNOFIELDS \"$BEDFILE\" \"$REFERENCE\" > \"$GC_ANNOTATE_BED\""
     eval "$GCANNOCMD" >&2
@@ -264,6 +301,8 @@ gc_annotate_bed ()
       echo "> $GC_ANNOTATE_BED" >&2
     fi
   fi
+  # Return val to python.
+  echo "RVAL:$GC_ANNOTATE_BED:END"
 }
 
 # Link specific file names with more non-run-speicific names (in a diferent folder).
@@ -288,6 +327,8 @@ write_html_results ()
   local OUTDIR=${2}
   local OUTURL=${3}
   local BAMFILE=${4}
+  local SAMPLENAME=${5}
+  local BEDFILE=${6}
 
   # test for trimmed bam file based results
   local BAMROOT="$RUNID"
@@ -310,6 +351,9 @@ write_html_results ()
   PLUGIN_OUT_CHRCOVFILE="${BAMROOT}.chr.cov.xls"
   PLUGIN_OUT_WGNCOVFILE="${BAMROOT}.wgn.cov.xls"
 
+  # Create link to BED file upload page from BED filepath
+  PLUGIN_OUT_BEDPAGE=`echo $BEDFILE | sed -e 's/^.*\/uploads\/BED\/\([0-9][0-9]*\)\/.*/\/rundb\/uploadstatus\/\1/'`
+
   # Links to folders/files required for html report pages (inside firewall)
   run "ln -sf \"${DIRNAME}/flot\" \"${OUTDIR}/\"";
   run "ln -sf \"${LIFECHART}\" \"${OUTDIR}/\"";
@@ -320,6 +364,9 @@ write_html_results ()
   write_file_links "$OUTDIR" "$PLUGIN_OUT_FILELINKS";
   local HTMLOUT="${OUTDIR}/${HTML_RESULTS}";
   write_page_header "$LIFECHART/TCA.head.html" "$HTMLOUT";
+  if [ -n "$SAMPLENAME" -a "$SAMPLENAME" != "None" ];then
+    echo "<h3><center>Sample Name: $SAMPLENAME</center></h3>" >> "$HTMLOUT"
+  fi
   cat "${OUTDIR}/$PLUGIN_OUT_COVERAGE_HTML" >> "$HTMLOUT"
   write_page_footer "$HTMLOUT";
 
@@ -331,5 +378,6 @@ write_html_results ()
   run "rm -rf ${OUTDIR}/scraper"
   run "mkdir ${OUTDIR}/scraper"
   create_scraper_links "${OUTDIR}/$BAMROOT" "link" "${OUTDIR}/scraper"
+  echo "RVAL:$PLUGIN_OUT_STATSFILE:END"
 }
 

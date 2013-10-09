@@ -5,8 +5,6 @@
 //#include <armadillo>
 #include <string.h>
 #include <stdlib.h>
-#include <float.h>
-#include <cblas.h>
 
 // some of the code uses <complex.h>, and in <complex.h> 'I' is defined and this
 // interferes w/ lapackpp.  I undef it here in case anyone above has included <complex.h>
@@ -21,17 +19,19 @@ class LevMarFitterV2
 
   public:
 
-    int Fit (int max_iter, float *y, float *params, float *std_err = NULL);
     // evaluate the fitted function w/ the specified parameters
     virtual void Evaluate (float *y) = 0;
 
     // evaluate the fitted function w/ the specified parameters
     virtual void Evaluate (float *y,float *params) = 0;
 
+    // fit the data
+    virtual int Fit (bool gauss_newton, int max_iter,float *y) = 0;
+
     ~LevMarFitterV2();
 
-    // fit the data
-    virtual int Fit (int max_iter,float *y) = 0;
+    // set the weighting vector
+    void SetWeightVector (float *vect);
 
     void SetLambdaThreshold (float _lambda_threshold);
 
@@ -42,8 +42,18 @@ class LevMarFitterV2
     double GetDataDelta (int);
 
     void SetDebugTrace (bool _enable);
-    // set the weighting vector
-    void SetWeightVector (float *vect);
+
+    virtual void DetermineAndSetWeightVector(float ampl) 
+    {
+      wtScale = 0.0f;
+      if (residualWeight) {
+        for (int i=0; i<npts; ++i) {
+          residualWeight[i] = 1.0f;
+          wtScale += 1.0f;
+        }
+      }
+    }
+
     // set prior values for parameters
     void SetPrior (float *input_prior);
     // dampening effect of prior for each parameter
@@ -71,15 +81,21 @@ class LevMarFitterV2
     void SetParamVal (float *_param_val);
     float ReturnNthParam(int idx);
     void SetNthParam(float val, int idx);
+    virtual bool IsConverged() { return _converged; }
     
   protected:
     LevMarFitterV2() : npts (0), x (NULL), residual (0.0), dp (NULL), residualWeight (NULL),
         prior (NULL), dampers (NULL), wtScale (0.0), nparams (0), param_val(NULL) , param_max (NULL), param_min (NULL), debug_trace (false),
-        fval_cache (NULL), enable_fval_cache (false), lambda (1.0), lambda_threshold (1.0E+10),regularizer(0.0),data (NULL),numException (0)
+        fval_cache (NULL), enable_fval_cache (false), lambda (1.0), lambda_threshold (1.0E+10),regularizer(0.0),data (NULL),numException (0),
+        _converged(false)
     {
     }
 
+    int Fit (bool gauss_newton, int max_iter, float *y, float *params, float *std_err = NULL);
+
     void Initialize (int _nparams,int _npts,float *_x);
+
+    void SetConverged(bool converged) { _converged = converged; }
 
     virtual float CalcResidual (float *refVals,
                                 float *testVals,
@@ -104,7 +120,7 @@ class LevMarFitterV2
         }
 
       // r = sqrt(r/wtScale)
-      r = (r/wtScale);
+      r = (r/wtScale); // sqrt() is called at the end after optimization
       return r;
     }
 
@@ -149,6 +165,8 @@ class LevMarFitterV2
 
     float EvaluateParamFromPrior (float *param_new);
     void TryLevMarStep (float *y, float *fval, float *params, float *err_vect, double *bfjtj, double *bfrhs, int done_cnt, float &r_start, float &r_chg);
+
+    void TryGaussNewtonStep(float *y, float *fval, float *params, float *err_vect, double *bfjtj, double *bfrhs, int done_cnt, float &r_start, float &r_chg);
 
     // allow replacement
     virtual void MakeJacobian (float *bfjac, float *params, float *fval)
@@ -204,6 +222,7 @@ class LevMarFitterV2
 
     BkgFitLevMarDat *data;
     int numException;
+    bool _converged;
 
 };
 

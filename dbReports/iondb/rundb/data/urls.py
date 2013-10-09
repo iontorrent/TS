@@ -1,6 +1,11 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
-from django.conf.urls.defaults import patterns, url
+try:
+    from django.conf.urls import patterns, url
+except ImportError:
+    # Compat Django 1.4
+    from django.conf.urls.defaults import patterns, url
+
 
 urlpatterns = patterns(
     'iondb.rundb.data',

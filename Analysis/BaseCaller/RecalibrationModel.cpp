@@ -53,13 +53,15 @@ double rGetParamsDbl(Json::Value& json, const string& key, double default_value)
 }
 
 
-void RecalibrationModel::InitializeFromJSON(Json::Value &recal_params, string &my_block_key, bool spam_enabled) {
+void RecalibrationModel::InitializeFromJSON(Json::Value &recal_params, string &my_block_key, bool spam_enabled, int over_flow_protect) {
   // this needs to signal when it fails in some way
   
     int flowStart, flowEnd, flowSpan, xMin, xMax, xSpan, yMin, yMax, ySpan, max_hp_calibrated;
     flowStart = rGetParamsInt(recal_params[my_block_key],"flowStart",0);
     //cout << flowStart << endl;
     flowEnd = rGetParamsInt(recal_params[my_block_key],"flowEnd",0);
+    if (over_flow_protect>flowEnd)
+      flowEnd = over_flow_protect;  // allocate for combined bam files that need to access flows "past the end" without crashing
     //cout << flowEnd << endl;
     flowSpan = rGetParamsInt(recal_params[my_block_key],"flowSpan",0);
     //cout << flowSpan << endl;
@@ -106,6 +108,7 @@ void RecalibrationModel::InitializeFromJSON(Json::Value &recal_params, string &m
         
         // all set with the values
         int offsetRegion = stratification.OffsetRegion(xMin,yMin);
+        // note we only fill >in< flows fit by the recalibration model
         FillIndexes(offsetRegion,nucInd, refHP, flowStart, flowEnd, paramA, paramB);        
     }
    // now we're done!

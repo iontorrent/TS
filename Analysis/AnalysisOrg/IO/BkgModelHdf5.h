@@ -10,7 +10,7 @@
 #include "BkgDataPointers.h"
 
 
-using namespace std;
+//using namespace std;
 
 // datacube is written to by the source as a transfer mechanism
 // then h5_set is used to dump it to disk
@@ -32,6 +32,8 @@ class MatchedCube
     };
     void SafeWrite();
     MatchedCube();
+    //hid_t attribute_id;
+    //hid_t get_AttributeId() {return attribute_id;}
 };
 
 //@TODO: template
@@ -53,13 +55,15 @@ class MatchedCubeInt
     };
     void SafeWrite();
     MatchedCubeInt();
+    //hid_t attribute_id;
+    //hid_t get_AttributeId() {return attribute_id;}
 };
 
 // handle 1 cube per compute block smoothly
 class RotatingCube{
   public:
     DataCube<float> source;
-    vector<H5DataSet * > h5_vec;
+    std::vector<H5DataSet * > h5_vec;
     void RotateMyCube(H5File &h5_local_ref, int total_blocks, char *cube_name, char *cube_description);
     void InitRotatingCube(H5File &h5_local_ref, int x, int y, int z, int total_blocks, char *cube_name, char *cube_description);
     void Close();
@@ -82,35 +86,42 @@ class BkgParamH5
       Close();
     }
 
-    void Init ( char *results_folder,SpatialContext &loc_context,   ImageSpecClass &my_image_spec,int numFlows, int write_params_flag );
+    void Init ( char *results_folder,SpatialContext &loc_context,   ImageSpecClass &my_image_spec,int numFlows, int write_params_flag, int _max_frames );
 
     void IncrementalWriteParam ( DataCube<float> &cube, H5DataSet *set, int flow );
+    void IncrementalWriteParam ( DataCube<int> &cube, H5DataSet *set, int flow );
     void WriteOneBlock ( DataCube<float> &cube, H5DataSet *set, int iBlk );
     void WriteOneBlock ( DataCube<int> &cube, H5DataSet *set, int iBlk );
     void WriteOneFlowBlock ( DataCube<float> &cube, H5DataSet *set, int flow, int chunksize );
+    void WriteOneFlowBlock ( DataCube<int> &cube, H5DataSet *set, int flow, int chunksize );
     void IncrementalWriteBeads ( int flow,int iBlk );
     void IncrementalWriteRegions(int flow, int iBlk);
-    
     void IncrementalWrite (  int flow, bool last_flow ); // this is the interface to trigger a write
 
     void Close();
     void CloseBeads();
     void CloseRegion();
+    void CloseTraceXYFlow();
 
 
     void TryInitBeads ( H5File &h5_local_ref, int verbosity );
-
     void InitRegionEmphasisVector ( H5File &h5_local_ref );
-
     void InitRegionalParamCube(H5File &h5_local_ref);
     void InitRegionDebugBead (H5File &h5_local_ref);
     void TryInitRegionParams ( H5File &h5_local_ref, ImageSpecClass &my_image_spec );
 
+    // all beads in the best region
+    void Init2 (int write_params_flag,int nBeads_live,Region *);
+    void TryInitBeads_BestRegion ( H5File &h5_local_ref, int nBeads_live,Region *);
+    void InitBeads_BestRegion (H5File &h5_local_ref, int nBeads_live, Region *);
+    void IncrementalWriteBestRegion(int flow, bool lastflow);
+
   public: // should be private eventually
 
+    int max_frames;
     // the idea here is to "componentize" the data sets so we can
     // easily add or remove data as we're tuning up the structures.
-    
+
     // these are the components for beads
     MatchedCube Amplitude;
     MatchedCube bead_dc;
@@ -143,30 +154,64 @@ class BkgParamH5
     MatchedCube region_debug_bead_predicted;
     MatchedCube region_debug_bead_corrected;
     MatchedCube region_debug_bead_xtalk;
-    
     MatchedCubeInt region_debug_bead_location;
-    
+
+//  beads in the bestRegion
+    MatchedCubeInt beads_bestRegion_location;
+    MatchedCubeInt beads_bestRegion_fittype;
+    MatchedCube beads_bestRegion_predicted;
+    MatchedCube beads_bestRegion_corrected;
+    MatchedCube beads_bestRegion_amplitude;
+    MatchedCube beads_bestRegion_residual;
+    MatchedCube beads_bestRegion_kmult;
+    MatchedCube beads_bestRegion_dmult;
+    MatchedCube beads_bestRegion_SP;
+    MatchedCube beads_bestRegion_R;
+    MatchedCube beads_bestRegion_gainSens;
+    MatchedCube beads_bestRegion_timeframe;
+
+//  beads specified in the sse/xyflow/rcflow file
+    void InitBeads_xyflow(int write_params_flag, HashTable_xyflow &xyf_hash);
+    void saveBeads_xyflowPointers();
+    void IncrementalWrite_xyflow(bool lastflow);
+    MatchedCube beads_xyflow_predicted;
+    MatchedCube beads_xyflow_corrected;
+    MatchedCube beads_xyflow_amplitude;
+    MatchedCube beads_xyflow_kmult;
+    MatchedCube beads_xyflow_dmult;
+    MatchedCube beads_xyflow_SP;
+    MatchedCube beads_xyflow_R;
+    MatchedCube beads_xyflow_timeframe;
+    MatchedCube beads_xyflow_residual;
+    MatchedCubeInt beads_xyflow_fittype;
+    MatchedCubeInt beads_xyflow_location;
+    MatchedCubeInt beads_xyflow_hplen;
+    MatchedCubeInt beads_xyflow_mm;
+    // key traces corresponding to xyflow
+    MatchedCube beads_xyflow_predicted_keys;
+    MatchedCube beads_xyflow_corrected_keys;
+    MatchedCubeInt beads_xyflow_location_keys;
+
     RotatingCube emphasis_val;
 
 // interface to external world using datacubes linked to hdf5 sets
     BkgDataPointers ptrs;
-
     
     void savePointers();
     void saveRegionPointers();
     void saveBeadPointers();
+    void saveBestRegionPointers();
+    std::string getBeadFilename() {return hgBeadDbgFile;}
+    void ConstructOneFile ( H5File &h5_local_ref, std::string &hgLocalFile, std::string &local_results, char *my_name );
 
-    std::string getBeadFilename()
-    {
-      return hgBeadDbgFile;
-    }
-    void ConstructOneFile ( H5File &h5_local_ref, string &hgLocalFile, string &local_results, char *my_name );
   private:
     H5File h5BeadDbg;
     std::string hgBeadDbgFile;
     // two files to control size
     H5File h5RegionDbg;
     std::string hgRegionDbgFile;
+    H5File h5TraceDbg;
+    std::string hgTraceDbgFile;
 
     std::string local_results_directory;
 

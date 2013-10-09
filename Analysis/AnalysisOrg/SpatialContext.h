@@ -36,6 +36,8 @@ class SpatialContext{
     double percentEmptiesToKeep;
      // do we have regions that are known to be excluded
    bool exclusionMaskSet;
+   SpatialContext() { DefaultSpatialContext(); }
+
     struct Region GetChipRegion() {
         return chipRegion;
     }

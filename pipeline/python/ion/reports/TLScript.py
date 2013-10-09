@@ -7,7 +7,7 @@ Uses output from there to generate charts and graphs and dumps to current direct
 Adds key metrics to database
 """
 
-__version__ = filter(str.isdigit, "$Revision: 60453 $")
+__version__ = filter(str.isdigit, "$Revision: 67899 $")
 
 # First we need to bootstrap the analysis to start correctly from the command
 # line or as the child process of a web server. We import a few things we
@@ -305,9 +305,9 @@ if __name__=="__main__":
         explogfinalfilepath = os.path.join( env['pathToRaw'],'explog_final.txt')
 
     if env['blockArgs'] == "fromRaw":
-        runFromDC = True
-        runFromSigproc = True
-        runFromBasecaller = True
+        doSigproc = True
+        doBasecalling = True
+        doAlignment = True
 
         if env['oninstranalysis'] and is_blockprocessing:
             os.symlink(os.path.join(env['pathToRaw'], 'onboard_results', env['SIGPROC_RESULTS']), env['SIGPROC_RESULTS'])
@@ -325,9 +325,9 @@ if __name__=="__main__":
                 traceback.print_exc()
 
     elif env['blockArgs'] == "fromWells":
-        runFromDC = False
-        runFromSigproc = True
-        runFromBasecaller = True
+        doSigproc = False
+        doBasecalling = True
+        doAlignment = True
         initlogfilepath = os.path.join(env['previousReport'],'InitLog.txt')
         initlog1filepath = os.path.join(env['previousReport'],'InitLog1.txt')
         initlog2filepath = os.path.join(env['previousReport'],'InitLog2.txt')
@@ -360,9 +360,9 @@ if __name__=="__main__":
 
     else:
         printtime("WARNING: start point not defined, create new report from raw data")
-        runFromDC = True
-        runFromSigproc = True
-        runFromBasecaller = True
+        doSigproc = True
+        doBasecalling = True
+        doAlignment = True
 
         if not os.path.isdir(env['SIGPROC_RESULTS']):
             try:
@@ -457,44 +457,67 @@ if __name__=="__main__":
         env['block_dirs'] = [os.path.join(env['report_root_dir'],result_dirs[block['id_str']]) for block in blocks_to_process]
 
         while len(blocks_to_process) > 0 and timeout > 0:
-            for block in blocks_to_process:
-                printtime('waiting for %s block(s) to start' % str(len(blocks_to_process)))
-                sys.stdout.flush()
-                sys.stderr.flush()
 
-                if runFromDC:
+            printtime('waiting for %s block(s) to schedule' % str(len(blocks_to_process)))
+            sys.stdout.flush()
+            sys.stderr.flush()
+
+            # wait 10 sec before looking for new files
+            timeout -= 10
+            time.sleep (10)
+
+            blocks_to_process_ready = []
+            if doSigproc:
+                for block in blocks_to_process:
                     if is_thumbnail or is_wholechip:
                         data_file = os.path.join(env['pathToRaw'],'acq_0000.dat')
                     else:
                         data_file = os.path.join(env['pathToRaw'],block['id_str'],'acq_0000.dat')
 
                     if env['oninstranalysis'] and is_blockprocessing:
-                        data_file = os.path.join(env['SIGPROC_RESULTS'],'block_'+block['id_str'])
+                        # look for all analysis_return_code.txt files, this is the last file beeing transfered
+                        data_file = os.path.join(env['SIGPROC_RESULTS'],'block_'+block['id_str'],'analysis_return_code.txt')
 
                     if os.path.exists(data_file):
+                        blocks_to_process_ready.append(block)
+#                    else:
+#                        printtime("missing %s" % data_file)
 
+            else:
+                blocks_to_process_ready.extend(blocks_to_process)
+            printtime('try to schedule %s new block(s)' % str(len(blocks_to_process_ready)))
+
+
+            # check files on the wait list
+
+            # for all blocks found do
+            for block in blocks_to_process_ready:
+
+                if doSigproc:
+                    try:
+                        '''
+                        sigproc_dir = os.path.join(env['SIGPROC_RESULTS'],'block_'+block['id_str'])
                         if env['oninstranalysis'] and is_blockprocessing:
                             # check activity on directory
-                            mod_time = os.stat(data_file).st_mtime
+                            mod_time = os.stat(sigproc_dir).st_mtime
                             cur_time = time.time()
                             if cur_time - mod_time < 180:
                                 printtime("mtime %s" % mod_time)
                                 printtime("ctime %s" % cur_time)
-                                timeout -= 10
-                                time.sleep (10)
+                                printtime("ignore %s" % sigproc_dir)
                                 continue
 
                             wait_list = [
-                                         os.path.join(data_file, 'analysis_return_code.txt'),
-                                         os.path.join(data_file, 'analysis.bfmask.bin'),
-                                         os.path.join(data_file, 'analysis.bfmask.stats'),
-                                         os.path.join(data_file, 'processParameters.txt'),
-                                         os.path.join(data_file, 'avgNukeTrace_%s.txt' % env['tfKey']),
-                                         os.path.join(data_file, 'avgNukeTrace_%s.txt' % env['libraryKey']),
-                                         os.path.join(data_file, '1.wells'),
+                                         os.path.join(sigproc_dir, 'analysis_return_code.txt'),
+                                         os.path.join(sigproc_dir, 'analysis.bfmask.bin'),
+                                         os.path.join(sigproc_dir, 'analysis.bfmask.stats'),
+                                         os.path.join(sigproc_dir, 'processParameters.txt'),
+                                         os.path.join(sigproc_dir, 'avgNukeTrace_%s.txt' % env['tfKey']),
+                                         os.path.join(sigproc_dir, 'avgNukeTrace_%s.txt' % env['libraryKey']),
+                                         os.path.join(sigproc_dir, '1.wells'),
                                         ]
 
-                            analysis_return_code_file = os.path.join(data_file, 'analysis_return_code.txt')
+                            analysis_return_code_file = os.path.join(sigproc_dir, 'analysis_return_code.txt')
                             if os.path.exists(analysis_return_code_file):
                                 try:
                                     with open(analysis_return_code_file, 'r') as f:
@@ -516,21 +539,17 @@ if __name__=="__main__":
                                 for transferred_file in wait_list:
                                     if not os.path.exists(transferred_file):
                                         printtime("WARNING: %s file transfer delayed" % transferred_file)
-                                timeout -= 10
-                                time.sleep (10)
                                 continue
+                        '''
 
                         block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py', ['--do-sigproc'])
                         sigproc_job_dict[block['id_str']] = str(block['jobid'])
                         printtime("Submitted block (%s) analysis job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
-                    else:
-                        printtime("missing %s" % data_file)
-                        timeout -= 10
-                        time.sleep (10)
-                        continue
+                    except:
+                        printtime("submitting sigproc job for block (%s) failed" % block['id_str'])
 
 
-                if runFromSigproc:
+                if doBasecalling:
                     try:
                         if env['blockArgs'] == "fromWells":
                             wait_list = []
@@ -543,7 +562,7 @@ if __name__=="__main__":
                         printtime("submitting basecaller job for block (%s) failed" % block['id_str'])
 
 
-                if runFromBasecaller:
+                if doAlignment:
                     try:
                         wait_list = [ basecaller_job_dict[block['id_str']] ]
                         block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py',['--do-alignment'],wait_list)
@@ -556,11 +575,11 @@ if __name__=="__main__":
 
 
         if not is_thumbnail and not is_wholechip:
-            if runFromDC:
+            if doSigproc:
                 merge_job_dict['sigproc'] = spawn_cluster_job('.','MergeTLScript.py',['--do-sigproc'],sigproc_job_dict.values())
-            if runFromSigproc:
+            if doBasecalling:
                 merge_job_dict['basecaller'] = spawn_cluster_job('.','MergeTLScript.py',['--do-basecalling'],basecaller_job_dict.values())
-            if runFromBasecaller:
+            if doAlignment:
                 merge_job_dict['alignment'] = spawn_cluster_job('.','MergeTLScript.py',['--do-alignment'],alignment_job_dict.values()+[merge_job_dict.get('basecaller','')])
 
         # always create links to downloadable files
@@ -781,7 +800,7 @@ if __name__=="__main__":
                         afile = open(ionstats_alignment_json_path, 'r')
                         ionstats_alignment = json.load(afile)
                         afile.close()
-                        if int(ionstats_alignment['AQ17']['num_bases']) > 13000000000:
+                        if int(ionstats_alignment['AQ17']['num_bases']) > 14500000000:
                             keep_raw_data = True
                             f = open(raw_return_code_file+".keep", 'w')
                             f.write(str(99))
@@ -796,6 +815,19 @@ if __name__=="__main__":
             except:
                printtime("ERROR: keep_raw_data check failed")
                traceback.print_exc()
+
+            # save all P1.0.19 and P1.2.18 runs
+            try:
+                printtime("INFO: chipType: %s" % env['chipType'])
+                if is_blockprocessing and ( env['chipType'] == 'P1.0.19' or env['chipType'] == 'P1.2.18' ):
+                    keep_raw_data = True
+                    fk = open(raw_return_code_file+".keep", 'w')
+                    fk.write(str(99))
+                    fk.close()
+                    printtime("INFO: keep raw P1.0.19 data")
+            except:
+                printtime("ERROR: could not determine chip type")
+                traceback.print_exc()
 
             if (is_wholechip or is_blockprocessing) and os.path.isfile(raw_return_code_file):
                 if keep_raw_data:

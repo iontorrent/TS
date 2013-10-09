@@ -42,4 +42,18 @@ int CalculateWeightOfVariant(vcf::Variant *current_variant);
 void ClearVal(vcf::Variant *var, const char *clear_me);
 float RetrieveQualityTagValue(vcf::Variant *current_variant, const string &tag_wanted, int _allele_index);
 
+// double-star pointer here
+void SetFilteredStatus(vcf::Variant ** candidate_variant, bool isFiltered);
+void StoreGenotypeForOneSample(vcf::Variant ** candidate_variant,  string &my_sample_name, string &my_genotype, float genotype_quality);
+void NullGenotypeAllSamples(vcf::Variant ** candidate_variant);
+void OverwriteGenotypeForOneSample(vcf::Variant ** candidate_variant, string &my_sample_name, string &my_genotype, float genotype_quality);
+void NullFilterReason(vcf::Variant **candidate_variant);
+void AddFilterReason(vcf::Variant **candidate_variant, string &additional_reason);
+void DetectAndSetFilteredGenotype(vcf::Variant **candidate_variant, string &sampleName);
+
+// generic variant manipulation
+void RemoveFilteredAlleles(vcf::Variant ** candidate_variant, vector<int> &filtered_allele_index);
+void AdjustAlleles(vcf::Variant ** candidate_variant);
+
+
 #endif //VCFFORMAT_H

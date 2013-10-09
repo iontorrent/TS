@@ -469,6 +469,25 @@
                         <input id="flows" name="flows" value="{{selectedPlanTemplate.flows}}" style="width:50px;">
                     {% endif %}
                 </td>
+
+                <td width="35%">
+                	<p class="form-label">Mark as PCR Duplicates: 
+                    {% if selectedApplProductData %}
+                        {% if globalConfig_isDuplicateReads %}
+                        	<input type="checkbox" id="isDuplicateReads" name="isDuplicateReads"  checked="checked" style="vertical-align:top;">                        
+                        {% else %}
+                        	<input type="checkbox" id="isDuplicateReads" name="isDuplicateReads" style="vertical-align:top;">
+                        {% endif %}
+                    {% else %}
+                        {% if selectedPlanTemplate.isDuplicateReads %}
+                            <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads"  checked="checked" style="vertical-align:top;">
+                        {% else %}
+                            <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads" style="vertical-align:top;">
+                        {% endif %}
+                    {% endif %}
+                    </p>
+
+                </td>
             </tr>
         </table>
         <br>

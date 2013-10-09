@@ -5,7 +5,9 @@
 void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOpts &inception_state, Mask *maskPtr, string &analysisLocation, SequenceItem *seqList, int numSeqListItems)
 {
   DifSepOpt opts;
-
+  opts.doubleTapFlows = inception_state.bfd_control.doubleTapFlows;
+  opts.predictFlowStart = inception_state.bfd_control.predictFlowStart;
+  opts.predictFlowEnd = inception_state.bfd_control.predictFlowEnd;
   opts.bfType = inception_state.bfd_control.bfType;
   opts.bfDat = inception_state.bfd_control.bfDat;
   opts.bfBgDat = inception_state.bfd_control.bfBgDat;
@@ -81,9 +83,6 @@ void SetupForBkgModelTiming (DifferentialSeparator *diffSeparator, std::vector<f
 {
   // compute timing information
   AvgKeyIncorporation *keyIncorporation = NULL;
-
-  //Create a mask that tracks the pinned pixels discovered in each image
-  maskPtr->CalculateLiveNeighbors();
 
   // Setup t0 estimation from beadfind to pass to background model
   std::vector<float> sep_t0_est;

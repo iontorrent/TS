@@ -15,45 +15,50 @@ InputStructures::InputStructures() {
     DEBUG = 0;
     nFlows = 0;
     min_map_qv = 4;
+    read_snp_limit = 10;
     use_SSE_basecaller  = true;
     do_snp_realignment  = true;
     apply_normalization = false;
+    resolve_clipped_bases = false;
 }
 
-
-void InputStructures::bam_initialize(vector<string> bams ) {
-    if (!bamMultiReader.Open(bams)) {
-        cerr << " ERROR: fail to open input bam files " << bams.size() << endl;
-        exit(-1);
-    }
-
-    if (!bamMultiReader.LocateIndexes()) {
-        cerr << "ERROR: Unable to locate BAM Index (bai) files for input BAM files specified " << endl;
-        exit(-1);
-    }
-
-
-    samHeader = bamMultiReader.GetHeader();
-    if (!samHeader.HasReadGroups()) {
-        bamMultiReader.Close();
-        cerr << "ERROR: there is no read group in BAM files specified" << bams.size() << endl;
-        exit(1);
-    }
-
-    do_recal.ReadRecalibrationFromComments(samHeader);
-
+void InputStructures::DetectFlowOrderzAndKeyFromBam(SamHeader &samHeader){
+  
 //TODO Need to handle multiple BAM files with different flowOrders, at least throw an error for now.
     for (BamTools::SamReadGroupIterator itr = samHeader.ReadGroups.Begin(); itr != samHeader.ReadGroups.End(); ++itr) {
         if (itr->HasFlowOrder()) {
-            flowOrder = itr->FlowOrder;
-            if (bamFlowOrderVector.empty())
-                bamFlowOrderVector.push_back(flowOrder);
-            else { //check if the flowOrder is the same if not throw an error, for now we dont support bams with different flow orders
-                vector<string>::iterator it = std::find(bamFlowOrderVector.begin(), bamFlowOrderVector.end(), flowOrder);
+            string tmpflowOrder = itr->FlowOrder;
+            if (bamFlowOrderVector.empty()){
+                bamFlowOrderVector.push_back(tmpflowOrder);
+                flowOrder = tmpflowOrder; // first one free
+            }else { //check if the flowOrder is the same if not throw an error, for now we dont support bams with different flow orders
+                vector<string>::iterator it = std::find(bamFlowOrderVector.begin(), bamFlowOrderVector.end(), tmpflowOrder);
                 if (it == bamFlowOrderVector.end()) {
+                   // check to see if flowOrder is a substring/superstring first
+                  std::size_t found_me = std::string::npos; // assume bad
+                  if (tmpflowOrder.length()>flowOrder.length()){
+                    found_me = tmpflowOrder.find(flowOrder);
+                    if (found_me==0){ // must find at first position
+                      flowOrder = tmpflowOrder; // longer superstring
+                      bamFlowOrderVector.push_back(tmpflowOrder);
+                      //cout<< "Super: " << tmpflowOrder.length() << " " << tmpflowOrder << endl;
+                    } else
+                      found_me = std::string::npos;
+
+                  }else{
+                    found_me = flowOrder.find(tmpflowOrder);
+                    if (found_me==0){ // must find at first position
+                      // substring, so no need to update flowOrder
+                      bamFlowOrderVector.push_back(tmpflowOrder);
+                      //cout << "Sub: " << tmpflowOrder.length() << " "<< tmpflowOrder << endl;
+                    } else
+                      found_me = std::string::npos;
+                  }
+
+                  if (found_me==std::string::npos){
                     cerr << "FATAL ERROR: BAM files specified as input have different flow orders. Currently tvc supports only BAM files with same flow order. " << endl;
                     exit(-1);
-
+                  }
                 }
             }
             flowKey = itr->KeySequence;
@@ -61,8 +66,9 @@ void InputStructures::bam_initialize(vector<string> bams ) {
         }
 
     }
-
-
+    if (bamFlowOrderVector.size()>1)
+      cout << "Compatibly nested flow orders found: " << bamFlowOrderVector.size() << " using longest, nFlows=  " << flowOrder.length() << endl;
+    //cout << "Final: " << flowOrder.length() << " " << flowOrder << endl;
     nFlows = flowOrder.length();
 
     if (nFlows > 0) {
@@ -71,8 +77,10 @@ void InputStructures::bam_initialize(vector<string> bams ) {
         key.Set(treePhaserFlowOrder, flowKey, "key");
     }
 
+}
 
-    string bamseq;
+void InputStructures::VerifyContigsPresentInReference(SamHeader &samHeader){
+      string bamseq;
     int ref_id = 0;
 
     for (BamTools::SamSequenceIterator itr = samHeader.Sequences.Begin(); itr != samHeader.Sequences.End(); ++itr) {
@@ -99,6 +107,34 @@ void InputStructures::bam_initialize(vector<string> bams ) {
 
     }
 
+}
+
+
+void InputStructures::bam_initialize(vector<string> bams ) {
+    if (!bamMultiReader.Open(bams)) {
+        cerr << " ERROR: fail to open input bam files " << bams.size() << endl;
+        exit(-1);
+    }
+
+    if (!bamMultiReader.LocateIndexes()) {
+        cerr << "ERROR: Unable to locate BAM Index (bai) files for input BAM files specified " << endl;
+        exit(-1);
+    }
+
+
+    samHeader = bamMultiReader.GetHeader();
+    if (!samHeader.HasReadGroups()) {
+        bamMultiReader.Close();
+        cerr << "ERROR: there is no read group in BAM files specified" << bams.size() << endl;
+        exit(1);
+    }
+    // must do this first to detect nFlows
+    DetectFlowOrderzAndKeyFromBam(samHeader);
+// now get recalibration information, padded to account if nFlows for some bam is large
+    do_recal.ReadRecalibrationFromComments(samHeader,nFlows-1); // protect against over-flowing nFlows, 0-based
+
+    
+    VerifyContigsPresentInReference(samHeader);
 
 
     if (DEBUG)
@@ -138,7 +174,7 @@ string RecalibrationHandler::FindKey(string &runid, int x, int y) {
 };
 
 
-void RecalibrationHandler::ReadRecalibrationFromComments(SamHeader &samHeader) {
+void RecalibrationHandler::ReadRecalibrationFromComments(SamHeader &samHeader, int max_flows_protect) {
     // Read comment lines from Sam header
     // this will grab json files
     if (samHeader.HasComments()) {
@@ -169,7 +205,7 @@ void RecalibrationHandler::ReadRecalibrationFromComments(SamHeader &samHeader) {
                     //cout << my_members[0] << endl;
                     string my_block_key = recal_params["MasterKey"].asCString();
                     //cout << my_block_key << "\t" << recal_params[my_block_key]["modelParameters"].size() << endl;
-                    recalModel.InitializeFromJSON(recal_params, my_block_key, false);  // don't spam here
+                    recalModel.InitializeFromJSON(recal_params, my_block_key, false,max_flows_protect);  // don't spam here
                     // add a map to this entry
                     bam_header_recalibration.insert(pair<string,RecalibrationModel>(my_block_key, recalModel));
                     // parse out important information from the block key
@@ -286,10 +322,13 @@ void InputStructures::read_fasta(string chr_file, map<string, string> & chr_seq)
 
 void InputStructures::BringUpReferenceData(ExtendParameters &parameters) {
 
-    DEBUG = parameters.program_flow.DEBUG;
-    min_map_qv = parameters.MQL0;
-    use_SSE_basecaller = parameters.program_flow.use_SSE_basecaller;
-    do_snp_realignment = parameters.program_flow.do_snp_realignment;
+    DEBUG                 = parameters.program_flow.DEBUG;
+    min_map_qv            = parameters.MQL0;
+    read_snp_limit        = parameters.readSnpLimit;
+
+    use_SSE_basecaller    = parameters.program_flow.use_SSE_basecaller;
+    do_snp_realignment    = parameters.program_flow.do_snp_realignment;
+    resolve_clipped_bases = parameters.program_flow.resolve_clipped_bases;
 
     cout << "Loading reference." << endl;
     read_fasta(parameters.fasta, reference_contigs);
@@ -345,8 +384,9 @@ void InputStructures::ShiftLocalBamReaderToCorrectBamPosition(BamTools::BamMulti
         exit(-1);
     }
     int bam_ref_id = sequence_to_bam_ref_id[(*current_variant)->sequenceName];
-    if (!local_bamReader.Jump(bam_ref_id, (*current_variant)->position)) {
-        cerr << "Fatal ERROR: Unable to access ChrName " << bam_ref_id << " and position = " << (*current_variant)->position << " within the BAM file provoided " << endl;
+    // Attention: vcf-positions are 1-based; BamTools wants a 0-based position
+    if (!local_bamReader.Jump(bam_ref_id, (*current_variant)->position-1)) {
+        cerr << "Fatal ERROR: Unable to access ChrName " << bam_ref_id << " and 1-based position = " << (*current_variant)->position << " within the BAM file provoided " << endl;
         exit(-1);
     }
 
@@ -366,7 +406,6 @@ void LiveFiles::ActivateFiles(ExtendParameters &parameters) {
     ActiveOutputDir(parameters);
     ActiveOutputVCF(parameters);
     ActiveFilterVCF(parameters);
-    ActiveConsensus(parameters);
     ActiveDiagnostic(parameters);
 }
 
@@ -381,7 +420,7 @@ void LiveFiles::ActiveOutputDir(ExtendParameters &parameters) {
 }
 
 void LiveFiles::ActiveDiagnostic(ExtendParameters &parameters) {
-    if (parameters.program_flow.rich_json_diagnostic) {
+    if (parameters.program_flow.rich_json_diagnostic || parameters.program_flow.minimal_diagnostic) {
         // make output directory "side effect bad"
         parameters.program_flow.json_plot_dir = parameters.outputDir + "/json_diagnostic/";
         mkdir(parameters.program_flow.json_plot_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
@@ -421,25 +460,10 @@ void LiveFiles::ActiveFilterVCF(ExtendParameters &parameters) {
     }
 }
 
-void LiveFiles::ActiveConsensus(ExtendParameters &parameters) {
-
-    if (parameters.consensusCalls) { //output Consensus calls file used by Tumor-Normal module and others that are used to DiBayes
-        stringstream consensusCallsStream;
-        consensusCallsStream << parameters.outputDir;
-        consensusCallsStream << "/";
-        consensusCallsStream << file_base_name;
-        consensusCallsStream << "_Consensus_calls.txt";
-        string consensusCallsFileName = consensusCallsStream.str();
-        consensusFile.open(consensusCallsFileName.c_str());
-        if (!consensusFile.is_open()) {
-            cerr << "[tvc] ERROR: Cannot open Consensus Calls file : " << consensusCallsFileName << endl;
-            exit(-1);
-        }
-    }
-}
 
 void LiveFiles::ShutDown() {
 
     outVCFFile.close();
+    filterVCFFile.close();
     cout << "[tvc] Normal termination. Processing time: " << (time(NULL)-start_time) << " seconds." << endl;
 };

@@ -85,6 +85,9 @@ void PerBaseQual::Init(OptArgs& opts, const string& chip_type, const string &out
     case ChipId900: // Proton chip
       phred_table_file = "phredTable.txt_900.binary";
       break;
+    case ChipId910: // P1.0 uses Proton chip for now 
+      phred_table_file = "phredTable.txt_900.binary";
+      break;
     default:
       phred_table_file = "phredTable.txt_314.binary";
       fprintf(stderr, "PerBaseQual: No default phred table for chip_type=%s, trying %s instead\n",
@@ -664,13 +667,20 @@ void PerBaseQual::GenerateBaseQualities(const string& read_name, int num_bases, 
       predictor_dump_block << candidate3[base_to_flow[base]] << " ";
       predictor_dump_block << base_to_flow[base] << endl;
     }
-
+    // v3.4: p1,2,3,4,6,9
     // the real predictors used in the QvTable
     pred[0] = transform_P1(predictor1[base]);
     //pred[1] = transform_P2(predictor2[base]); // no transformation might help only if no Recalibration
     pred[4] = transform_P6(predictor6[base]);
     //pred[5] = transform_P8(candidate2[base_to_flow[base]]);
     pred[5] = transform_P9(candidate3[base_to_flow[base]]);
+
+    // v3.0: p1,2,3,4,5,6
+    //pred[0] = predictor1[base];
+    //pred[0] = transform_P1(predictor1[base]);
+    //pred[4] = predictor5[base];
+    //pred[5] = predictor6[base];
+
     quality.push_back(CalculatePerBaseScore(pred));
   }
 

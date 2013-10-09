@@ -1,13 +1,31 @@
 	<div class="review-workflow">
     <div class="row-fluid">
-        <div class="span4">
+        <div class="span6">
             <h3 style="text-decoration: none; font-size: 15px;">Application</h3>
             <p>
             <table class="plan-grid">
                 <tr>
-                    <td width="50%" style="line-height:100%; font-weight: bold;">Application:</td>
+                    <td width="50%" style="line-height:100%; font-weight: bold;">Application Group:</td>
+                    <td width="50%" id="review_application" style="line-height:100%;" >
+                    # if (applicationGroup != null && applicationGroup.name != null) { #
+                        #= applicationGroup.name # 
+                    # } #
+                </tr>   
+                <tr>
+                    <td width="50%" style="line-height:100%; font-weight: bold;">Sample Grouping:</td>
+                    <td width="50%" id="review_application" style="line-height:100%;" >
+                    # if (sampleGrouping != null && sampleGrouping.displayedName != null) { #
+                        #= sampleGrouping.displayedName # 
+                    # } #               
+                </tr>                                   
+                <tr>
+                    <td width="50%" style="line-height:100%; font-weight: bold;">Target Technique:</td>
                     <td width="50%" id="review_application" style="line-height:100%;" >#= runType.description # </td>
-                </tr>                                     
+                </tr>    
+                <tr>
+                    <td width="50%" style="line-height:100%; font-weight: bold;">Sample Set:</td>
+                    <td width="50%" id="review_application" style="line-height:100%;" >#= data.sampleSetDisplayedName # </td>
+                </tr>                                                   
             </table>
             </p>
             <br>
@@ -108,11 +126,20 @@
                 </tr>
             </table>
             </p>
-			
+
+            <p>
+            <table class="plan-grid">
+                <tr>
+                <td  width="50%" style="line-height:100%; font-weight: bold;">Mark as PCR Duplicates: </td>
+                <td width="50%" id="review_isDuplicateReads" style="line-height:100%;" >#= data.isDuplicateReads #</td>
+                </tr>
+            </table>
+            </p>
+                        			
             <br>
         </div>
        
-        <div class="span4">
+        <div class="span6">
             <h3 style="text-decoration: none; font-size: 15px;">Monitor</h3>
             <p>
             <table class="plan-grid">  
@@ -135,9 +162,9 @@
             <p style="line-height:100%; font-weight: bold;" >Hotspot Regions BED File:</p>
             <p style="line-height:100%; margin:10px; word-wrap:break-word; word-break: break-all;" id="review_regionfile">#= data.regionfile #</p>
             </p>                                
-        </div>
+        <!--/div>
                             
-        <div class="span4">     
+        <div class="span4" -->     
             <h3 style="text-decoration: none; font-size: 15px;">Plugins</h3>
             <p>
             <p style="line-height:100%; font-weight: bold;" ><b>Selected plugin(s)</b>: </p>   
@@ -149,9 +176,6 @@
                     # } #
                 # } #
            </p>
-                    
-           <p style="line-height:100%; font-weight: bold;" >Variant Frequency: </p>                   
-           <p style="line-height:100%; margin:10px;" id="review_notes">#= data.variantfrequency #</p>
 
            <h3 style="text-decoration: none; font-size: 15px;">Projects</h3>
            <p>
@@ -175,6 +199,13 @@
                                          
            <h3 style="text-decoration: none; font-size: 15px;">Notes</h3>
            <p style="line-height:100%; margin:10px;" id="review_notes">#= data.notes #</p>
+                                         
+           <h3 style="text-decoration: none; font-size: 15px;">Sample Tube Label</h3>
+           <p style="line-height:100%; margin:10px;" id="review_sampleTubeLabel">
+            # if (data.sampleTubeLabel != null) { #
+                #= data.sampleTubeLabel # 
+            # } #
+           </p>
            
        </div>                    
     </div><!-- row-fluid -->

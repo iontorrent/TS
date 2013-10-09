@@ -7,6 +7,151 @@
 
 #include "CandidateVariantGeneration.h"
 
+
+// Note: diagnostic HACK
+void justProcessInputVCFCandidates(CandidateGenerationHelper &candidate_generator, ExtendParameters *parameters) {
+
+
+    // just take from input file
+    vcf::VariantCallFile vcfFile;
+    vcfFile.open(parameters->candidateVCFFileName);
+    vcfFile.parseSamples = false;
+
+    //my_job_server.NewVariant(vcfFile);
+    vcf::Variant variant(vcfFile);
+    long int position = 0;
+    long int startPos = 0;
+    long int stopPos = 0;
+    string contigName = "";
+
+    //clear the BED targets and populate new targets that span just the variant positions
+    candidate_generator.parser->targets.clear();
+    while (vcfFile.getNextVariant(variant)) {
+        position = variant.position;
+        contigName = variant.sequenceName;
+        startPos = position - 10;
+        stopPos = position + 10;
+        //range check
+        if (candidate_generator.parser->targets.size() > 0) {
+            BedTarget * prevbd = &(candidate_generator.parser->targets[candidate_generator.parser->targets.size()-1]);
+            if (contigName.compare(prevbd->seq) == 0 && (startPos <= prevbd->right) && (startPos > prevbd->left)) {
+                prevbd->right = stopPos;
+            }
+            else {
+                BedTarget bd(contigName,
+                             startPos,
+                             stopPos);
+                candidate_generator.parser->targets.push_back(bd);
+            }
+        }
+        else {
+            BedTarget bd(contigName,
+                         startPos,
+                         stopPos);
+            candidate_generator.parser->targets.push_back(bd);
+        }
+
+    }
+}
+
+
+void CandidateStreamWrapper::ResetForNextPosition() {
+    doing_hotspot = false;
+    doing_generated = false;
+}
+
+void CandidateStreamWrapper::SetUp(ofstream &outVCFFile, ofstream &filterVCFFile,  InputStructures &global_context, ExtendParameters *parameters) {
+    candidate_generator.SetupCandidateGeneration(global_context, parameters);
+
+    if (parameters->output == "vcf") {
+        string headerstr = getVCFHeader(parameters, candidate_generator);
+        outVCFFile << headerstr << endl;
+        filterVCFFile << headerstr << endl;
+        candidate_generator.parser->variantCallFile.parseHeader(headerstr);
+    }
+
+    if (parameters->program_flow.skipCandidateGeneration) {
+        //PURELY R&D branch to be used only for diagnostic purposes, we remove all targets and generate new targets spanning just the input variants
+        justProcessInputVCFCandidates(candidate_generator, parameters);
+    }
+}
+
+// if we need to start returning hotspots, return the first variant
+// if we're in the middle, return the next variant
+// if we're done, return false
+bool CandidateStreamWrapper::ReturnNextHotSpot(bool &isHotSpot, vcf::Variant *variant) {
+    if (!doing_hotspot && checkHotSpotsSpanningHaploBases && candidate_generator.parser->inputVariantsWithinHaploBases.size() > 0) {
+        doing_hotspot = true;
+        ith_variant = 0;
+    }
+    if (doing_hotspot) {
+        if (ith_variant<candidate_generator.parser->inputVariantsWithinHaploBases.size()) {
+            isHotSpot = true;
+            fillInHotSpotVariant(candidate_generator.parser, candidate_generator.samples, variant, candidate_generator.parser->inputVariantsWithinHaploBases.at(ith_variant));
+            ith_variant++;
+        } else {
+            doing_hotspot = false;
+            checkHotSpotsSpanningHaploBases = false;
+            candidate_generator.parser->inputVariantsWithinHaploBases.clear();
+        }
+    }
+    return(doing_hotspot);
+}
+
+// if I'm ready to return a generated variant
+// try the variant
+//
+bool CandidateStreamWrapper::ReturnNextGeneratedVariant(bool &isHotSpot, vcf::Variant *variant, ExtendParameters *parameters) {
+    if (!doing_generated) {
+        doing_generated = true; // only generate one variant per location
+        if (!generateCandidateVariant(candidate_generator.parser, candidate_generator.samples, variant, isHotSpot, parameters, candidate_generator.allowedAlleleTypes))
+        {
+            //even if this position is not a valid candidate the candidate alleles might have spanned a hotspot position
+            if (candidate_generator.parser->lastHaplotypeLength > 1)
+                checkHotSpotsSpanningHaploBases = true;
+            return(false);
+        }
+
+        if (candidate_generator.parser->lastHaplotypeLength > 1)
+            checkHotSpotsSpanningHaploBases = true;
+        return(true);
+    } else
+        return(false);
+}
+
+// at a position, return the next variant
+// if hotspots needed, return them
+// if no hotspot needed return generated
+bool CandidateStreamWrapper::ReturnNextLocalVariant(bool &isHotSpot, vcf::Variant *variant, ExtendParameters *parameters) {
+    if (ReturnNextHotSpot(isHotSpot, variant))
+        return(true);
+    else
+        if (ReturnNextGeneratedVariant(isHotSpot, variant, parameters))
+            return(true);
+    // reset state
+    return(false);
+}
+
+// returns true with a new variant
+// returns false if ran out of variants to generate
+bool CandidateStreamWrapper::ReturnNextVariantStream(bool &isHotSpot, vcf::Variant *variant, ExtendParameters *parameters) {
+    // call next local variant, get a hotspot, return true
+    // call next local variant, don't get a hotspot, generate fresh
+    if (ReturnNextLocalVariant(isHotSpot, variant, parameters))
+        return(true);
+    // if didn't return either type of variant
+    // reset
+    ResetForNextPosition();
+    while (candidate_generator.parser->getNextAlleles(candidate_generator.samples, candidate_generator.allowedAlleleTypes)) {
+        // at neew location, generate candidate
+        if (ReturnNextLocalVariant(isHotSpot, variant, parameters))
+            return(true);
+        // if failed to generate a candidate, of course we're not doing anything
+        ResetForNextPosition();
+    }
+    return(false); // all done
+}
+
 CandidateGenerationHelper::~CandidateGenerationHelper(){
   if (parser!=NULL)
     delete parser;

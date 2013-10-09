@@ -4,12 +4,12 @@ import sys
 import os
 import json
 import glob
-import datetime
 import traceback
 
 sys.path.append('/opt/ion/')
 os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 from django.db import connection, transaction, IntegrityError
+from django.utils import timezone
 from iondb.rundb import models
 import subprocess
 from ion.reports import parseBeadfind
@@ -705,8 +705,11 @@ def writeDbFromDict(tfMetrics, procParams, beadMetrics, ionstats_alignment, geno
         res.status = status
         if not 'Completed' in status:
            res.reportLink = res.log
-    res.timeStamp = datetime.datetime.now()
+    res.timeStamp = timezone.now()
     res.save()
+    experiment = res.experiment
+    experiment.resultDate = res.timeStamp
+    experiment.save()
 
     try:
         e.write('Updating Analysis\n')

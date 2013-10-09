@@ -1,0 +1,15 @@
+--- CMakeLists.txt	1969-12-31 19:00:00.000000000 -0500
++++ CMakeLists.txt	2013-06-17 17:15:43.277075366 -0400
+@@ -0,0 +1,11 @@
++add_library (kmeans
++   src/KCtree.cpp
++   src/KCutil.cpp
++   src/KM_ANN.cpp
++   src/KMcenters.cpp
++   src/KMdata.cpp
++   src/KMeans.cpp
++   src/KMfilterCenters.cpp
++   src/KMlocal.cpp
++   src/KMrand.cpp
++   src/KMterm.cpp)
+

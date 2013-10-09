@@ -122,4 +122,6 @@ tmap_sam_get_fo_start_idx(tmap_sam_t *sam);
 int32_t
 tmap_sam_get_zb(tmap_sam_t *sam);
 
+int32_t
+tmap_sam_get_za(tmap_sam_t *sam);
 #endif // TMAP_SAM_H

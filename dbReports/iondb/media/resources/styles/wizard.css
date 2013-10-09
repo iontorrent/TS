@@ -160,3 +160,12 @@
 	float: left;
 	line-height: 34px;
 }
+
+.optional_section {
+	padding: 20px, 0, 10px, 0;
+	margin-top: 10px;
+    background: #F3F3F3;
+    border-radius: 8px;
+    
+}
+

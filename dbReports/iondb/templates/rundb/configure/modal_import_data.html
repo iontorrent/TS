@@ -1,0 +1,172 @@
+{% load static from staticfiles %}
+{% load url from future %}
+<div id="modal_import_data" class="modal modal-800 hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h1>Import Data</h1>
+    </div>
+    <div class="modal-body">
+        <div id="error-messages" class="alert alert-error" style="display:none;"></div>
+        <form class="form-horizontal" id="import_data_form" method="post" action='{% url "import_data" %}'>
+            <div class="control-group">
+                <label class="control-label" for="backup_directory">Archive Directory</label>
+                <div class="controls">
+                    <select id='backup_directory' data-href='{% url "import_data_find" "" %}'>
+                        {% for dir in backup_dirs %}
+                        <option> {{dir.0}}</option>
+                        {% endfor %}
+                    </select>
+                    <a href='{% url "browse_backup_dirs" "" %}' class="btn" id='browse_backup_dirs'>Browse</a>
+                    <div class="help-block">Select archive directory.</div>
+                </div>
+            </div>
+            <div id="import_data_table_div" class="control-group">
+                {% if results_list %}
+                <table id="import_data_table" class="data-table" cellpadding="5px">
+                    <thead>
+                        <tr>
+                            <th>
+                                <span rel='tooltip' title="Result Name">Name</span>
+                            </th>
+                            <th>
+                                <input type='checkbox' class='select_all' value='report' checked>
+                                <span rel='tooltip' title="Report rendering and Output files (BAM)">Report</span>
+                            </th>
+                            <th>
+                                <input type='checkbox' class='select_all' value='basecall' checked>
+                                <span rel='tooltip' title="Required input files for basecalling (1.wells)">Basecalling Input</span>
+                            </th>
+                            <th>
+                                <input type='checkbox' class='select_all' value='sigproc' checked>
+                                <span rel='tooltip' title="Required input files for signal processing (acq_*.dat)">Signal Processing Input</span>
+                            </th>
+                            <th>
+                                <input type='checkbox' class='select_all' value='copy_all'>
+                                <span rel='tooltip' title="Copy all selected categories data to local drive (Report rendering files will be copied always).">Copy Files?</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for r in results_list %}
+                        <tr>
+                            <td class="resultsName">{{r.name}}</td>
+                            <td>
+                                <input type='checkbox' name='{{r.name}}' class='report' data-category='{{dm_types.0}}' {% if r.report %} value='{{r.report}}' checked {% else %} disabled {% endif %}>
+                            </td>
+                            <td>
+                                <input type='checkbox' name='{{r.name}}' class='basecall' data-category='{{dm_types.1}}' {% if r.basecall %} value='{{r.basecall}}' checked {% else %} disabled {% endif %}>
+                            </td>
+                            <td>
+                                <input type='checkbox' name='{{r.name}}' class='sigproc' data-category='{{dm_types.2}}' {% if r.sigproc %} value='{{r.sigproc}}' checked {% else %} disabled {% endif %}>
+                            </td>
+                            <td>
+                                <input type='checkbox' name='{{r.name}}' class='copy_all' data-category='copy_all'>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">Cancel</a>
+        <input id="submitButton" type="submit" class="btn btn-primary" value="Import" disabled/>
+    </div>
+
+<script type="text/javascript" src="{% static "jquery/js/jquery.activity-indicator-1.0.0.min.js"%}"></script>
+<script type="text/javascript">
+    $('#modal_import_data').on('hidden', function () {
+        $('body #modal_import_data').remove();
+    });
+    
+    $('#modal_import_data #submitButton').click(function(e){
+        e.preventDefault();
+        var url = $('#import_data_form').attr('action');
+        var status = "";
+        var postData = [];
+        $('#modal_import_data .resultsName').each(function(){
+            var name = $(this).html();
+            if ( $('#import_data_form input[name='+name+']:checked').not('[class=copy_all]').length > 0){
+                var selected = {'name': name};
+                status += '<p>Queued data import for ' +name;
+                $('#import_data_form input[name='+name+']:checked').each(function(){
+                    var category = $(this).data('category');
+                    selected[category] = this.value;
+                    status += ', '+category;
+                });
+                postData.push(selected);
+                status += '</p>'
+            }
+        });
+        if (postData.length == 0){
+            $('#modal_import_data #error-messages').empty().append('<p class="error">Please select one or more categories to import.</p>').show();
+        } else {
+            postData = JSON.stringify(postData);
+            console.log(url, postData);
+            $.post(url, postData).done(function(data){
+                $('#modal_import_data').trigger('modal_import_data_done',status);
+                $('#modal_import_data').modal('hide');
+            });
+        }
+    });
+    
+    $('#browse_backup_dirs').click(function(e){
+        e.preventDefault();
+        var elem = '#modal_import_data #backup_directory';
+        $.get( $(this).attr('href'), function(data) {
+            $('body').append(data);
+            $( "#modal_browse_dirs").modal("show");
+            $('body #modal_browse_dirs').on('modal_browse_dirs_done', function(e, data){
+                if(data.path) {
+                    if ($(elem +' option[value="'+data.path+'"]').length == 0)
+                        $(elem).append('<option value="' + data.path + '">' + data.path + '</option>');
+                    $(elem).val(data.path);
+                    $(elem).change();
+                }
+            });
+        });
+    });
+    
+    $('#modal_import_data #backup_directory').change(function(e){
+        // directory selection changes: update list of runs
+        $('#modal_import_data #import_data_table_div').empty();
+        var form = $('#modal_import_data #import_data_form');
+        form.css('opacity',0.5);
+        form.activity({
+            segments: 10,
+            width: 3,
+            space: 2,
+            length: 2.5,
+            color: '#252525',
+            speed: 1.5,
+            padding: '3'
+        });
+        var url = $(this).data('href') + this.value;
+        $('#modal_import_data  #import_data_table_div').load(url + ' #import_data_table', function (data, status, xhr){
+            if (status == "error") {
+                $('#modal_import_data #error-messages').empty().append('<p class="error">' + data + '</p>').show();
+            } else {
+                $('#modal_import_data #error-messages').hide();
+                $('#modal_import_data #submitButton').removeAttr('disabled');
+            }
+            form.css('opacity',1);
+            form.activity(false);
+        });
+    });
+    
+    $('.select_all').live('click', function(){
+        var checked = $(this).is(":checked");
+        var category = this.value;
+        $("#modal_import_data :checkbox[class='"+category+"']").each(function(){
+            if (!$(this).attr('disabled')){
+                $(this).attr('checked',checked);
+            }
+        });
+    });
+    
+    // allow second modal popup window
+    $.fn.modal.Constructor.prototype.enforceFocus = function () {};
+</script>
+</div>

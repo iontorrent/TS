@@ -42,9 +42,8 @@ TB.plan.wizard.submit = function(e) {
 
     if ($("#barcodeName option:selected").text()) {
         var text = $("#barcodeName option:selected").text();
-        var rows = $('table.ws-8_barcodedSampleTable tr');
         var bcSamples = [];
-        $('table.ws-8_barcodedSampleTable tr.'+text+' input').each(function (index, input) {
+        $('table.ws-8_barcodedSampleTable tr').filter("[class='"+text+"']").find('input').each(function (index, input) {
             if (input.value) {
                 bcSamples.push([input.name, input.value]);
             }
@@ -52,17 +51,19 @@ TB.plan.wizard.submit = function(e) {
         $('input[name=bcSamples_workaround]').val(bcSamples);
     }
     else {
-        var rows = $('table.ws-8_nonBarcodedNonIrSampleTable tr');
-        
         var samples = [];
-        $('table.ws-8_nonBarcodedNonIrSampleTable tr input').each(function (index, input) {
-        	if (input.name.indexOf("sample_nonIrConfig_sampleName") >= 0) {
-            	if (input.value) {
-            		samples.push(input.value);
-            	}
-            }
+        var sampleTubeLabels = [];
+        
+        $('input[id^="sample_nonIr_sampleName_"]').each(function(i, elem){
+            if (elem.value){
+                samples.push(elem.value);
+                sampleTubeLabels.push($('input[id="sample_nonIr_sampleTubeLabel_nn"]'.replace('nn',i+1)).val());
+           }
+            
         });
-        $('input[name=samples_workaround]').val(samples);    	
+        
+        $('input[name=samples_workaround]').val(samples);  
+        $('input[name=nonIrSampleTubeLabels_workaround]').val(sampleTubeLabels);          
     }
 
     var json = $('#modal_plan_wizard #planTemplateWizard').serializeJSON(),
@@ -83,6 +84,9 @@ TB.plan.wizard.submit = function(e) {
             var bcKit = $("#barcodeName option:selected").text();
             if (bcKit === "") {
                 // non-barcoded + IR
+                var samples = [];
+                var sampleTubeLabels = [];
+                
                 $('input[id^="sample_irSample_"]').each(function(i, elem){
                     if (elem.value){
                         irConfigList.push({
@@ -93,8 +97,16 @@ TB.plan.wizard.submit = function(e) {
                         'RelationRole': $('select[id="sample_irRelationRole_select_nn"]'.replace('nn',i+1)).val(),
                         'setid': $('input[id="sample_irSetId_select_nn"]'.replace('nn',i+1)).val()
                         });
-                    }
+
+                        samples.push(elem.value);
+                        sampleTubeLabels.push($('input[id="sample_irSampleTubeLabel_nn"]'.replace('nn',i+1)).val());
+                   }
+                    
                 });
+               
+                $('input[name=samples_workaround]').val(samples);  
+                $('input[name=irSampleTubeLabels_workaround]').val(sampleTubeLabels);          
+
             } else {
                 // barcoded + IR
                 $('input[id^="bcSample_sample_BarcodeKit_"]'.replace('BarcodeKit',bcKit)).each(function(i, elem) {
@@ -115,6 +127,10 @@ TB.plan.wizard.submit = function(e) {
     });
     json.irConfigList = irConfigList;
 
+    json.samples_workaround = $('input[name=samples_workaround]').val();
+    json.nonIrSampleTubeLabels_workaround = $('#nonIrSampleTubeLabels_workaround').val();
+    json.irSampleTubeLabels_workaround = $('#irSampleTubeLabels_workaround').val();
+    
     // find selected plugins
     var selectedPlugins = {};
     $('input:checkbox[name=plugins]:checked').each(function() {
@@ -219,7 +235,7 @@ TB.plan.wizard.initialize = function() {
     //formdata = $('#modal_plan_wizard #planTemplateWizard').serializeJSON();
     //console.log($('#modal_plan_wizard #planTemplateWizard').serializeJSON());
     //var encodingTemplate = kendo.template($("#reviewWorkflowTemplate").text());
-    //var presets = {}; //TODO: load the presets from {% url get_application_product_presets %}
+    //var presets = {}; //TODO: load the presets from  url "get_application_product_presets"
     //$('#modal_plan_wizard #planTemplateWizard #review-workflow').html(encodingTemplate({data:formdata, presets:presets}));
     //});
 
@@ -477,9 +493,8 @@ TB.plan.wizard.initialize = function() {
             $("#isBarcodedPlan").val("True");
 
             var rows = $('table.ws-8_barcodedSampleTable tr');
-            console.log('rows=' + rows);
-            rows.filter("." + text).show();
-            rows.not("." + text).hide();
+            rows.filter("[class='"+text+"']").show();
+            rows.not("[class='"+text+"']").hide();
             rows.filter('.barcodedSampleTableHeader').show();
             //console.log("barcode kit selection changed: barcode selected");
             $.showAndHide_ws8();
@@ -489,8 +504,14 @@ TB.plan.wizard.initialize = function() {
             $("#isBarcodedPlan").val("False");
             $.showAndHide_ws8();
         }
-    });
+    }).change();
 
+    //user input change for duplicate reads check
+    $('#isDuplicateReads').change(function() {
+    	var value = $(this).prop('checked');
+        $("#review_isDuplicateReads").text(value);
+    });
+    
     //user input change for qc values
     $('#qcValues_1').change(function() {
         var value = $(this).val();
@@ -722,7 +743,7 @@ TB.plan.wizard.initialize = function() {
                 }
 
                 if (INTENT == "EditPlan" || INTENT == "Plan Run" || INTENT == "Plan Run New" || INTENT == "CopyPlan") {
-                    $('.ir1_hideable_IRConfig').slideDown();
+                    //$('.ir1_hideable_IRConfig').slideDown();
                     $.showAndHide_ws8();
                 }
             } else if (uploaderName.toLowerCase().search('ionreporteruploader') >= 0) {
@@ -742,7 +763,7 @@ TB.plan.wizard.initialize = function() {
                 }
 
                 if (INTENT == "EditPlan" || INTENT == "Plan Run" || INTENT == "Plan Run New" || INTENT == "CopyPlan") {
-                    $('.ir1_hideable_IRConfig').slideUp();
+                    //$('.ir1_hideable_IRConfig').slideUp();
                     $.showAndHide_ws8();
                 }
             }
@@ -751,9 +772,9 @@ TB.plan.wizard.initialize = function() {
             $("#review_export").text($("#review_export").text().replace(uploaderName + ",", "").replace(/,,/g, ","));
             
             //user unchecks IR v1.0
-            if (uploaderName.toLowerCase() == "ionreporteruploader_v1_0") {
-                $('.ir1_hideable_IRConfig').slideUp();
-            } else {
+//            if (uploaderName.toLowerCase() == "ionreporteruploader_v1_0") {
+//                $('.ir1_hideable_IRConfig').slideUp();
+//            } else {
                 if (uploaderName.toLowerCase().search('ionreporteruploader') >= 0) {
                     //if only barcode kit is selected
                     if ($("#barcodeName option:selected").text()) {
@@ -776,7 +797,7 @@ TB.plan.wizard.initialize = function() {
                         //$('div.ws-8_nonBarcodedSamples').show();
                         $('div.ws-8_nonBarcodedSamples_irConfig').hide();
                     }
-                }
+//                }
             }
         }
     });
@@ -966,7 +987,29 @@ TB.plan.wizard.initialize = function() {
     });
 
 
+    $('.autogen_sample_names').click(function() {
+        if ($("#barcodeName option:selected").text()) {
+            var text = $("#barcodeName option:selected").text();
 
+            var i = 1;
+            $('table.ws-8_barcodedSampleTable tr').find("[class='bcSample_autogenable_"+text+"']").each(function() {
+            	var name = "barcode_" + i;            	
+            	$(this).val(name);
+            	i++;
+            });
+        }
+    });
+    
+
+    $('.clear_autogen_sample_names').click(function() {
+        if ($("#barcodeName option:selected").text()) {
+            var text = $("#barcodeName option:selected").text();
+            $('table.ws-8_barcodedSampleTable tr').find("[class='bcSample_autogenable_"+text+"']").each(function() {
+            	$(this).val("");
+            });
+        }
+    });
+    
     //non-barcoded sample dropdown list selection change for ionReporter configuration
     $(".irWorkflow_select").change(function() {        
         var value = $(this).val();
@@ -1197,13 +1240,6 @@ TB.plan.wizard.initialize = function() {
             	else {
             		selectedBarcodeKit = selectedApplProductData.defaultBarcodeKitName;
             	}
-
-                var rows = $('table.ws-8_barcodedSampleTable tr');
-                var rowsToShow = rows.filter("."+selectedBarcodeKit+"");
-                var rowsToHide = rows.not("."+selectedBarcodeKit+"");
-                rowsToShow.show();
-                rowsToHide.hide();
-                rows.filter('.barcodedSampleTableHeader').show();
                 $('div.ws-8_nonBarcodedSamples').hide();
             }
             else {
@@ -1228,16 +1264,16 @@ TB.plan.wizard.initialize = function() {
 
         if (INTENT == "EditPlan" || INTENT == "Plan Run" || INTENT == "Plan Run New" || INTENT == "CopyPlan") {
             //hide irConfig columns if irReporter is not pre-selected
-            if (isIR_v1_selected) {
-                //console.log("document.ready going to SHOW ws-7 ir1_hideable_IRConfig");
-                $('.ir1_hideable_IRConfig').slideDown();
-            } else {
-                //console.log("document.ready going to HIDE ws-7 ir1_hideable_IRConfig");
-                $('.ir1_hideable_IRConfig').slideUp();
-            }
+//            if (isIR_v1_selected) {
+//                //console.log("document.ready going to SHOW ws-7 ir1_hideable_IRConfig");
+//                $('.ir1_hideable_IRConfig').slideDown();
+//            } else {
+//                //console.log("document.ready going to HIDE ws-7 ir1_hideable_IRConfig");
+//                $('.ir1_hideable_IRConfig').slideUp();
+//            }
 
             $.showAndHide_ws8();
-            $.addIR1FormFields();
+//            $.addIR1FormFields();
             $.addIRFormFields();
 
             // load previously saved IR selections
@@ -1247,22 +1283,24 @@ TB.plan.wizard.initialize = function() {
             if (obj === null){
             	if (selectedPlanTemplate) {
             		$('input[id="sample_nonIr_sampleName_1"]').val(selectedPlanTemplate.sampleDisplayedName);
+            		$('input[id="sample_nonIr_sampleTubeLabel_1"]').val(selectedPlanTemplate.sampleTubeLabel);
+            		$('input[id="sampleTubeLabel"]').val(selectedPlanTemplate.sampleTubeLabel);
+                    
             	}
 
                 return;
             }
 
-            //console.log("irVersion=", irVersion);
-            //console.log("ir obj=", obj);
-            
             // IR version 1.0
-            if (irVersion < 1.2) {
-                $('select[id="ir1_irWorkflow"]').val(obj[0].Workflow);
-                return;
-            }
+//            if (irVersion < 1.2) {
+//                $('select[id="ir1_irWorkflow"]').val(obj[0].Workflow);
+//                return;
+//            }
             
             if (selectedPlanTemplate && selectedPlanTemplate.barcodeId === "") {
-                // non-barcoded case
+                // non-barcoded case        		
+        		$('input[id="sample_irSampleTubeLabel_1"]').val(selectedPlanTemplate.sampleTubeLabel);
+            	
                 obj = obj[0];
                 if (obj === null) {
                 	return;
@@ -1274,8 +1312,11 @@ TB.plan.wizard.initialize = function() {
                 $.setIR_select('select[id="sample_irRelation_select_1"]', obj.Relation);
                 $.setIR_select('select[id="sample_irRelationRole_select_1"]', obj.RelationRole);
                 $('input[id="sample_irSetId_select_1"]').val(obj.setid.split('__')[0]);
+
             } else {
-                //barcoded case
+                //barcoded case         		
+        		$('input[id="sampleTubeLabel"]').val(selectedPlanTemplate.sampleTubeLabel);
+
                 var count = 0;
                 $('input[id^="bcSample_sample_BarcodeKit_"]'.replace('BarcodeKit', selectedPlanTemplate.barcodeId)).each(function(i, elem) {
                     if (elem.value) {
@@ -1287,6 +1328,7 @@ TB.plan.wizard.initialize = function() {
                         count++;
                     }
                 });
+
             }
         }
     });
@@ -1496,28 +1538,28 @@ TB.plan.wizard.initialize = function() {
         }
     };
 
-    $.addIR1FormFields = function() {
-        console.log('called addIR1FormFields');
-
-        var obj = $.getIRConfigSelection_1();
-        var columnCounter = 0;
-
-        if (obj !== null && obj.columns != null) {
-            $.each(obj.columns, function() {
-                var field = this.Name || '';
-                var values = this.Values || [];
-                if (field === "Workflow") {
-                    var selectedWorkflow = $('[name=ir1_irWorkflow_select] :selected').val();
-                    $('[name=ir1_irWorkflow_select]').empty().append('<option value=""></option>');
-                    $.each(values, function(i, value){
-                        var option = '<option value="' + value + '">' + value + '</option>';
-                        $('[name=ir1_irWorkflow_select]').append(option);
-                    });
-                    $('[name=ir1_irWorkflow_select] option').filter(function(){return $(this).text() == selectedWorkflow; }).attr('selected', true);
-                }
-            });
-        }
-    };
+//    $.addIR1FormFields = function() {
+//        console.log('called addIR1FormFields');
+//
+//        var obj = $.getIRConfigSelection_1();
+//        var columnCounter = 0;
+//
+//        if (obj !== null && obj.columns != null) {
+//            $.each(obj.columns, function() {
+//                var field = this.Name || '';
+//                var values = this.Values || [];
+//                if (field === "Workflow") {
+//                    var selectedWorkflow = $('[name=ir1_irWorkflow_select] :selected').val();
+//                    $('[name=ir1_irWorkflow_select]').empty().append('<option value=""></option>');
+//                    $.each(values, function(i, value){
+//                        var option = '<option value="' + value + '">' + value + '</option>';
+//                        $('[name=ir1_irWorkflow_select]').append(option);
+//                    });
+//                    $('[name=ir1_irWorkflow_select] option').filter(function(){return $(this).text() == selectedWorkflow; }).attr('selected', true);
+//                }
+//            });
+//        }
+//    };
 
     $.addIRFormFields = function() {
         console.log('called addIRFormFields');
@@ -1577,11 +1619,12 @@ TB.plan.wizard.initialize = function() {
             return;
         }
         console.log(plugininfo.name);
-        if (plugininfo.name.toLowerCase().search('ionreporteruploader_v1_0') === 0) {
-            console.log('$.refreshPluginDone updating IR1 form fields');
-            $.irConfigSelection_1 = plugininfo.config;
-            $.addIR1FormFields(plugininfo.config);
-        } else if (plugininfo.name.toLowerCase().search('ionreporteruploader') === 0) {
+//        if (plugininfo.name.toLowerCase().search('ionreporteruploader_v1_0') === 0) {
+//            console.log('$.refreshPluginDone updating IR1 form fields');
+//            $.irConfigSelection_1 = plugininfo.config;
+//            $.addIR1FormFields(plugininfo.config);
+//        } else 
+        	if (plugininfo.name.toLowerCase().search('ionreporteruploader') === 0) {
             console.log('$.refreshPluginDone updating IR form fields');
             console.log("Found [name='irWorkflow_select']:" + $("[name='irWorkflow_select']").exists());
             $.irConfigSelection = plugininfo.config;

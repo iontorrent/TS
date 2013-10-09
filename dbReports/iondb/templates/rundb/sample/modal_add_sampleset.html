@@ -1,0 +1,141 @@
+{% load url from future %}
+{% load static from staticfiles %}
+
+<div id="modal_add_sampleset_popup" class="modal fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"  aria-hidden="true">&times;</button>
+        <h3 id="modal_addLabel">
+        	{% if intent == "edit" %}Edit Sample Set
+        	{% else %}Add Sample Set
+        	{% endif %}
+        </h3>
+    </div>
+    <div class="modal-body">
+        <div class="workflow-step " style="display: block;">
+            <div id="error-messages" style="margin-left: 4%;" class="format-errors alert alert-error hide"></div>
+            
+	        <!--div class="alert alert-error modal-error-messages hide"></div>
+			<div class="alert alert-info modal-info-messages hide"></div>
+			<div class="alert alert-success modal-success-messages hide"></div -->
+
+			<form class="form-horizontal" id="save_sampleset" name="save_sampleset" method="POST" action="">
+            	<input type="hidden" id="intent" name="intent" value="{{intent}}">
+            	<input type="hidden" id="id" name="id" value="{{sampleSet.id}}">
+            	
+				<div class="control-group">
+					<label class="control-label" for="sampleSetName">Sample Set Name</label>
+					<div class="controls">
+						{% if intent == "edit" %}
+							<input type="text" maxlength="127"  id="sampleSetName" name="sampleSetName" placeholder="Required" value="{{sampleSet.displayedName}}" />						
+						{% else %}						
+							<input type="text" maxlength="127" id="sampleSetName" name="sampleSetName" placeholder="Required">"/>
+						{% endif %}
+					</div>
+				</div>
+				
+				<div class="control-group">
+					<label class="control-label" for="groupType">Group Type</label>
+					<div class="controls">
+                    	<select id="groupType" name="groupType"style="height:28px;">
+
+                    	{% if intent == "edit" %}
+        					{% ifequal sampleSet.status "created" %}
+        						<option value="0" >.....</option>
+        					{% else %}
+       		     				<span rel="tooltip" title="Group type cannot be changed since this sample set has been planned.">
+       		     			{% endifequal %}
+            		
+       		     			{% for groupType in sampleGroupType_list %}
+       		     				{% ifequal groupType.id sampleSet.SampleGroupType_CV_id %}
+       		     					<option SELECTED value="{{groupType.id}}">{{groupType.displayedName}}</option>
+       		     				{% else %}
+       		     					{% ifequal sampleSet.status "created" %}
+       		     						<option value="{{groupType.id}}">{{groupType.displayedName}}</option>
+       		     					{% else %}
+       		     						<option value="{{groupType.id}}" disabled>{{groupType.displayedName}}</option>
+       		     					{% endifequal %}
+       		     				{% endifequal %}
+       		     			{% endfor %}
+       		     		{% else %}                	
+                    		<option value="0" >.....</option>
+                    		{% for groupType in sampleGroupType_list %}
+                    			<option value="{{groupType.id}}" >{{groupType.displayedName}}</option>
+                    		{% endfor %}
+
+
+                        {% endif %}
+                    	</select>
+
+						<div class="help-block">
+        					{% ifequal sampleSet.status "created" %}
+        					{% else %}        					
+        						FYI: Group type cannot be changed since this sample set has been planned.
+        					{% endifequal %}
+						</div>
+					</div>
+				</div>
+				
+				<div class="control-group">
+					<label class="control-label" for="sampleSetDescription">Description</label>
+					<div class="controls">
+                		{% if intent == "edit" %}
+							<textarea maxlength="1024" id="sampleSetDescription" name="sampleSetDescription" placeholder="Optional" value="{{sampleSet.description}}">{{sampleSet.description}}</textarea>
+						{% else %}                		
+							<textarea maxlength="1024" id="sampleSetDescription" name="sampleSetDescription" placeholder="Optional"></textarea>
+						{% endif %}
+					</div>
+				</div>
+
+		</form>
+		</div>
+	<div class="modal-footer">
+		<button class="btn" data-dismiss="modal">Cancel</button>
+		<a class="btn btn-primary done_add_sampleSet_btn">Done</a>
+	</div>
+
+<script type="text/javascript">
+    $(document).ready(function(){
+      //$('[id*=save-sample]').find('input:eq(1)').focus();
+ 
+      $('.done_add_sampleSet_btn').click(function(e){
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          
+          if (intent == "edit"){
+              url = "/sample/sampleset/edited/"
+          }else{            
+              url = "/sample/sampleset/added/"
+          }
+          data = $('#save_sampleset').serialize();
+          $.post(url, data, function(data) {
+               if (data == "true"){
+                  $( "#modal_add_sampleset_popup" ).modal("hide");
+                  $('body #modal_add_sampleset_popup').remove();
+                  refreshKendoGrid("#sampleset_grid");
+                }else {
+
+                  $('#error-messages').empty();
+
+                  $('#error-messages').removeClass('hide');
+                  for (var i=0;i < data.length;i++){
+                      $('#error-messages').append('<p class="error">' + data[i] + '</p>');
+                      console.log("error:", data[i]);
+                  }
+                 }
+          }).done(function(data) {
+             console.log("success:", url);
+          })
+          .fail(function(data) {
+              $('#error-messages').empty();
+              $('#error-messages').append('<p class="error">' + data.responseText + '</p>'); 
+              console.log("error:", data);
+          })
+         .always(function(data) { /*console.log("complete:", data);*/ });
+
+           return false;
+      });
+  });   
+</script>
+
+</div>
+

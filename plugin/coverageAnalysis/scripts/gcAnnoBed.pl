@@ -145,7 +145,15 @@ while( <BEDFILE> )
   {
     my $f = $exFields[$i]-1;
     next if( $f < 0 );
-    print "\t$fields[$f]";
+    # strip surrounding white-space from KVP fields
+    my $fld = $fields[$f];
+    if( $fld =~ /=/ ) {
+      $fld =~ s/\s*$//g;
+      $fld =~ s/\s*?=\s*/=/g;
+      $fld =~ s/\s*?&\s*/&/g;
+      $fld =~ s/\s*?;\s*/;/g;
+    }
+    print "\t$fld";
   }
   print "\t$gc\n";
 }

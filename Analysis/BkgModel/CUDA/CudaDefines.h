@@ -9,13 +9,10 @@
 #define USE_CUDA_ERF
 #define USE_CUDA_EXP
 
-// Don't use lev mar algorithm for single flow fit
-#define NOLEVMAR
-
 
 //single fit memory config
-//#define FVAL_L1   //  FVAL buffers in Local Memeory 
-//#define JAC_L1 // JAC euffers in Local Memor  //  FVAL buffers in Local Memeory 
+#define FVAL_L1   //  FVAL buffers in local memory 
+//#define JAC_L1 // JAC buffers in local memory  
 
 
 
@@ -42,6 +39,9 @@
 #define MAX_XTALK_NEIGHBOURS 6
 
 #define MAX_NUM_DEVICES 4
+
+// new poisson table layout
+#define POISS_FLOAT4
 
 
 #endif // CUDADEFINES_H

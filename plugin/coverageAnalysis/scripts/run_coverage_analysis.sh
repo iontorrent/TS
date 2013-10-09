@@ -23,6 +23,7 @@ OPTIONS="OPTIONS:
   -C <name> Original name for BED targets selected for reporting (pre-padding, etc.)
   -D <dirpath> Path to root Directory where results are written. Default: ./
   -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
+  -N <name> Sample name for use in summary output. Default: 'None'
   -O <file> Output file name for text data (per analysis). Default: '' => <BAMROOT>.stats.cov.txt.
   -P <file> Padded targets BED file for padded target coverage analysis
   -Q <file> Name for BLOCK HTML results file (in output directory). Default: '' (=> none created)
@@ -58,8 +59,9 @@ TRGSID=""
 RNABED=0
 CKTARGETSEQ=0
 TRACKINGBED=""
+SAMPLENAME="None"
 
-while getopts "hladrtuwxp:A:B:C:M:G:D:X:O:R:S:T:P:Q:" opt
+while getopts "hladrtuwxp:A:B:C:M:G:D:X:N:O:R:S:T:P:Q:" opt
 do
   case $opt in
     A) ANNOBED=$OPTARG;;
@@ -67,6 +69,7 @@ do
     C) TRGSID=$OPTARG;;
     D) WORKDIR=$OPTARG;;
     G) GENOME=$OPTARG;;
+    N) SAMPLENAME=$OPTARG;;
     O) OUTFILE=$OPTARG;;
     P) PADBED=$OPTARG;;
     Q) BLOCKFILE=$OPTARG;;
@@ -111,6 +114,8 @@ if [ $RNABED -eq 1 ]; then
   AMPOPT="-r"
   BASECOVERAGE=0
 fi
+
+BAMBAI="${BAMFILE}.bai"
 
 #--------- End command arg parsing ---------
 
@@ -232,11 +237,12 @@ fi
 if [ $SHOWLOG -eq 1 ]; then
   echo "" >&2
 fi
-COVER="$RUNDIR/coverage_analysis.sh $LOGOPT $RTITLE $FILTOPTS $AMPOPT -O \"$OUTFILE\" -A \"$ANNOBED\" -B \"$BEDFILE\" -C \"$TRGSID\" -p $PADVAL -P \"$PADBED\" -S \"$TRACKINGBED\" -D \"$WORKDIR\" -G \"$GENOME\" \"$REFERENCE\" \"$BAMFILE\""
+COVER="$RUNDIR/coverage_analysis.sh $LOGOPT $RTITLE $FILTOPTS $AMPOPT -N \"$SAMPLENAME\" -O \"$OUTFILE\" -A \"$ANNOBED\" -B \"$BEDFILE\" -C \"$TRGSID\" -p $PADVAL -P \"$PADBED\" -S \"$TRACKINGBED\" -D \"$WORKDIR\" -G \"$GENOME\" \"$REFERENCE\" \"$BAMFILE\""
 eval "$COVER" >&2
 if [ $? -ne 0 ]; then
   echo -e "\nFailed to run coverage analysis."
   echo "\$ $COVER" >&2
+  exit 1
 fi
 
 ############
@@ -265,9 +271,13 @@ if [ $MAKEHML -eq 1 ]; then
   if [ $NOTARGETANALYSIS -gt 0 ];then
     AMPOPT=""
   fi
+  WARNMSG=''
+  if ! [ -f "$BAMBAI" ];then
+    WARNMSG="-W \"<h4 style='text-align:center;color:red'>WARNING: BAM index file not found. Assignments of reads to amplicons not performed.</h4>\""
+  fi
   COVERAGE_HTML="COVERAGE_html"
   PTITLE=`echo $BAMNAME | sed -e 's/\.trim$//'`
-  HMLCMD="$RUNDIR/coverage_analysis_report.pl $RTITLE $AMPOPT $ROWHTML $GENOPT $SIDOPT -N \"$BAMNAME\" -t \"$PTITLE\" -D \"$WORKDIR\" \"$COVERAGE_HTML\" \"$OUTFILE\""
+  HMLCMD="$RUNDIR/coverage_analysis_report.pl $RTITLE $AMPOPT $ROWHTML $GENOPT $SIDOPT $WARNMSG -N \"$BAMNAME\" -t \"$PTITLE\" -D \"$WORKDIR\" \"$COVERAGE_HTML\" \"$OUTFILE\""
   eval "$HMLCMD" >&2
   if [ $? -ne 0 ]; then
     echo -e "\nERROR: coverage_analysis_report.pl failed." >&2

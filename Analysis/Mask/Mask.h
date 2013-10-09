@@ -2,13 +2,10 @@
 #ifndef MASK_H
 #define MASK_H
 
-//#include <stdlib.h>
 #include <inttypes.h>
 #include "Region.h"
 #include <vector>
 #include "Serialization.h"
-//#include <algorithm>
-
 
 #define MATCH_ANY 1
 #define MATCH_ALL 2
@@ -56,11 +53,8 @@ class Mask
     virtual ~Mask();
     Mask() {
       mask.clear();
-      isHex = false;
     }
-    void SetHex ( bool hex ) {
-      isHex = hex;
-    }
+
     void Init ( int w, int h );
     void Init ( int w, int h, MaskType these );
     void Init ( Mask *origmask );
@@ -138,41 +132,6 @@ class Mask
     void MarkCrop ( Region region, MaskType );
     void MarkRegion ( Region region, MaskType );
     void CropRegions ( Region *regions, int numRegions, MaskType these );
-    // For now just check for 318 width.
-
-    bool isHexPack() const {
-      return isHex || h == 3792;
-    }
-
-
-    /**
-     * Fill in vector with indices for all of the
-     * neighbors. Start in the lower left neighbor well and
-     * continue clockwise around center well. Wells out of bounds (e.g. neighbors
-     * for edge wells) will have index -1
-     *
-     * square packed - just square around center well.
-     *    indices are (-1,-1), (0,-1), (1,-1), (1,0), (1,1), (0,1), (-1,1), (-1,0),
-     * hex packed - Little more complicated as depends on if row is even or odd.
-     *    row odd   (-1, 0), *(0,-1), (1, 0), (1,1), *(0,1), (-1,1)
-     *    row even  (-1,-1), *(0,-1), (1,-1), (1,0), *(0,1), (-1,0),
-     *
-     */
-    void GetNeighbors ( int row, int col, std::vector<int> &wells ) const;
-
-    /* Append the neighbor index or -1 for off grid as appropriate. */
-    void AddNeighbor ( int row, int col, int rOff, int cOff, std::vector<int> &wells ) const;
-
-    /* Fill in the neighbors for a hex grid starting in lower left neighbor. Note that
-       odd and even rows have different behavior */
-    void GetHexNeighbors ( int row, int col, std::vector<int> &wells ) const;
-
-    /* Fill in neigbors for a square grid starting in lower left neighbor. */
-    void GetSquareNeigbors ( int row, int col, std::vector<int> &wells ) const;
-
-    void CalculateLiveNeighbors();
-
-    int GetNumLiveNeighbors ( int row, int col );
 
 //    void OnlySomeWells(std::vector<int> mWellIdx);
 
@@ -181,7 +140,6 @@ class Mask
     int32_t xOffset, yOffset;
     //uint16_t *mask;
     std::vector<uint16_t> mask;
-    bool isHex;
     std::vector<char> numLiveNeighbors;
 
   private:
@@ -195,7 +153,6 @@ class Mask
 	w & h &
 	xOffset & yOffset &
 	mask &
-	isHex &
 	numLiveNeighbors;
       // fprintf(stdout, "done Mask\n");
     }

@@ -20,14 +20,32 @@
 #include "StackEngine.h"
 #include "VcfFormat.h"
 
+class EvaluatedGenotype{
+public:
+  bool genotype_already_set;
+  float evaluated_genotype_quality;
+  float evaluated_variant_quality;
+  vector<int> genotype_component;
+
+  EvaluatedGenotype(){
+    genotype_already_set = false;
+    evaluated_genotype_quality = 0.0f;
+    evaluated_variant_quality = 0.0f;
+    genotype_component.assign(2,0); // 0/0 = reference call
+
+  };
+  string GenotypeAsString();
+  bool IsReference();
+};
+
 // all the data needed to make a decision for filtration
 // characterize the variant, and the outcome from whatever evaluator we use
 class DecisionTreeData {
   public:
-    //vector<WhatVariantAmI> variant_identity_vector;
+
     MultiAlleleVariantIdentity multi_allele;
 
-    vector<VariantBook> summary_stats_vector;
+    MultiBook all_summary_stats;
 
     vector<VariantOutputInfo> summary_info_vector;
 
@@ -35,57 +53,64 @@ class DecisionTreeData {
 
 
     bool best_variant_filtered;
-    string best_filter_reason;
+
     bool best_allele_set;
     int best_allele_index;
     bool isBestAlleleSNP;
+    bool reference_genotype;
 
-    float tune_xbias;
+    EvaluatedGenotype eval_genotype;
+
+    float tune_xbias; // not tuned, removed from filters
     float tune_sbias;
 
     DecisionTreeData() {
-      //quasi_phred_quality_score = 0.0f;
-      //reject_status_quality_score = 0.0f;
-      //variant_filtered = false;
-      //filter_reason="HAPPY";
-      //genotype_call = 0;
+
       best_allele_set = false;
       best_allele_index = 0;
       best_variant_filtered=false;
       isBestAlleleSNP = false;
+      reference_genotype = false;
+
+
       tune_xbias = 0.005f; // tune calculation of chi-square bias = proportioinal variance by frequency
       tune_sbias = 0.5f; // safety factor for small allele counts for transformed strand bias
     };
 
-    void FilterReferenceCalls(int _allele);
-    void FilterOnStrandBias(float threshold, int _allele);
-    void DoFilter(ControlCallAndFilters &my_filters, int _allele);
-    void FilterOnMinimumCoverage(int min_cov_each_strand,  int _allele);
-    void FilterOnQualityScore(float min_quality_score, int _allele);
     void OverrideFilter(string & _filter_reason, int _allele);
-    void FilterNoCalls(bool isNoCall, int _allele);
-    void RemoveFilteredAlleles(vcf::Variant ** candidate_variant, string &sample_name);
-    void FilterOneAllele(VariantBook &l_summary_stats,
+    void FilterOneAllele(int i_alt,
                          VariantOutputInfo &l_summary_info,
                          AlleleIdentity &l_variant_identity, ControlCallAndFilters &my_filters);
     void FilterAlleles(ControlCallAndFilters &my_filters);
 
-    void FindBestAllele();
     void AccumulateFilteredAlleles();
-    string AnyNoCallsMeansAllFiltered();
-    void DetectBestAlleleFiltered(string &filter_reason);
-    void DetectAllFiltered();
-    void BestSNPsSuppressInDels();
+
+    void BestSNPsSuppressInDels(bool heal_snps);
     void FindBestAlleleIdentity();
     void FindBestAlleleByScore();
 
-    void StoreMaximumAlleleInVariants(vcf::Variant ** candidate_variant, ExtendParameters *parameters);
+    void GenotypeFromBestAlleleIndex(vcf::Variant ** candidate_variant, ExtendParameters *parameters);
+    void GenotypeFromEvaluator(vcf::Variant ** candidate_variant, ExtendParameters *parameters);
+
+    void FilterMyCandidate(vcf::Variant ** candidate_variant, ExtendParameters *parameters);
+    void BestAlleleFilterMyCandidate(vcf::Variant ** candidate_variant, ExtendParameters *parameters);
+    void GenotypeAlleleFilterMyCandidate(vcf::Variant ** candidate_variant, ExtendParameters *parameters);
+
+    void SimplifySNPsIfNeeded(vcf::Variant ** candidate_variant, ExtendParameters *parameters);
+
+
     bool SetGenotype(vcf::Variant ** candidate_variant, ExtendParameters *parameters, float gt_quality);
     void DecisionTreeOutputToVariant(vcf::Variant ** candidate_variant,ExtendParameters *parameters);
-    void SetupSummaryStatsFromCandidate(vcf::Variant **candidate_variant);
+
+    void AggregateFilterInformation(vcf::Variant ** candidate_variant,ExtendParameters *parameters);
+    void FillInFiltersAtEnd(vcf::Variant ** candidate_variant,ExtendParameters *parameters);
+
+
+
     void SetupFromMultiAllele(MultiAlleleVariantIdentity &_multi_allele);
-    void SetLocalGenotypeCallFromStats(float threshold);
-    void  InformationTagOnFilter(vcf::Variant ** candidate_variant, int _best_allele_index, string sampleName);
+    void AddStrandBiasTags(vcf::Variant **candidate_variant);
+    void  AddCountInformationTags(vcf::Variant ** candidate_variant, string &sampleName);
+
     string GenotypeStringFromAlleles(std::vector<int> &allowedGenotypes, bool refAlleleFound);
     bool AllowedGenotypesFromSummary(std::vector<int> &allowedGenotypes);
     string GenotypeFromStatus(vcf::Variant **candidate_variant, ExtendParameters *parameters);
@@ -93,15 +118,16 @@ class DecisionTreeData {
     void SpecializedFilterFromHypothesisBias(vcf::Variant ** candidate_variant, AlleleIdentity allele_identity, float deletion_bias, float insertion_bias, int _allele);
     void FilterAlleleHypothesisBias(float ref_bias, float var_bias, float threshold_bias, int _allele);
     void FilterOnSpecialTags(vcf::Variant ** candidate_variant, ExtendParameters *parameters);
+    void FilterOnStringency(vcf::Variant **candidate_variant, float data_quality_stringency,  int _check_allele_index);
+    void FilterSSE(vcf::Variant **candidate_variant,ClassifyFilters &filter_variant);
 };
-
-void AdjustAlleles(vcf::Variant ** candidate_variant);
-void FilterByBasicThresholds(stringstream &s, VariantBook &l_summary_stats,
+void FilterByBasicThresholds(stringstream &s, int i_alt, MultiBook &m_summary_stats,
                              VariantOutputInfo &l_summary_info,
                              BasicFilters &basic_filter, float tune_xbias, float tune_bias);
 
 void AutoFailTheCandidate(vcf::Variant **candidate_variant, bool suppress_no_calls);
 float FreqThresholdByType(AlleleIdentity &variant_identity, ControlCallAndFilters &my_controls);
-void FilterOnInformationTag(vcf::Variant **candidate_variant, float data_quality_stringency, bool suppress_no_calls, int _check_allele_index, string sampleName);
+void DetectSSEForNoCall(AlleleIdentity &var_identity, float sseProbThreshold, float minRatioReadsOnNonErrorStrand, float relative_safety_level, vcf::Variant **candidate_variant, unsigned _altAlleIndex);
+void SetQualityByDepth(vcf::Variant ** candidate_variant);
 
 #endif // DECISIONTREEDATA_H

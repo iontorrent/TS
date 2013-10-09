@@ -1,3 +1,4 @@
+{% load url from future %}
 <div><div class="modal hide" id="modal_report_analyze_started">
 	<div class="modal-header">
 		<button data-dismiss="modal" class="close" type="button">&times;</button>
@@ -8,7 +9,7 @@
  		<div id="analysis_started_content"> 
  			<h4>Report Name {{ name }}</h4>
 			<div class="hidden" id="analysis_liveness_info">
-				<a href="{% url rundb.ajax.analysis_liveness pk %}">_</a>
+				<a href="{% url "rundb.ajax.analysis_liveness" pk %}">_</a>
 			</div>
 			<div>
 				<div class="margins">

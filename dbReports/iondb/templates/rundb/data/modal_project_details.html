@@ -1,3 +1,4 @@
+{% load static from staticfiles %}
 <div id="modal_project_details" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -25,8 +26,8 @@
         <a class="btn btn-primary" href="#">Save</a>
     </div>
 
-<script type="text/javascript" src="/site_media/jquery/js/uni-form-validation.jquery.js"></script>
-<script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
+<script type="text/javascript" src="{% static "jquery/js/uni-form-validation.jquery.js"%}"></script>
+<script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script>
 <script type="text/javascript">
 $('#modal_project_details_form').uniform({
     holder_class : 'control-group'

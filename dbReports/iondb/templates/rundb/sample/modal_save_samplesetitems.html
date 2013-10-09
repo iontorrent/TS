@@ -1,0 +1,164 @@
+{% load url from future %}
+{% load static from staticfiles %}
+
+<div id="modal_save_samplesetitems_popup" class="modal fade hide" tabindex="-1" role="dialog" aria-labelledby="modal_addLabel" aria-hidden="false">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal"  aria-hidden="true">&times;</button>
+        <h3 id="modal_addLabel">Save Samples
+        </h3>
+    </div>
+	
+    <div class="modal-body">
+        <div class="workflow-step " style="display: block;">
+            <div id="error-messages" class="format-errors alert alert-error hide" style="margin-left: 4%;" ></div>
+            
+	        <!--div class="alert alert-error modal-error-messages hide"></div>
+			<div class="alert alert-info modal-info-messages hide"></div>
+			<div class="alert alert-success modal-success-messages hide"></div -->
+
+			<form class="form-horizontal" id="save_samplesetitems_form" name="save_samplesetitems_form" method="POST" action="">
+            	<div class="control-group">
+					<label for="sampleset" class="form-label">Select a Sample Set to Receive Samples</label>            	
+					<!--div class="controls" -->
+					<select id="sampleset" name="sampleset" multiple="multiple" class="span4" style="margin-bottom: 10px;">
+    					{% for sampleSet in sampleSet_list %}
+    						<option value="{{sampleSet.id}}" >{{sampleSet.displayedName}} ({{sampleSet.SampleGroupType_CV.displayedName}})</option>
+    					{%endfor%}
+    				</select>
+    				<div>
+						<div class="input-append">								
+							<input class="span3" id="sampleset_search_text" type="text" placeholder="Search sample set names" />
+							<button id="search_text_go" class="btn" type="button">Search</button>
+
+							<button class="btn addSampleSet_btn" type="button">Add Sample Set...</button>
+						
+							<!--20130728-donotwork-yet a class="btn search_text_go_btn">Search</a>
+							<a class="btn addSampleSet_btn">Add Sample Set...</a -->						
+						</div>
+						<!--/div -->
+						<div class="help-block"></div>
+					</div>
+				</div>
+
+            	<!--div class="control-group" -->				
+		        <div class="add_sample_set_info row-fluid optional_section" style="display: none;">
+		        	<!--div class="add_sample_set_info row-fluid" style="display: none; background-color: #E1EFFA;" -->					        
+		            <table class="plan-table">
+						<tbody>
+	                	<tr>
+							<div class="control-group">
+								<label class="control-label" for="new_sampleSetName">Sample Set Name:</label>
+								<div class="span4">
+									<input  maxlength="127" type="text" id="new_sampleSetName" name="new_sampleSetName" placeholder="Required" />
+								</div>
+							</div>
+						</tr>						
+						<tr>
+							<div class="control-group">
+								<label class="control-label" for="new_sampleSet_groupType">Group Type:</label>
+								<div class="span4">
+		                    		<select id="new_sampleSet_groupType" name="new_sampleSet_groupType"style="height:28px;">
+		                    			<option value="0" >.....</option>
+		                    			{% for groupType in sampleGroupType_list %}
+		                    				<option value="{{groupType.id}}" >{{groupType.displayedName}}</option>
+		                    			{%endfor%}
+		                    		</select>
+		                    	</div>
+		                    </div>
+						</tr>						
+						<tr>
+							<div class="control-group">
+								<label class="control-label" for="new_sampleSetDescription">Description:</label>
+								<div class="span4">
+									<textarea  maxlength="1024" id="new_sampleSetDescription" name="new_sampleSetDescription" placeholder="Optional"></textarea>
+								</div>
+							</div>
+		                </tr>
+		                <tr><p id="new_sampleset_error"></p>
+                        </tr>
+                        </tbody>
+		              </table>
+		          </div>
+
+		          <!--/div -->           	
+
+		    </form>
+		</div>
+	</div>
+	
+	<div class="modal-footer">
+		<button class="btn" data-dismiss="modal">Cancel</button>
+		<a class="btn btn-primary done_save_samplesetitems_btn">Save</a>
+	</div>
+
+
+<script type="text/javascript">
+	$(document).ready(function(){
+    
+  	$(".addSampleSet_btn").click(function(e) {      		
+		e.preventDefault();	
+  		
+		$(".add_sample_set_info").slideDown("fast");
+	});
+
+  	$("#search_text_go").click(function(e) {
+   		e.preventDefault();	
+  	});
+  	
+    //sample set filtering
+    $("#sampleset_search_text").change(function(e) {
+        $("input[name='sampleset']").parent().show();
+        if ($(this).val()) {
+    		console.log("enter modal_save_samplesetitems.html - sampleset_search_text.change() value=", $(this).val());
+    		
+            $("input[name=sampleset]").parent().not(":contains(" + $(this).val() + ")").hide();
+        }
+    }); 
+
+
+    $('.done_save_samplesetitems_btn').click(function(e){
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+    	SAMPLESET_URL = "{% url "samplesets" %}"
+    	
+        url = "{% url "save_input_samples" %}"       	
+        data = $('#save_samplesetitems_form').serialize();
+        console.log("LOOK!! data=", data);
+        
+        $.post(url, data, function(data) {
+             if (data == "true"){
+                $( "#modal_save_samplesetitems_popup" ).modal("hide");
+                $('body #modal_save_samplesetitems_popup').remove();
+
+                window.location = SAMPLESET_URL;
+              }else {
+
+                $('#modal_save_samplesetitems_popup .modal-body .workflow-step #error-messages').empty();
+
+                $('#modal_save_samplesetitems_popup .modal-body .workflow-step #error-messages').removeClass('hide');
+                
+                for (var i=0;i < data.length;i++) {
+                	$('#modal_save_samplesetitems_popup .modal-body .workflow-step #error-messages').append('<p class="error">' + data[i] + '</p>');
+                    console.log("error:", data[i]);
+                }
+               }
+        }).done(function(data) {
+           console.log("success:", url);
+        })
+        .fail(function(data) {
+        	$('#modal_save_samplesetitems_popup .modal-body .workflow-step #error-messages').empty();
+        	$('#modal_save_samplesetitems_popup .modal-body .workflow-step #error-messages').append('<p class="error">' + data.responseText + '</p>'); 
+            console.log("error:", data);
+        })
+       .always(function(data) { /*console.log("complete:", data);*/ });
+
+         return false;
+    });
+
+    });
+</script>
+
+
+
+</div>

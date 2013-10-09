@@ -18,7 +18,7 @@ if( $tqfh == 0 ) {
 }
 
 fwrite($tqfh,"<html><h2>Re-directing to Life Technologies TaqMan Genotyping Assay Search...</h2>\n<div style='display:none'>\n");
-fwrite($tqfh,"<form id='search_form' action='http://bioinfo.qa2.invitrogen.com/genome-database/MultipleTargets' method='POST' enctype='multipart/form-data'>");
+fwrite($tqfh,"<form id='search_form' action='http://www.qa2.lifetechnologies.com/order/genome-database/MultipleTargets' method='POST' enctype='multipart/form-data'>");
 fwrite($tqfh,"<input name='productTypeSelect' value='genotyping'/>\n");
 fwrite($tqfh,"<input name='targetTypeSelect' value='snp_all'/>\n");
 fwrite($tqfh,"<input name='species' value='' disabled='disabled'>\n");
@@ -40,7 +40,8 @@ while( ($j = strpos( $rows, ",", $i )) !== false ) {
   }
   if( $recNum != $r ) break;
   $fields = explode("\t",$line);
-  fwrite($tqfh,"$fields[0]\t$fields[1]\t.\t$fields[6]\t$fields[7]\n");
+  //use existing ref and alt and coord
+  fwrite($tqfh,"$fields[0]\t$fields[14]\t.\t$fields[2]\t$fields[7]\n");
 }
 fclose($dtfh);
 

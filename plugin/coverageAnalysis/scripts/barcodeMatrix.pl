@@ -80,7 +80,10 @@ while(<>)
   else
   {
     # build lists for sorting (by chromsome)
-    push( @{$sortlist{$fields[0]}}, [$fields[1],$fields[2],$fields[4],$fields[$idField]] );
+    my $gene = ';'.$fields[4].';';
+    $gene = ($gene =~ m/;GENE_ID=(.*?);/) ? $1 : (index($gene,"=") < 0 ? $fields[4] : '');
+    $gene = "N/A" if( $gene eq '.' || $gene !~ '\S' );
+    push( @{$sortlist{$fields[0]}}, [$fields[1],$fields[2],$gene,$fields[$idField]] );
     # add empty fields for previously unmatched barcodes
     for( my $tnum = $fnum; $tnum > 1; --$tnum )
     {

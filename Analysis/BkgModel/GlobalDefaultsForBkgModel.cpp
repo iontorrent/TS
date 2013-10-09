@@ -1,9 +1,13 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include <sys/stat.h>
+#include <fstream>
 #include "GlobalDefaultsForBkgModel.h"
 #include "Utils.h"
 #include "IonErr.h"
+#include "json/json.h"
+#include <boost/algorithm/string/predicate.hpp>
+
 
 static float _kmax_default[NUMNUC]  = { 18.0,   20.0,   17.0,   18.0 };
 static float _krate_default[NUMNUC] = { 18.78,   20.032,   25.04,   31.3 };
@@ -35,7 +39,7 @@ LocalSigProcControl::LocalSigProcControl()
 // a set of relevant parameters for allowing the krate to vary
   krate_adj_limit = 2.0f; // you must be at least this tall to ride the ride
   dampen_kmult = 0.0f;
-  kmult_low_limit = 0.65f;
+  kmult_low_limit = 0.65;
   kmult_hi_limit = 1.75f;
 
   ssq_filter = 0.0f;
@@ -46,6 +50,7 @@ LocalSigProcControl::LocalSigProcControl()
   generic_test_flag = false;
   projection_search_enable = false;
   fit_alternate = false;
+  fit_gauss_newton = false;
 
   do_clonal_filter = true;
   enable_dark_matter = true;
@@ -60,6 +65,8 @@ LocalSigProcControl::LocalSigProcControl()
   no_RatioDrift_fit_first_20_flows = false;
   fitting_taue = false;
   prefilter_beads = false;
+  amp_guess_on_gpu = false;
+  max_frames = 0;
 }
 
 TimeAndEmphasisDefaults::TimeAndEmphasisDefaults()
@@ -103,123 +110,182 @@ void GlobalDefaultsForBkgModel::SetAllConcentrations (float *_dntp_uM){
 // Load optimized defaults from GeneticOptimizer runs
 void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname )
 {
-  struct stat fstatus;
-  int         status;
-  FILE *param_file;
-  char *line;
-  int nChar = MAX_LINE_LEN;
-  float d[10];
+  if(fname == NULL)
+    return;
+  std::string fnameStr(fname);
+  bool isJson = false; //default is .param
+  //check file format based on suffix
+  if (boost::algorithm::ends_with(fnameStr, ".json"))
+    isJson = true;
+  //json way
+  if(isJson){
+      Json::Value gopt_params;
+      std::ifstream in(fname, std::ios::in);
 
-  int num = 0;
+      if (!in.good()) {
+        printf("Opening gopt parameter file %s unsuccessful. Aborting\n", fname);
+        exit(1);
+      }
+      in >> gopt_params;
 
-  line = new char[MAX_LINE_LEN];
+      const Json::Value km_const = gopt_params["parameters"]["km_const"];
+      for ( int index = 0; index < (int) km_const.size(); ++index )
+         region_param_start.kmax_default[index] = km_const[index].asFloat();
 
-  status = stat ( fname,&fstatus );
+      const Json::Value krate = gopt_params["parameters"]["krate"];
+      for ( int index = 0; index < (int) krate.size(); ++index )
+         region_param_start.krate_default[index] = krate[index].asFloat();
 
-  if ( status == 0 )
-  {
-    // file exists
-    printf ( "GOPT: loading parameters from %s\n",fname );
+      const Json::Value d_coeff = gopt_params["parameters"]["d_coeff"];
+      for ( int index = 0; index < (int) d_coeff.size(); ++index )
+         region_param_start.d_default[index] = d_coeff[index].asFloat();
 
-    param_file=fopen ( fname,"rt" );
+      const Json::Value sigma_mult = gopt_params["parameters"]["sigma_mult"];
+      for ( int index = 0; index < (int) sigma_mult.size(); ++index )
+         region_param_start.sigma_mult_default[index] = sigma_mult[index].asFloat();
 
-    bool done = false;
+      const Json::Value t_mid_nuc_delay = gopt_params["parameters"]["t_mid_nuc_delay"];
+      for ( int index = 0; index < (int) t_mid_nuc_delay.size(); ++index )
+         region_param_start.t_mid_nuc_delay_default[index] = t_mid_nuc_delay[index].asFloat();
 
-    while ( !done )
-    {
-      int bytes_read = getline ( &line, ( size_t * ) &nChar,param_file );
+      region_param_start.sens_default = gopt_params["parameters"]["sens"].asFloat();
+      region_param_start.molecules_to_micromolar_conv = gopt_params["parameters"]["molecules_to_micromolar_conv"].asFloat();
+      region_param_start.tau_R_m_default = gopt_params["parameters"]["tau_R_m"].asFloat();
+      region_param_start.tau_R_o_default = gopt_params["parameters"]["tau_R_o"].asFloat();
 
-      if ( bytes_read > 0 )
+      const Json::Value emphasis = gopt_params["parameters"]["emphasis"];
+      for ( int index = 0; index < (int) emphasis.size(); ++index )
+         data_control.emp[index] = emphasis[index].asFloat();
+
+      data_control.emphasis_ampl_default = gopt_params["parameters"]["emp_amplitude"].asFloat();
+      data_control.emphasis_width_default = gopt_params["parameters"]["emp_width"].asFloat();
+
+      const Json::Value clonal_call_scale = gopt_params["parameters"]["clonal_call_scale"];
+      for ( int index = 0; index < (int) clonal_call_scale.size(); ++index )
+         fitter_defaults.clonal_call_scale[index] = clonal_call_scale[index].asFloat();
+
+      fitter_defaults.shrink_factor = gopt_params["parameters"]["shrink_factor"].asFloat();
+
+      in.close();
+  } else{
+      //old way
+      struct stat fstatus;
+      int         status;
+      FILE *param_file;
+      char *line;
+      int nChar = MAX_LINE_LEN;
+      float d[10];
+
+      int num = 0;
+
+      line = new char[MAX_LINE_LEN];
+
+      status = stat ( fname,&fstatus );
+
+      if ( status == 0 )
       {
-        if ( bytes_read >= MAX_LINE_LEN || bytes_read < 0 )
-        {
-          ION_ABORT ( "Read: " + ToStr ( bytes_read ) + " into a buffer only: " +
-                      ToStr ( MAX_LINE_LEN ) + " long for line: '" + ToStr ( line ) + "'" );
-        }
-        line[bytes_read]='\0';
-        if ( strncmp ( "km_const",line,8 ) == 0 )
-        {
-          num = sscanf ( line,"km_const: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
-          if ( num > 0 )
-            for ( int i=0;i<NUMNUC;i++ ) region_param_start.kmax_default[i] = d[i];
-        }
-        if ( strncmp ( "krate",line,5 ) == 0 )
-        {
-          num = sscanf ( line,"krate: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
-          if ( num > 0 )
-            for ( int i=0;i<NUMNUC;i++ ) region_param_start.krate_default[i] = d[i];
-        }
-        if ( strncmp ( "d_coeff",line,7 ) == 0 )
-        {
-          num = sscanf ( line,"d_coeff: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
-          if ( num > 0 )
-            for ( int i=0;i<NUMNUC;i++ ) region_param_start.d_default[i] = d[i];
-        }
-        if ( strncmp ( "n_to_uM_conv",line,12 ) == 0 )
-          num = sscanf ( line,"n_to_uM_conv: %f",&region_param_start.molecules_to_micromolar_conv );
-        if ( strncmp ( "sens",line,4 ) == 0 )
-          num = sscanf ( line,"sens: %f",&region_param_start.sens_default );
-        if ( strncmp ( "tau_R_m",line,7 ) == 0 )
-          num = sscanf ( line,"tau_R_m: %f",&region_param_start.tau_R_m_default );
-        if ( strncmp ( "tau_R_o",line,7 ) == 0 )
-          num = sscanf ( line,"tau_R_o: %f",&region_param_start.tau_R_o_default );
-        if ( strncmp ( "sigma_mult", line, 10 ) == 0 )
-        {
-          num = sscanf ( line,"sigma_mult: %f %f %f %f", &d[0],&d[1],&d[2],&d[3] );
-          for ( int i=0;i<num;i++ ) region_param_start.sigma_mult_default[i]=d[i];
-        }
-        if ( strncmp ( "t_mid_nuc_delay", line, 15 ) == 0 )
-        {
-          num = sscanf ( line,"t_mid_nuc_delay: %f %f %f %f", &d[0],&d[1],&d[2],&d[3] );
-          for ( int i=0;i<num;i++ ) region_param_start.t_mid_nuc_delay_default[i]=d[i];
-        }
-        if ( strncmp ( "emphasis",line,8 ) == 0 )
-        {
-          num = sscanf ( line,"emphasis: %f %f %f %f %f %f %f %f", &d[0],&d[1],&d[2],&d[3],&d[4],&d[5],&d[6],&d[7] );
-          for ( int i=0;i<num;i++ ) data_control.emp[i]=d[i];
-        }
-        if ( strncmp ( "emp_amp",line,7 ) == 0 )
-          num = sscanf ( line,"emp_amplitude: %f",&data_control.emphasis_ampl_default );
-        if ( strncmp ( "emp_width",line,7 ) == 0 )
-          num = sscanf ( line,"emp_width: %f",&data_control.emphasis_width_default );
+        // file exists
+        printf ( "GOPT: loading parameters from %s\n",fname );
 
-        if ( strncmp ( "clonal_call_scale",line,17 ) == 0 )
+        param_file=fopen ( fname,"rt" );
+
+        bool done = false;
+
+        while ( !done )
         {
-          num = sscanf ( line,"clonal_call_scale: %f %f %f %f %f", &d[0],&d[1],&d[2],&d[3],&d[4] );
-          for ( int i=0;i<num;i++ ) fitter_defaults.clonal_call_scale[i]=d[i];
+          int bytes_read = getline ( &line, ( size_t * ) &nChar,param_file );
+
+          if ( bytes_read > 0 )
+          {
+            if ( bytes_read >= MAX_LINE_LEN || bytes_read < 0 )
+            {
+              ION_ABORT ( "Read: " + ToStr ( bytes_read ) + " into a buffer only: " +
+                          ToStr ( MAX_LINE_LEN ) + " long for line: '" + ToStr ( line ) + "'" );
+            }
+            line[bytes_read]='\0';
+            if ( strncmp ( "km_const",line,8 ) == 0 )
+            {
+              num = sscanf ( line,"km_const: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
+              if ( num > 0 )
+                for ( int i=0;i<NUMNUC;i++ ) region_param_start.kmax_default[i] = d[i];
+            }
+            if ( strncmp ( "krate",line,5 ) == 0 )
+            {
+              num = sscanf ( line,"krate: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
+              if ( num > 0 )
+                for ( int i=0;i<NUMNUC;i++ ) region_param_start.krate_default[i] = d[i];
+            }
+            if ( strncmp ( "d_coeff",line,7 ) == 0 )
+            {
+              num = sscanf ( line,"d_coeff: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
+              if ( num > 0 )
+                for ( int i=0;i<NUMNUC;i++ ) region_param_start.d_default[i] = d[i];
+            }
+            if ( strncmp ( "n_to_uM_conv",line,12 ) == 0 )
+              num = sscanf ( line,"n_to_uM_conv: %f",&region_param_start.molecules_to_micromolar_conv );
+            if ( strncmp ( "sens",line,4 ) == 0 )
+              num = sscanf ( line,"sens: %f",&region_param_start.sens_default );
+            if ( strncmp ( "tau_R_m",line,7 ) == 0 )
+              num = sscanf ( line,"tau_R_m: %f",&region_param_start.tau_R_m_default );
+            if ( strncmp ( "tau_R_o",line,7 ) == 0 )
+              num = sscanf ( line,"tau_R_o: %f",&region_param_start.tau_R_o_default );
+            if ( strncmp ( "sigma_mult", line, 10 ) == 0 )
+            {
+              num = sscanf ( line,"sigma_mult: %f %f %f %f", &d[0],&d[1],&d[2],&d[3] );
+              for ( int i=0;i<num;i++ ) region_param_start.sigma_mult_default[i]=d[i];
+            }
+            if ( strncmp ( "t_mid_nuc_delay", line, 15 ) == 0 )
+            {
+              num = sscanf ( line,"t_mid_nuc_delay: %f %f %f %f", &d[0],&d[1],&d[2],&d[3] );
+              for ( int i=0;i<num;i++ ) region_param_start.t_mid_nuc_delay_default[i]=d[i];
+            }
+            if ( strncmp ( "emphasis",line,8 ) == 0 )
+            {
+              num = sscanf ( line,"emphasis: %f %f %f %f %f %f %f %f", &d[0],&d[1],&d[2],&d[3],&d[4],&d[5],&d[6],&d[7] );
+              for ( int i=0;i<num;i++ ) data_control.emp[i]=d[i];
+            }
+            if ( strncmp ( "emp_amp",line,7 ) == 0 )
+              num = sscanf ( line,"emp_amplitude: %f",&data_control.emphasis_ampl_default );
+            if ( strncmp ( "emp_width",line,7 ) == 0 )
+              num = sscanf ( line,"emp_width: %f",&data_control.emphasis_width_default );
+
+            if ( strncmp ( "clonal_call_scale",line,17 ) == 0 )
+            {
+              num = sscanf ( line,"clonal_call_scale: %f %f %f %f %f", &d[0],&d[1],&d[2],&d[3],&d[4] );
+              for ( int i=0;i<num;i++ ) fitter_defaults.clonal_call_scale[i]=d[i];
+            }
+            if ( strncmp ( "shrink_factor:", line, 14 ) == 0 )
+            {
+              float t_shrink;
+              num = sscanf ( line,"shrink_factor: %f", &t_shrink );
+              fitter_defaults.shrink_factor = t_shrink;
+            }
+            if ( strncmp ( "nuc_flow_timing", line, 15 ) == 0 )
+            {
+              num = sscanf ( line,"nuc_flow_frame_width: %f", &d[0] );
+              data_control.nuc_flow_frame_width = d[0];
+            }
+            if ( strncmp ( "time_compression", line, 16 ) == 0 )
+            {
+              num = sscanf ( line,"time_compression: %f %f %f", &d[0], &d[1],&d[2] );
+              data_control.time_left_avg = d[0];
+              data_control.time_start_detail = d[1];
+              data_control.time_stop_detail = d[2];
+            }
+          }
+          else
+            done = true;
         }
-        if ( strncmp ( "shrink_factor:", line, 14 ) == 0 )
-        {
-          float t_shrink;
-          num = sscanf ( line,"shrink_factor: %f", &t_shrink );
-          fitter_defaults.shrink_factor = t_shrink;
-        }
-        if ( strncmp ( "nuc_flow_timing", line, 15 ) == 0 )
-        {
-          num = sscanf ( line,"nuc_flow_frame_width: %f", &d[0] );
-          data_control.nuc_flow_frame_width = d[0];
-        }
-        if ( strncmp ( "time_compression", line, 16 ) == 0 )
-        {
-          num = sscanf ( line,"time_compression: %f %f %f", &d[0], &d[1],&d[2] );
-          data_control.time_left_avg = d[0];
-          data_control.time_start_detail = d[1];
-          data_control.time_stop_detail = d[2];
-        }
+
+        fclose ( param_file );
       }
       else
-        done = true;
-    }
+        printf ( "GOPT: parameter file %s does not exist\n",fname );
 
-    fclose ( param_file );
-
-
-    DumpExcitingParameters("default");
+      delete [] line;
   }
-  else
-    printf ( "GOPT: parameter file %s does not exist\n",fname );
 
-  delete [] line;
+  DumpExcitingParameters("default");
 }
 
 void GlobalDefaultsForBkgModel::DumpExcitingParameters(char *fun_string)

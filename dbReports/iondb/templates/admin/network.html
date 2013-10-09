@@ -1,12 +1,14 @@
 {% extends "admin/base_site.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
 
 {% block title %}Management Options{% endblock %}
 {% block extrahead %}
   <script type="text/javascript"
-          src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
-  <script src="/site_media/js/underscore.js"></script>
-  <script src="/site_media/js/backbone.js"></script>
-  <script src="/site_media/js/messagebox.js"></script>
+          src="{% static "jquery/js/jquery-1.7.1.min.js"%}"></script>
+  <script src="{% static "js/underscore.js"%}"></script>
+  <script src="{% static "js/backbone.js"%}"></script>
+  <script src="{% static "js/messagebox.js"%}"></script>
   <script>
     $(function () {
 
@@ -220,7 +222,7 @@
       <div style="padding: 10px;">
         <div style="float: left; width: 500px;">
           <form id="network" class="resetable" method="post"
-                action="{% url iondb.rundb.admin.network %}">
+                action="{% url "iondb.rundb.admin.network" %}">
             <p style="display: inline-block; width: 100px;">Mac Address:</p>
             <p style="display: inline-block;">{{ network.mac }}</p>
             <br style="clear: both;"/>
@@ -255,9 +257,6 @@
               <label>Proxy login</label>
               <abbr title="Username">{{ network.form.proxy_username }}</abbr>
               <abbr title="Password">{{ network.form.proxy_password }}</abbr>
-            </div>
-            {{ network.form.collab_ip.label_tag }} {{ network.form.collab_ip }}
-            <div>
               <input type="submit" value="Update"
                      style="margin: 10px 38px 0 100px; display: inline-block"/>
               <input id="resetBtn" type="button" value="Reset"

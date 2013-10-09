@@ -14,9 +14,6 @@ check_c_compiler_flag( -malign-double HAS_ALIGN_DOUBLE )
 option(ION_DO_BACKGROUND "Build with background model" ON)
 mark_as_advanced(ION_DO_BACKGROUND)
 
-option(ION_USE_CUDA "Compile CUDA code" ON)
-mark_as_advanced(ION_USE_CUDA)
-
 option(ION_BUILD_STRAND_BIAS "Build samita and Strand_Bias_Extractor" OFF)
 mark_as_advanced(ION_BUILD_STRAND_BIAS)
 
@@ -70,10 +67,11 @@ include_directories("${PROJECT_SOURCE_DIR}/Wells")
 # CUDA Files
 if(ION_USE_CUDA)
     ## NOTE: -O2 enables strict-aliasing, and code is not clean
-    SET( CUDA_NVCC_FLAGS "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math" 
-                         "-gencode=arch=compute_20,code=sm_20" 
-                         "-gencode=arch=compute_30,code=sm_30" 
-                         "-gencode=arch=compute_35,code=sm_35" 
+    SET( CUDA_NVCC_FLAGS "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math"
+                         "-gencode=arch=compute_20,code=sm_20"
+                         "-gencode=arch=compute_30,code=sm_30"
+                         "-gencode=arch=compute_35,code=sm_35"
+                         "-gencode=arch=compute_35,code=compute_35"
                          "-maxrregcount=48" )
     if( HAS_MALIGN_DOUBLE )
         add_definitions(-malign-double) ## See CUDA 4.0 Release Nodes
@@ -81,7 +79,7 @@ if(ION_USE_CUDA)
     ## If user set CXX on command line, make sure NVCC respects it
     ## (necessary for compiling on systems where default compiler is not nvcc compatible)
     if($ENV{CXX} MATCHES ".+")
-        LIST(APPEND CUDA_NVCC_FLAGS "--compiler-bindir=$ENV{CXX}")
+        LIST(APPEND CUDA_NVCC_FLAGS --compiler-bindir $ENV{CXX})
     endif() #($ENV{CXX} MATCHES ".+")
     CUDA_COMPILE(CUDA_TEMP_FILES 
       BkgModel/CUDA/SingleFitStream.cu
@@ -100,7 +98,6 @@ endif()
 
 # Ion Analysis Library
 add_library(ion-analysis
-    ${LIBKMEANSFILE}
 
     ${PROJECT_BINARY_DIR}/IonVersion.cpp
 
@@ -288,7 +285,7 @@ add_library(ion-analysis
     ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
     ${CUDA_TEMP_FILES}
 )
-add_dependencies(ion-analysis IONVERSION samtools bamtools fftw armadillo_proj hdf5 boost unwind)
+add_dependencies(ion-analysis IONVERSION samtools bamtools fftw armadillo_proj hdf5 boost unwind kmeans_proj)
 if(ION_USE_CUDA)
   if(NOT ION_USE_SYSTEM_CUDA)
     add_dependencies(ion-analysis ${cuda_toolkit})
@@ -308,7 +305,7 @@ else()
     set(EXTRA_LIBS blas lapack)
 endif()
 
-target_link_libraries(ion-analysis ${ION_FFTW_LIBS} ${ION_HDF5_LIBS} LIBKMEANS ${ION_BOOST_LIBS} ${ION_ARMADILLO_LIBS} ${ION_UNWIND_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} file-io z)
+target_link_libraries(ion-analysis ${ION_FFTW_LIBS} ${ION_HDF5_LIBS} ${ION_KMEANS_LIBS} ${ION_BOOST_LIBS} ${ION_ARMADILLO_LIBS} ${ION_UNWIND_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} file-io z)
 
 set_target_properties(ion-analysis PROPERTIES
     VERSION   "${ION_VERSION_MAJOR}.${ION_VERSION_MINOR}.${ION_VERSION_RELEASE}.${ION_VERSION_BUILDNUM}"
@@ -321,46 +318,46 @@ install(TARGETS ion-analysis DESTINATION lib)
 
 add_executable(Crop crop/Crop.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Crop IONVERSION)
-target_link_libraries(Crop ion-analysis pthread)
+target_link_libraries(Crop ion-analysis pthread dl)
 install(TARGETS Crop DESTINATION bin)
 
 add_executable(ChkDat crop/ChkDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(ChkDat IONVERSION)
-target_link_libraries(ChkDat ion-analysis pthread)
+target_link_libraries(ChkDat ion-analysis pthread dl)
 install(TARGETS ChkDat DESTINATION bin)
 
 add_executable(CmpDat crop/CmpDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(CmpDat IONVERSION)
-target_link_libraries(CmpDat ion-analysis pthread)
+target_link_libraries(CmpDat ion-analysis pthread dl)
 install(TARGETS CmpDat DESTINATION bin)
 
 add_executable(Blocks crop/Blocks.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Blocks IONVERSION)
-target_link_libraries(Blocks ion-analysis pthread)
+target_link_libraries(Blocks ion-analysis pthread dl)
 install(TARGETS Blocks DESTINATION bin)
 
 add_executable(MergeImages crop/MergeImages.cpp crop/MergeAcq.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(MergeImages IONVERSION)
-target_link_libraries(MergeImages ion-analysis pthread)
+target_link_libraries(MergeImages ion-analysis pthread dl)
 install(TARGETS MergeImages DESTINATION bin)
 
 add_executable(MergeDats crop/MergeDats.cpp crop/MergeAcq.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(MergeDats IONVERSION)
-target_link_libraries(MergeDats ion-analysis pthread)
+target_link_libraries(MergeDats ion-analysis pthread dl)
 install(TARGETS MergeDats DESTINATION bin)
 
 add_executable(Archive crop/Archive.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(Archive IONVERSION)
-target_link_libraries(Archive ion-analysis pthread)
+target_link_libraries(Archive ion-analysis pthread dl)
 
 if(ION_DO_BACKGROUND)
     add_executable(Analysis AnalysisOrg/Analysis.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
     add_dependencies(Analysis IONVERSION)
 
     if (ION_USE_CUDA)
-        target_link_libraries(Analysis ion-analysis pthread ${CUDA_LIBRARIES})
+        target_link_libraries(Analysis ion-analysis pthread dl ${CUDA_LIBRARIES})
     else()
-        target_link_libraries(Analysis ion-analysis pthread)
+        target_link_libraries(Analysis ion-analysis pthread dl)
     endif()
 
     install(TARGETS Analysis DESTINATION bin)
@@ -377,12 +374,16 @@ endif()
 ## Standalone BeadFind
 add_executable(justBeadFind AnalysisOrg/justBeadFind/justBeadFind.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(justBeadFind IONVERSION)
-target_link_libraries(justBeadFind ion-analysis pthread)
+target_link_libraries(justBeadFind ion-analysis pthread dl)
 install(TARGETS justBeadFind DESTINATION bin)
+
+add_executable(BeadfindStats Separator/BeadfindStats.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(BeadfindStats IONVERSION)
+target_link_libraries(BeadfindStats ion-analysis pthread dl)
 
 add_executable(CompareBf Separator/CompareBf.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(CompareBf IONVERSION)
-target_link_libraries(CompareBf ion-analysis pthread)
+target_link_libraries(CompareBf ion-analysis pthread dl)
 
 ## Standalone BaseCaller
 add_executable(BaseCaller 
@@ -399,7 +400,7 @@ add_executable(BaseCaller
     BaseCaller/RecalibrationModel.cpp
     ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(BaseCaller IONVERSION bamtools)
-target_link_libraries(BaseCaller ion-analysis pthread ${ION_BAMTOOLS_LIBS})
+target_link_libraries(BaseCaller ion-analysis pthread ${ION_BAMTOOLS_LIBS} dl)
 install(TARGETS BaseCaller DESTINATION bin)
 
 
@@ -434,13 +435,11 @@ add_executable(tvc
 
   VariantCaller/Reads/ExtendedReadInfo.cpp
   VariantCaller/Reads/StackPlus.cpp
-  VariantCaller/Reads/AlignmentAssist.cpp
 
   VariantCaller/Splice/ErrorMotifs.cpp
   VariantCaller/Splice/LocalContext.cpp
   VariantCaller/Splice/ClassifyVariant.cpp
   VariantCaller/Splice/ErrorMotifs.cpp
-  VariantCaller/Splice/SpliceVariantsToReads.cpp
   VariantCaller/Splice/SpliceVariantHypotheses.cpp
 
   VariantCaller/Filter/DecisionTreeData.cpp
@@ -448,11 +447,8 @@ add_executable(tvc
 
   VariantCaller/HypothesisEvaluator.cpp
 
-  VariantCaller/FlowDistEval/peakestimator.cpp
-  VariantCaller/FlowDistEval/VariantCallUsingFlowDist.cpp
-  VariantCaller/FlowDistEval/MultiFlowDist.cpp
-
   VariantCaller/EnsembleEval/EnsembleGlue.cpp
+  VariantCaller/EnsembleEval/DiagnosticJSON.cpp
   VariantCaller/EnsembleEval/BiasGenerator.cpp
   VariantCaller/EnsembleEval/SigmaGenerator.cpp
   VariantCaller/EnsembleEval/SkewGenerator.cpp
@@ -497,8 +493,8 @@ add_executable(tvc
   ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
   ${PROJECT_BINARY_DIR}/IonVersion.cpp
 )
-target_link_libraries(tvc ${ION_BAMTOOLS_LIBS} z ${ION_LEVMAR_LIBS} file-io pthread)
-add_dependencies(tvc levmar IONVERSION bamtools)
+target_link_libraries(tvc ${ION_BAMTOOLS_LIBS} z ${ION_LEVMAR_LIBS} ${ION_ARMADILLO_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} file-io pthread)
+add_dependencies(tvc levmar IONVERSION bamtools armadillo_proj )
 install(TARGETS tvc DESTINATION bin)
 
 
@@ -514,13 +510,15 @@ add_executable(tvcvalidator
   ${ION_VCFLIB_DIR}/smithwaterman/IndelAllele.cpp
   ${ION_VCFLIB_DIR}/smithwaterman/SmithWatermanGotoh.cpp
 )
-target_link_libraries(tvcvalidator ${ION_BAMTOOLS_LIBS} z ion-analysis pthread)
+target_link_libraries(tvcvalidator ${ION_BAMTOOLS_LIBS} z ion-analysis pthread dl)
 add_dependencies(tvcvalidator IONVERSION bamtools)
 
 add_executable(tvcutils
   VariantCaller/tvcutils/tvcutils.cpp
   VariantCaller/tvcutils/prepare_hotspots.cpp
+  VariantCaller/tvcutils/validate_bed.cpp
   Util/OptArgs.cpp
+  ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
   ${PROJECT_BINARY_DIR}/IonVersion.cpp
   Util/Utils.cpp
   Image/ChipIdDecoder.cpp
@@ -558,13 +556,13 @@ add_executable(ionstats
     ionstats/ionstats_tf.cpp
     ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(ionstats IONVERSION bamtools)
-target_link_libraries(ionstats ion-analysis ${ION_BAMTOOLS_LIBS} pthread)
+target_link_libraries(ionstats ion-analysis ${ION_BAMTOOLS_LIBS} pthread dl)
 install(TARGETS ionstats DESTINATION bin)
 
 ## calibrate - flowspace recalibration training in c++
 add_executable(calibrate Recall/calibrate.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(calibrate IONVERSION bamtools)
-target_link_libraries(calibrate ion-analysis ${ION_BAMTOOLS_LIBS} pthread)
+target_link_libraries(calibrate ion-analysis ${ION_BAMTOOLS_LIBS} pthread dl)
 install(TARGETS calibrate DESTINATION bin)
 
 add_executable(bamrealignment
@@ -590,7 +588,7 @@ add_executable(PairedEndErrorCorrection
    SFFCorrection/sffCorrection.cpp
    SFFCorrection/SmithWaterman.cpp)
 add_dependencies(PairedEndErrorCorrection IONVERSION)
-target_link_libraries(PairedEndErrorCorrection ion-analysis file-io pthread ${ION_BAMTOOLS_LIBS})
+target_link_libraries(PairedEndErrorCorrection ion-analysis file-io pthread ${ION_BAMTOOLS_LIBS} dl)
 install(TARGETS PairedEndErrorCorrection DESTINATION bin)
 
 IF( ION_BUILD_STRAND_BIAS )
@@ -616,63 +614,54 @@ ENDIF(ION_BUILD_STRAND_BIAS )
 # target_link_libraries(WellsTimer ion-analysis pthread)
 # install(TARGETS WellsTimer DESTINATION bin)
 
-
-add_executable(MeasureXTalk MeasureXTalk.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(MeasureXTalk IONVERSION)
-target_link_libraries(MeasureXTalk ion-analysis pthread)
-
-add_executable(WellCrossTalk WellCrossTalk.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(WellCrossTalk IONVERSION)
-target_link_libraries(WellCrossTalk ion-analysis pthread ${ION_ARMADILLO_LIBS})
-
 add_executable(Recall
 	Recall/Recall.cpp
 	${PROJECT_BINARY_DIR}/IonVersion.cpp)
-target_link_libraries(Recall ion-analysis file-io)
+target_link_libraries(Recall ion-analysis file-io dl)
 install(TARGETS Recall DESTINATION bin)
 
 add_executable(SeqBoost
         Recall/SeqBoost.cpp
         ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-target_link_libraries(SeqBoost ion-analysis file-io ${ION_BAMTOOLS_LIBS} pthread)
+target_link_libraries(SeqBoost ion-analysis file-io ${ION_BAMTOOLS_LIBS} pthread dl)
 install(TARGETS SeqBoost DESTINATION bin)
 
 add_executable(sff2bam
         Converter/sff2bam.cpp
         ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-target_link_libraries(sff2bam ion-analysis file-io ${ION_BAMTOOLS_LIBS} pthread)
+target_link_libraries(sff2bam ion-analysis file-io ${ION_BAMTOOLS_LIBS} pthread dl)
 install(TARGETS sff2bam DESTINATION bin)
 
 add_executable(bam2sff
         Converter/bam2sff.cpp
         ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-target_link_libraries(bam2sff ion-analysis file-io  ${ION_BAMTOOLS_LIBS} pthread)
+target_link_libraries(bam2sff ion-analysis file-io  ${ION_BAMTOOLS_LIBS} pthread dl)
 install(TARGETS bam2sff DESTINATION bin)
 
 add_executable(SamVsSam
         SamUtils/SamVsSam.cpp
 )
-target_link_libraries(SamVsSam ion-analysis ${ION_SAMTOOLS_LIBS} pthread)
+target_link_libraries(SamVsSam ion-analysis ${ION_SAMTOOLS_LIBS} pthread dl)
 install(TARGETS SamVsSam DESTINATION bin)
 
 add_executable(BeadmaskParse Mask/BeadmaskParse.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(BeadmaskParse IONVERSION)
-target_link_libraries(BeadmaskParse ion-analysis pthread)
+target_link_libraries(BeadmaskParse ion-analysis pthread dl)
 install(TARGETS BeadmaskParse DESTINATION bin)
 
 add_executable(BeadmaskMerge Mask/BeadmaskMerge.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(BeadmaskMerge IONVERSION)
-target_link_libraries(BeadmaskMerge ion-analysis pthread)
+target_link_libraries(BeadmaskMerge ion-analysis pthread dl)
 install(TARGETS BeadmaskMerge DESTINATION bin)
 
 add_executable(MergeWells Wells/MergeWells.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(MergeWells IONVERSION)
-target_link_libraries(MergeWells ion-analysis pthread)
+target_link_libraries(MergeWells ion-analysis pthread dl)
 install(TARGETS MergeWells DESTINATION bin)
 
 add_executable(RawWellsCombine Wells/RawWellsCombine.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(RawWellsCombine IONVERSION)
-target_link_libraries(RawWellsCombine ion-analysis pthread)
+target_link_libraries(RawWellsCombine ion-analysis pthread dl)
 install(TARGETS RawWellsCombine DESTINATION bin)
 
 include_directories("${PROJECT_SOURCE_DIR}/file-io")
@@ -711,55 +700,59 @@ add_executable(alignStats
         SamUtils/alignStats_driver.cpp
         ${PROJECT_BINARY_DIR}/IonVersion.cpp
 )
-target_link_libraries(alignStats ion-analysis z ${ION_SAMTOOLS_LIBS} pthread)
+target_link_libraries(alignStats ion-analysis z ${ION_SAMTOOLS_LIBS} pthread dl)
 add_dependencies(alignStats IONVERSION)
 install(TARGETS alignStats DESTINATION bin)
 
 add_executable(FlowErrTest
         SamUtils/FlowErrTest.cpp
 )
-target_link_libraries(FlowErrTest ion-analysis z ${ION_SAMTOOLS_LIBS} ${ION_HDF5_LIBS} pthread)
+target_link_libraries(FlowErrTest ion-analysis z ${ION_SAMTOOLS_LIBS} pthread dl)
 
 add_executable(SFFRead SFFUtils/SFFRead.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(SFFRead IONVERSION)
-target_link_libraries(SFFRead ion-analysis pthread)
+target_link_libraries(SFFRead ion-analysis pthread dl)
 install(TARGETS SFFRead DESTINATION bin)
 
 add_executable(SFFRandom SFFUtils/SFFRandom.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(SFFRandom IONVERSION)
-target_link_libraries(SFFRandom ion-analysis pthread)
+target_link_libraries(SFFRandom ion-analysis pthread dl)
 install(TARGETS SFFRandom DESTINATION bin)
 
 add_executable(RawWellsEquivalent Wells/RawWellsEquivalent.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(RawWellsEquivalent IONVERSION)
-target_link_libraries(RawWellsEquivalent ion-analysis pthread)
+target_link_libraries(RawWellsEquivalent ion-analysis pthread dl)
 install(TARGETS RawWellsEquivalent DESTINATION bin)
 
 add_executable(DiffSeparator Separator/DiffSeparator.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(DiffSeparator IONVERSION)
-target_link_libraries(DiffSeparator ion-analysis pthread ${ION_ARMADILLO_LIBS})
+target_link_libraries(DiffSeparator ion-analysis pthread ${ION_ARMADILLO_LIBS} dl)
 install(TARGETS DiffSeparator DESTINATION bin)
 
 add_executable(CompressDeviation Separator/CompressDeviation.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(CompressDeviation IONVERSION)
-target_link_libraries(CompressDeviation ion-analysis pthread ${ION_ARMADILLO_LIBS})
+target_link_libraries(CompressDeviation ion-analysis pthread ${ION_ARMADILLO_LIBS} dl)
 
 add_executable(DumpSynchDat SynchDat/DumpSynchDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(DumpSynchDat IONVERSION)
-target_link_libraries(DumpSynchDat ion-analysis pthread ${ION_ARMADILLO_LIBS})
+target_link_libraries(DumpSynchDat ion-analysis pthread ${ION_ARMADILLO_LIBS} dl)
 
 add_executable(GrindSynchDat SynchDat/GrindSynchDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(GrindSynchDat IONVERSION)
-target_link_libraries(GrindSynchDat ion-analysis pthread ${ION_ARMADILLO_LIBS})
+target_link_libraries(GrindSynchDat ion-analysis pthread ${ION_ARMADILLO_LIBS} dl)
 
 
 add_executable(TraceDriver SynchDat/TraceDriver.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(TraceDriver IONVERSION)
-target_link_libraries(TraceDriver ion-analysis pthread )
+target_link_libraries(TraceDriver ion-analysis pthread dl)
 
 add_executable(NormWells NormWells/NormWells.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(NormWells IONVERSION)
-target_link_libraries(NormWells ion-analysis pthread )
+target_link_libraries(NormWells ion-analysis pthread dl)
+
+add_executable(ExtractWells NormWells/ExtractWells.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(ExtractWells IONVERSION)
+target_link_libraries(ExtractWells ion-analysis pthread dl)
 
 # add_executable(VFCTest SynchDat/VFCTest.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 # add_dependencies(VFCTest IONVERSION)
@@ -773,28 +766,27 @@ target_link_libraries(NormWells ion-analysis pthread )
 
 #add_executable(PinnedWell PinnedWell.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 #add_dependencies(PinnedWell IONVERSION)
-#target_link_libraries(PinnedWell ion-analysis  pthread )
+#target_link_libraries(PinnedWell ion-analysis  pthread dl)
 #install(TARGETS PinnedWell DESTINATION bin)
 
 add_executable(readDat readDat.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(readDat IONVERSION)
 #target_link_libraries(readDat ion-analysis pthread)
-target_link_libraries(readDat ion-analysis ${GTEST_BOTH_LIBRARIES} pthread)
+target_link_libraries(readDat ion-analysis ${GTEST_BOTH_LIBRARIES} pthread dl)
 install(TARGETS readDat DESTINATION bin)
 
 add_executable(readWells Wells/readWells.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(readWells IONVERSION)
-target_link_libraries(readWells ion-analysis pthread)
+target_link_libraries(readWells ion-analysis pthread dl)
 install(TARGETS readWells DESTINATION bin)
 
 add_executable(iontools file-io/main.c file-io/sff_check.c ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(iontools IONVERSION)
-target_link_libraries(iontools ion-analysis file-io pthread)
+target_link_libraries(iontools ion-analysis file-io pthread dl)
 install(TARGETS iontools DESTINATION bin)
 
 add_executable(barcodeMaskParse Mask/barcodeMaskParse.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
-add_dependencies(barcodeMaskParse IONVERSION)
-target_link_libraries(barcodeMaskParse ion-analysis)
+target_link_libraries(barcodeMaskParse ion-analysis dl)
 install(TARGETS barcodeMaskParse DESTINATION bin)
 
 add_executable(BamDuplicates
@@ -804,6 +796,10 @@ add_executable(BamDuplicates
 add_dependencies(BamDuplicates IONVERSION)
 target_link_libraries( BamDuplicates ${ION_BAMTOOLS_LIBS} ion-analysis z pthread )
 install( TARGETS BamDuplicates DESTINATION bin )
+
+add_executable(seqCoverage coverage/seqCoverage.cpp coverage/interval_tree.cpp)
+add_dependencies(seqCoverage IONVERSION)
+install(TARGETS seqCoverage DESTINATION bin)
 
 # Setup for testing and gtest in particular, only needed once in file before tests.
 enable_testing()
@@ -905,6 +901,9 @@ if(GTEST_FOUND)
 
 endif()
 
+install(PROGRAMS  "${PROJECT_SOURCE_DIR}/FlowspaceCalibration/FlowspaceCalibration.jar" DESTINATION share/java)
+
+
 #files used for configuration
 #not actually source files at all
 install(FILES "${PROJECT_SOURCE_DIR}/config/DefaultTFs.conf" DESTINATION ${ION_INSTALL_PREFIX}/config RENAME "DefaultTFs.conf.dist")
@@ -939,7 +938,9 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_314.param" DESTINATION ${ION_IN
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_316.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_316v2.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_318.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_900.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.1.17.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.0.19.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.2.18.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/gopt_p1.1.17_ampliseq_exome.param" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
 install(FILES "${PROJECT_SOURCE_DIR}/Analysis.1" DESTINATION share/man/man1)
@@ -948,6 +949,16 @@ if(NOT ION_USE_SYSTEM_ARMADILLO)
    install(FILES "${PROJECT_BINARY_DIR}/../armadillo-3.800.2+ion0-install/lib/libarmadillo.so.3" DESTINATION lib)
    install(FILES "${PROJECT_BINARY_DIR}/../armadillo-3.800.2+ion0-install/lib/libarmadillo.so.3.800.2" DESTINATION lib)
 endif()
+
+add_test("trimfastq.pl" "perl" "-cw" "${PROJECT_SOURCE_DIR}/trimfastq.pl")
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/trimfastq.pl" DESTINATION bin)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/build_genome_index.pl" DESTINATION bin)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/validate_reference.pl" DESTINATION bin)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/alignmentQC.pl" DESTINATION bin)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/getref" DESTINATION bin)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/updateref.py" DESTINATION bin RENAME updateref)
+
+install(DIRECTORY "${PROJECT_BINARY_DIR}/../picard-1.96/" DESTINATION "/opt/picard/picard-tools-current/")
 
 add_subdirectory(TMAP)
 
@@ -961,10 +972,11 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "libatlas3gf-base,
     liblapack3gf,
     libstdc++6,
     libgsl0ldbl,
+    perl,
     ion-gpu (>=2.5.0)")
 
-set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-gpu (<< 2.9)")
-set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-gpu (<< 2.9)")
+set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-gpu (<< 2.9), ion-alignment")
+set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-gpu (<< 2.9), ion-alignment")
 
 set(CPACK_PACKAGE_DESCRIPTION "ion-analysis provides the command line workflow and supporting tools to process raw DAT files into SFF and fastq files.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA

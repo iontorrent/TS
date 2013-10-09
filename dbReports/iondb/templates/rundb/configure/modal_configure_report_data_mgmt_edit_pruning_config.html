@@ -1,3 +1,4 @@
+{% load url from future %}
 <div id="modal_configure_report_data_mgmt_edit_pruning_config" title="" class="modal container hide" data-modal-Overflow="true">
 	<div class="modal-header">
 		<button type="button" class="close" data-dismiss="modal">
@@ -53,7 +54,7 @@
 		{% endwith %}
 {% endcomment %}
 		</div>
-		<form id="modal_configure_report_data_mgmt_edit_pruning_config_form" class="form-horizontal" method='post' enctype="multipart/form-data" action="{% url configure_report_data_mgmt_edit_prune_groups %}">
+		<form id="modal_configure_report_data_mgmt_edit_pruning_config_form" class="form-horizontal" method='post' enctype="multipart/form-data" action="{% url "configure_report_data_mgmt_edit_prune_groups" %}">
 			<fieldset>
     		<div class="control-group">
     			<label class="control-label" for="">Pruning Options</label>

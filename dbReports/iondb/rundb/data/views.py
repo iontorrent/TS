@@ -4,11 +4,11 @@ from django.core import urlresolvers
 from django.core import serializers
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.cache import cache_page
+from django.core.cache import cache
 from django.shortcuts import render_to_response, get_object_or_404, redirect
 from django.template import RequestContext
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
-from django.utils import simplejson
+
 import json
 import cStringIO
 import csv
@@ -25,6 +25,7 @@ from iondb.rundb.api import CompositeExperimentResource, ProjectResource
 from iondb.rundb.report.views import build_result, _report_started
 from iondb.rundb import forms
 from iondb.anaserve import client
+from iondb.rundb.data import dmactions_types
 
 from django.http import HttpResponse, HttpResponseServerError
 from datetime import datetime
@@ -78,10 +79,7 @@ def rundb_redirect(request):
     return redirect(url, permanent=True)
 
 
-@login_required
-@cache_page(29)
-def data(request):
-    """This is a the main entry point to the Data tab."""
+def data_context(request):
     pageSize = GlobalConfig.objects.all()[0].records_to_display
     resource = CompositeExperimentResource()
     objects = resource.get_object_list(request)
@@ -105,7 +103,17 @@ def data(request):
         'inital_query': serialized_exps,
         'pageSize': pageSize
     }
-    return render_to_response("rundb/data/data.html", _data,
+    return _data
+
+
+@login_required
+def data(request):
+    """This is a the main entry point to the Data tab."""
+    context = cache.get("data_tab_context")
+    if context is None:
+        context = data_context(request)
+        cache.set("data_tab_context", context, 29)
+    return render_to_response("rundb/data/data.html", context,
                               context_instance=RequestContext(request))
 
 
@@ -230,7 +238,8 @@ def projects(request):
 
 def project_view(request, pk=None):
     pr = ProjectResource()
-    project = pr.obj_get(pk=pk)
+    base_bundle = pr.build_bundle(request=request)
+    project = pr.obj_get(bundle=base_bundle, pk=pk)
 
     pr_bundle = pr.build_bundle(obj=project, request=request)
 
@@ -250,7 +259,8 @@ def project_add(request, pk=None):
 
 def project_delete(request, pk=None):
     pr = ProjectResource()
-    project = pr.obj_get(pk=pk)
+    base_bundle = pr.build_bundle(request=request)
+    project = pr.obj_get(bundle=base_bundle, pk=pk)
     _type = 'project'
     ctx = template.RequestContext(request, {
         "id": pk, "name": project.name, "method": "DELETE", 'methodDescription': 'Delete', "readonly": False, 'type': _type, 'action': reverse('api_dispatch_detail', kwargs={'resource_name': _type, 'api_name': 'v1', 'pk': int(pk)})
@@ -260,7 +270,8 @@ def project_delete(request, pk=None):
 
 def project_edit(request, pk=None):
     pr = ProjectResource()
-    project = pr.obj_get(pk=pk)
+    base_bundle = pr.build_bundle(request=request)
+    project = pr.obj_get(bundle=base_bundle, pk=pk)
     pr_bundle = pr.build_bundle(obj=project, request=request)
 
     otherList = [p.name for p in Project.objects.all()]
@@ -321,7 +332,7 @@ def results_to_project(request, results_pks):
             "method": 'POST'})
         return render_to_response("rundb/data/modal_projects_select.html", context_instance=ctx)
     if request.method == 'POST':
-        json_data = simplejson.loads(request.raw_post_data)
+        json_data = json.loads(request.raw_post_data)
         try:
             project_pks = json_data['projects']
         except KeyError:
@@ -356,22 +367,40 @@ def validate_results_to_combine(selected_results):
     # validate selected reports
     warnings = []
     ver_map = {'analysis': 'an', 'alignment': 'al', 'dbreports': 'db', 'tmap': 'tm'}
-    for result in selected_results:
+    barcoded = False
+    for r in selected_results:
         version = {}
         for name, shortname in ver_map.iteritems():
-            version[name] = next((v.split(':')[1].strip() for v in result.analysisVersion.split(',') if v.split(':')[0].strip() == shortname), '')
-            setattr(result, name + "_version", version[name])
-        result.floworder = result.experiment.flowsInOrder
-        result.barcodeId = result.eas.barcodeKitName
+            version[name] = next((v.split(':')[1].strip() for v in r.analysisVersion.split(',') if v.split(':')[0].strip() == shortname), '')
+            setattr(r, name + "_version", version[name])
+        # starting with TS3.6 we don't have separate alignment or tmap packages
+        if not version['tmap']: r.tmap_version = version['analysis']
+        if not version['alignment']: r.alignment_version = version['analysis']
+        
+        r.barcodeId = r.eas.barcodeKitName
+        if r.barcodeId:
+            r.barcodedSamples = json.dumps(r.eas.barcodedSamples)
+            barcoded = True
+        else:
+            r.sample = r.experiment.get_sample()
 
     if len(set([getattr(r, 'tmap_version') for r in selected_results])) > 1:
         warnings.append("Selected results have different TMAP versions.")
     if len(set([getattr(r, 'alignment_version') for r in selected_results])) > 1:
         warnings.append("Selected results have different Alignment versions.")
-    if len(set([r.floworder for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
+    if len(set([r.experiment.flowsInOrder for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
         warnings.append("Selected results have different FlowOrder Sequences.")
     if len(set([r.barcodeId for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
         warnings.append("Selected results have different Barcode Sets.")
+        barcoded = False
+    
+    if barcoded:
+        if len(set([r.barcodedSamples for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
+            warnings.append("Selected results have different Samples.")
+    else:
+        if len(set([r.sample for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
+            warnings.append("Selected results have different Samples.")
+        
     return warnings
 
 
@@ -388,12 +417,12 @@ def results_to_combine(request, results_pks, project_pk):
         return render_to_response("rundb/data/modal_combine_results.html", context_instance=ctx)
     if request.method == 'POST':
         try:
-            json_data = simplejson.loads(request.raw_post_data)
+            json_data = json.loads(request.raw_post_data)
             result = _combine_results_sendto_project(project_pk, json_data, request.user.username)
             ctx = _report_started(request, result.pk)
             return render_to_response("rundb/reports/analysis_started.html", context_instance=ctx)
         except Exception as e:
-            return HttpResponseServerError("Error: %s" % e)
+            return HttpResponseServerError("%s" % e)
 
 
 def _combine_results_sendto_project(project_pk, json_data, username=''):
@@ -403,31 +432,38 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     name = json_data['name']
     mark_duplicates = json_data['mark_duplicates']
     ids_to_merge = json_data['selected_pks']
+    parents = Results.objects.filter(id__in=ids_to_merge).order_by('-timeStamp')
 
-    # check reference and flow order the same in all selected results
-    for pk in ids_to_merge:
-        result = Results.objects.get(pk=pk)
-        if pk == ids_to_merge[0]:
-            reference = result.reference
-            floworder = result.experiment.flowsInOrder
-            barcodeId = result.eas.barcodeKitName
+    # test if reports can be combined and get common field values
+    for parent in parents:
+        if parent.dmfilestat_set.get(dmfileset__type=dmactions_types.OUT).action_state == 'DD':
+            raise Exception("Output Files for %s are Deleted." % parent.resultsName)
+        
+        if parent.pk == parents[0].pk:
+            reference = parent.reference
+            floworder = parent.experiment.flowsInOrder
+            barcodeId = parent.eas.barcodeKitName
+            barcodeSamples = parent.eas.barcodedSamples
         else:
-            if not reference == result.reference:
+            if not reference == parent.reference:
                 raise Exception("Selected results do not have the same Alignment Reference.")
-            if not floworder == result.experiment.flowsInOrder:
+            if not floworder == parent.experiment.flowsInOrder:
                 floworder = ''
-            if not barcodeId == result.eas.barcodeKitName:
+            if not barcodeId == parent.eas.barcodeKitName:
                 barcodeId = ''
+            if not barcodeSamples == parent.eas.barcodedSamples:
+                barcodeSamples = {}
 
     # create new entry in DB for combined Result
     delim = ':'
     filePrefix = "CombineAlignments"  # this would normally be Experiment name that's prefixed to all filenames
     result, exp = create_combined_result('CA_%s_%s' % (name, projectName))
-    result.projects.add(project)
     result.resultsType = 'CombinedAlignments'
     result.parentIDs = delim + delim.join(ids_to_merge) + delim
     result.reference = reference
     result.sffLink = path.join(result.reportLink, "%s_%s.sff" % (filePrefix, result.resultsName))
+    
+    result.projects.add(project)
 
     # add ExperimentAnalysisSettings
     eas_kwargs = {
@@ -438,8 +474,10 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
             'status' : 'run',
             'reference': reference,
             'barcodeKitName': barcodeId,
+            'barcodedSamples': barcodeSamples,
             'targetRegionBedFile': '',
-            'hotSpotRegionBedFile': ''
+            'hotSpotRegionBedFile': '',
+            'isDuplicateReads': mark_duplicates
     }
     eas = ExperimentAnalysisSettings(**eas_kwargs)
     eas.save()    
@@ -452,12 +490,15 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     bams = []
     names = []
     plan = {}
-    parents = Results.objects.filter(id__in=ids_to_merge).order_by('-timeStamp')
+    bamFile = 'rawlib.bam'
     for parent in parents:
         links.append(parent.reportLink)
         names.append(parent.resultsName)
-        bamFile = 'rawlib.bam'
-        bams.append(path.join(parent.get_report_dir(), bamFile))
+
+        # BAM files location
+        dmfilestat = parent.dmfilestat_set.get(dmfileset__type=dmactions_types.OUT)
+        reportDir = dmfilestat.archivepath if dmfilestat.action_state == 'AD' else parent.get_report_dir()
+        bams.append(path.join(reportDir, bamFile))
 
         #need Plan info for VariantCaller etc. plugins: but which plan to use??
         try:
@@ -477,6 +518,10 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     except:
         genomeinfo = ""
 
+    eas_json = serializers.serialize("json", [eas])
+    eas_json = json.loads(eas_json)
+    eas_json = eas_json[0]["fields"]
+    
     params = {
         'resultsName': result.resultsName,
         'parentIDs': ids_to_merge,
@@ -492,10 +537,13 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         'flowOrder': floworder,
         'project': projectName,
         'barcodeId': barcodeId,
+        'barcodeSamples': json.dumps(barcodeSamples),
+        'experimentAnalysisSettings': eas_json,
         'warnings': validate_results_to_combine(parents)
     }
 
-    scriptpath = '/usr/lib/python2.6/dist-packages/ion/reports/combineReports.py'
+    from distutils.sysconfig import get_python_lib
+    scriptpath = path.join(get_python_lib(), 'ion', 'reports', 'combineReports.py')
 
     try:
         with open(scriptpath, "r") as f:
@@ -614,6 +662,7 @@ def experiment_edit(request, pk):
         # Application, i.e. runType
         if plan:
             exp_form.fields['runtype'].initial = plan.runType
+            exp_form.fields['sampleTubeLabel'].initial = plan.sampleTubeLabel
             
         # Library Kit name - can get directly or from kit barcode    
         libraryKitName = ''
@@ -636,6 +685,8 @@ def experiment_edit(request, pk):
             exp_form.fields['sample'].initial = exp.samples.all()[0].id
         exp_form.fields['barcodedSamples'].initial = eas.barcodedSamples
         
+        exp_form.fields['mark_duplicates'].initial = eas.isDuplicateReads
+        
         # plugins with optional userInput
         eas_form.fields['plugins'].initial = [plugin.id for plugin in plugins_list]
         pluginsUserInput = {}
@@ -643,7 +694,7 @@ def experiment_edit(request, pk):
             pluginsUserInput[str(plugin.id)] = eas.selectedPlugins.get(plugin.name, {}).get('userInput','')
         eas_form.fields['pluginsUserInput'].initial = json.dumps(pluginsUserInput)
     
-    if request.method == 'POST':
+    if request.method == 'POST': 
         exp_form = forms.ExperimentSettingsForm(request.POST, instance=exp)
         eas_form = forms.AnalysisSettingsForm(request.POST, instance=eas)
 
@@ -651,6 +702,8 @@ def experiment_edit(request, pk):
             # save Plan
             if plan:
                 plan.runType = exp_form.cleaned_data['runtype']
+                plan.sampleTubeLabel = exp_form.cleaned_data['sampleTubeLabel']
+
                 plan.save()
                 
             # save Experiment
@@ -661,6 +714,7 @@ def experiment_edit(request, pk):
             eas.libraryKey = exp_form.cleaned_data['libraryKey']
             eas.libraryKitName = exp_form.cleaned_data['libraryKitname']
             eas.barcodedSamples = exp_form.cleaned_data['barcodedSamples']
+            eas.isDuplicateReads = exp_form.cleaned_data['mark_duplicates']
             
             # plugins
             form_plugins_list = list(eas_form.cleaned_data['plugins'])

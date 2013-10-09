@@ -10,30 +10,10 @@ from django.core import urlresolvers
 from django import shortcuts
 from iondb.rundb.models import Message, Results, EventLog
 from iondb.rundb.data import dmactions
+from iondb.rundb.data.dmactions_types import FILESET_TYPES
 from iondb.rundb.data.project_msg_banner import project_msg_banner
 
 logger = get_task_logger('data_management')
-
-
-def _store_message(user, pk, status, action):
-    url = urlresolvers.reverse('dm_log', args=(pk,))
-    report = Results.objects.get(id=pk)
-    token = 'complete' if status else 'failed'
-    msg = "Report (%s) %s %s. <a href='%s'  data-toggle='modal' data-target='#modal_report_log'>View Report Log</a>" % (report.resultsName, action, token, url)
-    func = Message.success if status else Message.error
-    return func(msg, route=user)
-
-
-def _store_messages(user, pk, status_list, action):
-    url = urlresolvers.reverse('dm_log', args=(pk,))
-    report = Results.objects.get(id=pk)
-    msg = "Report (%s) %s " % (report.resultsName, action.title())
-    for category,status in status_list.iteritems():
-        msg += " %s, " % str(category)
-        msg += 'success' if status == "Success" else status
-    msg += " <a href='%s'  data-toggle='modal' data-target='#modal_report_log'>View Report Log</a>" % (url)
-    func = Message.success if status else Message.error
-    return func(msg, route=user)
 
 
 @task(queue="periodic")
@@ -76,7 +56,6 @@ def action_group(user, categories, action, dmfilestat_dict, user_comment, backup
 
         # Generates message per result
         logger.debug("%s" % msg_dict)
-        #message = _store_messages(user, result_pk, msg_dict, action)
         project_msg[result_pk] = msg_dict
 
     logger.debug(project_msg)
@@ -121,7 +100,23 @@ def test_action(user, user_comment, dmfilestat, lockfile=None, msg_banner = Fals
     except:
         raise
 
+
 @task(queue="periodic")
 def update_dmfilestats_diskspace(dmfilestat):
     ''' Task to update DMFileStat.diskspace '''
     dmactions.update_diskspace(dmfilestat)
+
+
+@task(queue="periodic")
+def update_diskusage(resultpk):
+    '''
+    Task to update DMFileStat.diskspace for all associated with this resultpk
+    NOTE: This can be a long-lived task
+    '''
+    try:
+        result = Results.objects.get(pk=resultpk)
+        for type in FILESET_TYPES:
+            dmfilestat = result.get_filestat(type)
+            dmactions.update_diskspace(dmfilestat)
+    except:
+        raise

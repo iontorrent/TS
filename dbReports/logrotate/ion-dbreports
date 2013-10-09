@@ -49,3 +49,13 @@
     copytruncate
     create 664 ionadmin www-data
 }
+/var/log/ion/celerybeat.log {
+    size 5M
+    missingok
+    rotate 10
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionian www-data
+}

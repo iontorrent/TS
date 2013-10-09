@@ -908,9 +908,9 @@ bool Realigner::CreateRefFromQueryBases(
 
       case ('S') :
         read_ptr += cigar->Length;
-        if (cigar == algn_cigar_data.begin())
+        if (cigar == algn_cigar_data.begin() or (cigar == algn_cigar_data.begin()+1 and (algn_cigar_data.begin())->Type == 'H'))
           clipped_anchors_.cigar_left[0].Length = cigar->Length;
-        else if (cigar == algn_cigar_data.end()-1)
+        else if (cigar == algn_cigar_data.end()-1 or (cigar ==algn_cigar_data.end()-2 and (algn_cigar_data.end()-1)->Type == 'H'))
           clipped_anchors_.cigar_right[0].Length = cigar->Length;
         else {
           if (verbose_)

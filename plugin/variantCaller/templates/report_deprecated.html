@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+
+{% block subnav %}
+<li><a href="/report/{{startplugin_json.runinfo.pk}}/">&larr; Go back to
+    {{startplugin_json.expmeta.results_name}} </a></li>
+{% endblock %}
+
+{% block extra_head %}
+
+<link rel="stylesheet" href="slickgrid/slick.grid.css" type="text/css"/>
+<link rel="stylesheet" href="classic/lifegrid/columnpicker.css" type="text/css"/>
+<link rel="stylesheet" href="slickgrid/lib/jquery-ui-1.10.2.custom/css/smoothness/jquery-ui-1.10.2.custom.min.css"
+      type="text/css"/>
+<link rel="stylesheet" href="classic/lifegrid/lifegrid.css" type="text/css"/>
+
+<script src="slickgrid/lib/firebugx.js"></script>
+<script src="slickgrid/lib/jquery-ui-1.10.2.custom/js/jquery-ui-1.10.2.custom.min.js"></script>
+<script src="slickgrid/lib/jquery.event.drag-2.0.min.js"></script>
+<script src="slickgrid/slick.core.js"></script>
+<script src="slickgrid/slick.grid.js"></script>
+<script src="slickgrid/plugins/slick.rowselectionmodel.js"></script>
+<script src="slickgrid/slick.dataview.js"></script>
+<script src="classic/lifegrid/lifegrid.js"></script>
+<script src="classic/lifegrid/pager.js"></script>
+<script src="classic/lifegrid/checkboxselectcolumn.js"></script>
+<script src="classic/lifegrid/columnpicker.js"></script>
+
+<script src="classic/lifegrid/variantCallsTable.js"></script>
+
+{% if options.has_hotspots %}
+<script src="classic/lifegrid/alleleCoverageTable.js"></script>
+{% endif %}
+
+<script>
+    function igvSessionURLAbsolutePath() {
+        var locpath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/'));
+        var igvURL = window.location.protocol + "//" + window.location.host + "/auth" + locpath + "/igv.php3";
+        // link to Broad IGV
+        var launchURL = window.location.protocol + "//" + window.location.host + "/IgvServlet/igv";
+        var href = launchURL + "?sessionURL=" + igvURL;
+        return href;
+    }
+
+    $(function () {
+        $("#igvlink").attr("href", igvSessionURLAbsolutePath());
+    });
+
+</script>
+
+{% endblock %}
+
+{% block content %}
+<div class="content clearfix">
+  <div style="padding-bottom:20px">
+      <h2>Deprecated features - {{options.run_name}} </h2>
+      <a href="variantCaller.html">Return to Variant Caller Report</a>
+  </div>
+
+<!--  New report header -->
+<div class="row-fluid bumper">
+    <div class="span6">
+        
+        {% if barcode %}
+        <div class="row-fluid bumper">
+            <div class="span3">
+                <span class="headvc">Barcode</span>
+            </div>
+            <div class="span4">
+                {{barcode}}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="row-fluid bumper">
+            <div class="span3">
+                <span class="headvc">Sample Name</span>
+            </div>
+            <div class="span4">
+                {{summary.sample_name}}
+            </div>
+        </div>
+
+    </div>
+
+    <div class="span6">
+
+
+        <div class="row-fluid bumper">
+            <div class="span3">
+                <span class="headvc">Variant Calls</span>
+            </div>
+            <div class="span6">
+                <a class="btn" href="{{variants_xls_link}}">XLS</a>
+            </div>
+        </div>
+
+        {% if options.has_hotspots %}
+        <div class="row-fluid bumper">
+            <div class="span3">
+                <span class="headvc">Hotspot Alleles</span>
+            </div>
+            <div class="span3">
+                <a class="btn" href="{{hotspots_xls_link}}">XLS</a>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+
+
+<div id="variantCallsTable" fileurl="variants.xls" class="center"></div>
+
+
+<div id="VC-tablecontent" style="display:none">
+    <div id="VC-titlebar" class="grid-header">
+        <span class="table-title">Variant Calls</span>
+        <span id="VC-toggleFilter" class="filter btn pull-right" href="#"><i class="icon-filter"></i></span>
+
+        <span id="VC-message" class="message"></span>
+    </div>
+    <div id="VC-grid" class="grid-body"></div>
+    <div id="VC-pager" class="grid-footer"></div>
+    <p class="grid-text"/>
+</div>
+<div id="VC-filterpanel" class="filter-panel">
+    <table style="width:100%">
+        <tr>
+            <td>
+                <span class="nwrap">Chrom <select id="VC-selectChrom" class="txtSelect" style="width:80px">
+                    <option value=""/>
+                </select></span>
+    <span class="nwrap">Position <input type="text" id="VC-txtSearchPosStart" class="numSearch" size=9>
+      to <input type="text" id="VC-txtSearchPosEnd" class="numSearch" size=9"></span>
+                <span class="nwrap">Gene Sym <input type="text" class="txtSearch" id="VC-txtSearchGeneSym"
+                                                    size=10></span>
+                <span class="nwrap">Target ID <input type="text" class="txtSearch" id="VC-txtSearchTargetID"
+                                                     size=11></span>
+                <span id="VC-filterHotSpot"><span class="nwrap">HotSpot ID <input type="text" class="txtSearch"
+                                                                                  id="VC-txtSearchHotSpotID"
+                                                                                  size=11></span></span>
+                <span class="nwrap">Type <select id="VC-selectVarType" class="txtSelect" style="width:55px">
+                    <option value=""/>
+                </select></span>
+                <span class="nwrap">Zygosity <select id="VC-selectPloidy" class="txtSelect" style="width:55px">
+                    <option value=""/>
+                </select></span>
+    <span class="nwrap">Var Freq <input type="text" class="numSearch" id="VC-txtSearchFreqMin" size=4 value="0">
+      to <input type="text" id="VC-txtSearchFreqMax" class="numSearch" size=4 value="100"></span>
+                <span class="nwrap">Cov &ge; <input type="text" id="VC-txtSearchCovMin" class="numSearch" size=7
+                                                    value=""></span>
+            </td>
+            <td style="float:right;padding-right:8px">
+                <input class="btn" type="button" id="VC-clearSelected" value="Clear Filters"
+                       title="Clear all current filters."><br/>
+                <input type="button" id="VC-checkSelected" class="checkOff btn" value="Selected"
+                       title="Display only selected rows. Other filters are ignored and disabled while this filter is checked.">
+            </td>
+        </tr>
+    </table>
+</div>
+
+
+
+<div id="VC-dialog" class="modal hide">
+  <div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+    <h3>Variant Caller Export Tools</h3>
+  </div>
+  <div id="VC-dialog-content" class="modal-body">
+
+  </div>
+  <div class="modal-footer">
+    <span class="btn" id="closebutton">Close</span>
+    <span id="VC-exportOK" class="btn btn-primary">OK</span>
+
+  </div>
+</div>
+
+
+{% if options.has_hotspots %}
+
+
+<div id="alleleCoverageTable" fileurl="allele_counts.xls"></div>
+
+
+<div id="AC-tablecontent" style="display:none">
+    <div id="AC-titlebar" class="grid-header">
+        <span class="table-title">Allele Coverage for bases in HotSpot Regions<sup>&dagger;</sup></span>
+
+        <span id="AC-toggleFilter" class="filter btn pull-right" href="#" title="Toggle search/filter panel"><i
+                class="icon-filter"></i></span>
+
+
+        <span id="AC-message" class="message"></span>
+    </div>
+    <div id="AC-grid" class="grid-body"></div>
+    <div id="AC-pager" class="grid-footer"></div>
+</div>
+<div id="AC-filterpanel" class="filter-panel">
+    <table style="width:100%">
+        <tr>
+            <td>
+                    <span class="nwrap">Chrom <select id="AC-selectChrom" class="txtSelect" style="width:80px">
+                        <option value=""/>
+                    </select></span>
+        <span class="nwrap">Position <input type="text" id="AC-txtSearchPosStart" class="numSearch" size=9>
+          to <input type="text" id="AC-txtSearchPosEnd" class="numSearch" size=9"></span>
+                    <span class="nwrap">Target ID <input type="text" class="txtSearch" id="AC-txtSearchTargetID"
+                                                         size=11></span>
+                    <span id="AC-filterHotSpot"><span class="nwrap">HotSpot ID <input type="text" class="txtSearch"
+                                                                                      id="AC-txtSearchHotSpotID"
+                                                                                      size=11></span></span>
+                    <span class="nwrap">Cov &ge; <input type="text" id="AC-txtSearchCovMin" class="numSearch" size=7
+                                                        value=""></span>
+        <span class="nwrap">% Cov (+) <input type="text" class="numSearch" id="AC-txtSearchFreqMin" size=4 value="0">
+          to <input type="text" id="AC-txtSearchFreqMax" class="numSearch" size=4 value="100"></span>
+            </td>
+            <td style="float:right;padding-right:8px">
+                <input type="button" class="btn" id="AC-clearSelected" value="Clear Filters"
+                       title="Clear all current filters."><br/>
+                <input type="button" id="AC-checkSelected" class="checkOff btn" value="Selected"
+                       title="Display only selected rows. Other filters are ignored and disabled while this filter is checked.">
+            </td>
+        </tr>
+    </table>
+</div>
+
+<p id="AC-footnote" class="grid-footnote"><sup><b>&dagger;</b></sup>Table does not include coverage for HotSpot
+    insertion variants. * HotSpot has multiple start positions or start position changed after LeftAlignment.</p>
+
+<p id="AC-footnote-close" style="display:none" class="grid-text"><br/></p>
+
+
+<div id="AC-dialog" class="modal hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h3>HotSpot Export Tools</h3>
+    </div>
+    <div id="AC-dialog-content" class="modal-body">
+
+    </div>
+    <div class="modal-footer">
+        <span class="btn" id="ACclosebutton">Close</span>
+        <span id="AC-exportOK" class="btn btn-primary">OK</span>
+
+    </div>
+</div>
+
+
+{% endif %}
+
+</div>
+{% endblock %}

@@ -1,0 +1,741 @@
+#!/bin/bash
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+set -u -e
+
+TSCONFIG_CARD_ID="PERC H810"
+PATH=/opt/MegaRAID/MegaCli/:$PATH
+
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source $TSCONFIG_SRC_DIR/ts_params
+source $TSCONFIG_SRC_DIR/ts_functions
+
+#--------------------------------------
+# Error handler called from trap command
+#--------------------------------------
+function error ()
+{
+    local PARENT_LINENO="$1"
+    local CODE="${2:-1}"
+    user_msg "=================================================================="
+    user_msg "ERROR on or near line ${PARENT_LINENO}; exiting with status ${CODE}"
+    user_msg "See file $TSCONFIG_LOG_DIR/$TSCONFIG_LOG_BASENAME for error details"
+    user_msg "=================================================================="
+    log "ERROR ${CODE}"
+    log "LINENO: ${PARENT_LINENO}"
+    exit ${CODE}
+}
+
+#---------------------------------------
+# Return current TS version
+#---------------------------------------
+function get_ts_version(){
+    # Return only the Major.Minor portion of the version string
+    #set +e
+    current_version=$(python -c "from ion import version; print version" 2>/dev/null)
+    if [ "$current_version" != "" ]; then
+        current_version=$(echo $current_version|cut -f1-2 -d".")
+    elif which Analysis; then
+        current_version=$(Analysis -v|grep ^Analysis|cut -f2 -d"("|sed 's/)//'|cut -f1-2 -d".")
+    else
+        current_version=""
+    fi
+    echo $current_version
+    #set -e
+}
+
+
+#==============================================================================
+# Patch ion-dbreports 3.6.x
+#==============================================================================
+function patch_3.6()
+{
+    patch -N /opt/ion/iondb/utils/devices.py << EOF
+Index: devices.py
+===================================================================
+--- devices.py	(revision 64632)
++++ devices.py	(working copy)
+@@ -65,6 +65,6 @@
+         type = i.get_type()
+         # Report Data Management requires an ext3/4 filesystem or nfs (anything that supports symbolic links actually)
+         #if 'media' in path and ('ext' in type or 'nfs' in type):
+-        if 'nfs' in type or ('media' in path and 'ext' in type):
++        if 'nfs' in type or ('/media' in path) or ('/mnt' in path):
+             ret.append((path, path))
+     return ret
+EOF
+
+    patch -N /opt/ion/iondb/rundb/report/views.py << EOF
+Index: views.py
+===================================================================
+--- views.py	(revision 63257)
++++ views.py	(working copy)
+@@ -1583,7 +1583,7 @@
+                     dmactions_type = "On-Instrument Analysis"
+                     previous_obj = exp.results_set.exclude(pk=result.pk)
+                     if previous_obj:
+-                        dmfilestat = previous_obj[0].get_filestat(dmactions_types.BASE)
++                        dmfilestat = previous_obj[0].get_filestat(dmactions_types.BASE).exclude(metaData__contains='thumb')
+                         # replace dmfilestat
+                         result.dmfilestat_set.filter(dmfileset__type=dmactions_types.BASE).delete()
+                         dmfilestat.pk = None
+EOF
+
+if [[ $? -eq 0 ]]; then
+    log $(service apache2 restart 2>&1)
+fi
+}
+
+#==============================================================================
+# Patch ion-dbreports 3.4
+#==============================================================================
+function patch_3.4()
+{
+    patch -N /opt/ion/iondb/backup/devices.py << EOF
+Index: devices.py
+===================================================================
+--- devices.py	(revision 53848)
++++ devices.py	(working copy)
+@@ -64,6 +64,6 @@
+         path = i.get_path()
+         type = i.get_type()
+         # Report Data Management requires an ext3/4 filesystem or nfs (anything that supports symbolic links actually)
+-        if 'media' in path and ('ext' in type or 'nfs' in type):
++        if 'nfs' in type or ('/media' in path) or ('/mnt' in path):
+             ret.append((path, path))
+     return ret
+EOF
+if [[ $? -eq 0 ]]; then
+    log $(service apache2 restart 2>&1)
+fi
+}
+#==============================================================================
+# Patch ion-dbreports 3.2
+#==============================================================================
+function patch_3.2()
+{
+    patch -N /opt/ion/iondb/backup/devices.py << EOF
+Index: devices.py
+===================================================================
+--- devices.py	(revision 53848)
++++ devices.py	(working copy)
+@@ -64,6 +64,6 @@
+         path = i.get_path()
+         type = i.get_type()
+         # Report Data Management requires an ext3/4 filesystem or nfs (anything that supports symbolic links actually)
+-        if 'media' in path and ('ext' in type or 'nfs' in type):
++        if 'nfs' in type or ('/media' in path) or ('/mnt' in path):
+             ret.append((path, path))
+     return ret
+EOF
+if [[ $? -eq 0 ]]; then
+    log $(service apache2 restart 2>&1)
+fi
+}
+#==============================================================================
+# Patch ion-dbreports 3.0 and earlier
+#==============================================================================
+function patch_3.0()
+{
+    patch -N /opt/ion/iondb/backup/devices.py << EOF
+Index: devices.py
+===================================================================
+--- devices.py	(revision 49427)
++++ devices.py	(working copy)
+@@ -53,6 +53,6 @@
+     ret = []
+     for i in devArr:
+         path = i.get_path()
+-        if 'media' in path:
++        if 'nfs' in type or ('/media' in path) or ('/mnt' in path):
+             ret.append((path,path))
+     return ret
+EOF
+if [[ $? -eq 0 ]]; then
+    log $(service apache2 restart 2>&1)
+fi
+}
+
+#==============================================================================
+# Returns true when PERC H810 card is installed
+# Implies that the MD1200 external storage unit is connected
+#==============================================================================
+function is_perc_installed ()
+{
+    if grep -q "$TSCONFIG_CARD_ID" /proc/scsi/scsi; then
+        #echo "Hooray, external scsi is enabled"
+        return 0
+    else
+        log "$TSCONFIG_CARD_ID not detected"
+        return 1
+    fi
+}
+
+#==============================================================================
+# Returns block device for given Device ID (Enclosure ID)
+#==============================================================================
+function get_block_device ()
+{
+    device_id=$1
+    adp_id=$(get_adapter_id)
+    # Search all logical devices for matching block id - this loop works for up to 8 virtual drives
+    for (( i=0; $i<8; i++ )); do
+        # device_id extracted
+        did=$(MegaCli64 -ldinfo -l${i} -a${adp_id}|awk '/EnclId/{print $5}')
+        if [[ $did -eq $device_id ]]; then
+            LUN=$i
+            #TODO - the print $7 positional depends on the fact that our adapter name has a space in it:
+            # [1:2:0:0]    disk    DELL     PERC H810        3.13  /dev/sdc
+            block_device=$(lsscsi|grep "$TSCONFIG_CARD_ID"|awk -v LUN="$LUN" '{split($1,location,":");if (location[3]==LUN)print $7}')
+            echo "$block_device"
+        fi
+    done
+}
+
+#==============================================================================
+# Get controller card "adapter id"
+# Assumes there is only one card - will return after finding first card
+#==============================================================================
+function get_adapter_id()
+{
+    num_adp=$(MegaCli64 -adpCount | grep "Controller Count" | sed -e 's/ //g' -e 's/\.//' | cut -d: -f2)
+    if [[ "$num_adp" == "" ]]; then num_adp=0; fi
+    for (( i=0; i<${num_adp}; i++ ));
+    do
+        name=$(MegaCli64 -AdpAllInfo -a${i} | grep "Product Name" | cut -f2 -d: | sed 's/ Adapter//g' | sed -e 's/^[ \t]*//')
+        if [ "$name" == "$TSCONFIG_CARD_ID" ]; then
+            adp_number=$i
+            echo $adp_number
+            return
+        fi
+    done
+}
+#==============================================================================
+# Get list of Service Tags from enclosures connected to adapter and their
+# device id.  Returns string "device,servicetag"
+#==============================================================================
+function get_service_tags()
+{
+    tags=
+    adp_id=$(get_adapter_id)
+    if [ "$adp_id" == "" ]; then
+        echo "No controller card found" >&2
+        return 1
+    else
+        tags=( $(MegaCli64 -EncInfo -a${adp_id}|awk '/Device ID/{printf $4","}/Vendor Specific/{print $4}' ) )
+    fi
+    echo ${tags[@]}
+}
+#==============================================================================
+# Generates a mountpoint name based on something
+#==============================================================================
+function generate_mountpoint()
+{
+    tag=$1
+    partition=$(echo $2 | sed 's/[^0-9]*//g')
+    if [ $partition -eq 1 ]; then
+        mnt_pt="/mnt/ion-ext-$tag"
+    else
+        mnt_pt="/mnt/ion-ext-$tag-$partition"
+    fi
+    echo $mnt_pt
+}
+
+#==============================================================================
+# Return true when device contains partitions
+#==============================================================================
+function is_partitioned ()
+{
+    block_dev=$1
+    string=$(parted $block_dev print|tail -2|head -1|awk '{print $1}')
+    case $string in
+        ''|*[!0-9]*)
+            return 1
+        ;;
+        *)
+            return 0
+        ;;
+    esac
+}
+
+#==============================================================================
+# Print information about this tool
+#==============================================================================
+function print_info ()
+{
+    echo "=============================================================================="
+    echo $(basename $0)
+    echo
+    echo "This script searches for block devices attached to the $TSCONFIG_CARD_ID"
+    echo "controller card.  For any devices found that do not have a partition, one"
+    echo "can be created.  For any partitions not part of the LV, it can be added."
+    echo
+    echo "=============================================================================="
+}
+#==============================================================================
+# Print information about enclosures to stdout
+#==============================================================================
+function print_enclosure_info ()
+{
+    echo "=============================================================================="
+    echo "Controller Card Scan"
+    # Loop thru all controllers
+    num_adp=$(MegaCli64 -adpCount | grep "Controller Count" | cut -f2 -d: | sed -e 's/ //' -e 's/\.//')
+    if [[ "$num_adp" == "" ]]; then num_adp=0; fi
+    echo "Server: $HOSTNAME Adapters: $num_adp"
+    for (( i=0; i<${num_adp}; i++ ));
+    do
+        name_adp=$(MegaCli64 -AdpAllInfo -a${i} | grep "Product Name" | cut -f2 -d: | sed 's/ Adapter//g' | sed -e 's/^[ \t]*//')
+        # Loop thru all enclosures
+        num_enc=$(MegaCli64 -EncInfo -a${i} | grep "Number of enclosures" |cut -f3 -d-)
+        echo "Adapter: $name_adp Enclosures: $num_enc"
+        MegaCli64 -EncInfo -a${i}|egrep '(Vendor|Product|Device ID)'||true
+
+    done
+    echo "=============================================================================="
+}
+function print_success ()
+{
+    echo "=============================================================================="
+    echo "$(basename $0) script completed."
+    echo "=============================================================================="
+}
+
+#==============================================================================
+# Helper function to get user input
+#==============================================================================
+function proceed_query ()
+{
+    query="$1"
+    read -p "$query [y|n]: " answer
+    case $answer in
+        "y"|"Y")
+            return 0
+        ;;
+        *)
+            return 1
+        ;;
+    esac
+}
+
+#==============================================================================
+# Verify required packages and tools are available before proceeding
+#==============================================================================
+function check_prerequisites ()
+{
+    fail=0
+    # List of required debian packages
+    required=( libdevmapper-event1.02.1 watershed megacli dkms megaraid-sas-dkms lvm2 xfsprogs lsscsi )
+    for pkg in ${required[@]}; do
+        if [[ "ii" != "$(dpkg -l ${pkg}|tail -1|awk '{print $1}')" ]]; then
+            echo "Cannot find $pkg package." >&2
+            fail=1
+        else
+            #echo "Found $pkg" >&2
+            :
+        fi
+    done
+    # List of required tools
+    required=( MegaCli64 parted pvcreate vgdisplay vgextend vgcreate lvcreate mkfs.xfs blkid )
+    for prg in ${required[@]}; do
+        if ! which $prg >/dev/null 2>&1; then
+            echo "Cannot find $prg tool." >&2
+            fail=1
+        else
+            :
+        fi
+    done
+    return $fail
+}
+
+
+#==============================================================================
+# Install required packages, if it is missing
+#==============================================================================
+function install_prerequisites()
+{
+    # Stand-alone use case.  Deb files need to be co-located with this script.
+    # Assume this script has been unpacked along with required deb packages
+    required=( libdevmapper-event1.02.1 watershed megacli dkms megaraid-sas-dkms lvm2 xfsprogs lsscsi )
+    for pkgname in ${required[@]}; do
+        if [[ "$(dpkg -l $pkgname|tail -1|awk '{print $1}')" == "ii" ]]; then
+            #echo $pkgname is installed
+            :
+        else
+            log "$pkgname needs to be installed"
+            pkgfile=$(find ./ -name $pkgname\* -print)
+            if [[ -e $pkgfile ]]; then
+                log "dpkg -i $pkgfile"
+                log $(dpkg -i $pkgfile)
+            else
+                # should not get here
+                log "apt-get --assume-yes --force-yes install $pkgname"
+                log $(apt-get --assume-yes --force-yes install $pkgname)
+            fi
+        fi
+    done
+    log "Required packages are installed"
+}
+
+#==============================================================================
+# Prompts user to customize their mountpoint
+#==============================================================================
+function customize_mountpoint()
+{
+    current_mp=$(basename $1)
+
+    echo -e "\nYou can customize the name of the archive directory\n"
+    while [ 0 ]; do
+        read -e -i $current_mp -p "Modify the name (or press enter to accept current): " new_mp
+        regex="^[[:alnum:]][-_[:alnum:]]{0,61}$"
+
+        if [[ $new_mp =~ $regex ]] ; then
+            #echo "VALID"
+            if [ -d $(dirname $1)/$new_mp ]; then
+                echo -e "\n$(dirname $1)/$new_mp already exists."
+                echo "Here is a list of directories that already exist:"
+                find $(dirname $1) -maxdepth 1 -type d
+                echo ""
+            else
+                break
+            fi
+        else
+            echo -e "\n$new_mp IS NOT VALID\nOnly alphanumeric characters, hyphens and underscores are allowed"
+            # Not valid
+            #return 1
+        fi
+    done
+    mnt_pt=$(dirname $1)/$new_mp    # Global variable alert
+}
+
+
+#==============================================================================
+# Test if partition is part of LVM configuration
+#==============================================================================
+function is_added_lvm()
+{
+    block_dev=$1
+    for device in $(pvdisplay|awk '/PV Name/{print $3}'); do
+        if [[ "$device" == "$block_dev" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+
+function is_vg_exported()
+{
+    oldIFS=$IFS
+    IFS=$'\n'
+    block_dev=$1
+    for line in $(pvscan|grep $block_dev); do
+        if echo $line| grep -q "is in exported VG"; then
+            IFS=$oldIFS
+            return 0
+        else
+            IFS=$oldIFS
+            return 1
+        fi
+    done
+    IFS=$oldIFS
+    return 1
+}
+
+
+#==============================================================================
+# Prepare a Volume Group to be disconnected and shipped out
+#==============================================================================
+function export_VG()
+{
+    mnt_pt=$1
+    # umount
+    umount $mnt_pt
+    # deactivate IonArchive
+    vgchange -an $VolumeGroupName
+    # rename to factoryVG
+    vgrename $VG $FactoryVGName
+    # deactivate factoryVG
+    vgchange -an $FactoryVGName
+    # export factoryVG
+    vgexport $FactoryVGName
+}
+
+#==============================================================================
+# MAIN
+#==============================================================================
+#--------------------------------------
+# trap exit codes
+#--------------------------------------
+trap 'error ${LINENO}' ERR
+print_info
+sleep 1
+# Will exit if we don't have root privilege
+needs_root
+print_enclosure_info
+sleep 1
+
+if is_perc_installed; then
+
+    install_prerequisites
+
+    # Verify dependent tools are installed
+    if ! check_prerequisites; then
+        echo -e "ERROR! Cannot continue!\n" >&2
+        exit 1
+    fi
+
+    service_tags=( $(get_service_tags) )
+    VolumeGroupName="IonArchive"
+    FactoryVGName="factoryVG"
+
+    echo "=============================================================================="
+    echo "Controller Card: $TSCONFIG_CARD_ID"
+    echo "Enclosure Scan"
+    echo "${#service_tags[@]} external units: ${service_tags[@]}"
+    echo "=============================================================================="
+
+    for (( i=0; $i<${#service_tags[@]}; i++ )); do
+
+        # service_tag element is comma delimited string "deviceId,serviceTag"
+        # use bash builtins to split on comma
+        device_id=${service_tags[$i]%,*}
+        service_tag=${service_tags[$i]#*,}
+
+        # Get block device using device_id as lookup key
+        item=$(get_block_device $device_id)
+
+        echo "=============================================================================="
+        echo Device: $item   Service Tag: $service_tag
+        echo
+
+        #======================================================================
+        # If there are no partitions on the device, we need to create one
+        #======================================================================
+        if ! is_partitioned $item; then
+            #log "$item: no partitions"
+
+            # Query
+            echo
+            echo "Device $item needs to be partitioned."
+            echo "Any data on the drive will be overwritten."
+            if ! proceed_query "Do you want to proceed with partitioning $item?"; then
+                echo "Aborting configuration of $item."
+                echo "=============================================================================="
+                continue
+            else
+                # Create partition
+                log "parted -s $item mklabel gpt"
+                parted -s $item mklabel gpt
+
+                log "parted -s $item mkpart primary 0% 100%"
+                parted -s $item mkpart primary 0% 100%
+            fi
+        else
+            echo "Device $item already has a partition"
+        fi
+
+        #======================================================================
+        # Create LVM
+        #======================================================================
+        if ! is_added_lvm ${item}1; then
+
+            # Query
+            echo
+            echo "Device $item needs to be added to LVM."
+            if ! proceed_query "Do you want to add $item to LVM?"; then
+                echo "Aborting LVM configuration."
+                echo "=============================================================================="
+                continue
+            else
+                LogicalVolumeName=$service_tag
+
+                # LVM
+                log "pvcreate ${item}1"
+                log $(pvcreate ${item}1)
+
+                if vgdisplay|grep -q $VolumeGroupName; then
+                    log "vgextend $VolumeGroupName ${item}1"
+                    log $(vgextend $VolumeGroupName ${item}1)
+                else
+                    log "vgcreate $VolumeGroupName ${item}1"
+                    log $(vgcreate $VolumeGroupName ${item}1)
+                fi
+
+                log "lvcreate -n $LogicalVolumeName -l 100%PVS $VolumeGroupName ${item}1"
+                log $(lvcreate -n $LogicalVolumeName -l 100%PVS $VolumeGroupName ${item}1)
+
+                # Format filesystem
+                echo "This can take several minutes..."
+                log "mkfs.xfs /dev/$VolumeGroupName/$LogicalVolumeName"
+                log $(mkfs.xfs /dev/$VolumeGroupName/$LogicalVolumeName)
+            fi
+        else
+            echo "${item}1 is already in LVM"
+        fi
+
+        #======================================================================
+        # Import the volume group previously created on the enclosure
+        #======================================================================
+        if is_vg_exported ${item}1; then
+            echo
+            echo "${item}1 has an exported VolumeGroup"
+            if ! proceed_query "Do you want to import the VolumeGroup?"; then
+                echo "Skipping import of VolumeGroup"
+                echo "=============================================================================="
+                continue
+            else
+                # if VolumeGroup exists locally, import the new into VolumeGroup
+                if vgscan | grep -q $VolumeGroupName; then
+                    # Volume Group exists so merge
+                    log "vgimport ${FactoryVGName}"
+                    log $(vgimport ${FactoryVGName})
+                    log "vgchange -an $FactoryVGName"
+                    log $(vgchange -an $FactoryVGName)
+                    log "vgmerge $VolumeGroupName $FactoryVGName"
+                    log $(vgmerge $VolumeGroupName $FactoryVGName)
+                else
+                    # Volume Group does not exist so import and rename
+                    log "vgrename $FactoryVGName ${VolumeGroupName}"
+                    log $(vgrename $FactoryVGName ${VolumeGroupName})
+                    log "vgimport ${VolumeGroupName}"
+                    log $(vgimport ${VolumeGroupName})
+                    log "vgchange -ay $VolumeGroupName"
+                    log $(vgchange -ay $VolumeGroupName)
+                fi
+            fi
+        fi
+
+        log "${item} has partitions:" # DEBUG output only
+        log $(blkid -s TYPE | grep "$item")        # DEBUG output only
+
+        for dev_part in $(blkid | grep "$item" | cut -f1 -d:); do
+
+            mnt_pt=$(generate_mountpoint $service_tag $dev_part)
+            fs=$(blkid -s TYPE /dev/mapper/${VolumeGroupName}-${service_tag} | cut -f2 -d= | sed 's/"//g')
+            if [[ "$fs" == "" ]]; then
+                fs="xfs"
+            fi
+
+            if ! grep -q "/dev/$VolumeGroupName/$service_tag" /etc/fstab; then
+
+                #Note: We want to support ability to comment-out a line with a UUID
+                #to prevent that device from being added again.
+                log "We need to add (/dev/$VolumeGroupName/$service_tag) to the /etc/fstab"   #DEBUG output only
+
+                # Query
+                echo
+                echo "We need to configure $dev_part to automount"
+                echo
+                echo "We will edit /etc/fstab file, create a mountpoint, and mount /dev/$VolumeGroupName/$service_tag."
+                if ! proceed_query "Do you want to proceed?"; then
+                    echo "Aborting configuration of $item."
+                    echo "Device is configured but will not be automounted"
+                    echo "=============================================================================="
+                    continue
+                else
+                    #==============================================================
+                    # Prompt to customize the name of the drive
+                    #==============================================================
+                    customize_mountpoint $mnt_pt    # mnt_pt variable will be overwritten
+
+                    #==============================================================
+                    # Actual Changes made to the server...
+                    #==============================================================
+                    # Add entry to /etc/fstab
+                    log "/dev/$VolumeGroupName/$service_tag\t$mnt_pt\t$fs\tdefaults\t0\t0"
+                    echo -e "/dev/$VolumeGroupName/$service_tag\t$mnt_pt\t$fs\tdefaults\t0\t0" >> /etc/fstab
+                fi
+
+                # Create mountpoint
+                log "mkdir -p $mnt_pt"
+                mkdir -p $mnt_pt
+
+                # Mount
+                log "mount /dev/$VolumeGroupName/$service_tag"
+                mount /dev/$VolumeGroupName/$service_tag || true
+
+                # Set permissions
+                log "chmod 0777 $mnt_pt"
+                chmod 0777 $mnt_pt
+
+                #==============================================================
+                # End
+                #==============================================================
+                echo
+                echo "Device $dev_part is ready for use at $mnt_pt"
+                echo "=============================================================================="
+
+            else
+                log "Already added (/dev/$VolumeGroupName/$service_tag) in the /etc/fstab"   #DEBUG output only
+                echo "Device $dev_part is ready for use at $mnt_pt"
+                echo "=============================================================================="
+            fi
+        done
+    done
+
+    # Allow Data Management system to recognize storage attached at /mnt mountpoint
+    INSTALLED_VERSION=$(get_ts_version)
+    log "TS version: $INSTALLED_VERSION"
+    if [[ ! $INSTALLED_VERSION = "" ]]; then
+        if [[ $INSTALLED_VERSION < '3.0' ]] || [[ $INSTALLED_VERSION = '3.0' ]]; then
+            log "patch_3.0"
+            log $(patch_3.0)
+        elif [[ $INSTALLED_VERSION = '3.2' ]]; then
+            log "patch_3.2"
+            log $(patch_3.2)
+        elif [[ $INSTALLED_VERSION = '3.4' ]]; then
+            log "patch_3.4"
+            log $(patch_3.4)
+        elif [[ $INSTALLED_VERSION = '3.6' ]]; then
+            log "patch_3.6"
+            log $(patch_3.6)
+        else
+            echo "Unhandled version detected! -- $INSTALLED_VERSION"
+        fi
+    else
+        echo "Cannot determine installed TS version.  Trying 3.0 patch"
+        log "patch_3.0"
+        log $(patch_3.0)
+    fi
+
+
+    print_success
+else
+    log "external scsi card not detected"
+fi
+
+exit
+
+# Note:
+# If you manually remove the entry from /etc/fstab, this will force the re-running
+# of /etc/fstab editing, mountpoint directory creation, remounting, and
+# permission setting for that partition.
+#
+# To re-create a partition, the disk must be removed from LVM first, following
+# the instructions below.
+#
+# Notes on removing a disk from LMV
+# unmount the logical drive
+# remove entry from fstab and delete the mountpoint
+# lvdisplay
+# lvremove <logicalvolume>
+# vgdisplay
+# vgreduce <volumegroup> <block device> -OR- vgremove <volumegroup> (only if all lv have been removed)
+# pvdisplay
+# pvremove <block device>
+#
+# To remove partition
+# parted <block device> rm 1
+
+# Note:
+# To export an LVM volume
+# vgchange -an <volumegroup>
+# vgexport <volumegroup>
+#
+# Note:
+# To prepare an enclosure to ship out of Attronica:
+# umount <mountpoint>
+# vgchange -a n IonArchive
+# vgrename IonArchive IonArchive-inactive
+# vgchange -a n IonArchive-inactive
+# vgexport IonArchive-inactive

@@ -56,7 +56,7 @@ def QVtable(dir_recalibration,
             flowSpan):
     '''Generates a QV table from the mapped sample reads'''
     try:
-        cmd = "java -jar /usr/local/lib/java/FlowspaceCalibration.jar"
+        cmd = "java -jar /usr/local/share/java/FlowspaceCalibration.jar"
         cmd += " I=%s" % sampleBAMFile
         cmd += " R=%s" % genome_path
         cmd += " O=%s" % os.path.join(dir_recalibration, 'sample.csv')
@@ -100,7 +100,7 @@ def QVaggregation(dir_recalibration,
                   qvtable
                  ):
     try:
-        cmd = "java -classpath /usr/local/lib/java/FlowspaceCalibration.jar"
+        cmd = "java -classpath /usr/local/share/java/FlowspaceCalibration.jar"
         cmd += " org.iontorrent.sam2flowgram.flowspace.PerturbationTableParser"
         cmd += " -f %s" % dir_recalibration
         cmd += " -s %d" % flowSpan
@@ -127,6 +127,7 @@ def base_recalib(
       barcodeId,
       barcodeSamples,
       barcodesplit_filter,
+      barcodesplit_filter_minreads,
       DIR_BC_FILES,
       barcodeList_path,
       barcodeMask_path,
@@ -173,6 +174,7 @@ def base_recalib(
                       barcodeId,
                       barcodeSamples,
                       barcodesplit_filter,
+                      barcodesplit_filter_minreads,
                       DIR_BC_FILES,
                       barcodeList_path,
                       barcodeMask_path,

@@ -10,13 +10,48 @@
 		</div>
 		<div class="span6">
 			<h2>{{avg_coverage_depth_of_target}} </h2>
-			<small rel='tooltip' title="Total aligned bases divided by the number of bases in the reference sequence. Will not be aware of or account for any enrichment that may have been done to selectively amplify a subset of the reference sequence">Average Coverage Depth of Reference</small>
+			<small rel='tooltip' title="Total aligned bases divided by the number of bases in the reference sequence. Will not be aware of or account for any enrichment that may have been done to selectively amplify a subset of the reference sequence">Reference Coverage</small>
 		</div>
 	</div>
 
     <a data-toggle="modal" class="report-metric-visual showImg" href="#alignRate">
-       <img class="showImg" src="{{report.reportWebLink}}/alignment_rate_plot.png">
+       <img class="showImg" src="{{report.reportWebLink}}/alignment_rate_plot.png"> <i class="icon-zoom-in"></i>
     </a>
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>&nbsp;</th>
+        <th style="text-align: right;">Count</th>
+        <th style="text-align: right;">%</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% if ionstats_alignment %}
+      <tr>
+        <td rel="tooltip" title="Reads generated during basecalling">Total Reads</td>
+        <td style="text-align: right;">{{ionstats_alignment.full.num_reads|intcomma}}</td>
+        <td style="text-align: right;">&nbsp;&mdash;&nbsp;</td>
+      </tr>
+      <tr>
+        <td rel="tooltip" title="Reads aligned to reference genome">Aligned Reads</td>
+        <td style="text-align: right;">{{ionstats_alignment.aligned.num_reads|intcomma}}</td>
+        <td style="text-align: right;">{{ionstats_alignment.aligned.p_num_reads|floatformat:"1"}}%</td>
+      </tr>
+      <tr>
+        <td rel="tooltip" title="Reads not-aligned to reference genome">Unaligned Reads</td>
+        <td style="text-align: right;">{{ionstats_alignment.unaligned.num_reads|intcomma}}</td>
+        <td style="text-align: right;">{{ionstats_alignment.unaligned.p_num_reads|stringformat:".1f"}}%</td>
+      </tr>
+      {% endif %}
+      {% if duplicate_metrics %}
+      <tr>
+        <td rel="tooltip" title="Aligned reads marked as potential PCR duplicates">Duplicate Reads</td>
+        <td style="text-align: right;">{{duplicate_metrics.duplicate_reads|intcomma}}</td>
+        <td style="text-align: right;">{{duplicate_metrics.duplicate_read_percentage|stringformat:".1f"}}%</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
 
     <div class="modal hide" id="alignRate" style="width: 830px; margin-left: -415px;">
         <div class="modal-header">
@@ -24,44 +59,7 @@
             <h3>Alignment summary</h3>
         </div>
         <div class="modal-body" id="alignRate_body" style="max-height: 900px;">
-            <img class="pull-right" style="width: 770px;" src="{{report.reportWebLink}}/large_alignment_rate_plot.png">
-
-            <h3>Alignment Detail Metrics</h3>
-            <table class="table table-condensed table-striped" style="height: auto; width: 300px;">
-              <thead>
-                <tr>
-                  <th>&nbsp;</th>
-                  <th style="text-align: right;">Count</th>
-                  <th style="text-align: right;">%</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% if ionstats_alignment %}
-                <tr>
-                  <td rel="tooltip" title="Reads generated during basecalling">Total Reads</td>
-                  <td style="text-align: right;">{{ionstats_alignment.full.num_reads|intcomma}}</td>
-                  <td style="text-align: right;">&nbsp;&mdash;&nbsp;</td>
-                </tr>
-                <tr>
-                  <td rel="tooltip" title="Reads aligned to reference genome">Aligned Reads</td>
-                  <td style="text-align: right;">{{ionstats_alignment.aligned.num_reads|intcomma}}</td>
-                  <td style="text-align: right;">{{ionstats_alignment.aligned.p_num_reads|floatformat:"1"}}%</td>
-                </tr>
-                <tr>
-                  <td rel="tooltip" title="Reads not-aligned to reference genome">Unaligned Reads</td>
-                  <td style="text-align: right;">{{ionstats_alignment.unaligned.num_reads|intcomma}}</td>
-                  <td style="text-align: right;">{{ionstats_alignment.unaligned.p_num_reads|stringformat:".1g"}}%</td>
-                </tr>
-                {% endif %}
-                {% if duplicate_metrics %}
-                <tr>
-                  <td rel="tooltip" title="Aligned reads marked as potential PCR duplicates">Duplicate Reads</td>
-                  <td style="text-align: right;">{{duplicate_metrics.duplicate_reads|intcomma}}</td>
-                  <td style="text-align: right;">{{duplicate_metrics.duplicate_read_percentage|stringformat:".1g"}}%</td>
-                </tr>
-                {% endif %}
-              </tbody>
-            </table>
+            <img style="width: 770px;" src="{{report.reportWebLink}}/large_alignment_rate_plot.png">
         </div>
         <div class="modal-footer">
             <a href="#" class="btn" data-dismiss="modal">Close</a>

@@ -38,7 +38,8 @@ def basecaller_cmd(basecallerArgs,
                    block_row_offset,
                    datasets_pipeline_path,
                    adapter,
-                   barcodesplit_filter):
+                   barcodesplit_filter,
+                   barcodesplit_filter_minreads):
     if basecallerArgs:
         cmd = basecallerArgs
     else:
@@ -54,8 +55,8 @@ def basecaller_cmd(basecallerArgs,
     cmd += " --block-row-offset %d" % (block_row_offset)
     cmd += " --datasets=%s" % (datasets_pipeline_path)
     cmd += " --trim-adapter %s" % (adapter)
-    if barcodesplit_filter:
-        cmd += " --barcode-filter %s" % barcodesplit_filter
+    cmd += " --barcode-filter %s" % barcodesplit_filter
+    cmd += " --barcode-filter-minreads %s" % barcodesplit_filter_minreads
 
     return cmd
 
@@ -72,6 +73,7 @@ def basecalling(
       barcodeId,
       barcodeSamples,
       barcodesplit_filter,
+      barcodesplit_filter_minreads,
       DIR_BC_FILES,
       barcodeList_path,
       barcodeMask_path,
@@ -154,7 +156,8 @@ def basecalling(
                              block_row_offset,
                              datasets_pipeline_path,
                              adapter,
-                             barcodesplit_filter)
+                             barcodesplit_filter,
+                             barcodesplit_filter_minreads)
 
         printtime("DEBUG: Calling '%s':" % cmd)
         proc = subprocess.Popen(shlex.split(cmd.encode('utf8')), shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -234,7 +237,6 @@ def basecalling(
 def post_basecalling(BASECALLER_RESULTS,expName,resultsName,flows):
 
     datasets_basecaller_path = os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json")
-
     if not os.path.exists(datasets_basecaller_path):
         printtime("ERROR: %s does not exist" % datasets_basecaller_path)
         raise Exception("ERROR: %s does not exist" % datasets_basecaller_path)
@@ -273,7 +275,19 @@ def post_basecalling(BASECALLER_RESULTS,expName,resultsName,flows):
         quality_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'))
         
     # Merge ionstats_basecaller files from individual barcodes/dataset
-    ionstats.reduce_stats(quality_file_list,os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'))
+    ionstats_basecaller_path = os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json')
+    ionstats.reduce_stats(quality_file_list, ionstats_basecaller_path)
+
+    # Read the merged ionstats in order to set a consistent read length histogram width for more detailed images
+    try:
+        with open(ionstats_basecaller_path) as f:
+            ionstats_basecaller = json.load(f)
+    except Exception:
+        printtime("ERROR: problem parsing %s" % ionstats_basecaller_path)
+        raise Exception("ERROR: problem parsing %s" % ionstats_basecaller_path)
+    full_graph_x = max(50, ionstats_basecaller["full"]["max_read_length"])
+    if full_graph_x % 50:
+        full_graph_x += 50 - full_graph_x % 50
 
     # Generate legacy stats file: quality.summary
     ionstats.generate_legacy_basecaller_files(
@@ -284,7 +298,7 @@ def post_basecalling(BASECALLER_RESULTS,expName,resultsName,flows):
     ionstats_plots.old_read_length_histogram(
             os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
             os.path.join(BASECALLER_RESULTS,'readLenHisto.png'),
-            graph_max_x)
+            full_graph_x)
     
     # Plot new read length histogram
     ionstats_plots.read_length_histogram(
@@ -296,6 +310,15 @@ def post_basecalling(BASECALLER_RESULTS,expName,resultsName,flows):
     ionstats_plots.quality_histogram(
         os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
         os.path.join(BASECALLER_RESULTS,'quality_histogram.png'))
+
+    # Plot higher detail barcode specific histograms
+    for dataset in datasets_basecaller["datasets"]:
+        if not os.path.exists(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])):
+            continue
+        ionstats_plots.old_read_length_histogram(
+                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
+                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.read_len_histogram.png'),
+                full_graph_x)
 
     printtime("Finished basecaller post processing")
 
@@ -705,6 +728,7 @@ if __name__=="__main__":
         'barcodeId'             : 'IonExpress',
         #'barcodeId'             : '',
         'barcodesplit_filter'   : 0.01,
+        'barcodesplit_filter_minreads'  : 0,
         'DIR_BC_FILES'          : 'basecaller_results/bc_files',
         'libraryName'           : 'hg19',
         'sample'                : 'My-sample',
@@ -736,6 +760,7 @@ if __name__=="__main__":
         env['barcodeId'],
         env.get('barcodeSamples',''),
         env['barcodesplit_filter'],
+        env['barcodesplit_filter_minreads'],
         env['DIR_BC_FILES'],
         os.path.join("barcodeList.txt"),
         os.path.join(env['BASECALLER_RESULTS'], "barcodeMask.bin"),

@@ -58,6 +58,7 @@ struct LocalSigProcControl{
   bool  var_kmult_only;    // always do variable kmult override
   bool  generic_test_flag; // control any features that I'm just testing
   bool fit_alternate;
+  bool fit_gauss_newton;
   int   choose_time;
 
   bool  projection_search_enable;
@@ -79,8 +80,13 @@ struct LocalSigProcControl{
   bool regional_sampling;
   int regional_sampling_type;
   bool prefilter_beads;
+  bool amp_guess_on_gpu;
 
   LocalSigProcControl();
+  
+  int max_frames;
+  void set_max_frames(int nFrames) { max_frames = nFrames; }
+  int get_max_frames() { return (max_frames); }
 
 private:
   friend class boost::serialization::access;
@@ -97,6 +103,7 @@ private:
       & var_kmult_only
       & generic_test_flag
       & fit_alternate 
+      & fit_gauss_newton 
       & choose_time
       & projection_search_enable
       & ssq_filter
@@ -111,7 +118,9 @@ private:
       & pca_dark_matter
       & prefilter_beads
       & regional_sampling
-      & regional_sampling_type;
+      & regional_sampling_type
+      & amp_guess_on_gpu
+      & max_frames;
   }
 };
   
@@ -250,6 +259,7 @@ public:
   void SetVarKmultControl(bool _var_kmult_only){signal_process_control.var_kmult_only = _var_kmult_only;};
   void SetGenericTestFlag(bool _generic_test_flag){signal_process_control.generic_test_flag = _generic_test_flag;};
   void SetFitAlternate(bool _fit_alternate){signal_process_control.fit_alternate = _fit_alternate;};
+  void SetFitGaussNewton(bool _fit_gauss_newton){signal_process_control.fit_gauss_newton = _fit_gauss_newton;};
   void SetEmphasizeByCompression(bool _emp_by_comp){data_control.point_emphasis_by_compression = _emp_by_comp;};
   void ReadXtalk(char *name);
   void SetChipType(char *name);

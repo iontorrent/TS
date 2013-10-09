@@ -48,8 +48,6 @@
 			$(signalContainer).addClass('signal-strength');
 			
 			if (typeof strength == 'undefined' || strength == null) {
-				console.log("Whuuutt");
-				console.log(typeof strength);
 				stren = 0;
 				strength = 0;
 			} else {

@@ -1,7 +1,10 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 ## {{{ http://code.activestate.com/recipes/576891/ (r1)
 #! /usr/bin/env python
-import os, errno, fcntl
+import os
+import errno
+import fcntl
+
 
 class ApplicationLock:
     '''
@@ -19,11 +22,11 @@ class ApplicationLock:
         lockfile  -- Full path to lock file
         lockfd    -- File descriptor of lock file exclusively locked
     '''
-    def __init__ (self, lockfile):
+    def __init__(self, lockfile):
         self.lockfile = lockfile
         self.lockfd = None
 
-    def lock (self):
+    def lock(self):
         '''
         Creates and holds on to the lock file with exclusive access.
         Returns True if lock successful, False if it is not, and raises
@@ -41,14 +44,14 @@ class ApplicationLock:
             #
             # Could use os.O_EXLOCK, but that doesn't exist yet in my Python
             #
-            self.lockfd = os.open (self.lockfile,
-                                   os.O_TRUNC | os.O_CREAT | os.O_RDWR)
+            self.lockfd = os.open(self.lockfile,
+                                  os.O_TRUNC | os.O_CREAT | os.O_RDWR)
 
             # Acquire exclusive lock on the file, but don't block waiting for it
-            fcntl.flock (self.lockfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(self.lockfd, fcntl.LOCK_EX | fcntl.LOCK_NB)
 
             # Writing to file is pointless, nobody can see it
-            os.write (self.lockfd, "My Lockfile")
+            os.write(self.lockfd, "My Lockfile")
 
             return True
         except (OSError, IOError), e:
@@ -58,13 +61,13 @@ class ApplicationLock:
             else:
                 raise
 
-    def unlock (self):
+    def unlock(self):
         try:
             # FIRST unlink file, then close it.  This way, we avoid file
             # existence in an unlocked state
-            os.unlink (self.lockfile)
+            os.unlink(self.lockfile)
             # Just in case, let's not leak file descriptors
-            os.close (self.lockfd)
+            os.close(self.lockfd)
         except (OSError, IOError), e:
             # Ignore error destroying lock file.  See class doc about how
             # lockfile can be erased and everything still works normally.
@@ -73,14 +76,13 @@ class ApplicationLock:
 # Test main routine
 if __name__ == '__main__':
     import time
-    applock = ApplicationLock ('Test.lock')
-    if (applock.lock ()):
+    applock = ApplicationLock('Test.lock')
+    if (applock.lock()):
         # Hint: try running 2nd program instance while this instance sleeps
         print ("Obtained lock, sleeping 10 seconds")
-        time.sleep (10)
+        time.sleep(10)
         print ("Unlocking")
-        applock.unlock ()
+        applock.unlock()
     else:
         print ("Unable to obtain lock, exiting")
 ## end of http://code.activestate.com/recipes/576891/ }}}
-

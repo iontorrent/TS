@@ -1,0 +1,7 @@
+{%include "rundb/plan/page_plan/summary/kit_summary.html"%}
+{% for qcTypeName,qcValue in helper.getStepDict.Monitoring.getCurrentSavedFieldDict.items %}
+    <tr>
+    	<td><b>{{qcTypeName}}:</b></td>
+    	<td id="selected__{{forloop.counter0}}">{{qcValue}}</td>
+    </tr>
+{% endfor %}

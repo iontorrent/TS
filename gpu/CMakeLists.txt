@@ -41,7 +41,7 @@ install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_devdriver_version}/${cuda_devdr
         	PATTERN .svn EXCLUDE)
         install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/bin/nvcc DESTINATION /usr/local/cuda/bin)
 
-if (0)
+if (1)
     set (CMAKE_C_FLAGS_RELEASE "")
     set (CMAKE_CXX_FLAGS_RELEASE "")
     include_directories( "${PROJECT_SOURCE_DIR}/common/inc" )
@@ -52,10 +52,28 @@ if (0)
                          "-maxrregcount=48" )
     CUDA_ADD_EXECUTABLE(bandwidthTest bandwidthTest.cu)
     CUDA_ADD_EXECUTABLE(deviceQuery deviceQuery.cpp)
+    CUDA_ADD_EXECUTABLE(xtalk_sim
+                        xtalk_sim/xtalk_sim.cpp
+                        xtalk_sim/DiffEqModel_Init.cpp
+                        xtalk_sim/DiffEqModel.cpp
+                        xtalk_sim/DelsqCUDA.cu
+                        xtalk_sim/utils.cpp
+                        xtalk_sim/xtalk_sim.cpp
+                        xtalk_sim/sim_incorp_flux.cpp
+                        xtalk_sim/WorkerInfoQueue.cpp)
+
+    target_link_libraries(xtalk_sim pthread)
+
+    add_dependencies(bandwidthTest cuda_toolkit)
+    add_dependencies(deviceQuery cuda_toolkit)
+    add_dependencies(xtalk_sim cuda_toolkit)
+
+    install(PROGRAMS ${PROJECT_BINARY_DIR}/deviceQuery DESTINATION .)
+    install(PROGRAMS ${PROJECT_BINARY_DIR}/bandwidthTest DESTINATION .)
+    install(PROGRAMS ${PROJECT_BINARY_DIR}/xtalk_sim DESTINATION .)
+
 endif()
 
-install(PROGRAMS deviceQuery DESTINATION .)
-install(PROGRAMS bandwidthTest DESTINATION .)
 install(PROGRAMS create_nvidia_files DESTINATION .)
 
 
@@ -66,6 +84,10 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 set(CPACK_DEBIAN_PACKAGE_BREAKS "ion-analysis (<< 2.9)")
 set(CPACK_DEBIAN_PACKAGE_REPLACES "ion-analysis (<< 2.9)")
+
+# Compiling GPU kernel code requires
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "build-essential, linux-headers, dkms")
+
 
 #% nice to automate this
 set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Browser and related programs including the job crawler, and the archive daemon.")

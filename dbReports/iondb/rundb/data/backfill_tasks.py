@@ -123,7 +123,8 @@ def backfill_result_diskusage():
     log.info("===== New Run =====")
 
     log.info("RESULTS:")
-    query = Q(diskusage=None) | Q(diskusage=0)
+    #query = Q(diskusage=None) | Q(diskusage=0)
+    query = Q(diskusage=None)
     obj_list = models.Results.objects.filter(query).values('pk','resultsName')
     #obj_list = models.Results.objects.values('pk','resultsName')
     for obj in obj_list:

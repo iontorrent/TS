@@ -9,7 +9,7 @@ from iondb.rundb.models import Message, Results
 logger = get_task_logger('data_management')
 
 def project_msg_banner(user, project_msg, action):
-    logger.info("Function: %s()" % sys._getframe().f_code.co_name)
+    logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
     try:
         msg = ''
         thistag = ''

@@ -1,3 +1,5 @@
+{% load url from future %}
+{% load static from staticfiles %}
 <div id="modal_references_add_barcodeset" title="" class="modal hide" data-width="750">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -5,7 +7,7 @@
     </div>
     <div class="modal-body">
         <div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
-        <form class="form-horizontal" id="modal_references_add_barcodeset_form" method="POST" action="{% url references_barcodeset_add %}" enctype="multipart/form-data">
+        <form class="form-horizontal" id="modal_references_add_barcodeset_form" method="POST" action="{% url "references_barcodeset_add" %}" enctype="multipart/form-data">
             <fieldset>
                 <div class="control-group">
                     <label for="input01" class="control-label">Barcode Set Name</label>
@@ -25,7 +27,7 @@
                         <p class="help-block error">
                         </p>
                         <p class="help-block">
-                            CSV File of barcodes. <a href="/site_media/examples/barcodeExample.csv">Download the example file </a><em>sequence column is required</em>
+                            CSV File of barcodes. <a href="{% static "examples/barcodeExample.csv"%}">Download the example file </a><em>sequence column is required</em>
                         </p>
                     </div>
                 </div>
@@ -62,7 +64,7 @@
                 if (!jQuery.fn.uniform.isValid($('#modal_references_add_barcodeset_form'), jQuery.fn.uniform.defaults)) {
                     return false;
                 }
-                $("#loadingstatus").html("<p>Uploading Barcode file <img src='/site_media/jquery/colorbox/images/loading.gif'></img></p>");
+                $("#loadingstatus").html("<p>Uploading Barcode file <img src='{% static "jquery/colorbox/images/loading.gif"%}'></img></p>");
             },
             success: function SubmitSuccesful(responseText, statusText) {
                 upReturn = eval(responseText);

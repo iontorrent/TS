@@ -24,17 +24,24 @@ barcode_load_list ()
     BARCODES[$BCN]=${BARCODE_LINE}
     BARCODE_ROWSUM[$BCN]=$ROWSUM_NODATA
     BARCODE_BAM="${ANALYSIS_DIR}/${BARCODE_LINE}_${PLUGIN_BAM_FILE}"
+    SAMPNAME=`echo "$PLUGIN_SAMPLE_NAMES" | sed -e "s/.*;$BARCODE_LINE=\([^;]*\).*/\1/"`
+    if [ -z "$SAMPNAME" -o "$SAMPNAME" = "$PLUGIN_SAMPLE_NAMES" ];then
+      SAMPNAME='None'
+    fi
     if [ -e ${BARCODE_BAM} ]; then
       BARCODES_OK[${BCN}]=1
       BARCODE_BAMNAME[${BCN}]=$PLUGIN_BAM_FILE
+      BARCODE_SAMPNAME[${BCN}]="$SAMPNAME"
     else
       BARCODE_BAM="${ANALYSIS_DIR}/${BARCODE_LINE}_${PLUGIN_RUN_NAME}.bam"
       if [ -e ${BARCODE_BAM} ]; then
         BARCODES_OK[${BCN}]=1
         BARCODE_BAMNAME[${BCN}]="${PLUGIN_RUN_NAME}.bam"
+        BARCODE_SAMPNAME[${BCN}]="$SAMPNAME"
       else
         BARCODES_OK[${BCN}]=0
         BARCODE_BAMNAME[${BCN}]=""
+        BARCODE_SAMPNAME[${BCN}]=""
       fi
     fi
     BCN=`expr ${BCN} + 1`
@@ -56,9 +63,9 @@ barcode_partial_table ()
     REFRESHRATE=0
   fi
   write_html_header "$HTML" $REFRESHRATE
-  if [ "$HTML_TORRENT_WRAPPER" -eq 1 ]; then
-    echo "<h3><center>$PLUGIN_RUN_NAME</center></h3>" >> "$HTML"
-  fi
+  #if [ "$HTML_TORRENT_WRAPPER" -eq 1 ]; then
+    #echo "<h3><center>$PLUGIN_RUN_NAME</center></h3>" >> "$HTML"
+  #fi
   barcode_links "$HTML" $NLINES
   # insert any extra text as raw html below table
   if [ -n "$3" ]; then
@@ -69,8 +76,28 @@ barcode_partial_table ()
 
 barcode_links ()
 {
+  # Define BC_COL array data.
+  declare -A BC_COL_TITLE
+  declare -A BC_COL_HELP
+  BC_COL_TITLE[0]=$BCT0
+  BC_COL_HELP[0]=$BCH0
+  BC_COL_TITLE[1]=$BCT1
+  BC_COL_HELP[1]=$BCH1
+  if [ $BC_SUM_ROWS -gt 2 ]; then
+    BC_COL_TITLE[2]=$BCT2
+    BC_COL_HELP[2]=$BCH2
+  fi
+  if [ $BC_SUM_ROWS -gt 3 ]; then
+    BC_COL_TITLE[3]=$BCT3
+    BC_COL_HELP[3]=$BCH3
+  fi
+  if [ $BC_SUM_ROWS -gt 4 ]; then
+    BC_COL_TITLE[4]=$BCT4
+    BC_COL_HELP[4]=$BCH4
+  fi
+  
   local HTML="${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}"
-  if [ -n "1" ]; then
+  if [ -n "$1" ]; then
     HTML="$1"
   fi
   local NLINES=-1;  # -1 => all, 0 => none
@@ -91,9 +118,11 @@ barcode_links ()
   echo "   <table class=\"noheading\" style=\"table-layout:fixed\">" >> "$HTML"
   echo "   <tr>" >> "$HTML"
   echo "  <th><span class=\"help\" style=\"width:100px !important\" title=\"Name of the barcode sequence and link to detailed report for reads associated with that barcode.\">Barcode ID</span></th>" >> "$HTML"
+  echo "  <th><span class=\"help\" style=\"width:100px !important\" title=\"Sample Name associated with this barcode in the experiment plan.\">Sample Name</span></th>" >> "$HTML"
   local BCN
   local CWIDTH
   local CTITLE
+  BARCODE_TITLES=''
   for((BCN=0;BCN<${BC_SUM_ROWS};BCN++))
   do
     CTITLE=${BC_COL_TITLE[$BCN]}
@@ -105,6 +134,11 @@ barcode_links ()
       CWIDTH=70
     fi
     echo "  <th style=\"width:${CWIDTH}px !important\"><span class=\"help\" title=\"${BC_COL_HELP[$BCN]}\">${CTITLE}</span></th>" >> "$HTML"
+    if [ $BCN -eq 0 ];then
+      BARCODE_TITLES=$CTITLE
+      continue
+    fi
+    BARCODE_TITLES="$BARCODE_TITLES\t$CTITLE"
   done
   echo "   </tr>" >> "$HTML"
 
@@ -119,9 +153,11 @@ barcode_links ()
     BARCODE=${BARCODES[$BCN]}
     if [ ${BARCODES_OK[$BCN]} -eq 1 ]; then
       echo "<tr><td style=\"text-align:left\"><a style=\"cursor:help\" href=\"${BARCODE}/${HTML_RESULTS}\"><span title=\"Click to view the detailed coverage report for barcode ${BARCODE}\">${BARCODE}</span></a></td>" >> "$HTML"
+      echo "<td style=\"text-align:left\">${BARCODE_SAMPNAME[$BCN]}</td>" >> "$HTML"
       echo "${BARCODE_ROWSUM[$BCN]}</tr>" >> "$HTML"
     elif [ ${BARCODES_OK[$BCN]} -eq 2 ]; then
       echo "<tr><td style=\"text-align:left\"><span class=\"help\" title=\"An error occurred while processing data for barcode ${BARCODE}\" style=\"color:red\">${BARCODE}</span></td>" >> "$HTML"
+      echo "<td style=\"text-align:left\">${BARCODE_SAMPNAME[$BCN]}</td>" >> "$HTML"
       echo "${BARCODE_ROWSUM[$BCN]}</tr>" >> "$HTML"
     fi
   done
@@ -130,6 +166,26 @@ barcode_links ()
   if [ $UNFIN -eq 1 ]; then
     display_static_progress "$HTML"
   fi
+}
+
+barcode_summary_to_file ()
+{
+  local FILEOUT=$1
+  if [ -z "$FILEOUT" ]; then
+    FILEOUT="barcode_summary.xls"
+  fi
+  FILEOUT="${TSP_FILEPATH_PLUGIN_DIR}/$FILEOUT"
+  echo -e "Barcode ID\tSample Name\t$BARCODE_TITLES" > "$FILEOUT"
+  local BCN
+  for((BCN=0;BCN<${#BARCODES[@]};BCN++))
+  do
+    BARCODE=${BARCODES[$BCN]}
+    if [ ${BARCODES_OK[$BCN]} -eq 1 ]; then
+      SAMPNAME=${BARCODE_SAMPNAME[$BCN]}
+      ROWSUM=`echo "${BARCODE_ROWSUM[$BCN]}" | sed -e 's/[ \t]*<td>//g' | sed -e 's/<\/td>/\t/g' | sed -e 's/[ \t]*$//'`
+      echo -e "$BARCODE\t$SAMPNAME\t$ROWSUM" >> "$FILEOUT"
+    fi
+  done
 }
 
 barcode_create_summary_matrix ()
@@ -193,10 +249,6 @@ barcode_append_to_json_results ()
 barcode ()
 {
   local HTMLOUT="${TSP_FILEPATH_PLUGIN_DIR}/${HTML_RESULTS}"
-
-  # Yes, there are barcodes
-  echo -e "\nThere are barcodes!" >&2
-  
   local LOGOPT="> /dev/null"
   if [ "$PLUGIN_DEV_FULL_LOG" -eq 1 ]; then
     echo "" >&2
@@ -207,6 +259,9 @@ barcode ()
   local BARCODES
   local BARCODES_OK
   local BARCODE_ROWSUM
+  local BARCODE_TITLES
+  local BARCODE_BAMNAME
+  local BARCODE_SAMPNAME
   barcode_load_list;
 
   # Start json file
@@ -217,6 +272,25 @@ barcode ()
 
   barcode_partial_table "$HTMLOUT";
   NBARCODES=${#BARCODES[@]}
+  
+  # Convert python-generated list to bash list.
+  # Start by making a list of the keys...
+  barCount=1
+  declare -A BARCODE_TARGET_MAP_contig
+  for barVal in $T_BARCODE_TARGET_MAP_VALS
+  do
+    BARCODE_TARGET_MAP_contig[$barCount]=$barVal
+    barCount=$[barCount+1]
+  done
+  # ...Then put the values in accordingly.
+  barCount=1
+  declare -A BARCODE_TARGET_MAP
+  for barVal in $T_BARCODE_TARGET_MAP_KEYS
+  do
+    #BARCODE_TARGET_MAP[${BARCODE_TARGET_MAP_contig[$barCount]}]=$barVal
+    BARCODE_TARGET_MAP[$barVal]=${BARCODE_TARGET_MAP_contig[$barCount]}
+    barCount=$[barCount+1]
+  done
   
   # Go through the barcodes 
   local BARCODE_DIR
@@ -245,6 +319,7 @@ barcode ()
       echo -e "\nProcessing barcode ${BARCODE}..." >&2
       run "mkdir -p ${BARCODE_DIR}"
       # code block to handle barcode to bed mapping
+      BC_BED="$PLUGIN_DETAIL_TARGETS"
       BC_GCANNOBED="$GCANNOBED"
       BC_MERGEBED="$PLUGIN_EFF_TARGETS"
       BC_PADBED="$PADDED_TARGETS"
@@ -259,11 +334,12 @@ barcode ()
             continue
           fi
           echo "Employing default targets: $BC_TRGSID" >&2
-           BC_MAPPED_BED="$PLUGINCONFIG__TARGETREGIONS_ID"
+          BC_MAPPED_BED="$PLUGINCONFIG__TARGETREGIONS_ID"
           if [ -n "$BC_GCANNOBED" ]; then
             run "ln -s ${BC_GCANNOBED} ${BARCODE_DIR}/"
           fi
         else
+          BC_BED="$BC_MAPPED_BED"
           BC_TRGSID=`echo "$BC_MAPPED_BED" | sed -e 's/^.*\///' | sed -e 's/\.[^.]*$//'`
           echo "Employing barcoded targets: $BC_TRGSID" >&2
           # get the correct detail/plain merged/unmerged versions
@@ -284,11 +360,12 @@ barcode ()
         run "ln -s ${BC_GCANNOBED} ${BARCODE_DIR}/"
       fi
       # need to create link early so the correct name gets used if a PTRIM file is created
+      SAMPLENAME="${BARCODE_SAMPNAME[$BCN]}"
       BARCODE_LINK_BAM="${BARCODE_DIR}/${BARCODE}_${PLUGIN_RUN_NAME}.bam"
       run "ln -sf \"${ANALYSIS_DIR}/${BARCODE_BAM}\" \"${BARCODE_LINK_BAM}\""
       run "ln -sf \"${ANALYSIS_DIR}/${BARCODE_BAM}.bai\" \"${BARCODE_LINK_BAM}.bai\""
       local RT=0
-      eval "${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $FILTOPTS $AMPOPT $TRIMOPT -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -D \"$BARCODE_DIR\" -A \"$BC_GCANNOBED\" -B \"$BC_MERGEBED\" -C \"$BC_TRGSID\" -p $PLUGIN_PADSIZE -P \"$BC_PADBED\" -S \"$PLUGIN_SAMPLEID_REGIONS\" \"$REFERENCE\" \"$BARCODE_LINK_BAM\"" || RT=$?
+      eval "${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $FILTOPTS $AMPOPT $TRIMOPT -N \"$SAMPLENAME\" -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -D \"$BARCODE_DIR\" -A \"$BC_GCANNOBED\" -B \"$BC_MERGEBED\" -C \"$BC_TRGSID\" -p $PLUGIN_PADSIZE -P \"$BC_PADBED\" -S \"$PLUGIN_SAMPLEID_REGIONS\" \"$REFERENCE\" \"$BARCODE_LINK_BAM\"" || RT=$?
       if [ $RT -ne 0 ]; then
         BC_ERROR=1
         if [ "$CONTINUE_AFTER_BARCODE_ERROR" -eq 0 ]; then
@@ -298,7 +375,7 @@ barcode ()
         fi
       else
         # process all result files to detailed html page and clean up
-        write_html_results "${BARCODE}_${PLUGIN_RUN_NAME}" "$BARCODE_DIR" "$BARCODE_URL" "${BARCODE}_${PLUGIN_RUN_NAME}.bam"
+        write_html_results "${BARCODE}_${PLUGIN_RUN_NAME}" "$BARCODE_DIR" "$BARCODE_URL" "${BARCODE}_${PLUGIN_RUN_NAME}.bam" "$SAMPLENAME" "$BC_BED"
         # collect table summary results
         if [ -f "${BARCODE_DIR}/${HTML_ROWSUMS}" ]; then
           BARCODE_ROWSUM[$BCN]=`cat "${BARCODE_DIR}/$HTML_ROWSUMS"`
@@ -334,8 +411,11 @@ barcode ()
   fi
   echo "" >&2
   echo "(`date`) Creating barcode/${TITLESTR}s coverage matrix..." >&2
+  BCSUMMARY="${PLUGIN_RUN_NAME}.barcode_summary.xls"
+  barcode_summary_to_file "$BCSUMMARY"
+  INSERT_HTML="\n<br/><a href='$BCSUMMARY' title='Click to download a table file of the Barcode Summary Report presented above.'>Download Barcode Summary Report</a>\n"
   barcode_create_summary_matrix $FILEEXT $FIELDID "$BCMATRIX"
-  INSERT_HTML="\n<br/><a href='$BCMATRIX' title='Click to download a table file of coverage for individual ${TITLESTR}s for each barcode.'>Download barcode/$TITLESTR coverage matrix</a>\n"
+  INSERT_HTML="$INSERT_HTML\n<br/><a href='$BCMATRIX' title='Click to download a table file of coverage for individual ${TITLESTR}s for each barcode.'>Download barcode/$TITLESTR coverage matrix</a>\n"
   # redraw page to get new link in right place
   barcode_partial_table "$HTMLOUT" $NLINE "$INSERT_HTML";
 

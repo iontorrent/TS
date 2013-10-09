@@ -1,0 +1,117 @@
+{% extends "rundb/plan/page_plan/base.html" %}
+{% load url from future %}
+
+{% block main-title %}Select the project(s) that will receive data from runs planned in this template, then hit next.{% endblock main-title %}
+
+{% block page-plan-content %}
+<div class="row-fluid">  
+    <div class="folders" id="projectsGrid">
+        {% for project in step.getPrePopulatedFieldDict.projects %}
+            <label class="checkbox">
+                {% if project.id|stringformat:"s" in step.getCurrentSavedFieldDict.projects or project.id in step.getCurrentSavedFieldDict.projects %}
+                    <input name="projects" type="checkbox" checked="checked" value="{{project.id}}">
+                {% else %}
+                    <input name="projects" type="checkbox" value="{{project.id}}">
+                {% endif %}
+                {{project.name}}
+            </label>
+        {% endfor %}
+    </div>
+    <br>                   
+    <div class="form-search">
+        <div class="input-append">
+            <input type="text" class="span10 search-query" id="projectSearchInput">
+            <button class="btn" type="button" id="searchProjects">Search</button>
+        </div>
+        <div id="addNewProjectsButton" style="margin-left:50px;" class="btn">Add Project…</div>
+    </div>
+    <div id="newProjectsHolder" style="display: none;">
+        <p class="form-label">Enter project name(s) (comma-separated):</p>
+        <textarea id="newProjects" name="newProjects" style="width:70%;height:40px;"></textarea>
+    </div>
+</div>
+<div class="row-fluid">  
+    {% for key, value in step.validationErrors.items %}
+        <h4 style="color: red">{{value}}</h4>
+    {% endfor %}
+</div>
+{% endblock page-plan-content %}
+
+{% block prevnext-buttons %}
+    {% if helper.isPlanBySample%}
+        <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_barcode" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+        <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_save_plan" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+    {%else%}
+        <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_plugins" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+        {% if helper.isPlan %}
+            <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_plan" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+        {% else %}
+            {%if helper.isTemplateBySample %}
+                <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_template_by_sample" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+            {%else%}
+                <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_template" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+            {%endif%}
+            
+            
+        {%endif%}
+    {%endif%}
+{% endblock prevnext-buttons %}
+
+{% block summary-table %}
+    {%include "rundb/plan/page_plan/summary/output_summary.html"%}
+{% endblock summary-table %}
+
+{% block post-raw %}
+{{ block.super }}
+<script type="text/javascript">
+    function updateSelectedProjects() {
+        var projectStr = '';
+        $("input[name='projects']:checked").each(function(){
+            projectStr += projectIdToName[$(this).val()] + ", ";
+        });
+        projectStr = projectStr.substring(0, projectStr.length - 2);
+        if ($('#newProjects').val().length > 0) {
+            projectStr += ", " + $('#newProjects').val();
+        }
+        
+        $('#selectedProjects').text(projectStr);
+    }
+    
+    $(document).ready(function () {
+        $("input[name='projects']").change(function(){
+            updateSelectedProjects();
+        });
+        
+            //projects filtering
+        $("#projectSearchInput").change(function(e) {
+            $("input[name='projects']").parent().show();
+            if ($(this).val()) {
+                $("input[name='projects']").parent().not(":contains(" + $(this).val() + ")").hide();
+            }
+        });
+        
+        $("#addNewProjectsButton").click(function(){
+            if ($('#newProjectsHolder:visible').length > 0) {
+                $('#addNewProjectsButton').text('Add Project…');
+                $('#newProjectsHolder').hide();
+                $('#newProjects').val('');
+                updateSelectedProjects();
+            } else {
+                $('#addNewProjectsButton').text('Remove New Projects');
+                $('#newProjectsHolder').show();
+            }
+        });
+        
+        $('#newProjects').bind('input propertychange', function() {
+            updateSelectedProjects();
+        });
+        
+        {% if step.getCurrentSavedFieldDict.newProjects %}
+            $('#addNewProjectsButton').text('Remove New Projects');
+            $('#newProjects').val('{{step.getCurrentSavedFieldDict.newProjects}}');
+            $('#newProjectsHolder').show();
+        {% endif %}
+    });
+</script>
+{% endblock post-raw %}
+

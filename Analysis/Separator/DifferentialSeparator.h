@@ -14,7 +14,7 @@
 #include "TraceStore.h"
 #include "TraceStoreMatrix.h"
 #include "H5File.h"
-
+#include "RawWells.h"
 #define FRAMEZERO 0
 #define FRAMELAST 100
 #define FIRSTDCFRAME 3
@@ -27,6 +27,11 @@ class DifSepOpt
   public:
     DifSepOpt()
     {
+      predictRow = 0;
+      predictHeight = 0;
+      predictCol = 0;
+      predictWidth = 0;
+
       maxKeyFlowLength = 7;
       flowOrder = "TCAG";
       reportStepSize = 0;
@@ -84,6 +89,21 @@ class DifSepOpt
       referencePickStep = 25;
       blobFilter = true;
       blobFilterStep = 100;
+      predictFlowStart = -1;
+      predictFlowEnd = -1;
+      predictRegion = "300,200,300,200";
+      //      predictRegion = "0,100,0,100";
+      //      predictRegion = "0,20,0,20";
+      //      predictFlowStart = 0;
+      //      predictFlowEnd = 60;
+      //      doubleTapFlows = "3";
+      //                1         2         3         4         5         6
+      //      0123456789012345678901234567890123456789012345678901234567890123456789012
+      //      TACCGTAACGTCTGAGCATCGATTCGATGTACAGGCTACCGTAACGTCTGAGCATCGATTCGATGTACAGGC
+      //         3   7               3          4    9   3               9          0
+      //       doubleTapFlows = "3,7,23,34,39,43,59,70";
+      //      doubleTapFlows = "3,4,11,27,30,32,43,59,62,75";
+      // doubleTapFlows = "10,26,2,3,29,31,42,58,61,74";
     }
 
     Mask *mask;
@@ -150,6 +170,10 @@ class DifSepOpt
     bool sdAsBf;
     bool aggressive_cnc;
     bool blobFilter; 
+    string doubleTapFlows;
+    int predictFlowStart, predictFlowEnd;
+    int predictRow,predictHeight,predictCol,predictWidth;
+    string predictRegion; // row, height, col width
 };
 
 /**
@@ -413,6 +437,15 @@ class DifferentialSeparator : public AvgKeyIncorporation
                      DifSepOpt &opts, Mask &mask,
                      std::vector<KeyFit> &fits, std::vector<float> &metric, 
                      Col<double> &time);
+
+    void PredictWellsFlow(DifSepOpt &opts, Mask &mask,
+                          Mat<float> &raw_frames,
+                          Mat<float> &predicted_frames,
+                          Mat<float> &reference_frames,
+                          RawWells &sep_wells,
+                          int flow,
+                          ZeromerModelBulk<double> &zBulk,
+                          Col<double> &time);
 
     bool InSpan (size_t rowIx, size_t colIx,
                  const std::vector<int> &rowStarts,

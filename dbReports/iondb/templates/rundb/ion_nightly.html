@@ -53,7 +53,7 @@
           <th ALIGN="center" rowspan="2">Reference</th>
           <th ALIGN="center" colspan="3" bgcolor=#D8D8D8>AQ20 Reads</th>
           <th ALIGN="center" colspan="3" bgcolor=#E8E8E8>&nbsp;&nbsp;&nbsp;Throughput&nbsp;(bases)&nbsp;&nbsp;&nbsp;</th>
-          <th ALIGN="center" colspan="4" bgcolor=#F8F8F8>Metrics</th>
+          <th ALIGN="center" colspan="5" bgcolor=#F8F8F8>Metrics</th>
           <!-- <th ALIGN="right" rowspan="2">fps</th> -->
         </tr>
         <tr>
@@ -66,6 +66,8 @@
           <th ALIGN="right" bgcolor=#F8F8F8>SNR</th>
           <th ALIGN="right" bgcolor=#F8F8F8>dup</th>
           <th ALIGN="right" bgcolor=#F8F8F8>syserr</th>
+          <th ALIGN="right" bgcolor=#F8F8F8>&nbsp;&nbsp;20x&nbsp;cov</th>
+          <th ALIGN="right" bgcolor=#F8F8F8>&nbsp;&nbsp;uniformity</th>
           <!-- <th ALIGN="right" bgcolor=#F8F8F8>cov</th> -->
           <!-- <<th ALIGN="right" bgcolor=#F8F8F8>SNP:InDel</th> -->
         </tr>
@@ -98,11 +100,13 @@
             <td ALIGN="right" bgcolor=#F8F8F8>{{ lbm.sysSNR|floatformat:2 }}</td>
             <td ALIGN="right" bgcolor=#F8F8F8>{{ info.dup }}</td>
             <td ALIGN="right" bgcolor=#F8F8F8>{{ info.syserr }}</td>
+            <td ALIGN="right" bgcolor=#F8F8F8>{{ info.cov20 }}</td>
+            <td ALIGN="right" bgcolor=#F8F8F8>{{ info.unif }}</td>
             {# <td ALIGN="right" bgcolor=#F8F8F8>{{ info.cov }}</td> #}
             {# <td ALIGN="right" bgcolor=#F8F8F8>{{ info.vc }}</td>  #}
           </tr>
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
-            <td colspan="15">Notes: {{ r.experiment.notes }}</td>
+            <td colspan="16">Notes: {{ r.experiment.notes }}</td>
             {# <td colspan="4" bgcolor=#F8F8F8>&nbsp;</td> #}
           </tr>
         {% endspaceless %}
@@ -129,7 +133,7 @@
           <th ALIGN="center" rowspan="2">Reference</th>
           <th ALIGN="center" colspan="3" bgcolor=#D8D8D8>AQ20 Reads</th>
           <th ALIGN="center" colspan="3" bgcolor=#E8E8E8>&nbsp;&nbsp;&nbsp;Throughput&nbsp;(bases)&nbsp;&nbsp;&nbsp;</th>
-          <th ALIGN="center" colspan="4" bgcolor=#F8F8F8>Metrics</th>
+          <th ALIGN="center" colspan="5" bgcolor=#F8F8F8>Metrics</th>
         </tr>
         <tr>
           <th ALIGN="right" bgcolor=#D8D8D8>100&nbsp;bp</th>
@@ -141,6 +145,8 @@
           <th ALIGN="right" bgcolor=#F8F8F8>SNR</th>
           <th ALIGN="right" bgcolor=#F8F8F8>dup</th>
           <th ALIGN="right" bgcolor=#F8F8F8>syserr</th>
+          <th ALIGN="right" bgcolor=#F8F8F8>&nbsp;&nbsp;20x&nbsp;cov</th>
+          <th ALIGN="right" bgcolor=#F8F8F8>&nbsp;&nbsp;uniformity</th>
           <!-- <th ALIGN="right" bgcolor=#F8F8F8>cov</th> -->
           <!-- <th ALIGN="right" bgcolor=#F8F8F8>SNP:InDel</th> -->
         </tr>
@@ -170,11 +176,13 @@
             <td ALIGN="right" bgcolor=#F8F8F8>{{ lbm.sysSNR|floatformat:2 }}</td>
             <td ALIGN="center" bgcolor=#F8F8F8>{{ info.dup }}</td>
             <td ALIGN="center" bgcolor=#F8F8F8>{{ info.syserr }}</td>
+            <td ALIGN="right" bgcolor=#F8F8F8>{{ info.cov20 }}</td>
+            <td ALIGN="right" bgcolor=#F8F8F8>{{ info.unif }}</td>
             {# <td ALIGN="center" bgcolor=#F8F8F8>{{ info.cov }}</td> #}
             {# <td ALIGN="center" bgcolor=#F8F8F8>{{ info.vc }}</td> #}
           </tr>
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
-            <td colspan="15">Notes: {{ r.experiment.notes }}</td>
+            <td colspan="16">Notes: {{ r.experiment.notes }}</td>
           </tr>
         {% endspaceless %}
         {% endfor %}
@@ -342,7 +350,7 @@
           <th ALIGN="center" rowspan="2">Reference</th>
           <th ALIGN="center" colspan="3" bgcolor=#D8D8D8>AQ20 Reads</th>
           <th ALIGN="center" colspan="3" bgcolor=#E8E8E8>&nbsp;&nbsp;&nbsp;Throughput&nbsp;(bases)&nbsp;&nbsp;&nbsp;</th>
-          <th ALIGN="center" colspan="4" bgcolor=#F8F8F8>Metrics</th>
+          <th ALIGN="center" colspan="5" bgcolor=#F8F8F8>Metrics</th>
         </tr>
         <tr>
           <th ALIGN="right" bgcolor=#D8D8D8>100&nbsp;bp</th>
@@ -354,6 +362,8 @@
           <th ALIGN="right" bgcolor=#F8F8F8>SNR</th>
           <th ALIGN="right" bgcolor=#F8F8F8>dup</th>
           <th ALIGN="right" bgcolor=#F8F8F8>syserr</th>
+          <th ALIGN="right" bgcolor=#F8F8F8>&nbsp;&nbsp;20x&nbsp;cov</th>
+          <th ALIGN="right" bgcolor=#F8F8F8>&nbsp;&nbsp;uniformity</th>
           <!-- <th ALIGN="right" bgcolor=#F8F8F8>cov</th> -->
           <!-- <th ALIGN="right" bgcolor=#F8F8F8>SNP:InDel</th> -->
         </tr>        
@@ -383,11 +393,13 @@
             <td ALIGN="right" bgcolor=#F8F8F8>{{ lbm.sysSNR|floatformat:2 }}</td>
             <td ALIGN="right" bgcolor=#F8F8F8>{{ info.dup }}</td>
             <td ALIGN="right" bgcolor=#F8F8F8>{{ info.syserr }}</td>
+            <td ALIGN="right" bgcolor=#F8F8F8>{{ info.cov20 }}</td>
+            <td ALIGN="right" bgcolor=#F8F8F8>{{ info.unif }}</td>
             {# <td ALIGN="right" bgcolor=#F8F8F8>{{ info.cov }}</td> #}
             {# <td ALIGN="right" bgcolor=#F8F8F8>{{ info.vc }}</td> #}
           </tr>
           <tr style="background-color:{%cycle 'inherit' '#AAA' %};">
-            <td colspan="15">Notes: {{ r.experiment.notes }}</td>
+            <td colspan="16">Notes: {{ r.experiment.notes }}</td>
           </tr>
         {% endspaceless %}
         {% endfor %}

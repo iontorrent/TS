@@ -132,11 +132,7 @@ int main(int argc, const char *argv[]) {
   chunks[1] = (chunks[1] < 100) ? 100 : chunks[1];
 
   recorder.CreateDataset(chunks);
-  fprintf(stdout, "Opening for write %s:%s with rank %d, row x col x flow chunks=[ ", &h5file[0], &destination[0], (int)chunks.size());
-  for (int i=0; i<(int)chunks.size(); i++)
-    fprintf(stdout, "%d ", (int)chunks[i]);
-  fprintf(stdout, "]\n");
-
+  
   int max_threads_ever = (dims[0]/chunks[0] +1)*(dims[1]/chunks[1] +1);
   thread_flags.resize (max_threads_ever, 0);
   // fprintf(stdout, "max_threads_ever = %d\n", max_threads_ever);
@@ -160,7 +156,7 @@ int main(int argc, const char *argv[]) {
       my_args.at(thread_id).thread_id = thread_id;
       my_args.at(thread_id).flowlimit = flowlimit;
 
-      // fprintf(stdout, "creating thread %d from row=%d (max %d), column=%d (max %d)\n", thread_id, (int)row, (int)dims[0], (int)col, (int)dims[1]);
+      fprintf(stdout, "creating thread %d from row=%d (max %d), column=%d (max %d)\n", thread_id, (int)row, (int)dims[0], (int)col, (int)dims[1]);
       while (accumulate(thread_flags.begin(), thread_flags.end(), 0) > numThreads) {
 	// only have to be approximate, don't worry about races
 	// fprintf(stdout, "Sleeping ...\n");
@@ -168,6 +164,7 @@ int main(int argc, const char *argv[]) {
       }
       thread_flags[thread_id] = 1;
       thread_status = pthread_create(&thread, NULL, compute_norm, (void *)&my_args[thread_id]);
+      // compute_norm((void *)&my_args[thread_id]);
       assert (thread_status >= 0);
       thread_id++;
 
@@ -176,6 +173,12 @@ int main(int argc, const char *argv[]) {
     }
     row += chunks[0];
   }
+  while (accumulate(thread_flags.begin(), thread_flags.end(), 0) > 0) {
+    // wait for the threads to finish
+    // fprintf(stdout, "Waiting ...\n");
+    sleep(1);
+  }
+
   cout << "Done." << endl;
   pthread_exit(NULL);
 }
@@ -236,7 +239,8 @@ void *compute_norm(void* data)
       NoKeyCall nkc;
       nkc.SetBeadLocation(cc+col,rr+row);
       nkc.GetPeaks(dat, peaks);
-      nkc.NormalizeBeadSignal(dat, peaks, normalized);
+      float failure_to_normalize_value = -1.0f;
+      nkc.NormalizeBeadSignal(dat, peaks, normalized, failure_to_normalize_value);
       // vector<float>normalized(dat.size(), 1);
       
       // stick it back in signal
@@ -249,7 +253,6 @@ void *compute_norm(void* data)
 	else {
 	  *(normed_signal.begin()+wellindex+fnum) = 0;
 	}
-	
       }
       assert(v>0);
     }

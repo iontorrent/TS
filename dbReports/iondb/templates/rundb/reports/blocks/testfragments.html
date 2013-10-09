@@ -2,7 +2,14 @@
 <div id="TestFragments" data-title="Test Fragments" class="tab-pane">
 
 {% if testfragments %}
-
+  <script>
+  function modal_tf(name, url) {
+    $("#modal_tf_name").text(name);
+    $("#modal_tf_images > img").hide();
+    $("#tf_img_"+name).show();
+    $("#modal_tf").modal('show');
+  }
+  </script>
   <table id="test_fragments">
     <thead>
       <tr>
@@ -19,13 +26,28 @@
         <td><h3>{{tf_data.num_reads|intcomma}}</h3></td>
         <td><h3>{{tf_data.conversion_50AQ17}}%</h3></td>
         <td class="tf_image" data-img="{{report.reportWebLink}}/{{tf_data.histogram_filename}}">
-                <img height="100" width="800" src="{{report.reportWebLink}}/{{tf_data.histogram_filename}}"></img>
+                <img onclick="modal_tf('{{tf_name}}', '{{report.reportWebLink}}/{{tf_data.histogram_filename}}');" height="100" width="800" src="{{report.reportWebLink}}/{{tf_data.histogram_filename}}"></img>
         </td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
-  
+    <div id="modal_tf" class="modal hide" style="width: 830px; margin-left: -415px;">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h3 id="modal_tf_name">Modal header</h3>
+      </div>
+      <div class="modal-body">
+        <p id="modal_tf_images">
+          {% for tf_name,tf_data in testfragments.items %}
+            <img id="tf_img_{{tf_name}}" src="{{report.reportWebLink}}/{{tf_data.histogram_filename}}"/>
+          {% endfor %}
+        </p>
+      </div>
+      <div class="modal-footer">
+        <a href="#" data-dismiss="modal" class="btn">Close</a>
+      </div>
+    </div>
 {%else%}
 
   <h2>No Test Fragments found</h2>

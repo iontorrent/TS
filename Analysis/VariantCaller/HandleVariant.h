@@ -40,14 +40,14 @@
 #include "stats.h"
 
 #include "InputStructures.h"
-#include "AlignmentAssist.h"
 #include "MiscUtil.h"
 #include "ExtendedReadInfo.h"
 #include "ClassifyVariant.h"
 #include "ExtendParameters.h"
-#include "MultiFlowDist.h"
+
 #include "StackEngine.h"
 #include "EnsembleGlue.h"
+#include "DiagnosticJson.h"
 
 
 using namespace std;

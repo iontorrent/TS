@@ -9,7 +9,6 @@
 MODULES=${MODULES-"
         gpu
 	Analysis
-	alignTools
 	dbReports
     pipeline
 	torrentR
@@ -47,7 +46,7 @@ for MODULE in $MODULES; do
     		if [ "$MODULE" = "rndplugins" ]; then
 			make 
     		else
-			make -j3
+			make -j13
     		fi
         if [ "$?" != 0 ]; then LOCALERR=1; fi
 		make test

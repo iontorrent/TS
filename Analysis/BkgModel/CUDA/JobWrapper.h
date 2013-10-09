@@ -134,6 +134,8 @@ public:
   float getAmpLowLimit();
   float getkmultLowLimit();
   float getkmultHighLimit();
+  float getkmultAdj();
+  bool fitkmultAlways();
   float getClonalCallPenalty(); 
   float getMaxEmphasis();
   bool performAlternatingFit();
@@ -178,6 +180,7 @@ public:
   bool performExpTailFitting();
   bool performCalcPCADarkMatter();
   bool useDarkMatterPCA();
+  bool InitializeAmplitude();
 
 };
 

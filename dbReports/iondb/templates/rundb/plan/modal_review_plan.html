@@ -1,3 +1,5 @@
+{% load url from future %}
+{% load static from staticfiles %}
 <div id="modal_review_plan" title="" class="modal " style="width: 800px; left: 40%;">
 	<div class="modal-header">
 		<button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -18,7 +20,9 @@
 	runType = {{selectedRunType|safe}};
 	barcodes = {{selectedBarcodes|safe}};
 	chipType = {{selectedChip|safe}};
-
+	applicationGroup = {{selectedApplicationGroup|safe}};
+	sampleGrouping = {{selectedSampleGrouping|safe}};
+	
 	if (chipType == null) {
 		chipType = "";
 	}
@@ -66,14 +70,22 @@
 	console.log(formdata);
 	$.ajax({
 			type: 'GET'
-	        , url: '/site_media/template/review_plan.kendo.template'
+	        , url: '{% static "template/review_plan.kendo.template"%}'
 	        , async: false
 	        , dataType: "html"
     }).done(function(data) {
 	    // $('#modal_review_plan').append(data);
 		var encodingTemplate = kendo.template(data);		
-		var presets = {}; //TODO: load the presets from {% url get_application_product_presets %}
-		$('.review-workflow').html(encodingTemplate({data:formdata, runType: runType, barcodes: barcodes, chip: chipType, presets:presets}));
+		var presets = {}; //TODO: load the presets from {% url "get_application_product_presets" %}
+		$('.review-workflow').html(encodingTemplate({
+			data:formdata, 
+			runType: runType, 
+			barcodes: barcodes, 
+			chip: chipType, 
+			presets:presets, 
+			applicationGroup: applicationGroup, 
+			sampleGrouping : sampleGrouping
+			}));
 		if (!formdata.isReusable) {
 			$('#barcodeSamplesTitle').show(); 
 			$('.review-workflow #barcodeSamples').kendoGrid({

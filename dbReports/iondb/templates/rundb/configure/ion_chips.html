@@ -33,12 +33,12 @@
               $('body').append(data);
               $('#modal_chip_log').modal("show");
               return false;
-            }).done(function(data) { 
+            }).done(function(data) {
               console.log("success:", url);
             })
             .fail(function(data) {
               $('#error-messages').empty().show();
-              $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+              $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
               console.log("error:", data);
             })
             .always(function(data) { /*console.log("complete:", data);*/ });
@@ -48,25 +48,25 @@
 
   <div class="content clearfix">
     {% ifequal error_state 0 %}
-      <b>{{ base_site_name }}</b><p>
+      <h1>{{ base_site_name }}</h1><p>
       <!-- Some Instructions For the Viewer -->
       <p>
       What the links do:<br>
        <b>[Download]</b> will download the diagnostic archive file (zip format)<br>
        <b>[View Log]</b> will extract and display the Init.log file<br>
        <b>[PDF]</b> will download an Installation Acceptance Report</p>
-      
+
       {% for key,values in files.items%}
         <div class="content clearfix">
-        <p>Location: {{ key }}</p>
+        <p><h2>Location: {{ key }}</h2></p>
         {% if values %}
           {% for loc in locations_list %}
 	  		{% ifequal loc.1 key %}
             <div class="content clearfix">
-              <div id="ex{{loc.0}}_{{loc.1}}"><a href="javascript:cl_expcol('{{loc.0}}_{{loc.1}}');">[+]</a> {{ loc.0 }}:</div>
-              <div id="cl{{loc.0}}_{{loc.1}}" style="display:none"><a href="javascript:cl_expcol('{{loc.0}}_{{loc.1}}');">[-]</a> {{ loc.0 }}:</div>
+              <div id="ex{{loc.0}}_{{loc.1}}"><a href="javascript:cl_expcol('{{loc.0}}_{{loc.1}}');">[+] </a><b>{{ loc.0 }}:</b></div>
+              <div id="cl{{loc.0}}_{{loc.1}}" style="display:none"><a href="javascript:cl_expcol('{{loc.0}}_{{loc.1}}');">[-] </a><b>{{ loc.0 }}:</b></div>
               <ul id="{{loc.0}}_{{loc.1}}" style="display:none">
-              
+
               <table>
                 <tr><th align="left"><br />Passed:</th></tr>
                 {% for v in values %}{% ifequal v.1 loc.0 %}{% ifequal v.3 "T" %}
@@ -80,7 +80,7 @@
                     <td><a href="/configure/getChipPdf/{{ v.2 }}">[PDF]</a></td>
                   </tr>
                 {% endifequal %}{% endifequal %}{% endfor %}
-            
+
                 <tr><th align="left">Failed:</th></tr>
                 {% for v in values %}{% ifequal v.1 loc.0 %}{% ifequal v.3 "F" %}
                   <tr>
@@ -101,6 +101,18 @@
         {% endif %}
         </div>
       {% endfor %}
+      
+      {% if protonDiags %}
+      <div class="content clearfix">
+        <h2>Proton Diagnostics Archive Files</h2>
+        {% for diag in protonDiags %}
+        <div class="content clearfix">
+          {{ diag }} <a href="/configure/getProtonDiags/{{ diag }}">[Download]</a>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      
     {% else %}
       <!--Problem encountered. Detailed information below: {{ error_state }}<br /><br />{% for err in error %}{{ err.0 }}: {{ err.1 }}<br />{% endfor %}-->
           <script language="Javascript">
@@ -108,11 +120,11 @@
         window.location="/configure/chips/"
           </script>
     {% endifequal %}
-  
+
   <!--note: another good (and easy-to-read) solution to collapsible content:
   function cl_expcol(id) {
     var i = document.getElementById(id);
-  
+
     if (i.style.display == '')
       i.style.display = 'none';
     else

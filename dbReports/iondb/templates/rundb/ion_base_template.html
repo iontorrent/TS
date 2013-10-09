@@ -1,33 +1,35 @@
+{% load url from future %}
 <!DOCTYPE html>
 <html>
 {% load pagetools %}
+{% load static from staticfiles %}
 <head>
   <!--[if IE]>
-    <link href='/site_media/jquery/js/tipTipX/jquery.tipTipX-ie.css' rel='stylesheet' rel='stylesheet' type='text/css' />
+    <link href='{% static "jquery/js/tipTipX/jquery.tipTipX-ie.css"%}' rel='stylesheet' rel='stylesheet' type='text/css' />
   <![endif]-->
-  <link rel="stylesheet" type="text/css" href="/site_media/stylesheet.css"/>
+  <link rel="stylesheet" type="text/css" href="{% static "stylesheet.css"%}"/>
   <link type="text/css"
-        href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css"
+        href="{% static "jquery/css/aristo/jquery-ui-1.8.7.custom.css"%}"
         rel="Stylesheet"/>
-  <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet"
+  <link href="{% static "jquery/js/tipTipX/jquery.tipTipX.css"%}" rel="stylesheet"
         type="text/css"/>
   <script type="text/javascript"
-          src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+          src="{% static "jquery/js/jquery-1.7.1.min.js"%}"></script>
   <script type="text/javascript"
-          src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
+          src="{% static "jquery/js/jquery-ui-1.8.13.min.js"%}"></script>
   <script type="text/javascript"
-          src="/site_media/jquery/js/tipTipX/jquery.tipTipX.js"></script>
-  <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet"
+          src="{% static "jquery/js/tipTipX/jquery.tipTipX.js"%}"></script>
+  <link href="{% static "jquery/js/tipTipX/jquery.tipTipX.css"%}" rel="stylesheet"
         type="text/css"/>
 
-  <link href="/site_media/css/bootstrap.css" rel="stylesheet" type="text/css" />
+  <link href="{% static "css/bootstrap.css"%}" rel="stylesheet" type="text/css" />
 
-  <script type="text/javascript" src="/site_media/scripts.js"></script>
+  <script type="text/javascript" src="{% static "scripts.js"%}"></script>
   <script type="text/javascript"
-          src="/site_media/detectmobilebrowser.js"></script>
-  <script src="/site_media/js/underscore.js"></script>
-  <script src="/site_media/js/backbone.js"></script>
-  <script src="/site_media/js/messagebox.js"></script>
+          src="{% static "detectmobilebrowser.js"%}"></script>
+  <script src="{% static "js/underscore.js"%}"></script>
+  <script src="{% static "js/backbone.js"%}"></script>
+  <script src="{% static "js/messagebox.js"%}"></script>
 
   {% block extra_head %}
   {% endblock extra_head %}
@@ -52,7 +54,7 @@
 <body>
 <div class="all all_width">
   {% block topbar %}
-		{% if user.is_authenticated %}<div style="text-align:right">Welcome, {{ user.get_full_name|default:user.username }}! <!--Logout Disabled - broken. Close your browser to clear the session... [ <a href="{% url logout %}">Logout</a> ] --> </div>{% endif %}
+		{% if user.is_authenticated %}<div style="text-align:right">Welcome, {{ user.get_full_name|default:user.username }}! <!--Logout Disabled - broken. Close your browser to clear the session... [ <a href="{% url "logout" %}">Logout</a> ] --> </div>{% endif %}
     <div id="global_messages"></div>
     <script>
       $(function(){

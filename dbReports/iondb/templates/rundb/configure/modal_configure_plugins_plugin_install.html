@@ -1,4 +1,6 @@
 {% load pagetools %}
+{% load url from future %}
+{% load static from staticfiles %}
 <div id="modal_configure_plugins_plugin_install" title="" class="modal modal-750 hide">
 	<div class="modal-header">
 		<button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -66,7 +68,7 @@
 				</form>
 			</div>
 		</div>
-		<form id="modal_configure_plugins_plugin_install_form" method="POST" action="{% url configure_plugins_plugin_install %}" enctype="multipart/form-data">
+		<form id="modal_configure_plugins_plugin_install_form" method="POST" action="{% url "configure_plugins_plugin_install" %}" enctype="multipart/form-data">
 	  	</form>
 	</div>
 	<div class="modal-footer" id="tab-1-footer">
@@ -111,27 +113,27 @@ $("#downloadPluginButton").click(function (e) {
         async: false,
         beforeSend: function () {
             if (isValid()) {
-              	$("#modal_configure_plugins_plugin_install_body").html("<p>Starting download plugin <img src='/site_media/jquery/colorbox/images/loading.gif'></img></p>");
-    			$('#modal_configure_plugins_plugin_install .modal-footer').hide();
-    			$('#modal_configure_plugins_plugin_install .close').hide();
+                $("#modal_configure_plugins_plugin_install_body").html("<p>Starting download plugin <img src='{% static "jquery/colorbox/images/loading.gif"%}'></img></p>");
+                $('#modal_configure_plugins_plugin_install .modal-footer').hide();
+                $('#modal_configure_plugins_plugin_install .close').hide();
             } else {
               return false;
             }
         },
         success: function () {
-        	setTimeout(function(){
-        		$("#modal_configure_plugins_plugin_install_body").html("<p>Installing plugin <img src='/site_media/jquery/colorbox/images/loading.gif'></img></p>");
-        	}, 1000);
+            setTimeout(function(){
+                $("#modal_configure_plugins_plugin_install_body").html("<p>Installing plugin <img src='{% static "jquery/colorbox/images/loading.gif"%}'></img></p>");
+            }, 1000);
             setTimeout(function () { 
-            	$('#modal_configure_plugins_plugin_install').trigger('modal_configure_plugins_plugin_install_done', {});
-            	$('#modal_configure_plugins_plugin_install').modal('hide'); 
-        	}, 4000);
+                $('#modal_configure_plugins_plugin_install').trigger('modal_configure_plugins_plugin_install_done', {});
+                $('#modal_configure_plugins_plugin_install').modal('hide');
+            }, 4000);
         },
         error: function (){
             $("#downloadPlugin").html("<span>Failed To Install</span>");
         }
     });
-});	
+});
 var firstFinish = false;
 function finish() {
     // Post to a this Django view
@@ -181,13 +183,13 @@ var uploader = new plupload.Uploader({
         {title : "Zip files", extensions : "zip"}
     ],
     browse_button: 'pickfile',
-  	url: '{% url configure_plugins_plugin_zip_upload %}',
+  	url: '{% url "configure_plugins_plugin_zip_upload" %}',
     chunk_size: '15mb',
     unique_names: true,
     multi_selection: false,
     multiple_queues: false,
-    silverlight_xap_url: '/site_media/resources/plupload/js/plupload.silverlight.xap',
-    flash_swf_url: '/site_media/resources/plupload/js/plupload.flash.swf'		
+    silverlight_xap_url: '{% static "resources/plupload/js/plupload.silverlight.xap"%}',
+    flash_swf_url: '{% static "resources/plupload/js/plupload.flash.swf"%}'		
 });	
 $( "#modal_configure_plugins_plugin_install" ).data('uploader', uploader);
 

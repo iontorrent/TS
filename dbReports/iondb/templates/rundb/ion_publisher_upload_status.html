@@ -1,15 +1,203 @@
 {% extends "rundb/configure/base.html" %}
 
 {% block content %}
+
+
+{% for upload in processed_uploads %}
 <div class="content">
-  <h1>{{ contentupload.publisher.name }} Upload: {{ filename }}</h1>
-  <p>Your file is being stored in {{ contentupload.file_path }}</p>
-  <h2>{{ contentupload.status }}</h2>
-  <dl>
-    {% for log in logs %}
-      <dt>{{ log.timeStamp }}</dt>
-      <dd>{{ log.text }}</dd>
-    {% endfor %}
-  </dl>
+  <div class="modal-header">
+    <h1>{{upload.content_type}} Details - {{upload.content_name}}</h1>
+  </div>
+
+  <div >
+    <form class="form-horizontal" id="content_edit_{{upload.content_id}}" method="POST" enctype="multipart/form-data">
+
+      <fieldset>
+        <div class="control-group" style="margin-bottom:0;">
+          <label class="control-label">Processed File</label>
+          <div class="controls">
+            <div style="padding-top:6px;">
+              <a href='/rundb/content/download/{{upload.content_id}}'>{{upload.file_name}}</a> {{upload.file_size_string}}
+            </div>
+          </div>
+        </div>
+            
+      {% for bonus in upload.bonus_fields %}
+        <div class="control-group" style="margin-bottom:0;">
+          <label class="control-label">{{bonus.title}}</label>
+          <div class="controls">
+            <div style="padding-top:6px;">
+              {{bonus.value}}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+        
+        <div class="control-group">
+          <label for="description" class="control-label">Description</label>
+          <div class="controls">
+            <textarea name="description" id="description_{{upload.content_id}}" placeholder='optional' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required">{{upload.description}}</textarea>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <label for="notes" class="control-label">Notes</label>
+          <div class="controls">
+            <textarea name="notes" id="notes_{{upload.content_id}}" placeholder='optional' cols="50" rows="3" maxlength="512" type="text" class="input-xxlarge textInput required">{{upload.notes}}</textarea>
+          </div>
+        </div>
+        
+        <div class="control-group">
+          <label for="enabled" class="control-label">Enabled</label>
+          <div class="controls">
+            <input type="checkbox" name="enabled" id="enabled_{{upload.content_id}}" {% if upload.enabled %} checked="yes" {% endif %}>
+          </div>
+        </div>
+      </fieldset>
+
+    </form>
+  </div>
+
+  <div class="modal-footer">    
+    <div class="row-fluid">
+      <button class="btn btn-primary pull-right" id="submit_{{upload.content_id}}">Save Changes</button>
+      <input class="btn btn-primary pull-right" style="display:none;" type="submit" value="Save Changes" name="submit" form="content_edit_{{upload.content_id}}"/>
+      <a class="btn pull-left" href="/configure/references/#{{upload.content_type_hash}}">Back to {{upload.content_type}}</a>
+      <a class='btn pull-left' style="display:none;" href='/rundb/content/{{upload.content_id}}'>Details</a>
+    </div>
+  </div>
 </div>
+
+<script type="text/javascript">
+  $(document).ready(function () {
+    $("#submit_{{upload.content_id}}").click(function () {
+      $.ajax({
+        type: "POST",
+        url: "/rundb/content/{{upload.content_id}}/",
+        async: false,
+        data: {
+          description: $('#description_{{upload.content_id}}').val(),
+          notes: $('#notes_{{upload.content_id}}').val(),
+          enabled: $('#enabled_{{upload.content_id}}').prop('checked')
+        }
+      });
+      window.location.href = '/configure/references/#{{upload.content_type_hash}}';
+      return false;
+    });
+  });
+</script>
+{% endfor %}
+
+<div class="content">
+  <div class="modal-header">
+    <h1>Original Upload - {{upload_name}}</h1>
+  </div>
+
+  <div >
+    <form class="form-horizontal">
+      <fieldset>
+        <div class="control-group" style="margin-bottom:0;">
+          <label class="control-label">Original File</label>
+          <div class="controls">
+            <div style="padding-top:6px;">
+              <a href='/rundb/uploadstatus/download/{{contentupload.id}}'>{{contentupload.file_path}}</a> {{file_size_string}}
+            </div>
+          </div>
+        </div>
+            
+        <div class="control-group" style="margin-bottom:0;">
+          <label class="control-label">Type</label>
+          <div class="controls">
+            <div style="padding-top:6px;">
+              {{upload_type}}
+            </div>
+          </div>
+        </div>
+
+        <div class="control-group" style="margin-bottom:0;">
+          <label class="control-label">Date</label>
+          <div class="controls">
+            <div style="padding-top:6px;">
+              {{upload_date}}
+            </div>
+          </div>
+        </div>
+
+        <div class="control-group" style="margin-bottom:0;">
+          <label class="control-label">Status</label>
+          <div class="controls">
+            <div style="padding-top:6px;">
+              {{status_line}}
+            </div>
+          </div>
+        </div>
+        
+      </fieldset>
+    </form>
+  </div>
+
+  <div class="modal-footer">    
+    <div class="row-fluid">
+      <a class="btn pull-left" href="/configure/references/#uploads">Back to Upload History</a>
+      <button class="btn btn-danger pull-right" id="delete">Delete</button>
+    </div>
+    <div id="ask_delete" style="display: none; margin-top:12px;">
+      <div class="row-fluid">
+        <p class='pull-left'>Are you sure you want to delete these uploaded and processed files?</p>
+      </div>
+      <div class="row-fluid">
+        <button class="btn pull-left" id="cancel_delete">No, Keep It</button> <button class="btn btn-danger pull-left" id="confirm_delete">Yes, Delete It</button>
+      </div>
+    </div>
+    <div class="row-fluid">
+      <div id="status_delete" style="margin-top:12px;" class="pull-left"></div>
+    </div>
+  </div>
+</div>
+
+  
+<div class="content">
+  <div class="modal-header">
+    <h1>Processing Log</h1>
+  </div>
+
+<pre class='log'>
+{% for log in logs %}{{log.text}}
+{% endfor %}
+</pre>
+
+</div>
+
+
+<script type="text/javascript">
+  $(document).ready(function () {
+    
+    $("#delete").click(function () {
+      $("#ask_delete").slideDown('slow');
+      return false;
+    });
+  
+    $("#cancel_delete").click(function () {
+      $("#ask_delete").slideUp('fast');
+      return false;
+    });
+  
+    $("#confirm_delete").click(function () {
+      $("#ask_delete").slideUp();
+      $("#status_delete").html("<p>Deleting</p>");
+      $.ajax({
+        type: "DELETE",
+        url: "/rundb/api/v1/contentupload/{{contentupload.id}}/",
+        async: false,
+        success: function (msg) {
+          $("#status_delete").html("<p>Upload deleted</p>");
+          setTimeout(function(){window.location = "/configure/references/#uploads";}, 1000);
+        }
+      });
+      return false;
+    });
+    
+    
+  });
+</script>
 {% endblock %}

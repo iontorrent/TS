@@ -20,7 +20,7 @@ from ion.plugin import constants
 import logging
 import logging.handlers
 
-__version__ = filter(str.isdigit, "$Revision: 52594 $")
+__version__ = filter(str.isdigit, "$Revision: 63057 $")
 
 # Setup log file logging
 try:
@@ -115,6 +115,17 @@ def SGEPluginJob(start_json):
         plugin_output = start_json['runinfo']['results_dir']
 
         logger.debug("Getting ready for queue : %s %s", resultpk, plugin['name'])
+
+        # Update pluginresult status
+        h = httplib2.Http()
+        headers = {"Content-type": "application/json","Accept": "application/json"}
+        url = 'http://localhost' + '/rundb/api/v1/results/%s/plugin/' % resultpk
+        data = {
+            plugin['name']: "Pending",
+            'owner': start_json.get('owner', None),
+        }
+        resp, content = h.request(url, "PUT", body=json.dumps(data), headers=headers)
+        logger.debug("PluginResult Marked Queued : %s %s" % (resp, content))
 
         #Make sure the dirs exist
         if not os.path.exists(plugin_output):

@@ -1,4 +1,5 @@
 {% extends "rundb/ion_base_template.html" %}
+{% load url from future %}
 
 {% block pagination_holder %}
 {% endblock pagination_holder %}
@@ -25,7 +26,7 @@
         {% for pub in pubs %}{% spaceless %}
           <tr class="{% cycle 'row1' 'row2' %} graphable" id="{{pg.pk}}_row">
             <td>
-              <a href="{% url iondb.rundb.publishers.publisher_upload pub.name %}">{{ pub.name }}</a>
+              <a href="{% url "iondb.rundb.publishers.publisher_upload" pub.name %}">{{ pub.name }}</a>
             </td>
           </tr>
         {% endspaceless %}

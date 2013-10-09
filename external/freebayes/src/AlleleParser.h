@@ -285,6 +285,7 @@ public:
     int fastaReferenceSequenceCount; // number of reference sequences
     bool hasTarget;
     BedTarget* currentTarget;
+    bool isFirstTarget;
     long int currentPosition;  // 0-based current position
     int lastHaplotypeLength;
     char currentReferenceBase;

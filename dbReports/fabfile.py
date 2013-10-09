@@ -181,8 +181,6 @@ def _build_pipeline():
 def build():
     '''Builds ion-dbreports using CMake'''
     _filecheck()
-    recess()
-    minifyjs()
     compilepy()
     cleanpyc()
     _build_pipeline()
@@ -192,7 +190,7 @@ def install():
     '''Builds & Installs the ion-dbreports and dependencies from local'''
     build()
     local('sudo dpkg -i ../build/pipeline/*.deb')
-    local('sudo dpkg -i ../build/dbReports/*.deb')
+    local('sudo gdebi ../build/dbReports/*.deb')
 
 def precommit():
     '''Runs precommit checks - static analysis, unit tests, builds & installs .deb packages'''
@@ -207,8 +205,6 @@ def ci():
     
 def runserver():
     '''Starts the Django runserver '''
-    recess()
-    minifyjs()
     local('export PYTHONPATH=`pwd`; \
             python manage.py runserver 0.0.0.0:8000')
 
@@ -221,13 +217,9 @@ def compilepy():
     cleanpyc()
     local('python -m compileall -q -f "./iondb/"')
     
-def recess():
-    '''Compiles & compresses LESS into CSS and compressed CSS'''
-    local('cd iondb/media; make compile-css') 
-
-def minifyjs():
-    '''Minifies Javascript'''
-    local('cd iondb/media; make minify-js') 
+def shell():
+    local('export PYTHONPATH=`pwd`; \
+            python manage.py shell')
     
 #def setup():
 #    """

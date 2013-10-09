@@ -596,6 +596,23 @@ int SimpleMultiFitStream::getL1SettingPartialD()
   return _l1typePartialD;
 }
 
+void SimpleMultiFitStream::printStatus()
+{
+
+	cout << getLogHeader()  << " status: " << endl
+	<< " +------------------------------" << endl
+	<< " | block size MultiFit: " << getBeadsPerBlockMultiFit()  << endl
+	<< " | l1 setting MultiFit: " << getL1SettingMultiFit() << endl
+	<< " | block size PartialD: " << getBeadsPerBlockPartialD() << endl
+	<< " | l1 setting PartialD: " << getL1SettingPartialD() << endl
+	<< " | state: " << _state << endl;
+	if(_resources->isSet())
+		cout << " | streamResource acquired successfully"<< endl;
+	else
+		cout << " | streamResource not acquired"<< endl;
+    _myJob.printJobSummary();
+    cout << " +------------------------------" << endl;
+}
 
 
 

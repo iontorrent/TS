@@ -5,6 +5,7 @@ from iondb.bin import djangoinit
 #from django.core.cache import get_cache
 from django.core.cache import cache
 
+
 class TaskLock:
 
     def __init__(self, lock_id):
@@ -22,12 +23,26 @@ class TaskLock:
 # Test main routine
 if __name__ == '__main__':
     import time
-    applock = TaskLock ('Test.lock')
-    if (applock.lock ()):
+    applock = TaskLock('Test.lock')
+    if (applock.lock()):
         # Hint: try running 2nd program instance while this instance sleeps
         print ("Obtained lock, sleeping 10 seconds")
-        time.sleep (10)
+        time.sleep(10)
         print ("Unlocking")
-        applock.unlock ()
+        applock.unlock()
     else:
         print ("Unable to obtain lock, exiting")
+
+'''
+To clear a specific lock manually:
+start python shell
+from iondb.bin import djangoinit
+from django.core.cache import cache
+cache.delete(<lock id>)
+
+or direct on command line:
+python -c "from iondb.bin import djangoinit; from django.core.cache import cache; cache.delete(<lock id>)"
+
+to delete everything from cache:
+python -c "from iondb.bin import djangoinit; from django.core.cache import cache; cache.clear()"
+'''

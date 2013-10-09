@@ -18,7 +18,10 @@
   flowOrder = "TACGTACGTCTGAGCATCGATCGATGTACAGC",
   keySeq = "TCAG",
   noNegativeSignal=TRUE,
-  plotFigure=TRUE)
+  plotFigure=TRUE,
+  randSeed=NA,
+  terminatorChemistryRun=0
+  )
 }
 \arguments{
   \item{numBases}{
@@ -47,6 +50,12 @@
   }
   \item{plotFigure}{
     If TRUE (default) the function plots a figure.
+  }
+  \item{randSeed}{
+    Initial seed for the random number generator.
+  }
+  \item{terminatorChemistryRun}{
+    Switch to analyze a run with terminator chemistry.
   }
 }
 \value{

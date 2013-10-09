@@ -46,7 +46,7 @@ RcppExport SEXP readBeadFindMask(SEXP beadFindFile_in, SEXP x_in, SEXP y_in) {
 	if(nX != nY) {
 	    exceptionMesg = strdup("x and y should be of the same length");
 	} else if(nX < 0) {
-	    exceptionMesg = strdup("x and y should be of posiive length");
+	    exceptionMesg = strdup("x and y should be of positive length");
 	} else if(xMin < 0) {
 	    exceptionMesg = strdup("xMin must be positive");
 	} else if(yMin < 0) {

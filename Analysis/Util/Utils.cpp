@@ -149,38 +149,53 @@ int numCores ()
 {
 #if 1
   // returns physical cpu cores
+  int return_num_cores = 1;
   int cores = 0;
   int processors = 0;
   int n = 0; //number elements read
   FILE *fp = NULL;
-  // Number of cores
-  fp = popen ("cat /proc/cpuinfo | grep \"cpu cores\" | uniq  | awk '{ print $4 }'", "r");
 
   // if the grep finds nothing, then this returns a NULL fp...
-  if (fp == NULL)
-    return (sysconf (_SC_NPROCESSORS_ONLN));
 
-  n = fscanf (fp, "%d", &cores);
-  if (n != 1)
-    cores=1;
+  // Number of cores
+  fp = popen ("cat /proc/cpuinfo | grep \"cpu cores\" | uniq  | awk '{ print $4 }'", "r");
+  if (fp != NULL)
+  {
+    n = fscanf (fp, "%d", &cores);
+    if (n != 1)
+      cores=1;
+  }
   pclose (fp);
 
   // Number of processors
   fp = popen ("cat /proc/cpuinfo | grep \"physical\\ id\" | sort | uniq | wc -l", "r");
-
-  if (fp == NULL)
-    return (sysconf (_SC_NPROCESSORS_ONLN));
-
-  n = fscanf (fp, "%d", &processors);
-  if (n != 1)
-    processors=1;
+  if (fp != NULL)
+  {
+    n = fscanf (fp, "%d", &processors);
+    if (n != 1)
+      processors=1;
+  }
   pclose (fp);
 
-  /* Hack: Some VMs report 0 cores */
-  cores = (cores > 0 ? cores:1);
-  processors = (processors > 0 ? processors:1);
 
-  return (cores * processors);
+  if (cores==0 || processors==0)
+  {
+    fp = popen ("grep \"processor\" /proc/cpuinfo | wc -l","r");
+    if (fp != NULL)
+    {
+      n = fscanf (fp, "%d", &return_num_cores);
+      if (n != 1)
+        return_num_cores=1;
+    }
+    pclose (fp);
+  }
+  else
+    return_num_cores = cores * processors;
+
+  /* Hack: Some VMs report 0 cores */
+  return_num_cores  = (return_num_cores > 0 ? return_num_cores:1);
+
+  return return_num_cores;
 #else
   // returns virtual cpu cores
   return (sysconf (_SC_NPROCESSORS_ONLN));
@@ -294,7 +309,6 @@ char *GetIonConfigFile (const char filename[])
       free (string);
       string = NULL;
     }
-    free(ION_CONFIG);
   }
 
   // Search for config file:
@@ -882,6 +896,9 @@ short GetPinHigh()
       pin_high = 0x3fff;
       break;
     case ChipId900:
+      pin_high = 16380;
+      break;
+    case ChipId910:
       pin_high = 16380;
       break;
     default:

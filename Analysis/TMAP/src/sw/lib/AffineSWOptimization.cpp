@@ -44,9 +44,10 @@ AffineSWOptimization::AffineSWOptimization(int type) {
 //      case 8:
 //        s = new Solution8();
 //        break;
-      case 9:
-        s = new Solution9();
-        break;
+// compile error with icc version 13.1.1 (gcc version 4.7.0 compatibility): Solution9.cpp(927): error: argument of type "__m128i *" is incompatible with parameter of type "const char *"  _mm_prefetch(TargetLookup[0] + jBlock, _MM_HINT_T0);
+//      case 9:
+//        s = new Solution9();
+//        break;
       case 10:
         s = new Solution10();
         break;

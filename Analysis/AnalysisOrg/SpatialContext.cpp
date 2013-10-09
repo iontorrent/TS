@@ -33,6 +33,9 @@ void SpatialContext::DefaultSpatialContext()
   chip_len_x = 0;
   chip_len_y = 0;
   percentEmptiesToKeep = 100;
+  exclusionMaskSet = false;
+  regionsX = 0;
+  regionsY = 0;
 }
 
 SpatialContext::~SpatialContext()

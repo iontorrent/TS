@@ -73,7 +73,7 @@ for slotnum in $(seq 0 $(($num_dev-1))); do
 # PredictiveFailureCount
     MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Predictive Failure"
 # FirmwareState
-    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Firmware State"
+    MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Firmware state"
 # InquiryData
     MegaCli64 -PDInfo -PhysDrv[$enc_num:$slotnum] -aALL | grep "^Inquiry Data"
 # NeedsEkmAttention

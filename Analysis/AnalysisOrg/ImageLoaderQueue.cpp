@@ -360,7 +360,8 @@ void *FileLoader ( void *arg )
     item.private_data = cur_image_loader;
     loadWorkQ->PutItem ( item );
 
-    if (ChipIdDecoder::GetGlobalChipId() != ChipId900)
+    if (!((ChipIdDecoder::GetGlobalChipId() == ChipId900) || (ChipIdDecoder::GetGlobalChipId() == ChipId910)))
+    
       PauseForLongCompute ( cur_flow,cur_image_loader );
   }
 
@@ -418,7 +419,7 @@ void *FileSDatLoader ( void *arg )
     item.private_data = cur_image_loader;
     loadWorkQ->PutItem ( item );
     
-    if (ChipIdDecoder::GetGlobalChipId() != ChipId900)
+    if (!((ChipIdDecoder::GetGlobalChipId() == ChipId900) || (ChipIdDecoder::GetGlobalChipId() == ChipId910)))
       PauseForLongCompute ( cur_flow,cur_image_loader );
   }
 
@@ -471,7 +472,7 @@ void DumpStep ( ImageLoadWorkInfo *info )
   const RawImage *rawImg = info->img[info->cur_buffer].GetImage();
 
   ChipIdEnum chipId = ChipIdDecoder::GetGlobalChipId();
-  if ( chipId == ChipId900 )
+  if ( (chipId == ChipId900 )||(chipId == ChipId910))
   {
     // Proton chips
     regionName.push_back ( "inlet" );

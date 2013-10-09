@@ -177,6 +177,16 @@ float WorkSet::getkmultHighLimit()
   return _info->bkgObj->getGlobalDefaultsForBkgModel().signal_process_control.kmult_hi_limit;
 }
 
+float WorkSet::getkmultAdj()
+{
+  return _info->bkgObj->getGlobalDefaultsForBkgModel().signal_process_control.krate_adj_limit;
+}
+
+bool WorkSet::fitkmultAlways()
+{
+  return _info->bkgObj->getGlobalDefaultsForBkgModel().signal_process_control.var_kmult_only;
+}
+
 float* WorkSet::getClonalCallScale() 
 {
   return _info->bkgObj->getGlobalDefaultsForBkgModel().fitter_defaults.clonal_call_scale;
@@ -214,7 +224,15 @@ float WorkSet::getMaxEmphasis()
 
 bool WorkSet::useDynamicEmphasis()
 {
-  return (ChipIdDecoder::GetGlobalChipId() == ChipId900);
+
+  switch(ChipIdDecoder::GetGlobalChipId()){
+    case ChipId900:
+    case ChipId910:
+      return true;
+    default:
+      return false;
+  }
+
 }
 
 
@@ -508,13 +526,13 @@ void WorkSet::printJobSummary()
     << " | live beads: " << getNumBeads() <<" padded: "<< getPaddedN()  << endl
     << " | num frames: " << getNumFrames() << endl
     << " | flow num:   " << getAbsoluteFlowNum() << endl
-   << " +------------------------------" << endl
+
     ; 
   }
   else{
-   cout << "No Valid Job Set" << endl;
+   cout << "| No Valid Job Set" << endl;
   }
-  
+
 }
 
 int WorkSet::getXtalkNeiIdxMapSize(bool padded)
@@ -556,7 +574,13 @@ void WorkSet::calculateCPUXtalkForBead(int ibd, float* buf) {
 }
 
 bool WorkSet::performCrossTalkCorrection() {
-  return _info->bkgObj->getXtalkExecute().xtalk_spec_p->do_xtalk_correction;
+  //never perform Xtalk for 900 chips  
+  if(ChipIdDecoder::GetGlobalChipId() == ChipId900) return false;
+  //if not 900 chip return xtalk flag
+  if(isSet())
+    return _info->bkgObj->getXtalkExecute().xtalk_spec_p->do_xtalk_correction;
+  else 
+    return true;
 }
 
 bool WorkSet::performExpTailFitting() {
@@ -569,6 +593,13 @@ bool WorkSet::performCalcPCADarkMatter() {
 
 bool WorkSet::useDarkMatterPCA() {
   return (  performCalcPCADarkMatter() && _info->bkgObj->region_data->my_regions.missing_mass.mytype == PCAVector)?(true):(false) ;
+}
+
+bool WorkSet::InitializeAmplitude() {
+  if (_info->bkgObj->getGlobalDefaultsForBkgModel().signal_process_control.regional_sampling)
+    return _info->bkgObj->getGlobalDefaultsForBkgModel().signal_process_control.amp_guess_on_gpu;
+  else
+    return false;
 }
 
 

@@ -1,16 +1,21 @@
 {% extends "rundb/data/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
 {% block extra_head_js %}
-<script type="text/javascript" src="/site_media/js/sprintf-0.7-beta1.js"></script>
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
-<script src="/site_media/resources/jquery/jQuery.download.min.js"></script>
-<script src="/site_media/resources/scripts/data/modal_combine_results.js"></script>
-{% endblock extra_head_js %}
-{% block extra_head %}
+<script type="text/javascript" src="{% static "js/sprintf-0.7-beta1.js"%}"></script>
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script src="{% static "resources/jquery/jQuery.download.min.js"%}"></script>
+<script src="{% static "resources/scripts/data/modal_combine_results.js"%}"></script>
+<script src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
+<script src="/site_media/js/date.min.js"></script>
+<script src="/site_media/js/jquery.daterangepicker.min.js"></script>
 <script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modalmanager.js"></script>
 <script type="text/javascript" src="/site_media/resources/bootstrap-modal/js/bootstrap-modal.js"></script>
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/bootstrap-modal/css/bootstrap-modal.css" />
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
-<link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
+{% endblock extra_head_js %}
+{% block extra_head %}
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css" %}"/>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
 <style type="text/css">
     .search-field {
         display: inline-block;
@@ -53,7 +58,7 @@
     <div id="search_bar" class="well">
             <div class="search-field">
                 <label for="rangeA" class="hide">Date</label>
-                <input type="text" value="" id="rangeA"/>
+                <input type="text" value="" id="rangeA" placeholder="Report Date"/>
             </div>
             <div class="input-append search-field">
                 <label for="search_text" class="hide">Search Names</label>
@@ -100,14 +105,10 @@
                 <a class="remove_from_project" href="/data/project/{{project.id}}/results/%s/">&raquo;&nbsp;&nbsp; Remove from Project</a>
             </li>
             <li class="divider"></li>
-        <li><a class="dm_actions" href="{% url dm_actions 99999 %}" >&raquo;&nbsp;&nbsp; Data Management </a></li>        
+        <li><a class="dm_actions" href="{% url "dm_actions" 99999 %}" >&raquo;&nbsp;&nbsp; Data Management </a></li>
         </ul>
     </div>
 
-<script src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
-<script src="/site_media/js/date.min.js"></script>
-<script src="/site_media/js/jquery.daterangepicker.min.js"></script>
 <script type="text/javascript">
 function initialize_search () {
     $('#rangeA').daterangepicker({dateFormat: 'yy-mm-dd'});
@@ -117,12 +118,13 @@ function initialize_search () {
 function filter(e){
     e.preventDefault();
     e.stopPropagation();
-    var daterange;
-    if ($("#rangeA").val().split(/ - /).length < 2)
-        daterange = $("#rangeA").val() + " 00:00," + $("#rangeA").val() + " 23:59"; // single date range hack
-    else
-        daterange = $("#rangeA").val().replace(/ - /," 00:00,") + " 23:59";
-
+    var daterange = $("#rangeA").val();
+    if (daterange) {
+        if (!/ - /.test(daterange)) {
+            daterange = daterange + ' - ' + daterange;
+        }
+        daterange = daterange.replace(/ - /," 00:00,") + " 23:59";
+    }
     $("#grid").data("kendoGrid").dataSource.filter([
         {
             field: "timeStamp",
@@ -144,7 +146,7 @@ function filter(e){
 
 function clear_filters(){
     $("#grid").data("kendoGrid").dataSource.filter({});
-    $('#rangeA').val(Date.parse('2005-07-16').toString('yyyy-MM-dd') + ' - ' + Date.parse('today').toString('yyyy-MM-dd'));
+    $('#rangeA').val('');
     $("#search_text").val('');
 }
 
@@ -203,7 +205,7 @@ $(document).ready(function(){
                 field: "resultsName",
                 title: "Name",
                 width: '40%',
-                template: "<a href=/report/${id}>${resultsName}</a>"
+                template: '<a href="/report/${id}/" target="_blank">${resultsName}</a>'
             } , {
                 field: "status",
                 title: "Status",
@@ -267,7 +269,7 @@ $(document).ready(function(){
             $('body').append(data);
             $( "#modal_confirm_delete" ).modal("show");
             $('body #modal_confirm_delete').on('modal_confirm_delete_done', function () {
-                window.location.href = '{% url projects %}';
+                window.location.href = '{% url "projects" %}';
             });
             return false;
         }).fail(function(data) {
@@ -330,7 +332,6 @@ $(document).ready(function(){
         $('#error-messages').hide().empty();
         if (checked_ids.length != 0) {
             var url = $(this).attr('href').replace('99999', checked_ids.toString());
-					  console.log(url);
 					  $('body #modal_dm_actions').remove();
 					  $.get(url, function(data) {
 						  $('body').append(data);

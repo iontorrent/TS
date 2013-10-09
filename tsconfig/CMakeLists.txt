@@ -61,6 +61,10 @@ configure_file (
 	"${PROJECT_SOURCE_DIR}/bin/TSinit"
 	"${PROJECT_BINARY_DIR}/TSinit" @ONLY
 )
+configure_file (
+	"${PROJECT_SOURCE_DIR}/bin/TSaddstorage"
+	"${PROJECT_BINARY_DIR}/TSaddstorage" @ONLY
+)
 
 
 install(PROGRAMS "${PROJECT_BINARY_DIR}/TSconfig" DESTINATION sbin )
@@ -71,11 +75,13 @@ install(PROGRAMS "${PROJECT_BINARY_DIR}/TSquery" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_BINARY_DIR}/TSdns" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_BINARY_DIR}/TSwrapper" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_BINARY_DIR}/TSinit" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_BINARY_DIR}/TSaddstorage" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TScreateLocalRepository" DESTINATION sbin )
 install(FILES "${PROJECT_BINARY_DIR}/ts_functions" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_BINARY_DIR}/ts_params" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/config/iptables.rules" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/config/torrentsuite-packagelist.json" DESTINATION share/ion-tsconfig )
+install(FILES "${PROJECT_SOURCE_DIR}/stresstest.tgz" DESTINATION share/ion-tsconfig )
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/sge-configuration" DESTINATION share/ion-tsconfig
     PATTERN ".svn" EXCLUDE )
 
@@ -129,7 +135,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
 set(CPACK_PACKAGE_DESCRIPTION "This package contains scripts for configuring Torrent Server.")
 # TODO: putty-tools is only here so that it gets installed with 3.0 from 2.2 GUI update
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect, gcc, make, python-jsonpipe, putty-tools, python-pysam (>= 0.7)")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect, gcc, make, python-jsonpipe, putty-tools, lsscsi, xfsprogs, lvm2")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/prerm

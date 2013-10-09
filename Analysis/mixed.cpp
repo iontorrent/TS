@@ -24,6 +24,9 @@ using namespace arma;
 
 typedef pair<int,int>   well_coord;
 typedef set<well_coord> well_set;
+int mixed::mixed_first_flow = 12;
+int mixed::mixed_last_flow = 72;
+int mixed::max_iterations = 30;
 
 void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, Mask& mask, RawWells& wells, const vector<int>& key_ionogram);
 well_set sample_lib(Mask& mask, int nsamp);
@@ -73,8 +76,8 @@ void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, M
     WellData data;
     unsigned int nflows = wells.NumFlows();
     vector<float> nrm(nflows);
-    int flow0 = mixed_first_flow();
-    int flow1 = mixed_last_flow();
+    int flow0 = mixed::mixed_first_flow;
+    int flow1 = mixed::mixed_last_flow;
     wells.ResetCurrentRegionWell();
     
     // Some temporary code for comparing clonal filter in background model:
@@ -208,8 +211,9 @@ bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, 
         if (verbose)
           print_dist(mean, sgma, alpha, converged, 0);
 
-        int  max_iters = 20;
-        for(int i=1; i<=max_iters and not converged; ++i){
+        int  max_iters = mixed::max_iterations;
+        int iteration = 1;
+        for(; iteration<=max_iters and not converged; ++iteration){
             // Re-estimate parameters for each distribution:
             int nsamp = ppf.size();
             vec sumw(2);
@@ -286,8 +290,9 @@ bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, 
             mean[1] = new_mean[1];
             sgma[0] = new_sgma;
             sgma[1] = new_sgma;
+
             if (verbose)
-              print_dist(mean, sgma, alpha, converged, i);
+              print_dist(mean, sgma, alpha, converged, iteration);
         }
 
         // Fallback position if failed to converge:
@@ -296,7 +301,7 @@ bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, 
             init(mean, sgma, alpha);
             converged = true;
         } else {
-          cout << "converged to acceptable filter: using adapted filter" << endl;
+          cout << "converged to acceptable filter: using adapted filter at iteration " << (iteration-1) << endl;
         }
     }catch(const exception& ex){
         converged = false;

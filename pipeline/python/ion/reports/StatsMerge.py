@@ -6,6 +6,7 @@ import ConfigParser
 
 addressable_fraction = {
     '15456,10656': 0.88,
+    '7680,5328': 0.88,
 }
 
 def main_merge(stats_list, stats_file, verbose):

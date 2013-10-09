@@ -16,10 +16,9 @@ Personal Genome Machine experiments. This information includes...
 ``models`` also contains information about infrastructure that supports
 the data gathering and analysis.
 """
-from os import path
 import datetime
 import re
-import os.path
+import os
 import fnmatch
 import traceback
 import pytz
@@ -61,7 +60,7 @@ from django.core import urlresolvers
 from django.db.models.signals import post_save, pre_delete, post_delete
 from django.dispatch import receiver
 from distutils.version import LooseVersion
-
+from celery.task.control import revoke
 
 import copy
 
@@ -125,7 +124,8 @@ class KitInfo(models.Model):
         ('AdapterKit', "AdapterKit"),
         ('ControlSequenceKit', "ControlSequenceKit"),
         ('SamplePrepKit', "SamplePrepKit"),
-        ('IonChefPrepKit', 'IonChefPrepKit')
+        ('IonChefPrepKit', 'IonChefPrepKit'),
+        ('AvalancheTemplateKit', 'AvalancheTemplateKit')        
     )
 
     kitType = models.CharField(max_length=20, choices=ALLOWED_KIT_TYPES)
@@ -201,7 +201,7 @@ class RunTypeManager(models.Manager):
         return self.get(runType = runType)
 
 class RunType(models.Model):
-    runType = models.CharField(max_length=512)
+    runType = models.CharField(max_length=512, unique = True)
     barcode = models.CharField(max_length=512, blank=True)
     description = models.TextField(blank=True)
     meta = json_field.JSONField(blank=True, null=True, default = "")
@@ -216,11 +216,35 @@ class RunType(models.Model):
 
     objects = RunTypeManager()
 
+    applicationGroups = models.ManyToManyField("ApplicationGroup", related_name='applications', null = True)
+
+    alternate_name = models.CharField(max_length=512, blank = True, null = True, default = "")
+
     def __unicode__(self):
         return self.runType
 
     def natural_key(self):
         return (self.runType, )  # must return a tuple
+
+
+class ApplicationGroupManager(models.Manager):
+    def get_by_natural_key(self, uid):
+        return self.get(uid = uid)
+
+class ApplicationGroup(models.Model):
+    name = models.CharField(max_length = 127, blank = False, null = False)
+    description = models.CharField(max_length = 1024, blank = True, null = True)
+    isActive = models.BooleanField(default = True)
+
+    uid = models.CharField(max_length = 32, unique = True, blank = False)
+
+    objects = ApplicationGroupManager()
+
+    def __unicode__(self):
+        return self.name
+
+    def natural_key(self):
+        return (self.uid,)  # must return a tuple
 
 
 class ApplProductManager(models.Manager):
@@ -266,6 +290,16 @@ class ApplProduct(models.Model):
     isDefaultBarcoded = models.BooleanField(default = False)
     defaultBarcodeKitName = models.CharField(max_length=128, blank=True, null=True)
     defaultIonChefPrepKit = models.ForeignKey(KitInfo, related_name='ionChefPrepKit_applProduct_set', null=True)
+    defaultAvalancheTemplateKit = models.ForeignKey(KitInfo, related_name='avalancheTemplateKit_applProduct_set', null=True)
+    defaultAvalancheSequencingKit = models.ForeignKey(KitInfo, related_name='avalancheSeqKit_applProduct_set', null=True)
+
+    ALLOWED_INSTRUMENT_TYPES = (
+        ('', 'Any'),
+        ('pgm', 'PGM'),
+        ('proton', 'Proton')
+    )
+    #compatible instrument type
+    instrumentType = models.CharField(max_length=64, choices=ALLOWED_INSTRUMENT_TYPES, default='', blank=True)
 
     def __unicode__(self):
         return u'%s' % self.productName
@@ -304,10 +338,15 @@ class PlannedExperimentManager(models.Manager):
         extra_kwargs['x_notes'] = kwargs.pop('x_notes', "")
         extra_kwargs['x_regionfile'] = kwargs.pop('x_regionfile', "")
         extra_kwargs['x_sample'] = kwargs.pop('x_sample', "")
+        extra_kwargs['x_sample_external_id'] = kwargs.pop('x_sample_external_id', "")
+        extra_kwargs['x_sample_description'] = kwargs.pop('x_sample_description', "")
         extra_kwargs['x_sampleDisplayedName'] = kwargs.pop('x_sampleDisplayedName', "")
         extra_kwargs['x_selectedPlugins'] = kwargs.pop('x_selectedPlugins', {})
         extra_kwargs['x_sequencekitname'] = kwargs.pop('x_sequencekitname', "")
         extra_kwargs['x_variantfrequency'] = kwargs.pop('x_variantfrequency', "")
+        extra_kwargs['x_isDuplicateReads'] = kwargs.pop('x_isDuplicateReads', False)
+        extra_kwargs['x_isSaveBySample'] = kwargs.pop('x_isSaveBySample', False)
+        extra_kwargs['x_numberOfChips'] = kwargs.pop('x_numberOfChips', 1)
 
         logger.info("EXIT PlannedExpeirmentManager.extract_extra_kwargs... extra_kwargs=%s" %(extra_kwargs))
 
@@ -322,6 +361,11 @@ class PlannedExperimentManager(models.Manager):
 
         if planOid < 0:
             plan = self.create(**popped_kwargs)
+            # if extra_kwargs.pop('x_isSaveBySample', False):
+            #     plan.sampleSet_uid = str(uuid.uuid4())
+            #     #setattr(plan, 'sampleSet', extra_kwargs.get('x_sampleSet'))
+            #     plan.sampleSet_planTotal = 1
+            #     plan.save()
         else:
             plan = self.get(pk = planOid)
 
@@ -333,6 +377,7 @@ class PlannedExperimentManager(models.Manager):
         if plan:
             isPlanCreated = (planOid < 0)
             plan.save_plannedExperiment_association(isPlanCreated, **extra_kwargs)
+            plan.update_plan_qcValues(**popped_kwargs)
 
 
         return plan, extra_kwargs
@@ -355,15 +400,32 @@ class PlannedExperiment(models.Model):
     #was the plan already executed?
     planExecuted = models.BooleanField(default=False)
 
-    #"planned" status : means the entire plan object has been saved but not yet used
-    #"reserved" status: means part of a group plan (e.g., forward of a paired-end plan) has been claimed for a run
-    #"run" status     : means the plan has been claimed for a run and the corresponding sequencing run has started
-    #"voided" status  : means to ignore the status of a plan (e.g., forward of a paired-end plan) so the claiming
-    #of the reverse of a paired-end plan will mark this plan as executed
-    #"blank" status   : for backward compatibility, blank status + planExecuted = True is same as "executed" while
-    #"blank" status + planExecuted = False is same as "planned" status. [TODO: replace blank status]
+    #Typical status transition of a plan/experiment:
+    # pending (optional) -> planned -> run (e.g., from LIMS or HUB)
+    # reserved (optional)-> planned -> run (e.g., from Sample Prep instrument like IonChef)
+    #
+    #planStatus summary:
+    #"pending" status : means the plan creation is not fully completed  - user can further edit a pending plan
+    #from the plan wizard and have its status promoted to "planned" upon successful db plan update
+
+    #"planned" status : means the entire plan object has been created and saved and ready to be selected for
+    #sequencing run
+    #"run" status     : means the plan has been claimed by a sequencing run on the instrument
+
+    #"reserved" status: the original intent of this status is to indicate that part of a group plan
+    #(e.g., forward of a paired-end plan) has been claimed for a run - user can't further edit a reserved plan
+    #from the plan wizard
+
+    #"voided" status  : the original intent of this status is to indicate this group plan has been abandoned
+    #even though it has not been fully used for its sequencing runs - user can't further edit a voided plan
+    #from the plan wizard
+
+    #"blank" status   : for backward compatibility, blank status + planExecuted = True is same as "executed"
+    #while "blank" status + planExecuted = False is same as "planned" status. [TODO: replace blank status]
+
     ALLOWED_PLAN_STATUS = (
         ('', 'Undefined'),
+        ('pending', 'Pending'),
         ('voided', 'Voided'),
         ('reserved', 'Reserved'),
         ('planned', 'Planned'),
@@ -390,7 +452,6 @@ class PlannedExperiment(models.Model):
 
     chipBarcode = models.CharField(max_length=64, blank=True,null=True)
 
-    #we now persist the sequencing kit name instead of its part number. to be phased out
     seqKitBarcode = models.CharField(max_length=64, blank=True,null=True)
 
     #name of the experiment
@@ -422,7 +483,7 @@ class PlannedExperiment(models.Model):
     #runname - name of the raw data directory
     runname = models.CharField(max_length=255, blank=True, null=True)
 
-    flowsInOrder = models.CharField(max_length=512, blank=True, null=True)
+    #flowsInOrder = models.CharField(max_length=512, blank=True, null=True)
     storageHost = models.CharField(max_length=128, blank=True, null=True)
     reverse_primer = models.CharField(max_length=128, blank=True, null=True)
 
@@ -479,8 +540,9 @@ class PlannedExperiment(models.Model):
 
     qcValues = models.ManyToManyField(QCType, through="PlannedExperimentQC", null=True)
 
-    #we now persist the kit names instead of their part number
+    templatingKitBarcode = models.CharField(max_length=64, blank=True, null=True)
     templatingKitName = models.CharField(max_length=512, blank=True, null=True)
+
     controlSequencekitname = models.CharField(max_length=512, blank=True, null=True)
 
     #pairedEnd library adapter name
@@ -488,6 +550,17 @@ class PlannedExperiment(models.Model):
 
     #sample preparation kit name
     samplePrepKitName = models.CharField(max_length=512, blank=True, null=True)
+
+    #the barcode sample prep label on the sample tube
+    sampleTubeLabel = models.CharField(max_length=512, blank=True, null=True)
+
+    sampleSet = models.ForeignKey('SampleSet', related_name = "plans", null = True, blank = True)
+    sampleSet_uid = models.CharField(max_length = 512, blank = True, null = True)
+    sampleSet_planIndex = models.PositiveIntegerField(default=0)
+    sampleSet_planTotal = models.PositiveIntegerField(default=0)
+
+    sampleGrouping = models.CharField(max_length=512, blank=True, null=True)
+    applicationGroup = models.ForeignKey(ApplicationGroup, null=True)
 
     objects = PlannedExperimentManager()
 
@@ -599,7 +672,13 @@ class PlannedExperiment(models.Model):
     def get_chipType(self):
         experiment = self.experiment
         if experiment:
-            return experiment.chipType
+            chipType = experiment.chipType
+            # older chip names compatibility, e.g 314R, 318B, "318C"
+            if chipType not in Chip.objects.values_list('name',flat=True):
+                chipType = chipType.replace('"','')
+                if chipType and chipType[0].isdigit():
+                    chipType = chipType[:3]
+            return chipType
         else:
             return ""
 
@@ -688,6 +767,38 @@ class PlannedExperiment(models.Model):
         else:
             return ""
 
+    def get_sample_external_id(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas and latest_eas.barcodeKitName:
+                return ""
+            else:
+                if experiment.samples.count() > 0:
+                    sample = experiment.samples.values()[0]
+                    externalId = sample['externalId']
+                    return externalId
+                else:
+                    return ""
+        else:
+            return ""
+
+    def get_sample_description(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas and latest_eas.barcodeKitName:
+                return ""
+            else:
+                if experiment.samples.count() > 0:
+                    sample = experiment.samples.values()[0]
+                    description = sample['description']
+                    return description
+                else:
+                    return ""
+        else:
+            return ""
+
     def get_sampleDisplayedName(self):
         experiment = self.experiment
         if experiment:
@@ -734,34 +845,21 @@ class PlannedExperiment(models.Model):
 
         return False
 
+    def is_duplicateReads(self):
+        experiment = self.experiment
+        if experiment:
+            latest_eas = experiment.get_EAS()
+            if latest_eas:
+                return latest_eas.isDuplicateReads
+            else:
+                return False
+        else:
+            return False
 
     def save(self, *args, **kwargs):
 
         logger.debug("PDD ENTER models.PlannedExperiment.save(self, args, kwargs)")
         logger.debug("PDD kwargs=%s " %(kwargs))
-
-
-        #PDD-TODO: remove the x_ prefix. the x_ prefix is just a reminder what the obsolete attributes to remove during the next phase
-
-        extra_kwargs = {}
-        extra_kwargs['x_autoAnalyze'] = kwargs.pop('x_autoAnalyze', True)
-        extra_kwargs['x_barcodedSamples'] = kwargs.pop('x_barcodedSamples', {})
-        extra_kwargs['x_barcodeId'] = kwargs.pop('x_barcodeId', "")
-        extra_kwargs['x_bedfile'] = kwargs.pop('x_bedfile', "")
-        extra_kwargs['x_chipType'] = kwargs.pop('x_chipType', "")
-        extra_kwargs['x_flows'] = kwargs.pop('x_flows', "0")
-        extra_kwargs['x_forward3primeadapter'] = kwargs.pop('x_forward3primeadapter', "")
-        ###'_isReverseRun':  = self.isReverseRun
-        extra_kwargs['x_library'] = kwargs.pop('x_library', "")
-        extra_kwargs['x_libraryKey'] = kwargs.pop('x_libraryKey', "")
-        extra_kwargs['x_librarykitname'] = kwargs.pop('x_librarykitname', "")
-        extra_kwargs['x_notes'] = kwargs.pop('x_notes', "")
-        extra_kwargs['x_regionfile'] = kwargs.pop('x_regionfile', "")
-        extra_kwargs['x_sample'] = kwargs.pop('x_sample', "")
-        extra_kwargs['x_sampleDisplayedName'] = kwargs.pop('x_sampleDisplayedName', "")
-        extra_kwargs['x_selectedPlugins'] = kwargs.pop('x_selectedPlugins', {})
-        extra_kwargs['x_sequencekitname'] = kwargs.pop('x_sequencekitname', "")
-        extra_kwargs['x_variantfrequency'] = kwargs.pop('x_variantfrequency', "")
 
         if not self.planStatus:
             self.planStatus = "planned"
@@ -770,7 +868,7 @@ class PlannedExperiment(models.Model):
         if not self.planDisplayedName:
             self.planDisplayedName = self.planName;
 
-        self.date = datetime.datetime.now()
+        self.date = timezone.now()
         if not self.planShortID:
             self.planShortID = self.findShortID()
         if not self.planGUID:
@@ -778,8 +876,6 @@ class PlannedExperiment(models.Model):
 
         if not self.runType:
             self.runType = "GENS"
-
-        isToSkipPlanUpdate = False
 
         isPlanCreated = True
 
@@ -793,21 +889,13 @@ class PlannedExperiment(models.Model):
             dbPlan = PlannedExperiment.objects.get(pk=self.id)
 
             #last modified date
-            self.date = datetime.datetime.now()
+            self.date = timezone.now()
 
-            #scenario: change from PE to PE or non-PE to PE
-            if (self.runMode == "pe" or self.isReverseRun):
-                raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName)
-            else:
-                #scenario: change from PE to non-PE
-                if (dbPlan.runMode == "pe" or dbPlan.isReverseRun):
-                    raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be updated." % self.planDisplayedName)
+            #historical paired-end plan (can't raise error because this could be for db schema change
+            if (self.runMode == "pe" or self.isReverseRun or dbPlan.runMode == "pe" or dbPlan.isReverseRun):
+                logger.warning("Paired-end plan is no longer supported even though it is being updated. Plan name=%s; id=%d" % (self.planDisplayedName, self.id))
 
-                else:
-                    if (self.isReverseRun == False):
-                        super(PlannedExperiment, self).save()
-                    else:
-                        raise ValidationError("Error: paired-end plan is no longer supported. Plan %s will not be saved." % self.planDisplayedName)
+            super(PlannedExperiment, self).save()
         else:
             #if user creates a new forward plan
             if (self.runMode == "pe" or self.isReverseRun):
@@ -816,196 +904,223 @@ class PlannedExperiment(models.Model):
                 if PlannedExperiment.objects.filter(planShortID=self.planShortID, planExecuted=False):
                     self.planShortID = self.findShortID()
 
+                if (self.sampleSet):
+                        if (not self.sampleSet_uid):
+                            self.sampleSet_uid = str(uuid.uuid4())
+                        if (self.sampleSet_planTotal == 0):
+                            self.sampleSet_planTotal = 1
+                            self.sampleSet_planIndex = 0
+
                 #logger.info('Going to CREATE the 1 UNTOUCHED plan with name=%s' % self.planName)
                 super(PlannedExperiment, self).save()
+
+                if (self.sampleSet):
+                        if (self.sampleSet.status == "" or self.sampleSet.status == "created"):
+                            self.sampleSet.status = "planned"
+                            self.sampleSet.save()
 
 
     def save_plannedExperiment_association(self, isPlanCreated, **kwargs):
         """
         create/update the associated records for the plan
+
+        1. for template: create or update exp, eas
+        2. for plan: create or update exp, eas, samples
+        3. for executed plan: update existing exp, eas, samples
         """
         logger.debug("PDD ENTER models.save_plannedExperiment_association() isPlanCreated=%s; self_id=%d; planExecuted=%s; kwargs=%s" %(str(isPlanCreated), self.id, str(self.planExecuted), kwargs))
 
-        #-1-for plan creation: create all records (exp/sample/eas)
-        #-2-for template creation: create only exp and eas records
-        #-3-for plan updates: if plan is still at planning stage, all exp/sample/eas attributes are editable
-        #-4-if user has already selected this plan for a run on the instrument, entry point for edits needs to start from experiment
-        #-5-for template updates, all exp/sample/eas attributes are editable
+        # ===================== Experiment ==================================
+        exp_kwargs = {
+            'autoAnalyze' : kwargs.get('x_autoAnalyze', True),
+            'chipType' : kwargs.get('x_chipType', ""),
+            'flows' : kwargs.get('x_flows', "0"),
+            'isReverseRun' : kwargs.get('x_isReverseRun', False),
+            'notes' : kwargs.get('x_notes', ""),
+            'runMode' : self.runMode,
+            'sequencekitname' : kwargs.get('x_sequencekitname', ""),
+        }
 
-        if (not isPlanCreated) and self.planExecuted:
-            pass
-        else:
-            #this could be a new creation or an update
-            logger.debug("models.save_plannedExperiment_association() isPlanCreated=%s; self_id=%d" %(str(isPlanCreated), self.id))
+        #there must be one experiment for each plan
+        try:
+            experiment = self.experiment
+            for key,value in exp_kwargs.items():
+                setattr(experiment, key, value)
+            logger.debug("PDD models.save_plannedExperiment_association() going to UPDATE experiment id=%d" % experiment.id)
 
-            currentDate = datetime.datetime.now()
+        except Experiment.DoesNotExist:
+            # creating new experiment
+            exp_kwargs.update({
+                'date' : timezone.now(),
+                'status' : self.planStatus,
+                'expDir' : '',
+                #temp expName value below will be replaced in crawler
+                'expName' : self.planGUID,
+                'displayName' : self.planShortID,
+                'pgmName' : '',
+                'log' : '',
+                #db constraint requires a unique value for experiment. temp unique value below will be replaced in crawler
+                'unique' : self.planGUID,
+                'chipBarcode' : '',
+                'seqKitBarcode' : '',
+                'sequencekitbarcode' : '',
+                'reagentBarcode' : '',
+                'cycles' : 0,
+                'expCompInfo' : '',
+                'baselineRun' : '',
+                'flowsInOrder' : '',
+                'ftpStatus' : 'Complete',
+                'displayName' : '',
+                'storageHost' : ''
+            })
+            experiment = Experiment(**exp_kwargs)
+            logger.debug("PDD models.save_plannedExperiment_association() #2 going to CREATE experiment")
 
-            exp_kwargs = {
-                          'autoAnalyze' : kwargs.get('x_autoAnalyze', True),
-                          'chipType' : kwargs.get('x_chipType', ""),
-                          'date' : currentDate,
-                          'flows' : kwargs.get('x_flows', "0"),
-                          'isReverseRun' : kwargs.get('x_isReverseRun', False),
-                          'notes' : kwargs.get('x_notes', ""),
-                          'plan' : self,
-                          'runMode' : self.runMode,
-                          'sequencekitname' : kwargs.get('x_sequencekitname', ""),
-                          'status' : self.planStatus,
+        logger.debug("PDD models.save_plannedExperiment_association() self_id=%d exp_kwargs=..." %(self.id))
+        logger.debug(exp_kwargs)
 
-                          'expDir' : '',
-                          #temp expName value below will be replaced in crawler
-                          'expName' : self.planGUID,
-                          'displayName' : self.planShortID,
-                          'pgmName' : '',
-                          'log' : '',
-                          #db constraint requires a unique value for experiment. temp unique value below will be replaced in crawler
-                          'unique' : self.planGUID,
-                          'chipBarcode' : '',
-                          'seqKitBarcode' : '',
-                          'sequencekitbarcode' : '',
-                          'reagentBarcode' : '',
-                          'cycles' : 0,
-                          'expCompInfo' : '',
-                          'baselineRun' : '',
-                          'flowsInOrder' : '',
-                          'ftpStatus' : 'Complete',
-                          'displayName' : '',
-                          'storageHost' : ''
-            }
+        #need this!
+        experiment.plan = self
+        experiment.save()
+        logger.debug("PDD models.save_plannedExperiment_association() AFTER saving experiment_id=%d" %(experiment.id))
 
-            logger.debug("PDD models.save_plannedExperiment_association() self_id=%d exp_kwargs=..." %(self.id))
-            logger.debug(exp_kwargs)
+        # ===================== ExperimentAnalysisSettings =====================
+        eas_kwargs = {
+            'barcodedSamples' : kwargs.get('x_barcodedSamples', {}),
+            'barcodeKitName' : kwargs.get('x_barcodeId', ""),
+            'hotSpotRegionBedFile' : kwargs.get('x_regionfile', ""),
+            'libraryKey' : kwargs.get('x_libraryKey', ""),
+            'libraryKitName' : kwargs.get('x_librarykitname', ""),
+            'reference' : kwargs.get('x_library', ""),
+            'selectedPlugins' : kwargs.get('x_selectedPlugins', {}),
+            'status' : self.planStatus,
+            'targetRegionBedFile' : kwargs.get('x_bedfile', ""),
+            'threePrimeAdapter' : kwargs.get('x_forward3primeadapter' ""),
+            'isDuplicateReads' : kwargs.get('x_isDuplicateReads', False)
+        }
+        # add default cmdline args
+        args = self.get_default_cmdline_args(libraryKitName=eas_kwargs['libraryKitName'])
+        eas_kwargs.update(args)
 
-            #there should only be 1 experiment maximum for each plan
+        eas, eas_created = experiment.get_or_create_EAS(editable=True)
+        for key,value in eas_kwargs.items():
+            setattr(eas, key, value)
+        eas.save()
+        logger.debug("PDD models.save_plannedExperiment_association() AFTER saving EAS_id=%d" %(eas.id))
 
-            experiment = None
-            try:
-                experiment = self.experiment
-                for key,value in exp_kwargs.items():
-                    setattr(experiment, key, value)
+        # ===================== Samples ==========================================
+        if not self.isReusable:
+            #if this is not a template need to create/update single sample or multiple barcoded samples
+            samples_kwargs = []
+            barcodedSamples = kwargs.get('x_barcodedSamples', {})
 
-                #need this!
-                experiment.plan = self
-                logger.debug("PDD models.save_plannedExperiment_association() going to UPDATE experiment id=%d" % experiment.id)
-            except Experiment.DoesNotExist:
-                experiment = Experiment(**exp_kwargs)
+            if barcodedSamples:
+                barcodedSampleDict = simplejson.loads(barcodedSamples)
+                for displayedName, sampleDict in barcodedSampleDict.items():
+                    name = displayedName.replace(' ', '_')
+                    if barcodedSampleDict[displayedName].get('barcodeSampleInfo'):
+                        externalId = barcodedSampleDict[displayedName]['barcodeSampleInfo'].values()[0].get('externalId','')
+                        description = barcodedSampleDict[displayedName]['barcodeSampleInfo'].values()[0].get('description','')
+                    else:
+                        externalId = ""
+                        description = ""
 
-                experiment.plan = self
-                logger.debug("PDD models.save_plannedExperiment_association() #2 going to CREATE experiment")
-
-            experiment.save()
-
-            logger.debug("PDD models.save_plannedExperiment_association() AFTER saving experiment_id=%d" %(experiment.id))
-
-            #if this is a plan
-            if not self.isReusable:
-                #TODO: sample-driven planning is not yet supported. all is plan-driven planning
-
-                if not isPlanCreated:
-                    #TODO: should we try to figure out if there has been any sample updates and applied the updates to existing samples instead of creating new samples?
-                    #remove all the m2m relationship between samples and experiment
-                    #if sample is created as a by-product of plan creation and has become an orphan, we'll delete the sample
-                    for sample in experiment.samples.all():
-                        experiment.samples.remove(sample)
-                        experiment.save()
-
-                        #delete sample if it is not associated with any experiments
-                        if sample.experiments.all().count() == 0 and not (sample.status == "loaded"):
-                            logger.debug("PDD models.save_plannedExperiment_association() going to DELETE sample=%s" %(sample.name))
-                            sample.delete()
-
-                    ##experiment.samples.clear()
-                    logger.debug("PDD models.save_plannedExperiment_association() has CLEARED all previously associated samples")
-
-                # add single sample or multiple barcoded samples
-                barcodedSamples = kwargs.get('x_barcodedSamples', {})
-
-                barcodedSampleDict = {}
-                if barcodedSamples:
-                    barcodedSampleDict = simplejson.loads(barcodedSamples)
-
-                ##logger.debug("PDD models.save_plannedExperiment_association() barcodedSampleDict=%s" %(barcodedSampleDict))
-
-                if barcodedSampleDict:
-                    sample_displayedNames = barcodedSampleDict.keys()
-                    sample_names = [name.replace(' ', '_') for name in sample_displayedNames]
-
-                    externalId = None
-                    for name, displayedName in zip(sample_names,  sample_displayedNames):
-                        sample_kwargs = {
-                                     'name' : name,
-                                     'displayedName' : displayedName,
-                                     'date' : self.date,
-                                     'status' : self.planStatus,
-                                     'externalId': externalId
-                                     }
-
-                        sample = Sample.objects.get_or_create(name=name, externalId=externalId, defaults=sample_kwargs)[0]
-                        sample.experiments.add(experiment)
-                        sample.save()
-
-                        logger.debug("PDD models.save_plannedExperiment_association() AFTER saving barcoded sample_id=%d" %(sample.id))
-                else:
-                    sample_name = kwargs.get('x_sample', "")
-                    sample_displayedName = kwargs.get('x_sampleDisplayedName', "")
-
-                    if sample_name:
-                        externalId = None
-                        name = sample_name.replace(' ', '_')
-
-                        sample_kwargs = {
-                                     'name' : name,
-                                     'displayedName' : sample_displayedName,
-                                     'date' : self.date,
-                                     'status' : self.planStatus,
-                                     'externalId': externalId
-                                     }
-
-                        sample = Sample.objects.get_or_create(name=name, externalId=externalId, defaults=sample_kwargs)[0]
-                        sample.experiments.add(experiment)
-                        sample.save()
-
-                        logger.debug("PDD models.save_plannedExperiment_association() AFTER saving sample_id=%d" %(sample.id))
-
-            eas_kwargs = {
-                          'barcodedSamples' : kwargs.get('x_barcodedSamples', {}),
-                          'barcodeKitName' : kwargs.get('x_barcodeId', ""),
-                          'date' : self.date,
-                          'experiment' : experiment,
-                          'hotSpotRegionBedFile' : kwargs.get('x_regionfile', ""),
-                          'isEditable' : True,
-                          'isOneTimeOverride' : False,
-                          'libraryKey' : kwargs.get('x_libraryKey', ""),
-                          'libraryKitName' : kwargs.get('x_librarykitname', ""),
-                          'reference' : kwargs.get('x_library', ""),
-                          'selectedPlugins' : kwargs.get('x_selectedPlugins', {}),
-                          'status' : self.planStatus,
-                          'targetRegionBedFile' : kwargs.get('x_bedfile', ""),
-                          'threePrimeAdapter' : kwargs.get('x_forward3primeadapter' "")
-                          }
-
-            if isPlanCreated:
-                ##eas = ExperimentAnalysisSettings.objects.create(**eas_kwargs)
-                eas = ExperimentAnalysisSettings(**eas_kwargs)
-                logger.debug("PDD models.save_plannedExperiment_association() going to CREATE eas")
+                    samples_kwargs.append({
+                        'name' : name,
+                        'displayedName' : displayedName,
+                        'date' : self.date,
+                        'status' : self.planStatus,
+                        'externalId': externalId,
+                        'description': description
+                    })
+                logger.debug("PDD models.save_plannedExperiment_association() barcoded samples kwargs=")
+                logger.debug(samples_kwargs)
             else:
-                #update the most recent eas
-                eas_set = ExperimentAnalysisSettings.objects.filter(experiment = experiment).exclude(isEditable = False).order_by('-date')
-                if eas_set:
-                    eas = eas_set[0]
+                displayedName = kwargs.get('x_sampleDisplayedName', "")
+                name = kwargs.get('x_sample', "") or displayedName
+                if name:
+                    samples_kwargs.append({
+                        'name' : name.replace(' ', '_'),
+                        'displayedName' : displayedName or name,
+                        'date' : self.date,
+                        'status' : self.planStatus,
+                        'externalId': kwargs.get('x_sample_external_id', ""),
+                        'description': kwargs.get('x_sample_description', "")
+                    })
+                    logger.debug("PDD models.save_plannedExperiment_association() samples kwargs=")
+                    logger.debug(samples_kwargs)
 
-                    for key,value in eas_kwargs.items():
-                        setattr(eas, key, value)
+            # add sample(s)
+            for sample_kwargs in samples_kwargs:
+                try:
+                    sample = Sample.objects.get(name=sample_kwargs['name'], externalId=sample_kwargs['externalId'])
+                    for key,value in sample_kwargs.items():
+                        setattr(sample, key, value)
+                except Sample.DoesNotExist:
+                    sample = Sample(**sample_kwargs)
 
-                    logger.debug("PDD models.save_plannedExperiment_association() going to UPDATE eas")
-                else:
-                    eas = ExperimentAnalysisSettings(**eas_kwargs)
-                    logger.debug("PDD models.save_plannedExperiment_association() going to CREATE eas")
+                sample.save()
+                sample.experiments.add(experiment)
 
-            eas.save()
+                logger.debug("PDD models.save_plannedExperiment_association() AFTER saving sample_id=%d" %(sample.id))
 
-            logger.debug("PDD models.save_plannedExperiment_association() AFTER saving EAS_id=%d" %(eas.id))
+            # clean up old samples that may remain on experiment
+            sample_names = [ d['name'] for d in samples_kwargs ]
+            for sample in experiment.samples.all():
+                if sample.name not in sample_names:
+                    experiment.samples.remove(sample)
 
+                #delete sample if it is not associated with any experiments
+                if sample.experiments.all().count() == 0 and not (sample.status == "created"):
+                    logger.debug("PDD models.save_plannedExperiment_association() going to DELETE sample=%s" %(sample.name))
+                    sample.delete()
+
+
+    def update_plan_qcValues(self, **kwargs):
+        qcTypes = QCType.objects.all()
+        for qcType in qcTypes:
+            qc_threshold = kwargs.get(qcType.qcName, '')
+            if qc_threshold:
+                try:
+                    plannedExpQc = PlannedExperimentQC.objects.get(plannedExperiment=self, qcType=qcType)
+                    plannedExpQc.threshold = qc_threshold
+                    plannedExpQc.save()
+                except PlannedExperimentQC.DoesNotExist:
+                    plannedExpQc_kwargs = {
+                        'plannedExperiment': self,
+                        'qcType': qcType,
+                        'threshold': qc_threshold
+                    }
+                    plannedExpQc = PlannedExperimentQC(**plannedExpQc_kwargs)
+                    plannedExpQc.save()
+
+    def get_default_cmdline_args(self, **kwargs):
+        # retrieve args from AnalysisArgs table
+        chipType = kwargs.get('chipType') or self.get_chipType()
+        sequenceKitName = kwargs.get('sequenceKitName') or self.get_sequencekitname()
+        templateKitName = kwargs.get('templateKitName') or self.templatingKitName
+        libraryKitName = kwargs.get('libraryKitName') or self.get_librarykitname()
+        samplePrepKitName = kwargs.get('samplePrepKitName') or self.samplePrepKitName
+        
+        args = AnalysisArgs.best_match(chipType, sequenceKitName, templateKitName, libraryKitName, samplePrepKitName)
+        if args:
+            args_dict = args.get_args()
+        else:
+            args_dict = {
+                'beadfindargs':   'justBeadFind',
+                'analysisargs':   'Analysis',
+                'basecallerargs': 'BaseCaller',
+                'prebasecallerargs': 'BaseCaller',
+                'alignmentargs': '',
+                'thumbnailbeadfindargs':    'justBeadFind',
+                'thumbnailanalysisargs':    'Analysis',
+                'thumbnailbasecallerargs':  'BaseCaller',
+                'prethumbnailbasecallerargs':  'BaseCaller',
+                'thumbnailalignmentargs': ''
+            }
+            logger.error('No default command line args found for chip type = %s' % chipType)
+            
+        return args_dict
 
     class Meta:
         ordering = [ '-id' ]
@@ -1056,6 +1171,8 @@ class Experiment(models.Model):
     unique = models.CharField(max_length=512, unique=True)
     date = models.DateTimeField(db_index=True)
     resultDate = models.DateTimeField(auto_now_add=True, db_index=True, blank=True, null=True)
+    repResult = models.OneToOneField('Results', null=True, blank=True, related_name="+", on_delete=models.SET_NULL)
+    pinnedRepResult = models.BooleanField("pinned representative result", default=False)
 
     #deprecated as of TS 3.6: see DMFileStat and DMFileSet class
     storage_options = models.CharField(max_length=200, choices=STORAGE_CHOICES,
@@ -1073,7 +1190,7 @@ class Experiment(models.Model):
     flows = models.IntegerField()
     expCompInfo = models.TextField(blank=True)
     baselineRun = models.BooleanField()
-    flowsInOrder = models.CharField(max_length=512)
+    flowsInOrder = models.TextField(blank=True)
     star = models.BooleanField()
     ftpStatus = models.CharField(max_length=512, blank=True)
     storageHost = models.CharField(max_length=128, blank=True, null=True)
@@ -1104,10 +1221,18 @@ class Experiment(models.Model):
     # plan may be null because Experiments do not Have to have a plan
     # and it may be blank for the same reason.
     plan = models.OneToOneField(PlannedExperiment, blank=True, null=True, related_name='experiment')
-    #planned status: means the entire plan object has been saved but not yet used
-    #run status: means the plan has been claimed for a run and the corresponding sequencing run has started
+
+    #Typical status transition of a plan/experiment:
+    # pending (optional) -> planned -> run (e.g., from LIMS or HUB)
+    # reserved (optional)-> planned -> run (e.g., from Sample Prep instrument like IonChef)
+    #
+    #A plan's status can be cascaded down to experiment.
+    #For more details, refer to the plannedExperiment's planStatus comments
     ALLOWED_STATUS = (
         ('', 'Undefined'),
+        ('pending', 'Pending'),
+        ('voided', 'Voided'),
+        ('reserved', 'Reserved'),
         ('planned', 'Planned'),
         ('run', 'Run')
     )
@@ -1227,7 +1352,7 @@ class Experiment(models.Model):
                 eas = eas_set[0]
 
                 eas.pk = None # this will create a new instance
-                eas.date = datetime.datetime.now()
+                eas.date = timezone.now()
                 eas.isEditable = True
                 eas.isOneTimeOverride = False
                 eas.save()
@@ -1236,14 +1361,14 @@ class Experiment(models.Model):
 
                 # generate blank EAS
                 default_eas_kwargs = {
-                              'date' : datetime.datetime.now(),
+                              'date' : timezone.now(),
                               'experiment' : self,
                               'libraryKey' : GlobalConfig.objects.all()[0].default_library_key,
                               'isEditable' : True,
                               'isOneTimeOverride' : False,
                               'status' : 'run',
                               }
-                eas = models.ExperimentAnalysisSettings(**default_eas_kwargs)
+                eas = ExperimentAnalysisSettings(**default_eas_kwargs)
                 eas.save()
 
         return (eas, created)
@@ -1316,6 +1441,25 @@ class Experiment(models.Model):
         """Return the first sample displayed name"""
         return self._get_firstSampleValue('displayedName')
 
+    def isProton(self):
+        if self.chipType:
+            chips = Chip.objects.filter(name = self.chipType)
+            if chips:
+                chip = chips[0]
+                return (chip.instrumentType == "proton")
+            else:
+                chipPrefix = self.chipType[:3]
+                chips = Chip.objects.filter(name = chipPrefix)
+                if chips:
+                    chip = chips[0]
+                    return (chip.instrumentType == "proton")
+
+            #if somehow the chip is not in the chip table but it starts with p...
+            if (self.chipType[:1].lower() == 'p'):
+                return True
+
+        return False
+
 
     def save(self):
         """on save we need to sync up the log JSON and the other values that might have been set
@@ -1364,7 +1508,7 @@ def on_experiment_preDelete(sender, instance, **kwargs):
     for sample in instance.samples.all():
         instance.samples.remove(sample)
         #if sample is created via loading instead of plan/run creation, keep the sample around!!
-        if (sample.experiments.count() == 0) and not (sample.status == "loaded"):
+        if (sample.experiments.count() == 0) and not (sample.status == "created"):
             sample.delete()
 
     logger.info("Deleting companion records before deleting experiment=%s; pk=%d" % (instance.expName, instance.id))
@@ -1421,6 +1565,23 @@ class ExperimentAnalysisSettings(models.Model):
     # foreign key to the experiment
     experiment = models.ForeignKey(Experiment, related_name='eas_set', blank=True, null=True)
 
+    isDuplicateReads = models.BooleanField(default=False)
+
+    # Beadfind args
+    beadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Beadfind args")
+    thumbnailbeadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Beadfind args")
+    # Analysis args
+    analysisargs = models.CharField(max_length=5000, blank=True, verbose_name="Analysis args")
+    thumbnailanalysisargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Analysis args")
+    # PreBasecaller args
+    prebasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Pre Basecaller args, used for recalibration")
+    prethumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Pre Basecaller args, used for recalibration")
+    # Basecaller args
+    basecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Basecaller args")
+    thumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Basecaller args")
+    # Alignment args
+    alignmentargs = models.CharField(max_length=5000, blank=True, verbose_name="Alignment args")
+    thumbnailalignmentargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Alignment args")
 
     def __unicode__(self):
         return "%s/%d" % (self.experiment, self.pk)
@@ -1430,15 +1591,192 @@ class ExperimentAnalysisSettings(models.Model):
 
 
 
+class SampleGroupType_CVManager(models.Manager):
+    def get_by_natural_key(self, uid):
+        return self.get(uid = uid)
+
+class SampleGroupType_CV(models.Model):
+    '''
+    To support sample and sample set creation regardless a TS instance is IR-enabled or not,
+    we need to define the necessary terms in TS and flag a term that has an IR-eqivalence.
+    '''
+    displayedName = models.CharField(max_length = 127, blank = False, null = False, unique = True)
+    description = models.CharField(max_length = 1024, blank = True, null = True)
+
+    isIRCompatible = models.BooleanField(default = False)
+    iRAnnotationType = models.CharField(max_length = 127, blank = True, null = True)
+    iRValue = models.CharField(max_length = 127, blank = True, null = True)
+    isActive = models.BooleanField(default = True)
+
+    #keep uid, displayedName value might change per requirement
+    uid = models.CharField(max_length = 32, unique = True, blank = False)
+
+    objects = SampleGroupType_CVManager()
+
+    def __unicode__(self):
+        return u'%s' % (self.displayedName)
+
+    def natural_key(self):
+        return (self.uid,)  # must return a tuple
+
+
+class SampleAnnotation_CVManager(models.Manager):
+    def get_by_natural_key(self, uid):
+        return self.get(uid = uid)
+
+class SampleAnnotation_CV(models.Model):
+    value = models.CharField(max_length = 127, blank = True, null = False)
+
+    ALLOWED_TYPES = (
+        ('gender', 'Gender'),
+        ('relationship', 'Relationship'),
+        ('relationshipRole', 'RelationshipRole'),
+        ('relationshipGroup', 'RelationshipGroup')
+    )
+
+    annotationType = models.CharField(max_length = 127, blank = False, null = False, choices = ALLOWED_TYPES)
+
+    isIRCompatible = models.BooleanField(default = False)
+    iRAnnotationType = models.CharField(max_length = 127, blank = True, null = True)
+    iRValue = models.CharField(max_length = 127, blank = True, null = True)
+    isActive = models.BooleanField(default = True)
+
+    #optional n-to-n between sampleMetaData and SampleGroupType_CV (some meta data will not belong to a SampleGroupType_CV (e.g., gender)
+    sampleGroupType_CV = models.ForeignKey(SampleGroupType_CV, related_name = "sampleAnnotation_set", blank = True, null = True)
+
+    uid = models.CharField(max_length = 32, unique = True, blank = False)
+
+    objects = SampleAnnotation_CVManager()
+
+    def __unicode__(self):
+        return u'%s' % self.value
+
+    def natural_key(self):
+        return (self.uid,)  # must return a tuple
+
+
+class SampleSet(models.Model):
+    displayedName = models.CharField(max_length = 127, blank = False, null = False, unique = True)
+    description = models.CharField(max_length=1024, blank=True, null = True)
+
+    creator = models.ForeignKey(User, related_name = "created_sampleSet")
+    # This will be set to the time a new record is created
+    creationDate = models.DateTimeField(auto_now_add = True)
+
+    lastModifiedUser = models.ForeignKey(User, related_name = "lastModified_sampleSet")
+
+    # This will be set to the current time every time the model is updated
+    lastModifiedDate = models.DateTimeField(auto_now = True)
+
+    #many sampleSets can have the same SampleGroupType_CV but a sampleSet can only have 1 SampleGroupType_CV
+    SampleGroupType_CV = models.ForeignKey(SampleGroupType_CV, related_name = "sampleSets", null=True)
+
+    #created status       : means the sample set is created for sample-driven planning. it may or may not have plans associated with it.
+    #planned status      : means the sample set has at least one plan created for it but is not yet used
+    #run status          : means the sample set has at least one plan that with "planExecuted" set to True
+    ALLOWED_SAMPLESET_STATUS = (
+        ('', 'Undefined'),
+        ('created', 'Created'),
+        ('planned', 'Planned'),
+        ('run', 'Run')
+    )
+
+    status = models.CharField(max_length=512, blank=True, choices=ALLOWED_SAMPLESET_STATUS, default='')
+
+
+    def __unicode__(self):
+        return u'%s' % (self.displayedName)
+
+class SampleSetItem(models.Model):
+    #reference Sample but Sample class is defined after SampleSetItem!!!
+
+    #a sample can be in many sampleSets but a sample can only associate with one sampleSetItem
+    sample = models.ForeignKey("Sample", related_name = "sampleSets", blank = False, null = False)
+
+    #a sampleSet can have many sampleSetItem but a sampleSetItem can only associate with one sampleSet
+    sampleSet = models.ForeignKey(SampleSet, related_name = "samples", blank = False, null = False)
+
+    gender = models.CharField(max_length = 127, blank = True, null = True)
+    relationshipRole = models.CharField(max_length = 127, blank = True, null = True)
+    relationshipGroup = models.IntegerField()
+
+    creator = models.ForeignKey(User, related_name = "created_sampleSetItem")
+
+    # This will be set to the time a new record is created
+    creationDate = models.DateTimeField(auto_now_add = True)
+
+    lastModifiedUser = models.ForeignKey(User, related_name = "lastModified_sampleSetItem")
+
+    # This will be set to the current time every time the model is updated
+    lastModifiedDate = models.DateTimeField(auto_now = True)
+
+    def __unicode__(self):
+        return u'%s/%s/%d' % (self.sampleSet, self.sample, self.relationshipGroup)
+
+
+class SampleAttributeDataType(models.Model):
+    ALLOWED_TYPES = (
+        ('Text', 'Text'),
+        ('Number', 'Number')
+    )
+
+    dataType = models.CharField(max_length = 64, blank = False, null = False, unique = True, choices = ALLOWED_TYPES)
+    description = models.CharField(max_length=1024, blank=True, null = True)
+    isActive = models.BooleanField(default = True)
+
+    def __unicode__(self):
+        return self.dataType
+
+
+class SampleAttribute(models.Model):
+    displayedName = models.CharField(max_length = 127, blank = False, null = False, unique = True)
+    description = models.CharField(max_length=1024, blank=True, null = True)
+
+    isMandatory = models.BooleanField(default = False)
+    isActive = models.BooleanField(default = True)
+
+    creator = models.ForeignKey(User, related_name = "created_sampleAttribute")
+
+    # This will be set to the time a new record is created
+    creationDate = models.DateTimeField(auto_now_add = True)
+
+    lastModifiedUser = models.ForeignKey(User, related_name = "lastModified_sampleAttribute")
+
+    # This will be set to the current time every time the model is updated
+    lastModifiedDate = models.DateTimeField(auto_now = True)
+
+    dataType = models.ForeignKey(SampleAttributeDataType, related_name = "sampleAttributes")
+
+    def __unicode__(self):
+        return self.displayedName
+
+
+class SampleAttributeValue(models.Model):
+    value = models.CharField(max_length = 1024, blank = True, null = True)
+
+    creator = models.ForeignKey(User, related_name = "created_sampleAttributeValue")
+
+    # This will be set to the time a new record is created
+    creationDate = models.DateTimeField(auto_now_add = True)
+
+    lastModifiedUser = models.ForeignKey(User, related_name = "lastModified_sampleAttributeValue")
+
+    # This will be set to the current time every time the model is updated
+    lastModifiedDate = models.DateTimeField(auto_now = True)
+
+    sample = models.ForeignKey("Sample", related_name = "sampleAttributeValues")
+    sampleAttribute = models.ForeignKey(SampleAttribute, related_name = "samples")
+
+    def __unicode__(self):
+        return u'%s' % (self.value)
+
 class Sample(models.Model):
-    #loaded status       : means the sample is created for sample-driven planning. it may or may not have plans associated with it.
-    #samplePlanned status: means the loaded sample has been assigned to a plan
+    #created status       : means the sample is created for sample-driven planning. it may or may not have plans associated with it.
     #planned status      : means the sample is created as a by-product of a plan entire plan object has been saved but not yet used
     #run status          : means the plan has been claimed for a run and the corresponding sequencing run has started
     ALLOWED_STATUS = (
         ('', 'Undefined'),
-        ('loaded', 'Loaded'),
-        ('samplePlanned', 'SamplePlanned'),
+        ('created', 'Created'),
         ('planned', 'Planned'),
         ('run', 'Run')
     )
@@ -1447,7 +1785,7 @@ class Sample(models.Model):
 
     name = models.CharField(max_length=127, blank=True, null=True)
     displayedName = models.CharField(max_length=127, blank=True, null=True)
-    externalId = models.CharField(max_length=127, blank=True, null=True)
+    externalId = models.CharField(max_length=127, blank=True, null=True, default = '')
     description = models.CharField(max_length=1024, blank=True, null=True)
     date = models.DateTimeField(auto_now_add=True, blank=True,null=True)
 
@@ -1473,7 +1811,7 @@ class Lookup(object):
                 return None
             else:
                 return getattr(obj, name)
-        elements = path.split('.')
+        elements = os.path.split('.')
         curr = self
         for e in elements:
             if curr is None:
@@ -1601,19 +1939,10 @@ class Results(models.Model, Lookup):
         return self.dmfilestat_set.filter(dmfileset__type=typeStr)[0]
 
     def isProton(self):
-        if self.experiment.chipType:
-            chips = Chip.objects.filter(name = self.experiment.chipType)
-            if chips:
-                chip = chips[0]
-                return (chip.instrumentType == "proton")
-            else:
-                chipPrefix = self.experiment.chipType[:3]
-                chips = Chip.objects.filter(name = chipPrefix)
-                if chips:
-                    chip = chips[0]
-                    return (chip.instrumentType == "proton")
-        return False
+        if self.experiment:
+            return self.experiment.isProton()
 
+        return False
 
     #a place for plugins to store information
     # NB: These two functions facilitate compatibility with earlier model,
@@ -1749,7 +2078,7 @@ class Results(models.Model, Lookup):
                 self.reportstorage = storage
                 self.save()
         if self.reportstorage is not None:
-            return path.join(self.reportstorage.dirPath, location.name, basename)
+            return os.path.join(self.reportstorage.dirPath, location.name, basename)
         else:
             return None
 
@@ -1788,7 +2117,7 @@ class Results(models.Model, Lookup):
         """Returns filesystem path to results directory"""
         fs_path = self.get_report_path()
         if fs_path:
-            fs_path = path.split(fs_path)[0]
+            fs_path = os.path.split(fs_path)[0]
         return fs_path
 
     def is_archived(self):
@@ -1803,7 +2132,7 @@ class Results(models.Model, Lookup):
             if storage is not None:
                 self.reportstorage = storage
                 self.save()
-        webServerPath = path.join(self.reportstorage.webServerPath, location.name, basename)
+        webServerPath = os.path.join(self.reportstorage.webServerPath, location.name, basename)
 
         #TODO: the webpath is not the same as the path of the filesystem. Check the webpath somehow.
         return webServerPath
@@ -1822,7 +2151,7 @@ class Results(models.Model, Lookup):
             if size > 0: retLog.info(self.resultsName+": Size saved:* %7.2f KB"%(float(size/1024)))
 
         self.metaData["Status"] = status
-        self.metaData["Date"] = "%s"%datetime.datetime.now()
+        self.metaData["Date"] = "%s" % timezone.now()
         self.metaData["Info"] = info
         self.metaData["Comment"] = comment
 
@@ -1998,6 +2327,9 @@ def on_result_created(sender, instance, created, **kwargs):
     if created:
         experiment = instance.experiment
         experiment.resultDate = instance.timeStamp
+        if not (experiment.repResult and experiment.pinnedRepResult):
+            experiment.repResult = instance
+            experiment.pinnedRepResult = False
         experiment.save()
 
 
@@ -2015,6 +2347,16 @@ def on_result_delete(sender, instance, **kwargs):
     logger.info("Deleting Result %d in %s" % (instance.id, directory))
     tasks.delete_that_folder.delay(directory,
                        "Triggered by Results %d deletion" % instance.id)
+    
+    if Experiment.objects.filter(id = instance.experiment_id).exists():
+        experiment = instance.experiment
+        if experiment.repResult is None:
+            experiment.pinnedRepResult = False
+            results = experiment.results_set.order_by('-timeStamp')[:1]
+            if results:
+                experiment.repResult = results[0]
+            experiment.save()
+
 
 class TFMetrics(models.Model, Lookup):
     _CSV_METRICS = (
@@ -2581,7 +2923,7 @@ class BackupConfig(models.Model):
                 return d.get_free_space()
 
     def check_if_online(self):
-        if path.exists(self.backup_directory):
+        if os.path.exists(self.backup_directory):
             return True
         else:
             return False
@@ -2641,16 +2983,6 @@ class Chip(models.Model):
     slots = models.IntegerField()
     description = models.CharField(max_length=128, default="")
 
-    # Default cmdline args
-    beadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Beadfind args")
-    thumbnailbeadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Beadfind args")
-    analysisargs = models.CharField(max_length=5000, blank=True, verbose_name="Analysis args")
-    thumbnailanalysisargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Analysis args")
-    prebasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Pre Basecaller args, used for recalibration")
-    prethumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Pre Basecaller args, used for recalibration")
-    basecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Basecaller args")
-    thumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Basecaller args")
-
     isActive = models.BooleanField(default=True)
 
     ALLOWED_INSTRUMENT_TYPES = (
@@ -2692,11 +3024,15 @@ class GlobalConfig(models.Model):
 
     barcode_args = json_field.JSONField(blank=True)
     enable_auto_pkg_dl = models.BooleanField("Enable Package Auto Download", default=True)
+    #enable_alt_apt = models.BooleanField("Enable USB apt repository", default=False)
+    enable_version_lock = models.BooleanField("Enable TS Version Lock", default=False)
     ts_update_status = models.CharField(max_length=256,blank=True)
     # Controls analysis pipeline alternate processing path
     base_recalibrate = models.BooleanField(default=True)
     mark_duplicates = models.BooleanField(default=False)
     realign = models.BooleanField(default=False)
+    check_news_posts = models.BooleanField("check for news posts", default=True)
+
 
     def set_TS_update_status(self,inputstr):
         self.ts_update_status = inputstr
@@ -2755,7 +3091,7 @@ class Plugin(models.Model):
 
     date = models.DateTimeField(auto_now_add=True)
     selected = models.BooleanField(default=False)
-    path = models.CharField(max_length=512)
+    path = models.CharField(max_length=512, blank=True, default="")
     autorun = models.BooleanField(default=False)
     majorBlock = models.BooleanField(default=False)
     config = json_field.JSONField(blank=True, null=True, default="")
@@ -2766,7 +3102,7 @@ class Plugin(models.Model):
     active = models.BooleanField(default=True)
 
     # Plugin Feed URL - 0install xml
-    url = models.URLField(verify_exists=False, max_length=256, blank=True, default="")
+    url = models.URLField(max_length=256, blank=True, default="")
 
     # pluginsettings.json or python class features, runtype, runlevel attributes
     pluginsettings = json_field.JSONField(blank=True, null=True, default="")
@@ -2924,6 +3260,9 @@ class Plugin(models.Model):
         from ion.plugin.info import PluginInfo
         return PluginInfo(info).todict()
 
+    def natural_key(self):
+        return (self.name, self.version)
+
     class Meta:
         unique_together=( ('name','version'), )
 
@@ -2969,6 +3308,8 @@ class PluginResult(models.Model):
 
     size = models.BigIntegerField(default=-1)
     inodes = models.BigIntegerField(default=-1)
+
+    owner = models.ForeignKey(User)
 
     def path(self):
         return os.path.join(self.result.get_report_dir(),
@@ -3050,7 +3391,9 @@ class PluginResult(models.Model):
             return 0
         if not self.endtime:
             return (timezone.now() - self.starttime)
-        return (self.endtime - self.starttime)
+        if (self.endtime > self.starttime):
+            return (self.endtime - self.starttime)
+        return 0
 
     def __unicode__(self):
         return "%s/%s" % (self.result, self.plugin)
@@ -3104,7 +3447,7 @@ class ReferenceGenome(models.Model):
 
     enabled = models.BooleanField(default=True)
     reference_path = models.CharField(max_length=1024, blank=True)
-    date = models.DateTimeField()
+    date = models.DateTimeField(default=timezone.now)
     version = models.CharField(max_length=100, blank=True)
     species = models.CharField(max_length=512, blank=True)
     source = models.CharField(max_length=512, blank=True)
@@ -3113,49 +3456,59 @@ class ReferenceGenome(models.Model):
     status = models.CharField(max_length=512, blank=True)
     index_version = models.CharField(max_length=512, blank=True)
     verbose_error = models.CharField(max_length=3000, blank=True)
-    identity_hash = models.CharField(max_length=40, null=True, default=None)
+    identity_hash = models.CharField(max_length=40, null=True, blank=True, default=None)
+    file_monitor = models.OneToOneField('FileMonitor', null=True, blank=True, on_delete=models.SET_NULL)
+    celery_task_id = models.CharField(max_length=60, default="", blank=True)
 
     class Meta:
         ordering = ['short_name']
 
     def delete(self):
         #delete the genome from the filesystem as well as the database
-
+        from celery.result import AsyncResult
+        if self.celery_task_id:
+            revoke(self.celery_task_id, terminate=True)
+            children = AsyncResult(self.celery_task_id).children
+            if children:
+                for result in children:
+                    result.revoke(terminate=True)
+        logger.warning("Revoking celery task: {0}".format(self.celery_task_id))
         if os.path.exists(self.reference_path):
             try:
                 shutil.rmtree(self.reference_path)
             except OSError:
+                logger.error("Failed to delete reference %d at %s" % (self.pk, self.reference_path))
                 return False
+        else:
+            logger.error("Files do not exists for reference %d at %s"  % (self.pk, self.reference_path))
 
         super(ReferenceGenome, self).delete()
         return True
 
     def enable_genome(self):
         """this should be around to move the genome in a disabled dir or not"""
-
         #get the new path to move the reference to
         enabled_path = os.path.join(iondb.settings.TMAP_DIR, self.short_name)
-
         try:
             shutil.move(self.reference_path, enabled_path)
             self.reference_path = enabled_path
             self.save()
         except:
+            logger.exception("Failed to enable gnome %s" % self.short_name)
             return False
-
         return True
 
     def disable_genome(self):
         """this should be around to move the genome in a disabled dir or not"""
         #get the new path to move the reference to
-        base_path = os.path.split(os.path.split(self.reference_path)[0])[0]
-        disabled_path = os.path.join(base_path, "disabled", self.index_version, self.short_name)
-
+        disabled_path = os.path.join(iondb.settings.TMAP_DIR, "disabled", self.index_version, self.short_name)
         try:
             shutil.move(self.reference_path, disabled_path)
+            self.reference_path = disabled_path
+            self.save()
         except:
+            logger.exception("Failed to disable gnome %s" % reference.short_name)
             return False
-
         return True
 
     def info_text(self):
@@ -3178,6 +3531,11 @@ class ReferenceGenome(models.Model):
 
     def __unicode__(self):
         return u'%s' % self.name
+
+
+class ThreePrimeAdapterManager(models.Manager):
+    def get_by_natural_key(self, uid):
+        return self.get(uid = uid)
 
 class ThreePrimeadapter(models.Model):
     ALLOWED_DIRECTIONS = (
@@ -3202,24 +3560,38 @@ class ThreePrimeadapter(models.Model):
 
     isDefault = models.BooleanField("use this by default", default=False)
 
+    uid = models.CharField(max_length = 32, unique = True, blank = False)
+
+    ALLOWED_CHEMISTRY = (
+        ('', 'Undefined'),
+        ('avalanche', 'Avalanche')
+    )
+
+    chemistryType = models.CharField(max_length=64, choices= ALLOWED_CHEMISTRY, default='', blank=True)
+
+    objects = ThreePrimeAdapterManager()
+
     class Meta:
         verbose_name_plural = "3' Adapters"
 
     def __unicode__(self):
         return u'%s' % self.name
 
+    def natural_key(self):
+        return (self.uid,)  # must return a tuple
+
 
     def save(self):
-        if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() == 1):
-            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
-            #there should only be 1 default for a given direction at any time
+        if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True, chemistryType = self.chemistryType).count() == 1):
+            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True, chemistryType = self.chemistryType)
+            #there should only be 1 default for a given direction and chemistry type at any time
             for currentDefault in currentDefaults:
                 if (self.id == currentDefault.id):
-                    raise ValidationError("Error: Please set another adapter for %s direction to be the default before changing this adapter not to be the default." % self.direction)
+                    raise ValidationError("Error: Please set another adapter for %s direction and %s chemistry to be the default before changing this adapter not to be the default." % (self.direction, self.chemistryType))
 
-        if (self.isDefault == True and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() > 0):
-            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
-            #there should only be 1 default for a given direction at any time
+        if (self.isDefault == True and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True, chemistryType = self.chemistryType).count() > 0):
+            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True, chemistryType = self.chemistryType)
+            #there should only be 1 default for a given direction and chemistry type at any time
             for currentDefault in currentDefaults:
                 if (self.id <> currentDefault.id):
                     currentDefault.isDefault = False
@@ -3230,19 +3602,19 @@ class ThreePrimeadapter(models.Model):
 
 
     def delete(self):
-        if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() == 1):
-            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
-            #there should only be 1 default for a given direction at any time
+        if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True, chemistryType = self.chemistryType).count() == 1):
+            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True, chemistryType = self.chemistryType)
+            #there should only be 1 default for a given direction and chemistry type at any time
             for currentDefault in currentDefaults:
                 if (self.id == currentDefault.id):
-                    raise ValidationError("Error: Deleting the default adapter is not allowed. Please set another adapter for %s direction to be the default before deleting this adapter." % self.direction)
+                    raise ValidationError("Error: Deleting the default adapter is not allowed. Please set another adapter for %s direction and %s chemistry to be the default before deleting this adapter."  % (self.direction, self.chemistryType))
 
-        if (self.isDefault == True and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True).count() > 0):
-            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True)
-            #there should only be 1 default for a given direction at any time
+        if (self.isDefault == True and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True, chemistryType = self.chemistryType).count() > 0):
+            currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True, chemistryType = self.chemistryType)
+            #there should only be 1 default for a given direction and chemistry type at any time
             for currentDefault in currentDefaults:
                 if (self.id == currentDefault.id):
-                    raise ValidationError("Error: Deleting the default adapter is not allowed. Please set another adapter for %s direction to be the default before deleting this adapter." % self.direction)
+                    raise ValidationError("Error: Deleting the default adapter is not allowed. Please set another adapter for %s direction and %s chemistry to be the default before deleting this adapter."  % (self.direction, self.chemistryType))
 
         super(ThreePrimeadapter, self).delete()
 
@@ -3368,6 +3740,7 @@ class UserProfile(models.Model):
     # This is a simple, plain-text dumping ground for whatever the user might
     # want to document about themselves that isn't captured in the above.
     note = models.TextField(default="", blank=True)
+    last_read_news_post = models.DateTimeField(default=datetime.datetime(1984, 11, 6, tzinfo=timezone.utc))
 
     def save(self, *args, **kwargs):
         if self.user and not self.name:
@@ -3681,9 +4054,12 @@ class DMFileStat (models.Model):
     # datetime stamp when object created; do not auto fill
     created = models.DateTimeField(blank=True, null=True)
 
+    # field to store manual action username and comment
+    user_comment = json_field.JSONField(blank=True)
+
     def save(self, *args, **kwargs):
         if not self.id:
-            self.created = datetime.datetime.now(pytz.UTC)
+            self.created = timezone.now()
         super(DMFileStat, self).save(*args, **kwargs)
 
     def getpreserved(self):
@@ -3724,7 +4100,7 @@ class DMFileStat (models.Model):
         return bool(self.action_state in ['AG','DG','EG','SA','SE','SD'])
 
 
-class DownloadMonitor(models.Model):
+class FileMonitor(models.Model):
     """Record the details of a file download from a remote server to the TS
     by a backround or automated process.
     """
@@ -3735,8 +4111,135 @@ class DownloadMonitor(models.Model):
     size = models.BigIntegerField(default=None, null=True)
     progress = models.BigIntegerField(default=0)
     status = models.CharField(max_length=60, default="")
-    celery_task_id = models.CharField(max_length=60)
+    celery_task_id = models.CharField(max_length=60, default="", blank=True)
     tags = models.CharField(max_length=1024, default="")
 
     created = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
+
+    def percent_progress(self):
+        if self.size:
+            return "{0:.1f}".format(100.0 * self.progress / self.size)
+        else:
+            return "..."
+
+    def full_path(self):
+        if self.local_dir and self.name:
+            return os.path.join(self.local_dir, self.name)
+
+    def delete(self):
+        # delete the files from the filesystem as well as the database
+        revoke(self.celery_task_id, terminate=True)
+        try:
+            if os.path.exists(self.local_dir):
+                shutil.rmtree(self.local_dir)
+        except OSError:
+            return False
+
+        super(FileMonitor, self).delete()
+        return True
+
+class MonitorData(models.Model):
+    treeDat = json_field.JSONField(blank=True)
+    name = models.CharField(max_length=128, default="")
+
+
+class NewsPost(models.Model):
+    guid = models.CharField(max_length=64, null=True, blank=True)
+    title = models.CharField(max_length=140, blank=True, default="")
+    summary = models.CharField(max_length=300, blank=True, default="")
+    link = models.CharField(max_length=2000, blank=True, default="")
+    updated = models.DateTimeField(default=timezone.now)
+
+    def __unicode__(self):
+        return self.title if len(self.title) <= 60 else self.title[:57] + u'...'
+
+class AnalysisArgs(models.Model):
+    # Holds default command line args for selected chipType and kits
+    name = models.CharField(max_length=256, blank=False, unique=True)
+    chipType = models.CharField(max_length=128, default='')
+    active = models.BooleanField(default=True)
+    # specify these args are to be used as default for this chip type, only one chip_default should exist per chip
+    chip_default = models.BooleanField(default=False)
+
+    sequenceKitName = models.CharField(max_length=512, blank=True, default='')
+    templateKitName = models.CharField(max_length=512, blank=True, default='')
+    libraryKitName = models.CharField(max_length=512, blank=True, default='')
+    samplePrepKitName = models.CharField(max_length=512, blank=True, default='')
+
+    # Beadfind args
+    beadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Beadfind args")
+    thumbnailbeadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Beadfind args")
+    # Analysis args
+    analysisargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Analysis args")
+    thumbnailanalysisargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Analysis args")
+    # PreBasecaller args
+    prebasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Pre Basecaller args, used for recalibration")
+    prethumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Pre Basecaller args, used for recalibration")
+    # Basecaller args
+    basecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Basecaller args")
+    thumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Basecaller args")
+    # Alignment args
+    alignmentargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Alignment args")
+    thumbnailalignmentargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Alignment args")
+
+    def get_args(self):
+        args = {
+            'beadfindargs': self.beadfindargs,
+            'analysisargs': self.analysisargs,
+            'basecallerargs': self.basecallerargs,
+            'prebasecallerargs': self.prebasecallerargs,
+            'alignmentargs': self.alignmentargs,
+            'thumbnailbeadfindargs':    self.thumbnailbeadfindargs,
+            'thumbnailanalysisargs':    self.thumbnailanalysisargs,
+            'thumbnailbasecallerargs':  self.thumbnailbasecallerargs,
+            'prethumbnailbasecallerargs':  self.prethumbnailbasecallerargs,
+            'thumbnailalignmentargs': self.thumbnailalignmentargs
+        }
+        return args
+
+    @classmethod
+    def best_match(cls, chipType, sequenceKitName='', templateKitName='', libraryKitName='', samplePrepKitName=''):
+        ''' Find args that best match given chip type and kits.
+            If chipType not found returns None.
+            If none of the kits matched returns chip default.
+        '''
+        # chip name backwards compatibility
+        chipType = chipType.replace('"','')
+        if Chip.objects.filter(name=chipType).count() == 0:
+            chipType = chipType[:3]
+
+        args = AnalysisArgs.objects.filter(chipType=chipType).order_by('-pk')
+        args_count = args.count()
+        if args_count == 0:
+            best_match = None
+        elif args_count == 1:
+            best_match = args[0]
+        else:
+            kits = {
+                'sequenceKitName': sequenceKitName,
+                'templateKitName': templateKitName,
+                'libraryKitName': libraryKitName,
+                'samplePrepKitName': samplePrepKitName
+            }
+            match = [0]*args_count
+            match_no_blanks = [0]*args_count
+            for i, arg in enumerate(args):
+                for key, value in kits.items():
+                    if getattr(arg, key) == value:
+                        match[i] += 1
+                        if value:
+                            match_no_blanks[i] += 1
+                
+            if max(match_no_blanks) > 0:
+                best_match = args[match.index(max(match))]
+            else:
+                try: 
+                    best_match = args.get(chip_default=True)
+                except:
+                    best_match = None
+
+        return best_match
+
+    class Meta:
+        verbose_name_plural = "Analysis Args"

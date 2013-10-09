@@ -7,6 +7,8 @@
 #ifndef HYPOTHESISEVALUATOR_H
 #define HYPOTHESISEVALUATOR_H
 
+#include "SpliceVariantHypotheses.h"
+/*
 #include <iostream>
 #include <string>
 #include <sstream>
@@ -15,70 +17,15 @@
 #include <assert.h>
 #include "stdlib.h"
 #include "ctype.h"
-#include "SpliceVariantsToReads.h"
-
+#include "ClassifyVariant.h"
+#include "ExtendedReadInfo.h"
 
 
 using namespace std;
-using namespace ion;
-
-class HypothesisEvaluator {
-  public:
-
-    vector<float>   measurementValues ;
-    ion::FlowOrder  treePhaserFlowOrder;
-    vector<float>   treePhaserParams;
-
-    int nFlows;
-    int DEBUG;
+using namespace ion;*/
 
 
-    HypothesisEvaluator(const vector<float>& measures, const ion::FlowOrder& flowOrder,const vector<float>& crIeDrParams, int _DEBUG=0) {
-      treePhaserFlowOrder = flowOrder;
-      assert(crIeDrParams.size() == 3);
-      treePhaserParams = crIeDrParams;
-
-      assert((int)measures.size() <= flowOrder.num_flows());
-      nFlows = measures.size();
-      measurementValues.reserve(flowOrder.num_flows());
-      measurementValues = measures;
-      measurementValues.resize(flowOrder.num_flows(),0);
-
-      DEBUG = _DEBUG;
-    };
-
-    void LoadDataToRead(BasecallerRead &read);
-    unsigned int SolveBeginningOfRead(DPTreephaser &working_treephaser, BasecallerRead &read,
-                                      const vector<string>& Hypotheses, int startFlow);
-    void   AddHypothesisToPrefix(BasecallerRead &current_read, const string &cur_hypothesis, unsigned int prefix_size);
-    void EvaluateAllHypotheses(DPTreephaser &working_treephaser, BasecallerRead &read,
-                               vector<BasecallerRead> &hypothesesReadsVector,const vector<string>& Hypotheses, int startFlow, int applyNormalization, int &max_last_flow);
-    int EvaluateOneHypothesis(DPTreephaser &working_treephaser, BasecallerRead &current_hypothesis, int applyNormalization);
-    int LastIncorporatingFlow(BasecallerRead &current_hypothesis);
-    void SquaredDistancesAllHypotheses(vector<BasecallerRead> &hypothesesReadsVector, int max_last_flow,
-                                       vector<float>& DistanceObserved,
-                                       vector<float>& DistanceHypotheses);
-    int MatchedFilter(DPTreephaser &working_treephaser, vector<BasecallerRead> &hypothesesReadsVector,int max_last_flow,
-                       int refHpLen, int flowPosition, int startFlow,
-                       vector<float>& DistanceObserved,
-                       vector<float>& DistanceHypotheses);
-    int CalculateDistances(const vector<string>& Hypotheses,
-                           const int startFlow,
-                           const int refHPlength,
-                           const int flowPosition,
-                           const int applyNormalization,
-                           vector<float>& DistanceObserved,
-                           vector<float>& DistanceHypotheses);
-
-    int calculateCrudeLikelihood(vector<string> &hypotheses, int start_flow,
-                                      float & refLikelihood, float & minDelta, float & minDistToRead, float & distDelta);
-
-    int  calculateHPLikelihood(const string& read_sequence, const int startFlow, int refHpLength, int flowPosition, float & new_metric, bool strand);
-
-};
-
-
-// Function to calculate predictions
+// Function to calculate signal predictions
 int CalculateHypPredictions(
 		PersistingThreadObjects  &thread_objects,
         ExtendedReadInfo         &my_read,
@@ -86,5 +33,26 @@ int CalculateHypPredictions(
         const vector<string>     &Hypotheses,
         vector<vector<float> >   &predictions,
         vector<vector<float> >   &normalizedMeasurements);
+
+// Does what the name says
+void InitializeBasecallers(PersistingThreadObjects &thread_objects,
+		                   ExtendedReadInfo        &my_read,
+	                       InputStructures         &global_context);
+
+// Solve for hard and soft clipped bases at the start of the read, before start_flow
+int GetStartOfMasterRead(PersistingThreadObjects  &thread_objects,
+		                  const ExtendedReadInfo   &my_read,
+	                      const InputStructures    &global_context,
+	                      const vector<string>     &Hypotheses,
+	                      const int                &nFlows,
+	                      BasecallerRead           &master_read);
+
+// Print out some messages
+void PredictionGenerationVerbose(const vector<string>         &Hypotheses,
+		                         const vector<BasecallerRead> &hypothesesReads,
+		                         const ExtendedReadInfo       &my_read,
+		                         const vector<vector<float> > &predictions,
+		                         const int                    &prefix_size,
+		                         const InputStructures        &global_context);
 
 #endif // HYPOTHESISEVALUATOR_H

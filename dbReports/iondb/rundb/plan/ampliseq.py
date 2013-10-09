@@ -8,26 +8,10 @@ from iondb.rundb.models import Plugin
 # the AmpliSeq output for the 3.6 TS in every way.
 # Note: this is unlikely for most releases as a change to the Variant Caller,
 # the Plan schema, or the BED publisher might necessitate changes here.
-CURRENT_VERSION = "3.6"
+CURRENT_VERSION = "4.0"
 
 
-def legacy_plan_handler(data):
-	data["plan"] = dict(data)
-	return data
-
-# Current plan handler
-def plan_handler_3_6(data):
-	plan = data["plan"]["3.6"]
-
-	if "runType" in plan:
-		if plan["runType"] == "AMPS_DNA":
-			plan["runType"] = "AMPS"
-	elif "pipeline" in data:
-		if data["pipeline"] == "RNA":
-			plan["runType"] = "AMPS_RNA"
-		else:
-			plan["runType"] = "AMPS"
-
+def setup_vc_config_36(plan):
 	vc_config = plan.pop("variant_caller", None)
 	# If there's no VC config, we'll just skip the entire plugin configuration
 	if vc_config is not None:
@@ -45,25 +29,73 @@ def plan_handler_3_6(data):
 				"version": plugin.version,
 			}
 		}
+	return plan
+
+
+def legacy_plan_handler(data):
+	data["plan"] = dict(data)
+	return data
+
+# Current plan handler
+def plan_handler_4_0(data, meta):
+	choices = meta.get("choice", None)
+	config_choices = data["plan"]["4.0"]["configuration_choices"]
+	keys = config_choices.keys()
+	if len(keys) == 1 or choices not in keys:
+		choices = sorted(keys)[0]
+	plan = config_choices[choices]
+
+	if "runType" in plan:
+		if plan["runType"] == "AMPS_DNA":
+			plan["runType"] = "AMPS"
+
+	plan = setup_vc_config_36(plan)
+
 	data["plan"] = plan
+	data["configuration_choices"] = keys
 	return data
 
 
+def plan_handler_3_6(data):
+	plan = data["plan"]["3.6"]
+
+	if "runType" in plan:
+		if plan["runType"] == "AMPS_DNA":
+			plan["runType"] = "AMPS"
+	elif "pipeline" in data:
+		if data["pipeline"] == "RNA":
+			plan["runType"] = "AMPS_RNA"
+		else:
+			plan["runType"] = "AMPS"
+
+	plan = setup_vc_config_36(plan)
+
+	data["plan"] = plan
+	data["configuration_choices"] = []
+	return data
+
 
 version_plan_handlers = {
+	"4.0": plan_handler_4_0,
 	"3.6": plan_handler_3_6,
 }
 
 
-def handle_versioned_plans(data):
+def handle_versioned_plans(data, meta=None):
+	if meta is None:
+		meta = {}
 	# This is the very first iteration of AmpliSeq zip exports to be used
 	# by the TS and it might not need to be supported at all
 	if "plan" not in data:
 		return "legacy", legacy_plan_handler(data)
+	# The plan is empty or null
+	elif not data['plan']:
+		data["plan"] = {}
+		return "unplanned", data
 	# This is the version we want to find, the version for *this* TS version
 	# even if later versions are available in the JSON
 	elif CURRENT_VERSION in data["plan"]:
-		return CURRENT_VERSION, version_plan_handlers[CURRENT_VERSION](data)
+		return CURRENT_VERSION, version_plan_handlers[CURRENT_VERSION](data, meta)
 	# If the current version isn't in there, it's because the zip is older
 	# than the current version; however, it's possible that we know how
 	# to handle archives from that older version for this TS version

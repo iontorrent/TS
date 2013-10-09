@@ -66,8 +66,9 @@ tmap_map_util_set_softclip(tmap_map_opt_t *opt, tmap_seq_t *seq, int32_t *softcl
   if(TMAP_SEQ_TYPE_SAM == seq->type || TMAP_SEQ_TYPE_BAM == seq->type) { // SAM/BAM
       tmap_sam_t *sam = seq->data.sam;
       int32_t zb = tmap_sam_get_zb(sam);
+	int32_t za = tmap_sam_get_za(sam);
       // keep 3' soft clipping on if zb tag does not exists or there are too few adapter bases.
-      if(-1 != zb && opt->max_adapter_bases_for_soft_clipping < zb) { 
+      if(-1 != zb && opt->max_adapter_bases_for_soft_clipping < zb && -1 != za && sam->seq->l >= za-5) { 
           (*softclip_end) = 0;
       }
   }
@@ -827,6 +828,18 @@ tmap_map_util_mapq_score(int32_t seq_len, int32_t n_best, int32_t best_score, in
       n_best_subo = 1;
       best_subo_score = opt->score_thr; 
   }
+  if (opt->use_new_QV == 1) {
+	int32_t x = 11*opt->score_match;
+	if (best_subo_score < x) {best_subo_score = x; n_best_subo= 1;}
+	double sf = (double) (best_score - best_subo_score + 1 );
+	if (sf < 0) return 1.0;
+	sf /= ((double)opt->score_match+opt->pen_mm);
+	sf *= 7.3;
+	sf -= log(n_best_subo);
+	mapq = (int32_t) (sf+0.9999);
+	if (mapq < 0) return 0;
+	return mapq;
+  } 
   /*
      fprintf(stderr, "n_best=%d n_best_subo=%d\n",
      n_best, n_best_subo);
@@ -906,7 +919,7 @@ tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt)
       best_subo_score = best_subo_score2;
       if(0 == n_best_subo) n_best_subo = 1;
   }
-  if(1 < n_best || best_score <= best_subo_score || 0 < best_repetitive) {
+  if(1 < n_best || best_score < best_subo_score || 0 < best_repetitive) {
       mapq = 0;
   }
   else {

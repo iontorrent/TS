@@ -4,15 +4,15 @@ from datetime import datetime
 from django.contrib.auth.decorators import login_required
 from django.template import RequestContext
 from django.shortcuts import render_to_response, get_object_or_404, \
-    get_list_or_404
+    get_list_or_404, render
 from django.conf import settings
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 
 from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, \
     ReferenceGenome, Content, KitInfo, VariantFrequencies, dnaBarcode, \
     LibraryKey, ThreePrimeadapter, Chip, QCType, Project, Plugin, \
-    PlannedExperimentQC, Sample
+    PlannedExperimentQC, Sample, GlobalConfig, Message, Experiment
 
 from traceback import format_exc
 import json
@@ -22,7 +22,7 @@ import uuid
 import logging
 from django.core import serializers
 from iondb.rundb.api import PlannedExperimentResource, RunTypeResource, \
-    dnaBarcodeResource, ChipResource
+    dnaBarcodeResource, ChipResource, ApplicationGroupResource, SampleGroupType_CVResource
 
 from django.core.urlresolvers import reverse
 
@@ -40,6 +40,9 @@ import tempfile
 import csv
 
 from django.core.exceptions import ValidationError
+from iondb.rundb.plan.page_plan.step_helper import StepHelper, StepHelperType
+from iondb.rundb.plan.page_plan.step_helper_db_loader import StepHelperDbLoader
+from iondb.rundb.plan.page_plan.step_helper_db_saver import StepHelperDbSaver
 
 logger = logging.getLogger(__name__)
 
@@ -47,17 +50,47 @@ MAX_LENGTH_PLAN_NAME = 512
 MAX_LENGTH_SAMPLE_NAME = 127
 MAX_LENGTH_PROJECT_NAME = 64
 MAX_LENGTH_NOTES = 1024
+MAX_LENGTH_SAMPLE_TUBE_LABEL = 512
 
 ERROR_MSG_INVALID_CHARS = " should contain only numbers, letters, spaces, and the following: . - _"
 ERROR_MSG_INVALID_LENGTH = " length should be %s characters maximum. "
 ERROR_MSG_INVALID_LEADING_CHARS = " should only start with numbers or letters. "
 
 
+def get_ir_config(request):
+    if request.is_ajax():
+        try:
+            iru_plugin = Plugin.objects.get(name__iexact='IonReporterUploader', active=True)
+            account_id = request.POST.get('accountId')
+            userconfigs = iru_plugin.config.get('userconfigs').get(request.user.username)
+            if userconfigs:
+                for config in userconfigs:
+                    if config["id"] == account_id:
+                        return HttpResponse(simplejson.dumps(config), content_type = 'application/javascript')     
+            else:
+                return HttpResponse(simplejson.dumps(dict(error = "Unable to find userconfigs in IRU plugin")), content_type = 'application/javascript')      
+        except:
+            return HttpResponse(simplejson.dumps(dict(error = "Could not find IRU Plugin")), content_type = 'application/javascript')
+    return HttpResponse(simplejson.dumps(dict(error = "Invalid view function call")), content_type = 'application/javascript')
+
+def reset_page_plan_session(request):
+    request.session.pop('plan_step_helper', None)
+    return HttpResponse("Page Plan Session Object has been reset")
+    
+
 @login_required
 def plans(request):
     """
     plan template home page
     """
+
+    # Check for a postback url in the URL args. Used to redirect the planning wizard back to the postback URL.
+    if request.method == "GET":
+        if "postback" in request.GET:
+            request.session["postback"] = request.GET["postback"]
+        if "referer_site_name" in request.GET:
+            request.session["referer_site_name"] = request.GET["referer_site_name"]
+
     ctxd = {}
 
     ctx = RequestContext(request, ctxd)
@@ -65,10 +98,357 @@ def plans(request):
 
 
 @login_required
+def page_plan_edit_template(request, template_id):
+    ''' edit a template with id template_id '''
+    step_helper = StepHelperDbLoader().getStepHelperForTemplatePlannedExperiment(template_id, StepHelperType.EDIT_TEMPLATE)
+    request.session['plan_step_helper'] = step_helper
+    ctxd = handle_step_request(request, 'Save_template')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_copy_template(request, template_id):
+    ''' copy a template with id template_id '''
+    step_helper = StepHelperDbLoader().getStepHelperForTemplatePlannedExperiment(template_id, StepHelperType.COPY_TEMPLATE)
+    request.session['plan_step_helper'] = step_helper
+    ctxd = handle_step_request(request, 'Save_template')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_new_template(request, code=None):
+    """ Create a new template from runtype code or from scratch """
+    if code:
+        step_helper = StepHelperDbLoader().getStepHelperForRunType(_get_runtype_from_code(code).pk)
+        request.session['plan_step_helper'] = step_helper
+    else:
+        request.session['plan_step_helper'] = StepHelper()
+    ctxd = handle_step_request(request, 'Ionreporter')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_new_template_by_sample(request, sampleset_id=None):
+    """ Create a new template by sample """
+    
+    step_helper = StepHelperDbLoader().getStepHelperForNewTemplateBySample(_get_runtype_from_code(0).pk)
+    step_helper.steps['Ionreporter'].savedFields['sampleset_id'] = sampleset_id
+    request.session['plan_step_helper'] = step_helper
+    
+    ctxd = handle_step_request(request, 'Ionreporter')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_new_plan(request, template_id):
+    ''' create a new plan from a template with id template_id '''
+    step_helper = StepHelperDbLoader().getStepHelperForTemplatePlannedExperiment(template_id, StepHelperType.CREATE_NEW_PLAN)
+    request.session['plan_step_helper'] = step_helper
+    ctxd = handle_step_request(request, 'Save_plan')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_new_plan_by_sample(request, template_id, sampleset_id):
+    ''' create a new plan by sample from a template with id template_id '''
+
+    if int(template_id) == int(0):
+        #we are creating a new experiment based on the sample set
+        return HttpResponseRedirect(reverse('page_plan_new_template_by_sample', args=(sampleset_id,)))
+
+    step_helper = StepHelperDbLoader().getStepHelperForTemplatePlannedExperiment(template_id, 
+                                                                                 StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE, 
+                                                                                 sampleset_id=sampleset_id)
+    request.session['plan_step_helper'] = step_helper
+    ctxd = handle_step_request(request, 'Barcode_by_sample')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_new_plan_from_code(request, code):
+    ''' create a new plan from a runtype code '''
+    runType = _get_runtype_from_code(code)
+    step_helper = StepHelperDbLoader().getStepHelperForRunType(runType.pk, StepHelperType.CREATE_NEW_PLAN)
+    request.session['plan_step_helper'] = step_helper
+    ctxd = handle_step_request(request, 'Ionreporter')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_edit_plan_by_sample(request, plan_id):
+    step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan_id, StepHelperType.EDIT_PLAN_BY_SAMPLE)
+    request.session['plan_step_helper'] = step_helper
+    ctxd = handle_step_request(request, 'Barcode_by_sample')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_edit_plan(request, plan_id):
+    ''' edit plan with id plan_id '''
+    #first get the plan and check if it's plan by sample set
+    plan = PlannedExperiment.objects.get(pk=plan_id)
+    if plan.sampleSet:
+        return HttpResponseRedirect(reverse('page_plan_edit_plan_by_sample', args=(plan_id,)))
+
+    step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan_id, StepHelperType.EDIT_PLAN)
+    request.session['plan_step_helper'] = step_helper
+    ctxd = handle_step_request(request, 'Save_plan')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_edit_run(request, exp_id):
+    ''' retrieve and edit a plan for existing experiment '''
+    try:
+        plan = PlannedExperiment.objects.get(experiment=exp_id)
+    except PlannedExperiment.DoesNotExist:
+        # experiment doesn't have a Plan - give it a copy of system default plan template
+        exp = Experiment.objects.get(pk=exp_id)
+        plan = PlannedExperiment.get_latest_plan_or_template_by_chipType(exp.chipType)
+        if not plan:
+            plan = PlannedExperiment.get_latest_plan_or_template_by_chipType()
+        plan.pk = plan.planGUID = plan.planShortID = None
+        plan.isReusable = plan.isSystem = plan.isSystemDefault = False
+        plan.planName = plan.planDisplayedName = "CopyOfSystemDefault_" + exp.expName
+        plan.planStatus = 'run'
+        plan.planExecuted = True
+        plan.save()
+        exp.plan = plan
+        exp.save()
+
+    step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan.id, StepHelperType.EDIT_RUN)
+    request.session['plan_step_helper'] = step_helper
+    ctxd = handle_step_request(request, 'Save_plan')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+
+@login_required
+def page_plan_copy_plan(request, plan_id):
+    ''' copy plan with id plan_id '''
+    plan = PlannedExperiment.objects.get(pk=plan_id)
+    if plan.sampleSet:
+        return HttpResponseRedirect(reverse('page_plan_copy_plan_by_sample', args=(plan_id,)))
+    step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan_id, StepHelperType.COPY_PLAN)
+    request.session['plan_step_helper'] = step_helper
+    ctxd = handle_step_request(request, 'Save_plan')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_copy_plan_by_sample(request, plan_id):
+    step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan_id, StepHelperType.COPY_PLAN_BY_SAMPLE)
+    request.session['plan_step_helper'] = step_helper
+    ctxd = handle_step_request(request, 'Barcode_by_sample')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_export(request):
+    ctxd = handle_step_request(request, 'Export')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_application(request):
+    ctxd = handle_step_request(request, 'Application')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_save_sample(request):
+    ctxd = handle_step_request(request, 'Save_plan_by_sample')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_kits(request):
+    ctxd = handle_step_request(request, 'Kits')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_monitoring(request):
+    ctxd = handle_step_request(request, 'Monitoring')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_reference(request):
+    ctxd = handle_step_request(request, 'Reference')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_plugins(request):
+    ctxd = handle_step_request(request, 'Plugins')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_output(request):
+    ctxd = handle_step_request(request, 'Output')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_ionreporter(request):
+    ctxd = handle_step_request(request, 'Ionreporter')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_save_template(request):
+    ctxd = handle_step_request(request, 'Save_template')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_save_template_by_sample(request):
+    ctxd = handle_step_request(request, 'Save_template_by_sample')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_save_plan(request):
+    ctxd = handle_step_request(request, 'Save_plan')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_by_sample_barcode(request):
+    ctxd = handle_step_request(request, 'Barcode_by_sample')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+@login_required
+def page_plan_by_sample_save_plan(request):
+    ctxd = handle_step_request(request, 'Save_plan_by_sample')
+    return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+
+@login_required
+def page_plan_save(request):
+    ''' you may only come here from the last plan/template step that has a save button. '''
+    
+    # update the step_helper with the latest data from the save page
+    ctxd = handle_step_request(request, '')
+    
+    # make sure the step helper is valid
+    first_error_step = ctxd['helper'].validateAll()
+    if not first_error_step:
+        try:
+            # save the step helper
+            step_helper_db_saver = StepHelperDbSaver()
+            planTemplate = step_helper_db_saver.save(ctxd['helper'], request.user.username)
+
+            step_helper = request.session['plan_step_helper']
+            if step_helper.isTemplateBySample():
+                return HttpResponseRedirect(reverse('page_plan_new_plan_by_sample', args=(planTemplate.pk, step_helper.steps['Ionreporter'].savedFields['sampleset_id'])))
+        except:
+            step_helper_db_saver = None
+            logger.exception(format_exc())
+            Message.error("There was an error saving your plan/template.")
+
+        #If this wizard was started with a postback url, redirect and send the planned run pks.
+        if "postback" in request.session:
+            postback_url = request.session["postback"] + "?planned_runs=" + ",".join(
+                [str(planned_run.pk) for planned_run in step_helper_db_saver.planned_runs]
+            ) + "&host_name=" + settings.HOSTNAME + "&host_url=" + settings.ROOT_URL
+
+            del request.session["postback"] # Clear postback url
+            del request.session["referer_site_name"] # Clear via title on TS
+
+            return HttpResponseRedirect(postback_url)
+
+        #Otherwise redirect to a listing page
+        elif ctxd['helper'].isEditRun():
+            return HttpResponseRedirect('/data')
+        elif ctxd['helper'].isPlan():
+            return HttpResponseRedirect('/plan/planned')
+        else:
+            return HttpResponseRedirect('/plan/plan')
+    else:
+        # tell the context which step to go to
+        ctxd['step'] = ctxd['helper'].steps[first_error_step]
+        
+        # go to that step
+        return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
+
+def handle_step_request(request, next_step_name):
+    # add a blank step helper to the request session if there isn't one
+    _create_plan_session(request)
+    
+    # find out which step we came from
+    current_step_name = request.POST.get('stepName', None)
+    step_helper = request.session['plan_step_helper']
+    
+    # update the step heler with the input from the step we came from
+    updated = step_helper.updateStepFromRequest(request, current_step_name)
+    # raise RuntimeError("what" + '%s' % updated)
+    logger.debug("Step: %s, Updated: %s" % (current_step_name, str(updated)))
+    if updated:
+
+        request.session.modified = True
+    if current_step_name and step_helper.steps[current_step_name].hasErrors()\
+        and step_helper.isTargetStepAfterOriginal(current_step_name, next_step_name):
+        # if the user enterred invalid input and is trying to move forward in the wizard, force them to fix it.
+
+        next_step_name = current_step_name
+
+    ctxd = _create_context_from_session(request, next_step_name)
+    return ctxd
+
+def _get_runtype_from_code(code):
+        codes = {
+            '1': "AMPS",
+            '2': "TARS",
+            '3': "WGNM",
+            '4': "RNA",
+            '5': "AMPS_RNA",
+            '6': "AMPS_EXOME",
+            '7': "TARS_16S"
+        }
+        product_code = codes.get(code, "GENS")
+        return RunType.objects.get(runType=product_code)
+
+def _create_context_from_session(request, next_step_name):
+    ctxd = request.session['saved_plan']
+    ctxd['helper'] = request.session['plan_step_helper']
+    ctxd['step'] = None
+    if next_step_name in ctxd['helper'].steps:
+        ctxd['step'] = ctxd['helper'].steps[next_step_name]
+    context = RequestContext(request, ctxd)
+    return context
+
+def _create_plan_session(request):
+    if 'saved_plan' not in request.session:
+        isForTemplate = True
+        data = _get_allApplProduct_data(isForTemplate)
+        codes = {
+            '1': "AMPS",
+            '2': "TARS",
+            '3': "WGNM",
+            '4': "RNA",
+            '5': "AMPS_RNA",
+            '6': "AMPS_EXOME",
+            '7': "TARS_16S"            
+        }
+        product_code = codes.get(1, "GENS")
+        logger.debug("views.add_planTemplate()... code=%s, product_code=%s" % (1, product_code))
+    
+        globalConfig_isDuplicateReads = GlobalConfig.objects.all()[0].mark_duplicates
+    
+        ctxd = {
+            "intent": 'New',
+            "planTemplateData": data,
+            "selectedPlanTemplate": None,
+            "selectedApplProductData": data[product_code],
+            "globalConfig_isDuplicateReads" : globalConfig_isDuplicateReads
+        }
+        request.session['saved_plan'] = ctxd
+    if 'plan_step_helper' not in request.session:
+        logger.debug("INTITIALIZED NEW STEP_HELPER IN SESSION")
+        request.session['plan_step_helper'] = StepHelper()
+
+
+@login_required
 def planned(request):
     ctx = RequestContext(request)
     return render_to_response("rundb/plan/planned.html", context_instance=ctx)
 
+
+@login_required
+def planned_by_template(request):
+    ctx = RequestContext(request)
+    return render_to_response("rundb/plan/planned_by_template.html", context_instance=ctx)
+
+
+@login_required
+def planned_by_sampleset(request):
+    ctx = RequestContext(request)
+    return render_to_response("rundb/plan/planned_by_sampleset.html", context_instance=ctx)
+
+
+@login_required
+def plan_run_home(request):
+    ctx = RequestContext(request)
+    return render_to_response("rundb/plan/plan_run_home.html", context_instance=ctx)
 
 @login_required
 def delete_plan_template(request, pks=None):
@@ -124,16 +504,20 @@ def _add_plan(request, code, intent):
         '3': "WGNM",
         '4': "RNA",
         '5': "AMPS_RNA",
-        '6': "AMPS_EXOME"
+        '6': "AMPS_EXOME",
+        '7': "TARS_16S"        
     }
     product_code = codes.get(code, "GENS")
     logger.debug("views.add_planTemplate()... code=%s, product_code=%s" % (code, product_code))
+
+    globalConfig_isDuplicateReads = GlobalConfig.objects.all()[0].mark_duplicates
 
     ctxd = {
         "intent": intent,
         "planTemplateData": data,
         "selectedPlanTemplate": None,
-        "selectedApplProductData": data[product_code]
+        "selectedApplProductData": data[product_code],
+        "globalConfig_isDuplicateReads" : globalConfig_isDuplicateReads
     }
 
     context = RequestContext(request, ctxd)
@@ -143,7 +527,8 @@ def _add_plan(request, code, intent):
 
 def _get_runtype_json(request, runType):
     rtr = RunTypeResource()
-    rt = rtr.obj_get(runType=runType)
+    base_bundle = rtr.build_bundle(request=request)
+    rt = rtr.obj_get(bundle=base_bundle, runType=runType)
     rtr_bundle = rtr.build_bundle(obj=rt, request=request)
     rt_json = rtr.serialize(None, rtr.full_dehydrate(rtr_bundle), 'application/json')
     return rt_json
@@ -151,7 +536,8 @@ def _get_runtype_json(request, runType):
 
 def _get_dnabarcode_json(request, barcodeId):
     dnar = dnaBarcodeResource()
-    dna = dnar.obj_get_list(name=barcodeId, request=request).order_by('index')
+    base_bundle = dnar.build_bundle(request=request)
+    dna = dnar.obj_get_list(bundle=base_bundle, name=barcodeId, request=request).order_by('index')
     dna_bundles = [dnar.build_bundle(obj=x, request=request) for x in dna]
     dna_json = dnar.serialize(None, [dnar.full_dehydrate(bundle) for bundle in dna_bundles], 'application/json')
     return dna_json
@@ -162,10 +548,11 @@ def _get_chiptype_json(request, chipType, plan):
     chipResource_serialize_json = None
     if chipType:
         try:
+            base_bundle = chipResource.build_bundle(request=request)
             try:
-                chip = chipResource.obj_get(name = chipType)
+                chip = chipResource.obj_get(bundle=base_bundle, name = chipType)
             except Chip.DoesNotExist:
-                chip = chipResource.obj_get(name = chipType[:3])
+                chip = chipResource.obj_get(bundle=base_bundle, name = chipType[:3])
 
             chipResource_bundle = chipResource.build_bundle(obj=chip, request=request)
             chipResource_serialize_json = chipResource.serialize(None, chipResource.full_dehydrate(chipResource_bundle), 'application/json')
@@ -173,7 +560,6 @@ def _get_chiptype_json(request, chipType, plan):
             logger.error("views._get_chiptype_json() Plan.pk=%d; name=%s has invalid chip type=%s" %(plan.id, plan.planName, chipType))
             chipResource_bundle = None
             chipResource_serialize_json = json.dumps("INVALID")
-            
     else:
         chipResource_bundle = None
         chipResource_serialize_json = json.dumps(None)
@@ -190,10 +576,54 @@ def _get_stripped_chipType(chipType):
     else:
         return chipType
 
+
+def _get_applicationGroup_json(request, applicationGroup_id):
+    applicationGroupResource = ApplicationGroupResource()
+    applicationGroupResource_serialize_json = None
     
+    if applicationGroup_id:
+        try:
+            base_bundle = applicationGroupResource.build_bundle(request=request)
+    
+            applicationGroup = applicationGroupResource.obj_get(bundle=base_bundle, id = applicationGroup_id)
+    
+            applicationGroupResource_bundle = applicationGroupResource.build_bundle(obj=applicationGroup, request=request)
+            applicationGroupResource_serialize_json = applicationGroupResource.serialize(None, applicationGroupResource.full_dehydrate(applicationGroupResource_bundle), 'application/json')
+        except:
+            applicationGroupResource_bundle = None
+            applicationGroupResource_serialize_json = json.dumps(None)            
+    else:
+        applicationGroupResource_bundle = None
+        applicationGroupResource_serialize_json = json.dumps(None)
+    return applicationGroupResource_serialize_json    
+
+
+def _get_sampleGrouping_json(request, sampleGroup_id):
+    sampleGroupResource = SampleGroupType_CVResource()
+    sampleGroupResource_serialize_json = None
+    
+    if sampleGroup_id:
+        try:
+            base_bundle = sampleGroupResource.build_bundle(request=request)
+    
+            sampleGroup = sampleGroupResource.obj_get(bundle=base_bundle, id = sampleGroup_id)
+    
+            sampleGroupResource_bundle = sampleGroupResource.build_bundle(obj=sampleGroup, request=request)
+            sampleGroupResource_serialize_json = sampleGroupResource.serialize(None, sampleGroupResource.full_dehydrate(sampleGroupResource_bundle), 'application/json')
+        except:
+            sampleGroupResource_bundle = None
+            sampleGroupResource_serialize_json = json.dumps(None)            
+    else:
+        sampleGroupResource_bundle = None
+        sampleGroupResource_serialize_json = json.dumps(None)
+    return sampleGroupResource_serialize_json    
+
+    
+
 def _review_plan(request, pk):
     per = PlannedExperimentResource()
-    pe = per.obj_get(pk=pk)
+    base_bundle = per.build_bundle(request=request)
+    pe = per.obj_get(bundle=base_bundle, pk=pk)
     per_bundle = per.build_bundle(obj=pe, request=request)
     pe_json = per.serialize(None, per.full_dehydrate(per_bundle), 'application/json')
 
@@ -201,13 +631,18 @@ def _review_plan(request, pk):
     dna_json = _get_dnabarcode_json(request, per_bundle.data.get('barcodeId'))
     chipType_json = _get_chiptype_json(request, _get_stripped_chipType(per_bundle.data.get('chipType')), pe)
 
-    return render_to_response("rundb/plan/modal_review_plan.html", {
+    applicationGroup_json = _get_applicationGroup_json(request, pe.applicationGroup_id)
+    sampleGrouping_json = _get_sampleGrouping_json(request, pe.sampleGrouping)
+    
+    return render(request, "rundb/plan/modal_review_plan.html", {
                               "plan": pe,
                               "selectedPlanTemplate": pe_json,
                               "selectedRunType": rt_json,
                               "selectedBarcodes": dna_json,
                               "view": 'template' if 'template' in request.path else 'Planned Run',
-                              "selectedChip": chipType_json
+                              "selectedChip": chipType_json,
+                              "selectedApplicationGroup" : applicationGroup_json,
+                              "selectedSampleGrouping" : sampleGrouping_json
                               })
 
 
@@ -277,13 +712,14 @@ def _plan_template_helper(request, _id, isForTemplate, intent):
         setattr(planTemplate, plankey, getattr(experiment,key,''))
 
     chipResource = ChipResource()
+    base_bundle = chipResource.build_bundle(request=request)
     try:
-        chip = chipResource.obj_get(name = experiment.chipType)
+        chip = chipResource.obj_get(bundle=base_bundle, name = experiment.chipType)
         if chip:
             setattr(planTemplate, "chipType", experiment.chipType)
     except Chip.DoesNotExist:
         try:
-            chip = chipResource.obj_get(name = experiment.chipType[:3])
+            chip = chipResource.obj_get(bundle=base_bundle, name = experiment.chipType[:3])
             if chip:
                 setattr(planTemplate, "chipType", experiment.chipType[:3])
         except Chip.DoesNotExist:
@@ -308,7 +744,8 @@ def _plan_template_helper(request, _id, isForTemplate, intent):
           ('libraryKey', 'libraryKey'),
           ('librarykitname', 'libraryKitName'),
           ('regionfile', 'hotSpotRegionBedFile'),
-          ('selectedPlugins', 'selectedPlugins')
+          ('selectedPlugins', 'selectedPlugins'),
+          ('isDuplicateReads', 'isDuplicateReads')
     ]
     for plankey, key in eas_keys:
         setattr(planTemplate, plankey, getattr(eas,key,''))
@@ -353,6 +790,8 @@ def _plan_template_helper(request, _id, isForTemplate, intent):
         else:
             plugin.selected = False
 
+    globalConfig_isDuplicateReads = GlobalConfig.objects.all()[0].mark_duplicates
+    
     #planTemplateData contains what are available for selection
     #and what each application product's characteristics and default selection
     ctxd = {
@@ -362,7 +801,8 @@ def _plan_template_helper(request, _id, isForTemplate, intent):
         "selectedPlanTemplate": planTemplate,
         "selectedRunType": runType,
         "selectedProjectNames": selectedProjectNames,
-        "selectedChipTypeDetails": chipTypeDetails
+        "selectedChipTypeDetails": chipTypeDetails,
+        "globalConfig_isDuplicateReads" : globalConfig_isDuplicateReads
     }
     context = RequestContext(request, ctxd)
     return context
@@ -576,9 +1016,11 @@ def save_uploaded_plans_for_template(request):
     except:
         logger.exception(format_exc())
         transaction.rollback()
-        return HttpResponse(json.dumps({"status": "Error saving plans to database!"}), mimetype="text/html")
+        return HttpResponse(json.dumps({"status": "Error saving plans to database!" + format_exc()}), mimetype="text/html")
         ##return HttpResponse(json.dumps({"error": "Internal error while trying to save the plan."}), mimetype="application/json")
     else:
+        #logger.info("views.save_uploaded_plans_for_template going to transaction.COMMIT")
+        
         transaction.commit()            
         r = {"status": "Plans Uploaded! The plans will be listed on the planned run page.", "failed": failed}
         return HttpResponse(json.dumps(r), mimetype="text/html")
@@ -797,7 +1239,7 @@ def _get_base_planTemplate_data(isForTemplate):
 
     #to allow data entry for multiple non-barcoded samples at the plan wizard
     data['nonBarcodedSamples_irConfig_loopCounter'] = [i + 1 for i in range(20)]
-
+    
     return data
 
 
@@ -905,15 +1347,27 @@ def save_plan_or_template(request, planOid):
     sampleValidationErrorMsg = ''
     sampleValidationErrorMsg_leadingChars = ''
     sampleValidationErrorMsg_length = ''
-        
+
+    sampleTubeLabelValidationErrorMsg_length = ''
+    
     # one Plan will be created per entry in sampleList
     # samples for barcoded Plan have a separate field (barcodedSamples)
 
+    sampleTubeLabelList = []
+             
     if isReusable:
         # samples entered only when saving planned run (not template)
         sampleList = ['']
     elif barcodeIdValue:
         # a barcode Set is selected
+        sampleTubeLabelValue = json_data.get('sampleTubeLabel', '')
+        if sampleTubeLabelValue:   
+            if not is_valid_length(sampleTubeLabelValue, MAX_LENGTH_PLAN_NAME):
+                transaction.rollback()
+                return HttpResponse(json.dumps({"error": "Error, %s sample tube label"  %(msgvalue) + ERROR_MSG_INVALID_LENGTH  %(str(MAX_LENGTH_SAMPLE_TUBE_LABEL))}), mimetype="application/html")
+            else:
+                sampleTubeLabelList.append(sampleTubeLabelValue)
+
         sampleList = ['']
         bcSamplesValues = json_data.get('bcSamples_workaround', '')
         bcDictionary = {}
@@ -944,11 +1398,20 @@ def save_plan_or_template(request, planOid):
     else:
         # Non-barcoded samples
         sampleList = []
+        sampleTubeLabels = ''
+        
         if IRU_selected:
             samples = samples_IRconfig
         else:
             samples = json_data.get('samples_workaround', '')
 
+        sampleTubeLabels = json_data.get('irSampleTubeLabels_workaround', '') if IRU_selected else json_data.get('nonIrSampleTubeLabels_workaround', '')
+
+        logger.debug("views.save_plan_or_template json_data.get() IRU_selected=%s; sampleTubeLabels=%s " % (str(IRU_selected), sampleTubeLabels))
+            
+        sampleTubeLabelList = sampleTubeLabels.split(",")
+        
+        i = 0
         for sample in samples.split(','):
             if sample.strip():
                 if not is_valid_chars(sample):
@@ -960,12 +1423,27 @@ def save_plan_or_template(request, planOid):
                 else:
                     sampleList.append(sample)
 
-        logger.debug("views.save_plan_or_template sampleList=%s " % (sampleList))
+                    if (len(sampleTubeLabelList) > i):
+                        sampleTubeLabel = sampleTubeLabelList[i]                   
 
+                        if sampleTubeLabel.strip():
+                            if not is_valid_length(sampleTubeLabel, MAX_LENGTH_SAMPLE_TUBE_LABEL):
+                                sampleTubeLabelValidationErrorMsg_length += sampleTubeLabel + ", "
+                    else:
+                        sampleTubeLabelList.append("")
+            i += 1
+        
         if  len(sampleList) == 0 and not sampleValidationErrorMsg and not sampleValidationErrorMsg_leadingChars and not sampleValidationErrorMsg_length:
             transaction.rollback()
             return HttpResponse(json.dumps({"error": "Error, please enter a sample name for the run plan."}), mimetype="application/html")
-    
+
+        logger.debug("views.save_plan_or_template sampleList=%s " % (sampleList))
+
+        if  sampleTubeLabelValidationErrorMsg_length:
+            transaction.rollback()
+            return HttpResponse(json.dumps({"error": "Error, sample tube label %s"  %(sampleTubeLabelValidationErrorMsg_length) + ERROR_MSG_INVALID_LENGTH  %(str(MAX_LENGTH_SAMPLE_TUBE_LABEL))}), mimetype="application/html")
+
+
     # Samples validation
     if sampleValidationErrorMsg or sampleValidationErrorMsg_leadingChars or sampleValidationErrorMsg_length:
         message = ""
@@ -1016,6 +1494,12 @@ def save_plan_or_template(request, planOid):
         if samplePrepInstrumentType == 'ionChef':
             selectedTemplatingKit = json_data.get('templatekitionchefname', '')
         
+        sampleTubeLabel = ''
+        if (sampleTubeLabelList and len(sampleTubeLabelList) >= i):
+            sampleTubeLabel = sampleTubeLabelList[i].strip()
+        
+        ##logger.debug("plan/views - i=%d; sample=%s, sampleTubeLabel=%s" %(i, sample, sampleTubeLabel))
+        
         #PDD-TODO: remove the x_ prefix. the x_ prefix is just a reminder what the obsolete attributes to remove during the next phase
         kwargs = {
             'planDisplayedName': inputPlanDisplayedName,
@@ -1035,6 +1519,7 @@ def save_plan_or_template(request, planOid):
             'pairedEndLibraryAdapterName': json_data.get('pairedEndLibraryAdapterName', ''),
             'samplePrepKitName': json_data.get('samplePrepKitName', ''),
             'planStatus' : "planned",
+            'sampleTubeLabel' : sampleTubeLabel,
 
             'x_autoAnalyze': True,
             'x_barcodedSamples': barcodedSamples,
@@ -1054,10 +1539,13 @@ def save_plan_or_template(request, planOid):
             'x_selectedPlugins': selectedPluginsValue,
             'x_sequencekitname': json_data.get('sequencekitname', ''),
             'x_variantfrequency': json_data.get('variantfrequency', ''),
+            'x_isDuplicateReads': json_data.get('isDuplicateReads', False)
         }
 
         planTemplate = None
-        
+        logger.debug("KWARGS ARE: %s" % str(kwargs))
+        for key,value in sorted(kwargs.items()):
+            logger.debug('KWARG %s: %s' % (str(key), str(value)))
         #if we're changing a plan from having 1 sample to say 2 samples, we need to UPDATE 1 plan and CREATE 1 plan!!
         try:
             if not edit_existing_plan:

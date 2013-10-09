@@ -22,6 +22,26 @@ void TraceCurry::IntegrateRedObserved(float *red, float *red_obs)
     IntegrateRedFromRedTraceObserved (red,red_obs, npts, i_start, deltaFrame, tauB);
 }
 
+void TraceCurry::ErrorSignal(float *obs,float *fit, float *posptr, float *negptr)
+{
+
+    float err[npts];
+    float timetotal=0.0f,positive=0.0f, negative=0.0f;
+    bool posflag=true;
+    for (int k=0; k<npts;k++){ err[k]=(obs[k]-fit[k])*deltaFrame[k];}
+    int k=npts-1;
+    while  (k>=0){
+       timetotal+=deltaFrame[k];
+       if (err[k]>0 && posflag){ positive+=err[k];}
+       else if (err[k]<0) {posflag =false;}
+       if ((err[k]<0)&& (!posflag)) {negative+=err[k];};
+       k--;
+     }
+     *posptr=positive/timetotal;
+     *negptr=-negative/timetotal;
+}
+
+
 float TraceCurry::GuessAmplitude(float *red_obs)
 {
     float red_guess[npts];

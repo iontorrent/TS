@@ -1,6 +1,10 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
-from django.conf.urls.defaults import patterns, url
+try:
+    from django.conf.urls import patterns, url, include
+except ImportError:
+    # Compat Django 1.4
+    from django.conf.urls.defaults import patterns, url, include
 
 urlpatterns = patterns(
     'iondb.rundb.report',
@@ -14,4 +18,6 @@ urlpatterns = patterns(
     url(r'^analyze/(?P<exp_pk>\d+)/(?P<report_pk>\d+)/$', 'views.analyze', name="report_analyze"),
 
     url(r'^action/(?P<pk>\d+)/(?P<action>[\w.,/_\-]+)$', 'views.report_action', name='report_action'),
+	url(r'^(?P<pk>\d+)/getZip/$', 'views.getZip', name="getZip"),
+	url(r'^(?P<pk>\d+)/getVCF/$', 'views.getVCF', name="getVCF"),
     )

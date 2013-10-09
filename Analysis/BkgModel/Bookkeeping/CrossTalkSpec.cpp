@@ -28,6 +28,7 @@ CrossTalkSpecification::CrossTalkSpecification()
     nscale = 0;
     hex_packed = false;
     three_series = true;
+    initialPhase = 0;
     do_xtalk_correction = true;
     simple_model = false;
     rescale_flag = false;
@@ -169,7 +170,7 @@ void CrossTalkSpecification::SetNewHexGrid()
     tau_fluid[ndx] = 15;
     multiplier[ndx] = 0.01;
     ndx++;
-    cx[ndx] = 1, cy[ndx] = 0;
+    cx[ndx] = 1; cy[ndx] = 0;
     tau_top[ndx] = 5;
     tau_fluid[ndx] = 12;
     multiplier[ndx] = 0.01;
@@ -199,6 +200,49 @@ void CrossTalkSpecification::SetNewHexGrid()
     cy[ndx] = -1;
     tau_top[ndx] = 5;
     tau_fluid[ndx] = 11;
+    multiplier[ndx] = 0.01;
+    ndx++;
+}
+
+void CrossTalkSpecification::SetNewHexGridP0()
+{
+    hex_packed = true;
+    three_series = false;
+    initialPhase = 1;
+    Allocate(6);
+    int ndx = 0;
+    // left/right
+    cx[ndx] = 0;    cy[ndx] = -1;
+    tau_top[ndx] = 5;
+    tau_fluid[ndx] = 12;
+    multiplier[ndx] = 0.01;
+    ndx++;
+    cx[ndx] = 1; cy[ndx] = 0;
+    tau_top[ndx] = 5;
+    tau_fluid[ndx] = 12;
+    multiplier[ndx] = 0.01;
+    ndx++;
+    // phase of hex grid shifts these two entities
+    // up
+    cx[ndx] = 0;    cy[ndx] = 1;
+    tau_top[ndx] = 5;
+    tau_fluid[ndx] = 12;
+    multiplier[ndx] = 0.01;
+    ndx++;
+    cx[ndx] = 1;    cy[ndx] = 1;
+    tau_top[ndx] = 5;
+    tau_fluid[ndx] = 12;
+    multiplier[ndx] = 0.01;
+    ndx++;
+    // down
+    cx[ndx] = 0;    cy[ndx] = -1;
+    tau_top[ndx] = 5;
+    tau_fluid[ndx] = 12;
+    multiplier[ndx] = 0.01;
+    ndx++;
+    cx[ndx] = 1;    cy[ndx] = -1;
+    tau_top[ndx] = 5;
+    tau_fluid[ndx] = 12;
     multiplier[ndx] = 0.01;
     ndx++;
 }
@@ -290,7 +334,7 @@ void CrossTalkSpecification::ReadCrossTalkFromFile(const char *fname)
     if (status == 0)
     {
         // file exists
-        //printf("XTALK: loading parameters from %s\n",fname);
+        printf("XTALK: loading parameters from %s\n",fname);
 
         param_file=fopen(fname,"rt");
 
@@ -331,6 +375,11 @@ void CrossTalkSpecification::ReadCrossTalkFromFile(const char *fname)
                         simple_model= false;
                     //printf("simple_model: %d\n", simple_model);
                 }                
+                if (strncmp("initial_phase",line,13)==0)
+                {
+                    sscanf(line,"initial_phase: %d", &initialPhase);
+                    //printf("initial_phase: %d\n", initialPhase);
+                }
                if (strncmp("rescale_flag",line,12)==0)
                 {
                   int rescale_tmp;
@@ -413,7 +462,7 @@ void CrossTalkSpecification::NeighborByChipType(int &ncx, int &ncy, int bead_rx,
         if (three_series)
           NeighborByGridPhase (ncx,ncy,bead_rx,bead_ry,cx[nei_idx],cy[nei_idx], (region_y + bead_ry+1) % 2); // maybe????
         else
-          NeighborByGridPhaseBB(ncx,ncy,bead_rx,bead_ry,cx[nei_idx],cy[nei_idx], (region_x + bead_rx+1) % 2); // maybe????
+          NeighborByGridPhaseBB(ncx,ncy,bead_rx,bead_ry,cx[nei_idx],cy[nei_idx], (region_x + bead_rx+1+initialPhase) % 2); // maybe????
       }
 
 }
@@ -426,10 +475,13 @@ void CrossTalkSpecification::BootUpXtalkSpec(bool can_do_xtalk_correction, const
     {
         if (strlen(xtalk_name)>0)
         {
+            printf("Reading crosstalk for %s from: %s\n", chipType, xtalk_name);
             ReadCrossTalkFromFile(xtalk_name);
         } else {
-            if ((strcmp (chipType, "318") == 0)||(strcmp (chipType, "316v2") == 0)) 
+            if ((strcmp (chipType, "318") == 0)||(strcmp (chipType, "316v2") == 0))
                 SetNewHexGrid(); // find out who we really are!
+            else if(strcmp (chipType, "910") == 0)
+                SetNewHexGridP0();
             else if (strcmp(chipType,"900")==0)
                 SetAggressiveHexGrid(); // 900 may have different cross-talk!
             else

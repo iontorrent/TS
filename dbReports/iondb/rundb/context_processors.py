@@ -13,7 +13,7 @@ def base_context_processor(request):
     added to the base_template in every view.
     Namespace any items added here with 'base_' in order to avoid conflict.
     """
-    site_name = models.GlobalConfig.objects.all().order_by('id')[0].site_name
+    gconfig = models.GlobalConfig.get()
     messages = models.Message.objects.filter(route="").filter(
         Q(status="unread", expires="read") | ~Q(expires="read"))
     from iondb.rundb.api import MessageResource
@@ -21,18 +21,22 @@ def base_context_processor(request):
     msg_list = [resource.full_dehydrate(Bundle(message)) for message in messages]
     serialized_messages = resource.serialize(None, msg_list, "application/json")
     base_js_extra = settings.JS_EXTRA
-    if msg_list:
-        logger.debug("Found %d global messages" % len(msg_list))
-        
-    logger.debug("Global messages are %s" % serialized_messages)
     
     if request.user:
         user_messages = models.Message.objects.filter(route=request.user).filter(Q(status="unread", expires="read") | ~Q(expires="read"))
         user_msglist = [resource.full_dehydrate(Bundle(message)) for message in user_messages]
         user_serialized_messages = resource.serialize(None, user_msglist, "application/json")
-        logger.debug("User messages are %s" % user_serialized_messages)
-    return {"base_site_name": site_name, "global_messages": serialized_messages,
-            "user_messages":user_serialized_messages, "base_js_extra" : base_js_extra}
+
+    unread_news = 0
+    if request.user.is_authenticated() and gconfig.check_news_posts:
+        unread_news = models.NewsPost.objects.filter(updated__gte=request.user.get_profile().last_read_news_post).count()
+
+    # This global template var is used with planning wizard callbacks.
+    referer_site_name = request.session.get("referer_site_name", None)
+
+    return {"base_site_name": gconfig.site_name, "global_messages": serialized_messages,
+            "user_messages":user_serialized_messages, "base_js_extra" : base_js_extra,
+            "referer_site_name": referer_site_name, "unread_news": unread_news}
 
 
 def message_binding_processor(request):
@@ -44,11 +48,8 @@ def message_binding_processor(request):
             .filter(Q(status="unread", expires="read") | ~Q(expires="read"))
         bound_messages = list(messages)
         messages.update(status="read")
-        if bound_messages:
-            logger.debug("Found %d bound messages" % len(bound_messages))
         return {"bound_messages": bound_messages}
     else:
-        logger.debug("No messages found")
         return {}
 
 

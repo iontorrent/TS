@@ -1,0 +1,15 @@
+{%include "rundb/plan/page_plan/summary/monitoring_summary.html"%}
+<tr>
+    <td><b>Reference Library:</b></td>
+    <td id="selectedReferenceLibrary"></td>
+</tr>
+<tr>
+    <td><b>Target Regions:</b></td>
+    <td id="selectedTargetRegions">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.targetBedFile|default_if_none:""}}</td>
+</tr>
+{% if helper.getStepDict.Reference.getPrePopulatedFieldDict.showHotSpotBed %}
+    <tr>
+        <td><b>Hotspot Regions:</b></td>
+        <td id="selectedHotspotRegions">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.hotSpotBedFile|default_if_none:""}}</td>
+    </tr>
+{% endif %}

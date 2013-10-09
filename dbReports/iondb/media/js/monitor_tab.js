@@ -33,9 +33,9 @@ $(function(){
                 "bead_live": met && Math.round(met.live / met.bead * 1000) / 10,
                 "bead_lib": met && Math.round(met.lib / met.live * 1000) / 10,
                 "usable_seq": met && qc && Math.round(qc.q0_reads / met.lib * 1000) / 10,
-                "progress_flows": Math.round((status == "Complete" ? 1: status / 100.0) * this.model.get('flows')),
-                "progress_percent": status == "Complete" ? 100 : status,
-                "is_proton": this.model.get("chipType") == "900",
+                "progress_flows": (status == "Complete" ? this.model.get('flows') : status),
+                "progress_percent": status == "Complete" ? 100 : Math.round((status / this.model.get('flows')) * 100),
+                "is_proton" : this.model.get('chipInstrumentType') == "proton",
                 "in_progress": status != "Complete"
             };
             var qc = this.model.get('qcThresholds'),
@@ -61,9 +61,9 @@ $(function(){
             console.log("Destroying card run view");
             //COMPLETELY UNBIND THE VIEW
             this.undelegateEvents();
-            $(this.el).removeData().unbind(); 
+            $(this.el).removeData().unbind();
             //Remove view from DOM
-            this.remove();  
+            this.remove();
             Backbone.View.prototype.remove.call(this);
         }
     });
@@ -106,22 +106,22 @@ $(function(){
 		e.preventDefault();
     	$('#error-messages').hide().empty();
 		url = $(e.target).attr('href');
-		
+
 		$('body #modal_review_plan').remove();
 		$.get(url, function(data) {
 		  	$('body').append(data);
 		    $( "#modal_review_plan" ).modal("show");
 		    return false;
-		}).done(function(data) { 
+		}).done(function(data) {
 	    	console.log("success:", url);
 		})
 	    .fail(function(data) {
 	    	$('#error-messages').empty().show();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
+	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
 	    	console.log("error:", data);
-	    	 
+
 	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ });		
+	    .always(function(data) { /*console.log("complete:", data);*/ });
 	};
 
     RunListView = Backbone.View.extend({
@@ -134,9 +134,9 @@ $(function(){
         },
 
         initialize: function () {
-            _.bindAll(this, 'render', 'addRun', 'setup_full_view', 
+            _.bindAll(this, 'render', 'addRun', 'setup_full_view',
                 'view_full', 'setup_table_view', 'view_table', 'start_update',
-                'toggle_live_update', 'clear_update', 'poll_update', 
+                'toggle_live_update', 'clear_update', 'poll_update',
                 'countdown_update', 'appendRun');
             this.table_view = null;
             this.pager = new PaginatedView({collection: this.collection, el:$("#pager")});
@@ -227,7 +227,7 @@ $(function(){
                 this.clear_update();
                 this.$("#live_button").addClass('btn-success').text('Auto Update');
                 this.$("#update_status").text('Page is static until refreshed');
-                
+
             } else {
                 this.start_update();
                 this.$("#live_button").removeClass('btn-success').text('Stop Updates');
@@ -383,7 +383,7 @@ $(function(){
 					sortable : false,
 					width : '5%',
 					template : kendo.template($("#usableSequenceColumnTemplate").html())
-				}], 
+				}],
 				dataBound: function(e){
 					function clickHandler(that) {
 						function clickHandlerSuccess(_that, _attributes){
@@ -400,16 +400,16 @@ $(function(){
 			                url: url,
 			                type: 'PATCH',
 			                data: JSON.stringify(attributes),
-			                contentType: 'application/json', 
+			                contentType: 'application/json',
 			                success: clickHandlerSuccess(that, attributes)
 			            });
 			            url = null;
 			            attributes = null;
 					};
-					
+
 					$('.toggle-star').click(function(e){e.preventDefault();clickHandler($(this));});
 					$('.review-plan').click(review_plan);
-					
+
 					$('body div.tooltip').remove();
 					initTooltip(this.content);
 					// this.content.bind("DOMMouseScroll", hideTooltip(this.content)).bind("mousewheel", hideTooltip(this.content))
@@ -418,7 +418,7 @@ $(function(){
 				requestStart: function(e) {
 					$("#main_table").find('[rel="tooltip"]').tooltip('hide');
 				}
-			});             
+			});
         },
 
         view_table: function () {

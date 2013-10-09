@@ -1,7 +1,11 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
 from django.conf import settings
-from django.conf.urls.defaults import patterns, include
+try:
+    from django.conf.urls import patterns, url, include
+except ImportError:
+    # Compat Django 1.4
+    from django.conf.urls.defaults import patterns, url, include
 
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
 
@@ -20,8 +24,12 @@ urlpatterns = patterns(
     (r'^data/', include('iondb.rundb.data.urls')),
     (r'^monitor/', include('iondb.rundb.monitor.urls')),
     (r'^plan/', include('iondb.rundb.plan.urls')),
+    (r'^sample/', include('iondb.rundb.sample.urls')),
     (r'^report/', include('iondb.rundb.report.urls')),
     (r'^rundb/', include('iondb.rundb.urls')),
+    # From extra/
+    url(r'^news/$', 'iondb.rundb.extra.views.news', name="news"),
+    # Admin
     (r'^admin/doc/', include('django.contrib.admindocs.urls')),
     (r'^admin/manage/$', 'iondb.rundb.admin.manage'),
     (r'^admin/network/$', 'iondb.rundb.admin.network'),
@@ -36,8 +44,11 @@ urlpatterns = patterns(
     (r'^admin/updateOneTouch/ot_log$', 'iondb.rundb.admin.ot_log'),
     (r'^admin/update/install_log$', 'iondb.rundb.admin.install_log'),
     (r'^admin/update/install_lock$', 'iondb.rundb.admin.install_lock'),
+    (r'^admin/update/version_lock/(?P<enable>[\w\.]+)', 'iondb.rundb.admin.version_lock'),
+    (r'^admin/experiment/exp_redo_from_scratch/$', 'iondb.rundb.admin.exp_redo_from_scratch'),
     (r'^admin/', include(admin.site.urls)),
     (r'^(?P<urlpath>output.*)$', serve_wsgi_location),
+    (r'^(?P<urlpath>chef_logs.*)$', serve_wsgi_location),
 )
 urlpatterns.extend(login_patterns)
 urlpatterns.extend(staticfiles_urlpatterns())
@@ -53,4 +64,3 @@ if settings.TEST_INSTALL:
              'django.views.static.serve',
              {'document_root':path.join(path.dirname(settings.MEDIA_ROOT),
                                                      "testreports")})))
-

@@ -1,12 +1,13 @@
 <!DOCTYPE html>
 <html><!-- 2.2 and lower legacy report -->
 <head>
+{% load static from staticfiles %}
   <!--[if IE]>
-    <link href='/site_media/jquery/js/tipTipX/jquery.tipTipX-ie.css' rel='stylesheet' rel='stylesheet' type='text/css' />
+    <link href='{% static "jquery/js/tipTipX/jquery.tipTipX-ie.css"%}' rel='stylesheet' rel='stylesheet' type='text/css' />
   <![endif]-->
-  <link href="/site_media/stylesheet.css" rel="stylesheet" type="text/css" />
-  <link href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" type="text/css" rel="stylesheet"  />
-  <link href="/site_media/jquery/js/tipTipX/jquery.tipTipX.css" rel="stylesheet" type="text/css"/>
+  <link href="{% static "stylesheet.css"%}" rel="stylesheet" type="text/css" />
+  <link href="{% static "jquery/css/aristo/jquery-ui-1.8.7.custom.css"%}" type="text/css" rel="stylesheet"  />
+  <link href="{% static "jquery/js/tipTipX/jquery.tipTipX.css"%}" rel="stylesheet" type="text/css"/>
   <!-- This is just a subset of boot-strap needed to display the tab row -->
   <style type="text/css">
     body {
@@ -96,7 +97,7 @@
       border-bottom-color: transparent;
     }
   </style>
-  <script src="/site_media/jquery/js/jquery-1.7.1.min.js"></script>
+  <script src="{% static "jquery/js/jquery-1.7.1.min.js"%}"></script>
   <title>{% if base_site_name.strip != "" %}{{ base_site_name }} - {% endif %}Torrent Browser</title>
 </head>
 <body>
@@ -129,13 +130,13 @@
     </div>
   </div>
 
-  <script src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
-  <script src="/site_media/jquery/js/tipTipX/jquery.tipTipX.js"></script>
-  <script src="/site_media/scripts.js"></script>
-  <script src="/site_media/detectmobilebrowser.js"></script>
-  <script src="/site_media/js/underscore.js"></script>
-  <script src="/site_media/js/backbone.js"></script>
-  <script src="/site_media/js/messagebox.js"></script>
+  <script src="{% static "jquery/js/jquery-ui-1.8.13.min.js"%}"></script>
+  <script src="{% static "jquery/js/tipTipX/jquery.tipTipX.js"%}"></script>
+  <script src="{% static "scripts.js"%}"></script>
+  <script src="{% static "detectmobilebrowser.js"%}"></script>
+  <script src="{% static "js/underscore.js"%}"></script>
+  <script src="{% static "js/backbone.js"%}"></script>
+  <script src="{% static "js/messagebox.js"%}"></script>
   <script>
     $(document).ready(function () {
       $().tipTipDefaults({ delay: 0 });

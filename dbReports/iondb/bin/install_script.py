@@ -141,7 +141,7 @@ def add_backupconfig():
         bk.save()
         print 'BackupConfig added'
 
-def add_chips():
+def add_chips_obsolete():
     from iondb.utils.default_chip_args import default_chip_args
     '''Sets the per chip default analysis args into the `chips` table in the database.  '''
         
@@ -856,13 +856,6 @@ if __name__=="__main__":
         cursor.close()
     except:
         print 'No database found'
-        print traceback.format_exc()
-        sys.exit(1)
-
-    try:
-        add_chips()
-    except:
-        print 'Adding Chips Failed'
         print traceback.format_exc()
         sys.exit(1)
 

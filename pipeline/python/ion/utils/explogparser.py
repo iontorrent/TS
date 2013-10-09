@@ -170,6 +170,8 @@ def getparameter(parameterfile=None):
         else:
            env['report_type'] = 'composite'
 
+    env['username'] = EXTERNAL_PARAMS.get('username')
+
     return env, warnings
 
 def getparameter_minimal(parameterfile=None):

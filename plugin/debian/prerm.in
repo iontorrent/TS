@@ -5,11 +5,19 @@ set -e
 
 case "$1" in
     upgrade|remove)
-    
+
     # Ensure these plugins are no longer present in any system
-    rm -rf /results/plugins/IonReporterUploader
-    rm -rf /results/plugins/combineAlignments
-    
+    rm -rf @ION_INSTALL_PREFIX@/plugins/IonReporterUploader
+    rm -rf @ION_INSTALL_PREFIX@/plugins/combineAlignments
+
+    # Clean up auto generated files
+    if [ -d @ION_INSTALL_PREFIX@/plugins ]; then
+        find @ION_INSTALL_PREFIX@/plugins -name \*.pyc -exec rm -f {} \;
+    fi
+
+    # Only remove if it is empty!
+    rmdir @ION_INSTALL_PREFIX@/plugins/scratch || true
+
     ;;
 esac
 

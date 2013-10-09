@@ -14,6 +14,7 @@ ChipIdDecodeArrayType ChipIdDecoder::chip_id_str_lookup_array[] =
   { "318", ChipId318    },
   { "314", ChipId314    },
   { "900", ChipId900    },
+  { "910", ChipId910    },
   { NULL,   ChipIdUnknown },
 };
 

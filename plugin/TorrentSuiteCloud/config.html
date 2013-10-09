@@ -1,14 +1,16 @@
+<!DOCTYPE html>
 <html>
   <head>
     <!-- java script required for interacting with the RESTful API -->
     <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
-    <script type="text/javascript" src="/pluginMedia/IonCloud/bootstrap-scrollspy.js"></script>
-    <link href="/pluginMedia/IonCloud/bootstrap.min.css" rel="stylesheet">
+    <script type="text/javascript" src="/pluginMedia/TorrentSuiteCloud/bootstrap-scrollspy.js"></script>
+    <link href="/pluginMedia/TorrentSuiteCloud/bootstrap.min.css" rel="stylesheet">
 
     <!-- page style -->
     <style type='text/css'>
       #formwrap {
        line-height: 2em;
+     background: #eef;
        margin: 10px;
        padding: 10px;
        height: 130px;
@@ -36,35 +38,44 @@
         type: "GET",
         async: false,
         success:function(data){
-         //get the plugin data
-         pluginGET = data;
+          //get the plugin data
+          pluginGET = data;
 
-        //delete the resource_uri
-        delete pluginGET.resource_uri;
+          //delete the resource_uri
+          delete pluginGET.resource_uri;
 
-         $.each(pluginGET.config, function(key,val){
-          //set the value of the html object ftp_server
-          if(key == "ip"){
-           document.getElementById("ip").value = val;
-          }
+          $.each(pluginGET.config, function(key,val){
+            console.log(key+"->"+val);
+            if(key == "ip"){
+             document.getElementById("ip").value = val;
+            }
 
-          //set the vlaue of user_name
-          else if(key == "user_name"){
-           document.getElementById("user_name").value = val;
-          }
+            //set the vlaue of user_name
+            else if(key == "user_name"){
+             document.getElementById("user_name").value = val;
+            }
 
-          //set the vlaue of user_password
-          else if(key == "user_password"){
-           document.getElementById("user_password").value = val;
-          }
+            //set the vlaue of user_password
+            else if(key == "user_password"){
+             document.getElementById("user_password").value = val;
+            }
 
-          //set the vlaue of upload path
-          else if(key == "upload_path"){
-           document.getElementById("upload_path").value = val;
-          }
-         });
+            //set the value of upload_path
+            else if(key == "upload_path"){
+             document.getElementById("upload_path").value = val;
+            }
+
+            //set the value of thumbnailonly
+            else if(key == "thumbnailonly"){
+              if (val == "off") {
+                $("#thumbnailonly").prop('checked', false);
+              } else {
+                $("#thumbnailonly").prop('checked', true);
+              }
+            }
+          });
         }
-       });
+      });
 
         //if nothing has been provided for path and user name, let's fill that out
         if(document.getElementById("user_name").value == ""){
@@ -78,51 +89,58 @@
 
       //turn the html objects into json objects
       $(function() {
-       $.fn.serializeObject = function(){
-        var o = {};
-        var a = this.serializeArray();
+          $.fn.serializeObject = function(){
+          var o = {};
+          var a = this.serializeArray();
+          a = a.concat(
+            jQuery('#pluginconfig input[type=checkbox]:not(:checked)').map(
+                    function() {
+                        return {"name": this.name, "value": "off"}
+                    }).get());
 
-        $.each(a, function() {
-         if (o[this.name] != null) {
-          if (!o[this.name].push) {
-           o[this.name] = [o[this.name]];
-          }
+          console.log(a)
+          $.each(a, function() {
+            console.log(this.name+" : "+this.value);
 
-          o[this.name].push(this.value || '');
-         } else {
-           o[this.name] = this.value || '';
-         }
-        });
+            if (o[this.name] != null) {
+              if (!o[this.name].push) {
+                o[this.name] = [o[this.name]];
+              }
+              o[this.name].push(this.value || '');
+            } else {
+              o[this.name] = this.value || '';
+            }
+          });
 
-       return o;
-      };
+          return o;
+        };
 
       //use the RESTful API to post the json objects to the plugin
       $(function() {
        $('#postbutton').click(function() {
+
         if(document.getElementById("ip").value == ""){
           alert("Please enter the IP address for your Torrent Server Cloud account.");
           return(false);
         }
 
-      if(document.getElementById("user_name").value == ""){
-          alert("Please enter the user name");
-          return(false);
-      }
+        if(document.getElementById("user_name").value == ""){
+            alert("Please enter the user name");
+            return(false);
+        }
 
-      if(document.getElementById("user_password").value == ""){
-          alert("Please enter the user password");
-          return(false);
-      }
+        if(document.getElementById("user_password").value == ""){
+            alert("Please enter the user password");
+            return(false);
+        }
 
-      if(document.getElementById("upload_path").value == ""){
-          alert("Please enter the upload path");
-          return(false);
-      }
+        if(document.getElementById("upload_path").value == ""){
+            alert("Please enter the upload path");
+            return(false);
+        }
 
         <!-- this form name "pluginconfig" should match the one used in the html page-->
         obj =  $('#pluginconfig').serializeObject();
-
         //use the data retreived from the GET and modify it only the config key is changed
         pluginGET.config = obj;
         pluginAPIJSON = JSON.stringify(pluginGET);
@@ -155,7 +173,8 @@
 	  <tr><td>User Name (default ionadmin): </td><td><input size="50" type="text" id="user_name" name="user_name" value=""/></td></tr>
 	  <tr><td>Password: </td><td><input size="50" type="password" id="user_password" name="user_password" value=""/></td></tr>
 	  <tr><td>Upload Path (default /results/uploads/): </td><td><input size="50" id="upload_path" name="upload_path" value=""/></td></tr>
-	</table>
+      <tr><td align=right>Thumbnail-only: </td><td><input type="checkbox" size="50" id="thumbnailonly" name="thumbnailonly" title="Only affects Proton datasets"/></td></tr>
+    </table>
       </form><p>
 
       <input id="postbutton" type="submit" value="Submit">

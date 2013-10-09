@@ -3,7 +3,8 @@
 #include <Rcpp.h>
 #include "DPTreephaser.h"
 
-RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rcf, SEXP Rie, SEXP Rdr, SEXP Rbasecaller)
+RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle,
+		                   SEXP Rcf, SEXP Rie, SEXP Rdr, SEXP Rbasecaller, SEXP RterminatorChemistry)
 {
   SEXP ret = R_NilValue;
   char *exceptionMesg = NULL;
@@ -16,6 +17,7 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rc
     double ie          = Rcpp::as<double>(Rie);
     double dr          = Rcpp::as<double>(Rdr);
     string basecaller  = Rcpp::as<string>(Rbasecaller);
+    unsigned int isTerminatorRun     = Rcpp::as<int>(RterminatorChemistry);
 
     ion::FlowOrder flow_order(flowCycle, flowCycle.length());
     unsigned int nFlow = signal.cols();
@@ -44,11 +46,13 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rc
       vector <float> sigVec(nFlow);
       BasecallerRead read;
       DPTreephaser dpTreephaser(flow_order);
-      if (basecaller == "dp-treephaser")
-        dpTreephaser.SetModelParameters(cf, ie, dr);
-      else
-        dpTreephaser.SetModelParameters(cf, ie, 0); // Adaptive normalization
+      dpTreephaser.SetTerminatorChemistry((isTerminatorRun>0));
 
+      // In contrast to pipeline, we always use droop here.
+      // To have the same behavior of treephaser-swan as in the pipeline, supply dr=0
+      dpTreephaser.SetModelParameters(cf, ie, dr);
+
+      // Main loop iterating over reads and solving them
       for(unsigned int iRead=0; iRead < nRead; iRead++) {
 
         for(unsigned int iFlow=0; iFlow < nFlow; iFlow++)
@@ -89,7 +93,7 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle, SEXP Rc
 
 // ======================================================================
 RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Rie, SEXP Rdr,
-		SEXP Rmaxflows, SEXP RgetStates)
+		SEXP Rmaxflows, SEXP RgetStates, SEXP RterminatorChemistry)
 {
   SEXP ret = R_NilValue;
   char *exceptionMesg = NULL;
@@ -101,8 +105,9 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
     double cf          = Rcpp::as<double>(Rcf);
     double ie          = Rcpp::as<double>(Rie);
     double dr          = Rcpp::as<double>(Rdr);
-    unsigned int max_flows      = Rcpp::as<int>(Rmaxflows);
-    unsigned int get_states     = Rcpp::as<int>(RgetStates);
+    unsigned int max_flows       = Rcpp::as<int>(Rmaxflows);
+    unsigned int get_states      = Rcpp::as<int>(RgetStates);
+    unsigned int isTerminatorRun = Rcpp::as<int>(RterminatorChemistry);
 
     ion::FlowOrder flow_order(flowCycle, flowCycle.length());
     unsigned int nFlow = flow_order.num_flows();
@@ -117,7 +122,10 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
     BasecallerRead read;
     DPTreephaser dpTreephaser(flow_order);
     dpTreephaser.SetModelParameters(cf, ie, dr);
+    dpTreephaser.SetTerminatorChemistry((isTerminatorRun>0));
     unsigned int max_length = (2*flow_order.num_flows());
+    // XXX
+    //cout << "Simulate:: Terminator Chemistry Run: " << isTerminatorRun << endl;
 
     for(unsigned int iRead=0; iRead<nRead; iRead++) {
       string mySequence = Rcpp::as<std::string>(sequences(iRead));

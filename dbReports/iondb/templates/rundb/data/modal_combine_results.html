@@ -1,3 +1,4 @@
+{% load static from staticfiles %}
 <div id="modal_combine_results" title="" class="modal hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -15,9 +16,8 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="mark_duplicates" class="control-label"> Mark PCR duplicates
-                        <br>
-                        (beta feature)</label>
+                    <label for="mark_duplicates" class="control-label"> Mark as Duplicates Reads
+                        <br></label>
                     <div class="controls">
                         <input name="mark_duplicates" id="mark_duplicates" type="checkbox">
                     </div>
@@ -79,9 +79,9 @@
         <a class="btn btn-primary hide" href="#">Launch</a>
     </div>
 
-    <script type="text/javascript" src="/site_media/resources/uni-form/js/uni-form-validation.jquery.js"></script> <!-- Using updated uni-form JS -->
-    <script type="text/javascript" src="/site_media/jquery/js/jquery.form.js"></script>
-    <script type="text/javascript" src="/site_media/runliveness.min.js"></script>
+    <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script> <!-- Using updated uni-form JS -->
+    <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script>
+    <script type="text/javascript" src="{% static "runliveness.min.js"%}"></script>
     <script type="text/javascript">
     TB.data.modal_combine_results.ready('{{method}}');
     </script>

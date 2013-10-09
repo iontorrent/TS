@@ -128,7 +128,7 @@ public:
     }
   }
 
-  void CalcIndividualT0(std::vector<float> &t0, int useMeshNeighbors) {
+  void CalcIndividualT0(std::vector<float> &t0, int useMeshNeighbors, int withinGrid = 0) {
     std::vector<double> dist(7);
     std::vector<float *> values;
 
@@ -137,7 +137,12 @@ public:
     for (size_t rowIx = 0; rowIx < mRow; rowIx++) {
       for (size_t colIx = 0; colIx < mCol; colIx++) {
         int idx = rowIx * mCol + colIx;
-        mT0.GetClosestNeighbors(rowIx, colIx, useMeshNeighbors, dist, values);
+        if (withinGrid == 0) {
+          mT0.GetClosestNeighbors(rowIx, colIx, useMeshNeighbors, dist, values);
+        }
+        else {
+          mT0.GetClosestNeighborsWithinGrid(rowIx, colIx, useMeshNeighbors, withinGrid, withinGrid, dist, values);
+        }
         double distWeight = 0;
         double startX = 0;
         for (size_t i = 0; i < values.size(); i++) {

@@ -66,6 +66,8 @@ void  PerFlowGaussNewtonFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem,
   float minAmpl,
   float maxKmult,
   float minKmult, 
+  float adjKmult,
+  bool fitKmult,
   int realFnum,
   int num_beads, // 4
   int num_frames, // 4
@@ -73,6 +75,35 @@ void  PerFlowGaussNewtonFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem,
 //  int * pMonitor,
   int sId = 0
 ); 
+
+extern "C"
+void  PerFlowRelaxKmultGaussNewtonFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
+  // inputs
+  float* fg_buffers_base, // NxF
+  float* emphasis,
+  float* nucRise, 
+  float * pBeadParamsBase, //N
+  bead_state* pState,
+  // scratch space in global memory
+  float* err, // NxF
+  float* fval, // NxF
+  float* tmp_fval, // NxF
+  float* jac, // NxF 
+  float* meanErr,
+  // other inputs
+  float minAmpl,
+  float maxKmult,
+  float minKmult, 
+  float adjKmult,
+  bool fitKmult,
+  int realFnum,
+  int num_beads, // 4
+  int num_frames, // 4
+  bool useDynamicEmphasis,
+//  int * pMonitor,
+  int sId = 0
+); 
+
 
 extern "C"
 void  PerFlowHybridFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
@@ -93,6 +124,8 @@ void  PerFlowHybridFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cuda
   float minAmpl,
   float maxKmult,
   float minKmult,  
+  float adjKmult,
+  bool fitKmult,
   int realFnum,
   int num_beads, // 4
   int num_frames, // 4
@@ -129,6 +162,8 @@ void  PerFlowLevMarFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cuda
   float minAmpl,
   float maxKmult,
   float minKmult, 
+  float adjKmult,
+  bool fitKmult,
   int realFnum,
   int num_beads, // 4
   int num_frames, // 4
@@ -352,13 +387,28 @@ void ExponentialTailFitting_Wrapper(
 );
 
 extern "C"
+void ProjectionSearch_Wrapper(
+  dim3 grid, 
+  dim3 block, 
+  int smem, 
+  cudaStream_t stream,
+  float* fg_buffers, // FLxFxN (already background and xtalk corrected if applicable))
+  float* emphasisVec, // FxLAST_POISSON_TABLE_COL
+  float* nucRise, // ISIG_SUB_STEPS_MULTI_FLOW*F*FL 
+  float* pBeadParamsBase,
+  float* fval, // NxF
+  int realFnum, // starting flow number in block of 20 flows
+  int num_beads,
+  int num_frames,
+  int sId
+);
+
+extern "C"
 void transposeData_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t stream,float *dest, float *source, int width, int height);
 
 ///////// Transpose Kernel
 extern "C"
 void transposeDataToFloat_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t stream,float *dest, FG_BUFFER_TYPE *source, int width, int height);
-
-
 
 
 #endif // STREAMINGKERNELS_H

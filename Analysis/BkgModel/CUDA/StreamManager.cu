@@ -1,5 +1,4 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
-
 // patch for CUDA5.0/GCC4.7
 #undef _GLIBCXX_ATOMIC_BUILTINS
 #undef _GLIBCXX_USE_INT128
@@ -16,6 +15,10 @@
 #include "SignalProcessingFitterQueue.h"
 #include "SingleFitStream.h"
 #include "MultiFitStream.h"
+
+
+#define MAX_EXECUTION_ERRORS 10
+#define NUM_ERRORS_TOGGLE_VERBOSE 5
 
 using namespace std;
 
@@ -142,6 +145,10 @@ WorkerInfoQueueItem * cudaSimpleStreamExecutionUnit::getItemAndReset()
   return NULL;
 }*/
 
+void cudaSimpleStreamExecutionUnit::setVerbose(bool v)
+{
+	_verbose = v;
+}
 
 bool cudaSimpleStreamExecutionUnit::Verbose()
 {
@@ -190,6 +197,19 @@ int cudaSimpleStreamExecutionUnit::getCompute()
   return _computeVersion;
 }
 
+int cudaSimpleStreamExecutionUnit::getNumFrames()
+{
+  int n=0;
+  if(_myJob.ValidJob()) n = _myJob.getNumFrames(); 
+  return n;
+}
+
+int cudaSimpleStreamExecutionUnit::getNumBeads()
+{
+  int n=0;
+  if(_myJob.ValidJob()) n = _myJob.getNumBeads(); 
+  return n;
+}
 
 
 
@@ -217,7 +237,12 @@ cudaSimpleStreamManager::cudaSimpleStreamManager( WorkerInfoQueue * inQ, int num
   _maxNumStreams = numStreams;
   allocateResources();
   _tasks = 0;
- 
+  _sumBeads=0;
+  _maxBeads=0;
+  _sumFrames=0;
+  _maxFrames=0;
+  _executionErrorCount=0;
+
 
 }
 
@@ -226,14 +251,15 @@ cudaSimpleStreamManager::cudaSimpleStreamManager( WorkerInfoQueue * inQ, int num
 cudaSimpleStreamManager::~cudaSimpleStreamManager()
 {
   
-  freeResources(); 
   
   ostringstream outputStr;
    
   outputStr << getLogHeader() << " handled " << _tasks <<" tasks."<< endl;
-
+  outputStr << getLogHeader() << " Beads max: "<< _maxBeads <<" avg: " << _sumBeads/_tasks << " Frames max: " <<  _maxFrames << " avg: " << _sumFrames/_tasks << endl; 
  for ( map< string, TimeKeeper>::iterator iter = _timer.begin(); iter != _timer.end(); ++iter )
-      outputStr << getLogHeader() << " " << iter->first << " finished: " << iter->second.getJobCnt() << " in " << iter->second.getTime() << " time/job: " << iter->second.getAvgTime() << endl;
+      outputStr << getLogHeader() << " " << iter->first << " finished: " << iter->second.getJobCnt() << " in " << iter->second.getTime() << " time/job: " << iter->second.getAvgTime() << " (exceptions: " <<  iter->second.getErrorCnt()<< ")" << endl;
+
+  freeResources(); 
 
   cout << outputStr.str();
 
@@ -246,21 +272,24 @@ void cudaSimpleStreamManager::allocateResources()
 {
 
   size_t maxHostSize = getMaxHostSize();
+  //allocate a lot of frames to handle exponential tail fit
   size_t maxDeviceSize = getMaxDeviceSize(MAX_PREALLOC_COMPRESSED_FRAMES_GPU);
 
+  if(_resourcePool !=NULL) delete _resourcePool;
+  _resourcePool = NULL;
 
   try{
     _resourcePool = new cudaResourcePool(maxHostSize,maxDeviceSize,_maxNumStreams); // throws cudaException
     cout << getLogHeader() << " one Stream Execution Unit requires "<< maxHostSize/(1024.0*1024.0)  << "MB Host and " << maxDeviceSize/(1024.0*1024.0) << "MB Devcie memory" << endl;
     int n = getNumStreams();
-    if (n > 0){ cout <<  getLogHeader() <<" successfully aquired resources for " << n << " Stream Execution Units" <<endl;
+    if (n > 0){ cout <<  getLogHeader() <<" successfully acquired resources for " << n << " Stream Execution Units" <<endl;
     }
     _GPUerror = false;
 
   }
   catch(exception &e){
     cout << e.what() << endl;
-    cout << getLogHeader() << " No StreamResources could be aquired! retry pending. jobs will he handled by CPU for now!" << endl;
+    cout << getLogHeader() << " No StreamResources could be acquired! retry pending. jobs will he handled by CPU for now!" << endl;
     _GPUerror = true;
     _resourcePool = NULL;
   }
@@ -276,7 +305,12 @@ void cudaSimpleStreamManager::freeResources()
 
   if(_item.finished && _inQ !=NULL){
     cout << getLogHeader() << " signaling Queue that all jobs and cleanup completed" << endl;
-    _inQ->DecrementDone();
+    try{
+      _inQ->DecrementDone();
+    }
+    catch(...){
+      cout << getLogHeader() << " signal to Queue caused exception, Queue seems to be destroyed already!" << endl;
+    }
   }
 }
 
@@ -318,14 +352,16 @@ void cudaSimpleStreamManager::moveToCPU()
   if(!_item.finished && _item.private_data != NULL ){ 
     if(_verbose) cout << getLogHeader()<< " job received, try to reallocate resources!" << endl;
     //try to allocate and recover before handing job to CPU
-    if(_resourcePool == NULL){
-      allocateResources();
-      if( getNumStreams()  > 0){ 
-        cout << getLogHeader()<< " managed to aquire streamResources, switching execution back to GPU!" << endl;
-        addSEU();
-        _GPUerror = false;
-        return;
-      }
+    if(_executionErrorCount < MAX_EXECUTION_ERRORS){
+    	if(getNumStreams() == 0 ){
+    		allocateResources();
+    	}
+    	if( getNumStreams()  > 0){
+    		cout << getLogHeader()<< " managed to acquire streamResources, switching execution back to GPU!" << endl;
+    		addSEU();
+    		_GPUerror = false;
+    		return;
+    	}
     }
     if(_verbose) cout << getLogHeader() << " handing job on to CPU queue" << endl;
     BkgModelWorkInfo *info = (BkgModelWorkInfo *) (_item.private_data);
@@ -377,20 +413,21 @@ void cudaSimpleStreamManager::addSEU()
         default:        
           if(_verbose) cout << getLogHeader()<< " received unknown item" << endl;
           info->pq->GetCpuQueue()->PutItem(_item); // if no matching SEU put to CpuQ
-          _inQ->DecrementDone(); // signale to Q that a job is completed
+          _inQ->DecrementDone(); // Signal to Q that a job is completed
       }
-      //set the compute version accorsitn to the device the streamManager is initiated for 
+      //set the compute version according to the device the streamManager is initiated for
       tmpSeu->setCompute(_computeVersion);
     }
     catch(cudaException &e){
-      if(_resourcePool->getNumStreams() == 0){ 
+      if(getNumStreams() == 0){ 
         cout << " *** ERROR DURING STREAM UNIT CREATION, handing job back to CPU" << endl;
          info->pq->GetCpuQueue()->PutItem(_item); // if no matching SEU put to CpuQ
-        _inQ->DecrementDone(); // signale to Q that a job is completed
+        _inQ->DecrementDone(); // Signal to Q that a job is completed
         _GPUerror = true;
       }else{ 
+        cout << " *** ERROR DURING STREAM UNIT CREATION, retry on GPU" << endl;
          info->pq->GetGpuQueue()->PutItem(_item); // if no matching SEU put to CpuQ
-        _inQ->DecrementDone(); // signale to Q that a job is completed
+        _inQ->DecrementDone(); // Signal to Q that a job is completed
       }
 
 
@@ -409,13 +446,14 @@ void cudaSimpleStreamManager::addSEU()
 void cudaSimpleStreamManager::executeSEU()
 {
   bool workDone = false;
+  bool errorOccured = false; 
 
   for(int i=(_activeSEU.size()-1); i >= 0 ; i--){ // iterate backwards for easy delete
     if(_activeSEU[i] != NULL){ // saftey, should not be possible to be NULL
       try{
          workDone = !(_activeSEU[i]->execute());
       }
-      catch(cudaException &e){ 
+      catch(cudaAllocationError &e){ 
                 //if execution exception, get item and habd it back tio CPU
         //cout << e.what() << endl;
         if(_verbose) e.Print();
@@ -423,26 +461,69 @@ void cudaSimpleStreamManager::executeSEU()
         _item = _activeSEU[i]->getItem(); 
         BkgModelWorkInfo *info = (BkgModelWorkInfo *) (_item.private_data);
      
-        if(_resourcePool->getNumStreams() == 0){ 
-          cout << getLogHeader() << "*** ERROR DURING STREAM EXECUTION, handing incomplete Job back to CPU for retry" << endl;
+        if(getNumStreams() == 0){ 
+          cout << getLogHeader() << "*** CUDA RESOURCE POOL EMPTY , handing incomplete Job back to CPU for retry" << endl;
           info->pq->GetCpuQueue()->PutItem(_item); // if no matching SEU put to CpuQ
           _GPUerror = true;
         }else{ 
-          cout << getLogHeader() << "*** ERROR DURING STREAM EXECUTION, " << _resourcePool->getNumStreams() << " StreamResources still avaiable, retry pending" << endl;
+          cout << getLogHeader() << "*** CUDA STREAM RESOURCE COULD NOT BE ALLOCATED, " << getNumStreams() << " StreamResources still avaiable, retry pending" << endl;
           info->pq->GetGpuQueue()->PutItem(_item); // if no matching SEU put to CpuQ
         }
-        workDone = true; // mark work as done so SEU gets cleaned up
-        _tasks--; // decrease task count for GPU
+        workDone = true ; // maek work as done so SEU gets cleaned up
+        errorOccured = true;
+        
 
       } // end catch block
 
+      catch(cudaException &e){ 
+                //if execution exception, get item and habd it back tio CPU
+        //cout << e.what() << endl;
+        e.Print();
+        _item = _activeSEU[i]->getItem();
+
+        BkgModelWorkInfo *info = (BkgModelWorkInfo *) (_item.private_data);
+     
+        cout << getLogHeader() << "*** ERROR DURING STREAM EXECUTION, handing incomplete Job back to CPU for retry" << endl;
+        info->pq->GetCpuQueue()->PutItem(_item); // if no matching SEU put to CpuQ
+        workDone = true; // mark work as done so SEU gets cleaned up
+        errorOccured = true;
+        _executionErrorCount++;
+        if(e.getCudaError() == cudaErrorLaunchFailure)
+        {
+        	cout << getLogHeader() << "encountered Kernel Launch Failure. Stop retrying, set GPU error state" << endl;
+        	cout << getNumStreams() << " StreamResources available" << endl;
+        	_activeSEU[i]->printStatus();
+        	_executionErrorCount = MAX_EXECUTION_ERRORS + 1;
+        	_GPUerror = true;
+        }else{
+        	if(_executionErrorCount == NUM_ERRORS_TOGGLE_VERBOSE){
+        		cout << getLogHeader() << "encountered " << NUM_ERRORS_TOGGLE_VERBOSE << " errors, turning on verbose mode for debugging" << endl;
+        		setVerbose(true);
+        		cudaSimpleStreamExecutionUnit::setVerbose(true);
+        	}
+        	if(_executionErrorCount >= MAX_EXECUTION_ERRORS){
+        		cout << getLogHeader() << "encountered " << MAX_EXECUTION_ERRORS << " errors. Stop retrying, set GPU error state" << endl;
+        		setVerbose(false);
+        		cudaSimpleStreamExecutionUnit::setVerbose(false);
+        		_GPUerror = true;
+        	}
+        }
+      } // end catch block
+
+  
       if(workDone){
-        _timer[_activeSEU[i]->getName()].stop();
+        if(!errorOccured){
+          _timer[_activeSEU[i]->getName()].stop();
+          recordBeads(_activeSEU[i]->getNumBeads());
+          recordFrames(_activeSEU[i]->getNumFrames());
+          _tasks++;
+        }else{
+          _timer[_activeSEU[i]->getName()].stopAfterError();
+        }
         delete _activeSEU[i]; // destroy SEU object
         _activeSEU.erase(_activeSEU.begin()+i); //delete SEU from active list
         _inQ->DecrementDone(); // signale to Q that a job is completed
-        _tasks++;
-      }
+      }      
     }
   }
 }
@@ -471,10 +552,27 @@ bool cudaSimpleStreamManager::DoWork()
       // and clean up when a SEU is don
       executeSEU();
       // as long as no finish job received and there are still active SEUs 
-      // in the list we are not none yet
+      // in the list we are not done yet
       notDone =  (_activeSEU.empty() && _item.finished)?(false):(true);
   }
   return false;
+}
+
+  //bookkeeping
+void cudaSimpleStreamManager::recordBeads(int n)
+{
+  _sumBeads+=n;
+  _maxBeads = (_maxBeads>n)?(_maxBeads):(n);
+}
+void cudaSimpleStreamManager::recordFrames(int n)
+{
+  _sumFrames+=n;
+  _maxFrames = (_maxFrames>n)?(_maxFrames):(n);
+}
+
+void cudaSimpleStreamManager::setVerbose(bool v)
+{
+	_verbose = v;
 }
 
 string cudaSimpleStreamManager::getLogHeader()
@@ -495,6 +593,7 @@ TimeKeeper::TimeKeeper()
   _timesum = 0;
   _activeCnt = 0;
   _jobCnt = 0;
+  _errCnt = 0;
 }
 
 
@@ -512,6 +611,12 @@ void TimeKeeper::stop(){
   }
 }
 
+void TimeKeeper::stopAfterError(){
+  stop();
+  _jobCnt--;
+  _errCnt++;
+}
+
 double TimeKeeper::getTime()
 {
   return _timesum;
@@ -526,5 +631,9 @@ int TimeKeeper::getJobCnt()
   return _jobCnt;
 }
 
+int TimeKeeper::getErrorCnt()
+{
+  return _errCnt;
+}
 
 

@@ -111,7 +111,7 @@ public:
   // implementatin of stream execution methods
   int handleResults();
   void ExecuteJob();
-
+  void printStatus();
 
   static void setBeadsPerBLockMultiF(int bpb);
   static void setL1SettingMultiF(int type); // 0:sm=l1, 1:sm>l1, 2:sm<l1

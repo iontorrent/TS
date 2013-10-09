@@ -1,29 +1,38 @@
 {% extends "rundb/plan/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
 {% block extra_head %}
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/styles/wizard.css" />    
-<script type="text/javascript" src="/site_media/resources/scripts/wizard.min.js"></script>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/wizard.css"%}" />
+<script type="text/javascript" src="{% static "resources/scripts/wizard.min.js"%}"></script>
 
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />
-<script type="text/javascript" src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>  
- 
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<script type="text/javascript" src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
 
-<script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
-<link rel="stylesheet" href="/site_media/jquery/js/apprise/apprise.css" type="text/css"/>
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+
+<script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
+<link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
 
 {% endblock extra_head %}
 {% block sub-nav %}
-<li><a href="{% url plans %}">Templates</a></li>
-<li class="active"><a href="{% url planned %}">Planned Runs</a></li>
+<li><a href="{% url "planRuns" %}">Plan Runs</a></li>
+<li><a href="{% url "samplesets" %}">Samples</a></li>
+<li><a href="{% url "plans" %}">Templates</a></li>
+<li class="active"><a href="{% url "planned" %}">Planned Run List</a></li>
 {% endblock sub-nav %}
 {% block content %}
 
 <div class="content clearfix">
 	<h1 style="">Planned Runs</h1>
+	
+    <div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;" >
+    	<a id="view_all" href="{% url "planned" %}" class="active">All</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a id="view_by_template" href="{% url "planned_by_template" %}" class="";>by Template</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a id="view_by_sample" href="{% url "planned_by_sampleset" %}" class="">by Sample</a>
+    </div>
+    
 	<div id='grid'></div>
 	
 	<div class="btn-group pull-left">						
-		<a class="btn delete_selected" href="{% url delete_plan_template 0 %}" style="margin-right: 4px;">Delete Selected</a>
+		<a class="btn delete_selected" href="{% url "delete_plan_template" 0 %}" style="margin-right: 4px;">Delete Selected</a>
 	</div>
     <div class="btn-group pull-left">                       
         <a id="clear" class="btn clear_selection" > Clear Selection </a>
@@ -38,11 +47,12 @@
 						WGNM : 'appl_wholeGenome',
 						RNA : 'appl_rnaSeq',
 						AMPS_RNA : 'appl_ampliSeqRna',
-						AMPS_EXOME : 'appl_ampliSeqExome'}; 
+						AMPS_EXOME : 'appl_ampliSeqExome',
+						TARS_16S : 'appl_metagenomics'}; 
 	#
 						  
-	<span class="runTypeImageClass" rel="tooltip" title="#=TB.runTypeDescription(runType)#">
-		<img src="/site_media/resources/img/#=applications[runType]#.png" />
+	<span rel="tooltip" title="#=TB.runTypeDescription(runType)#">
+		<img src="{% static "resources/img/#=applications[runType]#.png"%}" width="24px" height="24px" />
 	</span>
 	
 </script>
@@ -72,27 +82,51 @@
 		#= sampleDisplayedName # 
 	# } #
 </script>
+
+<!--20130626-TODO -->
+<!-- //# var planRunCode = data.planShortID; #  <span><div class="shortcode128" data-barcode=data.planShortID data-href=""></div></span> -->
+<script id="PlanShortIdColumnTemplate" type="text/x-kendo-template">
+	#= data.planShortID #
+</script>
+
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
 <div class="btn-group">
 	# var _id = id;# 
-	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="/site_media/resources/img/gear-active.png" border="0"><span class="caret"></span></a>
+	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
-			<a href="#= '{% url review_plan_run 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a>
+			<a href="#= '{% url "review_plan_run" 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a>
 		</li>
 		<li>
-			<a href="#= '{% url edit_plan_run 999999 %}'.replace('999999',_id)#" class="edit-or-copy-plan">Edit</a>
+			<a href="#= '{% url "page_plan_edit_plan" 999999 %}'.replace('999999',_id)#">Edit</a>
 		</li>
 		<li>
-		<a href="#= '{% url copy_plan_run 999999 %}'.replace('999999',_id)#" class="edit-or-copy-plan">Copy</a>
+		<a href="#= '{% url "page_plan_copy_plan" 999999 %}'.replace('999999',_id)#">Copy</a>
 		</li>		
 		<li>
-			<a href="#= '{% url delete_plan_template 999999 %}'.replace('999999',_id)#" class="delete-plan">Delete</a>
+			<a href="#= '{% url "delete_plan_template" 999999 %}'.replace('999999',_id)#" class="delete-plan">Delete</a>
 		</li>
 	</ul>
 </div>	
 </script>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/planned.html.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/plan/modal_plan_wizard.html.js"></script>
-<script type="text/javascript" src="/site_media/resources/scripts/configure/plugins/modal_refresh.js"></script>
+
+<script type="text/javascript">
+	var checked_ids = [];
+</script>
+
+<!--script>
+//$(".shortcode128").each(function () {
+//	console.log("i am at planned.html shortcode128!!!");
+//	
+//	$(this).barcode(
+//			$(this).data("barcode"), 
+//			"code128", {
+//			barWidth: 2, 
+//			barHeight: 30, 
+//            bgColor: $(this).parent().parent().css("background-color") 
+//    });
+//});
+</script -->
+
+<script type="text/javascript" src="{% static "resources/scripts/plan/planned.html.js"%}"></script>
 {% endblock content %}

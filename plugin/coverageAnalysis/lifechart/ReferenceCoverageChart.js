@@ -50,6 +50,9 @@ document.write('\
 </div>\
 <div id="RC-tooltip" style="display:none">\
   <div><span id="RC-tooltip-close" title="Close" class="help-box ui-icon ui-icon-close"></span></div>\
+  <div><span id="RC-tooltip-zoomout" title="Zoom out from this region" class="help-box ui-icon ui-icon-zoomout"></span></div>\
+  <div><span id="RC-tooltip-center" title="Center view on this region" class="help-box ui-icon ui-icon-arrowthick-2-e-w"></span></div>\
+  <div><span id="RC-tooltip-zoomin" title="Zoom in on this region" class="help-box ui-icon ui-icon-zoomin"></span></div>\
   <div id="RC-tooltip-body"></div>\
 </div>\
 <div id="RC-helptext" class="helpblock" style="display:none">\
@@ -199,10 +202,15 @@ $(function () {
   });
 
   $('#RC-placeholder').dblclick(function(e) {
-    if( plotStats.numPlots <= 0 ) return;
-    var binNum = lastHoverBar.binNum;
-    if( binNum >= 0 ) {
-      hideTooltip();
+    if( zoomViewOnBin( lastHoverBar.binNum, true ) ) hideTooltip();
+  });
+
+  function zoomViewOnBin(binNum,zoomIn) {
+    // Always perform zoom out if binNum < 0
+    if( plotStats.numPlots <= 0 ) return false;
+    var overzoom = plotStats.minX > 0 || plotStats.maxX < plotStats.numPoints;
+    if( binNum >= 0 && zoomIn ) {
+      if( overzoom ) return false;
       var chr = dataTable[binNum][DataField.contig_id];
       if( plotStats.binnedChroms ) {
         var i = chr.indexOf(' - ');
@@ -213,59 +221,72 @@ $(function () {
           plotStats.zmSrtChrom = plotStats.zmEndChrom = chr;
         }
         unzoomData(); // requires file reload
-        return;
+        return true;
       }
       if( plotParams.dblCenter && plotStats.zoomChrom ) {
-        centerViewOnBin(binNum);
-        return;
+        return centerViewOnBin(binNum);
       }
       var srt = dataTable[binNum][DataField.pos_start];
       var end = dataTable[binNum][DataField.pos_end];
       zoomDataRange(chr,srt,end);
     } else if( plotStats.zoomChrom ) {
-      // check for reset of overzoom
-      if( plotStats.minX > 0 || plotStats.maxX < plotStats.numPoints ) {
+      // set zoom out range by limits of current view
+      var chr = covFilter.chrom;
+      var srt = covFilter.pos_srt;
+      var end = covFilter.pos_end;
+      // return to previous view if in over-zoom
+      if( overzoom ) {
         plotStats.minX = 0;
         plotStats.maxX = plotStats.numPoints;
         setMaxZoomXtitle(0,plotStats.maxX-1);
         updatePlot(false);
-        return;
+        return true;
+      } else if( binNum >= 0 && !zoomIn ) {
+        // override limits by selected bin if provided
+        var cbin = Math.floor(plotStats.numPoints/2);
+        var csrt = dataTable[binNum][DataField.pos_start];
+        var cend = dataTable[binNum][DataField.pos_end];
+        var csiz = cend - csrt + 1;
+        csrt -= (cbin * csiz) + 1;
+        cend += cbin * csiz;
+        if( csrt > 0 && cend <= plotStats.chromLength ) {
+          chr = dataTable[binNum][DataField.contig_id];
+          srt = csrt;
+          end = cend;
+        }
       }
-      var chr = covFilter.chrom;
-      var srt = covFilter.pos_srt;
-      var end = covFilter.pos_end;
       var siz = dblclickUnzoomFac*(end-srt+1);
       srt = Math.floor(0.5*(end+srt-siz));
-      if( srt < 1 ) srt = 1;
       end = srt + siz - 1;
-      if( end > plotStats.chromLength ) {
-        end = plotStats.chromLength;
-        srt = end - 2*siz + 1;
-        if( siz < 0 ) siz = 1;
-      }
       zoomDataRange(chr,srt,end);
     } else if( plotStats.zmSrtChrom != "" ) {
       // flag this since requires a reload to find outer contig range
       plotStats.zmOutChrom = true;
       unzoomData();
+    } else {
+      return false;
     }
-  });
+    return true;
+  }
 
   function centerViewOnBin(binNum) {
-    var chr = dataTable[binNum][DataField.contig_id];
-    var binAway = Math.floor(plotStats.numPoints/2);
-    // avoid unnessary updates
-    if( binNum == binAway ) return;
-    //if( binNum > binAway && end > plotStats.chromLength ) return;
-    //if( binNum < binAway && srt < 1 ) return;
-    var srt = dataTable[binNum][DataField.pos_start];
-    var end = dataTable[binNum][DataField.pos_end];
+    if( plotStats.numPlots <= 0 || binNum < 0 ) return false;
+    // binNum 0-based so 99 (bin#100) is center of 200 bins and 100 (bin#101) is center of 201 bins
+    var cbin = (plotStats.numPoints-1) >> 1;
+    if( binNum == cbin ) return true;
+    // check for zoomed multi-contig views
+    if( plotStats.zmSrtChrom != "" ) return false;
+    // skip for fully zoomed-out views
+    if( !plotStats.zoomChrom ) return false;
+    // to prevent zoom out view changing on re-center the current bin start position for the shift rather than it's center
+    var srt = dataTable[0][DataField.pos_start];
+    var end = dataTable[plotStats.numPoints-1][DataField.pos_end];
     var siz = end - srt + 1;
-    srt -= binAway * siz;
-    end += binAway * siz;
-    if( srt < 1 || end > plotStats.chromLength ) return;
-    hideTooltip();
+    srt += (binNum - cbin) * (siz / plotStats.numPoints);
+    end = srt + siz - 1;
+    var chr = dataTable[binNum][DataField.contig_id];
     zoomDataRange(chr,srt,end);
+    return true;
   }
 
   //$('#RC-chart').noContext();
@@ -475,16 +496,14 @@ $(function () {
       plotStats.minY = options.yaxes[0].min = ranges.yaxis.from;
       plotStats.maxY = options.yaxes[0].max = ranges.yaxis.to;
     }
-    zoomToRange( ranges.xaxis.from, ranges.xaxis.to );
+    zoomViewToBinRange( Math.floor(ranges.xaxis.from), Math.floor(ranges.xaxis.to) );
   });
 
-  function zoomToRange(xLeft,xRight) {
-    lastHoverBar.postZoom = true;
-    // determine if zoom requires new binning request
-    var binSrt = Math.floor(xLeft);
-    var binEnd = Math.floor(xRight);
+  function zoomViewToBinRange(binSrt,binEnd) {
     // correct for selections dragged beyond end of last bin
     if( binEnd >= plotStats.numPoints ) binEnd = plotStats.numPoints - 1;
+    lastHoverBar.postZoom = true;
+    // deal with range zooms across multiple and single contig views
     if( plotStats.multiChrom ) {
       plotStats.zmSrtChrom = dataTable[binSrt][DataField.contig_id];
       plotStats.zmEndChrom = dataTable[binEnd][DataField.contig_id];
@@ -498,9 +517,17 @@ $(function () {
           plotStats.zmEndChrom = plotStats.zmEndChrom.substr(i+3);
         }
       }
-      unzoomData(); // resets plotStats.zoomChrom
-      return;
+      if( plotStats.zmSrtChrom != plotStats.zmEndChrom ) {
+        setUnzoomTitle(false);
+        unzoomData(); // resets plotStats.zoomChrom
+        return;
+      }
     }
+    // escape multi-contig view since only one contig is now selected
+    plotStats.zmSrtChrom = "";
+    plotStats.zmEndChrom = "";
+    plotStats.multiChrom = false;
+    plotStats.zoomInMode = false;
     // check for zoom on a chromosome view
     if( plotStats.binnedData ) {
       // ensure only the middle chromosome is selected
@@ -629,7 +656,8 @@ $(function () {
         lastHoverBar.isRev == isRev && lastHoverBar.label == label ) return;
     hideTooltip();
     // correct for over-approximate bin selection for point hover with missing data points
-    if( !dataBar(label) ) {
+    var clickBar = dataBar(label);
+    if( !clickBar ) {
       // if item is available try to map points throu
       if( item != null && pointMap.length > 0 ) binNum = pointMap[item.dataIndex];
       if( dataTable[binNum][DataField.fwd_reads]+dataTable[binNum][DataField.rev_reads] == 0 ) return;
@@ -639,9 +667,11 @@ $(function () {
     lastHoverBar.sticky = sticky;
     lastHoverBar.label = label;
     $('#RC-tooltip-body').html( sticky ? tooltipMessage(label,binNum) : tooltipHint(label,binNum));
-    var posx = pos.pageX+12;
+    var posx = pos.pageX+10;
     var posy = pos.pageY-10;
+    var minTipWidth = 0;
     if( sticky ) {
+      if( clickBar ) minTipWidth = plotParams.barAxis ? 230 : 210;
       var cof = $('#RC-chart').offset();
       var ht = $('#RC-tooltip').height();
       var ymax = cof.top + $('#RC-chart').height() - ht;
@@ -652,7 +682,7 @@ $(function () {
       if( pos.pageX > xmid ) posx = pos.pageX - $('#RC-tooltip').width() - 16;
     }
     $('#RC-tooltip').css({
-      position: 'absolute', left: posx, top: posy, maxWidth: 280,
+      position: 'absolute', left: posx, top: posy, minWidth: minTipWidth,
       background: bgColor, padding: (sticky ? 3 : 4)+'px',
       border: (sticky ? 2 : 1)+'px solid #444',
       opacity: sticky ? 1: 0.7
@@ -666,12 +696,27 @@ $(function () {
     hideTooltip();
   });
 
+  $('#RC-tooltip-zoomout').click( function() {
+    if( zoomViewOnBin( lastHoverBar.binNum, false ) ) hideTooltip();
+  });
+
+  $('#RC-tooltip-center').click( function() {
+    if( centerViewOnBin( lastHoverBar.binNum ) ) hideTooltip();
+  });
+
+  $('#RC-tooltip-zoomin').click( function() {
+    if( zoomViewOnBin( lastHoverBar.binNum, true ) ) hideTooltip();
+  });
+
   function dataBar(id) {
     return (id === LegendLabels.fwdReads || id === LegendLabels.revReads || id === LegendLabels.allReads);
   }
 
   function tooltipHint(id,bin) {
     $('#RC-tooltip-close').hide();
+    $('#RC-tooltip-zoomout').hide();
+    $('#RC-tooltip-center').hide();
+    $('#RC-tooltip-zoomin').hide();
     if( dataBar(id) ) {
       var chr = dataTable[bin][DataField.contig_id];
       if( dataTable[bin][DataField.pos_start] < 0 ) {
@@ -694,6 +739,10 @@ $(function () {
   }
 
   function tooltipMessage(id,bin) {
+    $('#RC-tooltip-close').show();
+    $('#RC-tooltip-zoomout').show();
+    $('#RC-tooltip-center').show();
+    $('#RC-tooltip-zoomin').show();
     var br = "<br/>";
     var i = id.indexOf(' ');
     var dirStr = id.substr(0,i);
@@ -702,7 +751,7 @@ $(function () {
     var regionLen = dataTable[bin][DataField.pos_end];
     if( !binChrom ) regionLen += 1-dataTable[bin][DataField.pos_start];
     var numReads = dataTable[bin][DataField.fwd_reads]+dataTable[bin][DataField.rev_reads];
-    var msg = id+" in bin#"+(bin+1)+"."+br;
+    var msg = "<span style='white-space:nowrap'>"+id+" in bin#"+(bin+1)+".</span>"+br;
     if( binChrom ) {
       msg += "Contigs: "+dataTable[bin][DataField.contig_id]+br;
       msg += "Number of contigs: "+(-dataTable[bin][DataField.pos_start])+br;
@@ -744,7 +793,6 @@ $(function () {
       msg += dirStr + " off-target base reads: "+(dirReads-dirTarg)+br;
       msg += dirStr + " on-target fraction: "+sigfig(pcOntarg)+'%'+br;
     }
-    $('#RC-tooltip-close').show();
     return msg;
   }
 
@@ -948,16 +996,22 @@ $(function () {
       $('#RC-showLegend').attr('checked', plotParams.showLegend = true );
     }
   }
-
+  
   $("#RC-unzoomToggle").click(function() {
-    if( this.value == "Zoom In" ) {
+    // check for zoom out after zoom in mode and not at max zoom out already
+    if( plotStats.multiChrom && plotStats.zmSrtChrom == "" ) {
+      plotStats.zoomInMode = false;
+    }
+    if( plotStats.zoomInMode || this.value == "Zoom In" ) {
+      plotStats.zmSrtChrom = "";
+      plotStats.zmEndChrom = "";
+      plotStats.zmOutChrom = false;
       unzoomToFile( wgncovFile );
       plotStats.wgnNumPoints = plotStats.numPoints;
       plotStats.zoomInMode = true;
       setUnzoomTitle(false);
       return;
     }
-    plotStats.zoomInMode = false;
     // this means zoomed in on a contig
     if( plotStats.zoomChrom ) {
       if( covFilter.pos_srt > 1 || covFilter.pos_end < plotStats.chromLength ) {
@@ -1191,6 +1245,20 @@ $(function () {
 
   function zoomDataRange(chr,srt,end) {
     setContig(chr);
+    // adjust coordinates if would put view beyond the ends of selected contig
+    var siz = end - srt;
+    if( srt < 1 ) srt = 1;
+    end = srt + siz;
+    if( end > plotStats.chromLength ) {
+      end = plotStats.chromLength;
+      srt = end - siz;
+      if( siz < 0 ) siz = 1;
+    }
+    // reset flags based on viewing single contig
+    plotStats.zmSrtChrom = "";
+    plotStats.zmEndChrom = "";
+    plotStats.zmOutChrom = false;
+    plotStats.zoomInMode = false;
     plotStats.zoomChrom = setContigRange(srt+'-'+end);
     zoomData();
     setUnzoomTitle(false);

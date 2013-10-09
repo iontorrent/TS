@@ -1,5 +1,7 @@
 {% extends "rundb/reports/base.html" %}
+{% load url from future %}
 {% load pagetools %}
+{% load static from staticfiles %}
 {% block content %}
 <script>
 $(function() {
@@ -37,7 +39,7 @@ $(function() {
                 <a href="{{report_link}}/Default_Report.php">View the pre-3.0 report</a>
             </li>
             <li>
-                <a href="{% url report report.pk %}log" id="log-btn">View this report Log</a>
+                <a href="{% url "report" report.pk %}log" id="log-btn">View this report Log</a>
             </li>
         </ul>
     {% else %}
@@ -53,8 +55,8 @@ $(function() {
 			</ul>
 		{% else %}
 			<ul>
-				<li><a href="{% url report_csa report.pk %}">Customer Support Archive</a></li>
-                <li><a href="{% url report report.pk %}">Report</a></li>
+				<li><a href="{% url "report_csa" report.pk %}">Customer Support Archive</a></li>
+                <li><a href="{% url "report" report.pk %}">Report</a></li>
 			</ul>
 			<ul>
 				{% for exists, path, text in file_links %}
@@ -77,7 +79,7 @@ $(function() {
 								<h2 class="pull-left">{{name}}</h2>&nbsp;
 								<a href="{{report_link}}/{{name}}" class="btn btn-small"><i class="icon-download"></i> Download</a>
 							</div>
-							<pre data-logfile="{{report_link}}/{{logfile}}" class="log">Loading <img src='/site_media/jquery/colorbox/images/loading.gif'></img> </pre>
+							<pre data-logfile="{{report_link}}/{{logfile}}" class="log">Loading <img src='{% static "jquery/colorbox/images/loading.gif"%}'></img> </pre>
 						{% endif %}
 					{% endfor %}
 			{% else %}

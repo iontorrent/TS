@@ -7,17 +7,18 @@
 {% block controls_holder %}{% endblock %}
 
 {% block extra_head %}
+{% load static from staticfiles %}
   <link rel="stylesheet" type="text/css"
-        href="/site_media/jquery/colorbox/colorbox.css" media="screen"/>
+        href="{% static "jquery/colorbox/colorbox.css"%}" media="screen"/>
   <script type="text/javascript"
-          src="/site_media/jquery/colorbox/jquery.colorbox-min.js"></script>
+          src="{% static "jquery/colorbox/jquery.colorbox-min.js"%}"></script>
   <script type="text/javascript"
-          src="/site_media/jquery/js/jquery.tools.min.js"></script>
+          src="{% static "jquery/js/jquery.tools.min.js"%}"></script>
   <script type="text/javascript"
-          src="/site_media/jquery/js/jquery.activity-indicator-1.0.0.min.js"></script>
+          src="{% static "jquery/js/jquery.activity-indicator-1.0.0.min.js"%}"></script>
 
   <!-- style for the reports -->
-  <link rel="stylesheet" type="text/css" href="/site_media/plugin_report.css"
+  <link rel="stylesheet" type="text/css" href="{% static "plugin_report.css"%}"
         media="screen"/>
   <script type="text/javascript" src="/site-media/scripts.js"></script>
 {% endblock extra_head %}

@@ -1,8 +1,10 @@
 {% extends "rundb/data/base.html" %}
+{% load url from future %}
 {% load pagetools %}
+{% load static from staticfiles %}
 {% block extra_head %}
-<link href="/site_media/css/chosen.css" rel="stylesheet"/>
-<link type="text/css" rel="stylesheet" media="all" href="/site_media/resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css" />  <link href="/site_media/css/ui.daterangepicker.css" rel="stylesheet"/>
+<link href="{% static "css/chosen.css"%}" rel="stylesheet"/>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />  <link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
 <style type="text/css">
     .search-field {
         display: inline-block;
@@ -81,24 +83,18 @@
               $('#action_dropdown').dropdown('toggle')
             $( "#modal_projects_select" ).modal("show");
             return false;
-        }).done(function(data) {
-            console.log("success:",  data);
-            // $(that).trigger('remove_from_project_done', {values: e.values});
-        })
-        .fail(function(data) {
+        }).fail(function(data) {
             $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
-
-        })
-        .always(function(data) { /*console.log("complete:", data);*/ });
+            console.log("Send to project error:", data);
+        });
     });
   });
 </script>
 {% endblock extra_head %}
 {% block sub-nav %}
-    <li class="active"><a href="{% url data %}">Completed Runs &amp; Results</a></li>
-    <li><a href="{% url projects %}">Projects</a></li>
+    <li class="active"><a href="{% url "data" %}">Completed Runs &amp; Results</a></li>
+    <li><a href="{% url "projects" %}">Projects</a></li>
 {% endblock sub-nav %}
 {% block content %}
 <div id="data_view" class="content group">
@@ -107,14 +103,14 @@
     </div>
     <h1>Completed Runs &amp; Results</h1>
     <div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;" >
-        <a id="view_full" class="">List View</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a id="view_table" class="active">Table View</a>
+        <a href="#full" id="view_full" class="">List View</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a href="#table" id="view_table" class="active">Table View</a>
     </div>
     <br/>
     <div id="search_bar" class="well" style="margin-top:5px;">
         {%spaceless%}
         <div class="row-fluid">
             <div class="search-field" style="width: 40px;">
-                <img id="id_star_img" width="16" border="0" style="margin:1px 5px 0px 0px;" src="/site_media/resources/img/star-blue.png">
+                <img id="id_star_img" width="16" border="0" style="margin:1px 5px 0px 0px;" src="{% static "resources/img/star-blue.png"%}">
                 <input id="id_star" name="star" type="checkbox">
                 <script type="text/javascript">
                 $(document).ready(function(){
@@ -273,35 +269,44 @@
     </div>
 </div>
 
-<script src="/site_media/js/underscore.js"></script>
-<script src="/site_media/js/backbone.js"></script>
-<script src="/site_media/js/chosen.jquery.min.js"></script>
-<script src="/site_media/resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"></script>
+<script src="{% static "js/underscore.js"%}"></script>
+<script src="{% static "js/backbone.js"%}"></script>
+<script src="{% static "js/chosen.jquery.min.js"%}"></script>
+<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
 <!-- iso8601.min.js MUST BE BEFORE date.js so that date.js will place the existing
     iso8601 Date.parse into Date._parse and we're going to use Date._parse within our KendoGrid inside data_tab.js -->
-<script type="text/javascript" src="/site_media/js/iso8601.min.js"></script>
-<script src="/site_media/js/date.min.js"></script>
-<script src="/site_media/js/jquery.daterangepicker.min.js"></script>
-<script src="/site_media/js/template.min.js"></script>
-<script src="/site_media/js/compiler.min.js"></script>
-<script src="/site_media/js/messagebox.min.js"></script>
-<script src="/site_media/resources/jquery/jQuery.download.min.js"></script>
-{% raw %}
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script src="{% static "js/date.min.js"%}"></script>
+<script src="{% static "js/jquery.daterangepicker.min.js"%}"></script>
+<script src="{% static "js/template.min.js"%}"></script>
+<script src="{% static "js/compiler.min.js"%}"></script>
+<script src="{% static "js/messagebox.min.js"%}"></script>
+<script src="{% static "resources/jquery/jQuery.download.min.js"%}"></script>
 <script type="text/template" id="experiment_template">
     <div class="run-summary row-fluid">
-    <div class="run-name span6">
+        <div class="run-name span6">
+{% comment %} NOTE: UGLY HACK to use django STATIC_URL here {% endcomment %}
+{% raw %}
             <div class="pull-left">
                 {{#exp.star}}
-                    <img src="/site_media/resources/img/star-blue.png" border="0" class="completedrun-star" width="18">
+{% endraw %}
+                    <img src="{% static "resources/img/star-blue.png"%}" border="0" class="completedrun-star" width="18">
+{% raw %}
                 {{/exp.star}}
                 {{^exp.star}}
-                    <img src="/site_media/resources/img/star_off.png" border="0" class="completedrun-star" width="18">
+{% endraw %}
+                    <img src="{% static "resources/img/star_off.png"%}" border="0" class="completedrun-star" width="18">
+{% raw %}
                 {{/exp.star}}
                 {{#is_proton}}
-                    <img src="/site_media/resources/img/proton_jumbo_icon.png" class="pull-left" />
+{% endraw %}
+                    <img src="{% static "resources/img/proton_jumbo_icon.png"%}" class="pull-left" />
+{% raw %}
                 {{/is_proton}}
                 {{^is_proton}}
-                    <img src="/site_media/resources/img/pgm_jumbo_icon.png" class="pull-left" />
+{% endraw %}
+                    <img src="{% static "resources/img/pgm_jumbo_icon.png"%}" class="pull-left" />
+{% raw %}
                 {{/is_proton}}
                 {{#exp.plan}}<span class="{{exp.plan.runType}} app-icon-completed"></span>{{/exp.plan}}
             </div>
@@ -327,6 +332,11 @@
             <ul class="unstyled">
                 {{#exp.barcodeId}}<li><b>Barcode:</b> {{exp.barcodeId}}</li>{{/exp.barcodeId}}
                 <li><b>Reference:</b> {{ exp.library }}</li>
+            	{{#exp.sampleSetName}}
+                <li><b>Sample Set:</b>
+    				{{exp.sampleSetName}}
+                </li>
+    			{{/exp.sampleSetName}}                
                 <li><b>Sample:</b> {{ exp.sample }}</li>
                 <li><b>Chip:</b> {{ exp.chipDescription }}</li>
                 <li><b>Project:</b> {{#king_report.projects}}<span class="label">{{name}}</span> {{/king_report.projects}}</li>
@@ -334,7 +344,7 @@
         </div>
         <div class="run-actions pull-right">
             <a class="btn btn-tertiary reanalyze-run btn75" href="/report/analyze/{{exp.id}}/0" >Reanalyze</a>
-            <a class="btn btn-tertiary edit-run btn75" href="/data/experiment/{{exp.id}}/">Edit</a>
+            <a class="btn btn-tertiary btn75" href="/plan/page_plan_edit_run/{{exp.id}}/">Edit</a>
             <div class="btn-group storage">
 				{{#exp.archived}}
 				<button type="btn" class="storage" title="Signal Processing Input data has been {{exp.archived}}" disabled>{{exp.archived}}</button>
@@ -389,18 +399,22 @@
         <td style="overflow:visible;">
             <div class="btn-group pull-right">
                 <a class="btn dropdown-toggle" data-toggle="dropdown" href="#">
-                    <img src="/site_media/resources/img/gear-active.png" border="0">
+{% endraw %}
+                    <img src="{% static "resources/img/gear-active.png"%}" border="0">
+{% raw %}
                 </a>
                 <ul class="dropdown-menu">
                     <li><a class="send_to_project" href="/data/results/{{id}}/project/"> Add Report to Project</a></li>
                     <li class="divider"></li>
                     <li>
-                        <a href="/configure/services/log/{{id}}" class="reportLog" data-pk={{id}} data-toggle="modal" data-target="#modal_report_log">
-                            View Log&nbsp;&nbsp;<img src="/site_media/images/View_Log_Blue.png"/>
+                        <a href="/configure/services/log/{{id}}" class="reportLog" data-pk="{{id}}" data-toggle="modal" data-target="#modal_report_log">
+{% endraw %}
+                            View Log&nbsp;&nbsp;<img src="{% static "images/View_Log_Blue.png"%}"/>
+{% raw %}
                         </a>
                     </li>
                     <li class="divider"></li>
-					<li><a href="#" class="dm-actions">Data management</a></li>
+                    <li><a href="#" class="dm-actions">Data management</a></li>
                 </ul>
             </div>
         </td>
@@ -414,6 +428,7 @@
                 <col style="width:26px">
                 <col>
                 <col style="width:10%">
+                <col style="width:7%">
                 <col style="width:32px">
                 <col style="width:60px">
                 <col style="width:60px">
@@ -434,6 +449,7 @@
                     <th class="k-header"></th>
                     <th class="k-header"><a class="sort_link" data-name="expName" href="#">Run Name<span class="order_indicator"></span></a></th>
                     <th class="k-header">Sample</th>
+                    <th class="k-header">Sample Set</th>
                     <th class="k-header">App.</th>
                     <th class="k-header"><a class="sort_link" data-name="date" href="#">Run<span class="order_indicator"></span></a></th>
                     <th class="k-header"><a class="sort_link" data-name="resultDate" href="#">Analysis<span class="order_indicator"></span></a></th>
@@ -458,16 +474,25 @@
 <script type="text/template" id="experiment_table_template">
     <td>
         {{#exp.star}}
-            <img src="/site_media/resources/img/star-blue.png" border="0" class="completedrun-star" width="18">
+{% endraw %}
+            <img src="{% static "resources/img/star-blue.png"%}" border="0" class="completedrun-star" width="18">
+{% raw %}
         {{/exp.star}}
         {{^exp.star}}
-            <img src="/site_media/resources/img/star_off.png" border="0" class="completedrun-star" width="18">
+{% endraw %}
+            <img src="{% static "resources/img/star_off.png"%}" border="0" class="completedrun-star" width="18">
+{% raw %}
         {{/exp.star}}
     </td>
     <td>
         {{ exp.expName }}
     </td>
     <td>{{ exp.sample }}</td>
+    <td>
+    	{{#exp.sampleSetName}}
+			{{exp.sampleSetName}}
+		{{/exp.sampleSetName}}
+    </td>
     <td>
         {{#exp.plan}}
             <span class="{{plan.runType}}" rel="tooltip" title=""></span>
@@ -499,10 +524,12 @@
     <td>{{ total_q0bp }}</td>
     <td>
         <div class="btn-group pull-right">
-            <a class="btn dropdown-toggle" data-toggle="dropdown" href="#"><img src="/site_media/resources/img/gear-active.png" border="0"></a>
+{% endraw %}
+            <a class="btn dropdown-toggle" data-toggle="dropdown" href="#"><img src="{% static "resources/img/gear-active.png"%}" border="0"></a>
+{% raw %}
             <ul class="dropdown-menu">
                 <li><a href="/report/analyze/{{exp.id}}/0/" class="reanalyze-run">Reanalyze</a></li>
-                <li><a href="/data/experiment/{{exp.id}}/" class="edit-run">Edit</a></li>
+                <li><a href="/plan/page_plan_edit_run/{{exp.id}}/">Edit</a></li>
             </ul>
         </div>
     </td>
@@ -569,77 +596,8 @@
     <span class="k-pager-info k-label">{{lower_range}} - {{upper_range}} of {{total}} runs</span>
 </script>
 {% endraw %}
-<script id="favoriteColumnTemplate" type="text/x-kendo-template">
-    # var _id = data.id;#
-    # if (data.star) { #
-        <a href="#= '{% url api_dispatch_detail resource_name="experiment" api_name="v1" pk=999999 %}'.replace('999999', _id)#" class="toggle-star" data-id="#=data.id#" data-star="#=data.star#"><img src="/site_media/resources/img/star-blue.png" border="0" class="completedrun-star" width="18"></a>
-    # } else { #
-        <a href="#= '{% url api_dispatch_detail resource_name="experiment" api_name="v1" pk=999999 %}'.replace('999999', _id)#" class="toggle-star" data-id="#=data.id#" data-star="#=data.star#"><img src="/site_media/resources/img/star_off.png" border="0" class="completedrun-star" width="18"></a>
-    # } #
-</script>
-<script id="statusColumnTemplate" type="text/x-kendo-template">
-    # var in_progress = !isNaN(parseInt(data.ftpStatus)); #
-    # var progress_percent = (data.ftpStatus == "Complete") ? 100 : data.ftpStatus; #
-    # var progress_flows = Math.round((data.ftpStatus == "Complete" ? 1: data.ftpStatus / 100.0) * data.flows); #
-    # var king_report = (data.results && data.results.length > 0) ? data.results[0] : null; #
-    # if (in_progress) { #
-    #= progress_flows # / #= data.flows #
-    <div class="progress progress-striped active">
-        <div class="bar" style="width: #=progress_percent#%;"></div>
-    </div>
-    # } else { #
-        # value = (king_report == 'undefined' || king_report == null) ? '' : king_report.status; #
-        # value = (value == 'undefined' || value == null) ? '' : value; #
-        <span rel="tooltip" title="#= value #">#= value #</span>
-    # } #
-</script>
-<script id="reportNameColumnTemplate" type="text/x-kendo-template">
-    # var king_report = (data.results && data.results.length > 0) ? data.results[0] : null; #
-    # if (king_report) { #
-    <a class="pull-left" href="/report/#=king_report.id#/" alt="Open report in this window." title="#=king_report.resultsName#">#=king_report.resultsName#</a><span title="Open report in new window." onclick="window.open('/report/#=king_report.id#/\#RunSummary')" class="pull-left icon_link ui-icon ui-icon-extlink ui-state-default ui-corner-all" style="margin-left:4px;"></span>
-    # } #
-</script>
-<script id="totalReadsColumnTemplate" type="text/x-kendo-template">
-    # var king_report = (data.results && data.results.length > 0) ? data.results[0] : null; #
-    # var value = king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_reads); #
-    # value = (value == 'undefined' || value == null) ? '' : value; #
-    #= value #
-</script>
-<script id="meanReadLengthColumnTemplate" type="text/x-kendo-template">
-    # var king_report = (data.results && data.results.length > 0) ? data.results[0] : null; #
-    # var value = king_report && king_report.quality_metrics && Math.round(king_report.quality_metrics.q0_mean_read_length); #
-    # value = (value == 'undefined' || value == null) ? '' : value; #
-    #= value #
-</script>
-<script id="q20BasesColumnTemplate" type="text/x-kendo-template">
-    # var king_report = (data.results && data.results.length > 0) ? data.results[0] : null; #
-    # var value = king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q20_bases); #
-    # value = (value == 'undefined' || value == null) ? '' : value; #
-    #= value #
-</script>
-<script id="outputColumnTemplate" type="text/x-kendo-template">
-    # var king_report = (data.results && data.results.length > 0) ? data.results[0] : null; #
-    # var value = king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_bases); #
-    # value = (value == 'undefined' || value == null) ? '' : value; #
-    #= value #
-</script>
-<script id="actionColumnTemplate" type="text/x-kendo-template">
-<div class="btn-group pull-right">
-    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\#">
-        <img src="/site_media/resources/img/gear-active.png" border="0">
-    </a>
-    <ul class="dropdown-menu">
-        <li><a href="/report/analyze/#=data.id#/0/" class="reanalyze-run">Reanalyze</a></li>
-        <li><a href="/data/experiment/#=data.id#/" class="edit-run">Edit</a></li>
-        # var king_report = (data.results && data.results.length > 0) ? data.results[0] : null; #
-        # if (king_report) { #
-        <li><a class="send_to_project" href="/data/results/#=king_report.id#/project/"> Add Report to Project</a></li>
-        # } #
-    </ul>
-</div>
-</script>
-<script src="/site_media/js/data_models.js"></script>
-<script src="/site_media/js/data_tab.js"></script>
+<script src="{% static "js/data_models.js"%}"></script>
+<script src="{% static "js/data_tab.js"%}"></script>
 <script>
     $(function(){
         //inbox = new MessageBox({models: {{global_messages|safe}} });
@@ -653,14 +611,13 @@
             limit: pageSize
         });
         exps.total = initial_runs.meta.total_count;
-        mainRouter = new RunRouter();
+        mainRouter = new RunRouter({server_state: "{{request.session.show_data_tab}}"});
         mainRuns = new RunListView({
             collection: exps,
             router: mainRouter
         });
         if (!Backbone.history.start()) {
-            console.log("Not routed");
-            mainRuns.view_table();
+            mainRouter.navigate(mainRouter.server_state, {trigger: true});
         }
     });
 </script>

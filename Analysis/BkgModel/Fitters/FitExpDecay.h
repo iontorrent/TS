@@ -51,9 +51,9 @@ public:
     }
 
     // entry point for fitting
-    virtual int Fit(int max_iter,float *y)
+    virtual int Fit(bool gauss_newton, int max_iter,float *y)
     {
-        return(LevMarFitterV2::Fit(max_iter,y,(float *)(&params)));
+        return(LevMarFitterV2::Fit(gauss_newton, max_iter,y,(float *)(&params)));
     }
 
     // the starting point and end point of the fit
@@ -87,7 +87,7 @@ protected:
         if (GetDataDelta (0) * GetDataDelta (0) < 0.0000025) done_cnt++;
         else done_cnt = 0;
 
-        return((iter >= max_iter) || (done_cnt > 5));
+        return(done_cnt > 5);
     }
 
 private:

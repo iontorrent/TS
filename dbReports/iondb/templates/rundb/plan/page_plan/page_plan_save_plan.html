@@ -1,0 +1,992 @@
+{% extends "rundb/plan/page_plan/base.html" %}
+{% load url from future %}
+{% block extra_head %}
+    {{ block.super }}
+    {% load static %}
+    <script type="text/javascript" src="{% static "resources/scripts/configure/plugins/modal_refresh.js"%}"></script>
+    <script src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
+    <link rel="stylesheet" type="text/css"
+        href="{% static "jquery/colorbox/colorbox.css"%}" media="screen"/>
+    <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}"
+        type="text/css"/>
+<script type="text/javascript" src="/site_media/resources/scripts/plan/iru_validation.js"></script>
+{% endblock extra_head %}
+
+{% block main-title %}{% endblock main-title %}
+
+{% block page-plan-content %}
+{% if helper.getStepDict.Save_template.getCurrentSavedFieldDict.templateName %}
+    <div class="row-fluid">
+        <div class="span7">
+            <label for="templateName" class="form-label">Template Name:</label>
+            <div id="templateName">{{helper.getStepDict.Save_template.getCurrentSavedFieldDict.templateName|default_if_none:""}}</div>
+            <br>
+        </div>
+    </div>
+{% endif %}
+<div class="row-fluid">
+    <div class="span12">
+        <input type="hidden" name="fireValidation" value="{{step.prepopulatedFields.fireValidation}}"/>
+        <input type="hidden" name="applicationType"/>
+        <label for="planName" class="form-label">Run Plan Name (required):</label>
+        <input style="width: 700px;" id="planName" name="planName" value="{{step.getCurrentSavedFieldDict.planName|default_if_none:""}}"/>
+        <br>
+    </div>
+</div>
+{% if step.validationErrors and "planName" in step.validationErrors %}
+    <div class="row-fluid">
+    {% for error in step.validationErrors.planName %}
+        <h4 style="color: red">{{error}}</h4>
+    {% endfor %}
+    </div>
+{% endif %}
+{% if step.prepopulatedFields.barcodes %}
+<div class="row-fluid">
+    <div class="span12">
+        <label for="barcodeSampleTubeLabel" class="form-label">Sample Tube Label (optional):</label>
+        <input style="width: 700px;" id="barcodeSampleTubeLabel" name="barcodeSampleTubeLabel" value="{{step.getCurrentSavedFieldDict.barcodeSampleTubeLabel|default_if_none:""}}"/>
+    </div>
+</div>
+{% if step.validationErrors and "barcodeSampleTubeLabel" in step.validationErrors %}
+    <div class="row-fluid">
+    {% for error in step.validationErrors.barcodeSampleTubeLabel %}
+        <h4 style="color: red">{{error}}</h4>
+    {% endfor %}
+    </div>
+{% endif %}
+<div class="row-fluid">
+    <div class="span12">
+        <div class="form-label">
+            Enter a sample name for each barcode used (required at least one sample): 
+            {% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
+                <a title="Refresh Plugin IonReporterUploader Information" class="refresh-uploader-information" ><i class="icon-refresh"></i></a>
+                <img src="/site_media/img/loading.gif" width="35" height="35" id="loading"/>
+            {% endifnotequal %}
+            <a title="Auto generate sample names" class="btn" href="#" id="fillSampleNames"><i class="icon-arrow-down"></i></a>
+            <a title="Clear sample names" class="btn" href="#" id="clearSampleNames"><i class="icon-trash"></i></a>
+        </div>
+        <div id="error" style="color:red;font-weight:bold;"></div>
+        <div style="border:1px solid #0981d2;overflow: auto;max-height:550px;padding:5px">
+            <table id="barcodeToSampleTable">
+                <tr>
+                    <th style="text-align: left; font-weight: bold;">BC #</th>
+                    <th style="text-align: left; font-weight: bold;">Sequence</th>
+                    <th style="text-align: center; font-weight: bold;">Sample Name (required)</th>
+                    <th style="text-align: center; font-weight: bold;">Sample ID</th>
+                    <th style="text-align: center; font-weight: bold;">Sample Description</th>
+                    {% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
+                        <th>Gender</th>
+                        <th>Workflow</th>
+                        <th>Relation</th>
+                        <th>Relation Role</th>
+                        <th  rel="tooltip" title="After file transfer, in Ion Reporter Software, samples with the same Set ID are considered related samples and are launched in the same analysis, such as a normal sample and its corresponding tumor samples. Do not give unrelated samples the same Set ID value (even if that value is zero or blank).">Set ID</th>
+                    {% endifnotequal %}
+                </tr>
+                {% for barcode, sampleValues in step.savedObjects.barcodeToSample.items %}
+                    <tr id="barcodeRow{{barcode.pk}}">
+                        <td>{{barcode.id_str}}</td>
+                        <td>{{barcode.sequence}}</td>
+                        <td><input type="text" class="irSampleName" name="barcodeSampleName{{barcode.pk}}" value="{{sampleValues.sampleName|default_if_none:""}}" style="width:150px;"></td>
+                        <td><input type="text" name="barcodeSampleExternalId{{barcode.pk}}" value="{{sampleValues.sampleExternalId|default_if_none:""}}" style="width:120px;"></td>
+                        <td><input type="text" name="barcodeSampleDescription{{barcode.pk}}" value="{{sampleValues.sampleDescription|default_if_none:""}}" style="width:120px;"></td>
+                        {% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
+                            <td data-id="irGender">
+                                <select style="width:90px;" name="irGender{{barcode.pk}}" class="irGender">
+                                    <option value=""></option>
+                                </select>
+                            </td>
+                            <td data-id="irWorkflow">
+                                <select style="width:200px;" name="irWorkflow{{barcode.pk}}" class="irWorkflow">
+                                    <option value=""></option>
+                                </select>
+                            </td>
+                            <td data-id="irRelationshipType">
+                                <select style="width:130px;" name="irRelation{{barcode.pk}}" class="irRelation">
+                                    <option value=""></option>
+                                </select>
+                            </td>
+                            <td data-id="irRelation">
+                                <select style="width:90px;" name="irRelationRole{{barcode.pk}}" class="irRelationRole">
+                                    <option value=""></option>
+                                </select>
+                            </td>
+                            <td data-id="irSetID">
+                                <input style="width:30px;" name="irSetID{{barcode.pk}}" value="0" style="width:40px;" class="irSetID">
+                            </td>
+                        {% endifnotequal %}
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="row-fluid">
+    <div class="span12">
+        <div class="form-label">
+            Enter a sample name for each plan (required at least one sample): 
+            {% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
+                <a title="Refresh Plugin IonReporterUploader Information" class="refresh-uploader-information"><i class="icon-refresh"></i></a>
+                <img src="/site_media/img/loading.gif" width="35" height="35" id="loading"/>
+            {% endifnotequal %}
+        </div>
+        <div id="error" style="color:red;font-weight:bold;"></div>
+        <div style="border:1px solid #0981d2;overflow: auto;max-height:550px;padding:5px">
+            <table id="chipToSampleTable">
+                <tr>
+                    <th>Chip #</th>
+                    <th>Sample Name (required)</th>
+                    <th>Sample ID</th>
+                    <th>Sample Description</th>
+                    <th>Sample Tube Label</th>
+                    {% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
+                        <th>Gender</th>
+                        <th>Workflow</th>
+                        <th>Relation</th>
+                        <th>Relation Role</th>
+                        <th rel="tooltip" title="After file transfer, in Ion Reporter Software, samples with the same Set ID are considered related samples and are launched in the same analysis, such as a normal sample and its corresponding tumor samples. Do not give unrelated samples the same Set ID value (even if that value is zero or blank).">Set ID</th>
+                    {% endifnotequal %}
+                </tr>
+                {% for key, value in step.savedObjects.chipToSamples.items %}
+                    <tr id='chipRow{{key}}'>
+                        <td><input type="text" value="{{key}}" style="width:30px;" disabled></td>
+                        <td><input type="text" class="irSampleName" name="sampleName{{key}}" value="{{value.sampleName|default_if_none:""}}" style="width:150px;"></td>
+                        <td><input type="text" name="sampleExternalId{{key}}" value="{{value.sampleExternalId|default_if_none:""}}" style="width:150px;"></td>
+                        <td><input type="text" name="sampleDescription{{key}}" value="{{value.sampleDescription|default_if_none:""}}" style="width:150px;"></td>
+                        <td><input type="text" name="tubeLabel{{key}}" value="{{value.tubeLabel|default_if_none:""}}" style="width:150px;"></td>
+                        {% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
+                            <td>
+                                <select style="width:90px;" name="irGender{{key}}" class="irGender">
+                                    <option value=""></option>
+                                </select>
+                            </td>
+                            <td data-name="irWorkflow">
+                                <select style="width:200px;" name="irWorkflow{{key}}" class="irWorkflow">
+                                    <option value=""></option>
+                                </select>
+                            </td>
+                            <td data-id="irRelationshipType">
+                                <select style="width:130px;" name="irRelation{{key}}" class="irRelation">
+                                    <option value=""></option>
+                                </select>
+                            </td>
+                            <td data-id="irRelation">
+                                <select style="width:90px;" name="irRelationRole{{key}}" class="irRelationRole">
+                                    <option value=""></option>
+                                </select>
+                            </td>
+                            <td data-id="irSetID">
+                                <input style="width:30px;" name="irSetID{{key}}" value="0" style="width:40px;" class="irSetID">
+                            </td>
+                        {% endifnotequal %}
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% if step.validationErrors and "no_samples" in step.validationErrors %}
+    <div class="row-fluid">
+        <h4 style="color: red">{{step.validationErrors.no_samples}}</h4>
+    </div>
+{% endif %}
+
+{% if step.validationErrors and "bad_sample_name" in step.validationErrors %}
+    <div class="row-fluid">
+        <div class="span12">
+            <h4 style="color: red;">Error, sample name should be 127 characters maximum, should only start with lettes and numbers and contain only numbers, letters, spaces, and the following: . - _ </h4>
+            <h4 style="color: red;">Please Fix: {% for sample_name in step.validationErrors.bad_sample_name %}{{sample_name}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+        </div>
+    </div>
+{% endif %}
+
+{% if step.validationErrors and "bad_sample_external_id" in step.validationErrors %}
+    <div class="row-fluid">
+        <div class="span12">
+            <h4 style="color: red;">Error, sample external id should be 127 characters maximum, should only start with lettes and numbers and contain only numbers, letters, spaces, and the following: . - _ </h4>
+            <h4 style="color: red;">Please Fix: {% for invalid_item in step.validationErrors.bad_sample_external_id %}{{invalid_item}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+        </div>
+    </div>
+{% endif %}
+
+{% if step.validationErrors and "bad_sample_description" in step.validationErrors %}
+    <div class="row-fluid">
+        <div class="span12">
+            <h4 style="color: red;">Error, sample description should be 1024 characters maximum and contain only numbers, letters, spaces, and the following: . - _ </h4>
+            <h4 style="color: red;">Please Fix: {% for invalid_item in step.validationErrors.bad_sample_description %}{{invalid_item}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+        </div>
+    </div>
+{% endif %}
+
+{% if step.validationErrors and "bad_tube_label" in step.validationErrors %}
+    <div class="row-fluid">
+        <div class="span12">
+            <h4 style="color: red;">Error, tube label length should be 512 characters maximum. </h4>
+            <h4 style="color: red;">Please Fix: {% for tube_label in step.validationErrors.bad_tube_label %}{{tube_label}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+        </div>
+    </div>
+{% endif %}
+
+{% if step.validationErrors and "badIrSetId" in step.validationErrors %}
+    <div class="row-fluid">
+        <div class="span12">
+            <h4 style="color: red;">Error, IR set id must be numeric.</h4>
+            <h4 style="color: red;">Please Fix: {% for ir_set_id in step.validationErrors.badIrSetId %}{{ir_set_id}}{% if not forloop.last %}, {% endif %}{% endfor %}</h4>
+        </div>
+    </div>
+{% endif %}
+
+<div class="row-fluid">
+    <div class="span12">
+        <label for="note" class="form-label">Add a note:</label>
+        <textarea id="note" name="note" style="width:70%;height:100px;">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
+        <br>
+    </div>
+</div>
+{% if step.validationErrors and "note" in step.validationErrors %}
+    <div class="row-fluid">
+    {% for error in step.validationErrors.note %}
+        <h4 style="color: red">{{error}}</h4>
+    {% endfor %}
+    </div>
+{% endif %}
+<div class="row-fluid">
+    <div id="errors" style="color:red;font-weight:bold;"></div>
+</div>
+{% endblock page-plan-content %}
+
+{% block prevnext-buttons %}
+    <input type="hidden" name="error_messages_count" value="0"/>
+    <input type="hidden" name="warning_messages_count" value="-1"/>
+    
+    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_ionreporter" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save" %}');$('#step_form').submit();return false;">
+        {% if helper.isCopy %}
+            Copy Plan
+        {% elif helper.isEdit %}
+            Update Plan
+        {% elif helper.isEditRun %}
+            Update Run
+        {% else %}
+            Plan Run
+        {% endif %}
+    </a>
+{% endblock prevnext-buttons %}
+
+{% block summary-table %}
+    {%include "rundb/plan/page_plan/summary/uploader_summary.html"%}
+{% endblock summary-table %}
+
+{% block post-raw %}
+{{ block.super }}
+<script type="text/javascript">
+    var default_relation_values = [];
+    var sample_group_to_workflow_map = {};
+    var ir_sample_to_tss_sample = {};
+    var default_samples = [];
+    var workflow_to_application_type_map = {};
+
+    function setIrRefreshListener(){
+        var source = "#planName";
+        $(document).bind('modal_confirm_plugin_refresh_done', function(e){
+            irConfigJsonObj = e.plugininfo.config;
+            fillIrSelects();
+        });
+        $(".refresh-uploader-information").click(function(e) {
+            e.preventDefault();
+            url = $(this).attr('href');
+            $('body #modal_confirm_plugin_refresh').remove();
+            $.get(url, function(data) {
+                $('body').append(data);
+                $("#modal_confirm_plugin_refresh").data('source', source);
+                $("#modal_confirm_plugin_refresh").modal("show");
+                return false;
+            }).done(function(data) {
+                console.log("success:", url);
+            }).fail(function(data) {
+                console.log("error:", data);
+            }).always(function(data) {
+            });
+        });
+    }
+
+    function fillIrSelects() {
+        if (irConfigJsonObj !== null && irConfigJsonObj.columns != null) {
+            $.each(irConfigJsonObj.columns, function() {
+                var field = this.Name || '';
+                var values = this.Values || [];
+                if (field === "Workflow") {
+                    $("select[name^='irWorkflow']").empty().append('<option value=""></option>');
+                    $.each(values, function(i, value){
+                        var option = '<option value="' + value + '">' + value + '</option>';
+                        $("select[name^='irWorkflow']").append(option);
+                    });
+                }
+                else if (field === "Gender") {
+                    $("select[name^='irGender']").empty().append('<option value=""></option>');
+                    $.each(values, function(i, value){
+                        var option = '<option value="' + value + '">' + value + '</option>';
+                        $("select[name^='irGender']").append(option);
+                    });
+                }
+            });
+        }
+    }
+    
+    getIRConfigApplication = function(theSelectedWorkflow) {
+        var selectedApplication = '';
+        if (theSelectedWorkflow === null || theSelectedWorkflow === '') {
+            return selectedApplication;
+        }
+        
+        if (irConfigJsonObj !== null) {
+            $.each(irConfigJsonObj["column-map"], function() {
+                //console.log(key + ' ' + value);
+                var application = this.ApplicationType || '';
+                var workflow = this.Workflow || '';
+                if (workflow == theSelectedWorkflow) {
+                    selectedApplication = application;
+                }
+            });
+        } else {
+            console.log("irConfigJsonObj is null at getIRConfigApplication...");
+        }
+        return selectedApplication;
+    };
+
+    getIRConfigRelation = function(theSelectedWorkflow) {
+        var selectedApplication = getIRConfigApplication(theSelectedWorkflow);
+
+        var selectedValidValues = [];
+        if (selectedApplication === null || selectedApplication === '') {
+            return selectedValidValues;
+        }
+
+        var validValues = [];
+
+        if (irConfigJsonObj !== null) {
+            $.each(irConfigJsonObj.columns, function() {
+                var field = this.Name || '';
+                var values = this.Values || [];
+                if (field === "RelationshipType") {
+                    validValues = validValues.concat(values);
+                }
+            });
+            $.each(irConfigJsonObj.restrictionRules, function() {
+                var _for = this.For || null;
+                var _valid = this.Valid || null;
+                if (_for && _valid) {
+                    if (_for.Name === "ApplicationType" && _for.Value === selectedApplication) {
+                        var values = _valid.Values || [];
+                        validValues = [].concat(_valid.Values);
+                    }
+                }
+            });
+            selectedValidValues = validValues;
+        } else {
+            console.log("obj is null at getIRConfigRelation...");
+        }
+        return selectedValidValues;
+    };
+
+    getIRConfigRelationRole = function(theSelectedRelation) {
+        var selectedValidValues = [];
+        if (theSelectedRelation === null || theSelectedRelation === '') {
+            return selectedValidValues;
+        }
+
+        var validValues = [];
+
+        if (irConfigJsonObj !== null) {
+            $.each(irConfigJsonObj.columns, function() {
+                var field = this.Name || '';
+                var values = this.Values || [];
+                if (field === "Relation") {
+                    validValues = validValues.concat(values);
+                }
+            });
+            $.each(irConfigJsonObj.restrictionRules, function() {
+                var _for = this.For || null;
+                var _valid = this.Valid || null;
+                if (_for && _valid) {
+                    if (_for.Name === "RelationshipType" && _for.Value === theSelectedRelation) {
+                        var values = _valid.Values || [];
+                        validValues = [].concat(values);
+                    }
+                }
+            });
+            selectedValidValues = validValues;
+        } else {
+            //console.log("obj is null at getIRConfigRelationRole....");
+        }
+        return selectedValidValues;
+    };
+
+    isToDisableIRConfigRelationRole = function(theSelectedRelation) {
+        return isToDisableIRConfigAttribute(theSelectedRelation, 'Relation');
+    };
+
+    isToDisableIRConfigSetId = function(theSelectedRelation) {
+        return isToDisableIRConfigAttribute(theSelectedRelation, 'SetID');
+    };
+
+    isToDisableIRConfigAttribute = function(theSelectedRelation, theDisabledName) {
+        var isToDisable = false;
+        if (theSelectedRelation === null || theSelectedRelation === '' || theDisabledName === null || theDisabledName === '') {
+            isToDisable = true;
+            return isToDisable;
+        }
+
+        var isToDisableName = '';
+        var forName = '';
+        var forValue = '';
+
+        if (irConfigJsonObj !== null) {
+            $.each(irConfigJsonObj.restrictionRules, function() {
+                var _for = this.For || null;
+                var _disabled = this.Disabled || null;
+                if (_for && _disabled) {
+                    if (_disabled.Name === theDisabledName && _for.Value === theSelectedRelation) {
+                        isToDisable = true;
+                    }
+                }
+            });
+        } else {
+            //console.log("obj is null at isToDisableIRConfigAttribute....");
+        }
+        return isToDisable;
+    };
+
+    addWorkflowChangeListener = function(){
+        $("select[name^='irWorkflow']").change(function() {        
+            var value = $(this).val();
+            
+            $(this).parent().next().find('select').find('option').remove();
+            if (value === null || value === "") {
+                $(this).parent().next().find('select').attr('disabled', 'disabled');
+                //console.debug($(this).parent().nextAll().find('select').attr('name'));
+    
+                $(this).parent().nextAll().find('select').find('option').remove();
+                $(this).parent().nextAll().find('select').find('option').attr('disabled', 'disabled');
+                $(this).parent().nextAll().find('input').val('');
+                $(this).parent().nextAll().find('input').attr('disabled', 'disabled');
+            } else {
+                $(this).parent().next().find('select').removeAttr('disabled');
+    
+                var option = '<option value=""></option>';
+                $(this).parent().next().find('select').append(option);
+                var _that = $(this);
+                var relationChoices = getIRConfigRelation(value);
+                $.each(relationChoices, function(i, relation){
+                    var option = '<option value="' + relation + '">' + relation + '</option>';
+                    _that.parent().next().find('select').append(option);
+                });
+            
+            }
+        });
+    };
+    
+    addRelationChangeListener = function() {
+        $("select[name^='irRelation']").change(function() {
+            var value = $(this).val();
+            //  console.log(value);
+            var relationRoleChoices = getIRConfigRelationRole(value);
+            var isToDisableRelationRole = isToDisableIRConfigRelationRole(value);
+            var isToDisableSetId = isToDisableIRConfigSetId(value);
+    
+            if (isToDisableSetId === true) {
+                $(this).parent().nextAll().find('input').val('');
+                $(this).parent().nextAll().find('input').attr('disabled', 'disabled');
+            } else {
+                $(this).parent().next().nextAll().find('input').removeAttr('disabled');
+            }
+    
+            $(this).parent().nextAll().find('select').find('option').remove();
+            if (isToDisableRelationRole === true) {
+                $(this).parent().nextAll().find('select').attr('disabled', 'disabled');
+            } else {
+                $(this).parent().nextAll().find('select').removeAttr('disabled');
+    
+                var option = '<option value=""></option>';
+                $(this).parent().nextAll().find('select').append(option);
+                var _that = $(this);
+                $.each(relationRoleChoices, function(i, relation) {
+                    var option = '<option value="' + relation + '">' + relation + '</option>';
+                    _that.parent().nextAll().find('select').append(option);
+                });
+            }
+        });
+    };
+    
+    addRelationRoleChangeListener = function() {
+        $("select[name^='irRelationRole']").change(function() {
+            var value = $(this).val();
+            //  console.log(value);
+            var isToDisable = isToDisableIRConfigSetId(value);
+    
+            if (isToDisable === true) {
+                $(this).parent().nextAll().find('input').val('');
+                $(this).parent().nextAll().find('input').attr('disabled', 'disabled');
+            } else {
+                $(this).parent().nextAll().find('input').removeAttr('disabled');
+            }
+        });
+    };
+
+    selectOptionOrAddDisabled = function(parentRowObj, selectStr, value) {
+        if(parentRowObj.find(selectStr + " option[value='" + value + "']").length > 0) {
+            parentRowObj.find(selectStr).val(value);
+        } else {
+            parentRowObj.find(selectStr).add('<option disabled="disabled" value="' + value + '">' + value + '</option>');
+        }
+    };
+
+    function add_ir_general_to_select(name, values, invalid_value, old_values) {
+        var $selects = $(".ir"+name+"");
+        $.each($selects, function(j){
+            var $select = $(this);
+            $.each(values, function(k){
+                if (name == "Workflow") {
+                    var value = values[k];    
+                } else {
+                    //TODO: might need to change this tookip value in a map
+                    var value = values[k];    
+                }
+                var $opt = $("<option></option>");
+                $opt.attr('value', value);
+                $opt.text(value);
+                if (value == "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}") {
+                    $opt.attr('selected', true);
+                }
+                $select.append($opt);
+            });
+        });    
+    }
+
+    function add_relation_to_select(old_values, restrictions) {
+        $.each(old_values, function(i){
+            var rel_type = old_values[i];
+            $.each(restrictions, function(j){
+                var restriction = restrictions[j];
+                if (typeof restriction["For"] != 'undefined' && typeof restriction["Valid"] != 'undefined') {
+                    if (restriction["For"]["Name"] == "RelationshipType" && restriction["For"]["Value"] == rel_type) {
+                        if (typeof restriction["Valid"]["Value"] != 'undefined') {
+                            type_to_relation_map[rel_type] = [restriction["Valid"]["Value"]];
+                        } else {
+                            type_to_relation_map[rel_type] = restriction["Valid"]["Values"];
+                        }
+                                              
+                    }
+                }
+            });
+        });
+    }
+
+    function add_type_to_select($select, values, invalid_value) {
+        $select.empty();
+        $select.append($("<option></option>"));
+        $.each(values, function(k){
+            var value = ir_sample_to_tss_sample[values[k]];
+            if (value != invalid_value) {
+                var $opt = $("<option></option>");
+                $opt.attr('value', value);
+                $opt.text(value);
+                
+                $select.on('change', function() {
+                    var $tr = $(this).parent().parent();
+                    var rel_value = $(this).val();
+                    var $rel_select = $tr.find(".irRelationRole");
+                    $rel_select.empty();
+                    var option_values = type_to_relation_map[rel_value];
+                    $.each(option_values, function(x){
+                        var $rel_opt = $("<option></option>");
+                        $rel_opt.attr('value', option_values[x]);
+                        $rel_opt.text(option_values[x]);
+                        $rel_select.append($rel_opt);
+                    });
+                });
+                // if (value == "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}") {
+                //     $opt.attr('selected', true);
+                // }
+                $select.append($opt);
+            }
+        });
+    }
+
+    function set_invalid_value(restrictions) {
+        var  invalid_value = "invalid";
+        $.each(restrictions, function(i){
+            var restriction = restrictions[i];
+            if (typeof restriction["Disabled"] != 'undefined' && restriction["For"]["Name"] == 'RelationShipType') {
+                invalid_value = restriction["For"]["Value"];
+            }
+        });
+
+        return invalid_value;
+    }
+
+    function add_ir_user_input(values, name, restrictions, old_values) {
+    
+            if (name == "Gender" || name == "Workflow") {
+                add_ir_general_to_select(name, values, set_invalid_value(restrictions));
+            } else if (name == "Relation") {
+                default_relation_values = values;
+            }
+
+        return old_values;
+    }
+
+    function populate_sample_grouping_to_workflow_map(data) {
+        var column_map = data["sampleRelationshipsTableInfo"]["column-map"];
+        var restrictions = data["sampleRelationshipsTableInfo"]["restrictionRules"];
+
+        $.each(column_map, function(i){
+            var cm = column_map[i];
+            var workflow = cm["Workflow"];
+            var relationshipType = cm["RelationshipType"];
+            workflow_to_application_type_map[workflow] = cm["ApplicationType"];
+            $.each(restrictions, function(j){
+                var restriction = restrictions[j];
+                if (typeof restriction["For"] != 'undefined') {
+                    if (restriction["For"]["Name"] == 'RelationshipType' && restriction["For"]["Value"] == relationshipType) {
+                        
+                            sample_group_to_workflow_map[workflow] = {};
+                            sample_group_to_workflow_map[workflow]["relationshipType"] = restriction["For"]["Value"]
+                            sample_group_to_workflow_map[workflow]["relationRoles"] = restriction["Valid"]["Values"];
+                        
+                    }
+                }
+            });
+
+        });
+    }
+
+    
+    var irGenderSelects;
+    var irWorkflowSelects;
+    var irRelationSelects;
+    var irRelationRoleSelects;
+    var irSetIDInputs;
+
+    function preset_ir_fields(counter, irSampleName, irGender, irWorkflow, irRelType, irRelationRole, irSetID) {
+        var $genderSelect = $(irGenderSelects[counter]);
+        var $workflowSelect = $(irWorkflowSelects[counter]);
+        var $relationSelect = $(irRelationSelects[counter]);
+        var $relationRoleSelect = $(irRelationRoleSelects[counter]);
+        var $irSetIDInput = $(irSetIDInputs[counter]);
+
+        if (irGender.length > 0) {
+            var irGenderTerms = ir_sample_to_tss_sample[irGender];
+            
+            if (irGenderTerms.length > 1) {
+                irGender = irGenderTerms[1];
+            } else {
+                irGender = irGenderTerms[0];
+            }
+
+            $genderSelect.find("option[value="+irGender+"]").attr('selected', true); 
+
+        }
+
+        if (irSampleName != '') {
+            $workflowSelect.find("option[value='"+irWorkflow+"']").attr('selected', true);        
+        } else {
+            $workflowSelect.find("option[value='{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}']").attr('selected', true);
+        }
+
+        $workflowSelect.change();
+        
+        $relationSelect.find("option[value="+irRelType+"]").attr('selected', true);
+        
+        if (irRelationRole.length > 0) {
+            var irRelationRoleTerms = ir_sample_to_tss_sample[irRelationRole];
+            if (typeof irRelationRoleTerms != 'undefined') {
+                if (irRelationRoleTerms.length > 1 && ("{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irVersion}}".match(/4.?0/) != null)) {
+                   irRelationRole = irRelationRoleTerms[1];
+                } else {
+                    irRelationRole = irRelationRoleTerms[0];
+                }    
+            }
+            
+
+            $relationRoleSelect.find("option[value="+irRelationRole+"]").attr('selected', true);
+        }
+        
+
+        $irSetIDInput.val(irSetID);
+    }
+
+    function set_relationshiptype_from_workflow($relationshipType, relationshipType) {
+        $relationshipType.empty();
+
+        $relationshipType.append($("<option></option>"));
+
+        var $opt = $("<option></option>");
+
+        $opt.val(relationshipType);
+        $opt.text(relationshipType);
+
+        $relationshipType.append($opt);
+
+    }
+
+    function set_relationroles_from_workflow($relationRole, relationRoles) {
+        $relationRole.empty();
+
+        $relationRole.append($("<option></option>"));
+
+        $.each(relationRoles, function(i){
+            var relationRole = relationRoles[i];
+
+            var $opt = $("<option></option>");
+
+            $opt.val(relationRole);
+            $opt.text(relationRole);
+
+            $relationRole.append($opt);
+
+        });
+    }
+
+    function find_relationship_type(workflow, columns_map) {
+        var relationshipType = "";
+        $.each(columns_map, function(i){
+            var column = columns_map[i];
+            if (column["Workflow"] == workflow) {
+                relationshipType = column["RelationshipType"];
+            }
+        });
+        return relationshipType;
+    }
+
+    function load_and_set_ir_fields() {
+        var user_input_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/userInput/";
+
+            var jqhxhr = $.get(user_input_url, {"format" : "json", "id" : "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}"}, function(data){
+
+                if (typeof data["sampleRelationshipsTableInfo"] == 'undefined') {
+                    $("#loading").hide();
+                    $("#error").text("Error contacting IonReporter Server");
+                    $("input[name=fireValidation]").val('0');
+                    return;
+                }
+
+                populate_sample_grouping_to_workflow_map(data);
+
+                var columns = data["sampleRelationshipsTableInfo"]["columns"];
+                var restrictions = data["sampleRelationshipsTableInfo"]["restrictionRules"];
+                var old_values = {};
+            
+                if (typeof columns != 'undefined') {
+
+                    if ("{{step.prepopulatedFields.fireValidation}}" == "1"){$("input[name=fireValidation]").val('1');}
+                    
+                    $("#error").text("");
+
+                    var invalid_value = set_invalid_value(restrictions);
+
+                    $.each(columns, function(i){
+                        var result = columns[i];
+                        var name = result["Name"];
+                        var values = result["Values"];
+                        old_values = add_ir_user_input(values, name, restrictions, old_values);
+                        
+                    });
+
+                    irGenderSelects = $(".irGender");
+                    irWorkflowSelects = $(".irWorkflow");
+                    irRelationSelects = $(".irRelation");
+                    irRelationRoleSelects = $(".irRelationRole");
+                    irSetIDInputs = $(".irSetID");
+
+                    irWorkflowSelects.on('change', function(){
+                        var $tr = $(this).parent().parent();
+                        var $relationshipType = $tr.find(".irRelation");
+                        var $relationRole = $tr.find(".irRelationRole");
+                        
+                        var workflow = $(this).val();
+                        var workflow_map = sample_group_to_workflow_map[workflow];
+
+                        if (typeof workflow_map != 'undefined') {
+                            
+                            var relationshipType = workflow_map["relationshipType"];
+                            var relationRoles = workflow_map["relationRoles"];
+
+                            set_relationshiptype_from_workflow($relationshipType, relationshipType);
+
+                            if (relationshipType != invalid_value) {
+                                $relationRole.attr('disabled', false);
+                                set_relationroles_from_workflow($relationRole, relationRoles);    
+                            } else {
+                                $relationRole.empty();
+                                $relationRole.attr('disabled', true);
+                            }
+                            
+
+                        } else {
+                            var relationshipType = find_relationship_type(workflow, data["sampleRelationshipsTableInfo"]["column-map"]);
+                            set_relationshiptype_from_workflow($relationshipType, relationshipType);
+
+                            if (relationshipType != invalid_value) {
+                                $relationRole.attr('disabled', false);
+                                set_relationroles_from_workflow($relationRole, default_relation_values);
+                            } else {
+                                $relationRole.empty();
+                                $relationRole.attr('disabled', true);
+                            }
+                                                        
+                        }
+                    });
+
+                    $("input[name=applicationType]").val(workflow_to_application_type_map['{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}']);
+
+                    irWorkflowSelects.change();
+                
+
+                    {%if helper.isBarcoded %}
+                        {% for barcode, sampleValues in step.savedObjects.barcodeToSample.items %}
+                            preset_ir_fields({{forloop.counter0}}, "{{sampleValues.sampleName|default_if_none:""}}","{{sampleValues.irGender|default_if_none:""}}", "{{sampleValues.irWorkflow|default_if_none:""}}", "{{sampleValues.irRelation|default_if_none:""}}", "{{sampleValues.irRelationRole|default_if_none:""}}", "{{sampleValues.irSetID|default_if_none:"0"}}");
+                        {%endfor%}
+                    {%else%}
+                        {% for key, sampleValues in step.savedObjects.chipToSamples.items %}
+                            preset_ir_fields({{forloop.counter0}}, "{{sampleValues.sampleName|default_if_none:""}}", "{{sampleValues.irGender|default_if_none:""}}", "{{sampleValues.irWorkflow|default_if_none:""}}", "{{sampleValues.irRelation|default_if_none:""}}", "{{sampleValues.irRelationRole|default_if_none:""}}", "{{sampleValues.irSetID|default_if_none:"0"}}");
+
+                        {%endfor%}
+                    {%endif%}
+                } 
+
+                $("#loading").hide();
+            
+        }, "json").fail(function(){
+            $("#error").text("Could not contact the IonReporter server");
+            $("#loading").hide();
+        });
+    }
+
+    $(document).ready(function () {
+        {%comment%} some javascript functions are no longer used, and need cleanup {%endcomment%}
+
+        {%for sample_annotation in step.prepopulatedFields.sampleAnnotations %}
+            var ir_term = "{{sample_annotation.iRValue}}";
+            var ir_terms = ir_term.split("|");
+            $.each(ir_terms, function(i) {
+                var term = ir_terms[i];
+                if (typeof ir_sample_to_tss_sample["{{sample_annotation.value}}"] == 'undefined') {
+                    ir_sample_to_tss_sample["{{sample_annotation.value}}"] = []
+                }
+                ir_sample_to_tss_sample["{{sample_annotation.value}}"].push(term);
+                // if ($.inArray("{{sample_annotation.value}}", default_samples) == -1) {
+                //     default_samples.push("{{sample_annotation.value}}");
+                // }
+            });
+        {%endfor%}
+
+        
+        $('#fillSampleNames').click(function(){
+            $('input[name^="barcodeSampleName"]').each(function(index, value){
+                $(this).val('barcode_' + (index + 1));
+            })
+        });
+        $('#clearSampleNames').click(function(){
+            $('input[name^="barcodeSampleName"]').each(function(index, value){
+                $(this).val('');
+            })
+        });
+
+        {% ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
+            load_and_set_ir_fields();
+        {%endifnotequal%}
+
+        $(".refresh-uploader-information").on('click', function(){
+            $("#loading").show();
+
+            irGenderSelects.empty();
+            irGenderSelects.append($("<option></option>"));
+
+            irWorkflowSelects.empty();
+
+            irRelationSelects.empty();
+            irRelationSelects.append($("<option></option>"));
+
+            irRelationRoleSelects.empty();
+            irRelationRoleSelects.append($("<option></option>"));
+            load_and_set_ir_fields(); 
+            return false;
+        });
+
+        $(".refresh-uploader-information").css('cursor', 'pointer');
+
+        $(".irWorkflow").on('change', function(){
+            var flag = true;
+            {% for key, value in step.validationErrors.items %}
+                flag = false;
+            {%endfor%}
+            if ($("input[name=fireValidation]").val() == "0" && flag) {
+                $("input[name=fireValidation]").val("1");
+            }
+        });
+
+        $(".irGender").on('change', function(){
+            var flag = true;
+            {% for key, value in step.validationErrors.items %}
+                flag = false;
+            {%endfor%}
+            if ($("input[name=fireValidation]").val() == "0" && flag) {
+                $("input[name=fireValidation]").val("1");
+            }
+        });
+
+        $(".irRelationRole").on('change', function(){
+            var flag = true;
+            {% for key, value in step.validationErrors.items %}
+                flag = false;
+            {%endfor%}
+            if ($("input[name=fireValidation]").val() == "0" && flag) {
+                $("input[name=fireValidation]").val("1");
+            }
+        });
+
+        $(".irRelation").on('change', function(){
+            var flag = true;
+            {% for key, value in step.validationErrors.items %}
+                flag = false;
+            {%endfor%}
+            if ($("input[name=fireValidation]").val() == "0" && flag) {
+                $("input[name=fireValidation]").val("1");
+            }
+        });
+
+        $("form").submit(function(){
+            if ($(this).attr('action') != '{% url "page_plan_save" %}') {return true;}
+            if ($("input[name=fireValidation]").val() == "0") {return true;}
+            {%ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0"%}
+                var $rows;
+
+                if ($("#barcodeToSampleTable").length > 0) {
+                    $rows = $("#barcodeToSampleTable tr:gt(0)");
+                } else {
+                    $rows = $("#chipToSampleTable tr:gt(0)");
+                }
+                
+                var badRelation = false;   
+                var counter = 1; 
+                $.each($rows, function(i){
+                    var $tr = $(this);
+                    if ($tr.find(".irSampleName").val().length > 0 && $tr.find(".irRelation").val().length == 0) {
+                        badRelation = true;
+                        return false;
+                    }
+                    counter++;
+                });
+                if (badRelation){$("#errors").text("Relation on row " + counter + " cannot by blank");return false;}
+
+                return validate_user_input_from_iru($(this), "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}", "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}");
+            {%else%}
+                return true;
+            {%endifnotequal%}
+        });
+    });
+</script>
+{% endblock post-raw %}
+

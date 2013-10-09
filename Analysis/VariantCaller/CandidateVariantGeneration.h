@@ -50,7 +50,6 @@
 #include "stats.h"
 
 #include "InputStructures.h"
-#include "AlignmentAssist.h"
 #include "HandleVariant.h"
 #include "ExtendParameters.h"
 #include "MiscUtil.h"
@@ -82,5 +81,30 @@ class CandidateGenerationHelper{
 void clearInfoTags(vcf::Variant *variant);
 bool generateCandidateVariant(AlleleParser * parser, Samples &samples, vcf::Variant * var,  bool &isHotSpot, ExtendParameters * parameters, int allowedAlleleTypes);
 bool fillInHotSpotVariant(AlleleParser * parser, Samples &samples, vcf::Variant * var, vcf::Variant hsVar);
+
+// motif: return one variant, or tell me to give up
+class CandidateStreamWrapper {
+public:
+    CandidateGenerationHelper candidate_generator;
+
+    // overly complex state
+    bool checkHotSpotsSpanningHaploBases;
+    size_t ith_variant;
+    bool doing_hotspot;
+    bool doing_generated;
+
+    CandidateStreamWrapper() {
+        ith_variant = 0;
+        checkHotSpotsSpanningHaploBases = false;
+        doing_hotspot = false;
+        doing_generated = false;
+    };
+    void SetUp(ofstream &outVCFFile, ofstream &filterVCFFile,  InputStructures &global_context, ExtendParameters *parameters);
+    bool ReturnNextHotSpot(bool &isHotSpot, vcf::Variant *variant);
+    bool ReturnNextGeneratedVariant(bool &isHotSpot, vcf::Variant *variant, ExtendParameters *parameters);
+    bool ReturnNextLocalVariant(bool &isHotSpot, vcf::Variant *variant, ExtendParameters *parameters);
+    bool ReturnNextVariantStream(bool &isHotSpot, vcf::Variant *variant, ExtendParameters *parameters);
+    void ResetForNextPosition();
+};
 
 #endif // CANDIDATEVARIANTGENERATION_H

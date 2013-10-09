@@ -5,11 +5,11 @@ WSGIProcessGroup iontorrent
 WSGIApplicationGroup iontorrent
 WSGIPassAuthorization On
 
-WSGIDaemonProcess iontorrent threads=15 processes=8 maximum-requests=512
+WSGIDaemonProcess iontorrent threads=15 processes=8
 # User and group can be set here. user=ionadmin group=ionadmin
-# Virtualenv - python-path=@ION_INSTALL_PREFIX@/ve/lib/python2.6/site-packages
+# Virtualenv - python-path=@ION_INSTALL_PREFIX@/ve/lib/python${PYTHON_VERSION}/site-packages
 
-<Location ~ "^/(data|configure|rundb|plan|monitor|report|logout|login|output)">
+<Location ~ "^/(data|configure|rundb|plan|monitor|report|logout|login|output|news|chef_logs)">
     WSGIApplicationGroup iontorrent
     WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi application-group=iontorrent
     WSGIPassAuthorization On
@@ -21,10 +21,12 @@ WSGIScriptAlias /data @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
 WSGIScriptAlias /configure @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
 WSGIScriptAlias /rundb @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
 WSGIScriptAlias /plan @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+WSGIScriptAlias /sample @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
 WSGIScriptAlias /monitor @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
 WSGIScriptAlias /report @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
 WSGIScriptAlias /login @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
 WSGIScriptAlias /logout @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
+WSGIScriptAlias /news @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
 
 WSGIScriptAliasMatch "^/output.*" @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
 
@@ -60,6 +62,16 @@ WSGIScriptAlias /admin @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
     Allow from 127.0.0.0/8
     Allow from ::1
     Satisfy Any
+
+    # CORS for cross domain json requests
+    # - makes API accessible from other sites
+    <IfModule mod_setenvif.c>
+      <IfModule mod_headers.c>
+        SetEnvIf Origin ":" IS_CORS
+        Header set Access-Control-Allow-Origin "*" env=IS_CORS
+        Header set Access-Control-Allow-Credentials "true" env=IS_CORS
+      </IfModule>
+    </IfModule>
 </Location>
 
 <Location "/ion-docs">
@@ -104,7 +116,6 @@ WSGIScriptAlias /admin @ION_INSTALL_PREFIX@/iondb/wsgi/iontorrent.wsgi
     ExpiresDefault A604800
   </IfModule>
 </Directory>
-Alias /site_media /var/www/site_media
 
 ## ========================================================================
 ## The following blocks access to output until it goes through django auth
@@ -117,6 +128,7 @@ RewriteRule ^/private/ - [F]
 # Special URL for internal redirects only
 # NOTE: Unlike Alias, AliasMatch needs to match entire url
 AliasMatch ^/private/output([^/]*)/(.*) /var/www/output$1/$2
+AliasMatch ^/private/chef_logs([^/]*)/(.*) /var/www/chef_logs$1/$2
 
 # Provide pure basic auth access to /output tree.
 # Used by IGV and external tools.
@@ -149,7 +161,7 @@ Alias /auth/ /var/www/
 ## Static Files For Reports
 <Directory /var/www/output*>
     SetHandler none
-    Options FollowSymLinks MultiViews
+    Options +FollowSymLinks -MultiViews
 
     DirectoryIndex Default_Report.php index.html index.htm index.php log.html drmaa_stdout.txt
 
@@ -166,8 +178,6 @@ Alias /auth/ /var/www/
         ExpiresByType text/html M0
     </IfModule>
 
-    # Some files get detected as text, but we want to transmit them as binary.
-    AddType application/octet-stream .sam .fastq .bam .bai
 </Directory>
 
 <Directory "/var/www/output*/*/*">
@@ -175,65 +185,151 @@ Alias /auth/ /var/www/
     Options +Indexes
 </Directory>
 
-## Enable on the fly compression for various file types
-# NB: Currently only json.
-<IfModule mod_deflate.c>
-  <IfModule filter_module>
-    FilterDeclare   COMPRESS
-    #FilterProvider  COMPRESS  DEFLATE resp=Content-Type $text/html
-    #FilterProvider  COMPRESS  DEFLATE resp=Content-Type $text/css
-    #FilterProvider  COMPRESS  DEFLATE resp=Content-Type $text/plain
-    #FilterProvider  COMPRESS  DEFLATE resp=Content-Type $text/xml
-    #FilterProvider  COMPRESS  DEFLATE resp=Content-Type $application/javascript
-    FilterProvider  COMPRESS  DEFLATE resp=Content-Type $application/json
-    #FilterProvider  COMPRESS  DEFLATE resp=Content-Type $application/xml
-    #FilterProvider  COMPRESS  DEFLATE resp=Content-Type $application/xhtml+xml
-    #FilterProvider  COMPRESS  DEFLATE resp=Content-Type $image/svg+xml
-    FilterChain     COMPRESS
-    FilterProtocol  COMPRESS  DEFLATE change=yes;byteranges=no
-  </IfModule>
+<Directory /var/www/chef_logs*>
+    SetHandler none
+    Options +Indexes
+</Directory>
 
-  <IfModule !mod_filter.c>
-    # Legacy versions of Apache
-    AddOutputFilterByType DEFLATE application/json
-    #AddOutputFilterByType DEFLATE text/html text/plain text/css application/json
-    #AddOutputFilterByType DEFLATE application/javascript
-    #AddOutputFilterByType DEFLATE text/xml application/xml
-    #AddOutputFilterByType DEFLATE application/xhtml+xml
-  </IfModule>
+# Useful elements from github.com/h5bp/server-configs
+
+# ------------------------------------------------------------------------------
+# | CORS-enabled images                                                        |
+# ------------------------------------------------------------------------------
+
+# Send the CORS header for images when browsers request it.
+# https://developer.mozilla.org/en/CORS_Enabled_Image
+# http://blog.chromium.org/2011/07/using-cross-domain-images-in-webgl-and.html
+# http://hacks.mozilla.org/2011/11/using-cors-to-load-webgl-textures-from-cross-domain-images/
+
+<IfModule mod_setenvif.c>
+    <IfModule mod_headers.c>
+        <FilesMatch "\.(gif|ico|jpe?g|png|svgz?|webp)$">
+            SetEnvIf Origin ":" IS_CORS
+            Header set Access-Control-Allow-Origin "*" env=IS_CORS
+        </FilesMatch>
+    </IfModule>
+</IfModule>
+
+
+# ------------------------------------------------------------------------------
+# | Better website experience                                                  |
+# ------------------------------------------------------------------------------
+
+# Force IE to render pages in the highest available mode in the various
+# cases when it may not: http://hsivonen.iki.fi/doctype/ie-mode.pdf.
+# Use, if installed, Google Chrome Frame.
+
+<IfModule mod_headers.c>
+    Header set X-UA-Compatible "IE=edge,chrome=1"
+    # `mod_headers` can't match based on the content-type, however, we only
+    # want to send this header for HTML pages and not for the other resources
+    <FilesMatch "\.(appcache|crx|css|eot|gif|htc|ico|jpe?g|js|m4a|m4v|manifest|mp4|oex|oga|ogg|ogv|otf|pdf|png|safariextz|svgz?|ttf|vcf|webapp|webm|webp|woff|xml|xpi)$">
+        Header unset X-UA-Compatible
+    </FilesMatch>
+    # Sequencing specific file formats
+    <FilesMatch "\.(sam|bam|bai|fastq|sff|vcf)$">
+        Header unset X-UA-Compatible
+    </FilesMatch>
+</IfModule>
+
+
+# ------------------------------------------------------------------------------
+# | Cookie setting from iframes                                                |
+# ------------------------------------------------------------------------------
+
+# Allow cookies to be set from iframes in IE.
+
+<IfModule mod_headers.c>
+  Header set P3P "policyref=\"/w3c/p3p.xml\", CP=\"IDC DSP COR ADM DEVi TAIi PSA PSD IVAi IVDi CONi HIS OUR IND CNT\""
+</IfModule>
+
+# Correct some mime types
+<IfModule mod_mime.c>
+
+  # JavaScript
+    # Normalize to standard type (it's sniffed in IE anyways):
+    # http://tools.ietf.org/html/rfc4329#section-7.2
+    AddType application/javascript                      js jsonp
+    AddType application/json                            json
+
+  # Web fonts
+    AddType application/font-woff                       woff
+    AddType application/vnd.ms-fontobject               eot
+
+    # Browsers usually ignore the font MIME types and sniff the content,
+    # however, Chrome shows a warning if other MIME types are used for the
+    # following fonts.
+    AddType application/x-font-ttf                      ttc ttf
+    AddType font/opentype                               otf
+
+    # Make SVGZ fonts work on iPad:
+    # https://twitter.com/FontSquirrel/status/14855840545
+    AddType     image/svg+xml                           svg svgz
+    AddEncoding gzip                                    svgz
+
+  # Other
+    AddType application/xml                             atom rdf rss xml
+    AddType image/webp                                  webp
+    AddType image/x-icon                                ico
+    AddType text/cache-manifest                         appcache manifest
+
+
+    # ION: Some files get detected as text, but we want to transmit them as binary.
+    AddType application/octet-stream sam fastq bam bai vcf
 
 </IfModule>
 
-## ========================================================================
-## Note: Must explicitly list all non-django content here
-## All content listed here is under django auth and served via WSGI/sendfile
 
-### Static files and media paths
-#Alias /index.html /var/www/index.html
-#Alias /favicon.ico /var/www/favicon.ico
-#Alias /robots.txt /var/www/robots.txt
-#Alias /licenses/ /var/www/licenses/
+# ------------------------------------------------------------------------------
+# | UTF-8 encoding                                                             |
+# ------------------------------------------------------------------------------
 
-## These are not password protected - images, javascript, css, etc.
-#Alias /media/   /var/www/media/
-#Alias /site_media/ /var/www/site_media/
-#Alias /pluginMedia/ /var/www/pluginMedia/
+# Use UTF-8 encoding for anything served as `text/html` or `text/plain`.
+AddDefaultCharset utf-8
 
-#Alias /updates/ /var/www/updates/
-#Alias /systemStatsZip.php /var/www/systemStatsZip.php
-#AliasMatch /onetouchUpdates(.*.tar.bz2) /var/www/onetouchUpdates$1
+# Force UTF-8 for certain file formats.
+<IfModule mod_mime.c>
+    AddCharset utf-8 .atom .css .js .json .rss .vtt .webapp .xml
+</IfModule>
 
-#Alias /__debug__/ /var/www/__debug__/
 
-#Alias /docsnotfound.html /var/www/docsnotfound.html
-#<Location "/ion-docs">
-#    ErrorDocument 404 /docsnotfound.html
-#</Location>
+# ------------------------------------------------------------------------------
+# | Compression                                                                |
+# ------------------------------------------------------------------------------
 
-# Chrome frame activation
-<IfModule mod_setenvif.c>
-  <IfModule mod_headers.c>
-    BrowserMatch chromeframe gcf
-    Header append X-UA-Compatible "chrome=1" env=gcf
-  </IfModule>
+<IfModule mod_deflate.c>
+
+    # Force compression for mangled headers.
+    # http://developer.yahoo.com/blogs/ydn/posts/2010/12/pushing-beyond-gzipping
+    <IfModule mod_setenvif.c>
+        <IfModule mod_headers.c>
+            SetEnvIfNoCase ^(Accept-EncodXng|X-cept-Encoding|X{15}|~{15}|-{15})$ ^((gzip|deflate)\s*,?\s*)+|[X~-]{4,13}$ HAVE_Accept-Encoding
+            RequestHeader append Accept-Encoding "gzip,deflate" env=HAVE_Accept-Encoding
+        </IfModule>
+    </IfModule>
+
+    # Compress all output labeled with one of the following MIME-types
+    # (for Apache versions below 2.3.7, you don't need to enable `mod_filter`
+    #  and can remove the `<IfModule mod_filter.c>` and `</IfModule>` lines
+    #  as `AddOutputFilterByType` is still in the core directives).
+    <IfModule mod_filter.c>
+        AddOutputFilterByType DEFLATE application/atom+xml \
+                                      application/javascript \
+                                      application/json \
+                                      application/rss+xml \
+                                      application/vnd.ms-fontobject \
+                                      application/x-font-ttf \
+                                      application/x-web-app-manifest+json \
+                                      application/xhtml+xml \
+                                      application/xml \
+                                      font/opentype \
+                                      image/svg+xml \
+                                      image/x-icon \
+                                      text/css \
+                                      text/html \
+                                      text/plain \
+                                      text/x-component \
+                                      text/xml
+    </IfModule>
+
 </IfModule>

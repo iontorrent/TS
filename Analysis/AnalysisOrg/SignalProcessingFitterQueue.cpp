@@ -386,6 +386,7 @@ bool UseGpuAcceleration(float useGpuFlag) {
     switch (Id) {
       case ChipId318:
       case ChipId900:
+      case ChipId910:
         return true;
       case ChipId314:
       case ChipId316:

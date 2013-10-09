@@ -117,7 +117,7 @@ float *frameNumber = &tmp_delta_frame[0];
   oneFlowFitKrate->SetNthParam(Astart,AMPLITUDE);
   oneFlowFitKrate->SetNthParam(Kstart,KMULT);
 // do our fit
-  int iter = oneFlowFitKrate->Fit (NUMSINGLEFLOWITER,old_observed);
+  int iter = oneFlowFitKrate->Fit (false, NUMSINGLEFLOWITER_LEVMAR,old_observed);
 
 // return the data
   oneFlowFitKrate->Evaluate(old_vb_out);

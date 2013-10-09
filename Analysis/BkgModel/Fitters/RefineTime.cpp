@@ -129,7 +129,7 @@ float RefineTime::FitSingleFlowTimeShiftFromOneMer(float *avg_1mer, int len, int
     t_mid_nuc_fit.SetParamMin (param_min);
     t_mid_nuc_fit.SetParamMax (param_max);
 
-    t_mid_nuc_fit.Fit (100,avg_1mer);
+    t_mid_nuc_fit.Fit (false, 100, avg_1mer);
 
 //   printf("Flow %d, found t_mid_nuc shift of %8.5f\n",my_flow.buff_flow[fnum],t0fit.params.delta_t_mid_nuc);
     ret = t_mid_nuc_fit.params.delta_t_mid_nuc;

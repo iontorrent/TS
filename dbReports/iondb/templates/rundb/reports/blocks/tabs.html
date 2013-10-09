@@ -1,3 +1,4 @@
+{% load url from future %}
 <section id="tabs">
 	<ul class="nav nav-tabs inContentTabs" id="ReportDetailsTab">
 		<li class="active">
@@ -56,28 +57,28 @@ function precisionUnits(num, div) {
 		<div class='pluginGroup'>
 				<div class='pluginGroupHead'>
 						<div class='pluginGroupHeadInner clearfix'>
-								<button class="btn plugin-collapse">-</button>
-								#= data.Name # &mdash; v#=data.Version#
-# if (!data.State.match("(Superseded|Missing)")) { #
-								<a class="pluginLog ui-icon ui-icon-script"
-										data-title="Log for #=data.Name#"
-										title="Log File for #=data.Name#"
-										href="#=data.URL#/drmaa_stdout.txt">log</a>
-# } #
-								<strong class='pluginState'> #= data.State # </strong>
-# if (data.State.match("^(Completed|Error)")) { #
-								<a class="pluginRemove ui-icon ui-icon-trash"
-										data-title="Remove Plugin Result #=data.Name#"
-										title="Remove Plugin Result #=data.Name#"
-										href="{% url api_dispatch_list resource_name="pluginresult" api_name="v1" %}/#=data.id#/">Remove</a>
-								<span rel='tooltip' title="Size (bytes): #=data.Size#, Inode Count: #=data.inodes#" >
-										<span class='pluginState'>#= precisionUnits(data.Size, 1024) #B</span>
-							 </span>
-# } #
+							# if (!data.Major) { #
+								<button class="btn plugin-collapse">#= (data.show)? "-" : "+" #</button>
+							# } else { #
+								<div style="width: 34px; display: inline-block;"> </div>
+							# } #
+								<strong>#= data.Name #</strong> <small>(v#=data.Version#)</small>
+								# if (data.Major) { #
+                                    <a href="\##= data.Name #">See plugin results above</a>
+                                # } #
+                                <div class="pull-right">
+                                    # if (data.State.match("^(Completed|Error)")) { #
+                                        <span rel='tooltip' title="Size (bytes): #=data.Size#, Inode Count: #=data.inodes#">#= precisionUnits(data.Size, 1024) #B</span>
+                                    # } #
+                                    <span> #= data.State # </span>
+                                    #= plugin_dropdown_template(data) #
+                                </div>
+								
+
 						</div>
 				</div>
-
-				<div class="pluginGroupList" id="#= data.Name #">
+# if (!data.Major) { #
+				<div class="pluginGroupList" id="#= data.Name #" style="display: #= (data.show)? 'block' : 'none' #;">
 # if (data.Files) { #
 #   for (var j = 0; j < data.Files.length; j++) { #
 		#     if ( data.Files[j].endsWith("_block.html") || data.Files[j].endsWith("_block.php") ) {#
@@ -94,9 +95,47 @@ function precisionUnits(num, div) {
 						<div>No Data</div>
 		# } #
 				</div>
+# } #
 		</div>
 </script>
-
+<script type="text/x-kendo-template" id="pluginMajorBlockTemplate">
+    <div class="pluginGroup">
+        <div class="majorNameRow clearfix">
+            <h2 class="pull-left">#= Name # <small>(v#= Version #)</small></h2><a id="#= Name #"> </a>
+            <span class="plugin_links"></span>
+        	<div class="pull-right">
+        		<span style="line-height:48px;">#= State #</span>
+                #= plugin_dropdown_template(data) #
+            </div>
+        </div>
+    </div>
+</script>
+<script type="text/x-kendo-template" id="pluginDropdownTemplate">
+    <div class="btn-group plugin-controls">
+        <button data-toggle="dropdown" class="btn btn-mini dropdown-toggle"><span class="caret"></span></button>
+        <ul class="dropdown-menu pull-right">
+        # if (!State.match("(Superseded|Missing)")) { #
+            <li>
+                <a class="pluginLog" title="Log File for #= Name #" href="#= URL #drmaa_stdout.txt"><i class="icon-file"></i> View Plugin Log</a>
+            </li>
+        # } else { #
+            <li class="disabled">
+                <a><i class="icon-white icon-file"></i> View Plugin Log</a>
+            </li>
+        # } #
+            <li class="divider"></li>
+        # if (State.match("^(Completed|Error)")) { #
+            <li>
+                <a class="pluginRemove" title="Delete plugin #= Name #" href="/rundb/api/v1/pluginresult/#= id #/"><i class="icon-trash"></i> Delete this plugin result</a>
+            </li>
+        # } else { #
+            <li class="disabled">
+                <a><i class="icon-white icon-trash"></i> Delete this plugin result</a>
+            </li>
+        # } #
+        </ul>
+    </div>
+</script>
 			<div id="pluginStatus" >
 				<div>
 					<div id="pluginStatusLoad"></div>
@@ -135,12 +174,19 @@ function precisionUnits(num, div) {
 						{% spaceless %}
 						{% for project in report.projects.all %}
 							{% if not forloop.first %}, {% endif %}
-							<a href="{% url project_results project.id %}">{{project.name}}</a>
+							<a href="{% url "project_results" project.id %}">{{project.name}}</a>
 						{% endfor %}
 						{% endspaceless %}
 					</td>
 				</tr>
 				<tr><td>Sample</td><td>{{ experiment.samples.all|join:", " }}</td></tr>
+				<tr><td>Sample Tube Label</td>
+					<td>
+					{% if experiment.plan %}
+						{{experiment.plan.sampleTubeLabel}}
+					{% endif %}
+					</td>
+				</tr>				
 				<tr><td>Reference</td><td>{{report.eas.reference}}</td></tr>
 				<tr><td>Instrument</td><td>{{experiment.pgmName}}</td></tr>
 				<tr><td>Flow Order</td><td>{{experiment.flowsInOrder}}</td></tr>
@@ -168,9 +214,9 @@ function precisionUnits(num, div) {
 		
 		<div id="Support" data-title="Support" class="tab-pane">
 			<ul>
-				<li>Download the <a href="{% url report_csa report.pk %}">Customer Support Archive</li>
+				<li>Download the <a href="{% url "report_csa" report.pk %}">Customer Support Archive</a></li>
 				<li><a href="log">View the report log</a></li>
-			<ul>
+			</ul>
 		</div>
 		
 		<div id="SoftwareVersion" data-title="Software Version" class="tab-pane">
@@ -190,7 +236,7 @@ function precisionUnits(num, div) {
 	<a class="close" data-dismiss="modal">&times;</a>
 	<h3 id="modal-header"></h3>
   </div>
-  <div class="modal-body" id="modal-body">
+  <div class="modal-body" id="modal-body" style="height: 450px; overflow-y: scroll;">
   </div>
   <div class="modal-footer">
 	<a href="#" class="btn" data-dismiss="modal">Close</a>

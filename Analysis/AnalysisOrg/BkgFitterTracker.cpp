@@ -5,9 +5,30 @@
 #include "MaskSample.h"
 #include "GpuMultiFlowFitControl.h"
 
-void BkgFitterTracker::SetRegionProcessOrder ()
-{
 
+int BkgFitterTracker::findRegion(int row, int col)
+{
+	int reg = -1;
+	for(int i=0; i<numFitters; ++i)
+	{
+		Region *rp = sliced_chip[i]->get_region();
+		int c = rp->col;
+		int r = rp->row;
+		int w = rp->w;
+		int h = rp->h;
+        if (col>=c && col<c+w && row>=r && row<r+h)
+		{
+		reg = i;
+		break;
+		}
+	}
+	return (reg);
+}
+
+
+
+void BkgFitterTracker::SetRegionProcessOrder (CommandLineOpts &inception_state)
+{
   analysis_compute_plan.region_order.resize (numFitters);
   int numBeads;
   int zeroRegions = 0;
@@ -20,23 +41,48 @@ void BkgFitterTracker::SetRegionProcessOrder ()
     analysis_compute_plan.region_order[i] = beadRegion (i, numBeads);
   }
   std::sort (analysis_compute_plan.region_order.begin(), analysis_compute_plan.region_order.end(), sortregionProcessOrderVector);
-
   int nonZeroRegions = numFitters - zeroRegions;
+  printf("Number of live bead regions (nonZeroRegions): %d\n",nonZeroRegions);
 
-  printf ("Number of live bead regions: %d\n", nonZeroRegions);
   if (analysis_compute_plan.gpu_work_load != 0)
   {
-
     int gpuRegions = int (analysis_compute_plan.gpu_work_load * float (nonZeroRegions));
     if (gpuRegions > 0)
       analysis_compute_plan.lastRegionToProcess = gpuRegions;
   }
+  // bestRegion is used for beads_bestRegion output to hdf5 file
+  if (nonZeroRegions>0)
+  {
+      int r = inception_state.bkg_control.bkgModelHdf5Debug_region_r;
+      int c = inception_state.bkg_control.bkgModelHdf5Debug_region_c;
+      if (r >= 0 && c >= 0)
+      {
+      int reg =  findRegion(r,c);
+	  //cout << "SetRegionProcessOrder... findRegion(" << x << "," << y << ") => bestRegion=" << reg << endl << flush;
+      if (reg>=0)
+          bestRegion = beadRegion(reg,sliced_chip[reg]->GetNumLiveBeads());
+      else
+          bestRegion = analysis_compute_plan.region_order[0];
+      }
+      else
+          bestRegion = analysis_compute_plan.region_order[0];
+      bestRegion_region = sliced_chip[bestRegion.first]->get_region();
+      sliced_chip[bestRegion.first]->isBestRegion = true;
+	  //cout << "SetRegionProcessOrder... bestRegion_region.row=" << bestRegion_region->row << " bestRegion_region.col=" << bestRegion_region->col << endl << flush;
+  }
+  else
+  {
+    bestRegion = beadRegion(0,0);
+    bestRegion_region = NULL;
+  }
+  printf("BkgFitterTracker::SetRegionProcessOrder... bestRegion=(%d,%d)\n",bestRegion.first,bestRegion.second);
 }
+
+
 
 
 void BkgFitterTracker::UnSpinGpuThreads ()
 {
-
   if (analysis_queue.GetGpuQueue())
   {
     WorkerInfoQueueItem item;
@@ -80,6 +126,7 @@ BkgFitterTracker::BkgFitterTracker (int numRegions)
   sliced_chip.resize(numRegions);
   bkinfo = NULL;
   all_emptytrace_track = NULL;
+  bestRegion_region = NULL;
 }
 
 void BkgFitterTracker::AllocateRegionData(std::size_t numRegions)   
@@ -153,21 +200,73 @@ void BkgFitterTracker::InitCacheMath()
   poiss_cache.GenerateValues(); // fill out my table
 }
 
-void BkgFitterTracker::ThreadedInitialization (RawWells &rawWells, CommandLineOpts &inception_state, ComplexMask &a_complex_mask, char *results_folder,
+
+void BkgFitterTracker::InitBeads_BestRegion(CommandLineOpts &inception_state)
+{
+    if (inception_state.bkg_control.bkg_debug_files)
+    {
+        int nBeads_live = bestRegion.second;
+        all_params_hdf.Init2(inception_state.bkg_control.bkgModelHdf5Debug,nBeads_live,bestRegion_region);
+    }
+}
+
+
+void BkgFitterTracker::InitBeads_xyflow(CommandLineOpts &inception_state)
+{
+    if (inception_state.bkg_control.bkg_debug_files && inception_state.bkg_control.bkgModel_xyflow_output)
+    {
+        bool readOk = false;
+        int numFlows = inception_state.flow_context.GetNumFlows();
+        switch(inception_state.bkg_control.bkgModel_xyflow_fname_in_type)
+        {
+        case 1:
+            readOk = inception_state.bkg_control.read_file_sse(xyf_hash,numFlows);
+            break;
+        case 2:
+            readOk = inception_state.bkg_control.read_file_rcflow(xyf_hash,numFlows);
+            break;
+        case 3:
+            readOk = inception_state.bkg_control.read_file_xyflow(xyf_hash,numFlows);
+            break;
+        default:
+            break;
+        }
+        if (! readOk) {
+            std::cerr << "InitBeads_xyflow read error... " << inception_state.bkg_control.bkgModel_xyflow_fname_in << std::endl << std::flush;
+            exit(1);
+        }
+        // init xyflow
+        all_params_hdf.InitBeads_xyflow(inception_state.bkg_control.bkgModelHdf5Debug,xyf_hash);
+    }
+}
+
+
+void BkgFitterTracker::ThreadedInitialization (GlobalDefaultsForBkgModel &global_defaults, RawWells &rawWells, CommandLineOpts &inception_state, ComplexMask &a_complex_mask, char *results_folder,
     ImageSpecClass &my_image_spec, std::vector<float> &smooth_t0_est, 
 					       std::vector<Region> &regions,
 					       std::vector<RegionTiming> &region_timing,SeqListClass &my_keys,
 					       bool restart)
 {
+  int totalRegions = regions.size();
   // a debugging file if needed
+  int max_frames = 0;
+  for (size_t i = 0; i <  sliced_chip.size(); i++) {
+    TimeCompression time_c;
+    int t0_frame = (int)(region_timing[i].t0_frame + VFC_T0_OFFSET + .5);
+    time_c.choose_time = global_defaults.signal_process_control.choose_time;
+    time_c.SetUpStandardTime(my_image_spec.uncompFrames, t0_frame,
+                             global_defaults.data_control.time_start_detail, global_defaults.data_control.time_stop_detail, global_defaults.data_control.time_left_avg);
+    int nframes = time_c.npts();
+    max_frames = max(max_frames, nframes);
+  }
   if (inception_state.bkg_control.bkg_debug_files) {
+	global_defaults.signal_process_control.set_max_frames(max_frames); 
     all_params_hdf.Init ( inception_state.sys_context.results_folder,
                         inception_state.loc_context,  
                         my_image_spec, inception_state.flow_context.GetNumFlows(),
-                        inception_state.bkg_control.bkgModelHdf5Debug );
+                          inception_state.bkg_control.bkgModelHdf5Debug, max_frames );
   }
   
-  int totalRegions = regions.size();
   // designate a set of reads that will be processed regardless of whether they pass filters
   set<int> randomLibSet;
   MaskSample<int> randomLib (*a_complex_mask.my_mask, MaskLib, inception_state.bkg_control.unfiltered_library_random_sample);
@@ -274,7 +373,6 @@ void BkgFitterTracker::ExecuteFitForFlow (int flow, ImageTracker &my_img_set, bo
       bkinfo[r].img = & (my_img_set.img[flow_buffer_for_flow]);
     }
     bkinfo[r].last = last;
-
     bkinfo[r].pq = &analysis_queue;
     analysis_queue.item.finished = false;
     analysis_queue.item.private_data = (void *) &bkinfo[r];

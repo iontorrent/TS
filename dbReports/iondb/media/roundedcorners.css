@@ -5,19 +5,19 @@
 }
 
 .roundedcornr_top_526903 div {
-    background: url(/site_media/images/roundedcornr_526903_tl.png) no-repeat top left;
+    background: url("./images/roundedcornr_526903_tl.png") no-repeat top left;
 }
 
 .roundedcornr_top_526903 {
-    background: url(/site_media/images/roundedcornr_526903_tr.png) no-repeat top right;
+    background: url("./images/roundedcornr_526903_tr.png") no-repeat top right;
 }
 
 .roundedcornr_bottom_526903 div {
-    background: url(/site_media/images/roundedcornr_526903_bl.png) no-repeat bottom left;
+    background: url("./images/roundedcornr_526903_bl.png") no-repeat bottom left;
 }
 
 .roundedcornr_bottom_526903 {
-    background: url(/site_media/images/roundedcornr_526903_br.png) no-repeat bottom right;
+    background: url("./images/roundedcornr_526903_br.png") no-repeat bottom right;
 }
 
 .roundedcornr_top_526903 div, .roundedcornr_top_526903, .roundedcornr_bottom_526903 div, .roundedcornr_bottom_526903 {

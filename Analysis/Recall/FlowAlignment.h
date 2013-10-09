@@ -53,5 +53,6 @@ bool PerformFlowAlignment(
 
 void ReverseComplementInPlace (std::string& sequence);
 arma::mat fitFirstOrder(const std::vector<double> & predictions, const std::vector<double> & measurements);
+arma::mat fitFirstOrder(const std::vector<double> & predictions, const std::vector<double> & measurements, int refHP,  const std::vector<int> & calledHPs, int nucIndex);
 
 #endif // FLOWALIGNMENT_H

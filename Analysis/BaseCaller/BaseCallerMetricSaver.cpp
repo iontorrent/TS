@@ -198,8 +198,8 @@ void BaseCallerMetricSaver::SaveRawMeasurements(int y, int x, const vector<float
 {
   if (!save_raw_measurements_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,num_flows_};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,(unsigned int)num_flows_};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_all (dataspace_memory_);
   H5Dwrite (dataset_raw_measurements_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -210,8 +210,8 @@ void BaseCallerMetricSaver::SaveAdditiveCorrection(int y, int x, const vector<fl
 {
   if (!save_additive_correction_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,num_flows_};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,(unsigned int)num_flows_};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_all (dataspace_memory_);
   H5Dwrite (dataset_additive_correction_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -222,8 +222,8 @@ void BaseCallerMetricSaver::SaveMultiplicativeCorrection(int y, int x, const vec
 {
   if (!save_multiplicative_correction_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,num_flows_};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,(unsigned int)num_flows_};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_all (dataspace_memory_);
   H5Dwrite (dataset_multiplicative_correction_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -234,8 +234,8 @@ void BaseCallerMetricSaver::SaveNormalizedMeasurements(int y, int x, const vecto
 {
   if (!save_normalized_measurements_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,num_flows_};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,(unsigned int)num_flows_};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_all (dataspace_memory_);
   H5Dwrite (dataset_normalized_measurements_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -246,8 +246,8 @@ void BaseCallerMetricSaver::SavePrediction(int y, int x, const vector<float>& pr
 {
   if (!save_prediction_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,num_flows_};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,(unsigned int)num_flows_};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_all (dataspace_memory_);
   H5Dwrite (dataset_prediction_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -258,8 +258,8 @@ void BaseCallerMetricSaver::SaveSolution(int y, int x, const vector<char>&  solu
 {
   if (!save_solution_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,num_flows_};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,(unsigned int)num_flows_};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_all (dataspace_memory_);
   H5Dwrite (dataset_solution_, H5T_NATIVE_CHAR, dataspace_memory_, dataspace_file_,
@@ -270,8 +270,8 @@ void BaseCallerMetricSaver::SaveStateInphase(int y, int x, const vector<float>& 
 {
   if (!save_state_inphase_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,num_flows_};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,(unsigned int)num_flows_};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_all (dataspace_memory_);
   H5Dwrite (dataset_state_inphase_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -282,8 +282,8 @@ void BaseCallerMetricSaver::SaveStateTotal(int y, int x, const vector<float>& st
 {
   if (!save_state_total_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,num_flows_};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,(unsigned int)num_flows_};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_all (dataspace_memory_);
   H5Dwrite (dataset_state_total_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -294,8 +294,8 @@ void BaseCallerMetricSaver::SavePenaltyResidual(int y, int x, const vector<float
 {
   if (!save_penalty_residual_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,min(num_flows_,(int)penalty_residual.size())};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,min((unsigned int)num_flows_,(unsigned int)penalty_residual.size())};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_hyperslab (dataspace_memory_, H5S_SELECT_SET, write_start+2, NULL, write_count+2, NULL);
   H5Dwrite (dataset_penalty_residual_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -306,8 +306,8 @@ void BaseCallerMetricSaver::SavePenaltyMismatch(int y, int x, const vector<float
 {
   if (!save_penalty_mismatch_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,min(num_flows_,(int)penalty_mismatch.size())};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,min((unsigned int)num_flows_,(unsigned int)penalty_mismatch.size())};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_hyperslab (dataspace_memory_, H5S_SELECT_SET, write_start+2, NULL, write_count+2, NULL);
   H5Dwrite (dataset_penalty_mismatch_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -320,8 +320,8 @@ void BaseCallerMetricSaver::SaveLocalNoise(int y, int x, const vector<float>& lo
 {
   if (!save_local_noise_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,min(num_flows_,(int)local_noise.size())};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,min((unsigned int)num_flows_,(unsigned int)local_noise.size())};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_hyperslab (dataspace_memory_, H5S_SELECT_SET, write_start+2, NULL, write_count+2, NULL);
   H5Dwrite (dataset_local_noise_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -333,8 +333,8 @@ void BaseCallerMetricSaver::SaveNoiseOverlap(int y, int x, const vector<float>& 
 {
   if (!save_noise_overlap_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,min(num_flows_,(int)minus_noise_overlap.size())};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,min((unsigned int)num_flows_,(unsigned int)minus_noise_overlap.size())};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_hyperslab (dataspace_memory_, H5S_SELECT_SET, write_start+2, NULL, write_count+2, NULL);
   H5Dwrite (dataset_noise_overlap_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -346,8 +346,8 @@ void BaseCallerMetricSaver::SaveHomopolymerRank(int y, int x, const vector<float
 {
   if (!save_homopolymer_rank_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,min(num_flows_,(int)homopolymer_rank.size())};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,min((unsigned int)num_flows_,(unsigned int)homopolymer_rank.size())};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_hyperslab (dataspace_memory_, H5S_SELECT_SET, write_start+2, NULL, write_count+2, NULL);
   H5Dwrite (dataset_homopolymer_rank_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,
@@ -359,8 +359,8 @@ void BaseCallerMetricSaver::SaveNeighborhoodNoise(int y, int x, const vector<flo
 {
   if (!save_neighborhood_noise_)
     return;
-  hsize_t   write_start[3] = {y,x,0};
-  hsize_t   write_count[3] = {1,1,min(num_flows_,(int)neighborhood_noise.size())};
+  hsize_t   write_start[3] = {(unsigned int)y,(unsigned int)x,0};
+  hsize_t   write_count[3] = {1,1,min((unsigned int)num_flows_,(unsigned int)neighborhood_noise.size())};
   H5Sselect_hyperslab (dataspace_file_, H5S_SELECT_SET, write_start, NULL, write_count, NULL);
   H5Sselect_hyperslab (dataspace_memory_, H5S_SELECT_SET, write_start+2, NULL, write_count+2, NULL);
   H5Dwrite (dataset_neighborhood_noise_, H5T_NATIVE_FLOAT, dataspace_memory_, dataspace_file_,

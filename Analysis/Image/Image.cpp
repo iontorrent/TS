@@ -2366,6 +2366,10 @@ bool Image::LoadSlice (
     {
       chipID = strdup ( "318" );
     }
+    else if ( nColFull == 7680 && nRowFull == 5328 )
+    {
+      chipID = strdup ( "910" ); // this is for P1.0 but will not work for a thumb nail.
+    }
     else
     {
       ION_WARN ( "Unable to determine chip type from dimensions" );
@@ -2375,7 +2379,7 @@ bool Image::LoadSlice (
   // Only allow for XTCorrection on 316 and 318 chips
   if ( XTCorrect )
   {
-    if ( ( chipID == NULL ) || ( strcmp ( chipID,"318" ) && strcmp ( chipID,"316" ) && strcmp ( chipID,"316v2" )) )
+    if ( ( chipID == NULL ) || ( strcmp ( chipID,"318" ) && strcmp ( chipID,"316" ) && strcmp ( chipID,"316v2" ) && strcmp(chipID,"910")) )
     {
       XTCorrect = false;
     }

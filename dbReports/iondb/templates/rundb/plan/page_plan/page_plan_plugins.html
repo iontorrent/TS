@@ -1,0 +1,229 @@
+{% extends "rundb/plan/page_plan/base.html" %}
+{% load url from future %}
+
+{% block main-title %}Select which plugins you want executed, then hit next.{% endblock main-title %}
+
+{% block page-plan-content %}
+<div class="row-fluid">
+    <a style="margin-right:20px;" href="#" id="selectAllPlugins" class="btn ">Select All</a>
+    <a href="#" id="clearPluginSelections" class="btn ">Clear Selections</a>
+    <br />
+    <br />
+</div>
+{% for plugin_id, values in step.savedObjects.plugins.items %}
+    {% if forloop.counter0|divisibleby:"3" %}
+        <div class="row-fluid">
+    {% endif %}
+    <div class="span4">
+        {% if values.plugin.autorun %}
+            {% if values.selected %}
+                <input id="plugin_{{plugin_id}}" type="checkbox" name="non_export_plugin" checked="checked" data-autorun="selected" style="opacity: 1;" value="{{plugin_id}}"> {{values.plugin.name}}
+            {% else %}
+                <input id="plugin_{{plugin_id}}" type="checkbox" name="non_export_plugin" checked="checked" data-autorun="auto" style="opacity: 0.3;" value="{{plugin_id}}" title="Plugin is set to auto-run"> {{values.plugin.name}}
+            {% endif %}
+        {% else %}
+            {% if values.selected %}
+                <input id="plugin_{{plugin_id}}" type="checkbox" name="non_export_plugin" checked="checked" value="{{plugin_id}}"> {{values.plugin.name}}
+            {% else %}
+                <input id="plugin_{{plugin_id}}" type="checkbox" name="non_export_plugin" value="{{plugin_id}}"> {{values.plugin.name}}
+            {% endif %}
+        {% endif %}
+        
+        {%if values.plugin.isPlanConfig %}
+            <a id="configure_plugin_{{plugin_id}}" href="#configModal" data-plugin-id="{{plugin_id}}" data-href="/configure/plugins/plugin/{{plugin_id}}/configure/plan/" data-toggle="modal" style="display: none;">Configure</a>
+            <input id="plugin_config_{{plugin_id}}" name="plugin_config_{{plugin_id}}" style="display: none;" value="{{values.config|default_if_none:""}}"/>
+        {% endif %}
+    </div>
+    {% if forloop.counter|divisibleby:"3" or forloop.last %}
+        </div>
+    {% endif %}
+{% endfor %}
+<input id="pluginIds" name="pluginIds" value="" class="hide" type="hidden"/>
+<div id="configModal" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="configModalLabel" aria-hidden="true">
+     <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">x</button>
+        <h3 id="configModalLabel">Plugin Configuration</h3>
+    </div>
+    <div class="modal-body">
+        <iframe width="820" height="350" id="pluginConfigIframe">
+            WARNING: Your browser does not support iFrames.
+        </iframe>
+    </div>
+    <div class="modal-footer">
+        <button class="btn" data-dismiss="modal">Close</button>
+        <button class="btn btn-primary" id="configSaveChanges" data-dismiss="modal">Save Changes</button>
+    </div>
+</div>
+{% endblock page-plan-content %}
+
+{% block prevnext-buttons %}
+    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_reference" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+    {%if helper.isPlanBySample%}
+        <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_barcode" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+    {%else%}
+        <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+    {%endif%}
+    
+{% endblock prevnext-buttons %}
+
+{% block summary-table %}
+    {%include "rundb/plan/page_plan/summary/plugins_summary.html"%}
+{% endblock summary-table %}
+
+{% block post-raw %}
+{{ block.super }}
+<script type="text/javascript">
+    TB.namespace('TB.page_plan.plugins');
+
+    TB.page_plan.plugins.updateSelectedPlugins = function() {
+        var pluginStr = '';
+        var pluginIdsStr = '';
+        $("a[id^='configure_plugin_']").hide();
+        $("input[name='non_export_plugin']:checked").each(function(){
+            var autorun = $(this).attr('data-autorun');
+            if (!autorun || (autorun && autorun == 'selected')) {
+                var pluginId = $(this).val();
+                var pluginName = pluginIdToName[pluginId];
+                var pluginConfigStr = $("#plugin_config_" + pluginId).val();
+                if (pluginName == "variantCaller" && pluginConfigStr && pluginConfigStr.length > 0) {
+                    pluginStr += pluginName;
+                    var pluginConfigJson = JSON.parse(pluginConfigStr);
+                    if (pluginConfigJson && "meta" in pluginConfigJson && "configuration" in pluginConfigJson["meta"]) {
+                        pluginStr +=" (" + pluginConfigJson["meta"]["configuration"] + ")";
+                    }
+                    pluginStr += ", ";
+                } else {
+                    pluginStr += pluginName + ", ";
+                }
+                
+                $("a[id='configure_plugin_" + pluginId + "']").show();
+                pluginIdsStr += pluginId + ", ";
+            }
+        });
+        if (pluginStr.length > 0) {
+            pluginStr = pluginStr.substring(0, pluginStr.length - 2);
+            pluginIdsStr = pluginIdsStr.substring(0, pluginIdsStr.length - 2);
+        }
+        
+        $('#selectedPlugins').text(pluginStr);
+        $('#pluginIds').val(pluginIdsStr);
+    }
+
+    TB.page_plan.plugins.setAutorunClickHandler = function() {
+        $('input:checkbox[name=non_export_plugin]').click(function() {
+            var autorun = $(this).attr('data-autorun');
+            if (autorun) {
+                // 2 states for autorun plugins: user selected and autorun selected, currently can't unselect
+                if (autorun == 'auto') {
+                    $(this).attr('style', 'opacity: 1;');
+                    $(this).attr('data-autorun', 'selected');
+                    $(this).attr('title', '');
+                } else {
+                    $(this).attr('style', 'opacity: 0.3;');
+                    $(this).attr('data-autorun', 'auto');
+                    $(this).attr('title', 'Plugin is set to auto-run');
+                }
+                $(this).prop('checked',true);
+            }
+        });
+    }
+
+    // restore serialized form
+    $.fn.restoreJSON = function(data) {
+        var els = $(this).find(':input').get();
+        if(data && typeof data == 'object') {
+            $.each(els, function() {
+                if (this.name && data[this.name]) {
+                    if(this.type == 'checkbox' || this.type == 'radio') {
+                        $(this).attr("checked", (data[this.name] == $(this).val()));
+                    } else {
+                        $(this).val(data[this.name]);
+                    }
+                    $(this).change();
+                } else if (this.type == 'checkbox') {
+                    $(this).attr("checked", false);
+                }
+            });
+        }
+        return $(this);
+    };
+
+
+    $(document).ready(function () {
+        currentConfigPluginId = null;
+        $("input[name='non_export_plugin']").change(function(){
+            TB.page_plan.plugins.updateSelectedPlugins();
+        });
+        
+        $("#selectAllPlugins").click(function() {
+            $("input[name='non_export_plugin']").each(function(){
+                var autorun = $(this).attr('data-autorun');
+                if (autorun) {
+                    $(this).attr('style', 'opacity: 1;');
+                    $(this).attr('data-autorun', 'selected');
+                    $(this).attr('title', '');
+                } else {
+                    $(this).prop('checked', true);
+                }
+            });
+            TB.page_plan.plugins.updateSelectedPlugins();
+            return false;
+        });
+        $("#clearPluginSelections").click(function() {
+            $("input[name='non_export_plugin']").each(function(){
+                var autorun = $(this).attr('data-autorun');
+                if (autorun) {
+                    $(this).attr('style', 'opacity: 0.3;');
+                    $(this).attr('data-autorun', 'auto');
+                    $(this).attr('title', 'Plugin is set to auto-run');
+                } else {
+                    $(this).prop('checked', false);
+                }
+            });
+            TB.page_plan.plugins.updateSelectedPlugins();
+            return false;
+        });
+        
+        TB.page_plan.plugins.setAutorunClickHandler();
+        TB.page_plan.plugins.updateSelectedPlugins();
+        
+        $("#configSaveChanges").on("click", function (clickEvent) {
+            clickEvent.preventDefault();
+            var pluginIframe = $(this).closest(".modal").find("#pluginConfigIframe")[0];
+            var pluginParams;
+            if ($.isFunction(pluginIframe.contentWindow.serializeForm)){
+                pluginParams = pluginIframe.contentWindow.serializeForm();
+            }else{
+                pluginParams = $(pluginIframe.contentDocument.forms).serializeJSON();
+            }
+            $("#plugin_config_" + currentConfigPluginId).val(JSON.stringify(pluginParams));
+            TB.page_plan.plugins.updateSelectedPlugins();
+        });
+        
+        $("a[id^='configure_plugin_']").click(function(){
+            var plugin_id = $(this).data("plugin-id");
+            currentConfigPluginId = plugin_id;
+            $("#pluginConfigIframe").attr("src", $(this).data("href"));
+            
+            var json_config_str = $('#plugin_config_' + plugin_id).val();
+            if (json_config_str && json_config_str.length > 0) {
+                var iframe = document.getElementById('pluginConfigIframe');
+
+                $(iframe).bind('load', function() {
+                    if ($.isFunction(iframe.contentWindow.restoreForm)){
+                        // use plugin's restoreForm function if exists
+                        iframe.contentWindow.restoreForm(JSON.parse(json_config_str));
+                    } else {
+                        $(iframe.contentDocument.forms).restoreJSON(JSON.parse(json_config_str));
+                        iframe.contentWindow.$(':input').trigger('change');
+                    }
+                });
+            } else {
+                $(iframe).unbind('load');
+            }
+        });
+        
+    });
+</script>
+{% endblock post-raw %}
+

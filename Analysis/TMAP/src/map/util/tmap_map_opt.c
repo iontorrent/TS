@@ -177,6 +177,7 @@ __tmap_map_opt_option_print_func_tf_init(ignore_rg_sam_tags)
 __tmap_map_opt_option_print_func_tf_init(rand_read_name)
 __tmap_map_opt_option_print_func_tf_init(prefix_exclude)
 __tmap_map_opt_option_print_func_tf_init(suffix_exclude)
+__tmap_map_opt_option_print_func_tf_init(use_new_QV)
 __tmap_map_opt_option_print_func_compr_init(input_compr_gz, input_compr, TMAP_FILE_GZ_COMPRESSION)
 __tmap_map_opt_option_print_func_compr_init(input_compr_bz2, input_compr, TMAP_FILE_BZ2_COMPRESSION)
 __tmap_map_opt_option_print_func_int_init(output_type)
@@ -620,6 +621,12 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            "specify how many letters of suffix of name to be excluded when do randomize by name",
                            NULL,
                            tmap_map_opt_option_print_func_suffix_exclude,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "newQV", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "specify whether to use new mapping QV formula",
+                           NULL,
+                           tmap_map_opt_option_print_func_use_new_QV,
                            TMAP_MAP_ALGO_GLOBAL);
   tmap_map_opt_options_add(opt->options, "input-gz", no_argument, 0, 'z', 
                            TMAP_MAP_OPT_TYPE_NONE,
@@ -1594,6 +1601,9 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       } 
       else if(0 == c && 0 == strcmp("suffix-exclude",  options[option_index].name)) {
           opt->suffix_exclude = atoi(optarg);
+      } 
+      else if(0 == c && 0 == strcmp("newQV",  options[option_index].name)) {
+          opt->use_new_QV = atoi(optarg);
       }
       else if(c == 'v' || (0 == c && 0 == strcmp("verbose", options[option_index].name))) {       
           tmap_progress_set_verbosity(1);
@@ -2284,6 +2294,9 @@ tmap_map_opt_copy_global(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src)
     opt_dest->pen_gape = opt_src->pen_gape;
     opt_dest->pen_gapl = opt_src->pen_gapl;
     opt_dest->gapl_len = opt_src->gapl_len;
+    opt_dest->use_new_QV = opt_src->use_new_QV;
+    opt_dest->prefix_exclude =  opt_src->prefix_exclude;
+    opt_dest->suffix_exclude = opt_src->suffix_exclude;
     opt_dest->bw = opt_src->bw;
     opt_dest->softclip_type = opt_src->softclip_type;
     opt_dest->dup_window = opt_src->dup_window;
