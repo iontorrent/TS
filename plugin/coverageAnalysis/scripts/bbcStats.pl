@@ -20,7 +20,7 @@ my $OPTIONS = "Options:
      to regions using the -B option but may take if only target coverage stats are required.
   -D <file> Output file name for depth of coverage Distribution table (tsv) file. Default: '' (None output).
      Output fields created depend on provided options -B, -g and -T.
-  -R <int> Threshold for Read coverage for strand bias to be counted. Default: 10 reads.
+  -R <int> Threshold for Read coverage for strand bias to be counted. Reset to 1 if less. Default: 10 reads.
   -S <int> Threshold for Strand bias counting based on percent forward reads being between <int> and 100-<int>. Default: 70.
   -T <int> Target size in bases. Required (>0) for coverage stats vs. total target region. Default: 0";
 
@@ -79,12 +79,13 @@ my $havedoc = ($docfile ne "" && $docfile ne "-" );
 my $havebed = ($bedfile ne "" && $bedfile ne "-" );
 
 $targetSize = 0 if( $targetSize <= 0 );
+$thresReads = 1 if( $thresReads < 1 );
 $thresBias = 0 if( $thresBias <= 0 );
 $thresBias *= 0.01; # % -> fraction
 
 unless( $genomeStat || $targetSize || $havebed )
 {
-  print STDERR "$CMD: Requires at least one of options -B, -G or -T to be specified.\n";
+  print STDERR "$CMD: Requires at least one of options -g, -B, or -T to be specified.\n";
   exit 1;
 }
 
@@ -124,7 +125,7 @@ loadBedRegions() if( $haveTargets );
 my @genomeDist = $genomeStat > 0 ? ((0)x20000) : ();
 my @targetDist = $targetSize > 0 ? ((0)x20000) : ();
 my ($genomeMaxDepth,$targetMaxDepth) = (0,0);
-my ($genomeNoBias,$targetNoBias) = (0,0);
+my ($genomeBias,$targetBias) = (0,0);
 
 my $baseReads = 0;
 my $intsize = 4;
@@ -163,26 +164,28 @@ while(1)
     ($fcov,$rcov) = unpack $upcstr, $buffer;
     $nrd = $fcov+$rcov;
     $baseReads += $nrd;
-    $bias = $nrd ? $fcov / $nrd : 0.5;
+    $bias = $nrd >= $thresReads ? $fcov / $nrd : 0.5;
     if( $genomeStat )
     {
       ++$genomeDist[$nrd];
       $genomeMaxDepth = $nrd if( $nrd > $genomeMaxDepth );
-      ++$genomeNoBias unless( $nrd >= $thresReads && ($bias < $lthresBias || $bias > $thresBias) );
+      ++$genomeBias if( $bias < $lthresBias || $bias > $thresBias );
     }
     if( $targetSize && $ontarg )
     {
       ++$targetDist[$nrd];
       $targetMaxDepth = $nrd if( $nrd > $targetMaxDepth );
-      ++$targetNoBias unless( $nrd >= $thresReads && ($bias < $lthresBias || $bias > $thresBias) );
+      ++$targetBias if( $bias < $lthresBias || $bias > $thresBias );
     }
     --$rdlen;
   }
 }
 
 # create output stats
-my ($genomeCumd,$genomeABC,$targetCumd,$targetABC);
 $baseReads = $basereads if( $basereads >= 0 );
+my $genomeNoBias = $genomeSize - $genomeBias;
+my $targetNoBias = $targetSize - $targetBias;
+my ($genomeCumd,$genomeABC,$targetCumd,$targetABC);
 ($targetCumd,$targetABC) = outputStats( 'Target', \@targetDist, $targetMaxDepth, $targetSize, $baseReads, $targetNoBias ) if( $targetSize );
 ($genomeCumd,$genomeABC) = outputStats( 'Genome', \@genomeDist, $genomeMaxDepth, $genomeSize, 0, $genomeNoBias ) if( $genomeStat );
 
@@ -336,15 +339,12 @@ sub outputStats
   my $cov0x = $targSize - $cumcov;
   ${$_[1]}[0] = $cov0x;
   $cumd[0] = $targSize;
-  # adjust no stand bias reads to include bases at 0x coverage
-  $noBiasReads += $cov0x;
   # mean read depth
   my $abc = $sum_reads / $targSize;
   # mean and stddev for reads with at least 1x coverage ($cumcov == $cumd[1])
   my $ave = $cumcov > 0 ? $sum_reads/$cumcov : 0;
   my $std = $cumcov > 1 ? sqrt(($sum_dreads - $ave*$ave*$cumcov)/($cumcov-1)) : 0;
   my $scl = 100 / $targSize;
-  my $p2m = int(0.2*$abc+0.5);
   if( $baseReads > 0 )
   {
     printf "Total aligned base reads:          %.0f\n",$baseReads;
@@ -368,7 +368,13 @@ sub outputStats
   }
   my $sig = sigfig($abc);
   printf "Average base coverage depth:       %.${sig}f\n",$abc;
-  printf "Uniformity of base coverage:       %.2f%%\n",$cumd[$p2m]*$scl;
+  # uniformity changed from closest cum cov point to interpolation between two points - as seen on plot
+  # my $p2m = int(0.2*$abc+0.5); my $uniformity = $cumd[$p2m]*$scl;
+  my $lambda = 0.2*$abc;
+  my $p2m = int($lambda);
+  $lambda -= $p2m;
+  my $uniformity = ((1-$lambda)*$cumd[$p2m] + $lambda*$cumd[$p2m+1])*$scl;
+  printf "Uniformity of base coverage:       %.2f%%\n",$uniformity;
   if( $fullstats )
   {
     printf "Bases covered (at least 1x):       %.0f\n",$cumcov;

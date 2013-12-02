@@ -1290,22 +1290,8 @@ tr.new_plan td {
   margin: 0 0 15px;
 }
 
-#runSection .row-fluid {
-  display: -webkit-box;
-  /* OLD: Safari,  iOS, Android browser, older WebKit browsers.  */
-
-  display: -moz-box;
-  /* OLD: Firefox (buggy) */
-
-  display: -ms-flexbox;
-  /* MID: IE 10 */
-
-  display: -webkit-flex;
-  /* NEW, Chrome 21+ */
-
-  display: flex;
-  /* NEW: Opera 12.1, Firefox 22+ */
-
+#runSection div.well {
+  min-height: 540px;
 }
 
 #RunSummary .well small {
@@ -1671,6 +1657,7 @@ tr.new_plan td {
   background-repeat: no-repeat;
   background-size: 100% 100%;
 }
+
 /* =============================================================================
    Ion plugin report
    ========================================================================== */

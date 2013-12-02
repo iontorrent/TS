@@ -223,12 +223,12 @@
             "Variants with strand bias above this are not reported.",
             "Allowed values: Decimal numbers between 0.0 and 1.0",
             "Recommended values: between 0.6 and 1.0",
-            "Impact: Increasing values make indel calls more sensitive but less specific. "]
+            "Impact: Increasing values make indel calls more sensitive but less specific. "],
             
         "output_mnv":[
             "Enables reporting of complex variants.",
             "Allowed values: 1 = report complex variants, 0 = don't report",
-            "Recommended value: 0"],
+            "Recommended value: 0"]
             
     }
 }

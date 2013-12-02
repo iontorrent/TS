@@ -49,14 +49,24 @@
     <div class="span6">                                     
         <label>Chip Type (required):</label>
         <select id="chipType" name="chipType">
-            {% if not helper.isEditRun %}<option value=""></option>{% endif %}
-            {% for chipType in step.getPrePopulatedFieldDict.chipTypes %}
-                {% if chipType.name == step.getCurrentSavedFieldDict.chipType or chipType.name == helper.getStepDict.Application.savedObjects.applProduct.defaultChipType %}
-                    <option SELECTED value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
-                {% elif not helper.isEditRun %}
-                    <option value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+            {% if helper.isEditRun %}
+                <option SELECTED value="{{step.getCurrentSavedFieldDict.chipType}}">Ion 
+                {% if step.getPrePopulatedFieldDict.chipTypes %}
+                    {{step.getPrePopulatedFieldDict.chipTypes.0.getChipDisplayedName}}
+                {% else %}
+                    {{step.getCurrentSavedFieldDict.chipType}}
                 {% endif %}
-            {% endfor %}
+                &trade; Chip</option>
+            {% else %}
+                <option value=""></option>
+                {% for chipType in step.getPrePopulatedFieldDict.chipTypes %}
+                    {% if chipType.name == step.getCurrentSavedFieldDict.chipType or chipType.name == helper.getStepDict.Application.savedObjects.applProduct.defaultChipType %}
+                        <option SELECTED value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+                    {% else %}
+                        <option value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+                    {% endif %}
+                {% endfor %}
+            {% endif %}
         </select>
     </div>
 </div>                  
@@ -135,15 +145,15 @@
                 <option value=""></option>
                 {% for kit in kitDict.kit_values %}
                     {% if kit.name == step.getCurrentSavedFieldDict.templatekitname %}
-                        <option SELECTED value="{{kit.name}}">{{kit}}</option>
+                        <option SELECTED value="{{kit.name}}">{{kit.description}}</option>
                     {% elif kit.name == kitDict.applDefault.name %}
                         {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
-                            <option {{step.getCurrentSavedFieldDict.templatekitname|yesno:",,SELECTED"}} value="{{kit.name}}">{{kit}}</option>
+                            <option {{step.getCurrentSavedFieldDict.templatekitname|yesno:",,SELECTED"}} value="{{kit.name}}">{{kit.descripition}}</option>
                         {% else %}
-                            <option SELECTED value="{{kit.name}}">{{kit}}</option>
+                            <option SELECTED value="{{kit.name}}">{{kit.description}}</option>
                         {% endifequal %}
                     {% else %}
-                        <option value="{{kit.name}}">{{kit}}</option>
+                        <option value="{{kit.name}}">{{kit.description}}</option>
                     {% endif %}
                 {% endfor %}
                 </select>

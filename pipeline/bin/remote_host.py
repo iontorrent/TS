@@ -44,7 +44,7 @@ def queued_check(queue, connection_string, timeout=10):
 ion_remotes = [
     "rssh.iontorrent.net:22",
     "drm.appliedbiosystems.com:443",
-    "updates.iontorrent.com:80",
+    "ionupdates.com:80",
     "us.archive.ubuntu.com:80",
     "security.ubuntu.com:80"
 ]

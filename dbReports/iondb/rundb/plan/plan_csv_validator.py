@@ -183,7 +183,7 @@ def validate_csv_plan(csvPlanDict):
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_HOTSPOT_BED, errorMsg))                        
     
-    errorMsg,plugins = _validate_plugins(csvPlanDict.get(plan_csv_writer.COLUMN_PLUGINS), selectedTemplate, planObj)
+    errorMsg,plugins = _validate_plugins(csvPlanDict.get(plan_csv_writer.COLUMN_PLUGINS), selectedTemplate, selectedEAS, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_PLUGINS, errorMsg))
         
@@ -446,7 +446,7 @@ def _validate_hotspot_bed(input, selectedTemplate, planObj):
         planObj.get_easObj().hotSpotRegionBedFile = ""
     return errorMsg
 
-def _validate_plugins(input, selectedTemplate, planObj):
+def _validate_plugins(input, selectedTemplate, selectedEAS, planObj):
     errorMsg = ""
     plugins = {}
 
@@ -457,7 +457,8 @@ def _validate_plugins(input, selectedTemplate, planObj):
                     selectedPlugin = Plugin.objects.filter(name = plugin.strip(), selected = True, active = True)[0]
 
                     pluginUserInput = {}
-                    template_selectedPlugins = selectedTemplate.get_selectedPlugins()
+
+                    template_selectedPlugins = selectedEAS.selectedPlugins
 
                     if plugin.strip() in template_selectedPlugins:
                         #logger.info("_validate_plugins() FOUND plugin in selectedTemplate....=%s" %(template_selectedPlugins[plugin.strip()]))

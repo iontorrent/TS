@@ -8,6 +8,8 @@ import logging
 
 from django.db import transaction
 
+from iondb.rundb import models
+
 from iondb.rundb.models import Sample, SampleSet, SampleSetItem, SampleAttribute, SampleGroupType_CV,  \
     SampleAttributeDataType, SampleAttributeValue
 
@@ -23,6 +25,7 @@ COLUMN_GENDER = "Gender"
 COLUMN_GROUP_TYPE = "Type"
 COLUMN_GROUP = "Group"
 COLUMN_SAMPLE_DESCRIPTION = "Description"
+COLUMN_BARCODE = "Barcode"
 
 
 def process_csv_sampleSet(csvSampleDict, request, user, sampleSet_ids):
@@ -58,7 +61,8 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     sampleGroupType = csvSampleDict.get(COLUMN_GROUP_TYPE, None)
     sampleGroup = csvSampleDict.get(COLUMN_GROUP, '0').strip()
     sampleDescription = csvSampleDict.get(COLUMN_SAMPLE_DESCRIPTION, '').strip()
-
+    barcodeAssignment = csvSampleDict.get(COLUMN_BARCODE, '').strip()
+    
     if not sampleGroup:
         sampleGroup = '0'
 
@@ -102,7 +106,8 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
                                  'creator' : user,
                                  'creationDate' : currentDateTime,
                                  'lastModifiedUser' : user,
-                                 'lastModifiedDate' : currentDateTime                                     
+                                 'lastModifiedDate' : currentDateTime,
+                                 'barcode' : barcodeAssignment                                
                              }
     
         sampleSetItem, isCreated = SampleSetItem.objects.get_or_create(sample = sample, 
@@ -206,7 +211,8 @@ def validate_csv_sample(csvSampleDict, request):
     sampleGroupType = csvSampleDict.get(COLUMN_GROUP_TYPE, '').strip()
     sampleGroup = csvSampleDict.get(COLUMN_GROUP, '').strip()
     sampleDescription = csvSampleDict.get(COLUMN_SAMPLE_DESCRIPTION, '').strip()
-    
+    barcodeAssignment = csvSampleDict.get(COLUMN_BARCODE, '').strip()
+        
     #skip blank line
     hasAtLeastOneValue = bool([v for v in csvSampleDict.values() if v != ''])
     if not hasAtLeastOneValue:
@@ -237,6 +243,9 @@ def validate_csv_sample(csvSampleDict, request):
         isValid, errorMessage = sample_validator.validate_sampleGroup(sampleGroup)
         if not isValid:
             failed.append((COLUMN_GROUP, errorMessage))
+            
+    if not isValid:
+        failed.append((COLUMN_BARCODE, errorMessage))
 
     #validate user-defined custom attributes
     failed_userDefined = _validate_csv_user_defined_attributes(csvSampleDict, request)
@@ -274,4 +283,77 @@ def _validate_csv_user_defined_attributes(csvSampleDict, request):
         
     return failed
 
- 
+
+def validate_barcodes(row_list):
+    barcodekits = []
+    barcodes = []
+    id_strings = []
+    msgs = dict()
+    count = 0
+    for row in row_list:
+        count += 1
+        barcode = row.get(COLUMN_BARCODE, "")
+        if barcode.strip():
+            dnabarcode = models.dnaBarcode.objects.filter(id_str__iexact=barcode.strip())
+            if len(dnabarcode) > 0:
+                id_strings.append(barcode)
+            else:
+                msgs[count] = ((COLUMN_BARCODE, "Error, %s is an invalid barcode" % (barcode)))
+
+            if barcode in barcode in barcodes:
+                msgs[count] = ((COLUMN_BARCODE, "Error, A barcode can be assigned to only one sample in the sample set and %s has been assigned to another sample" %(barcode)))
+            else:
+                barcodes.append(barcode)
+
+    count = 0
+    for id_str in id_strings:
+        if len(barcodekits) > 0:
+            d = models.dnaBarcode.objects.filter(id_str__iexact=id_str, name__in=[x.name for x in barcodekits])
+        else:
+            d = models.dnaBarcode.objects.filter(id_str__iexact=id_str)
+        if len(d) > 0:
+            barcodekits.extend(list(d))
+        else:
+            msgs[count] = ((COLUMN_BARCODE, "Error, Only one barcode kit can be used for a sample set"))
+    return msgs
+
+def validate_barcodes_for_existing_samples(row_list, sampleset_ids):
+    msgs = dict()
+    count = 0
+    for row in row_list:
+        count += 1
+        barcode = row.get(COLUMN_BARCODE,"")
+        barcode = barcode.strip()
+        
+        if barcode: 
+            dnabarcode = models.dnaBarcode.objects.filter(id_str__iexact=barcode)
+            barcodeKit = dnabarcode[0].name
+            row[COLUMN_BARCODE] = dnabarcode[0].id_str
+        else:
+            barcode = None
+            barcodeKit = None
+
+        for sampleset_id in sampleset_ids:
+        
+            sampleset = models.SampleSet.objects.get(pk=sampleset_id)
+            samplesetitems = sampleset.samples.all()
+        
+            for item in samplesetitems:
+                #first validate that all barcode kits are the same for all samples
+                if item.barcode:
+        
+                    dnabarcodes = models.dnaBarcode.objects.filter(id_str=item.barcode)
+                    barcodeKit1 = dnabarcodes[0].name
+                    barcode1 = item.barcode
+                else:
+                    barcodeKit1 = None
+                    barcode1 = None
+
+                if barcodeKit and barcodeKit1 and barcodeKit != barcodeKit1:
+                    msgs[count] = ((COLUMN_BARCODE, "Error, Only one barcode kit can be used for a sample set"))
+                    
+                #next validate that all barcodes are unique per each sample
+                if barcode and barcode1 and barcode == barcode1:
+                    msgs[count] = ((COLUMN_BARCODE, "Error, A barcode can be assigned to only one sample in the sample set and %s has been assigned to another sample" %(barcode)))
+
+    return msgs

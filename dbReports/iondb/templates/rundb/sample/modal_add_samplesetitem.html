@@ -39,7 +39,7 @@
 						{% endif %}
 
 						<div class="help-block">
-        					{% if sampleSetItem.sample.status != "created" %}      					
+        					{% if intent == "edit" and sampleSetItem.sample.status != "created" %}      					
         						FYI: Sample name in the sample set cannot be changed since this sample set has been planned.
         					{% endif %}
 						</div>						
@@ -63,6 +63,73 @@
 
 					</div>
 				</div>	
+	            
+				<div class="control-group">
+					<label class="control-label" for="barcodeKit">Barcode Kit</label>
+					<div class="controls">
+                    	<select id="barcodeKit" name="barcodeKit"style="height:28px;">
+            			<option value="" >.....</option>
+                    	{% if intent == "edit" %}
+            				{% for kit in barcodeKits %}
+            					{% ifequal selectedBarcodeKitName kit.name %}
+            						<option SELECTED value="{{kit.name}}">{{kit.name}}</option>
+            					{% else %}
+            						<option value="{{kit.name}}" >{{kit.name}}</option>
+            					{% endifequal %}
+            				{% endfor %}		
+            			{% elif intent == "edit_pending" %}
+            				{% for kit in barcodeKits %}
+            					{% ifequal pending_sampleSetItem.barcodeKit kit.name %}
+            						<option SELECTED value="{{kit.name}}">{{kit.name}}</option>
+            					{% else %}
+            						<option value="{{kit.name}}" >{{kit.name}}</option>
+            					{% endifequal %}
+            				{% endfor %}		}
+                        {% else %}                	
+                    		{% for kit in barcodeKits %}
+    						<option value="{{kit.name}}" >{{kit.name}}</option>}
+                    		{% endfor %}
+                        {% endif %}
+                    	</select>
+
+						<div class="help-block">
+						</div>
+					</div>
+				</div>
+
+				<div id="barcodesDiv" class="control-group">
+					<label class="control-label" for="barcode">Barcode</label>
+					<div class="controls">
+                    	<select id="barcode" name="barcode"style="height:28px;">
+            			<option value="" >.....</option>
+                    	{% if intent == "edit" %}
+            				{% for barcode in barcodeInfo %}
+    							{% ifequal selectedBarcodeKitName barcode.name %}            				
+            						{% ifequal sampleSetItem.barcode barcode.id_str %}
+            							<option SELECTED value="{{sampleSetItem.barcode}}">{{sampleSetItem.barcode}}</option>
+            						{% else %}
+            							<option value="{{barcode.id_str}}" >{{barcode.id_str}}</option>
+            						{% endifequal %}
+            					{% endifequal %}
+            				{% endfor %}
+    					{% elif intent == "edit_pending" %}
+    						{% for barcode in barcodeInfo %}
+    							{% ifequal pending_sampleSetItem.barcodeKit barcode.name %}    						
+    								{% ifequal pending_sampleSetItem.barcode barcode.id_str %}
+    									<option SELECTED value="{{pending_sampleSetItem.barcode}}">{{pending_sampleSetItem.barcode}}</option>
+    								{% else %}
+    									<option value="{{barcode.id_str}}" >{{barcode.id_str}}</option>
+    								{% endifequal %}
+    							{% endifequal %}
+    						{% endfor %}
+                        {% endif %}
+                    	</select>
+
+						<div class="help-block">
+						</div>
+					</div>
+				</div>
+				
 
 				<div class="control-group">
 					<label class="control-label" for="gender">Gender</label>
@@ -118,7 +185,7 @@
 
 			    
 				<div class="control-group">
-					<label class="control-label" for="relationshipRole">Role</label>
+					<label class="control-label" for="relationshipRole">Type</label>
 					<div class="controls">
                     	<select id="relationshipRole" name="relationshipRole"style="height:28px;">
             			<option value="" >.....</option>
@@ -208,7 +275,16 @@
 	                    />
 						</div>
 					</div>
-				{% endfor %}			
+				{% endfor %}	
+
+				<div id="myBarcodes" class="control-group" style="display: none;" >
+            		<select id="myBarcode">
+					{% for barcode in barcodeInfo %}
+						<option value="{{barcode.name}}|{{barcode.id_str}}" >{{barcode.id_str}}</option>
+					{% endfor %}
+					</select>
+				</div
+						
 		</form>
 		</div>
 		</div>
@@ -241,6 +317,17 @@
                 }
               }
         }); 
+        
+
+    	//dropdown list selection change for barcode kit
+        $("#barcodeKit").change(function() {
+       	
+            var selectedBarcodeKit = $(this).find("option:selected").val();
+        	console.log("barcodeKit=", selectedBarcodeKit, "; this.val=", $(this).val());
+
+        	filterBarcodeList(selectedBarcodeKit);
+        });
+
         
       $('.done_add_sampleSetItem_btn').click(function(e){
     	  
@@ -300,7 +387,33 @@
 
            return false;
       });
+      
     });   
+        
+
+    function filterBarcodeList(barcodeKitName) {
+    	console.log("filterBarcodeList() barcodeKitName=", barcodeKitName);
+
+        $('#barcode').find('option').remove();
+        var option = '<option value="" >.....</option>';
+        $('[name=barcode]').append(option);
+
+        if (barcodeKitName) {
+        	$("#myBarcode option").each(function() {
+        		var value = $(this).val();
+        		var splitedValue = value.split('|');
+        		var barcodeKitValue = splitedValue[0];
+        		var barcodeValue = splitedValue[1];
+
+        		if (($(this).val() != "...") && (barcodeKitValue == barcodeKitName)) {
+        			var option = '<option value="' + barcodeValue + '">' + barcodeValue + '</option>';
+        			$('[name=barcode]').append(option);            		
+        		}
+
+        	});
+        }
+    };
+    	
 </script>
 
 </div>

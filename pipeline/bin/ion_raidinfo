@@ -10,6 +10,19 @@ if [ $(id -u) != 0 ]; then
     exit 1
 fi
 
+# Get Firmware versions of Controller cards
+echo "=================================================================="
+echo "BIOS:"
+dmidecode -t bios | egrep '(Version|Revision)'
+echo
+echo "=================================================================="
+echo "RAID Firmware:"
+PATH=/opt/MegaRAID/MegaCli/:$PATH
+MEGALOG="-NoLog"
+MegaCli64 -AdpAllInfo -aALL $MEGALOG| grep -A 3 Product
+echo "=================================================================="
+echo
+
 # Get list of devices
 # MegaCli64 -PDList -aALL -or- MegaCli64 -PDList -a0 since we only have one adapter
 

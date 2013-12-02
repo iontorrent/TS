@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}"
         type="text/css"/>
 <script type="text/javascript" src="/site_media/resources/scripts/plan/iru_validation.js"></script>
+<script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
 {% endblock extra_head %}
 
 {% block main-title %}{% endblock main-title %}
@@ -27,6 +28,7 @@
 <div class="row-fluid">
     <div class="span12">
         <input type="hidden" name="fireValidation" value="{{step.prepopulatedFields.fireValidation}}"/>
+        <input type="hidden" name="irDown" value="{{step.getCurrentSavedFieldDict.irDown}}"/>
         <input type="hidden" name="applicationType"/>
         <label for="planName" class="form-label">Run Plan Name (required):</label>
         <input style="width: 700px;" id="planName" name="planName" value="{{step.getCurrentSavedFieldDict.planName|default_if_none:""}}"/>
@@ -260,7 +262,7 @@
     <input type="hidden" name="error_messages_count" value="0"/>
     <input type="hidden" name="warning_messages_count" value="-1"/>
     
-    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_ionreporter" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">&larr; Previous</a>
     <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save" %}');$('#step_form').submit();return false;">
         {% if helper.isCopy %}
             Copy Plan
@@ -768,7 +770,7 @@
                 if (typeof data["sampleRelationshipsTableInfo"] == 'undefined') {
                     $("#loading").hide();
                     $("#error").text("Error contacting IonReporter Server");
-                    $("input[name=fireValidation]").val('0');
+                    $("input[name=irDown]").val('1');
                     return;
                 }
 
@@ -779,7 +781,7 @@
                 var old_values = {};
             
                 if (typeof columns != 'undefined') {
-
+                    $("input[name=irDown]").val('0');
                     if ("{{step.prepopulatedFields.fireValidation}}" == "1"){$("input[name=fireValidation]").val('1');}
                     
                     $("#error").text("");
@@ -864,7 +866,38 @@
         });
     }
 
+    function submitForm() {
+            if ($("form").attr('action') != '{% url "page_plan_save" %}') {return true;}
+            
+            {%ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0"%}
+                var $rows;
+
+                if ($("#barcodeToSampleTable").length > 0) {
+                    $rows = $("#barcodeToSampleTable tr:gt(0)");
+                } else {
+                    $rows = $("#chipToSampleTable tr:gt(0)");
+                }
+                
+                var badRelation = false;   
+                var counter = 1; 
+                $.each($rows, function(i){
+                    var $tr = $(this);
+                    if ($tr.find(".irSampleName").val().length > 0 && $tr.find(".irRelation").val().length == 0) {
+                        badRelation = true;
+                        return false;
+                    }
+                    counter++;
+                });
+                if (badRelation){$("#errors").text("Relation on row " + counter + " cannot by blank");return false;}
+
+                return validate_user_input_from_iru($("form"), "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}", "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}");
+            {%else%}
+                return true;
+            {%endifnotequal%}
+        }
+
     $(document).ready(function () {
+        $(document).ajaxStart($.blockUI).ajaxStop($.unblockUI);
         {%comment%} some javascript functions are no longer used, and need cleanup {%endcomment%}
 
         {%for sample_annotation in step.prepopulatedFields.sampleAnnotations %}
@@ -957,34 +990,41 @@
             }
         });
 
-        $("form").submit(function(){
-            if ($(this).attr('action') != '{% url "page_plan_save" %}') {return true;}
-            if ($("input[name=fireValidation]").val() == "0") {return true;}
-            {%ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0"%}
-                var $rows;
+        
 
-                if ($("#barcodeToSampleTable").length > 0) {
-                    $rows = $("#barcodeToSampleTable tr:gt(0)");
-                } else {
-                    $rows = $("#chipToSampleTable tr:gt(0)");
-                }
-                
-                var badRelation = false;   
-                var counter = 1; 
-                $.each($rows, function(i){
-                    var $tr = $(this);
-                    if ($tr.find(".irSampleName").val().length > 0 && $tr.find(".irRelation").val().length == 0) {
-                        badRelation = true;
-                        return false;
-                    }
-                    counter++;
-                });
-                if (badRelation){$("#errors").text("Relation on row " + counter + " cannot by blank");return false;}
-
-                return validate_user_input_from_iru($(this), "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}", "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}");
-            {%else%}
+        $("form").submit(function(e){
+            if ($("input[name=irDown]").val() == "1")
                 return true;
-            {%endifnotequal%}
+            $.blockUI();
+            var flag = false;
+            setTimeout(function(){
+                flag = submitForm();
+                if (flag === true) {
+                    $("form").unbind("submit");
+                    $("form").submit();
+                } else if (flag === false){
+                    $.unblockUI();
+                    return false;
+                }else {
+                    apprise(flag, {
+                        'confirm': false,       // Ok and Cancel buttons
+                        'verify': true,     // Yes and No buttons
+                        'input': false,         // Text input (can be true or string for default text)
+                        'animate': true,    // Groovy animation (can true or number, default is 400)
+                        'textOk': 'Ok',     // Ok button default text
+                        'textCancel': 'Cancel', // Cancel button default text
+                        'textYes': 'Ignore Errors',     // Yes button default text
+                        'textNo': 'Fix Errors',     // No button default text
+                        'position': 'center'// position center (y-axis) any other option will default to 100 top
+                    }, function (r) {
+                            if (r) {$("form").unbind("submit");$("form").submit();}
+                            else {flag = false;}
+                        }
+                    );
+                }
+            },200);
+            if (!flag)
+                e.preventDefault();
         });
     });
 </script>

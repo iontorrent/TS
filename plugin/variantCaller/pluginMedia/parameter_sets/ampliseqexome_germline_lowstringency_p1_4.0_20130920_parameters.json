@@ -1,6 +1,6 @@
 {
   "torrent_variant_caller":{
-        "tvc_parameters_version": "germline_low_stringency_proton-3.6.66827",
+        "tvc_parameters_version": "germline_low_stringency_proton-4.0_20130920",
         "data_quality_stringency":5.0,
         "hp_max_length":8,
         "filter_unusual_predictions":0.25,

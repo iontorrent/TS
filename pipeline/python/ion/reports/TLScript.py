@@ -7,7 +7,7 @@ Uses output from there to generate charts and graphs and dumps to current direct
 Adds key metrics to database
 """
 
-__version__ = filter(str.isdigit, "$Revision: 67899 $")
+__version__ = filter(str.isdigit, "$Revision: 75897 $")
 
 # First we need to bootstrap the analysis to start correctly from the command
 # line or as the child process of a web server. We import a few things we
@@ -53,7 +53,6 @@ from urlparse import urlunsplit
 from ion.reports.plotters import *
 from ion.utils.aggregate_alignment import *
 sys.path.append('/opt/ion/')
-import re
 
 #####################################################################
 #
@@ -793,44 +792,50 @@ if __name__=="__main__":
         #never overwrite existing checksum_status.txt file, needed in R&D to keep important data
         if not os.path.exists(os.path.join(env['pathToRaw'],"checksum_status.txt")):
 
+            printtime("INFO: chipType: %s" % env['chipType'])
+
             keep_raw_data = False
             try:
-                if env['libraryName']!='none' and len(env['libraryName'])>0:
-                    if os.path.exists(ionstats_alignment_json_path):
-                        afile = open(ionstats_alignment_json_path, 'r')
-                        ionstats_alignment = json.load(afile)
-                        afile.close()
-                        if int(ionstats_alignment['AQ17']['num_bases']) > 14500000000:
+
+                if os.path.exists('/opt/ion/.ion-internal-server'):
+
+                    if is_blockprocessing:
+
+                        if env['chipType'] == 'P1.1.17':
+                            if env['libraryName']!='none' and len(env['libraryName'])>0:
+                                if os.path.exists(ionstats_alignment_json_path):
+                                    afile = open(ionstats_alignment_json_path, 'r')
+                                    ionstats_alignment = json.load(afile)
+                                    afile.close()
+                                    if int(ionstats_alignment['AQ17']['num_bases']) > 17000000000:
+                                        keep_raw_data = True
+                                    else:
+                                        printtime("INFO: delete raw data if all blocks have been processed successfully")
+                                else:
+                                    keep_raw_data = True
+                                    printtime("ERROR: keep_raw_data check failed: ionstats_alignment.json is missing")
+                            else:
+                                printtime("INFO: reference library not set, skip AQ17 check")
+
+                        if env['chipType'] == 'P1.0.19':
                             keep_raw_data = True
-                            f = open(raw_return_code_file+".keep", 'w')
-                            f.write(str(99))
-                            f.close()
-                            printtime("INFO: keep raw data")
-                        else:
-                            printtime("INFO: delete raw data if all blocks have been processed successfully")
-                    else:
-                        printtime("ERROR: keep_raw_data check failed: ionstats_alignment.json is missing")
-                else:
-                    printtime("INFO: reference library not set, skip AQ17 check")
+
+                        if env['chipType'] == 'P2.2.16':
+                            keep_raw_data = True
+
+                        if env['chipType'] == 'P1.2.18':
+                            keep_raw_data = True
             except:
                printtime("ERROR: keep_raw_data check failed")
                traceback.print_exc()
 
-            # save all P1.0.19 and P1.2.18 runs
-            try:
-                printtime("INFO: chipType: %s" % env['chipType'])
-                if is_blockprocessing and ( env['chipType'] == 'P1.0.19' or env['chipType'] == 'P1.2.18' ):
-                    keep_raw_data = True
-                    fk = open(raw_return_code_file+".keep", 'w')
-                    fk.write(str(99))
-                    fk.close()
-                    printtime("INFO: keep raw P1.0.19 data")
-            except:
-                printtime("ERROR: could not determine chip type")
-                traceback.print_exc()
-
             if (is_wholechip or is_blockprocessing) and os.path.isfile(raw_return_code_file):
                 if keep_raw_data:
+                    printtime("INFO: keep raw %s data" % env['chipType'])
+                    f = open(raw_return_code_file+".keep", 'w')
+                    f.write(str(99))
+                    f.close()
+         
                     shutil.copyfile(raw_return_code_file+".keep",os.path.join(env['pathToRaw'],"checksum_status.txt"))
                 else:
                     shutil.copyfile(raw_return_code_file,os.path.join(env['pathToRaw'],"checksum_status.txt"))

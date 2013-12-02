@@ -88,7 +88,7 @@ REFERENCE_LIBRARY_TEMP_DIR = "/results/referenceLibrary/temp/"
 import iondb.anaserve.djangoinit
 import iondb.rundb.models
 
-__version__ = filter(str.isdigit, "$Revision: 73367 $")
+__version__ = filter(str.isdigit, "$Revision: 74435 $")
 
 
 # local settings
@@ -997,6 +997,30 @@ class AnalysisServer(xmlrpc.XMLRPC):
                     metrics.append("chef:n");
             except:
                 pass
+
+            # report loading for this run (percent of addressable wells that contain ISPs)
+            wells_with_isps = 0
+            addressable_wells = 0
+            keys = [
+                      'bead',
+                      'empty',
+                      'pinned',
+                      'ignored',
+                   ]
+            for k in keys:
+                try:
+                    v = r.analysismetrics_set.values()[0][k]
+                    if v:
+                        addressable_wells = addressable_wells + v
+                        if k == 'bead':
+                            wells_with_isps = v
+                except Exception as err:
+                    pass
+
+            if (addressable_wells > 0):
+                percent_loaded = 100.0 * float(wells_with_isps) / float(addressable_wells)
+                pstr = 'loading:{0:.3}'.format(percent_loaded)
+                metrics.append(pstr)
 
             # write out the metrics
             x = uuid.uuid1()

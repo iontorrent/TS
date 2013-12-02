@@ -77,6 +77,9 @@ for site in Proton:
 chipListLookup = models.Chip.objects.all().values_list('name', 'description')
 chipDictLookup = dict(i for i in chipListLookup)
 
+chipLookup = {'P0':['P1.0.19', 'P2.0.16'], 'PI':['900', '900v2', 'P1.1.17', 'P1.1.16', 'P2.1.16']}
+
+
 def lookupSite(site):
     printName = ''
     if 'ite' in site:
@@ -347,6 +350,35 @@ class MetricRecord:
         self.historyValue = [0]*self.historyPeriods
 
 def isChipMatch(chipName, exp):
+    global chipLookup
+
+    match = False
+
+    # try our most recent naming scheme first
+    chipVersion = ''
+    try:
+        chipVersion = exp.log['chipversion']
+    except:
+        if exp.chipType == '900': # legacy Proton support
+            chipVersion = 'P1.1.17'
+
+    if len(chipVersion) > 0 and len(chipVersion) < 7:
+        if chipVersion[0] == 'P' or chipVersion[0] == '1': # intermediate style naming, assume P1 chip
+            chipVersion = 'P1.1.17'
+
+    # chip might have been a P0 chip run in advAvg mode 1 so it reports 164M sensors, treat as a P1
+    try:
+        if chipVersion == 'P1.0.19' and int(exp.log['columns']) > 15000:
+            chipVersion = 'P1.1.17'
+    except:
+        pass
+
+    if chipVersion in chipLookup[chipName]:
+        match = True
+
+    return match
+
+def isChipMatch_old(chipName, exp):
     global chipDictLookup
 
     match = False
@@ -517,6 +549,8 @@ def BuildMetrics(metricRecordList, site):
     repList_other = repList.exclude(eas__reference='hg19')
     repList_hg19_default = repList_hg19.filter(resultsName__icontains='auto')
     repList_other_default = repList_other.filter(resultsName__icontains='auto')
+    repList_hg19 = repList_hg19.exclude(resultsName__icontains='auto')
+    repList_other = repList_other.exclude(resultsName__icontains='auto')
 
     # loop through all metrics, updating top 5 (numBest) list for each
     for metricRecord in metricRecordList:
@@ -830,8 +864,10 @@ if __name__=="__main__":
     #
 
     # chipList = ['P1.0.19', 'P1.1.17']
-    chipList = ['P0', 'PI']
-    chipListDesc = ["P0", "P1"]
+    #chipList = ['P0', 'PI']
+    #chipListDesc = ["P0", "P1"]
+    chipList = ['PI']
+    chipListDesc = ["P1"]
     metricList = ['total_mapped_target_bases', 'q17_mapped_bases', 'q20_mapped_bases']
     metricListDesc = ['Mapped Bases', 'AQ17 Bases', 'AQ20 Bases']
     protonMetrics = {}

@@ -56,6 +56,7 @@ function status()
   if [ "$pid" == "" ]
   then
     echo "RSMAgent_TS is not running"
+    return 1
   else
     echo "RSMAgent_TS is running"
   fi

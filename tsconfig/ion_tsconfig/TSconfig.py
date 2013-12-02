@@ -813,11 +813,6 @@ class TSconfig (object):
             self.reset_pkgprogress(total=len(syspkglist) + len(ionpkglist))
 
             #================================
-            # Execute sources.list file update
-            #================================
-            self.TSupdated_mirror_check()
-
-            #================================
             # Execute pre-System package install
             #================================
             self.TSpreinst_syspkg()
@@ -851,6 +846,11 @@ class TSconfig (object):
             # Update tsconf.conf file
             #================================
             self.TSupdate_conf_file()
+
+            #================================
+            # Execute sources.list file update
+            #================================
+            self.TSupdated_mirror_check()
 
         except:
             self.logger.exception(traceback.format_exc())

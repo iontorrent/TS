@@ -20,6 +20,7 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   if (opts.outputDebug == 0 && inception_state.bkg_control.bkg_debug_files) {
     opts.outputDebug = 1;
   }
+  opts.useSignalReference = inception_state.bfd_control.useSignalReference;
   opts.minRatioLiveWell = inception_state.bfd_control.bfMinLiveRatio;
   opts.doRecoverSdFilter = inception_state.bfd_control.skipBeadfindSdRecover == 0;
   opts.nCores = inception_state.bfd_control.numThreads;

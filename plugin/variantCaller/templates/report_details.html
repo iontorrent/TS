@@ -27,6 +27,7 @@
 
 <script src="lifegrid/allelesTable.js"></script>
 <script src="bootstrap-select.js"></script>
+<script src="bootbox.min.js"></script>
 
 <style>
     .highlight {
@@ -578,49 +579,59 @@ $(function () {
   
   
   $('#postbutton').click(function () {
-    $('#postbutton').attr('disabled','disabled')
-    $("#postbutton").val("Submitting...");
-    pluginAPIJSON = {
-        "plugin": ["{{options.plugin_name}}"],
-        "pluginconfig": local_parameters
-    };
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_min_coverage"] = $("#edit_snp_min_coverage").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_min_coverage"] = $("#edit_indel_min_coverage").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_min_coverage"] = $("#edit_hotspot_min_coverage").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_min_cov_each_strand"] = $("#edit_snp_min_cov_each_strand").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_min_cov_each_strand"] = $("#edit_indel_min_cov_each_strand").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_min_cov_each_strand"] = $("#edit_hotspot_min_cov_each_strand").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_strand_bias"] = $("#edit_snp_strand_bias").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_strand_bias"] = $("#edit_indel_strand_bias").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_strand_bias"] = $("#edit_hotspot_strand_bias").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_min_variant_score"] = $("#edit_snp_min_variant_score").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_min_variant_score"] = $("#edit_indel_min_variant_score").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_min_variant_score"] = $("#edit_hotspot_min_variant_score").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hp_max_length"] = $("#edit_hp_max_length").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["filter_unusual_predictions"] = $("#edit_filter_unusual_predictions").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["filter_insertion_predictions"] = $("#edit_filter_insertion_predictions").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["filter_deletion_predictions"] = $("#edit_filter_deletion_predictions").val();
-    pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["data_quality_stringency"] = $("#edit_data_quality_stringency").val();
-    pluginAPIJSON = JSON.stringify(pluginAPIJSON);
-    
-    pluginURL = "/rundb/api/v1/results/{{startplugin_json.runinfo.pk}}/plugin/";
-    console.log(pluginAPIJSON);
-    console.log(pluginURL);
-  
-    $.ajax({
-        type: 'POST',
-        url: pluginURL,
-        async: false,
-        contentType: "application/json; charset=utf-8",
-        data: pluginAPIJSON,
-        dataType: "json"
-    }).done(function(data) {
-      $("#postbutton").val("Success");
-      $("#rerun_message").html('Plugin relaunch has been submitted. Check run report page.');
-      //'<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check variantCaller.html in the Plugin Summary</p></div>');
-      
+
+
+    bootbox.confirm("Are you sure you want to rerun Variant Caller? The previous plugin data will be overwritten.", function(result) {
+        if (result){
+            $('#postbutton').attr('disabled','disabled')
+            $("#postbutton").val("Submitting...");
+            pluginAPIJSON = {
+                "plugin": ["{{options.plugin_name}}"],
+                "pluginconfig": local_parameters
+            };
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_min_coverage"] = $("#edit_snp_min_coverage").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_min_coverage"] = $("#edit_indel_min_coverage").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_min_coverage"] = $("#edit_hotspot_min_coverage").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_min_cov_each_strand"] = $("#edit_snp_min_cov_each_strand").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_min_cov_each_strand"] = $("#edit_indel_min_cov_each_strand").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_min_cov_each_strand"] = $("#edit_hotspot_min_cov_each_strand").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_strand_bias"] = $("#edit_snp_strand_bias").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_strand_bias"] = $("#edit_indel_strand_bias").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_strand_bias"] = $("#edit_hotspot_strand_bias").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["snp_min_variant_score"] = $("#edit_snp_min_variant_score").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["indel_min_variant_score"] = $("#edit_indel_min_variant_score").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hotspot_min_variant_score"] = $("#edit_hotspot_min_variant_score").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["hp_max_length"] = $("#edit_hp_max_length").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["filter_unusual_predictions"] = $("#edit_filter_unusual_predictions").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["filter_insertion_predictions"] = $("#edit_filter_insertion_predictions").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["filter_deletion_predictions"] = $("#edit_filter_deletion_predictions").val();
+            pluginAPIJSON["pluginconfig"]["torrent_variant_caller"]["data_quality_stringency"] = $("#edit_data_quality_stringency").val();
+            pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+
+            pluginURL = "/rundb/api/v1/results/{{startplugin_json.runinfo.pk}}/plugin/";
+            console.log(pluginAPIJSON);
+            console.log(pluginURL);
+
+            $.ajax({
+                type: 'POST',
+                url: pluginURL,
+                async: false,
+                contentType: "application/json; charset=utf-8",
+                data: pluginAPIJSON,
+                dataType: "json"
+            }).done(function(data) {
+                        $("#postbutton").val("Success");
+                        $("#rerun_message").html('Plugin relaunch has been submitted. Check run report page.');
+                        //'<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check variantCaller.html in the Plugin Summary</p></div>');
+
+                    });
+        }
+
     });
-  
+
+
+
+
   });
 });
 

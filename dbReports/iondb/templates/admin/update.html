@@ -76,6 +76,9 @@
           <div><input type="checkbox" id="auto_download" /> Automatically download but do not install updates.</div>
           <button id="check_update">Check</button>
           <button id="confirm_update" disabled="disabled">Update Server</button>
+            {% if not allow_update %}
+              <p><strong>Update is disabled until more disk space is available on root partition</strong></p>
+            {% endif %}
         </div>
         <div id="update_confirmation" style="display: none;">
           <p><strong>Are you sure you want to update?</strong></p>
@@ -119,6 +122,10 @@
               <li><a href="{% url "iondb.rundb.admin.tsconfig_log" %}">View tsconfig log</a></li>
               <li><a href="{% url "iondb.rundb.admin.get_zip_logs" %}">Download logs archive</a></li>
           </div>
+          <div id="disk_root_full" style="display: none;">
+            <p><strong>Low free disk space on the root partition.
+            Software update is disabled until space is freed up.</strong></p>
+          </div>
           <div id="unknown" style="display: none;">
             <p>The status of your system is unknown at this time.
               Check this page again in a few minutes or contact support.</p>
@@ -131,14 +138,7 @@
       </div>
       <div id="release_memo">
         <h3>Torrent Suite Release Notes</h3>
-        <p>Here are some helpful videos explaining how to perform some common tasks using the new version.</p>
-        <ul>
-          <li><a href="http://ioncommunity.lifetechnologies.com/docs/DOC-3230">Overview</a> of the software</li>
-          <li><a href="http://ioncommunity.lifetechnologies.com/videos/1693">Finding your data</a></li>
-          <li><a href="http://ioncommunity.lifetechnologies.com/videos/1691">Planning new runs</a></li>
-          <li><a href="http://ioncommunity.lifetechnologies.com/videos/1692">Monitoring new runs</a></li>
-        </ul>
-        <p>Please check the Release Notes on the <a href="http://lifetech-it.hosted.jivesoftware.com/index.jspa">Ion Community</a> for more details.</p>
+        <p>Please check the Release Notes on the <a href="http://ioncommunity.lifetechnologies.com/welcome">Ion Community</a> for more details.</p>
         <p>After the Torrent Suite upgrade is completed, don't forget to also upgrade your instruments to the same software level to ensure they are compatible.</p>
       </div>
     </div>
@@ -202,7 +202,7 @@
             this.$("#update_checking").show();
           },
           "Available": function() {
-            this.$("#confirm_update").removeAttr("disabled");
+            if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
             this.$("#update_actions").slideDown();
             if (this.previous_status != null) {
               setTimeout(function(){
@@ -215,7 +215,7 @@
             this.$("#update_actions").slideDown();
           },
           "Ready to install": function() {
-            this.$("#confirm_update").removeAttr("disabled");
+            if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
             this.$("#ready_install").slideDown();
             this.$("#update_actions").slideDown();
           },
@@ -229,18 +229,22 @@
           },
           "Update failure": function() {
             this.$("#update_actions").slideDown();
-            this.$("#confirm_update").removeAttr("disabled");
+            if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
             this.$("#update_failure").slideDown();
           },
           "Download failure": function() {
             this.$("#update_actions").slideDown();
-            this.$("#confirm_update").removeAttr("disabled");
+            if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
             this.$("#download_failure").slideDown();
           },
           "Install failure": function() {
             this.$("#update_actions").slideDown();
-            this.$("#confirm_update").removeAttr("disabled");
+            if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
             this.$("#install_failure").slideDown();
+          },
+          "Insufficient disk space": function() {
+            this.$("#update_actions").hide();
+            this.$("#disk_root_full").slideDown('slow');
           },
           "Finished installing": function() {
             this.$("#update_finished").show();
@@ -268,7 +272,7 @@
 
         confirm_update: function(){
           this.$("#update_actions").hide();
-          this.$("#confirm_update").removeAttr("disabled");
+          if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
           this.$("#update_confirmation").slideDown('slow');
         },
 

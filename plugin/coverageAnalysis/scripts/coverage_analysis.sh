@@ -11,6 +11,8 @@ OPTIONS="OPTIONS:
   -h --help Report usage and help.
   -l Log progress to STDERR.
   -a Customize output for Amplicon targets - use assigned reads rather than bases
+  -b Base coverage only. No individual target coverage analysis. (Lite version.)
+  -c Add target Coverage statistics by mean base read depth. TargetSeq option => ignorred if -a specified.
   -d Ignore Duplicate reads.
   -u Include only Uniquely mapped reads (MAPQ > 1).
   -p <number> Padding value used (for report). Default: 0.
@@ -21,6 +23,7 @@ OPTIONS="OPTIONS:
   -C <name> Original name for BED targets selected for reporting (pre-padding, etc.)
   -D <dirpath> Path to Directory where results are written.
   -G <file> Genome file. Assumed to be <reference.fasta>.fai if not specified.
+  -L <name> Reference library name, e.g. hg19. Defaults to <reference> if not supplied.
   -N <name> Sample name for use in summary output. Default: 'None'
   -O <file> Output file name for text data (per analysis). Default: '' => <BAMROOT>.stats.cov.txt.
   -P <file> Padded targets BED file for padded target coverage analysis.
@@ -50,26 +53,32 @@ PLOTREPLEN=0
 RNABED=0
 TRACKINGBED=""
 SAMPLENAME="None"
+NOTARGETANAL=0
+TRGCOVBYBASES=0
+LIBRARY=""
 
-while getopts "hladurp:s:A:B:C:G:D:N:O:P:S:" opt
+while getopts "hlabcdurp:s:A:B:C:D:G:L:N:O:P:S:" opt
 do
   case $opt in
-    a) AMPLICONS=1;;
-    d) NONDUPREADS=1;;
-    u) UNIQUEREADS=1;;
-    l) SHOWLOG=1;;
-    r) RNABED=1;;
-    p) PADVAL=$OPTARG;;
-    s) USROPTS=$OPTARG;;
     A) ANNOBED=$OPTARG;;
     B) BEDFILE=$OPTARG;;
     C) TRGSID=$OPTARG;;
     D) WORKDIR=$OPTARG;;
     G) GENOME=$OPTARG;;
+    L) LIBRARY=$OPTARG;;
     N) SAMPLENAME=$OPTARG;;
     O) OUTFILE=$OPTARG;;
     P) PADBED=$OPTARG;;
     S) TRACKINGBED=$OPTARG;;
+    a) AMPLICONS=1;;
+    b) NOTARGETANAL=1;;
+    c) TRGCOVBYBASES=1;;
+    d) NONDUPREADS=1;;
+    u) UNIQUEREADS=1;;
+    r) RNABED=1;;
+    p) PADVAL=$OPTARG;;
+    s) USROPTS=$OPTARG;;
+    l) SHOWLOG=1;;
     h) echo -e "$DESCR\n$USAGE\n$OPTIONS" >&2
        exit 0;;
     \?) echo $USAGE >&2
@@ -94,9 +103,6 @@ if [ "$OUTFILE" == "-" ]; then
   OUTFILE=""
 fi
 
-# Grab global option in local option (for override)
-TRGCOVBYBASE=$TARGETCOVBYBASES
-
 # set up some dependent options and tags
 BASECOVERAGE=1
 PROPPLOTS=1
@@ -113,6 +119,11 @@ fi
 TARGETMSG='target base'
 if [ $AMPLICONS -gt 0 ];then
   TARGETMSG='amplicon read'
+fi
+
+if [ -z "$LIBRARY" ]; then
+  LIBRARY=`echo $REFERENCE | sed -e 's/^.*\///' | sed -e 's/\.[^.]*$//'`
+  echo "$CMD: WARNING: -L option not supplied. Reference library name assumed to be '$LIBRARY'." >&2
 fi
 
 #--------- End command arg parsing ---------
@@ -208,11 +219,11 @@ if [ -n "$ANNOBED" ]; then
 else
   # called scripts fail w/o specific annotation format
   ANNOBEDOPT=''
-  TRGCOVBYBASE=0
+  TRGCOVBYBASES=0
 fi
 
 if [ $AMPLICONS -gt 0 -a -z "$BEDOPT" ];then
-  echo "WARNING: AmpliSeq run requested without targets file. Report defaulting to Whole Genome analysis."
+  echo "WARNING: AmpliSeq run requested without -B targets file. Report defaulting to Whole Genome analysis."
   AMPLICONS=0
 fi
 
@@ -276,30 +287,34 @@ fi
 
 ########### Generate the Coverage Overview Plot #########
 
-if [ $TRACK -eq 1 ]; then
-  echo "(`date`) Calculating effective reference coverage overview plot..." >&2
+if [ $NOTARGETANAL -ne 0 ];then
+  echo "(`date`) Skipping coverage overview analysis..." >&2
+else
+  if [ $TRACK -eq 1 ]; then
+    echo "(`date`) Calculating effective reference coverage overview plot..." >&2
+  fi
+  COVOVR_XLS="$ROOTNAME.covoverview.xls"
+  COVCMD="$RUNDIR/bbcOverview.pl $BEDOPT \"$BBCFILE\" > \"$COVOVR_XLS\""
+  eval "$COVCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: bbcOverview.pl failed." >&2
+    echo "\$ $COVCMD" >&2
+    exit 1;
+  elif [ $SHOWLOG -eq 1 ]; then
+    echo "> $COVOVR_XLS" >&2
+  fi
+  
+  COVOVR_PNG="$ROOTNAME.covoverview.png"
+  PLOTCMD="R --no-save --slave --vanilla --args \"$COVOVR_XLS\" \"$COVOVR_PNG\" < $RUNDIR/plot_overview.R"
+  eval "$PLOTCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: plot_overview.R failed." >&2
+    PLOTERROR=1
+  elif [ $SHOWLOG -eq 1 ]; then
+    echo "> $COVOVR_PNG" >&2
+  fi
 fi
-COVOVR_XLS="$ROOTNAME.covoverview.xls"
-COVCMD="$RUNDIR/bbcOverview.pl $BEDOPT \"$BBCFILE\" > \"$COVOVR_XLS\""
-eval "$COVCMD" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: bbcOverview.pl failed." >&2
-  echo "\$ $COVCMD" >&2
-  exit 1;
-elif [ $SHOWLOG -eq 1 ]; then
-  echo "> $COVOVR_XLS" >&2
-fi
-
-COVOVR_PNG="$ROOTNAME.covoverview.png"
-PLOTCMD="R --no-save --slave --vanilla --args \"$COVOVR_XLS\" \"$COVOVR_PNG\" < $RUNDIR/plot_overview.R"
-eval "$PLOTCMD" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: plot_overview.R failed." >&2
-  PLOTERROR=1
-elif [ $SHOWLOG -eq 1 ]; then
-  echo "> $COVOVR_PNG" >&2
-fi
-
+  
 fi;  # BASECOVERAGE
 
 ########### Read Coverage Analysis #########
@@ -334,14 +349,14 @@ elif [ -n "$TRACKINGBED" ]; then
 fi
 echo "" >> "$OUTFILE"
 
-if [ $NOTARGETANALYSIS -ne 0 ]; then
+if [ $NOTARGETANAL -ne 0 ]; then
   echo "(`date`) Skipping fine coverage analysis..." >&2
 elif [ -n "$ANNOBEDOPT" ]; then
   if [ $AMPLICONS -eq 0 ]; then
     TARGETCOVFILE="$ROOTNAME.target.cov.xls"
     COVCMD="$RUNDIR/bbcTargetAnno.pl \"$BBCFILE\" \"$ANNOBED\" > \"$TARGETCOVFILE\""
   else
-    TRGCOVBYBASE=0
+    TRGCOVBYBASES=0
     TARGETCOVFILE="$ROOTNAME.amplicon.cov.xls"
     COVCMD="$RUNDIR/targetReadCoverage.pl $FILTOPTS $AMPCOVOPTS \"$BAMFILE\" \"$ANNOBED\" > \"$TARGETCOVFILE\""
   fi
@@ -443,9 +458,9 @@ fi
 
 ########### Depth of Read Coverage Analysis #########
 
-if [ $NOTARGETANALYSIS -ne 0 ]; then
+if [ $NOTARGETANAL -ne 0 ]; then
   echo "(`date`) Skipping analysis of depth of $TARGETMSG coverage..." >&2
-elif [ $AMPLICONS -ne 0 -o $TRGCOVBYBASE -eq 1 ]; then
+elif [ $AMPLICONS -ne 0 -o $TRGCOVBYBASES -eq 1 ]; then
   if [ $TRACK -eq 1 ]; then
     echo "(`date`) Analyzing depth of $TARGETMSG coverage..." >&2
   fi
@@ -496,26 +511,30 @@ fi
 
 ########### Chromosome Coverage Analysis #########
 
-if [ $TRACK -eq 1 ]; then
-  echo "(`date`) Generating reference coverage files..." >&2
-fi
-CBCFILE="$AUXFILEROOT.cbc"
-CHRCOVFILE="$ROOTNAME.chr.cov.xls"
-WGNCOVFILE="$ROOTNAME.wgn.cov.xls"
-TRGOPTS=""
-if [ -n "$BEDFILE" ]; then
-  TRGOPTS="-t"
-fi
-COVCMD="$RUNDIR/bbcCoarseCov.pl $TRGOPTS -O \"$CBCFILE\" -C \"$CHRCOVFILE\" -W \"$WGNCOVFILE\" \"$BBCFILE\""
-eval "$COVCMD" >&2
-if [ $? -ne 0 ]; then
-  echo -e "\nERROR: bbcCourseCov.pl failed." >&2
-  echo "\$ $COVCMD" >&2
-  exit 1;
-elif [ $SHOWLOG -eq 1 ]; then
-  echo "> $CBCFILE" >&2
-  echo "> $CHRCOVFILE" >&2
-  echo "> $WGNCOVFILE" >&2
+if [ $NOTARGETANAL -ne 0 ];then
+  echo "(`date`) Skipping generating reference coverage files..." >&2
+else
+  if [ $TRACK -eq 1 ]; then
+    echo "(`date`) Generating reference coverage files..." >&2
+  fi
+  CBCFILE="$AUXFILEROOT.cbc"
+  CHRCOVFILE="$ROOTNAME.chr.cov.xls"
+  WGNCOVFILE="$ROOTNAME.wgn.cov.xls"
+  TRGOPTS=""
+  if [ -n "$BEDFILE" ]; then
+    TRGOPTS="-t"
+  fi
+  COVCMD="$RUNDIR/bbcCoarseCov.pl $TRGOPTS -O \"$CBCFILE\" -C \"$CHRCOVFILE\" -W \"$WGNCOVFILE\" \"$BBCFILE\""
+  eval "$COVCMD" >&2
+  if [ $? -ne 0 ]; then
+    echo -e "\nERROR: bbcCourseCov.pl failed." >&2
+    echo "\$ $COVCMD" >&2
+    exit 1;
+  elif [ $SHOWLOG -eq 1 ]; then
+    echo "> $CBCFILE" >&2
+    echo "> $CHRCOVFILE" >&2
+    echo "> $WGNCOVFILE" >&2
+  fi
 fi
 
 fi;  # BASECOVERAGE
@@ -532,9 +551,9 @@ fi
 REFGEN="genome"
 COLLAPSERCC=""; # RCC will be expanded unless no targets are defined (=> Whole Genome but not necessarily!)
 
-if [ $NOTARGETANALYSIS -ne 0 ]; then
+if [ $NOTARGETANAL -ne 0 ]; then
   echo "(`date`) Skipping output for $TARGETMSG representation and coverage chart..." >&2
-elif [ -n "$BEDFILE" ]; then
+elif [ -n "$ANNOBEDOPT" ]; then
   COLLAPSEPFP="collapse"
   if [ $PROPPLOTS -eq 1 ]; then
     TARGETCOV_GC_PNG=`echo $TARGETCOV_GC_PNG | sed -e 's/^.*\///'`
@@ -551,30 +570,32 @@ elif [ -n "$BEDFILE" ]; then
     fi
     echo "<br/> <div id='PictureFrame' $REPOPT $COLLAPSEPFP class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
   fi
-  REFGEN=""
   COLLAPSERCC="collapse"
   TCCINITFILE=`echo $TCCINITFILE | sed -e 's/^.*\///'`
   echo "<br/> <div id='TargetCoverageChart' amplicons=$AMPLICONS datafile='$TARGETCOVFILE' initfile='$TCCINITFILE' class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
 fi
 
-if [ $BASECOVERAGE -eq 1 ]; then
+if [ $BASECOVERAGE -eq 1 -a $NOTARGETANAL -eq 0 ]; then
+  if [ -n "$BEDOPT" ];then
+    REFGEN=""
+  fi
   CHRCOVFILE=`echo $CHRCOVFILE | sed -e 's/^.*\///'`
   WGNCOVFILE=`echo $WGNCOVFILE | sed -e 's/^.*\///'`
   echo "<br/> <div id='ReferenceCoverageChart' $REFGEN $COLLAPSERCC bbcfile='$BBCFILE' cbcfile='$CBCFILE' chrcovfile='$CHRCOVFILE' wgncovfile='$WGNCOVFILE' class='center' style='width:800px;height:300px'></div>" >> "$EXTRAHTML"
 fi
+
 echo "<br/> <div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:420px'></div>" >> "$EXTRAHTML"
 echo "<br/>" >> "$EXTRAHTML"
 
 # create local igv session file
-# TODO: This is an environment variable that should be here.
-if [ -n "$TSP_LIBRARY" ]; then
+if [ -n "$LIBRARY" ]; then
   TRACKOPT=''
   if [ -n "$ANNOBEDOPT" ]; then
     ANNOBED=`echo $ANNOBED | sed -e 's/^.*\///'`
     TRACKOPT="-a \"$ANNOBED\""
   fi
   BAMFILE=`echo $BAMFILE | sed -e 's/^.*\///'`
-  COVCMD="$RUNDIR/create_igv_link.py -r ${WORKDIR} -b ${BAMFILE} $TRACKOPT -g ${TSP_LIBRARY} -s igv_session.xml"
+  COVCMD="$RUNDIR/create_igv_link.py -r ${WORKDIR} -b ${BAMFILE} $TRACKOPT -g ${LIBRARY} -s igv_session.xml"
   eval "$COVCMD" >&2
   if [ $? -ne 0 ]; then
     echo -e "\nWARNING: create_igv_link.py failed." >&2
@@ -582,6 +603,8 @@ if [ -n "$TSP_LIBRARY" ]; then
   elif [ $SHOWLOG -eq 1 ]; then
     echo "> igv_session.xml" >&2
   fi
+elif [ $NOTARGETANAL -ne 0 ]; then
+  echo "$CMD: WARNING: Reference library name (-L) not supplied. IGV links may not work." >&2
 fi
 
 ########### Finished #########

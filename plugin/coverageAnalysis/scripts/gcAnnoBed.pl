@@ -11,8 +11,9 @@ my $DESCR = "Create GC augmented BED file (write to STDOUT).";
 my $USAGE = "Usage:\n\t$CMD <BED file> <FASTA file>";
 my $OPTIONS = "Options:
   -h ? --help Display Help information.
+  -a Auto-format. Attempt to recognize BED file format from track line and convert as best as possible. (-f option ignorred) 
   -s Strict validation. Error out for potential issues, e.g. records out-of-order.
-  -w Print Warning messages for potential BED file issues to STDOUT (-l also has to be specified).
+  -w Print Warning messages for potential BED file issues to STDOUT
   -f <list> Add extra Fields defined by comma-separated list of fields positions (1 based).
   -t <dirpath> Path to use for temporary file output. Default: '.'";
 
@@ -20,6 +21,7 @@ my $extraFields = "";
 my $strictbed = 0;
 my $bedwarn = 0;
 my $tmpdir = '.';
+my $autoformat = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -27,6 +29,7 @@ while( scalar(@ARGV) > 0 )
     last if($ARGV[0] !~ /^-/);
     my $opt = shift;
     if($opt eq '-f') {$extraFields = shift;}
+    elsif($opt eq '-a') {$autoformat = 1;}
     elsif($opt eq '-s') {$strictbed = 1;}
     elsif($opt eq '-w') {$bedwarn = 1;}
     elsif($opt eq '-t') {$tmpdir = shift;}
@@ -55,9 +58,10 @@ elsif( scalar @ARGV != 2 )
 my $bedfile = shift(@ARGV);
 my $fastafile = shift(@ARGV);
 
-#--------- End command arg parsing ---------
-
+$extraFields = "" if( $autoformat );
 my @exFields = split(',',$extraFields);
+
+#--------- End command arg parsing ---------
 
 # Create temporary fasta-tab file
 my($fastatmp,$folder,$ext) = fileparse($bedfile, qr/\.[^.]*$/);
@@ -71,6 +75,9 @@ my %chromNum;
 my ($line,$gc,$lastChr,$lastSrt,$lastEnd);
 my ($numTargets,$numTargReads,$numTracks,$chromCnt) = (0,0,0,0);
 my ($numWarns,$numErrors,$trackWarns) = (0,0,0);
+
+my $autofield_id = "";
+my $autofield_aux = "";
 
 # Assume equivalant ordering and re-write input BED to STDOUT
 open( FASTABED, "$fastatmp" ) || die "Cannot open fastaFromBed result file $fastatmp.\n";
@@ -98,7 +105,19 @@ while( <BEDFILE> )
       exit 1 if( $strictbed );
     }
     print "$_\n";
+    if( $autoformat ) {
+      $autoformat = 2 if( m/\stype=bedDetail/ );
+    }
     next;
+  }
+  # complete autoformat detection
+  if( $autoformat ) {
+    my $nflds = scalar(@fields);
+    if( $nflds >= 4 ) { push(@exFields,4) }
+    else { $autofield_id = "." }
+    if( $autoformat == 2 ) { push(@exFields,$nflds) }
+    else { $autofield_aux = "." }
+    $autoformat = 0;
   }
   # read corresponding GC line
   chomp($line = <FASTABED>);
@@ -141,8 +160,8 @@ while( <BEDFILE> )
   my @seq = split('\t',$line);
   my $gc = ($seq[1] =~ tr/cgGC/*/);
   print "$fields[0]\t$fields[1]\t$fields[2]";
-  for( my $i = 0; $i < scalar(@exFields); ++$i )
-  {
+  print "\t$chrid:$srt-$end" if( $autofield_id eq "." );
+  for( my $i = 0; $i < scalar(@exFields); ++$i ) {
     my $f = $exFields[$i]-1;
     next if( $f < 0 );
     # strip surrounding white-space from KVP fields
@@ -155,6 +174,7 @@ while( <BEDFILE> )
     }
     print "\t$fld";
   }
+  print "\t$autofield_aux" if( $autofield_aux ne "" );
   print "\t$gc\n";
 }
 close( BEDFILE );

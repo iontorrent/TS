@@ -25,6 +25,39 @@ logger = logging.getLogger(__name__)
 
 
 
+def validate_for_existing_samples(request, sampleSet_ids):
+    if 'input_samples' in request.session:
+        if 'pending_sampleSetItem_list' in request.session['input_samples']:
+            pending_sampleSetItem_list = request.session['input_samples']['pending_sampleSetItem_list']
+        else:
+            pending_sampleSetItem_list = []
+    else:
+        pending_sampleSetItem_list = []
+
+    for samplesetitem_id in sampleSet_ids:
+        sampleset = models.SampleSet.objects.get(pk=samplesetitem_id)
+        samplesetitems = sampleset.samples.all()
+        for item in samplesetitems:
+            #first validate that all barcode kits are the same for all samples
+            if item.barcode:
+                dnabarcode = models.dnaBarcode.objects.filter(id_str=item.barcode)
+                barcodeKit1 = dnabarcode[0].name
+                barcode1 = item.barcode
+            else:
+                barcodeKit1 = None
+                barcode1 = None
+
+            for item1 in pending_sampleSetItem_list:
+                barcodeKit = item1.get('barcodeKit')
+                barcode = item1.get('barcode')
+                if barcodeKit and barcodeKit1 and barcodeKit != barcodeKit1:
+                    return False, "Error, Only one barcode kit can be used for a sample set"
+                    
+                #next validate that all barcodes are unique per each sample
+                if barcode and barcode1 and barcode == barcode1:
+                    return False, "Error, A barcode can be assigned to only one sample in the sample set and %s has been assigned to another sample" %(barcode)
+    return True, None
+
 def _get_or_create_sampleSets(request, user):                
     queryDict = request.POST
     logger.info("views._get_or_create_sampleSets POST queryDict=%s" %(queryDict))
@@ -35,6 +68,8 @@ def _get_or_create_sampleSets(request, user):
     new_sampleSetDesc = queryDict.get("new_sampleSetDescription", "").strip()
     new_sampleSet_groupType_id = queryDict.get("new_sampleSet_groupType", None)
     selected_sampleSet_ids = queryDict.getlist("sampleset", [])
+
+    
     
     #logger.debug("views_helper._get_or_create_sampleSets selected_sampleSet_ids=%s" %(selected_sampleSet_ids))
     
@@ -52,7 +87,7 @@ def _get_or_create_sampleSets(request, user):
         
     #if new_sampleSetName is missing, the rest of the input will be ignored
     if new_sampleSetName:
-        isValid, errorMessage = sample_validator.validate_sampleSet_values(new_sampleSetName, new_sampleSetDesc)
+        isValid, errorMessage = sample_validator.validate_sampleSet_values(new_sampleSetName, new_sampleSetDesc, True)
         
         if errorMessage:
             return isValid, errorMessage,sampleSet_ids
@@ -90,12 +125,16 @@ def _create_or_update_sample_for_sampleSetItem(request, user):
     sampleDisplayedName = queryDict.get("sampleName", "").strip()
     sampleExternalId = queryDict.get("sampleExternalId", "").strip()
     sampleDesc = queryDict.get("sampleDescription", "").strip()
+    #20130930-TODO
+    #barcode info
+    barcodeKit = queryDict.get("barcodeKit", "").strip()
+    barcode = queryDict.get("barcode", "").strip()
           
-    return _create_or_update_sample_for_sampleSetItem_with_id_values(request, user, sampleSetItem_id, sampleDisplayedName, sampleExternalId, sampleDesc)
+    return _create_or_update_sample_for_sampleSetItem_with_id_values(request, user, sampleSetItem_id, sampleDisplayedName, sampleExternalId, sampleDesc, barcodeKit, barcode)
 
 
 
-def _create_or_update_sample_for_sampleSetItem_with_id_values(request, user, sampleSetItem_id, sampleDisplayedName, sampleExternalId, sampleDesc):
+def _create_or_update_sample_for_sampleSetItem_with_id_values(request, user, sampleSetItem_id, sampleDisplayedName, sampleExternalId, sampleDesc, barcodeKit, barcode):
     currentDateTime = timezone.now()  ##datetime.datetime.now()        
            
     orig_sampleSetItem = get_object_or_404(SampleSetItem, pk = sampleSetItem_id)
@@ -130,6 +169,10 @@ def _create_or_update_sample_for_sampleSetItem_with_id_values(request, user, sam
             orig_sampleSetItem.sample = existingSample
             orig_sampleSetItem.lastModifiedUser = user
             orig_sampleSetItem.lastModifiedDate = currentDateTime
+
+            if barcode:
+                orig_sampleSetItem.barcode = barcode
+                
             orig_sampleSetItem.save()
                             
             new_sample = existingSample
@@ -176,6 +219,10 @@ def _create_or_update_sample_for_sampleSetItem_with_id_values(request, user, sam
                 sample = Sample.objects.get_or_create(displayedName = sampleDisplayedName, externalId=sampleExternalId, defaults=sample_kwargs)[0]
 
                 orig_sampleSetItem.sample = sample
+
+                if barcode:
+                    orig_sampleSetItem.barcode = barcode
+                
                 orig_sampleSetItem.save()
                             
                 logger.debug("views_helper - _create_or_update_sample_for_sampleSetItem_with_id_values - #8 CREATE NEW SAMPLE sampleSetItem.id=%d; sample.id=%d" %(orig_sampleSetItem.id, sample.id))                            
@@ -185,7 +232,7 @@ def _create_or_update_sample_for_sampleSetItem_with_id_values(request, user, sam
 
 
 
-def _create_or_update_sample_for_sampleSetItem_with_values(request, user, sampleDisplayedName, sampleExternalId, sampleDesc):
+def _create_or_update_sample_for_sampleSetItem_with_values(request, user, sampleDisplayedName, sampleExternalId, sampleDesc, barcodeKit, barcode):
     currentDateTime = timezone.now()  ##datetime.datetime.now()        
         
     sample = None
@@ -304,11 +351,13 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleDisplayedName = queryDict.get("sampleName", "").strip()
     sampleExternalId = queryDict.get("sampleExternalId", "").strip()
     sampleDesc = queryDict.get("sampleDescription", "").strip()
-    
+
+    barcodeKit = queryDict.get("barcodeKit", None)        
+    barcode = queryDict.get("barcode", None)    
     gender = queryDict.get("gender", "")
     relationshipRole = queryDict.get("relationshipRole", "")
     relationshipGroup = queryDict.get("relationshipGroup", None)
-
+    
     isValid, errorMessage, sampleAttributes_dict = _create_pending_sampleAttributes_for_sampleSetItem(request)
     
     if errorMessage:
@@ -323,6 +372,9 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['displayedName'] = sampleDisplayedName
     sampleSetItem_dict['externalId'] = sampleExternalId
     sampleSetItem_dict['description'] = sampleDesc
+
+    sampleSetItem_dict['barcodeKit'] = barcodeKit
+    sampleSetItem_dict['barcode'] = barcode
     sampleSetItem_dict['status'] = "created"
 
     sampleSetItem_dict['gender'] = gender
@@ -357,6 +409,10 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     relationshipRole = queryDict.get("relationshipRole", "")
     relationshipGroup = queryDict.get("relationshipGroup", None)
     
+
+    barcodeKit = queryDict.get("barcodeKit", "")
+    barcode = queryDict.get("barcode", "")
+    
     isValid, errorMessage, sampleAttributes_dict = _create_pending_sampleAttributes_for_sampleSetItem(request)
     
     if errorMessage:
@@ -376,6 +432,9 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['gender'] = gender
     sampleSetItem_dict['relationshipRole'] = relationshipRole
     sampleSetItem_dict['relationshipGroup'] = relationshipGroup
+
+    sampleSetItem_dict['barcodeKit'] = barcodeKit
+    sampleSetItem_dict['barcode'] = barcode    
     sampleSetItem_dict['attribute_dict'] = sampleAttributes_dict
     
     #logger.debug("views_helper._create_pending_sampleSetItem_dict=%s" %(sampleSetItem_dict))
@@ -551,7 +610,7 @@ def _create_or_update_sampleAttributes_for_sampleSetItem_with_values(request, us
                         logger.debug("views_helper - _create_or_update_sampleAttributes_for_sampleSetItem_with_values - #7 UPDATED with None!! attributeValue.id=%d;" %(attributeValue.id))                                                                        
               
 
-def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup):
+def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, selectedBarcode):
     currentDateTime = timezone.now()  ##datetime.datetime.now()      
     
     for sampleSet_id in sampleSet_ids:
@@ -570,7 +629,8 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                 sampleSetItem_kwargs = {
                                         'gender' : sampleGender,
                                         'relationshipRole' : sampleRelationshipRole,
-                                        'relationshipGroup' : relationshipGroup,                          
+                                        'relationshipGroup' : relationshipGroup,
+                                        'barcode' : selectedBarcode,                        
                                         'lastModifiedUser' : user,                     
                                         'lastModifiedDate' : currentDateTime   
                                         }
@@ -583,7 +643,8 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
             sampleSetItem_kwargs = {
                                      'gender' : sampleGender, 
                                      'relationshipRole' : sampleRelationshipRole, 
-                                     'relationshipGroup' : relationshipGroup, 
+                                     'relationshipGroup' : relationshipGroup,
+                                     'barcode' : selectedBarcode,  
                                      'creator' : user,
                                      'creationDate' : currentDateTime,
                                      'lastModifiedUser' : user,
@@ -611,15 +672,18 @@ def _create_or_update_sampleSetItem(request, user, sample):
     relationshipGroup = queryDict.get("relationshipGroup", None)
 
     sampleSetItem = get_object_or_404(SampleSetItem, pk = sampleSetItem_id)
-    
-    if sampleSetItem.gender == gender and sampleSetItem.relationshipRole == relationshipRole and sampleSetItem.relationshipGroup == relationshipGroup:
+
+    barcode = queryDict.get("barcode", "").strip()
+                 
+    if sampleSetItem.gender == gender and sampleSetItem.relationshipRole == relationshipRole and str(sampleSetItem.relationshipGroup) == str(relationshipGroup) and sampleSetItem.barcode == barcode:
         logger.debug("views_helper - _create_or_update_sampleSetItem NO change for sampleSetItem.id=%d" %(sampleSetItem.id))
     else:
             
         sampleSetItem_kwargs = {
                                 'gender' : gender,
                                 'relationshipRole' : relationshipRole,
-                                'relationshipGroup' : relationshipGroup,                          
+                                'relationshipGroup' : relationshipGroup, 
+                                'barcode' : barcode,                         
                                 'lastModifiedUser' : user,                     
                                 'lastModifiedDate' : currentDateTime   
                                 }

@@ -121,13 +121,15 @@ def update_diskspace(dmfilestat):
         kpatterns = _get_keeper_list(dmfilestat, '')
 
         #Create a list of files eligible to process
+        isThumbnail = dmfilestat.result.metaData.get('thumb')==1
         for start_dir in search_dirs:
             to_process = []
             if os.path.isdir(start_dir):
                 to_process, to_keep = _file_selector(start_dir,
                                                      dmfilestat.dmfileset.include,
                                                      dmfilestat.dmfileset.exclude,
-                                                     kpatterns)
+                                                     kpatterns,
+                                                     isThumbnail)
 
                 #process files in list
                 for j, path in enumerate(to_process, start=1):
@@ -362,7 +364,7 @@ def _create_destination(dmfilestat, action, filesettype, backup_directory=None):
         raise
 
 
-def _file_selector(start_dir, ipatterns, epatterns, kpatterns, add_linked_sigproc=False):
+def _file_selector(start_dir, ipatterns, epatterns, kpatterns, isThumbnail=False, add_linked_sigproc=False):
     '''Returns list of files found in directory which match the list of
     patterns to include and which do not match any patterns in the list
     of patterns to exclude.  Also returns files matching keep patterns in
@@ -380,6 +382,9 @@ def _file_selector(start_dir, ipatterns, epatterns, kpatterns, add_linked_sigpro
 
     #find files matching include filters from start_dir
     for root, dirs, files in os.walk(start_dir,topdown=True):
+        if isThumbnail and 'onboard_results' in root:
+            continue
+            
         for pattern in ipatterns:
             filter = re.compile(r'(%s/)(%s)' % (start_dir,pattern)) #NOTE: use of start_dir, not root here
             for filename in files:
@@ -535,6 +540,7 @@ def _process_fileset_task(dmfilestat, action, user, user_comment, lockfile, msg_
 
     #Create a list of files eligible to process
     list_of_file_dict = []
+    isThumbnail = dmfilestat.result.metaData.get('thumb')==1
     add_linked_sigproc=False if (action==DELETE or dmfilestat.dmfileset.type==dmactions_types.INTR) else True
     for start_dir in search_dirs:
         logger.debug("Searching: %s" % start_dir)
@@ -543,6 +549,7 @@ def _process_fileset_task(dmfilestat, action, user, user_comment, lockfile, msg_
                                                  dmfilestat.dmfileset.include,
                                                  dmfilestat.dmfileset.exclude,
                                                  kpatterns,
+                                                 isThumbnail,
                                                  add_linked_sigproc)
             logger.info("%d files to process at %s" % (len(list(set(to_process) - set(to_keep))),start_dir))
             list_of_file_dict.append(
@@ -958,7 +965,7 @@ def set_action_param_var(list_of_dict_files, **kwargs):
     '''
     from cPickle import Pickler
     import tempfile
-    with tempfile.NamedTemporaryFile(dir='/tmp',delete=False,mode='w+b',**kwargs) as fileh:
+    with tempfile.NamedTemporaryFile(dir='/var/spool/ion',delete=False,mode='w+b',**kwargs) as fileh:
         pickle = Pickler(fileh)
         pickle.dump(list_of_dict_files)
     return fileh.name

@@ -94,6 +94,7 @@ case "$1" in
     chown www-data.www-data /results/analysis/output
     chown www-data.www-data /results/analysis/output/disabled
     chown www-data.www-data /results/chef_logs
+    chmod a+w /results/chef_logs
 
     # some systems export a different /results for reports
     # don't want to squash that link.
@@ -159,7 +160,7 @@ case "$1" in
     chmod a+w /var/log/ion
     chown www-data.ionadmin /var/spool/ion  # created in CMakeLists.txt
     chmod g+w /var/spool/ion    # set in CMakeLists.txt but want to be certain
-    
+
     #special for ionPlugin who used to run as www-data
     if [ -e /var/log/ion/ionPlugin.log ]; then
         chmod a+w /var/log/ion/ionPlugin.log || true
@@ -181,7 +182,7 @@ case "$1" in
     # ------------------------------------------
     SUDOFILE=/etc/sudoers
     sed -i '/www-data/ d' ${SUDOFILE}
-    echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig, @ION_INSTALL_PREFIX@/onetouch/findHosts.py, /opt/ion/iondb/bin/wkhtmltopdf-amd64, /usr/bin/pdftk, /usr/bin/pdflatex, /opt/ion/iondb/bin/wkhtmltoimage-amd64" >> ${SUDOFILE}
+    echo "www-data ALL=(ALL) NOPASSWD: /sbin/shutdown, /usr/bin/at, /usr/bin/aptitude, /usr/bin/apt-get, /usr/sbin/TSconfig, @ION_INSTALL_PREFIX@/onetouch/findHosts.py" >> ${SUDOFILE}
 
     #--------------------------------------------------#
     #---	Remove possible stale ion packages      ---#
@@ -225,6 +226,10 @@ case "$1" in
         # Updates existing database entries
         # THIS HAS TO HAPPEN AFTER THE PHP_BASE.HTML FILE IS PUT INTO PLACE DO NOT MOVE
         /usr/bin/python ./bin/install_script.py
+
+        # Loads system templates to database if needed
+        echo "Going to add or update system plan templates if needed..."
+        /usr/bin/python ./bin/add_or_update_systemPlanTemplates.py
 
         # Loads DMFileSet entries into database
         /usr/bin/python ./bin/install_dmfilesets.py
@@ -285,7 +290,7 @@ EOF
     echo -n "Migrating to new Data Management..."
     python -c 'import iondb.bin.djangoinit, iondb.rundb.data.data_management as dm; dm.backfill_create_dmfilestat()'
     echo "done"
-    
+
     # Now that prerequisite tasks have been run or scheduled, restart crawler.
     invoke-rc.d ionJobServer restart
     invoke-rc.d ionPlugin restart

@@ -119,7 +119,6 @@ function config_compute_node ()
 function config_ionSoftware()
 {
     # Install/Update system-level software packages
-    updated_mirror_check
     preinst_system_packages
     install_system_packages
     config_system_packages
@@ -128,6 +127,7 @@ function config_ionSoftware()
     install_ion_packages
     config_ion_packages
     update_conf_file
+    updated_mirror_check
 }
 
 #-------------------------------------------------
@@ -987,6 +987,9 @@ function cleanup_previousInstallations()
     # File created with TS 4.0
     rm -f /MegaSAS.log 1>&2 || true
 
+    # TS-8145.  Some servers fail to upgrade due to this stale link
+    rm -f /opt/ion/iondb/media/RunRecognitION || true
+
     return 0
 }
 
@@ -1202,6 +1205,14 @@ tmpreaper	tmpreaper/readsecurity	note
 tmpreaper	tmpreaper/TMPREAPER_TIME	note
 tmpreaper	tmpreaper/confignowexists	note
 tmpreaper	tmpreaper/readsecurity_upgrading	note
+EOF
+
+    # samba update will prompt user for input if config has been modified.
+    # We override this questioning.
+    debconf-set-selections << EOF
+samba-common    samba-common/encrypt_passwords  boolean true
+samba-common    samba-common/dhcp   boolean	false
+samba-common    samba-common/do_debconf boolean	true
 EOF
 
     # TS-6230
@@ -2229,7 +2240,7 @@ function config_master_sge()
     # For network-using plugins, set a consumable resource to control bandwidth utilization
     NET_CR=10   # Needs experimenting to determine maximum network resource units
     # ERROR: Was added per-host. Remove and set as global consumable
-    if !qconf -dattr exechost complex_values export_plugins $currentNodeName 1>&2; then
+    if ! qconf -dattr exechost complex_values export_plugins $currentNodeName 1>&2; then
         user_msg "WARN: unable to clear export_plugins on $currentNodeName. Not set?"
     fi
     if ! qconf -aattr exechost complex_values export_plugins=10 global 1>&2; then
@@ -3403,32 +3414,32 @@ function updated_mirror_check()
     APT_ENTRY="deb http://ionupdates.com/updates/software `lsb_release -cs`/"
 
     if [ ! -e $SRCLIST ]; then
-        # major problem if this file doesn't exist
         echo "Does not exist:${SRCLIST}" 1>&2
-        return 1
+        return 0
     fi
 
+    # Rule #1: If the apt repository is the old address and an archive repository, update the address
+    # Rule #2: If the apt repository is the old address, delete the line
+    # Rule #3: If new address is not in file, add it
+
+    # If line contains updates.iontorrent.com AND archive, replace address
+    sed -i 's/\(updates.iontorrent.com\)\(.*archive\)/ionupdates.com\2/g' $SRCLIST
+
+    # If line contains updates.iontorrent.com, delete it
+    sed -i '/updates.iontorrent.com/d' $SRCLIST
+
+    # If file does not contain new address, add it
     if ! grep -q "ionupdates.com" $SRCLIST; then
-
         echo "The desired apt repository entry does not exist" 1>&2
-
-        if ! grep -q "updates.iontorrent.com" $SRCLIST; then
-
-            echo "The expected apt repository entry does not exist either" 1>&2
-
-            echo $APT_ENTRY >> $SRCLIST
-        else
-
-            echo "Found the expected entry:" 1>&2
-            # deb http://updates.iontorrent.com/updates/software <release name>/
-            # N.B. use of comma as the sed command delimiter.  Insert desired entry
-            # before expected entry
-            sed -i "/updates.iontorrent.com/ s,$,\n${APT_ENTRY}," $SRCLIST
-        fi
+        echo $APT_ENTRY >> $SRCLIST
     else
-        echo "An apt repository entry exists with desired web address" 1>&2
+        echo "An apt repository entry with desired web address exists" 1>&2
     fi
 
+    # Force re-load of apt packages
+    apt-get update 1>&2 || true
+
+    return 0
 }
 
 function config_apt_cache() {
@@ -3438,35 +3449,50 @@ function config_apt_cache() {
     cachepath=${cachepath}$(apt-config dump|grep "^Dir::Cache::archives "|awk '{print $2}'|sed 's:[";]::g')
     log Current apt cache location is $cachepath
 
-    # If total capacity is below threshold, change location
-    threshold_kb=5242880 # 5GB in kbyte units
-    #threshold_kb=2097152 # 2GB in kbyte units
-    total_capacity=$(df -P $cachepath | awk 'NR==2 {print $2}')
-    if [ ! "$total_capacity" == "" ] && [ "$total_capacity" -lt "$threshold_kb" ]; then
-        log "Partition capacity is under $threshold_kb kbytes"
-        log "Migrating apt cache to a larger partition"
-
-        # compute nodes mount a remote /results; do not use that location
-        if is_master; then
-            rootdir="/"
-            cachedir="results/cache/apt/"
-            archivedir="archives/"
-        else
-            rootdir="/"
-            cachedir="TSapt/cache/apt/"
-            archivedir="archives/"
-        fi
-        newcachepath=${rootdir}${cachedir}${archivedir}
-        mkdir -p ${newcachepath}partial
-        log "New apt cache location is $newcachepath"
-
-        # Change the default apt cache directory by writing a conf file
-        conffile=/etc/apt/apt.conf.d/99cache
-        echo "Dir::Cache ${cachedir};" > $conffile
-        echo "Dir::Cache::archives ${archivedir};" >> $conffile
-        apt-get update
+    # compute nodes mount a remote /results; do not use that location
+    if is_master; then
+        rootdir="/"
+        cachedir="results/cache/apt/"
+        archivedir="archives/"
     else
-        log "Partition capacity is over $threshold_kb kbytes"
+        rootdir="/"
+        cachedir="TSapt/cache/apt/"
+        archivedir="archives/"
+    fi
+    newcachepath=${rootdir}${cachedir}${archivedir}
+
+    # Already using the new cache location
+    if [[ "$cachepath" == "$newcachepath" ]]; then
+        log "Current and new cache location: $newcachepath"
+
+        #TS-8169 - patching previous error of not cleaning up deb pgks
+        mv /var/cache/apt/archives/*.deb $newcachepath || true
+        apt-get update > /dev/null || true
+
+    else
+
+        # If total capacity is below threshold, change location
+        threshold_kb=524288000 # 5GB in kbyte units
+        #threshold_kb=2097152 # 2GB in kbyte units
+        total_capacity=$(df -P $cachepath | awk 'NR==2 {print $2}')
+        if [ ! "$total_capacity" == "" ] && [ "$total_capacity" -lt "$threshold_kb" ]; then
+            log "Partition capacity is under $threshold_kb kbytes"
+            log "Migrating apt cache to a larger partition"
+
+            mkdir -p ${newcachepath}partial
+            log "New apt cache location is $newcachepath"
+
+            # Change the default apt cache directory by writing a conf file
+            conffile=/etc/apt/apt.conf.d/99cache
+            echo "Dir::Cache ${cachedir};" > $conffile
+            echo "Dir::Cache::archives ${archivedir};" >> $conffile
+
+            # move pkgs from old cache location
+            mv /var/cache/apt/archives/*.deb $newcachepath || true
+            apt-get update || true
+        else
+            log "Partition capacity is over $threshold_kb kbytes"
+        fi
     fi
 
     # Contents of 99cache ought to be (Removing the hash of course):
@@ -3475,7 +3501,6 @@ function config_apt_cache() {
     # Don't forget to make the partial directory under the archives/:
     # mkdir -p /results/cache/apt/archives/partial
 
-    #TODO: Can we move existing contents to the new cache directory?
-    #This would preserve already downloaded pkg files.
 }
+
 

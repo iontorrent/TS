@@ -1383,8 +1383,10 @@ def _createReport(request, pk, reportpk):
         else:
             previousReports.append(result_choice)
 
-    # get latest reusable ExperimentAnalysisSettings to attach to new report
-    eas, eas_created = exp.get_or_create_EAS(reusable=True)
+    # get ExperimentAnalysisSettings to attach to new report, prefer latest editable EAS if available
+    eas = exp.get_EAS(editable=True,reusable=True)
+    if not eas:
+        eas, eas_created = exp.get_or_create_EAS(reusable=True)
 
     # get list of plugins to run, include plugins marked autorun or selected during planning
     plugins = models.Plugin.objects.filter(selected=True,active=True).exclude(path='')

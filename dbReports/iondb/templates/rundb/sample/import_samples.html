@@ -46,8 +46,6 @@
 {% endblock sub-nav %}
 {% block content %}
 
-<div class="main">
-<div class="container-fluid">
 	<div class="content group">
 		<ul class="breadcrumb">
             <li><a href="{% url "samplesets" %}">Sample Sets</a> <span class="divider">/</span></li>
@@ -216,10 +214,6 @@
 	
     <script type="text/javascript">
     TB.sample.batchupload.ready("{% url "samplesets" %}");</script>
-    
-</div>
-<div class="main-push"></div>
-</div>
 
 
 {% endblock content %}

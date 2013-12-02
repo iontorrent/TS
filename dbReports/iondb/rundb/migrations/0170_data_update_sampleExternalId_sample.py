@@ -15,7 +15,7 @@ class Migration(SchemaMigration):
         skippedCount = 0
         samples =  orm.sample.objects.filter(externalId__isnull=True)
         for sample in samples:
-            dupSamples = orm.sample.objects.filter(externalId = "", displayedName = sample.displayedName)
+            dupSamples = orm.sample.objects.filter(externalId = "", name = sample.name)
             
             if (dupSamples.count() > 0):
                 skippedCount +=1

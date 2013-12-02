@@ -302,8 +302,7 @@ $(function () {
     } else if( type == "View" ) {
       $('.DOC-hideFilter').show();
       if( 2 * plotStats.cov999x <= plotStats.maxX ) {
-        plotParams.binSize = Math.floor(plotParams.binSize/2);
-        if( plotParams.binSize < 1 ) plotParams.binSize = 1;
+        plotParams.binSize = roundBinSize(plotStats.cov999x);
       }
     }
     updateBinSizeUsed(plotParams.binSize);
@@ -452,6 +451,10 @@ $(function () {
           break;
         }
       }
+    }
+    // avoid the solid block output
+    if( plotStats.cov999x < 5 ) {
+      ++plotStats.cov999x;
     }
     // set the default plot based on whether the 99.9% view is merited
     if( plotStats.cov999x * 2 < plotStats.numPoints ) {

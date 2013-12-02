@@ -15,7 +15,7 @@
 		<input type="text" class="input-large" placeholder="" value="{{helper.getStepDict.Save_template_by_sample.getCurrentSavedFieldDict.templateName|default_if_none:""}}" name="templateName" style="width:350px;">
 	{%else%}
 		<legend>Save &amp; Finish</legend>	
-		<p>Enter a plan name. This will be contatenated with the sample name(s) to name the run plan:</p>
+		<p>Enter a plan name. This is concatenated with the sample names or sample set name to form the run plan name:</p>
 		<input type="text" class="input-large" placeholder="" value="{{helper.getStepDict.Save_plan_by_sample.getCurrentSavedFieldDict.templateName|default_if_none:""}}" name="templateName" style="width:350px;">
 	{%endif%}						
 </div>

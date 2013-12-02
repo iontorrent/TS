@@ -5,13 +5,31 @@ from iondb.rundb.models import PlannedExperiment
 from south.db import db
 from south.v2 import DataMigration
 from django.db import models
+from django.utils import simplejson
 
 class Migration(DataMigration):
+
+    def get_EAS(self, experiment, editable=True, reusable=True):
+        eas_set = experiment.eas_set.all().order_by("-date", "-id")
+
+        queryset = None
+        if editable and reusable:
+            queryset = eas_set.filter(isEditable = True, isOneTimeOverride = False)
+            if not queryset:
+                queryset = eas_set.filter(isEditable = False, isOneTimeOverride = False)
+
+        if not queryset:
+            queryset = eas_set.filter(isEditable=True)
+
+        if queryset.exists():
+            return queryset[0]
+        else:
+            return None
 
     def forwards(self, orm):
         "Write your forwards methods here."
         """ correct pre-4.0 selectedPlugins blob """
-        planned_experiments = PlannedExperiment.objects.all()
+        planned_experiments = orm.PlannedExperiment.objects.all()
         for pe in planned_experiments:
             
             try:
@@ -19,15 +37,19 @@ class Migration(DataMigration):
             except:
                 print ">>0197 WARNING!! SKIPPING plan that has no experiment record. plan.id=%d" %(pe.id)
                 continue
- 
-            selected_plugins = pe.get_selectedPlugins()
+            experiment = pe.experiment
+            eas = self.get_EAS(experiment)
+            if (not eas):
+                print ">>0197 WARNING!! SKIPPING plan that has no EAS record. plan.id=%d" %(pe.id)
+                continue
+            selected_plugins = eas.selectedPlugins
+            if selected_plugins:
+                selected_plugins = simplejson.loads(str(selected_plugins))
+            else:
+                continue
             if 'IonReporterUploader' in selected_plugins:
-                eas = pe.experiment.get_EAS()
-                if (not eas):
-                    print ">>0197 WARNING!! SKIPPING plan that has no EAS record. plan.id=%d" %(pe.id)
-                    continue
                 
-                iru = eas.selectedPlugins['IonReporterUploader']
+                iru = selected_plugins['IonReporterUploader']
                 if 'userInput' in iru:
                     ui = iru['userInput']
                     if 'userInputInfo' in iru['userInput']:
@@ -42,6 +64,7 @@ class Migration(DataMigration):
                                 if type(ui1) == types.DictType:
                                     ui1['ApplicationType'] = ""
                     else:
+                        
                         if not type(ui) == types.ListType:
                             if type(ui) == types.DictType: ui['ApplicationType'] = ""
                             ui = [ui]
@@ -62,7 +85,9 @@ class Migration(DataMigration):
                         accountId = "",
                         userInputInfo = []
                     )
-                eas.save()
+                _selected_plugins = simplejson.dumps(selected_plugins)
+                eas.selectedPlugins = _selected_plugins
+                eas.save()                                                             
 
     def backwards(self, orm):
         "Write your backwards methods here."

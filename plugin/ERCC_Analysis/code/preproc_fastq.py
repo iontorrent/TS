@@ -84,7 +84,7 @@ if __name__=='__main__':
     print 'version_nbr',version_nbr
     INPUT_BAM = 'none found'
     if BARCODING_USED == 'Y':
-        INPUT_BAM = PATH_TO_BAM
+        #INPUT_BAM = PATH_TO_BAM
         filepath = PATH_TO_BAM.split('/')
         print 'filepath',filepath
         file_prefix = filepath[-1]
@@ -112,7 +112,7 @@ if __name__=='__main__':
             os.chdir(run_dir+'/basecaller_results')
             for file in os.listdir('.'):
                 if file.startswith(file_prefix) and file.endswith('.bam'):
-                    INPUT_BAM = run_dir+'basecaller_results/'+file
+                    INPUT_BAM = run_dir+'/basecaller_results/'+file
                     if os.path.islink(INPUT_BAM): #we want the real thing, not a symlink
                         INPUT_BAM = os.path.realpath(INPUT_BAM)
                         if os.path.exists(INPUT_BAM):

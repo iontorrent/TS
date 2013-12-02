@@ -174,7 +174,7 @@ def get_versions(inputJson):
     try:
         url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/versionList/"
         hdrs = {'Authorization': token}
-        resp = requests.get(url, headers=hdrs)
+        resp = requests.get(url, verify=False, headers=hdrs)
         result = {}
         if resp.status_code == requests.codes.ok:
             result = resp.json()
@@ -355,7 +355,7 @@ def authCheck(inputJson):
     try:
         url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/usr/authcheck/"
         hdrs = {'Authorization': token}
-        resp = requests.get(url, headers=hdrs)
+        resp = requests.get(url, verify=False, headers=hdrs)
         result = ""
         if resp.status_code == requests.codes.ok:          # status_code returns an int
             result = resp.text
@@ -395,7 +395,7 @@ def getWorkflowList(inputJson):
     try:
         url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/workflowList/"
         hdrs = {'Authorization': token, 'Version': version}
-        resp = requests.get(url, headers=hdrs)
+        resp = requests.get(url, verify=False, headers=hdrs)
         result = {}
         if resp.status_code == requests.codes.ok:
             result = json.loads(resp.text)
@@ -445,7 +445,7 @@ def getUserDataUploadPath(inputJson):
     try:
         url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/uploadpath/"
         hdrs = {'Authorization': token}
-        resp = requests.get(url, headers=hdrs)
+        resp = requests.get(url, verify=False, headers=hdrs)
         result = ""
         if resp.status_code == requests.codes.ok:
             result = resp.text
@@ -485,7 +485,7 @@ def sampleExistsOnIR(inputJson):
         url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/sampleExists/"
         hdrs = {'Authorization': token}
         queryArgs = {"sampleName": sampleName}
-        resp = requests.post(url, params=queryArgs, headers=hdrs)
+        resp = requests.post(url, params=queryArgs, verify=False, headers=hdrs)
         result = ""
         if resp.status_code == requests.codes.ok:
             result = resp.text
@@ -537,8 +537,8 @@ def getUserDetails(inputJson):
         url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/getUserDetails/"
         formParams = {"userName": userId, "password": password}
         #hdrs = {'Authorization':token}
-        #resp = requests.post(url,data=formParams,headers=hdrs)
-        resp = requests.post(url, data=formParams)
+        #resp = requests.post(url,data=formParams,verify=False, headers=hdrs)
+        resp = requests.post(url, verify=False, data=formParams)
         result = {}
         if resp.status_code == requests.codes.ok:
             result = json.loads(resp.text)
@@ -639,7 +639,7 @@ def validateUserInput(inputJson):
     uniqueSamples={}
     analysisCost={}
     analysisCost["workflowCosts"]=[]
-    
+
 
     row = 1
     for uip in userInputInfo:
@@ -806,7 +806,7 @@ def validateUserInput(inputJson):
     try:
         url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/TSUserInputValidate/"
         hdrs = {'Authorization': token}
-        resp = requests.post(url, headers=hdrs)
+        resp = requests.post(url, verify=False, headers=hdrs)
         result = {}
         if resp.status_code == requests.codes.ok:
             result = json.loads(resp.text)
@@ -926,21 +926,25 @@ def getWorkflowCreationLandingPageURL(inputJson):
     #for 4.0, now return a hard coded result  grws layer inside ir 4.0  is not implemented yet.
     queryParams = {'authToken': token}
     urlEncodedQueryParams = urllib.urlencode(queryParams)
-    url2 = protocol + "://" + server + ":" + port + "/ir/secure/workflow.html?" + urlEncodedQueryParams
-
-    return {"status": "true", "error": "none", "workflowCreationLandingPageURL": url2}
+    #url2 = protocol + "://" + server + ":" + port + "/ir/secure/workflow.html?" + urlEncodedQueryParams
+    #urlPart1 = protocol + "://" + server + ":" + port
+    urlPart2 = "/ir/secure/workflow.html?" + urlEncodedQueryParams
+    #returnUrl = urlPart1+urlPart2
+    #return {"status": "true", "error": "none", "workflowCreationLandingPageURL": returnUrl}
 
     #actually get the correct ui server address, port and protocol from the grws and use that one instead of using iru-server's address.
     try:
-        url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/TSUserInputValidate/"
+        url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/getIrGUIUrl"
+        print url 
         hdrs = {'Authorization': token}
-        resp = requests.post(url, headers=hdrs)
-        result = {}
+        resp = requests.get(url, verify=False, headers=hdrs)
+        #result = {}
         if resp.status_code == requests.codes.ok:
-            result = json.loads(resp.text)
+            #result = json.loads(resp.text)
+            urlPart1 =str(resp.text)
         else:
             #raise Exception ("IR WebService Error Code " + str(resp.status_code))
-            raise Exception("IR WebService Error Code " + str(resp.status_code))
+            return {"status": "false", "error":"IR WebService Error Code " + str(resp.status_code)}
     except requests.exceptions.ConnectionError, e:
         #raise Exception("Error Code " + str(e))
         return {"status": "false", "error": str(e)}
@@ -953,7 +957,8 @@ def getWorkflowCreationLandingPageURL(inputJson):
     except Exception, e:
         #raise Exception("Error Code " + str(e))
         return {"status": "false", "error": str(e)}
-    return {"status": "true", "error": "none", "workflowCreationLandingPageURL": result}
+    returnUrl = urlPart1+urlPart2
+    return {"status": "true", "error": "none", "workflowCreationLandingPageURL": returnUrl}
 
 
 
@@ -1003,17 +1008,17 @@ def setPluginDir(x):
 if __name__ == "__main__":
     j = {'port': '8080',
          'protocol': 'http',
-         'server': '167.116.6.164',
-         'token': 'XhffVD6BUNQ/T7qeRVasoCl7Vvhq5IcUqeuPv73P7YtLzJiniMw0o5NZq/TXNybXVCk5f5Znt0pgkfBdbJSEaZljvVoqCbqU'}
+         'server': 'plum.itw',
+         'token': 'wVcoTeYGfKxItiaWo2lngsV/r0jukG2pLKbZBkAFnlPbjKfPTXLbIhPb47YA9u78'}
     b = {}
     b["request_post"] = j
     #print IRUTest(b)
 
-    k = {'port': '8080',
-         'protocol': 'http',
-         'server': '167.116.6.85',
+    k = {'port': '443',
+         'protocol': 'https',
+         'server': 'think2.itw',
          'version': 'IR40',
-         'token': 'ttkQFgifrL29f71ZFYDpV8tktJT7vie8XfMKmbFZ1LwsAQiQUdjnGDwr8hvBdkD82eBOY2fATqvpC0xiqQxL0HHSk8AWzZbB'}
+         'token': 'wVcoTeYGfKxItiaWo2lngsV/r0jukG2pLKbZBkAFnlPbjKfPTXLbIhPb47YA9u78'}
     c = {}
     c["irAccount"] = k
 
@@ -1074,8 +1079,15 @@ if __name__ == "__main__":
     print ""
     print ""
     print validateUserInput(c)
-
-
-
-
+    print ""
+    print ""
+    print ""
+    print ""
+    print ""
+    print getWorkflowCreationLandingPageURL(c)
+    print ""
+    print ""
+    print ""
+    print ""
+    print get_versions(c)
 

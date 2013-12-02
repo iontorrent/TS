@@ -39,7 +39,7 @@ INITIAL_CONFIG=1        # Flags interactive configuration settings - only for in
 CHANGE_PASSWORD=0       # Change ionadmin password.
 PURGE_ALL_DEB=0         # Delete all deb package files in apt cache
 RECONFIGURE=0           # Re-run configuration steps only
-version=`echo '$Revision: 68610 $'|awk '{print $2}'`
+version=`echo '$Revision: 76486 $'|awk '{print $2}'`
 
 #---                                    ---#
 #---    Command Line Options Parsing    ---#
@@ -311,14 +311,30 @@ if [ $UPDATE_SOFTWARE == 1 ]; then
     echo "=================================================================="
     echo "Waiting for Torrent daemons to shutdown"
     echo "=================================================================="
-    ion_daemon_ctrl stop
-    config_ionSoftware
+    # Root partition space check
+    free_root=$(df -Pk |grep `mount|grep "on / type"|awk '{print $1}'`|awk '{print $4}')
+    log "root partition free space:$free_root kb"
+    free_threshold=1048576
+    if [[ $free_root -lt $free_threshold ]]; then
 
-    echo "=================================================================="
-    echo "TSconfig software update process completed successfully"
-    echo "=================================================================="
-    log "TSconfig process completed successfully"
+        log "Not enough disk space to update software (/ has $free_root kb free)"
+        user_msg "=================================================================="
+        user_msg "Not enough disk space to update software"
+        user_msg "/ partition has $free_root kb free and needs $free_threshold kb"
+        user_msg "Ion Software update has been cancelled."
+        user_msg "=================================================================="
 
+    else
+
+        ion_daemon_ctrl stop
+        config_ionSoftware
+
+        echo "=================================================================="
+        echo "TSconfig software update process completed successfully"
+        echo "=================================================================="
+        log "TSconfig process completed successfully"
+
+    fi
     exit
 fi
 

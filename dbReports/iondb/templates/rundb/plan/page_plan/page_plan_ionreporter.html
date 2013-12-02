@@ -1,6 +1,10 @@
 {% extends "rundb/plan/page_plan/base.html" %}
 {% load url from future %}
-
+{% block extra_head %}
+{{ block.super }}
+{% load static %}
+<script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
+{%endblock%}
 {% block main-title %}
 <div style="float:left;">Select the IonReporter workflow to use:</div>
 <div style="float:left;">
@@ -186,6 +190,7 @@
                 $('#selectedWorkflow').text('');
                 $("#sample_grouping").hide();
                 $("#workflows").hide();
+                $("input[name=applicationType]").val('');
                 return;
             }
 
@@ -374,6 +379,7 @@
                 $('input[name="irAccountName"]').val('None');
                 $("#selectedIR").text('None');
                 $("#loading").hide();
+
         });
 
     }
@@ -381,7 +387,7 @@
     function goToCreateWorkflowUrl() {
         var url = '/rundb/api/v1/plugin/IonReporterUploader/extend/newWorkflow/'; 
         $.get(url,
-              {"format" : "json", "id" : "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}"},
+              {"format" : "json", "id" : $("input[name=irAccountId]").val()},
               function(data){
                   window.open(data["workflowCreationLandingPageURL"], '_blank');
               },"json").fail(function(){
@@ -397,6 +403,7 @@
     }
     
     $(document).ready(function () {
+        $(document).ajaxStart($.blockUI).ajaxStop($.unblockUI);
         $("#loading").parent().parent().css('overflow', 'auto');
         get_ir_accounts();
         

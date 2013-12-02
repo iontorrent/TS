@@ -8,15 +8,34 @@
     <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}"
         type="text/css"/>
 <script type="text/javascript" src="/site_media/resources/scripts/plan/iru_validation.js"></script>
-
+<script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
+<style>
+.darkClass
+{
+    background-color: white;
+    filter:alpha(opacity=30); /* IE */
+    opacity: 0.3; /* Safari, Opera */
+    -moz-opacity:0.30; /* FireFox */
+    z-index: 20;
+    height: 100%;
+    width: 100%;
+    background-repeat:no-repeat;
+    background-position:center;
+    position:absolute;
+    top: 0px;
+    left: 0px;
+}
+</style>
 {%endblock extra_head%}
 {% block page-plan-content %}
+<div id="darkLayer" class="darkClass" style="display:none"></div>
 <div class="row-fluid">						
 	<div>
 		<div id="step1" class="tab-pane">
 			<legend>Barcoding</legend>
 			<label class="radio inline">
                 <input type="hidden" name="fireValidation" value="{{step.prepopulatedFields.fireValidation}}"/>
+                <input type="hidden" name="irDown" value="0"/>
                 <input type="hidden" name="applicationType"/>
 				<input type="radio" id="chk_is_barcoded" name="is_barcoded" value="1" {%if helper.isBarcoded%}checked{%endif%}> Use Barcoding
 			</label>
@@ -201,6 +220,14 @@
                     {%endif%}
 					</tbody>		
 				</table>
+                <div>
+                {% ifequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0" %}
+                    {%for samplesetitem in step.prepopulatedFields.samplesetitems %}
+                        <input type="hidden" name="gender{{forloop.counter0}}" value="{{samplesetitem.gender}}"/>
+                        <input type="hidden" name="relationRole{{forloop.counter0}}" value="{{samplesetitem.relationshipRole}}"/>
+                    {%endfor%}
+                {%endifequal%}
+                </div>
 			</div>								
 		</div>
 	</div>
@@ -243,6 +270,30 @@
     var ir_sample_to_tss_sample = {};
     var default_samples = [];
     var workflow_to_application_type_map = {};
+
+    var sample_to_barcode_map = {};
+
+    {%if helper.isBarcoded %}
+        {% for barcode, sampleValues in step.savedObjects.barcodeToSample.items %}
+            {%if sampleValues.sampleName%}
+                {%for barcodeitem in step.prepopulatedFields.planned_dnabarcodes %}
+                    {%ifequal sampleValues.barcodeId barcodeitem.id_str%} 
+                        sample_to_barcode_map["{{sampleValues.sampleName}}"] = "{{barcodeitem.id_str}}";
+                    {%endifequal%}
+                {%endfor%}
+            {%endif%}
+        {%endfor%}
+    {%else%}
+        {% for chip, sampleValues in step.savedObjects.chipToSample.items %}
+            {%if sampleValues.sampleName%}
+                {%for barcodeitem in step.prepopulatedFields.planned_dnabarcodes %}
+                    {%ifequal sampleValues.barcodeId barcodeitem.id_str%} 
+                        sample_to_barcode_map["{{sampleValues.sampleName}}"] = "{{barcodeitem.id_str}}";
+                    {%endifequal%}
+                {%endfor%}
+            {%endif%}
+        {%endfor%}
+    {%endif%}
 
     
 
@@ -335,7 +386,12 @@
                 irGender = irGenderTerms[0];
             }
 
-            $genderSelect.find("option[value="+irGender+"]").attr('selected', true); 
+            // $genderSelect.find("option[value="+irGender+"]").attr('selected', true);
+
+            var matchingGender = $genderSelect.find("option").filter(function () { 
+                                    return this.value.toLowerCase() == irGender.toLowerCase(); 
+                                } ).attr('value');    
+            $genderSelect.val(matchingGender); 
 
         }
         
@@ -356,11 +412,20 @@
             
                 $.each(irRelationRoleTerms, function(i){
                     var irRelationRole1 = irRelationRoleTerms[i];
-                    $relationRoleSelect.find("option[value="+irRelationRole1+"]").attr('selected', true);
+
+                    // $relationRoleSelect.find("option[value="+irRelationRole1+"]").attr('selected', true);
+                    var matchingRole = $relationRoleSelect.find("option").filter(function () { 
+                                    return this.value.toLowerCase() == irRelationRole1.toLowerCase(); 
+                                } ).attr('value');    
+                    $relationRoleSelect.val(matchingRole);
                 
                 });
             } else {
-                $relationRoleSelect.find("option[value="+irRelationRole+"]").attr('selected', true);
+                // $relationRoleSelect.find("option[value="+irRelationRole+"]").attr('selected', true);
+                var matchingRole = $relationRoleSelect.find("option").filter(function () { 
+                                    return this.value.toLowerCase() == irRelationRole.toLowerCase(); 
+                                } ).attr('value');    
+                $relationRoleSelect.val(matchingRole);
             }
                 
             
@@ -419,20 +484,20 @@
 
         var validRelationRolesTerms = sample_group_to_workflow_map[workflow];
 
-        $.each(validRelationRolesTerms, function(k, v){
-            if (k == "relationRoles") {
-                var relationRole = v;
+        if (typeof validRelationRolesTerms != 'undefined') {
+            $.each(validRelationRolesTerms, function(k, v){
+                if (k == "relationRoles") {
+                    var relationRole = v;
 
-                $.each(relationRole, function(j){
-                    var $opt = $("<option></option>");
-                    $opt.val(relationRole[j]);
-                    $opt.text(relationRole[j]);
-                    $relationRole.append($opt);    
-                });
-            }
-            
-
-        });
+                    $.each(relationRole, function(j){
+                        var $opt = $("<option></option>");
+                        $opt.val(relationRole[j]);
+                        $opt.text(relationRole[j]);
+                        $relationRole.append($opt);    
+                    });
+                }
+            });
+        }
     }
 
     function find_relationship_type(workflow, columns_map) {
@@ -471,7 +536,7 @@
                     
             		$("#loading").hide();
             		$("#irerror").text("Cannot contact Ion Reporter Server!");
-                    $("input[name=fireValidation]").val('0');
+                    $("input[name=irDown]").val('1');
                     // $("#selectedIR").text("None");
                     $rows = $("#chipsets tbody tr");
                     $ths = $("#chipsets thead tr");
@@ -489,7 +554,6 @@
             	}
             	
             	$("#error").text("");
-                if ("{{step.prepopulatedFields.fireValidation}}" == "1"){$("input[name=fireValidation]").val('1');}
 
                 populate_sample_grouping_to_workflow_map(data);
                 $("input[name=applicationType]").val(workflow_to_application_type_map['{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}']);
@@ -501,7 +565,7 @@
                 if (typeof columns != 'undefined') {
 
                     $("#error").text("");
-
+                    $("input[name=irDown]").val('0');
                     var invalid_value = set_invalid_value(restrictions);
 
                     $.each(columns, function(i){
@@ -543,9 +607,7 @@
                         {% for key, value in step.validationErrors.items %}
                             flag = false;
                         {%endfor%}
-                        if ($("input[name=fireValidation]").val() == "0" && flag) {
-                            $("input[name=fireValidation]").val("1");
-                        }
+                        
                         var $tr = $(this).parent().parent();
                         var $relationshipType = $tr.find(".irRelation");
                         var $relationRole = $tr.find(".irRelationRole");
@@ -578,7 +640,9 @@
 
                             if (relationshipType != invalid_value) {
                                 $relationRole.attr('disabled', false);
+                                
                                 set_relationroles_from_workflow($relationRole, default_rel_role_values, workflow);
+
                             } else {
                                 $relationRole.empty();
                                 $relationRole.attr('disabled', true);
@@ -586,9 +650,8 @@
                                                         
                         }
                     });
-
                     irWorkflowSelects.change();               
-                
+                    
 
                     {%if helper.isBarcoded %}
                         {% for barcode, sampleValues in step.savedObjects.barcodeToSample.items %}
@@ -610,7 +673,64 @@
         });
     }
 
+    function submitSampleSetForm() {
+            if ($("#chk_is_barcoded").is(":checked")) {
+                if ($("#barcodingKit").val() == '') {
+                    $("#irerror").text("Please select a barcoding kit");
+                    return false;
+                }
+            }
+            if ($("form").attr('action') == '{% url "page_plan_by_sample_barcode" %}') {return true;}
+            // if ($("input[name=fireValidation]").val() == "0") {return true;}
+            {%ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0"%}
+                    // $.blockUI();
+                    var counter = 1;
+                    var inputData = {};
+                    
+                    var badRelation = false;
+                    var $rows = $("#chipsets tbody tr");
+                    
+                    $.each($rows, function(i){
+                            
+                        var $tr = $(this);
+                        var sampleNameSelect = $tr.find(".irSampleName");
+                        if (sampleNameSelect.val() != '') {
+                            inputData["counter"+counter] = {};
+                            
+                            var irWokflow = $tr.find(".irWorkflow").val();
+                            
+                            if (irWokflow == '') {badRelation = true; $("#loading1").hide();return false;}
+
+                            inputData["counter"+counter]["relation"] = $tr.find(".irRelation").val();
+                            inputData["counter"+counter]["row"] = counter.toString();
+                            inputData["counter"+counter]["sampleName"] = sampleNameSelect.val();
+                            inputData["counter"+counter]["workflow"] = $tr.find(".irWorkflow").val();
+                            inputData["counter"+counter]["gender"] = $tr.find(".irGender").val();
+                            inputData["counter"+counter]["relationRole"] = $tr.find(".irRelationRole").val();
+                            inputData["counter"+counter]["irSetID"] = $tr.find(".irSetID").val();
+                            {%if helper.isBarcoded%}
+                                inputData["counter"+counter]["barcodeId"] = $tr.find(".irSetID").val();
+                            {%endif%}
+
+                        }
+                        counter++;
+                    });
+
+                    if (badRelation) {
+                        $("#errors").text("Workflow on row " + counter + " cannot be blank");
+                        return false;
+                    }
+
+                    flag = validate_user_input_from_iru($("form"), "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}", "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}", inputData);
+                    return flag;
+                    
+            {%else%}
+                return true;
+            {%endifnotequal%}
+        }
+
     $(document).ready(function () {
+        $(document).ajaxStart($.blockUI).ajaxStop($.unblockUI);
         {%comment%} some javascript functions are no longer used, and need cleanup {%endcomment%}
     	var barcodekits = {};
     	var samplesetmap = {};
@@ -800,13 +920,26 @@
                         var $option = $("<option></option>").attr({'value' : id_str}).text(id_str);
                         $option.data('sequence', sequence);
 
+
+                        
                         if (i == x) {
                             $option.attr('selected', true);
                         }
                         $select.append($option);
 
                 });
-
+                if ($("#barcodingKit").val() == "{{step.getCurrentSavedFieldDict.barcodeId}}"){
+                    var $samplenameslect1 = $("select[name=sampleName"+i+"]");
+                    if ($samplenameslect1.val().length > 0) {
+                        id_str = sample_to_barcode_map[$samplenameslect1.val()];
+                        if (typeof(id_str) != 'undefined') {
+                            $select.find("option[value="+sample_to_barcode_map[$samplenameslect1.val()]+"]").attr('selected', true);
+                        } else{
+                            $select.val('');
+                        }        
+                    }
+                }
+                
                 $sequence_td.html(dnabarcodes[i]['sequence']);  
 
             });
@@ -940,63 +1073,40 @@
 
         
 
-        $("form").submit(function(){
-            if ($("#chk_is_barcoded").is(":checked")) {
-                if ($("#barcodingKit").val() == '') {
-                    $("#error").text("Please select a barcoding kit");
-                    return false;
-                }
-            }
-            if ($(this).attr('action') == '{% url "page_plan_by_sample_barcode" %}') {return true;}
-            if ($("input[name=fireValidation]").val() == "0") {return true;}
-            {%ifnotequal helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId "0"%}
-                    $("#loading1").show();
-                    var counter = 1;
-                    var inputData = {};
-                    
-                    var badRelation = false;
-                    var $rows = $("#chipsets tbody tr");
-                    
-                    $.each($rows, function(i){
-                            
-                        var $tr = $(this);
-                        var sampleNameSelect = $tr.find(".irSampleName");
-                        if (sampleNameSelect.val() != '') {
-                            inputData["counter"+counter] = {};
-                            
-                            var irWokflow = $tr.find(".irWorkflow").val();
-                            
-                            if (irWokflow == '') {badRelation = true; $("#loading1").hide();return false;}
-
-                            inputData["counter"+counter]["relation"] = $tr.find(".irRelation").val();
-                            inputData["counter"+counter]["row"] = counter.toString();
-                            inputData["counter"+counter]["sampleName"] = sampleNameSelect.val();
-                            inputData["counter"+counter]["workflow"] = $tr.find(".irWorkflow").val();
-                            inputData["counter"+counter]["gender"] = $tr.find(".irGender").val();
-                            inputData["counter"+counter]["relationRole"] = $tr.find(".irRelationRole").val();
-                            inputData["counter"+counter]["irSetID"] = $tr.find(".irSetID").val();
-                            {%if helper.isBarcoded%}
-                                inputData["counter"+counter]["barcodeId"] = $tr.find(".irSetID").val();
-                            {%endif%}
-
-                        }
-                        counter++;
-                    });
-
-                    if (badRelation) {
-                        $("#errors").text("Workflow on row " + counter + " cannot be blank");
-                        return false;
-                    }
-
-                    flag = validate_user_input_from_iru($(this), "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountId}}", "{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}", inputData);
-                    $("#loading1").hide();
-                    return flag;
-                    
-            {%else%}
+        $("form").submit(function(e){
+            if ($("input[name=irDown]").val() == "1")
                 return true;
-            {%endifnotequal%}
+            $.blockUI();
+            var flag = false;
+            setTimeout(function(){
+                flag = submitSampleSetForm();
+                if (flag === true) {
+                    $("form").unbind("submit");
+                    $("form").submit();
+                } else if (flag === false){
+                    $.unblockUI();
+                    return false;
+                }else {
+                    apprise(flag, {
+                        'confirm': false,       // Ok and Cancel buttons
+                        'verify': true,     // Yes and No buttons
+                        'input': false,         // Text input (can be true or string for default text)
+                        'animate': true,    // Groovy animation (can true or number, default is 400)
+                        'textOk': 'Ok',     // Ok button default text
+                        'textCancel': 'Cancel', // Cancel button default text
+                        'textYes': 'Ignore Errors',     // Yes button default text
+                        'textNo': 'Fix Errors',     // No button default text
+                        'position': 'center'// position center (y-axis) any other option will default to 100 top
+                    }, function (r) {
+                            if (r) {$("form").unbind("submit");$("form").submit();}
+                            else {flag = false;}
+                        }
+                    );
+                }
+            },200);
+            if (!flag)
+                e.preventDefault();
         });
-
     });
 
 </script>

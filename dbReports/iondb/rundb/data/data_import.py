@@ -16,6 +16,8 @@ from iondb.settings import RELVERSION
 from django.core import serializers
 from django.core.urlresolvers import reverse
 from django.utils import timezone
+from django.db.models import get_model
+from django.db import transaction
 
 from iondb.rundb.data import dmactions_types
 from iondb.rundb.data.dmactions import _file_selector, _copy_to_dir
@@ -45,7 +47,7 @@ def update_DMFileStats(result, data):
     # set state to Deleted, will be updated later when files are copied
     dmfilestats.update(action_state='DD')
     # set correct DMFileSet version
-    for d in json.loads(data):
+    for d in data:
         if 'dmfileset' in d['model']:
             dmtype = d['fields']['type']
             version = d['fields']['version']
@@ -56,31 +58,34 @@ def update_DMFileStats(result, data):
                 except Exception as e:
                     pass
 
-def create_obj(name, data, saved_objs):
+def create_obj(model_name, data, saved_objs):
     # strip object pk and replace relations and DateTimeField then save
-    for deserialized_obj in serializers.deserialize('json', data):
-        obj = deserialized_obj.object
-        if name == obj._meta.verbose_name:
-            obj.pk = None
+    app_model_string = 'rundb' + '.' + model_name.replace(' ', '')
+    model = get_model(*app_model_string.split('.'))
+    for d in data:
+        if d['model'] == app_model_string:
+            data_fields = d['fields']
+            obj = model()
             for field in obj._meta.fields:
                 field_type = field.get_internal_type()
 
                 if field_type == 'DateTimeField':
                     setattr(obj, field.name, timezone.now() )
-                
-                if field_type in ['ForeignKey', 'OneToOneField', 'ManyToManyField']:
+                elif field_type in ['ForeignKey', 'OneToOneField', 'ManyToManyField']:
                     relation_name = field.related.parent_model._meta.verbose_name
                     if relation_name in saved_objs.keys():
                         setattr(obj, field.name, saved_objs[relation_name] )
                     elif field.null:
                         setattr(obj, field.name, None )
+                else:
+                    if field.name in data_fields:
+                        setattr(obj, field.name, data_fields[ field.name ] )
 
             obj.save()
-            logger.debug('[Data Import] SAVED %s pk=%s' % (name, obj.pk) )
+            logger.debug('[Data Import] SAVED %s pk=%s' % (model_name, obj.pk) )
             
             return obj
-    else:
-        logger.warning( '[Data Import] No object %s found' % name )
+
 
 def load_serialized_json(json_path, log, create_result):
     # creates DB objects for Plan, Experiment, Result etc.
@@ -89,13 +94,13 @@ def load_serialized_json(json_path, log, create_result):
     log.write('Creating database objects ...\n')
     
     with open(json_path) as f:
-        data = f.read()
+        data = json.load(f)
     
     create_sequence = []
     saved_objs = {}
     
     # skip creating experiment if it already exists
-    for d in json.loads(data):
+    for d in data:
         if d['model'] == 'rundb.experiment':
             unique = d['fields']['unique']
             exp = Experiment.objects.filter(unique=unique)
@@ -106,21 +111,21 @@ def load_serialized_json(json_path, log, create_result):
             else:
                 create_sequence += ['planned experiment', 'experiment']
     
+    create_sequence += ['experiment analysis settings']
     if create_result:
-        create_sequence += ['experiment analysis settings', 'results', 'analysis metrics', 'lib metrics', 'quality metrics']
-        # ?? want import plugin result if plugin of that name found on this TS
-    else:
-        create_sequence += ['experiment analysis settings']
+        create_sequence += ['results', 'analysis metrics', 'lib metrics', 'quality metrics']
 
     # create the records
-    for name in create_sequence:
-        try:
-            obj = create_obj(name, data, saved_objs)
-            saved_objs[name] = obj
-        except:
-            logger.error('[Data Import] Unable to create %s from %s.' % (name, json_path) )
-            logger.error(traceback.format_exc())
-            log.write('Failed to import %s.\n' % name)
+    try:
+        with transaction.commit_on_success():
+            for model_name in create_sequence:
+                obj = create_obj(model_name, data, saved_objs)
+                saved_objs[model_name] = obj
+    except:
+        logger.error('[Data Import] Failed creating database objects from %s.' % json_path )
+        logger.error(traceback.format_exc())
+        log.write('Failed to create database objects.\n')
+        raise
     
     if create_result:
         # additional things to update for new Results
@@ -191,6 +196,7 @@ def data_import(name, selected, username, copy_all=False):
         logger.error(msg)
         log.write(msg)
         msg_banner(name, selected.keys(), logfile, 'Error')
+        return
 
     # process files
     for category, path in selected.items():

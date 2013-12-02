@@ -530,6 +530,9 @@ function detailInit(e) {
 //							validation: { 
 //								required: false
 //							}
+						},
+						barcode : {
+							type : "string"
 						}
 					}
 				}
@@ -666,6 +669,10 @@ function getColumns() {
          sortable: true,
          editor : relationshipGroupDropDownSelector,
          //template: "#=relationshipGroup.displayedName#"
+     } , {
+         field: "barcode",
+         title: "Barcode",        
+         sortable: true
      }];
 
 //    var default_last_columnArray = [

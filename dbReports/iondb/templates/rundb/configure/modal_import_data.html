@@ -88,10 +88,10 @@
         var postData = [];
         $('#modal_import_data .resultsName').each(function(){
             var name = $(this).html();
-            if ( $('#import_data_form input[name='+name+']:checked').not('[class=copy_all]').length > 0){
+            if ( $('#import_data_form input[name="'+name+'"]:checked').not('[class=copy_all]').length > 0){
                 var selected = {'name': name};
                 status += '<p>Queued data import for ' +name;
-                $('#import_data_form input[name='+name+']:checked').each(function(){
+                $('#import_data_form input[name="'+name+'"]:checked').each(function(){
                     var category = $(this).data('category');
                     selected[category] = this.value;
                     status += ', '+category;

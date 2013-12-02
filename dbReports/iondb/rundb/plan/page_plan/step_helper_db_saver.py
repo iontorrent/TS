@@ -3,6 +3,7 @@ from iondb.utils import toBoolean
 import json
 import uuid
 from django.core.exceptions import ValidationError
+from django.utils import simplejson
 from traceback import format_exc
 from iondb.rundb.plan.page_plan.step_helper import StepHelperType
 from django.contrib.auth.models import User
@@ -63,7 +64,7 @@ class StepHelperDbSaver():
             application_group = ApplicationGroup.objects.get(pk=application_step_data.savedFields['applicationGroup'])
 
         if ionreporter_step_data.savedFields['sampleGrouping']:
-            sampleGrouping = ionreporter_step_data.savedFields['sampleGrouping']
+            sampleGrouping = ionreporter_step_data.savedObjects['sampleGrouping']
 
         templatingKitName = kits_step_data.savedFields['templatekitname']
         controlSequencekitname = kits_step_data.savedFields['controlsequence']
@@ -244,8 +245,11 @@ class StepHelperDbSaver():
                 if step_helper.isEdit() or step_helper.isCopy():
                     try:
                        user_input_dict['setid'] = sampleValueDict['irSetID'] + step_helper.steps[StepNames.SAVE_PLAN].prepopulatedFields['setid_suffix']
-                    except:
-                        user_input_dict['setid'] = sampleValueDict['irSetID'] + step_helper.steps[StepNames.BARCODE_BY_SAMPLE].prepopulatedFields['setid_suffix']
+                    except Exception, e:
+                        try:
+                            user_input_dict['setid'] = sampleValueDict['irSetID'] + step_helper.steps[StepNames.BARCODE_BY_SAMPLE].prepopulatedFields['setid_suffix']
+                        except:
+                            user_input_dict['setid'] = str(sampleValueDict['irSetID']) + '__' + str(uuid.uuid4())        
                 else:
                     user_input_dict['setid'] = str(sampleValueDict['irSetID']) + '__' + str(uuid.uuid4())
 
@@ -257,10 +261,25 @@ class StepHelperDbSaver():
             if not applicationType:
                 try:
                     applicationType = step_helper.steps[StepNames.SAVE_PLAN].savedFields['applicationType']
+                    is_IR_Down = step_helper.steps[StepNames.SAVE_PLAN].savedFields['irDown'] == '1'
                 except:
                     applicationType = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields['applicationType']
-            parentDict['x_selectedPlugins']['IonReporterUploader'] = self.__get_ir_plugins_entry(ir_plugin, [user_input_dict],
+                    is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields['irDown'] == '1'
+            else:
+                try:
+                    is_IR_Down = step_helper.steps[StepNames.SAVE_PLAN].savedFields['irDown'] == '1'
+                except:
+                    is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields['irDown'] == '1'
+
+            if not is_IR_Down:
+                parentDict['x_selectedPlugins']['IonReporterUploader'] = self.__get_ir_plugins_entry(ir_plugin, [user_input_dict],
                                                                                                  accountId, accountName, applicationType)
+            elif is_IR_Down and (step_helper.isEdit() or step_helper.isCopy() or step_helper.isEditRun()) and step_helper.previous_plan_id > 0:
+                _json_selectedPlugins = PlannedExperiment.objects.get(pk=step_helper.previous_plan_id).experiment.get_EAS().selectedPlugins
+                if _json_selectedPlugins:
+                    if 'IonReporterUploader' in _json_selectedPlugins:
+                        parentDict['x_selectedPlugins']['IonReporterUploader'] = _json_selectedPlugins['IonReporterUploader']
+
         
     def __update_barcode_plugins_with_ir(self, step_helper, parentDict, userInputList, suffix=None):
         # save_plan_step_data = step_helper.steps[StepNames.SAVE_PLAN]
@@ -275,8 +294,15 @@ class StepHelperDbSaver():
             if not applicationType:
                 try:
                     applicationType = step_helper.steps[StepNames.SAVE_PLAN].savedFields['applicationType']
+                    is_IR_Down = step_helper.steps[StepNames.SAVE_PLAN].savedFields['irDown'] == '1'
                 except:
                     applicationType = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields['applicationType']
+                    is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields['irDown'] == '1'
+            else:
+                try:
+                    is_IR_Down = step_helper.steps[StepNames.SAVE_PLAN].savedFields['irDown'] == '1'
+                except:
+                    is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields['irDown'] == '1'
 
             for item in userInputList:
                 if 'setid' in item:
@@ -287,8 +313,15 @@ class StepHelperDbSaver():
                             item['setid'] = item['setid'] + step_helper.steps[StepNames.BARCODE_BY_SAMPLE].prepopulatedFields['setid_suffix']
                     else:
                         item['setid'] = item['setid'] + '__' + suffix
-            parentDict['x_selectedPlugins']['IonReporterUploader'] = self.__get_ir_plugins_entry(ir_plugin, userInputList,
-                                                                                                 accountId, accountName, applicationType)
+
+            if not is_IR_Down:
+                parentDict['x_selectedPlugins']['IonReporterUploader'] = self.__get_ir_plugins_entry(ir_plugin, userInputList,
+                                                                                        accountId, accountName, applicationType)
+            elif is_IR_Down and (step_helper.isEdit() or step_helper.isCopy() or step_helper.isEditRun()) and step_helper.previous_plan_id > 0:
+                _json_selectedPlugins = PlannedExperiment.objects.get(pk=step_helper.previous_plan_id).experiment.get_EAS().selectedPlugins
+                if _json_selectedPlugins:
+                    if 'IonReporterUploader' in _json_selectedPlugins:
+                        parentDict['x_selectedPlugins']['IonReporterUploader'] = _json_selectedPlugins['IonReporterUploader']
             
     def __get_ir_plugins_entry(self, ir_plugin, userInputList, accountId, accountName, applicationType):
         # version = 1.0 if ir_plugin.name == 'IonReporterUploader_V1_0' else ir_plugin.version

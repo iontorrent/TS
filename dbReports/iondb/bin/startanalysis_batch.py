@@ -119,7 +119,7 @@ def generate_project_name(exp):
     else:
         fpath = load_log(exp.expDir, 'explog.txt')
         explog = parse_log(fpath)
-        crawler.exp_kwargs(explog, exp.expDir, logger.errors)
+        #crawler.exp_kwargs(explog, exp.expDir, logger.errors)
         project_name = explog.get('project', '')
     return project_name
 

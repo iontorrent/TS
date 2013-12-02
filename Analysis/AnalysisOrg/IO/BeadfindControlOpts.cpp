@@ -28,6 +28,8 @@ void BeadfindControlOpts::DefaultBeadfindControl()
   bfMult = 1.0;
   sdAsBf = true;
   gainCorrection = true;
+  useSignalReference = 1;
+  useSignalReferenceSet = 0;
   blobFilter = false;
   if (isInternalServer()) {
     bfOutputDebug = 2;

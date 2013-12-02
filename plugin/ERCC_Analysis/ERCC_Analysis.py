@@ -8,9 +8,10 @@ from subprocess import *
 from ion.plugin import *
 from django.utils.datastructures import SortedDict
 
+
 class ERCC_Analysis(IonPlugin):
 	"""ERCC_Analysis Plugin for use with ERCC RNA Spike-In Control Mixes"""
-	version = "4.0-r%s" % filter(str.isdigit,"$Revision: 72040 $")
+	version = "4.0-r%s" % filter(str.isdigit,"$Revision: 76483 $")
 	envDict = dict(os.environ)
 	
 	def ERCCRun(self):

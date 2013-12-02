@@ -30,6 +30,7 @@ class IonreporterStepData(AbstractStepData):
         self.savedFields['irVersion'] = None
 
         self.savedFields[IonReporterFieldNames.SAMPLE_GROUPING] = None
+        self.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING] = None
         self.savedFields[IonReporterFieldNames.IR_WORKFLOW] = None
         self.prepopulatedFields[IonReporterFieldNames.SAMPLE_GROUPINGS] = SampleGroupType_CV.objects.filter(isActive=True).order_by('uid')
 
@@ -47,7 +48,8 @@ class IonreporterStepData(AbstractStepData):
         return StepNames.IONREPORTER
     
     def updateSavedObjectsFromSavedFields(self):
-        pass
+        if self.savedFields[IonReporterFieldNames.SAMPLE_GROUPING]:
+            self.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING] = SampleGroupType_CV.objects.get(pk=self.savedFields[IonReporterFieldNames.SAMPLE_GROUPING])
     
     def updateFromStep(self, updated_step):
         pass

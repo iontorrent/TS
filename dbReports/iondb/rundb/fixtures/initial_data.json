@@ -153,7 +153,7 @@
       "flowCount": 0,
       "uid": "LIB0001",
       "instrumentType": "",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion Fragment Library Kit"
     }
   },
@@ -258,7 +258,7 @@
       "flowCount": 0,
       "uid": "LIB0007",
       "instrumentType": "",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion AmpliSeq 2.0 Beta Kit"
     }
   },
@@ -663,7 +663,7 @@
       "flowCount": 0,
       "uid": "TEMPLT0005",
       "instrumentType": "proton",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PI Template OT2 200 Kit"
     }
   },
@@ -708,7 +708,7 @@
       "flowCount": 400,
       "uid": "SEQ0011",
       "instrumentType": "proton",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PI Sequencing 200 Kit"
     }
   },  
@@ -799,7 +799,7 @@
       "uid": "TEMPLT0007",
       "instrumentType": "proton",
       "isActive": true,
-      "description": "Ion PI Template OT2 200 Kit with XT"
+      "description": "Ion PI Template OT2 200 Kit v2 with XT"
     }
   },
  {
@@ -828,7 +828,7 @@
       "flowCount": 520,
       "uid": "SEQ0014",
       "instrumentType": "proton",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion PI Sequencing 200 Kit v3"
     }
   },
@@ -843,11 +843,87 @@
       "flowCount": 0,
       "uid": "TEMPLT0008",
       "instrumentType": "proton",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion PI Template OT2 200 Kit v3"
     }
   },
-        
+
+  {
+    "pk": 20051,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion PGM Controls 200 Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0014",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Controls 200 Kit"
+    }
+  },
+  {
+    "pk": 20052,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "E.coli DH10B Control 400 Library",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0015",
+      "instrumentType": "",
+      "isActive": true,
+      "description": "E.coli DH10B Control 400 Library"
+    }
+  },
+  {
+    "pk": 20053,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion PI Controls Kit v2",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0016",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PI Controls Kit v2"
+    }
+  },
+  {
+    "pk": 20054,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGMHiQTA",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 1100,
+      "uid": "SEQ0015",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Hi-Q Tech Access Kit"
+    }
+  }, 
+ {
+    "pk": 20055,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM Template IA Tech Access Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "IATEMP0001",
+      "instrumentType": "pgm",
+      "isActive": true,
+      "description": "Ion PGM Template IA Tech Access Kit"
+    }
+  },  
+     
   {
     "pk": 20001,
     "model": "rundb.kitpart",
@@ -1692,7 +1768,7 @@
     "pk": 20085,
     "model": "rundb.kitpart",
     "fields": {
-      "barcode": "4484080",
+      "barcode": "100020579",
       "kit": [
         "ICPREP0001"
       ]
@@ -1702,27 +1778,7 @@
     "pk": 20086,
     "model": "rundb.kitpart",
     "fields": {
-      "barcode": "4484083",
-      "kit": [
-        "ICPREP0001"
-      ]
-    }
-  },
-  {
-    "pk": 20087,
-    "model": "rundb.kitpart",
-    "fields": {
-      "barcode": "4484084",
-      "kit": [
-        "ICPREP0001"
-      ]
-    }
-  },
-  {
-    "pk": 20088,
-    "model": "rundb.kitpart",
-    "fields": {
-      "barcode": "4484085",
+      "barcode": "100020580",
       "kit": [
         "ICPREP0001"
       ]
@@ -1814,7 +1870,7 @@
     "fields": {
       "barcode": "4485416",
       "kit": [
-        "SEQ0012"
+        "SEQ0014"
       ]
     }
   },
@@ -1838,14 +1894,14 @@
       ]
     }
   },
-
+  
   {     
     "pk": 20100,
     "model": "rundb.kitpart",
     "fields": {
-      "barcode": "4488376",
+      "barcode": "4483287",
       "kit": [
-        "ICPREP0001"
+        "LIB0014"
       ]
     }
   },
@@ -1853,9 +1909,9 @@
     "pk": 20101,
     "model": "rundb.kitpart",
     "fields": {
-      "barcode": "4488375",
+      "barcode": "4482012",
       "kit": [
-        "ICPREP0001"
+        "LIB0015"
       ]
     }
   },
@@ -1863,12 +1919,13 @@
     "pk": 20102,
     "model": "rundb.kitpart",
     "fields": {
-      "barcode": "4484271",
+      "barcode": "4482414",
       "kit": [
-        "ICPREP0001"
+        "LIB0016"
       ]
     }
   },
+  
   {     
     "pk": 20103,
     "model": "rundb.kitpart",
@@ -1979,8 +2036,27 @@
       ]
     }
   },  
-
- 
+  {     
+    "pk": 20114,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A24571",
+      "kit": [
+        "SEQ0015"
+      ]
+    }
+  },
+  {     
+    "pk": 20115,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A24622",
+      "kit": [
+        "IATEMP0001"
+      ]
+    }
+  },  
+  
   {
     "pk": 20001,
     "model": "rundb.applproduct",
@@ -2311,7 +2387,7 @@
       "defaultHotSpotRegionBedFileName": "",
       "defaultPairedEndAdapterKit": null,
       "defaultTemplateKit": [
-        "TEMPLT0007"
+        "TEMPLT0008"
       ],
       "defaultPairedEndLibraryKit": null,
       "defaultLibraryKit": [
@@ -2336,7 +2412,7 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "hg19",
       "defaultSequencingKit": [
-        "SEQ0013"
+        "SEQ0014"
       ],
       "defaultSamplePrepKit": [
         "SPREP0009"
@@ -2407,7 +2483,7 @@
       "defaultHotSpotRegionBedFileName": "",
       "defaultPairedEndAdapterKit": null,
       "defaultTemplateKit": [
-        "TEMPLT0006"
+        "TEMPLT0008"
       ],
       "defaultPairedEndLibraryKit": null,
       "defaultLibraryKit": [
@@ -2430,7 +2506,7 @@
       "defaultTargetRegionBedFileName": "",
       "defaultGenomeRefName": "hg19",
       "defaultSequencingKit": [
-        "SEQ0012"
+        "SEQ0014"
       ],
       "defaultSamplePrepKit": null,
       "defaultControlSeqKit": null,
@@ -2527,7 +2603,7 @@
       "name": "900",
       "slots": 1,
       "description": "PI",
-      "isActive": true,
+      "isActive": false,
       "instrumentType": "proton"
     }
   }, 
@@ -2603,7 +2679,7 @@
     "fields": {
       "name": "P1.1.17",
       "slots": 1,
-      "description": "PIv2",
+      "description": "PI",
       "isActive": true,
       "instrumentType": "proton"
     }
@@ -2991,7 +3067,46 @@
       "thumbnailalignmentargs"  : "stage1 map4"
     }
   },
-  
+  {
+    "pk": 18,
+    "model": "rundb.analysisargs",
+    "fields": {
+      "name": "AmpliseqExome_V3",
+      "chipType": "P1.1.17",
+      "sequenceKitName": "ProtonI200Kit-v3",
+      "samplePrepKitName": "Ion AmpliSeq Exome Kit",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "alignmentargs"           : "stage1 map4",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000",
+      "thumbnailalignmentargs"  : "stage1 map4"
+    }
+  },
+  {
+    "pk": 19,
+    "model": "rundb.analysisargs",
+    "fields": {
+      "name": "TargetSeq_V3",
+      "chipType": "P1.1.17",
+      "sequenceKitName": "ProtonI200Kit-v3",
+      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216x224 --total-timeout 600",
+      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=216x224 --bkg-bfmask-update off --gpuWorkLoad 1 --total-timeout 600 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param",
+      "prebasecallerargs"       : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
+      "basecallerargs"          : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 1000",
+      "alignmentargs"           : "stage1 map4",
+      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100x100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel on --region-size=100x100 --bkg-bfmask-update off --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param",
+      "prethumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "thumbnailbasecallerargs" : "BaseCaller --keypass-filter on --phasing-residual-filter=2.0 --trim-qual-cutoff 15 --trim-qual-window-size 30 --trim-adapter-cutoff 16 --num-unfiltered 100000",
+      "thumbnailalignmentargs"  : "stage1 map4"
+    }
+  },
+
   {
     "pk": 1,
     "model": "rundb.samplegrouptype_cv",

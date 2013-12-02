@@ -29,6 +29,8 @@ class BeadfindControlOpts{
     float bfMult;
     bool sdAsBf;
     bool gainCorrection;
+    int useSignalReference;
+    int useSignalReferenceSet;
     std::string beadfindType;
     std::string bfType; // signal or buffer
     std::string bfDat;

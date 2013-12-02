@@ -1616,12 +1616,13 @@ def get_ampliseq_designs(user, password):
     url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/design/list")
     response, content = h.request(url)
     if response['status'] == '200':
-        data = json.loads(content)
-        designs = data.get('AssayDesigns', [])
+        design_data = json.loads(content)
+        designs = design_data.get('AssayDesigns', [])
         for design in designs:
             solutions = []
             for solution in design.get('DesignSolutions', []):
-                solutions.append(ampliseq.handle_versioned_plans(solution)[1])
+                version, data, meta = ampliseq.handle_versioned_plans(solution)
+                solutions.append(data)
             design['DesignSolutions'] = solutions
         return response, designs
     else:
@@ -1633,8 +1634,11 @@ def get_ampliseq_fixed_designs(user, password):
     url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/tmpldesign/list/active")
     response, content = h.request(url)
     if response['status'] == '200':
-        data = json.loads(content)
-        fixed = [ampliseq.handle_versioned_plans(d)[1] for d in data.get('TemplateDesigns', [])]
+        designs = json.loads(content)
+        fixed = []
+        for template in designs.get('TemplateDesigns', []):
+            version, data, meta = ampliseq.handle_versioned_plans(template)
+            fixed.append(data)
         return response, fixed
     else:
         return response, None

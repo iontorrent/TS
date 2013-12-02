@@ -1201,7 +1201,7 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 				fprintf(fp, "ssh rssh.iontorrent.net as rsshUser, then run:\nssh -l ionadmin -p %d -o NoHostAuthenticationForLocalhost=yes -o StrictHostKeyChecking=no localhost", nextPort);
 				fclose(fp);
 
-				snprintf(cmd, 1024, "script -c \"./reverse_ssh.sh %s 22 22 %d rssh.iontorrent.net %s %s\" /dev/null &", rsshCmd, nextPort, user, pass);
+				snprintf(cmd, 1024, "script -c \"%s/reverse_ssh.sh %s 22 22 %d rssh.iontorrent.net %s %s\" /dev/null &", BIN_DIR, rsshCmd, nextPort, user, pass);
 				if (verbose > 0)
 					printf("System cmd executing: %s\n", cmd);
 				rc = system(cmd);

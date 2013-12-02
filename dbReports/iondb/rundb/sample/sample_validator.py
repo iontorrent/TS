@@ -1,6 +1,7 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
 from iondb.rundb import models
+import types
 import datetime
 import logging
 
@@ -8,7 +9,7 @@ import re
 
 
 from iondb.rundb.models import SampleGroupType_CV,  \
-    SampleAnnotation_CV
+    SampleAnnotation_CV, SampleSet
 
 
 logger = logging.getLogger(__name__)
@@ -78,8 +79,8 @@ def validate_sampleSet(queryDict):
 
     return validate_sampleSet_values(sampleSetName, sampleSetDesc)    
 
-    
-def validate_sampleSet_values(sampleSetName, sampleSetDesc):
+
+def validate_sampleSet_values(sampleSetName, sampleSetDesc, isNew = False):
     """ 
     validate the sampleSet input. 
     returns a boolean isValid and a text string for error message, None if input passes validation
@@ -96,6 +97,13 @@ def validate_sampleSet_values(sampleSetName, sampleSetDesc):
         if not _is_valid_length(sampleSetName, MAX_LENGTH_SAMPLE_SET_DISPLAYED_NAME):
             errorMessage = "Error, Sample set name should be %s characters maximum. It is currently %s characters long." % (str(MAX_LENGTH_SAMPLE_SET_DISPLAYED_NAME), str(len(sampleSetName.strip())))            
             return isValid, errorMessage
+
+        if isNew:
+            #error if new sample set already exists
+            existingSampleSets = SampleSet.objects.filter(displayedName = sampleSetName)
+            if existingSampleSets:
+                errorMessage = "Error, Sample set %s already exists." % (sampleSetName)           
+                return isValid, errorMessage
     
     if _has_value(sampleSetDesc):
         if not _is_valid_chars(sampleSetDesc):
@@ -107,6 +115,72 @@ def validate_sampleSet_values(sampleSetName, sampleSetDesc):
 
     isValid = True
     return isValid, None
+
+def validate_barcoding_samplesetitems(samplesetitems, barcodeKit, barcode, samplesetitem_id, pending_id=None):
+    isValid = True
+    errorMessage = None
+
+    for item in samplesetitems:
+        if type(item) == types.DictType:
+            #check if you are editing against your self
+            if len(samplesetitems) == 1 and str(pending_id) == str(item.get('pending_id')): return True, None
+            barcodeKit1 = item.get('barcodeKit', barcodeKit)
+            barcode1 = item.get('barcode', None)
+        else:
+            dnabarcode = models.dnaBarcode.objects.filter(id_str=item.barcode)
+            if int(item.pk) == int(samplesetitem_id):
+                barcode1 = None
+            else:
+                barcode1 = item.barcode
+            if len(dnabarcode) > 0:
+                barcodeKit1 = dnabarcode[0].name
+            else:
+                barcodeKit1 = None
+
+        #ensure only 1 barcode kit for the whole sample set
+        if barcodeKit and barcodeKit1 and barcodeKit != barcodeKit1:
+            isValid = False
+            errorMessage = "Error, Only one barcode kit can be used for a sample set"
+            return isValid, errorMessage
+
+        #ensure only 1 barcode id_str per sample
+        if barcode and barcode1 and barcode == barcode1:
+            isValid = False
+            errorMessage = "Error, A barcode can be assigned to only one sample in the sample set and %s has been assigned to another sample" %(barcode)
+            return isValid, errorMessage
+        
+    return isValid, errorMessage
+
+
+def validate_barcoding_for_existing_sampleset(queryDict):
+    samplesetitem_id = queryDict.get('id', None)
+    item = models.SampleSetItem.objects.get(pk=samplesetitem_id)
+    samplesetitems = item.sampleSet.samples.all()
+
+    return validate_barcoding_samplesetitems(samplesetitems, queryDict.get('barcodeKit', None), queryDict.get('barcode', None), samplesetitem_id)
+
+
+def validate_barcoding_for_new_sampleset(request, queryDict):
+
+    if 'input_samples' in request.session:
+        if 'pending_sampleSetItem_list' in request.session["input_samples"] and len(request.session["input_samples"]['pending_sampleSetItem_list']) > 0:
+            samplesetitems = request.session["input_samples"]['pending_sampleSetItem_list']
+            return validate_barcoding_samplesetitems(samplesetitems,queryDict.get('barcodeKit', None), queryDict.get('barcode', None), None, pending_id=queryDict.get('pending_id', ""))
+
+    return True, None
+
+
+def validate_barcoding(request, queryDict):
+    """
+        first we look at the session and retrieve the list of pending sampleset items 
+        and validate barcodes accordin to jira ticket TS-7930
+    """
+    samplesetitem_id = queryDict.get('id', None)
+
+    if samplesetitem_id:
+        return validate_barcoding_for_existing_sampleset(queryDict)
+    else:
+        return validate_barcoding_for_new_sampleset(request, queryDict)
 
 
 def validate_sample_for_sampleSet(queryDict):
@@ -329,5 +403,6 @@ def validate_sampleAttribute_definition(attributeName, attributeDescription):
         return isValid, errorMessage
     
     isValid = True
-    return isValid, None   
+    return isValid, None 
+  
     

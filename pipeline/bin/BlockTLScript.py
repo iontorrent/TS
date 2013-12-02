@@ -234,6 +234,7 @@ if __name__=="__main__":
         bfmaskstatspath = os.path.join(env['SIGPROC_RESULTS'],"analysis.bfmask.stats")
         try:
             upload_analysismetrics(bfmaskstatspath)
+            update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, env['SIGPROC_RESULTS'], plot_title=env['shortRunName'])
             update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, "./", plot_title=env['shortRunName'])
         except:
             traceback.print_exc()

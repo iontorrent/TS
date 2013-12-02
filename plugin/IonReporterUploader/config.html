@@ -51,7 +51,7 @@
         font-weight: bold;
     }
 
-    /*get rid of the table bottom margin*/
+        /*get rid of the table bottom margin*/
     .table {
         margin-bottom: 0px;
     }
@@ -115,38 +115,38 @@
         width: 785px;
     }
 
-    .nameCol{
-       width:750px;
+    .nameCol {
+        width: 750px;
     }
 
-    .nameSelectCol{
-        width:600px;
+    .nameSelectCol {
+        width: 600px;
     }
 
-    .smallCol{
-        width:50px;
+    .smallCol {
+        width: 50px;
     }
 
-    .medCol{
-        width:100px;
+    .medCol {
+        width: 100px;
     }
 
-    .editCol{
+    .editCol {
         text-align: center;
         text-indent: 10px;
     }
 
-    .centerCol{
+    .centerCol {
         text-indent: 10px;
     }
 
-    .versionStatus{
+    .versionStatus {
         position: relative;
         top: 7px;
     }
 
-    .versionError{
-        color:#b94a48;
+    .versionError {
+        color: #b94a48;
         position: relative;
         top: 7px;
     }
@@ -268,7 +268,7 @@
 <script type="text/template" id="row-layout">
     <td class="nameCol"><strong>{{name}}</strong>
         {{# if details }}
-            <span style="margin-left: 10px"></span>({{ details.orgname }})
+        <span style="margin-left: 10px"></span>({{ details.orgname }})
         {{/if}}
     </td>
     <td class="smallCol">{{humanVersion version}}</td>
@@ -277,9 +277,9 @@
 </script>
 
 <script type="text/template" id="select-row-layout">
-     <td class="nameCol"><strong>{{name}}</strong>
+    <td class="nameCol"><strong>{{name}}</strong>
         {{# if details }}
-            <span style="margin-left: 10px"></span>({{ details.orgname }})
+        <span style="margin-left: 10px"></span>({{ details.orgname }})
         {{/if}}
     <td class="smallCol">{{humanVersion version}}</td>
     <td class="smallCol centerCol">{{# if default}}<i class="icon-ok"></i>{{/if}}</td>
@@ -391,7 +391,8 @@
                     <div class="controls">
                         <label class="checkbox">
                             <input type="checkbox" name="default" {{#if default}}checked{{/if}} >
-                            Set as default account. The default account is the preferred Ion Reporter Account for auto-analysis.
+                            Set as default account. The default account is the preferred Ion Reporter Account for
+                            auto-analysis.
                         </label>
                     </div>
                 </div>
@@ -640,8 +641,8 @@ $(function () {
         uniqName: function (model, name) {
             var uniq = true;
             this.each(function (config) {
-                if (model.id != config.id){
-                    if (config.get("name") == name){
+                if (model.id != config.id) {
+                    if (config.get("name") == name) {
                         uniq = false;
                     }
                 }
@@ -733,7 +734,7 @@ $(function () {
             });
 
             if (alreadyGoing) {
-                uploadMsg = "WARNING   Are you sure you want to upload this, there is already an upload in progress?";
+                uploadMsg = "WARNING Are you sure you want to upload this, there is already an upload in progress?";
             } else {
                 uploadMsg = "Are you sure you want to upload this?";
             }
@@ -825,7 +826,7 @@ $(function () {
 
             this.model.validate();
 
-            if (!this.model.isValid() ) {
+            if (!this.model.isValid()) {
                 //the validation failed to replace the data with the cloned one from earlier.
                 console.log("failed validation");
                 //this.model.set(cloned.toJSON(), {"silent": true});
@@ -921,7 +922,7 @@ $(function () {
 
             authXHR.fail(function (data) {
                 var msg = "Failed to get the version list. Please make sure all the values above are correct";
-                $(".version-group").html(that.versionStatusTemplate({"error": true, "msg":msg, "status" : "versionError"}));
+                $(".version-group").html(that.versionStatusTemplate({"error": true, "msg": msg, "status": "versionError"}));
             });
 
         },
@@ -945,31 +946,23 @@ $(function () {
 
             authXHR.done(function (data) {
                 if (data["error"] === "none") {
-                    if (!update){
-                        that.model.set({"details": data["details"]});
-                        that.model.set({"token": data["details"]["token"]});
-                    }else{
-                        //that.model.set({"_details": data["details"]});
-                        that.model.unset("_details_failed");
-                    }
+                    that.model.set({"details": data["details"]});
+                    that.model.set({"token": data["details"]["token"]});
+                    that.model.unset("_details_failed");
                 } else {
-                    if (!update){
-                        console.log("Failed to get token");
-                        console.log(that);
-                        that.model.unset("token");
-                    }else{
-                        console.log("Failed to check token");
-                        //that.model.unset("_details");
-                        that.model.set({"_details_failed": true});
-                    }
+                    console.log("Failed to get token");
+                    console.log(that);
+                    that.model.unset("token");
+                    console.log("Failed to check token");
+                    that.model.set({"_details_failed": true});
                 }
             });
 
             authXHR.fail(function (data) {
-                if (!update){
+                if (!update) {
                     console.log("failed to access the extend details api");
                     console.log(data);
-                }else{
+                } else {
                     console.log("failed to access the update extend details api");
                     //that.model.unset("_details");
                     that.model.set({"_details_failed": true});
@@ -994,7 +987,7 @@ $(function () {
                 }
             } else {
                 var msg = "An account must specify the Ion Reporter version. </br> Once the server, port, and token have been entered above please click the button below to retrieve the list of available versions ";
-                $(".version-group").html(this.versionStatusTemplate({"error": false, "msg":msg, "status" : "versionStatus"}));
+                $(".version-group").html(this.versionStatusTemplate({"error": false, "msg": msg, "status": "versionStatus"}));
             }
         },
         render: function (isNew) {

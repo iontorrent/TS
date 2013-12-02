@@ -8,9 +8,10 @@ from subprocess import *
 from ion.plugin import *
 from django.utils.datastructures import SortedDict
 import parse_barcodedSampleNames
- 
+
 class coverageAnalysis(IonPlugin):
-        version = "4.0-r%s" % filter(str.isdigit,"$Revision: 73765 $")
+	'''Genome and Targeted Re-sequencing Coverage Analysis. (Ion supprted)'''
+        version = "4.0-r%s" % filter(str.isdigit,"$Revision: 77897 $") 
 	major_block = True
 	runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
 	runlevels = [ RunLevel.DEFAULT ]
@@ -20,7 +21,7 @@ class coverageAnalysis(IonPlugin):
 	def startAnalysis(self):
 		# Enable coverageAnalysisLite mode? (No per-target coverage analysis)
 		self.envDict['NOTARGETANALYSIS'] = '0'
-		# Enable TargetSeq target coverage based on mean base read depth per target?
+		# Enable TargetSeq target coverage based on mean base read depth per target? (0 => Classic)
 		self.envDict['TARGETCOVBYBASES'] = '1'
 		# Dev/debug options; these should be '0' for production.
 		self.envDict['PLUGIN_DEV_FULL_LOG'] = '0'
@@ -283,6 +284,12 @@ class coverageAnalysis(IonPlugin):
 		else:
 			self.envDict['BC_TITLE_INFO'] = 'Coverage summary statistics for all (un-filtered) aligned barcoded reads.'
 
+		# Tag customization options (e.g. Lite & Classic)
+		if (self.envDict['NOTARGETANALYSIS'] == '1'):
+			self.envDict['FILTOPTS'] = '%s -b'%self.envDict['FILTOPTS']
+		if (self.envDict['TARGETCOVBYBASES'] == '1'):
+			self.envDict['FILTOPTS'] = '%s -c'%self.envDict['FILTOPTS']
+
 		# Set up log options.
 		self.envDict['LOGOPT'] = ''
 		if (int(self.envDict['PLUGIN_DEV_FULL_LOG']) > 0):
@@ -356,14 +363,14 @@ class coverageAnalysis(IonPlugin):
 			sampleName = self.envDict['TSP_SAMPLE']
 
 			self.envDict['RT'] = '0'
-			retOut = Popen(['/bin/bash', '-c', '%s/run_coverage_analysis.sh %s %s %s %s -N "%s" -R "%s" -D "%s" -A "%s" -B "%s" -C "%s" -P "%s" -p "%s" -Q "%s" -S "%s" %s %s.bam'%(self.envDict['SCRIPTSDIR'], self.envDict['LOGOPT'], self.envDict['FILTOPTS'], self.envDict['AMPOPT'], self.envDict['TRIMOPT'], sampleName, self.envDict['HTML_RESULTS'], self.envDict['TSP_FILEPATH_PLUGIN_DIR'], self.envDict['GCANNOBED'], self.envDict['PLUGIN_EFF_TARGETS'], self.envDict['PLUGIN_TRGSID'], self.envDict['PADDED_TARGETS'], self.envDict['PLUGIN_PADSIZE'], self.envDict['HTML_BLOCK'], self.envDict['PLUGIN_SAMPLEID_REGIONS'], self.envDict['REFERENCE'], self.envDict['PLUGIN_RUN_NAME'])], stdout=PIPE, env=self.envDict)
+			retOut = Popen(['/bin/bash', '-c', '"%s/run_coverage_analysis.sh" %s %s %s %s -N "%s" -D "%s" -A "%s" -B "%s" -C "%s" -P "%s" -p "%s" -Q "%s" -S "%s" -L "%s" "%s" "%s.bam"'%(self.envDict['SCRIPTSDIR'], self.envDict['LOGOPT'], self.envDict['FILTOPTS'], self.envDict['AMPOPT'], self.envDict['TRIMOPT'], sampleName, self.envDict['TSP_FILEPATH_PLUGIN_DIR'], self.envDict['GCANNOBED'], self.envDict['PLUGIN_EFF_TARGETS'], self.envDict['PLUGIN_TRGSID'], self.envDict['PADDED_TARGETS'], self.envDict['PLUGIN_PADSIZE'], self.envDict['HTML_BLOCK'], self.envDict['PLUGIN_SAMPLEID_REGIONS'], self.envDict['TSP_LIBRARY'], self.envDict['REFERENCE'], self.envDict['PLUGIN_RUN_NAME'])], stdout=PIPE, env=self.envDict)
 			retOut.communicate()
 			self.envDict['RT'] = '%s'%retOut.returncode
 			if (self.envDict['RT'] != '0'):
 				Popen(['/bin/bash', '-c', 'source %s/functions/common.sh; source %s/functions/head.sh; source %s/functions/footer.sh; source %s/functions/logo.sh; write_html_header %s write_html_error %s; write_html_footer %s'%(self.envDict['DIRNAME'], self.envDict['DIRNAME'], self.envDict['DIRNAME'], self.envDict['DIRNAME'], self.envDict['HTML'], self.envDict['HTML'], self.envDict['HTML'])], stdout=PIPE, env=self.envDict)
 				sys.exit(1)
 			# Collect results for detail html report and clean up.
-			resOut = Popen(['/bin/bash', '-c', 'source %s/functions/common.sh; source %s/functions/logo.sh; source %s/functions/footer.sh; source %s/functions/fileLinks.sh; write_html_results %s %s . %s.bam %s %s'%(self.envDict['DIRNAME'], self.envDict['DIRNAME'], self.envDict['DIRNAME'], self.envDict['DIRNAME'], self.envDict['PLUGIN_RUN_NAME'], self.envDict['TSP_FILEPATH_PLUGIN_DIR'], self.envDict['PLUGIN_RUN_NAME'], sampleName, self.envDict['PLUGIN_DETAIL_TARGETS'])], stdout=PIPE, env=self.envDict)
+			resOut = Popen(['/bin/bash', '-c', 'source %s/functions/common.sh; source %s/functions/logo.sh; source %s/functions/footer.sh; source %s/functions/fileLinks.sh; write_html_results "%s" "%s" . "%s.bam" "%s" "%s"'%(self.envDict['DIRNAME'], self.envDict['DIRNAME'], self.envDict['DIRNAME'], self.envDict['DIRNAME'], self.envDict['PLUGIN_RUN_NAME'], self.envDict['TSP_FILEPATH_PLUGIN_DIR'], self.envDict['PLUGIN_RUN_NAME'], sampleName, self.envDict['PLUGIN_DETAIL_TARGETS'])], stdout=PIPE, env=self.envDict)
 			# Get PLUGIN_OUT_STATSFILE value.
 			resRead, resErr = resOut.communicate()
 			self.envDict['PLUGIN_OUT_STATSFILE'] = resRead[resRead.find('RVAL:')+5:resRead.find(':END')]

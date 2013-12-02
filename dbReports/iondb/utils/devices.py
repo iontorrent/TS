@@ -65,7 +65,8 @@ def to_media(devArr):
         type = i.get_type()
         # Report Data Management requires an ext3/4 filesystem or nfs (anything that supports symbolic links actually)
         #if 'media' in path and ('ext' in type or 'nfs' in type):
-        if 'nfs' in type or ('/media' in path) or ('/mnt' in path):
+        #if 'nfs' in type or ('/media' in path) or ('/mnt' in path):
+        if 'nfs' in type or path.startswith('/media') or path.startswith('/mnt'):
             try:
                 if os.path.exists(os.path.join(path, '.not_an_archive')):
                     continue

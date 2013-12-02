@@ -246,7 +246,7 @@ def main():
     elif "plan.json" in files:
         meta['is_ampliseq'] = True
         plan_data = json.load(open(os.path.join(args.path, "plan.json")))
-        version, design = ampliseq.handle_versioned_plans(plan_data, meta)
+        version, design, meta = ampliseq.handle_versioned_plans(plan_data, meta)
         meta['design'] = design
         try:
             target_regions_bed = design['plan']['designed_bed']

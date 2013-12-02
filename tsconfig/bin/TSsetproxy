@@ -38,7 +38,7 @@ trap 'error ${LINENO}' ERR
 #--------------------------------------
 # Default settings
 #--------------------------------------
-version=`echo '$Revision: 62078 $'|awk '{print $2}'`
+version=`echo '$Revision: 76606 $'|awk '{print $2}'`
 DEMO=0
 interactive=1
 REMOVE=0
@@ -305,7 +305,7 @@ else
     # #http_proxy=
     if [ -e /etc/wgetrc ]; then
         # First, find the pattern and update the values
-        sed -i "s,\(http_proxy=\).*,\1$proxy_addr\:$proxy_port," /etc/wgetrc
+        sed -i "s,\(http_proxy\).*,\1=$proxy_addr\:$proxy_port," /etc/wgetrc
         # Second, enable if it is commented by removing the comment character
         sed -i 's/^#\(http_proxy.*\)/\1/' /etc/wgetrc
         echo "wget has been configured for proxy use"

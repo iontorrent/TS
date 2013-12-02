@@ -18,14 +18,13 @@ from ion.plugin import *
 
 import extend
 
-
 #######
-###  global variables   
+###  global variables      
 pluginName = ""
 plugin_dir = ""
 
 class IonReporterUploader(IonPlugin):
-	version = "4.0-r%s" % filter(str.isdigit,"$Revision: 72326 $")
+	version = "4.0-r%s" % filter(str.isdigit,"$Revision: 77705 $")
 	runtypes = [ RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE ]
 	runlevels = [ RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST ]
 	features = [ Feature.EXPORT ]
@@ -94,6 +93,7 @@ class IonReporterUploader(IonPlugin):
 		self.write_log("VERSION=1.2", data)
 		self.write_log(timestamp + " " + pluginName, data)
 		self.write_classpath()
+		self.test_report(data)
 		self.get_plugin_parameters(data)
 		log_text = self.get_timestamp() + pluginName + " : executing the IonReporter Uploader Client -- - pre"
 		print "LAUNCH OPTION " + launchOption
@@ -260,17 +260,13 @@ class IonReporterUploader(IonPlugin):
 	def test_report(self, data):
 		global pluginName
 		net = self.get_runinfo("net_location", data)
-		url = self.get_runinfo("url_root", data)
+		pk = self.get_runinfo("pk", data)
 		report = "/Default_Report.php?do_print=true"
-		
-		try1 = "http://127.0.0.1/" + url + report
-		try2 = net + url + report
-	
+		try1 = net + "/report/latex/" + str(pk) + ".pdf"
 		try:
 			urllib2.urlopen(try1)
 		except urllib2.URLError, e:
 			self.write_log("Report Generation (report.pdf) failed", data) 
-		#urllib2.urlopen(try2) #This query asks for a system username/password... so skip it
 
 
 	# Create objects.json file (plugin parameters) thru RESTful

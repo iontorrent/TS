@@ -207,7 +207,10 @@ $(document).ready(function() {
     					},
     					gender : {
     						type : "string",
-    					}
+    					},
+    					barcode : {
+    						type : "string",
+    					}    					
     				}
                 }
             },
@@ -281,6 +284,10 @@ function getColumns() {
      } , {
          field: "relationshipGroup",
          title: "Group",        
+         sortable: true,         
+     } , {
+         field: "barcode",
+         title: "Barcode",        
          sortable: true,
      }];
 

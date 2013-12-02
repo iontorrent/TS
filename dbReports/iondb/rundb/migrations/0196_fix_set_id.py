@@ -6,14 +6,37 @@ import uuid
 from south.db import db
 from south.v2 import DataMigration
 from django.db import models
+from django.utils import simplejson
 
 
 class Migration(DataMigration):
 
+    def get_barcodedSamples(self, latest_eas):
+        return latest_eas.barcodedSamples
+
+    def get_EAS(self, experiment, editable=True, reusable=True):
+        eas_set = experiment.eas_set.all().order_by("-date", "-id")
+
+        queryset = None
+        if editable and reusable:
+            queryset = eas_set.filter(isEditable = True, isOneTimeOverride = False)
+            if not queryset:
+                queryset = eas_set.filter(isEditable = False, isOneTimeOverride = False)
+
+        if not queryset:
+            queryset = eas_set.filter(isEditable=True)
+
+        if queryset.exists():
+            return queryset[0]
+        else:
+            return None
+
+
     def forwards(self, orm):
         "Write your forwards methods here."
         """Fixing SET ID on selected Plugins BLOB"""
-        planned_experiments = PlannedExperiment.objects.all().order_by('sampleSet_uid')
+        # planned_experiments = PlannedExperiment.objects.all().order_by('sampleSet_uid')
+        planned_experiments  = orm.PlannedExperiment.objects.all().order_by('sampleSet_uid')
         sampleSetids = []
         suffix = str(uuid.uuid4())
         for pe in planned_experiments:
@@ -24,10 +47,18 @@ class Migration(DataMigration):
             except:
                 print ">>0196 WARNING!! SKIPPING plan that has no experiment record. plan.id=%d" %(pe.id)
                 continue
+
+            experiment = pe.experiment
+
+            eas = self.get_EAS(experiment)
+
+            if (not eas):
+                print ">>0196 WARNING!! SKIPPING plan that has no EAS record. plan.id=%d" %(pe.id)
+                continue
                 
             if pe.sampleSet_uid and pe.sampleSet_uid in sampleSetids:
                 match_ssuid = True
-            elif len(pe.get_barcodedSamples()) > 0:
+            elif len(self.get_barcodedSamples(eas)) > 0:
                 match_ssuid = True
                 suffix = str(uuid.uuid4())
             else:
@@ -38,17 +69,14 @@ class Migration(DataMigration):
                     
             #print ">>0196 going to get_EAS() for plan.id=%d exp.id=%s" %(pe.id, pe.experiment.id)
 
-            eas = pe.experiment.get_EAS()
-
-            if (not eas):
-                print ">>0196 WARNING!! SKIPPING plan that has no EAS record. plan.id=%d" %(pe.id)
-                continue
+            
 
             #print ">>0196 going to get_selectedPlugins() for plan.id=%d; eas=%d" %(pe.id, eas.id)
            
             selected_plugins = eas.selectedPlugins
+            
             if selected_plugins:
-                
+                selected_plugins = simplejson.loads(str(selected_plugins))    
                 #print ">>0196 going to process IonReporterUploader at selectedPlugins for plan.id=%d; eas.id=%d" %(pe.id, eas.id)
                 
                 iru = selected_plugins.get('IonReporterUploader', "")
@@ -58,12 +86,16 @@ class Migration(DataMigration):
                         uii = iru['userInput']['userInputInfo']
                         
                         if type(uii) == types.DictType:
+                            
                             setid_value = uii.get('setid', "")
                             if setid_value:
                                 setid = str(setid_value)
                                 
                                 if setid.find('__') == -1:
+                                    
                                     uii['setid'] = setid + '__' + str(uuid.uuid4())
+                                    _selected_plugins = simplejson.dumps(selected_plugins)
+                                    eas.selectedPlugins = _selected_plugins
                                     eas.save()                                                                    
                             else:                                                
                                 print ">>0196 NO SET ID found in userInputInfo DICT!!! SKIPPING!!!" 
@@ -76,11 +108,15 @@ class Migration(DataMigration):
                                     
                                     if setid:
                                         if setid.find('__') == -1:
+
                                             if match_ssuid:
                                                 ui['setid'] = setid + '__' + suffix
                                             else:
-                                                ui['setid'] = setid + '__' + str(uuid.uuid4())                                    
+                                                ui['setid'] = setid + '__' + str(uuid.uuid4()) 
+                                            _selected_plugins = simplejson.dumps(selected_plugins)
+                                            eas.selectedPlugins = _selected_plugins                                   
                                             eas.save()
+
                                             #print 'corrected setid plan.id=%d; exp.id=%d; eas.id=%d' %(pe.id, pe.experiment.id, eas.id)                                                                        
                                     else:                                                        
                                         print ">>0196 NO SET ID found in userInputInfo LIST. SKIPPED plan.id=%d; eas.id=%d" %(pe.id, eas.id)

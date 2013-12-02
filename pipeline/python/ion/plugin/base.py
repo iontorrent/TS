@@ -109,16 +109,7 @@ class IonPluginMeta(type):
             warnings.warn("NO DOCSTRING: Please update python class documentation to provide a short description and documentation for your plugin.")
             #docstr = "[ Please update python class documentation to provide a short description and documentation for your plugin. ]"
             docstr = ""
-        k = {
-            'name': cls.__name__, 
-            'version': cls.__version__,
-            'doc': docstr,
-            # author, about, url, ...
-        }
-        doc = """Ion Torrent Plugin - '%(name)s' v%(version)s""" % k
-        if k['doc']:
-            doc += "\n\n" + k['doc']
-        setattr(cls, '__doc__', doc)
+            setattr(cls, '__doc__', docstr)
 
         # Upgrade "special" attributes - these can be callables, so attach property decorator
         class_attr = (

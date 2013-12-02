@@ -98,7 +98,7 @@ function show_apprise($form, message) {
 function validate_user_input_from_iru($form, accountId, accountName, userInputInfoDict) {
 	
 	flag = false;
-	var $div = $("#errors");
+	var $div = $("#error");
 	$div.html('');
 
 	var url = "/rundb/api/v1/plugin/IonReporterUploader/extend/validateUserInput/";
@@ -140,7 +140,7 @@ function validate_user_input_from_iru($form, accountId, accountName, userInputIn
 
 		});
 	}
-	return show_apprise($form, results["advices"]["onTooManyErrors"]);
+	return results["advices"]["onTooManyErrors"];
 	
 
 }

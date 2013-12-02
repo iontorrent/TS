@@ -269,5 +269,5 @@ if __name__ == '__main__':
         subprocess.call(command,shell=True)
 
     alignStopTime = datetime.datetime.now()
-    alignTime = ((alignStopTime-alignStartTime).seconds +59)/60
-    print "Alignment time: %d minutes" % alignTime
+    alignTime = (alignStopTime-alignStartTime).seconds
+    print "Alignment time: %d:%02d minutes" % (alignTime/60, alignTime%60)

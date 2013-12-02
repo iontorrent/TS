@@ -35,7 +35,7 @@ class ApplicationStepData(AbstractStepData):
         super(ApplicationStepData, self).__init__()
         self.resourcePath = 'rundb/plan/page_plan/page_plan_application.html'
 
-        self._dependsOn = [StepNames.IONREPORTER]
+        # self._dependsOn = [StepNames.IONREPORTER]
         
         self.savedFields[ApplicationFieldNames.RUN_TYPE] = None
         self.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = None

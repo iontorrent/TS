@@ -594,8 +594,7 @@ def create_combined_result(resultsName):
         last = int(lastName.split('_')[-1])
     resultsName = "%s_%03d" % (resultsName, last + 1)
 
-    storages = ReportStorage.objects.all().order_by('id')
-    storage = storages[len(storages) - 1]
+    storage = ReportStorage.objects.filter(default=True)[0]
 
     result = build_result(exp, resultsName, storage, _location())
     return result, exp

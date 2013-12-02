@@ -38,16 +38,16 @@ def get_raid_status_json(raidinfojson):
     #==========================================================================
     def status_rules(key, value):
         alert_map = {
-            'Media Error Count': '0',
-            'Predictive Failure Count': '0',
             'Foreign State': 'None',
-            'Drive has flagged a S.M.A.R.T alert': 'No',
-        }
-        warn_map = {
-            'Needs EKM Attention': 'No',
-            'Other Error Count': '0',
             'Port0 status': 'Active',
             'Port1 status': 'Active'
+        }
+        warn_map = {
+            'Media Error Count': '0',
+            'Needs EKM Attention': 'No',
+            'Other Error Count': '0',
+            'Drive has flagged a S.M.A.R.T alert': 'No',
+            'Predictive Failure Count': '0',
         }
         if alert_map.get(key):
             return ERROR if value != alert_map[key] else GOOD

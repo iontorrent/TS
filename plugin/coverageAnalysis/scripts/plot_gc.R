@@ -208,12 +208,12 @@ if( grepl("k",option,ignore.case=TRUE) ) {
   lcols = c("red","green")
   if( grepl("a",option) ) {
     title <- "Amplicon Representation vs. Amplicon Length"
-    xaxisTitle <- "Amplicon Length (%)"
+    xaxisTitle <- "Amplicon Length"
     yaxisTitle <- "Number of Amplicons"
     legendTitle <- c("Fail (Assigned reads < 0.2x mean)","Pass")
   } else {
     title <- "Target Representation vs. Target Length"
-    xaxisTitle <- "Target Length (%)"
+    xaxisTitle <- "Target Length"
     yaxisTitle <- "Number of Targets"
     legendTitle <- c("Fail (Base reads < 0.2x mean)","Pass")
   }

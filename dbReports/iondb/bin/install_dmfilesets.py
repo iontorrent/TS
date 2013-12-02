@@ -154,6 +154,8 @@ DM_FILE_SETS = [
             'download_links/.*?',
             '.[^/]*?eport_layout\.json',
             'CA_barcode_summary.json',
+            '.*NucStep/.*',
+            '.*dcOffset/.*',
             ],
         'exclude':[
             '.*?filtered.untrimmed.*?',
@@ -282,6 +284,8 @@ DM_FILE_SETS = [
             'download_links/.*?',
             '.[^/]*?eport_layout\.json',
             'CA_barcode_summary.json',
+            '.*NucStep/.*',
+            '.*dcOffset/.*',
             ],
         'keepwith':{
             dmactions_types.BASE:[
@@ -540,10 +544,6 @@ DM_FILE_SETS = [
 
 def main():
 
-    # Special cases: remove version 3.5 dmfilesets
-    sets = models.DMFileSet.objects.exclude(version__in = ['2.2','3.6', '3.7'])
-    sets.delete()
-
     for dmfileset in DM_FILE_SETS:
         try:
             dmfileset_obj, created = models.DMFileSet.objects.get_or_create(type=dmfileset['type'], version=dmfileset['version'])
@@ -566,6 +566,8 @@ def main():
                     dmfileset_obj.auto_trigger_age = olddm.auto_trigger_age
                     dmfileset_obj.auto_trigger_usage = olddm.auto_trigger_usage
                     dmfileset_obj.auto_action = olddm.auto_action
+                    dmfileset_obj.backup_directory = olddm.backup_directory
+                    dmfileset_obj.bandwidth_limit = olddm.bandwidth_limit
                 except IndexError:
                     pass
                 except:

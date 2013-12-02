@@ -177,6 +177,7 @@ void CommandLineOpts::GetOpts ( int argc, char *argv[] )
     {"beadfind-zero-flows",    required_argument,  NULL,               0},
     {"beadfind-predict-start",    required_argument,  NULL,               0},
     {"beadfind-predict-end",    required_argument,  NULL,               0},
+    {"beadfind-sig-ref-type",    required_argument,  NULL,               0},
     {"bead-washout",            no_argument,    NULL,       0},
     {"use-beadmask",      required_argument,  NULL,       0},
     {"bkg-use-duds",  required_argument, NULL, 0},
@@ -572,6 +573,9 @@ void CommandLineOpts::SetProtonDefault()
     {
       bkg_control.AmplLowerLimit = -0.5;
     }
+    if (bfd_control.useSignalReferenceSet == 0) {
+      bfd_control.useSignalReference = 2;
+    }
   }
 
 
@@ -617,6 +621,9 @@ void CommandLineOpts::SetProtonDefault()
     if ( !radio_buttons.amplitude_lower_limit_set )
     {
       bkg_control.AmplLowerLimit = -0.5;
+    }
+    if (bfd_control.useSignalReferenceSet == 0) {
+      bfd_control.useSignalReference = 2;
     }
   }
 
@@ -1052,6 +1059,11 @@ void CommandLineOpts::SetAnyLongBeadFindOption ( char *lOption, const char *orig
   if ( strcmp ( original_name, "beadfind-predict-end" ) == 0 )
   {
     bfd_control.predictFlowEnd = atoi( optarg );
+  }
+  if ( strcmp ( original_name, "beadfind-sig-ref-type") == 0) 
+  {
+    bfd_control.useSignalReference = atoi( optarg );
+    bfd_control.useSignalReferenceSet = 1;
   }
   if ( strcmp ( original_name, "beadfind-zero-flows" ) == 0 )
   {

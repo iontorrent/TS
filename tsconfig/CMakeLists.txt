@@ -109,6 +109,8 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/10-postgresql-shm.conf" DESTINATION 
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/gridengine-scripts" DESTINATION share/ion-tsconfig
     USE_SOURCE_PERMISSIONS
     PATTERN ".svn" EXCLUDE )
+# Disable apt archive which deletes deb package files
+install(FILES "${PROJECT_SOURCE_DIR}/config/99torrentserver" DESTINATION /etc/apt/apt.conf.d/)
 
 #################################
 # Install python library files

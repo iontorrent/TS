@@ -254,6 +254,14 @@ barcode ()
     echo "" >&2
     LOGOPT=""
   fi
+  # Additional customization options
+  local CUSTOPT=""
+  if [ "$NOTARGETANALYSIS" -eq 1 ]; then
+    CUSTOPT="-b"
+  fi
+  if [ "$TARGETCOVBYBASES" -eq 1 ]; then
+    CUSTOPT="$CUSTOPT -c"
+  fi
   # Load bar code data
   local BC_ERROR=0
   local BARCODES
@@ -365,7 +373,7 @@ barcode ()
       run "ln -sf \"${ANALYSIS_DIR}/${BARCODE_BAM}\" \"${BARCODE_LINK_BAM}\""
       run "ln -sf \"${ANALYSIS_DIR}/${BARCODE_BAM}.bai\" \"${BARCODE_LINK_BAM}.bai\""
       local RT=0
-      eval "${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $FILTOPTS $AMPOPT $TRIMOPT -N \"$SAMPLENAME\" -R \"$HTML_RESULTS\" -T \"$HTML_ROWSUMS\" -D \"$BARCODE_DIR\" -A \"$BC_GCANNOBED\" -B \"$BC_MERGEBED\" -C \"$BC_TRGSID\" -p $PLUGIN_PADSIZE -P \"$BC_PADBED\" -S \"$PLUGIN_SAMPLEID_REGIONS\" \"$REFERENCE\" \"$BARCODE_LINK_BAM\"" || RT=$?
+      eval "${SCRIPTSDIR}/run_coverage_analysis.sh $LOGOPT $FILTOPTS $CUSTOPT $AMPOPT $TRIMOPT -N \"$SAMPLENAME\" -T \"$HTML_ROWSUMS\" -D \"$BARCODE_DIR\" -A \"$BC_GCANNOBED\" -B \"$BC_MERGEBED\" -C \"$BC_TRGSID\" -p $PLUGIN_PADSIZE -P \"$BC_PADBED\" -S \"$PLUGIN_SAMPLEID_REGIONS\" -L \"$TSP_LIBRARY\" \"$REFERENCE\" \"$BARCODE_LINK_BAM\"" || RT=$?
       if [ $RT -ne 0 ]; then
         BC_ERROR=1
         if [ "$CONTINUE_AFTER_BARCODE_ERROR" -eq 0 ]; then

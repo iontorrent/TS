@@ -317,15 +317,18 @@ $(function () {
         // Closure to capture the file information.
         reader.onload = (function (theFile) {
             return function (e) {
-                JsonObj = e.target.result;
-                var parsedJSON = JSON.parse(JsonObj);
 
+                console.log(theFile);
                 try {
+                    JsonObj = e.target.result;
+                    var parsedJSON = JSON.parse(JsonObj);
                     advancedTmpl(parsedJSON);
                     $("#customconfig").prop("checked", true);
+                    $("#custom-label").text("Custom Parameter Settings: " + theFile.name );
                 }
                 catch (e) {
-                    console.log("Failed");
+                    $("#file-form").trigger('reset');
+                    alert("Failed to load the custom parameter settings from " + theFile.name);
                     console.log(parsedJSON);
                 }
 
@@ -543,8 +546,8 @@ $(function () {
             </label>
 
             <label class="radio">
-                <input id="customconfig" type="radio" name="variationtype" value="custom" disabled>
-                <span class="help" style="font-weight:normal"
+                <input id="customconfig" type="radio" name="variationtype" value="custom">
+                <span id="custom-label" class="help" style="font-weight:normal"
                       title="Custom parameter settings, enabled by either manually editing the parameter tables or uploading a parameters file.">
                       Custom</span>
             </label>
@@ -559,9 +562,11 @@ $(function () {
                       Upload Custom Parameter Settings:</span>
             </div>
 
-            <label for="files">
-                <input type="file" id="files" name="files[]"/>
-            </label>
+            <form id="file-form">
+                <label for="files">
+                    <input type="file" id="files" name="files[]"/>
+                </label>
+            </form>
         </div>
 
         <div class="span4">

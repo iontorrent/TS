@@ -4,6 +4,7 @@ from iondb.rundb.models import *
 from iondb.rundb import tasks
 from iondb.rundb import forms
 from iondb.rundb import views
+from iondb.utils import files
 from django.contrib import admin
 from django.forms import TextInput, Textarea
 
@@ -255,11 +256,25 @@ def update(request):
         serialized_config = resource.serialize(None,
                                                resource.full_dehydrate(bundle),
                                                "application/json")
+
+        try:
+            # Disable Update Server button for some reason
+            # Checking root partition for > 1GB free
+            allow_update = True if files.getSpaceKB("/") > 1048576 else False
+            if not allow_update:
+                GlobalConfig.objects.update(ts_update_status="Insufficient disk space")
+            else:
+                if GlobalConfig.objects.get().ts_update_status in "Insufficient disk space":
+                    GlobalConfig.objects.update(ts_update_status="No updates")
+        except:
+            allow_update = True
+
         return render_to_response(
             "admin/update.html",
             {"about": about, "meta": meta_version,
              "show_available": config.ts_update_status not in ['No updates', 'Finished installing'],
-             "global_config_json": serialized_config},
+             "global_config_json": serialized_config,
+             "allow_update": allow_update},
             RequestContext(request, {}),
         )
 
@@ -453,8 +468,14 @@ class BackupAdmin(admin.ModelAdmin):
     search_fields = ['backupName' ]
     ordering = ( "-id", )
 
+    def has_add_permission(self, request):
+        return False
+
 class BackupConfigAdmin(admin.ModelAdmin):
-    list_display = ('backupDirectory',)
+    list_display = ('backup_directory',)
+
+    def has_add_permission(self, request):
+        return False
 
 
 class PluginAdmin(admin.ModelAdmin):
@@ -593,7 +614,7 @@ admin.site.register(LibMetrics)
 admin.site.register(QualityMetrics)
 admin.site.register(Template)
 admin.site.register(Backup, BackupAdmin)
-admin.site.register(BackupConfig)
+admin.site.register(BackupConfig, BackupConfigAdmin)
 admin.site.register(GlobalConfig, GlobalConfigAdmin)
 admin.site.register(Plugin, PluginAdmin)
 admin.site.register(PluginResult, PluginResultAdmin)

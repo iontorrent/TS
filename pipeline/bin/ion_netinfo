@@ -110,15 +110,15 @@ echo
 echo "=================================================================="
 echo "-----Testing connection to the Ion Torrent update server-----"
 
-if eval "/usr/bin/wget -o /tmp/log -O - http://updates.iontorrent.com/updates/software/lucid/Packages.gz >/dev/null"
+if eval "/usr/bin/wget -o /tmp/log -O - http://ionupdates.com/updates/software/lucid/Packages.gz >/dev/null"
 then
-    echo "GOOD - Successful connection to updates.iontorrent.com"
+    echo "GOOD - Successful connection to ionupdates.com"
 	rm -f Packages.gz 2>/dev/null
     rm -f /tmp/log 2>/dev/null
 else
-    echo "uh-oh.... We can't reach 'updates.iontorrent.com' "
+    echo "uh-oh.... We can't reach 'ionupdates.com' "
 	echo
-	echo "Try again in a little while, the server needs to reach http://updates.iontorrent.com"
+	echo "Try again in a little while, the server needs to reach ionupdates.com on Port 80"
 	echo "or we won't be able to get software patches for the Server or Sequencers"
 
 fi

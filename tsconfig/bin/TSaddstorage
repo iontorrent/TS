@@ -641,7 +641,7 @@ if is_perc_installed; then
                 (
                     cd $mnt_pt/STRESS
                     NUM_THREAD=$(grep processor /proc/cpuinfo | wc -l)
-                    LOG=$0.log
+                    LOG=TSaddstorage_$(basename $mnt_pt).log
                     #./stress --verbose --io $NUM_THREAD --hdd $NUM_THREAD --timeout $TIMEOUT | tee >(egrep 'info|dbug' >$LOG) | egrep 'info|writing|closing' &
                     ./stress --verbose --io $NUM_THREAD --hdd $NUM_THREAD --timeout $TIMEOUT | egrep 'info|dbug' >$LOG &
                     echo "stress test has been launched in the background (Duration: $TIMEOUT)"

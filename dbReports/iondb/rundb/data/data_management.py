@@ -198,7 +198,8 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
         for path in pathlist:
             if dmfileset['type'] == dmactions_types.SIG:
                 query |= Q(result__experiment__expDir__startswith=path)
-            elif dmfileset['type'] == dmactions_types.INTR:
+            # These categories have files in both directory paths.
+            elif dmfileset['type'] in [dmactions_types.INTR,dmactions_types.BASE]:
                 query |= Q(result__experiment__expDir__startswith=path)
                 query |= Q(result__reportstorage__dirPath__startswith=path)
             else:

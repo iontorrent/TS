@@ -74,6 +74,7 @@ class SavePlanStepData(AbstractStepData):
         self.savedFields[SavePlanFieldNames.PLAN_NAME] = None
         self.savedFields[SavePlanFieldNames.NOTE] = None
         self.savedFields['applicationType'] = ''
+        self.savedFields['irDown'] = '0'
         
         self.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = None
         self.prepopulatedFields[SavePlanFieldNames.IR_CONFIG_JSON] = None

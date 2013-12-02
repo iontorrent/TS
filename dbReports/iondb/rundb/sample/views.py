@@ -30,7 +30,7 @@ import csv
 from django.core.exceptions import ValidationError
 
 from iondb.rundb.models import Sample, SampleSet, SampleSetItem, SampleAttribute, SampleGroupType_CV,  \
-    SampleAnnotation_CV, SampleAttributeDataType, SampleAttributeValue, PlannedExperiment
+    SampleAnnotation_CV, SampleAttributeDataType, SampleAttributeValue, PlannedExperiment, dnaBarcode
 
 #from iondb.rundb.api import SampleSetItemInfoResource
 
@@ -112,6 +112,7 @@ def download_samplefile_format(request):
             , import_sample_processor.COLUMN_GROUP_TYPE
             , import_sample_processor.COLUMN_GROUP
             , import_sample_processor.COLUMN_SAMPLE_DESCRIPTION
+            , import_sample_processor.COLUMN_BARCODE
             ]
     
     customAttributes = SampleAttribute.objects.all().exclude(isActive = False).order_by("displayedName")
@@ -191,16 +192,16 @@ def show_plan_run(request, _id):
                                                      isSystem=False).order_by('sampleGrouping', '-date', 'planDisplayedName')
     
     all_templates = all_templates.extra(select={'sg_name': 
-                                                'select "displayedName" from %s where "rundb_samplegrouptype_cv"."id"::varchar = %s::varchar' %
-                                                ('"rundb_samplegrouptype_cv"', '"rundb_plannedexperiment"."sampleGrouping"')})
+                                                'select "displayedName" from %s where "rundb_samplegrouptype_cv"."id" = %s' %
+                                                ('"rundb_samplegrouptype_cv"', '"rundb_plannedexperiment"."sampleGrouping_id"')})
 
     #we want to display the system templates last
     all_systemTemplates = PlannedExperiment.objects.filter(isReusable=True,
                                                      isSystem=True, isSystemDefault=False).order_by('sampleGrouping', 'planDisplayedName')
     
     all_systemTemplates = all_systemTemplates.extra(select={'sg_name': 
-                                                'select "displayedName" from %s where "rundb_samplegrouptype_cv"."id"::varchar = %s::varchar' %
-                                                ('"rundb_samplegrouptype_cv"', '"rundb_plannedexperiment"."sampleGrouping"')})
+                                                'select "displayedName" from %s where "rundb_samplegrouptype_cv"."id" = %s' %
+                                                ('"rundb_samplegrouptype_cv"', '"rundb_plannedexperiment"."sampleGrouping_id"')})
 
     for template in all_templates:
         print template.sg_name
@@ -337,6 +338,11 @@ def save_samplesetitem(request):
             transaction.rollback()
             return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
 
+        isValid, errorMessage = sample_validator.validate_barcoding(request, queryDict)
+
+        if errorMessage:
+            transaction.rollback()
+            return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")
 
         if isValid:
             userName = request.user.username
@@ -463,7 +469,15 @@ def save_input_samples_for_sampleset(request):
                 
                 transaction.rollback()
                 #return HttpResponse(errorMessage, mimetype="text/html")
-                return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
+                return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")
+
+            isValid, errorMessage = views_helper.validate_for_existing_samples(request, sampleSet_ids)      
+
+            if not isValid:
+                
+                transaction.rollback()
+                #return HttpResponse(errorMessage, mimetype="text/html")
+                return HttpResponse(json.dumps([errorMessage]), mimetype="application/json") 
             
             if not sampleSet_ids:
                 transaction.rollback()
@@ -474,20 +488,22 @@ def save_input_samples_for_sampleset(request):
             for pending_sampleSetItem in pending_sampleSetItem_list:
 
                 sampleDisplayedName = pending_sampleSetItem.get("displayedName", "").strip()
-                sampleExternalId = pending_sampleSetItem .get("externalId", "").strip()
-                sampleDesc = pending_sampleSetItem .get("description", "").strip()
+                sampleExternalId = pending_sampleSetItem.get("externalId", "").strip()
+                sampleDesc = pending_sampleSetItem.get("description", "").strip()
 
-                sampleAttribute_dict = pending_sampleSetItem .get("attribute_dict", {})
+                sampleAttribute_dict = pending_sampleSetItem.get("attribute_dict", {})
 
                 if sampleAttribute_dict is None:
                     sampleAttribute_dict = {}
                     
                 sampleGender = pending_sampleSetItem .get("gender", "")
-                sampleRelationshipRole = pending_sampleSetItem .get("relationshipRole", "")
-                sampleRelationshipGroup = pending_sampleSetItem .get("relationshipGroup", "")
+                sampleRelationshipRole = pending_sampleSetItem.get("relationshipRole", "")
+                sampleRelationshipGroup = pending_sampleSetItem.get("relationshipGroup", "")
 
+                selectedBarcodeKit = pending_sampleSetItem.get("barcodeKit", "")
+                selectedBarcode = pending_sampleSetItem.get("barcode", "")
                 
-                new_sample = views_helper._create_or_update_sample_for_sampleSetItem_with_values(request, user, sampleDisplayedName, sampleExternalId, sampleDesc)
+                new_sample = views_helper._create_or_update_sample_for_sampleSetItem_with_values(request, user, sampleDisplayedName, sampleExternalId, sampleDesc, selectedBarcodeKit, selectedBarcode)
                             
                 isValid, errorMessage = views_helper._create_or_update_sampleAttributes_for_sampleSetItem_with_dict(request, user, new_sample, sampleAttribute_dict)
                 if not isValid:
@@ -495,7 +511,7 @@ def save_input_samples_for_sampleset(request):
                     #return HttpResponse(errorMessage, mimetype="text/html")
                     return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
                 
-                views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup)
+                views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, selectedBarcode)
                    
             clear_samplesetitem_session(request)
                        
@@ -582,7 +598,7 @@ def save_import_samplesetitems(request):
     
     userName = request.user.username
     user = User.objects.get(username=userName)   
-
+    
     try:
         for index, row in enumerate(reader, start=1):
             logger.debug("LOOP views.save_import_samples_for_sampleset() validate_csv_sample...index=%d; row=%s" %(index, row))
@@ -594,8 +610,14 @@ def save_import_samplesetitems(request):
                 continue
             else:
                 rawSampleDataList.append(row)
-                row_count += 1           
+                row_count += 1  
 
+        #now validate that all barcode kit are the same      
+        errorMsg = import_sample_processor.validate_barcodes(rawSampleDataList)
+        if errorMsg:
+            for k, v in errorMsg.items():
+                failed[k] = [v]
+            # return HttpResponse(json.dumps({"status": ERROR_MSG_SAMPLE_IMPORT_VALIDATION, "failed" : {"Sample Set" : [errorMessage]}}), mimetype="text/html")
         logger.info("views.save_import_samples_for_sampleset() row_count=%d" %(row_count)) 
 
         destination.close()  # now close and remove the temp file
@@ -614,8 +636,8 @@ def save_import_samplesetitems(request):
         logger.info("views.save_import_samples_for_sampleset() failed=%s" %(r))
        
         transaction.rollback()
-        return HttpResponse(json.dumps(r), mimetype="text/html")        
-       
+        return HttpResponse(json.dumps(r), mimetype="text/html")
+
     if row_count > 0:
         try:
             #validate new sampleSet entry before proceeding further
@@ -632,6 +654,11 @@ def save_import_samplesetitems(request):
        
                 transaction.rollback()
                 return HttpResponse(json.dumps(r), mimetype="text/html")
+            
+            errorMsg = import_sample_processor.validate_barcodes_for_existing_samples(rawSampleDataList, sampleSet_ids)
+            if errorMsg:
+                for k, v in errorMsg.items():
+                    failed[k] = [v]
               
             if len(sampleSet_ids) == 0:
                 msgList = []
@@ -707,6 +734,9 @@ def show_add_pending_samplesetitem(request):
 
     sampleAttribute_list = SampleAttribute.objects.filter(isActive = True).order_by('id')    
     
+    barcodeKits = list(dnaBarcode.objects.values('name').distinct().order_by('name'))
+    barcodeInfo = list(dnaBarcode.objects.all().order_by('name', 'index'))
+            
     ctxd = {
             'sampleSetItem' : None,
             'sample_groupType_CV_list' : sample_groupType_CV_list,
@@ -714,6 +744,9 @@ def show_add_pending_samplesetitem(request):
             'gender_CV_list' : gender_CV_list,
             'sampleAttribute_list' : sampleAttribute_list,
             'sampleAttributeValue_list' : None, 
+            "selectedBarcodeKitName" : None,            
+            'barcodeKits': barcodeKits,
+            'barcodeInfo' : barcodeInfo,
             ##'sampleAttributeValue_dict' : simplejson.dumps(sampleAttributeValue_dict),           
             'intent' : "add_pending"
             }
@@ -747,14 +780,20 @@ def show_edit_pending_samplesetitem(request, pending_sampleSetItemId):
             
     sampleAttributeValue_list = []
     
-    
+    barcodeKits = list(dnaBarcode.objects.values('name').distinct().order_by('name'))
+    barcodeInfo = list(dnaBarcode.objects.all().order_by('name', 'index'))
+            
+
     ctxd = {
             'pending_sampleSetItem' : pending_sampleSetItem,
             'sample_groupType_CV_list' : sample_groupType_CV_list,
             'sample_role_CV_list' : sample_role_CV_list,
             'gender_CV_list' : gender_CV_list,
             'sampleAttribute_list' : sampleAttribute_list,
-            'sampleAttributeValue_list' : sampleAttributeValue_list,          
+            'sampleAttributeValue_list' : sampleAttributeValue_list,
+            "selectedBarcodeKitName" : None,            
+            'barcodeKits': barcodeKits,
+            'barcodeInfo' : barcodeInfo,                    
             'intent' : "edit_pending"
             }
 
@@ -1125,7 +1164,18 @@ def show_edit_sample_for_sampleset(request, sampleSetItemId):
 #        except:
 #            logger.info("views - sampleAttributeValue NONE #1 attribute=%s" %(str(attribute)))            
 #            sampleAttributeValue_dict[attribute.id] = ""
-    
+        
+
+    barcodeKits = list(dnaBarcode.objects.values('name').distinct().order_by('name'))
+    barcodeInfo = list(dnaBarcode.objects.all().order_by('name', 'index'))
+            
+    selectedBarcodeKit = None
+    if (sampleSetItem.barcode):
+        barcodes = dnaBarcode.objects.filter(id_str = sampleSetItem.barcode)
+        if (barcodes):
+            selectedBarcodeKit = barcodes[0].name
+                          
+            
     ctxd = {
             'sampleSetItem' : sampleSetItem,
             'sample_groupType_CV_list' : sample_groupType_CV_list,
@@ -1133,7 +1183,10 @@ def show_edit_sample_for_sampleset(request, sampleSetItemId):
             'gender_CV_list' : gender_CV_list,
             'sampleAttribute_list' : sampleAttribute_list,
             'sampleAttributeValue_list' : sampleAttributeValue_list, 
-            ##'sampleAttributeValue_dict' : simplejson.dumps(sampleAttributeValue_dict),           
+            ##'sampleAttributeValue_dict' : simplejson.dumps(sampleAttributeValue_dict),  
+            "selectedBarcodeKitName" : selectedBarcodeKit,            
+            'barcodeKits': barcodeKits,
+            'barcodeInfo' : barcodeInfo,                           
             'intent' : "edit"
             }
 

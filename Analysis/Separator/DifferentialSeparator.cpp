@@ -1147,8 +1147,8 @@ void DifferentialSeparator::RankWellsBySignal(int flow0, int flow1, TraceStore<d
       int idx = mask.ToIndex(row, col);
       if (!mask.Match(col, row, MaskPinned) && !mask.Match(col,row,MaskExclude) && filter[idx] == GoodWell) {
         mapping[count] = idx;
-        store.GetTrace(idx, flow0, O.begin_col(count));
-        store.GetTrace(idx, flow1, Z.begin_col(count));
+        store.GetTrace(idx, flow1, O.begin_col(count));
+        store.GetTrace(idx, flow0, Z.begin_col(count));
         count++;
       }
     }
@@ -1338,12 +1338,40 @@ bool DifferentialSeparator::Find0merAnd1merFlows(KeySeq &key, TraceStore<double>
   return found;
 }
 
+bool AllMatch(std::vector<KeySeq> & key_vectors, int flow, int hp) {
+  for (size_t i = 0; i <key_vectors.size(); i++) {
+    if (key_vectors[i].flows[flow] != hp) {
+      return false;
+    }
+  }
+  return true;
+}
 
+bool DifferentialSeparator::FindCommon0merAnd1merFlows(std::vector<KeySeq> &key_vectors,
+                                                       TraceStore<double> &store,
+                                                       int &flow0mer, int &flow1mer) {
+  int minflows = std::numeric_limits<int>::max();
+  for (size_t keyIx = 0; keyIx < key_vectors.size(); keyIx++) {
+    minflows = min((int)key_vectors[keyIx].usableKeyFlows, minflows);
+  }
+  for (int flow1 = minflows; flow1 >= 0; flow1--) {
+    for (int flow2 = minflows; flow2 >= 0; flow2--) {
+      if (store.GetNucForFlow(flow1) == store.GetNucForFlow(flow2) &&
+          AllMatch(key_vectors, flow1, 1) && 
+          AllMatch(key_vectors, flow2, 0)) {
+        flow0mer = flow2;
+        flow1mer = flow1;
+        return true;
+      }
+    }
+  }
+  return false;
+}
 
 void DifferentialSeparator::PickReference(TraceStore<double> &store,
                                           BFReference &reference, 
                                           int rowStep, int colStep,
-                                          bool useKeySignal,
+                                          int useKeySignal,
                                           float iqrMult,
                                           int numBasis,
                                           Mask &mask,
@@ -1363,7 +1391,7 @@ void DifferentialSeparator::PickReference(TraceStore<double> &store,
   cout << "Beadfind filtered: " << count << " wells of: " << filter.size() << " (" << float(count)/filter.size() << ")" << endl;
   //  CountReference("After beadfind reference", mFilteredWells);
   vector<vector<float> > mads;
-  if (useKeySignal) {
+  if (useKeySignal == 1) {
     mads.resize(keys.size());
     for (size_t i = 0; i < keys.size(); i++) {
       int flow1 = -1, flow0 = -1;
@@ -1378,10 +1406,21 @@ void DifferentialSeparator::PickReference(TraceStore<double> &store,
       }
     }
   }
+  else if (useKeySignal == 2) {
+    mads.resize(1);
+    mads[0].resize(mask.H() * mask.W());
+    fill(mads[0].begin(), mads[0].end(), 0);
+    int flow0 = -1, flow1 = -1;
+    bool found = FindCommon0merAnd1merFlows(keys, store, flow0, flow1);
+    if (found) {
+      CreateSignalRef(flow0, flow1, store, rowStep, colStep, iqrMult, numBasis,
+                      mask, minWells, filter, mads[0]);
+    }
+  }
   else {
     cout << "Not using key signal reference." << endl;
   }
-
+  cout << "Picking reference with: " << mads.size() << " vectors useSignalReference " << useKeySignal << endl;
   PickCombinedRank(reference, mads, rowStep, colStep, minWells, filter, refWells);
   //  CountReference("After signal combined ranke", mFilteredWells);
 }

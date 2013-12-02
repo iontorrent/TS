@@ -55,7 +55,7 @@ from iondb.utils.crawler_utils import getFlowOrder
 from iondb.utils.crawler_utils import folder_mtime, explog_time
 from iondb.utils.crawler_utils import tdelt2secs
 
-__version__ = filter(str.isdigit, "$Revision: 69729 $")
+__version__ = filter(str.isdigit, "$Revision: 75064 $")
 
 LOG_BASENAME = "explog.txt"
 LOG_FINAL_BASENAME = "explog_final.txt"
@@ -592,7 +592,12 @@ def update_exp_objects_from_log(d, folder, planObj, expObj, easObj, logobj):
             # change existing sample name only if this sample has association to 1 experiment,
             # otherwise need to dissociate the original sample and add a new one
             if sample.name != sampleName:
-                if sample.experiments.count() == 1:
+                sample_found = models.Sample.objects.filter(name = sampleName)
+                if sample_found:
+                   sample.experiments.remove(expObj)
+                   sample_found[0].experiments.add(expObj)
+                   logobj.info("Replaced sample=%s; sample.id=%s" %(sampleName, sample_found[0].pk))
+                elif sample.experiments.count() == 1:
                    sample.name = sampleName
                    sample.displayedName = sampleName
                    sample.save()
@@ -711,7 +716,7 @@ def generate_http_post(exp, logger, thumbnail_analysis=False):
     eas = exp.get_EAS()
     if (eas):
         ##logger.errors.info("crawler.generate_http_post() exp.name=%s; id=%s; isDuplicateReads=%s" %(exp.expName, str(exp.pk), str(eas.isDuplicateReads)))
-        mark_duplciates = eas.isDuplicateReads
+        mark_duplicates = eas.isDuplicateReads
 
     report_name = get_name_from_json(exp, 'autoanalysisname', thumbnail_analysis)
 

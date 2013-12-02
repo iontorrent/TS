@@ -1,6 +1,6 @@
 {
     "torrent_variant_caller":{
-        "tvc_parameters_version": "ampliseq_exome_proton-3.6.66827",
+        "tvc_parameters_version": "ampliseq_exome_proton-4.0_20130920",
         "data_quality_stringency":20.0,
         "hp_max_length":25,
         "filter_unusual_predictions":0.25,

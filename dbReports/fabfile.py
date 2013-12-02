@@ -2,14 +2,15 @@
 #!/usr/bin/env python
 from fabric.api import env, local, sudo, require, run, put, settings, cd
 from fabric.utils import abort
+import subprocess
 from xml.etree import ElementTree as ET
 import os
 import sys
 import time
 try:
     from iondb import settings as base_settings
-except ImportError:
-    pass
+except ImportError, e:
+    raise e
 
 
 # globals
@@ -131,22 +132,9 @@ def test(reusedb=0, verbosity=2, coverage=1, viewcoverage=1, fail=0):
         :viewcoverage=[0|1] opens the html coverage report automatically, 0 is off (test_iondb)
         :fail=[0|1] 0 will ignore coverage check failures, 1 (default) will fail on coverage check failures 
     '''
-    dev_setup()
+    # dev_setup()
     _verify_local_settings()
     _grant_createdb_permission()
-#    '''
-#    # generate coberatura-style coverage and reports
-#    local("export PYTHONPATH=`pwd`; cd     iondb; python manage.py test --verbosity=2 --with-xunit --with-xcoverage --xunit-file=../reports/nosetests.xml --xcoverage-file=../reports/coverage.xml --cover-package=warehouse --cover-html --cover-erase --cover-html-dir=../reports/coverage rundb")
-#    local("export REUSE_DB=%s; export PYTHONPATH=`pwd`; \
-#            python manage.py test --verbosity=%s \
-#            --cover-erase \
-#            --cover-package=iondb.rundb \
-#            --with-xunit --xunit-file=reports/nosetests.xml \
-#            --xcoverage-file=reports/coverage.xml --with-xcoverage \
-#            rundb" % (reusedb, verbosity, ))
-#    '''
-    
-#    TODO: --cover-min-percentage=85 logs 'nose.plugins.cover: ERROR: No total percentage was found in coverage output, something went wrong.' to console
     options = ""
     if int(coverage) == 1: 
         options += "--cover-erase \
@@ -155,11 +143,18 @@ def test(reusedb=0, verbosity=2, coverage=1, viewcoverage=1, fail=0):
             --cover-branches \
             --cover-html --cover-html-dir=reports/coverage/"
 
-    local("export REUSE_DB=%s; export PYTHONPATH=`pwd`; \
+    cmd = "export REUSE_DB=%s; export PYTHONPATH=`pwd`; \
             python manage.py test --verbosity=%s \
             %s \
-            iondb"
-            % (reusedb, verbosity, options))
+            iondb" % (reusedb, verbosity, options)
+    flag = subprocess.call(cmd, shell=True)
+    
+    if not flag and fail:
+        # TODO: ADD SOMETHING HERE TO NOTIFY USERS OF FAILURE
+        pass
+    else:
+        # install()
+        pass
     if int(coverage) == 1 and int(viewcoverage) == 1:
         local('firefox file://$PWD/reports/coverage/index.html')
     if int(coverage) == 1:

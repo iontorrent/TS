@@ -143,9 +143,14 @@ class KitsStepData(AbstractStepData):
         if updated_step.getStepName() == StepNames.APPLICATION and updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
             applProduct = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]
             logger.debug("kits_step_data.updateFromStep() Updating kits for applproduct %s" % applProduct.productCode)
+
+            if not applProduct.defaultChipType:
+                self.savedFields[KitsFieldNames.CHIP_TYPE] = None    
             
             if applProduct.defaultSamplePrepKit:
                 self.savedFields[KitsFieldNames.SAMPLE_PREPARATION_KIT] = applProduct.defaultSamplePrepKit.name
+            else:
+                self.savedFields[KitsFieldNames.SAMPLE_PREPARATION_KIT] = None
             
             if applProduct.defaultLibraryKit:
                 self.savedFields[KitsFieldNames.LIBRARY_KIT_NAME] = applProduct.defaultLibraryKit.name
@@ -174,9 +179,13 @@ class KitsStepData(AbstractStepData):
                 
             if applProduct.defaultControlSeqKit:
                 self.savedFields[KitsFieldNames.CONTROL_SEQUENCE] = applProduct.defaultControlSeqKit.name
+            else:
+                self.savedFields[KitsFieldNames.CONTROL_SEQUENCE] = None
             
             if applProduct.isDefaultBarcoded and applProduct.defaultBarcodeKitName:
                 self.savedFields[KitsFieldNames.BARCODE_ID] = applProduct.defaultBarcodeKitName
+            elif not applProduct.isDefaultBarcoded:
+                self.savedFields[KitsFieldNames.BARCODE_ID] = None
             
             if applProduct.defaultFlowCount > 0:
                 self.savedFields[KitsFieldNames.FLOWS] = applProduct.defaultFlowCount

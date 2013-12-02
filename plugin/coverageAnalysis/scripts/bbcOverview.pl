@@ -89,11 +89,6 @@ loadBedRegions() if( $haveBed );
 my @binid;
 if( $haveBed )
 {
-  if( $targetSize < $numbins ) {
-    die "Error: Target size is 0 bases.\n" unless($genomeSize);
-    print STDERR "Warning: Bin size ($numbins) reduced to target size ($genomeSize).\n";
-    $numbins = $targetSize;
-  }
   $binsize = $targetSize / $numbins;
   print STDERR "targetSize = $targetSize, numbins = $numbins -> binsize = $binsize\n" if( $logopt );
   my $lastChrom = "";
@@ -120,15 +115,10 @@ if( $haveBed )
   {
     $binid[$binnum++] = $lastChrom;
   }
-  open( BBCVIEW, "$Bin/bbcView.pl -B $bedfile $bbcfile |" ) || die "Cannot read base coverage from $bbcfile.\n";
+  open( BBCVIEW, "$Bin/bbcView.pl -B \"$bedfile\" \"$bbcfile\" |" ) || die "Cannot read base coverage from $bbcfile.\n";
 }
 else
 {
-  if( $genomeSize < $numbins ) {
-    die "Error: Reference genome has 0 bases.\n" unless($genomeSize);
-    print STDERR "Warning: Bin size ($numbins) reduced to genome size ($genomeSize)\n";
-    $numbins = $genomeSize;
-  }
   $binsize = $genomeSize / $numbins;
   my $chrid = $chromName[0];
   my $chrsz = $numChroms > 1 ? $chromMaps{$chromName[1]} : $genomeSize;
@@ -149,7 +139,7 @@ else
     }
     $binid[$i] .= '--' . $chrid if( $binid[$i] ne $chrid );
   }
-  open( BBCVIEW, "$Bin/bbcView.pl $bbcfile |" ) || die "Cannot read base coverage from $bbcfile.\n";
+  open( BBCVIEW, "$Bin/bbcView.pl \"$bbcfile\" |" ) || die "Cannot read base coverage from $bbcfile.\n";
 }
 
 my @covbin;

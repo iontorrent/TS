@@ -75,7 +75,7 @@ class DifSepOpt
       useProjectedCurve = true;
       outputDebug = 0;
       percentReference = .01;
-      useSignalReference = true;
+      useSignalReference = 1;
       doSdat = false;
       sdatSuffix = "sdat";
       useSeparatorRef = false;
@@ -157,7 +157,7 @@ class DifSepOpt
     bool useProjectedCurve;
     int outputDebug;
     float percentReference;
-    bool useSignalReference;
+    int useSignalReference;
     bool doSdat;
     float minTfPeakMax,minLibPeakMax;
     int blobFilterStep;
@@ -398,6 +398,11 @@ class DifferentialSeparator : public AvgKeyIncorporation
     bool Find0merAnd1merFlows(KeySeq &key, TraceStore<double> &store,
                               int &flow0mer, int &flow1mer);
 
+    /** Find flow where all keys are 0 and 1 */
+    bool FindCommon0merAnd1merFlows(std::vector<KeySeq> &key_vectors,
+                                    TraceStore<double> &store,
+                                    int &flow0mer, int &flow1mer);
+
     /** 
      * Create our initial set of reference wells using the filters set up in the BFReference object
      * and additionally using the signal seen between flows if useKeySignal is true. The overall goal
@@ -411,7 +416,7 @@ class DifferentialSeparator : public AvgKeyIncorporation
     void PickReference(TraceStore<double> &store,
                        BFReference &reference, 
                        int rowStep, int colStep,
-                       bool useKeySignal,
+                       int useKeySignal,
                        float iqrMult,
                        int numBasis,
                        Mask &mask,

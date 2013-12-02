@@ -74,7 +74,8 @@ The average number of reads of all targeted reference bases. This is the total n
 target divided by the number of targeted bases and therefore includes any bases that had no coverage.
 
 @Uniformity of base coverage
-The percentage of bases in all targeted regions (or whole genome) covered by at least (the nearest integer to) 20% of the average base read depth reads.
+The percentage of bases in all targeted regions (or whole genome) covered by at least 20% of the average base coverage depth reads.
+(Cumulative coverage is linearly interpolated between nearest integer base read depths.)
 
 @Maximum base read depth
 The maximum number of reads of any target base. (Not including deletions.)
@@ -110,7 +111,7 @@ The percentage of target bases covered by at least five hundred reads.
 The percentage of all target bases that did not show a bias towards forward or reverse strand
 read alignments. An individual target base is considered to have read bias if it has at least 10 
 reads and the fraction of forward or reverse reads to total reads is greater than 70%.
-Target bases with no reads are considered to have no strand bias.
+Target bases with less than 10 reads are considered to have no strand bias.
 
 @Amplicon Read Coverage
 Summary statistics for reads assigned to specific amplicons.
@@ -143,7 +144,8 @@ that has the greatest overlap of aligned sequence.
 The average number of reads assigned to amplicons.
 
 @Uniformity of amplicon coverage
-The percentage of amplicons that had at least (the nearest integer to) 20% of the average number of reads per amplicon reads.
+The percentage of amplicons that had at least 20% of the average number of reads per amplicon reads.
+(Cumulative coverage is linearly interpolated between nearest integer read depth counts.)
 
 @Maximum amplicon read depth
 The maximum number of reads assigned to any amplicon.
@@ -188,7 +190,7 @@ The percentage of all amplicons that had at least one hundred thousand reads.
 The percentage of all amplicons that did not show a bias towards forward or reverse strand
 read alignments. An individual amplicon is considered to have read bias if it has at least 10
 reads and the fraction of forward or reverse reads to total reads is greater than 70%.
-Amplicons with no reads are considered to have no strand bias.
+Amplicons with less than 10 reads are considered to have no strand bias.
 
 @Amplicons reading end-to-end
 The percentage of all amplicons that were considered to have a sufficient proportion of
@@ -233,7 +235,7 @@ The percentage of reference genome bases covered by at least five hundred reads.
 The percentage of all reference genome bases that did not show a bias towards forward or reverse strand
 read alignments. An individual reference base is considered to have read bias if it has at least 10 
 reads and the fraction of forward or reverse reads to total reads is greater than 70%.
-Genome bases that have no reads are considered to have no strand bias.
+Genome bases that have less than 10 reads are considered to have no strand bias.
 
 @Target Read Coverage
 Summary statistics for reads assigned to specific targets.
@@ -252,7 +254,8 @@ A read is assigned to a particular target region has at least one aligned base o
 The average number of reads assigned to targets.
 
 @Uniformity of target coverage
-The percentage of bases in all targeted regions (or whole genome) covered by at least (the nearest integer to) 20% of the average base read depth reads.
+The percentage of bases in all targeted regions (or whole genome) covered by at least 20% of the average base read depth reads.
+(Cumulative coverage is linearly interpolated between nearest integer base read depths.)
 
 @Maximum target read depth
 The maximum number of reads assigned to any target.
@@ -317,9 +320,9 @@ The average of the mean base read depth of all individual targets. For N overlap
 coverage is spread evenly as if N separated target had this mean base coverage.
 
 @Uniformity of base coverage per target
-The percentage of all individual targets that had an average base coverage depth that is at least (the nearest integer to) 20% of
-the average base coverage depth per target reads. Note that this value is based on an integerized threshold to be consisent with other
-uniformity of coverage statistics, even though average base coverage depth for individual targets is a non-integer value.
+The percentage of all individual targets that had an average base coverage depth that is at least 20% of
+the average base coverage depth per target reads.
+(Cumulative coverage is linearly interpolated between nearest integer base read depths.)
 
 @Targets with base coverage at 1x
 The percentage of targets that had an average base coverage depth of at least one base.
@@ -349,7 +352,7 @@ Note that this does not mean all bases across the whole length of any particular
 The percentage of targets that did not show a bias towards forward or reverse strand base read alignments.
 An individual target is considered to show strand bias if it has an average base read coverage depth of at least 10 and
 the fraction of forward or reverse base reads to total base reads is greater than 70%.
-Traget regions with no reads are considered to have no strand bias.
+Traget regions with less than 10 reads are considered to have no strand bias.
 
 @Targets with full coverage
 The percentage of targets that had at least 98% of their length covered by at least one base read. This definition allows some

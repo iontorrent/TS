@@ -11,6 +11,11 @@ import errno
 import json
 import os
 import sys
+import requests
+import urlparse
+import tempfile
+import shutil
+import traceback
 
 
 class TsConnectionError(Exception):
@@ -24,16 +29,14 @@ def gather_and_send_data(rr_config, ts_conn, lb_conn):
     try:
         ts_client = TorrentServerApiClient(ts_conn)
         ts_data = _gather_ts_data(rr_config.results_id, ts_client)
-        lb_client = RunRecognitionApiClient(lb_conn)
+        lb_client = RunRecognitionApiClient(lb_conn, rr_config)
         print 'gather_and_send_data initialized'
         if rr_config.generate_file:
             print 'generating file'
             generate_export_file(ts_data, rr_config.site_name, rr_config.reference_genome, rr_config.application_type,
                                  sys.argv[2])
             generate_export_report(sys.argv[1], sys.argv[2], rr_config.guru_api_url)
-        elif (lb_client.submit_data(ts_data, rr_config.site_name, rr_config.reference_genome,
-                                    rr_config.application_type,
-                  rr_config.guru_api_username, rr_config.guru_api_password)):
+        elif (lb_client.submit_data(ts_data)):
             print 'sent run to tg, about to generate upload report'
             generate_upload_report(sys.argv[1], sys.argv[2], 'Your data has been saved to the leaderboard.',
                                  ts_data['experiment']['chipType'])
@@ -76,6 +79,10 @@ def _gather_ts_data(result_id, ts_client):
         ts_data['experiment_log'] = ts_data['experiment']['log']
     else:
         ts_data['experiment_log'] = {}
+    if 'eas_set' in ts_data['experiment'] and len(ts_data['experiment']['eas_set']) > 0:
+        ts_data['experiment_eas_set'] = ts_data['experiment']['eas_set'][0]
+    else:
+        ts_data['experiment_eas_set'] = {}
     return ts_data
 
 
@@ -90,11 +97,13 @@ def generate_export_file(ts_data, site_name, reference_genome, application_type,
     _purge_empties(ts_data['tfmetrics'])
     _purge_empties(ts_data['analysismetrics'])
     _purge_empties(ts_data['experiment_log'])
+    _purge_empties(ts_data['experiment_eas_set'])
     data['raw_qualitymetrics'] = ts_data['qualitymetrics']
     data['raw_libmetrics'] = ts_data['libmetrics']
     data['raw_tfmetrics'] = ts_data['tfmetrics']
     data['raw_analysismetrics'] = ts_data['analysismetrics']
     data['raw_experiment_log'] = ts_data['experiment_log']
+    data['raw_experiment_eas_set'] = ts_data['experiment_eas_set']
 
     try:
         os.makedirs(out_file_path + '/files')
@@ -225,18 +234,23 @@ def strip_tz(date_str):
     return retval
 
 
-class RunRecognitionApiClient:  # pylint: disable=R0914
+class RunRecognitionApiClient:  # pylint: disable=R0914,R0201,W0702
     '''Class to encapsulate interactions with the runrecognition api'''
-    def __init__(self, connection):
+    def __init__(self, connection, rr_config):
         ''' init the api'''
         self.connection = connection
+        self.rr_config = rr_config
 
-    def submit_data(self, ts_data, site_name, reference_genome, application_type, username, password):
-        '''takes the data packages it for the leaderboard, and sends it.
-        returns true on success, false on failure.'''
+    def submit_data(self, ts_data):
+        '''
+            takes the data packages it for the leaderboard, and sends it.
+            returns true on success, false on failure.
+        '''
         # check for if there is an existing record the initial values assume it is a create
+        experimentrun_id = None
         record = self._get_existing_record(ts_data['experiment']['chipType'],
-                                           ts_data['results']['timeStamp'], username)
+                                           ts_data['results']['timeStamp'],
+                                           self.rr_config.guru_api_username)
         submission_data = {}
         submission_data['experiment_fields'] = []
         func = self.connection.request_post
@@ -244,6 +258,7 @@ class RunRecognitionApiClient:  # pylint: disable=R0914
         field_defs_to_add = self._get_field_definitions()
         if record is not None:
             # use the existing record as the submission data, and update the url and request type
+            experimentrun_id = record['id']
             submission_data = record
             func = self.connection.request_put
             url += str(record['id']) + '/'
@@ -262,8 +277,11 @@ class RunRecognitionApiClient:  # pylint: disable=R0914
                         break
 
         # the standard fields are handled the same on create and update
-        populate_dict_with_core_fields(submission_data, ts_data, site_name, reference_genome,
-                                       application_type, username)
+        populate_dict_with_core_fields(submission_data, ts_data,
+                                       self.rr_config.site_name,
+                                       self.rr_config.reference_genome,
+                                       self.rr_config.application_type,
+                                       self.rr_config.guru_api_username)
 
         # Add in any non standard fields that need to be added. We're having to deal
         # with field_def versions now because older plugin code could not recover from
@@ -278,7 +296,8 @@ class RunRecognitionApiClient:  # pylint: disable=R0914
                 self._set_field_value(ts_data, field, field_def)
                 submission_data['experiment_fields'].append(field)
 
-        temp_str = '%s:%s' % (username, password)
+        temp_str = '%s:%s' % (self.rr_config.guru_api_username,
+                              self.rr_config.guru_api_password)
         temp_str = temp_str.strip().encode("utf-8")
         credentials = base64.encodestring(temp_str).strip()
         response = func(url, body=json.dumps(submission_data),
@@ -289,7 +308,104 @@ class RunRecognitionApiClient:  # pylint: disable=R0914
             sys.stderr.write(str(response))
             return False
 
+        try:
+            if not experimentrun_id:
+                experimentrun_id = self.get_experimentrun_id(response)
+            self.submit_images(experimentrun_id)
+        except:
+            print "Failed to submit images; Trace: %s" % traceback.format_exc()
         return True
+
+    def submit_images(self, experimentrun_id):
+        ''' submit the experimentrun's images to tg. fail silently. '''
+        image_type_to_path_dict = self.get_image_dict()
+
+        report_dir = tempfile.mkdtemp()
+        report_path = os.path.join(report_dir, 'latex_report.pdf')
+        if self.get_latex_pdf(self.rr_config.results_id, report_path):
+            image_type_to_path_dict['pdf_report'] = report_path
+
+        for image_type, image_path in image_type_to_path_dict.items():
+            try:
+                files = {'file': open(image_path, 'rb')}
+                data = {'experimentrun_id': str(experimentrun_id),
+                        'image_type_name': image_type}
+                url = urlparse.urljoin(self.rr_config.guru_api_url, "/runrecognition/upload_experimentrun_image/")
+                response = requests.post(url, files=files, data=data,
+                                         auth=(self.rr_config.guru_api_username,
+                                               self.rr_config.guru_api_password))
+                if response.status_code != 200:
+                    print "Failed to submit image\n%s\n%s" % (str(response.status_code), response.text)
+            except:
+                print ("Failed to submit image; Type: %s; Path: %s;\n Trace: %s"
+                       % (image_type, image_path, traceback.format_exc()))
+        shutil.rmtree(report_dir)
+
+    def get_image_dict(self):
+        ''' get the dictionary of image type to image path that the plugin should upload '''
+        start_plugin_json = self._get_start_plugin_json_obj()
+        if start_plugin_json:
+            return self._get_image_dict_from_json(start_plugin_json)
+        return {}
+
+    def get_latex_pdf(self, results_id, report_file_path):
+        ''' grab latex pdf from net location and save it into report_file_path '''
+        try:
+            url = urlparse.urljoin(self.rr_config.torrent_server_api_url, '/report/latex/%s.pdf' % str(results_id))
+            report_response = requests.get(url,
+                                           auth=(self.rr_config.torrent_server_api_username,
+                                                 self.rr_config.torrent_server_api_password))
+            if report_response.status_code >= 200 and report_response.status_code < 300:
+                file_handle = open(report_file_path, 'wb+')
+                for chunk in report_response.iter_content():
+                    file_handle.write(chunk)
+                file_handle.close()
+                return True
+            print '''Got back a non-success reponse while grabbing latex report.
+                     Response code is: %s\nResponse Body is: %s
+                  ''' % (report_response.status_code, report_response.text)
+            return False
+        except:
+            print "Failed to grab or save latex report, error is: %s" % traceback.format_exc()
+            return False
+
+    def get_experimentrun_id(self, response):
+        ''' get the saved experimentrun id from a put or post response '''
+        try:
+            saved_experiment = requests.get(response['headers']['location']).json()
+            return saved_experiment['id']
+        except:
+            print "Failed to get an experiment from response: %s" % str(response)
+            return None
+
+    def _get_start_plugin_json_obj(self):
+        start_plugin_json_path = os.path.join(os.getcwd(), 'startplugin.json')
+        if os.path.exists(start_plugin_json_path):
+            start_plugin_json_file = open(start_plugin_json_path, 'r')
+            return json.loads(start_plugin_json_file.read())
+        return None
+
+    def _get_image_dict_from_json(self, start_plugin_json):
+        retval = {}
+        sig_proc_dir = start_plugin_json["runinfo"]["sigproc_dir"]
+        basecaller_dir = start_plugin_json["runinfo"]["basecaller_dir"]
+        analysis_dir = start_plugin_json["runinfo"]["analysis_dir"]
+        self._update_dict_with_image(sig_proc_dir, 'Bead_density_1000.png',
+                                     'bead_density_1000', retval)
+        self._update_dict_with_image(basecaller_dir, 'wells_beadogram.png',
+                                     'wells_beadogram', retval)
+        self._update_dict_with_image(basecaller_dir, 'readLenHisto2.png',
+                                     'read_len_histo2', retval)
+        self._update_dict_with_image(analysis_dir, 'alignment_rate_plot.png',
+                                     'alignment_rate_plot', retval)
+        self._update_dict_with_image(analysis_dir, 'base_error_plot.png',
+                                     'base_error_plot', retval)
+        return retval
+
+    def _update_dict_with_image(self, base_path, image_name, image_type, target_dict):
+        image_path = os.path.join(base_path, image_name)
+        if os.path.exists(image_path):
+            target_dict[image_type] = image_path
 
     @classmethod
     def _check_field_existence(cls, ts_data, field_def):
@@ -321,7 +437,7 @@ class RunRecognitionApiClient:  # pylint: disable=R0914
 
     def _get_field_definitions(self):
         response = self.connection.request_get('runrecognition/api/v1/experimentrunfielddefinition/',
-               args={'limit': '1000', 'plugin_version__lt': 1.41},
+               args={'limit': '1000', 'plugin_version__lt': 1.61},
                headers={'Accept': 'text/json'})
         rawdata = json.loads('[%s]' % response[u'body'])[0]
         return rawdata['objects']

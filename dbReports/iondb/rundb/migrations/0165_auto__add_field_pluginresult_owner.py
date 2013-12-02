@@ -4,11 +4,23 @@ import datetime
 from south.db import db
 from south.v2 import SchemaMigration
 from django.db import models
+import logging
 
 class Migration(SchemaMigration):
 
     def forwards(self, orm):
-        uid = 1 ## ionadmin
+        log = logging.getLogger(__name__)
+        uid = 1 # ionadmin in default config:
+        try:
+            # This should be ionadmin, but users may have deleted ionadmin TS-8155
+            # Take first valid user in database
+            user = orm['auth.User'].objects.all().order_by('id')[0]
+            uid = user.pk
+            log.info('Default user for PluginResult owner: %s [%d]', user.username, user.pk)
+        except:
+            log.exception('Failed to get a valid user for use as PluginResult owner')
+            log.error('This is fatal unless this is a clean install and there are no PluginResults. Trying anyway...')
+
         # Adding field 'PluginResult.owner'
         db.add_column(u'rundb_pluginresult', 'owner',
                       self.gf('django.db.models.fields.related.ForeignKey')(default=uid, to=orm['auth.User']),

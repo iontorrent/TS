@@ -1879,6 +1879,7 @@ class PlannedExperimentDbResource(ModelResource):
 
     sampleSet = fields.ToOneField(SampleSetResource, 'sampleSet', full=False, null=True, blank=True)
     applicationGroup = fields.ToOneField(ApplicationGroupResource, 'applicationGroup', full=False, null=True, blank=True)
+    sampleGrouping = fields.ToOneField(SampleGroupType_CVResource, 'sampleGrouping', full=False, null=True, blank=True)
 
     def hydrate_m2m(self, bundle):
         # Promote projects from names to something tastypie recognizes in hydrate_m2m
@@ -3128,7 +3129,7 @@ class MonitorExperimentResource(ModelResource):
                 'results_set__projects',
                 'plan__plannedexperimentqc_set',
                 'plan__plannedexperimentqc_set__qcType'
-            ).exclude(expName="NONE_ReportOnly_NONE").exclude(status="planned").order_by('-resultDate')
+            ).exclude(expName="NONE_ReportOnly_NONE").exclude(status="planned").exclude(expDir = "").order_by('-resultDate')
 
         field_list = ['id', 'expName', 'displayName', 'date', 'library', 'ftpStatus',
             'pgmName', 'storage_options', 'sample', 'flows', 'chipType',
@@ -3324,7 +3325,7 @@ class CompositeExperimentResource(ModelResource):
             'results_set__projects',
             'results_set__dmfilestat_set',
             'samples'
-        ).exclude(expName="NONE_ReportOnly_NONE").exclude(status="planned").order_by('-resultDate')
+        ).exclude(expName="NONE_ReportOnly_NONE").exclude(status = "planned").exclude(expDir = "").order_by('-resultDate')
 
         field_list = [
                     'barcodeId',    'chipType',     'date',
@@ -3570,6 +3571,28 @@ class NetworkResource(ModelResource):
         update_allowed_methods = ['get']
 
 class AnalysisArgsResource(ModelResource):
+
+    def prepend_urls(self):
+        return [
+            url(r"^(?P<resource_name>%s)/getargs%s$" % (self._meta.resource_name, trailing_slash()), self.wrap_view('get_args'), name="api_get_args"),
+        ]
+    
+    def get_args(self, request, **kwargs):
+        # function for OIA to retrieve default args with or without Plan specified
+        try:
+            planGUID = request.GET.get('planGUID')
+            if planGUID:
+                plan = models.PlannedExperiment.objects.filter(planGUID=planGUID)[0]
+            else:
+                # use system default template
+                chipType = request.GET.get('chipType','')
+                plan = models.PlannedExperiment.get_latest_plan_or_template_by_chipType(chipType)
+
+            args = plan.get_default_cmdline_args(**request.GET.dict())
+        except:
+            args = {}
+    
+        return self.create_response(request, args)
 
     class Meta:
         queryset = models.AnalysisArgs.objects.all()

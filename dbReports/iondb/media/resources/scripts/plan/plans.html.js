@@ -270,7 +270,7 @@ $(document).ready(function() {
 
     var ampliSeqExome = $("#ampliSeqExome").kendoGrid(commonKendoGrid("#ampliSeqExome",
         basePlannedExperimentUrl + "&runType=AMPS_EXOME" + orderByOptions,
-        'No Ampliseq Exome templates yet'));
+        'No template loaded, click AmpliSeq.com link above to download template.'));
 
     var targetSeq_16s = $("#16sTargetSeq").kendoGrid(commonKendoGrid("#16sTargetSeq",
         basePlannedExperimentUrl + "&runType=TARS_16S" + orderByOptions,

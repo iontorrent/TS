@@ -9,8 +9,9 @@ from subprocess import *
 from ion.plugin import *
 from django.utils.datastructures import SortedDict
 
+
 class RunRecognitION(IonPlugin):
-	version = "4.0-r%s" % filter(str.isdigit,"$Revision: 70791 $")	
+	version = "4.0-r%s" % filter(str.isdigit,"$Revision: 75081 $")	
 
 	envDict = dict(os.environ)
 	

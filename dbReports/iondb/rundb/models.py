@@ -182,7 +182,7 @@ class KitPartManager(models.Manager):
 
 class KitPart(models.Model):
     kit = models.ForeignKey(KitInfo, null=False)
-    barcode = models.CharField(max_length=7, unique=True, blank=False)
+    barcode = models.CharField(max_length=64, unique=True, blank=False)
 
     objects = KitPartManager()
 
@@ -559,7 +559,7 @@ class PlannedExperiment(models.Model):
     sampleSet_planIndex = models.PositiveIntegerField(default=0)
     sampleSet_planTotal = models.PositiveIntegerField(default=0)
 
-    sampleGrouping = models.CharField(max_length=512, blank=True, null=True)
+    sampleGrouping = models.ForeignKey("SampleGroupType_CV", blank=True, null=True, default=None)
     applicationGroup = models.ForeignKey(ApplicationGroup, null=True)
 
     objects = PlannedExperimentManager()
@@ -1710,6 +1710,9 @@ class SampleSetItem(models.Model):
     # This will be set to the current time every time the model is updated
     lastModifiedDate = models.DateTimeField(auto_now = True)
 
+    #optional sample-dnabarcode.id_str assignment
+    barcode = models.CharField(max_length = 128, blank = True, null = True)
+    
     def __unicode__(self):
         return u'%s/%s/%d' % (self.sampleSet, self.sample, self.relationshipGroup)
 
@@ -2444,6 +2447,9 @@ class Rig(models.Model):
     last_init_date = models.CharField(max_length=512, blank=True)
     last_clean_date = models.CharField(max_length=512, blank=True)
     last_experiment = models.CharField(max_length=512, blank=True)
+
+    host_address = models.CharField(blank=True,max_length=1024)
+    type = models.CharField(blank=True,max_length=1024)
 
 
     def __unicode__(self): return self.name

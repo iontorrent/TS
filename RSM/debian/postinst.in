@@ -10,7 +10,7 @@ chmod -R g+w /opt/ion/RSM
 if [ -e "/opt/ion/.masternode" ]; then
 	# start the service
 	if [ -e "/etc/init.d/RSM_Launch" ]; then
-		/etc/init.d/RSM_Launch start
+		/etc/init.d/RSM_Launch restart
 	fi
 
 	# see if this was already registered, if not, register it now
@@ -22,4 +22,3 @@ if [ -e "/opt/ion/.masternode" ]; then
 		$CMD
 	fi
 fi
-

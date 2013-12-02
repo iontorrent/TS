@@ -13,7 +13,6 @@ import shutil
 
 import iondb.bin.djangoinit
 from django import shortcuts
-from pwd import getpwnam
 
 from iondb.rundb import models
 import logging
@@ -101,13 +100,11 @@ def makePDFdir(pkR, savePath):
     #create the directory to store the pdf files
     try:
         os.makedirs(os.path.join(savePath,"pdf"))
-        os.chown(os.path.join(savePath,"pdf"),getpwnam('www-data').pw_uid,getpwnam('www-data').pw_gid)
     except OSError:
         pass
 
     def create_pdf(url, outputFile, title):
-        pdf_str = 'sudo -u www-data '
-        pdf_str += '/opt/ion/iondb/bin/wkhtmltopdf-amd64 -q'
+        pdf_str = '/opt/ion/iondb/bin/wkhtmltopdf-amd64 -q'
         pdf_str += ' --javascript-delay 1200'
         pdf_str += ' --no-outline'
         pdf_str += ' --margin-top 15'
@@ -135,7 +132,7 @@ def makePDFdir(pkR, savePath):
         if get_status_code(full_url) == 200:
             uniq = paths[i].split("/")[-2]
             outpath  = os.path.join(ret.get_report_dir(), "pdf" ,  uniq + entry +  ".pdf")
-            create_pdf( full_url, outpath ,  entry)
+            create_pdf(full_url, outpath, entry)
         else:
             logger.debug("Did NOT get 200 response from " + full_url)
 
@@ -143,7 +140,7 @@ def makePDFdir(pkR, savePath):
     pdf_string = " ".join(pdfs)
 
     try:
-        os.system("sudo -u www-data pdftk " + pdf_string + " cat output " + savePath + "/plugins.pdf")
+        os.system("pdftk " + pdf_string + " cat output " + savePath + "/plugins.pdf")
         return True
     except Exception as inst:
         logger.exception("PDF generation error")
@@ -177,7 +174,7 @@ def latex(pkR, directory):
         if pluginFile:
             try:
                 image_path = os.path.join(directory,"pdf",plugin + ".png")
-                plugin_image =  ['sudo','-u','www-data',"/opt/ion/iondb/bin/wkhtmltoimage-amd64", "--width", "1024", "--crop-w", "1024"
+                plugin_image =  ["/opt/ion/iondb/bin/wkhtmltoimage-amd64", "--width", "1024", "--crop-w", "1024"
                 , pluginFile, image_path]
                 plugin_proc = subprocess.Popen(plugin_image, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=directory)
                 plugin_stdout, plugin_stderr = plugin_proc.communicate()
@@ -188,7 +185,7 @@ def latex(pkR, directory):
 
     page_url = "http://127.0.0.1/report/" + str(pkR) + "/?latex=1"
     latex = urllib.urlretrieve(page_url , directory + "/report.tex")
-    pdf =  ['sudo','-u','www-data',"pdflatex",  directory + "/report.tex", "-output-directory", directory
+    pdf =  ["pdflatex",  directory + "/report.tex", "-output-directory", directory
         ,"-interaction", "batchmode"]
 
     proc = subprocess.Popen(pdf, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -215,7 +212,6 @@ def makePDF(pkR):
             #cmd = "pdftk %s %s cat output %s" % (latexReport,pluginReport,fullReport)
             #os.system(cmd)
             cmd = ['pdftk', latexReport, pluginReport, 'cat', 'output', fullReport]
-            cmd = ['sudo','-u','www-data','pdftk', latexReport, pluginReport, 'cat', 'output', fullReport]
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             plugin_stdout, plugin_stderr = proc.communicate()
             if proc.returncode != 0:
@@ -294,8 +290,7 @@ def makeOldPDFdir(pkR, dirname):
 
     #this string will be really long for reports with lots of plugins. One of the bigger ones caused wkhtmltopdf to segfault.
     #but, it did successfully produce a .pdf with the report and all of the plugins in one piece, so I'm not really sure what to make of that.
-    pdf_str = "sudo -u www-data "
-    pdf_str += '/opt/ion/iondb/bin/wkhtmltopdf-amd64 -q'
+    pdf_str = '/opt/ion/iondb/bin/wkhtmltopdf-amd64 -q'
     pdf_str += ' --margin-top 15'
     pdf_str += ' --header-spacing 5'
     pdf_str += ' --header-left " ' + ret.resultsName + ' - [date]"'

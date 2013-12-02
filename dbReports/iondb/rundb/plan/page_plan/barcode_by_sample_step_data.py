@@ -66,6 +66,7 @@ class BarcodeBySampleStepData(AbstractStepData):
         self.savedFields[BarcodeBySampleFieldNames.PLANNEDITEM_EXTERNALID] = None
         self.savedFields[BarcodeBySampleFieldNames.BARCODE_ID] = None
         self.savedFields['applicationType'] = ''
+        self.savedFields['irDown'] = '0'
 
         self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS] = []
         self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all())
@@ -173,9 +174,9 @@ class BarcodeBySampleStepData(AbstractStepData):
                 dnabarcode_id_str = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_BARCODE, i)]
                 sample_name = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_NAME, i)]
 
-            # if dnabarcode_id_str == '' and is_barcoded:
-            #     if not self.validationErrors[BarcodeBySampleFieldNames.NO_BARCODE]:
-            #         self.validationErrors[BarcodeBySampleFieldNames.NO_BARCODE] = "Please select a barcode for each sample set item"
+                if sample_name and not dnabarcode_id_str and is_barcoded:
+                    if not self.validationErrors[BarcodeBySampleFieldNames.NO_BARCODE]:
+                        self.validationErrors[BarcodeBySampleFieldNames.NO_BARCODE].append("Please select a barcode for each sample")
 
             # if sample_name == '':
             #     if not self.validationErrors[BarcodeBySampleFieldNames.NO_SAMPLE_NAME]:

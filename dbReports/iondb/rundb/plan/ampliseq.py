@@ -38,12 +38,13 @@ def legacy_plan_handler(data):
 
 # Current plan handler
 def plan_handler_4_0(data, meta):
-	choices = meta.get("choice", None)
+	choice = meta.get("choice", None)
 	config_choices = data["plan"]["4.0"]["configuration_choices"]
 	keys = config_choices.keys()
-	if len(keys) == 1 or choices not in keys:
-		choices = sorted(keys)[0]
-	plan = config_choices[choices]
+	if len(keys) == 1 or choice not in keys:
+		choice = sorted(keys)[0]
+		meta["choice"] = choice
+	plan = config_choices[choice]
 
 	if "runType" in plan:
 		if plan["runType"] == "AMPS_DNA":
@@ -53,11 +54,12 @@ def plan_handler_4_0(data, meta):
 
 	data["plan"] = plan
 	data["configuration_choices"] = keys
-	return data
+	return data, meta
 
 
-def plan_handler_3_6(data):
+def plan_handler_3_6(data, meta):
 	plan = data["plan"]["3.6"]
+	meta["choice"] = "None"
 
 	if "runType" in plan:
 		if plan["runType"] == "AMPS_DNA":
@@ -72,7 +74,7 @@ def plan_handler_3_6(data):
 
 	data["plan"] = plan
 	data["configuration_choices"] = []
-	return data
+	return data, meta
 
 
 version_plan_handlers = {
@@ -87,20 +89,22 @@ def handle_versioned_plans(data, meta=None):
 	# This is the very first iteration of AmpliSeq zip exports to be used
 	# by the TS and it might not need to be supported at all
 	if "plan" not in data:
-		return "legacy", legacy_plan_handler(data)
+		return "legacy", legacy_plan_handler(data), meta
 	# The plan is empty or null
 	elif not data['plan']:
 		data["plan"] = {}
-		return "unplanned", data
+		return "unplanned", data, meta
 	# This is the version we want to find, the version for *this* TS version
 	# even if later versions are available in the JSON
 	elif CURRENT_VERSION in data["plan"]:
-		return CURRENT_VERSION, version_plan_handlers[CURRENT_VERSION](data, meta)
+		data, meta = version_plan_handlers[CURRENT_VERSION](data, meta)
+		return CURRENT_VERSION, data, meta
 	# If the current version isn't in there, it's because the zip is older
 	# than the current version; however, it's possible that we know how
 	# to handle archives from that older version for this TS version
 	else:
 		max_version = max(data["plan"].keys())
 		if max_version in version_plan_handlers:
-			return max_version, version_plan_handlers[max_version](data)
+			data, meta = version_plan_handlers[max_version](data, meta)
+			return max_version, data, meta
 	return None, None

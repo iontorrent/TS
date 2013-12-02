@@ -23,7 +23,7 @@ my $OPTIONS = "Options:
   -E <pcnt> Threshold for end-to-end read counting based on percent end-to-end reads greater or equal to <pcnt>. Default: 70.
   -P <pcnt> Percentage of assigned mapped reads. If provided this will be output as the percent assigned reads statistic.
   -M <int>  Number of Mapped reads. If provided the percent assigned reads statistic will be output (unless -b option used).
-  -R <int>  Threshold for Read coverage for strand bias to be counted. Default: 10 reads/bases.
+  -R <int>  Threshold for Read coverage for strand bias to be counted. Reset to 1 if less. Default: 10 reads/bases.
   -S <pcnt> Threshold for strand Bias counting based on percent forward reads being between <pcnt> and 100-<pcnt>. Default: 70.";
 
 my $docfile = '';
@@ -81,6 +81,7 @@ elsif( $nargs != 1 )
 my $trdfile = shift(@ARGV);
 
 # validate thresholds and turn percents to fractions
+$thresReads = 1 if( $thresReads < 1 );
 $thresBias = 0 if( $thresBias <= 0 );
 $thresE2E = 0 if( $thresE2E <= 0 );
 $fullycov = 0 if( $fullycov <= 0 );
@@ -123,7 +124,7 @@ while(<TRDFILE>)
   my $tlen = $fields[$contig_end] - $fields[$contig_srt] + 1;
   my $depth = $fields[$cov_dpt];
   my $rE2E  = $basedepths ? ($tlen > 0 ? $fields[$overlaps]/$tlen : 0) : ($depth > 0 ? ($fields[$fwd_e2e]+$fields[$rev_e2e])/$depth : 0); 
-  my $rBias = $depth > 0 ? $fields[$fwd_reads]/($fields[$fwd_reads]+$fields[$rev_reads]) : 0.5; 
+  my $rBias = $depth > $thresReads ? $fields[$fwd_reads]/($fields[$fwd_reads]+$fields[$rev_reads]) : 0.5; 
   $targetMaxDepth = $depth if( $depth > $targetMaxDepth );
   if( $basedepths ) {
     my $ntrgs = 1+($haveNVP ? ($fields[$region_id] =~ tr/&/&/) : ($fields[$region_id] =~ tr/,/,/));
@@ -131,12 +132,12 @@ while(<TRDFILE>)
     $numTargets += $ntrgs;
     $targetDist[int($depth)] += $ntrgs;
     $numE2E += $ntrgs if( $rE2E >= $fullycov );
-    $numBias += $ntrgs unless( $depth >= $thresReads && ($rBias < $lthresBias || $rBias > $thresBias) );
+    $numBias += $ntrgs if( $rBias < $lthresBias || $rBias > $thresBias );
   } else {
     ++$numTargets;
     ++$targetDist[int($depth)];
-    ++$numE2E unless( $rE2E < $thresE2E );
-    ++$numBias unless( $depth >= $thresReads && ($rBias < $lthresBias || $rBias > $thresBias) );
+    ++$numE2E if( $rE2E >= $thresE2E );
+    ++$numBias if( $rBias < $lthresBias || $rBias > $thresBias );
     #$numOvlps += $fields[$overlaps];
   }
 }
@@ -146,13 +147,14 @@ close(TRDFILE);
 my $targType = $ampout ? 'Amplicon' : 'Target';
 my $targetCumd = outputStats( $targType, \@targetDist, $targetMaxDepth, $numTargets, $sumBaseDepth );
 
-my $pcBias = $numTargets > 0 ? 100*$numBias/$numTargets : 0;
+my $numNoBias = $numTargets - $numBias;
+my $pcBias = $numTargets > 0 ? 100*$numNoBias/$numTargets : 0;
 my $pcE2E  = $numTargets > 0 ? 100*$numE2E/$numTargets : 0;
 if( $basedepths ) {
   printf "%ss with no strand bias:        %.2f%%\n",$targType,$pcBias;
   printf "%ss with full coverage:         %.2f%%\n",$targType,$pcE2E if( $fullycov > 0 );
 } elsif( $rnaopt ) {
-  printf "%ss with no strand bias:       %d\n",$targType,$numBias;
+  printf "%ss with no strand bias:       %d\n",$targType,$numNoBias;
   printf "%ss reading end-to-end:        %d\n",$targType,$numE2E;
 } else {
   printf "%ss with no strand bias:       %.2f%%\n",$targType,$pcBias;
@@ -181,7 +183,7 @@ sub outputStats
   my $tagL = lc($tag);
   my $tagU = ucfirst($tagL);
   my ($reads,$sum_reads,$sum_dreads,$cumcov) = (0,0,0,0);
-  for( my $depth = $maxDepth; $depth > 0; --$depth ) {
+  for( my $depth = int($maxDepth); $depth > 0; --$depth ) {
     $dist[$depth] += 0; # force value
     $cumcov += $dist[$depth];
     $cumd[$depth] = $cumcov; # for medians
@@ -199,8 +201,9 @@ sub outputStats
   my $ave = $cumcov > 0 ? $sum_reads/$cumcov : 0;
   my $std = $cumcov > 1 ? sqrt(($sum_dreads - $ave*$ave*$cumcov)/($cumcov-1)) : 0;
   my $scl = 100 / $numTargs;
-  my $p2m = int(0.2*$abc+0.5);
   my $sig = sigfig($abc);
+  # uniformity changed from closest cum cov point to interpolation between two points - as seen on plot
+  # my $p2m = int(0.2*$abc+0.5); my $uniformity = $cumd[$p2m]*$scl;
   if( $basedepths ) {
     # Cumulative base coverage used integer depths => use more accurate sum & average
     $abc = $sumDepth / $numTargs;
@@ -209,14 +212,22 @@ sub outputStats
     #printf "Total on $tagL mean base reads:  %.0f\n",$sumDepth;
     printf "Percent assigned $tagL reads:    %.2f%%\n",$pc_mappedReads if( $pc_mappedReads >= 0 );
     printf "Average base coverage depth per target: %.${sig}f\n",$abc;
-    printf "Uniformity of base coverage per target: %.2f%%\n",$cumd[$p2m]*$scl;
+    my $lambda = 0.2*$abc;
+    my $p2m = int($lambda);
+    $lambda -= $p2m;
+    my $uniformity = ((1-$lambda)*$cumd[$p2m] + $lambda*$cumd[$p2m+1])*$scl;
+    printf "Uniformity of base coverage per target: %.2f%%\n",$uniformity;
   } else {
     printf "Number of %ss:                %.0f\n",$tagL,$numTargs;
     printf "Total assigned $tagL reads:      %.0f\n",$sum_reads;
     if( !$rnaopt ) {
       printf "Percent assigned $tagL reads:    %.2f%%\n",($mappedReads > 0 ? 100*$sum_reads/$mappedReads : 0) if( $mappedReads >= 0 );
       printf "Average reads per $tagL:         %.${sig}f\n",$abc;
-      printf "Uniformity of $tagL coverage:    %.2f%%\n",$cumd[$p2m]*$scl;
+      my $lambda = 0.2*$abc;
+      my $p2m = int($lambda);
+      $lambda -= $p2m;
+      my $uniformity = ((1-$lambda)*$cumd[$p2m] + $lambda*$cumd[$p2m+1])*$scl;
+      printf "Uniformity of $tagL coverage:    %.2f%%\n",$uniformity;
     }
     if( $fullstats ) {
       printf "%ss with at least 1 read:     %.0f\n",$tagU,$cumcov;

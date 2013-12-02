@@ -945,8 +945,12 @@ def update_diskusage(fs):
 # python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.check_disk_space.apply_async()'
 @periodic_task(run_every=600, expires=300, queue="periodic")
 def check_disk_space():
-    '''For every FileServer object, get percentage of used disk space'''
+    """
+    For every FileServer object, get percentage of used disk space.
+    Checks root partition for sufficient space.
+    """
     from iondb.rundb import models
+    from iondb.utils import files
     import socket
     import traceback
     from django.core import mail
@@ -1028,6 +1032,25 @@ def check_disk_space():
             # Remove any message objects
             models.Message.objects.filter(tags__contains=crit_tag).delete()
             models.Message.objects.filter(tags__contains=warn_tag).delete()
+            
+    #========================================================================
+    # Check root partition
+    #========================================================================
+    root_threshold = 1048576 # 1 GB in KB
+    warn_tag = "root_partition_space_warning"
+    try:
+        root_free_space = files.getSpaceKB('/')
+        if root_free_space < root_threshold:
+            msg = "Root Partition is getting full - less than 1GB available"
+            logger.warn(msg)
+            message  = models.Message.objects.filter(tags__contains=warn_tag)
+            if not message:
+                models.Message.warn(msg, tags=warn_tag)
+        else:
+            models.Message.objects.filter(tags__contains=warn_tag).delete()
+            #logger.debug("Root partition is spacious enough with %0.2f" % (root_free_space))
+    except:
+        logger.error(traceback.format_exc())
 
 
 #TS-5495: Refactored from a ionadmin cron job

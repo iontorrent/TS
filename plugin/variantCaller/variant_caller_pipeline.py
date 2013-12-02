@@ -5,7 +5,10 @@ import sys
 import os
 import subprocess
 import time
-import json
+try:
+    import json
+except:
+    import simplejson as json
 from optparse import OptionParser
 
 

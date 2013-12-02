@@ -8,7 +8,10 @@ from django.conf import settings
 from iondb.rundb.models import NewsPost, GlobalConfig
 from django.template import RequestContext
 from django.utils import timezone
+from django.contrib.auth.decorators import login_required
 
+
+@login_required
 def news(request):
 	profile = request.user.get_profile()
 	ctx = {

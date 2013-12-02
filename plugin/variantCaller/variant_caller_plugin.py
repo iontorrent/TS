@@ -505,6 +505,7 @@ def options_for_plan_autostart(startplugin_json):
         
         options['start_mode'] = 'Autostart with plan configuration'
     except:
+        traceback.print_exc()
         options['configuration'] = "Germ Line - PGM"
         f = open(DIRNAME + '/pluginMedia/configs/germline_low_stringency.json','r')
         options['parameters'] = json.load(f)

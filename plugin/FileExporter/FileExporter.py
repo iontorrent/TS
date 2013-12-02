@@ -11,9 +11,8 @@ from subprocess import *
 from django.utils.datastructures import SortedDict
 import zipfile
 
-
 class FileExporter(IonPlugin):
-	version = "4.0-r%s" % filter(str.isdigit,"$Revision: 73226 $")
+	version = "4.0-r%s" % filter(str.isdigit,"$Revision: 76310 $")
 	runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
 	runlevels = [ RunLevel.DEFAULT ]
 	
@@ -21,6 +20,7 @@ class FileExporter(IonPlugin):
 	json_dat = {}
 	renameString = ""
 	barcodeNames = []
+	sampleNameLookup = {} # dictionary allowing us to get the sample name associated with a particular barcode name
 	isBarcodedRun = False
 
 	# Method to locate files matching a certain pattern within a directory.
@@ -45,10 +45,9 @@ class FileExporter(IonPlugin):
 						barSample = testBarcode
 
 				# build our new filename and move this file
-				if barSample == '': # not expected?  use file name as-is
-					destName = self.OUTPUT_DIR + '/' + self.renameString.replace('@BARINFO@', '') + '.bam'
-				else:
-					destName = self.OUTPUT_DIR + '/' + self.renameString.replace('@BARINFO@', barSample) + '.bam'
+				finalName = self.renameString.replace('@BARINFO@', barSample)
+				finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barSample])
+				destName = self.OUTPUT_DIR + '/' + finalName + '.bam'
 			else:
 				destName = self.OUTPUT_DIR + '/' + self.renameString + '.bam'
 
@@ -62,6 +61,32 @@ class FileExporter(IonPlugin):
 			baiOut, baiErr = baiLink.communicate()
 			print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
 			print 'BAIOUT: %s\nBAIERR: %s'%(baiOut, baiErr)
+
+	# Method to rename and symlink the .vcf files.
+	def vcfRename(self, bamFileList):
+		for fileName in bamFileList:
+			fileName = fileName.replace('./', '')
+			if self.isBarcodedRun:
+				# look for matching barcode key
+				barSample = ''
+				for testBarcode in self.barcodeNames:
+					if testBarcode in fileName:
+						barSample = testBarcode
+
+				# build our new filename and move this file
+				finalName = self.renameString.replace('@BARINFO@', barSample)
+				finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barSample])
+				destName = self.OUTPUT_DIR + '/' + finalName + '.vcf'
+				srcName = '%s/plugin_out/variantCaller_out/%s/TSVC_variants.vcf' % (self.envDict['ANALYSIS_DIR'], barSample)
+			else:
+				destName = self.OUTPUT_DIR + '/' + self.renameString + '.vcf'
+				srcName = '%s/plugin_out/variantCaller_out/TSVC_variants.vcf' % (self.envDict['ANALYSIS_DIR'])
+
+			# And, link.
+			print 'LINKING: %s --> %s'%(srcName, destName)
+			linkCmd = Popen(['ln', '-sf', srcName, destName], stdout=PIPE, env=self.envDict)
+			linkOut, linkErr = linkCmd.communicate()
+			print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
 
 
 	def moveRenameFiles(self, suffix):
@@ -80,11 +105,10 @@ class FileExporter(IonPlugin):
 					if testBarcode in fileName:
 						barSample = testBarcode
 
-				# build our new filename and move this file
-				if barSample == '': # not expected?  use file name as-is
-					destName = self.OUTPUT_DIR + '/' + self.renameString.replace('@BARINFO@', '') + '.' + suffix
-				else:
-					destName = self.OUTPUT_DIR + '/' + self.renameString.replace('@BARINFO@', barSample) + '.' + suffix
+				finalName = self.renameString.replace('@BARINFO@', barSample)
+				finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barSample])
+				destName = self.OUTPUT_DIR + '/' + finalName + '.' + suffix
+
 			else:
 				destName = self.OUTPUT_DIR + '/' + self.renameString + '.' + suffix
 
@@ -158,9 +182,11 @@ class FileExporter(IonPlugin):
 		except:
 			print 'Warning: plugin does not appear to be configured, will default to run name with fastq zipped'
 			#sys.exit(0)
-			selections = ['TSP_RUN_NAME']
 			delim = '.'
+			selections = ['TSP_RUN_NAME']
+			sffCreate = False
 			fastqCreate = True
+			vcCreate = False
 			zipCreate = True
 		
 		try:
@@ -170,8 +196,9 @@ class FileExporter(IonPlugin):
 			print 'No run level detected.'
 
 		# DEBUG: Print barcoded sampleID data.
-		samples = self.json_dat['plan']['barcodedSamples']
+		samples = json.loads(self.json_dat['plan']['barcodedSamples'])
 		print 'SAMPLEID DATA: %s'%samples
+		print 'TYPE: %s' % type(samples)
 		
 		htmlOut.write('<b>Create SFF?</b> %s<br/>\n'%sffCreate)
 		htmlOut.write('<b>Create FASTQ?</b> %s<br/>\n'%fastqCreate)
@@ -192,17 +219,31 @@ class FileExporter(IonPlugin):
 			# Use an arbitrary value that nobody will ever use otherwise, so they're easy to replace.
 			# '@' is an invalid character, right? Maybe not, actually...
 			if (selections[i] == 'OPT_BARCODE'):
-				if (os.path.isfile(self.envDict['TSP_FILEPATH_BARCODE_TXT'])):
+				if self.isBarcodedRun:
 					selections[i] = '@BARINFO@'
 				else:
 					selections[i] = ''
+			elif (selections[i] == 'TSP_SAMPLE'):
+				if self.isBarcodedRun:
+					selections[i] = '@SAMPLEID@'
+				else:
+					selections[i] = self.envDict[selections[i]] # user may have provided a sample name to the single sample so just replace now
 			else:
 				selections[i] = self.envDict[selections[i]]
 				selections[i] = selections[i].replace('\\', '') # no idea why, but some chips look like \314R\ with backslashes?
 
 		# Take care of case where barcode info is not provided in barcoded run.
-		if not '@BARINFO@' in selections and os.path.isfile(self.envDict['TSP_FILEPATH_BARCODE_TXT']):
+		if not '@BARINFO@' in selections and self.isBarcodedRun:
 			selections = ['@BARINFO@'] + selections
+
+		try:
+			reference_path = self.envDict['TSP_FILEPATH_GENOME_FASTA']
+		except:
+			reference_path = ''
+
+		# won't make sense to create vcf links if no reference was specified, so don't waste the time
+		if reference_path == '':
+			vcCreate = False
 
 		# Get bam filenames.
 		with open(os.path.join(self.json_dat['runinfo']['basecaller_dir'], 'datasets_basecaller.json'), 'r') as f:
@@ -211,7 +252,12 @@ class FileExporter(IonPlugin):
 		bamPaths = []
 		bams = []
 		for datum in json_basecaller['datasets']:
-			tempPath = os.path.join(self.json_dat['runinfo']['alignment_dir'], datum['file_prefix']+'.bam')
+			if reference_path != '':
+				tempPath = os.path.join(self.json_dat['runinfo']['alignment_dir'], datum['file_prefix']+'.bam')
+			else:
+				tempPath = os.path.join(self.json_dat['runinfo']['basecaller_dir'], datum['file_prefix']+'.basecaller.bam')
+
+			print 'adding BAM: %s' % tempPath
 			if os.path.exists(tempPath):
 				bamPaths.append(tempPath)
 				if datum['dataset_name'][datum['dataset_name'].rfind('/')+1:] != 'No_barcode_match' and '/' in datum['dataset_name']:
@@ -222,8 +268,20 @@ class FileExporter(IonPlugin):
 		for bamFileName in bamPaths:
 			barcodeName = bamFileName.split('/')[-1] # get the last part, just the name with no path (probably can use os method here too)
 			barcodeName = barcodeName.split('_rawlib')[0] # get just the barcode part of the name
-			print 'BARCODE FOUND: %s' % barcodeName
+			# find a possible matching sample name
+			for sampleItemName in samples:
+				sampleItem = samples[sampleItemName]
+				if barcodeName in sampleItem['barcodes']:
+					self.sampleNameLookup[barcodeName] = sampleItemName
+			if barcodeName in self.sampleNameLookup.keys():
+				sampleName = self.sampleNameLookup[barcodeName]
+			else:
+				sampleName = ''
+				self.sampleNameLookup[barcodeName] = '' # makes it much easier later to do the lookup with no conditional tests
+			# MGD note: I considered setting blank sample names to the barcode name instead, but might not be what customer intended
+			print 'BARCODE FOUND: %s SAMPLE ID: %s' % (barcodeName, sampleName)
 			self.barcodeNames.append(barcodeName)
+		self.sampleNameLookup[''] = '' # allows us to easily handle case where barcode might not have been found
 
 		# log basic info for debug purposes
 		print 'PLUGINCONFIG:'
@@ -239,15 +297,16 @@ class FileExporter(IonPlugin):
 		# Produce string to rename to.
 		self.renameString = ""
 		# Avoid delimiting anywhere but in between the arguments.
-		doDelim = False
+		firstSelectionDone = False
 		for sel in selections:
 			if sel != '':
-				if doDelim:
+				if firstSelectionDone:
 					self.renameString += delim
-				else:
-					doDelim = True
-				self.renameString += '%s'%sel
-		
+				self.renameString += sel
+				firstSelectionDone = True
+		print 'BASE RENAME STRING: %s' % self.renameString
+
+
 		# Perform bam symlink(s).
 		self.bamRename(bamPaths)
 
@@ -286,53 +345,10 @@ class FileExporter(IonPlugin):
 
 
 		# Link to variants if requested.
-		vcNew = ''
-		vcNames = []
 		if (vcCreate):
-			'''#vcFiles = self.locate('TSVC_variants.vcf', '%s/plugin_out/variantCaller_out'%self.envDict['ANALYSIS_DIR'])
-			vcFiles = []
-			if bams != []:
-				for bam in bams:
-					vcFiles.append('%s/plugin_out/variantCaller_out/%s/TSVC_variants.vcf'%(self.envDict['ANALYSIS_DIR'], bam[bam.rfind('/')+1:]))
-			else:
-				vcFiles.append('%s/plugin_out/variantCaller_out/TSVC_variants.vcf'%self.envDict['ANALYSIS_DIR'])'''
-			vcNew = self.renameString
-			#vcNew = vcNew.replace(self.envDict['TSP_SAMPLE'], '')
-			if bams != []:
-				for bam in bams:
-					vcFile = '%s/plugin_out/variantCaller_out/%s/TSVC_variants.vcf'%(self.envDict['ANALYSIS_DIR'], bam[bam.rfind('/'):])
-					vcName = vcNew
-					vcName = vcName.replace('@BARINFO@', bam[bam.rfind('/')+1:])
-					#vcName = vcName.replace('@BARINFO@', '')
-					if bam[:bam.rfind('/')] == 'None':
-						vcName = vcName.replace(self.envDict['TSP_SAMPLE'], '')
-					else:
-						vcName = vcName.replace(self.envDict['TSP_SAMPLE'], bam[:bam.rfind('/')])
-					vcName = vcName.replace('%s%s'%(self.json_dat['pluginconfig']['delimiter_select'], self.json_dat['pluginconfig']['delimiter_select']), self.json_dat['pluginconfig']['delimiter_select'])
-					if vcName[0] == self.json_dat['pluginconfig']['delimiter_select']:
-						vcName = vcName[1:]
-					if vcName[len(vcName)-1] == self.json_dat['pluginconfig']['delimiter_select']:
-						vcName = vcName[:len(vcName)-1]
-					lnCmd = Popen(['ln', '-sf', vcFile, os.path.join('%s'%self.envDict['ANALYSIS_DIR'], 'plugin_out', 'downloads', '%s.vcf'%vcName)], stdout=PIPE)
-					lnOut, lnErr = lnCmd.communicate()
-					vcNames.append(vcName)
-					sys.stderr.write('vcf appended: %s\n'%vcName)
-			else:
-				vcFile = '%s/plugin_out/variantCaller_out/TSVC_variants.vcf'%(self.envDict['ANALYSIS_DIR'])
-				vcName = vcNew
-				vcName = vcName.replace('@BARINFO@', '')
-				vcName = vcName.replace(self.envDict['TSP_SAMPLE'], '')
-				vcName = vcName.replace('%s%s'%(self.json_dat['pluginconfig']['delimiter_select'], self.json_dat['pluginconfig']['delimiter_select']), self.json_dat['pluginconfig']['delimiter_select'])
-				if vcName[0] == self.json_dat['pluginconfig']['delimiter_select']:
-					vcName = vcName[1:]
-				if vcName[len(vcName)-1] == self.json_dat['pluginconfig']['delimiter_select']:
-					vcName = vcName[:len(vcName)-1]
-				lnCmd = Popen(['ln', '-sf', vcFile, os.path.join('%s'%self.envDict['ANALYSIS_DIR'], 'plugin_out', 'downloads', '%s.vcf'%vcName)], stdout=PIPE)
-				lnOut, lnErr = lnCmd.communicate()
-				vcNames.append(vcName)
-				sys.stderr.write('vcf appended: %s\n'%vcName)
-			
-		
+			self.vcfRename(bamPaths)
+
+
 		#htmlOut.write('<br/><b>Files created: </b><a href="/report/%s/getZip">Download link</a><br/>'%self.envDict['RUNINFO__PK'])
 		htmlOut.write('<b/><b>Output Files:</b></br>')
 

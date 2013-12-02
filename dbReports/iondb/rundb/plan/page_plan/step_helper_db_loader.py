@@ -1,7 +1,7 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 import types
 from iondb.rundb.models import PlannedExperiment, PlannedExperimentQC,\
-    RunType, dnaBarcode, Plugin, ApplProduct, SampleSet, ThreePrimeadapter
+    RunType, dnaBarcode, Plugin, ApplProduct, SampleSet, ThreePrimeadapter, Chip, KitInfo
 
 from iondb.rundb.plan.page_plan.step_helper import StepHelper, StepHelperType
 from iondb.rundb.plan.views_helper import getPlanDisplayedName
@@ -34,7 +34,7 @@ class StepHelperDbLoader():
         application_step_data.savedFields['applicationGroup'] = runType.applicationGroups.all()[0:1][0].pk
         application_step_data.updateSavedObjectsFromSavedFields()
         
-        step_helper.update_dependant_steps(ionReporter_step_data)
+        step_helper.update_dependant_steps(application_step_data)
         return step_helper
 
     def getStepHelperForNewTemplateBySample(self, run_type_id, step_helper_type=StepHelperType.CREATE_NEW_TEMPLATE_BY_SAMPLE):
@@ -52,7 +52,7 @@ class StepHelperDbLoader():
         application_step_data.savedFields['applicationGroup'] = runType.applicationGroups.all()[0:1][0].pk
         application_step_data.updateSavedObjectsFromSavedFields()
         
-        step_helper.update_dependant_steps(ionReporter_step_data)
+        step_helper.update_dependant_steps(application_step_data)
         return step_helper
     
     def updateTemplateSpecificStepHelper(self, step_helper, planned_experiment):
@@ -222,7 +222,8 @@ class StepHelperDbLoader():
         
         # application_step_data.updateFromStep(export_step_data)
         
-        ionreporter_step_data.savedFields['sampleGrouping'] = planned_experiment.sampleGrouping if planned_experiment.sampleGrouping else None 
+        ionreporter_step_data.savedFields['sampleGrouping'] = planned_experiment.sampleGrouping.pk if planned_experiment.sampleGrouping else None 
+        ionreporter_step_data.savedObjects['sampleGrouping'] = planned_experiment.sampleGrouping if planned_experiment.sampleGrouping else None 
         
         #why use AMPS?
         selectedRunType = RunType.objects.filter(runType="GENS")[0:1][0]
@@ -254,8 +255,10 @@ class StepHelperDbLoader():
         kits_step_data.savedFields['controlsequence'] = planned_experiment.controlSequencekitname
         kits_step_data.savedFields['samplePreparationKit'] = planned_experiment.samplePrepKitName
         kits_step_data.savedFields['barcodeId'] = planned_experiment.get_barcodeId()
+
         chipType = planned_experiment.get_chipType()
         kits_step_data.savedFields['chipType'] = 'P1.1.17' if chipType == '900v2' else chipType
+
         kits_step_data.savedFields['flows'] = planned_experiment.get_flows()
         kits_step_data.savedFields['forward3primeAdapter'] = planned_experiment.get_forward3primeadapter()
         kits_step_data.savedFields['libraryKey'] = planned_experiment.get_libraryKey()
@@ -276,6 +279,23 @@ class StepHelperDbLoader():
             kits_step_data.savedFields['nonAvalancheTemplateKitName'] = appl_product.defaultTemplateKit.name
         if appl_product.defaultSequencingKit:
             kits_step_data.savedFields['nonAvalancheSequencekitname'] = appl_product.defaultSequencingKit.name
+        
+        # if editing a sequenced run old/obsolete chipType and kits must be included
+        if step_helper.isEditRun():
+            kits_step_data.prepopulatedFields['chipTypes'] = Chip.objects.filter(name=kits_step_data.savedFields['chipType'])
+            kits_step_data.prepopulatedFields['controlSeqKits'] |= KitInfo.objects.filter(name=kits_step_data.savedFields['controlsequence'])
+            kits_step_data.prepopulatedFields['samplePrepKits'] |= KitInfo.objects.filter(name=kits_step_data.savedFields['samplePreparationKit'])
+            kits_step_data.prepopulatedFields['libKits'] |= KitInfo.objects.filter(name=kits_step_data.savedFields['librarykitname'])
+            kits_step_data.prepopulatedFields['seqKits'] |= KitInfo.objects.filter(name=kits_step_data.savedFields['sequencekitname'])
+            
+            savedtemplatekit = KitInfo.objects.filter(name=kits_step_data.savedFields['templatekitname'])
+            kits_step_data.prepopulatedFields['templateKits'] |= savedtemplatekit
+            oneTouchKits = kits_step_data.prepopulatedFields['templateKitTypes']['OneTouch']['kit_values']
+            ionChefKits = kits_step_data.prepopulatedFields['templateKitTypes']['IonChef']['kit_values']
+            avalancheKits = kits_step_data.prepopulatedFields['templateKitTypes']['Avalanche']['kit_values']
+            kits_step_data.prepopulatedFields['templateKitTypes']['OneTouch']['kit_values'] |= savedtemplatekit.filter(kitType__in=oneTouchKits.values_list('kitType',flat=True))
+            kits_step_data.prepopulatedFields['templateKitTypes']['IonChef']['kit_values'] |= savedtemplatekit.filter(kitType__in=ionChefKits.values_list('kitType',flat=True))
+            kits_step_data.prepopulatedFields['templateKitTypes']['Avalanche']['kit_values'] |= savedtemplatekit.filter(kitType__in=avalancheKits.values_list('kitType',flat=True))
         
         reference_step_data.savedFields['targetBedFile'] = planned_experiment.get_bedfile()
         reference_step_data.savedFields["reference"] = planned_experiment.get_library()
@@ -412,18 +432,42 @@ class StepHelperDbLoader():
                                       sequence = str(dnabarcode['sequence'])) \
                                             for dnabarcode in all_barcodes if dnabarcode['name'] == barcodekit], key=lambda z: z['id_str'])) \
                                                 for barcodekit in barcodekits]
+        planned_dnabarcodes = []
+        list_of_barcodes = []
+        for item in samplesetitems:
+            if item.barcode:
+                list_of_barcodes.append(item.barcode)
 
-        if step_helper.isBarcoded():
-            # planned_dnabarcodes = dnaBarcode.objects.filter(name=planned_experiment.get_barcodeId()).values('id_str', 'sequence').order_by('id_str')
-            planned_dnabarcodes = list(dnaBarcode.objects.filter(name=planned_experiment.get_barcodeId()).order_by('id_str'))
-        else:
-            planned_dnabarcodes = [None]
+        barcode_kits = []   
+        planned_dnabarcodes = dnaBarcode.objects.filter(id_str__in=list_of_barcodes)
+        barcode_kits = set([x.name for x in planned_dnabarcodes])
+        
+        if len(planned_dnabarcodes) > 1:
+            for barcode in list_of_barcodes:
+                for kit in barcode_kits:
+                    planned_dnabarcodes = planned_dnabarcodes.filter(id_str=barcode, name=kit)
+                    if len(planned_dnabarcodes) == 1:
+                        break
+                    else:
+                        planned_dnabarcodes = dnaBarcode.objects.filter(id_str__in=list_of_barcodes)
+
+        if len(planned_dnabarcodes) == 1:
+            planned_dnabarcodes = list(planned_dnabarcodes)
+            step_helper.steps[StepNames.KITS].savedFields['barcodeId'] = planned_dnabarcodes[0].name
+            barcoding_step.savedFields[BarcodeBySampleFieldNames.BARCODE_ID] = planned_dnabarcodes[0].name
+        
+        if len(planned_dnabarcodes) == 0:
+            barcoding_step.savedFields[BarcodeBySampleFieldNames.BARCODE_ID] = planned_experiment.get_barcodeId()
+            if step_helper.isBarcoded():
+                planned_dnabarcodes = list(dnaBarcode.objects.filter(name=planned_experiment.get_barcodeId()).order_by('id_str'))
+            else:
+                planned_dnabarcodes = [None]
 
         barcoding_step.prepopulatedFields['samplesetitems'] = samplesetitems
-        barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.PLANNED_DNABARCODES] = planned_dnabarcodes
+        
         barcoding_step.prepopulatedFields['barcodekits'] = dnabarcodes_grouped
         barcoding_step.savedFields[BarcodeBySampleFieldNames.NUMBER_OF_CHIPS] = len(samplesetitems)
-        barcoding_step.savedFields[BarcodeBySampleFieldNames.BARCODE_ID] = planned_experiment.get_barcodeId()
+        
         
         selected_plugins = planned_experiment.get_selectedPlugins()
         if 'IonReporterUploader' in selected_plugins:
@@ -458,8 +502,12 @@ class StepHelperDbLoader():
             barcoding_step.savedFields['%s%d' % ('relation', i)] = None
             barcoding_step.savedFields['%s%d' % (BarcodeBySampleFieldNames.SET_ID, i)] = None
 
-        if step_helper.isBarcoded():
 
+        if planned_dnabarcodes[0]: 
+            planned_dnabarcodes = dnaBarcode.objects.filter(name=planned_dnabarcodes[0].name).order_by('id_str')
+            barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.PLANNED_DNABARCODES] = planned_dnabarcodes
+        
+        if step_helper.isBarcoded():
             for i in range(len(planned_dnabarcodes)):
                 samplesetitem = samplesetitems[i] if i < len(samplesetitems) else None
                 dnabarcode = planned_dnabarcodes[i] if i < len(planned_dnabarcodes) else None
@@ -511,7 +559,7 @@ class StepHelperDbLoader():
                             BarcodeBySampleFieldNames.GENDER         : samplesetitem.gender,
                             BarcodeBySampleFieldNames.RELATION_ROLE  : samplesetitem.relationshipRole,
                             BarcodeBySampleFieldNames.WORKFLOW  : planned_experiment.irworkflow,
-                            BarcodeBySampleFieldNames.BARCODE_ID  : dnabarcode.id_str,
+                            BarcodeBySampleFieldNames.BARCODE_ID  : samplesetitem.barcode,
                             BarcodeBySampleFieldNames.SET_ID  : samplesetitem.relationshipGroup,
                             'relation' : '',
 
@@ -582,6 +630,7 @@ class StepHelperDbLoader():
                             BarcodeBySampleFieldNames.RELATION_ROLE  : samplesetitem.relationshipRole,
                             BarcodeBySampleFieldNames.WORKFLOW  : planned_experiment.irworkflow,
                             BarcodeBySampleFieldNames.SET_ID  : samplesetitem.relationshipGroup,
+                            BarcodeBySampleFieldNames.BARCODE_ID  : samplesetitem.barcode,
                             'relation' : '',
                         }
                     elif step_helper.steps[StepNames.IONREPORTER].savedFields['irAccountId'] == '0':
