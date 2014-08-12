@@ -727,7 +727,7 @@ void RegionalizedData::ComputeSimpleFlowValues(float nuc_flow_frame_width, int f
   vector<hsize_t> chunk_dims(3);
   chunk_dims[0] = region->w;
   chunk_dims[1] = region->h;
-  chunk_dims[2] = NUMFB;
+  chunk_dims[2] = numfb;      // Used to be capitalized.
 
   recorder.CreateDataset(chunk_dims);
 
@@ -740,7 +740,7 @@ void RegionalizedData::ComputeSimpleFlowValues(float nuc_flow_frame_width, int f
   size_t t_end_ix = time_c.SecondsToIndex(t_end/time_c.frames_per_second);
   NoKeyCall nkc = NoKeyCall();
   std::vector<float> signalInFlow(my_beads.numLBeads, 0);
-  for (int fnum=0; fnum < NUMFB; fnum++)
+  for (int fnum=0; fnum < numfb; fnum++)    // used to be capitalized
   {
     for (int ibd=0; ibd < my_beads.numLBeads; ibd++)
     {
@@ -755,7 +755,7 @@ void RegionalizedData::ComputeSimpleFlowValues(float nuc_flow_frame_width, int f
     vector<hsize_t> offset(3);
     offset[0] = region->row;
     offset[1] = region->col;
-    offset[2] = fnum+flow+1-NUMFB;
+    offset[2] = fnum+flow+1-numfb;    // numfb used to be capitalized
 
     vector<hsize_t> count(3);
     count[0] = region->h;

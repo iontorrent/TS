@@ -18,33 +18,22 @@
 import os
 import sys
 import json
-import glob
 import time
-import copy
 import string
 import random
 import urllib
 import argparse
-import datetime
 import traceback
 import logging
-from djangoinit import *
+from iondb.bin.djangoinit import *
 from iondb.rundb import models
-from iondb.rundb.report.views import get_default_cmdline_args
 from ion.utils.explogparser import load_log_path
 from ion.utils.explogparser import parse_log
-from iondb.utils.crawler_utils import getFlowOrder
-from iondb.utils.crawler_utils import folder_mtime
-from iondb.bin.crawler import get_planned_exp_objects, update_exp_objects_from_log
+from iondb.bin.crawler import generate_updateruninfo_post
 
 logger = logging.getLogger(__name__)
 
 TIMESTAMP_RE = models.Experiment.PRETTY_PRINT_RE
-def extract_rig(folder):
-    """Given the name of a folder storing experiment data, return the name
-    of the PGM from which the date came."""
-    #return os.path.basename(os.path.dirname(folder))
-    return "uploads"
 
 
 # Extracted from crawler.py and stem modified to be Reanalysis instead of Auto
@@ -57,9 +46,9 @@ def get_name_from_json(exp, key, thumbnail_analysis):
     # also ignore name if it has the string value "None"
     if not name or name == "None":
         uniq = ''.join(random.choice(string.letters + string.digits) for i in xrange(4))
-        return 'Reanalysis_%s_%s_%s%s' % (exp.pretty_print().replace(" ","_"),exp.pk,uniq,twig)
+        return 'Reanalysis_%s_%s_%s%s' % (exp.pretty_print().replace(" ", "_"), exp.pk, uniq, twig)
     else:
-        return '%s_%s%s' % (str(name),exp.pk,twig)
+        return '%s_%s%s' % (str(name), exp.pk, twig)
 
 
 # Extracted from crawler.py and modified to launch fromWells analysis
@@ -78,7 +67,7 @@ def generate_http_post(exp, data_path, thumbnail_analysis=False):
     eas = exp.get_EAS()
     if (eas):
         ##logger.errors.info("from_well_analysis.generate_http_post() exp.name=%s; id=%s; isDuplicateReads=%s" %(exp.expName, str(exp.pk), str(eas.isDuplicateReads)))
-        mark_duplciates = eas.isDuplicateReads
+        mark_duplicates = eas.isDuplicateReads
 
     #default_args = get_default_cmdline_args(exp.chipType)
     #if thumbnail_analysis:
@@ -89,9 +78,9 @@ def generate_http_post(exp, data_path, thumbnail_analysis=False):
     # Force the from-wells option here
     #analysisArgs = analysisArgs + " --from-wells %s" % os.path.join(data_path,"1.wells")
 
-    report_name = get_name_from_json(exp,'autoanalysisname',thumbnail_analysis)
+    _report_name = get_name_from_json(exp, 'autoanalysisname', thumbnail_analysis)
 
-    params = urllib.urlencode({'report_name':report_name,
+    params = urllib.urlencode({'report_name':_report_name,
                             'tf_config':'',
                             'path':exp.expDir,
                             'submit': ['Start Analysis'],
@@ -104,7 +93,7 @@ def generate_http_post(exp, data_path, thumbnail_analysis=False):
                             'mark_duplicates': mark_duplicates,
                             })
 
-    status_msg = report_name
+    status_msg = _report_name
     try:
         connection_url = 'http://127.0.0.1/report/analyze/%s/0/' % (exp.pk)
         f = urllib.urlopen(connection_url, params)
@@ -123,43 +112,58 @@ def generate_http_post(exp, data_path, thumbnail_analysis=False):
         error_code = f.getcode()
         if error_code is not 200:
             print(" !! Failed to start analysis. URL failed with error code %d for %s" % (error_code, f.geturl()))
-            for line in f.readlines():
-                print(line.strip())
+            #for line in f.readlines():
+            #    print(line.strip())
             status_msg = "Failure to generate POST"
 
     return status_msg
 
 
-def newExperiment(explog_path, plan_json=''):
+def newExperiment(_explog_path, _plan_json=''):
     '''Create Experiment record'''
-    folder = os.path.dirname(explog_path)
+    folder = os.path.dirname(_explog_path)
 
     # Test if Experiment object already exists
     try:
-        newExp = models.Experiment.objects.get(unique=folder)
+        _newExp = models.Experiment.objects.get(unique=folder)
+        print "DEBUG: Experiment exists in database: %s" % (folder)
     except:
-        newExp = None
+        print "DEBUG: Experiment does not exist in database"
+        _newExp = None
 
-    if newExp is None:
+    if _newExp is None:
         # Parse the explog.txt file
-        text = load_log_path(explog_path)
+        text = load_log_path(_explog_path)
         explog = parse_log(text)
         explog["planned_run_short_id"] = '' # don't allow getting plan by shortId - other plans may exist with that id
         try:
-            planObj, expObj, easObj = get_planned_exp_objects(explog,folder,logger)
-            newExp = update_exp_objects_from_log(explog,folder, planObj, expObj, easObj, logger)
-            # TEST CODE: Append to expName to indicate imported dataset.
-            newExp.expName += "_foreign"
-            newExp.save()
-            if plan_json:
-                update_plan_info(plan_json, planObj, easObj)
+            ret_val = generate_updateruninfo_post(folder, logger)
+            if ret_val == "Generated POST":
+                # Get experiment object
+                exp_set = models.Experiment.objects.filter(unique=folder)
+                if exp_set:
+                    # Experiment object exists in database
+                    _newExp = exp_set[0]
+            else:
+                print "ERROR: Could not update/generate new Experiment record in database"
+                print ret_val
+                return None
+            
+            # Append to expName to indicate imported dataset.
+            _newExp.expName += "_foreign"
+            _newExp.save()
+            if _plan_json:
+                planObj = _newExp.plan
+                easObj = _newExp.get_EAS()
+                update_plan_info(_plan_json, planObj, easObj)
         except:
-            newExp = None
+            print "DEBUG: There was an error adding the experiment"
+            _newExp = None
             print traceback.format_exc()
 
-    return newExp
+    return _newExp
 
-def update_plan_info(plan_json, planObj, easObj):
+def update_plan_info(_plan_json, planObj, easObj):
     # update Plan and EAS fields
     eas_params = {"barcodeId": 'barcodeKitName',
         "barcodedSamples": 'barcodedSamples',
@@ -167,22 +171,22 @@ def update_plan_info(plan_json, planObj, easObj):
         "threePrimeAdapter": 'threePrimeAdapter'}
     plan_params = ["controlSequencekitname", "planName", "runType", "samplePrepKitName", "templatingKitName"]
     try:
-        for key in plan_json.keys():
+        for key in _plan_json.keys():
             if key in eas_params:
-                setattr(easObj,eas_params[key],plan_json[key])
+                setattr(easObj, eas_params[key], _plan_json[key])
             elif key in plan_params:
-                setattr(planObj,key,plan_json[key])
+                setattr(planObj, key, _plan_json[key])
                 if key == "planName":
-                    setattr(planObj,"planDisplayedName",plan_json[key])
+                    setattr(planObj, "planDisplayedName", _plan_json[key])
         easObj.save()
         planObj.save()
     except:
         print traceback.format_exc()
 
-def getReportURL(report_name):
+def getReportURL(_report_name):
     URLString = None
     try:
-        report = models.Results.objects.get(resultsName=report_name)
+        report = models.Results.objects.get(resultsName=_report_name)
         URLString = "/report/%d" % report.pk
     except models.Results.DoesNotExist:
         URLString = "Not found"
@@ -194,11 +198,11 @@ def getReportURL(report_name):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Initiate from-wells analysis Report")
-    parser.add_argument("--thumbnail-only",dest="thumbnail_only",action="store_true",default=False,help="Flag indicating thumbnail analysis only")
-    parser.add_argument("directory",metavar="directory",help="Path to data to analyze")
+    parser.add_argument("--thumbnail-only", dest="thumbnail_only", action="store_true", default=False, help="Flag indicating thumbnail analysis only")
+    parser.add_argument("directory", metavar="directory", help="Path to data to analyze")
 
     # If no arguments, print help and exit
-    if len(sys.argv)==1:
+    if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
 
@@ -212,18 +216,18 @@ if __name__ == '__main__':
     src_dir = args.directory
 
     # Validate existence of prerequisite files
-    explog_path = os.path.join(src_dir,'explog.txt')
+    explog_path = os.path.join(src_dir, 'explog.txt')
     if not os.path.isfile(explog_path):
         print "Does not exist: %s" % explog_path
         print "Cannot create environment for re-analysis to take place"
         print "STATUS: Error"
         sys.exit(1)
 
-    if os.path.exists(os.path.join(src_dir,'onboard_results','sigproc_results')):
-        test_dir = os.path.join(src_dir,'onboard_results','sigproc_results')
+    if os.path.exists(os.path.join(src_dir, 'onboard_results', 'sigproc_results')):
+        test_dir = os.path.join(src_dir, 'onboard_results', 'sigproc_results')
         is_fullchip = True
     else:
-        test_dir = os.path.join(src_dir,'sigproc_results')
+        test_dir = os.path.join(src_dir, 'sigproc_results')
         is_fullchip = False
 
     #TODO: this test modified to support Proton
@@ -231,25 +235,25 @@ if __name__ == '__main__':
     if is_fullchip:
         pass
     else:
-        wells_path = os.path.join(test_dir,'1.wells')
+        wells_path = os.path.join(test_dir, '1.wells')
         if not os.path.isfile(wells_path):
             print "Does not exist: %s" % wells_path
             print "Cannot basecall without output from signal processing"
             print "STATUS: Error"
             sys.exit(1)
 
-    testpath = os.path.join(test_dir,'analysis.bfmask.bin')
+    testpath = os.path.join(test_dir, 'analysis.bfmask.bin')
     if not os.path.isfile(testpath):
-        testpath = os.path.join(test_dir,'bfmask.bin')
+        testpath = os.path.join(test_dir, 'bfmask.bin')
         if not os.path.isfile(testpath):
             print "Does not exist: %s" % testpath
             print "Cannot basecall without bfmask.bin from signal processing"
             print "STATUS: Error"
             sys.exit(1)
 
-    testpath = os.path.join(test_dir,'analysis.bfmask.stats')
+    testpath = os.path.join(test_dir, 'analysis.bfmask.stats')
     if not os.path.isfile(testpath):
-        testpath = os.path.join(test_dir,'bfmask.stats')
+        testpath = os.path.join(test_dir, 'bfmask.stats')
         if not os.path.isfile(testpath):
             print "Does not exist: %s" % testpath
             print "Cannot basecall without bfmask.stats from signal processing"
@@ -257,12 +261,12 @@ if __name__ == '__main__':
             sys.exit(1)
 
     # Missing these files just means key signal graph will not be generated
-    testpath = os.path.join(test_dir,'avgNukeTrace_ATCG.txt')
+    testpath = os.path.join(test_dir, 'avgNukeTrace_ATCG.txt')
     if not os.path.isfile(testpath):
         print "Does not exist: %s" % testpath
         print "Cannot create TF key signal graph without %s file" % 'avgNukeTrace_ATCG.txt'
 
-    testpath = os.path.join(test_dir,'avgNukeTrace_TCAG.txt')
+    testpath = os.path.join(test_dir, 'avgNukeTrace_TCAG.txt')
     if not os.path.isfile(testpath):
         print "Does not exist: %s" % testpath
         print "Cannot create Library key signal graph without %s file" % 'avgNukeTrace_TACG.txt'
@@ -285,8 +289,8 @@ if __name__ == '__main__':
         sys.exit(1)
 
     # Submit analysis job URL
-    report_name = generate_http_post(newExp,src_dir,thumbnail_analysis=args.thumbnail_only)
-    if report_name is None:
+    report_name = generate_http_post(newExp, src_dir, thumbnail_analysis=args.thumbnail_only)
+    if report_name == "Failure to generate POST":
         print ("Could not start a new analysis")
         print "STATUS: Error"
         sys.exit(1)
@@ -304,7 +308,7 @@ if __name__ == '__main__':
             print "STATUS: Error"
             sys.exit(1)
         elif reportURL == "Not found":
-            print "Retry %d of %d in %d second" % (count,retries, delay)
+            print "Retry %d of %d in %d second" % (count, retries, delay)
             time.sleep(delay)
         else:
             count = retries

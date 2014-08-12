@@ -12,6 +12,7 @@ import shutil
 import traceback
 import fnmatch
 import xmlrpclib
+import json
 
 from ion.reports import beadDensityPlot
 from ion.utils import blockprocessing
@@ -20,7 +21,7 @@ from ion.utils import sigproc
 from ion.utils import basecaller
 from ion.utils import alignment
 from ion.utils import flow_space_recal
-from ion.utils import handle_legacy_report
+from ion.utils import ionstats_plots
 
 from ion.utils.blockprocessing import printtime
 
@@ -65,6 +66,7 @@ if __name__=="__main__":
     except:
         traceback.print_exc()
 
+    reference_selected = env['referenceName'] and env['referenceName']!='none'
 
     if os.path.exists(primary_key_file):
         isProtonBlock = False
@@ -155,26 +157,18 @@ if __name__=="__main__":
 
     if args.do_sigproc:
 
-        if env['doThumbnail']:
-            oninstrumentanalysis = False
-        else:
-            oninstrumentanalysis = env['oninstranalysis']
+        set_result_status('Beadfind')
+        status = sigproc.beadfind(
+                    env['beadfindArgs'],
+                    env['libraryKey'],
+                    env['tfKey'],
+                    env['pathToRaw'],
+                    env['SIGPROC_RESULTS'])
+        add_status("Beadfind", status)
 
-
-        if not oninstrumentanalysis:
-
-            set_result_status('Beadfind')
-            status = sigproc.beadfind(
-                        env['beadfindArgs'],
-                        env['libraryKey'],
-                        env['tfKey'],
-                        env['pathToRaw'],
-                        env['SIGPROC_RESULTS'])
-            add_status("Beadfind", status)
-
-            if status != 0:
-                printtime("ERROR: Beadfind finished with status '%s'" % status)
-                sys.exit(1)
+        if status != 0:
+            printtime("ERROR: Beadfind finished with status '%s'" % status)
+            sys.exit(1)
 
 
         ########################################################
@@ -184,43 +178,35 @@ if __name__=="__main__":
         bfmaskstatspath = os.path.join(env['SIGPROC_RESULTS'],"bfmask.stats")
         try:
             upload_analysismetrics(bfmaskstatspath)
-            update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, env['SIGPROC_RESULTS'], plot_title=env['shortRunName'])
             update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, "./", plot_title=env['shortRunName'])
         except:
             traceback.print_exc()
 
+        set_result_status('Signal Processing')
+        status = sigproc.sigproc(
+                    env['analysisArgs'],
+                    env['libraryKey'],
+                    env['tfKey'],
+                    env['pathToRaw'],
+                    env['SIGPROC_RESULTS'])
+        add_status("Analysis", status)
 
-        if not oninstrumentanalysis:
+        # write return code into file
+        try:
+            f = open(os.path.join(env['SIGPROC_RESULTS'],"analysis_return_code.txt"), 'w')
+            f.write(str(status))
+            f.close()
+            os.chmod(os.path.join(env['SIGPROC_RESULTS'],"analysis_return_code.txt"), 0775)
+        except:
+            traceback.print_exc()
 
-            set_result_status('Signal Processing')
-            status = sigproc.sigproc(
-                env['analysisArgs'],
-                env['libraryKey'],
-                env['tfKey'],
-                env['pathToRaw'],
-                env['SIGPROC_RESULTS'])
-            add_status("Analysis", status)
-
-            # write return code into file
-            try:
-                f = open(os.path.join(env['SIGPROC_RESULTS'],"analysis_return_code.txt"), 'w')
-                f.write(str(status))
-                f.close()
-                os.chmod(os.path.join(env['SIGPROC_RESULTS'],"analysis_return_code.txt"), 0775)
-            except:
-                traceback.print_exc()
-
-            if status != 0:
-                printtime("ERROR: Analysis finished with status '%s'" % status)
-                sys.exit(1)
+        if status != 0:
+            printtime("ERROR: Analysis finished with status '%s'" % status)
+            sys.exit(1)
 
 
 
     if args.do_basecalling:
-
-        # In case of from-wells or from-basecaller reanalysis of a legacy report
-        # some adjustments may be needed
-        handle_legacy_report.handle_sigproc(env['SIGPROC_RESULTS'])
 
         # Generate files needed for regular and fromWells reports
         sigproc.generate_raw_data_traces(
@@ -234,7 +220,6 @@ if __name__=="__main__":
         bfmaskstatspath = os.path.join(env['SIGPROC_RESULTS'],"analysis.bfmask.stats")
         try:
             upload_analysismetrics(bfmaskstatspath)
-            update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, env['SIGPROC_RESULTS'], plot_title=env['shortRunName'])
             update_bfmask_artifacts(bfmaskPath, bfmaskstatspath, "./", plot_title=env['shortRunName'])
         except:
             traceback.print_exc()
@@ -268,48 +253,110 @@ if __name__=="__main__":
         # Flow Space Recalibration and re-basecalling          #
         ########################################################
         additional_basecallerArgs = ""
-        if env['libraryName']!='none' and len(env['libraryName'])>=1 and env['doBaseRecal']:
-            printtime("DEBUG: Flow Space Recalibration is enabled with Reference: %s" % env['libraryName'])
+        if env['doBaseRecal'] and reference_selected:
+            printtime("DEBUG: Flow Space Recalibration is enabled with Reference: %s" % env['referenceName'])
             set_result_status('Flow Space Recalibration')
             try:
-                qvtable = flow_space_recal.base_recalib(
-                                                env['SIGPROC_RESULTS'],
-                                                env['prebasecallerArgs'],
-                                                env['libraryKey'],
-                                                env['tfKey'],
-                                                env['runID'],
-                                                env['flowOrder'],
-                                                env['reverse_primer_dict'],
-                                                env['BASECALLER_RESULTS'],
-                                                env['barcodeId'],
-                                                env['barcodeSamples'],
-                                                env.get('barcodesplit_filter',0),
-                                                env.get('barcodesplit_filter_minreads',0),
-                                                env['DIR_BC_FILES'],
-                                                os.path.join("barcodeList.txt"),
-                                                os.path.join(env['BASECALLER_RESULTS'], "barcodeMask.bin"),
-                                                env['libraryName'],
-                                                env['sample'],
-                                                env['site_name'],
-                                                env['notes'],
-                                                env['start_time'],
-                                                env['chipType'],
-                                                env['expName'],
-                                                env['resultsName'],
-                                                env['pgmName'],
-                                                env['tmap_version'],
-                                                "datasets_basecaller.json", # file containing all available datasets
-                                                "BaseCaller.json" #file containing dimension info (offsets, rows, cols) and flow info for stratification
-                                               )
-                printtime("QVTable: %s" % qvtable)
-                additional_basecallerArgs = " --calibration-file " + qvtable + " --phase-estimation-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "BaseCaller.json") + " --model-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "hpModel.txt")
+
+                # Default options to produce smaller basecaller results
+                prebasecallerArgs = env['prebasecallerArgs']
+                if not "--calibration-training=" in prebasecallerArgs:
+                    prebasecallerArgs = prebasecallerArgs + " --calibration-training=2000000"
+                if not "--flow-signals-type" in prebasecallerArgs:
+                    prebasecallerArgs = prebasecallerArgs + " --flow-signals-type scaled-residual"
+
+                basecaller.basecalling(
+                    env['SIGPROC_RESULTS'],
+                    prebasecallerArgs,
+                    env['libraryKey'],
+                    env['tfKey'],
+                    env['runID'],
+                    env['reverse_primer_dict'],
+                    os.path.join(env['BASECALLER_RESULTS'], 'recalibration'),
+                    env['barcodeId'],
+                    env['barcodeInfo'],
+                    env['library'],
+                    env['notes'],
+                    env['site_name'],
+                    env['platform'],
+                    env['instrumentName'],
+                    env['chipType'])
+
+                basecaller_recalibration_datasets = blockprocessing.get_datasets_basecaller(os.path.join(env['BASECALLER_RESULTS'],'recalibration'))
+
+                # file containing dimension info (offsets, rows, cols) and flow info for stratification
+                try:
+                    c = open(os.path.join(env['BASECALLER_RESULTS'], "recalibration", 'BaseCaller.json'),'r')
+                    chipflow = json.load(c)
+                    c.close()
+                except:
+                    traceback.print_exc()
+                    raise
+
+                # Recalibrate
+                for dataset in basecaller_recalibration_datasets["datasets"]:
+
+                    read_group = dataset['read_groups'][0]
+
+                    if basecaller_recalibration_datasets['read_groups'][read_group].get('filtered',False):
+                        continue
+
+                    if not basecaller_recalibration_datasets['read_groups'][read_group].get('read_count',0) > 0:
+                        continue
+
+                    barcode_name = basecaller_recalibration_datasets['read_groups'][read_group].get('barcode_name','no_barcode')
+                    if not env['barcodeInfo'][barcode_name]['calibrate']:
+                        continue
+
+                    referenceName = basecaller_recalibration_datasets['read_groups'][read_group]['reference']
+
+                    if not referenceName:
+                        continue
+
+                    readsFile = os.path.join(env['BASECALLER_RESULTS'],'recalibration',dataset['basecaller_bam'])
+
+                    printtime("DEBUG: Work starting on %s" % readsFile)
+                    RECALIBRATION_RESULTS = os.path.join(env['BASECALLER_RESULTS'],"recalibration", dataset['file_prefix'])
+                    os.makedirs(RECALIBRATION_RESULTS)
+                    sample_map_path = os.path.join(RECALIBRATION_RESULTS, "samplelib.bam")
+
+                    alignment.align(
+                        referenceName,
+                        readsFile,
+                        bidirectional=False,
+                        mark_duplicates=False,
+                        realign=False,
+                        skip_sorting=True,
+                        aligner_opts_extra="",
+                        logfile=os.path.join(RECALIBRATION_RESULTS,"alignmentQC_out.txt"),
+                        output_dir=RECALIBRATION_RESULTS,
+                        output_basename="samplelib")
+
+                    # Generate both hpTable and hpModel.
+                    flow_space_recal.calibrate(
+                        RECALIBRATION_RESULTS,
+                        sample_map_path,
+                        env['recalibArgs'],
+                        chipflow)
+
+                # merge step, calibrate collects the training data saved for each barcode,
+                # calculate and generate hpTable and hpModel files for the whole dataset
+                flow_space_recal.HPaggregation(
+                    os.path.join(env['BASECALLER_RESULTS'],"recalibration"),
+                    env['recalibArgs'])
+
+                hptable = os.path.join(env['BASECALLER_RESULTS'], "recalibration", "hpTable.txt")
+                printtime("hptable: %s" % hptable)
+                additional_basecallerArgs = " --calibration-file " + hptable + " --phase-estimation-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "BaseCaller.json") + " --model-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "hpModel.txt")
                 add_status("Recalibration", 0)
             except:
                 traceback.print_exc()
                 add_status("Recalibration", 1)
+                printtime ("ERROR: Recalibration failed")
+                sys.exit(1)
 
         else:
-            printtime("DEBUG: Flow Space Recalibration is disabled, Reference: '%s'" % env['libraryName'])
+            printtime("DEBUG: Flow Space Recalibration is disabled, Reference: '%s'" % env['referenceName'])
             updated_basecallerArgs = env['basecallerArgs']
 
 
@@ -321,168 +368,111 @@ if __name__=="__main__":
                 env['libraryKey'],
                 env['tfKey'],
                 env['runID'],
-                env['flowOrder'],
                 env['reverse_primer_dict'],
                 env['BASECALLER_RESULTS'],
                 env['barcodeId'],
-                env['barcodeSamples'],
-                env.get('barcodesplit_filter',0),
-                env.get('barcodesplit_filter_minreads',0),
-                env['DIR_BC_FILES'],
-                os.path.join("barcodeList.txt"),
-                os.path.join(env['BASECALLER_RESULTS'], "barcodeMask.bin"),
-                env['libraryName'],
-                env['sample'],
-                env['site_name'],
+                env['barcodeInfo'],
+                env['library'],
                 env['notes'],
-                env['start_time'],
+                env['site_name'],
+                env['platform'],
+                env['instrumentName'],
                 env['chipType'],
-                env['expName'],
-                env['resultsName'],
-                env['pgmName']
             )
             add_status("Basecaller", 0)
         except:
             traceback.print_exc()
             add_status("Basecaller", 1)
-
-
-        set_result_status('Post Basecalling')
-        try:
-            basecaller.post_basecalling(env['BASECALLER_RESULTS'],env['expName'],env['resultsName'],env['flows'])
-            add_status("PostBasecaller", 0)
-        except:
-            traceback.print_exc()
-            add_status("PostBasecaller", 1)
-
-        if not isProtonBlock:
-            set_result_status('Merge Barcoded Basecaller Bams')
-            try:
-                basecaller.merge_barcoded_basecaller_bams(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed'))
-                add_status("MergeBarcodedBasecallerBamsUntrimmed", 0)
-            except:
-                traceback.print_exc()
-                add_status("MergeBarcodedBasecallerBamsUntrimmed", 1)
-            try:
-                basecaller.merge_barcoded_basecaller_bams(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed'))
-                add_status("MergeBarcodedBasecallerBamsTrimmed", 0)
-            except:
-                traceback.print_exc()
-                add_status("MergeBarcodedBasecallerBamsTrimmed", 1)
-            try:
-                basecaller.merge_barcoded_basecaller_bams(env['BASECALLER_RESULTS'])
-                add_status("MergeBarcodedBasecallerBams", 0)
-            except:
-                traceback.print_exc()
-                add_status("MergeBarcodedBasecallerBams", 1)
-
-
-        set_result_status('TF Processing')
-        try:
-            basecaller.tf_processing(
-                os.path.join(env['BASECALLER_RESULTS'], "rawtf.basecaller.bam"),
-                env['tfKey'],
-                env['flowOrder'],
-                env['BASECALLER_RESULTS'],
-                '.')
-            add_status("TF Processing", 0)
-        except:
-            traceback.print_exc()
-            add_status("TF Processing", 1)
-
-
-        ##################################################
-        # Unfiltered BAM
-        ##################################################
-
-        if not isProtonBlock:
-            try:
-                if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed')):
-                    basecaller.post_basecalling(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed'),env['expName'],env['resultsName'],env['flows'])
-
-                if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed')):
-                    basecaller.post_basecalling(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed'),env['expName'],env['resultsName'],env['flows'])
-
-            except IndexError:
-                printtime("Error, unfiltered handling")
-                traceback.print_exc()
-
-    do_merged_alignment = False
-    if args.do_alignment and not do_merged_alignment:
-
-        #make sure pre-conditions for alignment step are met
-        # TODO if not os.path.exists(os.path.join(env['BASECALLER_RESULTS'], "rawlib.basecaller.bam")):
-        if not os.path.exists(os.path.join(env['BASECALLER_RESULTS'], "ionstats_basecaller.json")):
-            printtime ("ERROR: alignment pre-conditions not met")
-            add_status("Pre Alignment Step", status=1)
+            printtime ("ERROR: Basecaller failed")
             sys.exit(1)
-        
-        if env['libraryName']=='none' or len(env['libraryName'])<1:
-            # skip alignment when no library
-            printtime("DEBUG: No Reference Library selected (libraryName = %s)",env['libraryName'])        
-        else:
+
+
+
+    if args.do_alignment:
+
+        do_merged_alignment = isProtonBlock and False
+        if do_merged_alignment:
+            sys.exit(0)
+
+        try:
+            c = open(os.path.join(env['BASECALLER_RESULTS'], "BaseCaller.json"),'r')
+            basecaller_meta_information = json.load(c)
+            c.close()
+        except:
+            traceback.print_exc()
+            raise
+
+        basecaller_datasets = blockprocessing.get_datasets_basecaller(env['BASECALLER_RESULTS'])
+
+        # update filtered flag
+        if isProtonBlock:
+            composite_basecaller_datasets = blockprocessing.get_datasets_basecaller(os.path.join('..',env['BASECALLER_RESULTS']))
+            for rg_name in basecaller_datasets["read_groups"]:
+                block_filtered_flag = basecaller_datasets["read_groups"][rg_name].get('filtered',False)
+                composite_filtered_flag = composite_basecaller_datasets["read_groups"][rg_name].get('filtered',False)
+                basecaller_datasets["read_groups"][rg_name]['filtered'] = composite_filtered_flag or block_filtered_flag
+
+        activate_barcode_filter = True
+
+        if reference_selected:
+
             set_result_status('Alignment')
-            
-            bidirectional = False
-            
-            ##################################################
-            # Unfiltered BAM
-            ##################################################
 
-            if not isProtonBlock:
-
-                try:
-                    if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed")):
-                        alignment.alignment_unmapped_bam(
-                            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
-                            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
-                            env['align_full'],
-                            env['libraryName'],
-                            env['flows'],
-                            env['realign'],
-                            env['aligner_opts_extra'],
-                            env['mark_duplicates'],
-                            bidirectional,
-                            env['sam_parsed'])
-                        #add_status("Alignment", 0)
-                except:
-                    traceback.print_exc()
-                    #add_status("Alignment", 1)
-
-                try:
-                    if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed")):
-                        alignment.alignment_unmapped_bam(
-                            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
-                            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
-                            env['align_full'],
-                            env['libraryName'],
-                            env['flows'],
-                            env['realign'],
-                            env['aligner_opts_extra'],
-                            env['mark_duplicates'],
-                            bidirectional,
-                            env['sam_parsed'])
-                        #add_status("Alignment", 0)
-                except:
-                    traceback.print_exc()
-                    #add_status("Alignment", 1)
+            if isProtonBlock:
+                create_index = False
+            else:
+                create_index = True
 
             try:
+                bidirectional = False
                 alignment.alignment_unmapped_bam(
                     env['BASECALLER_RESULTS'],
+                    basecaller_datasets,
                     env['ALIGNMENT_RESULTS'],
-                    env['align_full'],
-                    env['libraryName'],
-                    env['flows'],
                     env['realign'],
                     env['aligner_opts_extra'],
                     env['mark_duplicates'],
+                    create_index,
                     bidirectional,
-                    env['sam_parsed'])
+                    activate_barcode_filter,
+                    env['barcodeInfo'])
                 add_status("Alignment", 0)
             except:
                 traceback.print_exc()
                 add_status("Alignment", 1)
+                printtime ("ERROR: Alignment failed")
+                sys.exit(1)
+
+
+        if isProtonBlock and os.path.exists('/opt/ion/.ion-internal-server'):
+
+            printtime("create block level ionstats")
+
+            try:
+                import math
+                graph_max_x = int(50 * math.ceil(0.014 * int(env['flows'])))
+            except:
+                traceback.print_exc()
+                graph_max_x = 400
+
+            try:
+                # Plot classic read length histogram (also used for Read Length Details view)
+                # TODO: change word alignment
+                alignment.create_ionstats(
+                    env['BASECALLER_RESULTS'],
+                    env['ALIGNMENT_RESULTS'],
+                    basecaller_meta_information,
+                    basecaller_datasets,
+                    graph_max_x,
+                    activate_barcode_filter)
+
+                ionstats_plots.old_read_length_histogram(
+                    #os.path.join('ionstats_alignment.json'),
+                    os.path.join(env['BASECALLER_RESULTS'],'ionstats_basecaller.json'),
+                    os.path.join(env['BASECALLER_RESULTS'],'readLenHisto.png'),
+                    graph_max_x)
+            except:
+                traceback.print_exc()
 
         set_result_status('Processing finished')
 

@@ -1,255 +1,255 @@
 [tmap index] packing the reference FASTA.
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00002:1-1061].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00003:1-1023].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00004:1-523].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00009:1-984].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00012:1-994].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00013:1-808].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00014:1-1957].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00016:1-844].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00017:1-1136].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00019:1-644].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00022:1-751].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00024:1-536].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00025:1-1994].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00028:1-1130].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00031:1-1138].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00033:1-2022].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00034:1-1019].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00035:1-1130].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00039:1-740].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00040:1-744].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00041:1-1122].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00042:1-1023].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00043:1-1023].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00044:1-1156].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00046:1-522].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00048:1-992].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00051:1-274].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00053:1-1023].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00054:1-274].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00057:1-1021].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00058:1-1136].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00059:1-525].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00060:1-523].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00061:1-1136].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00062:1-1023].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00067:1-644].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00069:1-1137].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00071:1-642].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00073:1-603].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00074:1-522].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00075:1-1023].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00076:1-642].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00077:1-273].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00078:1-993].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00079:1-644].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00081:1-534].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00083:1-1022].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00084:1-994].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00085:1-844].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00086:1-1020].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00092:1-1124].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00095:1-521].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00096:1-1107].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00097:1-523].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00098:1-1143].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00099:1-1350].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00104:1-2022].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00108:1-1022].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00109:1-536].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00111:1-994].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00112:1-1136].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00113:1-840].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00116:1-1991].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00117
-src/index/tmap_refseq.c:228: in function "tmap_refseq_fasta2pac"
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00002:1-1037].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00003:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00004:1-499].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00009:1-960].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00012:1-970].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00013:1-784].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00014:1-1937].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00016:1-820].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00017:1-1113].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00019:1-619].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00022:1-728].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00024:1-511].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00025:1-1970].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00028:1-1106].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00031:1-1114].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00033:1-2000].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00034:1-995].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00035:1-1106].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00039:1-716].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00040:1-720].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00041:1-1100].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00042:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00043:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00044:1-1135].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00046:1-498].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00048:1-968].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00051:1-250].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00053:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00054:1-248].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00057:1-1000].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00058:1-1112].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00059:1-501].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00060:1-498].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00061:1-1112].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00062:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00067:1-620].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00069:1-1113].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00071:1-618].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00073:1-579].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00074:1-498].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00075:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00076:1-618].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00077:1-250].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00078:1-969].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00079:1-620].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00081:1-509].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00083:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00084:1-970].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00085:1-820].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00086:1-998].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00092:1-1100].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00095:1-499].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00096:1-1083].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00097:1-498].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00098:1-1118].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00099:1-1324].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00104:1-1999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00108:1-997].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00109:1-512].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00111:1-970].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00112:1-1112].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00113:1-817].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00116:1-1969].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00117:1-1112].
+
+/home/tsbuilder/devEnv/Release_4.0/Analysis/TMAP/src/index/tmap_refseq.c:230: in function "tmap_refseq_fasta2pac"
 IUPAC codes were found and will be converted to non-matching DNA bases
 warning: the value is out of range
 trying to continue...
 
-:1-1136].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00120:1-536].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00123:1-1022].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00126:1-1118].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00130:1-1059].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00131:1-771].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00134:1-274].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00136:1-1033].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00137:1-537].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00138:1-1024].
-[tmap index] 0.00/0.01 sec: IUPAC code N will be converted to A.
-[tmap index] 0.00/0.01 sec: IUPAC code B will be converted to A.
-[tmap index] 0.00/0.01 sec: IUPAC code D will be converted to C.
-[tmap index] 0.00/0.01 sec: IUPAC code H will be converted to G.
-[tmap index] 0.00/0.01 sec: IUPAC code K will be converted to A.
-[tmap index] 0.00/0.01 sec: IUPAC code M will be converted to G.
-[tmap index] 0.00/0.01 sec: IUPAC code R will be converted to C.
-[tmap index] 0.00/0.01 sec: IUPAC code S will be converted to A.
-[tmap index] 0.00/0.01 sec: IUPAC code V will be converted to T.
-[tmap index] 0.00/0.01 sec: IUPAC code W will be converted to C.
-[tmap index] 0.00/0.01 sec: IUPAC code Y will be converted to A.
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00142:1-493].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00143:1-784].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00144:1-538].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00145:1-1042].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00147:1-1023].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00148:1-494].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00150:1-743].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00154:1-537].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00156:1-494].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00157:1-1019].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00158:1-1027].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00160:1-743].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00162:1-523].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00163:1-543].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00164:1-1022].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00165:1-872].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00168:1-1024].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00170:1-1023].
-[tmap index] 0.00/0.01 sec: packing contig [ERCC-00171:1-505].
-[tmap index] 0.00/0.01 sec: total genome length [82756].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00120:1-512].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00123:1-998].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00126:1-1097].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00130:1-1037].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00131:1-747].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00134:1-249].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00136:1-1011].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00137:1-513].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00138:1-999].
+[tmap index] 0.01/0.02 sec: IUPAC code N will be converted to A.
+[tmap index] 0.01/0.02 sec: IUPAC code B will be converted to A.
+[tmap index] 0.01/0.02 sec: IUPAC code D will be converted to C.
+[tmap index] 0.01/0.02 sec: IUPAC code H will be converted to G.
+[tmap index] 0.01/0.02 sec: IUPAC code K will be converted to A.
+[tmap index] 0.01/0.02 sec: IUPAC code M will be converted to G.
+[tmap index] 0.01/0.02 sec: IUPAC code R will be converted to C.
+[tmap index] 0.01/0.02 sec: IUPAC code S will be converted to A.
+[tmap index] 0.01/0.02 sec: IUPAC code V will be converted to T.
+[tmap index] 0.01/0.02 sec: IUPAC code W will be converted to C.
+[tmap index] 0.01/0.02 sec: IUPAC code Y will be converted to A.
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00142:1-470].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00143:1-759].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00144:1-513].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00145:1-1016].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00147:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00148:1-470].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00150:1-719].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00154:1-513].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00156:1-470].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00157:1-995].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00158:1-1004].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00160:1-719].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00162:1-499].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00163:1-519].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00164:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00165:1-848].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00168:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00170:1-999].
+[tmap index] 0.01/0.02 sec: packing contig [ERCC-00171:1-481].
+[tmap index] 0.01/0.02 sec: total genome length [80566].
 [tmap index] 1 IUPAC base was found and converted to a DNA base.
-[tmap index] 0.00/0.01 sec: packing the reverse compliment FASTA for BWT/SA creation.
-[tmap index] 0.00/0.01 sec: packed the reference FASTA.
+[tmap index] 0.01/0.02 sec: packing the reverse compliment FASTA for BWT/SA creation.
+[tmap index] 0.01/0.02 sec: packed the reference FASTA.
 [tmap index] defaulting to "is" BWT construction algorithm.
 [tmap index] constructing the BWT string from the packed FASTA.
-[tmap index] 0.02/0.03 sec: constructed the BWT string from the packed FASTA.
-[tmap index] 0.02/0.03 sec: setting the BWT hash width to 9.
+[tmap index] 0.03/0.03 sec: constructed the BWT string from the packed FASTA.
+[tmap index] 0.03/0.03 sec: setting the BWT hash width to 9.
 [tmap index] constructing the occurrence hash for the BWT string.
-[tmap index] 0.02/0.03 sec: constructing 1-mer hash.
-[tmap index] 0.02/0.03 sec: constructing 2-mer hash.
-[tmap index] 0.02/0.03 sec: constructing 3-mer hash.
-[tmap index] 0.02/0.03 sec: constructing 4-mer hash.
-[tmap index] 0.02/0.03 sec: constructing 5-mer hash.
-[tmap index] 0.02/0.03 sec: constructing 6-mer hash.
-[tmap index] 0.02/0.03 sec: constructing 7-mer hash.
-[tmap index] 0.02/0.03 sec: constructing 8-mer hash.
-[tmap index] 0.02/0.03 sec: constructing 9-mer hash.
-[tmap index] 0.04/0.05 sec: testing the BWT hash.
-[tmap index] 0.04/0.05 sec: 1-mer validation passed.
-[tmap index] 0.04/0.05 sec: 2-mer validation passed.
-[tmap index] 0.04/0.05 sec: 3-mer validation passed.
-[tmap index] 0.04/0.05 sec: 4-mer validation passed.
-[tmap index] 0.04/0.05 sec: 5-mer validation passed.
-[tmap index] 0.04/0.05 sec: 6-mer validation passed.
-[tmap index] 0.04/0.05 sec: 7-mer validation passed.
+[tmap index] 0.03/0.03 sec: constructing 1-mer hash.
+[tmap index] 0.03/0.03 sec: constructing 2-mer hash.
+[tmap index] 0.03/0.03 sec: constructing 3-mer hash.
+[tmap index] 0.03/0.03 sec: constructing 4-mer hash.
+[tmap index] 0.03/0.03 sec: constructing 5-mer hash.
+[tmap index] 0.03/0.03 sec: constructing 6-mer hash.
+[tmap index] 0.03/0.03 sec: constructing 7-mer hash.
+[tmap index] 0.03/0.03 sec: constructing 8-mer hash.
+[tmap index] 0.03/0.04 sec: constructing 9-mer hash.
+[tmap index] 0.05/0.05 sec: testing the BWT hash.
+[tmap index] 0.05/0.05 sec: 1-mer validation passed.
+[tmap index] 0.05/0.05 sec: 2-mer validation passed.
+[tmap index] 0.05/0.05 sec: 3-mer validation passed.
+[tmap index] 0.05/0.05 sec: 4-mer validation passed.
+[tmap index] 0.05/0.05 sec: 5-mer validation passed.
+[tmap index] 0.05/0.05 sec: 6-mer validation passed.
+[tmap index] 0.05/0.05 sec: 7-mer validation passed.
 [tmap index] 0.05/0.06 sec: 8-mer validation passed.
-[tmap index] 0.07/0.08 sec: 9-mer validation passed.
-[tmap index] 0.07/0.08 sec: constructed the occurrence hash for the BWT string.
+[tmap index] 0.07/0.07 sec: 9-mer validation passed.
+[tmap index] 0.07/0.07 sec: constructed the occurrence hash for the BWT string.
 [tmap index] constructing the SA from the BWT string.
-[tmap index] 0.09/0.10 sec: constructed the SA from the BWT string.
+[tmap index] 0.08/0.09 sec: constructed the SA from the BWT string.
 [tmap index] packing the reference FASTA (forward only).
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00002:1-1061].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00003:1-1023].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00004:1-523].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00009:1-984].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00012:1-994].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00013:1-808].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00014:1-1957].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00016:1-844].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00017:1-1136].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00019:1-644].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00022:1-751].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00024:1-536].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00025:1-1994].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00028:1-1130].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00031:1-1138].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00033:1-2022].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00034:1-1019].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00035:1-1130].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00039:1-740].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00040:1-744].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00041:1-1122].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00042:1-1023].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00043:1-1023].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00044:1-1156].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00046:1-522].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00048:1-992].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00051:1-274].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00053:1-1023].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00054:1-274].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00057:1-1021].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00058:1-1136].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00059:1-525].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00060:1-523].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00061:1-1136].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00062:1-1023].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00067:1-644].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00069:1-1137].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00071:1-642].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00073:1-603].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00074:1-522].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00075:1-1023].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00076:1-642].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00077:1-273].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00078:1-993].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00079:1-644].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00081:1-534].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00083:1-1022].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00084:1-994].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00085:1-844].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00086:1-1020].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00092:1-1124].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00095:1-521].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00096:1-1107].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00097:1-523].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00098:1-1143].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00099:1-1350].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00104:1-2022].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00108:1-1022].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00109:1-536].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00111:1-994].
-[tmap index] 0.09/0.10 sec
-src/index/tmap_refseq.c:228: in function "tmap_refseq_fasta2pac"
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00002:1-1037].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00003:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00004:1-499].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00009:1-960].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00012:1-970].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00013:1-784].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00014:1-1937].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00016:1-820].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00017:1-1113].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00019:1-619].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00022:1-728].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00024:1-511].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00025:1-1970].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00028:1-1106].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00031:1-1114].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00033:1-2000].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00034:1-995].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00035:1-1106].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00039:1-716].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00040:1-720].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00041:1-1100].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00042:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00043:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00044:1-1135].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00046:1-498].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00048:1-968].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00051:1-250].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00053:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00054:1-248].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00057:1-1000].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00058:1-1112].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00059:1-501].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00060:1-498].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00061:1-1112].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00062:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00067:1-620].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00069:1-1113].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00071:1-618].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00073:1-579].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00074:1-498].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00075:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00076:1-618].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00077:1-250].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00078:1-969].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00079:1-620].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00081:1-509].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00083:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00084:1-970].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00085:1-820].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00086:1-998].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00092:1-1100].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00095:1-499].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00096:1-1083].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00097:1-498].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00098:1-1118].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00099:1-1324].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00104:1-1999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00108:1-997].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00109:1-512].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00111:1-970].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-0011
+/home/tsbuilder/devEnv/Release_4.0/Analysis/TMAP/src/index/tmap_refseq.c:230: in function "tmap_refseq_fasta2pac"
 IUPAC codes were found and will be converted to non-matching DNA bases
 warning: the value is out of range
 trying to continue...
 
-: packing contig [ERCC-00112:1-1136].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00113:1-840].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00116:1-1991].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00117:1-1136].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00120:1-536].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00123:1-1022].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00126:1-1118].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00130:1-1059].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00131:1-771].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00134:1-274].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00136:1-1033].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00137:1-537].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00138:1-1024].
-[tmap index] 0.09/0.10 sec: IUPAC code N will be converted to A.
-[tmap index] 0.09/0.10 sec: IUPAC code B will be converted to A.
-[tmap index] 0.09/0.10 sec: IUPAC code D will be converted to C.
-[tmap index] 0.09/0.10 sec: IUPAC code H will be converted to G.
-[tmap index] 0.09/0.10 sec: IUPAC code K will be converted to A.
-[tmap index] 0.09/0.10 sec: IUPAC code M will be converted to G.
-[tmap index] 0.09/0.10 sec: IUPAC code R will be converted to C.
-[tmap index] 0.09/0.10 sec: IUPAC code S will be converted to A.
-[tmap index] 0.09/0.10 sec: IUPAC code V will be converted to T.
-[tmap index] 0.09/0.10 sec: IUPAC code W will be converted to C.
-[tmap index] 0.09/0.10 sec: IUPAC code Y will be converted to A.
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00142:1-493].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00143:1-784].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00144:1-538].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00145:1-1042].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00147:1-1023].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00148:1-494].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00150:1-743].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00154:1-537].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00156:1-494].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00157:1-1019].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00158:1-1027].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00160:1-743].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00162:1-523].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00163:1-543].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00164:1-1022].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00165:1-872].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00168:1-1024].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00170:1-1023].
-[tmap index] 0.09/0.10 sec: packing contig [ERCC-00171:1-505].
-[tmap index] 0.09/0.10 sec: total genome length [82756].
+2:1-1112].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00113:1-817].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00116:1-1969].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00117:1-1112].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00120:1-512].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00123:1-998].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00126:1-1097].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00130:1-1037].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00131:1-747].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00134:1-249].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00136:1-1011].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00137:1-513].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00138:1-999].
+[tmap index] 0.08/0.09 sec: IUPAC code N will be converted to A.
+[tmap index] 0.08/0.09 sec: IUPAC code B will be converted to A.
+[tmap index] 0.08/0.09 sec: IUPAC code D will be converted to C.
+[tmap index] 0.08/0.09 sec: IUPAC code H will be converted to G.
+[tmap index] 0.08/0.09 sec: IUPAC code K will be converted to A.
+[tmap index] 0.08/0.09 sec: IUPAC code M will be converted to G.
+[tmap index] 0.08/0.09 sec: IUPAC code R will be converted to C.
+[tmap index] 0.08/0.09 sec: IUPAC code S will be converted to A.
+[tmap index] 0.08/0.09 sec: IUPAC code V will be converted to T.
+[tmap index] 0.08/0.09 sec: IUPAC code W will be converted to C.
+[tmap index] 0.08/0.09 sec: IUPAC code Y will be converted to A.
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00142:1-470].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00143:1-759].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00144:1-513].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00145:1-1016].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00147:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00148:1-470].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00150:1-719].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00154:1-513].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00156:1-470].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00157:1-995].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00158:1-1004].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00160:1-719].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00162:1-499].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00163:1-519].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00164:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00165:1-848].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00168:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00170:1-999].
+[tmap index] 0.08/0.09 sec: packing contig [ERCC-00171:1-481].
+[tmap index] 0.08/0.09 sec: total genome length [80566].
 [tmap index] 1 IUPAC base was found and converted to a DNA base.
-[tmap index] 0.09/0.10 sec: packed the reference FASTA.
-[tmap index] 0.09/0.10 sec: terminating successfully.
+[tmap index] 0.08/0.09 sec: packed the reference FASTA.
+[tmap index] 0.08/0.09 sec: terminating successfully.

@@ -1,0 +1,233 @@
+{% extends "rundb/data/base.html" %}
+{% load url from future %}
+{% block sub-nav %}
+    <li><a href="{% url "data" %}">Completed Runs &amp; Results</a></li>
+    <li><a href="{% url "projects" %}">Projects</a></li>
+    <li class="active"><a href="{% url "datamanagement" %}">Data Management</a></li>
+{% endblock sub-nav %}
+{% block content %}
+<div class="content">
+    <h1>Data Management Configuration
+        <small>
+        </small>
+    </h1>
+    <div id="error-messages" class="alert alert-error" style="display:none;"></div>
+    <div id="config_table">
+        <table class="data-table" cellpadding="5px">
+            <thead>
+                <th>File Category</th>
+                <th></th>
+                <th>
+                    <span rel='tooltip' title="Choose whether to automatically archive or delete data after the specified number of days">
+                        Auto Action
+                </th>
+                <th>
+                    <span rel='tooltip' title="Time interval, in days, that data is exempt from autoaction">
+                        Data Age Threshold <br />(days)
+                    </span>
+                </th>
+                <th>
+                    <span rel='tooltip' title="Specify the Torrent Server local disk capacity before data management autoaction is triggered">
+                        Disk Full Threshold <br /> (Percent)
+                    </span>
+                </th>
+                <th>
+                    <span rel='tooltip' title="Archive directories appear in the drop down menu after the drive is mounted">
+                        Archive Directory
+                    </span>
+                </th>
+            </thead>
+            <tbody>
+            {% for entry in dm_filesets %}
+            <tr>
+                <td><b> {{entry.type}} </b></td>
+                <td>
+                    <small>{{entry.description}}</small>
+                </td>
+                <td>
+                    <select id='auto_action_select_{{forloop.counter}}' name='auto_action' class='filesets' data-type='{{entry.type}}' style="width:110px">
+                        {% for action,name in entry.AUTO_ACTION %}
+                        <option value='{{action}}' {% if action == entry.auto_action %} selected="selected" {% endif %}>
+                            {{name}}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </td>
+                <td>
+                    <input type=number min=0 id='trigger_age_{{forloop.counter}}' name='auto_trigger_age' data-type='{{entry.type}}' class="input-small filesets validate"
+                           value={{entry.auto_trigger_age|default:'0'}} >
+                </td>
+                <td>
+                    <input type=number min=0 max=100 id='trigger_usage_{{forloop.counter}}' name='auto_trigger_usage' data-type='{{entry.type}}' class="input-small filesets validate"
+                            value={{entry.auto_trigger_usage|default:'0'}}>
+                </td>
+                <td>
+                    <select id='backup_dir_{{forloop.counter}}' data-type='{{entry.type}}' name='backup_directory' class='filesets'>
+                        {% for dir in backup_dirs %}
+                        <option value={{dir.0}} {% if dir.0 == entry.backup_directory %} selected="selected" {% endif %}>
+                            {{dir.1}}
+                        </option>
+                        {% endfor %}
+                    </select>
+                <a href='{% url "browse_backup_dirs" "" %}' class='btn browse_backup_dirs' id='browse_{{forloop.counter}}' style="vertical-align:top;">Browse</a>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div>
+        <form class="form-horizontal" id="config_form" style="margin-top:40px;">
+            <fieldset>
+                <div class="control-group">
+                    <label class="control-label" for="enable_archive" style="font-size:large"> Enabled </label>
+                    <div class="controls">
+                        <input {% if config.auto_archive_enable %}checked{% endif %} type='checkbox' id="enable_archive">
+                        <div class="help-block">
+                            Enable the automatic data management actions to run. Uncheck to disable.
+                        </div>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label class="control-label" for="email"> Email </label>
+                    <div class="controls">
+                        <input id="email" value='{{ config.email }}' class="input-large">
+                        <div class="help-block">
+                            Enter one or more email addresses where notifications
+                            are sent. Email is sent through
+                            unauthenticated postfix, a Linux e-mail program.
+                        </div>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label class="control-label" for="ack"> Auto Acknowledge Delete? </label>
+                    <div class="controls">
+                        <input id='auto_archive_ack' {% if config.auto_archive_ack %} checked {% endif %} type="checkbox">
+                        <div class="help-block">
+                            Acknowledge Signal Processing Input data deletion automatically.
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+        </form>
+        <div class="clearfix">
+                <a href='{% url "dm_configuration" %}' id="saveConfig" class="btn btn-primary btn-100 pull-right">Save</a>
+                <a href="{% url "datamanagement" %}" class="btn btn-100 pull-right" id='cancel' style="margin-right:10px;">Cancel</a>
+        </div>
+    </div>
+</div>
+<script type="text/javascript">
+
+$(document).ready(function() {
+
+    $('#saveConfig').click(function(e){
+        e.preventDefault();
+
+        if ($("#config_table *").hasClass("error")) {
+            $('.error').trigger('change');
+        return false;
+        }
+
+        var filesets = {};
+        var types = {{categories|safe}};
+        $(".filesets").each(function(){
+            var el = $(this);
+            var type = el.data('type');
+            if (!filesets.hasOwnProperty(type))
+                filesets[type] = {};
+            filesets[type][el.attr('name')] = el.val();
+        });
+
+        var json = {
+                "filesets": filesets,
+                "email": $('#email').val(),
+                "auto_archive_ack": $('#auto_archive_ack').is(':checked') ? "True":"False"
+            }
+        var url = $(this).attr('href');
+        console.log('POST:', url, json);
+        $.ajax({
+            url: url,
+            dataType: 'html',
+            type: 'POST',
+            async: false,
+            contentType: "application/json",
+            data: JSON.stringify(json),
+        })
+        .done(function(data){
+            console.log('success:', data);
+            window.location.href = '{% url "datamanagement" %}';
+        })
+        .fail(function(data) {
+            $('#error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+            console.log("error:", data);
+        });
+
+    });
+
+    $("#enable_archive").change(function(){
+        var enabled = $(this).is(':checked');
+        $.ajax({
+            type: "PATCH",
+            dataType: 'json',
+            url: "/rundb/api/v1/globalconfig/1/",
+            data: '{"auto_archive_enable":'+enabled+'}',
+            contentType: 'application/json'
+        }).done(function(data) {
+            if (enabled) {
+                var log_entry = 'ENABLED Data Management automatic action';
+            } else {
+                var log_entry = 'DISABLED Data Management automatic action';
+            }
+            $.post('{% url "dm_configuration_log" %}', {log: log_entry});
+        });
+    });
+
+});
+
+$('.validate').change(function(e){
+    var val = $(this).val();
+    var msg = '';
+    if (!val.match(/(^-?\d\d*$)/)){
+        if (this.name == "auto_trigger_age"){
+            msg = "Data Age Threshold needs to be a whole number greater than 0";
+        }
+        if (this.name == "auto_trigger_usage"){
+            msg = "Disk Full Threshold needs to be a whole number greater than 0";
+        }
+    }
+    if ((this.name == "auto_trigger_age") && (parseInt(val)>10000)){
+        msg = "Data Age Threshold needs to be a whole number between 0 and 10000";
+    }
+    if ((this.name == "auto_trigger_usage") && (parseInt(val)>100)){
+        msg = "Disk Full Threshold needs to be a whole number between 0 and 100";
+    }
+    if(msg){
+        $('#error-messages').empty().append(msg).show();
+        $(this).addClass('error');
+        $(this).css({"background-color":"#FA9EA3"});
+    }else{
+        $('#error-messages').empty().hide();
+        $(this).removeClass('error');
+        $(this).css({"background-color":""});
+    }
+});
+
+$('.browse_backup_dirs').click(function(e){
+    e.preventDefault();
+    var elem = '#' + this.id.replace('browse', 'backup_dir');
+    var url = $(this).attr('href') + '?exclude_archived=true';
+    $.get( url, function(data) {
+        $('body').append(data);
+        $( "#modal_browse_dirs").modal("show");
+        $('body #modal_browse_dirs').on('modal_browse_dirs_done', function(e, data){
+            if(data.path) {
+                if ($(elem +' option[value="'+data.path+'"]').length == 0)
+                    $('[id^=backup_dir]').append('<option value="' + data.path + '">' + data.path + '</option>');
+                $(elem).val(data.path);
+            }
+        });
+    });
+});
+</script>
+
+{% endblock content %}

@@ -1,0 +1,48 @@
+{% extends "rundb/data/base.html" %}
+{% load url from future %}
+{% block current_tab %}about{% endblock %}
+{% block sub-nav %}
+    <li><a href="{% url "data" %}">Completed Runs &amp; Results</a></li>
+    <li><a href="{% url "projects" %}">Projects</a></li>
+    <li><a href="{% url "datamanagement" %}">Data Management</a></li>
+{% endblock sub-nav %}
+
+{% block content %}
+<div class="content">
+    <h1>Data Export</h1>
+    <div class="row-fluid">
+        <div class="span12">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Progress (%)</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                {% for upload in uploads %}
+                    <tr>
+                        <td>
+                            {{ upload.name }} <small>{{ upload.url }}</small>
+                        </td>
+                        <td>
+                            {% if upload.in_progress %}
+                                <div class="progress progress-striped active"
+                                    title="{{ upload.percent_progress }}%" style="margin: 0;">
+                                    <div class="bar" style="width: {{ upload.percent_progress }}%;"></div>
+                                </div>
+                            {% else %}
+                                
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ upload.status }}
+                        </td>
+                        <td><button class="btn"><i class="icon-trash"></i> Remove</button></td>
+                    </tr>
+                {% endfor %}
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock content %}

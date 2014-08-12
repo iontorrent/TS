@@ -1,6 +1,8 @@
 {%extends "rundb/plan/page_plan/base.html"%}
 {% block extra_head %}
-<script type="text/javascript" src="/site_media/resources/scripts/plan/iru_validation.js"></script>
+    {{ block.super }}
+    {% load static %}
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
 {%endblock%}
 {% block page-plan-content %}
 <div id="step3" class="tab-pane active">
@@ -15,19 +17,29 @@
 		<input type="text" class="input-large" placeholder="" value="{{helper.getStepDict.Save_template_by_sample.getCurrentSavedFieldDict.templateName|default_if_none:""}}" name="templateName" style="width:350px;">
 	{%else%}
 		<legend>Save &amp; Finish</legend>	
-		<p>Enter a plan name. This is concatenated with the sample names or sample set name to form the run plan name:</p>
+		<p>Enter a plan name:</p>
 		<input type="text" class="input-large" placeholder="" value="{{helper.getStepDict.Save_plan_by_sample.getCurrentSavedFieldDict.templateName|default_if_none:""}}" name="templateName" style="width:350px;">
 	{%endif%}						
 </div>
+<div id="errors" style="color:red;font-weight:bold;"></div>
+
 <div class="row-fluid">
     {% for key, value in step.validationErrors.items %}
         <h4 style="color: red">{{value}}</h4>
     {% endfor %}
 </div>
+
+<div id="noteerror" style="color:red;font-weight:bold;"></div>
+<div class="row-fluid">
+    <div class="span12">
+        <label for="note" class="form-label">Add a note</label>
+        <textarea id="note" name="note" style="width:70%;height:100px;">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
+        <br>
+    </div>
+</div>
+
 {%endblock%}
 {% block prevnext-buttons %}
-
-	<div id="errors"></div>
     <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">&larr; Previous</a>
 
     {% if helper.isTemplateBySample %}
@@ -41,9 +53,27 @@
 {% endblock summary-table %}
 {% block post-raw %}
 {{ block.super }}
-<script>
+<script type="text/javascript">
 	$(document).ready(function(){
-		
+		$("input[name=templateName]").on('keyup', function(){
+			$("#errors").html('');
+        	//call the Regex test function identified in validation.js file
+        	if (!is_valid_chars($(this).val())) {
+            	$("#errors").html('Error, Plan Name should contain only numbers, letters, spaces, and the following: . - _');
+        	}
+		});
+
+        $("#note").on('keyup', function(){
+            $("#noteerror").html('');
+            //call the Regex test function identified in validation.js file
+            if (!is_valid_chars($(this).val())) {
+                $("#noteerror").html('Error, Notes should contain only numbers, letters, spaces, and the following: . - _');
+            }
+            //call the check max length function that's in validation.js
+            if(!is_valid_length($(this).val(), 1024)) {
+                $("#noteerror").html('Error, Notes length should be 1024 characters maximum');   
+            } 
+        });		
 	});
 </script>
 {%endblock%}

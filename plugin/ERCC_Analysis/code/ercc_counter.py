@@ -2,13 +2,14 @@
 from __future__ import division
 from __future__ import print_function
 import sys
+import re
 
 def parse_transcript_line(line):
     parsed_line = line.split()
     if parsed_line[0][0] == '@':
         return '@', 'na' #header line or other non-data
-    elif parsed_line[1] != '0': #something other than primary mapping, forward strand
-        return '*', 'na'
+#    elif parsed_line[1] != '0': #something other than primary mapping, forward strand
+#        return '*', 'na'
     elif int(parsed_line[4]) <= 50: #low mapping quality
         return '*', 'na'
     else:
@@ -25,7 +26,10 @@ def process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file):
     with open(path_to_raw_sam_file) as sam_file:
         for line in sam_file:
             transcript_name, transcript_mapq = parse_transcript_line(line)
-            if transcript_name == '*':
+            # if transcript_name == '*':
+            if transcript_name == '@':
+                filtered_sam_file.write(line)
+            elif re.search('^ERCC-\d+$',transcript_name) == None:
                 total_counts += 1
             elif transcript_name in result_counts:
                 result_counts[transcript_name] += 1
@@ -33,8 +37,6 @@ def process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file):
                 total_counts += 1
                 all_ercc_counts += 1
                 mean_mapqs[transcript_name] = total_mapqs[transcript_name]/result_counts[transcript_name]
-                filtered_sam_file.write(line)
-            elif transcript_name == '@':
                 filtered_sam_file.write(line)
             else:
                 result_counts[transcript_name] = 1

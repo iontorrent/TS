@@ -4,19 +4,19 @@
 #include "IonVersion.h"
 #include "ChipIdDecoder.h"
 #endif
+#include <cstdio>
 #include <sys/stat.h>
 #include <libgen.h>
 #include <limits.h>
+#include <errno.h>
+#include <cstring>
 #include <ctype.h>
-#include <dirent.h>
-#include <fcntl.h>
 #include <assert.h>
 #include <stdlib.h>
-#include <iostream>
 #include <time.h>
-#include <fstream>
 #include <iostream>
-#include <sstream> // for istringstream
+#include <unistd.h> // getpid
+#include <math.h>   // isnan
 
 using namespace std;
 
@@ -670,28 +670,29 @@ string get_file_extension (const string& s)
 
 void split (const string& s, char c, vector<string>& v)
 {
-  string::size_type i = 0;
-  string::size_type j = s.find (c);
   v.clear();
-  if (j == string::npos)
-  {
-    v.push_back (s);
-  }
-  else
-  {
-    while (j != string::npos)
+  if (s != "") {
+    string::size_type i = 0;
+    string::size_type j = s.find (c);
+    if (j == string::npos)
     {
-      v.push_back (s.substr (i, j-i));
-      i = ++j;
-      j = s.find (c,j);
-
-      if (j == string::npos)
+      v.push_back (s);
+    }
+    else
+    {
+      while (j != string::npos)
       {
-        v.push_back (s.substr (i, s.length()));
+        v.push_back (s.substr (i, j-i));
+        i = ++j;
+        j = s.find (c,j);
+
+        if (j == string::npos)
+        {
+          v.push_back (s.substr (i, s.length()));
+        }
       }
     }
   }
-
 }
 
 void uintVectorToString (vector<unsigned int> &v, string &s, string &nullStr, char delim)
@@ -873,46 +874,6 @@ int totalMemOnTorrentServer()
   return mem;
 }
 
-// get pin values high and low
-short GetPinHigh()
-{
-  // should this be a supplied parameter like chip type?
-  // no guarantee that chip type always defines pin values
-  ChipIdEnum chipId = ChipIdDecoder::GetGlobalChipId();  //@TODO: bad use of fake global variable smuggled in through static 
-  short pin_high = 0;
-
-  switch (chipId)
-  {
-    case ChipId314:
-      pin_high = 0x3fff;
-      break;
-    case ChipId316:
-      pin_high = 0x3fff;
-      break;
-    case ChipId316v2:
-      pin_high = 0x3fff;
-      break;  
-    case ChipId318:
-      pin_high = 0x3fff;
-      break;
-    case ChipId900:
-      pin_high = 16380;
-      break;
-    case ChipId910:
-      pin_high = 16380;
-      break;
-    default:
-      pin_high = 0x3fff;
-      fprintf (stdout, "Warning! ChipType unknown, defaulting pin_high to %d\n", pin_high);
-  }
-  return (pin_high);
-}
-
-short GetPinLow()
-{
-  short pin_low = 0;
-  return (pin_low);
-}
 
 int GetSystemMemInBuffers()
 {

@@ -10,6 +10,8 @@
 #include <cstring>
 #include <cstdlib>
 #include <fstream>
+#include <errno.h>
+#include <time.h>
 
 #include "Utils.h"
 #include "IonErr.h"
@@ -20,7 +22,7 @@ void ValidateAndCanonicalizePath(string &path);   // Borrowed from BaseCaller.cp
 
 
 BarcodeDatasets::BarcodeDatasets(OptArgs& opts, const string& run_id)
-  : datasets_json_(Json::objectValue), num_barcodes_(0), num_datasets_(0)
+  : datasets_json_(Json::objectValue), num_barcodes_(0), num_datasets_(0), barcode_max_flows_(0)
 {
   string barcode_list_file              = opts.GetFirstString ('b', "barcodes", "off");
   string input_datasets_file            = opts.GetFirstString ('-', "datasets", "");
@@ -39,7 +41,7 @@ BarcodeDatasets::BarcodeDatasets(OptArgs& opts, const string& run_id)
 
 
 BarcodeDatasets::BarcodeDatasets(const string& run_id)
-  : datasets_json_(Json::objectValue), num_barcodes_(0), num_datasets_(0)
+  : datasets_json_(Json::objectValue), num_barcodes_(0), num_datasets_(0), barcode_max_flows_(0)
 {
   InitializeNonbarcoded(run_id);
   EnumerateReadGroups();
@@ -70,6 +72,8 @@ void BarcodeDatasets::LoadJson(const string& filename_json)
   time(&now);
   datasets_json_["meta"]["creation_date"] = get_time_iso_string(now);
 
+  if(not datasets_json_.isMember("barcode_filters"))
+    datasets_json_["barcode_filters"] = Json::objectValue;
 
   num_datasets_ = datasets_json_["datasets"].size();
   num_barcodes_ = 0;
@@ -95,6 +99,8 @@ void BarcodeDatasets::InitializeNonbarcoded(const string& run_id)
 
 
   // Populate datasets table with one dataset: "Nonbarcoded library"
+
+  datasets_json_["barcode_filters"] = Json::objectValue;
 
   datasets_json_["datasets"] = Json::arrayValue;
   datasets_json_["datasets"][0]["dataset_name"] = "Nonbarcoded library";
@@ -125,9 +131,11 @@ void BarcodeDatasets::InitializeFromBarcodeList(const string& run_id, string bar
 
   // Actually populate the json structure
 
+  datasets_json_["barcode_filters"] = Json::objectValue;
+
   datasets_json_["datasets"] = Json::arrayValue;
   datasets_json_["datasets"][0]["dataset_name"] = "Reads not matched to any barcode";
-  datasets_json_["datasets"][0]["file_prefix"] = "bc_files/nomatch_rawlib";
+  datasets_json_["datasets"][0]["file_prefix"] = "nomatch_rawlib";
   datasets_json_["datasets"][0]["read_groups"][0] = run_id + ".nomatch";
   num_barcodes_ = 0;
   num_datasets_ = 1;
@@ -261,7 +269,7 @@ void BarcodeDatasets::InitializeFromBarcodeList(const string& run_id, string bar
       num_barcodes_++;
 
       datasets_json_["datasets"][num_datasets_]["dataset_name"] = string("Barcode ")+barcode_name;
-      datasets_json_["datasets"][num_datasets_]["file_prefix"] = string("bc_files/")+barcode_name+string("_rawlib");
+      datasets_json_["datasets"][num_datasets_]["file_prefix"] = barcode_name+string("_rawlib");
       datasets_json_["datasets"][num_datasets_]["read_groups"][0] = read_group;
       num_datasets_++;
 

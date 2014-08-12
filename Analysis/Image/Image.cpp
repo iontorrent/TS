@@ -35,6 +35,7 @@
 #include "PinnedInFlow.h"
 #include "SynchDat.h"
 #include "IonImageSem.h"
+#include "PCACompression.h"
 
 using namespace std;
 
@@ -66,6 +67,9 @@ Image::Image()
   recklessAbandon = true; // false: use file availability testing during loading
   ignoreChecksumErrors = 0;
 
+  CacheAccessTime=0;
+  SemaphoreWaitTime=0;
+  FileLoadTime=0;
 }
 
 Image::~Image()
@@ -76,7 +80,17 @@ Image::~Image()
   if ( results )
     delete [] results;
   if ( results_folder )
-    free ( results_folder );
+  {
+      try
+      {
+        free ( results_folder );
+      }
+      catch (...)
+      {
+        std::cerr << "~Image error: free results_folder " << results_folder << std::endl << std::flush;
+        exit(1);
+      }
+  }
   if ( bkg )
     free ( bkg );
 
@@ -288,7 +302,6 @@ void Image::JustCacheOneImage(const char *name)
 {
 	int totalLen = 0;
     double startT = TinyTimer();
-    double stopT;
 	char buf[1024 * 1024];
 	int len;
 
@@ -305,17 +318,42 @@ void Image::JustCacheOneImage(const char *name)
 		printf("failed to open %s\n", name);
 	}
 
-	stopT = TinyTimer();
-	fprintf ( stdout, "File %s cache access = %0.2lf sec. with %d bytes\n", name,stopT - startT,totalLen );
-	fflush ( stdout );
+	CacheAccessTime = TinyTimer()-startT;
+//	fprintf ( stdout, "File %s cache access = %0.2lf sec. with %d bytes\n", name,stopT - startT,totalLen );
+//	fflush ( stdout );
 }
 
 
+// This is the actual function
+bool Image::LoadRaw_noWait ( const char *rawFileName, int frames, bool allocate, bool headerOnly)
+{
+    struct stat buffer;
+    //if ( !WaitForMyFileToWakeMeFromSleep ( rawFileName ) )
+    if (stat(rawFileName, &buffer)) // file does not exist
+    {
+        fprintf (stdout, "LoadRaw_noWait warning... file %s doest not exist\n", rawFileName);
+        fflush (stdout);
+        return (false);
+    }
+
+  ( void ) allocate;
+  cleanupRaw();
+
+  //set default name only if not already set
+  if ( !results_folder )
+  {
+    results_folder = ( char * ) malloc ( 3 );
+    strncpy ( results_folder, "./", 3 );
+  }
+
+  //int rc =
+  ActuallyLoadRaw ( rawFileName,frames,headerOnly );
+  return true;
+}
 
 
 // This is the actual function
-bool Image::LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly,
-                      TikhonovSmoother *tikSmoother )
+bool Image::LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly, TikhonovSmoother *tikSmoother )
 {
 //  _file_hdr hdr;
 //  int offset=0;
@@ -411,7 +449,6 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
   if ( frames )
     raw->frames = frames;
 
-
   if ( headerOnly )
   {
     rc = deInterlace_c ( ( char * ) rawFileName,NULL,NULL,
@@ -419,7 +456,7 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
                          0,0,
                          ImageCropping::chipSubRegion.col,ImageCropping::chipSubRegion.row,
                          ImageCropping::chipSubRegion.col+ImageCropping::chipSubRegion.w,ImageCropping::chipSubRegion.row+ImageCropping::chipSubRegion.h,
-                         ignoreChecksumErrors );
+                         ignoreChecksumErrors, &raw->imageState );
   }
   else
   {
@@ -428,19 +465,22 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
 			  ImageCropping::chipSubRegion.row == 0 && ImageCropping::chipSubRegion.h == 0 &&
 			  raw->frames == 0)
 	  { // only cache whole-file reads...
+		  double startT = TinyTimer();
 		  IonImageSem::Take();
+		  SemaphoreWaitTime = TinyTimer()-startT;
 
 		  JustCacheOneImage(rawFileName);
 
 		  IonImageSem::Give();
 	  }
+	  double startT = TinyTimer();
 
     rc = deInterlace_c ( ( char * ) rawFileName,&raw->image,&raw->timestamps,
                          &raw->rows,&raw->cols,&raw->frames,&raw->uncompFrames,
                          0,0,
                          ImageCropping::chipSubRegion.col,ImageCropping::chipSubRegion.row,
                          ImageCropping::chipSubRegion.col+ImageCropping::chipSubRegion.w,ImageCropping::chipSubRegion.row+ImageCropping::chipSubRegion.h,
-                         ignoreChecksumErrors );
+                         ignoreChecksumErrors, &raw->imageState );
 
 
 
@@ -455,11 +495,13 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
 	exit (EXIT_FAILURE);
       }
       TimeStampCalculation();
+      FileLoadTime=TinyTimer()-startT;
   }
 
   raw->frameStride = raw->rows * raw->cols;
 
-  printf ( "Loading raw file: %s...done\n", rawFileName );
+//  printf ( "Loading raw file: %s...done\n", rawFileName );
+
   return ( rc );
 }
 
@@ -501,7 +543,7 @@ bool Image::WaitForMyFileToWakeMeFromSleep ( const char *rawFileName )
     return false;
   }
 
-  printf ( "\nLoading raw file: %s...\n", rawFileName );
+//  printf ( "\nLoading raw file: %s...\n", rawFileName );
   fflush ( stdout );
 //  size_t rdSize;
 
@@ -632,13 +674,13 @@ void Image::SetImage ( RawImage *img )
 //
 //  input time is in milliseconds
 //  returns frame number corresponding to that time
-int Image::GetFrame ( int time )
+int Image::GetFrame ( int time , int offset)
 {
   int frame = 0;
   int prev=0;
   //flowOffset is time between image start and nuke flow.
   //all times provided are relative to the nuke flow.
-  time = time + flowOffset;
+  time = time + offset;
   for ( frame=0;frame < raw->frames;frame++ )
   {
     if ( raw->timestamps[frame] >= time )
@@ -646,8 +688,12 @@ int Image::GetFrame ( int time )
     prev = frame;
   }
 
-
   return ( prev );
+}
+
+int Image::GetFrame ( int time )
+{
+  return GetFrame(time, flowOffset);
 }
 
 // Special:  we usually get >all< the values for a given trace and send them to the bkgmodel.
@@ -784,15 +830,15 @@ typedef union{
 void Image::SetMeanOfFramesToZero ( int startPos, int endPos, int use_compressed_frame_nums )
 {
   // normalize trace data to the input frame per well
-  double stopT,startT = TinyTimer();
+//  double stopT,startT = TinyTimer();
 //  printf ( "SetMeanOfFramesToZero from frame %d to %d\n",startPos,endPos );
   int frame, x, y,rStartPos=0,rEndPos=0;
   int32_t refLA[8];
   v8s16_e refA;
-  v8s16_t *imgV;
+  v8s16_t * __restrict imgV;
   int ref;
   int i = 0;
-  short *imagePtr;
+  short * __restrict imagePtr;
   int nframes = raw->frames;
   int32_t idx;
 
@@ -875,7 +921,7 @@ void Image::SetMeanOfFramesToZero ( int startPos, int endPos, int use_compressed
 	      imagePtr = &raw->image[i];
 	      for ( frame=0;frame<nframes;frame++ )
 	      {
-	    	imgV = (v8s16_t *)imagePtr;
+	    	imgV = (v8s16_t * __restrict)  imagePtr;
 	        *imgV -= refA.V;
 	        imagePtr += raw->frameStride;
 	      }
@@ -883,8 +929,8 @@ void Image::SetMeanOfFramesToZero ( int startPos, int endPos, int use_compressed
 	    }
 	  }
   }
-  stopT = TinyTimer();
-  printf ( "SetMeanOfFramesToZero(%d-%d) in %0.2lf sec\n",startPos,endPos,stopT - startT );
+//  stopT = TinyTimer();
+//  printf ( "SetMeanOfFramesToZero(%d-%d) in %0.2lf sec\n",startPos,endPos,stopT - startT );
 }
 
 void Image::IntegrateRaw ( Mask *mask, MaskType these, int start, int end )
@@ -2368,7 +2414,11 @@ bool Image::LoadSlice (
     }
     else if ( nColFull == 7680 && nRowFull == 5328 )
     {
-      chipID = strdup ( "910" ); // this is for P1.0 but will not work for a thumb nail.
+      chipID = strdup ( "p1.0.19" ); // this is for P1.0 but will not work for a thumb nail.
+    }
+    else if ( nColFull == 7728 && nRowFull == 5328 )
+    {
+      chipID = strdup ( "p1.0.20" ); // this is for P1.0 but will not work for a thumb nail.
     }
     else
     {
@@ -2376,10 +2426,10 @@ bool Image::LoadSlice (
     }
   }
 
-  // Only allow for XTCorrection on 316 and 318 chips
+  // Only allow for XTCorrection on 316, 318 and P1.0 chips
   if ( XTCorrect )
   {
-    if ( ( chipID == NULL ) || ( strcmp ( chipID,"318" ) && strcmp ( chipID,"316" ) && strcmp ( chipID,"316v2" ) && strcmp(chipID,"910")) )
+    if ( ( chipID == NULL ) || ( strcmp ( chipID,"318" ) && strcmp ( chipID,"316" ) && strcmp ( chipID,"316v2" ) && strcmp(chipID,"p1.0.19")) )
     {
       XTCorrect = false;
     }

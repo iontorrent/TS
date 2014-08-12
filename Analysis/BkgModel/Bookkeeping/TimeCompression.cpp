@@ -9,10 +9,15 @@ using namespace std;
 TimeCompression::TimeCompression()
 {
   _npts = 0;
+  _stdFrames = 0;
+  _etfFrames = 0;
+  _uncompressedFrames = 0;
   time_start = 0.0-0.1;  // every data point real by default
   choose_time = 0; // default time
   frames_per_second = 15.0f;
   t0 = -1.0f;
+  etf_tail_start_frame = 0;
+  _standardCompression = true;
   //  frames_per_second = 16.39344f;
 }
  
@@ -22,6 +27,25 @@ void TimeCompression::DeAllocate()
   deltaFrame.clear();
   deltaFrameSeconds.clear();
   frames_per_point.clear();
+  mTimePoints.clear();
+
+  // standard timing compression
+  std_frameNumber.clear();
+  std_deltaFrame.clear();
+  std_deltaFrameSeconds.clear();
+  std_frames_per_point.clear();
+  std_interpolate_mult.clear();
+  std_interpolate_frame.clear();
+  std_mTimePoints.clear();
+
+  // exponentail tail fit timing compression
+  etf_frameNumber.clear();
+  etf_deltaFrame.clear();
+  etf_deltaFrameSeconds.clear();
+  etf_frames_per_point.clear();
+  etf_interpolate_mult.clear();
+  etf_interpolate_frame.clear();
+  etf_mTimePoints.clear();
 }
 
 TimeCompression::~TimeCompression()
@@ -36,13 +60,65 @@ void TimeCompression::Allocate(int imgFrames)
   deltaFrame.resize(imgFrames);
   deltaFrameSeconds.resize(imgFrames); // save recalculation on this
   frames_per_point.resize(imgFrames);
+  mTimePoints.resize(imgFrames);
+
+  // standard timing compression
+  std_frameNumber.resize(imgFrames);
+  std_deltaFrame.resize(imgFrames);
+  std_deltaFrameSeconds.resize(imgFrames);
+  std_frames_per_point.resize(imgFrames);
+  std_interpolate_mult.resize(imgFrames);
+  std_interpolate_frame.resize(imgFrames);
+  std_mTimePoints.resize(imgFrames);
+
+  // exponentail tail fit timing compression
+  etf_frameNumber.resize(imgFrames);
+  etf_deltaFrame.resize(imgFrames);
+  etf_deltaFrameSeconds.resize(imgFrames);
+  etf_frames_per_point.resize(imgFrames);
+  etf_interpolate_mult.resize(imgFrames);
+  etf_interpolate_frame.resize(imgFrames);
+  etf_mTimePoints.resize(imgFrames);
 }
 
 // placeholder:  do time compression correctly
 void TimeCompression::SetUpTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg)
 {
-  SetUpStandardTime(imgFrames, t_comp_start, start_detailed_time, stop_detailed_time, left_avg);
+
+  SetUncompressedFrames(imgFrames);
+
+  DeAllocate();
+  Allocate(imgFrames);
+  switch(choose_time){
+    case 1:
+       HalfSpeedSampling(imgFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
+       break;
+    case 2:
+       // generate both ETF and standard compression but se the compression to ETF
+       SetUpETFCompression(t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
+       SetUpStandardCompression(t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
+       UseETFCompression();
+       break;
+    default:
+       SetUpStandardCompression(t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
+       UseStandardCompression();
+  }
 }
+
+void TimeCompression::SetUpETFCompression(float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg) 
+{
+  ETFCompatible(_uncompressedFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
+  SetUpInterpolationVectorsForETF(_uncompressedFrames);
+  CompressionFromETFFramesPerPoint();
+}
+
+void TimeCompression::SetUpStandardCompression(float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg) 
+{
+  StandardAgain(_uncompressedFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
+  SetUpInterpolationVectorsForStd(_uncompressedFrames);
+  CompressionFromStdFramesPerPoint();
+}
+
 
 // imgFrames, t_compression_start, -5, 16, 5
 void TimeCompression::SetUpOldTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg)
@@ -111,27 +187,9 @@ void TimeCompression::SetUpOldTime(int imgFrames, float t_comp_start, int start_
   npts(npt);
 }
 
-// more flexible: define frames per point
-// then define compression by applying frames per point.
-void TimeCompression::SetUpStandardTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg)
-{
-  DeAllocate();
-  Allocate(imgFrames);
-  switch(choose_time){
-    case 1:
-       HalfSpeedSampling(imgFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
-       break;
-    case 2:
-       ETFCompatible(imgFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
-       break;
-    default:
-       StandardAgain(imgFrames,t_comp_start, start_detailed_time,stop_detailed_time, left_avg);
-  }
-  CompressionFromFramesPerPoint();
-}
-
 int CompressOneStep(int &cur_sum, int step)
 {
+  assert(step > 0);
   int tstep = step;
   cur_sum -= tstep;
   if (cur_sum<0)
@@ -142,56 +200,59 @@ int CompressOneStep(int &cur_sum, int step)
 void TimeCompression::StandardAgain(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg)
 {
   int i_start = (int) t_comp_start+start_detailed_time;
-  int i_done = (int)(t_comp_start+stop_detailed_time);
+  int i_done = min((int)(t_comp_start+stop_detailed_time),imgFrames);
   // go to i_start compressing aggressively
   int cur_pt =0;
   int cur_sum=i_start;
   int i=0;
-  for (; (i<imgFrames) & (cur_sum>0); i++)
+  for (; (i<imgFrames) && (cur_sum>0); i++)
   {
-    frames_per_point[cur_pt] = CompressOneStep(cur_sum,left_avg);
+    std_frames_per_point[cur_pt] = CompressOneStep(cur_sum,left_avg);
     cur_pt++;
   }
   // now do the middle time when we are at full detail
   cur_sum = i_done-i_start;
-  for (; (i<imgFrames) & (cur_sum>0); i++)
+  for (; (i<imgFrames) && (cur_sum>0); i++)
   {
-    frames_per_point[cur_pt] = CompressOneStep(cur_sum,1);
+    std_frames_per_point[cur_pt] = CompressOneStep(cur_sum,1);
     cur_pt++;
   }
   // finally compress the tail very heavily indeed
   int try_step = 2;
   cur_sum = imgFrames-i_done;
- for (; (i<imgFrames) & (cur_sum>0); i++)
+ for (; (i<imgFrames) && (cur_sum>0); i++)
   {
-    frames_per_point[cur_pt] = CompressOneStep(cur_sum,try_step);
+    std_frames_per_point[cur_pt] = CompressOneStep(cur_sum,try_step);
     cur_pt++;
     try_step += 4;
     //try_step *=2;
   }
- npts(cur_pt);
+ SetStandardFrames(cur_pt);
 }
 
 void TimeCompression::ETFCompatible(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg)
 {
   int i_start = (int) t_comp_start+start_detailed_time;
-  int i_done = (int)(t_comp_start+stop_detailed_time);
+  int i_done = min((int)(t_comp_start+stop_detailed_time),imgFrames);
   // go to i_start compressing aggressively
   int cur_pt =0;
   int cur_sum=i_start;
   int i=0;
   for (; (i<imgFrames) & (cur_sum>0); i++)
   {
-    frames_per_point[cur_pt] = CompressOneStep(cur_sum,left_avg);
+    etf_frames_per_point[cur_pt] = CompressOneStep(cur_sum,left_avg);
     cur_pt++;
   }
   // now do the middle time when we are at full detail
   cur_sum = i_done-i_start;
   for (; (i<imgFrames) & (cur_sum>0); i++)
   {
-    frames_per_point[cur_pt] = CompressOneStep(cur_sum,1);
+    etf_frames_per_point[cur_pt] = CompressOneStep(cur_sum,1);
     cur_pt++;
   }
+  
+  // set the start of the tail
+  etf_tail_start_frame = cur_pt;
   // finally compress the tail very heavily indeed
   int try_step = 1;
   float try_step_float = 1.0f;
@@ -199,14 +260,14 @@ void TimeCompression::ETFCompatible(int imgFrames, float t_comp_start, int start
   cur_sum = imgFrames-i_done;
  for (; (i<imgFrames) & (cur_sum>0); i++)
   {
-    frames_per_point[cur_pt] = CompressOneStep(cur_sum,try_step);
+    etf_frames_per_point[cur_pt] = CompressOneStep(cur_sum,try_step);
     cur_pt++;
     try_step_float += try_step_inc;
     try_step = (int)(try_step_float+0.5f);
     if (try_step > 8)
        try_step = 8;
   }
- npts(cur_pt);
+  SetETFFrames(cur_pt);
 }
 
 // What if we were to take data at 7.5 frames per second and average?
@@ -289,7 +350,7 @@ void TimeCompression::HyperTime(int imgFrames, float t_comp_start, int start_det
   npts(cur_pt);
 }
 
-void TimeCompression::StandardFramesPerPoint(int imgFrames,float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg)
+/*void TimeCompression::StandardFramesPerPoint(int imgFrames,float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg)
 {
   // starting point of non-averaged data
   int il = (int) t_comp_start+start_detailed_time;
@@ -339,76 +400,158 @@ void TimeCompression::StandardFramesPerPoint(int imgFrames,float t_comp_start, i
     }
   }
   npts(npt);
-}
+}*/
 
-void TimeCompression::CompressionFromFramesPerPoint()
+void TimeCompression::CompressionFromStdFramesPerPoint()
 {
   // frames_per_point contains the time compression information
   // sum (frames_per_point) = imgFrames
   // npts already defined
   // allocation already assumed
   // apply time compression to 0:(imgFrames-1)
-          int npt = 0;
-          mTimePoints.resize(npts());
-        // do not shift real bead wells at all
-        int cur_frame=0;
-        float  last_fnum = 0.0;
+  size_t npt = 0;
+  std_mTimePoints.resize(_stdFrames);
+  // do not shift real bead wells at all
+  int cur_frame=0;
+  float  last_fnum = 0.0;
 
-        for (;npt < npts();npt++)   // real data
-        {
-            float avg;
-            avg=0.0;
+  for (;npt < _stdFrames; npt++)   // real data
+  {
+    float avg;
+    avg=0.0;
 
-            for (int i=0;i<frames_per_point[npt];i++)
-            {
-                avg += i+cur_frame;
-            }
-            frameNumber[npt] = (avg / frames_per_point[npt]);
+    for (int i=0; i<std_frames_per_point[npt]; i++)
+    {
+      avg += i + cur_frame;
+    }
+    std_frameNumber[npt] = (avg / std_frames_per_point[npt]);
 
-            deltaFrame[npt] = frameNumber[npt] - last_fnum;
-            deltaFrameSeconds[npt] = deltaFrame[npt]/frames_per_second; // cache for hydrogen generation
+    std_deltaFrame[npt] = std_frameNumber[npt] - last_fnum;
+    std_deltaFrameSeconds[npt] = std_deltaFrame[npt]/frames_per_second; // cache for hydrogen generation
 
-            last_fnum = frameNumber[npt];            
-            cur_frame+=frames_per_point[npt];
-            mTimePoints[npt] = (float) (cur_frame-1) / frames_per_second;
-
-        }
-	// char buff[10000];
-	// int n = 0;
-	// n += sprintf(&buff[n], "Timepoints: \n");
-	// for (int i = 0; i < npts(); i++) {
-	//   n += sprintf(&buff[n], "%d\t%f\t%d\t%d\n", i, mTimePoints[i], frames_per_point[npt], npts());
-        // }
-	// buff[n] = '\0';
-	// fprintf(stdout, buff);
-
-/*
- * Ben's optimized implementation - approximately 1.8x faster for idential output
- */
-//        int     npt       = 0;
-//        float   cur_frame = -0.5f;
-//        float   last_fnum = 0.0f;
-//        float   oneOnFPS  = 1.0f / frames_per_second;
-//        register float thisFPP;
-//        float last = 0.0f;
-//
-//        mTimePoints.resize(npts());
-//        for (;npt < npts();npt++)   // real data
-//        {
-//            thisFPP = (float) frames_per_point[npt];
-//            mTimePoints[npt] = thisFPP * oneOnFPS + last;
-//            last = mTimePoints[npt];
-//
-//            frameNumber[npt] = thisFPP * 0.5f + cur_frame;
-//            deltaFrame[npt] = frameNumber[npt] - last_fnum;
-//            deltaFrameSeconds[npt] = deltaFrame[npt] * oneOnFPS; // cache for hydrogen generation
-//
-//            last_fnum  = frameNumber[npt];
-//            cur_frame += thisFPP;
-//        }
-
+    last_fnum = std_frameNumber[npt];            
+    cur_frame+=std_frames_per_point[npt];
+    std_mTimePoints[npt] = (float) (cur_frame-1) / frames_per_second;
+  }
 }
 
+void TimeCompression::CompressionFromETFFramesPerPoint()
+{
+  // frames_per_point contains the time compression information
+  // sum (frames_per_point) = imgFrames
+  // npts already defined
+  // allocation already assumed
+  // apply time compression to 0:(imgFrames-1)
+  size_t npt = 0;
+  etf_mTimePoints.resize(_etfFrames);
+  
+  // do not shift real bead wells at all
+  int cur_frame=0;
+  float  last_fnum = 0.0;
+
+  for (; npt < _etfFrames; npt++)   // real data
+  {
+    float avg;
+    avg=0.0;
+
+    for (int i=0;i<etf_frames_per_point[npt];i++)
+    {
+      avg += i+cur_frame;
+    }
+    etf_frameNumber[npt] = (avg / etf_frames_per_point[npt]);
+
+    etf_deltaFrame[npt] = etf_frameNumber[npt] - last_fnum;
+    etf_deltaFrameSeconds[npt] = etf_deltaFrame[npt]/frames_per_second; // cache for hydrogen generation
+
+    last_fnum = etf_frameNumber[npt];            
+    cur_frame += etf_frames_per_point[npt];
+    etf_mTimePoints[npt] = (float) (cur_frame-1) / frames_per_second;
+  }
+}
+
+void TimeCompression::SetUpInterpolationVectorsForETF(int imgFrames) {
+
+  int j=0; // tracking actual uncompressed frame number
+  int frames = static_cast<int>(_etfFrames);
+  for (int i=0; i<frames; ++i) {
+    for (int pt=1; pt<=etf_frames_per_point[i]; ++pt) {
+      etf_interpolate_frame[j] = i;      
+      etf_interpolate_mult[j++] = 
+        (static_cast<float>(etf_frames_per_point[i]) - static_cast<float>(pt)) / static_cast<float>(etf_frames_per_point[i]);      
+    }
+  }
+  assert(imgFrames == j);
+}
+
+void TimeCompression::SetUpInterpolationVectorsForStd(int imgFrames) {
+
+  int j=0; // tracking actual uncompressed frame number
+  int frames = static_cast<int>(_stdFrames);
+  for (int i=0; i<frames; ++i) {
+    for (int pt=1; pt<=std_frames_per_point[i]; ++pt) {
+      std_interpolate_frame[j] = i;
+      std_interpolate_mult[j++] = 
+        (static_cast<float>(std_frames_per_point[i]) - static_cast<float>(pt)) / static_cast<float>(std_frames_per_point[i]);
+    }
+  }
+  assert(imgFrames == j);
+}
+
+
+void TimeCompression::UseStandardCompression() {
+  _standardCompression = true;
+  npts(_stdFrames);
+  frameNumber =  std_frameNumber;
+  deltaFrame = std_deltaFrame;
+  deltaFrameSeconds = std_deltaFrameSeconds;
+  frames_per_point = std_frames_per_point;
+  mTimePoints = std_mTimePoints;
+}
+
+
+void TimeCompression::UseETFCompression() {
+  _standardCompression = false;
+  npts(_etfFrames);
+  frameNumber =  etf_frameNumber;
+  deltaFrame = etf_deltaFrame;
+  deltaFrameSeconds = etf_deltaFrameSeconds;
+  frames_per_point = etf_frames_per_point;
+  mTimePoints = etf_mTimePoints;
+}
+
+void TimeCompression::SetStandardFrames(int npt){
+  _stdFrames = (size_t)npt;
+  std_frameNumber.resize(_stdFrames);
+  std_deltaFrame.resize(_stdFrames);
+  std_deltaFrameSeconds.resize(_stdFrames);
+  std_frames_per_point.resize(_stdFrames);
+  std_mTimePoints.resize(_stdFrames);
+}
+
+void TimeCompression::SetETFFrames(int npt){
+  _etfFrames = (size_t)npt;
+  etf_frameNumber.resize(_etfFrames);
+  etf_deltaFrame.resize(_etfFrames);
+  etf_deltaFrameSeconds.resize(_etfFrames);
+  etf_frames_per_point.resize(_etfFrames);
+  etf_mTimePoints.resize(_etfFrames);
+}
+
+void TimeCompression::npts(int npt){
+  _npts = (size_t)npt;
+  frameNumber.resize(_npts);
+  deltaFrame.resize(_npts);
+  deltaFrameSeconds.resize(_npts);
+  frames_per_point.resize(_npts);
+  mTimePoints.resize(_npts);
+}
+
+
+//////////////////////////////////////////////////////////////
+//
+// Synchronized DAT routines
+//
+//////////////////////////////////////////////////////////////
 
 void TimeCompression::SetupConvertVfcTimeSegments(int frames, int *timestamps, int baseFrameRate, int frameStep) {
   std::vector<int> vfc_time(&timestamps[0], &timestamps[0] + frames);
@@ -508,16 +651,6 @@ void TimeCompression::ReportVfcConversion(int frames, int *timestamps, int baseF
     out << std::endl;
     cur_time += deltaFrameSeconds[i] * 1000;
   }
-}
-
-int TimeCompression::npts(int npt){
-  _npts = (size_t)npt;
-  frameNumber.resize(_npts);
-  deltaFrame.resize(_npts);
-  deltaFrameSeconds.resize(_npts);
-  frames_per_point.resize(_npts);
-  mTimePoints.resize(_npts);
-  return (_npts);
 }
 
 size_t TimeCompression::SecondsToIndex(float seconds){

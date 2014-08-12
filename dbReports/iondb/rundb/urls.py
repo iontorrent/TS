@@ -58,11 +58,12 @@ v1_api.register(api.NetworkResource())
 v1_api.register(api.IonReporter())
 
 v1_api.register(api.ProjectResource())
+v1_api.register(api.ProjectResultsResource())
 v1_api.register(api.UserResource())
 
 v1_api.register(api.CompositeResultResource())
 v1_api.register(api.CompositeExperimentResource())
-v1_api.register(api.MonitorExperimentResource())
+v1_api.register(api.MonitorResultResource())
 
 v1_api.register(api.ApplProductResource())
 v1_api.register(api.QCTypeResource())
@@ -94,6 +95,7 @@ v1_api.register(api.OneTouchPlanTemplateSummaryResource())
 
 v1_api.register(api.AvailablePlannedExperimentSummaryResource())
 v1_api.register(api.PlanTemplateSummaryResource())
+v1_api.register(api.PlanTemplateBasicInfoResource())
 
 v1_api.register(api.ApplicationGroupResource())
 v1_api.register(api.SampleGroupType_CVResource())
@@ -108,6 +110,9 @@ v1_api.register(api.SampleAttributeDataTypeResource())
 
 v1_api.register(api.AnalysisArgsResource())
 
+v1_api.register(api.FileMonitorResource())
+v1_api.register(api.SupportUploadResource())
+
 urlpatterns = patterns(
     'iondb.rundb',
     url(r'^$', 'data.views.rundb_redirect'),
@@ -117,8 +122,8 @@ urlpatterns = patterns(
     (r'^getOldPDF/(?P<pkR>.*)/$', 'views.PDFGenOld'),
     #(r'^blank/$', 'views.blank', {'tab': False}),
     (r'^tfcsv/$', 'views.tf_csv'),
-    (r'^getPDF/(?P<pkR>.*)/$', 'views.PDFGen'),    
-    
+    (r'^getPDF/(?P<pkR>.*)/$', 'views.PDFGen'),
+
     (r'^islive/(\d+)$', 'ajax.analysis_liveness'),
     (r'^star/(\d+)/(\d)$', 'ajax.starRun'),
     (r'^progress_bar/(\d+)$', 'ajax.progress_bar'),
@@ -128,20 +133,22 @@ urlpatterns = patterns(
 
     (r'^report/(\d+)$', 'views.displayReport'),
     (r'^graphiframe/(\d+)/$', 'report.classic.graph_iframe'),
-     
-    (r'^publish/frame/(\w+)$', 'publishers.publisher_upload', {"frame": True}),  #REFACTOR: move to rundb/configure 
-    (r'^publish/api/(?P<pub_name>\w+)$', 'publishers.publisher_api_upload'),  #REFACTOR: move to rundb/configure 
-    (r'^publish/plupload/(?P<pub_name>\w+)/$', 'publishers.write_plupload'),  #REFACTOR: move to rundb/configure 
-    (r'^publish/(\w+)$', 'publishers.publisher_upload'),  #REFACTOR: move to rundb/configure 
-    (r'^publish/$', 'publishers.upload_view'),  #REFACTOR: move to rundb/configure 
-    (r'^published/$', 'publishers.list_content'),  #REFACTOR: move to rundb/configure 
-    (r'^uploadstatus/(\d+)/$', 'publishers.upload_status'),  #REFACTOR: move to rundb/configure 
-    (r'^uploadstatus/frame/(\d+)/$', 'publishers.upload_status', {"frame": True}),  #REFACTOR: move to rundb/configure 
-    (r'^uploadstatus/download/(\d+)/$', 'publishers.upload_download'),  #REFACTOR: move to rundb/configure 
-    (r'^content/(\d+)/$', 'publishers.content_details'),  #REFACTOR: move to rundb/configure 
-    (r'^content/download/(\d+)/$', 'publishers.content_download'),  #REFACTOR: move to rundb/configure 
-    (r'^content/targetregions/add/$', 'publishers.content_add', {'hotspot': False}),  #REFACTOR: move to rundb/configure 
-    (r'^content/hotspots/add/$', 'publishers.content_add', {'hotspot': True}),  #REFACTOR: move to rundb/configure 
+
+    (r'^publish/frame/(\w+)$', 'publishers.publisher_upload', {"frame": True}),  #REFACTOR: move to rundb/configure
+    (r'^publish/api/(?P<pub_name>\w+)$', 'publishers.publisher_api_upload'),  #REFACTOR: move to rundb/configure
+    (r'^publish/plupload/(?P<pub_name>\w+)/$', 'publishers.write_plupload'),  #REFACTOR: move to rundb/configure
+    (r'^publish/(\w+)$', 'publishers.publisher_upload'),  #REFACTOR: move to rundb/configure
+    (r'^publish/$', 'publishers.upload_view'),  #REFACTOR: move to rundb/configure
+    (r'^published/$', 'publishers.list_content'),  #REFACTOR: move to rundb/configure
+    (r'^uploadstatus/(\d+)/$', 'publishers.upload_status'),  #REFACTOR: move to rundb/configure
+    (r'^uploadstatus/frame/(\d+)/$', 'publishers.upload_status', {"frame": True}),  #REFACTOR: move to rundb/configure
+    (r'^uploadstatus/download/(\d+)/$', 'publishers.upload_download'),  #REFACTOR: move to rundb/configure
+    (r'^content/(\d+)/$', 'publishers.content_details'),  #REFACTOR: move to rundb/configure
+    (r'^content/download/(\d+)/$', 'publishers.content_download'),  #REFACTOR: move to rundb/configure
+    (r'^content/targetregions/add/$', 'publishers.content_add', {'hotspot': False}),  #REFACTOR: move to rundb/configure
+    (r'^content/hotspots/add/$', 'publishers.content_add', {'hotspot': True}),  #REFACTOR: move to rundb/configure
+
+    (r'^updateruninfo/$', 'views.updateruninfo'),
 
     (r'^demo_consumer/?(?P<name>\w+)', 'events.demo_consumer'),
 

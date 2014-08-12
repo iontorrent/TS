@@ -10,7 +10,7 @@ class Migration(SchemaMigration):
 
     def forwards(self, orm):
 
-        # Not gonna make applicationgroup field mandatory as per consensus with Kirindi.
+        # Not gonna make applicationgroup field mandatory
         db.alter_column(u'rundb_plannedexperiment', 'applicationGroup_id', self.gf('django.db.models.fields.related.ForeignKey')(to=orm['rundb.ApplicationGroup'], null=True))
 
     def backwards(self, orm):

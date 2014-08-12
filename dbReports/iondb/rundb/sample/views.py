@@ -30,7 +30,7 @@ import csv
 from django.core.exceptions import ValidationError
 
 from iondb.rundb.models import Sample, SampleSet, SampleSetItem, SampleAttribute, SampleGroupType_CV,  \
-    SampleAnnotation_CV, SampleAttributeDataType, SampleAttributeValue, PlannedExperiment, dnaBarcode
+    SampleAnnotation_CV, SampleAttributeDataType, SampleAttributeValue, PlannedExperiment, dnaBarcode, GlobalConfig
 
 #from iondb.rundb.api import SampleSetItemInfoResource
 
@@ -56,6 +56,61 @@ def clear_samplesetitem_session(request):
     return HttpResponse("Manually Entered Sample session has been cleared")
 
 
+def _get_sample_groupType_CV_list(request):
+    sample_groupType_CV_list = None
+    isSupported = GlobalConfig.objects.all()[0].enable_compendia_OCP
+    
+    if (isSupported):
+        sample_groupType_CV_list = SampleGroupType_CV.objects.all().order_by("displayedName")
+    else:
+        sample_groupType_CV_list = SampleGroupType_CV.objects.all().exclude(displayedName = "DNA_RNA").order_by("displayedName")
+
+    return sample_groupType_CV_list
+
+
+def _get_sampleSet_list(request):
+    sampleSet_list = None    
+    isSupported = GlobalConfig.objects.all()[0].enable_compendia_OCP
+    
+    if (isSupported):
+        sampleSet_list = SampleSet.objects.all().order_by("-lastModifiedDate", "displayedName")
+    else:
+        sampleSet_list = SampleSet.objects.all().exclude(SampleGroupType_CV__displayedName = "DNA_RNA").order_by("-lastModifiedDate", "displayedName")   
+
+    return sampleSet_list
+
+
+def _get_all_userTemplates(request):
+    isSupported = GlobalConfig.objects.all()[0].enable_compendia_OCP
+    
+    all_templates = None
+    if isSupported:
+        all_templates = PlannedExperiment.objects.filter(isReusable=True,
+                                                     isSystem=False).order_by('applicationGroup', 'sampleGrouping', '-date', 'planDisplayedName')
+
+    else:
+        all_templates = PlannedExperiment.objects.filter(isReusable=True,
+                                                     isSystem=False).exclude(sampleGrouping__displayedName = "DNA_RNA").order_by('applicationGroup', 'sampleGrouping', '-date', 'planDisplayedName')
+        
+    return all_templates
+
+
+def _get_all_systemTemplates(request):
+    isSupported = GlobalConfig.objects.all()[0].enable_compendia_OCP
+    
+    all_templates = None
+    if isSupported:
+        all_templates = PlannedExperiment.objects.filter(isReusable=True,
+                                                     isSystem=True, isSystemDefault=False).order_by('applicationGroup', 'sampleGrouping', 'planDisplayedName')
+
+    else:
+        all_templates = PlannedExperiment.objects.filter(isReusable=True,
+                                                     isSystem=True, isSystemDefault=False).exclude(sampleGrouping__displayedName = "DNA_RNA").order_by('applicationGroup', 'sampleGrouping', 'planDisplayedName')
+        
+    return all_templates
+
+
+       
 @login_required
 def show_samplesets(request):
     """
@@ -70,8 +125,9 @@ def show_samplesets(request):
     custom_sample_column_list = list(SampleAttribute.objects.filter(isActive = True).values_list('displayedName', flat=True).order_by('id'))
     ##custom_sample_column_list = SampleAttribute.objects.filter(isActive = True).order_by('id')
 
-    sample_groupType_CV_list = SampleGroupType_CV.objects.all().order_by("displayedName")
-    sample_role_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "relationshiptRole").order_by('value')
+    sample_groupType_CV_list = _get_sample_groupType_CV_list(request)
+    
+    sample_role_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "relationshipRole").order_by('value')
     
     ctxd = {
             ##'custom_sample_column_objs' : custom_sample_column_objs,
@@ -112,6 +168,9 @@ def download_samplefile_format(request):
             , import_sample_processor.COLUMN_GROUP_TYPE
             , import_sample_processor.COLUMN_GROUP
             , import_sample_processor.COLUMN_SAMPLE_DESCRIPTION
+            , import_sample_processor.COLUMN_CANCER_TYPE
+            , import_sample_processor.COLUMN_CELLULARITY_PCT          
+            , import_sample_processor.COLUMNS_BARCODE_KIT
             , import_sample_processor.COLUMN_BARCODE
             ]
     
@@ -131,9 +190,11 @@ def show_import_samplesetitems(request):
     """
     
     ctxd = {}
-    sampleSet_list = SampleSet.objects.all().order_by("-lastModifiedDate", "displayedName")
-    sampleGroupType_list = list(SampleGroupType_CV.objects.filter(isActive=True).order_by("displayedName"))
 
+    sampleSet_list = _get_sampleSet_list(request)
+
+    sampleGroupType_list = list(_get_sample_groupType_CV_list(request))
+    
     ctxd = {
             'sampleSet_list': sampleSet_list,
             'sampleGroupType_list': sampleGroupType_list
@@ -150,8 +211,8 @@ def show_add_sampleset(request):
     """
     
     ctxd = {}
-    sampleGroupType_list = SampleGroupType_CV.objects.filter(isActive=True).order_by("displayedName")
-     
+    sampleGroupType_list = _get_sample_groupType_CV_list(request)
+    
     ctxd = {
             'sampleSet' : None,
             'sampleGroupType_list': sampleGroupType_list,
@@ -170,8 +231,8 @@ def show_edit_sampleset(request, _id):
     ctxd = {}
        
     sampleSet = get_object_or_404(SampleSet, pk = _id)
-    sampleGroupType_list = SampleGroupType_CV.objects.filter(isActive=True).order_by("displayedName")
-     
+    sampleGroupType_list = _get_sample_groupType_CV_list(request)
+    
     ctxd = {
             'sampleSet' : sampleSet,
             'sampleGroupType_list': sampleGroupType_list,
@@ -188,16 +249,14 @@ def show_plan_run(request, _id):
     """
     ctxd = {}
     sampleSet = get_object_or_404(SampleSet, pk = _id)
-    all_templates = PlannedExperiment.objects.filter(isReusable=True,
-                                                     isSystem=False).order_by('sampleGrouping', '-date', 'planDisplayedName')
-    
+    all_templates = _get_all_userTemplates(request)
+
     all_templates = all_templates.extra(select={'sg_name': 
                                                 'select "displayedName" from %s where "rundb_samplegrouptype_cv"."id" = %s' %
                                                 ('"rundb_samplegrouptype_cv"', '"rundb_plannedexperiment"."sampleGrouping_id"')})
 
-    #we want to display the system templates last
-    all_systemTemplates = PlannedExperiment.objects.filter(isReusable=True,
-                                                     isSystem=True, isSystemDefault=False).order_by('sampleGrouping', 'planDisplayedName')
+    #we want to display the system templates last    
+    all_systemTemplates = _get_all_systemTemplates(request)
     
     all_systemTemplates = all_systemTemplates.extra(select={'sg_name': 
                                                 'select "displayedName" from %s where "rundb_samplegrouptype_cv"."id" = %s' %
@@ -321,9 +380,9 @@ def save_samplesetitem(request):
         intent = request.POST.get('intent',None)
  
         logger.debug("at views.save_samplesetitem() intent=%s" %(intent))
-        ##json_data = simplejson.loads(request.raw_post_data)
-        raw_data = request.raw_post_data
-        logger.debug('views.save_samplesetitem POST.raw_post_data... raw_post_data: "%s"' % raw_data)
+        ##json_data = simplejson.loads(request.body)
+        raw_data = request.body
+        logger.debug('views.save_samplesetitem POST.body... body: "%s"' % raw_data)
         logger.debug('views.save_samplesetitem request.session: "%s"' % request.session)
             
         #TODO: validation (including checking the status)
@@ -337,9 +396,16 @@ def save_samplesetitem(request):
 
             transaction.rollback()
             return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
+        
+        logger.debug("views.save_samplesetitem() B4 validate_barcoding queryDict=%s" %(queryDict))
 
-        isValid, errorMessage = sample_validator.validate_barcoding(request, queryDict)
-
+        try:
+            isValid, errorMessage = sample_validator.validate_barcoding(request, queryDict)
+        except:
+            logger.exception(format_exc())
+            transaction.rollback()            
+            return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")            
+            
         if errorMessage:
             transaction.rollback()
             return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")
@@ -431,9 +497,9 @@ def save_input_samples_for_sampleset(request):
     """
      
     if request.method == "POST":
-        ##json_data = simplejson.loads(request.raw_post_data)
-        raw_data = request.raw_post_data
-        logger.debug('views.save_input_samples_for_sampleset POST.raw_post_data... raw_post_data: "%s"' % raw_data)
+        ##json_data = simplejson.loads(request.body)
+        raw_data = request.body
+        logger.debug('views.save_input_samples_for_sampleset POST.body... body: "%s"' % raw_data)
         logger.debug('views.save_input_samples_for_sampleset request.session: "%s"' % request.session)
             
         #TODO: validation
@@ -500,6 +566,12 @@ def save_input_samples_for_sampleset(request):
                 sampleRelationshipRole = pending_sampleSetItem.get("relationshipRole", "")
                 sampleRelationshipGroup = pending_sampleSetItem.get("relationshipGroup", "")
 
+                sampleCancerType = pending_sampleSetItem.get("cancerType", "")
+
+                sampleCellularityPct = pending_sampleSetItem.get("cellularityPct", None)
+                if sampleCellularityPct == "":
+                    sampleCellularityPct = None
+
                 selectedBarcodeKit = pending_sampleSetItem.get("barcodeKit", "")
                 selectedBarcode = pending_sampleSetItem.get("barcode", "")
                 
@@ -511,7 +583,7 @@ def save_input_samples_for_sampleset(request):
                     #return HttpResponse(errorMessage, mimetype="text/html")
                     return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
                 
-                views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, selectedBarcode)
+                views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct)
                    
             clear_samplesetitem_session(request)
                        
@@ -602,9 +674,12 @@ def save_import_samplesetitems(request):
     try:
         for index, row in enumerate(reader, start=1):
             logger.debug("LOOP views.save_import_samples_for_sampleset() validate_csv_sample...index=%d; row=%s" %(index, row))
-            errorMsg, isToSkipRow = import_sample_processor.validate_csv_sample(row, request)
+            errorMsg, isToSkipRow, isToAbort = import_sample_processor.validate_csv_sample(row, request)
             if errorMsg:
-                failed[index] = errorMsg
+                if isToAbort:
+                    failed["File"] = errorMsg
+                else:
+                    failed[index] = errorMsg
             elif isToSkipRow:
                 logger.debug("views.save_import_samples_for_sampleset() SKIPPED ROW index=%d; row=%s" %(index, row))            
                 continue
@@ -612,8 +687,15 @@ def save_import_samplesetitems(request):
                 rawSampleDataList.append(row)
                 row_count += 1  
 
-        #now validate that all barcode kit are the same      
-        errorMsg = import_sample_processor.validate_barcodes(rawSampleDataList)
+            if isToAbort:
+                r = {"status": ERROR_MSG_SAMPLE_IMPORT_VALIDATION, "failed": failed}
+                logger.info("views.save_import_samples_for_sampleset() failed=%s" %(r))
+               
+                transaction.rollback()
+                return HttpResponse(json.dumps(r), mimetype="text/html")
+                    
+        #now validate that all barcode kit are the same and that each combo of barcode kit and barcode id_str is unique
+        errorMsg = import_sample_processor.validate_barcodes_are_unique(rawSampleDataList)
         if errorMsg:
             for k, v in errorMsg.items():
                 failed[k] = [v]
@@ -728,10 +810,12 @@ def show_add_pending_samplesetitem(request):
     
     ctxd = {}
 
-    sample_groupType_CV_list = SampleGroupType_CV.objects.all().order_by("displayedName")
+    sample_groupType_CV_list = _get_sample_groupType_CV_list(request)
+
     sample_role_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "relationshipRole").order_by('value')    
     gender_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "gender").order_by('value')
-
+    cancerType_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "cancerType").order_by('value')
+    
     sampleAttribute_list = SampleAttribute.objects.filter(isActive = True).order_by('id')    
     
     barcodeKits = list(dnaBarcode.objects.values('name').distinct().order_by('name'))
@@ -742,6 +826,7 @@ def show_add_pending_samplesetitem(request):
             'sample_groupType_CV_list' : sample_groupType_CV_list,
             'sample_role_CV_list' : sample_role_CV_list,
             'gender_CV_list' : gender_CV_list,
+            'cancerType_CV_list' : cancerType_CV_list,
             'sampleAttribute_list' : sampleAttribute_list,
             'sampleAttributeValue_list' : None, 
             "selectedBarcodeKitName" : None,            
@@ -770,11 +855,12 @@ def show_edit_pending_samplesetitem(request, pending_sampleSetItemId):
         msg = "Error, The selected sample is no longer available for this session."
         return HttpResponse(msg, mimetype="text/html")
     
-    sample_role_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "relationshipRole").order_by('value')    
-    
-    sample_groupType_CV_list = SampleGroupType_CV.objects.all().order_by("displayedName")
+    sample_role_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "relationshipRole").order_by('value')  
+
+    sample_groupType_CV_list = _get_sample_groupType_CV_list(request)
     
     gender_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "gender").order_by('value')
+    cancerType_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "cancerType").order_by('value')
 
     sampleAttribute_list = SampleAttribute.objects.filter(isActive = True).order_by('id')
             
@@ -789,6 +875,7 @@ def show_edit_pending_samplesetitem(request, pending_sampleSetItemId):
             'sample_groupType_CV_list' : sample_groupType_CV_list,
             'sample_role_CV_list' : sample_role_CV_list,
             'gender_CV_list' : gender_CV_list,
+            'cancerType_CV_list' : cancerType_CV_list,
             'sampleAttribute_list' : sampleAttribute_list,
             'sampleAttributeValue_list' : sampleAttributeValue_list,
             "selectedBarcodeKitName" : None,            
@@ -834,8 +921,10 @@ def show_save_input_samples_for_sampleset(request):
     show the page to allow user to assign input samples to a sample set and trigger save
     """
     ctxd = {}
-    sampleSet_list = SampleSet.objects.all().order_by("-lastModifiedDate", "displayedName")
-    sampleGroupType_list = list(SampleGroupType_CV.objects.filter(isActive=True).order_by("displayedName"))
+
+    sampleSet_list = _get_sampleSet_list(request)
+
+    sampleGroupType_list = list(_get_sample_groupType_CV_list(request))
 
     ctxd = {
             'sampleSet_list': sampleSet_list,
@@ -1134,14 +1223,19 @@ def show_edit_sample_for_sampleset(request, sampleSetItemId):
 
     sampleSetItem = get_object_or_404(SampleSetItem, pk = sampleSetItemId)
 
-    sample_role_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "relationshipRole").order_by('value')    
+    sample_role_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "relationshipRole").order_by('value')  
+
+    #if sample grouping is selected, try to limit to whatever relationship roles are compatible.  But if none is compatible, include all  
     selectedGroupType = sampleSetItem.sampleSet.SampleGroupType_CV
     if selectedGroupType:
-        sample_role_CV_list = SampleAnnotation_CV.objects.filter(sampleGroupType_CV = selectedGroupType, annotationType = "relationshipRole").order_by('value')
-    
-    sample_groupType_CV_list = SampleGroupType_CV.objects.all().order_by("displayedName")
+        filtered_sample_role_CV_list = SampleAnnotation_CV.objects.filter(sampleGroupType_CV = selectedGroupType, annotationType = "relationshipRole").order_by('value')
+        if filtered_sample_role_CV_list:
+            sample_role_CV_list = filtered_sample_role_CV_list
+
+    sample_groupType_CV_list = _get_sample_groupType_CV_list(request)
     
     gender_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "gender").order_by('value')
+    cancerType_CV_list = SampleAnnotation_CV.objects.filter(annotationType = "cancerType").order_by('value')
 
     sampleAttribute_list = SampleAttribute.objects.filter(isActive = True).order_by('id')    
     ##sampleAttributeValue_list = SampleAttributeValue.objects.filter(sample = sampleSetItem.sample).order_by('sampleAttribute_id')
@@ -1168,19 +1262,15 @@ def show_edit_sample_for_sampleset(request, sampleSetItemId):
 
     barcodeKits = list(dnaBarcode.objects.values('name').distinct().order_by('name'))
     barcodeInfo = list(dnaBarcode.objects.all().order_by('name', 'index'))
-            
-    selectedBarcodeKit = None
-    if (sampleSetItem.barcode):
-        barcodes = dnaBarcode.objects.filter(id_str = sampleSetItem.barcode)
-        if (barcodes):
-            selectedBarcodeKit = barcodes[0].name
-                          
-            
+
+    selectedBarcodeKit = sampleSetItem.dnabarcode.name if sampleSetItem.dnabarcode else None                
+
     ctxd = {
             'sampleSetItem' : sampleSetItem,
             'sample_groupType_CV_list' : sample_groupType_CV_list,
             'sample_role_CV_list' : sample_role_CV_list,
             'gender_CV_list' : gender_CV_list,
+            'cancerType_CV_list' : cancerType_CV_list,
             'sampleAttribute_list' : sampleAttribute_list,
             'sampleAttributeValue_list' : sampleAttributeValue_list, 
             ##'sampleAttributeValue_dict' : simplejson.dumps(sampleAttributeValue_dict),  

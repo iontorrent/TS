@@ -74,12 +74,14 @@ void ProgramState::Save(CommandLineOpts &clo, SeqListClass &seq, ImageSpecClass 
 
 void ProgramState::AddBkgControl(Json::Value &json,BkgModelControlOpts &bkg_control) 
 {
-  json["wellsCompression"] = bkg_control.wellsCompression;
+  json["wellsCompression"] = bkg_control.signal_chunks.wellsCompression;
+  json["flow_block_sequence"] = bkg_control.signal_chunks.flow_block_sequence.ToString();
+  json["regional_smoothing_alpha"] = bkg_control.regional_smoothing.alpha;
+  json["regional_smoothing_gamma"] = bkg_control.regional_smoothing.gamma;
 }
 
 void ProgramState::AddModControl(Json::Value &json, ModuleControlOpts &mod_control)
 {
-  json["USE_BKGMODEL"] = mod_control.USE_BKGMODEL;
   json["passTau"] = mod_control.passTau;
 }
 
@@ -114,11 +116,11 @@ void ProgramState::AddSysContext(Json::Value &json, SystemContext &sys_context)
   json["tmpWellsFile"] = sys_context.tmpWellsFile;
   json["runId"] = sys_context.runId;
   json["wellsFilePath"] = sys_context.wellsFilePath;
-  json["wellStatFile"] = (sys_context.wellStatFile) ? sys_context.wellStatFile : "";
+  json["wellStatFile"] = (sys_context.wellStatFile.length() > 0) ? sys_context.wellStatFile : "";
   json["NO_SUBDIR"] = sys_context.NO_SUBDIR;
   json["LOCAL_WELLS_FILE"] = sys_context.LOCAL_WELLS_FILE;
   json["wellsFormat"] = sys_context.wellsFormat;
-  json["explog_path"] = (sys_context.explog_path) ? sys_context.explog_path : "";
+  json["explog_path"] = (sys_context.explog_path.length() > 0) ? sys_context.explog_path : "";
 }
 
 void ProgramState::AddBfdControl(Json::Value &json, BeadfindControlOpts &bfd_control)
@@ -257,13 +259,15 @@ void ProgramState::LoadState(CommandLineOpts &clo, SeqListClass &seq, ImageSpecC
 
 void ProgramState::SetBkgControl(Json::Value &json, BkgModelControlOpts &bkg_control) 
 {
-  bkg_control.wellsCompression = json["wellsCompression"].asUInt();
+  bkg_control.signal_chunks.wellsCompression = json["wellsCompression"].asUInt();
+  bkg_control.signal_chunks.flow_block_sequence.Set( json["flow_block_sequence"].asCString() );
+  bkg_control.regional_smoothing.alpha = json["regional_smoothing_alpha"].asFloat();
+  bkg_control.regional_smoothing.gamma = json["regional_smoothing_gamma"].asFloat();
 }
 
 void ProgramState::SetModControl(Json::Value &json, ModuleControlOpts &mod_control)
 {
   mod_control.BEADFIND_ONLY = 0;
-  mod_control.USE_BKGMODEL = json["USE_BKGMODEL"].asBool();
   mod_control.passTau = json["passTau"].asBool();
   mod_control.reusePriorBeadfind = true; 
 }

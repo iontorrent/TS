@@ -13,7 +13,7 @@ from django.contrib.auth.decorators import login_required
 
 @login_required
 def news(request):
-	profile = request.user.get_profile()
+	profile = request.user.userprofile
 	ctx = {
 		"articles": list(NewsPost.objects.all().order_by('-updated')),
 		"last_read": profile.last_read_news_post,

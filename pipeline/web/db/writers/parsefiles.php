@@ -275,6 +275,25 @@ function parseVersion($fileIn)
     return $data ?: False;
 }
 
+function parseReferenceInfo($fileIn)
+{
+    if(file_exists($fileIn))
+    {
+        $file = fopen($fileIn, 'r') or die();
+        //Output a line of the file until the end is reached
+        $data = array();
+        while(($line = fgets($file)) !== false)
+        {
+            list($key, $value) = preg_split('/\s+/', $line, 2);
+            $data[trim($key)] = trim($value);
+        }
+        fclose($file);
+    }
+    // This is a little redundant since Null and False both evaluate falsely?
+    return $data ?: False;
+}
+
+
 function parsePlugins($folderIn)
 {
 	$ret = NULL;

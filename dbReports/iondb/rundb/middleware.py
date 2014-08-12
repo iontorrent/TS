@@ -1,6 +1,10 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 from django.contrib import auth
+from django.contrib.auth import load_backend
+from django.contrib.auth.middleware import RemoteUserMiddleware
+from django.contrib.auth.backends import RemoteUserBackend
+
 from django.core.exceptions import ImproperlyConfigured
 from django.conf import settings
 import logging
@@ -27,9 +31,6 @@ class LocalhostAuthMiddleware(object):
                 " MIDDLEWARE_CLASSES setting to insert"
                 " 'django.contrib.auth.middleware.AuthenticationMiddleware'"
                 " before the RemoteUserMiddleware class.")
-        # If the user is already authenticated we don't need to continue.
-        if request.user.is_authenticated():
-            return
 
         if self.header in request.META:
             remote = request.META[self.header]
@@ -40,7 +41,19 @@ class LocalhostAuthMiddleware(object):
         if remote not in ['127.0.0.1','127.0.1.1', '::1']:
             return
 
-        #logger.debug("Allowing access from '%s' as user '%s'", remote, self.localuser)
+        # Keep existing user, allow it to pass through REMOTE_USER
+        # otherwise RemoteUserMiddleware logs the user out again!
+        if request.user.is_authenticated():
+            try:
+                stored_backend = load_backend(request.session.get(auth.BACKEND_SESSION_KEY, ''))
+                if isinstance(stored_backend, RemoteUserBackend):
+                    # Fake it for remote user
+                    request.META.setdefault(RemoteUserMiddleware.header, request.user.username)
+            except ImproperlyConfigured as e:
+                # backend failed to load
+                auth.logout(request)
+            # Otherwise keep currently logged in user - no need to override it
+            return
 
         # We are seeing this user for the first time in this session, attempt
         # to authenticate the user. (via RemoteUser backend)
@@ -49,6 +62,7 @@ class LocalhostAuthMiddleware(object):
             # User is valid.  Set request.user and persist user in the session
             # by logging the user in.
             request.user = user
+            request.META.setdefault(RemoteUserMiddleware.header, request.user.username)
             auth.login(request, user)
 
 

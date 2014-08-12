@@ -1,0 +1,9 @@
+---
+# file: nfs_client.yml
+- hosts: headnode:computes
+  vars_files:
+    - vars/nfs_client
+  roles:
+    - nfs_client
+  tags:
+    - nfs_client

@@ -10,7 +10,7 @@
 #include <string>
 #include <sstream>
 // cuda
-#include "JobWrapper.h"
+
 #include "WorkerInfoQueue.h"
 #include "BkgMagicDefines.h"
 #include "cuda_runtime.h"
@@ -18,8 +18,6 @@
 #include "Utils.h"
 #include "CudaDefines.h"
 #include "ResourcePool.h"
-
-//#define MAX_NUM_STREAMS 2
 
 //#define TASK_TIMING
 
@@ -72,8 +70,7 @@ public:
 class cudaSimpleStreamExecutionUnit
 {
 
-// sharedStreamData * _sd;
-  
+
 protected:
   
   static int _seuCnt;
@@ -86,22 +83,18 @@ protected:
   
   WorkerInfoQueueItem _item;
 
-  WorkSet _myJob;
-
-  streamResources * _resources;
+  streamResources * _resource;
 
   cudaStream_t _stream;
-  MemoryResource * _Host;
-  MemoryResource * _Device;
 
   cudaStreamState _state;
   
 
 public:
 
-	cudaSimpleStreamExecutionUnit( streamResources * resources,  WorkerInfoQueueItem item );
-//	cudaStreamExecutionUnit();
-	virtual ~cudaSimpleStreamExecutionUnit();
+  cudaSimpleStreamExecutionUnit( streamResources * resources,  WorkerInfoQueueItem item );
+//  cudaStreamExecutionUnit();
+  virtual ~cudaSimpleStreamExecutionUnit();
 
   //retuns true if work to do, and false if not
   bool execute();
@@ -122,17 +115,18 @@ public:
   WorkerInfoQueueItem getItem();
 //  void signalErrorToResource(); TODO
 
-  bool InitValidateJob(); 
+ // int getNumFrames();
+//  int getNumBeads();
 
-  int getNumFrames();
-  int getNumBeads();
 
 ////////////////////////
 // virtual interface functions needed for Stream Execution
 
+ //inits job from the private_data field in the item
+ //returns true if job is a valid job
+  virtual bool InitJob() ;
 
-
-// function should contain data preperation 
+// function should contain data preparation
 // followed by all async cuda calls needed to execute the job
 // 1. prepare data on host
 // 2. copy async to device
@@ -146,15 +140,31 @@ public:
 
 //handles host side results, when async work is completed. returns 0 when done. 
 //if return != 0 go back to ExecuteJob since more async work needs to be 
-//performed
+//performed. when done this method hands the item on to the next queue, provided
+//either inside the item or the derived SEU class.
   virtual int handleResults() = 0; 
 
-
+//this method is called by the streamManager in case of an exception during the SEU execution
+//implementation should print a summary of all relevant input data sizes/values which could
+//help to determine the reason for an error.
   virtual void printStatus() = 0;
 ////////////////////////
-// static helpers   
+
+
+  //Factory Method to produce job specific Stream Execution Units
+  static cudaSimpleStreamExecutionUnit * makeExecutionUnit(streamResources * resources, WorkerInfoQueueItem item);
+
+
+// static helpers
+  static size_t paddTo(size_t n, size_t padding)
+  {
+    return ((n+padding-1)/padding)*padding;
+  }
+
   static void setVerbose(bool v);
   static bool Verbose();
+
+
 
 };
 
@@ -167,22 +177,25 @@ class cudaSimpleStreamManager
 {
 
   static bool _verbose;
+  static int _maxNumStreams;
+
   int _executionErrorCount;
 
   WorkerInfoQueue * _inQ;
+  WorkerInfoQueue * _fallBackQ;
 
   WorkerInfoQueueItem _item;
   cudaResourcePool * _resourcePool;
+  bool _resourceAllocDone;
 
   vector<cudaSimpleStreamExecutionUnit *> _activeSEU;
 //  map<int,int> _taskcounter;
   int _tasks;
   int _devId;
   int _computeVersion;
-  int _maxNumStreams;
-  map<string, TimeKeeper> _timer;
+  map<string, TimeKeeper> _timer; //keep separate timer for each SEU type, distinguished by SEU name
   
-  bool _GPUerror;  
+  bool _GPUerror;
 
   // max and sum of all beads/frames of all jobs handled
   size_t _sumBeads;
@@ -192,8 +205,9 @@ class cudaSimpleStreamManager
     
 protected:
 
-  size_t getMaxHostSize();
-  size_t getMaxDeviceSize(int maxFrames = 0, int maxBeads = 0);
+
+  //size_t getMaxHostSize(int flow_block_size);
+  //size_t getMaxDeviceSize(int maxFrames /*= 0*/, int maxBeads /*= 0*/, int flow_block_size);
 
   void allocateResources();
   void freeResources();
@@ -211,17 +225,18 @@ protected:
   void recordBeads(int n);
   void recordFrames(int n);
  
+  bool checkItem(); //checks if job item is a valid job
+  bool isFinishItem(); //returns true if finish item
+
 public:
 
-  cudaSimpleStreamManager( WorkerInfoQueue * inQ, int numStreams = MAX_NUM_STREAMS);
+  //factory method to produce job type specific SEUs
+  cudaSimpleStreamManager( WorkerInfoQueue * inQ, WorkerInfoQueue * fallbackQ );
   ~cudaSimpleStreamManager();
-  
 
   bool DoWork();
-
-
  
-  int getNumStreams();
+  int getNumStreams(); //returns actual number of stream
   void printMemoryUsage();
 /*
   void startTimer();
@@ -233,7 +248,9 @@ public:
   string getLogHeader();
 
 ////////////////////////
-// static helpers   
+// static helpers
+  static void setNumMaxStreams(int numStreams);
+  static int getNumMaxStreams();
   static void setVerbose(bool v);
 
 

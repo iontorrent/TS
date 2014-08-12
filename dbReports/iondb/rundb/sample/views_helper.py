@@ -39,10 +39,12 @@ def validate_for_existing_samples(request, sampleSet_ids):
         samplesetitems = sampleset.samples.all()
         for item in samplesetitems:
             #first validate that all barcode kits are the same for all samples
-            if item.barcode:
-                dnabarcode = models.dnaBarcode.objects.filter(id_str=item.barcode)
-                barcodeKit1 = dnabarcode[0].name
-                barcode1 = item.barcode
+            #logger.debug("views_heoper.validate_for_existing_samples() item.dnabarcode=%s" %(item.dnabarcode))
+
+            if item.dnabarcode:
+                dnabarcode = item.dnabarcode
+                barcodeKit1 = dnabarcode.name
+                barcode1 = dnabarcode.id_str
             else:
                 barcodeKit1 = None
                 barcode1 = None
@@ -51,6 +53,7 @@ def validate_for_existing_samples(request, sampleSet_ids):
                 barcodeKit = item1.get('barcodeKit')
                 barcode = item1.get('barcode')
                 if barcodeKit and barcodeKit1 and barcodeKit != barcodeKit1:
+                    #logger.debug("views_helper... barcodeKit=%s; barcodeKit1=%s" %(barcodeKit, barcodeKit1))
                     return False, "Error, Only one barcode kit can be used for a sample set"
                     
                 #next validate that all barcodes are unique per each sample
@@ -358,6 +361,9 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     relationshipRole = queryDict.get("relationshipRole", "")
     relationshipGroup = queryDict.get("relationshipGroup", None)
     
+    cancerType = queryDict.get("cancerType", "")
+    cellularityPct = queryDict.get("cellularityPct", None)
+                
     isValid, errorMessage, sampleAttributes_dict = _create_pending_sampleAttributes_for_sampleSetItem(request)
     
     if errorMessage:
@@ -381,6 +387,9 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['relationshipRole'] = relationshipRole
     sampleSetItem_dict['relationshipGroup'] = relationshipGroup
     sampleSetItem_dict['attribute_dict'] = sampleAttributes_dict
+    
+    sampleSetItem_dict['cancerType'] = cancerType
+    sampleSetItem_dict['cellularityPct'] = cellularityPct
     
     #logger.debug("views_helper._create_pending_sampleSetItem_dict=%s" %(sampleSetItem_dict))
     
@@ -408,7 +417,9 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     gender = queryDict.get("gender", "")
     relationshipRole = queryDict.get("relationshipRole", "")
     relationshipGroup = queryDict.get("relationshipGroup", None)
-    
+
+    cancerType = queryDict.get("cancerType", "")
+    cellularityPct = queryDict.get("cellularityPct", None)   
 
     barcodeKit = queryDict.get("barcodeKit", "")
     barcode = queryDict.get("barcode", "")
@@ -433,6 +444,9 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['relationshipRole'] = relationshipRole
     sampleSetItem_dict['relationshipGroup'] = relationshipGroup
 
+    sampleSetItem_dict['cancerType'] = cancerType
+    sampleSetItem_dict['cellularityPct'] = cellularityPct
+    
     sampleSetItem_dict['barcodeKit'] = barcodeKit
     sampleSetItem_dict['barcode'] = barcode    
     sampleSetItem_dict['attribute_dict'] = sampleAttributes_dict
@@ -610,9 +624,14 @@ def _create_or_update_sampleAttributes_for_sampleSetItem_with_values(request, us
                         logger.debug("views_helper - _create_or_update_sampleAttributes_for_sampleSetItem_with_values - #7 UPDATED with None!! attributeValue.id=%d;" %(attributeValue.id))                                                                        
               
 
-def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, selectedBarcode):
+def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct):
     currentDateTime = timezone.now()  ##datetime.datetime.now()      
     
+    if selectedBarcode:
+        dnabarcode = models.dnaBarcode.objects.get(name = selectedBarcodeKit, id_str = selectedBarcode)
+    else:
+        dnabarcode = None
+        
     for sampleSet_id in sampleSet_ids:
         sampleSet = get_object_or_404(SampleSet, pk = sampleSet_id)        
     
@@ -622,7 +641,7 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
         
         if sampleSetItems.count() > 0:
             sampleSetItem = sampleSetItems[0]
-            if sampleSetItem.gender == sampleGender and sampleSetItem.relationshipRole == sampleRelationshipRole and sampleSetItem.relationshipGroup == relationshipGroup:
+            if sampleSetItem.gender == sampleGender and sampleSetItem.relationshipRole == sampleRelationshipRole and sampleSetItem.relationshipGroup == relationshipGroup and sampleSetItem.cancerType == sampleCancerType and sampleSetItem.cellularityPct == sampleCellularityPct :
                 logger.debug("views_helper - _create_or_update_pending_sampleSetItem NO change for sampleSetItem.id=%d" %(sampleSetItem.id))
             else:
                     
@@ -630,7 +649,10 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                         'gender' : sampleGender,
                                         'relationshipRole' : sampleRelationshipRole,
                                         'relationshipGroup' : relationshipGroup,
-                                        'barcode' : selectedBarcode,                        
+                                        'cancerType' : sampleCancerType,
+                                        'cellularityPct' : sampleCellularityPct,
+                                        # 'barcode' : selectedBarcode,  ##SAM MOHAMED: WE ARE USING THE PK OF DNABARCODE 
+                                        'dnabarcode' : dnabarcode,
                                         'lastModifiedUser' : user,                     
                                         'lastModifiedDate' : currentDateTime   
                                         }
@@ -644,7 +666,10 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                      'gender' : sampleGender, 
                                      'relationshipRole' : sampleRelationshipRole, 
                                      'relationshipGroup' : relationshipGroup,
-                                     'barcode' : selectedBarcode,  
+                                     'cancerType' : sampleCancerType,
+                                     'cellularityPct' : sampleCellularityPct,                                        
+                                     # 'barcode' : selectedBarcode,  ##SAM MOHAMED: WE ARE USING THE PK OF DNABARCODE 
+                                     'dnabarcode' : dnabarcode,                                  
                                      'creator' : user,
                                      'creationDate' : currentDateTime,
                                      'lastModifiedUser' : user,
@@ -673,9 +698,19 @@ def _create_or_update_sampleSetItem(request, user, sample):
 
     sampleSetItem = get_object_or_404(SampleSetItem, pk = sampleSetItem_id)
 
-    barcode = queryDict.get("barcode", "").strip()
-                 
-    if sampleSetItem.gender == gender and sampleSetItem.relationshipRole == relationshipRole and str(sampleSetItem.relationshipGroup) == str(relationshipGroup) and sampleSetItem.barcode == barcode:
+    selectedBarcodeKitName = queryDict.get("barcodeKit", "").strip()
+    selectedBarcode = queryDict.get("barcode", "").strip()
+    
+    cancerType = queryDict.get("cancerType", "")
+    cellularityPct = queryDict.get("cellularityPct", None)
+    if cellularityPct == "":
+        cellularityPct = None
+    
+    selectedDnaBarcode = None
+    if selectedBarcodeKitName and selectedBarcode:
+        selectedDnaBarcode = models.dnaBarcode.objects.get(name = selectedBarcodeKitName, id_str = selectedBarcode)    
+       
+    if sampleSetItem.gender == gender and sampleSetItem.relationshipRole == relationshipRole and str(sampleSetItem.relationshipGroup) == str(relationshipGroup) and (sampleSetItem.dnabarcode == selectedDnaBarcode) and sampleSetItem.cancerType == cancerType and (sampleSetItem.cellularityPct == cellularityPct):
         logger.debug("views_helper - _create_or_update_sampleSetItem NO change for sampleSetItem.id=%d" %(sampleSetItem.id))
     else:
             
@@ -683,13 +718,17 @@ def _create_or_update_sampleSetItem(request, user, sample):
                                 'gender' : gender,
                                 'relationshipRole' : relationshipRole,
                                 'relationshipGroup' : relationshipGroup, 
-                                'barcode' : barcode,                         
+                                'dnabarcode' : selectedDnaBarcode,
+                                'cancerType' : cancerType,
+                                'cellularityPct' : cellularityPct,                 
                                 'lastModifiedUser' : user,                     
                                 'lastModifiedDate' : currentDateTime   
                                 }
         for field, value in sampleSetItem_kwargs.iteritems():
             setattr(sampleSetItem, field, value)
-                            
+
+        logger.debug("views_helper._create_or_update_sampleSetItem sampleSetItem_kwargs=%s" %(sampleSetItem_kwargs)) 
+                
         sampleSetItem.save()                   
         logger.debug("views_helper - _create_or_update_sampleSetItem UPDATED for sampleSetItem.id=%d" %(sampleSetItem.id))
 

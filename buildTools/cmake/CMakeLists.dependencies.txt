@@ -9,6 +9,17 @@ if(LSB_RELEASE_COMMAND)
     message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
 endif(LSB_RELEASE_COMMAND) 
 
+# If defined while running cmake look for mkl
+# e.g. -DMKL_INSTALL_PATH=/home/ionadmin/intel/composer_xe_2013_sp1.0.080/mkl
+if (DEFINED MKL_INSTALL_PATH)
+  message("Setting mkl root to ${MKL_INSTALL_PATH}")
+  include_directories(${MKL_INSTALL_PATH}/include)
+  set(MKL_LINK_LIBS "-Wl,--start-group  ${MKL_INSTALL_PATH}/lib/intel64/libmkl_intel_lp64.a ${MKL_INSTALL_PATH}/lib/intel64/libmkl_core.a ${MKL_INSTALL_PATH}/lib/intel64/libmkl_sequential.a -Wl,--end-group")
+else() 
+  message("Not setting mkl root ${MKL_INSTALL_PATH}")
+endif()
+
+
 option(ION_USE_MKL "Using Intel MKL" OFF)
 mark_as_advanced(ION_USE_MKL)
 
@@ -30,6 +41,8 @@ mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
 
 if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "wheezy" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR 
     ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "raring")
   option(ION_USE_SYSTEM_FFTW "Use fftw system libraries" ON)
@@ -40,6 +53,8 @@ mark_as_advanced(ION_USE_SYSTEM_FFTW)
 
 if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "wheezy" OR
+    ${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "raring")
   option(ION_USE_SYSTEM_HDF5 "Use hdf5 system libraries" ON)
@@ -48,14 +63,14 @@ else()
 endif()
 mark_as_advanced(ION_USE_SYSTEM_HDF5)
 
+option(ION_USE_SYSTEM_EIGEN "Use EIGEN system libraries" OFF)
+mark_as_advanced(ION_USE_SYSTEM_EIGEN)
+
 option(ION_USE_SYSTEM_ARMADILLO "Use armadillo system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_ARMADILLO)
 
 option(ION_USE_SYSTEM_BOOST "Use boost system libraries" ON)
 mark_as_advanced(ION_USE_SYSTEM_BOOST)
-
-option(ION_USE_SYSTEM_UNWIND "Use unwind system libraries" OFF)
-mark_as_advanced(ION_USE_SYSTEM_UNWIND)
 
 option(ION_USE_SYSTEM_LEVMAR "Use systems default levmar libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_LEVMAR)
@@ -64,10 +79,6 @@ option(ION_USE_SYSTEM_PICARD "Use picard system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_PICARD)
 
 
-# wget http://developer.download.nvidia.com/compute/cuda/4_2/rel/toolkit/cudatoolkit_4.2.9_linux_64_ubuntu11.04.run
-# MYCUDASDK=cudatoolkit_4.2.9_linux_64_ubuntu11.04
-# bash $MYCUDASDK.run --nox11 --noexec --target $MYCUDASDK
-# GZIP=--best tar czf $MYCUDASDK.tar.gz $MYCUDASDK
 ExternalProject_add(${cuda_toolkit}
     PREFIX ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}
@@ -77,7 +88,7 @@ ExternalProject_add(${cuda_toolkit}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
     INSTALL_COMMAND ""
-#    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/cuda_toolkit-5.0.35.patch" 
+    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/cuda_toolkit-5.5.22.patch" 
 )
 
 
@@ -141,7 +152,7 @@ if(NOT ION_USE_SYSTEM_HDF5)
   set(proj_name "hdf5")
   set(proj_version "1.8.8")
   set(proj_name_version "${proj_name}-${proj_version}")
-  ExternalProject_add(${proj_name}
+  ExternalProject_add(${proj_name}_proj
     URL "http://${ION_UPDATE_SERVER}/updates/software/external/hdf5-1.8.8.tar.gz"
 #    URL_MD5 1196e668f5592bfb50d1de162eb16cff
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
@@ -158,20 +169,26 @@ else()
   set(HDF5_USE_STATIC_LIBRARIES True)
   find_package(HDF5 REQUIRED)
   set(ION_HDF5_LIBS ${HDF5_LIBRARIES})
+  message(STATUS "ION_HDF5_LIBS: ${HDF5_LIBRARIES}")
+endif()
+
+if(NOT ION_USE_SYSTEM_EIGEN)
+  include_directories("${ION_TS_EXTERNAL}/eigen-3.2")
 endif()
 
 if(NOT ION_USE_SYSTEM_ARMADILLO)
   set(proj_name "armadillo")
-  set(proj_version "3.800.2+ion0")
+  set(proj_version "4.300.0+ion0")
   set(proj_name_version "${proj_name}-${proj_version}")
-  set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-3.800.2+ion0.patch")
+  set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-4.300.0+ion0.patch")
   ExternalProject_add(${proj_name}_proj
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/armadillo-3.800.2.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/armadillo-4.300.0.tar.gz"
     #URL_MD5 e8400bc7adb65fa0edc8c8ccb49b60eb
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
     BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
     CMAKE_ARGS
+      -DARMA_USE_ATLAS:BOOL=FALSE
       -DARMA_USE_WRAPPER:BOOL=FALSE
       -DARMA_USE_MKL:BOOL=${ION_USE_MKL}
       -DCMAKE_INSTALL_PREFIX:PATH=${PROJECT_BINARY_DIR}/../${proj_name_version}-install
@@ -181,8 +198,6 @@ if(NOT ION_USE_SYSTEM_ARMADILLO)
   include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include")
 else()
   set(ION_ARMADILLO_LIBS "armadillo")
-#include_directories("/home/csugnet/local/src/armadillo-3.0.2/include")
-#set(ION_ARMADILLO_LIBS "/home/csugnet/local/src/armadillo-3.0.2/libarmadillo.so")
 endif()
 
 
@@ -212,31 +227,7 @@ else()
   set(ION_BOOST_LIBS "boost_serialization.a")
 endif()
 
-if(NOT ION_USE_SYSTEM_UNWIND)
-  set(proj_name "unwind")
-  set(proj_version "1.1")
-  set(proj_name_version "${proj_name}-${proj_version}")
-  ExternalProject_add(${proj_name}
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/libunwind-1.1.tar.gz"
-    PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
-    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
-    BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
-    CONFIGURE_COMMAND ${PROJECT_BINARY_DIR}/../${proj_name_version}/configure
-    CFLAGS=-D_FORTIFY_SOURCE=0
-    --with-pic=yes --disable-shared
-    --prefix=${PROJECT_BINARY_DIR}/../${proj_name_version}-install
-  )
-  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include")
-  set(ION_UNWIND_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libunwind.a")
-else()
-  set(UNWIND_USE_STATIC_LIBRARIES True)
-  find_package(UNWIND REQUIRED)
-  set(ION_UNWIND_LIBS ${UNWIND_LIBRARIES})
-endif()
-
-# uncomment for profiling if gprofile and unwind installed
-# add_library(UNWIND STATIC IMPORTED)
-# set_property(TARGET UNWIND PROPERTY IMPORTED_LOCATION "/usr/local/lib/libunwind.a")
+# uncomment for profiling if gprofile installed
 # add_library(PROFILE STATIC IMPORTED)
 # set_property(TARGET PROFILE PROPERTY IMPORTED_LOCATION "/usr/local/lib/libprofiler.a")
 
@@ -270,10 +261,10 @@ endif()
 
 if (NOT ION_USE_SYSTEM_PICARD)
   set(proj_name "picard")
-  set(proj_version "1.96")
+  set(proj_version "1.113")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
-    URL "http://updates.iontorrent.com/updates/software/external/picard-tools-1.96.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/picard-tools-1.113.tar.gz"
     #URL_MD5 
     # in source build
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
@@ -288,11 +279,11 @@ endif()
 
 if (NOT ION_USE_SYSTEM_BAMTOOLS)
     set(proj_name "bamtools")
-    set(revision_tag efd4f7b683)#set date below accordingly
-    set(proj_version "2.2.2.20121216+git${revision_tag}")
+    set(revision_tag 67178ae187)#set date below accordingly
+    set(proj_version "2.3.0.20131211+git${revision_tag}")
     set(proj_name_version "${proj_name}-${proj_version}")
     ExternalProject_add(${proj_name}
-      URL "http://${ION_UPDATE_SERVER}/updates/software/external/bamtools-2.2.2.20121216+gitefd4f7b683.tar.gz"
+      URL "http://${ION_UPDATE_SERVER}/updates/software/external/bamtools-2.3.0.20131211+git67178ae187.tar.gz"
 #      GIT_REPOSITORY "https://github.com/iontorrent/bamtools.git"
 #      GIT_TAG ${revision_tag}
       PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
@@ -315,7 +306,7 @@ if(NOT ION_USE_SYSTEM_LEVMAR)
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
     #URL            "http://www.ics.forth.gr/~lourakis/levmar/levmar-2.6.tgz"
-    URL             "http://updates.iontorrent.com/updates/software/external/levmar-2.6.tgz"
+    URL             "http://${ION_UPDATE_SERVER}/updates/software/external/levmar-2.6.tgz"
     PREFIX          ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}
     BINARY_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
@@ -331,11 +322,11 @@ else()
 endif()
 
 
-  set(proj_name "kmeans_proj")
+  set(proj_name "kmeans")
   set(proj_version "1.7")
   set(proj_name_version "${proj_name}-${proj_version}")
-  ExternalProject_add(${proj_name}
-    URL             "http://updates.iontorrent.com/updates/software/external/kmlocal-1.7.2.tar.gz"
+  ExternalProject_add(${proj_name}_proj
+    URL             "http://${ION_UPDATE_SERVER}/updates/software/external/kmlocal-1.7.2.tar.gz"
     PREFIX          ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}
     BINARY_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}-build

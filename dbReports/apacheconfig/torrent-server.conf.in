@@ -1,0 +1,199 @@
+## Config file, inherited by all vhosts (http and https)
+
+# Torrent Server Site driven by WSGI in daemon mode
+WSGIProcessGroup iontorrent
+WSGIApplicationGroup iontorrent
+WSGIPassAuthorization On
+
+WSGIDaemonProcess iontorrent threads=6 processes=16 maximum-requests=500 shutdown-timeout=90
+# User and group can be set here. user=ionadmin group=ionadmin
+# Virtualenv - python-path=@ION_INSTALL_PREFIX@/ve/lib/python${PYTHON_VERSION}/site-packages
+
+<Location ~ "^/(data|configure|rundb|plan|monitor|report|logout|login|output|news|chef_logs|ot_logs)">
+    WSGIApplicationGroup iontorrent
+    WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi.py application-group=iontorrent
+    WSGIPassAuthorization On
+</Location>
+
+#WSGIScriptAlias / @ION_INSTALL_PREFIX@/iondb/wsgi.py
+#WSGIScriptAliasMatch "^/(data|configure|rundb|plan|monitor|report|logout|login|output)" @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /data @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /configure @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /rundb @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /plan @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /sample @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /monitor @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /report @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /login @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /logout @ION_INSTALL_PREFIX@/iondb/wsgi.py
+WSGIScriptAlias /news @ION_INSTALL_PREFIX@/iondb/wsgi.py
+
+WSGIScriptAliasMatch "^/output.*" @ION_INSTALL_PREFIX@/iondb/wsgi.py
+
+## Django / TS Admin site
+<Location "/admin">
+    WSGIApplicationGroup iontorrent
+    WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi.py application-group=iontorrent
+    WSGIPassAuthorization On
+</Location>
+WSGIScriptAlias /admin @ION_INSTALL_PREFIX@/iondb/wsgi.py
+
+# Provide different auth / permissions on API
+<Location "/rundb/api/v1">
+    AuthType Basic
+    AuthName "Torrent Browser"
+    AuthBasicProvider wsgi
+
+    # Accept but do not require AuthBasic
+    AuthBasicAuthoritative Off
+    #Require valid-user
+    WSGIApplicationGroup iontorrent
+    WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi.py application-group=iontorrent
+    WSGIPassAuthorization On
+
+    Order deny,allow
+    #<Limit GET>
+    #    # Allow read-only access from private-networks RFC1918
+    #    Allow from 10.0.0.0/8
+    #    Allow from 192.168.0.0/24
+    #    Allow from 172.18.0.0/16
+    #</Limit>
+    Allow from localhost
+    Allow from 127.0.0.0/8
+    Allow from ::1
+    Satisfy Any
+
+    # CORS for cross domain json requests
+    # - makes API accessible from other sites
+    <IfModule mod_setenvif.c>
+      <IfModule mod_headers.c>
+        SetEnvIf Origin ":" IS_CORS
+        Header set Access-Control-Allow-Origin "*" env=IS_CORS
+        Header set Access-Control-Allow-Credentials "true" env=IS_CORS
+      </IfModule>
+    </IfModule>
+</Location>
+
+<Location "/ion-docs">
+    ErrorDocument 404 /docsnotfound.html
+</Location>
+
+## Exclude some entries from log files
+<IfModule mod_setenvif.c>
+    SetEnvIf Request_URI "/robots.txt" dontlog
+    SetEnvIf Request_URI "/favicon.ico" dontlog
+
+    # Polling from the messages API
+    SetEnvIf Request_URI "/rundb/api/v1/message/" dontlog
+    # Polling from RSM agent
+    SetEnvIf Request_URI "/rundb/api/v1/fileserver" dontlog
+    # Polling from progress bars
+    SetEnvIf Request_URI "/rundb/progress_bar/" dontlog
+    SetEnvIf Request_URI "/rundb/reports/progressbox" dontlog
+
+    #Exclude all internal traffic?
+    #SetEnvIf Remote_Addr "127.0.0.1" dontlog
+    # Exclude all auxiliary files
+    #SetEnvIfNoCase Request_URI "\.(jpg)|(png)|(css)|(js)|(ico)$" dontlog
+
+    # CustomLog entry in virtual host ends with env=!dontlog
+</IfModule>
+
+<FilesMatch "(progress_bar|progressbox)">
+    FileETag None
+    <IfModule mod_headers.c>
+        Header unset ETag
+        Header set Cache-Control "max-age=0, no-cache, no-store, must-revalidate"
+        Header set Pragma "no-cache"
+        Header set Expires "Wed, 11 Jan 1984 05:00:00 GMT"
+    </IfModule>
+</FilesMatch>
+
+<Directory ~ "^/var/www/(site_media|media|pluginMedia|__debug__)/">
+  # Cache js, css, and static resources for 1 week
+  <IfModule mod_expires.o>
+    ExpiresActive ON
+    ExpiresDefault A604800
+  </IfModule>
+</Directory>
+
+## ========================================================================
+## The following blocks access to output until it goes through django auth
+# NOTE: VirtualHosts MUST use RewriteOptions Inherit
+RewriteEngine On
+# Private is forbidden if it was in original THE_REQUEST
+RewriteCond %{THE_REQUEST} ^[\S]+\ /private/
+RewriteRule ^/private/ - [F]
+
+# Special URL for internal redirects only
+# NOTE: Unlike Alias, AliasMatch needs to match entire url
+AliasMatch ^/private/output([^/]*)/(.*) /var/www/output$1/$2
+AliasMatch ^/private/chef_logs([^/]*)/(.*) /var/www/chef_logs$1/$2
+AliasMatch ^/private/ot_logs([^/]*)/(.*) /var/www/ot_logs$1/$2
+AliasMatch ^/private/plugins([^/]*)/(.*) /var/www/plugins$1/$2
+
+# Provide pure basic auth access to /output tree.
+# Used by IGV and external tools.
+# Same as /output, except auth by apache, not via django.
+<Location /auth/>
+    AuthType Basic
+    AuthName "Torrent Browser"
+    AuthBasicAuthoritative Off
+    AuthBasicProvider wsgi
+    WSGIAuthUserScript @ION_INSTALL_PREFIX@/iondb/wsgi.py application-group=iontorrent
+    WSGIPassAuthorization On
+    Require valid-user
+
+    Order allow,deny
+    Allow from localhost
+    Satisfy any
+</Location>
+# Force download for content in /auth/.*/download_links/
+# NOTE that /output handles this via django,
+# and only one Content-disposition
+<IfModule mod_headers.c> 
+  <Location ~ "^/auth/.*/download_links/.+">
+    SetEnvIf Request_URI "^.*/([^/]*)$" FILENAME=$1
+    Header set "Content-disposition" "attachment; filename=%{FILENAME}e"
+    UnsetEnv FILENAME
+  </Location>
+</IfModule>
+Alias /auth/ /var/www/
+
+## Static Files For Reports
+<Directory /var/www/output*>
+    SetHandler none
+    Options +FollowSymLinks -MultiViews
+
+    DirectoryIndex Default_Report.php index.html index.htm index.php log.html drmaa_stdout.txt
+
+    <Files "ReportLog.html">
+        ForceType text/plain
+    </Files>
+
+    <IfModule mod_expires.c>
+        ExpiresActive On
+        ExpiresDefault M60
+        # Ensure that log files and generated html
+        # are revalidated immediately
+        ExpiresByType text/plain M0
+        ExpiresByType text/html M0
+    </IfModule>
+
+</Directory>
+
+<Directory "/var/www/output*/*/*">
+    # only allow directory listing for reports and plugin folders, not all of /output/Home/
+    Options +Indexes
+</Directory>
+
+<Directory /var/www/chef_logs*>
+    SetHandler none
+    Options +Indexes
+</Directory>
+
+<Directory /var/www/ot_logs*>
+    SetHandler none
+    Options +Indexes
+</Directory>
+

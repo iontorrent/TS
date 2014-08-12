@@ -1,5 +1,6 @@
-
-
+/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+#ifndef SIM_2MER_FLUX_DATA_H
+#define SIM_2MER_FLUX_DATA_H
 DATA_TYPE sim_incorp_flux[] = {
    0.00000,    0.00000,
    0.00067,    0.00000,
@@ -1505,3 +1506,4 @@ DATA_TYPE sim_incorp_flux[] = {
 
 int sim_incorp_flux_len = sizeof(sim_incorp_flux)/(2*sizeof(DATA_TYPE));
 
+#endif // SIM_2MER_FLUX_DATA_H

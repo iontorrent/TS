@@ -11,79 +11,83 @@ RefineTime::RefineTime (SignalProcessingMasterFitter &_bkg) :
 }
 
 
-void RefineTime::RefinePerFlowTimeEstimate (float *t_mid_nuc_shift_per_flow)
+void RefineTime::RefinePerFlowTimeEstimate (float *t_mid_nuc_shift_per_flow, int flow_block_size,
+    int flow_block_start
+  )
 {
   if (!bkg.global_defaults.signal_process_control.per_flow_t_mid_nuc_tracking)
   {
-    memset (t_mid_nuc_shift_per_flow,0,sizeof (float[NUMFB]));
+    memset (t_mid_nuc_shift_per_flow,0,sizeof (float[flow_block_size]));
   }
   else
   {
     if (bkg.region_data->my_trace.AlreadyAdjusted())
     {
       // estimate t0 per flow from the average 1-mer trace if possible
-      FitAverage1MerPerFlow (t_mid_nuc_shift_per_flow,false);
+      FitAverage1MerPerFlow (t_mid_nuc_shift_per_flow,false, flow_block_size, flow_block_start );
 
       // really? does this help in the slightest?
-      RezeroUsingLocalShift(t_mid_nuc_shift_per_flow);
+      RezeroUsingLocalShift(t_mid_nuc_shift_per_flow, flow_block_size);
 
       // really?
       // re-estimate t0 per flow from the average 1-mer trace if possible
-      FitAverage1MerPerFlow (t_mid_nuc_shift_per_flow,true);
+      FitAverage1MerPerFlow (t_mid_nuc_shift_per_flow,true, flow_block_size, flow_block_start );
     }
     else
     {
       // do version that doesn't require pre-corrected background
       // @TODO: note that t_mid_nuc_shift has not been set to anything but zero yet?
       //@TODO: SIDE EFFECTS of changing the traces
-      RezeroUsingLocalShift(t_mid_nuc_shift_per_flow);
+      RezeroUsingLocalShift(t_mid_nuc_shift_per_flow, flow_block_size);
 
-      FitAverage1MerAllFlows(t_mid_nuc_shift_per_flow,true);
+      FitAverage1MerAllFlows(t_mid_nuc_shift_per_flow,true, flow_block_size, flow_block_start);
     }
   }
 }
 
-void RefineTime::RezeroUsingLocalShift(float *t_mid_nuc_shift_per_flow)
+void RefineTime::RezeroUsingLocalShift(float *t_mid_nuc_shift_per_flow, int flow_block_size)
 {
       // re-zero the traces now that we have a better idea where t0 is in each flow
-    for (int fnum=0;fnum < NUMFB;fnum++)
+    for (int fnum=0;fnum < flow_block_size;fnum++)
     {
-      bkg.region_data->RezeroTraces (bkg.region_data->time_c.time_start,GetTypicalMidNucTime (&bkg.region_data->my_regions.rp.nuc_shape) +t_mid_nuc_shift_per_flow[fnum],
-                                      bkg.region_data->my_regions.rp.nuc_shape.sigma,MAGIC_OFFSET_FOR_EMPTY_TRACE,fnum);
+      bkg.region_data->RezeroTraces (bkg.region_data->time_c.time_start,
+        GetTypicalMidNucTime (&bkg.region_data->my_regions.rp.nuc_shape) +
+                                                          t_mid_nuc_shift_per_flow[fnum],
+        bkg.region_data->my_regions.rp.nuc_shape.sigma,MAGIC_OFFSET_FOR_EMPTY_TRACE,fnum, flow_block_size);
     }
 }
 
 
 #define MIN_1MER_TMIDNUC_EST_THRESHOLD (50)
-float RefineTime::FitAverage1Mer (int fnum,bool debug_output)
+float RefineTime::FitAverage1Mer (int fnum,bool debug_output, int flow_block_size, int flow_block_start )
 {
   int len = bkg.region_data->time_c.npts();
   float avg_1mer[len];
-  bead_params avg_bead;
+  BeadParams avg_bead;
 
-  int trc_cnt = FindAvg1MerFromSingleFlowAdjustedData(avg_1mer,len, avg_bead,fnum);
+  int trc_cnt = FindAvg1MerFromSingleFlowAdjustedData(avg_1mer,len, avg_bead,fnum, flow_block_size);
 
-  return(FitSingleFlowTimeShiftFromOneMer(avg_1mer,len, trc_cnt,&avg_bead, fnum, debug_output));
+  return(FitSingleFlowTimeShiftFromOneMer(avg_1mer,len, trc_cnt,&avg_bead, fnum, debug_output, flow_block_start ));
 }
 
-int RefineTime::FindAvg1MerFromSingleFlowAdjustedData(float *avg_1mer, int len, bead_params &avg_bead, int fnum)
+int RefineTime::FindAvg1MerFromSingleFlowAdjustedData(float *avg_1mer, int len, BeadParams &avg_bead, int fnum, int flow_block_size)
 {
     int trc_cnt = 0;
   float ampl;
 
   memset (avg_1mer,0,sizeof (float[len]));
 
-  params_SetBeadZeroValue(&avg_bead);
+  avg_bead.SetBeadZeroValue();
 
   for (int ibd=0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
   {
-    bead_params *beadp = &bkg.region_data->my_beads.params_nn[ibd];
+    BeadParams *beadp = &bkg.region_data->my_beads.params_nn[ibd];
     ampl = beadp->Ampl[fnum];
 
-    if ( ((ampl > 0.5f) && (ampl < 1.5f)) & FitBeadLogic(beadp)) // must be willing to fit this bead to include it
+    if ( ((ampl > 0.5f) && (ampl < 1.5f)) & beadp->FitBeadLogic()) // must be willing to fit this bead to include it
     {
-      bkg.region_data->my_trace.AccumulateSignal (avg_1mer,ibd,fnum,bkg.region_data->time_c.npts());
-      params_AccumulateBeadValue(&avg_bead,beadp);
+      bkg.region_data->my_trace.AccumulateSignal (avg_1mer,ibd,fnum,bkg.region_data->time_c.npts(), flow_block_size);
+      avg_bead.AccumulateBeadValue(beadp);
 
       trc_cnt++;
     }
@@ -91,14 +95,14 @@ int RefineTime::FindAvg1MerFromSingleFlowAdjustedData(float *avg_1mer, int len, 
   if (trc_cnt>0)
   {
     MultiplyVectorByScalar (avg_1mer,1.0f/ ( (float) trc_cnt),bkg.region_data->time_c.npts());
-    params_ScaleBeadValue(&avg_bead, 1.0f/float(trc_cnt));
+    avg_bead.ScaleBeadValue(1.0f/float(trc_cnt));
   }
   
   return(trc_cnt);
 }
 
 
-float RefineTime::FitSingleFlowTimeShiftFromOneMer(float *avg_1mer, int len, int trc_cnt, bead_params *avg_bead, int fnum, bool debug_output)
+float RefineTime::FitSingleFlowTimeShiftFromOneMer(float *avg_1mer, int len, int trc_cnt, BeadParams *avg_bead, int fnum, bool debug_output, int flow_block_start )
 {
   float ret = 0.0f;
   float new_kmult=1.0f;
@@ -107,7 +111,7 @@ float RefineTime::FitSingleFlowTimeShiftFromOneMer(float *avg_1mer, int len, int
   {
     float evect[bkg.region_data->time_c.npts()];
     bkg.region_data->emphasis_data.CustomEmphasis (evect,1.0f);
-    int NucID = bkg.region_data->my_flow.flow_ndx_map[fnum];
+    int NucID = bkg.region_data_extras.my_flow->flow_ndx_map[fnum];
     BkgModSingleFlowFitTMidNucParams param_min,param_max;
 
     param_min.Ampl = 0.5f;
@@ -124,7 +128,9 @@ float RefineTime::FitSingleFlowTimeShiftFromOneMer(float *avg_1mer, int len, int
         bkg.math_poiss);
 
     // TODO: get average dmult and kmult for this call
-    t_mid_nuc_fit.SetWellRegionParams (avg_bead->Copies,avg_bead->R,avg_bead->gain,1.0f,1.0f,&bkg.region_data->my_regions.rp,fnum,NucID,bkg.region_data->my_flow.buff_flow[fnum]);
+    t_mid_nuc_fit.SetWellRegionParams (avg_bead->Ampl[fnum], avg_bead->Copies, avg_bead->phi, 
+      avg_bead->R,avg_bead->gain,1.0f,1.0f,&bkg.region_data->my_regions.rp,fnum,NucID,
+      flow_block_start + fnum);
 
     t_mid_nuc_fit.SetParamMin (param_min);
     t_mid_nuc_fit.SetParamMax (param_max);
@@ -159,36 +165,45 @@ void RefineTime::DebugOneMerOutput(float *avg_1mer, int len, int trc_cnt, float 
   }
 }
 
-void RefineTime::FitAverage1MerPerFlow (float *t_mid_nuc_shift_per_flow,bool debug_output)
+void RefineTime::FitAverage1MerPerFlow (float *t_mid_nuc_shift_per_flow,bool debug_output,
+    int flow_block_size, int flow_block_start
+  )
 {
-  for (int fnum=0;fnum < NUMFB;fnum++)
+  for (int fnum=0;fnum < flow_block_size;fnum++)
   {
-    t_mid_nuc_shift_per_flow[fnum] = FitAverage1Mer (fnum,debug_output);
+    t_mid_nuc_shift_per_flow[fnum] = FitAverage1Mer (fnum,debug_output, flow_block_size, flow_block_start);
   }
 }
 
 // do this using unadjusted data
-void RefineTime::FitAverage1MerAllFlows(float *t_mid_nuc_shift_per_flow, bool debug_output)
+void RefineTime::FitAverage1MerAllFlows(float *t_mid_nuc_shift_per_flow, bool debug_output, int flow_block_size, int flow_block_start )
 {
   float block_bkg_corrected_avg_signal[bkg.region_data->my_scratch.bead_flow_t];
   float *avg_1_mer = NULL;
-  int cur_count[NUMFB];
-  bead_params avg_bead_by_flow[NUMFB];
+  int *cur_count = new int[flow_block_size];
+  BeadParams *avg_bead_by_flow = new BeadParams[flow_block_size];
   int local_offset = bkg.region_data->time_c.npts();
 
-  ConstructMultiFlowOneMers(block_bkg_corrected_avg_signal,cur_count,avg_bead_by_flow);
-  for (int fnum=0; fnum<NUMFB; fnum++)
+  ConstructMultiFlowOneMers(block_bkg_corrected_avg_signal,cur_count,avg_bead_by_flow, flow_block_size, flow_block_start );
+  for (int fnum=0; fnum<flow_block_size; fnum++)
   {
     avg_1_mer = &block_bkg_corrected_avg_signal[fnum*local_offset];
-    t_mid_nuc_shift_per_flow[fnum] = FitSingleFlowTimeShiftFromOneMer(avg_1_mer,local_offset, cur_count[fnum],&avg_bead_by_flow[fnum], fnum, debug_output);
+    t_mid_nuc_shift_per_flow[fnum] = FitSingleFlowTimeShiftFromOneMer(avg_1_mer,local_offset, cur_count[fnum],&avg_bead_by_flow[fnum], fnum, debug_output, flow_block_start );
   }
+
+  // Cleanup.
+  delete [] cur_count;
+  delete [] avg_bead_by_flow;
 }
 
-void RefineTime::ConstructMultiFlowOneMers(float *block_bkg_corrected_avg_signal, int *cur_count, bead_params *avg_bead_by_flow)
+void RefineTime::ConstructMultiFlowOneMers(
+    float *block_bkg_corrected_avg_signal, 
+    int *cur_count,                   // entries per flow of "1-mer" signals
+    BeadParams *avg_bead_by_flow,     //goofy, why would these be appreciably different?
+    int flow_block_size,
+    int flow_block_start
+  )
 {
-//  int cur_count[NUMFB]; // entries per flow of "1-mer" signals
-//  bead_params avg_bead_by_flow[NUMFB]; //goofy, why would these be appreciably different?
-
   // assume uncorrected data in buffers
   // assume we're building traces that are background corrected
   int buffer_size = bkg.region_data->my_scratch.bead_flow_t;
@@ -197,38 +212,39 @@ void RefineTime::ConstructMultiFlowOneMers(float *block_bkg_corrected_avg_signal
 
   memset(block_bkg_corrected_avg_signal,0, sizeof(float[buffer_size]));
 
-  for (int fnum=0; fnum<NUMFB; fnum++)
+  for (int fnum=0; fnum<flow_block_size; fnum++)
     cur_count[fnum] = 0;
+
   // typical beads had >better< be exactly what we expect, but just in case
-  for (int fnum=0; fnum<NUMFB; fnum++)
-    params_SetBeadZeroValue(&avg_bead_by_flow[fnum]);
+  for (int fnum=0; fnum<flow_block_size; fnum++)
+    avg_bead_by_flow[fnum].SetBeadZeroValue();
 
  int beadmax = bkg.region_data->GetNumLiveBeads();
  for (int ibd=0; ibd<beadmax; ibd++) 
   {
-    bead_params *p = &bkg.region_data->my_beads.params_nn[ibd];
-    if (FitBeadLogic(p))  // might be a sampling of some type
+    BeadParams *p = &bkg.region_data->my_beads.params_nn[ibd];
+    if (p->FitBeadLogic())  // might be a sampling of some type
     {
       //@TODO: should be able to average un-adjusted data, then adjust the average
-      bkg.trace_bkg_adj->ReturnBackgroundCorrectedSignal(cur_bkg_corrected_signal,ibd);
-      for (int fnum=0; fnum<NUMFB; fnum++)
+      bkg.trace_bkg_adj->ReturnBackgroundCorrectedSignal(cur_bkg_corrected_signal,ibd, flow_block_size, flow_block_start);
+      for (int fnum=0; fnum<flow_block_size; fnum++)
       {
         if ((p->Ampl[fnum] > 0.5f) && (p->Ampl[fnum] < 1.5f))
         {
           AccumulateVector(&block_bkg_corrected_avg_signal[fnum*local_offset],&cur_bkg_corrected_signal[fnum*local_offset],local_offset);
           cur_count[fnum] +=1;
-          params_AccumulateBeadValue(&avg_bead_by_flow[fnum], p);
+          avg_bead_by_flow[fnum].AccumulateBeadValue(p);
         }
       }
     }
   }
   // iterated over everything
-  for (int fnum=0; fnum<NUMFB; fnum++)
+  for (int fnum=0; fnum<flow_block_size; fnum++)
   {
     if (cur_count[fnum]>0)
     {
       MultiplyVectorByScalar(&block_bkg_corrected_avg_signal[fnum*local_offset],1.0f/(cur_count[fnum]),local_offset);
-      params_ScaleBeadValue(&avg_bead_by_flow[fnum],1.0f/(cur_count[fnum]));
+      avg_bead_by_flow[fnum].ScaleBeadValue(1.0f/(cur_count[fnum]));
     }
   }
   // okay, set up with average bead, set up with block signal and counts

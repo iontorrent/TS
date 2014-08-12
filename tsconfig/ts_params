@@ -27,8 +27,9 @@ TSCONFIG_ION_UPDATE_URL="http://ionupdates.com"
 TSCONFIG_UBUNTU_UPDATE_URL="http://us.archive.ubuntu.com"
 TSCONFIG_PACKAGELIST_FILE=${TSCONFIG_SRC_DIR}/torrentsuite-packagelist.json
 TSCONFIG_CARD_ID="PERC H810"
+TSCONFIG_CLUSTER_ADMIN=ionadmin # user with ssh-key on compute nodes for passwordless entry
 
 # Source any local edits
-if [ -r ./ts_params.local ]; then
-    source ./ts_params.local
+if [ -r ${TSCONFIG_SRC_DIR}/ts_params.local ]; then
+    source ${TSCONFIG_SRC_DIR}/ts_params.local
 fi

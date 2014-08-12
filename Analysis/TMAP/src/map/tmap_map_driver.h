@@ -6,6 +6,9 @@
 #include "../index/tmap_index.h"
 #include "../seq/tmap_seqs.h"
 
+// DVK - realignment
+#include "../realign/realign_wrapper.h"
+
 #ifdef HAVE_LIBPTHREAD
 #define TMAP_MAP_DRIVER_THREAD_BLOCK_SIZE 512
 #endif
@@ -155,6 +158,8 @@ typedef struct {
     tmap_map_driver_t *driver;  /*!< the main driver object */
     tmap_map_stats_t *stat; /*!< the driver statistics */
     tmap_rand_t *rand;  /*!< the random number generator */
+    // DVK - realigner
+    struct RealignProxy *realigner; /*!< post-processing realigner engine */
     int32_t do_pairing;  /*!< 1 if we are performing pairing paramter calculation, 0 otherwise */
     int32_t tid;  /*!< the zero-based thread id */
 } tmap_map_driver_thread_data_t;
@@ -185,6 +190,8 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             tmap_map_driver_t *driver,
                             tmap_map_stats_t* stat,
                             tmap_rand_t *rand,
+                            // DVK - realign
+                            struct RealignProxy *realigner, 
                             int32_t do_pairing,
                             int32_t tid);
 

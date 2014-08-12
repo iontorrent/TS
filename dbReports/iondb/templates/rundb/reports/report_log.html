@@ -23,9 +23,8 @@ $(function() {
 
 </script>
 <div id="data_view" class="content group">
-    <h1>Status: {{report.status}}</h1>
     {% if error == "old_report" %}
-        <h2>Old report analysis</h2>
+        <h1>Old report analysis</h1>
         <p>
             Cannot display TorrentSuite 3.0-style report for a pre-3.0 analysis run.
         </p>
@@ -35,25 +34,47 @@ $(function() {
                     Re-analyze the run to generate a new report
                 </a>
             </li>
-            <li>
-                <a href="{{report_link}}/Default_Report.php">View the pre-3.0 report</a>
-            </li>
+
+            {% if report_php %}
+                <li>
+                    <a href="{{report_link}}/Default_Report.php">View the pre-3.0 report</a>
+                </li>
+            {% endif %}
+
+            {% if report_pdf %}
+                <li>
+                    <a href="{{report_link}}/backupPDF.pdf">View the pre-3.0 PDF report</a>
+                </li>
+            {% endif %}
+
             <li>
                 <a href="{% url "report" report.pk %}log" id="log-btn">View this report Log</a>
             </li>
         </ul>
     {% else %}
-		{% if error == "report_archived" or error == "report_deleted"%}
-			{% if error == "report_archived" %}
+    	{% if error == "user_aborted" %}
+    		<h1>User Aborted Run</h1>
+    		<p>This run was aborted by the user on the instrument, and has no data.</p>
+    		<ul>
+				<li><a href="{{report_link}}/{{archive_files.csa}}">Customer Support Archive</a></li>
+			</ul>
+		{% elif error == "report_archived" or error == "report_deleted"%}
+			<h1>Status: {{report.status}}</h1>
+			{% if report.status == "Importing" %}
+			    <h2>Report is importing and cannot be viewed</h2>
+			{% elif error == "report_archived" %}
 				<h2>Report was archived and cannot be viewed</h2>
 			{% elif error == "report_deleted" %}
 				<h2>Report was deleted and cannot be viewed</h2>
 			{% endif %}
+			{% if archive_files %}
 			<ul>
-				<li><a href="{{report_link}}/{{report_link|basename}}.support.zip">Customer Support Archive</a></li>
-                <li><a href="{{report_link}}/backupPDF.pdf">View Backup Report PDF</a></li>
+				<li><a href="{{report_link}}/{{archive_files.csa}}">Customer Support Archive</a></li>
+                <li><a href="{{report_link}}/{{archive_files.report_pdf}}">View Backup Report PDF</a></li>
 			</ul>
+			{% endif %}
 		{% else %}
+			<h1>Status: {{report.status}}</h1>
 			<ul>
 				<li><a href="{% url "report_csa" report.pk %}">Customer Support Archive</a></li>
                 <li><a href="{% url "report" report.pk %}">Report</a></li>
@@ -72,7 +93,7 @@ $(function() {
 
 
 			{% if log_data %}
-					<h1>Report Error Log <small>Refresh the page to see updates</small></h1>
+					<h1>Report Log <small>Refresh the page to see updates</small></h1>
 					{% for name, logfile in log_data %}
 						{% if logfile %}
 							<div class="clearfix">

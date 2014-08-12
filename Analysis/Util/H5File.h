@@ -5,7 +5,6 @@
 #include <vector>
 #include <string>
 #include <map>
-#include <armadillo>
 #include <stdio.h>
 
 #include "hdf5.h"
@@ -44,21 +43,6 @@ class H5DataSet {
   template<typename T> 
     void WriteRangeData(const size_t *starts, const size_t *ends, const T *data);
 
-  /** Utility function to write an entire matrix. */
-    template<typename T>
-    void WriteMatrix(arma::Mat<T> &mat);
-
-    template<typename T>
-    void WriteMatrix(arma::Mat<T> &mat, int col);
-
-    /** Utility function to read an entire data cube. */
-    template<typename T>
-    void ReadDataCube(DataCube<T> &cube);
-
-    /** Utility function to read an entire matrix. */
-  template<typename T>
-  void ReadMatrix(arma::Mat<T> &mat);
-
   /** Utility function to write an entire vector. */
     template<typename T>
       void WriteVector(std::vector<T> &vec);
@@ -70,6 +54,10 @@ class H5DataSet {
   template<typename T>
   void WriteDataCube(DataCube<T> &cube);
 
+  /** Utility function to read an entire data cube. */
+    template<typename T>
+    void ReadDataCube(DataCube<T> &cube);
+
   /** 
    * Assumes that the T* is the same size as specified by starts and
    * ends that starts and ends are contingous in memory. */
@@ -79,6 +67,8 @@ class H5DataSet {
 
   const static int H5_NULL = -1; ///< Filler value for non-initialized fields
 
+  size_t GetRank() { return mRank; }
+  std::vector<hsize_t> &GetDims() { return mDims; }
  private:
   /* Most of state is set by factory. */
   friend class H5File;
@@ -161,21 +151,9 @@ class H5File {
                                std::string &diskPath,
                                std::string &h5Path);
   
-  /** Utility function to write a matrix in one go to an hdf5 file. */
-  template <typename T> 
-    void WriteMatrix(const std::string &hdf5FilePath, arma::Mat<T> &mat);
-
-  /** Utility function to write a matrix in one go to an hdf5 file. */
-  template <typename T> 
-    static bool WriteMatrix(const std::string &hdf5FilePath, arma::Mat<T> &mat, bool overwrite);
-
   /** Utility function to read a data cube in one go to an hdf5 file. */
   template <typename T>
     static bool ReadDataCube(const std::string &hdf5FilePath, DataCube<T> &mat);
-
-  /** Utility function to read a matrix in one go to an hdf5 file. */
-  template <typename T> 
-    static bool ReadMatrix(const std::string &hdf5FilePath, arma::Mat<T> &mat);
 
   /** Utility function to write a vector in one go to an hdf5 file. */
   template <typename T> 
@@ -212,13 +190,6 @@ class H5File {
   hid_t GetH5Type(short s) { return H5T_NATIVE_SHORT; }
   hid_t GetH5Type(double d) { return H5T_NATIVE_DOUBLE; }
   hid_t GetH5Type(char c) { return H5T_NATIVE_CHAR; }
-
-  /** 
-   * Create a dataset using dimensions and type from matrix.  Memory
-   * owned by HFile, don't delete when finished, call Close()
-   */
-  template<typename T>
-    H5DataSet * CreateDataSet(const std::string &name, arma::Mat<T> &mat, int compression);
 
   /** 
    * Create a dataset using dimensions and type from vector.  Memory
@@ -304,33 +275,6 @@ void H5DataSet::WriteRangeData(const size_t *starts, const size_t *ends, const T
 }
 
 template<typename T>
-void H5DataSet::WriteMatrix(arma::Mat<T> &mat) {
-  size_t starts[2];
-  size_t ends[2];
-  starts[0] = starts[1] = 0;
-  ends[0] = mat.n_rows;
-  ends[1] = mat.n_cols;
-  //size_t size = mat.n_rows * mat.n_cols;
-  arma::Mat<T> m = trans(mat); // armadillo is stored column major, we want row major...
-  WriteRangeData(starts, ends, m.memptr());
-}
-
-
-template<typename T>
-void H5DataSet::WriteMatrix(arma::Mat<T> &mat, int col) {
-  size_t starts[2];
-  size_t ends[2];
-  starts[0] = 0; 
-  ends[0] = mat.n_rows;
-  starts[1] = col;
-  ends[1] = col+1;
-  arma::Mat<T> m = trans(mat); // armadillo is stored column major, we want row major...
-  WriteRangeData(starts, ends, m.memptr());
-}
-
-
-
-template<typename T>
 void H5DataSet::WriteDataCube(DataCube<T> &cube) {
   size_t starts[3];
   size_t ends[3];
@@ -362,19 +306,6 @@ void H5DataSet::ReadDataCube(DataCube<T> &cube) {
   ReadRangeData(starts, ends, size, cube.GetMemPtr());
 }
 
-template<typename T>
-void H5DataSet::ReadMatrix(arma::Mat<T> &mat) {
-  ION_ASSERT(mRank == 2, "Can't read a matrix when rank isn't 2");
-  mat.set_size(mDims[1],mDims[0]);
-  size_t starts[2];
-  size_t ends[2];
-  starts[0] = starts[1] = 0;
-  ends[0] = mat.n_cols;
-  ends[1] = mat.n_rows;
-  size_t size = mat.n_rows * mat.n_cols;
-  ReadRangeData(starts, ends, size, mat.memptr());
-  mat = trans(mat); // armadillo is stored column major, we want row major...
-}
 
 /** 
  * Assumes that the T* is the same size as specified by starts and
@@ -391,20 +322,6 @@ void H5DataSet::ReadRangeData(const size_t *starts, const size_t *ends,
   ION_ASSERT(status >= 0, "Couldn't read data.");
 }
 
-template<typename T>
-H5DataSet * H5File::CreateDataSet(const std::string &name, arma::Mat<T> &mat, int compression) {
-  hsize_t rank = 2;
-  hsize_t dims[rank];
-  hsize_t chunking[rank];
-  chunking[0] = std::min(1000u, mat.n_rows);
-  dims[0] = mat.n_rows;
-  chunking[1] = std::min(1000u, mat.n_cols);
-  dims[1] = mat.n_cols;
-  T t = 0;
-  hid_t type = GetH5Type(t);
-  H5DataSet *ds = CreateDataSet(name, rank, dims, chunking, compression, type);
-  return ds;
-}
 
 // Assumes we will be writing in chunk sizes that matches vector
 template<typename T>
@@ -447,43 +364,6 @@ bool H5File::ReadDataCube(const std::string &hdf5FilePath, DataCube<T> &cube) {
   H5DataSet *ds = h5File.OpenDataSet(h5path);
   ION_ASSERT(ds != NULL, "Couldn't open dataset: " + h5path);
   ds->ReadDataCube(cube);
-  ds->Close();
-  h5File.Close();
-  return true;
-}
-
-template <typename T> 
-bool H5File::ReadMatrix(const std::string &hdf5FilePath, arma::Mat<T> &mat) {
-  std::string file, h5path;
-  bool okPath = SplitH5FileGroup(hdf5FilePath, file, h5path);
-  ION_ASSERT(okPath, "Could not find valid ':' to split on in path: '" + hdf5FilePath + "'");
-  H5File h5File(file);
-  h5File.OpenForReading();
-  H5DataSet *ds = h5File.OpenDataSet(h5path);
-  ION_ASSERT(ds != NULL, "Couldn't open dataset: " + h5path);
-  ds->ReadMatrix(mat);
-  ds->Close();
-  h5File.Close();
-  return true;
-}
-
-template <typename T>
-void  H5File::WriteMatrix(const std::string &h5path, arma::Mat<T> &mat) {
-  H5DataSet *ds = CreateDataSet(h5path, mat, 3);
-  ION_ASSERT(ds != NULL, "Couldn't make dataset: " + h5path);
-  ds->WriteMatrix(mat);
-}
-
-template <typename T> 
-bool  H5File::WriteMatrix(const std::string &hdf5FilePath, arma::Mat<T> &mat, bool overwrite) {
-  std::string file, h5path;
-  bool okPath = SplitH5FileGroup(hdf5FilePath, file, h5path);
-  ION_ASSERT(okPath, "Could not find valid ':' to split on in path: '" + hdf5FilePath + "'");
-  H5File h5File(file);
-  h5File.Open(overwrite);
-  H5DataSet *ds = h5File.CreateDataSet(h5path, mat, 3);
-  ION_ASSERT(ds != NULL, "Couldn't make dataset: " + h5path);
-  ds->WriteMatrix(mat);
   ds->Close();
   h5File.Close();
   return true;

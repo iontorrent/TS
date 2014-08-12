@@ -73,13 +73,13 @@ install(DIRECTORY iondb DESTINATION .
     PATTERN "ionPlugin" EXCLUDE
     PATTERN "media/TorrentServerSplash.jpg" EXCLUDE
     PATTERN "media/favicon.ico" EXCLUDE
+    PATTERN "media/Makefile" EXCLUDE
     PATTERN "iondb/media/resources/kendo/examples/" EXCLUDE
     PATTERN "iondb/media/resources/kendo/source/" EXCLUDE
     PATTERN "iondb/media/resources/bootstrap/less/" EXCLUDE
     PATTERN "*.less" EXCLUDE
     PATTERN "iondb/index.html" EXCLUDE
     PATTERN "iondb/docsnotfound.html" EXCLUDE
-    PATTERN "iondb/wsgi/torrent-server*.in" EXCLUDE
     PATTERN "*.pyc" EXCLUDE
     PATTERN "*.pyo" EXCLUDE
 	PATTERN "iondb/backup" EXCLUDE
@@ -94,23 +94,29 @@ install(PROGRAMS manage.py DESTINATION ${ION_INSTALL_PREFIX})
 install(FILES celeryconfig.py DESTINATION ${ION_INSTALL_PREFIX})
 
 configure_file (
-    "${PROJECT_SOURCE_DIR}/iondb/wsgi/torrent-server.conf.in"
-    "${PROJECT_BINARY_DIR}/apache2/torrent-server.conf" @ONLY
+    "${PROJECT_SOURCE_DIR}/apacheconfig/torrent-server.conf.in"
+    "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server.conf" @ONLY
 )
-install(FILES "${PROJECT_BINARY_DIR}/apache2/torrent-server.conf" DESTINATION /etc/apache2/conf.d/)
+install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server.conf" DESTINATION /etc/apache2/conf.d/)
 
 configure_file (
-    "${PROJECT_SOURCE_DIR}/iondb/wsgi/torrent-server.in"
-    "${PROJECT_BINARY_DIR}/apache2/torrent-server" @ONLY
+    "${PROJECT_SOURCE_DIR}/apacheconfig/h5bp-server.conf.in"
+    "${PROJECT_BINARY_DIR}/apacheconfig/h5bp-server.conf" @ONLY
 )
-install(FILES "${PROJECT_BINARY_DIR}/apache2/torrent-server" DESTINATION /etc/apache2/sites-available)
+install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/h5bp-server.conf" DESTINATION /etc/apache2/conf.d/)
 
 configure_file (
-    "${PROJECT_SOURCE_DIR}/iondb/wsgi/torrent-server-ssl.in"
-    "${PROJECT_BINARY_DIR}/apache2/torrent-server-ssl.example" @ONLY
+    "${PROJECT_SOURCE_DIR}/apacheconfig/torrent-server.in"
+    "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server" @ONLY
 )
-install(FILES "${PROJECT_BINARY_DIR}/apache2/torrent-server-ssl.example" DESTINATION /etc/apache2/sites-available)
-install(FILES "${PROJECT_SOURCE_DIR}/iondb/wsgi/force-torrent-server-ssl" DESTINATION /etc/apache2/sites-available)
+install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server" DESTINATION /etc/apache2/sites-available)
+
+configure_file (
+    "${PROJECT_SOURCE_DIR}/apacheconfig/torrent-server-ssl.in"
+    "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server-ssl.example" @ONLY
+)
+install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server-ssl.example" DESTINATION /etc/apache2/sites-available)
+install(FILES "${PROJECT_SOURCE_DIR}/apacheconfig/force-torrent-server-ssl" DESTINATION /etc/apache2/sites-available)
 
 install(FILES "logrotate/ion-dbreports" DESTINATION /etc/logrotate.d/)
 
@@ -133,7 +139,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
-    ion-pipeline (>= 3.5.11),
+    ion-pipeline (>= 4.1.1),
     texlive-latex-base,
     texlive-latex-extra,
     latex-xcolor,
@@ -145,9 +151,10 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     libapache2-mod-gnutls,
     ssl-cert,
     python-celery (>= 3.0.12),
-    python-django (>= 1.5.1),
+    python-django (>= 1.6.2),
+    libjs-jquery (>= 1.7.2),
     python-django-celery (>= 3.0.11),
-    python-django-south (>=0.7.6),
+    python-django-south (>=0.8.4),
 	python-matplotlib,
 	python-scipy,
 	python-psycopg2 (>= 2.5),
@@ -165,13 +172,15 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     python-tastypie (>= 0.9.15),
 	python-drmaa,
     python-feedparser,
+    python-boto (>=2.20.1),
     memcached,
     python-memcache,
     samtools (>= 0.1.18),
     python-dev,
     rabbitmq-server (>= 3.0.2),
     ion-analysis (>=3.5.15),
-	megacli")
+	megacli,
+    libdrmaa1.0")
 
 # Incompatible with older tastypie, remove or upgrade before installing
 set(CPACK_DEBIAN_PACKAGE_BREAKS "python-tastypie (<= 0.9.10)")

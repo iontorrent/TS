@@ -10,6 +10,7 @@
 #include "ComparatorNoiseCorrector.h"
 #include "BkgTrace.h"
 #include "H5File.h"
+#include "H5Arma.h"
 #include "Stats.h"
 
 using namespace std;
@@ -20,13 +21,14 @@ using namespace arma;
 #define FIRSTDCFRAME 3
 #define LASTDCFRAME 12
 #define MIN_TRACE_SD 100
-#define SAMPLE_PER_REGION 100
+#define SAMPLE_PER_REGION 1000
 #define BF_INTEGRATION_WIDTH 1
 #define BF_INTEGRATION_WINDOW 30
 #define THUMBNAIL_STEP 100
 #define NUM_EIGEN_FILTER 3
 #define MIN_PERCENT_OK_BEADS .3
 #define MIN_GOOD_ROWS 50
+#define MAX_SD_SEARCH_WINDOW 25
 BFReference::BFReference() {
   mDoRegionalBgSub = false;
   mMinQuantile = -1;
@@ -55,9 +57,9 @@ void BFReference::Init(int nRow, int nCol,
   assert(mMaxQuantile <= 1);
   
   mWells.resize(nRow * nCol);
-  fill(mWells.begin(), mWells.end(), Unknown);
+  std::fill(mWells.begin(), mWells.end(), Unknown);
   mBfMetric.resize(nRow * nCol);
-  fill(mBfMetric.begin(), mBfMetric.end(), 1.0f);
+  std::fill(mBfMetric.begin(), mBfMetric.end(), 1.0f);
 }
 
 bool BFReference::InSpan(size_t rowIx, size_t colIx,
@@ -195,16 +197,34 @@ void BFReference::FilterForOutliers(Image &bfImg, Mask &mask, float iqrThreshold
   grid.Init(raw->rows, raw->cols, rowStep, colStep);
   int numBin = grid.GetNumBin();
   int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-  int filteredCountBefore = 0, filteredCountAfter = 0;
-  filteredCountBefore = CountFiltered(mWells);
+  //  int filteredCountBefore = 0, filteredCountAfter = 0;
+  //  filteredCountBefore = CountFiltered(mWells);
   for (int binIx = 0; binIx < numBin; binIx++) {
     grid.GetBinCoords(binIx, rowStart, rowEnd, colStart, colEnd);
     FilterRegionOutliers(bfImg, mask, iqrThreshold, rowStart, rowEnd, colStart, colEnd);
   }
-  filteredCountAfter = CountFiltered(mWells);
-  cout << "FilterForOutliers() - Filtered: " << filteredCountAfter - filteredCountBefore << " wells." << endl;
+  //  filteredCountAfter = CountFiltered(mWells);
+  //  cout << "FilterForOutliers() - Filtered: " << filteredCountAfter - filteredCountBefore << " wells." << endl;
 }
 
+void BFReference::CalcReference(Image &bfImg, Mask &mask, BufferMeasurement bf_type) {
+  CalcShiftedReference(bfImg, mask, mBfMetric, bf_type);
+  for (size_t i = 0; i < mBfMetric.size(); i++) {
+    if (mask[i] & MaskExclude || mask[i] & MaskPinned) {
+      mWells[i] = Exclude;
+    }
+    // else {
+    //   mask[i] = MaskIgnore;
+    // }
+  }
+  //  cout << "Filling reference. " << endl;
+  FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile);
+  for (size_t i = 0; i < mBfMetric.size(); i++) {
+    if (mWells[i] == Reference) {
+      mask[i] |= MaskReference;
+    }
+  }
+}
 void BFReference::CalcReference(const std::string &datFile, Mask &mask, BufferMeasurement bf_type) {
   CalcShiftedReference(datFile, mask, mBfMetric, bf_type);
   for (size_t i = 0; i < mBfMetric.size(); i++) {
@@ -215,7 +235,7 @@ void BFReference::CalcReference(const std::string &datFile, Mask &mask, BufferMe
     //   mask[i] = MaskIgnore;
     // }
   }
-  cout << "Filling reference. " << endl;
+  //  cout << "Filling reference. " << endl;
   FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile);
   for (size_t i = 0; i < mBfMetric.size(); i++) {
     if (mWells[i] == Reference) {
@@ -240,7 +260,7 @@ void BFReference::CalcDualReference(const std::string &datFile1, const std::stri
     //   mask[i] = MaskEmpty;
     // }
   }
-  cout << "Filling reference. " << endl;
+  //  cout << "Filling reference. " << endl;
   FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile);
   for (size_t i = 0; i < mWells.size(); i++) {
     if (mWells[i] == Reference) {
@@ -522,16 +542,22 @@ void BFReference::AdjustForT0(int rowStart, int rowEnd, int colStart, int colEnd
 }
 
 void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, std::vector<float> &metric, BufferMeasurement bf_type) {
-  // cache to avoid looking up the same values over and over
-  std::map<std::pair<int,double>,double> mZDCache;
   Image bfImg;
   bfImg.SetImgLoadImmediate (false);
   bool loaded = LoadImage(bfImg, datFile);
   if (!loaded) { ION_ABORT("*Error* - No beadfind file found, did beadfind run? are files transferred?  (" + datFile + ")"); }
+  CalcShiftedReference(bfImg, mask, metric, bf_type);
+  bfImg.Close();
+}
+
+void BFReference::CalcShiftedReference(Image &bfImg, Mask &mask, std::vector<float> &metric, BufferMeasurement bf_type) {
+  // cache to avoid looking up the same values over and over
+  std::map<std::pair<int,double>,double> mZDCache;
+
   const RawImage *raw = bfImg.GetImage();
   metric.resize(raw->rows * raw->cols);  
   mTraceSd.resize(metric.size());
-  fill(metric.begin(), metric.end(), 0.0f);
+  std::fill(metric.begin(), metric.end(), 0.0f);
 
   // Sanity checks
   assert(raw->cols == GetNumCol());
@@ -542,12 +568,12 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
     DebugTraces(mDebugFile, mask, bfImg);
   }
 
-  // Basic image processing @todo - should we be doing comparator correction?
-  bfImg.FilterForPinned(&mask, MaskEmpty, false);
-  ImageTransformer::XTChannelCorrect(bfImg.raw, bfImg.results_folder);
-  if (ImageTransformer::gain_correction != NULL) {
-    ImageTransformer::GainCorrectImage(bfImg.raw);
-  }
+  // // Basic image processing @todo - should we be doing comparator correction?
+  // bfImg.FilterForPinned(&mask, MaskEmpty, false);
+  // ImageTransformer::XTChannelCorrect(bfImg.raw, bfImg.results_folder);
+  // if (ImageTransformer::gain_correction != NULL) {
+  //   ImageTransformer::GainCorrectImage(bfImg.raw);
+  // }
   ClockTimer timer;
   // Filter for odd wells based on response to wash
   FilterForOutliers(bfImg, mask, mIqrOutlierMult, mRegionYSize, mRegionXSize);
@@ -568,13 +594,14 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
   int sd_filtered = 0;
   vector<float> neighbor_avg_metric(metric.size(),0);
   vector<float> ks_D(metric.size(),std::numeric_limits<double>::quiet_NaN());
-  fill(ks_D.begin(), ks_D.end(), std::numeric_limits<double>::quiet_NaN());
+  std::fill(ks_D.begin(), ks_D.end(), std::numeric_limits<double>::quiet_NaN());
   vector<float> ks_prob(metric.size(),-1);
-  fill(ks_prob.begin(), ks_prob.end(), -1.0f);
+  std::fill(ks_prob.begin(), ks_prob.end(), -1.0f);
   if (!mDebugH5File.empty()) {
-    sample_data_dbg.resize(SAMPLE_PER_REGION * numBin, num_frames + 4);
+    //    sample_data_dbg.resize(SAMPLE_PER_REGION * numBin, num_frames + 4);
+    sample_data_dbg.resize(raw->frameStride, num_frames + 4);
     sample_data_dbg.fill(0);
-    buffer_metrics_dbg.resize(raw->rows * raw->cols, 9);
+    buffer_metrics_dbg.resize(raw->rows * raw->cols, 10);
     // Initialize as these might not end up being calculated with sparse regions.
     for(size_t i =0; i < buffer_metrics_dbg.n_rows; i++) {
       buffer_metrics_dbg(i,7) = std::numeric_limits<double>::quiet_NaN();
@@ -584,7 +611,7 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
 
   for (int binIx = 0; binIx < numBin; binIx++) {
     // cleanup buffers for this chip.
-    fill(region_avg, region_avg+raw->uncompFrames, 0.0);
+    std::fill(region_avg, region_avg+raw->uncompFrames, 0.0);
     for (size_t i = 0; i < region_stats.size(); i++) {
       region_stats[i].Clear();
     }
@@ -596,14 +623,17 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
     
     // Calculate average t0 for region
     for (int row = rowStart; row < rowEnd; row++) {
-      for (int col = colStart; col < colEnd; col++) {
-        int idx = row * raw->cols + col;
-        if (mT0[idx] > 0) {
-          avg_t0 += mT0[idx];
+      float *__restrict t0_start = &mT0[0] + row * raw->cols + colStart;
+      float *__restrict t0_end = t0_start + (colEnd - colStart);
+      while (t0_start != t0_end) {
+        if (*t0_start > 0) {
+          avg_t0 += *t0_start;
           count_t0++;
         }
+        t0_start++;
       }
     }
+
     // skip region if no decent beads
     if (count_t0 == 0) {
       continue;
@@ -650,8 +680,8 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
         int data_idx = (row-rowStart) * mRegionXSize + (col-colStart);
         if (!(mask[idx] & (MaskPinned | MaskExclude)) && mWells[idx] != Filtered) {
           for (int i = 0; i < raw->uncompFrames; i++) {
-            region_avg[i] += data(i,data_idx);
-            region_stats[i].AddValue(data(i,data_idx));
+            region_avg[i] += data.at(i,data_idx);
+            region_stats[i].AddValue(data.at(i,data_idx));
           }
           well_count++;
         }
@@ -661,21 +691,22 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
     // Capture debug information if necessary
     if (sample_data_dbg.n_rows > 0) {
       int region_wells = (rowEnd - rowStart) * (colEnd - colStart);
-      int step = ceil(region_wells/(SAMPLE_PER_REGION*1.0f));
+      int step = 1; //ceil(region_wells/(SAMPLE_PER_REGION*1.0f));
       int count = 0;
-      int sample_idx = binIx * SAMPLE_PER_REGION;
+      //      int sample_idx = binIx * SAMPLE_PER_REGION;
       for (int row = rowStart; row < rowEnd; row++) {
         for (int col = colStart; col < colEnd; col++) {
           int data_idx = (row-rowStart) * mRegionXSize + (col-colStart);
+          int sample_idx = row * raw->cols + col;
           if (count++ % step == 0) {
             sample_data_dbg(sample_idx, 0) = rowStart;
             sample_data_dbg(sample_idx, 1) = colStart;
             sample_data_dbg(sample_idx, 2) = row;
             sample_data_dbg(sample_idx, 3) = col;
             for (int frame = 0; frame < num_frames; frame++) {
-              sample_data_dbg(sample_idx,frame+4) = data(frame, data_idx);
+              sample_data_dbg(sample_idx,frame+4) = data.at(frame, data_idx);
             }
-            sample_idx++;
+            //            sample_idx++;
           }
         }
       }
@@ -693,9 +724,10 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
     float max_sd = 0.0f;
     int max_sd_idx = 0;
     float frame_sd[num_frames];
+    int end_search_window = ceil(avg_t0) + MAX_SD_SEARCH_WINDOW;
     for (int fIx = 0; fIx < num_frames; fIx++) {
       frame_sd[fIx] = region_stats[fIx].GetSD();
-      if (max_sd < frame_sd[fIx]) {
+      if (max_sd < frame_sd[fIx] && fIx < end_search_window) {
         max_sd_idx = fIx;
         max_sd = frame_sd[fIx];
       }
@@ -708,11 +740,11 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
         int data_idx = (row-rowStart) * mRegionXSize + (col-colStart);
         int start_frame = floor(avg_t0);
         int end_frame = min(start_frame + BF_INTEGRATION_WINDOW, raw->uncompFrames);
-        float min_val = data(start_frame, data_idx) - region_avg[start_frame];
+        float min_val = data.at(start_frame, data_idx) - region_avg[start_frame];
         float max_val = min_val;
         for (int frame = start_frame; frame < end_frame; frame++) {
           int fIx = frame - start_frame;
-          float val = data(fIx, data_idx) - region_avg[fIx];
+          float val = data.at(fIx, data_idx) - region_avg[fIx];
           max_val = max(max_val, val);
           min_val = min(min_val, val);
         }
@@ -723,7 +755,7 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
         end_frame = min((num_frames), max_sd_idx + BF_INTEGRATION_WIDTH);
         float integrated_val = 0;
         for (int frame = start_frame; frame < end_frame; frame++) {
-          integrated_val += data(frame, data_idx) - region_avg[frame];
+          integrated_val += data.at(frame, data_idx) - region_avg[frame];
         }
 
         // Fill In the metric based on that requested
@@ -731,7 +763,7 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
           metric[idx] = max_val - abs ( min_val );
         }
         else if(bf_type == BFMaxSd) {
-          metric[idx] = data(max_sd_idx, data_idx);
+          metric[idx] = data.at(max_sd_idx, data_idx);
         }
         else if(bf_type == BFIntMaxSd) {
           metric[idx] = integrated_val;
@@ -744,10 +776,11 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
         if (buffer_metrics_dbg.n_rows > 0) {
           int c = 0;
           buffer_metrics_dbg(idx,c++) = metric[idx]; // 0 
-          buffer_metrics_dbg(idx,c++) = data(max_sd_idx, data_idx); // 1
+          buffer_metrics_dbg(idx,c++) = data.at(max_sd_idx, data_idx); // 1
           buffer_metrics_dbg(idx,c++) = max_sd_idx; // 2
-          buffer_metrics_dbg(idx,c++) = mWells[idx];
-          buffer_metrics_dbg(idx,c++) = mTraceSd[idx];
+          buffer_metrics_dbg(idx,c++) = mWells[idx]; // 3
+          buffer_metrics_dbg(idx,c++) = mTraceSd[idx]; //4
+          buffer_metrics_dbg(idx,c++) = mT0[idx]; // 5
         }
       }
     }
@@ -759,10 +792,10 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
       for (int row = rowStart; row < rowEnd; row++) {
         for (int col = colStart; col < colEnd; col++) {
           int idx = row * raw->cols + col;
-          buffer_metrics_dbg(idx,last_col-3) = neighbor_avg_metric[idx];
-          buffer_metrics_dbg(idx,last_col-2) = metric[idx];
-          buffer_metrics_dbg(idx,last_col-1) = ks_D[idx];
-          buffer_metrics_dbg(idx,last_col) = ks_prob[idx];
+          buffer_metrics_dbg(idx,last_col-3) = neighbor_avg_metric[idx]; // 6
+          buffer_metrics_dbg(idx,last_col-2) = metric[idx]; // 7
+          buffer_metrics_dbg(idx,last_col-1) = ks_D[idx]; // 8
+          buffer_metrics_dbg(idx,last_col) = ks_prob[idx]; // 9
         }
       }
     }
@@ -788,10 +821,10 @@ void BFReference::CalcShiftedReference(const std::string &datFile, Mask &mask, s
       
   }
   if (!mDebugH5File.empty()) {
-    H5File::WriteMatrix(mDebugH5File + ":/beadfind/sample_traces", sample_data_dbg, false);
-    H5File::WriteMatrix(mDebugH5File + ":/beadfind/buffer_metrics", buffer_metrics_dbg, false);
+    H5Arma::WriteMatrix(mDebugH5File + ":/beadfind/sample_traces", sample_data_dbg, false);
+    H5Arma::WriteMatrix(mDebugH5File + ":/beadfind/buffer_metrics", buffer_metrics_dbg, false);
   }
-  bfImg.Close();
+
   int filteredCount = 0;
   int excludeCount = 0;
   for (size_t i = 0; i < metric.size(); i++) {
@@ -907,9 +940,9 @@ void BFReference::CalcSignalShiftedReference(const std::string &datFile, const s
   metric.resize(raw->rows * raw->cols);  
   mTraceSd.resize(metric.size());
   size_t chip_wells = raw->rows * raw->cols;
-  fill(metric.begin(), metric.end(), 0.0f);
+  std::fill(metric.begin(), metric.end(), 0.0f);
   mWells.resize(chip_wells);
-  fill(mWells.begin(), mWells.end(), Unknown);
+  std::fill(mWells.begin(), mWells.end(), Unknown);
   // Sanity checks
   assert(raw->cols == GetNumCol());
   assert(raw->rows == GetNumRow());
@@ -978,7 +1011,7 @@ void BFReference::CalcSignalShiftedReference(const std::string &datFile, const s
 
   for (int binIx = 0; binIx < numBin; binIx++) {
     // cleanup buffers for this chip.
-    fill(region_avg, region_avg+raw->uncompFrames, 0.0);
+    std::fill(region_avg, region_avg+raw->uncompFrames, 0.0);
     for (size_t i = 0; i < region_stats.size(); i++) {
       region_stats[i].Clear();
     }
@@ -1166,10 +1199,10 @@ void BFReference::CalcSignalShiftedReference(const std::string &datFile, const s
   }
 
   if (!mDebugH5File.empty()) {
-    H5File::WriteMatrix(mDebugH5File + ":/beadfind/sample_traces", sample_data_dbg, false);
-    H5File::WriteMatrix(mDebugH5File + ":/beadfind/sample_fg_traces", sample_raw_data_dbg, false);
-    H5File::WriteMatrix(mDebugH5File + ":/beadfind/sample_bg_traces", sample_bg_data_dbg, false);
-    H5File::WriteMatrix(mDebugH5File + ":/beadfind/buffer_metrics", buffer_metrics_dbg, false);
+    H5Arma::WriteMatrix(mDebugH5File + ":/beadfind/sample_traces", sample_data_dbg, false);
+    H5Arma::WriteMatrix(mDebugH5File + ":/beadfind/sample_fg_traces", sample_raw_data_dbg, false);
+    H5Arma::WriteMatrix(mDebugH5File + ":/beadfind/sample_bg_traces", sample_bg_data_dbg, false);
+    H5Arma::WriteMatrix(mDebugH5File + ":/beadfind/buffer_metrics", buffer_metrics_dbg, false);
   }
   
   img.Close();
@@ -1253,7 +1286,7 @@ void BFReference::CalcSignalReference2(const std::string &datFile, const std::st
       mWells[i] = Exclude;
     }
   }
-  cout << "Filling reference. " << endl;
+  //  cout << "Filling reference. " << endl;
   FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile);
   for (int i = 0; i < length; i++) {
     if (mWells[i] == Reference) {

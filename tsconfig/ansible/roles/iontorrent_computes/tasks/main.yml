@@ -1,0 +1,63 @@
+---
+# file: roles/iontorrent_computes/tasks/main.yml
+
+
+#-----------------------------------------------------------------------------
+# Install system packages specifically for a compute node
+#-----------------------------------------------------------------------------
+- name: Install system packages for compute resource - apt
+  apt: name={{ item }} state=latest force=yes
+  with_items: ioncompute_syspkg_list
+  when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
+  
+#- name: Install system packages for compute resource - yum
+#  yum: name={{ item }} state=latest force=yes
+#  with_items: ioncompute_syspkg_list
+#  when: "'{{ item }}' != '' and ansible_distribution == 'CentOS'"
+#  tags: debug
+
+#-----------------------------------------------------------------------------
+# Install Ion Torrent Packages for a compute node
+#-----------------------------------------------------------------------------
+- name: Install Ion packages for compute resource - apt
+  apt: name={{ item }} state=latest force=yes
+  with_items: ioncompute_ionpkg_list
+  when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
+  
+#- name: Install Ion packages for compute resource - yum
+#  yum: name={{ item }} state=latest force=yes
+#  with_items: ioncompute_ionpkg_list
+#  when: "'{{ item }}' != '' and ansible_distribution == 'CentOS'"
+#  tags: debug
+
+#-----------------------------------------------------------------------------
+# We need to configure node to use apt-cacher-ng server
+#-----------------------------------------------------------------------------
+- name: Configure apt-cacher-ng
+  lineinfile: dest=/etc/apt/apt.conf.d/01proxy create=true state=present
+                regexp='Acquire::http::Proxy.*'
+                line='Acquire::http::Proxy "http://{{ groups.iontorrent_master[0] }}:3142";'
+  
+# Set host location of Ion Torrent Server Daemons
+#function config_cluster_settings()
+- name: Update cluster configuration file - cluster_settings.py
+  lineinfile: dest={{ tsconfig_dir }}/cluster_settings.py
+                state=present
+                create=yes
+                owner=ionadmin mode=0644
+                regexp="^({{item}})(.*)"
+                line="{{item}} = {{ groups.headnode[0] }}"
+  with_items:
+    - PLUGINSERVER_HOST
+    - JOBSERVER_HOST
+    - CRAWLER_HOST
+ 
+# TODO: Expand and replace: function config_ionSoftware
+    # 4 items moved into common/tasks/main.yml
+    
+    # Install/Update Torrent Suite software packages
+#    preinst_ion_packages
+#    install_ion_packages
+#    config_ion_packages
+#    update_conf_file
+#    updated_mirror_check

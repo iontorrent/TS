@@ -19,6 +19,7 @@ COLUMN_TEMPLATE_NAME = "Template name to plan from (required)"
 COLUMN_PLAN_NAME = "Plan name (required)"
 COLUMN_BC_SAMPLE_KEY = ":Sample"
 COLUMN_SAMPLE = "Sample (required)"
+COLUMN_SAMPLE_ID = "Sample ID"
 COLUMN_SAMPLE_PREP_KIT = "Sample preparation kit name"
 COLUMN_LIBRARY_KIT = "Library kit name"
 COLUMN_TEMPLATING_KIT = "Templating kit name"
@@ -26,6 +27,7 @@ COLUMN_CONTROL_SEQ_KIT = "Control sequence name"
 COLUMN_SEQ_KIT = "Sequence kit name"
 COLUMN_CHIP_TYPE = "Chip type"
 COLUMN_FLOW_COUNT = "Flows"
+COLUMN_SAMPLE_TUBE_LABEL = "Sample tube label"
 COLUMN_BEAD_LOAD_PCT = "Bead loading %"
 COLUMN_KEY_SIGNAL_PCT = "Key signal %"
 COLUMN_USABLE_SEQ_PCT = "Usable sequence %"
@@ -151,7 +153,7 @@ def _get_target_regions_bed_file(template):
 def _get_hotspot_regions_bed_file(template):
     filePath = ""
     
-    if template and template.get_bedfile():
+    if template and template.get_regionfile():
         try:
             bed = Content.objects.get(file = template.get_regionfile())
             filePath = bed.path
@@ -241,13 +243,21 @@ def _has_ir_beyond_v1_0(template):
 def _get_sample_name(template):
     return ""
 
+
+def _get_sample_id(template):
+    return ""
+
+
+def _get_sample_tube_label(template):
+    return ""
+
 def _is_barcoded(template):
     return True if template.get_barcodeId() else False
 
 def _get_barcoded_sample_headers(template, prefix):
     hdrs = []
     if _is_barcoded(template):
-        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId())
+        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("id_str")
         barcodeCount = barcodes.count()
         for barcode in barcodes:
             hdrs.append(barcode.id_str + prefix)
@@ -257,7 +267,7 @@ def _get_barcoded_sample_headers(template, prefix):
 def _get_barcoded_sample_names(template):
     cells = []
     if _is_barcoded(template):
-        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId())
+        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("id_str")
         for barcode in barcodes:
             cells.append("")
 
@@ -266,7 +276,7 @@ def _get_barcoded_sample_names(template):
 def _get_barcoded_sample_IR_beyond_v1_0_headers(template, prefix):    
     hdrs = []
     if _is_barcoded(template):
-        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId())
+        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("id_str")
         barcodeCount = barcodes.count()
         index = 0
         for barcode in barcodes:
@@ -302,6 +312,7 @@ def get_template_data_for_batch_planning(templateId):
                , COLUMN_SEQ_KIT
                , COLUMN_CHIP_TYPE
                , COLUMN_FLOW_COUNT
+               , COLUMN_SAMPLE_TUBE_LABEL
                , COLUMN_BEAD_LOAD_PCT
                , COLUMN_KEY_SIGNAL_PCT
                , COLUMN_USABLE_SEQ_PCT
@@ -325,6 +336,7 @@ def get_template_data_for_batch_planning(templateId):
                , _get_seq_kit_description(template)
                , _get_chip_type_description(template)
                , _get_flow_count(template)
+               , _get_sample_tube_label(template)
                , _get_bead_loading_qc(template)
                , _get_key_signal_qc(template)
                , _get_usable_seq_qc(template)
@@ -354,6 +366,9 @@ def get_template_data_for_batch_planning(templateId):
         else:
             hdr.append(COLUMN_SAMPLE)
             body.append(_get_sample_name(template))
+
+            hdr.append(COLUMN_SAMPLE_ID)
+            body.append(_get_sample_id(template))            
             #if has_ir_beyond_v1_0:
              #   hdr.append(COLUMN_IR_V1_X_WORKFLOW)
              #   body.append(_get_sample_IR_beyond_v1_0_workflows(template))   

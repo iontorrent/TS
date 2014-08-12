@@ -54,10 +54,27 @@ h5, h6 {
     font-size: 12px;
   } 
 }
+
+
+
 body {
-  //background: #2D4782;
+  background: #EFEFEF;
   color: #333333;
   font: 0.875em/1.4 Arial,"Helvetica Neue",Helvetica,sans-serif;
+  background-image: linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
+  background-image: -o-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
+  background-image: -moz-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
+  background-image: -webkit-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
+  background-image: -ms-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
+  background-image: -webkit-gradient(
+    linear,
+    left bottom,
+    left top,
+    color-stop(0.08, @header-background-high),
+    color-stop(0.61, @main-background-high),
+    color-stop(0.89, @header-background-high)
+  );
+  background-position: center 100px;
 }
 
 .form-label {
@@ -210,14 +227,7 @@ a.btn-danger {
 @main-background-high: #a0a0a0;
 
 .header { 
-  background: @header-background-low; /* Old browsers */ 
-  background: -moz-linear-gradient(top, @header-background-low 0%, @header-background-high 100%);
-  background: -moz-linear-gradient(top, @header-background-low 0%, @header-background-high 100%); /* FF3.6+ */
-  background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,@header-background-low), color-stop(100%,@header-background-high)); /* Chrome,Safari4+ */
-  background: -webkit-linear-gradient(top, @header-background-low 0%,@header-background-high 100%); /* Chrome10+,Safari5.1+ */
-  background: -o-linear-gradient(top, @header-background-low 0%,@header-background-high 100%); /* Opera11.10+ */
-  background: -ms-linear-gradient(top, @header-background-low 0%,@header-background-high 100%); /* IE10+ */
-  background: linear-gradient(top, @header-background-low 0%,@header-background-high 100%); /* W3C */  
+  background-color: transparent;
   
   .nav-tabs {
     > li {
@@ -352,23 +362,7 @@ a.btn-danger {
 }
 
 .main, .login {
-  background: #EFEFEF; /* Old browsers */ 
-
-  background-image: linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
-  background-image: -o-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
-  background-image: -moz-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
-  background-image: -webkit-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
-  background-image: -ms-linear-gradient(bottom, @header-background-high 8%, @main-background-high 61%, @header-background-high 89%);
-
-  background-image: -webkit-gradient(
-    linear,
-    left bottom,
-    left top,
-    color-stop(0.08, @header-background-high),
-    color-stop(0.61, @main-background-high),
-    color-stop(0.89, @header-background-high)
-  );
-
+  background: transparent; /* Old browsers */ 
 
 	min-height: 100%; /*sticky footer*/
 	height: auto !important; /*sticky footer*/
@@ -556,13 +550,18 @@ body .modal-1000 {
   }
 }
 
-.table-dense td, .table-dense th {
-  padding: 2px 4px;
-  overflow: hidden;
-  font-size: 0.85em;
-  line-height: 1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.table-dense {
+  tr > td, tr > th {
+    padding: 2px 4px;
+    overflow: hidden;
+    font-size: 0.85em;
+    line-height: 1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  table#main_table tr > td:last-child {
+    padding: 2px 2px 2px 0;
+  }
 }
 
 .tight-text {

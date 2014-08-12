@@ -5,10 +5,14 @@
 #include <arpa/inet.h>
 #include "crop/Acq.h"
 #include "ByteSwapUtils.h"
+#include "AdvCompr.h"
 #include "datahdr.h"
 #include "Utils.h"
 #include <iostream>
 #include <fstream>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 using namespace std;
 
@@ -270,9 +274,9 @@ uint8_t *bwrt(uint8_t *src, uint32_t len, uint8_t *dst)
 	return dst;
 }
 
-bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh)
+bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh, bool verbose)
 {
-	// open up the acq file
+    // open up the acq file
 	const RawImage *raw = image->GetImage();
 	FILE *fp;
 	fp = fopen(acqName, "wb");
@@ -281,9 +285,9 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh)
 		return false;
 	}
 
-	_file_hdr	fileHdr;
-	_expmt_hdr_v4	expHdr;
 
+    _file_hdr	fileHdr;
+	_expmt_hdr_v4	expHdr;
 
 //	uint32_t vfr_array[100];
 	uint32_t vfr_array_cnt = 0;
@@ -322,8 +326,9 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh)
 	memset(&fileHdr,0,sizeof(fileHdr));
 	memset(&expHdr,0,sizeof(expHdr));
 
+
 	// set up the file header
-	fileHdr.signature = 0xdeadbeef;
+    fileHdr.signature = 0xdeadbeef;
 	fileHdr.struct_version = 0x4;
 	fileHdr.header_size = sizeof(_expmt_hdr_v3);
 	unsigned long totalSize = vfr_array_cnt * (ow*oh*2 + sizeof(uint32_t)); // data + timestamp
@@ -335,10 +340,8 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh)
 	ByteSwap4(fileHdr.header_size);
 	ByteSwap4(fileHdr.data_size);
 
-
-
 	// setup the data header
-	expHdr.first_frame_time = 0;
+    expHdr.first_frame_time = 0;
 	expHdr.rows = oh;
 	expHdr.cols = ow;
 	expHdr.frames_in_file = vfr_array_cnt;
@@ -365,7 +368,8 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh)
 	fwrite(&expHdr, sizeof(expHdr), 1, fp);
 	offset += sizeof(expHdr);
 
-//	printf("offset=%d %ld %ld\n",offset,sizeof(expHdr),sizeof(fileHdr));
+    if (verbose)
+        printf("offset=%d %ld %ld\n",offset,sizeof(expHdr),sizeof(fileHdr));
 	// write each frame block (timestamp & frame data)
 	uint32_t frame;
 //	int offset;
@@ -405,14 +409,13 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh)
 		comp=0;
 
 
-
 		// save the data into frame_data
 		for(iy=0;iy<oh;iy++)
 		{
 			sptr = &raw->image[frame*raw->frameStride+(iy+oy)*raw->cols+ox];
 			for(ix=0;ix<ow;ix++)
 			{
-				*ptr++ = *sptr++;
+				*ptr++ = *sptr++ & 0x3fff;
 //				image->GetInterpolatedValueAvg4(ptr,rframe,ox+ix,oy+iy,frameCnt);
 //				*ptr++ = get_val(ox,iy+oy,rframe,frameCnt);
 			}
@@ -420,21 +423,20 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh)
 
 		if(prev_data)
 		{
-			if(PrevFrameSubtract(ow*oh,frame_data,prev_data,results_data,&results_len,ow,oh) == 0)
+			if(PrevFrameSubtract(ow,oh,frame_data,prev_data,results_data,&results_len,&comp) == 0)
 			{
 //				printf("pfc worked %ld!!\n",results_len);
-				comp = htonl(1);
+				comp = htonl(comp);
 			}
 			else
 			{
-//				printf("pfc didn't work\n");
+//				printf("pfc didn't work frame=%d %x\n",frame,comp);
 			}
 		}
 
 		fwrite(&comp, sizeof(comp), 1, fp);
-//		bptr = bwrt(&comp, sizeof(comp),bptr);
-
 		offset += sizeof(comp);
+
 
 		if(!comp)
 		{
@@ -449,6 +451,7 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh)
 					ptr++;
 				}
 			}
+			offset += oh*ow*2;
 		}
 		else
 		{
@@ -470,20 +473,22 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh)
 			frame_data = (int16_t *)malloc(2*ow*oh);
 		}
 
+        if (verbose)
+        {
 		if(comp)
 			printf(".");
 		else
 			printf("-");
 		fflush(stdout);
+        }
 
 //					printf("val=%x %x %x %x   ptr=%x %x %x %x\n",val[0],val[1],val[2],val[3],ptr[0],ptr[1],ptr[2],ptr[3]);
-
-
 
 		rframe += frameCnt;
 	}
 
-	printf("\n");
+    if (verbose)
+        printf("\n  Size=%d\n",offset);
 
 	free(frame_data);
 	free(results_data);
@@ -493,7 +498,7 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh)
 	return true;
 }
 
-
+#if 0
 int Acq::PrevFrameSubtract(int elems, int16_t *framePtr, int16_t *prevFramePtr, int16_t *results, uint64_t *out_len, uint32_t ow, uint32_t oh)
 {
 	uint32_t x,y;
@@ -726,7 +731,7 @@ int Acq::PrevFrameSubtract(int elems, int16_t *framePtr, int16_t *prevFramePtr, 
 	return failed;
 }
 
-
+#endif
 
 bool Acq::WriteAscii(const char *acqName, int ox, int oy, int ow, int oh)
 {	//Unused parameter generates compiler warning, so...
@@ -1794,7 +1799,6 @@ unsigned int Acq::GetUncompressedFrames(unsigned int compressedFrames) {
 
 }
 
-
 bool Acq::WriteTimeBasedAcq(char *acqName, int ox, int oy, int ow, int oh)
 {
     // open up the acq file
@@ -1822,9 +1826,9 @@ bool Acq::WriteTimeBasedAcq(char *acqName, int ox, int oy, int ow, int oh)
     for (int i=0; i<raw->frames; ++i) {
         cutOffTime = (float)raw->timestamps[i]/(float)1000.0;
         if (cutOffTime > acqTime) {
-            vfr_array_cnt = i; 
+            vfr_array_cnt = i;
             break;
-        }           
+        }
     }
     vfr_total_cnt = GetUncompressedFrames(vfr_array_cnt);
     //vfr_total_cnt = ceil(acqTime / (sample_rate/(float)1000.0));
@@ -1836,7 +1840,7 @@ bool Acq::WriteTimeBasedAcq(char *acqName, int ox, int oy, int ow, int oh)
 
     memset(&fileHdr,0,sizeof(fileHdr));
     memset(&expHdr,0,sizeof(expHdr));
- 
+
     // set up the file header
     fileHdr.signature = 0xdeadbeef;
     fileHdr.struct_version = 0x4;
@@ -1898,6 +1902,7 @@ bool Acq::WriteTimeBasedAcq(char *acqName, int ox, int oy, int ow, int oh)
         uint16_t tmp[4];
         uint64_t results_len=0;
         uint32_t comp;
+        uint32_t comprType=0;
 
         results_len=0;
         comp=0;
@@ -1917,15 +1922,14 @@ bool Acq::WriteTimeBasedAcq(char *acqName, int ox, int oy, int ow, int oh)
         if(prev_data)
         {
             if(PrevFrameSubtract(
-                    ow*oh,
+                    ow,oh,
                     frame_data,
                     prev_data,
                     results_data,
                     &results_len,
-                    ow,
-                    oh) == 0)
+                    &comprType) == 0)
             {
-                comp = htonl(1);
+                comp = htonl(comprType);
             }
             else
             {
@@ -1987,6 +1991,55 @@ bool Acq::WriteTimeBasedAcq(char *acqName, int ox, int oy, int ow, int oh)
     if(prev_data)
         free(prev_data);
     fclose(fp);
+    return true;
+}
+
+bool Acq::WritePFV(char *acqName, int ox, int oy, int ow, int oh, char *options)
+{
+	// open up the acq file
+    const RawImage *raw = image->GetImage();
+
+    int fd;
+    fd = open(acqName, O_CREAT | O_WRONLY,0644);
+    if (fd < 0) {
+        printf("Warning!  Could not open file: %s for writing?\n", acqName);
+        return false;
+    }
+    int dbgType = 0;
+    if(options && options[0] >= '1' && options[0] <= '9')
+      dbgType = (int)options[0]-(int)'0';
+    if(ox == 0 && oy == 0 && ow == raw->cols && oh == raw->rows)
+    {
+    	// full image
+    	AdvCompr advc(fd, raw->image, raw->cols, raw->rows, raw->frames,
+    			raw->uncompFrames, raw->timestamps,NULL,dbgType,acqName,options);
+    	advc.Compress(-1);
+    }
+    else
+    {
+    	// create a cropped dataset, then save it.
+    	short int *image=(short int *)malloc(sizeof(short int)*ow*oh*raw->frames);
+    	int x,y;
+        for (int f = 0; f < raw->frames; f++) {
+          short *crop = image + f * ow * oh;
+          short *orig = raw->image + f * raw->rows * raw->cols;
+          for(y=oy;y<(oh+oy);y++)
+            {
+              for(x=ox;x<(ow+ox);x++)
+    		{
+                  crop[(y-oy)*ow+(x-ox)] = orig[y*raw->cols+x];
+    		}
+            }
+        }
+
+    	AdvCompr advc(fd, image, ow, oh, raw->frames,
+    			raw->uncompFrames, raw->timestamps,NULL,dbgType,acqName,options);
+    	advc.Compress(-1);
+
+    	free(image);
+    }
+
+	close(fd);
     return true;
 }
 

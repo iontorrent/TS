@@ -23,6 +23,7 @@ struct RawImage
   int *interpolatedFrames;
   float *interpolatedMult;
   float *interpolatedDiv;
+  int imageState;
 
   RawImage()
   {
@@ -45,6 +46,7 @@ struct RawImage
     uncompFrames=0;
     compFrames=0;
     baseFrameRate=0;
+    imageState=0;
   }
 };
 

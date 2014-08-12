@@ -26,7 +26,11 @@
     droopType    = c("ONLY_WHEN_INCORPORATING","EVERY_FLOW"),
     extraTaps    = 0,
     getStates    = 0,
-    terminatorChemistryRun = 0
+    diagonalStates = 0,
+    RecalModelFile="",
+    RecalModelThreshold=4,
+    xval=NA,
+    yval=NA
   )
 }
 \arguments{
@@ -80,8 +84,20 @@
     \item{getStates}{
     Advanced simulation that also logs the state of each incorporating homopolymer.
   }
-    \item{terminatorChemistryRun}{
-    Switch to simulate a run with terminator chemistry (only with treephaser simulator).
+    \item{diagonalStates}{
+    Switch to enable a diagonal state progression model (only with treephaser simulator).
+  }
+  \item{RecalModelFile}{
+    Filename of a HP recalibration file to be loaded. (only with treephaser simulator)
+  }
+  \item{RecalModelThreshold}{
+    Lower (inclusive) threshold for model HP recalibration. (default 4)
+  }
+  \item{xval}{
+    x coordinates of the wells. Required when RecalModelFile is provided.
+  }
+  \item{yval}{
+    y coordinates of the wells. Required when RecalModelFile is provided.
   }
 }
 \value{

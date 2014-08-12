@@ -15,7 +15,7 @@
 #include "TikhonovSmoother.h"
 #include "RawImage.h"
 #include "ImageTransformer.h"
-
+#include "deInterlace.h"
 #include <vector>
 #include <string>
 
@@ -48,10 +48,10 @@ class Image : public AcqMovie
 public:
     Image();
     virtual ~Image();
-    bool LoadRaw ( const char *rawFileName, int frames = 0, bool allocate = true, bool headerOnly = false );
     bool LoadRaw ( const char *rawFileName, TikhonovSmoother *tikSmoother );
-    bool LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly,
-                   TikhonovSmoother *tikSmoother );
+    bool LoadRaw ( const char *rawFileName, int frames = 0, bool allocate = true, bool headerOnly = false );
+    bool LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly, TikhonovSmoother *tikSmoother );
+    bool LoadRaw_noWait ( const char *rawFileName, int frames=0, bool allocate=true, bool headerOnly=false );
     int ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOnly );
     /** Not perfect as sdat has a particular time compression per region but good workaround for some use cases. */
     void InitFromSdat(SynchDat *sdat);
@@ -138,7 +138,7 @@ public:
     void SubtractLocalReferenceTrace ( Mask *mask, MaskType apply_to_these, MaskType derive_from_these, int innerx, int innery, int outerx, int outery, bool bkg = false, bool onlyBkg = false, bool replaceWBkg = false );
     void SubtractLocalReferenceTraceInRegion (Region &reg,  Mask *mask, MaskType apply_to_these, MaskType derive_from_these, int innerx, int innery,
             int outerx, int outery, bool saveBkg = false, bool onlyBkg = false, bool replaceWBkg = false );
-    void  GenerateCumulativeSumMatrix(int64_t *workTotal, unsigned int *workNum, uint16_t *MaskPtr, MaskType derive_from_these, int frame);
+    void GenerateCumulativeSumMatrix(int64_t *workTotal, unsigned int *workNum, uint16_t *MaskPtr, MaskType derive_from_these, int frame);
     int WholeFrameMean(int64_t *workTotal, unsigned int *workNum);
     void ApplyLocalReferenceToWholeChip(int64_t *workTotal, unsigned int *workNum, 
                                         uint16_t *MaskPtr, MaskType apply_to_these,
@@ -146,7 +146,7 @@ public:
                                         bool saveBkg, bool onlyBkg, bool replaceWBkg, int frame);
     void SetUpBkgSave(bool saveBkg);
 
-    void  GenerateCumulativeSumMatrixInRegion(Region &reg, int64_t *workTotal, unsigned int *workNum, uint16_t *MaskPtr, MaskType derive_from_these, int frame);
+    void GenerateCumulativeSumMatrixInRegion(Region &reg, int64_t *workTotal, unsigned int *workNum, uint16_t *MaskPtr, MaskType derive_from_these, int frame);
     void ApplyLocalReferenceInRegion(Region &reg, int64_t *workTotal, unsigned int *workNum,
                                      uint16_t *MaskPtr, MaskType apply_to_these,
                                      int innerx, int innery, int outerx, int outery,
@@ -204,6 +204,7 @@ public:
     void SetImage ( RawImage *img );
 
     int  GetFrame ( int time );
+    int  GetFrame ( int time, int offset );
 
     void    SetFlowOffset ( int _flowOffset ) {
         flowOffset = _flowOffset;
@@ -264,6 +265,10 @@ public:
     RawImage *raw;    // the raw image
     char   *results_folder;  // really the directory
 
+    double CacheAccessTime;  // how long it took to load the file from disk
+    double SemaphoreWaitTime;// how long it took to get the file semaphore
+    double FileLoadTime;     // how long it took to uncompress the file.
+
 protected:
     double  *results;   // working memory filled with results from various methods
     int16_t  *bkg;    // average background value per pixel
@@ -284,12 +289,6 @@ protected:
 
 double TinyTimer();
 
-// prototype for deInterlace.cpp
-
-int deInterlace_c (
-    char *fname, short **_out, int **_timestamps,
-    int *_rows, int *_cols, int *_frames, int *_compFrames, int start_frame, int end_frame,
-    int mincols, int minrows, int maxcols, int maxrows, int ignoreErrors );
 
 
 #endif // IMAGE_H

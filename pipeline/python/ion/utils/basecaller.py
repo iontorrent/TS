@@ -12,7 +12,6 @@ import re
 import time
 import dateutil
 from shutil import move
-import glob
 import math
 import shlex
 import copy
@@ -25,7 +24,6 @@ from ion.reports import mergeBaseCallerJson
 from ion.utils import blockprocessing
 from ion.utils import ionstats
 
-from ion.reports import wells_beadogram
 from ion.utils import ionstats_plots
 
 def basecaller_cmd(basecallerArgs,
@@ -37,9 +35,7 @@ def basecaller_cmd(basecallerArgs,
                    block_col_offset,
                    block_row_offset,
                    datasets_pipeline_path,
-                   adapter,
-                   barcodesplit_filter,
-                   barcodesplit_filter_minreads):
+                   adapter):
     if basecallerArgs:
         cmd = basecallerArgs
     else:
@@ -55,8 +51,6 @@ def basecaller_cmd(basecallerArgs,
     cmd += " --block-row-offset %d" % (block_row_offset)
     cmd += " --datasets=%s" % (datasets_pipeline_path)
     cmd += " --trim-adapter %s" % (adapter)
-    cmd += " --barcode-filter %s" % barcodesplit_filter
-    cmd += " --barcode-filter-minreads %s" % barcodesplit_filter_minreads
 
     return cmd
 
@@ -67,25 +61,16 @@ def basecalling(
       libKey,
       tfKey,
       runID,
-      floworder,
       reverse_primer_dict,
       BASECALLER_RESULTS,
       barcodeId,
-      barcodeSamples,
-      barcodesplit_filter,
-      barcodesplit_filter_minreads,
-      DIR_BC_FILES,
-      barcodeList_path,
-      barcodeMask_path,
-      libraryName,
-      sample,
-      site_name,
+      barcodeInfo,
+      library,
       notes,
-      start_time,
+      site_name,
+      platform,
+      instrumentName,
       chipType,
-      expName,
-      resultsName,
-      pgmName
       ):
 
     if not os.path.exists(BASECALLER_RESULTS):
@@ -96,27 +81,21 @@ def basecalling(
 
     # New file, datasets_pipeline.json, contains the list of all active result files.
     # Tasks like post_basecalling, alignment, plugins, must process each specified file and merge results
-    # Temporarily generated in BASECALLER_RESULTS directory from barcodeList.txt.
-    # Eventually will replace barcodeList.txt altogether.
     
     datasets_pipeline_path = os.path.join(BASECALLER_RESULTS,"datasets_pipeline.json")
-    datasets_basecaller_path = os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json")
-    
+
     try:
         generate_datasets_json(
             barcodeId,
-            barcodeSamples,
-            barcodeList_path,
-            datasets_pipeline_path,
+            barcodeInfo,
+            library,
             runID,
-            libraryName,
-            sample,
-            site_name,
             notes,
+            site_name,
+            platform,
+            instrumentName,
             chipType,
-            expName,
-            resultsName,
-            pgmName
+            datasets_pipeline_path,
         )
     except:
         printtime('ERROR: Generation of barcode_files.json unsuccessful')
@@ -155,9 +134,7 @@ def basecalling(
                              block_col_offset,
                              block_row_offset,
                              datasets_pipeline_path,
-                             adapter,
-                             barcodesplit_filter,
-                             barcodesplit_filter_minreads)
+                             adapter)
 
         printtime("DEBUG: Calling '%s':" % cmd)
         proc = subprocess.Popen(shlex.split(cmd.encode('utf8')), shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -188,197 +165,36 @@ def basecalling(
         raise
 
 
-
-    ''' Step 3: Apply barcode filtering: just move the filtered files to a different directory '''
-
-    # This approach to barcode filtering needs rethinking. On proton, filtering should happen after block merge
-
-    try:
-        DIR_BC_FILTERED = os.path.join(BASECALLER_RESULTS,'bc_filtered')
-        if not os.path.exists(DIR_BC_FILTERED):
-            os.mkdir(DIR_BC_FILTERED)
-
-        f = open(datasets_basecaller_path,'r')
-        datasets_basecaller = json.load(f);
-        f.close()
-        
-        for dataset in datasets_basecaller["datasets"]:
-            
-            keep_dataset = False
-            for rg_name in dataset["read_groups"]:
-                if not datasets_basecaller["read_groups"][rg_name].get('filtered',False):
-                    keep_dataset = True
-            if keep_dataset:
-                continue
-            
-            filtered_file = os.path.join(BASECALLER_RESULTS, dataset["basecaller_bam"])
-            printtime ("filter_barcodes: removing %s" % filtered_file)
-            try:
-                move(filtered_file, DIR_BC_FILTERED)
-            except:
-                traceback.print_exc()
-
-    except:
-        printtime ("Barcode filtering failed")
-        traceback.print_exc()
-    
-    
-    try:
-        wells_beadogram.generate_wells_beadogram(BASECALLER_RESULTS, SIGPROC_RESULTS)
-    except:
-        printtime ("Wells beadogram generation failed")
-        traceback.print_exc()
-
-    
     printtime("Finished basecaller processing")
 
 
 
-def post_basecalling(BASECALLER_RESULTS,expName,resultsName,flows):
-
-    datasets_basecaller_path = os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json")
-    if not os.path.exists(datasets_basecaller_path):
-        printtime("ERROR: %s does not exist" % datasets_basecaller_path)
-        raise Exception("ERROR: %s does not exist" % datasets_basecaller_path)
-    
-    datasets_basecaller = {}
-    try:
-        f = open(datasets_basecaller_path,'r')
-        datasets_basecaller = json.load(f);
-        f.close()
-    except:
-        printtime("ERROR: problem parsing %s" % datasets_basecaller_path)
-        raise Exception("ERROR: problem parsing %s" % datasets_basecaller_path)
-
-    try:
-        graph_max_x = int(50 * math.ceil(0.014 * int(flows)))
-    except:
-        graph_max_x = 400
-
-    quality_file_list = []
-    for dataset in datasets_basecaller["datasets"]:
-        if not os.path.exists(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])):
-            continue
-                
-        # Call ionstats utility to generate alignment-independent metrics for current unmapped BAM
-        ionstats.generate_ionstats_basecaller(
-                os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']),
-                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
-                graph_max_x)
-        
-        # Plot read length sparkline
-        ionstats_plots.read_length_sparkline(
-                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
-                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.sparkline.png'),
-                graph_max_x)
-        
-        quality_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'))
-        
-    # Merge ionstats_basecaller files from individual barcodes/dataset
-    ionstats_basecaller_path = os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json')
-    ionstats.reduce_stats(quality_file_list, ionstats_basecaller_path)
-
-    # Read the merged ionstats in order to set a consistent read length histogram width for more detailed images
-    try:
-        with open(ionstats_basecaller_path) as f:
-            ionstats_basecaller = json.load(f)
-    except Exception:
-        printtime("ERROR: problem parsing %s" % ionstats_basecaller_path)
-        raise Exception("ERROR: problem parsing %s" % ionstats_basecaller_path)
-    full_graph_x = max(50, ionstats_basecaller["full"]["max_read_length"])
-    if full_graph_x % 50:
-        full_graph_x += 50 - full_graph_x % 50
-
-    # Generate legacy stats file: quality.summary
-    ionstats.generate_legacy_basecaller_files(
-            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
-            os.path.join(BASECALLER_RESULTS,''))
-
-    # Plot classic read length histogram
-    ionstats_plots.old_read_length_histogram(
-            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
-            os.path.join(BASECALLER_RESULTS,'readLenHisto.png'),
-            full_graph_x)
-    
-    # Plot new read length histogram
-    ionstats_plots.read_length_histogram(
-            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
-            os.path.join(BASECALLER_RESULTS,'readLenHisto2.png'),
-            graph_max_x)
-
-    # Plot quality value histogram
-    ionstats_plots.quality_histogram(
-        os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
-        os.path.join(BASECALLER_RESULTS,'quality_histogram.png'))
-
-    # Plot higher detail barcode specific histograms
-    for dataset in datasets_basecaller["datasets"]:
-        if not os.path.exists(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])):
-            continue
-        ionstats_plots.old_read_length_histogram(
-                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
-                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.read_len_histogram.png'),
-                full_graph_x)
-
-    printtime("Finished basecaller post processing")
 
 
-def merge_barcoded_basecaller_bams(BASECALLER_RESULTS):
 
-    datasets_basecaller_path = os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json")
-
-    if not os.path.exists(datasets_basecaller_path):
-        printtime("ERROR: %s does not exist" % datasets_basecaller_path)
-        raise Exception("ERROR: %s does not exist" % datasets_basecaller_path)
-    
-    datasets_basecaller = {}
-    try:
-        f = open(datasets_basecaller_path,'r')
-        datasets_basecaller = json.load(f);
-        f.close()
-    except:
-        printtime("ERROR: problem parsing %s" % datasets_basecaller_path)
-        raise Exception("ERROR: problem parsing %s" % datasets_basecaller_path)
+def merge_barcoded_basecaller_bams(BASECALLER_RESULTS, basecaller_datasets, method):
 
     try:
         composite_bam_filename = os.path.join(BASECALLER_RESULTS,'rawlib.basecaller.bam')
-        if not os.path.exists(composite_bam_filename):
+        if not os.path.exists(composite_bam_filename): #TODO
 
             bam_file_list = []
-            for dataset in datasets_basecaller["datasets"]:
+            for dataset in basecaller_datasets["datasets"]:
                 print os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])
                 if os.path.exists(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])):
                     bam_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']))
 
-            blockprocessing.merge_bam_files(bam_file_list,composite_bam_filename,composite_bam_filename+'.bai',False)
+            composite_bai_filepath=""
+            mark_duplicates=False
+            blockprocessing.merge_bam_files(bam_file_list, composite_bam_filename, composite_bai_filepath, mark_duplicates, method)
     except:
         traceback.print_exc()
-        printtime("ERROR: Generate merged rawlib.basecaller.bam on barcoded runs failed")
+        printtime("ERROR: Generate merged %s on barcoded run failed" % composite_bam_filename)
 
     printtime("Finished basecaller barcode merging")
 
 
-def tf_processing(
-      tf_basecaller_bam_path,
-      tfKey,
-      floworder,
-      BASECALLER_RESULTS,
-      analysis_dir):
-
-
-    ##################################################
-    #generate TF Metrics                             #
-    ##################################################
-
-    printtime("Calling TFPipeline.processBlock")
-    TFPipeline.processBlock(tf_basecaller_bam_path, BASECALLER_RESULTS, tfKey, floworder, analysis_dir)
-    printtime("Completed TFPipeline.processBlock")
-
-    printtime("Finished tf processing")
-
-
-
-def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, floworder):
+def merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS):
 
     ########################################################
     # Merge datasets_basecaller.json                       #
@@ -408,50 +224,80 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, flo
             combined_datasets_json['datasets'][dataset_idx]['read_count'] += current_datasets_json['datasets'][dataset_idx].get("read_count",0)
     
     for read_group in combined_datasets_json['read_groups'].iterkeys():
-        combined_datasets_json['read_groups'][read_group]['Q20_bases'] = 0;
-        combined_datasets_json['read_groups'][read_group]['total_bases'] = 0;
-        combined_datasets_json['read_groups'][read_group]['read_count'] = 0;
-        combined_datasets_json['read_groups'][read_group]['filtered'] = True if 'nomatch' not in read_group else False
+        combined_datasets_json['read_groups'][read_group]['Q20_bases'] = 0
+        combined_datasets_json['read_groups'][read_group]['total_bases'] = 0
+        combined_datasets_json['read_groups'][read_group]['read_count'] = 0
+        combined_datasets_json['read_groups'][read_group]['filtered'] = True if 'barcode_sequence' in combined_datasets_json['read_groups'][read_group] else False
+        if "barcode_sequence" in combined_datasets_json['read_groups'][read_group]:
+            combined_datasets_json['read_groups'][read_group]['barcode_bias'] = [-1]
+            combined_datasets_json['read_groups'][read_group]['barcode_distance_hist'] = [0,0,0,0,0]
+            combined_datasets_json['read_groups'][read_group]['barcode_errors_hist'] = [0,0,0]
+            combined_datasets_json['read_groups'][read_group]['barcode_match_filtered'] = 0
+            combined_datasets_json['read_groups'][read_group]['num_blocks_filtered'] = 0
+                  
         for current_datasets_json in block_datasets_json:
             combined_datasets_json['read_groups'][read_group]['Q20_bases'] += current_datasets_json['read_groups'].get(read_group,{}).get("Q20_bases",0)
             combined_datasets_json['read_groups'][read_group]['total_bases'] += current_datasets_json['read_groups'].get(read_group,{}).get("total_bases",0)
             combined_datasets_json['read_groups'][read_group]['read_count'] += current_datasets_json['read_groups'].get(read_group,{}).get("read_count",0)
             combined_datasets_json['read_groups'][read_group]['filtered'] &= current_datasets_json['read_groups'].get(read_group,{}).get("filtered",True)
-    
+            if current_datasets_json['read_groups'].get(read_group,{}).get("filtered",False):
+                combined_datasets_json['read_groups'][read_group]['num_blocks_filtered'] += 1
+            if "barcode_sequence" in combined_datasets_json['read_groups'][read_group]:
+                combined_datasets_json['read_groups'][read_group]['barcode_match_filtered'] += current_datasets_json['read_groups'].get(read_group,{}).get("barcode_match_filtered",0)
+                error_hist = current_datasets_json['read_groups'].get(read_group,{}).get("barcode_errors_hist",[0,0,0])
+                for hist_idx in range(len(error_hist)):
+                    combined_datasets_json['read_groups'][read_group]['barcode_errors_hist'][hist_idx] += error_hist[hist_idx]
+                distance_hist = current_datasets_json['read_groups'].get(read_group,{}).get("barcode_distance_hist",[0,0,0,0,0])
+                for hist_idx in range(len(distance_hist)):
+                    combined_datasets_json['read_groups'][read_group]['barcode_distance_hist'][hist_idx] += distance_hist[hist_idx]
+                barcode_bias = current_datasets_json['read_groups'].get(read_group,{}).get("barcode_bias",[-1])
+                if (combined_datasets_json['read_groups'][read_group]['barcode_bias'] == [-1]) & (barcode_bias != [-1]):
+                    combined_datasets_json['read_groups'][read_group]['barcode_bias'] = len(barcode_bias) * [0]
+                if barcode_bias != [-1]:
+                    for bias_idx in range(len(barcode_bias)):
+                        combined_datasets_json['read_groups'][read_group]['barcode_bias'][bias_idx] += barcode_bias[bias_idx] * current_datasets_json['read_groups'].get(read_group,{}).get("read_count",0)
+        # After combining all the blocks
+        if "barcode_sequence" in combined_datasets_json['read_groups'][read_group]:
+            if combined_datasets_json['read_groups'][read_group]['barcode_bias'] == [-1]:
+                combined_datasets_json['read_groups'][read_group]['barcode_bias'] = [0]
+            if combined_datasets_json['read_groups'][read_group]['read_count'] > 0:
+                for bias_idx in range(len(combined_datasets_json['read_groups'][read_group]['barcode_bias'])):
+                    combined_datasets_json['read_groups'][read_group]['barcode_bias'][bias_idx] /= combined_datasets_json['read_groups'][read_group]['read_count']
+
+    # Barcode filters -------------------------------------------------------
+    # Potential filters 1) frequency filter 2) minreads filter 3) error histogram filter
+    # No use to attempt filtering here if filtering is done per block or json entries are missing
+    if "barcode_filters" in combined_datasets_json and (combined_datasets_json['barcode_filters']['filter_postpone'] != 0):
+        # Loop through read groups to compute combined filtering threshold
+        max_reads = 0
+        for read_group in combined_datasets_json['read_groups'].iterkeys():
+            if "barcode_sequence" in combined_datasets_json['read_groups'][read_group]:
+                max_reads = max(max_reads, combined_datasets_json['read_groups'][read_group]['read_count'])
+        filter_threshold = combined_datasets_json['barcode_filters']['filter_minreads']
+        filter_threshold = max(filter_threshold, math.floor(max_reads*combined_datasets_json['barcode_filters']['filter_frequency']))
+        
+        # Doing the actual filtering - exclude no-match read group
+        for read_group in combined_datasets_json['read_groups']:
+            if "barcode_sequence" in combined_datasets_json['read_groups'][read_group]:
+                if combined_datasets_json['read_groups'][read_group]['read_count'] <= filter_threshold:
+                    combined_datasets_json['read_groups'][read_group]['filtered'] = True
+                if (not combined_datasets_json['read_groups'][read_group]['filtered']) and (combined_datasets_json['barcode_filters']['filter_errors_hist'] > 0):
+                    av_errors = (combined_datasets_json['read_groups'][read_group]['barcode_errors_hist'][1] + 2*combined_datasets_json['read_groups'][read_group]['barcode_errors_hist'][2]) / combined_datasets_json['read_groups'][read_group]['read_count']
+                    combined_datasets_json['read_groups'][read_group]['filtered'] = (av_errors > combined_datasets_json['barcode_filters']['filter_errors_hist'])
+    # ----------------------------------------------------------------------
+        
     try:
         f = open(os.path.join(BASECALLER_RESULTS,'datasets_basecaller.json'),"w")
         json.dump(combined_datasets_json, f, indent=4)
         f.close()
     except:
-        printtime("ERROR; Failed to write merged datasets_basecaller.json")
+        printtime("ERROR: Failed to write merged datasets_basecaller.json")
         traceback.print_exc()
 
 
+def merge_basecaller_stats(dirs, BASECALLER_RESULTS):
 
-    ########################################################
-    # Merge ionstats_basecaller.json:                      #
-    # First across blocks, then across barcodes            #
-    ########################################################
-
-    try:
-        composite_filename_list = []
-        for dataset in combined_datasets_json["datasets"]:
-            composite_filename = os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json')
-            barcode_filename_list = [os.path.join(dir,BASECALLER_RESULTS,dataset['file_prefix']+'.ionstats_basecaller.json') for dir in dirs]
-            barcode_filename_list = [filename for filename in barcode_filename_list if os.path.exists(filename)]
-            ionstats.reduce_stats(barcode_filename_list,composite_filename)
-            if os.path.exists(composite_filename):
-                composite_filename_list.append(composite_filename)
-
-        ionstats.reduce_stats(composite_filename_list,os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'))
-        ionstats.generate_legacy_basecaller_files(
-                os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
-                os.path.join(BASECALLER_RESULTS,''))
-    except:
-        printtime("ERROR: Failed to merge ionstats_basecaller.json")
-        traceback.print_exc()
-
-
+    merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS)
 
     ########################################################
     # write composite return code                          #
@@ -483,18 +329,6 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, flo
         traceback.print_exc()
 
 
-    ##################################################
-    #generate TF Metrics                             #
-    #look for both keys and append same file         #
-    ##################################################
-
-    printtime("Merging TFMapper metrics and generating TF plots")
-    try:
-        TFPipeline.mergeBlocks(BASECALLER_RESULTS,dirs,floworder)
-    except:
-        printtime("ERROR: Merging TFMapper metrics failed")
-
-    
     ###############################################
     # Merge BaseCaller.json files                 #
     ###############################################
@@ -515,84 +349,29 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS, SIGPROC_RESULTS, flows, flo
 
         mergeBaseCallerJson.merge(basecallerfiles,BASECALLER_RESULTS)
     except:
-        printtime("Merging BaseCaller.json files failed")
-
-
-    ###############################################
-    # Generate composite plots
-    ###############################################
-
-    printtime("Build composite basecaller graphs")
-    try:
-        graph_max_x = int(50 * math.ceil(0.014 * int(flows)))
-    except:
-        graph_max_x = 400
-
-    # Plot read length sparkline
-    for dataset in combined_datasets_json["datasets"]:
-        ionstats_plots.read_length_sparkline(
-                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
-                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.sparkline.png'),
-                graph_max_x)
-
-    # Plot classic read length histogram
-    ionstats_plots.old_read_length_histogram(
-            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
-            os.path.join(BASECALLER_RESULTS,'readLenHisto.png'),
-            graph_max_x)
-    
-    # Plot new read length histogram
-    ionstats_plots.read_length_histogram(
-            os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
-            os.path.join(BASECALLER_RESULTS,'readLenHisto2.png'),
-            graph_max_x)
-
-    # Plot quality value histogram
-    ionstats_plots.quality_histogram(
-        os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'),
-        os.path.join(BASECALLER_RESULTS,'quality_histogram.png'))
-    
-
-    try:
-        wells_beadogram.generate_wells_beadogram(BASECALLER_RESULTS, SIGPROC_RESULTS)
-    except:
-        printtime ("ERROR: Wells beadogram generation failed")
         traceback.print_exc()
+        printtime("Merging BaseCaller.json files failed")
 
     printtime("Finished merging basecaller stats")
 
-def merge_basecaller_bam(dirs, BASECALLER_RESULTS):
 
-    datasets_basecaller = {}
-    try:
-        f = open(os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json"),'r')
-        datasets_basecaller = json.load(f);
-        f.close()
-    except:
-        printtime("ERROR: problem parsing %s" % os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json"))
-        traceback.print_exc()
-        return
+def merge_bams(dirs, BASECALLER_RESULTS, basecaller_datasets, method):
 
-    # Iterate over datasets. Could be one for non-barcoded runs or multiple for barcoded runs
-    
-    for dataset in datasets_basecaller['datasets']:
-        if 'basecaller_bam' not in dataset:
-            continue
-        
-        ###############################################
-        # Merge Per-barcode Unmapped BAMs             #
-        ###############################################
-        
+    for dataset in basecaller_datasets['datasets']:
+
         try:
-            block_bam_list = [os.path.join(dir,BASECALLER_RESULTS, dataset['basecaller_bam']) for dir in dirs]
+            bamdir = BASECALLER_RESULTS
+            bamfile = dataset['basecaller_bam']
+            block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in dirs]
             block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
-            composite_bam_filename = os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])
+            composite_bam_filepath = os.path.join(bamdir, bamfile)
             if block_bam_list:
-                blockprocessing.merge_bam_files(block_bam_list,composite_bam_filename,composite_bam_filename+'.bai',False)    
+                composite_bai_filepath=""
+                mark_duplicates=False
+                blockprocessing.merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates, method)
         except:
-            printtime("ERROR: merging %s unsuccessful" % dataset['basecaller_bam'])
-
-    ## Note! on barcoded runs, barcode files are NOT subsequently merged into one multi-barcode BAM. 
+            traceback.print_exc()
+            printtime("ERROR: merging %s unsuccessful" % bamfile)
 
     printtime("Finished merging basecaller BAM files")
 
@@ -600,24 +379,19 @@ def merge_basecaller_bam(dirs, BASECALLER_RESULTS):
 
 def generate_datasets_json(
         barcodeId,
-        barcodeSamples,
-        barcodeList_path,
-        datasets_json_path,
+        barcodeInfo,
+        library,
         runID,
-        libraryName,
-        sample,
-        site_name,
         notes,
+        site_name,
+        platform,
+        instrumentName,
         chipType,
-        expName,
-        resultsName,
-        pgmName
+        datasets_json_path
         ):
 
-    if not sample or barcodeId:
-        sample = "None"
-    if not libraryName:
-        libraryName = ""
+    # TS-6135: ignore optional LB field, TODO: track library in database
+
     if not site_name:
         site_name = ""
     if not notes:
@@ -630,69 +404,17 @@ def generate_datasets_json(
             "generated_by"      : "basecaller.py",
             "creation_date"     : dateutil.parser.parse(time.asctime()).isoformat()
         },
-        "sequencing_center" :  "%s/%s" % (''.join(ch for ch in site_name if ch.isalnum()), pgmName),
+        "sequencing_center" :  "%s/%s" % (''.join(ch for ch in site_name if ch.isalnum()), instrumentName),
         "datasets" : [],
         "read_groups" : {}
     }
     
-    # Scenario 1. Barcodes present
-    if barcodeId:
-        try:
-            datasets["barcode_config"] = {}
-            f = open(barcodeList_path, 'r')
-            for line in f:
-                if line.startswith('score_mode'):
-                    datasets["barcode_config"]["score_mode"] = int(line.lstrip("score_mode "))
-                if line.startswith('score_cutoff'):
-                    datasets["barcode_config"]["score_cutoff"] = float(line.lstrip("score_cutoff "))
-                if line.startswith('barcode'):
-                    record = line.lstrip("barcode ").rstrip().split(",")
-                    # use any per barcode sample names entered during Planning
-                    bcsample = [k for k,v in barcodeSamples.items() if record[1] in v.get('barcodes',[])]
-                    if len(bcsample) == 1:
-                        bcsample = bcsample[0]
-                    else:
-                        bcsample = 'None'
-                        
-                    datasets["datasets"].append({
-                        "dataset_name"      : bcsample + "/" + record[1],
-                        "file_prefix"       : '%s_rawlib' % record[1],
-                        "read_groups"       : [runID+"."+record[1],]
-                    })
-                    datasets["read_groups"][runID+"."+record[1]] = {
-                        "barcode_name"      : record[1],
-                        "barcode_sequence"  : record[2],
-                        "barcode_adapter"   : record[3],
-                        "index"             : int(record[0]),
-                        "sample"            : bcsample,
-                        "library"           : libraryName+"/"+record[1],
-                        "description"       : ''.join(ch for ch in notes if ch.isalnum() or ch == " "),
-                        "platform_unit"     :  "PGM/%s/%s" % (chipType.replace('"',""),record[1])
-                    }
-            f.close()
+    # get no barcode sample name and reference
+    sample = barcodeInfo['no_barcode']['sample']
+    reference = barcodeInfo['no_barcode']['referenceName']
 
-            datasets["datasets"].append({
-                "dataset_name"      : sample + "/No_barcode_match",
-                "file_prefix"       : "nomatch_rawlib",
-                "read_groups"       : [runID+".nomatch",]
-            })
-            datasets["read_groups"][runID+".nomatch"] = {
-                "index"             : 0,
-                "sample"            : sample,
-                "library"           : libraryName+"/No_barcode_match",
-                "description"       : ''.join(ch for ch in notes if ch.isalnum() or ch == " "),
-                "platform_unit"     :  "PGM/%s/%s" % (chipType.replace('"',""),"nomatch")
-            }
-            datasets["barcode_config"]["barcode_id"] = barcodeId
-        
-        except:
-            print traceback.format_exc()
-            datasets["read_groups"] = {}
-            datasets["datasets"] = []
-    
-
-    # Scenario 2. No barcodes.
-    if not datasets["datasets"]:
+    # Scenario 1. No barcodes.
+    if len(barcodeInfo)==1:
         datasets["datasets"].append({
             "dataset_name"      : sample,
             "file_prefix"       : "rawlib",
@@ -701,135 +423,67 @@ def generate_datasets_json(
         datasets["read_groups"][runID] = {
             "index"             : 0,
             "sample"            : sample,
-            "library"           : libraryName,
+            #"library"           : library,
+            "reference"         : reference,
             "description"       : ''.join(ch for ch in notes if ch.isalnum() or ch == " "),
-            "platform_unit"     :  "PGM/%s" % (chipType.replace('"',""))
+            "platform_unit"     :  "%s/%s" % (platform,chipType.replace('"',""))
         }
+
+    # Scenario 2. Barcodes present
+    else:
+        datasets["barcode_config"] = {}
+        datasets["datasets"].append({
+            "dataset_name"      : sample + "/No_barcode_match",
+            "file_prefix"       : "nomatch_rawlib",
+            "read_groups"       : [runID+".nomatch",]
+        })
+
+        datasets["read_groups"][runID+".nomatch"] = {
+            "index"             : 0,
+            "sample"            : sample,
+            #"library"           : library,
+            #"reference"         : reference,
+            "reference"         : "",
+            "description"       : ''.join(ch for ch in notes if ch.isalnum() or ch == " "),
+            "platform_unit"     :  "%s/%s/%s" % (platform,chipType.replace('"',""),"nomatch")
+        }
+        datasets["barcode_config"]["barcode_id"] = barcodeId
+
+        try:
+            for barcode_name,barcode_info in sorted(barcodeInfo.iteritems()):
+
+                if barcode_name == 'no_barcode':
+                    continue
+
+                # get per-barcode sample names and reference
+                bcsample = barcode_info['sample']
+                bcreference = barcode_info['referenceName']
+
+                datasets["datasets"].append({
+                    "dataset_name"      : bcsample + "/" + barcode_name,
+                    "file_prefix"       : '%s_rawlib' % barcode_name,
+                    "read_groups"       : [runID+"."+barcode_name,]
+                })
+
+                datasets["read_groups"][runID+"."+barcode_name] = {
+                    "barcode_name"      : barcode_name,
+                    "barcode_sequence"  : barcode_info['sequence'],
+                    "barcode_adapter"   : barcode_info['adapter'],
+                    "index"             : barcode_info['index'],
+                    "sample"            : bcsample,
+                    #"library"           : library,
+                    "reference"         : bcreference,
+                    "description"       : ''.join(ch for ch in notes if ch.isalnum() or ch == " "),
+                    "platform_unit"     :  "%s/%s/%s" % (platform,chipType.replace('"',""),barcode_name)
+                }
         
+        except:
+            print traceback.format_exc()
+            datasets["read_groups"] = {}
+            datasets["datasets"] = []
 
     f = open(datasets_json_path,"w")
     json.dump(datasets, f, indent=4)
     f.close()
     
 
-
-''' Marcin's temporary runner for testing basecalling and post_basecalling'''
-if __name__=="__main__":
-    
-    env = {
-        'SIGPROC_RESULTS'       : '../sigproc_results',
-        'basecallerArgs'        : '/home/msikora/Documents/BaseCaller',
-        'libraryKey'            : 'TCAG',
-        'tfKey'                 : 'ATCG',
-        'runID'                 : 'ABCDE',
-        'flowOrder'             : 'TACGTACGTCTGAGCATCGATCGATGTACAGC',
-        'reverse_primer_dict'   : {'adapter_cutoff':16,'sequence':'ATCACCGACTGCCCATAGAGAGGCTGAGAC','qual_window':30,'qual_cutoff':9},
-        'BASECALLER_RESULTS'    : 'basecaller_results',
-        'barcodeId'             : 'IonExpress',
-        #'barcodeId'             : '',
-        'barcodesplit_filter'   : 0.01,
-        'barcodesplit_filter_minreads'  : 0,
-        'DIR_BC_FILES'          : 'basecaller_results/bc_files',
-        'libraryName'           : 'hg19',
-        'sample'                : 'My-sample',
-        'site_name'             : 'My-site',
-        'notes'                 : 'My-notes',
-        'start_time'            : time.asctime(),
-        'align_full'            : False,
-        'flows'                 : 260,
-        'aligner_opts_extra'    : '',
-        'mark_duplicates'       : False,
-        'ALIGNMENT_RESULTS'     : './',
-        'sam_parsed'            : False,
-        'chipType'              : '316B',
-        'expName'               : 'My-experiment',
-        'resultsName'           : 'My-results',
-        'pgmName'               : 'B19'
-    }
-
-    
-    basecalling(
-        env['SIGPROC_RESULTS'],
-        env['basecallerArgs'],
-        env['libraryKey'],
-        env['tfKey'],
-        env['runID'],
-        env['flowOrder'],
-        env['reverse_primer_dict'],
-        env['BASECALLER_RESULTS'],
-        env['barcodeId'],
-        env.get('barcodeSamples',''),
-        env['barcodesplit_filter'],
-        env['barcodesplit_filter_minreads'],
-        env['DIR_BC_FILES'],
-        os.path.join("barcodeList.txt"),
-        os.path.join(env['BASECALLER_RESULTS'], "barcodeMask.bin"),
-        env['libraryName'],
-        env['sample'],
-        env['site_name'],
-        env['notes'],
-        env['start_time'],
-        env['chipType'],
-        env['expName'],
-        env['resultsName'],
-        env['pgmName']
-    )
-    
-    post_basecalling(env['BASECALLER_RESULTS'],env['expName'],env['resultsName'],env['flows'])
-
-    
-    tf_processing(
-        os.path.join(env['BASECALLER_RESULTS'], "rawtf.basecaller.bam"),
-        env['tfKey'],
-        env['flowOrder'],
-        env['BASECALLER_RESULTS'],
-        '.')
-
-    
-    if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed')):
-        post_basecalling(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.untrimmed'),env['expName'],env['resultsName'],env['flows'])
-    
-    if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed')):
-        post_basecalling(os.path.join(env['BASECALLER_RESULTS'],'unfiltered.trimmed'),env['expName'],env['resultsName'],env['flows'])
-    
-
-    
-    #from ion.utils import alignment
-    import alignment
-    bidirectional = False
-    
-
-    if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed")):
-        alignment.alignment_unmapped_bam(
-            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
-            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.untrimmed"),
-            env['align_full'],
-            env['libraryName'],
-            env['flows'],
-            env['aligner_opts_extra'],
-            env['mark_duplicates'],
-            bidirectional,
-            env['sam_parsed'])
-
-    if os.path.exists(os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed")):
-        alignment.alignment_unmapped_bam(
-            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
-            os.path.join(env['BASECALLER_RESULTS'],"unfiltered.trimmed"),
-            env['align_full'],
-            env['libraryName'],
-            env['flows'],
-            env['aligner_opts_extra'],
-            env['mark_duplicates'],
-            bidirectional,
-            env['sam_parsed'])
-
-    alignment.alignment_unmapped_bam(
-        env['BASECALLER_RESULTS'],
-        env['ALIGNMENT_RESULTS'],
-        env['align_full'],
-        env['libraryName'],
-        env['flows'],
-        env['aligner_opts_extra'],
-        env['mark_duplicates'],
-        bidirectional,
-        env['sam_parsed'])

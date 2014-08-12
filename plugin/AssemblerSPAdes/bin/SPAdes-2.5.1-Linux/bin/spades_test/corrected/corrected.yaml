@@ -1,0 +1,5 @@
+- left reads: [/rhome/ehubbell/Spades/SPAdes-2.5.1-Linux/bin/spades_test/corrected/ecoli_1K_1.fq.00.0_0.cor.fastq.gz]
+  orientation: fr
+  right reads: [/rhome/ehubbell/Spades/SPAdes-2.5.1-Linux/bin/spades_test/corrected/ecoli_1K_2.fq.00.0_0.cor.fastq.gz]
+  single reads: [/rhome/ehubbell/Spades/SPAdes-2.5.1-Linux/bin/spades_test/corrected/ecoli_1K__unpaired.00.0_0.cor.fastq.gz]
+  type: paired-end

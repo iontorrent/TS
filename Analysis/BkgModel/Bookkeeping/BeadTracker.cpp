@@ -28,12 +28,12 @@ BeadTracker::BeadTracker()
 
 void BeadTracker::InitHighBeadParams()
 {
-  params_SetBeadStandardHigh (&params_high);
+  params_high.SetBeadStandardHigh ();
 }
 
 void BeadTracker::InitLowBeadParams(float AmplLowerLimit)
 {
-  params_SetBeadStandardLow (&params_low,AmplLowerLimit);
+  params_low.SetBeadStandardLow (AmplLowerLimit);
 }
 
 void BeadTracker::InitModelBeadParams()
@@ -47,7 +47,7 @@ void BeadTracker::InitModelBeadParams()
   }
   for (int i=0;i<numLBeads;i++)
   {
-    params_SetBeadStandardValue (&params_nn[i]);
+    params_nn[i].SetBeadStandardValue ();
     params_nn[i].trace_ndx = i; // index into trace object
   }
 }
@@ -89,7 +89,8 @@ void BeadTracker::IgnoreQuality ()
 }
 
 
-void BeadTracker::InitBeadList (Mask *bfMask, Region *region, bool nokey, SequenceItem *_seqList, int _numSeq, const std::set<int>& sample, float AmplLowerLimit)
+void BeadTracker::InitBeadList (Mask *bfMask, Region *region, bool nokey, SequenceItem *_seqList, 
+    int _numSeq, const std::set<int>& sample, float AmplLowerLimit)
 {
   MaskType processMask = MaskLive;
   if (nokey) {         // actually, we don't yet ignore the keys...
@@ -172,7 +173,7 @@ void BeadTracker::SelectKeyFlowValues (int *keyval,float *observed, int keyLen)
   }
 }
 
-void BeadTracker::SelectKeyFlowValuesFromBeadIdentity (int *keyval, float *observed, int my_key_id, int &keyLen)
+void BeadTracker::SelectKeyFlowValuesFromBeadIdentity (int *keyval, float *observed, int my_key_id, int &keyLen, int flow_block_size)
 {
   if (my_key_id<0)
     SelectKeyFlowValues (keyval,observed,keyLen);
@@ -181,8 +182,8 @@ void BeadTracker::SelectKeyFlowValuesFromBeadIdentity (int *keyval, float *obser
     // lookup key id in seqlist
 
     keyLen = seqList[my_key_id].usableKeyFlows; // return the correct number of flows
-    if (keyLen>NUMFB)
-      keyLen = NUMFB;  // might have a very long key(!)
+    if (keyLen>flow_block_size)
+      keyLen = flow_block_size;  // might have a very long key(!)
     for (int i=0; i<keyLen; i++)
       keyval[i] = seqList[my_key_id].Ionogram[i];
   }
@@ -194,21 +195,21 @@ void SetKeyFlows (float *observed, int *keyval, int len)
     observed[i] = keyval[i];
 }
 
-float BeadTracker::ComputeSSQRatioOneBead(int ibd)
+float BeadTracker::ComputeSSQRatioOneBead(int ibd, int flow_block_size)
 {
-  int key_val[NUMFB];
-  struct bead_params *p = &params_nn[ibd];
+  int key_val[flow_block_size];
+  struct BeadParams *p = &params_nn[ibd];
   int key_len;
   key_len = KEY_LEN; 
-  SelectKeyFlowValuesFromBeadIdentity (key_val,p->Ampl, key_id[ibd], key_len); // what should we see
+  SelectKeyFlowValuesFromBeadIdentity (key_val,p->Ampl, key_id[ibd], key_len, flow_block_size); // what should we see
   return(ComputeSSQRatioKeyFlows (p->Ampl, key_val, key_len)); // how much did we deviate from it?
 }
 
-float BeadTracker::KeyNormalizeOneBead (int ibd, bool overwrite_key)
+float BeadTracker::KeyNormalizeOneBead (int ibd, bool overwrite_key, int flow_block_size)
 {
-  int   key_val[NUMFB];
+  int   key_val[flow_block_size];
   float normalizer = 1.0f;
-  bead_params  *p  = &params_nn[ibd];
+  BeadParams  *p  = &params_nn[ibd];
   bound_params *pl = &params_low;
   bound_params *ph = &params_high;
 
@@ -222,7 +223,7 @@ float BeadTracker::KeyNormalizeOneBead (int ibd, bool overwrite_key)
   else
   {
     // update key_len from sequence identity if known
-    SelectKeyFlowValuesFromBeadIdentity (key_val,p->Ampl, key_id[ibd], key_len);
+    SelectKeyFlowValuesFromBeadIdentity (key_val,p->Ampl, key_id[ibd], key_len, flow_block_size);
   }
   normalizer=ComputeNormalizerKeyFlows (p->Ampl,key_val,key_len);
 
@@ -230,14 +231,14 @@ float BeadTracker::KeyNormalizeOneBead (int ibd, bool overwrite_key)
   p->Copies *= normalizer;
   // scale to right signal
   //cout <<" and after =" << p->Copies <<"\n";
-  MultiplyVectorByScalar (p->Ampl,1.0f/normalizer,NUMFB);
+  MultiplyVectorByScalar (p->Ampl,1.0f/normalizer,flow_block_size);
 
   // set to exact values in key flows, overriding real levels
   if (overwrite_key)
     SetKeyFlows (p->Ampl,key_val,key_len);
 
-  params_ApplyLowerBound (p,pl);
-  params_ApplyUpperBound (p,ph);
+  p->ApplyLowerBound (pl, flow_block_size);
+  p->ApplyUpperBound (ph, flow_block_size);
   return (p->Copies);
 }
 
@@ -247,7 +248,7 @@ float BeadTracker::KeyNormalizeOneBead (int ibd, bool overwrite_key)
 // when using arbitrary keys
 // we use this to set a good scale/copy number for the beads
 
-float BeadTracker::KeyNormalizeReads(bool overwrite_key, bool sampled_only)
+float BeadTracker::KeyNormalizeReads(bool overwrite_key, bool sampled_only, int flow_block_size)
 {
 
   // figure out what to expect in the key flows.
@@ -260,7 +261,7 @@ float BeadTracker::KeyNormalizeReads(bool overwrite_key, bool sampled_only)
   {
 
     //  if(bfMask->Match( params_nn[ibd].x,params_nn[ibd].y, MaskLive  , MATCH_ANY)){
-    meanCopyCount += KeyNormalizeOneBead (ibd,overwrite_key);
+    meanCopyCount += KeyNormalizeOneBead (ibd,overwrite_key, flow_block_size);
     goodBeadCount++;
     // }
   }
@@ -269,7 +270,7 @@ float BeadTracker::KeyNormalizeReads(bool overwrite_key, bool sampled_only)
   return (meanCopyCount);
 }
 
-float BeadTracker::KeyNormalizeSampledReads(bool overwrite_key)
+float BeadTracker::KeyNormalizeSampledReads(bool overwrite_key, int flow_block_size)
 {
 
   // figure out what to expect in the key flows.
@@ -281,7 +282,7 @@ float BeadTracker::KeyNormalizeSampledReads(bool overwrite_key)
   for (int ibd=0;ibd < numLBeads;ibd++)
   {
     if( Sampled (ibd) ){
-          meanCopyCount += KeyNormalizeOneBead (ibd,overwrite_key);
+          meanCopyCount += KeyNormalizeOneBead (ibd,overwrite_key, flow_block_size);
           goodBeadCount++;
       }
   }
@@ -294,7 +295,7 @@ float BeadTracker::KeyNormalizeSampledReads(bool overwrite_key)
   return (meanCopyCount);
 }
 
-void BeadTracker::LowSSQRatioBeadsAreLowQuality(float snr_threshold)
+void BeadTracker::LowSSQRatioBeadsAreLowQuality(float snr_threshold, int flow_block_size)
 {
   if (ignoreQuality)
     return;
@@ -303,7 +304,7 @@ void BeadTracker::LowSSQRatioBeadsAreLowQuality(float snr_threshold)
   // only use the top snr beads for region-wide parameter fitting
   for (int ibd=0;ibd < numLBeads;ibd++)
   {
-    float SNR = ComputeSSQRatioOneBead(ibd);
+    float SNR = ComputeSSQRatioOneBead(ibd, flow_block_size);
     if (SNR < snr_threshold)
     {
       high_quality[ibd] = false; // reject beads that don't match
@@ -344,10 +345,10 @@ void BeadTracker::CorruptedBeadsAreLowQuality ()
   }
 }
 
-void BeadTracker::TypicalBeadParams(bead_params *p)
+void BeadTracker::TypicalBeadParams(BeadParams *p)
 {
   int count=1; // start with a "standard" bead in case we don't have much
-  params_SetBeadStandardValue(p);
+  p->SetBeadStandardValue();
   for (int ibd=0; ibd<numLBeads; ibd++)
   {
     if (high_quality[ibd]) // should be a bunch!
@@ -379,18 +380,19 @@ void BeadTracker::ResetLocalBeadParams()
 {
   for (int i=0; i<numLBeads; i++)
   {
-    params_SetStandardFlow(&params_nn[i]);
+    params_nn[i].SetStandardFlow();
   }
 }
 
-void BeadTracker::CompensateAmplitudeForEmptyWellNormalization(float *my_scale_buffer)
+void BeadTracker::CompensateAmplitudeForEmptyWellNormalization(float *my_scale_buffer,
+    int flow_block_size )
 {
   // my scale buffer contains a rescaling of the data per flow per bead and is therefore a memory hog
   // we'll avoid using this if at all possible.
   for (int ibd=0;ibd <numLBeads;ibd++)
   {
-    for (int fnum=0; fnum<NUMFB; fnum++)
-      params_nn[ibd].Ampl[fnum] *= my_scale_buffer[ibd*NUMFB+fnum];
+    for (int fnum=0; fnum<flow_block_size; fnum++)
+      params_nn[ibd].Ampl[fnum] *= my_scale_buffer[ibd*flow_block_size+fnum];
   }
 }
 
@@ -400,7 +402,7 @@ void BeadTracker::AssignEmphasisForAllBeads (int _max_emphasis)
   max_emphasis = _max_emphasis;
 }
 
-void BeadTracker::AdjustForCopyNumber(vector<float>& ampl, const bead_params& p, const vector<float>& copy_multiplier)
+void BeadTracker::AdjustForCopyNumber(vector<float>& ampl, const BeadParams& p, const vector<float>& copy_multiplier)
 {
   size_t num_flows = ampl.size();
   for(size_t flow=0; flow<num_flows; ++flow)
@@ -411,7 +413,7 @@ void BeadTracker::ComputeKeyNorm(const vector<int>& keyIonogram, const vector<fl
 {
   vector<float> ampl(keyIonogram.size());
   for(int bead=0; bead<numLBeads; ++bead){
-    bead_params& p = params_nn[bead];
+    BeadParams& p = params_nn[bead];
     AdjustForCopyNumber(ampl, p, copy_multiplier);
     p.my_state->key_norm = ComputeNormalizerKeyFlows(&ampl[0], &keyIonogram[0], keyIonogram.size());
   }
@@ -424,7 +426,7 @@ void BeadTracker::CheckKey(const vector<float>& copy_multiplier)
   vector<float> nrm (seqList[1].usableKeyFlows);
   for (int bead=0; bead<numLBeads; ++bead)
   {
-    bead_params& p = params_nn[bead];
+    BeadParams& p = params_nn[bead];
     AdjustForCopyNumber(ampl, p, copy_multiplier);
     transform (ampl.begin(), ampl.end(), nrm.begin(), bind2nd (divides<float>(),p.my_state->key_norm));
     if (not key_is_good (nrm.begin(), seqList[1].Ionogram, seqList[1].Ionogram+seqList[1].usableKeyFlows)){
@@ -434,42 +436,56 @@ void BeadTracker::CheckKey(const vector<float>& copy_multiplier)
   }
 }
 
-void BeadTracker::UpdateClonalFilter (int flow, const vector<float>& copy_multiplier)
+void BeadTracker::UpdateClonalFilter (int flow, const vector<float>& copy_multiplier, const PolyclonalFilterOpts & opts, int flow_block_size, int flow_begin_real_index )
 {
   // first block only:
-  if(flow == NUMFB-1){
+  if(flow_begin_real_index == 0 && flow == flow_block_size-1){
     vector<int> keyIonogram(seqList[1].Ionogram, seqList[1].Ionogram+seqList[1].usableKeyFlows);
     ComputeKeyNorm(keyIonogram, copy_multiplier);
     CheckKey(copy_multiplier);
   }
 
   // all blocks used by clonal filter:
-  int lastBlock = ceil(1.0 * mixed::mixed_last_flow / NUMFB);
-  int lastFlow  = lastBlock * NUMFB;
-  int firstBlock = floor(1.0 * mixed::mixed_first_flow / NUMFB);
-  int firstFlow  = firstBlock * NUMFB;
-  if (flow > firstFlow and flow<lastFlow)
-    UpdatePPFSSQ (flow, copy_multiplier);
+  // Figure out the real indices that bound this block.
+  int block_begin = flow_begin_real_index;
+  int block_end   = flow_begin_real_index + flow_block_size;
+
+  // Does this block overlap the requested "mixed" range?
+  if ( opts.mixed_first_flow < block_end and opts.mixed_last_flow >= block_begin )
+    UpdatePPFSSQ (flow, copy_multiplier, opts, flow_block_size, flow_begin_real_index );
 
   // last block used by clonal filter:
-  if (flow==lastFlow-1)
-    FinishClonalFilter();
+  if ( opts.mixed_last_flow >= block_begin and opts.mixed_last_flow <= block_end )
+    FinishClonalFilter( opts );
 }
 
-void BeadTracker::UpdatePPFSSQ (int flow, const vector<float>& copy_multiplier)
+void BeadTracker::UpdatePPFSSQ (int flow, const vector<float>& copy_multiplier, 
+    const PolyclonalFilterOpts & opts, int flow_block_size, int flow_begin_real_index )
 {
-  vector<float> ampl(NUMFB);
+  vector<float> ampl(flow_block_size);
   for (int bead=0; bead<numLBeads; ++bead)
   {
-    bead_params& p = params_nn[bead];
+    BeadParams& p = params_nn[bead];
     AdjustForCopyNumber(ampl, p, copy_multiplier);
     transform (ampl.begin(), ampl.end(), ampl.begin(), bind2nd (divides<float>(),p.my_state->key_norm));
 
     // Update ppf and ssq:
-    //assert(mixed::mixed_first_flow < NUMFB);
-    int first = max (flow+1-NUMFB, mixed::mixed_first_flow) % NUMFB;
-    int last  = min (flow, mixed::mixed_last_flow - 1) % NUMFB;
-    for (int i=first; i<=last; ++i)
+    // We want to do this calculation on any flows in the current flow block that
+    // are on [opts.mixed_first_flow and opts.mixed_last_flow).
+
+    // Figure out the real indices that bound this block.
+    int block_begin = flow_begin_real_index;
+    int block_end   = flow_begin_real_index + flow_block_size;
+
+    // Then get the real indices that we want to calculate.
+    int calc_real_begin = max( opts.mixed_first_flow, block_begin );
+    int calc_real_end   = min( opts.mixed_last_flow, block_end );
+
+    // Finally, get flow numbers within the local block.
+    int calc_begin = calc_real_begin - flow_begin_real_index;
+    int calc_end   = calc_real_end   - flow_begin_real_index;
+
+    for (int i=calc_begin; i<calc_end; ++i)
     {
       if (ampl[i] > mixed_pos_threshold())
         p.my_state->ppf += 1;
@@ -477,17 +493,17 @@ void BeadTracker::UpdatePPFSSQ (int flow, const vector<float>& copy_multiplier)
       p.my_state->ssq += x * x;
     }
     // Flag beads with infinite signal:
-    if (not all_finite (p.Ampl, p.Ampl+NUMFB))
+    if (not all_finite (p.Ampl, p.Ampl+flow_block_size))
       p.my_state->bad_read = true;
   }
 }
 
-void BeadTracker::FinishClonalFilter()
+void BeadTracker::FinishClonalFilter( const PolyclonalFilterOpts & opts )
 {
   for (int bead=0; bead<numLBeads; ++bead)
   {
-    bead_params& p = params_nn[bead];
-    p.my_state->ppf /= (mixed::mixed_last_flow - mixed::mixed_first_flow);
+    BeadParams& p = params_nn[bead];
+    p.my_state->ppf /= (opts.mixed_last_flow - opts.mixed_first_flow);
   }
 }
 int BeadTracker::NumHighPPF() const
@@ -495,7 +511,7 @@ int BeadTracker::NumHighPPF() const
   int numHigh = 0;
   for (int bead=0; bead<numLBeads; ++bead)
   {
-    const bead_params& p = params_nn[bead];
+    const BeadParams& p = params_nn[bead];
     if (p.my_state->ppf > mixed_ppf_cutoff())
       ++numHigh;
   }
@@ -507,7 +523,7 @@ int BeadTracker::NumPolyclonal() const
   int numPolyclonal = 0;
   for (int bead=0; bead<numLBeads; ++bead)
   {
-    const bead_params& p = params_nn[bead];
+    const BeadParams& p = params_nn[bead];
     if (not p.my_state->clonal_read)
       ++numPolyclonal;
   }
@@ -519,16 +535,14 @@ int BeadTracker::NumBadKey() const
   return numLBadKey;
 }
 
-void BeadTracker::ZeroOutPins (Region *region, Mask *bfmask, PinnedInFlow& pinnedInFlow, int flow, int iFlowBuffer)
+void BeadTracker::ZeroOutPins (Region *region, const Mask *bfmask, const PinnedInFlow& pinnedInFlow, int flow, int iFlowBuffer)
 
 {
   // Zero out beads that pin in this flow or earlier flows
-// Don't assume buffer structure
-  //int iFlowBuffer = flow % NUMFB;
 
   for (int bead=0; bead<numLBeads; ++bead)
   {
-    bead_params& p = params_nn[bead];
+    BeadParams& p = params_nn[bead];
     int ix = bfmask->ToIndex (p.y + region->row, p.x + region->col);
 
     // set bead Amplitude to zero in this flow so no basecalling occurs
@@ -625,6 +639,13 @@ void BeadTracker::WriteCorruptedToMask (Region *region, Mask *bfmask, int16_t *w
       }
 }
 
+//
+void BeadTracker::UpdateAllPhi(int flow, int flow_block_size){
+  for (int ibd=0; ibd<numLBeads; ibd++){
+    params_nn[ibd].UpdateCumulativeAvgIncorporation(flow, flow_block_size);
+  }
+}
+
 void BeadTracker::BuildBeadMap (Region *region, Mask *bfmask, MaskType &process_mask)
 {
   if (region!=NULL)
@@ -705,7 +726,7 @@ void BeadTracker::InitRandomSample (Mask& bf, Region& region, const std::set<int
   int chipWidth = bf.W();
   for (int i=0; i<numLBeads; ++i)
   {
-    struct bead_params *p = &params_nn[i];
+    struct BeadParams *p = &params_nn[i];
     int chipX   = region.col + p->x;
     int chipY   = region.row + p->y;
     int wellIdx = chipY * chipWidth + chipX;
@@ -806,19 +827,19 @@ int BeadTracker::NumberSampled()
   return(n);
 }
 
-void BeadTracker::DumpBeads (FILE *my_fp, bool debug_only, int offset_col, int offset_row)
+void BeadTracker::DumpBeads (FILE *my_fp, bool debug_only, int offset_col, int offset_row, int flow_block_size)
 {
   if (numLBeads>0) // trap for dead regions
   {
     if (debug_only)
-      DumpBeadProfile (&params_nn[DEBUG_BEAD],my_fp,offset_col, offset_row);
+      params_nn[DEBUG_BEAD].DumpBeadProfile (my_fp,offset_col, offset_row, flow_block_size);
     else
       for (int ibd=0; ibd<numLBeads; ibd++)
-        DumpBeadProfile (&params_nn[ibd],my_fp, offset_col, offset_row);
+        params_nn[ibd].DumpBeadProfile (my_fp, offset_col, offset_row, flow_block_size);
   }
 }
 
-void BeadTracker::DumpAllBeadsCSV (FILE *my_fp)
+void BeadTracker::DumpAllBeadsCSV (FILE *my_fp, int flow_block_size)
 {
   for (int i=0;i<numLBeads;i++)
   {
@@ -826,7 +847,7 @@ void BeadTracker::DumpAllBeadsCSV (FILE *my_fp)
     if (i == (numLBeads -1))
       sep_char = '\n';
 
-    for (int j=0;j<NUMFB;j++)
+    for (int j=0;j<flow_block_size;j++)
       fprintf (my_fp,"%10.5f,",params_nn[i].Ampl[j]);
 
     fprintf (my_fp,"%10.5f,%10.5f,%10.5f,%10.5f,%10.5f%c",params_nn[i].R,params_nn[i].dmult,params_nn[i].Copies,params_nn[i].gain,0.0,sep_char);
@@ -840,7 +861,7 @@ void BeadTracker::DumpAllBeadsCSV (FILE *my_fp)
     FILE *fp = fopen(fname,"wt");
     for (int i=0; i<numLBeads; i++){
       fprintf(fp, "%d",i);
-      for (int j=0; j<NUMFB; j++)
+      for (int j=0; j<MAX_NUM_FLOWS_IN_BLOCK_GPU; j++)
       {
         fprintf(fp, "\t%d ",params_nn[i].my_state->hits_by_flow[j]);
         params_nn[i].my_state->hits_by_flow[j] = 0;

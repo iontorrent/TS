@@ -42,16 +42,35 @@ TB.data.modal_combine_results.ready = function(method) {
             return false;
         }
 
-        // console.log($('#modal_combine_results_form').serializeArray());
         var json = $('#modal_combine_results_form').serializeJSON(), url = $('#modal_combine_results_form').attr('action'), type = method;
 
         json.mark_duplicates = $("#mark_duplicates").is(":checked");
         json.selected_pks = selected;
 
+        // if override, send new sample names
+        if (json.override_samples){
+            var samples = $('#modal-new_samples .sample_name');
+            if (barcoded){
+                var barcodedSamples = {};
+                samples.each(function(){
+                    if (this.value){
+                        if (barcodedSamples[this.value] === undefined){
+                            barcodedSamples[this.value] = {};
+                            barcodedSamples[this.value]['barcodes'] = [];
+                        }
+                        barcodedSamples[this.value]['barcodes'].push( $(this).closest('tr').find('.barcode_id').text() );
+                    }
+                });
+                json.barcodedSamples = barcodedSamples;
+            } else {
+                json.sample = samples.val();
+            }
+        }
+        
         $('#modal_combine_results #modal-error-messages').hide().empty();
         json = JSON.stringify(json);
         console.log('transmitting :', type, url, json);
-        // data2 = JSON.stringfy(data);
+        
         var jqxhr = $.ajax(url, {
             type : type,
             data : json,
@@ -79,6 +98,13 @@ TB.data.modal_combine_results.ready = function(method) {
         });
     });
 
+    $('#modal_combine_results #override_samples').change(function(e) {
+        if ($(this).is(':checked')){
+            $('#modal_combine_results #modal-new_samples').modal("show");
+        }
+    });
+    
     //If display a kendo-grid then you'll want to removeClass('hide') on dataBound event
     $('#modal_combine_results .btn-primary').removeClass('hide');
+    
 };

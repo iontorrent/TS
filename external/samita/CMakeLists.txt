@@ -30,7 +30,7 @@ mark_as_advanced(ION_USE_SYSTEM_SAMTOOLS)
 
 set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wextra -Werror -Wstrict-overflow=4 -Wstrict-aliasing=2 -O0 -DDEBUG -ftracer -rdynamic -g -fPIC -Wno-write-strings -Wno-unused-parameter -pipe")
 set(CMAKE_CXX_FLAGS_RELEASE "-Wall -Wextra -O2 -g -fPIC -Wno-write-strings -Wno-unused-parameter -DNDEBUG -O2 -pipe -march=nocona")
-set(CMAKE_CXX_FLAGS_PROFILE "-Wall -Wextra -O2 -g -fPIC -Wno-write-strings -Wno-unused-parameter -lunwind -lprofiler -ftracer -rdynamic -pipe")
+set(CMAKE_CXX_FLAGS_PROFILE "-Wall -Wextra -O2 -g -fPIC -Wno-write-strings -Wno-unused-parameter -lprofiler -ftracer -rdynamic -pipe")
 set(CMAKE_SHARED_LINKER_FLAGS "-Wall -as-needed -O2")
 
 ## Lifetech utility library

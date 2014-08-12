@@ -1,0 +1,153 @@
+{% load humanize %}
+{% load pagetools %}
+{% load ion_readable %}
+\documentclass[letterpaper,10pt]{article}
+\usepackage[left=1in,right=1in,top=1in,bottom=1in,landscape]{geometry}
+\usepackage[x11names]{xcolor}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{ctable}
+\usepackage{longtable}
+\usepackage{anyfontsize}
+\usepackage{seqsplit}
+\usepackage{tabularx}
+\batchmode
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%							   %
+% name your report			   %
+%							   %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\newcommand{\ReportTitle}{
+Comparison Report for {{project.name|latexsafe}}
+}
+
+
+%define custom header style starts
+\fancypagestyle{mystyle}{%
+\fancyhead{}                                                    % clears all header fields.
+\fancyhead[C]{\large\ReportTitle}                               % title of the report, centered
+\fancyfoot{}                                                    % clear all footer fields
+\fancyfoot[L]{\thepage}
+\fancyfoot[R]{\includegraphics[width=20mm]{/opt/ion/iondb/media/IonLogo.png}}
+\renewcommand{\headrulewidth}{1pt}								% the header rule
+\renewcommand{\footrulewidth}{0pt}
+}
+%define custom header style ends
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% document starts			   %
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\begin{document}
+\setlength{\parindent}{0pt}
+%%first page work starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\pagestyle{mystyle}
+ \section*{%
+ Run Comparison						
+ }
+{% for chunk_results in results|chunks:4 %}
+  \begin{tabular}{p{1.5in}p{1.7in}p{1.7in}p{1.7in}p{1.7in}}
+\bf Reports & \
+	{% for report in chunk_results %} \
+\splitseq{ {{report.resultsName|latexsafe}} } {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+  	  & \
+	{% for report in chunk_results %} \
+	\IfFileExists{% templatetag openbrace %}{{report.get_report_path}}/Bead_density_70.png}{ \
+\includegraphics[width=2cm,height=2cm,keepaspectratio]{% templatetag openbrace %}{{report.get_report_path}}/Bead_density_70.png} \
+		} \
+		 {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Time & \
+	{% for report in chunk_results %} \
+{{report.timeStamp}} {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Chip & \
+	{% for report in chunk_results %} \
+		{{report.experiment.chipType|safe|latexsafe}} {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+  	\bf Read Lens. & \
+	{% for report in chunk_results %} \
+	\IfFileExists{% templatetag openbrace %}{{report.get_report_path}}/basecaller_results/readLenHisto.png}{ \
+\includegraphics[width=1.5in,height=1in,keepaspectratio]{% templatetag openbrace %}{{report.get_report_path}}/basecaller_results/readLenHisto.png} \
+		} \
+		 {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Total Bases & \
+	{% for report in chunk_results %} \
+		{{report.qualitymetrics.q0_bases|ion_readable}} bp {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Total Reads & \
+	{% for report in chunk_results %} \
+		{{report.qualitymetrics.q0_reads|intcomma}} {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Key Signal & \
+	{% for report in chunk_results %} \
+{{report.libmetrics.aveKeyCounts|floatformat:"0"}} {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Loading & \
+	{% for report in chunk_results %} \
+		{{report.analysismetrics.loading|floatformat:"0"}}\% {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Mean Read Len. & \
+	{% for report in chunk_results %} \
+		{{report.qualitymetrics.q0_mean_read_length|stringformat:"d"}} bp {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Median Read Len. & \
+	{% for report in chunk_results %} \
+		{{report.qualitymetrics.q0_median_read_length|stringformat:"d"}} bp {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Mode Read Len. & \
+	{% for report in chunk_results %} \
+		{{report.qualitymetrics.q0_mode_read_length|stringformat:"d"}} bp {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Q20 Bases & \
+	{% for report in chunk_results %} \
+		{{report.qualitymetrics.q20_bases|ion_readable}} bp {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Q20 Reads & \
+	{% for report in chunk_results %} \
+		{{report.qualitymetrics.q20_reads|intcomma}} {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Q20 Read Len & \
+	{% for report in chunk_results %} \
+		{{report.qualitymetrics.q20_mean_read_length|stringformat:"d"}} bp {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Reference & \
+	{% for report in chunk_results %} \
+		{{report.eas.reference|latexsafe}} {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Aligned Bases & \
+	{% for report in chunk_results %} \
+		{{report.libmetrics.total_mapped_target_bases|ion_readable}} bp {% if not forloop.last %} & {% endif %} \
+	{% endfor %} \
+	\tabularnewline
+	\bf Aligned Reads & \
+	{% for report in chunk_results %} \
+		{{report.libmetrics.total_mapped_reads|intcomma}}  {% if not forloop.last %} & {% endif %} \
+	{% endfor %}
+ \end{tabular}
+ 
+ \vspace{1cm}
+
+ {% endfor %}
+
+\end{document}

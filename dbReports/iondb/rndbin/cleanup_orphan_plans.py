@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 import logging
 
 logging.basicConfig(level=logging.INFO)

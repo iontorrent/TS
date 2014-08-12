@@ -17,6 +17,8 @@ from django.contrib.auth.models import User
 
 import sample_validator
 
+from traceback import format_exc
+
 logger = logging.getLogger(__name__)
 
 COLUMN_SAMPLE_EXT_ID = "Sample ID"
@@ -25,8 +27,10 @@ COLUMN_GENDER = "Gender"
 COLUMN_GROUP_TYPE = "Type"
 COLUMN_GROUP = "Group"
 COLUMN_SAMPLE_DESCRIPTION = "Description"
+COLUMNS_BARCODE_KIT = "Barcodekit"
 COLUMN_BARCODE = "Barcode"
-
+COLUMN_CANCER_TYPE = "Cancer Type"
+COLUMN_CELLULARITY_PCT = "Cellularity %"
 
 def process_csv_sampleSet(csvSampleDict, request, user, sampleSet_ids):
     """ read csv contents and convert data to raw data to prepare for sample persistence
@@ -61,7 +65,11 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     sampleGroupType = csvSampleDict.get(COLUMN_GROUP_TYPE, None)
     sampleGroup = csvSampleDict.get(COLUMN_GROUP, '0').strip()
     sampleDescription = csvSampleDict.get(COLUMN_SAMPLE_DESCRIPTION, '').strip()
+    barcodeKit = csvSampleDict.get(COLUMNS_BARCODE_KIT, '').strip()
     barcodeAssignment = csvSampleDict.get(COLUMN_BARCODE, '').strip()
+    
+    cancerType = csvSampleDict.get(COLUMN_CANCER_TYPE, "").strip()
+    cellularityPct = csvSampleDict.get(COLUMN_CELLULARITY_PCT, None).strip()
     
     if not sampleGroup:
         sampleGroup = '0'
@@ -70,6 +78,7 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     isValid, errorMessage, gender_CV_value = sample_validator.validate_sampleGender(sampleGender)      
     isValid, errorMessage, role_CV_value = sample_validator.validate_sampleGroupType(sampleGroupType)
 
+    isValid, errorMessage, cancerType_CV_value = sample_validator.validate_cancerType(cancerType)        
     
     sampleName = sampleDisplayedName.replace(' ', '_')
     sample_kwargs = {
@@ -93,21 +102,26 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     logger.debug("import_sample_processor._create_sampleSetItem() after get_or_create isCreated=%s; sample=%s; sample.id=%d" %(str(isCreated), sampleDisplayedName, sample.id))
 
 
-    for sampleSetId in sampleSet_ids:
-        
+    for sampleSetId in sampleSet_ids: 
         logger.debug("import_sample_processor._create_sampleSetItem() going to create sampleSetItem for sample=%s; sampleSetId=%s in sampleSet_ids=%s" %(sampleDisplayedName, str(sampleSetId), sampleSet_ids))
         
         currentDateTime = timezone.now()  ##datetime.datetime.now() 
-        
+
+        dnabarcode = None
+        if barcodeKit and barcodeAssignment:
+            dnabarcode = models.dnaBarcode.objects.get(name__iexact=barcodeKit, id_str__iexact=barcodeAssignment)   
+      
         sampleSetItem_kwargs = {
                                  'gender' : gender_CV_value, 
                                  'relationshipRole' : role_CV_value, 
                                  'relationshipGroup' : sampleGroup, 
+                                 'cancerType' : cancerType_CV_value,
+                                 'cellularityPct' : cellularityPct if cellularityPct else None,
                                  'creator' : user,
                                  'creationDate' : currentDateTime,
                                  'lastModifiedUser' : user,
                                  'lastModifiedDate' : currentDateTime,
-                                 'barcode' : barcodeAssignment                                
+                                 'dnabarcode' : dnabarcode                                
                              }
     
         sampleSetItem, isCreated = SampleSetItem.objects.get_or_create(sample = sample, 
@@ -202,59 +216,91 @@ def validate_csv_sample(csvSampleDict, request):
     """
     failed = []
     isToSkipRow = False
+    isToAbort = False
 
     logger.debug("ENTER import_sample_processor.validate_csv_sample() csvSampleDict=%s; " %(csvSampleDict))
-        
-    sampleDisplayedName = csvSampleDict.get(COLUMN_SAMPLE_NAME, '').strip()
-    sampleExtId = csvSampleDict.get(COLUMN_SAMPLE_EXT_ID, '').strip()
-    sampleGender = csvSampleDict.get(COLUMN_GENDER, '').strip()
-    sampleGroupType = csvSampleDict.get(COLUMN_GROUP_TYPE, '').strip()
-    sampleGroup = csvSampleDict.get(COLUMN_GROUP, '').strip()
-    sampleDescription = csvSampleDict.get(COLUMN_SAMPLE_DESCRIPTION, '').strip()
-    barcodeAssignment = csvSampleDict.get(COLUMN_BARCODE, '').strip()
-        
-    #skip blank line
-    hasAtLeastOneValue = bool([v for v in csvSampleDict.values() if v != ''])
-    if not hasAtLeastOneValue:
-        isToSkipRow = True
-        return failed, isToSkipRow
     
-    isValid, errorMessage = sample_validator.validate_sampleDisplayedName(sampleDisplayedName)
-    if not isValid:
-        failed.append((COLUMN_SAMPLE_NAME, errorMessage))    
+    try:
+        sampleDisplayedName = csvSampleDict.get(COLUMN_SAMPLE_NAME, '').strip()
+        sampleExtId = csvSampleDict.get(COLUMN_SAMPLE_EXT_ID, '').strip()
+        sampleGender = csvSampleDict.get(COLUMN_GENDER, '').strip()
+        sampleGroupType = csvSampleDict.get(COLUMN_GROUP_TYPE, '').strip()
+        sampleGroup = csvSampleDict.get(COLUMN_GROUP, '').strip()
+        sampleDescription = csvSampleDict.get(COLUMN_SAMPLE_DESCRIPTION, '').strip()
+        barcodeKit = csvSampleDict.get(COLUMNS_BARCODE_KIT, '').strip()
+        barcodeAssignment = csvSampleDict.get(COLUMN_BARCODE, '').strip()
+    
+        cancerType = csvSampleDict.get(COLUMN_CANCER_TYPE, "").strip()
+        cellularityPct = csvSampleDict.get(COLUMN_CELLULARITY_PCT, None).strip()
+
+
+        #skip blank line
+        hasAtLeastOneValue = bool([v for v in csvSampleDict.values() if v != ''])
+        if not hasAtLeastOneValue:
+            isToSkipRow = True
+            return failed, isToSkipRow, isToAbort
         
-    isValid, errorMessage = sample_validator.validate_sampleExternalId(sampleExtId)
-    if not isValid:
-        failed.append((COLUMN_SAMPLE_EXT_ID, errorMessage))
-        
-    isValid, errorMessage = sample_validator.validate_sampleDescription(sampleDescription)
-    if not isValid:
-        failed.append((COLUMN_SAMPLE_DESCRIPTION, errorMessage))
-        
-    isValid, errorMessage, gender_CV_value = sample_validator.validate_sampleGender(sampleGender)
-    if not isValid:
-        failed.append((COLUMN_GENDER, errorMessage))
-       
-    isValid, errorMessage, role_CV_value = sample_validator.validate_sampleGroupType(sampleGroupType)
-    if not isValid:
-        failed.append((COLUMN_GROUP_TYPE, errorMessage))
-        
-    if sampleGroup: 
-        isValid, errorMessage = sample_validator.validate_sampleGroup(sampleGroup)
+        isValid, errorMessage = sample_validator.validate_sampleDisplayedName(sampleDisplayedName)
         if not isValid:
-            failed.append((COLUMN_GROUP, errorMessage))
+            failed.append((COLUMN_SAMPLE_NAME, errorMessage))    
             
-    if not isValid:
-        failed.append((COLUMN_BARCODE, errorMessage))
-
-    #validate user-defined custom attributes
-    failed_userDefined = _validate_csv_user_defined_attributes(csvSampleDict, request)
-    failed.extend(failed_userDefined)
-               
-    logger.debug("import_sample_processor.validate_csv_sample() failed=%s" %(failed))
+        isValid, errorMessage = sample_validator.validate_sampleExternalId(sampleExtId)
+        if not isValid:
+            failed.append((COLUMN_SAMPLE_EXT_ID, errorMessage))
+            
+        isValid, errorMessage = sample_validator.validate_sampleDescription(sampleDescription)
+        if not isValid:
+            failed.append((COLUMN_SAMPLE_DESCRIPTION, errorMessage))
+            
+        isValid, errorMessage, gender_CV_value = sample_validator.validate_sampleGender(sampleGender)
+        if not isValid:
+            failed.append((COLUMN_GENDER, errorMessage))
+           
+        isValid, errorMessage, role_CV_value = sample_validator.validate_sampleGroupType(sampleGroupType)
+        if not isValid:
+            failed.append((COLUMN_GROUP_TYPE, errorMessage))
+            
+        if sampleGroup: 
+            isValid, errorMessage = sample_validator.validate_sampleGroup(sampleGroup)
+            if not isValid:
+                failed.append((COLUMN_GROUP, errorMessage))
+    
+        if cancerType:
+            isValid, errorMessage, cancerType_CV_value = sample_validator.validate_cancerType(cancerType) 
+            if not isValid:
+                failed.append((COLUMN_CANCER_TYPE, errorMessage))
         
-    return failed, isToSkipRow
-
+        if cellularityPct:
+            isValid, errorMessage, value = sample_validator.validate_cellularityPct(cellularityPct)
+            if not isValid:
+                failed.append((COLUMN_CELLULARITY_PCT, errorMessage))     
+        
+          
+        ##NEW VALIDATION FOR BARCODEKIT AND BARCODE_ID_STR
+        isValid, errorMessage, item = sample_validator.validate_barcodekit_and_id_str(barcodeKit, barcodeAssignment)
+        if not isValid:
+            if item == 'barcodeKit':
+                failed.append((COLUMNS_BARCODE_KIT, errorMessage))
+            else:
+                failed.append((COLUMN_BARCODE, errorMessage))
+        # if not isValid:
+        #     failed.append((COLUMN_BARCODE, errorMessage))
+    
+        #validate user-defined custom attributes
+        failed_userDefined = _validate_csv_user_defined_attributes(csvSampleDict, request)
+        failed.extend(failed_userDefined)
+                   
+        logger.debug("import_sample_processor.validate_csv_sample() failed=%s" %(failed))
+            
+        return failed, isToSkipRow, isToAbort
+    
+    except:
+        logger.exception(format_exc())
+        
+        failed.append(("File Contents", " the CSV file does not seem to have all the columns. Click the Sample File Format button for an example. "))
+        isToAbort = True               
+        logger.debug("import_sample_processor.validate_csv_sample() failed=%s" %(failed))        
+        return failed, isToSkipRow, isToAbort
 
 
 def _validate_csv_user_defined_attributes(csvSampleDict, request):
@@ -284,37 +330,30 @@ def _validate_csv_user_defined_attributes(csvSampleDict, request):
     return failed
 
 
-def validate_barcodes(row_list):
+def validate_barcodes_are_unique(row_list):
     barcodekits = []
-    barcodes = []
-    id_strings = []
+    dnabarcodes = []
     msgs = dict()
     count = 0
     for row in row_list:
         count += 1
-        barcode = row.get(COLUMN_BARCODE, "")
-        if barcode.strip():
-            dnabarcode = models.dnaBarcode.objects.filter(id_str__iexact=barcode.strip())
-            if len(dnabarcode) > 0:
-                id_strings.append(barcode)
-            else:
-                msgs[count] = ((COLUMN_BARCODE, "Error, %s is an invalid barcode" % (barcode)))
+        barcodeKit = row.get(COLUMNS_BARCODE_KIT, "").strip()
+        barcode = row.get(COLUMN_BARCODE, "").strip()
+        if barcodeKit and barcode:
+            barcodekits.append(barcodeKit)
+            if len(set(barcodekits)) > 1:
+                msgs[count] = ((COLUMNS_BARCODE_KIT, "Error, Only one barcode kit can be used for a sample set"))
+            
+            dnabarcode = models.dnaBarcode.objects.filter(name__iexact=barcodeKit, id_str__iexact=barcode)
+            if dnabarcode.count() != 1:
+                msgs[count] = ((COLUMNS_BARCODE_KIT, "Error, %s %s is an invalid barcodeKit and barcode combination" % (barcodeKit, barcode)))
+            
+            if dnabarcode.count() > 0:
+                if dnabarcode[0] in dnabarcodes:
+                    msgs[count] = ((COLUMN_BARCODE, "Error, A barcode can be assigned to only one sample in the sample set and %s has been assigned to another sample" %(barcode)))
+                else:
+                    dnabarcodes.append(dnabarcode[0])
 
-            if barcode in barcode in barcodes:
-                msgs[count] = ((COLUMN_BARCODE, "Error, A barcode can be assigned to only one sample in the sample set and %s has been assigned to another sample" %(barcode)))
-            else:
-                barcodes.append(barcode)
-
-    count = 0
-    for id_str in id_strings:
-        if len(barcodekits) > 0:
-            d = models.dnaBarcode.objects.filter(id_str__iexact=id_str, name__in=[x.name for x in barcodekits])
-        else:
-            d = models.dnaBarcode.objects.filter(id_str__iexact=id_str)
-        if len(d) > 0:
-            barcodekits.extend(list(d))
-        else:
-            msgs[count] = ((COLUMN_BARCODE, "Error, Only one barcode kit can be used for a sample set"))
     return msgs
 
 def validate_barcodes_for_existing_samples(row_list, sampleset_ids):
@@ -340,11 +379,9 @@ def validate_barcodes_for_existing_samples(row_list, sampleset_ids):
         
             for item in samplesetitems:
                 #first validate that all barcode kits are the same for all samples
-                if item.barcode:
-        
-                    dnabarcodes = models.dnaBarcode.objects.filter(id_str=item.barcode)
-                    barcodeKit1 = dnabarcodes[0].name
-                    barcode1 = item.barcode
+                if item.dnabarcode:
+                    barcodeKit1 = item.dnabarcode.name
+                    barcode1 = item.dnabarcode.id_str
                 else:
                     barcodeKit1 = None
                     barcode1 = None

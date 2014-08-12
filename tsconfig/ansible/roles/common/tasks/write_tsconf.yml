@@ -1,0 +1,64 @@
+---
+# file: roles/common/tasks/write_tsconf.yml
+
+- name: Start the tsconf.conf file
+  file: path={{ tsconfig_dir }}/tsconf.conf state=touch
+          group=root owner=root mode=0644
+
+- name: Edit date
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^date'
+                line='date:{{ ansible_date_time.date }} {{ ansible_date_time.time }}'
+- name: Edit hostname
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^hostname'
+                line='hostname:{{ ansible_nodename }}'
+- name: Edit ipaddress
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^ipaddress'
+                line='ipaddress:{{ ansible_default_ipv4.address }}'
+- name: Edit serialnumber
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^serialnumber'
+                line='serialnumber:{{ ansible_product_serial }}'
+- name: Edit version
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^version'
+                line='version:NA'
+- name: Edit hardwarename
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^hardwarename'
+                line='hardwarename:{{ ansible_product_name }}'
+- name: Edit mode - set to compute by default
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^mode'
+                line='mode:compute'
+- name: Edit mode - set to master
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^mode'
+                line='mode:master'
+  when: ansible_nodename == '{{ groups.headnode[0] }}'
+# Any better way to do a conditional?
+# This is the default value
+- name: Edit configuration
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^configuration'
+                line='configuration:standalone'
+# --- or
+- name: Edit configuration
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^configuration'
+                line='configuration:tsvm'
+  when: ansible_product_name == 'VirtualBox'
+# --- or
+- name: Edit configuration
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^configuration'
+                line='configuration:raptorvm'
+  when: ansible_product_name == 'Bochs'
+# --- or
+- name: Edit configuration
+  lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
+                regexp='^configuration'
+                line='configuration:vmware'
+  when: ansible_product_name == 'VMware Virtual Platform'

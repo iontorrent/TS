@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "EmptyTrace.h"
-#include "EmptyTraceReplay.h"
 #include "Region.h"
 #include "GlobalDefaultsForBkgModel.h"
 #include "ImageSpecClass.h"
@@ -25,35 +24,38 @@ namespace boost {namespace serialization {
 class EmptyTraceTracker
 {
  public:
-  EmptyTraceTracker (std::vector<Region> &_regions,
-		     std::vector<RegionTiming> &_regiontiming,
-		     std::vector<float> &_sep_t0_est,
-		     CommandLineOpts &_inception_state);
+  EmptyTraceTracker (const std::vector<Region> &_regions,
+		     const std::vector<RegionTiming> &_regiontiming,
+		     const std::vector<float> &_sep_t0_est,
+		     const CommandLineOpts &_inception_state);
     
     ~EmptyTraceTracker();
     
-    void Allocate(Mask *bfmask, ImageSpecClass &imgSpec);
-    void SetEmptyTracesFromImage (Image &img, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask);
+    void Allocate(const Mask *bfmask, const ImageSpecClass &imgSpec, int flow_block_size);
+    void SetEmptyTracesFromImage (Image &img, const PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask);
     void SetEmptyTracesFromImage(SynchDat &mesh, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask);
-    void SetEmptyTracesFromImageForRegion(Image &img, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask, Region& region, float t_mid_nuc);
-    void SetEmptyTracesFromImageForRegion(SynchDat &mesh, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask, Region& region, float t_mid_nuc, float sigma, float t_start,TimeCompression *time_cp);
-    EmptyTrace *AllocateEmptyTrace (Region &region, int imgFrames);
-    EmptyTrace *GetEmptyTrace (Region &region);
+    void SetEmptyTracesFromImageForRegion(Image &img, const PinnedInFlow &pinnedInFlow, 
+      int raw_flow, const Mask *bfmask, Region& region, float t_mid_nuc, int flow_buffer_index);
+    void SetEmptyTracesFromImageForRegion(SynchDat &mesh, const PinnedInFlow &pinnedInFlow, 
+      int raw_flow, const Mask *bfmask, Region& region, float t_mid_nuc, float sigma, 
+      float t_start,TimeCompression *time_cp, int flow_buffer_index );
+    EmptyTrace *AllocateEmptyTrace (Region &region, int imgFrames, int flow_block_size);
+    EmptyTrace *GetEmptyTrace (const Region &region);
 
   private:
     std::vector<EmptyTrace *>emptyTracesForBMFitter;
-    std::vector<Region> &regions;
-    std::vector<RegionTiming> &regionTiming;
-    std::vector<float> &sep_t0_est;
+    const std::vector<Region> &regions;
+    const std::vector<RegionTiming> &regionTiming;
+    const std::vector<float> &sep_t0_est;
     int maxNumRegions;
     std::vector<int> imgFrames;
     std::string outlierDumpFile;
 
-    int MaxNumRegions (std::vector<Region>& regions);
+    int MaxNumRegions (const std::vector<Region>& regions);
     void InitializeDumpOutlierTracesFile();
     void DumpOutlierTracesPerFlowPerRegion(int flow, Region& region, int nOutliers, int nRef);
 
-    CommandLineOpts& inception_state; // why do I need to know this
+    const CommandLineOpts& inception_state; // why do I need to know this
 
     // the time compression variables needed here should be parsed out
     GlobalDefaultsForBkgModel global_defaults;
@@ -84,9 +86,9 @@ namespace boost { namespace serialization {
     template<typename Archive>
       inline void save_construct_data(Archive& ar, const EmptyTraceTracker * o, const unsigned int version) {
       // fprintf(stdout, "save_construct_data EmptyTraceTracker ... ");
-      std::vector<Region> *regions_ptr = & o->regions;
-      std::vector<RegionTiming> *regionTiming_ptr = & o->regionTiming;
-      std::vector<float> *sep_t0_est_ptr = & o->sep_t0_est;
+      const std::vector<Region> *regions_ptr = & o->regions;
+      const std::vector<RegionTiming> *regionTiming_ptr = & o->regionTiming;
+      const std::vector<float> *sep_t0_est_ptr = & o->sep_t0_est;
       // ar << inception_state_ptr;  later restored as a NULL pointer
       ar << regions_ptr;
       ar << regionTiming_ptr;

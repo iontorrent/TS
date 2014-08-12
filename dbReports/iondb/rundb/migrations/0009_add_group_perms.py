@@ -9,7 +9,9 @@ class Migration(DataMigration):
 
     def forwards(self, orm):
         from django.core.management import call_command
-        call_command("loaddata", "ionusers_group.json")
+        # Temporary work around for http://south.aeracode.org/ticket/1328
+        #call_command("loaddata", "ionusers_group.json")
+        call_command("loaddata", "/opt/ion/iondb/rundb/fixtures/ionusers_group.json")
 
         group = orm['auth.group'].objects.get(name='ionusers')
         for user in orm['auth.user'].objects.all():

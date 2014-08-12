@@ -1,0 +1,83 @@
+Aligning contigs to reference...
+	Running Nucmer
+Parsing coords...
+Loading Assembly...
+Loading reference...
+	Loaded [gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides]
+Loading SNPs...
+Loading regions...
+	No regions given, using whole reference.
+	Total Regions: 1
+	Total Region Length: 10000
+Analyzing contigs...
+CONTIG: contig2 (3360bp)
+Top Length: 1471  Top ID: 100.0
+		This contig is misassembled. 3 total aligns.
+			Real Alignment 1: 3431 4130 | 1 700 | 700 700 | 100.0 | gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides contig2
+			  Extensive misassembly ( relocation, inconsistency = 1750 ) between these two alignments
+			Real Alignment 2: 5881 7070 | 701 1890 | 1190 1190 | 100.0 | gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides contig2
+			  Extensive misassembly ( relocation, inconsistency = 1050 ) between these two alignments
+			Real Alignment 3: 8120 9590 | 1890 3360 | 1471 1471 | 100.0 | gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides contig2
+
+CONTIG: contig1 (2100bp)
+Top Length: 2100  Top ID: 100.0
+		One align captures most of this contig: 1121 3220 | 1 2100 | 2100 2100 | 100.0 | gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides contig1
+
+Analyzing coverage...
+Writing SNPs into /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/nucmer_output/contigs_2.used_snps
+	Reference gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides: 4 total alignments. 1 total regions.
+		Region: 1 to 10000 (10000 bp)
+			START in gap: 1 to 1121 (1120 bp)
+			Align 1: 1121 3220 contig1 1 2100
+				Gap between this and next alignment: 3220 to 3431 (210 bp)
+				Next Alignment: 3431 4130 contig2 1 700
+
+			Align 2: 3431 4130 contig2 1 700
+				Gap between this and next alignment: 4130 to 5881 (1750 bp)
+				Next Alignment: 5881 7070 contig2 701 1890
+
+			Align 3: 5881 7070 contig2 701 1890
+				Gap between this and next alignment: 7070 to 8120 (1049 bp)
+				Next Alignment: 8120 9590 contig2 1890 3360
+
+			Align 4: 8120 9590 contig2 1890 3360
+			END in gap: 9590 to 10000 (410 bp)
+
+Analysis is finished!
+Founded SNPs were written into /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/nucmer_output/contigs_2.used_snps
+
+Results:
+	Local Misassemblies: 0
+	Misassemblies: 2
+		Relocations: 2
+		Translocations: 0
+		Inversions: 0
+	Misassembled Contigs: 1
+	Misassembled Contig Bases: 3360
+	Misassmblies Inter-Contig Overlap: 1
+Uncovered Regions: 0 (0)
+Unaligned Contigs: 0 + 0 part
+Partially Unaligned Contigs with Misassemblies: 0
+Unaligned Contig Bases: 0
+
+Ambiguously Mapped Contigs: 0
+Total Bases in Ambiguously Mapped Contigs: 0
+Note that --allow-ambiguity option was set to "one" and only first alignment per each contig was used.
+
+	Covered Bases: 5461
+
+	SNPs: 0
+	Insertions: 0
+	Deletions: 0
+
+	Positive Gaps: 5
+		Internal Gaps:  2
+		External Gaps:  3
+		External Gap Total:  1740
+		External Gap Average: 580
+	Negative Gaps: 0
+		Internal Overlaps:  0
+		External Overlaps:  0
+		External Overlaps Total:  0
+		External Overlaps Average: 0
+	Contigs with Redundant Alignments: 0 (0)

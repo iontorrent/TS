@@ -20,7 +20,7 @@ log.addHandler(handler)
 '''
 Main entry point to the celery task to backfill diskusage field of Experiment objects.
 '''
-@task(queue="periodic")
+@task(queue="diskutil")
 def backfill_exp_diskusage():
     '''
     For every Experiment object in database, scan filesystem and determine disk usage.
@@ -51,7 +51,7 @@ def backfill_exp_diskusage():
 '''
 Recursive celery task to process a list of directories
 '''
-@task(queue="periodic")
+@task(queue="diskutil")
 def setRunDiskspace_task(obj_list):
     logger = get_task_logger('backfill_exp_diskusage')
     if len(obj_list) > 0:
@@ -69,7 +69,7 @@ def setRunDiskspace_task(obj_list):
         pass
 
 
-@task(queue="periodic")
+@task(queue="diskutil")
 def setRunDiskspace(experimentpk):
     '''Sets diskusage field in Experiment record with data returned from du command'''
     logger = logging.getLogger(__name__)
@@ -99,7 +99,7 @@ def setRunDiskspace(experimentpk):
             pass
 
 
-@task(queue="periodic")
+@task(queue="diskutil")
 def backfill_result_diskusage():
     '''Due to error in initial code that filled in the diskusage field, this function
     updates every Result object's diskusage value.
@@ -135,7 +135,7 @@ def backfill_result_diskusage():
             log.exception(traceback.format_exc())
 
 
-@task(queue="periodic")
+@task(queue="diskutil")
 def setResultDiskspace(resultpk):
     '''Sets diskusage field in Results record with data returned from du command'''
     logger = logging.getLogger(__name__)

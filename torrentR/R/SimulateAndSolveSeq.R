@@ -29,7 +29,7 @@ SimulateAndSolveSeq <- function(
   noNegativeSignal=TRUE,
   plotFigure=TRUE,
   randSeed=NA,
-  terminatorChemistryRun=0
+  diagonalStates=0
 ){
     #loading required libraries
     #library(torrentR)
@@ -54,7 +54,7 @@ SimulateAndSolveSeq <- function(
     for (i in 1:length(SequenceVector))
         SequenceVector[i] <- paste(SequenceVector[i], paste(sample(c("A", "C", "G", "T"), numBases, replace=TRUE), collapse=""), sep="")
         
-    temp <- SimulateCAFIE(SequenceVector, flowOrder ,PhaseParameters[1],PhaseParameters[2],PhaseParameters[3], numFlows, simModel="treePhaserSim", terminatorChemistryRun=terminatorChemistryRun)
+    temp <- SimulateCAFIE(SequenceVector, flowOrder ,PhaseParameters[1],PhaseParameters[2],PhaseParameters[3], numFlows, simModel="treePhaserSim", diagonalStates=diagonalStates)
         
     for (i in 1:length(SequenceVector)) {
         # Apply all sorts of distortions
@@ -65,7 +65,7 @@ SimulateAndSolveSeq <- function(
     
     
     # Solving Sequences using Treephaser
-    Solution <- treePhaser(NoisySignal, flowOrder, PhaseParameters[1], PhaseParameters[2], PhaseParameters[3], keySeq=keySeq, basecaller=basecaller, terminatorChemistryRun=terminatorChemistryRun)
+    Solution <- treePhaser(NoisySignal, flowOrder, PhaseParameters[1], PhaseParameters[2], PhaseParameters[3], keySeq=keySeq, basecaller=basecaller, diagonalStates=diagonalStates)
     
     # --- --- ---
     # Error Analysis
@@ -79,8 +79,8 @@ SimulateAndSolveSeq <- function(
     meanQreadlength <- rep(0, length(qvals))
     
     # Simulate ideal flow signals
-    truthFlows <- SimulateCAFIE(SequenceVector, flowOrder ,0,0,0, numFlows, simModel="treePhaserSim", terminatorChemistryRun=terminatorChemistryRun) 
-    callFlows  <- SimulateCAFIE(Solution$seq, flowOrder ,0,0,0, numFlows, simModel="treePhaserSim", terminatorChemistryRun=terminatorChemistryRun)
+    truthFlows <- SimulateCAFIE(SequenceVector, flowOrder ,0,0,0, numFlows, simModel="treePhaserSim", diagonalStates=diagonalStates) 
+    callFlows  <- SimulateCAFIE(Solution$seq, flowOrder ,0,0,0, numFlows, simModel="treePhaserSim", diagonalStates=diagonalStates)
     
     for (i in 1:length(SequenceVector)){
       # Translate to flow space

@@ -54,7 +54,7 @@ Run Report for {{report.resultsName|latexsafe}}
  \fcolorbox{gray}{white}{\parbox[t][62mm]{50mm}{\setlength{\parindent}{0mm}\small\centering%
  \begin{tabular}{P{20mm}P{20mm}}
  %column1									&   column2
- \bfseries\small {{dbr.total_Q0_bases|ion_readable}}		&   \bfseries\small {{key_signal|slugify}} \\
+ \bfseries\small {{dbr.total_Q0_bases|ion_readable}}		&   \bfseries\small {{report.libmetrics.aveKeyCounts|floatformat:"0"|default:"N/A"|slugify}} \\
  \footnotesize Total Bases					&	\footnotesize Key Signal
  \end{tabular}
  \rule{40mm}{0.5pt}\\
@@ -309,7 +309,7 @@ Run Report for {{report.resultsName|latexsafe}}
 	\bf PGM & {{experiment.pgmName|latexsafe}} \\ 
 	\bf Flow Order & {{experiment.flowsInOrder}} \\ 
 	\bf Library Key & {{report.eas.libraryKey}} \\ 
-	\bf TF Key & ATCG \\ 
+	\bf TF Key & {{report.eas.tfKey|default:"ATCG"}} \\ 
 	\bf Chip Check & {% spaceless %} {% if experiment.log.calibratepassed %} Passed {% else %}Failed{% endif %}{% endspaceless %} \\
 	\bf Chip Type & {{experiment.chipType}} \\ 
 	\bf Chip Data & {{experiment.rawdatastyle}} \\ 

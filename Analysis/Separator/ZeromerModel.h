@@ -23,14 +23,14 @@ class ZeromerModel {
   virtual void SetTime(const Col<T> &time) = 0;
 
   virtual void FitWellZeromers(PJobQueue &jQueue,
-                               TraceStore<T> &traceStore,
+                               TraceStore &traceStore,
                                std::vector<char> &keyAssignments,
                                Col<int> &zeroFlows,
                                std::vector<KeySeq> &keys) = 0;
 
   virtual int ZeromerPrediction(int wellIdx,
                                 int flowIdx,
-                                TraceStore<T> &store,
+                                TraceStore &store,
                                 const Col<T> &ref,
                                 Col<T> &zeromer) = 0;
 

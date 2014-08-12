@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<base target="_parent"/>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8"> 
+<head>
+<!-- Do not include tb_layout.css in block reports - it causes continuous scrolling -->
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/print.css" media="print" />
+
+<link type="text/css" rel="stylesheet" href="lifechart/pseudo-bootstrap.css" />
+<link rel="stylesheet" type="text/css" href="lifechart/lifegrid.css"/>
+
+{% load humanize %}
+
+<style type="text/css">
+  body {background:white}
+  .block-rounded {
+    padding:5px;
+    background-color:#F5F5F5;
+    border:1px solid #D6D6D6;
+    -moz-border-radius: 6px;
+    -webkit-border-radius:6px;
+    border-radius: 6px
+  }
+  .help {
+    cursor:help; 
+    border-bottom: 1px dotted #A9A9A9
+  }
+</style>
+
+<title>Torrent Coverage Analysis Report</title>
+
+</head>
+
+<body>
+
+<table class="center">
+<tr><td><h4>
+  <b>Library type:</b> {{library_type}}<br/>
+{% if Target_Regions %}
+  <b>Target regions:</b> {{Target_Regions}}<br/>
+{% endif %}
+{% if Target_Padding and Target_Padding != '0' %}
+  <b>Target padding:</b> {{Target_Padding|intcomma}}<br/>
+{% endif %}
+{% if Read_Filters %}
+  <b>Read filters:</b> {{Read_Filters}}<br/>
+{% endif %}
+</h4></td></tr><tr><td>
+
+<table class="block-rounded"><tr>
+{% if rna_stats %}
+  <td><a href="{{rep_overview_png}}" title="{{help_dict.Representation_Overview}}"><img  style="height:100px" src="{{rep_overview_png}}" alt="Representation Overview"/></a></td>
+{% else %}
+  <td><a href="{{overview_png}}" title="{{help_dict.Coverage_Overview}}"><img  style="height:100px" src="{{overview_png}}" alt="Coverage Overview"/></a></td>
+{% endif %}
+  <td><div class="statsdata" style="width:320px">
+  <table>
+    <tr><td class="inleft"><span title="{{help_dict.Number_of_mapped_reads}}">Number of mapped reads</span></td>
+        <td class="inright">{{Number_of_mapped_reads|intcomma}}</td></tr>
+{% if not wgn_stats %}
+    <tr><td class="inleft"><span title="{{help_dict.Percent_reads_on_target}}">Percent reads on target</span></td>
+        <td class="inright">{{Percent_reads_on_target}}</td></tr>
+{% endif %}
+{% if samp_track %}
+    <tr><td class="inleft"><span title="{{help_dict.Percent_sample_tracking_reads}}">Percent sample tracking reads</span></td>
+        <td class="inright">{{Percent_sample_tracking_reads}}</td></tr>
+{% endif %}
+{% if bas_stats %}
+    <tr><td class="inleft"><span title="{{help_dict.Average_base_coverage_depth}}">Average base coverage depth</span></td>
+        <td class="inright">{{Average_base_coverage_depth|intcomma}}</td></tr>
+    <tr><td class="inleft"><span title="{{help_dict.Uniformity_of_base_coverage}}">Uniformity of base coverage</span></td>
+        <td class="inright">{{Uniformity_of_base_coverage}}</td></tr>
+{% endif %}
+  </table></div></td>
+</tr></table>
+
+</td></tr></table>
+</body>
+</html>

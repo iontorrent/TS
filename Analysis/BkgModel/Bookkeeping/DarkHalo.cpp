@@ -12,6 +12,7 @@ Halo::Halo()
     dark_nuc_comp[i] = NULL;
   nuc_flow_t = 0;
   mytype = Unspecified;
+  training_only=true;
 }
 
 void Halo::Alloc (int _npts)

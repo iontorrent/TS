@@ -1,0 +1,143 @@
+#!/bin/bash
+# Copyright (C) 2014 Life Technologies Inc. All Rights Reserved
+#
+# Wrapper script to the vagrant commands:
+# start
+# suspend
+# stop
+# destroy
+# (Note: provision is provided via tsvm-setup script)
+#
+#=======================================================================
+# Common variables
+#=======================================================================
+WHERE=$(dirname $(readlink -f $0))
+source ${WHERE}/tsvm-include
+INTERACTIVE=false
+
+#=============================================================================
+# FUNCTIONS
+#=============================================================================
+function print_help()
+{
+    echo
+    echo "Usage: tsvm-ctrl <action>"
+    echo
+    echo "<action> is one of the following:"
+    echo
+    echo -e "\tstart"
+    echo -e "\tsuspend"
+    echo -e "\tstop"
+    echo -e "\tdestroy"
+    echo
+}
+#=============================================================================
+# BEGIN MAIN
+#=============================================================================
+#Cleanup from bad state
+rm -f ${WHERE}/.stopping
+
+#=============================================================================
+#Check for arguments
+#=============================================================================
+while [ $# != 0 ]; do
+    case ${1,,} in
+        'start')
+            ACTION='up --provision'
+            STATE="Starting"
+        ;;
+        'suspend')
+            ACTION='suspend'
+            STATE="Stopping"
+        ;;
+        'stop')
+            ACTION='halt'
+            STATE="Stopping"
+            touch ${WHERE}/.stopping
+        ;;
+        'destroy')
+            ACTION='destroy -f'
+            STATE="Stopping"
+        ;;
+        '-h'|'--help')
+            print_help
+            exit
+        ;;
+        *)
+            echo -n "Invalid parameter: ${1}" >&2
+            echo -n "Error" >&1
+            exit
+        ;;
+    esac
+    shift
+done
+
+#=============================================================================
+# Interactive mode: Get the action to perform
+#=============================================================================
+ACTIONS_DISPLAY=( 'Start' 'Suspend' 'Stop' 'Destroy' )
+ACTIONS=( 'up' 'suspend' 'halt' 'destroy -f' )
+while [ -z "$ACTION" ]; do
+    clear
+    echo
+    echo "Torrent Server - Virtual Machine Control"
+    echo
+    echo -e "Choose VM action:"
+    echo
+    CNT=1
+    for item in ${ACTIONS_DISPLAY[@]}; do
+        echo -e "\t$CNT) $item"
+        CNT=$((CNT+=1))
+    done
+    echo -e "\t--------------------"
+    echo -e "\tE) Exit"
+    echo
+
+    read -p "Enter a number: " answer
+    if [[ "$answer" = "E" ]]||[[ "$answer" = "e" ]]; then
+        exit
+    fi
+    if [[ $answer -gt 0 ]]&&[[ $answer -le 4 ]]; then
+        CHOICE=${ACTIONS_DISPLAY[$((answer-1))]}
+        ACTION=${ACTIONS[$((answer-1))]}
+        INTERACTIVE=true
+        break
+    else
+        echo "Invalid choice: $answer"
+    fi
+done
+
+if $INTERACTIVE; then
+    echo "You have chosen to $CHOICE TS-VM"
+    read -p "Is this correct? (N|y) " answer
+    case $answer in
+        'Y'|'y')
+            :
+        ;;
+        *)
+            exit
+        ;;
+    esac
+fi
+
+#=============================================================================
+# Run vagrant action
+#=============================================================================
+cd ${WHERE}
+
+echo $(date +"[%Y-%m-%d %H:%M:%S]") "Running the command: vagrant $ACTION" >>$RUNNING_LOG
+echo -n "Running the command: vagrant $ACTION" >&2
+echo -n ${STATE} >&1
+if $INTERACTIVE; then
+    echo
+    vagrant $ACTION 2>&1 | tee $RUNNING_LOG
+else
+    vagrant $ACTION >>$RUNNING_LOG 2>&1 &
+fi
+
+exit
+
+#Developer Notes:
+# After issuing the vagrant halt command, the status of the VM will still indicate 'running'.
+# It attempts a graceful shutdown first before attempting a forced shutdown.
+#

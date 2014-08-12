@@ -1,0 +1,8 @@
+---
+# file: roles/iontorrent_master/handlers/main.yml
+- name: restart ionJobServer
+  service: name=ionJobServer state=restarted
+- name: restart ionPlugin
+  service: name=ionPlugin state=restarted
+- name: restart ionCrawler
+  service: name=ionCrawler state=restarted

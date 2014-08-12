@@ -1,5 +1,0 @@
-genome_shortname	e_coli_dh10b
-genome_name	E. coli DH10B
-genome_version	1
-index_version	b-0.1
-genome_length	4686607

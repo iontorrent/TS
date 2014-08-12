@@ -1,5 +1,0 @@
-genome_shortname	T_Thermophilius_HB8_NC_006461
-genome_name	Thermus thermophilius HB8
-genome_version	gi|55979969|ref|NC_006461.1
-index_version	b-0.1
-genome_length	1849744

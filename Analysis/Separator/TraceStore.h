@@ -4,11 +4,12 @@
 
 #include <vector>
 #include <string>
-#include <armadillo>
 #include "Utils.h"
 #include "IonErr.h"
 #include "MathOptim.h"
-#include "KeyClassifier.h"
+//#include "KeyClassifier.h"
+
+using namespace std;
 
 /** Definititon of a binary map of key flows to pattern match. */
 class KeySeq {
@@ -16,14 +17,22 @@ class KeySeq {
   KeySeq() {
     usableKeyFlows = 0;
     minSnr = 0;
+    minPeak = 0;
+    good_enough_snr = 2.0;
+    good_enough_peak = 30;
   }
 
   std::string name;
   std::vector<int> flows;
   unsigned int usableKeyFlows;
-  arma::uvec zeroFlows;
-  arma::uvec onemerFlows;
+  //  arma::uvec zeroFlows;
+  std::vector<int> zeroFlows;
+  //  arma::uvec onemerFlows;
+  std::vector<int> onemerFlows;
   double minSnr;
+  double minPeak;
+  double good_enough_peak;
+  double good_enough_snr;
 };
 
 /** Statistics about how well a particular key fits a well. */
@@ -43,9 +52,10 @@ class KeyFit {
     onemerProjAvg = 0;
     traceMean = 0;
     traceSd = 0;
-    projResid = 0;
+    //projResid = 0;
+    bfMetric2 = 0;
     peakSig = 0;
-    param.set_size(2);
+    param.resize(2);
     param.at(0) = 0;
     param.at(1) = 0;
     flag = -1;
@@ -63,7 +73,8 @@ class KeyFit {
   int wellIdx;
   int8_t keyIndex;
   int8_t bestKey;
-  arma::Col<double> param;
+  //  arma::Col<double> param;
+  std::vector<float> param;
   float snr;
   float mad;
   float sd;
@@ -71,7 +82,8 @@ class KeyFit {
   float onemerProjAvg;
   float traceMean;
   float traceSd;
-  float projResid;
+  //  float projResid;
+  float bfMetric2;
   float traceSdMin;
   float peakSig;
   int8_t ok;
@@ -90,7 +102,6 @@ class KeyFit {
 /** 
  * Abstract interface to a repository for getting traces.
  */
-template <typename _T>
 class TraceStore {
 
  public:
@@ -99,6 +110,7 @@ class TraceStore {
   const static int TS_BAD_REGION = 5;
 
   enum Nuc { A_NUC=0,C_NUC=1,G_NUC=2,T_NUC=3 };	
+  virtual ~TraceStore() {}
   /** Accessors. */
   virtual size_t GetNumFrames() = 0;
   virtual size_t GetNumWells() = 0;
@@ -148,7 +160,8 @@ class TraceStore {
 
   virtual size_t GetFlowBuff() = 0;
   virtual double GetTime(size_t frame) = 0;
-  virtual void SetTime(arma::Col<double> &time)  = 0;
+  //  virtual void SetTime(arma::Col<double> &time)  = 0;
+  virtual void SetTime(double *time, int npts) = 0; //arma::Col<double> &time)  = 0;
   virtual void SetSize(int frames) = 0;
   virtual void SetFlowIndex(size_t flowIx, size_t index) = 0;
   virtual bool HaveWell(size_t wellIx) = 0;
@@ -157,7 +170,7 @@ class TraceStore {
   virtual bool IsReference(size_t wellIx) = 0;
   virtual bool HaveFlow(size_t flowIx) = 0;
   virtual size_t WellIndex(size_t row, size_t col) {return row * GetNumCols() + col; }
-  virtual void Dump(std::ofstream &out) = 0;
+  //  virtual void Dump(std::ofstream &out) = 0;
   static void WellRowCol(size_t idx, size_t nCols, size_t &row, size_t &col) { 
     row = idx / nCols;
     col = idx % nCols;
@@ -168,45 +181,50 @@ class TraceStore {
   }
 
   /* Getting the traces */
-  virtual int GetTrace(size_t wellIx, size_t flowIx, typename std::vector<_T>::iterator traceBegin) = 0;
-  virtual int GetTrace(size_t wellIx, size_t flowIx, typename arma::Col<_T>::col_iterator traceBegin) = 0;
+  virtual int GetTrace(size_t wellIx, size_t flowIx,  std::vector<float>::iterator traceBegin) = 0;
+  //  virtual int GetTrace(size_t wellIx, size_t flowIx,  arma::Col<float>::col_iterator traceBegin) = 0;
+  virtual int GetTrace(size_t wellIx, size_t flowIx, float * traceBegin) = 0;
 
+  /* virtual int GetReferenceTrace(size_t wellIx, size_t flowIx,  */
+  /*                                arma::Col<float>::col_iterator traceBegin) = 0; */
   virtual int GetReferenceTrace(size_t wellIx, size_t flowIx, 
-                                typename arma::Col<_T>::col_iterator traceBegin) = 0;
+                                float * traceBegin) = 0;
   
   virtual int PrepareReference(size_t flowIx) = 0;
   /* Setting the traces. */
   virtual int SetTrace(size_t wellIx, size_t flowIx, 
-                       typename std::vector<_T>::iterator traceBegin, typename std::vector<_T>::iterator traceEnd ) = 0;
+                        std::vector<float>::iterator traceBegin,  std::vector<float>::iterator traceEnd ) = 0;
+  /* virtual int SetTrace(size_t wellIx, size_t flowIx,  */
+  /*                       arma::Col<float>::col_iterator traceBegin,  arma::Col<float>::col_iterator traceEnd) = 0; */
   virtual int SetTrace(size_t wellIx, size_t flowIx, 
-                       typename arma::Col<_T>::col_iterator traceBegin, typename arma::Col<_T>::col_iterator traceEnd) = 0;
+                       float * traceBegin, float *traceEnd) = 0;
 	
   virtual void SetT0(std::vector<float> &t0) = 0;
 
   virtual float GetT0(int idx) = 0;
   virtual void SetMeshDist(int size) = 0;
   virtual int GetMeshDist() = 0;
-  virtual void SetTemp(arma::Col<double> &col) { mTemp = col; }
-  virtual void SetFirst() {
-    arma::Col<double> trace(GetNumFrames());
-    GetTrace(0, 0, trace.begin());
-    SetTemp(trace);
-  }
-  virtual void CheckFirst() {
-    arma::Col<double> trace(GetNumFrames());
-    GetTrace(0, 0, trace.begin());
-    assert(trace.size() == mTemp.size());
-    for (size_t f = 0; f < GetNumFrames(); f++) {
-      if (mTemp[f] != trace[f]) {
-        assert(0);
-      }
-    }
+  /* virtual void SetTemp(arma::Col<double> &col) { mTemp = col; } */
+  /* virtual void SetFirst() { */
+  /*   arma::Col<double> trace(GetNumFrames()); */
+  /*   GetTrace(0, 0, trace.begin()); */
+  /*   SetTemp(trace); */
+  /* } */
+  /* virtual void CheckFirst() { */
+  /*   arma::Col<double> trace(GetNumFrames()); */
+  /*   GetTrace(0, 0, trace.begin()); */
+  /*   assert(trace.size() == mTemp.size()); */
+  /*   for (size_t f = 0; f < GetNumFrames(); f++) { */
+  /*     if (mTemp[f] != trace[f]) { */
+  /*       assert(0); */
+  /*     } */
+  /*   } */
              
-  }
+  /* } */
  private: 
   std::vector<char> mKeyAssign;
   std::vector<KeySeq> mKeys;
-  arma::Col<double> mTemp;
+
 };
 
 #endif // TRACESTORE_H

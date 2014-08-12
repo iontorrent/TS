@@ -1,5 +1,6 @@
-#ifndef _DIFFEQSTEP_H
-#define _DIFFEQSTEP_H
+/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+#ifndef DIFFEQMODEL_H
+#define DIFFEQMODEL_H
 
 // these defines are needed by SignalAverager ..   TODO: I should move these to a separate file
 typedef enum {
@@ -171,4 +172,4 @@ private:
 
 };
 
-#endif /* _DIFFEQSTEP_H */
+#endif // DIFFEQMODEL_H

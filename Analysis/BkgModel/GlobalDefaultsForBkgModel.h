@@ -6,57 +6,26 @@
 #include <string>
 #include "BkgMagicDefines.h"
 #include "Serialization.h"
+#include "WellXtalk.h"
+#include "ControlSingleFlow.h"
+#include "RegionParamDefault.h"
+#include "TimeControl.h"
+#include "FitterDefaults.h"
+#include "FlowDefaults.h"
+#include "OptBase.h"
 
 // divide god-structure to individual item control structures associated with specific purposes/modules
 
-struct RegionParamDefault{
-  // not plausible at all
-  // various parameters used to initialize the model
-  float sens_default;
-  float dntp_uM[NUMNUC];
-  float molecules_to_micromolar_conv;
-  float tau_R_m_default;
-  float tau_R_o_default;
-
-  float krate_default[NUMNUC];
-  float d_default[NUMNUC];
-  float kmax_default[NUMNUC];
-  float sigma_mult_default[NUMNUC];
-  float t_mid_nuc_delay_default[NUMNUC];
-
-  RegionParamDefault();
-
-private:
-  friend class boost::serialization::access;
-  template<class Archive>
-  void serialize(Archive& ar, const unsigned int version)
-  {
-    ar
-      & sens_default
-      & dntp_uM
-      & molecules_to_micromolar_conv
-      & tau_R_m_default
-      & tau_R_o_default
-      & krate_default
-      & d_default
-      & kmax_default
-      & sigma_mult_default
-      & t_mid_nuc_delay_default;
-  }
-};
-
 struct LocalSigProcControl{
-  
-  float krate_adj_limit;
-  float dampen_kmult;
-  float kmult_low_limit;
-  float kmult_hi_limit;
-  
+  ControlSingleFlow single_flow_master;
+
   // why would this be global again?
   bool  no_RatioDrift_fit_first_20_flows;
+  bool use_alternative_etbR_equation;
+
   bool fitting_taue;
+  int hydrogenModelType;
   bool  var_kmult_only;    // always do variable kmult override
-  bool  generic_test_flag; // control any features that I'm just testing
   bool fit_alternate;
   bool fit_gauss_newton;
   int   choose_time;
@@ -72,7 +41,7 @@ struct LocalSigProcControl{
   float AmplLowerLimit;  // sadly ignored at the moment
 
   // options added for proton data processing
-  bool proton_dot_wells_post_correction;
+  bool enable_well_xtalk_correction;
   int  single_flow_fit_max_retry;
   bool per_flow_t_mid_nuc_tracking;
   bool exp_tail_fit;
@@ -81,9 +50,12 @@ struct LocalSigProcControl{
   int regional_sampling_type;
   bool prefilter_beads;
   bool amp_guess_on_gpu;
+  bool recompress_tail_raw_trace;
 
   LocalSigProcControl();
-  
+  void PrintHelp();
+  void SetOpts(OptArgs &opts, Json::Value& json_params);
+
   int max_frames;
   void set_max_frames(int nFrames) { max_frames = nFrames; }
   int get_max_frames() { return (max_frames); }
@@ -94,125 +66,34 @@ private:
   void serialize(Archive& ar, const unsigned int version)
   {
     ar
-      & krate_adj_limit
-      & dampen_kmult
-      & kmult_low_limit
-      & kmult_hi_limit
-      & no_RatioDrift_fit_first_20_flows
-      & fitting_taue
-      & var_kmult_only
-      & generic_test_flag
-      & fit_alternate 
-      & fit_gauss_newton 
-      & choose_time
-      & projection_search_enable
-      & ssq_filter
-      & do_clonal_filter
-      & enable_dark_matter
-      & use_vectorization
-      & AmplLowerLimit
-      & proton_dot_wells_post_correction
-      & single_flow_fit_max_retry
-      & per_flow_t_mid_nuc_tracking
-      & exp_tail_fit
-      & pca_dark_matter
-      & prefilter_beads
-      & regional_sampling
-      & regional_sampling_type
-      & amp_guess_on_gpu
-      & max_frames;
-  }
-};
-  
-// I'm crying because this object isn't unified across our codebase
-struct FlowMyTears{
-  // plausibly a shared object
-  int              flow_order_len;     // length of entire flow order sequence (might be > NUMFB)
-  std::vector<int> glob_flow_ndx_map;  // maps flow number within a cycle to nucleotide (flow_order_len values)
-  std::string      flowOrder;          // entire flow order as a char array (flow_order_len values)
-   
-  FlowMyTears();
-
-  void SetFlowOrder(char *_flowOrder);
-  int  GetNucNdx(int flow_ndx)
-  {
-    return glob_flow_ndx_map[flow_ndx%flow_order_len];
-  }
-
-  // special functions for double-tap flows
-  int IsDoubleTap(int flow)
-  {
-    // may need to refer to earlier flows
-    if (flow==0)
-      return(1); // can't be double tap
-
-    if (glob_flow_ndx_map[flow%flow_order_len]==glob_flow_ndx_map[(flow-1+flow_order_len)%flow_order_len])
-      return(0);
-    return(1);
-  }
-
-  void GetFlowOrderBlock(int *my_flow, int i_start, int i_stop);
-
-private:
-  friend class boost::serialization::access;
-  template<class Archive>
-  void serialize(Archive& ar, const unsigned int version)
-  {
-    ar
-      & flow_order_len
-      & glob_flow_ndx_map
-      & flowOrder;
+        & no_RatioDrift_fit_first_20_flows
+        & use_alternative_etbR_equation
+        & fitting_taue
+        & hydrogenModelType
+        & var_kmult_only
+        & fit_alternate
+        & fit_gauss_newton
+        & choose_time
+        & projection_search_enable
+        & ssq_filter
+        & do_clonal_filter
+        & enable_dark_matter
+        & use_vectorization
+        & AmplLowerLimit
+        & enable_well_xtalk_correction
+        & single_flow_fit_max_retry
+        & per_flow_t_mid_nuc_tracking
+        & exp_tail_fit
+        & pca_dark_matter
+        & prefilter_beads
+        & regional_sampling
+        & regional_sampling_type
+        & amp_guess_on_gpu
+        & max_frames
+        & recompress_tail_raw_trace;
   }
 };
 
-struct TimeAndEmphasisDefaults{
-  float nuc_flow_frame_width;
-  int   time_left_avg;
-  int   time_start_detail;
-  int   time_stop_detail;
-  float emphasis_ampl_default;
-  float emphasis_width_default;
-  int   numEv;                       // number of emphasis vectors allocated
-  float emp[NUMEMPHASISPARAMETERS];  // parameters for emphasis vector generation
-  bool point_emphasis_by_compression; 
-  
-  TimeAndEmphasisDefaults();
-
-private:
-  friend class boost::serialization::access;
-  template<class Archive>
-  void serialize(Archive& ar, const unsigned int version)
-  {
-    ar
-      & nuc_flow_frame_width
-      & time_left_avg
-      & time_start_detail
-      & time_stop_detail
-      & emphasis_ampl_default
-      & emphasis_width_default
-      & numEv
-      & point_emphasis_by_compression
-      & emp;
-  }
-};
-
-struct FitterDefaults{
-  // weighting applied to clonal restriction on different hp lengths
-  float clonal_call_scale[MAGIC_CLONAL_CALL_ARRAY_SIZE];
-  float clonal_call_penalty;
-  float shrink_factor;
-  FitterDefaults();
-
-private:
-  friend class boost::serialization::access;
-  template<class Archive>
-  void serialize(Archive& ar, const unsigned int version)
-  {
-    ar
-      & clonal_call_scale
-      & clonal_call_penalty;
-  }
-};
 
 class GlobalDefaultsForBkgModel
 {
@@ -222,65 +103,51 @@ public:
   LocalSigProcControl     signal_process_control;
   TimeAndEmphasisDefaults data_control;
   FitterDefaults          fitter_defaults;
+  WellXtalk well_xtalk_master;
 
   // ugly
   std::string chipType;   // Yes, this is available through Image, theoretically, but I need to know this before I see the first image passsed.
   std::string xtalk_name; // really bad, but I can't pass anything through analysis at all!!!
 
-  void  SetDntpUM(float concentration, int NucID);
-  float GetDntpUM(int NucID);
-  void SetAllConcentrations(float *_dntp_uM);
-  
-  void  SetGoptDefaults(char *gopt);
-  void  ReadEmphasisVectorFromFile(char *experimentName);
-
-  void SetKrateDefaults(float *krate_values)
-  {
-    for (int i=0;i < NUMNUC;i++)
-      region_param_start.krate_default[i] = krate_values[i];
-  }
-
-  void SetDDefaults(float *d_values)
-  {
-    for (int i=0;i < NUMNUC;i++)
-      region_param_start.d_default[i] = d_values[i];
-  }
-
-  void SetKmaxDefaults(float *kmax_values)
-  {
-    for (int i=0;i < NUMNUC;i++)
-      region_param_start.kmax_default[i] = kmax_values[i];
-  }
-  
-  void SetDampenKmult(float damp){signal_process_control.dampen_kmult = damp;};
   void FixRdrInFirst20Flows(bool fixed_RatioDrift) { signal_process_control.no_RatioDrift_fit_first_20_flows = fixed_RatioDrift; }
+  void SetUse_alternative_etbR_equation(bool if_use_alternative_etbR_equation) { signal_process_control.use_alternative_etbR_equation = if_use_alternative_etbR_equation; }
   void SetFittingTauE(bool fit_taue) { signal_process_control.fitting_taue = fit_taue; }
+  void SetHydrogenModel( int model ) { signal_process_control.hydrogenModelType = model; }
   bool GetVarKmultControl(){return(signal_process_control.var_kmult_only);};
   void SetVarKmultControl(bool _var_kmult_only){signal_process_control.var_kmult_only = _var_kmult_only;};
-  void SetGenericTestFlag(bool _generic_test_flag){signal_process_control.generic_test_flag = _generic_test_flag;};
   void SetFitAlternate(bool _fit_alternate){signal_process_control.fit_alternate = _fit_alternate;};
   void SetFitGaussNewton(bool _fit_gauss_newton){signal_process_control.fit_gauss_newton = _fit_gauss_newton;};
   void SetEmphasizeByCompression(bool _emp_by_comp){data_control.point_emphasis_by_compression = _emp_by_comp;};
   void ReadXtalk(char *name);
-  void SetChipType(char *name);
-  void DumpExcitingParameters(char *fun_string);
+  void SetChipType(const char *name);
 
- private:
+  // i/o from files for parameters
+  void  SetGoptDefaults(char *gopt);
+  void  ReadEmphasisVectorFromFile(char *experimentName);
+  void DumpExcitingParameters(char *fun_string);
+  void GoptDefaultsFromJson(char *fname);
+  void GoptDefaultsFromPoorlyStructuredFile(char *fname);
+
+  void PrintHelp();
+  void SetOpts(OptArgs &opts, Json::Value& json_params);
+
+private:
   friend class boost::serialization::access;
   template<class Archive>
-    void serialize(Archive& ar, const unsigned int version)
-    {
-      // fprintf(stdout, "Serialize GlobalDefaultsForBkgModel ... ");
-      ar
-	& flow_global
-	& region_param_start
-	& signal_process_control
-	& data_control
-	& fitter_defaults
-	& chipType
-	& xtalk_name;
-      // fprintf(stdout, "done\n");
-    }
+  void serialize(Archive& ar, const unsigned int version)
+  {
+    // fprintf(stdout, "Serialize GlobalDefaultsForBkgModel ... ");
+    ar
+        & flow_global
+        & region_param_start
+        & signal_process_control
+        & data_control
+        & fitter_defaults
+        & well_xtalk_master
+        & chipType
+        & xtalk_name;
+    // fprintf(stdout, "done\n");
+  }
 
 };
 

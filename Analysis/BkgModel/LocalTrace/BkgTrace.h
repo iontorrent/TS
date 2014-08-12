@@ -28,7 +28,7 @@ public:
     FG_BUFFER_TYPE *bead_trace_bkg_corrected;
     
     float *fg_dc_offset; // per bead per flow dc offset - expensive to track
-    int bead_flow_t; // important size information for fg_buffers
+    int npts; // recompressed trace size. important size information for fg_buffers
     int numLBeads; // other size information for fg_buffers;
     
     // used to shift traces as they are read in
@@ -42,41 +42,49 @@ public:
     virtual ~BkgTrace();
   void DumpFlows(std::ostream &out);
   bool NeedsAllocation();
-    void Allocate(int numfb, int max_traces, int _numLBeads);
-    void    RezeroBeads(float t_start, float t_end, int fnum);
+    void Allocate(int npts, int _numLBeads, int flow_block_size);
+    void    RezeroBeads(float t_start, float t_end, int fnum, int flow_block_size);
 
-    void    RezeroOneBead(float t_start, float t_end, int fnum, int ibd);
+    void    RezeroOneBead(float t_start, float t_end, int fnum, int ibd, int flow_block_size);
     void    RezeroBeadsAllFlows (float t_start, float t_end);
-    void  GenerateAllBeadTrace(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer);
+    void    RezeroUncompressedTraceV(void *Ptr,  float t_start, float t_end);
+    void  GenerateAllBeadTrace(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, int flow_block_size);
+    void  GenerateAllBeadTrace_nonvec(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, FG_BUFFER_TYPE *fgb, int flow_block_size);
+    void  GenerateAllBeadTrace_vec(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, FG_BUFFER_TYPE *fgb, int flow_block_size);
+    void  GenerateAllBeadTraceAnRezero(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer, int flow_block_size, float t_start, float t_end);
 
 #define BKTRC_VEC_SIZE 8
 #define BKTRC_VEC_SIZE_B 32
 
     void    LoadImgWOffset(const RawImage *raw, int16_t *out[BKTRC_VEC_SIZE], std::vector<int> &compFrms,
     		int nfrms, int l_coord[BKTRC_VEC_SIZE], float t0Shift/*, int print=0*/);
+    void LoadImgWRezeroOffset(const RawImage *raw, int16_t *out[BKTRC_VEC_SIZE], std::vector<int> &compFrms,
+        int nfrms, int l_coord[BKTRC_VEC_SIZE], float t0Shift, float t_start, float t_end);
 
     void  KeepEmptyScale(Region *region, BeadTracker &my_beads, Image *img, int iFlowBuffer);
     void KeepEmptyScale(Region *region, BeadTracker &my_beads, SynchDat &chunk, int iFlowBuffer);
-    void   FillBeadTraceFromBuffer(short *img,int iFlowBuffer);
-    void GenerateAllBeadTrace (Region *region, BeadTracker &my_beads, SynchDat &chunk, int iFlowBuffer, bool matchSdat);
+    void   FillBeadTraceFromBuffer(short *img,int iFlowBuffer, int flow_block_size);
+    void GenerateAllBeadTrace (Region *region, BeadTracker &my_beads, SynchDat &chunk, int iFlowBuffer, bool matchSdat, int flow_block_size);
     void   DumpEmptyTrace(FILE *my_fp, int x, int y); // collect everything
     void   DumpBeadDcOffset(FILE *my_fp, bool debug_only, int DEBUG_BEAD, int x, int y,BeadTracker &my_beads);
-    void    DumpABeadOffset(int a_bead, FILE *my_fp, int offset_col, int offset_row, bead_params *cur);
+    void    DumpABeadOffset(int a_bead, FILE *my_fp, int offset_col, int offset_row, BeadParams *cur);
     void    RecompressTrace(FG_BUFFER_TYPE *fgPtr, float *tmp_shifted);
 
     float   ComputeDcOffset(FG_BUFFER_TYPE *fgPtr,float t_start, float t_end);
+    void    ComputeDcOffset_params(float t_start, float t_end,
+    			int &pt1, int &pt2, float &cnt, float &overhang_start, float &overhang_end);
     template<typename T>
       float ComputeDcOffset(const T *fgPtr, TimeCompression &tc, float t_start, float t_end);
     float  GetBeadDCoffset(int ibd, int iFlowBuffer);
 
     void SetRawTrace();
     void SetBkgCorrectTrace();
-    void AccumulateSignal (float *signal_x, int ibd, int fnum, int len);
-    void WriteBackSignalForBead(float *signal_x, int ibd, int fnum=-1);
-    void SingleFlowFillSignalForBead(float *signal_x, int ibd, int fnum);
-    void MultiFlowFillSignalForBead(float *signal_x, int ibd);
-    void CopySignalForTrace(float *trace, int ntrace, int ibd,  int iFlowBuffer);
-    void T0EstimateToMap(std::vector<float>& sep_t0_est, Region *region, Mask *bfmask);
+    void AccumulateSignal (float *signal_x, int ibd, int fnum, int len, int flow_block_size);
+    void WriteBackSignalForBead(float *signal_x, int ibd, int fnum /*=-1*/, int flow_block_size);
+    void SingleFlowFillSignalForBead(float *signal_x, int ibd, int fnum, int flow_block_size);
+    void MultiFlowFillSignalForBead(float *signal_x, int ibd, int flow_block_size) const;
+    void CopySignalForTrace(float *trace, int ntrace, int ibd,  int iFlowBuffer, int flow_block_size);
+    void T0EstimateToMap(const std::vector<float>& sep_t0_est, Region *region, Mask *bfmask);
     void SetImageParams(int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps)
     {
       imgRows=_rows;
@@ -88,7 +96,8 @@ public:
 
  private:
     bool restart;
-    void AllocateScratch();
+    void AllocateScratch( int flow_block_size );
+    int allocated_flow_block_size;
 
     // Serialization section
     friend class boost::serialization::access;
@@ -105,11 +114,12 @@ public:
 	  // bead_trace_raw handled in AllocateScratch
 	  // bead_trace_bkg_corrected handled in AllocateScratch
 	  // fg_dc_offset handled in AllocateScratch
-	  bead_flow_t &
+	  npts &
 	  numLBeads &
 	  t0_map &
 	  // bead_scale_by_flow handled in AllocateScratch
-	  time_cp;
+	  time_cp &
+    allocated_flow_block_size;
 	// fprintf(stdout, "done BkgTrace\n");
     }
     template<typename Archive>
@@ -125,14 +135,15 @@ public:
 	  // bead_trace_raw handled in AllocateScratch
 	  // bead_trace_bkg_corrected handled in AllocateScratch
 	  // fg_dc_offset handled in AllocateScratch
-	  bead_flow_t &
+	  npts &
 	  numLBeads &
 	  t0_map &
 	  // bead_scale_by_flow handled in AllocateScratch
-	  time_cp;
+	  time_cp &
+    allocated_flow_block_size;
 	
 	restart = true;
-	AllocateScratch();
+	AllocateScratch( allocated_flow_block_size );
 	// fprintf(stdout, "done BkgTrace\n");
     }
 
@@ -197,8 +208,8 @@ namespace TraceHelper{
   void ShiftTrace(float *trc,float *trc_out,int pts,float frame_offset);
   void GetUncompressedTrace(float *tmp, Image *img, int absolute_x, int absolute_y, int img_frames);
   void SpecialShiftTrace (float *trc, float *trc_out, int pts, float frame_offset/*, int print=0*/);
-  float ComputeT0Avg(Region *region, Mask *bfmask, std::vector<float>& sep_t0_est, int img_cols);
-  void BuildT0Map (Region *region, std::vector<float>& sep_t0_est, float reg_t0_avg, int img_cols, std::vector<float>& output);
+  float ComputeT0Avg(const Region *region, const Mask *bfmask, const std::vector<float>& sep_t0_est, int img_cols);
+  void BuildT0Map (const Region *region, const std::vector<float>& sep_t0_est, float reg_t0_avg, int img_cols, std::vector<float>& output);
   void DumpBuffer(char *ss, float *buffer, int start, int len);
 }
 

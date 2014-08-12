@@ -207,7 +207,6 @@ if( $havedoc )
   my ($tot,$cov,$cumcov,$normdepth,$pccumcov);
   for( my $d = 0; $d <= $maxDepth; ++$d )
   {
-    print DOCOUT $d;
     if( $targetSize )
     {
       if( $d <= $targetMaxDepth )
@@ -219,7 +218,11 @@ if( $havedoc )
         $pccumcov = $tot > 0 ? 100 * $cumcov / $tot : 0;
       }
       else {$cov = $cumcov = $normdepth = $pccumcov = 0;}
-      printf DOCOUT "\t%.0f\t%.0f\t%.4f\t%.2f", $cov, $cumcov, $normdepth, $pccumcov;
+      # ignore read-depths at 0 coverage - imporant to avoid massive files where one target has v.high read depths
+      if( $cov ) {
+        printf DOCOUT "$d\t%.0f\t%.0f\t%.4f\t%.2f", $cov, $cumcov, $normdepth, $pccumcov;
+        print DOCOUT "\n" unless( $genomeStat );
+      }
     }
     if( $genomeStat )
     {
@@ -232,9 +235,12 @@ if( $havedoc )
         $pccumcov = $tot > 0 ? 100 * $cumcov / $tot : 0;
       }
       else {$cov = $cumcov = $normdepth = $pccumcov = 0;}
-      printf DOCOUT "\t%.0f\t%.0f\t%.4f\t%.2f", $cov, $cumcov, $normdepth, $pccumcov;
+      # ignore read-depths at 0 coverage - imporant to avoid massive files where one target has v.high read depths
+      if( $cov ) {
+        print DOCOUT $d unless( $targetSize );
+        printf DOCOUT "\t%.0f\t%.0f\t%.4f\t%.2f\n", $cov, $cumcov, $normdepth, $pccumcov;
+      }
     }
-    print DOCOUT "\n";
   }
   close( DOCOUT );
 }
@@ -327,7 +333,7 @@ sub outputStats
   my ($reads,$sum_reads,$sum_dreads,$cumcov) = (0,0,0,0);
   for( my $depth = $maxDepth; $depth > 0; --$depth )
   {
-    $dist[$depth] += 0; # force value
+    $dist[$depth] += 0; # force missing 0 coverage at read-depth
     $cumcov += $dist[$depth];
     $cumd[$depth] = $cumcov; # for medians
     $reads = $depth * $dist[$depth];

@@ -1,0 +1,20 @@
+#!/bin/bash
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+#set -e
+#set -x
+echo "postrm $@"
+
+case "$1" in
+    purge)
+        # Remove the VM files
+        # clean up everything - all directories
+        rm -rf @ION_INSTALL_PREFIX@/.config/
+        rm -rf @ION_INSTALL_PREFIX@/.vagrant/
+        rm -rf @ION_INSTALL_PREFIX@/.vagrant.d/
+        rm -rf @ION_INSTALL_PREFIX@/.vagrant/
+        rm -f @ION_INSTALL_PREFIX@/*.log
+        rmdir @ION_INSTALL_PREFIX@/VirtualBox\ VMs/ || true # only if empty
+
+    ;;
+esac
+    

@@ -4,6 +4,8 @@
 
 #include <vector>
 #include <stdint.h>
+#include <utility>
+
 /** Utility class just to hold stats for two clusters. */
 class MixModel {
  public:
@@ -67,7 +69,12 @@ public:
   static bool CalculateResponsibility(const MixModel &m, float data, float &ownership);  
   /** Guassian density function. */
   static double DNorm(double x, double mu, double var, double varsq2p);
-
+  void UpdateResponsibilityVec(float * _ownership,
+                               float * _data,
+                               float * _p1,
+                               float * _p2,
+                               int size,
+                               const MixModel &model);
   /** Update the probability that a point comes from each cluster. */
   void UpdateResponsibility(std::vector<float> &ownership,
 			    const std::vector<float> &data, 
@@ -76,6 +83,12 @@ public:
   bool UpdateResponsibility(std::vector<float> &ownership,
 			    const std::vector<std::pair<float,int8_t> > &data, 
 			    const MixModel &model);
+
+  /** Calculate the weighted mean and variance at the same time. */
+  static void CalcWeightedMeanVar(const std::vector<float> &weights,
+                                  const std::vector<std::pair<float, int8_t> > &values,
+                                  bool inverse,
+                                  double &mean, double &var);
 
   /** Calculate the weighted mean for each distribution based on
    *   probability a point comes from that distribution. */
@@ -111,8 +124,8 @@ public:
 		   
    /** Iterate the model until converged or until max iterations have been reached. */
   void ConvergeModel(const std::vector<float> &data, MixModel &model);
-		   
   void ConvergeModel(const std::vector<std::pair<float,int8_t> > &data, MixModel &model);
+  void ConvergeModelFaster(float *data, int count, MixModel &model);
 
   /** Pick two random points 25th and 75th percentile to start model off */
   void InitializeModel(const std::vector<float> &data, MixModel &model);
@@ -124,6 +137,29 @@ public:
 
   void TrimData(std::vector<std::pair<float,int8_t> > &data, double trim);
 
+  void InitializeModel(const float *data, const int8_t *assign, int size, MixModel &model);
+
+  double CalcWeightedVar(double mu,
+                         float *weights,
+                         float *values,
+                         int count,
+                         bool inverse);
+
+  double CalcWeightedMeanVec(float *_weights,
+                             float *_values,
+                             float *_scratch,
+                             int size,
+                             bool inverse);
+
+  void UpdateModelVec(MixModel &update, 
+                      float *data,
+                      float *cluster,
+                      float *scratch,
+                      int count);
+  void TrimData(const float *data,  const int8_t *assignments, int size, double trim,
+                float *trim_data, int8_t * trim_assignments, int &trim_count);
+
+  MixModel FitDualGaussMixModelFaster(const float *data, const int8_t *assignments, int length);
 private:
   int mMaxPoints;         ///< How many data points to use max (sample down to this)
   double mTrim;           ///< Fraction to trim (each end trims mTrim/2

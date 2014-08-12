@@ -15,6 +15,10 @@
     <td id="selectedTechnique"></td>
 </tr> 
 <tr>
-    <td><b>Workflow:</b></td>
-    <td id="selectedWorkflow">{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow}}</td>
-</tr> 
+    <td><b>Ion Reporter Workflow:</b></td>
+    <td id="selectedWorkflow">
+    {% if helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName != "None" %}
+        {{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irworkflow|default:"Upload Only"}}
+    {% endif %}
+    </td>
+</tr>

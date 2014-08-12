@@ -1,5 +1,4 @@
-#(c) 2011 Ion Torrent Systems, Inc.
-#(c) 2011 Life Technologies
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
 # simple script to query the localhost via the REST API for a list of attached file servers in the Torrent Browser
 # Author: Mel Davey

@@ -17,27 +17,18 @@
                     <label for="id_str" class="control-label">Barcode ID</label>
                     <div class="controls">
                         <input value="{{ barcode.id_str|blankIfNone}}" name="id_str" id="id_str" class="input-xlarge textInput required validateUniq validateAlphaNumNoSpace" maxlength="512" type="text">
-                        <p class="help-block">
-                            ID of this barcode sequence
-                        </p>
                     </div>
                 </div>
                 <div class="control-group">
                     <label for="sequence" class="control-label">Sequence</label>
                     <div class="controls">
                         <input value="{{ barcode.sequence|blankIfNone }}" name="sequence" id="sequence" class="input-xlarge textInput required validateNuc" maxlength="128" type="text" style="text-transform: uppercase;">
-                        <p class="help-block">
-                            Sequence
-                        </p>
                     </div>
                 </div>
                 <div class="control-group">
                     <label for="adapter" class="control-label">Adapter</label>
                     <div class="controls">
                         <input value="{{ barcode.adapter|blankIfNone }}" name="adapter" id="adapter" class="input-xlarge textInput validateNuc" maxlength="128" type="text" style="text-transform: uppercase;">
-                        <p class="help-block">
-                            Adapter
-                        </p>
                     </div>
                 </div>
                 <div class="control-group">
@@ -47,9 +38,6 @@
                                id="floworder" size="35" maxlength="128" type="text"
                                style="text-transform: uppercase;"
                                class="input-xlarge validateNuc" />
-                        <p class="help-block">
-                            Flow Order
-                        </p>
                     </div>
                 </div>
                 <div class="control-group">
@@ -58,9 +46,16 @@
                         <input value="{{ barcode.annotation|blankIfNone }}" name="annotation"
                             id="annotation" size="35" maxlength="512" type="text"
                                class="input-xlarge textInput"/>
-                           <p class="help-block">
-                            Notes
-                        </p>
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="type" class="control-label">Type</label>
+                    <div class="controls">
+                        <select name="type">
+                            {% for type_val,type in barcode.ALLOWED_BARCODE_TYPES %}
+                            <option value={{type_val}} {%if barcode.type == type_val %}selected{%endif%}>{{type}}</option>
+                            {% endfor %}
+                        </select>
                     </div>
                 </div>
             </fieldset>

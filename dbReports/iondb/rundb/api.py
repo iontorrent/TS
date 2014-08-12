@@ -22,7 +22,7 @@ import json
 import imp
 
 #auth
-from tastypie.authentication import BasicAuthentication, ApiKeyAuthentication, Authentication
+from iondb.rundb.authn import IonAuthentication
 from tastypie.authorization import DjangoAuthorization
 
 #tastypie
@@ -36,6 +36,7 @@ from tastypie.exceptions import NotFound, BadRequest, InvalidFilterError, Hydrat
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import login
+from django.core.exceptions import ValidationError
 
 from django.utils.decorators import method_decorator
 from tastypie.validation import Validation, FormValidation
@@ -48,10 +49,12 @@ from tastypie.utils.mime import build_content_type
 from iondb.rundb.views import barcodeData
 from iondb.rundb import forms
 import iondb.rundb.admin
+from iondb.rundb.plan import plan_validator
 
 from ion.utils.TSversion import findVersions
 #from iondb.plugins import runner
-from ion.plugin import remote
+from ion.plugin import remote, Feature
+from ion.plugin.constants import RunLevel, RunType, runLevelsList
 
 #custom query
 from django.db.models.sql.constants import QUERY_TERMS
@@ -97,13 +100,13 @@ from iondb.rundb.data import dmactions_types
 from iondb.plugins.manager import pluginmanager
 
 # shared functions for making startplugin json
-from ion.utils.explogparser import getparameter, getparameter_minimal
 from iondb.plugins.launch_utils import get_plugins_dict
 
 import ast
 import simplejson
 import traceback
 
+from iondb.rundb import json_field
 from iondb.utils import toBoolean
 
 logger = logging.getLogger(__name__)
@@ -126,98 +129,6 @@ def JSONconvert(self, value):
 
 #replace the tastypie CharField
 CharField.convert = JSONconvert
-
-class InternalBasicAuthentication(BasicAuthentication):
-    def is_authenticated(self, request, **kwargs):
-        if not request.META.get('HTTP_AUTHORIZATION'):
-            return False
-
-        try:
-            (auth_type, data) = request.META['HTTP_AUTHORIZATION'].split()
-            if auth_type.lower() != 'basic':
-                return False
-            user_pass = base64.b64decode(data)
-        except:
-            return False
-
-        bits = user_pass.split(':', 1)
-        if len(bits) != 2:
-            return False
-
-        import base64
-        username, password = base64.b64decode(bits[0], bits[1])
-
-        from django.contrib.auth import authenticate
-        user = authenticate(username=bits[0], password=bits[1])
-        if user is None:
-            return False
-
-        if not self.check_active(user):
-            return False
-
-        request.user = user
-        return True
-
-# Custom Authorization Class
-class IonAuthentication(object):
-    """
-        Derived from MultiAuthentication, but with Auth Schemes hardcoded
-    """
-    def __init__(self, allow_get=True):
-        self.backends = [
-            # Basic must be first, so it sets WWW-Authenticate header in 401.
-            BasicAuthentication(realm='Torrent Browser'), ## Apache Basic Auth
-            InternalBasicAuthentication(realm='Torrent Browser'),
-            ApiKeyAuthentication(),
-        ]
-        self.allow_get = allow_get
-        # NB: If BasicAuthentication is last, will return WWW-Authorize header and prompt for credentials
-
-    def is_authenticated(self, request, **kwargs):
-        """
-        Identifies if the user is authenticated to continue or not.
-
-        Should return either ``True`` if allowed, ``False`` if not or an
-        ``HttpResponse`` if you need something custom.
-        """
-        unauthorized = False
-
-        # Allow user with existing session - django authn via session cookie
-        if hasattr(request, 'user') and request.user.is_authenticated():
-            return True
-
-        for backend in self.backends:
-            check = backend.is_authenticated(request, **kwargs)
-
-            if check:
-                if isinstance(check, HttpUnauthorized):
-                    unauthorized = unauthorized or check
-                else:
-                    request._authentication_backend = backend
-
-                    # Did not have a session, but set and send back session cookie
-                    if hasattr(request, 'user'):
-                        try:
-                            login(request, request.user)
-                        except:
-                            logger.exception("Unable to login user: '%s'", request.user.username)
-
-                    return check
-
-        # Allow GET OPTIONS HEAD without auth
-        if self.allow_get and request.method in ('GET', 'OPTIONS', 'HEAD'):
-            return True
-
-        return unauthorized
-
-    def get_identifier(self, request):
-        """
-        Provides a unique string identifier for the requestor. Delegates to Authn classes
-        """
-        try:
-            return request._authentication_backend.get_identifier(request)
-        except AttributeError:
-            return 'nouser'
 
 class CustomSerializer(Serializer):
     formats = ['json', 'jsonp', 'xml', 'yaml', 'html', 'plist', 'csv']
@@ -272,6 +183,12 @@ class MyModelDeclarativeMetaclass(ModelDeclarativeMetaclass):
 
         if meta and not hasattr(meta, 'serializer'):
             setattr(meta, 'serializer', CustomSerializer())
+        if meta and not hasattr(meta, 'default_format'):
+            setattr(meta, 'default_format', 'application/json')
+        if meta and not hasattr(meta, 'authentication'):
+            setattr(meta, 'authentication', IonAuthentication())
+        if meta and not hasattr(meta, 'authorization'):
+            setattr(meta, 'authorization', DjangoAuthorization())
 
         new_class = super(MyModelDeclarativeMetaclass, cls).__new__(cls, name, bases, attrs)
 
@@ -379,7 +296,7 @@ class BaseMetadataResource(ModelResource):
         return self.create_response(request, metadata)
 
     def post_metadata(self, request, **kwargs):
-        deserialized = self.deserialize(request, request.raw_post_data, format=request.META.get('CONTENT_TYPE', 'application/json'))
+        deserialized = self.deserialize(request, request.body, format=request.META.get('CONTENT_TYPE', 'application/json'))
         data=dict_strip_unicode_keys(deserialized)
         results = self.get_object_list(request).get(pk=kwargs["pk"])
         if results is None:
@@ -503,6 +420,31 @@ class ProjectResource(ModelResource):
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
 
+class ProjectResultsResource(ModelResource):
+    projects = fields.ToManyField(ProjectResource, 'projects', full=True)
+
+    def apply_filters(self, request, applicable_filters):
+        base_object_list = super(ProjectResultsResource, self).apply_filters(request, applicable_filters)
+        # include/exclude thumbnail results
+        isthumbnail = request.GET.get('isThumbnail',None)
+        if isthumbnail:
+            if isthumbnail == 'yes':
+                base_object_list = base_object_list.filter(metaData__contains='thumb')
+            if isthumbnail == 'no':
+                base_object_list = base_object_list.exclude(metaData__contains='thumb')
+
+        return base_object_list
+
+    class Meta:
+        queryset = models.Results.objects.all()
+
+        field_list = ['id','resultsName','timeStamp','projects','status','reportLink','reportStatus', 'reference']
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
 
 class ResultsResource(BaseMetadataResource):
 
@@ -520,25 +462,70 @@ class ResultsResource(BaseMetadataResource):
            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/barcode%s$" % (self._meta.resource_name, trailing_slash()),
                self.wrap_view('dispatch_barcode'), name="api_dispatch_barcode"),
            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/metadata%s$" % (self._meta.resource_name, trailing_slash()),
-                self.wrap_view('dispatch_metadata'), name="api_dispatch_metadata")
+                self.wrap_view('dispatch_metadata'), name="api_dispatch_metadata"),
+           url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/representative%s$" % (self._meta.resource_name, trailing_slash()),
+                self.wrap_view('post_representative'), name="api_post_representative"),
         ]
 
        return urls
+
+    def post_representative(self, request, **kwargs):
+        bundle = self.build_bundle(request=request)
+        result = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
+        if result is None:
+            return HttpGone()
+        deserialized = self.deserialize(request, request.body, format=request.META.get('CONTENT_TYPE', 'application/json'))
+        data=dict_strip_unicode_keys(deserialized)
+        state = data.get("representative", None)
+        experiment = result.experiment
+        current_result = experiment.repResult
+        post_result = result
+
+        if current_result == post_result:
+            if not state:
+                post_result.representative = False
+                # Because we must have a report for this to even execute, and
+                # we get this report's experiment, the experiment must have at least 1 report.
+                latest = experiment.results_set.order_by('-timeStamp')[0]
+                experiment.repResult = latest
+                experiment.resultDate = latest.timeStamp
+            else:
+                post_result.representative = True
+            experiment.pinnedRepResult = not experiment.pinnedRepResult
+        else:
+            if state:
+                experiment.pinnedRepResult = True
+                experiment.repResult = post_result
+                current_result.reprsentative = False
+                post_result.representative = True
+                current_result.save()
+            else:
+                post_result.representative = False
+        post_result.save()
+        experiment.save()
+
+        logger.info("CompExp obj_update {0} {1} {2}".format(current_result, post_result, experiment))
+
+        return HttpAccepted()
 
     #TODO: extend the scheme so the docs can be auto generated
     def dispatch_plugin(self, request, **kwargs):
         return self.dispatch('plugin', request, **kwargs)
 
-    # @deprecated - use get_pluginresults instead
     def get_plugin(self, request, **kwargs):
         """
         Will return a list of the html files for all the plugs that a report has
         this is going to be based on the file system output
+
+        @deprecated - use get_pluginresults instead
         """
         bundle = self.build_bundle(request=request)
         results = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if results is None:
             return HttpGone()
+
+        #import warnings
+        #warnings.warn("/rundb/api/v1/report/%d/plugin/ is deprecated. Use /pluginresults/ instead." % results.pk, DeprecationWarning)
 
         #we want to get the dir name, so we can grab junk from the plugin_out dir
         #do we return a list of all the html?
@@ -554,7 +541,7 @@ class ResultsResource(BaseMetadataResource):
         pluginPath = os.path.join(results.get_report_dir(),"plugin_out")
 
         pluginFiles = {}
-        pluginDirs = [ name for name in os.listdir(pluginPath) if os.path.isdir(os.path.join(pluginPath, name)) ]
+        pluginDirs = [ name for name in os.listdir(pluginPath) if os.path.isdir(os.path.join(pluginPath, name)) and (name.find("_out") > 0)]
         for pluginDir in pluginDirs:
             full_path = os.path.join(pluginPath, pluginDir)
             htmlfiles = [pfile for pfile in os.listdir(full_path) if (pfile.endswith(".html") or pfile.endswith(".php"))]
@@ -570,24 +557,23 @@ class ResultsResource(BaseMetadataResource):
 
         return self.create_response(request, pluginStatus)
 
+    def _launch_plugin(self, plugin):
+        pass
+
+
     def post_plugin(self, request, **kwargs):
         """
         Expects dict with a plugin to run, with an optional plugin config dict
         """
-
-        deserialized = self.deserialize(request, request.raw_post_data, format=request.META.get('CONTENT_TYPE', 'application/json'))
-        data=dict_strip_unicode_keys(deserialized)
-        # data: 'plugin', 'pluginconfig', 'owner'
-        plugins = data["plugin"]
-
-        config = {}
-
-        if "pluginconfig" in data:
-            config = data["pluginconfig"]
-
-        result = self.get_object_list(request=request).get(pk=kwargs["pk"])
+        logger = logging.getLogger('iondb.rundb.api.ResultsResource')
+        bundle = self.build_bundle(request=request)
+        result = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         if result is None:
+            logger.error("Invalid result: %s", kwargs)
             return HttpGone()
+
+        deserialized = self.deserialize(request, request.body, format=request.META.get('CONTENT_TYPE', 'application/json'))
+        data=dict_strip_unicode_keys(deserialized)
 
 
         #get the hostname try to get the name from global config first
@@ -599,118 +585,99 @@ class ResultsResource(BaseMetadataResource):
             #if a hostname was not found in globalconfig.webroot then use what the system reports
             net_location = 'http://%s' % sge_master
 
-        report = str(result.reportLink)
-        reportList = report.split("/")[:-1]
-        reportUrl = ("/").join(reportList)
-
-        # URL ROOT is a relative path, no hostname,
-        # as there is no canonical hostname for users visiting reports
-        url_root = reportUrl
-        api_url = net_location + "/rundb/api/"
-
-        # Mirror env structure defined in pipeline scripts
         report_root = result.get_report_dir()
-        try:
-          env,warn = getparameter(os.path.join(report_root,'ion_params_00.json'))
-        except:
-          env = getparameter_minimal(os.path.join(report_root,'ion_params_00.json'))
-
-        env['report_root_dir'] = report_root
-
-        env['net_location'] = net_location
-        env['master_node'] = sge_master
-        env['api_url'] = api_url
-
-        env['primary_key'] = result.pk
-
-        env.setdefault('tmap_version',settings.TMAP_VERSION)
-
-        plugin_basefolder = "plugin_out"
 
         # Get the user specified in the POST, fallback to request.user (probably ionadmin)
-        try:
-            user = User.objects.get(username=data["username"])
-        except KeyError:
-            user = request.user
-        except User.DoesNotExist:
-            logger.exception("Invalid owner specified for plugin launch: %s", data["username"])
-        env['username'] = user.username
-
-        log = logging.getLogger('iondb.rundb.api.ResultsResource')
-        for plugin_name in plugins:
+        user = request.user
+        if request.user.is_superuser:
+            # Admin user can override plugin owner
             try:
-                qs = models.Plugin.objects.filter(name=plugin_name,active=True).exclude(path='')
-                if not qs:
-                    return HttpGone()
-                plugin_orm = None
-                ## Get Latest version of plugin
-                for p in qs:
-                    if (not plugin_orm) or p.versionGreater(plugin_orm):
-                        plugin_orm = p
-                if not plugin_orm:
-                    return HttpGone()
+                username = data.get('owner', data.get('username', None))
+                if username is not None:
+                    user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                logger.exception("Invalid owner specified for plugin launch: %s", username)
+
+        pluginkwargs = data.get("plugin",None)
+        if pluginkwargs is None:
+            return HttpGone()
+        plugin = None
+
+        if isinstance(pluginkwargs, int):
+            pluginkwargs = { "id": pluginkwargs }
+        if hasattr(pluginkwargs, 'items'):
+            # Got a dict of kwargs, use as query
+            pluginkwargs.update({'active':True, 'selected':True}) # Cannot run an plugin unless active and enabled
+            logger.info("Searching for plugin: '%s'", pluginkwargs)
+            try:
+                plugin = models.Plugin.objects.get(**pluginkwargs)
             except:
-                logger.exception("Unable to find suitable plugin for %s", plugin_name)
+                logger.exception("Failed to fetch plugin: '%s'", pluginkwargs)
+                return HttpGone()
+        else:
+            if isinstance(pluginkwargs, (list, tuple)):
+                if len(pluginkwargs) > 1:
+                    logger.error("ERROR: Ignoring extra pluginkwargs. Please run one at a time: '%s'", pluginkwargs)
+                pluginkwargs = pluginkwargs[0]
+            logger.info("Searching for plugin by name: '%s'", pluginkwargs)
+            qs = models.Plugin.objects.filter(name=pluginkwargs,active=True,selected=True).order_by('id')
+            ## Get Latest version of plugin
+            for p in qs:
+                if (not plugin) or p.versionGreater(plugin):
+                    plugin = p
+            if not plugin:
+                logger.error("Invalid plugin specified (No active versions): %s", pluginkwargs)
                 return HttpGone()
 
-            plugins_dict = get_plugins_dict([plugin_orm], result.eas.selectedPlugins)
+        plugins_dict = get_plugins_dict([plugin], result.eas.selectedPlugins)
+        plugins_dict = json.loads(json_field.dumps(plugins_dict))
 
-            # Override plugin config with instance config
-            plugins_dict[plugin_name]["pluginconfig"].update(config)
+        params = {
+            'run_mode': 'manual', ## Launches via REST API are all manual (instance?), pipeline calls direct to XMLRPC
+            'plugins': {
+                plugin.name: {
+                    'instance_config': data.get("pluginconfig",{}),
+                    'pluginresult': data.get('pluginresult',None),
+                }
+            }
+        }
 
-            # Set Started status before launching to avoid race condition
-            # Set here so it appears immediately in refreshed plugin status list
+        report_type = RunType.FULLCHIP
+        if result.experiment.rawdatastyle != 'single':
+            report_type = RunType.THUMB if result.isThumbnail else RunType.COMPOSITE
+            
+        if report_type == RunType.COMPOSITE:
+            # get analyzed block directories for Proton analysis
+            params['block_dirs'] = []
+            explog = result.experiment.log
+            blockIds = []
+            for line in explog.get('blocks', []):
+                args = line.strip().replace('BlockStatus:','').split(',')
+                if args[0] =='thumbnail' or (args[0] == '0' and args[1] == '0'):
+                    continue
+                blockId = args[0].strip() + '_' + args[1].strip()
+                block_dir = os.path.join(report_root,'block_'+blockId)
+                if os.path.isdir(block_dir):
+                    blockIds.append(blockId)
+                    params['block_dirs'].append(block_dir)
 
-            (pluginresult, created) = result.pluginresult_set.get_or_create(
-                plugin=plugin_orm,
-                defaults={'owner': user}
-            )
-            pluginresult.prepare()
-            pluginresult.save()
-
-            # run plugin in either single level (default) or multilevel if indicated in plugin['runlevel']
-            if len(plugins_dict[plugin_name].get('runlevel',[])) > 1 :
-                # multi-runlevel plugin
-
-                # get analyzed block directories for Proton analysis
-                if env['report_type'] == 'composite':
-                    env['block_dirs'] = []
-                    explog = result.experiment.log
-                    blockIds = []
-                    for line in explog.get('blocks', []):
-                        args = line.strip().replace('BlockStatus:','').split(',')
-                        if args[0] =='thumbnail' or (args[0] == '0' and args[1] == '0'):
-                            continue
-                        blockId = args[0].strip() + '_' + args[1].strip()
-                        block_dir = os.path.join(report_root,'block_'+blockId)
-                        if os.path.isdir(block_dir):
-                            blockIds.append(blockId)
-                            env['block_dirs'].append(block_dir)
-
-                # launch plugin for multiple levels, SGE dependency is used to wait for completion of previous level
-                for runlevel in ['pre', 'block', 'default', 'post', 'last']:
-                    if runlevel in plugins_dict[plugin_name]['runlevel']:
-                        env['runlevel'] = runlevel
-                        if runlevel == 'block':
-                            if env['report_type'] == 'composite':
-                              for blockId,block_dir in zip(blockIds, env['block_dirs']):
-                                  env['blockId'] = blockId
-                                  block_pluginbasefolder = os.path.join(block_dir,plugin_basefolder)
-                                  plugins_dict, msg = remote.call_launchPluginsXMLRPC(env, plugins_dict, block_pluginbasefolder, url_root)
-                                  logger.info('Plugin runlevel= %s. %s' % (runlevel, msg))
-                        else:
-                            plugins_dict, msg = remote.call_launchPluginsXMLRPC(env, plugins_dict, plugin_basefolder, url_root)
-                            logger.info('Plugin runlevel= %s. %s' % (runlevel, msg))
-
+        # launch plugin(s)
+        for runlevel in runLevelsList():
+            # plugins_dict may change in loop if dependency plugins get added
+            if runlevel == RunLevel.BLOCK:
+                plugin_runlevels = sum([(p.get('runlevel') or [RunLevel.DEFAULT]) for p in plugins_dict.values()], [])
+                if RunLevel.BLOCK in plugin_runlevels and report_type == RunType.COMPOSITE:
+                    for blockId in blockIds:
+                        params['blockId'] = blockId
+                        plugins_dict, msg = remote.call_launchPluginsXMLRPC(result.pk, plugins_dict, net_location, user.username, runlevel, params)
             else:
-                # default single level
-                plugins_dict, msg = remote.call_launchPluginsXMLRPC(env, plugins_dict, plugin_basefolder, url_root)
-                logger.info(msg)
-
-            if 'ERROR' in msg:
-                logger.error('Unable to launch plugin: %s', plugin_orm.name) # See ionPlugin.log for details
-                pluginresult.complete('Error')
-                pluginresult.save()
+                plugins_dict, msg = remote.call_launchPluginsXMLRPC(result.pk, plugins_dict, net_location, user.username, runlevel, params)
+            
+            if msg:
+                if 'ERROR' in msg:
+                    logger.error('Unable to launch plugin: %s', plugin.name) # See ionPlugin.log for details
+                else:
+                    logger.info('Launched plugin runlevel= %s. %s' % (runlevel, msg))
 
         return HttpAccepted()
 
@@ -719,63 +686,20 @@ class ResultsResource(BaseMetadataResource):
         Set the status of the plugins.
         This allow a way to see if the plugin was ran successfully.
         """
+        # DEPRECATED - disabled
+        import warnings
+        warnings.warn("Updating status by pluginname is deprecated. Use pluginresult by pk instead.", DeprecationWarning)
 
-        deserialized = self.deserialize(request, request.raw_post_data, format=request.META.get('CONTENT_TYPE', 'application/json'))
+        deserialized = self.deserialize(request, request.body,
+                                        format=request.META.get('CONTENT_TYPE', 'application/json'))
         data=dict_strip_unicode_keys(deserialized)
-        result = self.get_object_list(request).get(pk=kwargs["pk"])
-        if result is None:
-            return HttpGone()
-        #we are only doing to use the first value of the dict
-        if len(data) != 1:
-            return HttpBadRequest()
 
-        # Get user from metadata, or from request
-        user = request.user
-        if "metadata" in data:
-            try:
-                user = User.objects.get(username=data["metadata"]["username"])
-            except KeyError:
-                pass
-            except User.DoesNotExist:
-                logger.exception("Invalid owner specified for plugin launch: %s", data["metadata"]["username"])
-
-        try:
-            with transaction.commit_on_success():
-                for (key, value) in data.items():
-                    if key == "metadata": continue ## NOTE: Can never be a plugin named metadata...
-
-                    # Note: If multiple plugins exist, use one with last install date.
-                    # FIXME Must uniquely identify plugins
-                    plugin = models.Plugin.objects.get(name=key,active=True)
-
-                    (pluginresult, created) = result.pluginresult_set.get_or_create(
-                        plugin=plugin,
-                        defaults={'owner': user}
-                    )
-
-                    # Call trigger methods for special states
-                    # - Started, Complete, Error
-                    if value == 'Completed' or value=='Error':
-                        pluginresult.complete(state=value)
-                    elif value == 'Started':
-                        pluginresult.start()
-                    else:
-                        pluginresult.state = value
-                    pluginresult.save()
-        except:
-            logger.exception('Failed plugin state update')
-            return HttpBadRequest()
-
-        return HttpAccepted()
+        logger.error("Invalid plugin status update: '%s'", data)
+        return HttpBadRequest()
 
 
     def dispatch_pluginresults(self, request, **kwargs):
-        """ Uses pluginresults_allowed_methods,
-            Passes GET to get_pluginresults, passes post and put to %_plugin """
-        if request.method.lower() in ['get']:
-            return self.dispatch('pluginresults', request, **kwargs)
-        # else:
-        return self.dispatch('plugin', request, **kwargs)
+        return self.dispatch('pluginresults', request, **kwargs)
 
     def _startplugin_version(self, outputpath):
         startjson_fname = os.path.join(outputpath, 'startplugin.json')
@@ -791,6 +715,36 @@ class ResultsResource(BaseMetadataResource):
             logger.exception("Malformed startplugin.json? %s", outputpath)
         return None
 
+    def post_pluginresults(self, request, **kwargs):
+        try:
+            basic_bundle = self.build_bundle(request=request)
+            obj = self.cached_obj_get(bundle=basic_bundle, **self.remove_api_resource_names(kwargs))
+        except ObjectDoesNotExist:
+            return HttpNotFound()
+        except MultipleObjectsReturned:
+            return HttpMultipleChoices("More than one resource is found at this URI.")
+
+        # Result Bundle...
+        bundle = self.build_bundle(obj=obj, request=request)
+        bundle = self.full_dehydrate(bundle)
+
+        kwargs.update({
+            #"result": bundle, # obj,
+            "result": bundle.obj,
+            "id" : None, # Force creation of new PluginResult
+        })
+        return self.pluginresults.to_class().post_list(request, **kwargs)
+
+        #prbundle = prc.build_bundle(data=dict_strip_unicode_keys(deserialized), request=request)
+        #updated_bundle = prc.obj_create(prbundle, **self.remove_api_resource_names(kwargs))
+        #location = prc.get_resource_uri(updated_bundle)
+        #if not prc._meta.always_return_data:
+        #    return http.HttpCreated(location=location)
+        #else:
+        #    updated_bundle = prc.full_dehydrate(updated_bundle)
+        #    updated_bundle = prc.alter_detail_data_to_serialize(request, updated_bundle)
+        #    return self.create_response(request, updated_bundle, response_class=http.HttpCreated, location=location)
+
     def get_pluginresults(self, request, **kwargs):
         bundle = self.build_bundle(request=request)
         results = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
@@ -802,49 +756,22 @@ class ResultsResource(BaseMetadataResource):
 
         # In the order they were generated, newest plugin entry first.
         pluginresults = results.pluginresult_set.all().order_by('-starttime')
-        if major == 'true':
-            pluginresults = pluginresults.filter(plugin__majorBlock=True)
-            major_blocks = [pluginresult.plugin.name for pluginresult in pluginresults]
-        elif major == 'false':
-            pluginresults = pluginresults.filter(plugin__majorBlock=False)
+        if major is not None:
+            major = (major.lower() == "true")
+            pluginresults = pluginresults.filter(plugin__majorBlock=major)
+
+        gc = models.GlobalConfig.objects.all()[0]
 
         # Iterate through DB results first, find matching directories
         pluginArray = []
         seen = {}
         show_plugins = request.session.setdefault("show_plugins", {})
         for pr in pluginresults:
-            prpath = pr.path()
-            candidates = [
-                #prpath + (".%d" % pr.id), ## PluginResult ID specific output
-                #prpath + ("--v%s" % pr.plugin.version), ## Plugin Version Specific Output
-                prpath,
-            ]
-            outputpath = None
-            for p in candidates:
-                if not os.path.exists(p):
-                    continue
-
-                pathversion = self._startplugin_version(p)
-                if pathversion:
-                    if pathversion != pr.plugin.version:
-                        # ~-~ these aren't the results you are looking for ~-~
-                        outputpath = None
-                        pr.state = pr.state + ' [Superseded]'
-                        break
-                else:
-                    # unknown version (someone probably deleted startplugin.json)
-                    # most recent plugin wins - let it fall through
-                    if seen.get(os.path.basename(p), False):
-                        outputpath = None
-                        pr.state = pr.state + ' [Superseded?]'
-                        # we are done here - we've already excluded the better matches
-                        break
-                # Everything matches
-                #logger.debug('Got pluginresult for %s v%s at %s', pr.plugin.name, pr.plugin.version, prpath)
-                outputpath = p
-                break
-            else:
-                logger.debug("Plugin %s v%s has no plugin_out folder", pr.plugin.name, pr.plugin.version)
+            outputpath = pr.path(create=False)
+            base_path = os.path.basename(outputpath)
+            #logger.debug("Plugin %s v%s - searching %s", pr.plugin.name, pr.plugin.version, outputpath)
+            if not os.path.exists(outputpath):
+                logger.info("Plugin %s v%s has no plugin_out folder", pr.plugin.name, pr.plugin.version)
                 outputpath = None
                 pr.state = pr.state + ' [Missing]'
 
@@ -852,52 +779,57 @@ class ResultsResource(BaseMetadataResource):
                 # Got a matching path, populate list of files
                 all_files = [pfile for pfile in os.listdir(outputpath) if (pfile.endswith(".html") or pfile.endswith(".php"))]
                 outputfiles = all_files
-                if major == 'true':
-                    def onlyBlocks(s):
-                        return "_block" in s
-                    outputfiles = filter(onlyBlocks, all_files)
+                seen[base_path] = True
                 seen[os.path.basename(outputpath)] = True
+                if major:
+                    outputfiles = filter(lambda x: "_block" in x, all_files)
                 link_files = filter(lambda x: "_block" not in x, all_files)
             else:
                 # Missing Output, or unknown version
-                outputpath = prpath ## assume default path, let link be broken
+                outputpath = pr.path() ## assume default path, let link be broken
+                seen[base_path] = True
                 outputfiles = [] # but mask files
                 link_files = []
 
+                logger.info("Plugin %s v%s - unable to find output folder: %s", pr.plugin.name, pr.plugin.version, outputpath)
+
+            # Convert to PluginReportResource...
             data = {
                 'Name': pr.plugin.name,
                 'Version': pr.plugin.version,
                 'State': pr.state,
-                'Path': outputpath,
-                'URL': "%splugin_out/%s/" % (results.reportLink, os.path.basename(outputpath)),
+                'Path': os.path.join(outputpath,''),
+                'URL': os.path.join(results.reportLink, gc.plugin_output_folder, base_path,''),
                 'Files': outputfiles,
                 'Links': link_files,
                 'Major' : pr.plugin.majorBlock,
                 'Size': pr.size,
                 'inodes': pr.inodes,
                 'id': pr.id,
+                'jobid': pr.jobid,
                 'show': show_plugins.get(pr.plugin.name, True)
             }
             pluginArray.append(data)
 
         # Report base path for all plugins
-        plugin_out_path = os.path.join(results.get_report_dir(),"plugin_out")
-        try:
-            plugin_out_listing = ( d for d in os.listdir(plugin_out_path) if os.path.isdir(d) )
-        except (OSError, IOError):
-            logger.info("Error listing %s", plugin_out_path)
-            plugin_out_listing = []
-
-        # Now - directories found which don't match plugin result entries
         if not major:
+            plugin_out_path = os.path.join(results.get_report_dir(), gc.plugin_output_folder)
+            try:
+                plugin_out_listing = ( d for d in os.listdir(plugin_out_path) if os.path.isdir(os.path.join(plugin_out_path,d)) )
+            except (OSError, IOError):
+                logger.info("Error listing %s", plugin_out_path)
+                plugin_out_listing = []
+
+            # Now - directories found which don't match plugin result entries
             import re
+            re_clean = re.compile(r'_out(\.\d+)?$')
             for orphan in ( p for p in plugin_out_listing if p not in seen ):
                 outputpath = os.path.join(plugin_out_path, orphan)
                 version = self._startplugin_version(outputpath)
                 if version is None:
                     version = '??'
 
-                name = re.sub(r'_out(\.\d+)?$','',orphan)
+                name = re_clean.sub('',orphan)
                 outputfiles = [pfile for pfile in os.listdir(outputpath) if (pfile.endswith(".html") or pfile.endswith(".php"))]
 
                 data = {
@@ -905,15 +837,16 @@ class ResultsResource(BaseMetadataResource):
                     'Version': version,
                     'State': 'Unknown',
                     'Files': outputfiles,
-                    'Path': outputpath,
-                    'URL': "%s/plugin_out/%s/" % (results.reportLink, orphan),
+                    'Path': os.path.join(outputpath,''),
+                    'URL': os.path.join(results.reportLink, gc.plugin_output_folder, orphan, ''),
                     'Major' : False, # NB: Plugins without DB record cannot be major
                     'Size': -1,
                     'inodes': -1,
                     'id': None,
+                    'jobid': None,
                     'show': show_plugins.get(name, True)
                 }
-                logger.info("Plugin folder with no db record: %s v%s at '%s'", name, version, path)
+                logger.info("Plugin folder with no db record: %s v%s at '%s'", name, version, outputpath)
                 pluginArray.append(data)
 
         # Resort by plugin name
@@ -929,6 +862,7 @@ class ResultsResource(BaseMetadataResource):
     def get_pluginstore(self, request, **kwargs):
         """
         Returns pluginStore for all plugins
+        @deprecated
         """
         bundle = self.build_bundle(request=request)
         results = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
@@ -941,8 +875,9 @@ class ResultsResource(BaseMetadataResource):
     def put_pluginstore(self, request, **kwargs):
         """
         Set the store of the plugins. - results.json
+        @deprecated
         """
-        deserialized = self.deserialize(request, request.raw_post_data, format=request.META.get('CONTENT_TYPE', 'application/json'))
+        deserialized = self.deserialize(request, request.body, format=request.META.get('CONTENT_TYPE', 'application/json'))
         data=dict_strip_unicode_keys(deserialized)
 
         results = self.get_object_list(request).get(pk=kwargs["pk"])
@@ -983,17 +918,27 @@ class ResultsResource(BaseMetadataResource):
     def dispatch_pluginresult_set(self, request, **kwargs):
         return self.dispatch('pluginresult_set', request, **kwargs)
 
+
     def get_pluginresult_set(self, request, **kwargs):
+        # Helper to return full resource for pluginresults, 
+        # different from get_pluginresults, which returns custom report resource
         try:
-            bundle = self.build_bundle(request=request)
-            obj = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
+            basic_bundle = self.build_bundle(request=request)
+            obj = self.cached_obj_get(basic_bundle, **self.remove_api_resource_names(kwargs))
         except ObjectDoesNotExist:
             return HttpGone()
         except MultipleObjectsReturned:
             return HttpMultipleChoices("More than one resource is found at this URI.")
 
-        pluginresults = PluginResultResource()
-        return pluginresults.get_list(request, result_id=obj.pk)
+        bundle = self.build_bundle(obj=obj, request=request)
+        bundle = self.full_dehydrate(bundle)
+
+        kwargs.update({
+            "result" : bundle.obj,
+        })
+
+        pluginresults = self.pluginresults.to_class()
+        return pluginresults.get_list(request, **kwargs)
 
     filesystempath = CharField('get_report_dir')
     bamLink = CharField('bamLink')
@@ -1004,8 +949,8 @@ class ResultsResource(BaseMetadataResource):
     qualitymetrics = ToManyField(QualityMetricsResource, 'qualitymetrics_set', full=False)
     reportstorage = fields.ToOneField(ReportStorageResource, 'reportstorage', full=True)
 
-    sffLink = CharField('sffLinkPatch')
-    tfSffLink = CharField('sffTFLinkPatch')
+    sffLink = CharField('sffLinkPatch', null=True)
+    tfSffLink = CharField('sffTFLinkPatch', null=True)
 
     #parent experiment
     experiment = fields.ToOneField('iondb.rundb.api.ExperimentResource', 'experiment', full=False, null = True)
@@ -1067,8 +1012,8 @@ class ResultsResource(BaseMetadataResource):
         authorization = DjangoAuthorization()
 
         plugin_allowed_methods = ['get', 'post', 'put']
-        pluginresults_allowed_methods = ['get','post','put']
-        pluginresult_set_allowed_methods = ['get']
+        pluginresults_allowed_methods = ['get','post']
+        pluginresult_set_allowed_methods = ['get', ]
         projects_allowed_methods = ['get']
         pluginstore_allowed_methods = ['get','put']
         barcode_allowed_methods = ['get']
@@ -1092,6 +1037,8 @@ class ExperimentResource(BaseMetadataResource):
     plan = fields.ToOneField('iondb.rundb.api.PlannedExperimentResource', 'plan', full=False, null=True, blank=True)
     eas_set = fields.ToManyField('iondb.rundb.api.ExperimentAnalysisSettingsResource', 'eas_set', full=True, null=True, blank=True)
     samples = fields.ToManyField('iondb.rundb.api.SampleResource', 'samples', full=True, null=True, blank=True)
+
+    isProton = fields.CharField(readonly=True, attribute="isProton")
 
     # Backwards support - single sample field
     sample = fields.CharField(readonly=True, blank=True)
@@ -1170,6 +1117,21 @@ class SampleSetResource(ModelResource):
 
 
     class Meta:
+#        isSupported = models.GlobalConfig.objects.all()[0].enable_compendia_OCP
+#        
+#        if isSupported:
+#            queryset = models.SampleSet.objects.all().select_related(
+#                    'SampleGroupType_CV__displayedName'
+#                ).prefetch_related(
+#                    'samples'
+#                ).all()
+#        else:
+#            queryset = models.SampleSet.objects.all().exclude(SampleGroupType_CV__displayedName = "DNA_RNA").select_related(
+#                    'SampleGroupType_CV__displayedName'
+#                ).prefetch_related(
+#                    'samples'
+#                ).all()
+
         queryset = models.SampleSet.objects.all().select_related(
                 'SampleGroupType_CV__displayedName'
             ).prefetch_related(
@@ -1190,9 +1152,10 @@ class SampleSetResource(ModelResource):
 class SampleSetItemResource(ModelResource):
     sampleSet = fields.ToOneField('iondb.rundb.api.SampleSetResource', 'sampleSet', full=False, null=True, blank=True)
     sample = fields.ToOneField('iondb.rundb.api.SampleResource', 'sample', full=False, null=True, blank=True)
-
+    dnabarcode = fields.ToOneField('iondb.rundb.api.dnaBarcodeResource', "dnabarcode", full=False, null=True, blank=True)
+    
     class Meta:
-        queryset = models.SampleSetItem.objects.all().select_related('sampleSet', 'sample')
+        queryset = models.SampleSetItem.objects.all().select_related('sampleSet', 'sample', 'dnabarcode')
 
         resource_name = 'samplesetitem'
 
@@ -1218,6 +1181,8 @@ class SampleSetItemInfoResource(SampleSetItemResource):
     sampleDescription = fields.CharField(readonly = True, attribute="sampleDescription", null=True, blank=True)
     relationshipRole = fields.CharField(readonly = True, attribute="relationshipRole", null=True, blank=True)
     relationshipGroup = fields.IntegerField(readonly = True, attribute="relationshipGroup", null=True, blank=True)
+    dnabarcode = fields.ToOneField("iondb.rundb.api.dnaBarcodeResource", readonly=True, attribute="dnabarcode", null=True, blank=True)
+    dnabarcodeKit = fields.CharField(readonly = True, attribute="dnaBarcodeKit", null=True, blank=True)
 
     def dehydrate(self, bundle):
         sampleSet = bundle.obj.sampleSet
@@ -1233,7 +1198,9 @@ class SampleSetItemInfoResource(SampleSetItemResource):
 
         bundle.data['relationshipRole'] = bundle.obj.relationshipRole
         bundle.data['relationshipGroup'] = bundle.obj.relationshipGroup
-
+        bundle.data['dnabarcode'] = bundle.obj.dnabarcode.id_str if bundle.obj.dnabarcode else ""
+        bundle.data['dnabarcodeKit'] = bundle.obj.dnabarcode.name if bundle.obj.dnabarcode else ""
+        
         sampleAttribute_list = models.SampleAttribute.objects.filter(isActive = True).order_by('id')
 
         attribute_dict = {}
@@ -1290,7 +1257,13 @@ class SampleGroupType_CVResource(ModelResource):
     sampleAnnotation_set = fields.ToManyField('iondb.rundb.api.SampleAnnotation_CVResource', 'sampleAnnotation_set', full=False, null=True, blank=True)
 
     class Meta:
-        queryset = models.SampleGroupType_CV.objects.all()
+#        isSupported = models.GlobalConfig.objects.all()[0].enable_compendia_OCP
+#        
+#        if isSupported:
+#            queryset = models.SampleGroupType_CV.objects.all()
+#        else:
+#            queryset = models.SampleGroupType_CV.objects.all().exclude(displayedName = "DNA_RNA").all()
+        queryset = models.SampleGroupType_CV.objects.all().exclude(displayedName = "DNA_RNA").all()
 
         #allow ordering and filtering by all fields
         field_list = models.SampleGroupType_CV._meta.get_all_field_names()
@@ -1369,6 +1342,8 @@ class ExperimentAnalysisSettingsResource(ModelResource):
         ordering = field_list
         filtering = field_dict(field_list)
 
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
 
 class ReferenceGenomeResource(ModelResource):
     def apply_filters(self, request, applicable_filters):
@@ -1478,7 +1453,7 @@ class RigResource(ModelResource):
         Set the status of the Rigs
         """
 
-        deserialized = self.deserialize(request, request.raw_post_data, format=request.META.get('CONTENT_TYPE', 'application/json'))
+        deserialized = self.deserialize(request, request.body, format=request.META.get('CONTENT_TYPE', 'application/json'))
         status = dict_strip_unicode_keys(deserialized)
         rig = self.get_object_list(request).get(pk=kwargs["pk"])
 
@@ -1531,6 +1506,7 @@ class PluginResource(ModelResource):
     isConfig = fields.BooleanField(readonly=True, attribute='isConfig')
     isPlanConfig = fields.BooleanField(readonly=True, attribute='isPlanConfig')
     isInstance = fields.BooleanField(readonly=True, attribute='isInstance')
+    input = fields.CharField(readonly=True, attribute='isInstance')
     hasAbout = fields.BooleanField(readonly=True, attribute='hasAbout')
     versionedName = fields.CharField(readonly=True, attribute='versionedName')
 
@@ -1644,7 +1620,7 @@ class PluginResource(ModelResource):
 
     def post_install(self, request, **kwargs):
         try:
-            deserialized = self.deserialize(request, request.raw_post_data, format=request.META.get('CONTENT_TYPE', 'application/json'))
+            deserialized = self.deserialize(request, request.body, format=request.META.get('CONTENT_TYPE', 'application/json'))
             data=dict_strip_unicode_keys(deserialized)
         except UnsupportedFormat:
             return HttpBadRequest()
@@ -1748,9 +1724,10 @@ class PluginResource(ModelResource):
 
 class PluginResultResource(ModelResource):
     result = fields.ToOneField(ResultsResource,'result')
-    plugin = fields.ToOneField(PluginResource, 'plugin', full=True)
-    owner = fields.ToOneField(UserResource, 'owner', full=True)
+    plugin = fields.ToOneField(PluginResource, 'plugin', full=False)
+    owner = fields.ToOneField(UserResource, 'owner', full=False)
 
+    # Computed fields
     path = fields.CharField(readonly=True, attribute='path')
     duration = fields.CharField(readonly=True, attribute='duration')
 
@@ -1758,9 +1735,14 @@ class PluginResultResource(ModelResource):
     resultName = fields.CharField(readonly=True, attribute='result__resultsName')
     reportLink = fields.CharField(readonly=True, attribute='result__reportLink')
 
+    pluginName = fields.CharField(readonly=True, attribute='plugin__name')
+    pluginVersion = fields.CharField(readonly=True, attribute='plugin__version')
+
     def prepend_urls(self):
         urls = [url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/rescan%s$" % (self._meta.resource_name, trailing_slash()),
-                    self.wrap_view('dispatch_rescan'), name="api_dispatch_rescan")
+                    self.wrap_view('dispatch_rescan'), name="api_dispatch_rescan"),
+                url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/control%s$" % (self._meta.resource_name, trailing_slash()),
+                    self.wrap_view('dispatch_control'), name="api_dispatch_control"),
         ]
         return urls
 
@@ -1771,7 +1753,7 @@ class PluginResultResource(ModelResource):
         bundle = self.build_bundle(request=request)
         obj = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
         try:
-            size, inodes = obj._calc_size()
+            size, inodes = obj._calc_size
             if size > 0:
                 obj.size = size
                 obj.inodes = inodes
@@ -1781,19 +1763,116 @@ class PluginResultResource(ModelResource):
 
         return HttpAccepted()
 
+    def dispatch_control(self, request, **kwargs):
+        return self.dispatch('control', request, **kwargs)
+
+    def get_control(self, request, **kwargs):
+        bundle = self.build_bundle(request=request)
+        obj = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
+        if obj.jobid is None:
+            logger.error("PluginResult has no SGE jobid, not running?")
+            return HttpGone()
+
+        status, ret = remote.call_pluginStatus(obj.jobid)
+        if not status:
+            logger.error("Failed to get Plugin Status: %s", ret)
+            raise Http404()
+
+        return HttpAccepted()
+
+    def post_control(self, request, **kwargs):
+        bundle = self.build_bundle(request=request)
+        obj = self.cached_obj_get(bundle, **self.remove_api_resource_names(kwargs))
+        if obj.jobid is None:
+            logger.error("PluginResult has no SGE jobid, not running?")
+            raise HttpGone()
+
+        status = remote.call_sgeStop(obj.jobid)
+        #if status:
+        obj.complete(state="Terminated")
+        obj.save()
+        return HttpAccepted()
+
+
+    def hydrate_state(self, bundle):
+        # Call trigger methods for special states
+        # - Started, Complete, Error
+        value = bundle.data.get('state', None)
+        if value is not None and value != bundle.obj.state:
+            # Caller provided state change, trigger special eventss
+            if value == 'Pending':
+                bundle.obj.prepare(
+                    config=bundle.data.get('config',None),
+                    jobid=bundle.data.get('jobid',None)
+                )
+            elif value in ('Completed', 'Error'):
+                bundle.obj.complete(state=value)
+                bundle.obj.save()
+                # Ignore inodes/size, as they are computed by the model in complete
+                bundle.data.pop('inodes')
+                bundle.data.pop('size')
+            elif value == 'Started':
+                bundle.obj.start(bundle.data.get('jobid', None))
+                bundle.obj.save()
+
+        return bundle
+
+    def hydrate_owner(self, bundle):
+        if bundle.obj.pk:
+            # Ignore existing objects here, do not allow overriding
+            bundle.data['owner'] = bundle.obj.owner
+            return bundle
+
+        # Automatically get owner for new requests
+        owner = bundle.request.user
+        # Admin users can override.
+        if owner.is_superuser and u'owner' in bundle.data:
+            # handle resource_uri vs string username
+            try:
+                username = bundle.data['owner']
+                owner = User.objects.get(username=username)
+            except User.DoesNotExist:
+                logger.warn("Failed to lookup pluginresult owner by name '%s'", username)
+
+            bundle.data['owner'] = owner
+            return bundle
+
+        # NB: implicit else clause forces owner to current user
+        bundle.data['owner'] = owner
+        return bundle
+
+    def hydrate_plugin(self, bundle):
+        if bundle.obj.pk:
+            bundle.data['plugin'] = bundle.obj.plugin
+        else:
+            if 'plugin' in bundle.data:
+                if hasattr(bundle.data['plugin'], 'items'):
+                    # Add implicit filter criteria
+                    # Cannot run an plugin unless active and enabled
+                    bundle.data['plugin'].update({'active':True, 'selected':True})
+        return bundle
+
+    def hydrate_result(self, bundle):
+        if bundle.obj.pk:
+            # Ignore existing objects here, do not allow overriding
+            bundle.data['result'] = bundle.obj.result
+        return bundle
+
     class Meta:
         queryset = models.PluginResult.objects.all()
         #allow ordering and filtering by all fields
         field_list = models.PluginResult._meta.get_all_field_names()
         field_list.extend(['result','plugin', 'path', 'duration', 'id']),
-        excludes = ['apikey',]
+        #excludes = ['apikey',]
         ordering = field_list
         filtering = field_dict(field_list)
 
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
 
+        list_allowed_methods = ['get', 'post'] # block delete, put
         rescan_allowed_methods = ['get',]
+        control_allowed_methods = ['get', 'post', ]
 
 class ApplicationGroupResource(ModelResource):
     applications = fields.ToManyField('iondb.rundb.api.RunTypeResource', 'applications', full=True, null = True)
@@ -1852,17 +1931,64 @@ class PlannedExperimentValidation(Validation):
             return {'__all__': 'Fatal Error, no bundle!'}
 
         errors = {}
-        letters_punct_no_spaces = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.-"
-        letters_punct_with_spaces = letters_punct_no_spaces + " "
+
+        # validate required parameters
+        value = bundle.data.get("planName",'')
+        err = plan_validator.validate_plan_name(value)
+        if err:
+            errors["planName"] = err
+        
+        if not bundle.data.get('isReusable'):
+            value = bundle.data.get("x_chipType",'')
+            err = plan_validator.validate_chip_type(value)
+            if err:
+                errors["chipType"] = err
+
+            value = bundle.data.get("templatingKitName")
+            err = plan_validator.validate_plan_templating_kit_name(value)
+            if err:
+                errors["templatingKitName"] = err
+                
+            value = bundle.data.get("sampleTubeLabel")
+            err = plan_validator.validate_sample_tube_label(value)
+            if err:
+                errors["sampleTubeLabel"] = err   
+                 
+        # validate optional parameters
         for key, value in bundle.data.items():
-            if not isinstance(value, basestring):
-                continue
+            err = []
             if key == "sample":
-                if not set(value).issubset(letters_punct_no_spaces):
-                    errors[key] = "That Report sample has invalid characters. The valid values are letters, numbers, underscore, and period."
+                err = plan_validator.validate_sample_name(value)
+            if key == "x_barcodedSamples" and value:
+                barcodedSamples = json.loads(value) if isinstance(value, basestring) else value
+                for sample in barcodedSamples:                   
+                    err.extend(plan_validator.validate_sample_name(sample))
             if key == "notes":
-                if not set(value).issubset(letters_punct_with_spaces):
-                    errors[key] = "That Report name has invalid characters. The valid values are letters, numbers, underscore, space and period."
+                err = plan_validator.validate_notes(value)
+            if key == "x_flows" and value!="0":
+                err = plan_validator.validate_flows(value)            
+            if key == "project" or key == "projects":
+                projectNames = value if isinstance(value, basestring) else ','.join(value)
+
+                errors, trimmed_projectNames = plan_validator.validate_projects(projectNames)
+                err.extend(errors)
+            if key == "barcodeId":
+                err = plan_validator.validate_barcode_kit_name(value)             
+            if key == "sequencekitname":
+                err = plan_validator.validate_sequencing_kit_name(value)
+            if key == "applicationGroupDisplayedName":
+                runType = bundle.data.get("runType")
+                err = plan_validator.validate_application_group_for_runType(value, runType)
+            if key == "sampleGroupingName":
+                err = plan_validator.validate_sample_grouping(value)
+                          
+            if err:
+                errors[key] = err
+ 
+        if errors:
+            planName = bundle.data.get("planName",'')
+            logger.error("plan validation errors for plan=%s: Errors=%s" %(planName, errors))
+            raise ValidationError(json.dumps(errors))
 
         return errors
 
@@ -1882,22 +2008,32 @@ class PlannedExperimentDbResource(ModelResource):
     sampleGrouping = fields.ToOneField(SampleGroupType_CVResource, 'sampleGrouping', full=False, null=True, blank=True)
 
     def hydrate_m2m(self, bundle):
-        # Promote projects from names to something tastypie recognizes in hydrate_m2m
-        projects_list = []
-        for k in ["projects", "project"]:
-            value = bundle.data.get(k, [])
-
-            if isinstance(value, basestring):
-                value = [value]
-            for p in value:
-                if p not in projects_list:
-                    projects_list.append(p)
-
-        project_objs = []
-        if projects_list:
-            user = getattr(bundle.request, 'user', None)
-            project_objs = models.Project.bulk_get_or_create(projects_list, user)
-
+        if 'projects' in bundle.data or 'project' in bundle.data:
+            # Promote projects from names to something tastypie recognizes in hydrate_m2m
+            projects_list = []
+            for k in ["projects", "project"]:
+                value = bundle.data.get(k, [])
+    
+                if isinstance(value, basestring):
+                    value = [value]
+                for p in value:
+                    if p not in projects_list:
+                        projects_list.append(p)
+    
+            project_objs = []
+            if projects_list:
+                user = getattr(bundle.request, 'user', None)
+                if user is not None and user.is_superuser:
+                    username = bundle.data.get('username')
+                    if username is not None:
+                        try:
+                            user = User.objects.get(username=username)
+                        except User.DoesNotExist:
+                            pass
+                project_objs = models.Project.bulk_get_or_create(projects_list, user)
+        else:
+            project_objs = bundle.obj.projects.all()
+        
         bundle.data['projects'] = project_objs
         bundle.data['project'] = None
 
@@ -1918,14 +2054,41 @@ class PlannedExperimentDbResource(ModelResource):
 
         return firstProject
 
+    def build_filters(self, filters=None):
+        if filters is None:
+            filters = {}
+        
+        filter_platform = filters.get("platform") or filters.get("instrument")
+        if 'platform' in filters:
+            del filters['platform']
+        
+        orm_filters = super(PlannedExperimentDbResource, self).build_filters(filters)
+        if filter_platform:
+            orm_filters.update({
+                "custom_platform": (Q(experiment__platform="") | Q(experiment__platform__iexact=filter_platform))
+            })
+            
+        return orm_filters
+        
+
+    def apply_filters(self, request, filters):
+        custom_query = filters.pop("custom_platform", None)
+        base_object_list = super(PlannedExperimentDbResource, self).apply_filters(request, filters)
+        
+        if custom_query is not None:
+            base_object_list = base_object_list.filter(custom_query)
+        
+        return base_object_list
+
+
     class Meta:
         queryset = models.PlannedExperiment.objects.select_related(
-            'experiment'
+            'experiment',
+            'latestEAS'
         ).prefetch_related(
             'projects',
             'plannedexperimentqc_set',
             'plannedexperimentqc_set__qcType',
-            'experiment__eas_set',
             'experiment__samples'
         ).all()
 
@@ -1941,41 +2104,52 @@ class PlannedExperimentDbResource(ModelResource):
 
 class PlannedExperimentResource(PlannedExperimentDbResource):
     autoAnalyze = fields.BooleanField()
-    barcodedSamples = fields.CharField(blank=True, null=True)
-    barcodeId = fields.CharField(blank=True, null=True)
-    bedfile = fields.CharField(blank=True)
-    chipType = fields.CharField()
-    flows = fields.IntegerField()
-    forward3primeadapter = fields.CharField(blank=True, null=True)
-    library = fields.CharField(blank=True, null=True)
-    libraryKey = fields.CharField(blank=True)
-    librarykitname = fields.CharField(blank=True, null=True)
-    notes = fields.CharField(blank=True, null=True)
-    regionfile = fields.CharField(blank=True)
-    reverse3primeadapter = fields.CharField(readonly = True)
-    reverselibrarykey = fields.CharField(readonly = True)
-    sample = fields.CharField(blank=True, null=True)
-    sampleDisplayedName = fields.CharField(blank=True, null=True)
-    selectedPlugins = fields.CharField(blank=True, null=True)
-    sequencekitname = fields.CharField(blank=True, null=True)
-    variantfrequency = fields.CharField(readonly = True)
+    barcodedSamples = fields.CharField(blank=True, null=True, default='')
+    barcodeId = fields.CharField(blank=True, null=True, default='')
+    bedfile = fields.CharField(blank=True, default='')
+    chipType = fields.CharField(default='')
+    flows = fields.IntegerField(default=0)
+    forward3primeadapter = fields.CharField(blank=True, null=True, default='')
+    library = fields.CharField(blank=True, null=True, default='')
+    libraryKey = fields.CharField(blank=True, default='')
+    tfKey = fields.CharField(blank=True, default='')
+    librarykitname = fields.CharField(blank=True, null=True, default='')
+    notes = fields.CharField(blank=True, null=True, default='')
+    regionfile = fields.CharField(blank=True, default='')
+    reverse3primeadapter = fields.CharField(readonly = True, default='')
+    reverselibrarykey = fields.CharField(readonly = True, default='')
+    sample = fields.CharField(blank=True, null=True, default='')
+    sampleDisplayedName = fields.CharField(blank=True, null=True, default='')
+    selectedPlugins = fields.CharField(blank=True, null=True, default='')
+    sequencekitname = fields.CharField(blank=True, null=True, default='')
+    variantfrequency = fields.CharField(readonly = True, default='')
     isDuplicateReads = fields.BooleanField()
-    flowsInOrder = fields.CharField(blank=True, null=True)
+    base_recalibrate = fields.BooleanField()
+    realign = fields.BooleanField()
+    flowsInOrder = fields.CharField(blank=True, null=True, default='')
 
     sampleSetDisplayedName = fields.CharField(readonly = True, blank = True, null = True)
     sampleSetGroupType = fields.CharField(readonly = True, blank = True, null = True)
 
-    def dehydrate_autoAnalyze(self, bundle):
-        experiment = bundle.obj.experiment
-        if experiment:
-            return experiment.autoAnalyze
-        else:
-            return False
+    applicationGroupDisplayedName = fields.CharField(readonly = True, blank=True, null=True)
+    sampleGroupingName = fields.CharField(readonly = True, blank=True, null=True)
 
+    platform = fields.CharField(readonly = True, blank=True, null=True)
+    
     def dehydrate(self, bundle):
-        experiment = bundle.obj.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
+        try:
+            experiment = bundle.obj.experiment
+            bundle.data['autoAnalyze'] = experiment.autoAnalyze
+            bundle.data['chipType'] = experiment.chipType
+            bundle.data['flows'] = experiment.flows
+            bundle.data['flowsInOrder'] = experiment.flowsInOrder
+            bundle.data['notes'] = experiment.notes
+            bundle.data['sequencekitname'] = experiment.sequencekitname
+            bundle.data['platform'] = experiment.platform
+                        
+            latest_eas = bundle.obj.latestEAS
+            if not latest_eas:
+                latest_eas = experiment.get_EAS()
 
             bundle.data['barcodedSamples'] = latest_eas.barcodedSamples if latest_eas else ""
             bundle.data['barcodeId'] = latest_eas.barcodeKitName if latest_eas else ""
@@ -1983,9 +2157,12 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['forward3primeadapter'] = latest_eas.threePrimeAdapter if latest_eas else ""
             bundle.data['library'] = latest_eas.reference if latest_eas else ""
             bundle.data['libraryKey'] = latest_eas.libraryKey if latest_eas else ""
+            bundle.data['tfKey'] = latest_eas.tfKey if latest_eas else ""
             bundle.data['librarykitname'] = latest_eas.libraryKitName if latest_eas else ""
             bundle.data['regionfile'] = latest_eas.hotSpotRegionBedFile if latest_eas else ""
             bundle.data['isDuplicateReads'] = latest_eas.isDuplicateReads if latest_eas else False
+            bundle.data['base_recalibrate'] = latest_eas.base_recalibrate if latest_eas else False
+            bundle.data['realign'] = latest_eas.realign if latest_eas else False
 
             bundle.data['beadfindargs'] = latest_eas.beadfindargs if latest_eas else ""
             bundle.data['thumbnailbeadfindargs'] = latest_eas.thumbnailbeadfindargs if latest_eas else ""
@@ -1993,11 +2170,13 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['thumbnailanalysisargs'] = latest_eas.thumbnailanalysisargs if latest_eas else ""
             bundle.data['prebasecallerargs'] = latest_eas.prebasecallerargs if latest_eas else ""
             bundle.data['prethumbnailbasecallerargs'] = latest_eas.prethumbnailbasecallerargs if latest_eas else ""
+            bundle.data['calibrateargs'] = latest_eas.calibrateargs if latest_eas else ""
+            bundle.data['thumbnailcalibrateargs'] = latest_eas.thumbnailcalibrateargs if latest_eas else ""
             bundle.data['basecallerargs'] = latest_eas.basecallerargs if latest_eas else ""
             bundle.data['thumbnailbasecallerargs'] = latest_eas.thumbnailbasecallerargs if latest_eas else ""
             bundle.data['alignmentargs'] = latest_eas.alignmentargs if latest_eas else ""
             bundle.data['thumbnailalignmentargs'] = latest_eas.thumbnailalignmentargs if latest_eas else ""
-
+            
             if latest_eas and latest_eas.barcodeKitName:
                 bundle.data['sample'] = ""
                 bundle.data['sampleDisplayedName'] = ""
@@ -2020,73 +2199,23 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                     userInput = pluginInfo.get("userInput", {})
                     if userInput:
                         bundle.data['variantfrequency'] = userInput.get("variationtype", "")
-                else:
-                    bundle.data['variantfrequency'] = ""
-            else:
-                bundle.data['variantfrequency'] = ""
 
-        else:
-            bundle.data['barcodedSamples'] = ""
-            bundle.data['barcodeId'] = ""
-            bundle.data['bedfile'] = ""
-            bundle.data['forward3primeadapter'] = ""
-            bundle.data['library'] = ""
-            bundle.data['libraryKey'] = ""
-            bundle.data['librarykitname'] = ""
-            bundle.data['regionfile'] = ""
-            bundle.data['sample'] = ""
-            bundle.data['sampleDisplayedName'] = ""
-            bundle.data['selectedPlugins'] = ""
-            bundle.data['variantfrequency'] = ""
-            bundle.data['isDuplicateReads'] = False
-            bundle.data['beadfindargs'] = ""
-            bundle.data['thumbnailbeadfindargs'] = ""
-            bundle.data['analysisargs'] = ""
-            bundle.data['thumbnailanalysisargs'] = ""
-            bundle.data['prebasecallerargs'] = ""
-            bundle.data['prethumbnailbasecallerargs'] = ""
-            bundle.data['basecallerargs'] = ""
-            bundle.data['thumbnailbasecallerargs'] = ""
-            bundle.data['alignmentargs'] = ""
-            bundle.data['thumbnailalignmentargs'] = ""
+        except models.Experiment.DoesNotExist:
+            logger.error('Missing experiment for Plan %s(%s)' % (bundle.obj.planName, bundle.obj.pk))
 
         sampleSet = bundle.obj.sampleSet
         bundle.data['sampleSetDisplayedName'] = sampleSet.displayedName if sampleSet else ""
 
         if sampleSet:
             bundle.data['sampleSetGroupType'] = sampleSet.SampleGroupType_CV.displayedName if sampleSet.SampleGroupType_CV else ""
+
+        applicationGroup = bundle.obj.applicationGroup
+        bundle.data['applicationGroupDisplayedName'] = applicationGroup.description if applicationGroup else ""
+        
+        sampleGrouping = bundle.obj.sampleGrouping
+        bundle.data['sampleGroupingName'] = sampleGrouping.displayedName if sampleGrouping else ""
         
         return bundle
-
-
-    def dehydrate_chipType(self, bundle):
-        experiment = bundle.obj.experiment
-        return experiment.chipType if experiment else ""
-
-    def dehydrate_flows(self, bundle):
-        experiment = bundle.obj.experiment
-        return experiment.flows if experiment else "0"
-
-    def dehydrate_flowsInOrder(self, bundle):
-        experiment = bundle.obj.experiment
-        return experiment.flowsInOrder if experiment else ""
-
-
-
-    def dehydrate_notes(self, bundle):
-        experiment = bundle.obj.experiment
-        return experiment.notes if experiment else ""
-
-
-    def dehydrate_reverse3primeadapter(self, bundle):
-        return ""
-
-    def dehydrate_reverselibrarykey(self, bundle):
-        return ""
-
-    def dehydrate_sequencekitname(self, bundle):
-        experiment = bundle.obj.experiment
-        return experiment.sequencekitname if experiment else ""
 
 
     def hydrate_autoAnalyze(self, bundle):
@@ -2215,9 +2344,15 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
     def hydrate_isDuplicateReads(self, bundle):
         bundle.data['x_isDuplicateReads'] = toBoolean(bundle.data.get('isDuplicateReads', models.GlobalConfig.objects.all()[0].mark_duplicates), False)
-
         return bundle
 
+    def hydrate_base_recalibrate(self, bundle):
+        bundle.data['x_base_recalibrate'] = toBoolean(bundle.data.get('base_recalibrate', models.GlobalConfig.objects.all()[0].base_recalibrate), False)
+        return bundle
+
+    def hydrate_realign(self, bundle):
+        bundle.data['x_realign'] = toBoolean(bundle.data.get('realign', models.GlobalConfig.objects.all()[0].realign), False)
+        return bundle
 
     def hydrate_sampleSet(self, bundle):
         sampleSetDisplayedName = bundle.data.get('sampleSetDisplayedName', "")
@@ -2231,9 +2366,35 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         return bundle
 
+    def hydrate_metaData(self, bundle):
+        #logger.debug("api.PlannedExperimentResource.hydrate_metaData() metaData=%s" %(bundle.data.get('metaData', "")))        
+        
+        plan_metaData = bundle.data.get('metaData', "")
+        valid = True
+        if plan_metaData:
+            try:
+                if isinstance(plan_metaData, basestring):
+                    plan_metaData_dict = ast.literal_eval(plan_metaData)
+                    plan_metaData = simplejson.dumps(plan_metaData_dict)
+            except:
+                logger.error(traceback.format_exc())
+                valid = False
+                raise ValidationError("Error: Invalid JSON value for field metaData=%s in plannedExperiment with planName=%s" %(plan_metaData, bundle.data.get("planName", "")))
+               
+        bundle.data['metaData'] = plan_metaData if valid else "" 
+        return bundle
 
 
-    def hydrate(self, bundle):        
+    def hydrate_platform(self, bundle):
+        bundle.data['x_platform'] = bundle.data.get('platform', "").upper()
+
+        if bundle.data['x_platform'] and bundle.data['x_platform'].lower() == "none":
+            bundle.data['x_platform'] = ""
+
+        return bundle
+
+
+    def hydrate(self, bundle):
         #boolean handling for API posting
         bundle.data['planExecuted'] = toBoolean(bundle.data.get('planExecuted', False), False)
         bundle.data['isReverseRun'] = toBoolean(bundle.data.get('isReverseRun', False), False)
@@ -2247,24 +2408,88 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         bundle.data['usePreBeadfind'] = toBoolean(bundle.data.get('usePreBeadfind', True))
         bundle.data['usePostBeadfind'] = toBoolean(bundle.data.get('usePostBeadfind', True))
 
-        applicationGroupName = bundle.data.get('applicationGroupName', "")
+        applicationGroupDisplayedName = bundle.data.get('applicationGroupDisplayedName', "")
 
-        #logger.debug("api.PlannedExperimentResource.hydrate() going to handle applicationGroup() applicationGroupName=%s" %(applicationGroupName))
-
-        if applicationGroupName:
-            applicationGroups = models.ApplicationGroup.objects.filter(name__iexact = applicationGroupName.strip())
+        if applicationGroupDisplayedName:
+            applicationGroups = models.ApplicationGroup.objects.filter(description__iexact = applicationGroupDisplayedName.strip())
             if applicationGroups:
                 bundle.data['applicationGroup'] = applicationGroups[0]
 
+        sampleGroupingName = bundle.data.get('sampleGroupingName', "")
+
+        if sampleGroupingName:
+            sampleGroupings = models.SampleGroupType_CV.objects.filter(displayedName__iexact = sampleGroupingName.strip())
+            if sampleGroupings:
+                bundle.data['sampleGrouping'] = sampleGroupings[0]
+
+        self.hydrate_platform(bundle)
+        
         return bundle
 
 
+    def _prepare_for_min_update(self, bundle, **kwargs):
+        """
+        Enable fields that are typically mandatory for plan creation to be optional during updates
+        """
+        
+        #logger.debug("PlannedExperimentValidation._prepare_for_min_update() bundle.obj=%s" %(str(bundle.obj))) 
+        #logger.debug("PlannedExperimentValidation._prepare_for_min_update() kwarags=%s" %(kwargs)) 
+                        
+        id = -1
+        isNewPlan = True
+        if bundle.obj and bundle.obj.pk:
+            id = bundle.obj.pk
+            isNewPlan = False
+        else:
+            id = bundle.data.get("id", "")
+            if id:
+                isNewPlan = False
+            else:
+                id = kwargs.get("pk", "")
+                if id:
+                    isNewPlan = False                               
+                
+        logger.debug("PlannedExperimentValidation._prepare_for_min_update() isNewPlan=%s" %(str(isNewPlan))) 
+                                    
+        if not isNewPlan:
+            logger.debug("PlannedExperimentValidation._prepare_for_min_update() id=%s" %(str(id)))
+
+            input_planName = bundle.data.get("planName",'')
+            input_chipType = bundle.data.get("chipType",'')
+            input_templatingKitName = bundle.data.get("templatingKitName", "")
+                        
+            logger.debug("PlannedExperimentResource._prepare_for_min_update().. input_planName=%s; input_chipType=%s; input_templatingKitName=%s" %(input_planName, input_chipType, input_templatingKitName))
+            
+            if not input_planName or not input_chipType or not input_templatingKitName:
+                existingPlans = models.PlannedExperiment.objects.filter(id = id)
+                if existingPlans:
+                    existingPlan = existingPlans[0]
+                    if not input_planName:
+                        bundle.data["planName"] = existingPlan.planName
+                        #logger.debug("PlannedExperimentResource._prepare_for_min_update().. SETTING bundle.data.planName=%s" %(bundle.data["planName"]))
+
+                    if not input_chipType:
+                        bundle.data["chipType"] = existingPlan.experiment.chipType                        
+                        bundle.data["x_chipType"] = existingPlan.experiment.chipType
+                        #logger.debug("PlannedExperimentResource._prepare_for_min_update().. SETTING bundle.data.x_chipType=%s" %(bundle.data["x_chipType"]))
+
+                    if not input_templatingKitName:
+                        bundle.data["templatingKitName"] = existingPlan.templatingKitName
+                        #logger.debug("PlannedExperimentResource._prepare_for_min_update().. SETTING bundle.data.templatingKitName=%s" %(bundle.data["templatingKitName"]))
+                else:
+                    isNewPlan = True
+                    
+        return isNewPlan
+
+        
     def obj_create( self, bundle, request = None, **kwargs ):
         """
         A ORM-specific implementation of ``obj_create``.
         """
 
         bundle.obj = self._meta.object_class()
+
+        isNewPlan = self._prepare_for_min_update(bundle, **kwargs)
 
         for key, value in kwargs.items():
             setattr(bundle.obj, key, value)
@@ -2275,14 +2500,11 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         logger.debug("PDD at PlannedExperimentResource.obj_create()...AFTER full_hydrate() bundle.data=%s" %(bundle.data))
 
+        # validate plan bundle
+        self.is_valid(bundle)
+
         # Save FKs just in case.
         self.save_related(bundle)
-
-        id = -1
-        isNewPlan = True
-        if bundle.obj and bundle.obj.pk:
-            id = bundle.obj.pk
-            isNewPlan = False
 
         bundle.obj.save()
         bundle.obj.save_plannedExperiment_association(isNewPlan, **bundle.data)
@@ -2293,15 +2515,31 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         self.save_m2m(m2m_bundle)
         return bundle
 
+
     def obj_update( self, bundle, **kwargs ):
         logger.debug("PDD ENTER PlannedExperimentResource.obj_update() bundle.data=%s" %(bundle.data))
+        logger.debug("PDD ENTER PlannedExperimentResource.obj_update() kwargs=%s" %(kwargs))
 
+        self._prepare_for_min_update(bundle, **kwargs)
+   
         return super(PlannedExperimentResource, self).obj_update(bundle, **kwargs)
 
 
 class AvailableIonChefPlannedExperimentResource(PlannedExperimentResource):
+    
+    def build_filters(self, filters=None):
+        if filters is None:
+            filters = {}
+        orm_filters = super(AvailableIonChefPlannedExperimentResource, self).build_filters(filters)
+
+        if not hasattr(self, 'kit_names'):
+            self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")]
+        orm_filters["templatingKitName__in"] = self.kit_names
+        
+        return orm_filters
+
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['pending'], isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")])
+        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['pending'], isReusable = False, planExecuted = False)
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -2311,8 +2549,20 @@ class AvailableIonChefPlannedExperimentResource(PlannedExperimentResource):
 
 
 class AvailableIonChefPlannedExperimentSummaryResource(ModelResource):
+
+    def build_filters(self, filters=None):
+        if filters is None:
+            filters = {}
+        orm_filters = super(AvailableIonChefPlannedExperimentSummaryResource, self).build_filters(filters)
+
+        if not hasattr(self, 'kit_names'):
+            self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")]
+        orm_filters["templatingKitName__in"] = self.kit_names
+        
+        return orm_filters
+
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['pending'], isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")])
+        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['pending'], isReusable = False, planExecuted = False)
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -2326,8 +2576,20 @@ class AvailableIonChefPlannedExperimentSummaryResource(ModelResource):
 
 
 class IonChefPlanTemplateResource(PlannedExperimentResource):
+
+    def build_filters(self, filters=None):
+        if filters is None:
+            filters = {}
+        orm_filters = super(IonChefPlanTemplateResource, self).build_filters(filters)
+
+        if not hasattr(self, 'kit_names'):
+            self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")]
+        orm_filters["templatingKitName__in"] = self.kit_names
+        
+        return orm_filters
+
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(isReusable = True, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")])
+        queryset = models.PlannedExperiment.objects.filter(isReusable = True)
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -2337,8 +2599,20 @@ class IonChefPlanTemplateResource(PlannedExperimentResource):
 
 
 class IonChefPlanTemplateSummaryResource(ModelResource):
+
+    def build_filters(self, filters=None):
+        if filters is None:
+            filters = {}
+        orm_filters = super(IonChefPlanTemplateSummaryResource, self).build_filters(filters)
+
+        if not hasattr(self, 'kit_names'):
+            self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")]
+        orm_filters["templatingKitName__in"] = self.kit_names
+        
+        return orm_filters
+
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(isReusable = True, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")])
+        queryset = models.PlannedExperiment.objects.filter(isReusable = True)
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -2350,8 +2624,20 @@ class IonChefPlanTemplateSummaryResource(ModelResource):
 
 
 class AvailableOneTouchPlannedExperimentResource(PlannedExperimentResource):
+
+    def build_filters(self, filters=None):
+        if filters is None:
+            filters = {}
+        orm_filters = super(AvailableOneTouchPlannedExperimentResource, self).build_filters(filters)
+
+        if not hasattr(self, 'kit_names'):
+            self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")]
+        orm_filters["templatingKitName__in"] = self.kit_names
+        
+        return orm_filters
+
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['', 'planned'], isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")])
+        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['', 'planned'], isReusable = False, planExecuted = False)
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -2361,8 +2647,20 @@ class AvailableOneTouchPlannedExperimentResource(PlannedExperimentResource):
 
 
 class OneTouchPlanTemplateResource(PlannedExperimentResource):
+
+    def build_filters(self, filters=None):
+        if filters is None:
+            filters = {}
+        orm_filters = super(OneTouchPlanTemplateResource, self).build_filters(filters)
+
+        if not hasattr(self, 'kit_names'):
+            self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")]
+        orm_filters["templatingKitName__in"] = self.kit_names
+        
+        return orm_filters
+
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(isReusable = True, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")])
+        queryset = models.PlannedExperiment.objects.filter(isReusable = True)
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -2372,8 +2670,20 @@ class OneTouchPlanTemplateResource(PlannedExperimentResource):
 
 
 class AvailableOneTouchPlannedExperimentSummaryResource(ModelResource):
+
+    def build_filters(self, filters=None):
+        if filters is None:
+            filters = {}
+        orm_filters = super(AvailableOneTouchPlannedExperimentSummaryResource, self).build_filters(filters)
+
+        if not hasattr(self, 'kit_names'):
+            self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")]
+        orm_filters["templatingKitName__in"] = self.kit_names
+        
+        return orm_filters
+
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['', 'planned'], isReusable = False, planExecuted = False, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")])
+        queryset = models.PlannedExperiment.objects.filter(planStatus__in=['', 'planned'], isReusable = False, planExecuted = False)
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -2387,8 +2697,20 @@ class AvailableOneTouchPlannedExperimentSummaryResource(ModelResource):
 
 
 class OneTouchPlanTemplateSummaryResource(ModelResource):
+
+    def build_filters(self, filters=None):
+        if filters is None:
+            filters = {}
+        orm_filters = super(OneTouchPlanTemplateSummaryResource, self).build_filters(filters)
+
+        if not hasattr(self, 'kit_names'):
+            self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")]
+        orm_filters["templatingKitName__in"] = self.kit_names
+        
+        return orm_filters
+
     class Meta:
-        queryset = models.PlannedExperiment.objects.filter(isReusable = True, templatingKitName__in = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")])
+        queryset = models.PlannedExperiment.objects.filter(isReusable = True)
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -2427,6 +2749,113 @@ class PlanTemplateSummaryResource(ModelResource):
         authorization = DjangoAuthorization()
 
         metadata_allowed_methods = ['get',]
+
+
+class PlanTemplateBasicInfoResource(ModelResource):    
+    barcodeKitName = fields.CharField(readonly = True, attribute="barcodeKitName", null=True, blank=True)
+    templatePrepInstrumentType = fields.CharField(readonly = True, attribute="templatePrepInstrumentType", null=True, blank=True)
+    sequencingInstrumentType = fields.CharField(readonly = True, attribute="sequencingInstrumentType", null=True, blank=True)
+    notes = fields.CharField(readonly = True, blank=True, null=True, default='')
+
+    reference = fields.CharField(readonly = True, blank=True, null=True, default='')
+    #Target Regions BED File: old name is bedfile
+    #Hotspot Regions BED File: old name is regionfile
+    targetRegionBedFile = fields.CharField(readonly = True, blank=True, null=True, default='')
+    hotSpotRegionBedFile = fields.CharField(readonly = True, blank=True, null=True, default='')
+        
+    irAccountName = fields.CharField(readonly = True, attribute="irAccountName", null=True, blank=True)
+
+    applicationGroup = fields.ToOneField('iondb.rundb.api.ApplicationGroupResource', 'applicationGroup', null=True, blank=True, full=False)
+    
+    applicationGroupDisplayedName = fields.CharField(readonly = True, attribute="applicationGroupDisplayedName", null=True, blank=True)
+    sampleGroupName = fields.CharField(readonly = True, attribute="sampleGroupName", null=True, blank=True)
+
+    def dehydrate(self, bundle):
+        planTemplate = bundle.obj
+        eas = planTemplate.latestEAS
+
+        bundle.data['barcodeKitName'] = eas.barcodeKitName if eas else ''
+        
+        bundle.data['templatePrepInstrumentType'] = "" 
+        templatingKitName = planTemplate.templatingKitName
+        
+        if templatingKitName:
+            kits = models.KitInfo.objects.filter(name = templatingKitName)
+            if kits:
+                kit = kits[0]
+                if kit.kitType == "TemplatingKit":
+                    bundle.data['templatePrepInstrumentType'] = "OneTouch"
+                elif kit.kitType == "IonChefPrepKit":
+                    bundle.data['templatePrepInstrumentType'] = "IonChef"
+
+        bundle.data['sequencingInstrumentType'] = ""       
+        chipType = planTemplate.experiment.chipType if planTemplate.experiment else ''
+        
+        if chipType:
+            chips = models.Chip.objects.filter(name = chipType)
+            if chips:
+                chip = chips[0]
+                bundle.data['sequencingInstrumentType'] = chip.instrumentType.upper()
+        else:
+            bundle.data['sequencingInstrumentType'] = planTemplate.experiment.platform.upper()
+            
+        notes = planTemplate.experiment.notes if planTemplate.experiment else ''
+        bundle.data['notes'] = notes
+        
+        bundle.data['irAccountName'] = ""
+            
+        if eas:
+            bundle.data['reference'] = eas.reference
+            bundle.data['targetRegionBedFile'] = eas.targetRegionBedFile
+            bundle.data['hotSpotRegionBedFile'] = eas.hotSpotRegionBedFile
+            
+            templateSelectedPlugins = eas.selectedPlugins                
+            if "IonReporterUploader" in templateSelectedPlugins:
+                templateIRUConfig = templateSelectedPlugins.get("IonReporterUploader", {})
+                pluginDict = templateIRUConfig
+
+                templateUserInput = pluginDict.get("userInput", "")
+                if templateUserInput:
+                    bundle.data['irAccountName'] = templateUserInput.get("accountName", "")
+
+        applicationGroup = bundle.obj.applicationGroup
+        sampleGroup = bundle.obj.sampleGrouping
+        bundle.data['applicationGroupDisplayedName'] = applicationGroup.description if applicationGroup else ''
+        bundle.data['sampleGroupName'] = sampleGroup.displayedName if sampleGroup else ''
+
+        return bundle
+    
+    class Meta:
+        queryset = models.PlannedExperiment.objects.filter(isReusable = True)
+
+        #allow ordering and filtering by all fields
+        field_list = models.PlannedExperiment._meta.get_all_field_names()
+
+        fields = field_list + ['planTemplatePk',
+                               'planDisplayedName',
+                               'runType',
+                               'runMode',
+                               'irworkflow',
+                               'date',
+                               'username',
+                               'isReusable',
+                               'isSystem',
+                               'isFavorite',
+                               'barcodeKitName',
+                               'templatePrepInstrumentType',
+                               'sequencingInstrumentType',
+                               'irAccountName',
+                               'applicationGroupDisplayedName',
+                               'applicationGroup',
+                               'sampleGroupName']
+        ordering = fields
+        filtering = field_dict(fields)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+        allowed_methods = ['get']
+
 
 
 class TorrentSuite(ModelResource):
@@ -2604,6 +3033,8 @@ class KitPartResource(ModelResource):
         field_list = models.KitPart._meta.get_all_field_names()
         ordering = field_list
         filtering = field_dict(field_list)
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
 
 
 class SequencingKitInfoResource(ModelResource):
@@ -2867,6 +3298,8 @@ class CompositeTFMetricsResource(ModelResource):
         fields = field_list
         ordering = field_list
         filtering = field_dict(field_list)
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
 
 
 class CompositeLibMetricsResource(ModelResource):
@@ -2879,6 +3312,8 @@ class CompositeLibMetricsResource(ModelResource):
         fields = field_list
         ordering = field_list
         filtering = field_dict(field_list)
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
 
 
 class CompositeAnalysisMetricsResource(ModelResource):
@@ -2897,6 +3332,8 @@ class CompositeAnalysisMetricsResource(ModelResource):
         fields = field_list
         ordering = field_list
         filtering = field_dict(field_list)
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
 
 
 class CompositeQualityMetricsResource(ModelResource):
@@ -2908,6 +3345,8 @@ class CompositeQualityMetricsResource(ModelResource):
         'q0_mean_read_length', 'q0_reads', 'q20_reads']
         fields = field_list
         filtering = field_dict(field_list)
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
 
 class CompositeExperimentAnalysisSettingsResource(ModelResource):
     class Meta:
@@ -2969,7 +3408,13 @@ class CompositeDataManagementResource(ModelResource):
 
     def dehydrate(self, bundle):
         if bundle.data['diskusage'] is not None and bundle.obj.experiment.diskusage is not None:
-            bundle.data['diskusage'] += bundle.obj.experiment.diskusage
+            expDir_usage = bundle.obj.experiment.diskusage
+            if bundle.obj.isThumbnail:
+                # for thumbnails want only the size of file in expDir/thumbnail/, get from dmfilestat or estimate
+                sig_filestat = bundle.obj.get_filestat(dmactions_types.SIG)
+                bundle.data['diskusage'] += int(sig_filestat.diskspace) if sig_filestat.diskspace else 0.1*expDir_usage
+            else:
+                bundle.data['diskusage'] += expDir_usage
 
         for t, dm_type in dm_types:
             try:
@@ -3071,17 +3516,9 @@ def monitor_comparator(bundle):
 chips = dict((c.name, c) for c in models.Chip.objects.all())
 
 class MonitorExperimentResource(ModelResource):
-
-    results = fields.ToManyField(CompositeResultResource, 'results_set', full=True, related_name='experiment')
     plan = fields.ToOneField(MonitorPlannedExperimentResource, 'plan', full=True, null=True, blank=True)
 
-    barcodeId = fields.CharField(readonly = True, attribute='eas_set__barcodeKitName', null=True)
-    library = fields.CharField(readonly = True, attribute='eas_set__reference', null=True)
-
     def dehydrate(self, bundle):
-        bundle.data['results'].sort(key=monitor_comparator)
-        bundle.data['results'].reverse()
-
         chip = chips.get(bundle.obj.chipType, None) or chips.get(bundle.obj.chipType[:3], None)
         if chip:
             bundle.data['chipDescription'] = chip.description
@@ -3097,44 +3534,73 @@ class MonitorExperimentResource(ModelResource):
             qcThresholds = {}
         bundle.data['qcThresholds'] = qcThresholds
 
-        bundle.data['barcodeId'] = bundle.obj.get_barcodeId()
-        bundle.data['library'] = bundle.obj.get_library()
-
         return bundle
+
+    class Meta:
+        queryset = models.Experiment.objects.all()
+
+        #allow ordering and filtering by all fields
+        field_list = ['id', 'expName', 'displayName', 'date', 'library', 'ftpStatus',
+            'pgmName', 'storage_options', 'sample', 'flows', 'chipType',
+            'notes', 'results', 'runMode', 'barcodeId', 'resultDate', 'star'
+        ]
+        fields = field_list
+        ordering = field_list
+        filtering = field_dict(field_list)
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+        validation = PlannedExperimentValidation()
+
+class MonitorResultResource(ModelResource):
+    experiment = fields.ToOneField(MonitorExperimentResource, 'experiment', full=True)
+    eas = fields.ToOneField(CompositeExperimentAnalysisSettingsResource, 'eas', full=True)
+    analysismetrics = fields.ToOneField(CompositeAnalysisMetricsResource, 'analysismetrics', full=True, null=True)
+    libmetrics = fields.ToOneField(CompositeLibMetricsResource, 'libmetrics', full=True, null=True)
+    qualitymetrics = fields.ToOneField(CompositeQualityMetricsResource, 'qualitymetrics', full=True, null=True)
+
+    barcodeId = fields.CharField(readonly = True, attribute='eas__barcodeKitName', null=True)
+    library = fields.CharField(readonly = True, attribute='eas__reference', null=True)
+
+    projects = fields.ToManyField(CompositeProjectsResource, 'projects', full=True)
 
     def get_object_list(self, request):
         one_week_ago = datetime.datetime.now() - datetime.timedelta(weeks=1)
         two_days_ago = datetime.datetime.now() - datetime.timedelta(days=2)
-        return super(MonitorExperimentResource, self).get_object_list(
+        return super(MonitorResultResource, self).get_object_list(
             request).filter(
-                Q(resultDate__gte=two_days_ago) |
+                Q(timeStamp__gte=two_days_ago) |
                 (
-                    ~(  Q(ftpStatus="Complete") |
-                        Q(ftpStatus="Completed") |
-                        Q(ftpStatus="User Aborted") |
-                        Q(ftpStatus="Missing File(s)") |
-                        Q(ftpStatus="Lost Chip Connection")
-                    ) & Q(date__gte=one_week_ago)
+                    ~(  Q(experiment__ftpStatus="Complete") |
+                        Q(experiment__ftpStatus="Completed") |
+                        Q(experiment__ftpStatus="User Aborted") |
+                        Q(experiment__ftpStatus="Missing File(s)") |
+                        Q(experiment__ftpStatus="Lost Chip Connection")
+                    ) & Q(experiment__date__gte=one_week_ago)
                 )
             )
 
     class Meta:
         #TODO: CONSIDER MAKING A SOUTH MIGRATION TO UPDATE EXPERIMENT WITH runMode=="" for .exclude(runMode="") using Experiment.objects.filter(runMode="").update(ftpStatus="Missing File(s)")
-        queryset = models.Experiment.objects.select_related('plan').prefetch_related(
-                'results_set',
-                'results_set__analysismetrics',
-                'results_set__libmetrics',
-                'results_set__qualitymetrics',
-                'results_set__eas',
-                'results_set__projects',
-                'plan__plannedexperimentqc_set',
-                'plan__plannedexperimentqc_set__qcType'
-            ).exclude(expName="NONE_ReportOnly_NONE").exclude(status="planned").exclude(expDir = "").order_by('-resultDate')
+        queryset = models.Results.objects.select_related(
+                'experiment',
+                'eas',
+                'analysismetrics',
+                'libmetrics',
+                'qualitymetrics',
+                'experiment__plan',
+                'experiment__plan__plannedexperimentqc_set',
+                'experiment__plan__plannedexperimentqc_set__qcType'
+            ).prefetch_related('projects') \
+            .exclude(experiment__expName="NONE_ReportOnly_NONE") \
+            .exclude(experiment__status="planned") \
+            .exclude(experiment__expDir = "") \
+            .order_by('-timeStamp')
 
-        field_list = ['id', 'expName', 'displayName', 'date', 'library', 'ftpStatus',
-            'pgmName', 'storage_options', 'sample', 'flows', 'chipType',
-            'notes', 'results', 'runMode', 'barcodeId', 'resultDate', 'results_set', 'star'
-        ]
+        field_list = ['id', 'resultsName', 'processedflows', 'timeStamp',
+            'projects', 'status', 'reportLink', 'representative', 'eas',
+            'reportStatus', 'autoExempt', 'analysismetrics',
+            'libmetrics', 'qualitymetrics']
         fields = field_list
         ordering = field_list
         filtering = field_dict(field_list)
@@ -3167,6 +3633,7 @@ class CompositeExperimentResource(ModelResource):
         full=True, related_name='experiment')
     plan = fields.ToOneField(CompositePlannedExperimentResource, 'plan',
         full=True, null=True, blank=True)
+    repResult = fields.ToOneField(CompositeResultResource, 'repResult', null=True, blank=True)
 
     def prepend_urls(self):
         #this is meant for internal use only
@@ -3248,9 +3715,9 @@ class CompositeExperimentResource(ModelResource):
         name = request.GET.get('all_text', None)
         if name is not None:
             qset = (
-                Q(expName__iregex=name) |
-                Q(results_set__resultsName__iregex=name) |
-                Q(notes__iregex=name)
+                Q(expName__icontains=name) |
+                Q(results_set__resultsName__icontains=name) |
+                Q(notes__icontains=name)
             )
             base_object_list = base_object_list.filter(qset)
 
@@ -3316,6 +3783,7 @@ class CompositeExperimentResource(ModelResource):
     class Meta:
         queryset = models.Experiment.objects.select_related(
             'plan',
+            'repResult'
         ).prefetch_related(
             'results_set',
             'results_set__analysismetrics',
@@ -3332,7 +3800,7 @@ class CompositeExperimentResource(ModelResource):
                     'expName',      'flows',        'ftpStatus',
                     'id',           'library',      'notes',
                     'pgmName',      'resultDate',   'results',
-                    'results_set',  'runMode',
+                    'results_set',  'runMode',      'repResult',
                     'star',         'storage_options',
         ]
 
@@ -3443,11 +3911,13 @@ class ChipResource(ModelResource):
                 'analysisargs':   'Analysis',
                 'basecallerargs': 'BaseCaller',
                 'prebasecallerargs': 'BaseCaller',
+                'calibrateargs': 'calibrate',
                 'alignmentargs': '',
                 'thumbnailbeadfindargs':    'justBeadFind',
                 'thumbnailanalysisargs':    'Analysis',
                 'thumbnailbasecallerargs':  'BaseCaller',
                 'prethumbnailbasecallerargs':  'BaseCaller',
+                'calibrateargs': 'calibrate',
                 'thumbnailalignmentargs': ''
             }
         for key,value in args_dict.items():
@@ -3554,9 +4024,9 @@ class NetworkResource(ModelResource):
             logger.error("Exception raised during network self exam, '%s'" % err)
 
         try:
-            remote = urllib.urlopen(settings.EXTERNAL_IP_URL)
-            data = remote.read()
-            remote.close()
+            xremote = urllib.urlopen(settings.EXTERNAL_IP_URL)
+            data = xremote.read()
+            xremote.close()
         except Exception as complaint:
             logger.warn(complaint)
             data = ""
@@ -3602,5 +4072,32 @@ class AnalysisArgsResource(ModelResource):
         ordering = field_list
         filtering = field_dict(field_list)
 
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+
+class FileMonitorResource(ModelResource):
+    class Meta:
+        queryset = models.FileMonitor.objects.all()
+
+        #allow ordering and filtering by all fields
+        field_list = models.FileMonitor._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
+
+class SupportUploadResource(ModelResource):
+    result = fields.ToOneField(ResultsResource, 'result')
+    file = fields.ToOneField(FileMonitorResource, 'file', null=True, full=True)
+
+    class Meta:
+        queryset = models.SupportUpload.objects.select_related('file').all()
+
+        #allow ordering and filtering by all fields
+        field_list = models.SupportUpload._meta.get_all_field_names()
+        ordering = field_list
+        filtering = field_dict(field_list)
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()

@@ -5,7 +5,7 @@
 
 # please convert this plugin to use the newer method without launch.sh
 # so that this plugin version label will update itself automatically
-VERSION="4.0-r76013"
+VERSION="4.2-r87667"
 
 
 

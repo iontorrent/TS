@@ -1,0 +1,7 @@
+---
+# file: igv.yml
+- hosts: iontorrent_master:iontorrent_computes
+  roles:
+    - common
+  tags:
+    - common

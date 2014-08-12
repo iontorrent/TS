@@ -6,7 +6,6 @@
 
 #include "api/BamReader.h"
 
-#include "../Analysis/file-io/ion_util.h"
 #include <iostream>
 #include <sstream>
 #include <string>

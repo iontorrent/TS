@@ -132,3 +132,99 @@ def add_remove_plugins():
     pluginmanager.rescan()
 
 
+@task(queue="plugins")
+def backfill_pluginresult_diskusage():
+    '''Due to new fields (inodes), and errors with counting contents of symlinked files, this function
+    updates every Result object's diskusage value.
+    '''
+    import traceback
+    from django.db.models import Q
+    from iondb.rundb import models
+    from datetime import timedelta
+    from django.utils import timezone
+
+    # Setup log file logging
+    filename = '/var/log/ion/%s.log' % 'backfill_pluginresult_diskusage'
+    log = logging.getLogger('backfill_pluginresult_diskusage')
+    log.propagate = False
+    log.setLevel(logging.DEBUG)
+    handler = logging.handlers.RotatingFileHandler(
+        filename, maxBytes=1024 * 1024 * 10, backupCount=5)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    log.addHandler(handler)
+    log.info("\n===== New Run =====")
+    log.info("PluginResults:")
+    obj_list = models.PluginResult.objects.filter(
+        Q(size=-1) | Q(inodes=-1),
+        state__in=('Complete', 'Error'),
+        starttime__gte=(timezone.now() - timedelta(days=30)),
+    )
+    for obj in obj_list:
+        try:
+            if not os.path.exists(obj.path):
+                continue
+            obj.size, obj.inodes = obj._calc_size
+        except OSError:
+            log.exception("Failed to compute plugin size: '%s'", obj.path())
+            obj.size, obj.inodes = -1
+        except:
+            log.exception(traceback.format_exc())
+        log.debug("Scanning: %s at %s -- %d (%d)", str(obj), obj.path, obj.size, obj.inodes)
+        obj.save()
+
+@task
+def cleanup_pluginresult_state():
+    ''' Fix jobs stuck in running states '''
+    import traceback
+    from django.db.models import Q
+    from iondb.rundb import models
+    from datetime import timedelta
+    from django.utils import timezone
+
+    # Setup log file logging
+    filename = '/var/log/ion/%s.log' % 'backfill_pluginresult_diskusage'
+    log = logging.getLogger('backfill_pluginresult_diskusage')
+    log.propagate = False
+    log.setLevel(logging.DEBUG)
+    handler = logging.handlers.RotatingFileHandler(
+        filename, maxBytes=1024 * 1024 * 10, backupCount=5)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    handler.setFormatter(formatter)
+    log.addHandler(handler)
+    log.info("\n===== New Run =====")
+
+    transition_states = ('Pending', 'Started', 'Queued')
+    # Jobs with no timestamps - Could be large backlog. prefetch might be a mistake...
+    obj_list = models.PluginResult.objects.filter(
+        starttime__isnull=True,
+    ).prefetch_related('result')
+    for obj in obj_list:
+        obj.starttime = obj.result.timeStamp
+        endtime = obj.endtime
+        # These are handled in next query, but might as well resolve during this pass
+        if obj.state in transition_states:
+            obj.complete(state='Error')
+            if endtime is None:
+                obj.endtime = obj.starttime + timedelta(hours=24)
+        else:
+            if endtime is None:
+                obj.endtime = obj.starttime
+
+        log.debug("Backfilling timestamps: %s [%s] -- %s, %s (%s) -- %d (%d)", str(obj), obj.state, obj.starttime, obj.endtime, obj.duration(), obj.size, obj.inodes)
+        obj.save()
+
+    # Jobs stuck in SGE states
+    obj_list = models.PluginResult.objects.filter(
+        state__in=transition_states,
+        starttime__lte=timezone.now() - timedelta(hours=25),
+    )
+    for obj in obj_list:
+        endtime = obj.endtime
+        obj.complete(state='Error') # clears api_key, sets endtime, runs calc_size
+        if endtime is None:
+            obj.endtime = obj.starttime + timedelta(hours=24)
+
+        log.debug("Cleaning orphan job: %s [%s] -- %s, %s (%s) -- %d (%d)", str(obj), obj.state, obj.starttime, obj.endtime, obj.duration(), obj.size, obj.inodes)
+        obj.save()
+

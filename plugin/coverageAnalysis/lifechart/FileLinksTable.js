@@ -106,14 +106,15 @@ var disableTitleBar = false;
     $('#FL-grid').html(text);
   }
 
-  $("#FL-tablecontent").appendTo('#FileLinksTable');
-  $("#FL-tablecontent").show();
-
   var dataFile = $("#FileLinksTable").attr("fileurl");
-  if( dataFile == undefined ) {
-    alert("ERROR on page: FileLinksTable widget requires attribute 'fileurl' is set.");
+  if( dataFile == undefined || dataFile == "" ) {
+    // in tradition of HTML, an empty div results in no complaints
+    //alert("ERROR on page: FileLinksTable widget requires attribute 'fileurl' is set.");
+    $('#FileLinksTable').hide();
     return;
   }
+  $("#FL-tablecontent").appendTo('#FileLinksTable');
+  $("#FL-tablecontent").show();
   loadTSV(dataFile);
   displayTable();
   

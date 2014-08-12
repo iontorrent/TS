@@ -36,9 +36,9 @@ def remember_me_login(request, template_name='registration/login.html',
     """
     Displays the login form and handles the login action.
     """
-    redirect_to = request.REQUEST.get(redirect_field_name, '')
 
     if request.method == "POST":
+        redirect_to = request.POST.get(redirect_field_name, '')
         form = authentication_form(data=request.POST)
         if form.is_valid():
             netloc = urlparse.urlparse(redirect_to)[1]
@@ -69,6 +69,7 @@ def remember_me_login(request, template_name='registration/login.html',
 
             return HttpResponseRedirect(redirect_to)
     else:
+        redirect_to = request.GET.get(redirect_field_name, '')
         form = authentication_form(request)
 
     request.session.set_test_cookie()

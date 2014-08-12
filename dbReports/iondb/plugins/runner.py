@@ -11,13 +11,12 @@ from django.utils.encoding import smart_str
 import logging
 import json
 
-from iondb.plugins.config import PluginConfig
 # From pipeline package
 from ion.plugin.remote import callPluginXMLRPC
 
 from iondb.rundb import models
 from django.forms.models import model_to_dict
-
+from iondb.rundb.json_field import JSONEncoder
 
 """
 This class is used by components which can access the database directly. Remote instances must use XMLRPC or REST API calls.
@@ -157,99 +156,6 @@ class PluginRunner():
             del(output_start_json['command'])
         start_json_fname = os.path.join(start_json['runinfo']['results_dir'],'startplugin.json')
         with open(start_json_fname,"w") as fp:
-            json.dump(output_start_json,fp,indent=2)
-        return
-
-def launch_plugin(result, plugin, params={}):
-    #launcher = PluginRunner(result=result, plugin=plugin, params=params)
-
-    # FIXME  -- PluginConfig
-
-    plugin_output_dir = os.path.join(result.get_report_dir(),"plugin_out", plugin_orm.name + "_out")
-
-    # Mirror path structure defined in pipeline scripts
-    report_root = result.get_report_dir()
-    sigproc_results = os.path.join(report_root, 'sigproc_results')
-    basecaller_results = os.path.join(report_root, 'basecaller_results')
-    alignment_results = os.path.join(report_root, 'alignment_results')
-
-    # Fallback to 2.2 single folder layout
-    if not os.path.exists(sigproc_results):
-        sigproc_results = report_root
-    if not os.path.exists(basecaller_results):
-        basecaller_results = report_root
-    if not os.path.exists(alignment_results):
-        alignment_results = report_root
-
-    env={
-        'pathToRaw':result.experiment.unique,
-        'report_root_dir':result.get_report_dir(),
-        'analysis_dir': sigproc_results,
-        'basecaller_dir': basecaller_results,
-        'alignment_dir': alignment_results,
-        'libraryKey':result.eas.libraryKey,
-        'results_dir' : plugin_output_dir,
-        'net_location' : hostname,
-        'testfrag_key':'ATCG',
-    }
-
-    # if thumbnail
-    is_thumbnail = result.metaData.get("thumb",False)
-    if is_thumbnail:
-        env['pathToRaw'] =  os.path.join(env['pathToRaw'],'thumbnail')
-
-    plugindata = model_to_dict(plugin)
-
-    start_json = make_plugin_json(env,plugindata,result.pk,"plugin_out",url_root)
-
-    # Override plugin config with instance config
-    start_json["pluginconfig"].update(params)
-
-    # Set Started status before launching to avoid race condition
-    # Set here so it appears immediately in refreshed plugin status list
-    (pluginresult, created) = result.pluginresult_set.get_or_create(plugin=plugin)
-    pluginresult.prepare(config=start_json) ## Set Pending state
-    pluginresult.save()
-
-    # Created necessary folders
-    if not os.path.exists(start_json['runinfo']['results_dir']):
-        os.makedirs(start_json['runinfo']['results_dir'])
-    if not os.path.exists(pluginresult.path()):
-        os.makedirs(pluginresult.path())
-
-    # Create individual launch script from template and plugin launch.sh
-    (launch, iscompat) = pluginmanager.find_pluginscript(plugin_path, plugin_name)
-    if not launch or not os.path.exists(launch):
-        logger.error("Analysis: %s. Path to plugin script: '%s' Does Not Exist!" % (analysis_name,launch))
-
-    launcher = PluginRunner()
-    if isCompat:
-        launchScript = launcher.createPluginWrapper(launch, start_json)
-    else:
-        start_json.update({'command': ["python '%s'" % launch]})
-        launchScript = launcher.createPluginWrapper(None, start_json)
-    launchWrapper = launcher.writePluginLauncher(pluginDir, plugin_name, launchScript)
-    launcher.writePluginJson(start_json)
-
-    ## TODO Launch SGE task via DRMAA
-    ret = callPluginXMLRPC(start_json)
-
-    if ret < 0:
-        logger.error('Unable to launch plugin: %s', plugin_orm.name) # See ionPlugin.log for details
-        pluginresult.complete(state='Error')
-        pluginresult.save()
-
-    # Percolating through queue *should* take longer it takes to update status...
-    pluginresult = result.pluginresult_set.get(pk=pluginresult.pk)
-    if pluginresult.state == 'Pending':
-        pluginresult.state = "Queued"
-    pluginresult.jobid = ret
-    pluginresult.save()
-
-    return
-
-def launch_plugin_byname(result, plugin_name, plugin_version=None):
-    plugin = lookup_plugin(plugin_name, plugin_version)
-    ret = launch_plugin(result, plugin)
-    return ret
+            json.dump(output_start_json,fp,indent=2,cls=JSONEncoder)
+        return start_json_fname
 

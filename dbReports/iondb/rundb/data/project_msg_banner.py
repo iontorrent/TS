@@ -7,13 +7,14 @@ from django.core import urlresolvers
 from iondb.rundb.models import Message, Results
 
 logger = get_task_logger('data_management')
+d = {'logid':"%s" % ('proj_msg_banner')}
 
 def project_msg_banner(user, project_msg, action):
-    logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
+    logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra = d)
     try:
         msg = ''
         thistag = ''
-        logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
+        logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra = d)
         for pk,status_list in project_msg.iteritems():
             url = urlresolvers.reverse('dm_log', args=(pk,))
             report = Results.objects.get(id=pk)
@@ -24,7 +25,7 @@ def project_msg_banner(user, project_msg, action):
                 grpstatus = status
                 thistag = "%s_%s_%s" % (str(pk),action,slugify(category))
             msg += " <a href='%s'  data-toggle='modal' data-target='#modal_report_log'>View Report Log</a></br>" % (url)
-            logger.debug("MESSAGE: %s" % msg)
+            logger.debug("MESSAGE: %s" % msg, extra = d)
 
         #If message already exists (ie, scheduled task) delete it.
         Message.objects.filter(tags=thistag).delete()
@@ -40,7 +41,7 @@ def project_msg_banner(user, project_msg, action):
             func = Message.error
     except:
         func = Message.error
-        logger.exception(traceback.format_exc())
+        logger.error(traceback.format_exc(), extra = d)
     return func(msg, route=user, tags=thistag)
 
 def slugify(something):

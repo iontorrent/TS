@@ -53,7 +53,7 @@ void OutputTextMask ( const char *bcmask_filename, const char *bcmask_text_out )
 
   //fprintf (fOut, "%d %d\n", w, h);
   outStrm << "#Barcode locations, first row is flowcell's width and height.\n";
-  outStrm << "#col\trow\tvalue\n";
+  outStrm << "#row\tcol\tvalue\n";
   outStrm << w << "\t" << h << "\t-1\n";
   for ( int row=0; row<h; row++ )  // y
   {

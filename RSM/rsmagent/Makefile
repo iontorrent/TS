@@ -23,7 +23,7 @@ EXECUTABLE	= RSMAgent_TS
 # automatically generate dependency rules
 # -MMD write dependency rules to a file (include user header files only, not system header files)
 # -MP  add phony target for each dependency but main file (work around make errors for absent headers)
-CMNFLAGS	= $(INCLUDES) -Wall -Wextra -ggdb -MMD -MP -DENABLE_LARGEFILE64
+CMNFLAGS	= $(INCLUDES) -Wall -Wextra -ggdb -MMD -MP -DENABLE_LARGEFILE64 -std=c99
 
 all:	CFLAGS	= $(CMNFLAGS) -O3
 all:	LDFLAGS	= $(LIBS) -ggdb -O3

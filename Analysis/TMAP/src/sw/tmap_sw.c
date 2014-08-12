@@ -1217,8 +1217,11 @@ tmap_sw_clipping_core2(uint8_t *seq1, int32_t len1, uint8_t *seq2, int32_t len2,
           best_score = 0; 
           for(j=0;i<best_i && j<best_j;i++,j++) {
               // Note: i and j are zero-based here
-              mat = score_matrix + seq1[i] * N_MATRIX_ROW;
-              best_score += mat[seq2[j]];
+              // TS-9081 (DVK) (see description below)
+              //// mat = score_matrix + seq1[i] * N_MATRIX_ROW;
+              //// best_score += mat[seq2[j]];
+              mat = score_matrix + seq2[j] * N_MATRIX_ROW;
+              best_score += mat[seq1[i]];
           }
           //fprintf(stderr, "1 best_i=%d best_j=%d best_score=%d\n", best_i, best_j, best_score);
           // retrieve the path if necessary
@@ -1282,11 +1285,19 @@ tmap_sw_clipping_core2(uint8_t *seq1, int32_t len1, uint8_t *seq2, int32_t len2,
           curr[0].match_score = 0; 
       }
 
-      mat = score_matrix + seq1[i-1] * N_MATRIX_ROW;
+      // TS-9081 (DVK) (see description below)
+      // mat = score_matrix + seq1[i-1] * N_MATRIX_ROW;
 
       for(j=1;j<=len2;j++) { // for each col (seq2)
+	  // TS-9081  (DVK) swapped query and reference roles in substitution matrix index formation:
+	  // the matrix has just first 5 rows filled, expecting that no non-standard codes are used as row indices. 
+	  // The reference may have such non-standard codes, query can not. Thus, the query base should be used as a row index, 
+	  // and the reference base - as a column index (all 16 of the columns afe filled in first 5 rows)
+          //// tmap_sw_set_match(curr[j].match_score, dpcell[i] + j,
+          ////                   last + j - 1, mat[seq2[j-1]], right_justify);
           tmap_sw_set_match(curr[j].match_score, dpcell[i] + j,
-                            last + j - 1, mat[seq2[j-1]], right_justify);
+                            last + j - 1, (score_matrix + seq2[j-1] * N_MATRIX_ROW )[seq1[i-1]], right_justify);
+			    
           tmap_sw_set_del(curr[j].del_score, dpcell[i] + j, last + j, right_justify);
           tmap_sw_set_ins(curr[j].ins_score, dpcell[i] + j, curr + j - 1, right_justify);
           // deal with starting anywhere in seq2
@@ -1618,11 +1629,32 @@ tmap_sw_main(int argc, char *argv[])
   tmap_to_char((char*)query, qlen);
   tmap_to_char((char*)target, tlen);
   
+
+  // TODO: softclipping
+  
+  //DVK: here goes the realignment code
+  
+  // The Realigner accepts query, offset, Cigar and MD-tag to reconstruct the subject sequences
+  
+  // So the most 'code-preserving' way of integration is:
+  //  - to build the CIGAR string and MD string 
+  //  - call the Realigner methods in the same way they are called in bamrealignment
+  //  - convert the results back to TMAP (compact) format (or SAMTools ones?)
+  // While this is rather unoptimal, it would reduce the risk of errors due to side-effects of code alteration
+
+  // So the first-round way is:  
+  // 1. Convert to BamTools' cigar representation
+  // 2. Build the MD string from query and alignment
+  // 2. Call clipping to the 'difference' zone
+  // 3. If zlipping zone not empty -
+  //    cal 
+  
+  // The result is recorded as CIGAR string, so the following display code will pick it.
+  
   q_aln = tmap_malloc(sizeof(char) * (qlen + tlen + 1), "q_aln");
   t_aln = tmap_malloc(sizeof(char) * (qlen + tlen + 1), "t_aln");
   aln = tmap_malloc(sizeof(char) * (qlen + tlen + 1), "aln");
-
-  // TODO: softclipping
+  
   q_i = t_i = 0;
   q_aln_i = t_aln_i = aln_i = 0;
   for(i=0;i<n_cigar;i++) {

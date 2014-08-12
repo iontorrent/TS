@@ -40,6 +40,9 @@ void BaseCallerRecalibration::Initialize(OptArgs& opts, const ion::FlowOrder& fl
   is_enabled_ = false;
   flow_order_ = flow_order;
 
+  recal_model_hp_thres_ = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
+  printf("Recalibration HP threshold: %d\n", recal_model_hp_thres_);
+
   string calibration_file_name = opts.GetFirstString ('s', "calibration-file", "");
   if(calibration_file_name.empty()) {
     printf("Recalibration: disabled\n\n");
@@ -53,9 +56,6 @@ void BaseCallerRecalibration::Initialize(OptArgs& opts, const ion::FlowOrder& fl
     calibration_file.close();
     return;
   }
-
-  recal_model_hp_thres_ = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
-  printf("Recalibration HP threshold: %d\n", recal_model_hp_thres_);
 
   string comment_line;
   getline(calibration_file, comment_line);
@@ -150,8 +150,9 @@ void BaseCallerRecalibration::CalibrateRead(int x, int y, vector<char>& sequence
     flowBaseInt += offsetRegion + offsetFlow;
 
     int new_hp_length = old_hp_length;
-    //inclusive
-    if(old_hp_length <= max_hp_calibrated_ && old_hp_length <= recal_model_hp_thres_)
+
+    // we are either using model or this method - no double recalibration of HPs
+    if(old_hp_length <= max_hp_calibrated_ && old_hp_length < recal_model_hp_thres_)
       new_hp_length = std::abs(calibrated_table_hp_[flowBaseInt][old_hp_length][(int)(adjustment*100)+49]);
 
     if (old_hp_length == 0 or new_hp_length == 0) {
@@ -163,7 +164,7 @@ void BaseCallerRecalibration::CalibrateRead(int x, int y, vector<char>& sequence
     for (int idx = 0; idx < new_hp_length; ++idx)
       new_sequence.push_back(flow_order_[flow]);
 
-    if(old_hp_length <= max_hp_calibrated_ && old_hp_length <= recal_model_hp_thres_)
+    if(old_hp_length <= max_hp_calibrated_ && old_hp_length < recal_model_hp_thres_)
       normalized_measurements[flow] += calibrated_table_delta_[flowBaseInt][old_hp_length][(int)(adjustment*100)+49]*state_inphase[flow]/100;
 
   }

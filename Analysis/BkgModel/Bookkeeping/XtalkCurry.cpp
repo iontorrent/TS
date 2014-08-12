@@ -11,6 +11,8 @@ XtalkCurry::XtalkCurry()
   time_cp = NULL;
   math_poiss=NULL;
   my_scratch_p = NULL;
+  my_cur_bead_block_p = NULL;
+  my_cur_buffer_block_p = NULL;
   my_flow_p = NULL;
   my_trace_p = NULL;
   my_generic_xtalk = NULL;
@@ -34,11 +36,14 @@ XtalkCurry::~XtalkCurry()
 // buffering parameters of the neighbors
 // incorporation of the neighbors/excess hydrogens
 // trace calculation - time compression
-void XtalkCurry::CloseOverPointers ( Region *_region, CrossTalkSpecification *_xtalk_spec_p,
+void XtalkCurry::CloseOverPointers ( Region *_region, TraceCrossTalkSpecification *_xtalk_spec_p,
                                      BeadTracker *_my_beads_p, RegionTracker *_my_regions_p,
                                      TimeCompression *_time_cp, PoissonCDFApproxMemo *_math_poiss,
-                                     BeadScratchSpace *_my_scratch_p, flow_buffer_info *_my_flow_p,
-                                     BkgTrace *_my_trace_p, bool _use_vectorization )
+                                     BeadScratchSpace *_my_scratch_p, 
+                                     incorporation_params_block_flows *_my_cur_bead_block_p,
+                                     buffer_params_block_flows *_my_cur_buffer_block_p,
+                                     FlowBufferInfo *_my_flow_p,
+                                     BkgTrace *_my_trace_p, bool _use_vectorization)
 {
   region = _region;
   xtalk_spec_p = _xtalk_spec_p;
@@ -47,6 +52,8 @@ void XtalkCurry::CloseOverPointers ( Region *_region, CrossTalkSpecification *_x
   time_cp = _time_cp;
   math_poiss = _math_poiss;
   my_scratch_p = _my_scratch_p;
+  my_cur_bead_block_p = _my_cur_bead_block_p;
+  my_cur_buffer_block_p = _my_cur_buffer_block_p;
   my_flow_p = _my_flow_p;
   my_trace_p = _my_trace_p;
   use_vectorization = _use_vectorization;
@@ -64,7 +71,7 @@ void XtalkCurry::CloseOverPointers ( Region *_region, CrossTalkSpecification *_x
 }
 
 // refactor to simplify
-void XtalkCurry::NewXtalkFlux ( int cx, int cy,float *my_xtflux )
+void XtalkCurry::NewXtalkFlux ( int cx, int cy,float *my_xtflux, int flow_block_size, int flow_block_start )
 {
 
   if ( ( not my_beads_p->ndx_map.empty() ) and xtalk_spec_p->do_xtalk_correction )
@@ -87,9 +94,10 @@ void XtalkCurry::NewXtalkFlux ( int cx, int cy,float *my_xtflux )
           // multiplier = how many ions get to this location as opposed to others
           if ( xtalk_spec_p->multiplier[nei_idx] > 0 )
           {
-            AccumulateSingleNeighborXtalkTrace ( my_xtflux,&my_beads_p->params_nn[nn_ndx], &my_regions_p->rp,
-                                                 *my_scratch_p, *time_cp, *my_regions_p, *my_flow_p, math_poiss, use_vectorization,
-                                                 xtalk_spec_p->tau_top[nei_idx],xtalk_spec_p->tau_fluid[nei_idx],xtalk_spec_p->multiplier[nei_idx] );
+            MathModel::AccumulateSingleNeighborXtalkTrace ( my_xtflux,&my_beads_p->params_nn[nn_ndx], &my_regions_p->rp,
+                                                 *my_scratch_p, *my_cur_bead_block_p,
+                                                 *time_cp, *my_regions_p, *my_flow_p, math_poiss, use_vectorization,
+                                                 xtalk_spec_p->tau_top[nei_idx],xtalk_spec_p->tau_fluid[nei_idx],xtalk_spec_p->multiplier[nei_idx], flow_block_size, flow_block_start );
           }
           nei_total++;
         }
@@ -102,7 +110,8 @@ void XtalkCurry::NewXtalkFlux ( int cx, int cy,float *my_xtflux )
 // use directly integrated "excess hydrogens not from bkg" as a quick & dirty computation of cross-talk source
 // does not require detailed modeling of the bead
 // does not require the amplitude of the neighbor to have been computed
-void XtalkCurry::ExcessXtalkFlux ( int cx, int cy,float *my_xtflux, float *my_nei_flux )
+void XtalkCurry::ExcessXtalkFlux ( int cx, int cy,float *my_xtflux, float *my_nei_flux,
+                                   int flow_block_size, int flow_block_start )
 {
 
   if ( ( not my_beads_p->ndx_map.empty() ) and xtalk_spec_p->do_xtalk_correction )
@@ -126,20 +135,24 @@ void XtalkCurry::ExcessXtalkFlux ( int cx, int cy,float *my_xtflux, float *my_ne
           {
             
             float neighbor_signal[my_scratch_p->bead_flow_t];
-            my_trace_p->MultiFlowFillSignalForBead ( neighbor_signal, nn_ndx );
+            my_trace_p->MultiFlowFillSignalForBead ( neighbor_signal, nn_ndx, flow_block_size );
             
             // implicit: my_scratch has empty trace filled in already
             if (xtalk_spec_p->simple_model )
             {
-              AccumulateSingleNeighborExcessHydrogenOneParameter ( my_xtflux,neighbor_signal, &my_beads_p->params_nn[nn_ndx], &my_regions_p->rp,
-                  *my_scratch_p, *time_cp, *my_regions_p, *my_flow_p, use_vectorization,
-                  xtalk_spec_p->multiplier[nei_idx] ,xtalk_spec_p->rescale_flag);
+              MathModel::AccumulateSingleNeighborExcessHydrogenOneParameter ( my_xtflux,neighbor_signal, &my_beads_p->params_nn[nn_ndx], &my_regions_p->rp,
+                  *my_scratch_p, *my_cur_buffer_block_p, 
+                  *time_cp, *my_regions_p, *my_flow_p, use_vectorization,
+                  xtalk_spec_p->multiplier[nei_idx] ,xtalk_spec_p->rescale_flag,
+                  flow_block_size, flow_block_start);
             }
             else
             {
-              AccumulateSingleNeighborExcessHydrogen ( my_xtflux,neighbor_signal, &my_beads_p->params_nn[nn_ndx], &my_regions_p->rp,
-                  *my_scratch_p, *time_cp, *my_regions_p, *my_flow_p, use_vectorization,
-                  xtalk_spec_p->tau_top[nei_idx],xtalk_spec_p->tau_fluid[nei_idx],xtalk_spec_p->multiplier[nei_idx] );
+              MathModel::AccumulateSingleNeighborExcessHydrogen ( my_xtflux,neighbor_signal, &my_beads_p->params_nn[nn_ndx], &my_regions_p->rp,
+                  *my_scratch_p, *my_cur_buffer_block_p, 
+                  *time_cp, *my_regions_p, *my_flow_p, use_vectorization,
+                  xtalk_spec_p->tau_top[nei_idx],xtalk_spec_p->tau_fluid[nei_idx],xtalk_spec_p->multiplier[nei_idx],
+                  flow_block_size, flow_block_start);
             }
             
             if ( my_nei_flux!=NULL )
@@ -153,7 +166,10 @@ void XtalkCurry::ExcessXtalkFlux ( int cx, int cy,float *my_xtflux, float *my_ne
 }
 
 
-void XtalkCurry::ComputeTypicalCrossTalk ( float *my_xtalk_buffer, float *my_nei_buffer )
+void XtalkCurry::ComputeTypicalCrossTalk ( 
+    float *my_xtalk_buffer, float *my_nei_buffer,
+    int flow_block_size, int flow_block_start
+  )
 {
   memset ( my_xtalk_buffer,0,sizeof ( float[my_scratch_p->bead_flow_t] ) );
   if (my_nei_buffer!=NULL)
@@ -168,7 +184,7 @@ void XtalkCurry::ComputeTypicalCrossTalk ( float *my_xtalk_buffer, float *my_nei
     int t_row = large_num/region->h;
     t_row = t_row % region->h;
     int t_col = large_num % region->w;
-    ExcessXtalkFlux ( t_row, t_col, my_xtalk_buffer, my_nei_buffer );
+    ExcessXtalkFlux ( t_row, t_col, my_xtalk_buffer, my_nei_buffer, flow_block_size, flow_block_start );
 
   }
   MultiplyVectorByScalar ( my_xtalk_buffer, 1.0f/nsample, my_scratch_p->bead_flow_t );
@@ -178,16 +194,16 @@ void XtalkCurry::ComputeTypicalCrossTalk ( float *my_xtalk_buffer, float *my_nei
 
 // Warning:  has side effects on my_scratch.  Use with caution
 // need to isolate its own "scratch" construct
-void XtalkCurry::ExecuteXtalkFlux ( int ibd,float *my_xtflux )
+void XtalkCurry::ExecuteXtalkFlux ( int ibd,float *my_xtflux, int flow_block_size, int flow_block_start )
 {
   int cx, cy;
   cx = my_beads_p->params_nn[ibd].x;
   cy = my_beads_p->params_nn[ibd].y;
   if ( fast_compute ) {
-    ExcessXtalkFlux ( cx,cy,my_xtflux, NULL );
+    ExcessXtalkFlux ( cx,cy,my_xtflux, NULL, flow_block_size, flow_block_start );
   }
   else {
-    NewXtalkFlux ( cx,cy,my_xtflux );
+    NewXtalkFlux ( cx,cy,my_xtflux, flow_block_size, flow_block_start );
   }
       // reduce by generic value of cross talk already present in empty well trace
   DiminishVector(my_xtflux, my_generic_xtalk, my_scratch_p->bead_flow_t);

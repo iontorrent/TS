@@ -1,0 +1,272 @@
+{% load url from future %}
+{% load static from staticfiles %}
+<div id="modal_dm_actions" title="" class="modal hide" style="width:auto">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+		<b>{{name|escape}}</b><br>
+		{{subtitle}}
+    </div>
+	{% if error_msg %}
+
+		<div class="modal-body">
+			<div>
+				<H2>{{error_msg|linebreaks}}</H2>
+			</div>
+		</div>
+
+	{% else %}
+		<div class="modal-body">
+			<div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+			<form class="form-horizontal" id="modal_dm_actions_form">
+			<table id="dm_actions_table" class="table">
+				<thead>
+					<th></th>
+					<th><input id="select_all" type="checkbox"/></th>
+					<th>Select All</th>
+					<th>File Category</th>
+					<th>Size(MB)</th>
+					<th>Keep</th>
+					<th>State</th>
+				</thead>
+				<tbody>
+				{% for entry in dm_files_info %}
+				<tr>
+					<td>
+						{%if entry.action_state == "Local"%}
+							<img src="{% static "images/Prune_Blue.png"%}">
+						{%elif entry.action_state == "Deleted" %}
+							<img src="{% static "images/Export_Blue.png"%}">
+						{%elif entry.action_state == "Archived"%}
+							<img src="{% static "images/Archive_Blue.png"%}">
+						{% elif entry.in_process %}
+							<img src="{% static "resources/kendo/styles/Uniform/loading.gif"%}">
+						{%elif entry.action_state == "Error"%}
+							<img src="{% static "images/Failure_Red.png"%}">
+						{%endif%}
+					</td>
+					<td>
+						<input name="file_category" type="checkbox" id={{entry.category|slugify}} value='{{entry.category}}' data-state='{{entry.action_state}}'
+								{% if entry.in_process or entry.action_state == "Deleted" %} disabled {% endif %} >
+					</td>
+					<td>
+						<b> {{entry.category}} </b>
+					</td>
+					<td>
+						<small>{{entry.description}}</small>
+					</td>
+					{% if entry.diskspace == "*" %}
+					<td>{{entry.diskspace}}</td>
+					{% else %}
+					<td class="diskspace">{{entry.diskspace|floatformat|default:"updating..."}}</td>
+					{% endif %}
+					<td>
+						{% if entry.action_state != "Deleted" and entry.action_state != "Archived" and not entry.in_process %}
+							<input type="checkbox" href="{% url "preserve_data" %}" class="autoExempt" data-pks="{{results_pks}}"
+								{% if entry.keep %} checked {% endif %}>
+						{% endif %}
+					</td>
+					<td> {{entry.action_state}} </td>
+				</tr>
+				{% endfor %}
+				</tbody>
+			</table>
+			</form>
+		</div>
+		<div class="modal-footer">
+			{% if isDMDebug %}
+				<a href="{% url "dm_action_selected" results_pks 'test' %}" name="Test" class="btn dm_action_btn" title="Show files in the log file">Print Selected</a>
+			{% endif %}
+			<a href="{% url "dm_action_selected" results_pks 'delete' %}" name="Delete" class="btn dm_action_btn" title="Delete all files in selected categories">Delete Selected</a>
+			<a href="{% url "dm_action_selected" results_pks 'archive' %}" name="Archive" class="btn dm_action_btn" title="Move all files in selected categories off local filesystem">Archive Selected</a>
+			<a href="{% url "dm_action_selected" results_pks 'export' %}" name="Export" class="btn dm_action_btn" title="Copies all files in selected categories">Export Selected</a>
+			<a class="btn" href="#" data-dismiss="modal">Close</a>
+		</div>
+		<div id="confirm_action" style="text-align:center; display: none;">
+			<form class="form-inline" id="modal_dm_actions_confirm_form">
+				<h2></h2>
+				<div id="backup_directory" class="control-group">
+					<label for="select_backup_dir" class="control-label">Archive Directory:</label>
+					<select id="select_backup_dir" style="width:270px">
+						<option value="default">Use Configured Archive Directories</option>
+						{% for dir in backup_dirs %}
+						<option value={{dir.0}}>{{dir.1}}</option>
+						{% endfor %}
+					</select>
+					<a href='{% url "browse_backup_dirs" "" %}' class="btn" id='browse_backup_dirs'>Browse</a>
+				</div>
+				<div class="control-group">
+					<label for="dm_comment" class="control-label">Comment:</label>
+					<input id="dm_comment" type="text" placeholder="No comment">
+					<a href="#" class="btn" id="confirm_action_btn">Confirm</a>
+				</div>
+				<div id="error-messages" class="alert alert-error" style="display:none;"></div>
+			</form>
+		</div>
+		<div id="confirm_warning" style="text-align:center; display:none;">
+			<form class="form-inline" id="modal_dm_actions_confirm_warning_form">
+				<label for="confirm_warning_btn" style="font-weight:bold;">PROCEED WITH WARNINGS?</label>
+				<a href="#" class="btn" id="confirm_warning_btn">Yes</a>
+			</form>
+		</div>
+	{% endif %}
+
+<script type="text/javascript">
+
+	$('#modal_dm_actions').on('hidden', function () {
+		$('#modal_dm_actions').trigger('modal_dm_actions_done', {} );
+		$('body #modal_dm_actions').remove();
+	});
+	$('#modal_dm_actions_form, #modal_dm_actions_confirm_form').submit(function(e){
+		e.preventDefault();
+		return false;
+	});
+
+  $('#select_all').click(function(){
+      var checked = $(this).is(":checked");
+      $("#modal_dm_actions input[name=file_category]").each(function(){
+          if (!$(this).attr('disabled')){
+              $(this).attr('checked',checked);
+          }
+      });
+      $( "#modal_dm_actions input[name=file_category]").first().trigger('change');
+  });
+
+  $( "#modal_dm_actions input[name=file_category]").change(function(){
+      var state = $( "input[name=file_category]:checked" ).map(function(){return $(this).data('state');}).toArray();
+      if (state.indexOf('Archived')>-1){
+          $('.dm_action_btn[name=Archive]').addClass('disabled');
+          $('.dm_action_btn[name=Export]').addClass('disabled');
+      } else {
+          $('.dm_action_btn[name=Archive]').removeClass('disabled');
+          $('.dm_action_btn[name=Export]').removeClass('disabled');
+      }
+      return false;
+  });
+
+	$('#browse_backup_dirs').click(function(e){
+		e.preventDefault();
+		var elem = '#select_backup_dir';
+		$.get( $(this).attr('href'), function(data) {
+			$('body').append(data);
+			$( "#modal_browse_dirs").modal("show");
+			$('body #modal_browse_dirs').on('modal_browse_dirs_done', function(e, data){
+				if(data.path) {
+					if ($(elem +' option[value="'+data.path+'"]').length == 0)
+						$(elem).append('<option value="' + data.path + '">' + data.path + '</option>');
+					$(elem).val(data.path);
+				}
+			});
+		});
+	});
+	
+	$('.dm_action_btn').click(function(e){
+		e.preventDefault();
+		var url = $(this).attr('href');
+		var action = $(this).attr("name");
+		var confirmed = false;
+
+		// show confirmation dialog
+		$('#modal_dm_actions #confirm_action h2').text(action + " selected files, Proceed?");
+		$('#modal_dm_actions #error-messages').empty().hide();
+		$('#modal_dm_actions #confirm_action').show();
+		if (action!='Delete'){
+			$('#modal_dm_actions #backup_directory').show();
+		} else {
+			$('#modal_dm_actions #backup_directory').hide();
+		}
+		// handle warnings
+		$('#modal_dm_actions #confirm_warning').hide();
+		$('#modal_dm_actions #confirm_warning_btn').click(function(e){
+			e.preventDefault();
+			confirmed = true;
+			$('#modal_dm_actions #confirm_action_btn').trigger('click');
+		});
+
+		$('#modal_dm_actions #confirm_action_btn').unbind('click').click(function(e){
+			e.preventDefault();
+			categories = $( "input[name=file_category]:checked" ).map(function(){ return this.value; }).toArray();
+			if (categories.length < 1){
+				$('#modal_dm_actions #error-messages').empty().append('<p class="error"> Please select one or more File Categories. </p>').show();
+				return;
+			}
+			var json = {
+				"categories": categories,
+				"comment": $('#modal_dm_actions #dm_comment').val(),
+				"confirmed": confirmed,
+				"backup_dir": $('#select_backup_dir').val()
+			}
+			console.log('POST:', url, json);
+			$.ajax({
+				url: url,
+				dataType: 'html',
+				type: 'POST',
+				async: false,
+				contentType: "application/json; charset=utf-8",
+				data: JSON.stringify(json),
+			})
+			.done(function(data){
+				if (data){
+					data = JSON.parse(data);
+					console.log('done:', data);
+					if ('warning' in data){
+						$('#modal_dm_actions #error-messages').empty().append('<p class="error">WARNING: ' + data.warning + '</p>').show();
+						$('#modal_dm_actions #confirm_warning').show();
+						return
+					}
+				}
+				$('#modal_dm_actions').modal('hide');
+			})
+			.fail(function(data) {
+				console.log("fail:", data);
+				$('#modal_dm_actions #error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+			});
+		});
+	});
+
+	$(function() {
+		var update_timer = setInterval(update_diskspace, 10000);
+		function update_diskspace(){
+			if($("#dm_actions_table td:contains('updating...')").length){
+				$.get("/rundb/api/v1/compositedatamanagement/?format=json&id__in={{results_pks}}", function(data){
+					console.log('update_diskspace: get', data);
+					var diskspace = [0,0,0,0];
+					$.each(data.objects, function(){
+						diskspace[0]=_add_numeric(this.sigproc_diskspace, diskspace[0]);
+						diskspace[1]=_add_numeric(this.basecall_diskspace, diskspace[1]);
+						diskspace[2]=_add_numeric(this.output_diskspace, diskspace[2]);
+						diskspace[3]=_add_numeric(this.misc_diskspace, diskspace[3]);
+					});
+					// update displayed values
+					$("#dm_actions_table .diskspace").each(function(i){
+						if($.isNumeric(diskspace[i]))
+							$(this).text(diskspace[i].toFixed(1));
+					});
+				}).fail(function(){
+					clearInterval(update_timer);
+				});
+			}else{
+				clearInterval(update_timer);
+			}
+		}
+	});
+
+	function _add_numeric(value1, value2){
+		return ($.isNumeric(value1) && $.isNumeric(value2)) ? value1+value2 : NaN;
+	}
+	
+	$("#modal_dm_actions .autoExempt").click(function (e) {
+		var pks = $(this).data('pks');
+		var category = $(this).closest('tr').find('[name=file_category]').prop('id');
+		var data = "reportpk=" + pks + "&keep=" + $(this).is(':checked');
+		if(category == 'signal-processing-input') data+= "&type=sig";
+		if(category == 'basecalling-input') data+= "&type=base";
+		if(category == 'output-files') data+= "&type=out";
+		if(category == 'intermediate-files') data+= "&type=intr";
+		
+		$.post($(this).attr('href'), data);
+	});
+	
+	// allow second modal popup window
+	$.fn.modal.Constructor.prototype.enforceFocus = function () {};
+</script>
+</div>

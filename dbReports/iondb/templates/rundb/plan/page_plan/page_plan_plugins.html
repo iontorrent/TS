@@ -1,7 +1,7 @@
 {% extends "rundb/plan/page_plan/base.html" %}
 {% load url from future %}
 
-{% block main-title %}Select which plugins you want executed, then hit next.{% endblock main-title %}
+{% block main-title %}Select plugins to execute, then click Next.{% endblock main-title %}
 
 {% block page-plan-content %}
 <div class="row-fluid">
@@ -72,6 +72,7 @@
 
 {% block post-raw %}
 {{ block.super }}
+<script type="text/javascript" src="/site_media/resources/scripts/planplugins_common.js"%}"></script>
 <script type="text/javascript">
     TB.namespace('TB.page_plan.plugins');
 
@@ -109,49 +110,27 @@
         $('#pluginIds').val(pluginIdsStr);
     }
 
-    TB.page_plan.plugins.setAutorunClickHandler = function() {
-        $('input:checkbox[name=non_export_plugin]').click(function() {
-            var autorun = $(this).attr('data-autorun');
-            if (autorun) {
-                // 2 states for autorun plugins: user selected and autorun selected, currently can't unselect
-                if (autorun == 'auto') {
-                    $(this).attr('style', 'opacity: 1;');
-                    $(this).attr('data-autorun', 'selected');
-                    $(this).attr('title', '');
-                } else {
-                    $(this).attr('style', 'opacity: 0.3;');
-                    $(this).attr('data-autorun', 'auto');
-                    $(this).attr('title', 'Plugin is set to auto-run');
-                }
-                $(this).prop('checked',true);
+    TB.page_plan.plugins.toggleAutorunPlugin = function($plugin) {
+        var autorun = $plugin.attr('data-autorun');
+        if (autorun) {
+            // 2 states for autorun plugins: user selected and autorun selected, currently can't unselect
+            if (autorun == 'auto') {
+                $plugin.attr('style', 'opacity: 1;');
+                $plugin.attr('data-autorun', 'selected');
+                $plugin.attr('title', '');
+            } else {
+                $plugin.attr('style', 'opacity: 0.3;');
+                $plugin.attr('data-autorun', 'auto');
+                $plugin.attr('title', 'Plugin is set to auto-run');
             }
-        });
-    }
-
-    // restore serialized form
-    $.fn.restoreJSON = function(data) {
-        var els = $(this).find(':input').get();
-        if(data && typeof data == 'object') {
-            $.each(els, function() {
-                if (this.name && data[this.name]) {
-                    if(this.type == 'checkbox' || this.type == 'radio') {
-                        $(this).attr("checked", (data[this.name] == $(this).val()));
-                    } else {
-                        $(this).val(data[this.name]);
-                    }
-                    $(this).change();
-                } else if (this.type == 'checkbox') {
-                    $(this).attr("checked", false);
-                }
-            });
+            $plugin.prop('checked',true);
         }
-        return $(this);
-    };
-
+    }
 
     $(document).ready(function () {
         currentConfigPluginId = null;
         $("input[name='non_export_plugin']").change(function(){
+            if ($(this).attr('data-autorun')) TB.page_plan.plugins.toggleAutorunPlugin($(this));
             TB.page_plan.plugins.updateSelectedPlugins();
         });
         
@@ -184,18 +163,12 @@
             return false;
         });
         
-        TB.page_plan.plugins.setAutorunClickHandler();
         TB.page_plan.plugins.updateSelectedPlugins();
         
         $("#configSaveChanges").on("click", function (clickEvent) {
             clickEvent.preventDefault();
-            var pluginIframe = $(this).closest(".modal").find("#pluginConfigIframe")[0];
-            var pluginParams;
-            if ($.isFunction(pluginIframe.contentWindow.serializeForm)){
-                pluginParams = pluginIframe.contentWindow.serializeForm();
-            }else{
-                pluginParams = $(pluginIframe.contentDocument.forms).serializeJSON();
-            }
+            var pluginParams = serializeIframe($("#pluginConfigIframe"));
+            
             $("#plugin_config_" + currentConfigPluginId).val(JSON.stringify(pluginParams));
             TB.page_plan.plugins.updateSelectedPlugins();
         });
@@ -203,24 +176,13 @@
         $("a[id^='configure_plugin_']").click(function(){
             var plugin_id = $(this).data("plugin-id");
             currentConfigPluginId = plugin_id;
-            $("#pluginConfigIframe").attr("src", $(this).data("href"));
-            
+            var pluginIframe = $("#pluginConfigIframe");
             var json_config_str = $('#plugin_config_' + plugin_id).val();
+            var config = null;
             if (json_config_str && json_config_str.length > 0) {
-                var iframe = document.getElementById('pluginConfigIframe');
-
-                $(iframe).bind('load', function() {
-                    if ($.isFunction(iframe.contentWindow.restoreForm)){
-                        // use plugin's restoreForm function if exists
-                        iframe.contentWindow.restoreForm(JSON.parse(json_config_str));
-                    } else {
-                        $(iframe.contentDocument.forms).restoreJSON(JSON.parse(json_config_str));
-                        iframe.contentWindow.$(':input').trigger('change');
-                    }
-                });
-            } else {
-                $(iframe).unbind('load');
+                config = JSON.parse(json_config_str);
             }
+            updateIframe(pluginIframe, $(this).data("href"), config);
         });
         
     });

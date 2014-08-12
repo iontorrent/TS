@@ -1,0 +1,19 @@
+#!/bin/bash
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
+#
+# Wrapper script for /usr/bin/cssh - clusterssh tool
+# Retrieves compute nodenames from database
+#
+#==============================================================================
+# Include function definition file
+#==============================================================================
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source ${TSCONFIG_SRC_DIR}/grp_functions
+
+CSSH=/usr/bin/cssh
+USER=ionadmin
+HOSTNAMES=$(get_crunchers|tr ',' ' ')
+
+$CSSH -T "COMPUTE NODE" --username $USER $HOSTNAMES
+
+exit

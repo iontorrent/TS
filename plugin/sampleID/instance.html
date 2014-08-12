@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<head>
+ <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+ <style type="text/css">
+  #formwrap {
+   line-height: 2em;
+   background: #eef;
+   margin: 10px;
+   padding: 10px;
+   height: 500px;
+  }
+  body {
+   font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+   font-size: 14px;
+  }
+  .center { margin-left:auto; margin-right:auto; }
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+ </style>
+
+ <script>
+  $(function() {
+
+    $.fn.serializeObject = function() {
+     var o = {};
+     var a = this.serializeArray();
+     $.each(a,
+      function() {
+       if (o[this.name] != null) {
+        if (!o[this.name].push) {
+         o[this.name] = [o[this.name]];
+        }
+        o[this.name].push(this.value || '');
+       } else {
+        o[this.name] = this.value || '';
+       }
+      });
+     return o;
+    };
+
+    $(function() {
+     $('#postbutton').click(function() {
+      obj = $('#sampleID').serializeObject();
+      pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+      pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+      pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+      $.ajax({
+       type: 'POST',
+       url: pluginURL,
+       async: false,
+       contentType: "application/json; charset=utf-8",
+       success: function(data)
+       {
+        $("#json_result").html('<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check sampleID.html in the Plugin Summary</p></div>');
+        setTimeout("parent.$.fn.colorbox.close()",2000);
+       },
+       data: pluginAPIJSON,
+       dataType: "json"
+      });
+     });
+    });
+
+  });
+ </script>
+</head>
+
+<body>
+ <form id="sampleID" name="sampleID">
+  <div style="text-align:center">
+   <h1>Torrent Sample Identification Plugin</h1>
+   <h3>Identify samples by gender and SNP markers.</h3>
+  </div>
+   <br/>
+   <div align="center" id="json_result">
+    <input id="postbutton" type="submit" value="Submit">
+   </div>
+   <input type="hidden" id="launch_mode" name="launch_mode" value="Manual"/>
+   <div align="left">
+    <h3>Description and Usage Notes</h3>
+    <p>
+This plugin produces a 'unique' identication code ('sample ID') composed of the identified human sample gender
+and series of IUPAC base letters, based on calling a series of target alleles verses the genome. Typically this
+plugin is run on barcoded libraries such that an unambiguous sample ID is reported for each barcode.
+For this to work, the AmpliSeq library must have been prepared with AmpliSeq sample tracking amplicons.
+The detailed report pages provides the complete information on tracking reads and allele counts.</p>
+   </div>
+ </form>
+</body>
+</html>
+

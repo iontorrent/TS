@@ -1,5 +1,6 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include <iostream>
+#include <string.h>
 #include "H5File.h"
 #include "Utils.h"
 

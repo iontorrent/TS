@@ -2,6 +2,20 @@
 {% load url from future %}
 {% load static from staticfiles %}
 {% block extra_head %}
+
+{% if created_plan_pks %}
+    <script>
+        //Third party(hub) planning support
+        //Send a message to the parent iframe if hide_nav is set.
+        if(typeof(sessionStorage) != 'undefined'){
+            if(sessionStorage.getItem('hide_nav')){
+                window.parent.postMessage('{{ created_plan_pks|join:"," }}', '*');
+            }
+        }
+    </script>
+{% endif %}
+
+
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/wizard.css"%}" />
 <script type="text/javascript" src="{% static "resources/scripts/wizard.min.js"%}"></script>
 
@@ -13,11 +27,31 @@
 <script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
 <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
 
+<script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modalmanager.js"%}"></script>
+<script type="text/javascript" src="{% static "resources/bootstrap-modal/js/bootstrap-modal.js"%}"></script>
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/bootstrap-modal/css/bootstrap-modal.css"%}" />
+
+<link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
+<style type="text/css">
+    .search-field {
+        display: inline-block;
+        zoom: 1;
+		*display: inline;
+        width: 180px;
+        height: 10px;
+        float: left;
+        margin: 10px 15px 15px 0;
+    }
+</style>
+<script src="{% static "js/date.min.js"%}"></script>
+<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
+
+
 {% endblock extra_head %}
 {% block sub-nav %}
 <li><a href="{% url "planRuns" %}">Plan Runs</a></li>
 <li><a href="{% url "samplesets" %}">Samples</a></li>
-<li><a href="{% url "plans" %}">Templates</a></li>
+<li><a href="{% url "plan_templates" %}">Templates</a></li>
 <li class="active"><a href="{% url "planned" %}">Planned Run List</a></li>
 {% endblock sub-nav %}
 {% block content %}
@@ -26,9 +60,26 @@
 	<h1 style="">Planned Runs</h1>
 	
     <div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;" >
-    	<a id="view_all" href="{% url "planned" %}" class="active">All</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a id="view_by_template" href="{% url "planned_by_template" %}" class="";>by Template</a>&nbsp;&nbsp;|&nbsp;&nbsp;<a id="view_by_sample" href="{% url "planned_by_sampleset" %}" class="">by Sample</a>
+    	<a id="all" href="#all" class="active setview">All</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+		<a id="byTemplate" href="#byTemplate" class="setview";>by Template</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+		<a id="bySample" href="#bySample" class="setview">by Sample</a>
     </div>
     
+	<div class="row-fluid">
+		<div class="search-field">
+			<label for="dateRange" class=" hide">Date</label>
+			<input type="text" id="dateRange" placeholder="Date" style="width:180px;"/>
+		</div>
+		<div class="input-append search-field">
+			<label for="searchText" class=" hide">Search Names</label>
+			<input id="search_text" type="text" placeholder="Search names" style="width: 150px;" />
+			<button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+		</div>
+		<div class="search-field" style="width: 40px;">
+			<button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 15px">Clear</button>
+		</div>
+	</div>
+	
 	<div id='grid'></div>
 	
 	<div class="btn-group pull-left">						
@@ -51,8 +102,28 @@
 						TARS_16S : 'appl_metagenomics'}; 
 	#
 						  
-	<span rel="tooltip" title="#=TB.runTypeDescription(runType)#">
-		<img src="{% static "resources/img/#=applications[runType]#.png"%}" width="24px" height="24px" />
+	<span class="runTypeImageClass" rel="tooltip" title="#=TB.runTypeDescription(runType)#">
+		<!--does-not-work-on-some-TS img src="{% static "resources/img/#=applications[runType]#.png"%}" width="24px" height="24px" / -->
+		<!--TODO TS-8562 -->
+		# if (runType == "AMPS") { #
+		  <img src="{% static "resources/img/appl_ampliSeq.png"%}" width="24px" height="24px" />
+		# } else if (runType == "GENS") { #
+          <img src="{% static "resources/img/appl_wildcard.png"%}" width="24px" height="24px" />	
+        # } else if (runType == "TARS") { #
+          <img src="{% static "resources/img/appl_targetSeq.png"%}" width="24px" height="24px" />  
+        # } else if (runType == "WGNM") { #
+          <img src="{% static "resources/img/appl_wholeGenome.png"%}" width="24px" height="24px" />  
+        # } else if (runType == "RNA") { #
+          <img src="{% static "resources/img/appl_rnaSeq.png"%}" width="24px" height="24px" />  
+        # } else if (runType == "AMPS_RNA") { #
+          <img src="{% static "resources/img/appl_ampliSeqRna.png"%}" width="24px" height="24px" />  
+        # } else if (runType == "AMPS_EXOME") { #
+          <img src="{% static "resources/img/appl_ampliSeqExome.png"%}" width="24px" height="24px" />  
+        # } else if (runType == "TARS_16S") { #
+          <img src="{% static "resources/img/appl_metagenomics.png"%}" width="24px" height="24px" />  
+        # } else if (runType == "AMPS_DNA_RNA") { #
+          <img src="{% static "resources/img/appl_ampliSeqDNA_RNA.png"%}" width="24px" height="24px" />           
+        # } # 
 	</span>
 	
 </script>
@@ -95,7 +166,7 @@
 	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
-			<a href="#= '{% url "review_plan_run" 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a>
+			<a href="#= '{% url "review_plan" 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a>
 		</li>
 		<li>
 			<a href="#= '{% url "page_plan_edit_plan" 999999 %}'.replace('999999',_id)#">Edit</a>
@@ -110,11 +181,12 @@
 </div>	
 </script>
 
+<script type="text/javascript" src="{% static "resources/scripts/plan/planned.html.js"%}"></script>
 <script type="text/javascript">
 	var checked_ids = [];
 </script>
 
-<!--script>
+    <!--script>
 //$(".shortcode128").each(function () {
 //	console.log("i am at planned.html shortcode128!!!");
 //	
@@ -128,5 +200,4 @@
 //});
 </script -->
 
-<script type="text/javascript" src="{% static "resources/scripts/plan/planned.html.js"%}"></script>
 {% endblock content %}

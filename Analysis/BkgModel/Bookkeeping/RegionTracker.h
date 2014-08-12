@@ -8,6 +8,7 @@
 #include "NucStepCache.h"
 #include "DarkHalo.h"
 #include "GlobalDefaultsForBkgModel.h"
+#include "DoubleExpSmoothing.h"
 
 class RegionTracker{
   public:
@@ -20,16 +21,19 @@ class RegionTracker{
     NucStep cache_step;
     Halo missing_mass;
 
-    RegionTracker();
+    DoubleExpSmoothing copy_drift_smoother, ratio_drift_smoother;
+
+    RegionTracker();    // for serializing, only.
+    RegionTracker( const class CommandLineOpts * inception_state );
     ~RegionTracker();
-    void AllocScratch(int npts);
+    void AllocScratch(int npts, int flow_block_size);
     void RestrictRatioDrift();
-    void ResetLocalRegionParams();
+    void ResetLocalRegionParams( int flow_block_size );
     void Delete();
-    void InitHighRegionParams(float t_mid_nuc_start);
-    void InitLowRegionParams(float t_mid_nuc_start);
-    void InitModelRegionParams(float t_mid_nuc_start,float sigma_start, GlobalDefaultsForBkgModel &global_defaults);
-    void InitRegionParams(float t_mid_nuc_start,float sigma_start, GlobalDefaultsForBkgModel &global_defaults);
+    void InitHighRegionParams(float t_mid_nuc_start, int flow_block_size);
+    void InitLowRegionParams(float t_mid_nuc_start, int flow_block_size);
+    void InitModelRegionParams(float t_mid_nuc_start,float sigma_start, GlobalDefaultsForBkgModel &global_defaults, int flow_block_size);
+    void InitRegionParams(float t_mid_nuc_start,float sigma_start, GlobalDefaultsForBkgModel &global_defaults, int flow_block_size);
 
  private:
 
@@ -44,6 +48,8 @@ class RegionTracker{
 	   & rp
 	   & rp_high
 	   & rp_low
+     & copy_drift_smoother
+     & ratio_drift_smoother
 	  // cache_step  // re-initted every time
 	  & missing_mass;
 	// fprintf(stdout, "done RegionTracker\n");
@@ -56,6 +62,8 @@ class RegionTracker{
 	   & rp
 	   & rp_high
 	   & rp_low
+     & copy_drift_smoother
+     & ratio_drift_smoother
 	  // cache_step  // rebuilt every time by AllocScratch()
 	  // AllocScratch() called in AllocFitBuffers()
 	  // by the RegionalizedData object that owns this RegionTracker

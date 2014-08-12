@@ -50,7 +50,7 @@ document.write('\
     <td id="TC-chromFilter" class="nwrap"><span class="flyhelp" id="TC-filterChromLabel">Chrom/Contig</span>:\
       <select class="txtSelect" id="TC-selectChrom"></select></td>\
     <td class="nwrap"><span class="flyhelp" id="TC-filterGeneSymLabel">Gene Symbol</span>:\
-      <input class="txtSearch" type="text" id="TC-filterGeneSym" value="" size=6></td>\
+      <input class="txtSearch" type="text" id="TC-filterGeneSym" value="" size=20></td>\
     <td><input id="TC-clearFilters" type="button" value="Clear" style="width:45px"></td>\
   </tr></table>\
 </div>\
@@ -93,8 +93,9 @@ $(function () {
 
   // configure widget size and file used from placement div attributes
   var coverageFile = $("#TargetCoverageChart").attr("datafile");
-  if( coverageFile == undefined ) {
-    alert("ERROR on page: TargetCoverageChart widget requires attribute 'datafile' is set.");
+  if( coverageFile == undefined || coverageFile == "" ) {
+    //alert("ERROR on page: TargetCoverageChart widget requires attribute 'datafile' is set.");
+    $('#TargetCoverageChart').hide();
     return;
   }
   var initCovFile = $("#TargetCoverageChart").attr("initfile");
@@ -119,11 +120,14 @@ $(function () {
   var lengthNormal = baseCoverage || !ampliconReads;
 
   var showPlotOptions = $("#TargetCoverageChart").attr("showplotoptions");
-  if( showPlotOptions == undefined || showPlotOptions == '' ) showPlotOptions = 0;
+  showPlotOptions = (showPlotOptions != undefined);
   // URL override to enable by-strand plot option - quick dirty method to just find single parameter
   var query = '&' + window.location.search.substring(1) + '&';
   var urlEnablePlotOptions = query.indexOf('&EPO&') >= 0 || query.indexOf('&EPO=') >= 0;
   if( urlEnablePlotOptions ) showPlotOptions = 1;
+
+  var startHideLegend = $("#TargetCoverageChart").attr("hidelegend");
+  startHideLegend = (startHideLegend != undefined);
 
   // possible input options
   autoJumpToGene = true;
@@ -507,11 +511,10 @@ $(function () {
       "s on this chromosome, or to set to no filter by selecting the 'ALL' value. If there is only one chromosome in your "+
       "reference this value is set and cannot be changed." );
     $("#TC-filterGeneSymLabel").attr( "title",
-      "Type in the gene symbol in to filter the view to just "+trg+"s in that gene. The value must match the symbol "+
-      "exactly but is not case-sensitive. The plot will become empty if no "+trg+" has this gene symbol. Otherwise these "+trg+
-      "s will be presented and the Reference Coverage Chart will automatically zoom to view all "+trg+"s in the selected gene. "+
-      "Note that filters are additive so your particular gene may not be found if filtered out by chromosome or read depth.\n"+
-      "You may also filter by any other single attribute by prefixing its name, e.g. 'pool=1'." );
+      "Type in the gene symbol in to filter the view to just "+trg+"s in that gene. Alternatively you may filter on any single "+
+      "attribute specified in the "+trg+"s file by giving the name and value, e.g. 'Pool=1' or 'GENE_ID=TBP'. Press the enter or tab "+
+      "key to perform the filter. The gene symbol (or attribute name and value) typed in must match that of the "+trg+"(s) "+
+      "exactly but is not case-sensitive." );
     $("#TC-clearFilters").attr( "title",
       "Click this button to clear all specified filters: Coverage data is presented for all "+trg+"s." );
     $("#TC-help").attr( "title", "Click for help." );
@@ -794,8 +797,9 @@ $(function () {
       pcU3p = targLen > 0 ? sigfig(100 * uc3p / targLen) : 0;
       pcU5p = targLen > 0 ? sigfig(100 * uc5p / targLen) : 0;
     } else {
-      pcU3p = fwdReads > 0 ? sigfig(100 * uc3p / fwdReads) : 0;
-      pcU5p = revReads > 0 ? sigfig(100 * uc5p / revReads) : 0;
+      // note reverse of field values: uc5p == fwd_e2e
+      pcU3p = fwdReads > 0 ? sigfig(100 * uc5p / fwdReads) : 0;
+      pcU5p = revReads > 0 ? sigfig(100 * uc3p / revReads) : 0;
     }
     var dir = '';
     var barData = dataBar(id);
@@ -832,7 +836,9 @@ $(function () {
       }
     } else {
       gstr = dataTable[bin][DataField.gene_id]
-      msg += (gstr.indexOf('=') > 0 ? "Attributes" : "Gene Sym")+": "+gstr+br;
+      msg += (gstr.indexOf('=') > 0 ? "Attributes" : "Gene Sym")+": ";
+      if( gstr.length > 50 ) gstr = gstr.substring(0,50)+"...";
+      msg += gstr+br;
       var i, targID = dataTable[bin][DataField.target_id];
       while( (i = targID.indexOf(',')) > 0 ) {
         targID = targID.substr(0,i)+br+'+  '+targID.substr(i+1);
@@ -1325,8 +1331,8 @@ $(function () {
     var binLen = DataField.bin_length;
     var posSrt = DataField.pos_start;
     var posEnd = DataField.pos_end;
-    var uncov3p  = DataField.uncov_3p; // or fwd_e2e
-    var uncov5p  = DataField.uncov_5p; // or rev_e2e
+    var uncov3p  = DataField.uncov_3p; // or rev_e2e
+    var uncov5p  = DataField.uncov_5p; // or fwd_e2e
     var fwdReads = DataField.reads_fwd; // base reads or assigned reads
     var revReads = DataField.reads_rev; // base reads or assigned reads
     var logAxis = plotParams.logAxis;
@@ -1377,8 +1383,11 @@ $(function () {
           ucov5 = rcov * (1 - ucov5 * barScale);
         } else {
           // fractional passing coverage shows as ratio (not log)
-          ucov3 = dataTable[i][fwdReads] == 0 ? 0 : fcov * ucov3/dataTable[i][fwdReads];
-          ucov5 = dataTable[i][revReads] == 0 ? 0 : rcov * ucov5/dataTable[i][revReads];
+          // Note: the order of the data fields is opposite to that for base coverage
+          f_e2e = ucov5;
+          r_e2e = ucov3;
+          ucov3 = dataTable[i][fwdReads] == 0 ? 0 : fcov * f_e2e/dataTable[i][fwdReads];
+          ucov5 = dataTable[i][revReads] == 0 ? 0 : rcov * r_e2e/dataTable[i][revReads];
         }
         d1.push( [i,fcov] );
         d2.push( [i,ucov3] );
@@ -1592,7 +1601,8 @@ $(function () {
   }
 
   // autoload - after everything is defined
+  if( startHideLegend ) $('#TC-showLegend').attr('checked',plotParams.showLegend = false);
   unzoomToFile(coverageFile);
-  autoHideLegend();
+  if( !startHideLegend ) autoHideLegend();
 
 });

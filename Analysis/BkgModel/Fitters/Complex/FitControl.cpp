@@ -4,7 +4,8 @@
 
 
 
-FitControl_t::FitControl_t()
+FitControl_t::FitControl_t( master_fit_type_table *table ) :
+  bkg_model_fit_type( table )
 {
   PartialDeriv_comp_list = NULL;
   // well
@@ -68,72 +69,104 @@ FitControl_t::~FitControl_t()
   Delete();
 }
 
-void FitControl_t::AllocWellPackers ( int npts )
+void FitControl_t::AllocWellPackers ( int hydrogenModelType, int npts, int flow_block_size )
 {
   DeleteWellPackers();
 
-  int comp_list_len = fitParams.NumSteps;
+  int comp_list_len = BkgFitStructures::NumSteps;
 
-  FitWellAmpl = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitWellAmpl" ),PartialDeriv_comp_list,comp_list_len );
-  FitWellAmplBuffering = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitWellAmplBuffering" ),PartialDeriv_comp_list,comp_list_len );
-  FitWellPostKey = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitWellPostKey" ),PartialDeriv_comp_list,comp_list_len );
+  FitWellAmpl = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitWellAmpl" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+  FitWellAmplBuffering = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitWellAmplBuffering" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+  switch( hydrogenModelType ){
+    case 0:
+    default:
+        FitWellPostKey = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitWellPostKey" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+        break;
+    case 1:
+    case 2:
+    case 3:
+        FitWellPostKey = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitWellPostKeyNoDmult" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+        break;
+  }
 }
 
-void FitControl_t::CombinatorialAllocationOfInit2AndFull ( bool no_rdr_fit_starting_block,bool fitting_taue,  int npts )
+void FitControl_t::CombinatorialAllocationOfInit2AndFull ( bool no_rdr_fit_starting_block,bool fitting_taue, int hydrogenModelType, int npts, int flow_block_size )
 {
-  int comp_list_len = fitParams.NumSteps;
-  // combinatorial excess because we can't make up our minds
-  if ( no_rdr_fit_starting_block & ( !fitting_taue ) )
-  {
+    int comp_list_len = BkgFitStructures::NumSteps;
+    // combinatorial excess because we can't make up our minds
+    switch( hydrogenModelType ){
+    case 0:
+    default:
+        if ( no_rdr_fit_starting_block & ( !fitting_taue ) )
+        {
 
-    FitRegionInit2 = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionInit2NoRDR" ),PartialDeriv_comp_list,comp_list_len );
-    FitRegionFull = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionFullNoRDR" ),PartialDeriv_comp_list,comp_list_len );
-  }
+            FitRegionInit2 = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionInit2NoRDR" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+            FitRegionFull = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionFullNoRDR" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+        }
 
-  if ( ( !no_rdr_fit_starting_block ) & ( !fitting_taue ) )
-  {
-    FitRegionInit2 = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionInit2" ),PartialDeriv_comp_list,comp_list_len );
-    FitRegionFull = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionFull" ),PartialDeriv_comp_list,comp_list_len );
-  }
+        if ( ( !no_rdr_fit_starting_block ) & ( !fitting_taue ) )
+        {
+            FitRegionInit2 = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionInit2" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+            FitRegionFull = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionFull" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+        }
 
-  if ( fitting_taue & ( !no_rdr_fit_starting_block ) )
-  {
-    FitRegionInit2 = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionInit2TauE" ),PartialDeriv_comp_list,comp_list_len );
-    FitRegionFull = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionFullTauE" ),PartialDeriv_comp_list,comp_list_len );
-  }
+        if ( fitting_taue & ( !no_rdr_fit_starting_block ) )
+        {
+            FitRegionInit2 = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionInit2TauE" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+            FitRegionFull = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionFullTauE" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+        }
 
-  if ( fitting_taue & ( no_rdr_fit_starting_block ) )
-  {
-    FitRegionInit2 = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionInit2TauENoRDR" ),PartialDeriv_comp_list,comp_list_len );
-    FitRegionFull = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionFullTauENoRDR" ),PartialDeriv_comp_list,comp_list_len );
-  }
-  // end combinatorial excess
+        if ( fitting_taue & ( no_rdr_fit_starting_block ) )
+        {
+            FitRegionInit2 = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionInit2TauENoRDR" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+            FitRegionFull = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionFullTauENoRDR" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+        }
+
+        break;
+    case 1:
+    case 2:
+    case 3:
+        if ( fitting_taue & ( !no_rdr_fit_starting_block ) )
+        {
+            FitRegionInit2 = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionInit2TauENoD" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+            FitRegionFull = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionFullTauENoD" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+        }
+
+        if ( fitting_taue & ( no_rdr_fit_starting_block ) )
+        {
+            FitRegionInit2 = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionInit2TauENoRDRNoD" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+            FitRegionFull = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionFullTauENoRDRNoD" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+        }
+        break;
+    }
+
+    // end combinatorial excess
 }
 
-void FitControl_t::AllocRegionPackers ( bool no_rdr_fit_starting_block,bool fitting_taue,  int npts )
+void FitControl_t::AllocRegionPackers ( bool no_rdr_fit_starting_block,bool fitting_taue,  int hydrogenModelType, int npts, int flow_block_size )
 {
-  int comp_list_len = fitParams.NumSteps;
+  int comp_list_len = BkgFitStructures::NumSteps;
 
   DeleteRegionPackers();
-  FitRegionTmidnucPlus = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionTmidnucPlus" ),PartialDeriv_comp_list,comp_list_len );
+  FitRegionTmidnucPlus = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionTmidnucPlus" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
 
-  CombinatorialAllocationOfInit2AndFull ( no_rdr_fit_starting_block,fitting_taue,npts );
+  CombinatorialAllocationOfInit2AndFull ( no_rdr_fit_starting_block,fitting_taue,hydrogenModelType,npts, flow_block_size );
 
-  FitRegionTimeVarying = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionTimeVarying" ),PartialDeriv_comp_list,comp_list_len );
-  FitRegionDarkness = new BkgFitMatrixPacker ( npts,*GetFitInstructionsByName ( "FitRegionDarkness" ),PartialDeriv_comp_list,comp_list_len );
+  FitRegionTimeVarying = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionTimeVarying" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
+  FitRegionDarkness = new BkgFitMatrixPacker ( npts,*bkg_model_fit_type->GetFitInstructionsByName ( "FitRegionDarkness" ),PartialDeriv_comp_list,comp_list_len, flow_block_size );
 }
 
-void FitControl_t::AllocPackers ( float *tfptr, bool no_rdr_fit_starting_block,bool fitting_taue, int bead_flow_t, int npts )
+void FitControl_t::AllocPackers (float *tfptr, bool no_rdr_fit_starting_block, bool fitting_taue, int hydrogenModelType, int bead_flow_t, int npts, int flow_block_size )
 {
-  PartialDeriv_comp_list = new PartialDeriv_comp_list_item[fitParams.NumSteps];
-  for ( int i=0;i<fitParams.NumSteps;i++ )
+  PartialDeriv_comp_list = new PartialDeriv_comp_list_item[BkgFitStructures::NumSteps];
+  for ( int i=0;i<BkgFitStructures::NumSteps;i++ )
   {
-    fitParams.Steps[i].ptr = tfptr;
+    BkgFitStructures::Steps[i].ptr = tfptr;   // FIXME Really? We muck with a global structure?
     PartialDeriv_comp_list[i].addr = tfptr;
-    PartialDeriv_comp_list[i].comp = ( PartialDerivComponent ) fitParams.Steps[i].PartialDerivMask;
+    PartialDeriv_comp_list[i].comp = ( PartialDerivComponent ) BkgFitStructures::Steps[i].PartialDerivMask;
     tfptr += bead_flow_t;
   }
 
-  AllocWellPackers ( npts );
-  AllocRegionPackers ( no_rdr_fit_starting_block,fitting_taue,npts );
+  AllocWellPackers ( hydrogenModelType,  npts, flow_block_size );
+  AllocRegionPackers ( no_rdr_fit_starting_block, fitting_taue, hydrogenModelType, npts , flow_block_size);
 }

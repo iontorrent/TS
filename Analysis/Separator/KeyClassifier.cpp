@@ -1,36 +1,44 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
+#include <stddef.h>
+
 #include "KeyClassifier.h"
+#include "TraceStore.h"
+#include "ZeromerModelBulk.h"
+
 
 #define SDFUDGE .01
 #define FRAME_START 4u
 #define FRAME_END 19u
-#define PEAK_SEARCH 15u
-#define MIN_PEAK 30
+#define PEAK_SEARCH 17u
 //#define FRAME_END 25u
 
-void KeyClassifier::Classify(std::vector<KeySeq> &keys, 
-                             ZeromerDiff<double> &bg,
-                             Mat<double> &wellFlows,
-                             Mat<double> &refFlows,
-                             Col<double> &time,
+void KeyClassifier::Classify(std::vector<KeySeq> &keys,
+                             ZeromerDiff<float> &bg,
+                             Mat<float> &wellFlows,
+                             Mat<float> &refFlows,
+                             Col<float> &time,
                              double minSnr,
                              KeyFit &fit,
-                             Mat<double> &predicted) {
+                             Mat<float> &predicted) {
   param.set_size(2);
   param << 0 << 0;
   size_t frameStart = min(FRAME_START,wellFlows.n_rows);
   size_t frameEnd = min(FRAME_END,wellFlows.n_rows);
+
+    
   for (size_t keyIx = 0; keyIx < keys.size(); keyIx++) {
+    arma::uvec zeroFlows(keys[keyIx].zeroFlows.size());
+    std::copy(keys[keyIx].zeroFlows.begin(), keys[keyIx].zeroFlows.end(), zeroFlows.begin());
     int bad = bg.FitZeromer(wellFlows, refFlows,
-                            keys[keyIx].zeroFlows, time,
+                            zeroFlows, time,
                             param);
     double keyMinSnr = std::max(minSnr, keys[keyIx].minSnr);
     onemerSig.Clear();
     zeromerSig.Clear();
     zeroStats.Clear();
     traceSd.Clear();
-    
+
     for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
       for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
         traceSd.AddValue(wellFlows.at(frameIx,flowIx));
@@ -61,7 +69,9 @@ void KeyClassifier::Classify(std::vector<KeySeq> &keys,
       fit.traceMean = traceSd.GetMean();
       fit.traceSd = traceSd.GetSD();
       fit.snr = snr;
-      fit.param = param;
+      fit.param.resize(param.n_rows);
+      std::copy(param.begin(), param.end(), fit.param.begin());
+      //      fit.param = param;
       fit.ok = (bad == 0);
       for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
         bg.PredictZeromer(refFlows.unsafe_col(flowIx), time, fit.param, p);
@@ -74,7 +84,9 @@ void KeyClassifier::Classify(std::vector<KeySeq> &keys,
       fit.snr = snr;
       fit.traceMean = traceSd.GetMean();
       fit.traceSd = traceSd.GetSD();
-      fit.param = param;
+      fit.param.resize(param.n_rows);
+      std::copy(param.begin(), param.end(), fit.param.begin());
+      //      fit.param = param;
       fit.ok = (bad == 0);
       for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
         bg.PredictZeromer(refFlows.unsafe_col(flowIx), time, fit.param, p);
@@ -89,18 +101,18 @@ void KeyClassifier::Classify(std::vector<KeySeq> &keys,
 }
 
 void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys, 
-                                      ZeromerModelBulk<double> &bg,
-                                      Mat<double> &wellFlows,
-                                      Mat<double> &refFlows,
-                                      Col<double> &time,
-                                      Mat<double> *darkMatter,
-                                      Mat<double> *onemers,
+                                      ZeromerModelBulk<float> &bg,
+                                      Mat<float> &wellFlows,
+                                      Mat<float> &refFlows,
+                                      Col<float> &time,
+                                      Mat<float> *darkMatter,
+                                      Mat<float> *onemers,
                                       size_t frameCandEnd,
                                       double minSnr,
                                       double tauE,
                                       KeyFit &fit,
-                                      TraceStore<double> &store,
-                                      Mat<double> &predicted) {
+                                      TraceStore &store,
+                                      Mat<float> &predicted) {
 
   param.set_size(2);// << 0 << 0;
   param[0] = 0;
@@ -114,7 +126,7 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
   KeyBulkFit paramFit;
   paramFit = bg.GetFit(fit.wellIdx);
   if (weights.n_rows != store.GetNumFrames()) {
-    weights = ones<vec>(store.GetNumFrames());
+    weights = ones<fvec>(store.GetNumFrames());
   }
   if (fit.bestKey >= 0) {
     fit.bestKey = -1;
@@ -150,7 +162,7 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
     sigVar.Clear();
     onemerProj.Clear();
     mad.Clear();
-    Mat<double> incorporation = wellFlows;
+    Mat<float> incorporation = wellFlows;
     for (size_t flowIx = 0; flowIx < wellFlows.n_cols; flowIx++) {
       bg.ZeromerPrediction(fit.wellIdx, flowIx, store, refFlows.unsafe_col(flowIx),p);
       mPredictions.col(flowIx) = p;
@@ -167,12 +179,14 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
     if (keyIx >= 0) {
       // Do some smoothing...
       // Get the mean 1mer as our signal to project onto
-      Mat<double> onemer_incorp = incorporation.cols(keys[keyIx].onemerFlows);
-      Col<double> onemer_mean = mean(onemer_incorp, 1);
+      arma::uvec onemerFlows(keys[keyIx].onemerFlows.size());
+      std::copy(keys[keyIx].onemerFlows.begin(),keys[keyIx].onemerFlows.end(), onemerFlows.begin());
+      Mat<float> onemer_incorp = incorporation.cols(onemerFlows);
+      Col<float> onemer_mean = mean(onemer_incorp, 1);
       keyMax = arma::max(onemer_mean.rows(0,min(PEAK_SEARCH,onemer_incorp.n_rows)));
     }
     else {
-      Col<double> median_all = mean(incorporation, 1);
+      Col<float> median_all = mean(incorporation, 1);
       keyMax = max(median_all.rows(0,min(PEAK_SEARCH,median_all.n_rows)));
     }
 
@@ -189,7 +203,7 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
     // Project each flow onto that 1mer as our incorporation signal if we have 
     if (onemers != NULL) {
       for (size_t i = 0; i < incorporation.n_cols; i++) {
-        const Col<double> &inc = onemers->col(store.GetNucForFlow(i));
+        const Col<float> &inc = onemers->col(store.GetNucForFlow(i));
         if (sum(inc) > 0) {
           double o_proj =  GetProjection(incorporation.col(i), inc);
           incorporation.col(i) = o_proj * inc;
@@ -231,13 +245,15 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
       //      fit.mad = zeroStats.GetMean();
       fit.mad = zeroStats.GetMedian();
       fit.snr = snr;
-      fit.param = param;
+      fit.param.resize(param.n_rows);
+      std::copy(param.begin(), param.end(), fit.param.begin());
+      //      fit.param = param;
       fit.sd = sd;
-      fit.onemerAvg = onemerSig.GetCount() > 0 ? onemerSig.GetMedian() : std::numeric_limits<double>::quiet_NaN();
-      //      fit.peakSig = onemerProjMax.GetCount() > 0 ? onemerProjMax.GetMedian() : std::numeric_limits<double>::quiet_NaN();
+      fit.onemerAvg = onemerSig.GetCount() > 0 ? onemerSig.GetMedian() : std::numeric_limits<float>::quiet_NaN();
+      //      fit.peakSig = onemerProjMax.GetCount() > 0 ? onemerProjMax.GetMedian() : std::numeric_limits<float>::quiet_NaN();
       fit.peakSig = keyMax;
-      fit.onemerProjAvg = onemerProj.GetCount() > 0 ? onemerProj.GetMean() : std::numeric_limits<double>::quiet_NaN();
-      fit.projResid = onemerIncorpMad.GetCount() > 0 ? onemerIncorpMad.GetMean() : std::numeric_limits<double>::quiet_NaN();
+      fit.onemerProjAvg = onemerProj.GetCount() > 0 ? onemerProj.GetMean() : std::numeric_limits<float>::quiet_NaN();
+      fit.projResid = onemerIncorpMad.GetCount() > 0 ? onemerIncorpMad.GetMean() : std::numeric_limits<float>::quiet_NaN();
       fit.ok = true;
       predicted = mPredictions;
     }
@@ -247,12 +263,14 @@ void KeyClassifier::ClassifyKnownTauE(std::vector<KeySeq> &keys,
       fit.bestKey = keyIx;
       fit.mad = zeroStats.GetMedian();
       fit.snr = snr;
-      fit.param = param;
+      fit.param.resize(param.n_rows);
+      std::copy(param.begin(), param.end(), fit.param.begin());
+      //      fit.param = param;
       fit.sd = sd;
-      fit.onemerAvg = onemerSig.GetCount() > 0 ? onemerSig.GetMedian() : std::numeric_limits<double>::quiet_NaN();
-      fit.peakSig = keyMax; //onemerProjMax.GetCount() > 0 ? onemerProjMax.GetMedian() : std::numeric_limits<double>::quiet_NaN();
-      fit.onemerProjAvg = onemerProj.GetCount() > 0 ? onemerProj.GetMean() : std::numeric_limits<double>::quiet_NaN();
-      fit.projResid = onemerIncorpMad.GetCount() > 0 ? onemerIncorpMad.GetMean() : std::numeric_limits<double>::quiet_NaN();
+      fit.onemerAvg = onemerSig.GetCount() > 0 ? onemerSig.GetMedian() : std::numeric_limits<float>::quiet_NaN();
+      fit.peakSig = keyMax; //onemerProjMax.GetCount() > 0 ? onemerProjMax.GetMedian() : std::numeric_limits<float>::quiet_NaN();
+      fit.onemerProjAvg = onemerProj.GetCount() > 0 ? onemerProj.GetMean() : std::numeric_limits<float>::quiet_NaN();
+      fit.projResid = onemerIncorpMad.GetCount() > 0 ? onemerIncorpMad.GetMean() : std::numeric_limits<float>::quiet_NaN();
       fit.ok = isfinite(fit.mad);
       predicted = mPredictions;
     }

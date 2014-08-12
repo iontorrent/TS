@@ -10,45 +10,25 @@
         <form class="form-horizontal" id="modal_references_new_genome_form" method="POST">
             <fieldset>
                 <div class="control-group">
-                    <label for="name" class="control-label">Descriptive name <i>(required)</i></label>
-                    <div class="controls">
-                        <input name="name" id="name" placeholder='eg "Homo sapiens hg19", "Homo sapiens Amplicon Set 1"'  maxlength="512" type="text" class="input-xxlarge textInput required"/>
-                        <p class="help-block">
-                            Descriptive genome name
-                        </p>
-                    </div>
-                </div>
-                <div class="control-group">
                     <label for="short_name" class="control-label">Short name <i>(required)</i></label>
                     <div class="controls">
                         <input name="short_name" id="short_name" placeholder='eg "hg19", "rs_005296_1", "hs_ampl_set1"' maxlength="50" type="text" class="input-xlarge textInput required validateAlphaNumUnderscoreNoSpace"/>
                         <p class="help-block">
-                            Short form of genome name, use letters, numbers, and underscore only
+                            Short form of reference name, use letters, numbers, and underscore only
                         </p>
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="version" class="control-label">Genome version <i>(required)</i></label>
+                    <label for="name" class="control-label">Description <i>(required)</i></label>
                     <div class="controls">
-                        <input name="version" id="version" placeholder='eg "hg19", "gi|39933080|ref|NC_005296.1", "1.0"'
-                        maxlength="100" type="text" class="input-xlarge required"/>
+                        <input name="name" id="name" placeholder='eg "Homo sapiens hg19", "Homo sapiens Amplicon Set 1"'  maxlength="512" type="text" class="input-xxlarge textInput required"/>
                         <p class="help-block">
-                            Genome version
+                            A longer, more descriptive reference name.
                         </p>
                     </div>
                 </div>
-                <div class="control-group">
-                    <label for="notes" class="control-label">Notes</label>
-                    <div class="controls">
-                        <input name="notes" id="notes" type="text" class="input-xxlarge textInput">
-                        <p class="help-block">
-                            Notes about the Genome
-                        </p>
-                    </div>
-                </div>
-
                 <div id="upload-fasta" class="control-group">
-                    <label for="pickfile" class="control-label">Upload a FASTA file</label>
+                    <label for="pickfile" class="control-label">Upload a FASTA file (required)</label>
                     <div class="controls">
                         <div id="filelist"><a id="pickfile" name="pickfile" class="btn">Select File</a></div>
                         <div id="upload-help" class="help-block" >
@@ -69,6 +49,19 @@
                         </div>
                     </div>
                 </div>
+                <div class="control-group" title="The version information for this reference">
+                    <label for="version" class="control-label" style="font-weight: normal;">Version (optional)</label>
+                    <div class="controls">
+                        <input name="version" id="version" placeholder='eg "hg19", "gi|39933080|ref|NC_005296.1", "1.0"'
+                        maxlength="100" type="text" class="input-xlarge"/>
+                    </div>
+                </div>
+                <div class="control-group" title="Miscellaneous notes on this reference.">
+                    <label for="notes" class="control-label" style="font-weight: normal;">Notes (optional)</label>
+                    <div class="controls">
+                        <textarea name="notes" id="notes" class="input-xxlarge"></textarea>
+                    </div>
+                </div>
             </fieldset>
             <div id="update"></div>
             <input name="target_file" id="target_file" type="hidden"/>
@@ -82,7 +75,7 @@
   </div>    
   <div class="modal-footer">    
       <a class="btn" href="#" data-dismiss="modal">Cancel</a>
-      <a id="uploadfile" class="btn btn-primary" href="#">Upload file and create reference</a>
+      <a id="uploadfile" class="btn btn-primary" href="#">Upload Reference</a>
   </div>
 <script type="text/javascript">
 $(function(){
@@ -140,7 +133,7 @@ $(function(){
     // });    
     //init plupload
     var uploader = new plupload.Uploader({
-        runtimes: 'silverlight,flash',
+        runtimes: 'html5,silverlight,flash',
         filters : [
             {title : "FASTA files", extensions : "fasta"},
             {title : "FASTA Compressed Zip files", extensions : "zip"}

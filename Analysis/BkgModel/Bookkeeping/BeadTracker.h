@@ -11,6 +11,7 @@
 #include "SpecialDataTypes.h"
 #include "GlobalDefaultsForBkgModel.h"  //to get the flow order 
 #include "PinnedInFlow.h"
+#include "CommandLineOpts.h"
 
 class LevMarBeadAssistant;
 class extern_links;
@@ -24,7 +25,7 @@ public:
     int  numLBadKey;
     bound_params params_high;
     bound_params params_low;
-    std::vector<bead_params>  params_nn;
+    std::vector<BeadParams>  params_nn;
     std::vector<SequenceItem> seqList;
     int numSeqListItems;
 
@@ -56,7 +57,8 @@ public:
     
     BeadTracker();
 
-    void  InitBeadList(Mask *bfMask, Region *region, bool ignorekey, SequenceItem *_seqList, int _numSeq, const std::set<int>& sample, float AmplLowerLimit);
+    void  InitBeadList(Mask *bfMask, Region *region, bool ignorekey, SequenceItem *_seqList, 
+        int _numSeq, const std::set<int>& sample, float AmplLowerLimit);
     void  InitBeadParams(float AmplLowerLimit);
     void  InitBeadParamR(Mask *bfMask, Region *region, std::vector<float> *tauB,std::vector<float> *tauE);
     void  InitRandomSample(Mask& bf, Region& region, const std::set<int>& sample);
@@ -85,17 +87,17 @@ public:
     // utilities for optimization
     void  AssignEmphasisForAllBeads(int max_emphasis);
 
-    float KeyNormalizeReads(bool overwrite_key, bool sampled_only=false);
-    float KeyNormalizeSampledReads(bool overwrite_key);
-    float KeyNormalizeOneBead(int ibd, bool overwrite_key);
-    float ComputeSSQRatioOneBead(int ibd);
-    void  SelectKeyFlowValuesFromBeadIdentity(int *keyval, float *observed, int my_key_id, int &keyLen);
+    float KeyNormalizeReads(bool overwrite_key, bool sampled_only /*=false*/, int flow_block_size);
+    float KeyNormalizeSampledReads(bool overwrite_key, int flow_block_size);
+    float KeyNormalizeOneBead(int ibd, bool overwrite_key, int flow_block_size);
+    float ComputeSSQRatioOneBead(int ibd, int flow_block_size);
+    void  SelectKeyFlowValuesFromBeadIdentity(int *keyval, float *observed, int my_key_id, int &keyLen, int flow_block_size);
     void  SelectKeyFlowValues(int *keyval,float *observed, int keyLen);
     void  ResetFlowParams(int bufNum);
     void  ResetLocalBeadParams();
 
-    void  UpdateClonalFilter(int flow, const std::vector<float>& copy_multiplier);
-    void  FinishClonalFilter();
+    void  UpdateClonalFilter(int flow, const std::vector<float>& copy_multiplier, const PolyclonalFilterOpts & opts, int flow_block_size, int flow_begin_real_index );
+    void  FinishClonalFilter( const PolyclonalFilterOpts & opts );
     int   NumHighPPF() const;
     int   NumPolyclonal() const;
     int   NumBadKey() const;
@@ -104,6 +106,7 @@ public:
     float CenterDmult(bool skip_beads);
     float FindMeanDmultFromSample();
     float CenterDmultFromSample();
+    void UpdateAllPhi(int flow, int flow_block_size);
 
     void  RescaleRatio(float scale);
 
@@ -112,23 +115,23 @@ public:
     void AssignKeyID(Region *region, Mask *bfmask);
     void BuildBeadMap(Region *region, Mask *bfmask,MaskType &process_mask);
     void WriteCorruptedToMask(Region* region, Mask* bfmask, int16_t *washout_flow, int flow);
-    void ZeroOutPins(Region *region, Mask *bfmask, PinnedInFlow &pinnedInFlow, int flow, int iFlowBuffer);
-    void DumpBeads(FILE *my_fp, bool debug_only, int offset_col, int offset_row);
-    void DumpAllBeadsCSV(FILE *my_fp);
+    void ZeroOutPins(Region *region, const Mask *bfmask, const PinnedInFlow &pinnedInFlow, int flow, int iFlowBuffer);
+    void DumpBeads(FILE *my_fp, bool debug_only, int offset_col, int offset_row, int flow_block_size);
+    void DumpAllBeadsCSV(FILE *my_fp, int flow_block_size);
 
     void LowCopyBeadsAreLowQuality ( float mean_copy_count);
-    void LowSSQRatioBeadsAreLowQuality ( float snr_threshold);
+    void LowSSQRatioBeadsAreLowQuality ( float snr_threshold, int flow_block_size);
     void CorruptedBeadsAreLowQuality ();
-    void TypicalBeadParams(bead_params *p);
+    void TypicalBeadParams(BeadParams *p);
 
-    void CompensateAmplitudeForEmptyWellNormalization(float *my_scale_buffer);
+    void CompensateAmplitudeForEmptyWellNormalization(float *my_scale_buffer, int flow_block_size);
     //void DumpHits(int offset_col, int offset_row, int flow);
 
 private:
     void CheckKey(const std::vector<float>& copy_multiplier);
     void ComputeKeyNorm(const std::vector<int>& keyIonogram, const std::vector<float>& copy_multiplier);
-    void AdjustForCopyNumber(std::vector<float>& ampl, const bead_params& p, const std::vector<float>& copy_multiplier);
-    void UpdatePPFSSQ(int flow, const std::vector<float>& copy_multiplier);
+    void AdjustForCopyNumber(std::vector<float>& ampl, const BeadParams& p, const std::vector<float>& copy_multiplier);
+    void UpdatePPFSSQ(int flow, const std::vector<float>& copy_multiplier, const PolyclonalFilterOpts & opts, int flow_block_size, int flow_begin_real_index );
 
  private:
     // Boost serialization support:

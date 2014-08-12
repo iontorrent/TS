@@ -24,6 +24,12 @@ function get_adapter_name()
 }
 #==============================================================================
 #==============================================================================
+function get_adapter_info()
+{
+    MegaCli64 -adpallinfo -a$1 $MEGALOG|sed -n "/Device Present/,/Supported Adapter Operations/p"| sed -e 's/[ \t]*//g'
+}
+#==============================================================================
+#==============================================================================
 function get_enclosure_info()
 {
     # $1 - Adapter index
@@ -39,7 +45,93 @@ function get_drive_info()
     slot=$3     # Drive Slot ID
     MegaCli64 -PDInfo -PhysDrv[$enc:$slot] -a$adp $MEGALOG| sed -e 's/[ \t]*//g'
 }
-
+#==============================================================================
+#==============================================================================
+function get_num_virt_drv()
+{
+    adp=$1
+    MegaCli64 -ldgetnum -a$adp $MEGALOG|grep "Number of Virtual Drives"|cut -f2 -d:|sed -e 's/ //'
+}
+#==============================================================================
+#==============================================================================
+function print_drv_info()
+{
+    adp=$1      # Adapter ID
+    enc=$2      # Enclosure ID
+    slot=$3     # Drive Slot ID
+    drv_data=$(MegaCli64 -PDInfo -PhysDrv[$enc:$slot] -a$adp $MEGALOG| sed -e 's/[ \t]*//g')
+    no_device=""
+    for item in ${drv_data[@]}; do
+        if echo $item|grep -q "^DeviceId"; then
+            device_id=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+        elif echo $item|grep -q "^MediaError"; then
+            media_error=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+        elif echo $item|grep -q "^OtherError"; then
+            other_error=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+        elif echo $item|grep -q "^PredictiveFailure"; then
+            predictive_failure=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+        elif echo $item|grep -q "^Firmwarestate"; then
+            firmware_state=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+        elif echo $item|grep -q "^InquiryData"; then
+            inquiry_data=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+        elif echo $item|grep -q "^NeedsEKMAttention"; then
+            needs_ekm=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+        elif echo $item|grep -q "^ForeignState"; then
+            foreign_state=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+        elif echo $item|grep -q "^DrivehasflaggedaS.M.A.R.Talert"; then
+            smart=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+        elif echo $item|grep -q "^DriveTemperature"; then
+            drive_temp=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+    	elif echo $item|grep -q "isnotfound"; then
+            no_device="Empty"
+        fi
+    done
+    # oh yes, this is crufty. convert spaces to newline so we can use sed to identify multiline, then extract what we want.
+    port0_status=$(echo ${drv_data[@]} | tr ' ' '\n' | sed -n '/Port-0/,/Port status/p' | head -2 | tail -1 | cut -f2 -d:)
+    port1_status=$(echo ${drv_data[@]} | tr ' ' '\n' | sed -n '/Port-1/,/Port status/p' | head -2 | tail -1 | cut -f2 -d:)
+    if [ "$no_device" != "" ]; then
+    	echo \"Slot\":\"$slot\",
+    	echo \"Slot Status\":\"$no_device\"
+    else
+    	echo \"Slot\":\"$slot\",
+    	echo \"Media Error Count\":\"$media_error\",
+    	echo \"Other Error Count\":\"$other_error\",
+    	echo \"Predictive Failure Count\":\"$predictive_failure\",
+    	echo \"Firmware state\":\"$firmware_state\",
+    	echo \"Inquiry Data\":\"$inquiry_data\",
+    	echo \"Needs EKM Attention\":\"$needs_ekm\",
+    	echo \"Foreign State\":\"$foreign_state\",
+    	echo \"Port0 status\":\"$port0_status\",
+    	if [ ! -u $port1_status ]; then # Optional field; not all cards report it
+    	    echo \"Port1 status\":\"$port1_status\",
+    	fi
+    	echo \"Drive has flagged a S.M.A.R.T alert\":\"$smart\",
+    	echo \"Drive Temperature\":\"$drive_temp\"
+    fi
+}
+#==============================================================================
+#==============================================================================
+function print_virt_drv_info()
+{
+    adp=$1
+    drv=$2
+    data=$(MegaCli64 -ldinfo -l$drv -a$adp $MEGALOG | sed -e 's/[ \t]*//g') 
+    for item in $data; do
+        if echo $item|grep -q "^Name"; then
+            name=$(echo $item|cut -f2 -d:|cut -f1 -d'(')
+            echo \"lv_name\":\"$name\",
+        elif echo $item|grep -q "^VirtualDrive"; then
+            id=$(echo $item|cut -f2 -d:|cut -f1 -d'(')
+            echo \"id\":\"$id\",
+        elif echo $item|grep -q "^Size"; then
+            size=$(echo $item|cut -f2 -d:)
+            echo \"lv_size\":\"$size\",
+        elif echo $item|grep -q "^State"; then
+            state=$(echo $item|cut -f2 -d:)
+            echo \"lv_status\":\"$state\"
+        fi
+    done
+}
 
 #==============================================================================
 # Main
@@ -71,89 +163,124 @@ do
     # Open Enclosure Array
     #--------------------------------------------------------------------------
     echo \"enclosures\":[
-    for (( enc=0; enc<${num_enc}; enc++ ));
-    do
-        if (( enc>0 )); then echo ,;fi
-        enc_data=( $(get_enclosure_info $adp $enc) )
-        enc_service_tag=''
-        for item in ${enc_data[@]}; do
-            if echo $item|grep -q "^DeviceID"; then
-                enc_id=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                #break
-            elif echo $item|grep -q "^VendorSpecific"; then
-                enc_service_tag=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+    if [[ $num_enc == 0 ]]; then
+        #No enclosure, just a drive array
+        adp_data=( $(get_adapter_info $adp) )
+        for item in ${adp_data[@]}; do
+            if echo $item|grep -q "^VirtualDrives"; then
+                virt_drvs=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+            fi
+            if echo $item|grep -q "^PhysicalDevices"; then
+                phys_dev=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+            fi
+            if echo $item|grep -q "^Disks"; then
+                num_dsks=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
             fi
         done
 
-        #----------------------------------------------------------------------
-        # Add an Enclosure
-        #----------------------------------------------------------------------
+        # Add a fake enclosure
         echo {
-        #echo \"id\":\"$enc_id\",
-        echo \"id\":\"$enc_service_tag\",
-        for item in ${enc_data[@]}; do
-            if echo $item|grep -q "^NumberofPhysicalDrives"; then
-                num_drives=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                break
-            fi
-        done
-        echo \"num_drives\": \"$num_drives\",
+        echo \"id\":\"no_enclosure\",
         #----------------------------------------------------------------------
-        # Open Drive Array
+        # Add Logical Drives
         #----------------------------------------------------------------------
-        echo \"drives\":[
-        for (( drv=0; drv<${num_drives}; drv++ ));
-        do
+        virt_drv_num=$(get_num_virt_drv $adp)
+        echo \"num_logical_drives\":\"$virt_drv_num\",
+        #----------------------------------------------------------------------
+        # Open Logical Drive Array
+        #----------------------------------------------------------------------
+        echo \"logical_drives\":[
+        for (( drv=0; drv<${virt_drv_num}; drv++ )); do
             if (( drv>0 )); then echo ,;fi
             #------------------------------------------------------------------
-            # Add a Drive
+            # Add Logical Drive
             #------------------------------------------------------------------
             echo {
-            drv_data=$(get_drive_info $adp $enc_id $drv)
-            for item in ${drv_data[@]}; do
-                if echo $item|grep -q "^DeviceId"; then
-                    #drv_id=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                    drv_id=$drv
-                elif echo $item|grep -q "^MediaError"; then
-                    media_error=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                elif echo $item|grep -q "^OtherError"; then
-                    other_error=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                elif echo $item|grep -q "^PredictiveFailure"; then
-                    predictive_failure=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                elif echo $item|grep -q "^Firmwarestate"; then
-                    firmware_state=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                elif echo $item|grep -q "^InquiryData"; then
-                    inquiry_data=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                elif echo $item|grep -q "^NeedsEKMAttention"; then
-                    needs_ekm=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                elif echo $item|grep -q "^ForeignState"; then
-                    foreign_state=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                elif echo $item|grep -q "^DrivehasflaggedaS.M.A.R.Talert"; then
-                    smart=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                elif echo $item|grep -q "^DriveTemperature"; then
-                    drive_temp=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
-                fi
-            done
-            # oh yes, this is crufty. convert spaces to newline so we can use sed to identify multiline, then extract what we want.
-            port0_status=$(echo ${drv_data[@]} | tr ' ' '\n' | sed -n '/Port-0/,/Port status/p' | head -2 | tail -1 | cut -f2 -d:)
-            port1_status=$(echo ${drv_data[@]} | tr ' ' '\n' | sed -n '/Port-1/,/Port status/p' | head -2 | tail -1 | cut -f2 -d:)
-            echo \"Slot\":\"$drv_id\",
-            echo \"Media Error Count\":\"$media_error\",
-            echo \"Other Error Count\":\"$other_error\",
-            echo \"Predictive Failure Count\":\"$predictive_failure\",
-            echo \"Firmware state\":\"$firmware_state\",
-            echo \"Inquiry Data\":\"$inquiry_data\",
-            echo \"Needs EKM Attention\":\"$needs_ekm\",
-            echo \"Foreign State\":\"$foreign_state\",
-            echo \"Port0 status\":\"$port0_status\",
-            echo \"Port1 status\":\"$port1_status\",
-            echo \"Drive has flagged a S.M.A.R.T alert\":\"$smart\",
-            echo \"Drive Temperature\":\"$drive_temp\"
+            print_virt_drv_info $adp $drv
             echo -n }                               # Close drive
         done
-        echo ]                                      # Close drive array
-        echo }                                      # Close enclosure
-    done
+        echo ],
+        echo \"num_drives\": \"$num_dsks\",
+        echo \"drives\":[
+            # Add a drive
+            for (( drv=0; drv<${num_dsks}; drv++ )); do
+                if (( drv>0 )); then echo ,;fi
+                echo {
+                print_drv_info $adp "" $drv
+        	echo -n }                               # Close drive
+            done
+        echo ]}
+        # End of fake enclosure
+    else
+
+	    for (( enc=0; enc<${num_enc}; enc++ )); do
+        	if (( enc>0 )); then echo ,;fi
+        	enc_data=( $(get_enclosure_info $adp $enc) )
+        	enc_service_tag=''
+        	for item in ${enc_data[@]}; do
+        	    if echo $item|grep -q "^DeviceID"; then
+                	enc_id=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+                	#break
+        	    elif echo $item|grep -q "^VendorSpecific"; then
+                	enc_service_tag=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+        	    fi
+        	done
+
+        	#----------------------------------------------------------------------
+        	# Add an Enclosure
+        	#----------------------------------------------------------------------
+        	echo {
+        	#echo \"id\":\"$enc_id\",
+        	echo \"id\":\"$enc_service_tag\",
+		
+			#----------------------------------------------------------------------
+			# Add Logical Drives
+			#----------------------------------------------------------------------
+			virt_drv_num=$(get_num_virt_drv $adp)
+			echo \"num_logical_drives\":\"$virt_drv_num\",
+			#----------------------------------------------------------------------
+			# Open Logical Drive Array
+			#----------------------------------------------------------------------
+			echo \"logical_drives\":[
+			for (( drv=0; drv<${virt_drv_num}; drv++ )); do
+				if (( drv>0 )); then echo ,;fi
+				#------------------------------------------------------------------
+				# Add Logical Drive
+				#------------------------------------------------------------------
+				echo {
+				print_virt_drv_info $adp $drv
+				echo -n }                               # Close drive
+			done
+			echo ],
+		
+			#----------------------------------------------------------------------
+			# Add Physical Drives: Examine each slot
+			#----------------------------------------------------------------------
+        	for item in ${enc_data[@]}; do
+        	    if echo $item|grep -q "^NumberofSlots"; then
+                	num_drives=$(echo $item|cut -f2 -d:|sed -e 's/[ \t]*//')
+                	break
+        	    fi
+        	done
+        	echo \"num_drives\": \"$num_drives\",
+        	#----------------------------------------------------------------------
+        	# Open Drive Array
+        	#----------------------------------------------------------------------
+        	echo \"drives\":[
+        	for (( drv=0; drv<${num_drives}; drv++ ));
+        	do
+        	    if (( drv>0 )); then echo ,;fi
+        	    #------------------------------------------------------------------
+        	    # Add a Drive
+        	    #------------------------------------------------------------------
+        	    echo {
+                print_drv_info $adp $enc_id $drv
+        	    echo -n }                               # Close drive
+        	done
+        	echo ]                                      # Close drive array
+        	echo }                                      # Close enclosure
+	    done
+    fi
     echo ]                                          # Close enclosure array
     echo }                                          # Close adapter
 done

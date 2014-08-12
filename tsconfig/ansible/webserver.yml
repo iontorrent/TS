@@ -1,0 +1,7 @@
+---
+# file: gridengine_master.yml
+- hosts: webserver
+  roles:
+    - webserver
+  tags:
+    - webserver

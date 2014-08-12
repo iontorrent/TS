@@ -176,7 +176,6 @@ $(document).ready(function() {
                         barcodeId : {
                             type : "string"
                         },
-                        //runMode: { type: "string" },
                         runType : {
                             type : "string"
                         },
@@ -191,10 +190,20 @@ $(document).ready(function() {
                         },
                         planStatus : {
                             type : "string"
+                        },
+                        sampleSet : {
+                        	type : "string"
+                        },
+                        sampleSetDisplayedName : {
+                        	type : "string"
+                        },
+                        sampleSetGroupType : {
+                        	type : "string"
                         }
                     }
                 }
             },
+            serverFiltering: true,
             serverSorting : true,
             sort : [{
                 field : "date",
@@ -204,7 +213,7 @@ $(document).ready(function() {
                 dir : "asc"
             }],
             serverPaging : true,
-            pageSize : 100
+            pageSize : 10000
         },
         height : '446',
         groupable : false,
@@ -222,31 +231,39 @@ $(document).ready(function() {
             field : "id",
             title : "Select",
             sortable : false,
+            width: '70px',
             template : "<input id='${id}' name='runs' type='checkbox' class='selected'>"
+        }, {
+            field : "sampleSetDisplayedName",
+            title : "Sample Set",
+            sortable : true
         }, {
             field : "planShortID",
             title : "Run Code",
+            width: '70px',
             // template: "<a href='/data/project/${id}/results'>${name}</a>"
             template :kendo.template($('#PlanShortIdColumnTemplate').html())
         }, {
             field : "planDisplayedName",
             title : "Run Plan Name",
+            width: '25%',
             sortable : true
-        }, {        	
+        }, {
             field : "barcodeId",
             title : "Barcodes",
+            width: '10%',
             sortable : true
-            // } , {
-            // field: "runMode",
-            // title: "Run Type",
-            // sortable: true,
-            // template: '<span rel="tooltip" title="#= TB.runModeDescription(runMode)#">#= TB.runModeShortDescription(runMode)#</span>'
         }, {
             field : "runType",
             title : "Application",
             sortable : true,
+            width: '75px',
             template : kendo.template($('#RunTypeColumnTemplate').html())
         }, {
+            field : "sampleSetGroupType",
+        	title : "Group",
+        	sortable : true
+        }, {    
             field : "projects",
             title : "Project",
             sortable : false
@@ -257,10 +274,11 @@ $(document).ready(function() {
         }, {
             field : "date",
             title : "Last Modified",
-            template : '#= kendo.toString(new Date(Date.parse(date)),"yyyy/MM/dd hh:mm tt") #'
+            template : '#= kendo.toString(new Date(Date._parse(date)),"yyyy/MM/dd hh:mm tt") #'
         }, {
             field : "planStatus",
             title : "Status",
+            width: '70px',
             sortable : true            	
         }, {        	
             title : " ",
@@ -270,6 +288,12 @@ $(document).ready(function() {
         }],
     });
 
+    switch_to_view(window.location.hash.replace('#',''));
+    
+    $('#dateRange').daterangepicker({dateFormat: 'yy-mm-dd'});
+    $('.search-field').change(function (e) { filter(e); });
+    $('#clear_filters').click(function () { window.location.reload(true); });
+    
     $('.delete_selected').click(function(e) {
         e.preventDefault();
         e.stopPropagation();
@@ -303,23 +327,71 @@ $(document).ready(function() {
         $("#grid input:checked").attr('checked', false);
     });
     
-    //20130626-TODO
-//    $(".shortcode128").each(function () {
-//    	console.log("at planned.html.js shortcode128!!!");
-//    	
-//    	$(this).barcode(
-//    			$(this).data("barcode"), 
-//    			"code128", {
-//    			barWidth: 2, 
-//    			barHeight: 30, 
-//                bgColor: $(this).parent().parent().css("background-color") 
-//        });
-//    });
+    $('.setview').click(function(e){
+        switch_to_view(this.id);
+    });
     
     $(document).bind('modal_confirm_delete_done modal_plan_wizard_done', function(e) {
         console.log(e.target, e.relatedTarget);
         refreshKendoGrid('#grid');
     });
-    
 
-}); 
+});
+
+function switch_to_view(view){
+    //var view = window.location.hash;
+    if (view.length==0) view = 'all';
+    console.log('switching view to', view);
+    
+    var data = $("#grid").data("kendoGrid");
+    var base_url = data.dataSource.transport.options.read.url.split('&sampleSet')[0];
+    
+    $('.view-toggle').children().removeClass('active');
+    $('#'+view).addClass('active');
+
+    // hide/show sampleSet columns
+    if(view=='bySample'){
+        data.hideColumn('id');
+        data.hideColumn('projects');
+        data.showColumn('sampleSetDisplayedName');
+        data.showColumn('sampleSetGroupType');
+    } else {
+        data.showColumn('id');
+        data.showColumn('projects');
+        data.hideColumn('sampleSetDisplayedName');
+        data.hideColumn('sampleSetGroupType');
+    }
+    
+    // update dataSource url
+    if(view=='byTemplate'){
+        base_url += '&sampleSet__isnull=True'
+    } else if(view=='bySample'){
+        base_url += '&sampleSet__isnull=False'
+    }
+    data.dataSource.transport.options.read.url = base_url;
+    data.dataSource.read();
+}
+
+function filter(e){
+    e.preventDefault();
+    e.stopPropagation();
+
+    var daterange = $("#dateRange").val();
+    if (daterange) {
+        if (!/ - /.test(daterange)) { daterange = daterange + ' - ' + daterange; }
+        daterange = daterange.replace(/ - /," 00:00,") + " 23:59";
+    }
+    
+    $("#grid").data("kendoGrid").dataSource.filter([
+        {
+            field: "date",
+            operator: "__range",
+            value: daterange
+        },
+        {
+            field: "planDisplayedName",
+            operator: "__icontains",
+            value: $("#search_text").val()
+        }
+    ]);
+}

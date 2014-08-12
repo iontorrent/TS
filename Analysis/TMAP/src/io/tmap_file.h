@@ -183,4 +183,14 @@ tmap_file_printf(const char *format, ...);
 int32_t
 tmap_file_fflush(tmap_file_t *fp, int32_t gz_flush);
 
+
+/* Thread-safe logging support */
+
+void tmap_log_enable (FILE* fp);
+void tmap_log_disable ();
+int32_t tmap_log_enabled ();
+int32_t tmap_log (const char* format, ...);
+int32_t tmap_vlog (const char* format, va_list ap);
+
+
 #endif // TMAP_FILE_H

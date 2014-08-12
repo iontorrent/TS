@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include "datahdr.h"
+#include "AdvCompr.h"
 #ifdef BB_DC
 #include "deInterlace.h"
 #include "datacollect_global.h"
@@ -674,7 +675,7 @@ void InterpolateFramesBeforeT0 ( int* regionalT0, short *out, int rows, int cols
               }
               else
               {
-                float avg = ( *rightFramePtr + *t0PlusTwoFramePtr ) / 2;
+                float avg = (float)(( *rightFramePtr + *t0PlusTwoFramePtr ) / 2);
                 if ( imageFramePtr )
                 {
                   if ( realx >= mincols && realx < maxcols && realy >= minrows && realy < maxrows )
@@ -707,7 +708,7 @@ void InterpolateFramesBeforeT0 ( int* regionalT0, short *out, int rows, int cols
 int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, int totalFrames,
                                 int start_frame, int end_frame, int *timestamps, int mincols,
                                 int minrows, int maxcols, int maxrows,
-                                int x_region_size, int y_region_size, unsigned int offset, bool ignoreErrors )
+                                int x_region_size, int y_region_size, unsigned int offset, int ignoreErrors )
 
 {
   int frameStride = rows * cols;
@@ -740,6 +741,7 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
   int realx,realy;
   int WholeImage=0;
   uint32_t roff=0;
+  uint16_t RegionAverage;
 // unsigned char rgroupCksum,groupCksum;
 
   uint32_t num_regions_x = cols/x_region_size;
@@ -994,6 +996,13 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
 
         realy=y_reg*y_region_size;
 
+        RegionAverage=0;
+        if(frameHdr.Compressed >= 3)
+        {
+        	RegionAverage = CompPtr[0] << 8 | CompPtr[1];
+        	CompPtr += 2;
+        }
+
         for ( y = 0;y< ( int ) nelems_y;y++,realy++ )
         {
 //     ptr = (int16_t *)(frame_data + ((y+(y_reg*y_region_size))*w + (x_reg*x_region_size)));
@@ -1028,7 +1037,7 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
                 state = 16;
               else
                 state = CompPtr[1] & 0xf;
-              if(frameHdr.Compressed == 2)
+              if(frameHdr.Compressed >= 2)
 				leftShift = ((CompPtr[1] >> 4) & 0xf);
     		  else
 				leftShift = 0;
@@ -1153,7 +1162,7 @@ int LoadCompressedRegionImage ( DeCompFile *fd, short *out, int rows, int cols, 
 
 			for ( i=0;i<8;i++ )
             {
-              Val[i] += PrevWholeFrame[i];
+              Val[i] += PrevWholeFrame[i] + RegionAverage;
             }
             PrevWholeFrame += 8;
 
@@ -1449,7 +1458,7 @@ int LoadUnCompressedImage ( DeCompFile *fd, short *out, int offset,
 int LoadImage ( char *fname, short *out, int offset, int interlaceType,
                 int rows, int cols, int totalFrames, int start_frame, int end_frame,
                 int *timestamps, int mincols, int minrows, int maxcols, int maxrows,
-                int x_region_size, int y_region_size, int ignoreErrors )
+                int x_region_size, int y_region_size, int ignoreErrors, int *imageState)
 {
   int rc;
 
@@ -1463,12 +1472,27 @@ int LoadImage ( char *fname, short *out, int offset, int interlaceType,
       exit ( -1 );
   }
 
+  if(imageState)
+	  *imageState = 0;
+
   if ( maxcols == 0 )
     maxcols = cols;
   if ( maxrows == 0 )
     maxrows = rows;
 
-  if ( interlaceType == 4 )
+  if ( interlaceType == 7 )
+  {
+	  CloseFile(fd);
+	  rc=-1;
+	  rc = AdvComprUnCompress(fname,out,cols,rows,totalFrames, timestamps,
+			  start_frame, end_frame, mincols, minrows,
+			  maxcols, maxrows, ignoreErrors );
+	  if(imageState)
+		  *imageState = IMAGESTATE_GainCorrected |
+		                IMAGESTATE_ComparatorCorrected |
+		                IMAGESTATE_QuickPinnedPixelDetect;
+  }
+  else if ( interlaceType == 4 )
   {
     rc = LoadCompressedImage ( fd, out, rows, cols, totalFrames, start_frame, end_frame,
                                timestamps, mincols, minrows, maxcols, maxrows,ignoreErrors );
@@ -1637,7 +1661,7 @@ extern "C" int __declspec ( dllexport ) deInterlace_c (
   char *fname, short **_out, int **_timestamps,
   int *_rows, int *_cols, int *_frames, int *_uncompFrames,
   int start_frame, int end_frame,
-  int mincols, int minrows, int maxcols, int maxrows, int ignoreErrors )
+  int mincols, int minrows, int maxcols, int maxrows, int ignoreErrors, int *imageState )
 {
 
   DeCompFile *fd;
@@ -1723,7 +1747,6 @@ extern "C" int __declspec ( dllexport ) deInterlace_c (
       offset = sizeof ( expHdr ) + sizeof ( hdr );
       //printf("offset=%d %ld %ld\n",offset,sizeof(expHdr) , sizeof(hdr));
     }
-
     break;
 
     default:
@@ -1780,7 +1803,9 @@ extern "C" int __declspec ( dllexport ) deInterlace_c (
     CHECK_INPUT ( _timestamps,timestamps,sizeof ( int ) *frames,int );
 
     LoadImage ( fname,out,offset, ( int ) interlaceType,rows,cols,frames,
-                start_frame,end_frame,timestamps,mincols,minrows,maxcols,maxrows,x_region_size,y_region_size,ignoreErrors );
+                start_frame,end_frame,timestamps,mincols,minrows,maxcols,maxrows,x_region_size,y_region_size,ignoreErrors, imageState);
+    if(_timestamps == NULL)
+    	free(timestamps);
   }
 
 
@@ -1827,7 +1852,7 @@ extern "C" int __declspec ( dllexport ) deInterlaceData (
 #endif
   return deInterlace_c ( fname,&_out,&_timestamps,
                          NULL,NULL,NULL,NULL,start_frame,end_frame,
-                         mincols,minrows,maxcols,maxrows,ignoreErrors );
+                         mincols,minrows,maxcols,maxrows,ignoreErrors,NULL );
 }
 
 
@@ -1842,7 +1867,7 @@ extern "C" int __declspec ( dllexport ) deInterlaceHdr (
 #if 0
   char fname2[256];
 
-  sprintf ( fname2,"%s_params",fname );
+  sprintf ( fname2,"%s_params2",fname );
   FILE *fp = fopen ( fname2,"w" );
   if ( fp )
   {
@@ -1855,7 +1880,7 @@ extern "C" int __declspec ( dllexport ) deInterlaceHdr (
     fclose ( fp );
   }
 #endif
-  return deInterlace_c ( fname,NULL,NULL,_rows,_cols,_frames,_unCompFrames,0,0,0,0,0,0,false );
+  return deInterlace_c ( fname,NULL,NULL,_rows,_cols,_frames,_unCompFrames,0,0,0,0,0,0,false,NULL );
 }
 
 
@@ -1872,7 +1897,7 @@ int _tmain(int argc, _TCHAR* argv[])
   short *output=NULL;
   int *timestamps=NULL;
   int minx, miny, maxx, maxy;
-  char fname[1024]="e:\\acq_0005.dat";
+  char fname[1024]="C:\\Users\\beauchml\\Desktop\\Torrent Explorer 7.6.0\\testPCAFile.dat";
   int frameStride;
   int rows,cols;
 // DWORD bytesWritten;
@@ -1880,6 +1905,7 @@ int _tmain(int argc, _TCHAR* argv[])
 // int i;
 // char *ptr;
   int frames=0, uncompFrames=0;
+  int imageState=0;
 
   //swscanf_s ( argv[1], _T("%s"), &fname );
   swscanf_s ( argv[2], _T("%d"), &start_frame );
@@ -1900,7 +1926,7 @@ int _tmain(int argc, _TCHAR* argv[])
   {
     deInterlace_c ( fname, &output, &timestamps,  &rows, &cols,
                     &frames, &uncompFrames, start_frame, end_frame,
-                    minx, miny, maxx, maxy, 0 );
+                    minx, miny, maxx, maxy, 0, &imageState );
 //  printf("%d) loaded %p\n",i,ptr);
   }
 

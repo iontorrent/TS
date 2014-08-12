@@ -2,6 +2,8 @@
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import QCType
 from iondb.rundb.plan.page_plan.step_names import StepNames
+from iondb.rundb.plan.plan_validator import validate_QC
+
 try:
     from collections import OrderedDict
 except ImportError:
@@ -26,20 +28,11 @@ class MonitoringStepData(AbstractStepData):
         '''
         All qc thresholds must be positive integers
         '''
-        valid = False
-        try:
-            int_val = int(new_field_value)
-            if int_val >= 0:
-                valid = True
-        except:
-            pass
-        if valid and field_name in self.validationErrors:
+        errors = validate_QC(new_field_value, field_name)
+        if errors:
+            self.validationErrors[field_name] = errors[0]
+        else:
             self.validationErrors.pop(field_name, None)
-        elif not valid:
-            self.validationErrors[field_name] = "%s must be a positive integer." % field_name
-        
-        
-        
 
     def getStepName(self):
         return StepNames.MONITORING

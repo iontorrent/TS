@@ -2,9 +2,9 @@
 
 #include "DecisionTreeData.h"
 
-void AutoFailTheCandidate(vcf::Variant **candidate_variant, bool suppress_no_calls) {
-  (*candidate_variant)->quality = 0.0f;
-  NullInfoFields(*candidate_variant); // no information, destroy any spurious entries, add all needed tags
+void AutoFailTheCandidate(vcf::Variant &candidate_variant, bool suppress_no_calls) {
+  candidate_variant.quality = 0.0f;
+  NullInfoFields(candidate_variant); // no information, destroy any spurious entries, add all needed tags
   NullGenotypeAllSamples(candidate_variant);
   NullFilterReason(candidate_variant);
   string my_reason = "NODATA";
@@ -14,29 +14,32 @@ void AutoFailTheCandidate(vcf::Variant **candidate_variant, bool suppress_no_cal
 
 
 
-float FreqThresholdByType(AlleleIdentity &variant_identity, ControlCallAndFilters &my_controls) {
-  float retval = my_controls.filter_snps.min_allele_freq;
-  if (variant_identity.status.isHotSpot) {
-    retval = my_controls.filter_hotspot.min_allele_freq;
-  }
-  else if (variant_identity.ActAsSNP()) {
-    retval = my_controls.filter_snps.min_allele_freq;
-  }
-  else if (variant_identity.ActAsHPIndel()) {
-    retval = my_controls.filter_hp_indel.min_allele_freq;
-  }
-  return(retval);
+float FreqThresholdByType(AlleleIdentity &variant_identity, const ControlCallAndFilters &my_controls,
+    const VariantSpecificParams& variant_specific_params)
+{
+  if (variant_specific_params.min_allele_freq_override)
+    return variant_specific_params.min_allele_freq;
+  if (variant_identity.status.isHotSpot)
+    return my_controls.filter_hotspot.min_allele_freq;
+  if (variant_identity.ActAsSNP())
+    return my_controls.filter_snps.min_allele_freq;
+  if (variant_identity.ActAsMNP())
+    return my_controls.filter_mnp.min_allele_freq;
+  if (variant_identity.ActAsHPIndel())
+    return my_controls.filter_hp_indel.min_allele_freq;
+
+  return my_controls.filter_snps.min_allele_freq;
 }
 
 
 string EvaluatedGenotype::GenotypeAsString(){
   stringstream tmp_g;
-  tmp_g << genotype_component.at(0) << "/" << genotype_component.at(1);
+  tmp_g << genotype_component[0] << "/" << genotype_component[1];
   return(tmp_g.str());
 }
 
 bool EvaluatedGenotype::IsReference(){
-  if ((genotype_component.at(0)==0) & (genotype_component.at(1)==0))
+  if ((genotype_component[0]==0) & (genotype_component[1]==0))
     return(true);
   else
     return(false);
@@ -57,15 +60,19 @@ void PushAlleleCountsOntoStringMaps(map<string, vector<string> >& my_map, MultiB
     my_map["FAO"].push_back(convertToString(all_summary_stats.GetAlleleCount(-1,i_alt+1)));
     my_map["FSAF"].push_back(convertToString(all_summary_stats.GetAlleleCount(0,i_alt+1)));
     my_map["FSAR"].push_back(convertToString(all_summary_stats.GetAlleleCount(1,i_alt+1)));
+    if (all_summary_stats.TotalCount(-1) > 0)
+      my_map["AF"].push_back(convertToString((double)all_summary_stats.GetAlleleCount(-1,i_alt+1) / (double)all_summary_stats.TotalCount(-1)));
+    else
+      my_map["AF"].push_back(convertToString(0));
   }
 }
 
-float ComputeBaseStrandBiasForSSE(float relative_safety_level, vcf::Variant ** candidate_variant, unsigned _altAlleleIndex){
-  unsigned alt_counts_positive = atoi((*candidate_variant)->info.at("SAF")[_altAlleleIndex].c_str());
-  unsigned alt_counts_negative = atoi((*candidate_variant)->info.at("SAR")[_altAlleleIndex].c_str());
+float ComputeBaseStrandBiasForSSE(float relative_safety_level, const vcf::Variant & candidate_variant, unsigned _altAlleleIndex){
+  unsigned alt_counts_positive = atoi(candidate_variant.info.at("SAF")[_altAlleleIndex].c_str());
+  unsigned alt_counts_negative = atoi(candidate_variant.info.at("SAR")[_altAlleleIndex].c_str());
   // always only one ref count
- unsigned ref_counts_positive = atoi((*candidate_variant)->info.at("SRF")[0].c_str());
- unsigned ref_counts_negative = atoi((*candidate_variant)->info.at("SRR")[0].c_str());
+ unsigned ref_counts_positive = atoi(candidate_variant.info.at("SRF")[0].c_str());
+ unsigned ref_counts_negative = atoi(candidate_variant.info.at("SRR")[0].c_str());
 
   // remember to trap zero-count div by zero here with safety value
   float safety_val = 0.5f;  // the usual "half-count" to avoid zero
@@ -78,8 +85,8 @@ float ComputeBaseStrandBiasForSSE(float relative_safety_level, vcf::Variant ** c
 }
 
 
-void SuppressReferenceCalls(vcf::Variant **candidate_variant, ExtendParameters *parameters, bool reference_genotype){
-  if (reference_genotype & !(*candidate_variant)->isHotSpot & parameters->my_controls.suppress_reference_genotypes) {
+void SuppressReferenceCalls(vcf::Variant &candidate_variant, const ExtendParameters &parameters, bool reference_genotype){
+  if (reference_genotype & !candidate_variant.isHotSpot & parameters.my_controls.suppress_reference_genotypes) {
     SetFilteredStatus(candidate_variant, true); // used to suppress reference genotypes if not hot spot
     string my_suppression_reason = "SUPPRESSREFERENCECALL";
     AddFilterReason(candidate_variant, my_suppression_reason);
@@ -89,11 +96,12 @@ void SuppressReferenceCalls(vcf::Variant **candidate_variant, ExtendParameters *
 //*** Below here is actual decision tree data ***/
 
 
-void DecisionTreeData::SetupFromMultiAllele(MultiAlleleVariantIdentity &_multi_allele) {
-  multi_allele = _multi_allele;
+void DecisionTreeData::SetupFromMultiAllele(const EnsembleEval &my_ensemble) {
+  //multi_allele = _multi_allele;
+  allele_identity_vector = my_ensemble.allele_identity_vector;
 //  summary_stats_vector.resize(multi_allele.allele_identity_vector.size());
-  all_summary_stats.Allocate(multi_allele.allele_identity_vector.size()+1); // ref plus num alternate alleles
-  summary_info_vector.resize(multi_allele.allele_identity_vector.size());
+  all_summary_stats.Allocate(allele_identity_vector.size()+1); // ref plus num alternate alleles
+  summary_info_vector.resize(allele_identity_vector.size());
 }
 
 void DecisionTreeData::OverrideFilter(string & _filter_reason, int _allele) {
@@ -105,42 +113,66 @@ void DecisionTreeData::OverrideFilter(string & _filter_reason, int _allele) {
 // warning: no white-space allowed in filter reason
 void FilterByBasicThresholds( int i_alt, MultiBook &m_summary_stats,
                              VariantOutputInfo &l_summary_info,
-                             BasicFilters &basic_filter, float tune_xbias, float tune_sbias) {
-
-  if (l_summary_info.variant_qual_score < basic_filter.min_quality_score) {
+                             const BasicFilters &basic_filter, float tune_xbias, float tune_sbias,
+                             const VariantSpecificParams& variant_specific_params)
+{
+  int effective_min_quality_score = basic_filter.min_quality_score;
+  if (variant_specific_params.min_variant_score_override)
+    effective_min_quality_score = variant_specific_params.min_variant_score;
+  if (l_summary_info.variant_qual_score < effective_min_quality_score) {
     string my_reason = "QualityScore<";
-    my_reason += convertToString(basic_filter.min_quality_score);
+    my_reason += convertToString(effective_min_quality_score);
     l_summary_info.filterReason.push_back(my_reason);
     l_summary_info.isFiltered = true;
   }
 
-  if (m_summary_stats.GetDepth(-1, i_alt) < basic_filter.min_cov) {
-     l_summary_info.isFiltered = true;
-     string my_reason = "MINCOV<";
-     my_reason += convertToString(basic_filter.min_cov);
-     l_summary_info.filterReason.push_back(my_reason);
-   }
-  bool pos_cov = m_summary_stats.GetDepth(0, i_alt) < basic_filter.min_cov_each_strand;
+  int effective_min_cov = basic_filter.min_cov;
+  if (variant_specific_params.min_coverage_override)
+    effective_min_cov = variant_specific_params.min_coverage;
+  if (m_summary_stats.GetDepth(-1, i_alt) < effective_min_cov) {
+    l_summary_info.isFiltered = true;
+    string my_reason = "MINCOV<";
+    my_reason += convertToString(effective_min_cov);
+    l_summary_info.filterReason.push_back(my_reason);
+  }
+
+  int effective_min_cov_each_strand = basic_filter.min_cov_each_strand;
+  if (variant_specific_params.min_coverage_each_strand_override)
+    effective_min_cov_each_strand = variant_specific_params.min_coverage_each_strand;
+  bool pos_cov = m_summary_stats.GetDepth(0, i_alt) < effective_min_cov_each_strand;
   if (pos_cov){
     l_summary_info.isFiltered = true;
     string my_reason = "PosCov<";
-    my_reason += convertToString(basic_filter.min_cov_each_strand);
+    my_reason += convertToString(effective_min_cov_each_strand);
     l_summary_info.filterReason.push_back(my_reason);
   }
-  bool neg_cov = m_summary_stats.GetDepth(1, i_alt) < basic_filter.min_cov_each_strand;
-  if ( neg_cov ) {
+  bool neg_cov = m_summary_stats.GetDepth(1, i_alt) < effective_min_cov_each_strand;
+  if (neg_cov) {
     l_summary_info.isFiltered = true;
     string my_reason = "NegCov<";
-    my_reason +=convertToString( basic_filter.min_cov_each_strand);
+    my_reason +=convertToString(effective_min_cov_each_strand);
     l_summary_info.filterReason.push_back(my_reason);
    }
 
-  if (m_summary_stats.OldStrandBias(i_alt, tune_sbias) > basic_filter.strand_bias_threshold) {
+  float effective_strand_bias_thr = basic_filter.strand_bias_threshold;
+  if (variant_specific_params.strand_bias_override)
+    effective_strand_bias_thr = variant_specific_params.strand_bias;
+
+  float strand_bias = m_summary_stats.OldStrandBias(i_alt, tune_sbias);
+  float strand_bias_pval = m_summary_stats.StrandBiasPval(i_alt, tune_sbias);
+  if (strand_bias > effective_strand_bias_thr &&
+      strand_bias_pval <= basic_filter.strand_bias_pval_threshold) {
      string my_reason = "STDBIAS";
-     my_reason += convertToString( m_summary_stats.OldStrandBias(i_alt, tune_sbias));
+     my_reason += convertToString(strand_bias);
      my_reason += ">";
-     my_reason += convertToString(basic_filter.strand_bias_threshold);
+     my_reason += convertToString(effective_strand_bias_thr);
      l_summary_info.filterReason.push_back(my_reason);
+
+     string my_reason1 = "STDBIASPVAL";
+     my_reason1 += convertToString( strand_bias_pval );
+     my_reason1 += "<=";
+     my_reason1 += convertToString(basic_filter.strand_bias_pval_threshold);
+     l_summary_info.filterReason.push_back(my_reason1);
 
      l_summary_info.isFiltered = true;
    }
@@ -157,37 +189,42 @@ void FilterByBasicThresholds( int i_alt, MultiBook &m_summary_stats,
 }
 
 
-void DecisionTreeData::FilterOneAllele(int i_alt, VariantOutputInfo &l_summary_info, AlleleIdentity &l_variant_identity, ControlCallAndFilters &my_filters) {
+void DecisionTreeData::FilterOneAllele(int i_alt, VariantOutputInfo &l_summary_info, AlleleIdentity &l_variant_identity,
+    const ControlCallAndFilters &my_filters, const VariantSpecificParams& variant_specific_params)
+{
 
    // if some reason from the identity to filter it
   if (l_variant_identity.status.isProblematicAllele){
     l_summary_info.isFiltered = true;
-   l_summary_info.filterReason.push_back(l_variant_identity.filterReason);
+    l_summary_info.filterReason.push_back(l_variant_identity.filterReason);
   }
 
-    //filter values specific to SNPs, MNVs and Non Homopolymer Indels
-    if (l_variant_identity.status.isHotSpot) {
-      // hot spot overrides
-      FilterByBasicThresholds( i_alt, all_summary_stats, l_summary_info, my_filters.filter_hotspot, tune_xbias, tune_sbias);
-    }
-    else if (l_variant_identity.ActAsSNP()) {
-      //cout << "inside snp flow " << endl;
-      FilterByBasicThresholds(i_alt, all_summary_stats, l_summary_info, my_filters.filter_snps, tune_xbias, tune_sbias);
+  //filter values specific to SNPs, MNVs and Non Homopolymer Indels
+  if (l_variant_identity.status.isHotSpot) {
+    // hot spot overrides
+    FilterByBasicThresholds( i_alt, all_summary_stats, l_summary_info, my_filters.filter_hotspot, tune_xbias, tune_sbias, variant_specific_params);
+  }
+  else if (l_variant_identity.ActAsSNP()) {
+    //cout << "inside snp flow " << endl;
+    FilterByBasicThresholds(i_alt, all_summary_stats, l_summary_info, my_filters.filter_snps, tune_xbias, tune_sbias, variant_specific_params);
 
-    }//end if SNP or MNV
-    else
-      if (l_variant_identity.ActAsHPIndel()) {
+  }//end if SNP
+  else if (l_variant_identity.ActAsMNP()) {
+    //cout << "inside mnp flow " << endl;
+    FilterByBasicThresholds(i_alt, all_summary_stats, l_summary_info, my_filters.filter_mnp, tune_xbias, tune_sbias, variant_specific_params);
 
-        FilterByBasicThresholds( i_alt, all_summary_stats, l_summary_info, my_filters.filter_hp_indel, tune_xbias, tune_sbias);
-
-      }
+  } // end if MNV
+  else if (l_variant_identity.ActAsHPIndel()) {
+    FilterByBasicThresholds( i_alt, all_summary_stats, l_summary_info, my_filters.filter_hp_indel, tune_xbias, tune_sbias, variant_specific_params);
+  }
 
 }
 
 /* Method  to loop thru alleles and filter ones that fail the filter condition*/
-void DecisionTreeData::FilterAlleles(ControlCallAndFilters &my_filters) {
+void DecisionTreeData::FilterAlleles(const ControlCallAndFilters &my_filters, const vector<VariantSpecificParams>& variant_specific_params)
+{
   for (int i_alt = 0; i_alt < all_summary_stats.NumAltAlleles(); i_alt++) {
-    FilterOneAllele(i_alt, summary_info_vector[i_alt], multi_allele.allele_identity_vector[i_alt], my_filters);
+    FilterOneAllele(i_alt, summary_info_vector[i_alt], allele_identity_vector[i_alt], my_filters, variant_specific_params[i_alt]);
   } //end loop thru alleles
 }
 
@@ -198,7 +235,7 @@ void DecisionTreeData::AccumulateFilteredAlleles(){
    int numAlleles = summary_info_vector.size();
   VariantOutputInfo _summary_info;
    for (int i=0; i<numAlleles; i++){
-    _summary_info = summary_info_vector.at(i);
+    _summary_info = summary_info_vector[i];
 
     if (_summary_info.isFiltered)
       filteredAllelesIndex.push_back(i);
@@ -218,12 +255,12 @@ void DecisionTreeData::BestSNPsSuppressInDels(bool heal_snps){
   VariantOutputInfo _summary_info;
   AlleleIdentity _variant_identity;
     for (int counter = 0; counter < numAlleles; counter++) {
-      _summary_info = summary_info_vector.at(counter);
-      _variant_identity = multi_allele.allele_identity_vector.at(counter);
+      _summary_info = summary_info_vector[counter];
+      _variant_identity = allele_identity_vector[counter];
 
 
       if (_variant_identity.status.isIndel && !_summary_info.isFiltered) { //if it is Indel allele and not already filtered
-        summary_info_vector.at(counter).isFiltered = true;
+        summary_info_vector[counter].isFiltered = true;
         filteredAllelesIndex.push_back(counter);
       }
 
@@ -233,7 +270,7 @@ void DecisionTreeData::BestSNPsSuppressInDels(bool heal_snps){
 
 void DecisionTreeData::FindBestAlleleIdentity(){
   
-    AlleleIdentity _variant_identity = multi_allele.allele_identity_vector.at(best_allele_index);;
+    AlleleIdentity _variant_identity = allele_identity_vector[best_allele_index];
         if (_variant_identity.status.isSNP || _variant_identity.status.isMNV)
         isBestAlleleSNP = true;
       else
@@ -241,31 +278,31 @@ void DecisionTreeData::FindBestAlleleIdentity(){
 }
 
 
-void DecisionTreeData::SimplifySNPsIfNeeded(vcf::Variant **candidate_variant, ExtendParameters *parameters){
+void DecisionTreeData::SimplifySNPsIfNeeded(VariantCandidate &candidate_variant, const ExtendParameters &parameters){
 
   FindBestAlleleIdentity();
   AccumulateFilteredAlleles();
 
-  if (!best_variant_filtered && (isBestAlleleSNP & parameters->my_controls.heal_snps)) { //currently we are removing other filtered alleles if the best allele is a SNP
+  if (!best_variant_filtered && (isBestAlleleSNP & parameters.my_controls.heal_snps)) { //currently we are removing other filtered alleles if the best allele is a SNP
 
-    BestSNPsSuppressInDels(parameters->my_controls.heal_snps);
+    BestSNPsSuppressInDels(parameters.my_controls.heal_snps);
     // see if any genotype-components are needed here
     // if so, cannot remove them
     // unwilling to assume "deletions" or "insertions" are really reference if they are noticeable
     bool cannot_adjust = false;
     if (eval_genotype.genotype_already_set){
       for (unsigned int i_ndx=0; i_ndx<eval_genotype.genotype_component.size(); i_ndx++){
-        int i_comp = eval_genotype.genotype_component.at(i_ndx);
+        int i_comp = eval_genotype.genotype_component[i_ndx];
         if (i_comp>0){
-          if (summary_info_vector.at(i_comp-1).isFiltered)
+          if (summary_info_vector[i_comp-1].isFiltered)
             cannot_adjust = true;  // because it is part of the best diploid genotype
         }
       }
     }
     // and therefore will give a nonsense genotype if we do adjust
     if (!cannot_adjust){
-      RemoveFilteredAlleles(candidate_variant, filteredAllelesIndex);
-      AdjustAlleles(candidate_variant);
+      RemoveFilteredAlleles(candidate_variant.variant, filteredAllelesIndex);
+      AdjustAlleles(candidate_variant.variant, candidate_variant.position_upper_bound);
     }
   }
 
@@ -273,9 +310,9 @@ void DecisionTreeData::SimplifySNPsIfNeeded(vcf::Variant **candidate_variant, Ex
 
 //********* heal snps done ****////
 
-void DetectSSEForNoCall(VariantOutputInfo &l_summary_info, AlleleIdentity &var_identity, float sseProbThreshold, float minRatioReadsOnNonErrorStrand, float base_strand_bias,vcf::Variant ** candidate_variant, unsigned _altAlleleIndex) {
+void DetectSSEForNoCall(VariantOutputInfo &l_summary_info, AlleleIdentity &var_identity, float sseProbThreshold, float minRatioReadsOnNonErrorStrand, float base_strand_bias,vcf::Variant & candidate_variant, unsigned _altAlleleIndex) {
 
-  if (var_identity.sse_prob_positive_strand >= sseProbThreshold && var_identity.sse_prob_negative_strand >= sseProbThreshold) {
+  if (var_identity.sse_prob_positive_strand > sseProbThreshold && var_identity.sse_prob_negative_strand > sseProbThreshold) {
       l_summary_info.isFiltered = true;
       string my_reason = "NOCALLxPredictedSSE";
       l_summary_info.filterReason.push_back(my_reason);
@@ -292,13 +329,13 @@ void DetectSSEForNoCall(VariantOutputInfo &l_summary_info, AlleleIdentity &var_i
 //    float negative_ratio = (alt_counts_negative+safety_val) / (alt_counts_positive + alt_counts_negative + safety_val);
 //    bool pos_strand_bias_reflects_SSE = (negative_ratio < minRatioReadsOnNonErrorStrand);
 //    bool neg_strand_bias_reflects_SSE = (positive_ratio < minRatioReadsOnNonErrorStrand);
-    if (var_identity.sse_prob_positive_strand >= sseProbThreshold &&  pos_strand_bias_reflects_SSE) {
+    if (var_identity.sse_prob_positive_strand > sseProbThreshold &&  pos_strand_bias_reflects_SSE) {
       l_summary_info.isFiltered = true;
       string my_reason = "NOCALLxPositiveSSE";
       l_summary_info.filterReason.push_back(my_reason);
     }
 
-    if (var_identity.sse_prob_negative_strand >= sseProbThreshold && neg_strand_bias_reflects_SSE) {
+    if (var_identity.sse_prob_negative_strand > sseProbThreshold && neg_strand_bias_reflects_SSE) {
       l_summary_info.isFiltered = true;
       string my_reason = "NOCALLxNegativeSSE";
       l_summary_info.filterReason.push_back(my_reason);
@@ -307,80 +344,86 @@ void DetectSSEForNoCall(VariantOutputInfo &l_summary_info, AlleleIdentity &var_i
   // cout << alt_counts_positive << "\t" << alt_counts_negative << "\t" << ref_counts_positive << "\t" << ref_counts_negative << endl;
 }
 
-void DecisionTreeData::FilterSSE(vcf::Variant **candidate_variant,ClassifyFilters &filter_variant){
-  for (unsigned int i_allele=0; i_allele<multi_allele.allele_identity_vector.size(); i_allele++){
+void DecisionTreeData::FilterSSE(vcf::Variant &candidate_variant, const ClassifyFilters &filter_variant, const vector<VariantSpecificParams>& variant_specific_params)
+{
+  for (unsigned int i_allele=0; i_allele<allele_identity_vector.size(); i_allele++) {
 
     // change for 4.0:  store all allele information for multiallele clean filter application after VCF
     int _alt_allele_index = i_allele;
     float base_strand_bias = ComputeBaseStrandBiasForSSE(filter_variant.sse_relative_safety_level, candidate_variant, _alt_allele_index);
-    (*candidate_variant)->info["SSSB"].push_back(convertToString(base_strand_bias));
-    (*candidate_variant)->info["SSEP"].push_back(convertToString(multi_allele.allele_identity_vector[_alt_allele_index].sse_prob_positive_strand));
-    (*candidate_variant)->info["SSEN"].push_back(convertToString(multi_allele.allele_identity_vector[_alt_allele_index].sse_prob_negative_strand));
+    candidate_variant.info["SSSB"].push_back(convertToString(base_strand_bias));
+    candidate_variant.info["SSEP"].push_back(convertToString(allele_identity_vector[_alt_allele_index].sse_prob_positive_strand));
+    candidate_variant.info["SSEN"].push_back(convertToString(allele_identity_vector[_alt_allele_index].sse_prob_negative_strand));
 
     //@TODO: make sure this takes information from the tags in candidate variant and nowhere else
     // which forces us to be honest and only use information in the output
     DetectSSEForNoCall(summary_info_vector[i_allele],
-                       multi_allele.allele_identity_vector[i_allele],
-                       filter_variant.sseProbThreshold,
+                       allele_identity_vector[i_allele],
+                       variant_specific_params[_alt_allele_index].sse_prob_threshold_override ?
+                           variant_specific_params[_alt_allele_index].sse_prob_threshold : filter_variant.sseProbThreshold,
                        filter_variant.minRatioReadsOnNonErrorStrand, base_strand_bias, candidate_variant, i_allele);
 }
 }
 
-void DecisionTreeData::AddStrandBiasTags(vcf::Variant **candidate_variant){
+void DecisionTreeData::AddStrandBiasTags(vcf::Variant &candidate_variant){
   for ( int i_allele=0; i_allele<all_summary_stats.NumAltAlleles(); i_allele++){
-   (*candidate_variant)->info["STB"].push_back(convertToString(all_summary_stats.OldStrandBias(i_allele, tune_sbias)));
+    candidate_variant.info["STB"].push_back(convertToString(all_summary_stats.OldStrandBias(i_allele, tune_sbias)));
+    candidate_variant.info["STBP"].push_back(convertToString(all_summary_stats.StrandBiasPval(i_allele, tune_sbias)));
 //    (*candidate_variant)->info["SXB"].push_back(convertToString(all_summary_stats.GetXBias(i_allele,tune_xbias)));  // variance zero = 0.1^2
     }
 }
 
-void DecisionTreeData::AddCountInformationTags(vcf::Variant ** candidate_variant, string &sampleName) {
+void DecisionTreeData::AddCountInformationTags(vcf::Variant & candidate_variant, const string &sampleName) {
   // store tagged filter quantities
 
   AddStrandBiasTags(candidate_variant);
     // depth by allele statements
   // complex with multialleles
 
-   map<string, vector<string> >& infoOutput = (*candidate_variant)->info;
+   map<string, vector<string> >& infoOutput = candidate_variant.info;
    PushAlleleCountsOntoStringMaps(infoOutput,all_summary_stats);
 
    // testing this field for filtering
    infoOutput["FXX"].push_back(convertToString(all_summary_stats.GetFailedReadRatio()));
 
   if (!sampleName.empty()) {
-      map<string, vector<string> >& sampleOutput = (*candidate_variant)->samples[sampleName];
+      map<string, vector<string> >& sampleOutput = candidate_variant.samples[sampleName];
       PushAlleleCountsOntoStringMaps(sampleOutput, all_summary_stats);
   }
 
   // hrun fill in
-  ClearVal(*candidate_variant, "HRUN");
-  for (unsigned int ia=0; ia<multi_allele.allele_identity_vector.size(); ia++){
-    (*candidate_variant)->info["HRUN"].push_back(convertToString(multi_allele.allele_identity_vector[ia].ref_hp_length));
+  ClearVal(candidate_variant, "HRUN");
+  for (unsigned int ia=0; ia<allele_identity_vector.size(); ia++){
+    candidate_variant.info["HRUN"].push_back(convertToString(allele_identity_vector[ia].ref_hp_length));
   }
 }
 
-void SetQualityByDepth(vcf::Variant **candidate_variant){
-  float raw_qual_score= (*candidate_variant)->quality;
-  unsigned int scan_read_depth = atoi((*candidate_variant)->info.at("FDP")[0].c_str());
+void SetQualityByDepth(vcf::Variant &candidate_variant){
+  float raw_qual_score= candidate_variant.quality;
+  unsigned int scan_read_depth = atoi(candidate_variant.info["FDP"][0].c_str());
   // factor of 4 to put on similar scale to other data outputs.
   // depends on rounding of log-likleihood changes
-  (*candidate_variant)->info["QD"].push_back(convertToString(4.0*raw_qual_score/scan_read_depth));
+  if (scan_read_depth > 0)
+    candidate_variant.info["QD"].push_back(convertToString(4.0*raw_qual_score/scan_read_depth));
+  else
+    candidate_variant.info["QD"].push_back(convertToString(0));
 }
 
-void DecisionTreeData::GenotypeFromEvaluator(vcf::Variant ** candidate_variant, ExtendParameters *parameters){
-  (*candidate_variant)->quality = eval_genotype.evaluated_variant_quality;
+void DecisionTreeData::GenotypeFromEvaluator(vcf::Variant & candidate_variant, const ExtendParameters &parameters){
+  candidate_variant.quality = eval_genotype.evaluated_variant_quality;
 
   string genotype_string = eval_genotype.GenotypeAsString();
   reference_genotype = eval_genotype.IsReference();
 
-  StoreGenotypeForOneSample(candidate_variant, parameters->sampleName, genotype_string, eval_genotype.evaluated_genotype_quality);
+  StoreGenotypeForOneSample(candidate_variant, parameters.sampleName, genotype_string, eval_genotype.evaluated_genotype_quality);
 }
 
 
 // fill this in with whatever we are really going to filter
-void DecisionTreeData::FilterOnStringency(vcf::Variant **candidate_variant, float data_quality_stringency, int _check_allele_index) {
+void DecisionTreeData::FilterOnStringency(vcf::Variant &candidate_variant, const float data_quality_stringency, int _check_allele_index) {
 
 
-  float filter_on_min_quality = RetrieveQualityTagValue(*candidate_variant, "MLLD", _check_allele_index);
+  float filter_on_min_quality = RetrieveQualityTagValue(candidate_variant, "MLLD", _check_allele_index);
 
   if ((data_quality_stringency > filter_on_min_quality)) {
 
@@ -389,17 +432,29 @@ void DecisionTreeData::FilterOnStringency(vcf::Variant **candidate_variant, floa
   }
 }
 
-void DecisionTreeData::FilterOnSpecialTags(vcf::Variant ** candidate_variant, ExtendParameters *parameters){
-    // separate my control here
-  for (unsigned int _alt_allele_index = 0; _alt_allele_index < multi_allele.allele_identity_vector.size(); _alt_allele_index++) {
+void DecisionTreeData::FilterOnSpecialTags(vcf::Variant & candidate_variant, const ExtendParameters &parameters,
+    const vector<VariantSpecificParams>& variant_specific_params)
+{
+  // separate my control here
+  for (unsigned int _alt_allele_index = 0; _alt_allele_index < allele_identity_vector.size(); _alt_allele_index++) {
      // if something is strange here
-    SpecializedFilterFromLatentVariables(multi_allele.variant,  parameters->my_eval_control.filter_unusual_predictions, _alt_allele_index); // unusual filters
-    SpecializedFilterFromHypothesisBias(multi_allele.variant, multi_allele.allele_identity_vector[_alt_allele_index], parameters->my_eval_control.filter_deletion_bias, parameters->my_eval_control.filter_insertion_bias, _alt_allele_index);
-    FilterOnStringency(candidate_variant, parameters->my_controls.data_quality_stringency, _alt_allele_index);
+    SpecializedFilterFromLatentVariables(*(variant),  variant_specific_params[_alt_allele_index].filter_unusual_predictions_override ?
+        variant_specific_params[_alt_allele_index].filter_unusual_predictions : parameters.my_eval_control.filter_unusual_predictions, _alt_allele_index); // unusual filters
+    SpecializedFilterFromHypothesisBias(*(variant), allele_identity_vector[_alt_allele_index],
+        variant_specific_params[_alt_allele_index].filter_deletion_predictions_override ?
+            variant_specific_params[_alt_allele_index].filter_deletion_predictions : parameters.my_eval_control.filter_deletion_bias,
+        variant_specific_params[_alt_allele_index].filter_insertion_predictions_override ?
+            variant_specific_params[_alt_allele_index].filter_insertion_predictions : parameters.my_eval_control.filter_insertion_bias,
+        _alt_allele_index);
+
+    float effective_data_quality_stringency = parameters.my_controls.data_quality_stringency;
+    if (variant_specific_params[_alt_allele_index].data_quality_stringency_override)
+      effective_data_quality_stringency = variant_specific_params[_alt_allele_index].data_quality_stringency;
+    FilterOnStringency(candidate_variant, effective_data_quality_stringency, _alt_allele_index);
   } 
 }
 
-void DecisionTreeData::SpecializedFilterFromLatentVariables( vcf::Variant ** candidate_variant, float bias_radius, int _allele) {
+void DecisionTreeData::SpecializedFilterFromLatentVariables(vcf::Variant & candidate_variant, const float bias_radius, int _allele) {
 
   float bias_threshold;
   // likelihood threshold
@@ -409,7 +464,7 @@ void DecisionTreeData::SpecializedFilterFromLatentVariables( vcf::Variant ** can
     bias_threshold = bias_radius; // fine now
 
 //  float radius_bias = hypothesis_stack.cur_state.bias_generator.RadiusOfBias();
-   float radius_bias = RetrieveQualityTagValue(*candidate_variant, "RBI", _allele);
+   float radius_bias = RetrieveQualityTagValue(candidate_variant, "RBI", _allele);
 
   if (radius_bias > bias_threshold) {
     stringstream filterReasonStr;
@@ -446,12 +501,13 @@ void DecisionTreeData::FilterAlleleHypothesisBias( float ref_bias, float var_bia
 }
 
 
-void DecisionTreeData::SpecializedFilterFromHypothesisBias(vcf::Variant ** candidate_variant, AlleleIdentity allele_identity, float deletion_bias, float insertion_bias, int _allele) {
+void DecisionTreeData::SpecializedFilterFromHypothesisBias(vcf::Variant & candidate_variant, AlleleIdentity allele_identity, const float deletion_bias, const float insertion_bias, int _allele)
+{
 
 //  float ref_bias = hypothesis_stack.cur_state.bias_generator.latent_bias_v[0];
 //  float var_bias = hypothesis_stack.cur_state.bias_generator.latent_bias_v[1];
-   float ref_bias = RetrieveQualityTagValue(*candidate_variant, "REFB", _allele);
-   float var_bias = RetrieveQualityTagValue(*candidate_variant, "VARB", _allele);
+  float ref_bias = RetrieveQualityTagValue(candidate_variant, "REFB", _allele);
+  float var_bias = RetrieveQualityTagValue(candidate_variant, "VARB", _allele);
 
   if (allele_identity.status.isHPIndel) {
     if (allele_identity.status.isDeletion) {
@@ -463,8 +519,8 @@ void DecisionTreeData::SpecializedFilterFromHypothesisBias(vcf::Variant ** candi
   }
 }
 
-void FilterOnReadRejectionRate(vcf::Variant **candidate_variant, float read_rejection_threshold){
-  float observed_read_rejection = RetrieveQualityTagValue(*candidate_variant, "FXX",0);
+void FilterOnReadRejectionRate(vcf::Variant &candidate_variant, float read_rejection_threshold){
+  float observed_read_rejection = RetrieveQualityTagValue(candidate_variant, "FXX",0);
   if (observed_read_rejection>read_rejection_threshold){
     SetFilteredStatus(candidate_variant, true);
     string my_reason = "REJECTION";
@@ -474,23 +530,25 @@ void FilterOnReadRejectionRate(vcf::Variant **candidate_variant, float read_reje
 
 
 
-void DecisionTreeData::AggregateFilterInformation(vcf::Variant ** candidate_variant, ExtendParameters *parameters){
+void DecisionTreeData::AggregateFilterInformation(vcf::Variant & candidate_variant,
+    const vector<VariantSpecificParams>& variant_specific_params, const ExtendParameters &parameters)
+{
   // complete the decision tree for SSE using observed counts in base space
   // adds tags to the file
-  FilterSSE(candidate_variant, parameters->my_controls.filter_variant);
+  FilterSSE(candidate_variant, parameters.my_controls.filter_variant, variant_specific_params);
 
-  FilterOnSpecialTags(candidate_variant, parameters);
+  FilterOnSpecialTags(candidate_variant, parameters, variant_specific_params);
 
-  FilterAlleles(parameters->my_controls);
+  FilterAlleles(parameters.my_controls, variant_specific_params);
 
-  AddCountInformationTags(candidate_variant, parameters->sampleName);
+  AddCountInformationTags(candidate_variant, parameters.sampleName);
 
 }
 
 
 
 
-void DecisionTreeData::GenotypeAlleleFilterMyCandidate(vcf::Variant  **candidate_variant, ExtendParameters *parameters){
+void DecisionTreeData::GenotypeAlleleFilterMyCandidate(vcf::Variant  &candidate_variant, const ExtendParameters &parameters){
   // only filter if  ref/variant and variant is filtered, or if variant/variant and both variants are filtered
 
   // 1) do I have an allele escaping filtration?
@@ -498,18 +556,18 @@ void DecisionTreeData::GenotypeAlleleFilterMyCandidate(vcf::Variant  **candidate
   vector<int> filter_triggered; // only if we're filtered do we iterate through this
     bool no_filter = false;
     for (unsigned int i_ndx=0; i_ndx<eval_genotype.genotype_component.size(); i_ndx++){
-      int i_comp = eval_genotype.genotype_component.at(i_ndx);
+      int i_comp = eval_genotype.genotype_component[i_ndx];
       // if any allele involved in the genotype escapes
       if (i_comp>0){
         int alt_allele = i_comp-1;
-        if (!summary_info_vector.at(alt_allele).isFiltered){
+        if (!summary_info_vector[alt_allele].isFiltered){
          no_filter = true;  // an allele escapes
         }else
           filter_triggered.push_back(alt_allele); // this allele should be reported if no-one escapes
 
       } else {
         // if reference, does best alternate allele escape the filters?
-        if (!summary_info_vector.at(best_allele_index).isFiltered){
+        if (!summary_info_vector[best_allele_index].isFiltered){
           no_filter = true;  // the best alternate escapes!
         } else
          filter_triggered.push_back(best_allele_index);  // or it doesn't escape and needs to be reported
@@ -535,47 +593,48 @@ void DecisionTreeData::GenotypeAlleleFilterMyCandidate(vcf::Variant  **candidate
       // report the reasons for everyone who didn't escape
       for (unsigned int i_ndx=0; i_ndx<filter_triggered.size(); i_ndx++){
         // who is triggered?
-        int bad_variant = filter_triggered.at(i_ndx);
+        int bad_variant = filter_triggered[i_ndx];
         VariantOutputInfo _summary_info;
 
-        _summary_info = summary_info_vector.at(bad_variant);
+        _summary_info = summary_info_vector[bad_variant];
         SetFilteredStatus(candidate_variant,true);
 
         // if any normal reasons for filtering this allele
         if (_summary_info.isFiltered)
           for (unsigned int i_reason=0; i_reason<_summary_info.filterReason.size(); i_reason++)
-            AddFilterReason(candidate_variant, _summary_info.filterReason.at(i_reason));
+            AddFilterReason(candidate_variant, _summary_info.filterReason[i_reason]);
       }
     }
 }
 
-void DecisionTreeData::FilterMyCandidate(vcf::Variant  **candidate_variant, ExtendParameters *parameters){
-
+void DecisionTreeData::FilterMyCandidate(vcf::Variant &candidate_variant, const ExtendParameters &parameters)
+{
   // any allele involved in the genotype may trigger a filter
-    GenotypeAlleleFilterMyCandidate(candidate_variant, parameters);
+  GenotypeAlleleFilterMyCandidate(candidate_variant, parameters);
 
-    // whole candidate reason
-     FilterOnReadRejectionRate(candidate_variant, parameters->my_controls.read_rejection_threshold);
+  // whole candidate reason
+  FilterOnReadRejectionRate(candidate_variant, parameters.my_controls.read_rejection_threshold);
 }
 
 
 
-void DecisionTreeData::FillInFiltersAtEnd(vcf::Variant ** candidate_variant, ExtendParameters *parameters){
+void DecisionTreeData::FillInFiltersAtEnd(VariantCandidate &candidate_variant, const ExtendParameters &parameters)
+{
   // now we fill in the filters that are triggered
   // start with a blank "." as the first filter reason so we always have this tag and a value
-  NullFilterReason(candidate_variant);
-  SetFilteredStatus(candidate_variant, false);  // not filtered at this point (!)
+  NullFilterReason(candidate_variant.variant);
+  SetFilteredStatus(candidate_variant.variant, false);  // not filtered at this point (!)
 
   // candidate alleles contribute to possible filtration
-  FilterMyCandidate(candidate_variant, parameters);
+  FilterMyCandidate(candidate_variant.variant, parameters);
 
   SimplifySNPsIfNeeded(candidate_variant, parameters);
 
   // if the genotype is a reference call, and we want to suppress it, make sure it will be in the filtered file
-  SuppressReferenceCalls(candidate_variant, parameters,  reference_genotype);
+  SuppressReferenceCalls(candidate_variant.variant, parameters,  reference_genotype);
 
-  if (parameters->my_controls.suppress_nocall_genotypes)
-    DetectAndSetFilteredGenotype(candidate_variant, parameters->sampleName);
+  if (parameters.my_controls.suppress_nocall_genotypes)
+    DetectAndSetFilteredGenotype(candidate_variant.variant, parameters.sampleName);
 }
 
 
@@ -616,13 +675,14 @@ void DecisionTreeData::FillInFiltersAtEnd(vcf::Variant ** candidate_variant, Ext
 3g) if del, if the SSE filters are triggered (deletion entries may be errors)
 3h) if in/del if HPLEN is too large (signal/noise)
 */
-void DecisionTreeData::DecisionTreeOutputToVariant(vcf::Variant ** candidate_variant, ExtendParameters *parameters) {
+void DecisionTreeData::DecisionTreeOutputToVariant(VariantCandidate &candidate_variant, const ExtendParameters &parameters)
+{
 
-  AggregateFilterInformation(candidate_variant, parameters); // step 0 above
+  AggregateFilterInformation(candidate_variant.variant, candidate_variant.variant_specific_params, parameters); // step 0 above
 
-    GenotypeFromEvaluator(candidate_variant, parameters);  // step 0
-    // add a derived tag from the QUAL field and the depth counts
-    SetQualityByDepth(candidate_variant);
+  GenotypeFromEvaluator(candidate_variant.variant, parameters);  // step 0
+  // add a derived tag from the QUAL field and the depth counts
+  SetQualityByDepth(candidate_variant.variant);
 
   // no actual filters should be filled in yet, just all the information needed for filtering
   FillInFiltersAtEnd(candidate_variant, parameters);

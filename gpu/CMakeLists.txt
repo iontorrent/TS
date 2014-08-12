@@ -7,11 +7,34 @@ enable_testing()
 include(../buildTools/cmake/CMakeLists.version.txt)
 include(../buildTools/cmake/CMakeLists.compiler.txt)
 
+FIND_PACKAGE(PythonInterp)
+# Determine python site-packages or dist-packages directory
+execute_process (
+        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"
+        OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process (
+        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_lib; print get_python_lib(prefix='/usr/local')"
+        OUTPUT_VARIABLE PYTHON_LOCAL_SITE_PACKAGES
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+execute_process (
+        COMMAND "${PYTHON_EXECUTABLE}" -c "from distutils.sysconfig import get_python_version; print get_python_version()"
+        OUTPUT_VARIABLE PYTHON_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+
 # Where to install - override with: -DION_INSTALL_PREFIX
 set(ION_INSTALL_PREFIX "/opt/ion/gpu" CACHE PATH "Ion Install Prefix")
 set(CMAKE_INSTALL_PREFIX "${ION_INSTALL_PREFIX}" CACHE INTERNAL "Prefix prepended to install directories" FORCE)
 set(CPACK_PACKAGING_INSTALL_PREFIX ${ION_INSTALL_PREFIX})
 set(CPACK_SET_DESTDIR "ON")
+
+add_custom_target(compileall ALL
+    COMMAND ${PYTHON_EXECUTABLE} -m compileall -q -f "${PROJECT_SOURCE_DIR}/python/"
+)
 
 configure_file (
     "${PROJECT_SOURCE_DIR}/debian/postinst"
@@ -33,13 +56,28 @@ configure_file (
 message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
 
 include(../buildTools/cmake/CMakeLists.dependencies.txt)
-install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_devdriver_version}/${cuda_devdriver_file} DESTINATION .)
+install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_devdriver_version}/${cuda_devdriver_file}
+        DESTINATION .)
 
-        install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib DESTINATION /usr/local/cuda
-        	PATTERN .svn EXCLUDE)
-        install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64 DESTINATION /usr/local/cuda
-        	PATTERN .svn EXCLUDE)
-        install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/bin/nvcc DESTINATION /usr/local/cuda/bin)
+install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib
+        DESTINATION /usr/local/cuda
+        PATTERN .svn EXCLUDE)
+
+install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64
+        DESTINATION /usr/local/cuda
+        PATTERN .svn EXCLUDE)
+
+install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/bin/nvcc
+        DESTINATION /usr/local/cuda/bin)
+
+# from https://pypi.python.org/pypi/nvidia-ml-py/
+install(FILES python/nvidia_smi.py    DESTINATION ${PYTHON_SITE_PACKAGES})
+install(FILES python/nvidia_smi.pyc   DESTINATION ${PYTHON_SITE_PACKAGES})
+install(FILES python/pynvml.py        DESTINATION ${PYTHON_SITE_PACKAGES})
+install(FILES python/pynvml.pyc       DESTINATION ${PYTHON_SITE_PACKAGES})
+install(PROGRAMS python/pynvml_test.py         DESTINATION /usr/local/bin)
+install(PROGRAMS python/nvidia_smi_test.py     DESTINATION /usr/local/bin)
+
 
 if (1)
     set (CMAKE_C_FLAGS_RELEASE "")

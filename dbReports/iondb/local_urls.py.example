@@ -1,0 +1,13 @@
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
+from iondb.urls import *
+
+from httpproxy.views import HttpProxy
+ 
+urlpatterns += patterns('',
+                        (r'^(?P<url>.*)$', HttpProxy.as_view(base_url = settings.PROXY_BASE_URL)),
+                        (r'^(?P<url>output/.*)$', HttpProxy.as_view(base_url = settings.PROXY_BASE_URL)),
+                        (r'^(?P<url>pluginMedia/.*)$', HttpProxy.as_view(base_url = settings.PROXY_BASE_URL)),                     
+#                        (r'^(?P<url>output/.*)$', 'httpproxy.views.proxy'),
+#                        (r'^(?P<url>pluginMedia/.*)$', 'httpproxy.views.proxy'),
+#                        url(r'api/doc/', include('tastypie_swagger.urls', namespace='tastypie_swagger')),
+                       )

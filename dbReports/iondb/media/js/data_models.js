@@ -52,12 +52,17 @@ $(function(){
 
         fetch: function(options) {
             typeof(options) != 'undefined' || (options = {});
-            //this.trigger("fetching");s
+            this.trigger("fetchStart");
             var self = this;
             var success = options.success;
             options.success = function(resp) {
-                //self.trigger("fetched");
+                self.trigger("fetchDone fetchAlways");
                 if(success) { success(self, resp); }
+            };
+            var error = options.error;
+            options.error = function(resp) {
+                self.trigger("fetchFail fetchAlways");
+                if(error) { error(self, resp); }
             };
             return Backbone.Collection.prototype.fetch.call(this, options);
         },
@@ -345,11 +350,19 @@ $(function(){
     });
 
     Report = TastyModel.extend({
-
         parse: function (response) {
-            return _.extend(response, {
+            var response = _.extend(response, {
                 timeStamp: new Date(Date._parse(response.timeStamp))
             });
+            if (response.experiment) {
+                    console.log("Experiment is not undefined " + response.experiment);
+                    console.log(this);
+                response.experiment = _.extend(response.experiment, {
+                    date: new Date(Date._parse(response.experiment.date)),
+                    resultDate: new Date(Date._parse(response.experiment.resultDate))
+                });
+            }
+            return response;
         },
 
         isCompleted: function () {
@@ -367,13 +380,17 @@ $(function(){
 
     Run = TastyModel.extend({
         initialize: function () {
-            this.reports = new ReportList(this.get('results'), {
-                parse: true
-            });
-            var  run = this;
-            this.bind('change', function(){
-                run.reports.reset(run.get("results"));
-            });
+            if (this.get('results')) {
+                    console.log("Results are not undefined " + this.get('results'));
+                    console.log(this);
+                    this.reports = new ReportList(this.get('results'), {
+                    parse: true
+                });
+                var  run = this;
+                this.bind('change', function(){
+                    run.reports.reset(run.get("results"));
+                });
+            }
         },
 
         parse: function (response) {
@@ -383,7 +400,7 @@ $(function(){
             });
         },
 
-        baseUrl: "/rundb/api/v1/experiment/"
+        baseUrl: "/rundb/api/v1/compositeexperiment/"
     });
 
     RunList = PaginatedCollection.extend({

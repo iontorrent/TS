@@ -638,7 +638,7 @@ Reader::readString()
 
 
 bool 
-Reader::readObject( Token &tokenStart )
+Reader::readObject( Token &/*tokenStart*/ )
 {
    Token tokenName;
    std::string name;
@@ -677,7 +677,7 @@ Reader::readObject( Token &tokenStart )
       if ( !readToken( comma )
             ||  ( comma.type_ != tokenObjectEnd  &&  
                   comma.type_ != tokenArraySeparator &&
-		  comma.type_ != tokenComment ) )
+                  comma.type_ != tokenComment ) )
       {
          return addErrorAndRecover( "Missing ',' or '}' in object declaration", 
                                     comma, 
@@ -697,7 +697,7 @@ Reader::readObject( Token &tokenStart )
 
 
 bool 
-Reader::readArray( Token &tokenStart )
+Reader::readArray( Token &/*tokenStart*/ )
 {
    currentValue() = Value( arrayValue );
    skipSpaces();
@@ -708,7 +708,7 @@ Reader::readArray( Token &tokenStart )
       return true;
    }
    int index = 0;
-   while ( true )
+   for (;;)
    {
       Value &value = currentValue()[ index++ ];
       nodes_.push( &value );
@@ -951,7 +951,7 @@ Reader::recoverFromError( TokenType skipUntilToken )
 {
    int errorCount = int(errors_.size());
    Token skip;
-   while ( true )
+   for (;;)
    {
       if ( !readToken(skip) )
          errors_.resize( errorCount ); // discard errors caused by recovery
@@ -1562,7 +1562,8 @@ ValueIterator::operator =( const SelfType &other )
 
 #define JSON_ASSERT_UNREACHABLE assert( false )
 #define JSON_ASSERT( condition ) assert( condition );  // @todo <= change this into an exception throw
-#define JSON_ASSERT_MESSAGE( condition, message ) if (!( condition )) throw std::runtime_error( message );
+#define JSON_FAIL_MESSAGE( message ) throw std::runtime_error( message );
+#define JSON_ASSERT_MESSAGE( condition, message ) if (!( condition )) JSON_FAIL_MESSAGE( message )
 
 namespace Json {
 
@@ -1579,7 +1580,7 @@ const LargestUInt Value::maxLargestUInt = LargestUInt(-1);
 
 
 /// Unknown size marker
-enum { unknown = (unsigned)-1 };
+static const unsigned int unknown = (unsigned)-1;
 
 
 /** Duplicates the specified string value.
@@ -2063,34 +2064,15 @@ Value::type() const
 
 
 int 
-Value::compare( const Value &other )
+Value::compare( const Value &other ) const
 {
-   /*
-   int typeDelta = other.type_ - type_;
-   switch ( type_ )
-   {
-   case nullValue:
-
-      return other.type_ == type_;
-   case intValue:
-      if ( other.type_.isNumeric()
-   case uintValue:
-   case realValue:
-   case booleanValue:
-      break;
-   case stringValue,
-      break;
-   case arrayValue:
-      delete value_.array_;
-      break;
-   case objectValue:
-      delete value_.map_;
-   default:
-      JSON_ASSERT_UNREACHABLE;
-   }
-   */
-   return 0;  // unreachable
+   if ( *this < other )
+      return -1;
+   if ( *this > other )
+      return 1;
+   return 0;
 }
+
 
 bool 
 Value::operator <( const Value &other ) const
@@ -2133,13 +2115,13 @@ Value::operator <( const Value &other ) const
    default:
       JSON_ASSERT_UNREACHABLE;
    }
-   return 0;  // unreachable
+   return false;  // unreachable
 }
 
 bool 
 Value::operator <=( const Value &other ) const
 {
-   return !(other > *this);
+   return !(other < *this);
 }
 
 bool 
@@ -2195,7 +2177,7 @@ Value::operator ==( const Value &other ) const
    default:
       JSON_ASSERT_UNREACHABLE;
    }
-   return 0;  // unreachable
+   return false;  // unreachable
 }
 
 bool 
@@ -2228,7 +2210,7 @@ Value::asString() const
    case realValue:
    case arrayValue:
    case objectValue:
-      JSON_ASSERT_MESSAGE( false, "Type is not convertible to string" );
+      JSON_FAIL_MESSAGE( "Type is not convertible to string" );
    default:
       JSON_ASSERT_UNREACHABLE;
    }
@@ -2265,7 +2247,7 @@ Value::asInt() const
    case stringValue:
    case arrayValue:
    case objectValue:
-      JSON_ASSERT_MESSAGE( false, "Type is not convertible to int" );
+      JSON_FAIL_MESSAGE( "Type is not convertible to int" );
    default:
       JSON_ASSERT_UNREACHABLE;
    }
@@ -2295,7 +2277,7 @@ Value::asUInt() const
    case stringValue:
    case arrayValue:
    case objectValue:
-      JSON_ASSERT_MESSAGE( false, "Type is not convertible to uint" );
+      JSON_FAIL_MESSAGE( "Type is not convertible to uint" );
    default:
       JSON_ASSERT_UNREACHABLE;
    }
@@ -2325,7 +2307,7 @@ Value::asInt64() const
    case stringValue:
    case arrayValue:
    case objectValue:
-      JSON_ASSERT_MESSAGE( false, "Type is not convertible to Int64" );
+      JSON_FAIL_MESSAGE( "Type is not convertible to Int64" );
    default:
       JSON_ASSERT_UNREACHABLE;
    }
@@ -2353,7 +2335,7 @@ Value::asUInt64() const
    case stringValue:
    case arrayValue:
    case objectValue:
-      JSON_ASSERT_MESSAGE( false, "Type is not convertible to UInt64" );
+      JSON_FAIL_MESSAGE( "Type is not convertible to UInt64" );
    default:
       JSON_ASSERT_UNREACHABLE;
    }
@@ -2366,9 +2348,9 @@ LargestInt
 Value::asLargestInt() const
 {
 #if defined(JSON_NO_INT64)
-	return asInt();
+    return asInt();
 #else
-	return asInt64();
+    return asInt64();
 #endif
 }
 
@@ -2377,9 +2359,9 @@ LargestUInt
 Value::asLargestUInt() const
 {
 #if defined(JSON_NO_INT64)
-	return asUInt();
+    return asUInt();
 #else
-	return asUInt64();
+    return asUInt64();
 #endif
 }
 
@@ -2406,7 +2388,7 @@ Value::asDouble() const
    case stringValue:
    case arrayValue:
    case objectValue:
-      JSON_ASSERT_MESSAGE( false, "Type is not convertible to double" );
+      JSON_FAIL_MESSAGE( "Type is not convertible to double" );
    default:
       JSON_ASSERT_UNREACHABLE;
    }
@@ -2435,7 +2417,7 @@ Value::asFloat() const
    case stringValue:
    case arrayValue:
    case objectValue:
-      JSON_ASSERT_MESSAGE( false, "Type is not convertible to float" );
+      JSON_FAIL_MESSAGE( "Type is not convertible to float" );
    default:
       JSON_ASSERT_UNREACHABLE;
    }
@@ -3677,7 +3659,7 @@ FastWriter::writeValue( const Value &value )
 // //////////////////////////////////////////////////////////////////
 
 StyledWriter::StyledWriter()
-   : rightMargin_( 100000 )
+   : rightMargin_( 74 )
    , indentSize_( 3 )
 {
 }
@@ -3733,7 +3715,7 @@ StyledWriter::writeValue( const Value &value )
             writeWithIndent( "{" );
             indent();
             Value::Members::iterator it = members.begin();
-            while ( true )
+            for (;;)
             {
                const std::string &name = *it;
                const Value &childValue = value[name];
@@ -3773,7 +3755,7 @@ StyledWriter::writeArrayValue( const Value &value )
          indent();
          bool hasChildValue = !childValues_.empty();
          unsigned index =0;
-         while ( true )
+         for (;;)
          {
             const Value &childValue = value[index];
             writeCommentBeforeValue( childValue );
@@ -4009,7 +3991,7 @@ StyledStreamWriter::writeValue( const Value &value )
             writeWithIndent( "{" );
             indent();
             Value::Members::iterator it = members.begin();
-            while ( true )
+            for (;;)
             {
                const std::string &name = *it;
                const Value &childValue = value[name];
@@ -4049,7 +4031,7 @@ StyledStreamWriter::writeArrayValue( const Value &value )
          indent();
          bool hasChildValue = !childValues_.empty();
          unsigned index =0;
-         while ( true )
+         for (;;)
          {
             const Value &childValue = value[index];
             writeCommentBeforeValue( childValue );
@@ -4057,7 +4039,7 @@ StyledStreamWriter::writeArrayValue( const Value &value )
                writeWithIndent( childValues_[index] );
             else
             {
-	       writeIndent();
+               writeIndent();
                writeValue( childValue );
             }
             if ( ++index == size )

@@ -119,10 +119,22 @@ public:
   bool GetFirstBoolean(char shortOption, const std::string &longOption, bool defaultValue);
 
   /**
+   * Get a boolean option value for the given short/long key
+   * If the option appears multiple times, use the earliest occurrence
+   */
+  bool GetFirstBoolean(char shortOption, const std::string &longOption, const char * defaultValue);
+
+  /**
    * Get a string option value for the given short/long key
    * If the option appears multiple times, use the earliest occurrence
    */
   std::string GetFirstString(char shortOption, const std::string &longOption, const std::string &defaultValue);
+
+  /**
+   * Get a vector of comma separated string option values for the given short/long key
+   * If the option appears multiple times, use the earliest occurrence
+   */
+  std::vector<std::string> GetFirstStringVector(char shortOption, const std::string &longOption, const std::string &defaultValue);
 
   /**
    * Get a double option value for the givent short/long key
@@ -158,6 +170,11 @@ public:
   void CheckNoLeftovers();
 
 protected:
+
+  /**
+   * Determine if string is a valid option or parameter to an option
+   */
+  bool IsOption(const std::string &name) const;
 
   /**
    * Parse out a long option from the command line arguments, incrementing the index into

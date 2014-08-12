@@ -1,5 +1,0 @@
-genome_shortname	polio
-genome_name	Poliovirus, complete genome
-genome_version	gi|12408699|ref|NC_002058.3
-index_version	b-0.1
-genome_length	7451

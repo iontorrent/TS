@@ -15,7 +15,6 @@
 #include <map>
 #include <getopt.h>
 #include <stdlib.h>
-#include <Parameters.h>
 #include "OptArgs.h"
 #include "json/json.h"
 
@@ -85,6 +84,7 @@ class BasicFilters {
     float min_allele_freq;
 
     float strand_bias_threshold;
+    float strand_bias_pval_threshold;
 //    float beta_bias_filter;
     float min_quality_score;
 
@@ -94,6 +94,7 @@ class BasicFilters {
     BasicFilters() {
       min_allele_freq = 0.2f;
       strand_bias_threshold = 0.8f;
+      strand_bias_pval_threshold = 1.0f;
   //    beta_bias_filter = 8.0f;
       min_cov = 3;
       min_cov_each_strand = 3;
@@ -115,12 +116,19 @@ class ClassifyFilters {
     // don't worry about small relative SSE events
     float sse_relative_safety_level; 
 
+    // local realignment per variant type
+    bool do_snp_realignment;
+    bool do_mnp_realignment;
+
     ClassifyFilters() {
       hp_max_length = 11;
 
       sseProbThreshold = 0.2;
       minRatioReadsOnNonErrorStrand = 0.2; // min ratio of reads supporting variant on non-sse strand for variant to be called
       sse_relative_safety_level = 0.03f; // scale SSE we worry about by read depth - don't worry about anything less than a 5% problem
+
+      do_snp_realignment = false;
+      do_mnp_realignment = false;
     };
     void SetOpts(OptArgs &opts, Json::Value & tvc_params);
     void CheckParameterLimits();
@@ -152,6 +160,7 @@ class ControlCallAndFilters {
     float sbias_tune; 
 
     BasicFilters filter_snps;
+    BasicFilters filter_mnp;
     BasicFilters filter_hp_indel;
     BasicFilters filter_hotspot;
 
@@ -173,11 +182,9 @@ class ProgramControlSettings {
 
     bool use_SSE_basecaller;
     bool suppress_recalibration;
-    bool do_snp_realignment;
     bool resolve_clipped_bases;
 
     bool inputPositionsOnly;
-    bool skipCandidateGeneration;
 
     ProgramControlSettings();
     void SetOpts(OptArgs &opts, Json::Value & pf_params);
@@ -185,39 +192,69 @@ class ProgramControlSettings {
 };
 
 
-class ExtendParameters : public Parameters {
-  public:
+class ExtendParameters {
+public:
+  vector<string>    bams;
+  string            fasta;                // -f --fasta-reference
+  string            targets;              // -t --targets
+  string            outputFile;
+  string            variantPriorsFile;
+  string            postprocessed_bam;
+
+  string            basecaller_version;
+  string            tmap_version;
+
+  bool              onlyUseInputAlleles;
+  bool              processInputPositionsOnly;
+
+  bool              trim_ampliseq_primers;
+
+  // operation parameters
+  bool useDuplicateReads;      // -E --use-duplicate-reads
+  int useBestNAlleles;         // -n --use-best-n-alleles
+  bool allowIndels;            // -I --allow-indels
+  bool allowMNPs;              // -X --allow-mnps
+  bool allowComplex;           // -X --allow-complex
+  int maxComplexGap;
+  bool allowSNPs;              // -I --no-snps
+  int min_mapping_qv;                    // -m --min-mapping-quality
+  float readMaxMismatchFraction;  // -z --read-max-mismatch-fraction
+  int       read_snp_limit;            // -$ --read-snp-limit
+  long double minAltFraction;  // -F --min-alternate-fraction
+  long double minIndelAltFraction; // Added by SU to reduce Indel Candidates for Somatic
+  int minAltCount;             // -C --min-alternate-count
+  int minAltTotal;             // -G --min-alternate-total
+  int minCoverage;             // -! --min-coverage
+  bool debug; // set if debuglevel >=1
+
+
+
 	OptArgs opts;
-    ControlCallAndFilters my_controls;
-    EnsembleEvalTuningParameters my_eval_control;
-    ProgramControlSettings program_flow;
+  ControlCallAndFilters my_controls;
+  EnsembleEvalTuningParameters my_eval_control;
+  ProgramControlSettings program_flow;
 
-    bool vcfProvided;
+  //Input files
+  string outputDir;
 
-    //Input files
-    string inputBAM;
-    string outputDir;
+  string sseMotifsFileName;
+  bool sseMotifsProvided;
 
-    string sseMotifsFileName;
-    bool sseMotifsProvided;
+  string sampleName;
+  string force_sample_name;
 
-    vector<string> bams;
-    string sampleName;
-    //string referenceSampleName;
-    vector<string> ReadGroupIDVector;
-    string candidateVCFFileName;
+  string recal_model_file_name;
+  int recalModelHPThres;
 
-    string recal_model_file_name;
-    int recalModelHPThres;
+  string              params_meta_name;
+  string              params_meta_details;
 
-
-    // functions
-    ExtendParameters(void);
-    ExtendParameters(int argc, char** argv);
-    void SetupFileIO(OptArgs &opts);
-    void SetFreeBayesParameters(OptArgs &opts, Json::Value& fb_params);
-    void ParametersFromJSON(OptArgs &opts, Json::Value &tvc_params, Json::Value &fb_params);
-    void CheckParameterLimits();
+  // functions
+  ExtendParameters(int argc, char** argv);
+  void SetupFileIO(OptArgs &opts);
+  void SetFreeBayesParameters(OptArgs &opts, Json::Value& fb_params);
+  void ParametersFromJSON(OptArgs &opts, Json::Value &tvc_params, Json::Value &fb_params, Json::Value &params_meta);
+  void CheckParameterLimits();
 
 };
 

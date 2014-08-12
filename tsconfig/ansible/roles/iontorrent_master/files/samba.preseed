@@ -1,0 +1,8 @@
+#!/bin/bash
+set -u
+
+debconf-set-selections << EOF
+samba-common    samba-common/encrypt_passwords  boolean true
+samba-common    samba-common/dhcp   boolean	false
+samba-common    samba-common/do_debconf boolean	true
+EOF

@@ -78,7 +78,7 @@ class Mask
       row = idx / w;
       col = idx % w;
     }
-    const unsigned short *GetMask() {
+    const unsigned short *GetMask() const {
       return &mask[0];
     }
     uint16_t GetBarcodeId ( int x, int y ) const;

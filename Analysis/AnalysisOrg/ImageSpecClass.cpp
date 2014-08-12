@@ -14,7 +14,7 @@ ImageSpecClass::ImageSpecClass()
 {
 }
 
-int ImageSpecClass::LeadTimeForChipSize()
+int ImageSpecClass::LeadTimeForChipSize() const
 {
   int totalMem = totalMemOnTorrentServer();
   if ( totalMem > ( 24*1024*1024 ) )
@@ -98,46 +98,15 @@ void ImageSpecClass::ReadFirstImage(Image &img, SystemContext &sys_context, Imag
   img.SetImgLoadImmediate ( false );
   img.SetNumAcqFiles ( 1 );
   img.SetIgnoreChecksumErrors ( img_control.ignoreChecksumErrors );
-  bool datIsSdat = false;
   char *firstAcqFile = ( char * ) malloc ( strlen ( sys_context.dat_source_directory ) + strlen (
                          img_control.acqPrefix ) + 10 );
   sprintf ( firstAcqFile, "%s/%s%04d.dat", sys_context.dat_source_directory, img_control.acqPrefix, 0 );
-  /* Check to see if our dat file is really an sdat file in disguise, if so updat our suffix and doing sdats. */
-  if (H5File::IsH5File(firstAcqFile)) {
-    datIsSdat = true;
-    img_control.sdatSuffix = "dat";
-    img_control.doSdat = true;
-  }
-  char *firstSdatAcqFile = ( char * ) malloc ( strlen ( sys_context.dat_source_directory ) + strlen (
-                         img_control.acqPrefix ) + 11 );
-  sprintf ( firstSdatAcqFile, "%s/%s%04d.%s", sys_context.dat_source_directory, img_control.acqPrefix, 0, img_control.sdatSuffix.c_str() );
-
-  if (isFile(firstAcqFile) && !datIsSdat) {
-    if ( !img.LoadRaw ( firstAcqFile, 0, true, false ) )
-      {
-        exit ( EXIT_FAILURE );
-      }
-  }
-  else if(isFile(firstSdatAcqFile)) {
-    TraceChunkSerializer reader;
-    SynchDat sdat;
-    reader.Read(firstSdatAcqFile, sdat);
-    img.InitFromSdat(&sdat);
-    if (loc_context.regionXSize == 0){ // not explicitly set, set now
-      loc_context.regionXSize = sdat.GetColStep();
-      loc_context.regionYSize = sdat.GetRowStep();
+  if ( !img.LoadRaw ( firstAcqFile, 0, true, false ) )
+    {
+      exit ( EXIT_FAILURE );
     }
-    if ((sdat.GetColStep() != (size_t)loc_context.regionXSize) ||
-	(sdat.GetRowStep() != (size_t)loc_context.regionYSize)) {
-      fprintf(stdout, "Warning: Analysis region sizes width=%d, height=%d do not match sdat region sizes width=%d, height=%d\n", loc_context.regionXSize, loc_context.regionYSize, (int)sdat.GetColStep(), (int)sdat.GetRowStep());
-    }
-  }
-  else {
-    exit ( EXIT_FAILURE );
-  }
   img.SetOffsetFromChipOrigin ( firstAcqFile );
   free ( firstAcqFile );
-  free ( firstSdatAcqFile );
 
   if ( !loc_context.IsSetRegionXYSize() ){ // not yet set, has to be set now
     loc_context.SetRegionXYSize(50, 50);

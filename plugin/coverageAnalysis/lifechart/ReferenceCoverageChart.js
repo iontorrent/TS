@@ -97,13 +97,15 @@ $(function () {
 
   // configure widget size and file used from placement div attributes
   var bbcFile = $("#ReferenceCoverageChart").attr("bbcfile");
-  if( bbcFile == undefined ) {
-    alert("ERROR on page: ReferenceCoverageChart widget requires attribute 'bbcfile' is set.");
+  if( bbcFile == undefined  || bbcFile == "" ) {
+    //alert("ERROR on page: ReferenceCoverageChart widget requires attribute 'bbcfile' is set.");
+    $('#ReferenceCoverageChart').hide();
     return;
   }
   var chrcovFile = $("#ReferenceCoverageChart").attr("chrcovfile");
-  if( chrcovFile == undefined ) {
-    alert("ERROR on page: ReferenceCoverageChart widget requires attribute 'chrcovfile' is set.");
+  if( chrcovFile == undefined || chrcovFile == "" ) {
+    //alert("ERROR on page: ReferenceCoverageChart widget requires attribute 'chrcovfile' is set.");
+    $('#ReferenceCoverageChart').hide();
     return;
   }
   var cbcFile = $("#ReferenceCoverageChart").attr("cbcfile");
@@ -116,6 +118,12 @@ $(function () {
 
   var startCollapsed = $("#ReferenceCoverageChart").attr("collapse");
   startCollapsed = (startCollapsed != undefined);
+
+  var startShowOptions = $("#ReferenceCoverageChart").attr("showoptions");
+  startShowOptions = (startShowOptions != undefined);
+
+  var startOutlierOffScale = $("#ReferenceCoverageChart").attr("outlieroffscale");
+  startOutlierOffScale = (startOutlierOffScale != undefined);
 
   var tmp = $('#ReferenceCoverageChart').width();
   if( tmp < def_minWidth ) tmp = def_minWidth;
@@ -395,10 +403,10 @@ $(function () {
     revReads : "rgb(64,200,96)",
     offReads : "rgb(128,160,192)",
     ontReads : "rgb(0,0,128)",
-    fwdOffReads : "rgb(240,160,96)",
-    fwdOntReads : "rgb(240,96,64)",
-    revOffReads : "rgb(64,200,96)",
-    revOntReads : "rgb(32,160,32)",
+    fwdOffReads : "rgb(255,160,96)",
+    fwdOntReads : "rgb(220,96,32)",
+    revOffReads : "rgb(96,200,160)",
+    revOntReads : "rgb(32,160,64)",
     precentOntarg : "rgb(224,96,96)",
     fwdBias : "rgb(200,96,160)"
   }
@@ -1313,7 +1321,7 @@ $(function () {
         var fields = $.trim(row).split('\t');
         if( n == 0 ) {
           fieldIds = fields;
-          noTargets = fields.length <= 5;
+          noTargets = fields.length <= 6;
           if( fields.length < 3 ) {
             loadError();
             return false;
@@ -1531,10 +1539,11 @@ $(function () {
     }
     // check for outlier and avoid if specified by user
     if( ymax > def_outlierFactor*pmax || ymin < def_outlierFactor*pmin ) {
-      // if not yet displayed display (unchecked first)
+      // if not yet displayed display (unchecked first if not already checked)
       if( $('#RC-offScaleOutlierControl').css("display") == 'none' ) {
         $('#RC-offScaleOutlierControl').show();
-      } else if( $('#RC-offScaleOutlier').attr('checked') ) {
+      }
+      if( $('#RC-offScaleOutlier').attr('checked') ) {
         if( ymax > def_outlierFactor*pmax ) {
           ymax = 1.05 * pmax;
         } else {
@@ -1573,8 +1582,8 @@ $(function () {
       if( onTargets ) {
         plotData.push( { label: LegendLabels.fwdOffReads, color: ColorSet.fwdOffReads, data: d3 } );
         plotData.push( { label: LegendLabels.fwdOntReads, color: ColorSet.fwdOntReads, data: d1 } );
-        plotData.push( { label: LegendLabels.revOntReads, color: ColorSet.revOntReads, data: d2 } );
         plotData.push( { label: LegendLabels.revOffReads, color: ColorSet.revOffReads, data: d4 } );
+        plotData.push( { label: LegendLabels.revOntReads, color: ColorSet.revOntReads, data: d2 } );
       } else {
         plotData.push( { label: LegendLabels.fwdReads, color: ColorSet.fwdOffReads, data: d3 } );
         plotData.push( { label: LegendLabels.revReads, color: ColorSet.revOffReads, data: d4 } );
@@ -1632,9 +1641,14 @@ $(function () {
     canvas = plotObj.getCanvas();
   }
 
-  // autoload - after everything is defined
+  // start up customization attributes
+  if( startShowOptions )
+    $('#RC-controlpanel').show();
+  if( startOutlierOffScale )
+    $('#RC-offScaleOutlier').attr('checked', (plotParams.offScaleOutlier = true) );
   unzoomToFile(chrcovFile);
   autoHideLegend();
+
   // automatically change initial view to full contig if only one
   if( plotStats.totalChroms == 1 ) {
     $("#RC-unzoomToggle").click();
@@ -1643,6 +1657,8 @@ $(function () {
     setUnzoomTitle(false);
     wgncovFile = '';
   }
+
+  // collapse view after EVRYTHING has been drawn in open chart (to avoid flot issues)
   if( startCollapsed ) {
     $("#RC-collapsePlot").attr("class","ui-icon ui-icon-triangle-1-s");
     $("#RC-collapsePlot").attr("title","Expand view");
@@ -1651,5 +1667,4 @@ $(function () {
     $('#RC-chart').resizable('destroy');
     $('#RC-noncanvas').hide();
   }
-
 });

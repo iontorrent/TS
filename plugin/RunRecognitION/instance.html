@@ -188,7 +188,7 @@
             runData = getRunData(TB_result);
             timeOfRun = runData['results'].timeStamp;
             chipType = runData['experiment'].chipType;
-            initializeLeaderboard(chipType.replace(/[^0-9]/g, ''), '#leaderboard_wrapper', runData, '#leaderboard_position');
+            initializeLeaderboard(chipType, '#leaderboard_wrapper', runData, '#leaderboard_position');
             $('#reference_genome').val(runData['libmetrics'].genome);
             $.ajax({
                 url:  getGuruBaseUrl() + '/runrecognition/api/v1/experimentrunfielddefinition?limit=1000',
@@ -347,7 +347,7 @@
                                     <td><input type="text" id="application_type" name="application_type" /></td>
                                 </tr>
                                 <tr>
-                                    <td scope="row" colspan="2"><input type="checkbox" id="tc_aggreement" name="tc_aggreement" /> I agree to the <a href="http://lifetech-it.hosted.jivesoftware.com/docs/DOC-1951" target="_blank">Terms and conditions</a></td>
+                                    <td scope="row" colspan="2"><input type="checkbox" id="tc_aggreement" name="tc_aggreement" /> I agree to the <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-1951" target="_blank">Terms and conditions</a></td>
                                 </tr>
                             </table>
                         </div>

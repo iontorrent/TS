@@ -15,6 +15,7 @@
 #include <sstream>
 #include <cstdlib> 
 #include <map>
+#include <vector>
 
 using namespace std;
 
@@ -22,69 +23,92 @@ using namespace std;
 
 struct TMetaData
 {
- unsigned short covered_sse,
-                  covered_nonsse;
- TMetaData(unsigned short cov_sse,unsigned short  cov_nonsse){
-   covered_sse = cov_sse;
-   covered_nonsse = cov_nonsse;   
- }
- inline bool operator=(const TMetaData & md) 
-   {
-     covered_sse = md.covered_sse; 
-     covered_nonsse = md.covered_nonsse;
-     return false; 
-   }
- inline double calculate_probability() 
-   { 
-     return (double)covered_sse/(covered_sse+covered_nonsse);
-   }
+  unsigned short covered_sse_;
+  unsigned short covered_nonsse_;
+
+  TMetaData(unsigned short cov_sse,unsigned short  cov_nonsse) {
+    covered_sse_    = cov_sse;
+    covered_nonsse_ = cov_nonsse;
+  }
+
+  inline bool operator=(const TMetaData & md) {
+    covered_sse_ = md.covered_sse_;
+    covered_nonsse_ = md.covered_nonsse_;
+    return false;
+  }
+
+  inline double calculate_probability() const {
+    // Divide by zero protection
+    double denominator = (double)(covered_sse_ + covered_nonsse_);
+    if (denominator > 0)
+      return (double)covered_sse_ / denominator;
+    else
+      return -1.0;
+  }
 };
 
 //-----------------------------------------------------
 class TIonMotif
 {
 
-  map <unsigned, TMetaData> * motif_list;
+  map <unsigned, TMetaData> motif_list;
 
- public:
- short left_size , right_size;
- TIonMotif(){ left_size = 0; right_size = 0; motif_list = new map <unsigned, TMetaData>();}
- ~TIonMotif(){ delete motif_list; }
+  public:
+    short left_size;
+    short right_size;
 
- inline void add(unsigned hashKey, TMetaData * mdata){
-   try{
-       TMetaData * tmp_md = & motif_list->at(hashKey);
-       if(tmp_md->calculate_probability()>mdata->calculate_probability()) *tmp_md = *mdata;
-      }catch(...){motif_list->insert(make_pair(hashKey,*mdata));}
- };
+    TIonMotif(){ left_size = 0; right_size = 0; };
 
- inline bool has_hashkey(unsigned hashKey, TMetaData & md){
-  try{
-       md = motif_list->at(hashKey);
-       return true;
-      }catch(...){}
-  return false;
- };
+    inline void add(unsigned hashKey, const TMetaData &mdata) {
+      map <unsigned, TMetaData>::iterator itr;
+      itr = motif_list.find(hashKey);
 
- inline bool isEmpty(){ return (motif_list->size()==0); }
+      if (itr == motif_list.end())
+        motif_list.insert(make_pair(hashKey, mdata));
+      else if (itr->second.calculate_probability() > mdata.calculate_probability())
+        motif_list.at(hashKey) = mdata;
+     };
+
+     inline bool has_hashkey(unsigned hashKey, TMetaData &md) const {
+       map <unsigned, TMetaData>::const_iterator itr;
+       itr = motif_list.find(hashKey);
+
+       if (itr == motif_list.end())
+         return false;
+       else {
+         md = itr->second;
+         return true;
+       }
+     };
+
+     inline bool isEmpty() const {
+       return (motif_list.size()==0);
+     };
 };
 
 //-----------------------------------------------------
 class TIonMotifSet
 {
- unsigned MAX_HP_SIZE;
- TIonMotif * motif_table;
- bool isempty;
- void add_motif(short key, string motif, TMetaData * mdata, unsigned pos);
- public:
- TIonMotifSet(){ MAX_HP_SIZE = 20; motif_table = new TIonMotif[4*(MAX_HP_SIZE+1)];isempty=true; }
- ~TIonMotifSet(){ delete [] motif_table; }
- void load_from_file(const char * fname);
- void add_motif(string motif, TMetaData * mdata);
- short get_key(char hpChar, int hpSize);
- unsigned make_hashkey(string motif);
- float get_sse_probability(string context, unsigned err_base_pos);
- inline bool isEmpty(){return isempty;}
+  unsigned MAX_HP_SIZE;
+  vector<TIonMotif> motif_table;
+  bool isempty;
+  void add_my_motif(short key, string motif, const TMetaData &mdata, unsigned pos);
+
+  public:
+    TIonMotifSet() {
+      MAX_HP_SIZE = 20;
+      motif_table.resize(4*(MAX_HP_SIZE+1));
+      isempty=true;
+    };
+
+    void     load_from_file(const char * fname);
+    void     add_motif(string motif, const TMetaData &mdata);
+    short    get_key(char hpChar, int hpSize) const;
+    unsigned make_hashkey(string motif) const;
+
+    float    get_sse_probability(string context, unsigned err_base_pos) const;
+
+    inline bool isEmpty() { return isempty; };
 };
 //-----------------------------------------------------
 

@@ -1,4 +1,5 @@
 #!/bin/sh
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
 # Which Axeda server should we connect to?
 # See if we can reach LifeTech internal DNS.
@@ -34,7 +35,7 @@ fi
 
 # point to drmdev axeda server if on lifetech LAN
 if [ $on_intranet = "Yes" ]; then
-	/opt/ion/RSM/RSMAgent_TS https://drmdev.appliedbiosystems.com/eMessage >> /var/log/RSMAgent_TS.log &
+	/opt/ion/RSM/RSMAgent_TS https://drmdev.appliedbiosystems.com/eMessage >> /var/log/RSMAgent_TS.log 2>&1 &
 else
-	/opt/ion/RSM/RSMAgent_TS https://drm.appliedbiosystems.com/eMessage >> /var/log/RSMAgent_TS.log &
+	/opt/ion/RSM/RSMAgent_TS https://drm.appliedbiosystems.com/eMessage >> /var/log/RSMAgent_TS.log 2>&1 &
 fi

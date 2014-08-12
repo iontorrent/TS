@@ -16,29 +16,44 @@
 // we do this a lot
 // expand a bead parameters for a block of flows
 // this is used in MultiFlowModel
-struct incorporation_params_block_flows {
-    int NucID[NUMFB]; // technically redundant
-    float SP[NUMFB];
-    float sens[NUMFB];
-    float d[NUMFB];
-    float kr[NUMFB];
-    float kmax[NUMFB];
-    float C[NUMFB];
-    float molecules_to_micromolar_conversion[NUMFB]; // cannot reasonably differ by flow(?)
-    float *nuc_rise_ptr[NUMFB];
-    float *ival_output[NUMFB];
+class incorporation_params_block_flows {
+    // Don't do this...
+    incorporation_params_block_flows( const incorporation_params_block_flows & );
+    incorporation_params_block_flows & operator=( const incorporation_params_block_flows & );
+public:
+    incorporation_params_block_flows( int flow_block_size );
+    ~incorporation_params_block_flows();
+
+    int *NucID; // technically redundant
+    float *SP;
+    float *sens;
+    float *d;
+    float *kr;
+    float *kmax;
+    float *C;
+    float *molecules_to_micromolar_conversion; // cannot reasonably differ by flow(?)
+    float **nuc_rise_ptr;
+    float **ival_output;
 };
 
-struct buffer_params_block_flows {
-    float etbR[NUMFB]; // buffering ratio of empty to bead
-    float tauB[NUMFB]; // buffering of bead itself
+class buffer_params_block_flows {
+    // Don't do this...
+    buffer_params_block_flows( const buffer_params_block_flows & );
+    buffer_params_block_flows & operator=( const buffer_params_block_flows & );
+public:
+    buffer_params_block_flows( int flow_block_size );
+    ~buffer_params_block_flows();
+
+    float *etbR; // buffering ratio of empty to bead
+    float *tauB; // buffering of bead itself
 };
 
+namespace MathModel {
 
-void RedSolveHydrogenFlowInWell(float *vb_out, float *red_hydrogen, int len, int i_start,float *deltaFrame, float tauB);
-void BlueSolveBackgroundTrace(float *vb_out, float *blue_hydrogen, int len, float *deltaFrame, float tauB, float etbR);
-void NewBlueSolveBackgroundTrace (double *vb_out, const double *blue_hydrogen, int len, const double *deltaFrame, float tauB, float etbR);
-void PurpleSolveTotalTrace(float *vb_out, float *blue_hydrogen, float *red_hydrogen, int len, float *deltaFrame, float tauB, float etbR);
+void RedSolveHydrogenFlowInWell(float *vb_out, float *red_hydrogen, int len, int i_start,const float *deltaFrame, float tauB);
+void BlueSolveBackgroundTrace(float *vb_out, float *blue_hydrogen, int len, const float *deltaFrame, float tauB, float etbR);
+void NewBlueSolveBackgroundTrace (float *vb_out, const float *blue_hydrogen, int len, const float *deltaFrame, float tauB, float etbR);
+void PurpleSolveTotalTrace(float *vb_out, const float *blue_hydrogen, float *red_hydrogen, int len, const float *deltaFrame, float tauB, float etbR);
 
 // some fun utilities
 void IntegrateRedFromRedTraceObserved (float *red_hydrogen, float *red_obs, int len, int i_start, float *deltaFrame, float tauB);
@@ -48,7 +63,7 @@ void IntegrateRedFromObservedTotalTrace ( float *red_hydrogen, float *purple_obs
 void RedTrace(float *red_out, float *ivalPtr, int npts,
               float *deltaFrameSeconds, float *deltaFrame, float *nuc_rise_ptr, int SUB_STEPS, int my_start,
               float C, float A, float SP, float kr, float kmax, float d, float molecules_to_micromolar_conversion, float sens, float gain, float tauB,
-              PoissonCDFApproxMemo *math_poiss);
+              PoissonCDFApproxMemo *math_poiss, int incorporationModelType);
               
-              
+} // namespace              
 #endif // DIFFEQMODEL_H

@@ -18,8 +18,25 @@
 #include <algorithm>
 
 #include <Variant.h>
+#include "ReferenceReader.h"
 
 using namespace std;
+
+// example variant:
+//  genome       42 42 44 45 46 47 48 49 50 51 52   (0 based)
+//  ref is        C  C  A  A  A  A  T  G  T  A  A  A
+//  alt is                       A  d  G  G
+//  variant is                     |d  G  G|              
+//  position0                   47 (includes anchor_right)
+//  my_hp_start_pos            {47 48 49 49}
+//  my_hp_length               { 1  1  2  2}
+//  reference_allele             A  T  G  T
+//  ref_left_hp_base C
+//  left_hp_length   2
+//  left_hp_start   42
+//  ref_right_hp_base                        A
+//  right_hp_length                          3
+//  right_hp_start                          51
 
 class LocalReferenceContext{
   public:
@@ -57,12 +74,14 @@ class LocalReferenceContext{
   }
 
   //! @brief  Fills in the member variables
-  void DetectContext(const string & local_contig_sequence, vcf::Variant ** candidate_variant, int DEBUG);
+  void DetectContext(const vcf::Variant &candidate_variant, int DEBUG,
+      const ReferenceReader &ref_reader, int chr_idx);
 
   //! @brief  Basic sanity checks on the provided vcf positions
   //! Sets member context_detected to true if sanity checks are passed.
   //! Returns false if VCF position is not valid.
-  bool ContextSanityChecks(const string & local_contig_sequence, vcf::Variant ** candidate_variant);
+  bool ContextSanityChecks(const vcf::Variant &candidate_variant,
+      const ReferenceReader &ref_reader, int chr_idx);
 };
 
 #endif //LOCALCONTEXT_H

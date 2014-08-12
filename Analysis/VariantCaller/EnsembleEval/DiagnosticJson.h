@@ -4,7 +4,6 @@
 #define DIAGNOSTICJSON_H
 #include "api/BamReader.h"
 
-#include "../Analysis/file-io/ion_util.h"
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -18,6 +17,7 @@
 
 using namespace std;
 
-void JustOneDiagnosis(const EnsembleEval &my_ensemble, string &out_dir, bool rich_diag);
+void JustOneDiagnosis(const EnsembleEval &my_ensemble, const InputStructures &global_context,
+    const string &out_dir, bool rich_diag);
 
 #endif // DIAGNOSTICJSON_H

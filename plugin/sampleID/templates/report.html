@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<base target="_parent"/>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8"> 
+<head>
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/print.css" media="print" />
+
+<link type="text/css" rel="stylesheet" href="lifegrid/pseudo-bootstrap.css" />
+
+<link rel="stylesheet" href="slickgrid/slick.grid.css" type="text/css"/>
+<link rel="stylesheet" href="lifegrid/columnpicker.css" type="text/css"/>
+<link rel="stylesheet" type="text/css" href="lifegrid/lifegrid.css"/>
+
+<script src="slickgrid/lib/firebugx.js"></script>
+<script src="slickgrid/lib/jquery-1.7.min.js"></script>
+<script src="slickgrid/lib/jquery-ui-1.8.16.custom.min.js"></script>
+<script src="slickgrid/lib/jquery.event.drag-2.0.min.js"></script>
+<script src="slickgrid/slick.core.js"></script>
+<script src="slickgrid/slick.grid.js"></script>
+<script src="slickgrid/plugins/slick.rowselectionmodel.js"></script>
+<script src="slickgrid/slick.dataview.js"></script>
+
+<script src="lifegrid/lifegrid.js"></script>
+<script src="lifegrid/columnpicker.js"></script>
+
+<script src="lifegrid/sampleIDalleleCoverageTable.js"></script>
+{% if full_report %}
+<script src="lifegrid/fileLinksTable.js"></script>
+{% endif %}
+
+{% load humanize %}
+
+<style type="text/css">
+  body {
+    background:white;
+    padding: 0;
+    margin: 8px;
+  }
+  .block-rounded {
+    padding:5px;
+    background-color:#F5F5F5;
+    border:1px solid #D6D6D6;
+    -moz-border-radius: 6px;
+    -webkit-border-radius:6px;
+    border-radius: 6px
+  }
+  .help {
+    cursor:help;
+    border-bottom: 1px dotted #A9A9A9
+  }
+</style>
+
+<title>Torrent Sample ID Report</title>
+
+</head>
+
+<body>
+
+<h1><center>Sample ID Report</center></h1>
+{% if Sample_Name != "" and Sample_Name != "None" %}
+<h3><center>Sample Name: {{Sample_Name}}</center></h3>
+{% endif %}
+<h3><center>{{run_name}}<center></h3>
+<br/><h1 title='Sample ID: Sex (M/F) and list of alleles called from base read coverage at the sample identification loci. "N/A" means no sample ID could be identified.' style='cursor:help;text-align:center;color:darkred'>{{Sample_ID}}</h1>
+<br/>
+
+<table class="center">
+<tr><td>
+
+<table class="center block-rounded"><tr>
+  <td><div class="statsdata center" style="width:420px"> <table>
+    <tr><td class="inleft"><span title="Total number of reads mapped to the reference. ">Number of mapped reads</span></td> <td class="inright">{{Number_of_mapped_reads|intcomma}}</td></tr>
+    <tr><td class="inleft"><span title="Total number of reads mapped to any sample ID region of the reference. A read is considered to be on target if at least one aligned base overlaps a target region. A read that overlaps a targeted region but where only flanking sequence is aligned, e.g. due to poor matching of 5' bases of the read, is not counted. ">Number of reads in sample ID regions</span></td> <td class="inright">{{Number_of_reads_in_sample_ID_regions|intcomma}}</td></tr>
+    <tr><td class="inleft"><span title="The percentage of all mapped reads that overlapped any sample ID region. ">Percent reads in sample ID regions</span></td> <td class="inright">{{Percent_reads_in_sample_ID_regions}}</td></tr>
+    <tr><td class="inleft"><span title="The total number of sample ID region bases covered by all mapped reads.  ">Total base reads in sample ID regions</span></td> <td class="inright">{{Total_base_reads_in_sample_ID_regions|intcomma}}</td></tr>
+    <tr><td class="inleft"><span title="The percent of all aligned base reads that were bases in sample ID regions ">Percent base reads in sample ID regions</span></td> <td class="inright">{{Percent_base_reads_in_sample_ID_regions}}</td></tr>
+    <tr><td class="inleft"><span title="Number of reads mapped to the specific male (Y) identification target(s). ">Male sample ID region reads</span></td> <td class="inright">{{Male_sample_ID_region_reads|intcomma}}</td></tr>
+    <tr><td class="inleft"><span title="Number of reads mapped to the specific female (X) identification target(s). ">Female sample ID region reads</span></td> <td class="inright">{{Female_sample_ID_region_reads|intcomma}}</td></tr>
+  </table></div></td>
+</tr></table>
+
+<tr><td>
+<br/>
+<div class="center statsdata block-rounded" style="width:650px"> <table>
+  <tr><th><span title="Coverage summary for reads mapped to the enriched regions used for gender and sample identification. ">Sample ID Regions</span></th><th><span title="Coverage summary for reads mapped over sample identification SNP loci. ">Sample ID SNPs</span></th></tr>
+  <tr><td><div class="statsdata"><table>
+  <tr><td class="inleft"><span title="The total number of bases in all sample ID regions of the reference. ">Bases in target regions</span></td> <td class="inright">{{target_cov.Bases_in_target_regions|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="The average number of reads of all targeted reference bases. This is the total number of base reads on target divided by the number of targeted bases and therefore includes any bases that had no coverage. ">Average base coverage depth</span></td> <td class="inright">{{target_cov.Average_base_coverage_depth|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least 0.2x the average base coverage depth. ">Uniformity of coverage</span></td> <td class="inright">{{target_cov.Uniformity_of_coverage}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least one read. ">Coverage at 1x</span></td> <td class="inright">{{target_cov.Coverage_at_1x}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least twenty reads. ">Coverage at 20x</span></td> <td class="inright">{{target_cov.Coverage_at_20x}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least one hundred reads. ">Coverage at 100x</span></td> <td class="inright">{{target_cov.Coverage_at_100x}}</td></tr>
+</table></div></td>
+<td><div class="statsdata"> <table>
+  <tr><td class="inleft"><span title="The total number of bases in all sample ID regions of the reference. ">Bases in target regions</span></td> <td class="inright">{{loci_cov.Bases_in_target_regions|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="The average number of reads of all targeted reference bases. This is the total number of base reads on target divided by the number of targeted bases and therefore includes any bases that had no coverage. ">Average base coverage depth</span></td> <td class="inright">{{loci_cov.Average_base_coverage_depth|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least 0.2x the average base coverage depth. ">Uniformity of coverage</span></td> <td class="inright">{{loci_cov.Uniformity_of_coverage}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least one read. ">Coverage at 1x</span></td> <td class="inright">{{loci_cov.Coverage_at_1x}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least twenty reads. ">Coverage at 20x</span></td> <td class="inright">{{loci_cov.Coverage_at_20x}}</td></tr>
+  <tr><td class="inleft"><span title="The percentage of target bases covered by at least one hundred reads. ">Coverage at 100x</span></td> <td class="inright">{{loci_cov.Coverage_at_100x}}</td></tr>
+  </table></div></td></tr>
+
+</td></tr></table>
+</div>
+
+</table>
+<br/>
+
+<div id="sampleIDalleleCoverageTable" fileurl="{{allele_table}}" class="center"></div>
+<br/>
+{% if full_report %}
+<div id="fileLinksTable" fileurl="{{file_links}}" class="center"></div>
+
+<br/>
+<div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
+  <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+  <div class="pull-right">
+    <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
+    <p><span class="copyright">&copy; 2014 Life Technologies Corporation. All Rights Reserved.</span>
+    <a href="http://ioncommunity.lifetechnologies.com/community/products/torrent_suite">Ion Community Support Site</a> |
+    <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+  </div>
+</div> </div> </div> </div>
+{% endif %}
+<br/>
+</body>
+</html>

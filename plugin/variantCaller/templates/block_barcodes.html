@@ -12,7 +12,7 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
 .zebra {  background-color: #E1EFFA;}
 .table_hover{    color: #009;    background-color: #6DBCEE;}
 </style></head>
-<body>
+<body style="background:white">
 
 
 	<table>
@@ -27,9 +27,10 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
 	  {% else %}
 	    <tr><td>Hotspot regions:</td>     <td>None</td></tr>
 	  {% endif %}
-	  <tr><td>Configuration:</td>         <td>{{options.configuration}}</td></tr>
+	  <tr><td>Configuration:</td>         <td>{{options.config_line1}}</td></tr>
     <tr><td>Download all barcodes:</td> <td><a class="btn" href="{{options.run_name}}.vcf.zip">VCF.ZIP</a>
-                                            <a class="btn" href="{{options.run_name}}.xls.zip">XLS.ZIP</a></td></tr>
+                                            <a class="btn" href="{{options.run_name}}.xls.zip">XLS.ZIP</a>
+                                            <a class="btn" href="{{options.run_name}}.xls">XLS</a></td></tr>
 	</table>
 
 <div class="k-widget k-grid">
@@ -48,7 +49,7 @@ p, ul{font-family: "Lucida Sans Unicode", "Lucida Grande", Sans-Serif;}
     {% for barcode in barcode_data %}
       {% if barcode.status == "completed" %}
        <tr>      
-          <td style="text-align:left"><a style="cursor:help" href="{{barcode.name}}/variantCaller.html">
+          <td style="text-align:left"><a href="{{barcode.name}}/variantCaller.html">
             <span title="Click to view the detailed coverage report for barcode {{barcode.name}}">{{barcode.name}}</span></a>
           </td>
           

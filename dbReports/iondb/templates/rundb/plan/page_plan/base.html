@@ -15,6 +15,7 @@
                 }());
         }
 </script>
+
 <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css" />
 <link rel="stylesheet" href="/site_media/resources/bootstrap/css/bootstrap-responsive.min.css" >
 <link href="/site_media/resources/kendo/styles/kendo.common.min.css" rel="stylesheet" />
@@ -52,12 +53,18 @@
     height : 150px; 
     overflow : auto;
 }
+
+.clearbg{
+    background-image: none;
+    background: none;
+}
+
 </style>
 {% endblock extra_head %}
 {% block sub-nav %}
 <li><a href="{% url "planRuns" %}">Plan Runs</a></li>
 <li><a href="{% url "samplesets" %}">Samples</a></li>
-<li><a href="{% url "plans" %}">Templates</a></li>
+<li><a href="{% url "plan_templates" %}">Templates</a></li>
 <li><a href="{% url "planned" %}">Planned Run List</a></li>
 <li class="active">
     <a href="#">
@@ -85,7 +92,7 @@
 </li>
 {% endblock sub-nav %}
 {% block content %}
-    <div class="main ">
+    <div class="main clearbg">
         <div class="container-fluid">
             <div id="global_messages"></div>
             <div id="user_messages"></div>
@@ -168,6 +175,24 @@
             </div>
          </div>
      </div>
+
+    <script>
+    //Third party(hub) planning support
+    //Embedded in body to prevent blink/redraw after hiding elements
+    if(typeof(sessionStorage) != 'undefined'){
+        if(window.location.href.indexOf("hide_nav=true") != -1){
+            sessionStorage.setItem('hide_nav', 'true')
+        }
+        if(sessionStorage.getItem('hide_nav')){
+            $(".header").hide();
+            $(".sub-nav").hide();
+            $("#chipToSampleTable").find("tr").find("input:not(:last)").prop('readonly', true);
+            $("#numPlans").parent().hide();
+
+        }
+    }
+    </script>
+
 {% endblock content %}
 {% block post-raw %}
 <script type="text/javascript">
@@ -177,7 +202,7 @@
         applicationToDesc = {};
         applicationToRuntype = {};
         {% for application in helper.getStepDict.Application.getPrePopulatedFieldDict.applicationGroups %}
-            applicationToDesc['{{application.pk}}'] = '{{application.name}}';
+            applicationToDesc['{{application.pk}}'] = '{{application.description}}';
             applicationToRuntype['{{application.pk}}'] = [];
             {% for runType in application.applications.all %}
                 applicationToRuntype['{{application.pk}}'].push('{{runType.pk}}');
@@ -240,7 +265,7 @@
         
         chipNameToDisplayName = {};
         {% for chipType in helper.getStepDict.Kits.getPrePopulatedFieldDict.chipTypes %}
-            chipNameToDisplayName['{{chipType.name}}'] = 'Ion {{chipType.getChipDisplayedName}}\u2122 Chip';
+            chipNameToDisplayName['{{chipType.name}}'] = 'Ion {{chipType.getChipDisplayedNamePrefix}}\u2122 Chip {{chipType.getChipDisplayedVersion}}';
         {% endfor %}
         $("#selectedChipType").text(chipNameToDisplayName['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.chipType}}']);
         

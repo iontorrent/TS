@@ -23,19 +23,19 @@ void SystemContext::DefaultSystemContext()
 
   sprintf (wellsFileName, "1.wells");
   strcpy (tmpWellsFile, "");
-  LOCAL_WELLS_FILE = 1;
+  LOCAL_WELLS_FILE = true;
   strcpy (wellsFilePath, "");
-  wellStatFile=NULL;
-  stackDumpFile=NULL;
+  wellStatFile="";
+  stackDumpFile="";
   //wellsFormat = "hdf5";
   wellsFormat.assign("hdf5");
-  NO_SUBDIR = 0;  // when set to true, no experiment subdirectory is created for output files.
-  
-  explog_path = NULL;
+  NO_SUBDIR = false;  // when set to true, no experiment subdirectory is created for output files.
+
+  explog_path = "";
 }
 
 //const char *SystemContext::GetResultsFolder()
-char *SystemContext::GetResultsFolder()
+char *SystemContext::GetResultsFolder() const
 {
   return(results_folder);
 }
@@ -54,7 +54,7 @@ void SystemContext::GenerateContext ()
     fprintf (stderr, "'%s' is not a directory.  Exiting.\n", dat_source_directory);
     exit (EXIT_FAILURE);
   }
-  
+
   // standard output directory
   if (!wells_output_directory)
   {
@@ -64,6 +64,7 @@ void SystemContext::GenerateContext ()
   }
   else   // --output-dir specified, so wells_output_directory an input arg
   {
+	  cout << "wells_output_directory = " << wells_output_directory << endl;
     if (NO_SUBDIR)   // --no-subdir specified
     {
       // wells_output_directory is a directory spec.
@@ -73,9 +74,9 @@ void SystemContext::GenerateContext ()
       char *tmpPath = strdup (wells_output_directory);
       char *real_path = realpath (dirname (tmpPath), NULL);
       if (real_path == NULL){
-	std::string ss = tmpPath;  // dirname overwrites tmpPath
-	ss = ss + ": directory not found";
-	ION_ASSERT ((real_path != NULL), ss.c_str());
+        std::string ss = tmpPath;  // dirname overwrites tmpPath
+        ss = ss + ": directory not found";
+        ION_ASSERT ((real_path != NULL), ss.c_str());
       }
       char *tmpBase = strdup (wells_output_directory);
       char *base_name = basename (tmpBase);
@@ -108,15 +109,15 @@ SystemContext::~SystemContext()
   }
   if (dat_source_directory)
     free (dat_source_directory);
-  if (explog_path)
-    free (explog_path);
+  /*if (explog_path)
+    free (explog_path);*/
 }
 
 
 // utility function
 void SystemContext::MakeSymbolicLinkToOldDirectory (char *results_folder)
 {
-// Create symbolic link to bfmask.bin and 1.wells in new subdirectory: links are for disc space usage reasons
+  // Create symbolic link to bfmask.bin and 1.wells in new subdirectory: links are for disc space usage reasons
   char *oldpath = NULL;
   int sz = strlen (wellsFilePath) + strlen (wellsFileName) + 2;
   oldpath = (char *) malloc (sz);
@@ -171,8 +172,8 @@ void SystemContext::MakeNewTmpWellsFile (char *results_folder)
 // fill the new directory with files needed for report generation
 void SystemContext::CopyFilesForReportGeneration (char *results_folder, SeqListClass &my_keys)
 {
-//--- Copy files needed for report generation ---
-//--- Copy bfmask.stats ---
+  //--- Copy files needed for report generation ---
+  //--- Copy bfmask.stats ---
   int sz;
   char *newpath = NULL;
   char *oldpath = NULL;
@@ -186,8 +187,8 @@ void SystemContext::CopyFilesForReportGeneration (char *results_folder, SeqListC
   if( CopyFile (oldpath, newpath) ) ExitCode::UpdateExitCode(EXIT_FAILURE);
   free (oldpath);
   free (newpath);
-//--- Copy avgNukeTrace_ATCG.txt and avgNukeTrace_TCAG.txt
-//@TODO:  Is this really compatible with 3 keys?
+  //--- Copy avgNukeTrace_ATCG.txt and avgNukeTrace_TCAG.txt
+  //@TODO:  Is this really compatible with 3 keys?
   for (int q = 0; q < my_keys.numSeqListItems; q++)
   {
     char *filename;
@@ -265,26 +266,26 @@ char *SystemContext::experimentDir (char *rawdataDir, char *dirOut)
 void SystemContext::SetUpAnalysisLocation()
 {
   char *path = strdup(results_folder);
-  
+
   //get full path
   char *real_path = realpath (path, NULL);
   if (real_path == NULL) {
     cout << "Couldn't set up real output path from " << path << ". Using working directory." << endl;
     real_path = realpath("./", NULL);
-  } 
+  }
 
   analysisLocation = string(real_path);
   // file locations
   if (!analysisLocation.empty() && *analysisLocation.rbegin() != '/')
     analysisLocation = analysisLocation+"/";
-  
+
   char *bName = basename(real_path);
   ion_run_to_readname (runId, bName, strlen (bName)); // Create a run identifier from output results directory string
   cout << "SystemContext::SetUpAnalysisLocation... experimentName=" << results_folder << endl;
   cout << "SystemContext::SetUpAnalysisLocation... analysisLocation  =" << analysisLocation << endl << endl;
   cout << "SystemContext::SetUpAnalysisLocation... baseName      =" << bName << endl;
-  cout << "SystemContext::SetUpAnalysisLocation... runId         =" << runId << endl; 
-  
+  cout << "SystemContext::SetUpAnalysisLocation... runId         =" << runId << endl;
+
   free(path);
   free(real_path);
 }
@@ -292,14 +293,14 @@ void SystemContext::SetUpAnalysisLocation()
 // make sure we have explog file if not set cmd-line
 void SystemContext::FindExpLogPath()
 {
-  if (!explog_path){
+  if (explog_path.length() == 0){
     explog_path = MakeExpLogPathFromDatDir(dat_source_directory);
-    if (!explog_path)
+    if (explog_path.length() == 0)
     {
-    fprintf (stderr, "Unable to find explog file.  Exiting.\n");
-    exit (EXIT_FAILURE);
-    }  
-  }    
+      fprintf (stderr, "Unable to find explog file.  Exiting.\n");
+      exit (EXIT_FAILURE);
+    }
+  }
 }
 
 void SystemContext::CleanupTmpWellsFile ()
@@ -325,7 +326,7 @@ void SystemContext::CopyTmpWellFileToPermanent ( char *results_folder)
     char wellFileName[MAX_PATH_LENGTH];
     sprintf (wellFileName, "%s/%s.%s", results_folder, wellfileIndex, wellfileExt);
     if( CopyFile (tmpWellsFile, wellFileName) )
-        ExitCode::UpdateExitCode(EXIT_FAILURE);
+      ExitCode::UpdateExitCode(EXIT_FAILURE);
   }
 }
 
@@ -363,3 +364,41 @@ void  ClearStaleWellsFile (void)
   closedir (dirfd);
 }
 
+void SystemContext::PrintHelp()
+{
+	printf ("     SystemContext\n");
+    printf ("     --no-subdir             BOOL              no subdir [false]\n");
+    printf ("     --local-wells-file      BOOL              use local wells file [false]\n");
+    printf ("     --well-stat-file        FILE              well stat file name []\n");
+    printf ("     --stack-dump-file       FILE              stack dump file name []\n");
+	printf ("     --wells-format          STRING            wells format [hdf5]\n");
+    printf ("     --output-dir            DIRECTORY         wells output directory []\n");
+    printf ("     --explog-path           DIRECTORY         explog output directory []\n");
+    printf ("     --dat-source-directory  DIRECTORY         dat source input directory, if there is no such option the last argument of command line must be dat source input directory []\n");
+    printf ("\n");
+}
+
+void SystemContext::SetOpts(OptArgs &opts, Json::Value& json_params)
+{
+	LOCAL_WELLS_FILE = RetrieveParameterBool(opts, json_params, '-', "local-wells-file", false);
+	wellStatFile = RetrieveParameterString(opts, json_params, '-', "well-stat-file", "");
+	stackDumpFile = RetrieveParameterString(opts, json_params, '-', "stack-dump-file", "");
+	wellsFormat = RetrieveParameterString(opts, json_params, '-', "wells-format", "hdf5");
+	string s0 = RetrieveParameterString(opts, json_params, '-', "output-dir", "");
+	wells_output_directory = strdup(s0.c_str());
+	explog_path = RetrieveParameterString(opts, json_params, '-', "explog-path", "");
+	NO_SUBDIR = RetrieveParameterBool(opts, json_params, '-', "no-subdir", true);
+	//jz moved from CommandLineOpts::PickUpSourceDirectory
+	string s = RetrieveParameterString(opts, json_params, '-', "dat-source-directory", "");
+	if(s.length() > 0)
+	{
+		if (dat_source_directory)
+		{
+			free (dat_source_directory);
+			dat_source_directory = NULL;
+		}
+
+		dat_source_directory = (char *) malloc (s.length() + 1);
+		sprintf (dat_source_directory, "%s", s.c_str());  
+	}
+}

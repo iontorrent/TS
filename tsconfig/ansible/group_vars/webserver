@@ -1,0 +1,4 @@
+---
+# Variables applicable to webservers
+
+configfile: '/etc/logrotate.d/apache2'

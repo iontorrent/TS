@@ -1,0 +1,16 @@
+##gff-version 3
+contig1	GlimmerHMM	mRNA	337	1120	.	+	.	ID=contig1.path1.gene1;Name=contig1.path1.gene1
+contig1	GlimmerHMM	CDS	337	1120	.	+	0	ID=contig1.cds1.1;Parent=contig1.path1.gene1;Name=contig1.path1.gene1;Note=initial-exon
+contig2	GlimmerHMM	mRNA	28	1119	.	+	.	ID=contig2.path1.gene1;Name=contig2.path1.gene1
+contig2	GlimmerHMM	CDS	28	1119	.	+	0	ID=contig2.cds1.1;Parent=contig2.path1.gene1;Name=contig2.path1.gene1;Note=single-exon
+contig2	GlimmerHMM	mRNA	1121	1568	.	+	.	ID=contig2.path1.gene2;Name=contig2.path1.gene2
+contig2	GlimmerHMM	CDS	1121	1568	.	+	0	ID=contig2.cds2.1;Parent=contig2.path1.gene2;Name=contig2.path1.gene2;Note=initial-exon
+contig3	GlimmerHMM	mRNA	14	400	.	+	.	ID=contig3.path1.gene1;Name=contig3.path1.gene1
+contig3	GlimmerHMM	CDS	14	400	.	+	0	ID=contig3.cds1.1;Parent=contig3.path1.gene1;Name=contig3.path1.gene1;Note=single-exon
+contig3	GlimmerHMM	mRNA	668	910	.	+	.	ID=contig3.path1.gene2;Name=contig3.path1.gene2
+contig3	GlimmerHMM	CDS	668	910	.	+	0	ID=contig3.cds2.1;Parent=contig3.path1.gene2;Name=contig3.path1.gene2;Note=single-exon
+contig3	GlimmerHMM	mRNA	1063	1839	.	-	.	ID=contig3.path1.gene3;Name=contig3.path1.gene3
+contig3	GlimmerHMM	CDS	1063	1839	.	-	0	ID=contig3.cds3.1;Parent=contig3.path1.gene3;Name=contig3.path1.gene3;Note=single-exon
+contig3	GlimmerHMM	mRNA	2218	3873	.	+	.	ID=contig3.path1.gene4;Name=contig3.path1.gene4
+contig3	GlimmerHMM	CDS	2218	3115	.	+	0	ID=contig3.cds4.1;Parent=contig3.path1.gene4;Name=contig3.path1.gene4;Note=initial-exon
+contig3	GlimmerHMM	CDS	3311	3873	.	+	2	ID=contig3.cds4.2;Parent=contig3.path1.gene4;Name=contig3.path1.gene4;Note=final-exon

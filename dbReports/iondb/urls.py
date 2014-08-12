@@ -46,9 +46,13 @@ urlpatterns = patterns(
     (r'^admin/update/install_lock$', 'iondb.rundb.admin.install_lock'),
     (r'^admin/update/version_lock/(?P<enable>[\w\.]+)', 'iondb.rundb.admin.version_lock'),
     (r'^admin/experiment/exp_redo_from_scratch/$', 'iondb.rundb.admin.exp_redo_from_scratch'),
+    url(r'^admin/tsvm/$', 'iondb.rundb.admin.tsvm_control', name="tsvm"),
+    url(r'^admin/tsvm/(?P<action>\w+)/$', 'iondb.rundb.admin.tsvm_control', name="tsvm"),
+    url(r'^admin/tsvm_log/(.+)/$', 'iondb.rundb.admin.tsvm_get_log', name="tsvm_log"),
     (r'^admin/', include(admin.site.urls)),
     (r'^(?P<urlpath>output.*)$', serve_wsgi_location),
     (r'^(?P<urlpath>chef_logs.*)$', serve_wsgi_location),
+    (r'^(?P<urlpath>ot_logs.*)$', serve_wsgi_location),
 )
 urlpatterns.extend(login_patterns)
 urlpatterns.extend(staticfiles_urlpatterns())

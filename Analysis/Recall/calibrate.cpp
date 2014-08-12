@@ -49,6 +49,7 @@ bool quit[MAX_NUM_THREADS];
 int notDone[MAX_NUM_THREADS];
 BamAlignment bamAlignmentIn[MAX_NUM_THREADS];
 
+
 bool dump4Plugin = false;
 const int DEFAULT_NUM_HP = 10;
 pthread_mutex_t mutexAddRecord;
@@ -145,7 +146,7 @@ int PrintHelp()
   printf ("  -o,--output-dir            FILE       output directory [current directory]\n");
   printf ("  --rawFile                  FILE       raw HP counting statistics [off]\n");
   printf ("  --hpModelFile              FILE       HP model file [{output-dir}/hpModel.txt]\n");
-  printf ("  --hpTableStratified        FILE       stratified HP table [{output-dir}/flowQVtable.txt]\n");
+  printf ("  --hpTableStratified        FILE       stratified HP table [{output-dir}/hpTable.txt]\n");
   printf ("  --archiveFile              FILE       archive file of HP table [{output-dir}/HPTable.arc]\n");
   printf ("  --performMerge                        whether perform HPTable archivals merging [off]\n");
   printf ("  --mergeParentDir           FILE       parent directory of barcoded subfolders [off]\n");
@@ -154,6 +155,7 @@ int PrintHelp()
   printf ("  --alignmentAggregated      FILE       aggregated HP alignment summary [off]\n");
   printf ("  --alignmentStratified      FILE       stratified HP alignment [off]\n");
   printf ("  --skipDroop                           whether skip Droop [off]\n");
+  printf ("  --slopeAndIntercept       whether to use both slope and intercept for recalibration model [off] \n");
   printf ("\n");
   return 1;
 }
@@ -179,7 +181,26 @@ struct HPPMDistribution{
   vector<vector<double> > predictions;
   vector<vector<double> > measurements;
   vector<vector<int> > calledHPs;
-  vector<mat > models;
+  vector<mat> models;
+  vector<mat> modelsSlopeAndIntercept;
+  vector<mat> modelsSlopeOnly;
+  vector<mat> modelStats;
+  vector<double> matchedPMCorrelation;
+  vector<long> underCalls;
+  vector<long> overCalls;
+  vector<long> correctCalls;
+  bool slopeAndIntercept;
+  bool saveModelStats;
+  bool aggressiveExtrapolation;
+  
+  static int NucToInt (char nuc) {
+    if (nuc=='a' or nuc=='A') return 0;
+    if (nuc=='c' or nuc=='C') return 1;
+    if (nuc=='g' or nuc=='G') return 2;
+    if (nuc=='t' or nuc=='T') return 3;
+    return -1;
+  }
+  
   HPPMDistribution(int hps, int rLimit):numHPs(hps), recordsLimit(rLimit){
       predictions.resize(numHPs, vector<double>());
       measurements.resize(numHPs, vector<double>());
@@ -189,6 +210,19 @@ struct HPPMDistribution{
           measurements[hp].reserve(recordsLimit);
           calledHPs[hp].reserve(recordsLimit);
       }
+      slopeAndIntercept = false;
+      saveModelStats = false;
+      aggressiveExtrapolation = false;
+  }
+
+  void setSlopeAndInterceptMode(bool bMode){
+      slopeAndIntercept = bMode;
+  }
+  void setSaveModelStats(bool bSave){
+      saveModelStats = bSave;
+  }
+  void setAggressiveExtrapolation(bool bAggressiveExtrapolation){
+      aggressiveExtrapolation = bAggressiveExtrapolation;
   }
 
   //reserve memory for predictions and measurements for faster push_back
@@ -266,9 +300,9 @@ struct HPPMDistribution{
 
     for(int hp = 0; hp < numHPs; ++hp){
         if((int)predictions[hp].size() > MINIMUM_FIT_THRESHOLD)
-            models.push_back(fitFirstOrder(predictions[hp], measurements[hp]));
+            modelsSlopeAndIntercept.push_back(fitFirstOrder(predictions[hp], measurements[hp]));
         else
-          models.push_back(defaultModel);
+          modelsSlopeAndIntercept.push_back(defaultModel);
     }
   }
 
@@ -277,15 +311,165 @@ struct HPPMDistribution{
     mat defaultModel(2, 1);
     defaultModel(0, 0) = 1;
     defaultModel(1, 0) = 0;
+	
+    mat defaultStats(8, 1);
+    defaultStats(0,0) = 0;
+    defaultStats(1,0) = 0;
+    defaultStats(2,0) = 0;    
+    defaultStats(3,0) = 0;
+    defaultStats(4,0) = 0;
+    defaultStats(5,0) = 0;
+    defaultStats(6,0) = 0;	
+    defaultStats(7,0) = 0;	//P/M correlation
 
     for(int hp = 0; hp < numHPs; ++hp){
-        if((int)predictions[hp].size() > MINIMUM_FIT_THRESHOLD)
-          models.push_back(fitFirstOrder(predictions[hp], measurements[hp], hp, calledHPs[hp], nucIndex));
-        else
-          models.push_back(defaultModel);
+        if((int)predictions[hp].size() > MINIMUM_FIT_THRESHOLD){
+            double corr = 0;
+            modelsSlopeAndIntercept.push_back(fitFirstOrder(predictions[hp], measurements[hp], hp, calledHPs[hp], nucIndex, corr));
+            modelsSlopeOnly.push_back(fitFirstOrderSlopeOnly(predictions[hp], measurements[hp]));
+            matchedPMCorrelation.push_back(corr);
+        }
+        else{
+            modelsSlopeAndIntercept.push_back(defaultModel);
+            modelsSlopeOnly.push_back(defaultModel); 
+            matchedPMCorrelation.push_back(0);
+        }
+        if(saveModelStats){
+            if((int)predictions[hp].size() >5){
+                modelStats.push_back(calculateModelStats(predictions[hp], measurements[hp]));
+            }
+            else {
+                modelStats.push_back(defaultStats);
+            }
+        }
     }
+    if(saveModelStats)
+        calculateHPAccuracy( );
+
+  }
+  
+void calculateHPAccuracy( ){ //not in active use
+
+    underCalls.resize(numHPs);
+    overCalls.resize(numHPs);
+    correctCalls.resize(numHPs);
+    underCalls.assign(numHPs,0);
+    overCalls.assign(numHPs,0);
+    correctCalls.assign(numHPs,0);
+	
+    //accumulate number of calls (over, under) for each nuc
+    for (int hp = 0; hp < numHPs; hp++){
+        int numHPCalls = calledHPs[hp].size();
+        for(int i =0; i< numHPCalls; i++){
+			if(calledHPs[hp][i]>hp) overCalls[hp] = overCalls[hp] + 1;
+            if(calledHPs[hp][i]<hp) underCalls[hp] = underCalls[hp] + 1;
+            if(calledHPs[hp][i]==hp) correctCalls[hp] = correctCalls[hp] + 1;
+			}
+        }
+    }
+	
+  void postprocess(){ //extrapolate slope-only model to long hp length
+
+    mat defaultModel(2, 1);
+    defaultModel(0, 0) = 1;
+    defaultModel(1, 0) = 0;
+
+    models.clear();
+    for(int hp = 0; hp < numHPs; ++hp){        
+        if(matchedPMCorrelation[hp]<0.5 && (modelsSlopeAndIntercept[hp](0,0)>1.5||modelsSlopeAndIntercept[hp](0,0)<0.6)){
+         models.push_back(modelsSlopeOnly[hp]);
+        }
+        else{
+         models.push_back(modelsSlopeAndIntercept[hp]);
+        }
+    }
+
+    if(slopeAndIntercept)
+        return;
+
+    //before 2014/03/06
+    int firstHPWithoutEnoughSamples = numHPs;
+
+    for(int hp = 1; hp < numHPs; ++hp){ //for now, do nothing for hp < 6
+        if(modelsSlopeOnly[hp](0,0)==1.0 && modelsSlopeOnly[hp](1,0)==0.0){ //check for default model (due to insufficient number of training samples)
+            firstHPWithoutEnoughSamples = hp;
+            break;
+        }
+    }
+
+    if(firstHPWithoutEnoughSamples < 6) return;
+
+    int startHP = firstHPWithoutEnoughSamples - 3;
+    if(startHP > 4) startHP = 4; //startHP is 3 or 4
+    int endHP = firstHPWithoutEnoughSamples -1;
+
+    float minSlope = 100000;
+    float maxSlope = -100000;
+    int minSlopeHP = startHP;
+    int maxSlopeHP = endHP;
+
+    for(int hp = startHP; hp <= endHP; hp++){
+        if(modelsSlopeOnly[hp](0,0)<=minSlope){
+            minSlope = modelsSlopeOnly[hp](0,0);
+            minSlopeHP = hp;
+        }
+        if(modelsSlopeOnly[hp](0,0)>=maxSlope){
+            maxSlope = modelsSlopeOnly[hp](0,0);
+            maxSlopeHP = hp;
+        }
+    }
+
+    mat extraploationCoeffs(1,2);
+
+    int numHPSampled = endHP - startHP + 1;
+    mat slopeMat(numHPSampled, 2);
+    mat hpMat(numHPSampled, 1);
+
+    for(int hp = startHP; hp <= endHP; hp++){
+       slopeMat.at(hp - startHP, 0) = hp;
+       slopeMat.at(hp - startHP, 1) = 1;
+       hpMat.at(hp - startHP, 0) = modelsSlopeOnly[hp](0,0);
+       }
+
+
+     //pinv might throw runtime_error
+     extraploationCoeffs = pinv(slopeMat) * hpMat;
+
+     //check fititng residual to evaluate whether extrapolation is reliable
+
+     float rms = 0;
+
+     for(int hp = startHP; hp <= endHP; hp++){
+         rms = rms + (modelsSlopeOnly[hp](0,0) - hp*extraploationCoeffs[0] - extraploationCoeffs[1])*(modelsSlopeOnly[hp](0,0) - hp*extraploationCoeffs[0] - extraploationCoeffs[1]);
+     }
+     rms = sqrt(rms/numHPSampled);
+     //normalized
+     rms = rms/(maxSlope-minSlope+0.00001);
+
+     //simple extrapolation when fitting residual is too large
+     float fittingThreshold = 0.1;
+     if(aggressiveExtrapolation) fittingThreshold = 0.3;
+     if(rms>fittingThreshold)
+         return;
+
+     mat extrapolatedModel(1,2);
+
+     for(int hp = 0; hp < numHPs; hp++){
+         if(hp >= firstHPWithoutEnoughSamples){
+             extrapolatedModel(0) = hp*extraploationCoeffs[0] + extraploationCoeffs[1];
+             extrapolatedModel(1) = 0.0;
+             models[hp] =  extrapolatedModel;
+         }
+         else {
+             models[hp] = modelsSlopeOnly[hp];
+            }
+     }
+
+     return;
+
   }
 
+ 
   void print(FILE * hpTableFILE, Region r ){
     if(!hpTableFILE)
         return;
@@ -294,6 +478,13 @@ struct HPPMDistribution{
     }
   }
 
+  void printModelStats(FILE * hpTableFILE, Region r ){
+    if(!hpTableFILE)
+        return;
+    for(int calledHP = 0; calledHP < numHPs; ++calledHP){	
+        fprintf(hpTableFILE, "%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%6.4f\t%ld\t%ld\t%ld\t%ld\n", NucToInt(r.nuc), r.flowStart, r.flowEnd, r.xMin, r.xMax, r.yMin, r.yMax, calledHP, models[calledHP].at(0,0), models[calledHP].at(1,0), modelsSlopeAndIntercept[calledHP].at(0,0), modelsSlopeAndIntercept[calledHP].at(1,0), modelsSlopeOnly[calledHP].at(0,0), modelsSlopeOnly[calledHP].at(1,0), modelStats[calledHP].at(0,0), modelStats[calledHP].at(1,0), modelStats[calledHP].at(2,0), modelStats[calledHP].at(3,0),modelStats[calledHP].at(4,0),modelStats[calledHP].at(5,0),modelStats[calledHP].at(6,0), modelStats[calledHP].at(7,0), (long)(predictions[calledHP].size()), correctCalls[calledHP], overCalls[calledHP], underCalls[calledHP]);
+    }
+  }  
 
 };
 
@@ -561,6 +752,20 @@ struct HPTable{
   vector<char> nucs;
   const static unsigned int ALIGN_RECORD_LIMIT = 1000; //parameter to fine tune
 
+  bool slopeAndIntercept;
+  bool saveModelStats;
+  bool aggressiveExtrapolation;
+
+  void setSlopeAndInterceptMode(bool bMode){
+      slopeAndIntercept = bMode;
+  }
+  void setSaveModelStats(bool bSave){
+      saveModelStats = bSave;
+  }
+  void setAggressiveExtrapolation(bool bAggressiveExtrapolation){
+      aggressiveExtrapolation = bAggressiveExtrapolation;
+  }
+
   static int NucToInt (char nuc) {
       if (nuc=='a' or nuc=='A') return 0;
       if (nuc=='c' or nuc=='C') return 1;
@@ -640,6 +845,9 @@ struct HPTable{
     }
 
     isProcessed = false;
+    slopeAndIntercept = false;
+    saveModelStats = false;
+    aggressiveExtrapolation = false;
 
   }
 
@@ -770,12 +978,24 @@ struct HPTable{
         hpPerturbationDistributionList[regionInd] -> process(aggregatedHPPerturbationDistribution[NucToInt( regionList[regionInd].nuc)]);
         //hpPMDistributionList[regionInd]->process();
         //nuc_dependent_process
+        hpPMDistributionList[regionInd]->setSaveModelStats(saveModelStats);
+        hpPMDistributionList[regionInd]->setAggressiveExtrapolation(aggressiveExtrapolation);
         hpPMDistributionList[regionInd]->process(NucToInt(regionList[regionInd].nuc));
     }
 
     //low complexity handling
 
     isProcessed = true;
+  }
+
+
+  void postprocess(){
+    //model extrapolation for each region
+    for(int regionInd = 0; regionInd < numRegions; ++regionInd){        
+        hpPMDistributionList[regionInd]->setSlopeAndInterceptMode(slopeAndIntercept);
+        hpPMDistributionList[regionInd]->postprocess();
+        //hpPMDistributionList[regionInd]->postprocess(overCallPercent[NucToInt(regionList[regionInd].nuc)]);
+    }
   }
 
   void saveToFile(const char* fileName){
@@ -973,7 +1193,18 @@ struct HPTable{
     }
     fclose(hpTableFile);
   }
-
+  void printStratifiedModelStats(const char* fileName){
+    FILE * hpTableFile = fopen (fileName,"w");
+    if(hpTableFile == 0){
+        printf("%s does not exist", fileName);
+        return;
+    }
+    //no header
+    for(int regionInd = 0; regionInd < numRegions; ++regionInd){
+        hpPMDistributionList[regionInd] -> printModelStats(hpTableFile, regionList[regionInd]);
+    }
+    fclose(hpTableFile);
+  }
   void printAggregatedTable(const char* fileName){
     FILE * hpTableFile = fopen (fileName,"w");
     if(hpTableFile == 0){
@@ -1532,8 +1763,12 @@ int main (int argc, const char *argv[])
   string hpModelFile  = opts.GetFirstString ('-', "hpModelFile", "hpModel.txt");
   if(!hpModelFile.empty())
       hpModelFile = output_dir + "/" + hpModelFile;
+	  
+  string hpModelStatsFile = "hpModelStats.txt";
+  hpModelStatsFile = output_dir + "/" + hpModelStatsFile;
+  
 
-  string hpTableStratified = opts.GetFirstString ('-', "hpTableStratified", "flowQVtable.txt"); //be consistent with current production
+  string hpTableStratified = opts.GetFirstString ('-', "hpTableStratified", "hpTable.txt"); //be consistent with current production
   if(!hpTableStratified.empty())
       hpTableStratified = output_dir + "/" + hpTableStratified;
 
@@ -1559,6 +1794,11 @@ int main (int argc, const char *argv[])
 
   bool skipDroop = opts.GetFirstBoolean('-', "skipDroop", false);
 
+  bool slopeAndIntercept = opts.GetFirstBoolean('-', "slopeAndIntercept", false);
+
+  bool saveModelStats = opts.GetFirstBoolean('-', "saveModelStats", false);
+
+  bool aggressiveExtrapolation = opts.GetFirstBoolean('-', "aggressiveExtrapolation", false);
 
   if(performMerge){
     //load binary HPTables and merge it into one HPTable to support barcode runs
@@ -1603,14 +1843,20 @@ int main (int argc, const char *argv[])
       printf("HP table is not produced!\n");
       return 0;
     }
-
+    mergedHPTable->setSaveModelStats(saveModelStats);
+    mergedHPTable->setSlopeAndInterceptMode(slopeAndIntercept);
+    mergedHPTable->setAggressiveExtrapolation(aggressiveExtrapolation);
     mergedHPTable->process();
+    mergedHPTable->postprocess();
 
     if(!rawFile.empty())
       mergedHPTable->printRaw(rawFile.c_str());
 
-    if(!hpModelFile.empty())
+    if(!hpModelFile.empty()){
       mergedHPTable->printStratifiedModels(hpModelFile.c_str());
+      if(saveModelStats)
+        mergedHPTable->printStratifiedModelStats(hpModelStatsFile.c_str());
+	  }
 
     if(!hpTableStratified.empty())
       mergedHPTable->printStratifiedTable(hpTableStratified.c_str());
@@ -2076,13 +2322,21 @@ int main (int argc, const char *argv[])
       }
 
       //process hptable
+      hpTablePtr->setSaveModelStats(saveModelStats);
+      hpTablePtr->setSlopeAndInterceptMode(slopeAndIntercept);
+      hpTablePtr->setAggressiveExtrapolation(aggressiveExtrapolation);
       hpTablePtr->process();
+      hpTablePtr->postprocess();
+
 
       if(!rawFile.empty())
         hpTablePtr->printRaw(rawFile.c_str());
 
-      if(!hpModelFile.empty())
+      if(!hpModelFile.empty()){
         hpTablePtr->printStratifiedModels(hpModelFile.c_str());
+        if(saveModelStats)
+            hpTablePtr->printStratifiedModelStats(hpModelStatsFile.c_str());
+		}
 
       if(!hpTableStratified.empty())
         hpTablePtr->printStratifiedTable(hpTableStratified.c_str());
@@ -2187,26 +2441,26 @@ int main (int argc, const char *argv[])
 			  {
 				  startFlowA[nHp] = 0;
 			  }
-			  json["StartFlow"]["A"][sHp] = startFlowA[nHp];
-			  json["EndFlow"]["A"][sHp] = endFlowA[nHp];
+			  json["StartFlow"]["A"][sHp] = startFlowA[nHp] + 1;
+			  json["EndFlow"]["A"][sHp] = endFlowA[nHp] + 1;
 			  if(startFlowC[nHp] < 0)
 			  {
 				  startFlowC[nHp] = 0;
 			  }
-			  json["StartFlow"]["C"][sHp] = startFlowC[nHp];
-			  json["EndFlow"]["C"][sHp] = endFlowC[nHp];
+			  json["StartFlow"]["C"][sHp] = startFlowC[nHp] + 1;
+			  json["EndFlow"]["C"][sHp] = endFlowC[nHp] + 1;
 			  if(startFlowG[nHp] < 0)
 			  {
 				  startFlowG[nHp] = 0;
 			  }
-			  json["StartFlow"]["G"][sHp] = startFlowG[nHp];
-			  json["EndFlow"]["G"][sHp] = endFlowG[nHp];
+			  json["StartFlow"]["G"][sHp] = startFlowG[nHp] + 1;
+			  json["EndFlow"]["G"][sHp] = endFlowG[nHp] + 1;
 			  if(startFlowT[nHp] < 0)
 			  {
 				  startFlowT[nHp] = 0;
 			  }
-			  json["StartFlow"]["T"][sHp] = startFlowT[nHp];
-			  json["EndFlow"]["T"][sHp] = endFlowT[nHp];
+			  json["StartFlow"]["T"][sHp] = startFlowT[nHp] + 1;
+			  json["EndFlow"]["T"][sHp] = endFlowT[nHp] + 1;
 
 			  ofstream ofs(filename_json.c_str(), ofstream::out);
 			  ofs << json.toStyledString();

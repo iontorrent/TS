@@ -1,5 +1,0 @@
-genome_shortname	rhodopalu
-genome_name	Rhodopseudomonas palustris CGA009 chromosome
-genome_version	gi|39933080|ref|NC_005296.1
-index_version	b-0.1
-genome_length	5459213

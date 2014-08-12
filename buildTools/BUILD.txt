@@ -16,10 +16,11 @@ QUICK START on Ubuntu 10.04 (=Lucid)
         libbz2-dev \
         libcurl4-openssl-dev \
         libncurses-dev \
-        libboost-serialization-dev
+        libboost-serialization-dev \
+		r-base
 
 
-   ./buildTools/build.sh
+   MODULES="gpu Analysis" ./buildTools/build.sh
 
 
 
@@ -48,13 +49,14 @@ QUICK START on Ubuntu 11.10 (=Oneiric) (EXPERIMENTAL)
         libbz2-dev
         libbz2-dev \
         libcurl4-openssl-dev \
-        libncurses-dev
+        libncurses-dev \
+		r-base
 
    # icc needs sudo apt-get install libboost1.42-all-dev
 
-   ./buildTools/build.sh
+   MODULES="gpu Analysis" ./buildTools/build.sh
 
-QUICK START on Ubuntu 13.04 (=Raring) (EXPERIMENTAL)
+QUICK START on Ubuntu 14.04 (=Trusty) (EXPERIMENTAL)
 
      Activate Ubuntu's universe in /etc/apt/sources.list to get libatlas-base-dev
 
@@ -77,7 +79,10 @@ QUICK START on Ubuntu 13.04 (=Raring) (EXPERIMENTAL)
         libncurses5-dev \
         libboost-serialization-dev \
         libfftw3-dev \
-        libhdf5-dev
+        libhdf5-dev \
+		r-base
+
+   MODULES="gpu Analysis" ./buildTools/build.sh
 
 
 
@@ -107,7 +112,7 @@ The lapack++ (included external) depends on atlas and blas.
 Instructions for lapack++ on Ubuntu can be found at:
 
 	https://help.ubuntu.com/community/Lapack%2B%2B
-    
+
 BUILD EVERYTHING
 
 From the top level folder (where buildTools, Analysis, and others 
@@ -130,6 +135,63 @@ are listed as subfolders) run:
 
 where FOO and BAR are particular modules to build. 
 (eg Analysis). 
+
+BUILD TORRENTR MODULE
+
+A number of R library modules need to be installed in order for the torrentR module to compile.
+
+Add to /etc/apt/sources.list:
+deb http://updates.iontorrent.com/updates/softare lucid/
+
+Then execute the following:
+apt-get update
+apt-get install r-base
+
+The following R library modules are required to be installed:
+
+bitops_1.0-5.tar.gz
+Rcpp_0.10.4.tar.gz
+spam_0.29-3.tar.gz
+maps_2.3-3.tar.gz
+fields_6.8.tar.gz
+RCurl_1.95-4.1.tar.gz
+rjson_0.2.12.tar.gz
+
+Here is a bash script which will download and install the required R library modules:
+############################################################
+# Start of bash script
+#
+#!/bin/bash
+LIBLIST=(\
+    bitops_1.0-5.tar.gz \
+    Rcpp_0.10.4.tar.gz \
+    spam_0.29-3.tar.gz \
+    maps_2.3-3.tar.gz \
+    fields_6.8.tar.gz \
+    RCurl_1.95-4.1.tar.gz \
+    rjson_0.2.12.tar.gz \
+)
+
+for LIB in ${LIBLIST[@]}; do
+
+    LIBNAME=${LIB%_*}
+    DIR=/usr/local/lib/R/site-library
+    if ! wget -P /tmp http://updates.iontorrent.com/plugins/$LIB > /tmp/install_$LIBNAME.log 2>&1; then
+        #double fail. abort
+        echo "Failed to locate source for $LIB file. See tmp/install_$LIBNAME.log"
+        exit 1
+    fi
+    if ! R CMD INSTALL /tmp/$LIB > /tmp/install_$LIBNAME.log 2>&1; then
+        echo "Error during install: see /tmp/install_${LIBNAME}.log"
+        exit 1
+    fi
+done
+
+# End of bash script
+############################################################
+
+	MODULES='torrentR' ./buildTools/build.sh
+
 
 WORK ON SINGLE MODULE
 

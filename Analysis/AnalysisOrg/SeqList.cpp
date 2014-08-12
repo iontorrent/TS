@@ -1,6 +1,9 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "SeqList.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <cstring>
 
 
 SeqListClass::SeqListClass()

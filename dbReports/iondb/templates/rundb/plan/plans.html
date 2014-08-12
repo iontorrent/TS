@@ -75,7 +75,12 @@
                 <td width="49%">
                     <div class="application-template group">
                         <img src="{% static "resources/img/appl_ampliSeq.png"%}" border="0">
-                        <h3>Ampliseq DNA&nbsp;&nbsp;| <a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq.com Import</a> | <a href="{% url "page_plan_new_template" 1 %}" ref="#ampliSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url "page_plan_new_plan_from_code" 1 %}" ref="#ampliSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                        <h3>Ampliseq DNA&nbsp;&nbsp;| <div class="btn-group"><a title="Import template from from AmpliSeq.com" class="btn dropdown-toggle" href="#" id="ampliseq_import_dropdown_toggle" data-toggle="dropdown">AmpliSeq.com <i class="icon-download"></i>  <span class="caret"></span></a>                         
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url "configure_ampliseq" "DNA" %}">AmpliSeq DNA</a></li>
+                                <li><a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq Exome</a></li>
+                            </ul>                           
+                            </div>  |  <a href="{% url "page_plan_new_template" 1 %}" ref="#ampliSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url "page_plan_new_plan_from_code" 1 %}" ref="#ampliSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
                     </div>
                     <table id="ampliSeqs" style="width:100%;">
                         <thead style="display: none;">
@@ -115,10 +120,10 @@
             <tr>
                 <td width="49%">
                     <div class="application-template group">
-                        <img src="{% static "resources/img/appl_ampliSeqExome.png"%}" border="0">
-                        <h3>AmpliSeq Exome&nbsp;&nbsp; | <a href="{% url "configure_ampliseq" "exome" %}">AmpliSeq.com Import</a> | <a href="{% url "page_plan_new_template" 6 %}" ref="#ampliSeqExome" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url "page_plan_new_plan_from_code" 6 %}" ref="#ampliSeqExome" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
+                        <img src="{% static "resources/img/appl_targetSeq.png"%}" border="0">
+                        <h3>TargetSeq &nbsp;&nbsp;| <a href="{% url "page_plan_new_template" 2 %}" ref="#targetSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url "page_plan_new_plan_from_code" 2 %}" ref="#targetSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
                     </div>
-                    <table id="ampliSeqExome" style="width:100%;">
+                    <table id="targetSeqs" style="width:100%;">
                         <thead style="display: none;">
                             <tr>
                                 <td></td>
@@ -131,6 +136,7 @@
                             </tr>
                         </tbody>
                     </table>
+
                 </td>
                 <td width="2%">&nbsp;</td>
                 <td width="49%">
@@ -155,23 +161,6 @@
             </tr>
             <tr>
             <td width="49%">
-                <div class="application-template group">
-                    <img src="{% static "resources/img/appl_targetSeq.png"%}" border="0">
-                    <h3>TargetSeq &nbsp;&nbsp;| <a href="{% url "page_plan_new_template" 2 %}" ref="#targetSeqs" rel="tooltip" title="Create new template for run planning">Add New Template</a> | <a href="{% url "page_plan_new_plan_from_code" 2 %}" ref="#targetSeqs" rel="tooltip" title="Plan runs from this template">Plan New Run</a></h3>
-                </div>
-                <table id="targetSeqs" style="width:100%;">
-                    <thead style="display: none;">
-                        <tr>
-                            <td></td>
-                            <td></td>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr>
-                            <td colspan="2"></td>
-                        </tr>
-                    </tbody>
-                </table>
             </td>
             <td width="2%">&nbsp;</td>
             <td width="49%">
@@ -257,9 +246,9 @@
         <td class="actions">
             # var _id = id;#
             # if (isSystem) { #
-                <span><a href="#= '{% url "review_plan_template" 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a> | <a href="#= '{% url "page_plan_new_plan" 0 %}'.replace('0', _id)#">Plan Run</a> | <a class="batch-plan" href="#= '{% url "batch_plans_from_template" 0 %}'.replace('0', _id)#">Plan Multiple</a> | <a href="#= '{% url "page_plan_copy_template" 0 %}'.replace('0',_id)#">Copy</a></span>
+                <span><a href="#= '{% url "review_plan" 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a> | <a href="#= '{% url "page_plan_new_plan" 0 %}'.replace('0', _id)#">Plan Run</a> | <a class="batch-plan" href="#= '{% url "batch_plans_from_template" 0 %}'.replace('0', _id)#">Plan Multiple</a> | <a href="#= '{% url "page_plan_copy_template" 0 %}'.replace('0',_id)#">Copy</a></span>
             # }  else { #
-                <span><a href="#= '{% url "review_plan_template" 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a> | <a href="#= '{% url "page_plan_new_plan" 0 %}'.replace('0', _id)#">Plan Run</a> | <a class="batch-plan" href="#= '{% url "batch_plans_from_template" 0 %}'.replace('0', _id)#">Plan Multiple</a> | <a href="#= '{% url "page_plan_copy_template" 0 %}'.replace('0',_id)#">Copy</a> | <a href="#= '{% url "page_plan_edit_template" 0 %}'.replace('0',_id)#">Edit</a> | <a href="#= '{% url "delete_plan_template" 0 %}'.replace('0',_id)#" class="delete-plan">Delete</a></span>
+                <span><a href="#= '{% url "review_plan" 999999 %}'.replace('999999', _id)#" class="review-plan">Review</a> | <a href="#= '{% url "page_plan_new_plan" 0 %}'.replace('0', _id)#">Plan Run</a> | <a class="batch-plan" href="#= '{% url "batch_plans_from_template" 0 %}'.replace('0', _id)#">Plan Multiple</a> | <a href="#= '{% url "page_plan_copy_template" 0 %}'.replace('0',_id)#">Copy</a> | <a href="#= '{% url "page_plan_edit_template" 0 %}'.replace('0',_id)#">Edit</a> | <a href="#= '{% url "delete_plan_template" 0 %}'.replace('0',_id)#" class="delete-plan">Delete</a></span>
             # } #
         </td>
     </tr>

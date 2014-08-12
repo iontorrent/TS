@@ -29,6 +29,8 @@ class MergeAcq {
   /// Merge the two images set above into a single image
   void Merge(Image &combo);
 
+  void MergeImageStack(RawImage *combo, std::vector<Image *> &imgStack, bool colWise=true) ;
+
  private:
 
   /// Fill the buffers based on input chips and size of new chip.
@@ -37,8 +39,14 @@ class MergeAcq {
                     size_t rowStart, size_t colStart,
                     size_t rows, size_t cols, size_t frames, short *dest);
 
+  void FillOneImage(const short *first, size_t firstRows, size_t firstCols,
+                    size_t rowStart, size_t colStart,
+                    size_t rows, size_t cols, size_t frames, short *dest);
+
   /// Some sanity checks for images
   void CheckImagesAlign();
+  void CheckAlignment(int n, int cols, int rows, int &preCols, int &preRows,bool colWise);
+  void stackMetaData(const RawImage *src, RawImage *dst, int nImages, bool colWise);
 
   void Init();
 

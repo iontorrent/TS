@@ -208,9 +208,18 @@ $(document).ready(function() {
     					gender : {
     						type : "string",
     					},
+    					cancerType : {
+    						type : "string",
+    					},
+    					cellularityPct : {
+    						type : "number",
+                        },
+                        barcodeKit : {
+                        	type : "string",
+                        },
     					barcode : {
     						type : "string",
-    					}    					
+    					}					
     				}
                 }
             },
@@ -269,14 +278,22 @@ function getColumns() {
          field: "externalId",
          title: "Sample ID",         
          sortable: true,
+     } , {
+         field: "barcodeKit",
+         title: "Barcode Kit",        
+         sortable: false,        
+     } , {
+         field: "barcode",
+         title: "Barcode",        
+         sortable: true,         
      } , {    	 
+         field: "description",
+         title: "Description",        
+         sortable: false,         
+     } , {
          field: "gender",
          title: "Gender",       
          sortable: true,
-     } , {
-         field: "description",
-         title: "Description",        
-         sortable: false,
      } , {
          field: "relationshipRole",
          title: "Type",        
@@ -284,10 +301,14 @@ function getColumns() {
      } , {
          field: "relationshipGroup",
          title: "Group",        
-         sortable: true,         
+         sortable: true,
      } , {
-         field: "barcode",
-         title: "Barcode",        
+         field: "cancerType",
+         title: "Cancer Type",       
+         sortable: true,
+     } , {
+         field: "cellularityPct",
+         title: "Cellularity %",       
          sortable: true,
      }];
 

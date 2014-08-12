@@ -8,48 +8,23 @@ except ImportError:
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import dnaBarcode, Sample, SampleAnnotation_CV
 from iondb.rundb.plan.page_plan.step_names import StepNames
+from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNames
 from iondb.rundb.plan.page_plan.kits_step_data import KitsFieldNames
+from iondb.rundb.plan.page_plan.reference_step_data import ReferenceFieldNames
 from iondb.rundb.plan.page_plan.save_plan_step_data import SavePlanFieldNames
+from iondb.rundb.plan.plan_validator import validate_sample_tube_label, validate_barcode_sample_association
 
+from iondb.rundb.plan.views_helper import convert
+
+import json
 import logging
 logger = logging.getLogger(__name__)
 
 class BarcodeBySampleFieldNames():
-
-    BARCODES = 'barcodes'
-    BARCODE_SETS = 'barcodesets'
-    PLANNEDITEM_BARCODE = 'planneditem_barcode'
-    PLANNEDITEM_NAME = 'planneditem_sampleitem_name'
-    PLANNED_SAMPLESET_ITEMS = 'planned_sampleset_items'
-    PLANNEDITEM_EXTERNALID = 'planneditem_externalid'
-    IS_BARCODED = 'is_barcoded'
-    PLANNED_DNABARCODES = 'planned_dnabarcodes'
-    
-
+    # NOTE: this step uses field names from save_plan_step_data for consistency
     SAMPLESET_ITEMS = 'samplesetitems'
-    BARCODE_TO_SAMPLE = 'barcodeToSample'
-    CHIP_TO_SAMPLE = 'chipToSample'
-    SAMPLE_TO_BARCODE = 'sampleToBarcode'
-    SAMPLE_ITEM = 'sampleitem'
-    NUMBER_OF_CHIPS = 'chipNumber'
-    SAMPLE_NAME = 'sampleName'
-    SAMPLE_EXTERNAL_ID = 'sampleExternalId'
-    SAMPLE_DESCRIPTION = 'sampleDescription'
-    SAMPLE_BARCODE = 'sampleBarcode'
-    SAMPLE_SEQUENCE = 'sampleSequence'
-    GENDER = 'gender'
-    RELATION_ROLE = 'relationRole'
-    WORKFLOW = 'workflow'
-    TEMPLATE_WORKFLOW  = 'irworkflow'
-    BARCODE_ID = 'barcodeId'
-    SET_ID = 'irSetID'
-    BAD_BARCODES = 'bad_barcodes'
-    BAD_ITEM_NAMES = 'bad_item_names'
-    NO_BARCODE = 'no_barcode'
-    NO_SAMPLE_NAME = 'no_sample_name'
-    BARCODED_IR_PLUGIN_ENTRIES = 'barcodedIrPluginEntires'
-    SAMPLE_ANNOTATIONS = 'sampleAnnotations'
 
+    ONCO_SAME_SAMPLE = "isOncoSameSample"
 
 class BarcodeBySampleStepData(AbstractStepData):
 
@@ -57,247 +32,315 @@ class BarcodeBySampleStepData(AbstractStepData):
         super(BarcodeBySampleStepData, self).__init__()
 
         self.resourcePath = 'rundb/plan/page_plan/page_plan_by_sample_barcode.html'
-        self.savedListFieldNames = [BarcodeBySampleFieldNames.PLANNEDITEM_BARCODE, BarcodeBySampleFieldNames.PLANNEDITEM_NAME, BarcodeBySampleFieldNames.PLANNEDITEM_EXTERNALID]
         
         self.savedFields = OrderedDict()
-        self.savedFields[BarcodeBySampleFieldNames.PLANNEDITEM_NAME] = None
-        self.savedFields[BarcodeBySampleFieldNames.PLANNEDITEM_BARCODE] = None
-        self.savedFields[BarcodeBySampleFieldNames.IS_BARCODED] = None
-        self.savedFields[BarcodeBySampleFieldNames.PLANNEDITEM_EXTERNALID] = None
-        self.savedFields[BarcodeBySampleFieldNames.BARCODE_ID] = None
+        self.savedFields[SavePlanFieldNames.BARCODE_SET] = ''
+        self.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = ''
         self.savedFields['applicationType'] = ''
         self.savedFields['irDown'] = '0'
 
         self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS] = []
-        self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all())
+        self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all().order_by("annotationType", "iRValue"))
         self.prepopulatedFields['fireValidation'] = "1"
 
-        self.savedObjects[BarcodeBySampleFieldNames.BARCODED_IR_PLUGIN_ENTRIES] = []
+        self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES] = []
+        self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE] = OrderedDict()
+        
+        self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = list(dnaBarcode.objects.values_list('name',flat=True).distinct().order_by('name'))
+        all_barcodes = {}
+        for bc in dnaBarcode.objects.order_by('name', 'index').values('name', 'id_str','sequence'):
+            all_barcodes.setdefault(bc['name'],[]).append(bc)
+        self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
 
-        self.savedObjects[BarcodeBySampleFieldNames.BARCODE_TO_SAMPLE] = OrderedDict()
-        self.savedObjects[BarcodeBySampleFieldNames.SAMPLE_TO_BARCODE] = OrderedDict()
-        self.savedObjects[BarcodeBySampleFieldNames.CHIP_TO_SAMPLE] = OrderedDict()
+        self.savedObjects['samplesTableList'] = [{"row":"1"}]
+        self.savedFields['samplesTable'] = json.dumps(self.savedObjects['samplesTableList'])
 
-        self.prepopulatedFields[BarcodeBySampleFieldNames.BARCODES] = list(dnaBarcode.objects.values('name').distinct().order_by('name'))
+        self.savedFields[SavePlanFieldNames.ONCO_SAME_SAMPLE] = False
+
+        self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER] = None
+        
+        self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE] = ""
+        self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE] = ""
+        self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE] = ""
 
         self._dependsOn.append(StepNames.IONREPORTER)
-        self._dependsOn.append(StepNames.SAVE_PLAN_BY_SAMPLE)
-        
+        self._dependsOn.append(StepNames.APPLICATION)
+        self._dependsOn.append(StepNames.REFERENCE)
 
     def getStepName(self):
         return StepNames.BARCODE_BY_SAMPLE
 
+    
     def updateFromStep(self, updated_step):
+        if updated_step.getStepName() not in self._dependsOn:
+            return
+
+        if updated_step.getStepName() == StepNames.APPLICATION:
+            if updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE]:
+                self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE].runType
+            else:
+                self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = ""
+
+            logger.debug("barcode_by_sample_step_data.updateFromStep() APPLICATION going to update RUNTYPE value=%s" %(self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE]))
+       
         if updated_step.getStepName() == StepNames.IONREPORTER:
-            self.prepopulatedFields['irworkflow'] = updated_step.savedFields['irworkflow']
-            self.prepopulatedFields['accountId'] = updated_step.savedFields['irAccountId']
-            self.updateSavedObjectsFromSavedFields()
             
-        elif updated_step.getStepName() == StepNames.SAVE_PLAN_BY_SAMPLE:
-            error_messages = updated_step.savedFields['error_messages']
-            warning_messages = updated_step.savedFields['warning_messages']
-            self.validationErrors['error_messages'] = []
-            self.validationErrors['warning_messages'] = []
-            for msg in error_messages.split(';'):
-                if msg and msg != '':
-                    self.validationErrors['error_messages'].append(msg)
-            for msg in warning_messages.split(';'):
-                if msg and msg != '':
-                    self.validationErrors['warning_messages'].append(msg)
-            # raise RuntimeError(self.validationErrors['error_messages'])
-            if not warning_messages:
-                self.validationErrors.pop('warning_messages')
-            if not error_messages:
-                self.validationErrors.pop('error_messages')
+            # update samples table with saved sampleset items fields for IR 
+            if updated_step.savedFields['irAccountId'] and self.prepopulatedFields.get('selectedIr') != updated_step.savedFields['irAccountId']:
+                sorted_sampleSetItems = self.prepopulatedFields['samplesetitems']
+                for row in self.savedObjects['samplesTableList']:
+                    row[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields['irworkflow']
+                    sampleset_item = [item for item in sorted_sampleSetItems if item.sample.displayedName == row['sampleName']]
+                    if len(sampleset_item) > 0:
+                        row[SavePlanFieldNames.IR_GENDER] = sampleset_item[0].gender
+                        row[SavePlanFieldNames.IR_RELATION_ROLE] = sampleset_item[0].relationshipRole
+                        row[SavePlanFieldNames.IR_SET_ID] = sampleset_item[0].relationshipGroup
+                        #20140306-WIP-TO-BE-TESTED
+                        row[SavePlanFieldNames.IR_CANCER_TYPE] = sampleset_item[0].cancerType
+                        row[SavePlanFieldNames.IR_CELLULARITY_PCT] = sampleset_item[0].cellularityPct                        
+                        
+                self.savedFields['samplesTable'] = json.dumps(self.savedObjects['samplesTableList'])
+            
+            self.prepopulatedFields['irworkflow'] = updated_step.savedFields['irworkflow']
+            self.prepopulatedFields['selectedIr'] = updated_step.savedFields['irAccountId']
+ 
+        if updated_step.getStepName() == StepNames.APPLICATION and updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:         
+            applProduct = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]
+
+            barcodeDetails = None   
+            self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS] = list(dnaBarcode.objects.values_list('name',flat=True).distinct().order_by('name'))  
+            if applProduct.barcodeKitSelectableType == "":
+                self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_SUBSET] = list(dnaBarcode.objects.values_list('name',flat=True).filter(type__in =["", "none"]).distinct().order_by('name'))
+            elif applProduct.barcodeKitSelectableType == "dna":
+                self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_SUBSET] = list(dnaBarcode.objects.values_list('name',flat=True).filter(type = "dna").distinct().order_by('name'))   
+            elif applProduct.barcodeKitSelectableType == "rna":
+                self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_SUBSET] = list(dnaBarcode.objects.values_list('name',flat=True).filter(type = "rna").distinct().order_by('name')) 
+            elif applProduct.barcodeKitSelectableType == "dna+":
+                self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_SUBSET] = list(dnaBarcode.objects.values_list('name',flat=True).filter(type__in =["dna", "", "none"]).distinct().order_by('name')) 
+            elif applProduct.barcodeKitSelectableType == "rna+":
+                self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_SUBSET] = list(dnaBarcode.objects.values_list('name',flat=True).filter(type__in =["rna", "", "none"]).distinct().order_by('name')) 
+            else:
+                self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_SUBSET] = list(dnaBarcode.objects.values_list('name',flat=True).distinct().order_by('name'))  
+
+            barcodeDetails = dnaBarcode.objects.order_by('name', 'index').values('name', 'id_str','sequence')  
+            
+            all_barcodes = {}
+            for bc in barcodeDetails:
+                all_barcodes.setdefault(bc['name'],[]).append(bc)
+            self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes) 
+                
+        elif updated_step.getStepName() == StepNames.REFERENCE:
+            self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER] = updated_step
+
+            self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE] = updated_step.savedFields.get(ReferenceFieldNames.REFERENCE, "")
+            self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE] = updated_step.savedFields.get(ReferenceFieldNames.TARGET_BED_FILE, "")
+            self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE] = updated_step.savedFields.get(ReferenceFieldNames.HOT_SPOT_BED_FILE, "")
+
+            #logger.debug("barcode_by_sample_step_data.updateFromStep() REFERENCE plan_reference=%s" %(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]))
+       
+            self.updateSavedFieldsForSamples()
+            logger.debug("barcode_by_sample_step_data.updateFromStep() REFERENCE reference.savedFields=%s" %(updated_step.savedFields))
 
 
-    def create_barcode_ir_userinput_dict(self, index):
-        return {
-            KitsFieldNames.BARCODE_ID             : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_BARCODE, index)],
-            'sample'                              : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_NAME, index)],
-            SavePlanFieldNames.SAMPLE_EXTERNAL_ID : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_EXTERNAL_ID, index)],
-            SavePlanFieldNames.SAMPLE_DESCRIPTION : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_DESCRIPTION, index)],
-            SavePlanFieldNames.WORKFLOW           : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.WORKFLOW, index)],
-            SavePlanFieldNames.GENDER             : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.GENDER, index)],
-            SavePlanFieldNames.RELATION_ROLE      : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.RELATION_ROLE, index)] or "",
-            SavePlanFieldNames.SET_ID             : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SET_ID, index)],
-        }
+    def updateSavedFieldsForSamples(self):        
+        if self.savedFields[SavePlanFieldNames.BARCODE_SET]:
+            #convert tuple to string
+            planReference = str(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE])
+            planHotSptRegionBedFile = str(self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE])
+            planTargetRegionBedFile = str(self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE])
+                    
+            #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() type(planReference)=%s; planReference=%s" %(type(planReference), planReference))
+            #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() type(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE])=%s; self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]=%s" %(type(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]), self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]))
 
-    def create_non_barcoded_userinput_dict(self, index):
-        irworkflow = self.prepopulatedFields['irworkflow']
-        pe_irworkflow = self.prepopulatedFields['pe_irworkflow']
-        try:
-            samplename = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_NAME, index)]
-            sampleDescription = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_DESCRIPTION, index)]
-            sampleExternalId = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_EXTERNAL_ID, index)]
-            gender = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.GENDER, index)]
-            relationRole = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.RELATION_ROLE, index)] or ""
-            workflow = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.WORKFLOW, index)] if self.savedFields['%s%d' % (BarcodeBySampleFieldNames.WORKFLOW, index)] != pe_irworkflow or pe_irworkflow == irworkflow else irworkflow
-            setId = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SET_ID, index)]
-            relation = self.savedFields['%s%d' % ('relation', index)]
-        except:    
-            samplename = ''
-            sampleDescription = ''
-            sampleExternalId = ''
-            gender = ''
-            relationRole = ''
-            workflow = ''
-            setId = ''
-            relation = ''
-        return {
-                BarcodeBySampleFieldNames.NUMBER_OF_CHIPS : index + 1,
-                BarcodeBySampleFieldNames.SAMPLE_NAME            : samplename,
-                BarcodeBySampleFieldNames.SAMPLE_DESCRIPTION  : sampleDescription,
-                BarcodeBySampleFieldNames.SAMPLE_EXTERNAL_ID     : sampleExternalId,
-                BarcodeBySampleFieldNames.GENDER         : gender,
-                BarcodeBySampleFieldNames.RELATION_ROLE  : relationRole,
-                BarcodeBySampleFieldNames.WORKFLOW  : workflow,
-                BarcodeBySampleFieldNames.SET_ID             : setId,
-                'relation'                                       : relation,
-            }
+            hasAnyChanges = False
+            myTable = json.loads(self.savedFields['samplesTable'])
+            #convert unicode to str
+            myTable = convert(myTable)
+            
+            for index, row in enumerate(myTable):
+                #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() B4 CHANGES... BARCODE_SET LOOP row=%s" %(row))                   
+                                              
+                sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
+                if sample_name:
+                   
+                    sample_nucleotideType = row.get(SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, "")
+                    
+                    sampleReference = row.get(SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE, "")
+                    sampleHotSpotRegionBedFile = row.get(SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE, "")
+                    sampleTargetRegionBedFile = row.get(SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE, "")
+
+                    runType = self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE]
+
+                    if runType == "AMPS_DNA_RNA" and sample_nucleotideType == "RNA":
+                        newSampleReference = sampleReference
+                        newSampleHotspotRegionBedFile = sampleHotSpotRegionBedFile
+                        newSampleTargetRegionBedFile = sampleTargetRegionBedFile
+                    else:
+                        newSampleReference = planReference
+                        newSampleHotspotRegionBedFile = planHotSptRegionBedFile
+                        newSampleTargetRegionBedFile = planTargetRegionBedFile
+                        
+                                                
+                    #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() BARCODE_SET LOOP  type(newSampleReference)=%s; newSampleReference=%s" %(type(newSampleReference), newSampleReference))
+
+                    hasChanged = False
+                    if newSampleReference != sampleReference:
+                        row[SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE] = newSampleReference
+                        hasChanged = True
+                    if newSampleHotspotRegionBedFile != sampleHotSpotRegionBedFile:
+                        row[SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE] = newSampleHotspotRegionBedFile
+                        hasChanged = True
+                    if newSampleTargetRegionBedFile != sampleTargetRegionBedFile:
+                        row[SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE] = newSampleTargetRegionBedFile
+                        hasChanged = True
+                        
+                    if hasChanged:
+                        myTable[index] = row 
+                        #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() AFTER CHANGES  BARCODE_SET LOOP myTable[index]=%s" %(myTable[index]))                                     
+                        hasAnyChanges = True
+                        
+ 
+            if hasAnyChanges:    
+                #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasAnyChanges AFTER CHANGES... type=%s; myTable=%s" %(type(myTable), myTable))       
+
+                #convert list with single quotes to str with double quotes. Then convert it to be unicode
+                self.savedFields['samplesTable'] = unicode(json.dumps(myTable))
+                
+                #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasAnyChanges AFTER unicode(json.dumps)... type=%s; self.savedFields[samplesTable]=%s" %(type(self.savedFields['samplesTable']), self.savedFields['samplesTable']))       
+ 
+                self.savedObjects['samplesTableList'] = json.loads(self.savedFields['samplesTable'])
+                self.updateSavedObjectsFromSavedFields()
+                #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasAnyChanges AFTER json.loads... type=%s; self.savedObjects[samplesTableList]=%s" %(type(self.savedObjects['samplesTableList']), self.savedObjects['samplesTableList']))       
+                
+                                                         
+
+                
+    def validateField(self, field_name, new_field_value):
+        self.validationErrors.pop(field_name, None)
+        errors = None
+
+        if field_name == SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL:
+            errors = validate_sample_tube_label(new_field_value)
+
+        if errors:
+            self.validationErrors[field_name] = '\n'.join(errors)
 
     def validateStep(self):
+        self.validationErrors.pop(SavePlanFieldNames.NO_BARCODE,None)
+        self.validationErrors.pop(SavePlanFieldNames.BAD_BARCODES,None)
+                
+        samplesTable = json.loads(self.savedFields['samplesTable'])
+        barcodeSet = self.savedFields[SavePlanFieldNames.BARCODE_SET]
 
-        is_barcoded = bool(int(self.savedFields[BarcodeBySampleFieldNames.IS_BARCODED]))
+        selectedBarcodes = []
 
-        self.validationErrors[BarcodeBySampleFieldNames.BAD_BARCODES] = []
-        self.validationErrors[BarcodeBySampleFieldNames.NO_BARCODE] = []
-        self.validationErrors[BarcodeBySampleFieldNames.BAD_ITEM_NAMES] = []
-        self.validationErrors[BarcodeBySampleFieldNames.NO_SAMPLE_NAME] = []
+        for row in samplesTable:
+            sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
+            if sample_name:
+                if barcodeSet:
+                    selectedBarcodes.append(row.get('barcodeId'))
 
-        samplesetitems = self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS]
-        user_samplesetitems = []
-        user_barcodes = []
-
-        for i in range(20):
-            try:
-                dnabarcode_id_str = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_BARCODE, i)]
-                sample_name = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_NAME, i)]
-
-                if sample_name and not dnabarcode_id_str and is_barcoded:
-                    if not self.validationErrors[BarcodeBySampleFieldNames.NO_BARCODE]:
-                        self.validationErrors[BarcodeBySampleFieldNames.NO_BARCODE].append("Please select a barcode for each sample")
-
-            # if sample_name == '':
-            #     if not self.validationErrors[BarcodeBySampleFieldNames.NO_SAMPLE_NAME]:
-            #         self.validationErrors[BarcodeBySampleFieldNames.NO_SAMPLE_NAME] = "Please select a name for each sample item"
-
-            # if sample_name and  sample_name in user_samplesetitems:
-            #     if not self.validationErrors[BarcodeBySampleFieldNames.BAD_ITEM_NAMES]:
-            #         self.validationErrors[BarcodeBySampleFieldNames.BAD_ITEM_NAMES] = "Sample item name selections have to be unique"
-            # else:
-            #     user_samplesetitems.append(sample_name)
-
-                if dnabarcode_id_str and dnabarcode_id_str in user_barcodes and is_barcoded and sample_name:
-                    if not self.validationErrors[BarcodeBySampleFieldNames.BAD_BARCODES]:
-                        self.validationErrors[BarcodeBySampleFieldNames.BAD_BARCODES].append("Barcode %s selections have to be unique" % (dnabarcode_id_str))
-                else:
-                    user_barcodes.append(dnabarcode_id_str)
-            except Exception, e:
-                continue
-
-        if not self.validationErrors[BarcodeBySampleFieldNames.NO_BARCODE]:
-            self.validationErrors.pop(BarcodeBySampleFieldNames.NO_BARCODE, None)
+        if barcodeSet:
+            errors = validate_barcode_sample_association(selectedBarcodes, barcodeSet)
             
+            myErrors = convert(errors)
+            if myErrors.get("MISSING_BARCODE", ""):
+                self.validationErrors[SavePlanFieldNames.NO_BARCODE] = myErrors.get("MISSING_BARCODE", "")
+            if myErrors.get("DUPLICATE_BARCODE", ""):
+                self.validationErrors[SavePlanFieldNames.BAD_BARCODES] = myErrors.get("DUPLICATE_BARCODE", "")
+ 
         self.prepopulatedFields['fireValidation'] = "0"
-            
-
-        if not self.validationErrors[BarcodeBySampleFieldNames.NO_SAMPLE_NAME]:
-            self.validationErrors.pop(BarcodeBySampleFieldNames.NO_SAMPLE_NAME, None)
-
-        if not self.validationErrors[BarcodeBySampleFieldNames.BAD_ITEM_NAMES]:
-            self.validationErrors.pop(BarcodeBySampleFieldNames.BAD_ITEM_NAMES, None)
-
-        if not self.validationErrors[BarcodeBySampleFieldNames.BAD_BARCODES]:
-            self.validationErrors.pop(BarcodeBySampleFieldNames.BAD_BARCODES)
-
-        self.validationErrors.pop('error_messages', None)
-        self.validationErrors.pop('warning_messages', None)
 
 
     def updateSavedObjectsFromSavedFields(self):
-
-        self.savedObjects[BarcodeBySampleFieldNames.BARCODED_IR_PLUGIN_ENTRIES] = []
-
-        samplesetitems = self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS]
-
-        for i in range(20):
-            try:
-                sample_name = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_NAME, i)]
-                sample_external_id = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_EXTERNAL_ID, i)]
-                sample = Sample.objects.get(displayedName=sample_name, externalId=sample_external_id)
-
-                self.savedObjects[BarcodeBySampleFieldNames.BARCODED_IR_PLUGIN_ENTRIES].append(self.create_barcode_ir_userinput_dict(i))
-            except Exception, e:                
-                sample_name = None
+        #logger.debug("ENTER barcode_by_sample_step_data.updateSavedObjectsFromSavedFields()")
         
-        irworkflow = self.prepopulatedFields['irworkflow']
-        pe_irworkflow = self.prepopulatedFields['pe_irworkflow']
-        if self.savedFields[BarcodeBySampleFieldNames.BARCODE_ID]:
+        self.savedObjects['samplesTableList'] = json.loads(self.savedFields['samplesTable'])
         
-            planned_dnabarcodes = list(dnaBarcode.objects.filter(name=self.savedFields[BarcodeBySampleFieldNames.BARCODE_ID]).order_by('id_str'))
-            self.prepopulatedFields[BarcodeBySampleFieldNames.PLANNED_DNABARCODES] = planned_dnabarcodes
+        if self.savedFields[SavePlanFieldNames.BARCODE_SET]:
 
-            barcode_to_sample = self.savedObjects[BarcodeBySampleFieldNames.BARCODE_TO_SAMPLE]
-            sample_to_barcode = self.savedObjects[BarcodeBySampleFieldNames.SAMPLE_TO_BARCODE]
+            #logger.debug("barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() BARCODE_SET self.savedFields=%s" %(self.savedFields))
+            #logger.debug("barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() BARCODE_SET self=%s" %(self))
+            
 
-            barcode_to_sample.clear()
-            sample_to_barcode.clear()
+            planReference = self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]
+            planHotSptRegionBedFile = self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE]
+            planTargetRegionBedFile = self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE]
+    
+            logger.debug("barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() BARCODE_SET PLAN_REFERENCE=%s; TARGET_REGION=%s; HOTSPOT_REGION=%s;" %(planReference, planTargetRegionBedFile, planHotSptRegionBedFile))
 
-            for i in range(len(self.prepopulatedFields[BarcodeBySampleFieldNames.PLANNED_DNABARCODES])):
-                sample_name = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_NAME, i)]
+            self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE] = {}
+            self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES] = []
+            for row in self.savedObjects['samplesTableList']:
+                sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
                 if sample_name:
-                    sample_external_id = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_EXTERNAL_ID, i)]
-                    dnabarcode_id_str = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_BARCODE, i)]
+                    id_str = row['barcodeId']
                     
-                    barcode_to_sample['%s%d' % (dnabarcode_id_str, i)] = {
-                        BarcodeBySampleFieldNames.NUMBER_OF_CHIPS        : '1',
-                        BarcodeBySampleFieldNames.SAMPLE_NAME            : sample_name,
-                        BarcodeBySampleFieldNames.SAMPLE_DESCRIPTION     : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_DESCRIPTION, i)],
-                        BarcodeBySampleFieldNames.SAMPLE_EXTERNAL_ID     : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_EXTERNAL_ID, i)],
-                        BarcodeBySampleFieldNames.GENDER                 : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.GENDER, i)],
-                        BarcodeBySampleFieldNames.RELATION_ROLE          : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.RELATION_ROLE, i)],
-                        BarcodeBySampleFieldNames.WORKFLOW               : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.WORKFLOW, i)] if self.savedFields['%s%d' % (BarcodeBySampleFieldNames.WORKFLOW, i)] != pe_irworkflow and self.savedFields['%s%d' % (BarcodeBySampleFieldNames.WORKFLOW, i)] != irworkflow else irworkflow,
-                        BarcodeBySampleFieldNames.BARCODE_ID             : dnabarcode_id_str,
-                        BarcodeBySampleFieldNames.SET_ID                 : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SET_ID, i)],
-                        'relation'                                       : self.savedFields['%s%d' % ('relation', i)],
+                    # update barcodedSamples dict
+                    if sample_name not in self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE]:
+                        self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name] = {
+                            KitsFieldNames.BARCODES: [],
+                            SavePlanFieldNames.BARCODE_SAMPLE_INFO: {}
                         }
-                    barcodes = [dnabarcode_id_str]
-                    for j in range(len(self.prepopulatedFields[BarcodeBySampleFieldNames.PLANNED_DNABARCODES])):
-                        if i != j:
-                            other_sample_name = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_NAME, j)]
-                            if sample_name and other_sample_name and sample_name == other_sample_name:
-                                other_dnabarcode_id_str = self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_BARCODE, j)]
-                                if other_dnabarcode_id_str not in barcodes:
-                                    barcodes.append(other_dnabarcode_id_str)
 
-                    if sample_name and sample_name not in sample_to_barcode:
-                        sample_to_barcode[sample_name] = {
-                            'barcodeSampleInfo' : { 
-                                    dnabarcode_id_str: {
-                                                    'externalId'   : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_EXTERNAL_ID, i)],
-                                                    'description'  : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_DESCRIPTION, i)],
+                    sample_nucleotideType = row.get(SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, "")
+                    
+                    sampleReference = row.get(SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE, "")
+                    sampleHotSpotRegionBedFile = row.get(SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE, "")
+                    sampleTargetRegionBedFile = row.get(SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE, "")
+                    
+                    runType = self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE]                    
+                    
+                    #logger.debug("barcode_by_sample_step_data SETTING reference step helper runType=%s; sample_nucleotideType=%s; sampleReference=%s" %(runType, sample_nucleotideType, sampleReference))
+                    
+                    if runType == "AMPS_DNA_RNA" and sample_nucleotideType == "DNA":
+                        reference_step_helper = self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER]
+                        if reference_step_helper:
+                            if sampleReference != planReference:
+                                reference_step_helper.savedFields[ReferenceFieldNames.REFERENCE] = sampleReference
+                                 
+                            if sampleHotSpotRegionBedFile != planHotSptRegionBedFile:
+                                reference_step_helper.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = sampleHotSpotRegionBedFile
+                                
+                            if sampleTargetRegionBedFile != planTargetRegionBedFile:
+                                reference_step_helper.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = sampleTargetRegionBedFile
+                                         
+                    self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][KitsFieldNames.BARCODES].append(id_str)
+                    self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][SavePlanFieldNames.BARCODE_SAMPLE_INFO][id_str] = \
+                        {
+                            SavePlanFieldNames.EXTERNAL_ID : row.get(SavePlanFieldNames.SAMPLE_EXTERNAL_ID,''),
+                            SavePlanFieldNames.DESCRIPTION : row.get(SavePlanFieldNames.SAMPLE_DESCRIPTION,''),
 
-                                    }
-                                },
-                            'barcodes'          : barcodes
-                            }
-                else:
-                    dnabarcode = self.prepopulatedFields[BarcodeBySampleFieldNames.PLANNED_DNABARCODES][i]
-                    barcode_to_sample['%s%d' % (dnabarcode.id_str, i)] = {
-                        BarcodeBySampleFieldNames.NUMBER_OF_CHIPS        : '1',
-                        BarcodeBySampleFieldNames.SAMPLE_NAME            : sample_name,
-                        BarcodeBySampleFieldNames.SAMPLE_DESCRIPTION     : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_DESCRIPTION, i)],
-                        BarcodeBySampleFieldNames.SAMPLE_EXTERNAL_ID     : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SAMPLE_EXTERNAL_ID, i)],
-                        BarcodeBySampleFieldNames.GENDER                 : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.GENDER, i)],
-                        BarcodeBySampleFieldNames.RELATION_ROLE          : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.RELATION_ROLE, i)],
-                        BarcodeBySampleFieldNames.WORKFLOW               : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.WORKFLOW, i)] if self.savedFields['%s%d' % (BarcodeBySampleFieldNames.WORKFLOW, i)] != pe_irworkflow or pe_irworkflow == irworkflow else irworkflow,
-                        BarcodeBySampleFieldNames.BARCODE_ID             : dnabarcode.id_str,
-                        BarcodeBySampleFieldNames.SET_ID                 : self.savedFields['%s%d' % (BarcodeBySampleFieldNames.SET_ID, i)],
+                            SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE : sample_nucleotideType,
+
+                            SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE : row.get(SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE, ""),
+                            SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE : row.get(SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE, ""),
+                            SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE : row.get(SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE, ""),
+                                                        
+                            SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE : row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE, ""),
                         }
-        else:
-            self.savedObjects[BarcodeBySampleFieldNames.CHIP_TO_SAMPLE].clear()
-            _range = 20 if self.prepopulatedFields['accountId'] == "0" else len(samplesetitems)
-            for i in range(_range):
-                self.savedObjects[BarcodeBySampleFieldNames.CHIP_TO_SAMPLE][i] = self.create_non_barcoded_userinput_dict(i)
+                    
+                    # update barcoded IR fields
+                    barcode_ir_userinput_dict = {
+                        KitsFieldNames.BARCODE_ID             : id_str,
+                        SavePlanFieldNames.SAMPLE             : sample_name,
+                        SavePlanFieldNames.SAMPLE_NAME        : sample_name.replace(' ', '_'),
+                        SavePlanFieldNames.SAMPLE_EXTERNAL_ID : row.get(SavePlanFieldNames.SAMPLE_EXTERNAL_ID,''),
+                        SavePlanFieldNames.SAMPLE_DESCRIPTION : row.get(SavePlanFieldNames.SAMPLE_DESCRIPTION,''),
+                        
+                        SavePlanFieldNames.WORKFLOW           : row.get(SavePlanFieldNames.IR_WORKFLOW,''),
+                        SavePlanFieldNames.GENDER             : row.get(SavePlanFieldNames.IR_GENDER,''),
 
+                        SavePlanFieldNames.NUCLEOTIDE_TYPE    : row.get(SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, ''),
+                        SavePlanFieldNames.CANCER_TYPE        : row.get(SavePlanFieldNames.IR_CANCER_TYPE, ""),
+                        SavePlanFieldNames.CELLULARITY_PCT    : row.get(SavePlanFieldNames.IR_CELLULARITY_PCT, ""),
+                        
+                        SavePlanFieldNames.RELATION_ROLE      : row.get(SavePlanFieldNames.IR_RELATION_ROLE,''),
+                        SavePlanFieldNames.RELATIONSHIP_TYPE  : row.get(SavePlanFieldNames.IR_RELATIONSHIP_TYPE,''),
+                        SavePlanFieldNames.SET_ID             : row.get(SavePlanFieldNames.IR_SET_ID, '')
+                    }
+                   
+                    self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES].append(barcode_ir_userinput_dict)
+
+        #logger.debug("EXIT barcode_by_sample_step_date.updateSavedObjectsFromSaveFields() type(self.savedObjects['samplesTableList'])=%s; self.savedObjects['samplesTableList']=%s" %(type(self.savedObjects['samplesTableList']), self.savedObjects['samplesTableList']));
+       

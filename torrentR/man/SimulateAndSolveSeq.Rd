@@ -20,7 +20,7 @@
   noNegativeSignal=TRUE,
   plotFigure=TRUE,
   randSeed=NA,
-  terminatorChemistryRun=0
+  diagonalStates=0
   )
 }
 \arguments{
@@ -54,8 +54,8 @@
   \item{randSeed}{
     Initial seed for the random number generator.
   }
-  \item{terminatorChemistryRun}{
-    Switch to analyze a run with terminator chemistry.
+  \item{diagonalStates}{
+    Switch to enable a diagonal state progression model.
   }
 }
 \value{

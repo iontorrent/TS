@@ -13,23 +13,28 @@
 class EmptyTrace
 {
   public:
-    EmptyTrace ( CommandLineOpts &clo );
+    EmptyTrace ( const CommandLineOpts &clo );
     virtual ~EmptyTrace();
-    virtual void GenerateAverageEmptyTrace ( Region *region, PinnedInFlow &pinnedInFlow, Mask *bfmask, Image *img, int flow );
-    virtual void GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, SynchDat &sdat, int flow );
-    virtual void GenerateAverageEmptyTraceUncomp ( TimeCompression &time_cp, Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, SynchDat &sdat, int flow );
-    virtual void  Allocate ( int numfb, int _imgFrames );
-    void  PrecomputeBackgroundSlopeForDeriv ( int iFlowBuffer );
-    void  FillEmptyTraceFromBuffer ( short *bkg, int flow );
-    void  RezeroReference ( float t_start, float t_end, int fnum );
-    void  RezeroReferenceAllFlows ( float t_start, float t_end );
-    void  GetShiftedBkg ( float tshift,TimeCompression &time_cp, float *bkg );
-    void  GetShiftedSlope ( float tshift, TimeCompression &time_cp, float *bkg );
-    void  T0EstimateToMap ( std::vector<float>& sep_t0_est, Region *region, Mask *bfmask );
-    int CountReferenceTraces ( Region& region, Mask *bfmask );
+    virtual void GenerateAverageEmptyTrace ( Region *region, const PinnedInFlow &pinnedInFlow, 
+        const Mask *bfmask, Image *img, int flow_buffer_index, int raw_flow );
+    virtual void GenerateAverageEmptyTrace ( Region *region, const PinnedInFlow& pinnedInFlow, 
+        const Mask *bfmask, SynchDat &sdat, int flow_buffer_index, int raw_flow );
+    virtual void GenerateAverageEmptyTraceUncomp ( TimeCompression &time_cp, Region *region, 
+        PinnedInFlow& pinnedInFlow, Mask *bfmask, SynchDat &sdat, int flow_buffer_index,
+        int raw_flow );
+    virtual void  Allocate ( int global_flow_max, int _imgFrames );
+    void  PrecomputeBackgroundSlopeForDeriv ( int flow_buffer_index );
+    void  FillEmptyTraceFromBuffer ( short *bkg, int flow_buffer_index );
+    void  RezeroReference ( float t_start, float t_end, int flow_buffer_index );
+    void  RezeroReferenceAllFlows ( float t_start, float t_end, int flow_block_size );
+    void  GetShiftedBkg ( float tshift,const TimeCompression &time_cp, 
+                          float *bkg, int flow_block_size ) const;
+    void  GetShiftedSlope ( float tshift, TimeCompression &time_cp, float *bkg, int flow_block_size );
+    void  T0EstimateToMap ( const std::vector<float>& sep_t0_est, const Region *region, const Mask *bfmask );
+    int CountReferenceTraces ( const Region& region, const Mask *bfmask );
 
     void Dump_bg_buffers ( char *ss, int start, int len ); //JGV
-    void DumpEmptyTrace ( FILE *fp, int x, int y );
+    void DumpEmptyTrace ( FILE *fp, int x, int y, int flow_block_size );
 
     int imgFrames;
 
@@ -56,7 +61,7 @@ class EmptyTrace
     bool GetUsed() { return trace_used; }
 
   protected:
-    int numfb; // number of flow buffers 
+    int scratch_size; // number of flow buffers 
     float t0_mean;
     std::vector<int> regionIndices;
     float *neg_bg_buffers_slope;
@@ -74,12 +79,6 @@ class EmptyTrace
     std::vector<int> sampleIndex;
     bool trace_used;
 
-//@TODO: this is not a safe way of accessing buffers - need flow buffer object reference
-    int flowToBuffer ( int flow )
-    {
-      return ( flow % numfb );  // mapping of flow to bg_buffer entry
-    };
-
     // kernel used to smooth and measure the slope of the background signal
     // this >never< changes, so is fine as a static const variable
 #define BKG_SGSLOPE_LEN 5
@@ -89,13 +88,14 @@ class EmptyTrace
     float ComputeDcOffsetEmpty ( float *bPtr, float t_start, float t_end );
 
     void  AccumulateEmptyTrace ( float *bPtr, float *tmp_shifted, float w );
-    void  ShiftMe ( float tshift, TimeCompression &time_cp, float *my_buff, float *out_buff );
-    bool ReferenceWell ( int ax, int ay, Mask *bfmask );
+    void  ShiftMe ( float tshift, const TimeCompression &time_cp, 
+                    const float *my_buff, float *out_buff, int flow_block_size ) const;
+    bool ReferenceWell ( int ax, int ay, const Mask *bfmask );
     void RemoveEmptyTrace ( float *bPtr, float *tmp_shifted, float w );
     float TrimWildTraces ( Region *region, float *bPtr, std::vector<float>& valsAtT0,
                            std::vector<float>& valsAtT1,
                            std::vector<float>& valsAtT2, float total_weight,
-                           Mask *bfmask, Image *img, SynchDat *sdat );
+                           const Mask *bfmask, Image *img, SynchDat *sdat );
     int SecondsToIndex ( float seconds, std::vector<float>& delta );
 
   private:
@@ -112,7 +112,7 @@ class EmptyTrace
       imgFrames &
       regionIndex &
       nOutliers &
-      numfb &
+      scratch_size &
       t0_mean &
       nRef &
       regionIndices &
@@ -138,7 +138,7 @@ class EmptyTrace
       imgFrames &
       regionIndex &
       nOutliers &
-      numfb &
+      scratch_size &
       t0_mean &
       nRef &
       regionIndices &
@@ -163,7 +163,7 @@ class EmptyTrace
 
 
 
-inline bool EmptyTrace::ReferenceWell ( int ax, int ay, Mask *bfmask )
+inline bool EmptyTrace::ReferenceWell ( int ax, int ay, const Mask *bfmask )
 {
   // is this well a valid reference coming out of beadfind?
   bool isReference = bfmask->Match ( ax,ay,referenceMask );

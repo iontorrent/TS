@@ -1,0 +1,86 @@
+{% extends "rundb/monitor/base.html" %}
+{% load url from future %}
+{% load pagetools %}
+{% load static from staticfiles %}
+
+{% block extra_head %}
+<style type="text/css">
+    .run {
+        line-height: 30px;
+        border-width: 1px 1px 0 1px;
+        border-radius: 0;
+        margin: 0;
+    }
+    #runs .row-fluid:last-child .run {
+        border-width: 1px 1px 1px 1px;
+    }
+    .run .progress {
+        margin: 5px 0;
+    }
+    .alt-row {
+        background-color: #eee;
+    }
+    .header-row {
+        padding: 0 15px;
+    }
+    #pagination {
+        margin-top: 15px;
+    }
+</style>
+{% endblock extra_head %}
+
+{% block sub-nav %}
+<li class=""><a href="{% url "monitor" %}">Runs in Progress</a></li>
+<li class="active"><a href="{% url "monitor_chef" %}">Ion Chef</a></li>
+{% endblock sub-nav %}
+
+{% block content %}
+<div id="chef_view" class="content">
+    <div class="pull-right">
+        <a href="{% url "monitor_chef" %}" class="btn"><i class="icon-refresh"></i> Refresh</a>
+    </div>
+    <h1 style="margin-bottom:5px;">Ion Chef</h1>
+    <div id="runs">
+        <div class="row-fluid">
+            <div class="header-row">
+                <div class="span3"><h3>Plan</h3></div>
+                <div class="span2"><h3>Status</h3></div>
+                <div class="span2"><h3>Progress</h3></div>
+                <div class="span2"><h3>Updated</h3></div>
+                <div class="span2"><h3>Plan Status</h3></div>
+            </div>
+        </div>
+        {% for plan in plans %}
+        <div class="row-fluid">
+            <div class="run {% cycle '' 'alt-row' %}">
+                <div class="span3">{{ plan.planName }}</div>
+                <div class="span2">{{ plan.chefStatus }}</div>
+                <div class="span2">
+                    <div class="progress progress-striped active" style="margin-bottom: 0;">
+                        <div class="bar" style="width: {{plan.chefProgress}}%;"></div>
+                    </div>
+                </div>
+                <div class="span2">{{ plan.chefLastUpdate }}</div>
+                <div class="span1">{{ plan.planStatus }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div id="pagination" class="row-fluid">
+        <div class="offset4 span1">
+            {% if plans.has_previous %}
+                <a href="?page={{ plans.previous_page_number }}">Previous</a>
+            {% endif %}
+        </div>
+        <div class="span2">
+            {{ plans.start_index }} - {{ plans.end_index }} of {{ plans.paginator.count }}
+        </div>
+        <div class="span1">
+            {% if plans.has_next %}
+                <a href="?page={{ plans.next_page_number }}">Next</a>
+            {% endif %}
+        </div>
+    </div>
+
+</div><!-- content -->
+{% endblock content %}

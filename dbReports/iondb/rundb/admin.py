@@ -2,8 +2,8 @@
 
 from iondb.rundb.models import *
 from iondb.rundb import tasks
-from iondb.rundb import forms
-from iondb.rundb import views
+from iondb.rundb import tsvm
+from iondb.rundb.forms import NetworkConfigForm
 from iondb.utils import files
 from django.contrib import admin
 from django.forms import TextInput, Textarea
@@ -48,16 +48,134 @@ def mac_address():
     return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1]
 
 
-def how_are_you(request, host, port):
-    """Open a socket to the given host and port, if we can :), if not :(
-    """
+def parse_http_proxy_string(proxy_string):
+    have_proxy = False
+    username = ''
+    password = ''
+    hostname = ''
+    portnum = 0
+
     try:
-        s = socket.create_connection((host, int(port)), 10)
-        s.close()
-        status = ":)"
-    except Exception as complaint:
-        logger.warn(complaint)
-        status  = ":("
+        proxy_string = proxy_string.partition('#')[0]	# Remove comments (whole-line or suffixed)
+        proxy_string = proxy_string.strip()
+
+        # try this format: http_proxy=http://user:pass@11.22.33.44:55
+        exp = re.compile('http://(?P<user>.+):(?P<pass>.+)@(?P<host>.+):(?P<port>.+)')
+        match = exp.match(proxy_string)
+        if match:
+            username = match.group('user')
+            password = match.group('pass')
+            hostname = match.group('host')
+            portnum = int(match.group('port'))
+            have_proxy = True
+        else:
+            # try this format: http_proxy=http://11.22.33.44:55
+            exp = re.compile('http://(?P<host>.+):(?P<port>.+)')
+            match = exp.match(proxy_string)
+            if match:
+                hostname = match.group('host')
+                portnum = int(match.group('port'))
+                have_proxy = True
+    except:
+        pass
+
+    return have_proxy, username, password, hostname, portnum
+
+
+def get_http_proxy_from_etc_environment():
+    try:
+        with open('/etc/environment', 'r') as f:
+            for line in f:
+                if ('http_proxy' in line):
+                    return True, line.partition('=')[2].strip()
+        return False, ''
+    except:
+        return False, ''
+
+
+def ssh_status(dest_host, dest_port):
+    try:
+        dest = 'TSConnectivityCheck@' + dest_host
+
+        # Read http_proxy from /etc/environment, not from environment variables.
+        have_proxy, proxy_string = get_http_proxy_from_etc_environment()
+
+        if (have_proxy):
+
+            have_proxy, user, password, px_host, px_port = parse_http_proxy_string(proxy_string)
+
+            if (len(user) > 0 and len(password) > 0): # TODO syntax with user and pass is untested
+                px_cmd = 'HTTP_PROXY_PASSWORD=' + password + ';'
+                px_cmd = px_cmd + 'ProxyCommand connect -H ' + user + '@' + px_host + ':' + str(px_port) + ' %h %p'	
+            else:
+                px_cmd = 'ProxyCommand connect -H ' + px_host + ':' + str(px_port) + ' %h %p'
+
+        # Set -o "StrictHostKeyChecking no" -o "UserKnownHostsFile /dev/null" to work around the fact that
+        # www-data user doesn't own its home directory /var/www, and so can't create an .ssh directory.
+        if (have_proxy):
+            args = ['/usr/bin/ssh', '-p', str(dest_port),
+                '-o', 'PreferredAuthentications=publickey', 
+                '-o', 'StrictHostKeyChecking no',
+                '-o', 'UserKnownHostsFile /dev/null',
+                '-o', px_cmd,                                 # include ProxyCommand
+                dest]
+        else:
+            args = ['/usr/bin/ssh', '-p', str(dest_port),
+                '-o', 'PreferredAuthentications=publickey', 
+                '-o', 'StrictHostKeyChecking no',
+                '-o', 'UserKnownHostsFile /dev/null',
+                dest]
+
+        p = Popen(args, stdout=PIPE, stderr=PIPE)
+        out, err = p.communicate()
+        if ('denied' in err):
+            return ":)"
+        else:
+            return ":("
+
+    except:
+        logger.error("ssh_status failed")
+        return ":("
+
+
+def how_are_you(request, host, port):
+    """Attempt a connection to the given host and port, if we can :), if not :( 
+       Socket-to-socket connections fail in the presence of a network proxy, so use standard protocols.
+       ionupdates.com gives a 403 Forbidden to wget, so fall back to socket test.
+    """
+    if (int(port) == 80 or int(port) == 443) and (host != 'ionupdates.com'):
+        try:
+            cmd = ["/usr/bin/wget", "-O", "/dev/null", "--tries", "1", "--no-check-certificate"]
+            # This will suppress stdout from wget
+            #cmd += ["-o", "/dev/null"]
+            # Append URL
+            if int(port) == 80:
+                cmd += [str("http://%s:%s" % (host, str(port)))]
+            elif int(port) == 443:
+                cmd += [str("https://%s:%s" % (host, str(port)))]
+            #logger.warn("CMD:%s" % cmd)
+            proc = Popen(cmd, stdout=PIPE, stderr=PIPE)
+            stdout, stderr = proc.communicate()
+            if proc.returncode == 0:
+                status = ":)"
+            else:
+                status = ":("
+                logger.warn(stderr)
+        except:
+            status = ":("
+            logger.warn(traceback.format_exc())
+    elif int(port) == 22:
+        status = ssh_status(host, port)
+    else:
+        # Here we revert to ignore-proxy method for lack of better option
+        try:
+            s = socket.create_connection((host, int(port)), 10)
+            s.close()
+            status = ":)"
+        except Exception as complaint:
+            logger.warn(complaint)
+            status  = ":("
+
     return http.HttpResponse('{"feeling":"%s"}' % status,
                              mimetype='application/javascript')
 
@@ -106,14 +224,14 @@ def network(request):
     the networking configuration.
     """
     if request.method == "POST" and "network-mode" in request.POST:
-        form = forms.NetworkConfigForm(request.POST, prefix="network")
+        form = NetworkConfigForm(request.POST, prefix="network")
         if form.is_valid():
-            # TS* is updated by the form controller forms.NetworkConfigForm
+            # TS* is updated by the form controller NetworkConfigForm
             form.save()
         else:
             logger.warning("User entered invalid network settings:\n%s" % str(form.errors))
     else:
-        form = forms.NetworkConfigForm(prefix="network")
+        form = NetworkConfigForm(prefix="network")
 
     return render_to_response("admin/network.html", RequestContext(request,
         {"network": {"mac": mac_address(), "form": form} }))
@@ -220,7 +338,6 @@ def run_update_check(request):
     tasks.check_updates.delay()
     return http.HttpResponse()
 
-
 def run_update():
     """Run the update.sh script, that will run update.sh
     'at now' needed so that when Apache restarts the update script wil not be killed
@@ -284,10 +401,12 @@ def version_lock(request, enable):
 
     if enable == "enable_lock":
         # hide repository list file /etc/apt/sources.list
-        async_result = tasks.hide_apt_sources.delay()
+        #async_result = tasks.hide_apt_sources.delay()
+        async_result = tasks.lock_ion_apt_sources.delay(enable=True)
     else:
         # restore repository list file /etc/apt/sources.list
-        async_result = tasks.restore_apt_sources.delay()
+        #async_result = tasks.restore_apt_sources.delay()
+        async_result = tasks.lock_ion_apt_sources.delay(enable=False)
 
     try:
         async_result.get(timeout=20)
@@ -297,6 +416,56 @@ def version_lock(request, enable):
 
     return render_to_response("admin/update.html")
 
+
+def tsvm_control(request, action=''):
+
+    if request.method == 'GET':
+        status = tsvm.status()
+        versions = tsvm.versions()
+        log_files = []
+        for logfile in ["provisioning.log", "running.log"]:
+            if os.path.exists(os.path.join("/var/log/ion/",logfile)):
+                log_files.append(logfile)
+
+        ctxd = {
+            'versions': versions.split() if len(versions) > 0 else '',
+            'status': status,
+            'host': request.META.get('HTTP_HOST'),
+            'log_files': log_files
+        }
+        return render_to_response("admin/tsvm_control.html", RequestContext(request, ctxd))
+    
+    elif request.method == 'POST':
+        if "setup" in action:
+            version = request.REQUEST.get('version','')
+            response_object = tsvm.setup(version)
+        elif action in ["start","stop","suspend","destroy"]:
+            response_object = tsvm.ctrl(action)
+        elif "status" in action:
+            response_object = tsvm.status()
+        elif "check_update" in action:
+            async_result = tsvm.check_for_new_tsvm.delay()
+            response_object = async_result.get()
+        elif "update" in action:
+            async_result = tsvm.install_new_tsvm.delay()
+            response_object = async_result.get()
+        else:
+            return http.HttpResponseBadRequest('Error: unknown action type specified: %s' % action)
+    
+        return http.HttpResponse(json.dumps(response_object), content_type='application/json')
+
+
+def tsvm_get_log(request, logfile):
+    # Returns log file contents
+    try:
+        #Path specified in tsvm-include from ion-tsvm package
+        filepath = os.path.join("/var/log/ion/", logfile)
+        log = open(filepath).readlines()
+    except IOError as e:
+        log = str(e)
+    response = http.HttpResponse(log, content_type="text/plain;charset=utf-8")
+    return response
+    
 
 def ot_log(request):
     """provide a way to output the log to the admin page"""
@@ -362,6 +531,7 @@ class ExperimentAdmin(admin.ModelAdmin):
     search_fields = ['expName' ]
     ordering = ('-date', 'expName', )
     actions = ['redo_from_scratch']
+    raw_id_fields = ('plan','repResult',)
 
     # custom admin action to delete all results and reanalyze with Plan data intact
     def redo_from_scratch(self, request, queryset):
@@ -424,7 +594,7 @@ class PluginResultAdmin(admin.ModelAdmin):
     list_filter = ('state',)
     search_fields = ('result', 'plugin')
     readonly_fields = ('result', 'plugin', 'duration', 'path', 'total_size')
-    fields = ('result', ('plugin', 'state'), ('starttime', 'endtime', 'duration'), ('path','total_size'), 'store')
+    fields = ('result', ('plugin', 'state'), ('starttime', 'endtime', 'duration'), ('path','total_size'), 'store',)
     ordering = ( "-id", )
 
 class PluginResultsInline(admin.StackedInline):
@@ -449,6 +619,8 @@ class ResultsAdmin(admin.ModelAdmin):
     search_fields = ['resultsName']
     filter_horizontal = ('projects',)
     inlines = [ PluginResultsInline, ]
+    readonly_fields = ('analysismetrics', 'libmetrics', 'qualitymetrics')
+    raw_id_fields = ('experiment','eas',)
     ordering = ( "-id", )
 
 class TFMetricsAdmin(admin.ModelAdmin):
@@ -523,7 +695,7 @@ class ReferenceGenomeAdmin(admin.ModelAdmin):
 
 
 class ThreePrimeadapterAdmin(admin.ModelAdmin):
-    list_display = ('direction', 'name','sequence','description', 'isDefault')
+    list_display = ('direction', 'chemistryType', 'name','sequence','description', 'isDefault')
 
 
 class LibraryKeyAdmin(admin.ModelAdmin):
@@ -548,6 +720,7 @@ class PlannedExperimentAdmin(admin.ModelAdmin):
     list_filter = ('planExecuted',)
     search_fields = ['planShortID',]
     filter_horizontal = ('projects',)
+    raw_id_fields = ('latestEAS','parentPlan',)
 
     inlines = [PlannedExperimentQCInline,]
 
@@ -576,6 +749,7 @@ class ExperimentAnalysisSettingsAdmin(admin.ModelAdmin):
     list_filter = ('status',)
     search_fields = ['experiment__expName' ]
     ordering = ( "-id", )
+    raw_id_fields = ('experiment',)
     formfield_overrides = { models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})} }
 
 class DMFileSetAdmin(admin.ModelAdmin):
@@ -599,6 +773,10 @@ class AnalysisArgsAdmin(admin.ModelAdmin):
         models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}
     }
 
+class CruncherAdmin(admin.ModelAdmin):
+    list_display = ('name','state','date','comments')
+    list_filter = ('state',)
+
 admin.site.register(Experiment, ExperimentAdmin)
 admin.site.register(Results, ResultsAdmin)
 admin.site.register(Message)
@@ -608,7 +786,7 @@ admin.site.register(FileServer,FileServerAdmin)
 admin.site.register(TFMetrics, TFMetricsAdmin)
 admin.site.register(ReportStorage,ReportStorageAdmin)
 admin.site.register(RunScript)
-admin.site.register(Cruncher)
+admin.site.register(Cruncher,CruncherAdmin)
 admin.site.register(AnalysisMetrics)
 admin.site.register(LibMetrics)
 admin.site.register(QualityMetrics)
@@ -649,7 +827,9 @@ admin.site.register(ExperimentAnalysisSettings, ExperimentAnalysisSettingsAdmin)
 admin.site.register(DMFileSet, DMFileSetAdmin)
 admin.site.register(DMFileStat, DMFileStatAdmin)
 admin.site.register(EventLog, EventLogAdmin)
+admin.site.register(RemoteAccount)
 admin.site.register(FileMonitor)
+admin.site.register(SupportUpload)
 admin.site.register(NewsPost)
 admin.site.register(AnalysisArgs,AnalysisArgsAdmin)
 

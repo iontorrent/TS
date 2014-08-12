@@ -1,0 +1,29 @@
+---
+# Variables for gridengine
+
+queues: 
+  - { name: all.q, slots: 2}
+  - { name: plugin.q, slots: 4}
+  - { name: thumbnail.q, slots: 10}
+  - { name: tl.q, slots: 2}
+username:
+  - www-data
+  - ionadmin
+    
+# plugin.q Customizations
+
+NP_LOAD_AVG: 75.0
+PLUGIN_PRIORITY: 10
+S_RT_LIMIT: 24:00:00
+H_RT_LIMIT: 24:00:05
+S_VMEM_LIMIT: 48G
+H_VMEM_LIMIT: 48G
+# Setting vmem causes s_stack to default to vmem, which is too
+# high for threaded tasks. Force down to the normal OS limit of 8M
+S_STACK_LIMIT: 8M
+
+SCRIPT_PATH: /usr/share/ion-tsconfig/gridengine-scripts/
+PROLOG_SCRIPT: plugin-prolog.sh
+EPILOG_SCRIPT: plugin-epilog.sh
+LOCAL_PROLOG_SCRIPT: files/{{PROLOG_SCRIPT}}
+LOCAL_EPILOG_SCRIPT: files/{{EPILOG_SCRIPT}}

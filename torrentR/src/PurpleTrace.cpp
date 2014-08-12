@@ -42,7 +42,7 @@ RcppExport SEXP PurpleSolveTotalTraceR(SEXP R_blue_hydrogen, SEXP R_red_hydrogen
 
     old_vb_out = new float [my_frame_len];
     
-    PurpleSolveTotalTrace(old_vb_out,old_blue_hydrogen,old_red_hydrogen, my_frame_len, old_delta_frame,tau_bead,etb_ratio); // generate the trace as seen by C++
+    MathModel::PurpleSolveTotalTrace(old_vb_out,old_blue_hydrogen,old_red_hydrogen, my_frame_len, old_delta_frame,tau_bead,etb_ratio); // generate the trace as seen by C++
 
     vector<double> my_vb_out;
     for (int i=0; i<my_frame_len; i++)
@@ -96,7 +96,7 @@ RcppExport SEXP IntegrateRedFromTotalTraceR(SEXP R_purple_obs, SEXP R_blue_hydro
 
     old_vb_out = new float [my_frame_len];
     
-    IntegrateRedFromObservedTotalTrace(old_vb_out,old_purple_obs, old_blue_hydrogen, my_frame_len, old_delta_frame,tau_bead,etb_ratio); 
+    MathModel::IntegrateRedFromObservedTotalTrace(old_vb_out,old_purple_obs, old_blue_hydrogen, my_frame_len, old_delta_frame,tau_bead,etb_ratio); 
 
     vector<double> my_vb_out;
     for (int i=0; i<my_frame_len; i++)
@@ -147,7 +147,7 @@ RcppExport SEXP RedSolveHydrogenFlowInWellR( SEXP R_red_hydrogen, SEXP R_i_start
 
     old_vb_out = new float [my_frame_len];
     
-    RedSolveHydrogenFlowInWell(old_vb_out,old_red_hydrogen, my_frame_len, i_start, old_delta_frame,tau_bead); // generate the trace as seen by C++
+    MathModel::RedSolveHydrogenFlowInWell(old_vb_out,old_red_hydrogen, my_frame_len, i_start, old_delta_frame,tau_bead); // generate the trace as seen by C++
 
     vector<double> my_vb_out;
     for (int i=0; i<my_frame_len; i++)
@@ -197,7 +197,7 @@ RcppExport SEXP BlueSolveBackgroundTraceR( SEXP R_blue_hydrogen, SEXP R_delta_fr
 
     old_vb_out = new float [my_frame_len];
 
-    BlueSolveBackgroundTrace(old_vb_out,old_blue_hydrogen, my_frame_len, old_delta_frame,tau_bead,etb_ratio); // generate the trace as seen by C++
+    MathModel::BlueSolveBackgroundTrace(old_vb_out,old_blue_hydrogen, my_frame_len, old_delta_frame,tau_bead,etb_ratio); // generate the trace as seen by C++
 
     vector<double> my_vb_out;
     for (int i=0; i<my_frame_len; i++)

@@ -133,7 +133,7 @@ public:
     std::vector<float *> values;
 
     t0.resize(mRow*mCol);
-    fill(t0.begin(), t0.end(), -1);
+    std::fill(t0.begin(), t0.end(), -1);
     for (size_t rowIx = 0; rowIx < mRow; rowIx++) {
       for (size_t colIx = 0; colIx < mCol; colIx++) {
         int idx = rowIx * mCol + colIx;
@@ -186,7 +186,7 @@ public:
   }
   
   /** Sum up the traces for the regions. */
-  template <typename shortvec> void CalcAllSumTrace(shortvec &data) {
+  void CalcAllSumTrace(int16_t *data) {
     size_t numBin = mRegionSum.GetNumBin();
     int rowStart, rowEnd, colStart, colEnd;
     for (size_t bIx = 0; bIx < numBin; bIx++) {
@@ -236,6 +236,43 @@ public:
         }
         else {
           notOk++;
+        }
+      }
+    }
+    //    std::cout << "For: (" << rowStart << "," << colStart << ") not ok is: " << notOk << std::endl;
+  }
+
+  /** Sum up the traces for this region. */
+  void CalcSumTraceFaster(int16_t *data, 
+                          int rowStart, int rowEnd,
+                          int colStart, int colEnd,
+                          std::pair<size_t, std::vector<float> > &bin) {
+    size_t frameStep = mRow * mCol;
+    int notOk = 0;
+    uint32_t badMask = MaskPinned | MaskIgnore | MaskExclude;
+    int regionCols = colEnd - colStart;
+    size_t frameStride = mRow * mCol;
+    for (size_t frameIx = 0; frameIx < mFrame; frameIx++) {
+      float &bin_value = bin.second[frameIx];
+      size_t &bin_count = bin.first;
+      for (int row = rowStart; row < rowEnd; row++) {
+        int offset = row * mCol + colStart;
+        int16_t *__restrict data_start = data + frameIx * frameStride + offset;
+        int16_t *__restrict data_end = data_start + regionCols;
+        int16_t *__restrict dc_offset = data + offset;
+        uint16_t *__restrict mask_start = &((*mMask)[0]) + offset;
+        char *__restrict bad_start = mBadWells + offset;
+        while(data_start != data_end) {
+          if ((*mask_start & badMask) == 0 && *bad_start == 0) {
+            bin_value += (*data_start - *dc_offset);
+            if (frameIx == 0) {
+              bin_count++;
+            }
+          }
+          bad_start++;
+          mask_start++;
+          data_start++;
+          dc_offset++;
         }
       }
     }
@@ -603,9 +640,13 @@ public:
     std::cout << "Couldn't estimate sigma for: " << badCount << " of " << mSlope.GetNumBin() << " bins." << std::endl;
   }
 
+  void SetBadWells(char *badWells) { mBadWells = badWells; }
+
 private:
   /** Pointer to the mask characterizing wells. */
   Mask *mMask;
+  /** Soft mask of suspect wells. */
+  char *mBadWells;
   /** Dimensions of chip. */ 
   size_t mRow, mCol, mFrame;
   /** Timestamps for each frame. */

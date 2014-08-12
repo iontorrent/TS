@@ -239,7 +239,7 @@ $(document).bind('modal_confirm_delete_done modal_plan_wizard_done', function(e)
 });
 
 $(document).ready(function() {
-    var basePlannedExperimentUrl = "/rundb/api/v1/plannedexperiment/?format=json&isReusable=true&planExecuted=False&isSystemDefault=False";
+    var basePlannedExperimentUrl = "/rundb/api/v1/plantemplatesummary/?format=json&planExecuted=False&isSystemDefault=False";
     var orderByOptions = "&order_by=-date&order_by=planDisplayedName";
 
     var favorites = $("#favorites").kendoGrid(commonKendoGrid("#favorites",
@@ -249,7 +249,7 @@ $(document).ready(function() {
         basePlannedExperimentUrl + orderByOptions,
         'No Recents yet'));
     var ampliSeqs = $("#ampliSeqs").kendoGrid(commonKendoGrid("#ampliSeqs",
-        basePlannedExperimentUrl + "&runType=AMPS" + orderByOptions,
+        basePlannedExperimentUrl + "&runType__in=AMPS,AMPS_EXOME" + orderByOptions,
         'No Ampliseq DNA templates yet'));
     var wholeGenomes = $("#wholeGenomes").kendoGrid(commonKendoGrid("#wholeGenomes",
         basePlannedExperimentUrl + "&runType=WGNM" + orderByOptions,

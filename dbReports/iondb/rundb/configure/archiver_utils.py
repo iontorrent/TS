@@ -9,6 +9,7 @@ from iondb.rundb.models import Experiment, Backup, FileServer, Results, ReportSt
 from django.conf import settings
 from iondb.rundb.data.archiveExp import Experiment as ArchiveExperiment
 from iondb.utils.files import disk_attributes
+from iondb.rundb.data.dmfilestat_utils import get_keepers_diskspace
 
 logger = logging.getLogger(__name__)
 
@@ -159,7 +160,10 @@ def disk_usage_stats():
 
         other = total_gb - (reserved + avail_gb + rawused + reportsused)    #gbytes
 
-
+        # get space used by data marked Keep
+        keeper_used = get_keepers_diskspace(server.filesPrefix)
+        keeper_used = float(sum(keeper_used.values()))/1024     #gbytes
+        percentkeep = 100*(keeper_used/total_gb if total_gb and total_gb > 0 else 0)
 
         stats[server.filesPrefix] = {
             'statusmsg':errormsg,
@@ -169,6 +173,8 @@ def disk_usage_stats():
             'rawused': rawused,
             'reportsused': reportsused,
             'other': other,
+            'keeper_used': keeper_used,
+            'percentkeep': percentkeep,
         }
 
     return stats

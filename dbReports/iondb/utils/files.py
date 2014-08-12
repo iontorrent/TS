@@ -55,12 +55,14 @@ def test_sigproc_infinite_regression(directory):
 
 
 def getSpaceKB(drive_path):
+    """Return free space in kilobytes"""
     s = os.statvfs(drive_path)
     freebytes = s[statvfs.F_BSIZE] * s[statvfs.F_BAVAIL]
     return float(freebytes)/1024
 
 
 def getSpaceMB(drive_path):
+    """Return free space in megabytes"""
     s = os.statvfs(drive_path)
     freebytes = s[statvfs.F_BSIZE] * s[statvfs.F_BAVAIL]
     return float(freebytes)/(1024*1024)
@@ -166,4 +168,3 @@ def ismountpoint(directory):
     p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = p1.communicate()
     return p1.returncode
-

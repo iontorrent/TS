@@ -23,7 +23,6 @@ import signal
 import string
 import random
 import subprocess
-import datetime
 import shutil
 from django.conf import settings
 from django.utils import timezone
@@ -33,7 +32,7 @@ import sys
 import re
 import json
 import logging
-from datetime import timedelta
+from datetime import timedelta, datetime
 import pytz
 import time
 import tempfile
@@ -45,7 +44,6 @@ import dateutil
 
 import urlparse
 from ion.utils.timeout import timeout
-from iondb.utils.files import percent_full
 from iondb.utils import raid as raid_utils
 from iondb.utils import files as file_utils
 
@@ -292,7 +290,7 @@ def unzipPlugin(zipfile, logger=None):
 
 
 @task
-def echo(message, wait=0):
+def echo(message, wait=0.0):
     time.sleep(wait)
     logger.info("Logged: " + message)
     print(message)
@@ -301,8 +299,10 @@ def echo(message, wait=0):
 def delete_that_folder(directory, message):
     def delete_error(func, path, info):
         logger.error("Failed to delete %s: %s", path, message)
-    logger.info("Deleting %s", directory)
-    shutil.rmtree(directory, onerror=delete_error)
+    
+    if os.path.exists(directory):
+        logger.info("Deleting %s", directory)
+        shutil.rmtree(directory, onerror=delete_error)
 
 #N.B. Run as celery task because celery runs with root permissions
 @task
@@ -654,6 +654,8 @@ def make_reference_paths(reference):
 def unzip_reference(reference_id, reference_file=None):
     from iondb.rundb import models
     reference = models.ReferenceGenome.objects.get(pk=reference_id)
+    reference.status = "preprocessing"
+    reference.save()
     zip_path = reference.file_monitor.full_path()
     destination = make_reference_paths(reference)
     try:
@@ -673,6 +675,8 @@ def unzip_reference(reference_id, reference_file=None):
 def copy_reference(reference_id):
     from iondb.rundb import models
     reference = models.ReferenceGenome.objects.get(pk=reference_id)
+    reference.status = "preprocessing"
+    reference.save()
     fasta_path = reference.file_monitor.full_path()
     destination = make_reference_paths(reference)
     shutil.move(fasta_path, destination)
@@ -721,8 +725,9 @@ def build_tmap_index(reference_id):
     if ret == 0:
         logger.debug("Successfully built the TMAP %s index for %s" %
                     (settings.TMAP_VERSION, reference.short_name))
-        reference.status = 'created'
+        reference.status = 'complete'
         reference.index_version = settings.TMAP_VERSION
+        reference.save()
         reference.enabled = True
         reference.enable_genome()
     else:
@@ -730,9 +735,9 @@ def build_tmap_index(reference_id):
                      (" ".join(cmd), stderr))
         reference.status = 'error'
         reference.verbose_error = json.dumps((stdout, stderr, ret))
+        reference.save()
         reference.enabled = False
         reference.disable_genome()
-    reference.save()
 
     return ret == 0
 
@@ -837,7 +842,7 @@ def scheduled_update_check():
         upgrade_message = models.Message.objects.filter(tags__contains="new-upgrade")
         if packages:
             if not upgrade_message.all():
-                models.Message.info('There is an update available for your Torrent Server. <a class="btn btn-success" href="/admin/update">Update Now</a>', tags='new-upgrade')
+                models.Message.info('There is an update available for your Torrent Server. <a class="btn btn-success" href="/admin/update">Update Now</a>', tags='new-upgrade', route='_StaffOnly')
             download_now = models.GlobalConfig.objects.all()[0].enable_auto_pkg_dl
             if download_now:
                 async = download_updates.delay()
@@ -846,7 +851,6 @@ def scheduled_update_check():
             upgrade_message.delete()
     except Exception as err:
         logger.error("TSconfig raised '%s' during a scheduled update check." % err)
-        from iondb.rundb import models
         models.GlobalConfig.objects.update(ts_update_status="Update failure")
         raise
 
@@ -855,13 +859,15 @@ def check_updates():
     """Currently this is passed a TSConfig object; however, there might be a
     smoother design for this control flow.
     """
+    from iondb.rundb import models
     try:
         import ion_tsconfig.TSconfig
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
+        enable_security_update = models.GlobalConfig.objects.get().enable_auto_security
+        tsconfig.set_securityinstall(enable_security_update)
         packages = tsconfig.TSpoll_pkgs()
     except Exception as err:
         logger.error("TSConfig raised '%s' during update check." % err)
-        from iondb.rundb import models
         models.GlobalConfig.objects.update(ts_update_status="Update failure")
         raise
 
@@ -869,13 +875,15 @@ def check_updates():
 
 @task
 def download_updates(auto_install=False):
+    from iondb.rundb import models
     try:
         import ion_tsconfig.TSconfig
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
+        enable_security_update = models.GlobalConfig.objects.get().enable_auto_security
+        tsconfig.set_securityinstall(enable_security_update)
         downloaded = tsconfig.TSexec_download()
     except Exception as err:
         logger.error("TSConfig raised '%s' during a download" % err)
-        from iondb.rundb import models
         models.GlobalConfig.objects.update(ts_update_status="Download failure")
         raise
     async = None
@@ -895,6 +903,9 @@ def _do_the_install():
     try:
         import ion_tsconfig.TSconfig
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
+        enable_security_update = models.GlobalConfig.objects.get().enable_auto_security
+        tsconfig.set_securityinstall(enable_security_update)
+
         success = tsconfig.TSexec_update()
         if success:
             tsconfig.set_state('F')
@@ -925,7 +936,10 @@ def install_updates():
         raise
 
 
+@task(queue="diskutil")
 def update_diskusage(fs):
+    import os
+    from iondb.utils.files import percent_full
     if os.path.exists(fs.filesPrefix):
         try:
             fs.percentfull=percent_full(fs.filesPrefix)
@@ -1009,11 +1023,25 @@ def check_disk_space():
         return
 
     for fs in fileservers:
-        update_diskusage(fs)
+
+        # This can get stuck when NFS filesystems are misbehaving so need a timeout
+        #update_diskusage(fs)
+        async_result = update_diskusage.apply_async([fs], queue="diskutil")
+        raidinfo = async_result.get(timeout=60)
+        fail_tag = "Failed getting disk usage for %s" % (fs.filesPrefix)
+        if async_result.failed():
+            logger.debug("%s" %(fail_tag))
+            message = models.Message.objects.filter(tags__contains=fail_tag)
+            if not message:
+                models.Message.error("%s at %s" % (fail_tag, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),tags=fail_tag)
+            continue
+        else:
+            models.Message.objects.filter(tags__contains=fail_tag).delete()
+
         # TS-6669: Generate a Message Banner when disk usage gets critical
         crit_tag = "%s_disk_usage_critical" % (fs.name)
         warn_tag = "%s_disk_usage_warning" % (fs.name)
-        golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
+        golink = "<a href='%s' >  Visit Data Management</a>" % ('/data/datamanagement/')
         if fs.percentfull > 99:
             msg = "* * * CRITICAL! %s: Partition is getting very full - %0.2f%% * * *" % (fs.filesPrefix,fs.percentfull)
             logger.debug(msg+"   %s" % golink)
@@ -1032,7 +1060,7 @@ def check_disk_space():
             # Remove any message objects
             models.Message.objects.filter(tags__contains=crit_tag).delete()
             models.Message.objects.filter(tags__contains=warn_tag).delete()
-            
+
     #========================================================================
     # Check root partition
     #========================================================================
@@ -1055,7 +1083,7 @@ def check_disk_space():
 
 #TS-5495: Refactored from a ionadmin cron job
 #Note on time: we need to specify the time to run in UTC. 6am localtime
-if time.daylight:
+if time.localtime().tm_isdst and time.daylight:
     cronjobtime = 6 + int(time.altzone/60/60)
 else:
     cronjobtime = 6 + int(time.timezone/60/60)
@@ -1064,9 +1092,12 @@ cronjobtime = (24 + cronjobtime) % 24
 def runnightly():
     import traceback
     from iondb.bin import nightly
+    from iondb.rundb import models
 
     try:
-        nightly.send_nightly()
+        send_nightly = models.GlobalConfig.get().enable_nightly_email
+        if send_nightly:
+            nightly.send_nightly()
     except:
         logger.exception(traceback.format_exc())
 
@@ -1084,46 +1115,6 @@ def update_diskspace_fields(resultpk):
         for dmfilestat in dmfilestats:
             dmfilestat.update_diskusage()
 
-
-@task(queue="periodic")
-def backfill_pluginresult_diskusage():
-    '''Due to new fields (inodes), and errors with counting contents of symlinked files, this function
-    updates every Result object's diskusage value.
-    '''
-    import traceback
-    from django.db.models import Q
-    from iondb.rundb import models
-
-    # Setup log file logging
-    filename = '/var/log/ion/%s.log' % 'backfill_pluginresult_diskusage'
-    log = logging.getLogger('backfill_pluginresult_diskusage')
-    log.propagate = False
-    log.setLevel(logging.DEBUG)
-    handler = logging.handlers.RotatingFileHandler(
-        filename, maxBytes=1024 * 1024 * 10, backupCount=5)
-    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-    handler.setFormatter(formatter)
-    log.addHandler(handler)
-
-    log.info("")
-    log.info("===== New Run =====")
-
-    log.info("PluginResults:")
-    #query = Q(size=-1) | Q(inodes=-1)
-    #obj_list = models.PluginResult.objects.filter(query).values('pk','path', 'size', 'inodes')
-    obj_list = models.PluginResult.objects.all()
-    for obj in obj_list:
-        log.debug(str(obj))
-        try:
-            obj.size, obj.inodes = obj._calc_size()
-        except OSError:
-            log.exception("Failed to compute plugin size: '%s'", self.path())
-            obj.size, obj.inodes = -1
-        except:
-            log.exception(traceback.format_exc())
-        obj.save()
-    else:
-        log.warn("No PluginResult objects found")
 
 @task
 def download_something(url, download_monitor_pk=None, dir="/tmp/", name="", auth=None):
@@ -1243,14 +1234,17 @@ def install_reference(args, reference_id):
     full_path, monitor_id = args
     monitor = models.FileMonitor.objects.get(id=monitor_id)
     reference = models.ReferenceGenome.objects.get(id=reference_id)
+    reference.status = "preprocessing"
+    reference.save()
     extracted_path = os.path.join(monitor.local_dir, "reference_contents")
     extract_zip(full_path, extracted_path)
     reference.reference_path = extracted_path
     if reference.index_version == settings.TMAP_VERSION:
+        reference.status = "complete"
         reference.enabled = True
         reference.enable_genome()
     else:
-        reference.status = "Rebuilding index"
+        reference.status = "queued"
         result = build_tmap_index.delay(reference.id)
         reference.celery_task_id = result.task_id
     reference.save()
@@ -1337,6 +1331,72 @@ def update_news_posts():
     else:
         logger.error("Could not get Ion Torrent news feed.")
 
+@periodic_task(run_every=timedelta(minutes=3600), expires=600, queue="periodic")
+def checkLspciForGpu():
+    errorFileName = "/var/spool/ion/gpuErrors"
+    gpuFound = False
+    revsValid = True
+    count = 0
+
+    # get the output of lspci
+
+    # requires Python 2.7
+    #lspciStr = subprocess.check_output("lspci")
+
+    # works with Python 2.6.5
+    p = subprocess.Popen(['lspci'], stdout=subprocess.PIPE)
+    lspciStr, err = p.communicate()
+
+    # find all the lines containing "nvidia" (case insensitive) and get the rev
+    startIndex = 0;
+    while True:
+        revNum, startIndex = findNvidiaInLspci(lspciStr, startIndex)
+        #print "revNum", revNum, "startIndex" , startIndex
+
+        # if we didn't find a line containing nvidia, bail
+        if (startIndex == -1):
+            break
+
+        gpuFound = True
+
+        # check the rev num
+        if revNum == 'ff':     # When rev == ff, we have lost GPU connection
+            revsValid = False
+
+        # sanity check
+        count = count + 1
+        if count > 32:
+            break
+
+    writeError(errorFileName, gpuFound, revsValid)
+
+    return gpuFound and revsValid
+
+def findNvidiaInLspci(lspciStr, startIndex):
+
+    # find the line with the NVIDIA controller information
+    lowStr = lspciStr.lower()
+    idx = lowStr.find("controller: nvidia", startIndex)
+
+    # if we didn't find it, bail
+    if (idx == -1):
+        return "", -1
+
+    # truncate the line with the NVIDIA info
+    newline = lspciStr.find("\n", idx)
+    if newline != -1:
+        nvidiaLine = lspciStr[idx:newline]
+
+    # extract the rev number from the NVIDIA line
+    token = "(rev "
+    beg = nvidiaLine.find(token) + len(token)
+    end = nvidiaLine.find(")", beg)
+
+    return nvidiaLine[beg:end], newline + 1
+
+def writeError(errorFileName, gpuFound, allRevsValid):
+    with open(errorFileName, 'w') as f:
+        f.write(json.dumps({'gpuFound': gpuFound, 'allRevsValid': allRevsValid}))
 
 @task
 def hide_apt_sources():
@@ -1352,3 +1412,82 @@ def restore_apt_sources():
     hidden = filename+".hide"
     os.rename(hidden, filename)
     return
+
+
+@task
+def lock_ion_apt_sources(enable=False):
+    """Set sources.list to point to Ion archive location for current version
+    Change from:
+        deb http://ionupdates.com/updates/software lucid/
+        to:
+        deb http://ionupdates.com/updates/software/archive 4.0.2/
+    -or-
+        vicey-versy
+    """
+    # get Torrent Suite version string.
+    from ion import version
+    ts_version = version
+
+    # get distribution string
+    def get_distrib_name():
+        with open('/etc/lsb-release','r') as fp:
+            for line in fp.readlines():
+                if line.startswith('DISTRIB_CODENAME'):
+                    return line.split('=')[1].strip()
+        return 'lucid'  # failsafe default which may work
+
+    os_codename = get_distrib_name()
+
+    if enable:
+        find_string = "updates\/software.*%s\/" % (os_codename)
+        replace_string = "updates\/software\/archive %s\/" % (ts_version)
+    else:
+        find_string = "updates\/software\/archive %s\/" % (ts_version)
+        replace_string = "updates\/software %s\/" % (os_codename)
+    sed_string = "s/%s/%s/g" % (find_string, replace_string)
+
+    # Possible locations of Ion Apt repository strings:
+    #     /etc/apt/sources.list
+    #     /etc/apt/sources.list.d/*.list
+    #
+    filepaths = [os.path.join("/etc/apt/sources.list.d",x) for x in os.listdir("/etc/apt/sources.list.d") if os.path.splitext(x)[1] == '.list']
+    filepaths.append("/etc/apt/sources.list")
+    for filepath in filepaths:
+        logger.debug("Looking in %s" % filepath)
+        cmd = ["sed", "-i", sed_string, filepath]
+        try:
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            stdout, stderr = proc.communicate()
+        except:
+            logger.error("%s: cmd = '%s'" % (sys._getframe().f_code.co_name, cmd))
+        if proc.returncode:
+            logger.error("%s: %s" % (sys._getframe().f_code.co_name, stderr))
+
+
+@periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic")
+def check_cluster_status():
+    # run tests for cluster nodes and alert user with message banner of any problems
+    from iondb.rundb.models import Message
+    from iondb.rundb.configure.cluster_info import run_nodetests
+
+    try:
+        status = run_nodetests()
+        if status:
+            message = Message.objects.filter(tags="cluster_alert")
+            if 'error' in status or 'warning' in status:
+                if not message:
+                    msg = 'WARNING: Cluster node failure.'
+                    golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
+                    Message.warn(msg+"   %s" % golink,tags="cluster_alert")
+            else:
+                message.delete()
+    except:
+        logger.exception('Failed getting cluster nodes test results')
+
+@task
+def get_cluster_status():
+    # run tests for cluster nodes and return status
+    from iondb.rundb.configure.cluster_info import run_nodetests
+    status = run_nodetests()
+    return status
+

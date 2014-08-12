@@ -1,0 +1,71 @@
+#!/bin/bash
+# Copyright (C) 2014 Life Technologies Inc. All Rights Reserved
+#=======================================================================
+# Check for BIOS virtualization enabled
+# http://www.redhat.com/archives/libvir-list/2007-March/msg00218.html
+#=======================================================================
+if [[ $(id -u) != 0 ]]; then
+    echo -n 'Error' >&1
+    echo "Programming error:" >&2
+    echo "Needs to be executed with super user privilege" >&2
+    exit
+fi
+
+modprobe msr || true
+result=$(/usr/sbin/rdmsr 0x3A 2>&1)
+# In detail, the register is the IA32_FEATURE_CONTROL (0x3A) MSR. The relevant bits are:
+#  bit 0   Lock bit (0 = unlocked, 1 = permanently locked)
+#  bit 1   Enable VMXON in Intel Safer Mode Extensions (SMX)
+#  bit 2   Enable VMXON in normal operation
+# Mask bit 2
+result_int=$((0x$result))
+is_set=$(( $result_int & 4 ? 1 : 0 ))
+
+if [[ $is_set == 1 ]]; then
+    #This is happy path; virtualization enabled
+    echo -n "" >&1
+else
+    echo -n "BIOS Disabled" >&1 # Do not edit the stdout return string
+    echo "KVM (vmx) is disabled by your BIOS" >&2
+    echo "Enter your BIOS setup and enable Virtualization Technology (VT)" >&2
+    echo -n "and then hard poweroff/poweron your system" >&2
+    exit 1
+fi
+
+
+#=======================================================================
+# Check if kvm modules are running.  If so, virtualbox will not run
+# Note: this is not expected on Torrent Servers.  It likely means qemu
+# has been installed manually.
+#=======================================================================
+if lsmod|grep -q kvm_intel; then
+    echo -n "BIOS Disabled" >&1 # Do not edit the stdout return string
+    echo "WARNING: kvm_intel module is running" >&2
+    echo "This will prevent virtualbox from starting a VM" >&2
+    echo "To enable virtualbox, run the following:" >&2
+    echo " sudo rmmod kvm kvm_intel" >&2
+    exit 1
+fi
+
+exit
+
+#if [ $((0x$result)) -eq 5 ] 2>/dev/null; then
+#    #This is happy path; BIOS enabled
+#    echo -n ${STATES[$STATE]} >&1
+#elif [ $((0x$result)) -eq $(($result)) ] 2>/dev/null; then
+#    # result is an integer; thus not an error string
+#    #STATE=7
+#    echo -n "BIOS Disabled ($result)" >&1
+#    echo "KVM (vmx) is disabled by your BIOS" >&2
+#    echo "Enter your BIOS setup and enable Virtualization Technology (VT)" >&2
+#    echo -n "and then hard poweroff/poweron your system" >&2
+#    exit 1
+#else
+#    # result is an error string and we dump it; hoping it helps
+#    #STATE=9
+#    echo -n 'Error' >&1
+#    echo "Programming error:" >&2
+#    echo $result >&2
+#    echo "error in "$(readlink -f $0) >&2
+#    exit 1
+#fi

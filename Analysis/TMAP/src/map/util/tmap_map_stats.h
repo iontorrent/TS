@@ -13,6 +13,14 @@ typedef struct {
     uint64_t num_after_scoring; /*!< the number of hits after scoring */
     uint64_t num_after_rmdup; /*!< the number of hits after duplicate removal */
     uint64_t num_after_filter; /*!< the number of hits after filtering */
+    // realigner statistics
+    uint64_t num_realign_invocations; /*!< the number of alignments ran through realignment procedure*/
+    uint64_t num_realign_already_perfect; /*!< the number of alignments that considered already perfect and thus were not re-processed*/
+    uint64_t num_realign_not_clipped; /*!< the number of alignments could not be clipped (due to size / edge proximity / HP constraints*/ 
+    uint64_t num_realign_sw_failures; /*!< the number of realigner Smith-Waterman procedure failures*/ 
+    uint64_t num_realign_unclip_failures; /*!< the number of realigner un-clipping procedure failures*/ 
+    uint64_t num_realign_changed; /*!< the number of alignments that were modified adjusted by realigner*/ 
+    uint64_t num_realign_shifted; /*!< the number of alignments for which the position on the reference was altered by realigner*/ 
 } tmap_map_stats_t;
 
 /*!

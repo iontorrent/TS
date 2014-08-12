@@ -137,16 +137,14 @@ $(document).ready(function(){
             serverSorting: true,
             serverFiltering: true,
             serverPaging: true,                        	
-        	pageSize: 50
+        	pageSize: 15,
+        	sort: {field: "modified", dir: "desc"}
         },
-        height: '408',
         groupable: false,
-        scrollable: {
-        	virtual: true
-        },
+        scrollable: false,
         selectable: false,
         sortable: true,
-        pageable: false,
+        pageable: true,
 		columns: [ {
                 field: "id",
                 title: "Action",

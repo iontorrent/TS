@@ -19,27 +19,33 @@ typedef enum
 }CalcEnums;
 
 
-#define SPECIALCALCULATION 0
-#define NOTBEADPARAM -1
-#define NOTREGIONPARAM -1
-#define NOTNUCRISEPARAM -1
-#define SINGLETON 1
+#define NOTBEADPARAM        ( float * ( BeadParams    ::* )() )( 0 )
+#define NOTREGIONPARAM      ( float * ( reg_params     ::* )() )( 0 )
+#define NOTNUCRISEPARAM     ( float * ( nuc_rise_params::* )() )( 0 )
 #define FIRSTINDEX 0
 
-#define POSTKEY 7
-
-typedef struct
+struct CpuStep
 {
+    enum Length {
+      SpecialCalculation,
+      Singleton,
+      PerNuc,
+      PerFlow
+    };
+
     unsigned int PartialDerivMask;
     char *name;
     float *ptr;
     float diff;
     int   doBoth;
-    int paramsOffset;
-    int regParamsOffset;
-    int nucShapeOffset; // this is to deal with the goofy way the optimization is handled
-    int len;
-}CpuStep_t;
+
+    // The somewhat odd syntax below is C++ for "pointer to a member function".
+    // This is all to deal with the goofy way the optimization is handled.
+    float * ( BeadParams::*     paramsFunc    )();
+    float * ( reg_params::*      regParamsFunc )();
+    float * ( nuc_rise_params::* nucShapeFunc  )();
+    Length length;
+};
 
 typedef struct
 {
@@ -50,15 +56,35 @@ typedef struct
 
 
 
-/* Making the tables that configure the matrix operations was getting horribly tedious, so I now have some relatively
-   simple code that builds the table.  This code should be called once at startup because the tables are shared
-   by all objects of the class
+/* Making the tables that configure the matrix operations was getting horribly tedious, 
+   so I now have some relatively simple code that builds the table.  This code should be 
+   called once at startup because the tables are shared by all objects of the class.
    */
-struct mat_table_build_instr
+class mat_table_build_instr
 {
+  mat_table_build_instr( const mat_table_build_instr & );               // Don't do this.
+  mat_table_build_instr & operator=( const mat_table_build_instr & );   // Don't do this, either.
+
+  int * affected_flows;
+public:
+  mat_table_build_instr() 
+  { 
+    affected_flows = 0; 
+    comp = TBL_END;
+    array_index = 0;
+    bead_params_func = 0;
+    reg_params_func = 0;
+  }
+  ~mat_table_build_instr() { delete [] affected_flows; }
+  void realloc( int size ) { delete [] affected_flows; affected_flows = new int[size]; }
+  
   PartialDerivComponent comp;
-  int param_ndx;
-  int affected_flows[NUMFB];
+  float * ( BeadParams::* bead_params_func )();
+  float * ( reg_params::*  reg_params_func  )();
+  int array_index;
+
+  int GetAffectedFlow( int which ) const { return affected_flows[which]; }
+  void SetAffectedFlow( int which, int value ) { affected_flows[which] = value; }
 };
 
 /* typedef used to classify each parameter we are going to fit.  The high-level fit specification
@@ -85,11 +111,12 @@ typedef enum
 struct fit_descriptor
 {
   PartialDerivComponent comp;
-  int param_ndx;
+  float * ( BeadParams::* bead_params_func )();
+  float * ( reg_params::*  reg_params_func  )();
   ParameterSensitivityClassification ptype;
 };
 
-struct master_fit_type_table
+struct master_fit_type_entry
 {
   // nice human-readable descriptive name for what the fit attempts to do
   char *name;
@@ -105,18 +132,44 @@ struct master_fit_type_table
   // different number of flow buffers.  If the total number of flow buffers change, the number of entries
   // in the fit_descriptor table doesn't change, but the number of entries in the mat_table_build_instr
   // does change.  This also makes it easier to handle run-time configuration of the flow order.
-  struct mat_table_build_instr *mb;
+  mat_table_build_instr *mb;
   // the lowest-level fit instruction table.  These tables contain one entry for all the permutations
   // of each parameter with all other parameters.  These are built from the mat_table_build_instr
   // tables to make life much easier, and this low level is used to initialize the BkgFitMatrixPacker
   // class
   fit_instructions fi;
+
+  void CreateBuildInstructions(const int *my_nuc, int flow_key, int flow_block_size);
+};
+
+class master_fit_type_table
+{
+  // All of the table entries.
+  master_fit_type_entry *data;
+
+  // No copying or assignment.
+  master_fit_type_table( const master_fit_type_table & );
+  master_fit_type_table & operator=( const master_fit_type_table & );
+
+  // The base data that we start with when making our array.
+  static master_fit_type_entry base_bkg_model_fit_type[];
+public:
+
+  // TODO: PartialDeriv 'affected flows' has to be munged for tango flow order!!! */
+  // Make me a new one! (Used to be InitializeLevMarSparseMatrices())
+  master_fit_type_table( const class FlowMyTears & tears, 
+                         int flow_start, int flow_key, int flow_block_size );
+
+  // Cleanup! (Used to be CleanupLevMarSparseMatrices()).
+  ~master_fit_type_table();
+
+  fit_instructions *GetFitInstructionsByName(char *name);
+  fit_descriptor *GetFitDescriptorByName(const char* name);
 };
 
 
 
-void CreateBuildInstructions(struct master_fit_type_table *mfte, int *my_nuc);
-void InitializeLevMarFitter(struct mat_table_build_instr *btbl,fit_instructions *instr);
-void DumpBuildInstructionTable(struct mat_table_build_instr *tbl);
+void InitializeLevMarFitter(struct mat_table_build_instr *btbl,fit_instructions *instr, int flow_block_size);
+void DumpBuildInstructionTable(struct mat_table_build_instr *tbl, int flow_block_size);
 
 #endif // BKGFITOPTIM_H

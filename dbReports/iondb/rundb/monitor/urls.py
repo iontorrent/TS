@@ -11,4 +11,5 @@ urlpatterns = patterns(
     url(r'^$', 'views.monitor', name="monitor"),
     url(r'^instruments/$', 'views.instruments', name="instruments"),
 	url(r'^getSoftware/$', 'views.getSoftware', name="getSoftware"),
+	url(r'^chef/$', 'views.chef', name="monitor_chef"),
     )

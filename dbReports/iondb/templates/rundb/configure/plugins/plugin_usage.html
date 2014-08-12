@@ -37,6 +37,7 @@ function precisionUnits(num, div) {
   <li><a href="{% url "configure_services" %}">Services</a></li>
   <li class="active"><a href="{% url "configure_plugins" %}">Plugins</a></li>
   <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
   <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
@@ -154,7 +155,8 @@ $(document).ready(function(){
             , pageSize: 20
             , serverFiltering: true
             , filter: [ {field: "plugin__name", operator:"__exact", value:"{{ plugin.name|escapejs }}"}
-                        ,{ field: "starttime", operator: "__isnull", value: "false"} ]
+                        ,{ field: "starttime", operator: "__isnull", value: "false"}
+                        ,{ field: "endtime", operator: "__isnull", value: "false"} ]
             , autoSync: true
         }
         , height: '446'
@@ -167,7 +169,7 @@ $(document).ready(function(){
             , confirmation: "Are you sure you want to remove this plugin result? All output files will be removed."
         }
         , sortable: true
-        , pageable: false
+        , pageable: true
         , columns: [
             {
                 field: "result"
@@ -176,10 +178,12 @@ $(document).ready(function(){
             } , {
                 field: "starttime"
                 ,title: "Start"
+                ,sortable: true
                 ,template: '#= kendo.toString(new Date(Date.parse(starttime)),"yyyy/MM/dd hh:mm tt") #'
             } , {
                 field: "endtime"
                 ,title: "End"
+                ,sortable: true
                 ,template: kendo.template($("#EndTimeTemplate").html())
             } , {
                 field: "duration"

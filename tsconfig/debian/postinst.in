@@ -18,7 +18,8 @@ case "$1" in
     # IPC-System-Simple-1.21.tar.gz autodie-2.10.tar.gz
     staging="/tmp/perlModIn"
     cd $staging
-    moduleList=( common-sense-3.4.tar.gz Carp-Assert-0.20.tar.gz IO-All-0.44.tar.gz IPC-System-Simple-1.21.tar.gz JSON-2.53.tar.gz JSON-XS-2.32.tar.gz List-MoreUtils-0.33.tar.gz Log-Log4perl-1.35.tar.gz Perl6-Slurp-0.050000.tar.gz Readonly-1.03.tar.gz Regexp-Common-2011121001.tar.gz Statistics-Descriptive-3.0300.tar.gz Statistics-LineFit-0.07.tar.gz autodie-2.10.tar.gz )
+    #moduleList=( common-sense-3.4.tar.gz Carp-Assert-0.20.tar.gz IO-All-0.44.tar.gz IPC-System-Simple-1.21.tar.gz JSON-2.53.tar.gz JSON-XS-2.32.tar.gz List-MoreUtils-0.33.tar.gz Log-Log4perl-1.35.tar.gz Perl6-Slurp-0.050000.tar.gz Readonly-1.03.tar.gz Regexp-Common-2011121001.tar.gz Statistics-Descriptive-3.0300.tar.gz Statistics-LineFit-0.07.tar.gz autodie-2.10.tar.gz )
+    moduleList=( IO-All-0.44.tar.gz JSON-2.53.tar.gz  JSON-XS-2.32.tar.gz List-MoreUtils-0.33.tar.gz Readonly-1.03.tar.gz Statistics-Descriptive-3.0300.tar.gz Statistics-LineFit-0.07.tar.gz )
     for module in ${moduleList[@]}; do
         instLog=/tmp/${module%.tar.gz}_install.log
         echo "Installing ${module%.tar.gz}.  See $instLog"

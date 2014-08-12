@@ -6,6 +6,9 @@
 #include <string>
 #include <armadillo>
 #include <map>
+#include <algorithm>
+#include <utility>
+
 #include "GridMesh.h"
 #include "Mask.h"
 #include "Image.h"
@@ -84,10 +87,12 @@ class BFReference {
    */
   void CalcReference(const std::string &datFile, Mask &mask, BufferMeasurement bf_type=BFLegacy);
   void CalcReference(const std::string &datFile, Mask &mask, std::vector<float> &metric);
+  void CalcReference(Image &bfImg, Mask &mask, BufferMeasurement bf_type);
   void AdjustForT0(int rowStart, int rowEnd, int colStart, int colEnd,
 		   int nCol, std::vector<float> &t0, std::vector<char> &filters,
 		   std::vector<float> &metric);
   void CalcShiftedReference(const std::string &datFile, Mask &mask, std::vector<float> &metric, BufferMeasurement bf_type=BFLegacy);
+  void CalcShiftedReference(Image &bfImg, Mask &mask, std::vector<float> &metric, BufferMeasurement bf_type);
   void CalcSignalShiftedReference(const std::string &datFile, const std::string &bgFile, Mask &mask, std::vector<float> &metric, float minTraceSd, int bfIntegrationWindow, int bfIntegrationWidth, BufferMeasurement bf_type);
   void CalcDualReference(const std::string &datFile1, const std::string &datFile2, Mask &mask);
 

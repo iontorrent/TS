@@ -8,10 +8,15 @@
 #define RECALIBRATIONMODEL_H
 
 #include <vector>
-#include <stdint.h>
+#include <string>
+#include <fstream>
+#include <stdio.h>
+#include <cstdlib>
+#include <SystemMagicDefines.h>
+
 #include "OptArgs.h"
-#include "BaseCallerUtils.h"
 #include "json/json.h"
+
 
 using namespace std;
 
@@ -44,7 +49,7 @@ class RegionStratification{
       xCuts = (xMax - xMin + 2) / xSpan;
       yCuts = (yMax - yMin + 2) / ySpan;    
   };
-  int OffsetRegion(int x, int y){
+  int OffsetRegion(int x, int y) const {
     int offsetRegion = (y - yMin)/ySpan + (x -xMin)/xSpan * yCuts;
     return(offsetRegion);
   };
@@ -52,8 +57,8 @@ class RegionStratification{
 
 class MultiAB{
   public:
-    vector<vector<vector<float> > > * aPtr;
-    vector<vector<vector<float> > > * bPtr;
+    const vector<vector<vector<float> > > * aPtr;
+    const vector<vector<vector<float> > > * bPtr;
 
     MultiAB(){aPtr=0; bPtr = 0;};
     void Null(){aPtr=0; bPtr = 0;};
@@ -62,16 +67,20 @@ class MultiAB{
 
 class RecalibrationModel {
 public:
-
-  vector<vector<vector<float> > > * getAs(int x, int y);
-  vector<vector<vector<float> > > * getBs(int x, int y);
   
   RecalibrationModel();
   ~RecalibrationModel();
 
+  const vector<vector<vector<float> > > * getAs(int x, int y) const;
+  const vector<vector<vector<float> > > * getBs(int x, int y) const;
+
+  // Read command line arguments and then call InitializeModel
   void Initialize(OptArgs& opts);
 
-  void getAB(MultiAB &multi_ab, int x, int y);
+  // Model text file and hp threshold supplied as input variables
+  void InitializeModel(string model_file_name, int model_threshold);
+
+  void getAB(MultiAB &multi_ab, int x, int y) const;
 
   bool is_enabled() const { return is_enabled_; };
 

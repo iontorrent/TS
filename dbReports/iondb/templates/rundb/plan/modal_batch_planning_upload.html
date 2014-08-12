@@ -1,4 +1,5 @@
 {% load url from future %}
+
 <div id="modal_batch_planning_upload" title="" class="modal modal-900 hide">
     <div class="modal-header">
         <button type="button" class="close" data-dismiss="modal">&times;</button>
@@ -18,10 +19,21 @@
                             One row for each plan.
                             <br>
                             Tips:
-                            <br>
-                            (1) Plan values not included in the CSV file will default to values of the template you are planning from.
-                            <br>
-                            (2) If you want to associate a Plan with multiple Plugins or Projects, use ";" as the separator (e.g., My Project1; My Project2)
+                            <ul>
+                            <li>Plan values not included in the CSV file will default to values of the template you are planning from.
+                            </li>
+                            <li>To associate a Plan with multiple Plugins or Projects, <ul><li>use ";" as the separator</li>
+                            <li>Example: My Project1; My Project2</li></ul>
+                            </li>
+                            <li>To specify both sample name and sample ID during barcoded planning, <ul><li>use ";" as the separator and "ID:" as the sample ID key</li>
+                            <li>Example: sample 1;ID:ext 1</li></ul>
+                            </li>
+                            <li>For DNA and Fusions barcoded planning, <ul><li>use ";" as the separator, "TYPE:" as the Nucleotide Type key, and "RNA REF:" as the RNA reference key</li>
+                            <li>Example: sample 1;ID:ext 1;TYPE:DNA</li>
+                            <li>Example: sample 1;ID:ext 1;TYPE:RNA;RNA REF:hg19_RNA</li>
+                            </ul>
+                            </li>
+                            </ul>
                         </p>
                     </div>
                 </div>

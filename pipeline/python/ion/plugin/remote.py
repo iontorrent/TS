@@ -13,10 +13,9 @@ except ImportError:
     import torrentserver.cluster_settings as settings
 
 def get_serverProxy():
-
     host = getattr(settings,'PLUGINSERVER_HOST',getattr(settings,'IPLUGIN_HOST','127.0.0.1'))
     port = getattr(settings,'PLUGINSERVER_PORT',getattr(settings,'IPLUGIN_PORT',8080))
-    server = xmlrpclib.ServerProxy("http://%s:%d" % (host,port), allow_none=True)  
+    server = xmlrpclib.ServerProxy("http://%s:%d" % (host,port), allow_none=True, verbose=True)
     return server
 
 def callPluginXMLRPC(start_json, conn = None, retries = 60):
@@ -31,7 +30,7 @@ def callPluginXMLRPC(start_json, conn = None, retries = 60):
     attempts = 0
 
     log = logging.getLogger(__name__)
-    log.propagate = False
+    #log.propagate = False
 
     try:
         plugin_name = start_json["runinfo"]["plugin"]["name"]
@@ -41,7 +40,7 @@ def callPluginXMLRPC(start_json, conn = None, retries = 60):
     while attempts < retries:
         try:
             if conn is None:
-                conn = get_serverProxy()            
+                conn = get_serverProxy()
             jobid = conn.pluginStart(start_json)
             if jobid == -1:
                 log.warn("Error Starting Plugin: '%s'", plugin_name)
@@ -61,11 +60,43 @@ def callPluginXMLRPC(start_json, conn = None, retries = 60):
     return jobid
 
 
-def call_launchPluginsXMLRPC(env, plugins_dict, plugin_basefolder, url_root, conn=None):
+def call_launchPluginsXMLRPC(result_pk, plugins, net_location, username, runlevel='default', params={}, conn=None):
     
     if conn is None:    
-        conn = get_serverProxy()            
-    plugins_dict, msg = conn.launchPlugins(env, plugins_dict, plugin_basefolder, url_root)
+        conn = get_serverProxy()
+    plugins_dict, msg = conn.launchPlugins(result_pk, plugins, net_location, username, runlevel, params)
 
     return plugins_dict, msg
+
+def call_pluginStatus(jobid, conn=None):
+    if jobid is None:
+        return "Invalid JobID"
+    if conn is None:
+        conn = get_serverProxy()
+
+    ret = ""
+    log = logging.getLogger(__name__)
+    try:
+        ret = conn.pluginStatus()
+    except (socket.error, xmlrpclib.Fault, xmlrpclib.ProtocolError, xmlrpclib.ResponseError) as f:
+        log.exception("XMLRPC Error")
+        ret = str(f)
+
+    return ret
+
+def call_sgeStop(jobid, conn=None):
+    if jobid is None:
+        return "Invalid JobID"
+    if conn is None:
+        conn = get_serverProxy()
+
+    ret = ""
+    log = logging.getLogger(__name__)
+    try:
+        ret = conn.sgeStop(jobid)
+    except (socket.error, xmlrpclib.Fault, xmlrpclib.ProtocolError, xmlrpclib.ResponseError) as f:
+        log.exception("XMLRPC Error")
+        ret = str(f)
+
+    return ret
 

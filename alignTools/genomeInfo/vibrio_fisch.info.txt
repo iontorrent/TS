@@ -1,5 +1,0 @@
-genome_shortname	vibrio_fisch
-genome_name	Vibrio fischeri ES114 
-genome_version	NC_006840
-index_version	b-0.1
-genome_length	4227869

@@ -231,9 +231,10 @@
 }
 
 .slick-pager .slick-pager-status {
-    display: inline-block;
-    padding: 7px 7px 0px;
-    float: right;
+    /*display: inline-block;*/
+    padding: 6px 7px 0px 7px;
+    /*float: right;*/
+    font-size: 14px;
 }
 
 .slick-pager .ui-icon-container {

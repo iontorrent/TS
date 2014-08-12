@@ -1,0 +1,13 @@
+1: PREPARING DATA
+2,3: RUNNING mummer AND CREATING CLUSTERS
+# reading input file "/results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/nucmer_output/contigs_1.ntref" of length 10001
+# construct suffix tree for sequence of length 10001
+# (maximum reference length is 536870908)
+# (maximum query length is 4294967295)
+# CONSTRUCTIONTIME /results/plugins/AssemblerSPAdes/quast-2.3/libs/MUMmer3.23-linux/mummer /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/nucmer_output/contigs_1.ntref 0.00
+# reading input file "/results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/quast_corrected_input/contigs_1.fasta" of length 6712
+# matching query-file "/results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/quast_corrected_input/contigs_1.fasta"
+# against subject-file "/results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/nucmer_output/contigs_1.ntref"
+# COMPLETETIME /results/plugins/AssemblerSPAdes/quast-2.3/libs/MUMmer3.23-linux/mummer /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/nucmer_output/contigs_1.ntref 0.01
+# SPACE /results/plugins/AssemblerSPAdes/quast-2.3/libs/MUMmer3.23-linux/mummer /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/nucmer_output/contigs_1.ntref 0.02
+4: FINISHING DATA

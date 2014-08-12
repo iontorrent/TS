@@ -50,7 +50,7 @@ const std::vector<std::vector<float> > &Traces::GetReportCriticalFrames() {
 
 void Traces::SetReportSampling(const ReportSet &set, bool keepExclude) {
   mSampleMap.resize(mRow * mCol);
-  fill(mSampleMap.begin(), mSampleMap.end(), -1);
+  std::fill(mSampleMap.begin(), mSampleMap.end(), -1);
   int count = 0;
   const vector<int> &reportWells = set.GetReportIndexes();
   for (size_t i = 0; i < reportWells.size(); i++) {
@@ -127,7 +127,7 @@ void Traces::Init(Image *img, Mask *mask, int startFrame, int endFrame,
   if (mIndexes.size() != mRow*mCol) {
     mIndexes.resize(mRow*mCol);
   }
-  fill(mIndexes.begin(), mIndexes.end(), -1);
+  std::fill(mIndexes.begin(), mIndexes.end(), -1);
   vector<float> tBuff(mFrames, 0);
   SampleStats<float> traceStats;
   std::vector<float> sdTrace(mRow *mCol, 0);
@@ -209,7 +209,7 @@ void Traces::Init(Image *img, Mask *mask, int startFrame, int endFrame,
   }
   mSampleMap.resize(mRow * mCol);
   mCurrentData = mRawTraces;
-  fill(mSampleMap.begin(), mSampleMap.end(), -1);
+  std::fill(mSampleMap.begin(), mSampleMap.end(), -1);
 }
 
 int Traces::DCOffset(size_t startFrame, size_t endFrame) {
@@ -554,7 +554,7 @@ int Traces::CalcRegionReference(unsigned int type, int rowStart, int rowEnd,
 				int colStart, int colEnd,
 				std::vector<float> &trace) {
   trace.resize(mFrames);
-  fill(trace.begin(), trace.end(), 0.0f);
+  std::fill(trace.begin(), trace.end(), 0.0f);
   vector<vector<float> > matrix;
   vector<float> traceBuffer;
   matrix.resize(trace.size());
@@ -621,7 +621,7 @@ int Traces::CalcMedianReference(int row, int col,
     size = max(values[i]->size(), size);
   }
   reference.resize(size);
-  fill(reference.begin(), reference.end(), 0.0);
+  std::fill(reference.begin(), reference.end(), 0.0);
   double distWeight = 0;
   size_t valSize = values.size();
   for (size_t i = 0; i < valSize; i++) {

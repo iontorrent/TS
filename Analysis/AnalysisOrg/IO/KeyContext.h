@@ -4,6 +4,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include "OptBase.h"
 
 // this should be replaced by a listing of keys
 // not two specific keys
@@ -17,6 +18,8 @@ class KeyContext{
     int minNumKeyFlows;
 
     void DefaultKeys();
+	void PrintHelp();
+	void SetOpts(OptArgs &opts, Json::Value& json_params);
     ~KeyContext();
 };
 

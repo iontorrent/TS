@@ -13,7 +13,7 @@ class ReferenceFieldNames():
     REFERENCE = 'reference'
     REFERENCES = 'references'
     BED_FILES = 'bedFiles'
-    TARGET_BED_FIELS = 'targetBedFiles'
+    TARGET_BED_FILES = 'targetBedFiles'
     HOT_SPOT_FILES = 'hotspotFiles'
     HOT_SPOT_BED_FILE = 'hotSpotBedFile'
     HOT_SPOT_BED_FILES = 'hotSpotBedFiles'
@@ -37,15 +37,15 @@ class ReferenceStepData(AbstractStepData):
         references = list(ReferenceGenome.objects.all().filter(index_version=settings.TMAP_VERSION))
         self.file_dict = dict_bed_hotspot()
         self.prepopulatedFields[ReferenceFieldNames.REFERENCES] = references
-        self.prepopulatedFields[ReferenceFieldNames.TARGET_BED_FIELS] = self.file_dict[ReferenceFieldNames.BED_FILES]
+        self.prepopulatedFields[ReferenceFieldNames.TARGET_BED_FILES] = self.file_dict[ReferenceFieldNames.BED_FILES]
         self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILES] = self.file_dict[ReferenceFieldNames.HOT_SPOT_FILES]
         self.prepopulatedFields[ReferenceFieldNames.SHOW_HOT_SPOT_BED] = False
         self.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = False
         self.prepopulatedFields[ReferenceFieldNames.TARGED_BED_FILE_MISSING] = False
         self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = False
-        self.savedFields[ReferenceFieldNames.REFERENCE] = None
-        self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = None
-        self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = None
+        self.savedFields[ReferenceFieldNames.REFERENCE] = ""
+        self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = ""
+        self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = ""
         
         self.prepopulatedFields[ReferenceFieldNames.REFERENCE_SHORT_NAMES] = [ref.short_name for ref in references]
 
@@ -66,6 +66,7 @@ class ReferenceStepData(AbstractStepData):
                 self.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = True
                 if self.savedFields[ReferenceFieldNames.REFERENCE] in [ref.short_name for ref in self.prepopulatedFields[ReferenceFieldNames.REFERENCES]]:
                     self.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = False
+
             
             if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultTargetRegionBedFileName:
                 self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultTargetRegionBedFileName
@@ -73,15 +74,17 @@ class ReferenceStepData(AbstractStepData):
                 if self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_FULL_PATHS] or\
                    self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_PATHS]:
                     self.prepopulatedFields[ReferenceFieldNames.TARGED_BED_FILE_MISSING] = False
-            
+           
             if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultHotSpotRegionBedFileName:
                 self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultHotSpotRegionBedFileName
                 self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = True
                 if self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_FULL_PATHS] or\
                    self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_PATHS]:
-                    self.prepopulatedFields["hotSpotBedFileMissing"] = False
-            
+                    self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = False
+         
             if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].isHotspotRegionBEDFileSuppported:
                 self.prepopulatedFields[ReferenceFieldNames.SHOW_HOT_SPOT_BED] = True
             else:
                 self.prepopulatedFields[ReferenceFieldNames.SHOW_HOT_SPOT_BED] = False
+                        
+        #logger.debug("EXIT reference_step_data.updateFromStep() self.savedFields=%s" %(self.savedFields))

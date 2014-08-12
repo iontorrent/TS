@@ -61,10 +61,6 @@ div > .pluginRemove {
 	margin-top: 20px;
 }
 
-#barcodes tr:hover {
-    background-color: #E5E7ED;
-}
-
 #RunSummary {
     padding-top: 0;
 }
@@ -117,4 +113,8 @@ hr{
 #tabs .tab-content {
     border-width: 1px 0 0 0;
     padding: 20px 0 0 0;
+}
+
+.iru-account{
+    text-align: left;
 }

@@ -82,6 +82,7 @@
             <th>File Name</th>
             <th>Time</th>
             <th>Size</th>
+            <th></th>
         </tr>
     </thead>
     {% for file, file_path, file_mtime, file_size in files %}
@@ -89,6 +90,15 @@
             <td><a href="{% url "report_metal" report.id file_path %}">{{file}}</a></td>
             <td>{{file_mtime|date:"d M Y H:i:s"}}</td>
             <td>{{file_size}}</td>
+            <td>
+                {% if can_upload %}
+                <form action="{% url "export_upload_report" %}" method="POST">
+                    <input type="submit" value="Upload" class="btn btn-success" title="Upload {{file}} to Amazon S3"/>
+                    <input name="report" value="{{report.id}}" type="hidden"/>
+                    <input name="file_path" value="{{file_path}}" type="hidden"/>
+                </form>
+                {% endif %}
+            </td>
         </tr>
     {% endfor %}
 </table>

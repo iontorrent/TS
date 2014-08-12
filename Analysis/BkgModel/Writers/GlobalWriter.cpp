@@ -1,11 +1,6 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "GlobalWriter.h"
-#include <string.h>
-#include <stdlib.h>
-#include <sys/stat.h>
-#include <float.h>
-#include <vector>
 #include <assert.h>
 #include "LinuxCompat.h"
 #include "RawWells.h"
@@ -14,9 +9,9 @@
 #include "BkgDataPointers.h"
 #include "BkgTrace.h"
 #include "RegionalizedData.h"
-//#include "BkgModel.h"
+#include "SlicedChipExtras.h"
 
-void extern_links::WriteOneBeadToDataCubes ( bead_params &p, int flow, int iFlowBuffer, int last, int ibd, Region *region, BkgTrace &my_trace )
+void GlobalWriter::WriteOneBeadToDataCubes ( BeadParams &p, int flow, int iFlowBuffer, int last, int ibd, Region *region, BkgTrace &my_trace, int flow_block_size, int flow_block_id )
 {
   int x = p.x+region->col;
   int y = p.y+region->row;
@@ -40,38 +35,37 @@ void extern_links::WriteOneBeadToDataCubes ( bead_params &p, int flow, int iFlow
     mPtrs->copyCube_element ( mPtrs->mBeadInitParam,x,y,4,my_trace.t0_map[p.x+p.y*region->w] ); // one of these things is not like the others
   }
 
-  if ( ( iFlowBuffer+1 ) ==NUMFB || last ) // per compute block, not per flow
+  if ( ( iFlowBuffer+1 ) == flow_block_size || last ) // per compute block, not per flow
   {
-    int iBlk = CurComputeBlock ( flow );
     if ( mPtrs->mBeadFblk_avgErr!=NULL )
-      mPtrs->copyCube_element ( mPtrs->mBeadFblk_avgErr,x,y,iBlk,p.my_state->avg_err );
+      mPtrs->copyCube_element ( mPtrs->mBeadFblk_avgErr,x,y,flow_block_id,p.my_state->avg_err );
     if ( mPtrs->mBeadFblk_clonal!=NULL )
-      mPtrs->copyCube_element ( mPtrs->mBeadFblk_clonal,x,y,iBlk,p.my_state->clonal_read?1:0 );
+      mPtrs->copyCube_element ( mPtrs->mBeadFblk_clonal,x,y,flow_block_id,p.my_state->clonal_read?1:0 );
     if ( mPtrs->mBeadFblk_corrupt!=NULL )
-      mPtrs->copyCube_element ( mPtrs->mBeadFblk_corrupt,x,y,iBlk,p.my_state->corrupt?1:0 );
+      mPtrs->copyCube_element ( mPtrs->mBeadFblk_corrupt,x,y,flow_block_id,p.my_state->corrupt?1:0 );
   }
 }
 
 
 //@TODO: this is not actually a bkgmodel function but a function of my_beads?
-void extern_links::WriteBeadParameterstoDataCubes ( int iFlowBuffer, bool last,Region *region, BeadTracker &my_beads, flow_buffer_info &my_flow, BkgTrace &my_trace )
+void GlobalWriter::WriteBeadParameterstoDataCubes ( int iFlowBuffer, bool last,Region *region, BeadTracker &my_beads, FlowBufferInfo &my_flow, BkgTrace &my_trace, int flow_block_id, int flow_block_start )
 {
   if ( mPtrs == NULL )
     return;
 
 
-  int flow = my_flow.buff_flow[iFlowBuffer];
+  int flow = flow_block_start + iFlowBuffer;
   for ( int ibd=0;ibd < my_beads.numLBeads;ibd++ )
   {
-    struct bead_params &p = my_beads.params_nn[ibd];
-    WriteOneBeadToDataCubes ( p, flow, iFlowBuffer,  last, ibd, region, my_trace );
+    struct BeadParams &p = my_beads.params_nn[ibd];
+    WriteOneBeadToDataCubes ( p, flow, iFlowBuffer,  last, ibd, region, my_trace, my_flow.GetMaxFlowCount(), flow_block_id );
   }
 }
 
 
 
 
-void extern_links::SendErrorVectorToHDF5 ( bead_params *p, error_track &err_t, Region *region, flow_buffer_info &my_flow )
+void GlobalWriter::SendErrorVectorToHDF5 ( BeadParams *p, error_track &err_t, Region *region, FlowBufferInfo &my_flow, int flow_block_start )
 {
   if ( mPtrs!=NULL )
   {
@@ -79,20 +73,19 @@ void extern_links::SendErrorVectorToHDF5 ( bead_params *p, error_track &err_t, R
     {
       int x = p->x+region->col;
       int y = p->y+region->row;
-      //for (int fnum=0; fnum<NUMFB; fnum++)
       if ( mPtrs->mResError!=NULL )
       {
         for ( int fnum=0; fnum<my_flow.flowBufferCount; fnum++ )
         {
           // use copyCube_element to copy DataCube element to mResError
-          mPtrs->copyCube_element ( mPtrs->mResError,x,y,my_flow.buff_flow[fnum],err_t.mean_residual_error[fnum] );
+          mPtrs->copyCube_element ( mPtrs->mResError,x,y,flow_block_start + fnum,err_t.mean_residual_error[fnum] );
         }
       }
     }
   }
 }
 
-void extern_links::SendPredictedToHDF5 ( int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendPredictedToHDF5 ( int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
   // placeholder
   if ( mPtrs!=NULL )
@@ -101,10 +94,10 @@ void extern_links::SendPredictedToHDF5 ( int ibd, float *block_signal_predicted,
     {
       int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
       int reg = my_region_data.region->index;
-      //printf("extern_links::SendPredictedToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
-      for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+      //printf("GlobalWriter::SendPredictedToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
+      for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
       {
-        int flow= my_region_data.my_flow.buff_flow[fnum];
+        int flow= flow_block_start + fnum;
         for ( int j=0; j<npts; j++ )
           mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_predicted,reg,j,flow,block_signal_predicted[j+fnum*npts] );
         for ( int j=npts; j<max_frames; j++ )
@@ -114,7 +107,7 @@ void extern_links::SendPredictedToHDF5 ( int ibd, float *block_signal_predicted,
   }
 }
 
-void extern_links::SendCorrectedToHDF5 ( int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendCorrectedToHDF5 ( int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
   // placeholder
   if ( mPtrs!=NULL )
@@ -123,10 +116,10 @@ void extern_links::SendCorrectedToHDF5 ( int ibd, float *block_signal_corrected,
     {
       int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
       int reg = my_region_data.region->index;
-      //printf("extern_links::SendCorrectedToHDF5... (r,b)=(%d,%d) corrected[10]=%f\n",reg,ibd,block_signal_corrected[10]);
-      for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+      //printf("GlobalWriter::SendCorrectedToHDF5... (r,b)=(%d,%d) corrected[10]=%f\n",reg,ibd,block_signal_corrected[10]);
+      for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
       {
-        int flow= my_region_data.my_flow.buff_flow[fnum];
+        int flow= flow_block_start + fnum;
         for ( int j=0; j<npts; j++ )
           mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_corrected,reg,j,flow,block_signal_corrected[j+fnum*npts] );
         for ( int j=npts; j<max_frames; j++ )
@@ -137,7 +130,7 @@ void extern_links::SendCorrectedToHDF5 ( int ibd, float *block_signal_corrected,
 }
 
 
-void extern_links::SendBestRegion_PredictedToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendBestRegion_PredictedToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
@@ -145,10 +138,10 @@ void extern_links::SendBestRegion_PredictedToHDF5 (int ibd, float *block_signal_
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
         //int reg = my_region_data.region->index;
-        //printf("extern_links::SendBestRegionPredictedToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
-        for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+        //printf("GlobalWriter::SendBestRegionPredictedToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
+        for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
         {
-          int flow= my_region_data.my_flow.buff_flow[fnum];
+          int flow= flow_block_start + fnum;
           for ( int j=0; j<npts; j++ )
               mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_predicted,ibd,j,flow,block_signal_predicted[j+fnum*npts] );
           for ( int j=npts; j<max_frames; j++ )
@@ -159,7 +152,7 @@ void extern_links::SendBestRegion_PredictedToHDF5 (int ibd, float *block_signal_
 }
 
 
-void extern_links::SendBestRegion_CorrectedToHDF5 (int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendBestRegion_CorrectedToHDF5 (int ibd, float *block_signal_corrected, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
@@ -167,10 +160,10 @@ void extern_links::SendBestRegion_CorrectedToHDF5 (int ibd, float *block_signal_
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
         //int reg = my_region_data.region->index;
-        //printf("extern_links::SendBestRegionCorrectedToHDF5... (r,b)=(%d,%d) corrected[10]=%f\n",reg,ibd,block_signal_corrected[10]);
-        for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+        //printf("GlobalWriter::SendBestRegionCorrectedToHDF5... (r,b)=(%d,%d) corrected[10]=%f\n",reg,ibd,block_signal_corrected[10]);
+        for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
         {
-          int flow= my_region_data.my_flow.buff_flow[fnum];
+          int flow= flow_block_start + fnum;
           for ( int j=0; j<npts; j++ )
               mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_corrected,ibd,j,flow,block_signal_corrected[j+fnum*npts] );
           for ( int j=npts; j<max_frames; j++ )
@@ -181,16 +174,16 @@ void extern_links::SendBestRegion_CorrectedToHDF5 (int ibd, float *block_signal_
 }
 
 
-void extern_links::SendBestRegion_LocationToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendBestRegion_LocationToHDF5 (int ibd, RegionalizedData &my_region_data )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_bestRegion_location!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           //int x = p->x+my_region_data.region->col;
           //int y = p->y+my_region_data.region->row;
-          //printf("extern_links::SendBestRegionLocationToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          //printf("GlobalWriter::SendBestRegionLocationToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
           mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_location,ibd,0,0,p->y+my_region_data.region->row );
           mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_location,ibd,1,0,p->x+my_region_data.region->col );
       }
@@ -198,17 +191,17 @@ void extern_links::SendBestRegion_LocationToHDF5 (int ibd, RegionalizedData &my_
 }
 
 
-void extern_links::SendBestRegion_AmplitudeToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendBestRegion_AmplitudeToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_bestRegion_amplitude!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
-            // val in 1.wells, as in extern_links::WriteAnswersToWells()
+            int flow= flow_block_start + fnum;
+            // val in 1.wells, as in GlobalWriter::WriteAnswersToWells()
             // val = my_beads.params_nn[ibd].Ampl[iFlowBuffer] * my_beads.params_nn[ibd].Copies * my_regions->rp.copy_multiplier[iFlowBuffer];
             //float val = p->Ampl[fnum] * p->Copies * my_region_data.my_regions.rp.copy_multiplier[fnum];
             //mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_amplitude,ibd,0,flow,p->Ampl[fnum] * p->Copies * my_region_data.my_regions.rp.copy_multiplier[fnum]);
@@ -219,15 +212,15 @@ void extern_links::SendBestRegion_AmplitudeToHDF5 (int ibd, RegionalizedData &my
 }
 
 
-void extern_links::SendBestRegion_ResidualToHDF5 (int ibd, error_track &err_t, RegionalizedData &my_region_data )
+void GlobalWriter::SendBestRegion_ResidualToHDF5 (int ibd, error_track &err_t, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_bestRegion_residual!=NULL ) )
       {
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_residual,ibd,0,flow,err_t.mean_residual_error[fnum]);
           }
       }
@@ -235,16 +228,16 @@ void extern_links::SendBestRegion_ResidualToHDF5 (int ibd, error_track &err_t, R
 }
 
 
-void extern_links::SendBestRegion_KmultToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendBestRegion_KmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_bestRegion_kmult!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-              int flow= my_region_data.my_flow.buff_flow[fnum];
+              int flow= flow_block_start + fnum;
               mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_kmult,ibd,0,flow,p->kmult[fnum]);
           }
 
@@ -253,16 +246,16 @@ void extern_links::SendBestRegion_KmultToHDF5 (int ibd, RegionalizedData &my_reg
 }
 
 
-void extern_links::SendBestRegion_DmultToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendBestRegion_DmultToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_bestRegion_dmult!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-              int flow= my_region_data.my_flow.buff_flow[fnum];
+              int flow= flow_block_start + fnum;
               mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_dmult,ibd,0,flow,p->dmult);
           }
 
@@ -271,17 +264,17 @@ void extern_links::SendBestRegion_DmultToHDF5 (int ibd, RegionalizedData &my_reg
 }
 
 
-void extern_links::SendBestRegion_SPToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendBestRegion_SPToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_bestRegion_SP!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           reg_params *reg_p =  &my_region_data.my_regions.rp;
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             //float SP = ( float ) ( COPYMULTIPLIER * p->Copies ) * reg_p->copy_multiplier[fnum];
 			float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
             mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_SP,ibd,0,flow,SP );
@@ -291,17 +284,17 @@ void extern_links::SendBestRegion_SPToHDF5 (int ibd, RegionalizedData &my_region
 }
 
 
-void extern_links::SendBestRegion_RToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendBestRegion_RToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_bestRegion_R!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           //reg_params *reg_p =  &my_region_data.my_regions.rp;
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_R,ibd,0,flow,p->R );
           }
       }
@@ -309,17 +302,17 @@ void extern_links::SendBestRegion_RToHDF5 (int ibd, RegionalizedData &my_region_
 }
 
 
-void extern_links::SendBestRegion_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, int fitType[] )
+void GlobalWriter::SendBestRegion_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int fitType[], int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_bestRegion_fittype!=NULL ) )
       {
-          //bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          //BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           //reg_params *reg_p =  &my_region_data.my_regions.rp;
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_fittype,ibd,0,flow,fitType[fnum] );
           }
       }
@@ -327,13 +320,13 @@ void extern_links::SendBestRegion_FitType_ToHDF5 (int ibd, RegionalizedData &my_
 }
 
 
-void extern_links::SendBestRegion_GainSensToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendBestRegion_GainSensToHDF5 (int ibd, RegionalizedData &my_region_data )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_bestRegion_gainSens!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
 		  reg_params *reg_p =  &my_region_data.my_regions.rp;
 		  float gainSens = p->gain * reg_p->sens;
           mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_gainSens,ibd,0,0,gainSens);
@@ -342,7 +335,7 @@ void extern_links::SendBestRegion_GainSensToHDF5 (int ibd, RegionalizedData &my_
 }
 
 
-void extern_links::SendBestRegion_TimeframeToHDF5 (RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendBestRegion_TimeframeToHDF5 (RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames )
 {
     if ( mPtrs!=NULL )
     {
@@ -350,8 +343,8 @@ void extern_links::SendBestRegion_TimeframeToHDF5 (RegionalizedData &my_region_d
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
         //int reg = my_region_data.region->index;
-        //printf("extern_links::SendBestRegionPredictedToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
-        for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+        //printf("GlobalWriter::SendBestRegionPredictedToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
+        for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
         {
           for ( int j=0; j<npts; j++ )
               mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_timeframe,0,j,0,my_region_data.time_c.frameNumber[j] );
@@ -364,7 +357,7 @@ void extern_links::SendBestRegion_TimeframeToHDF5 (RegionalizedData &my_region_d
 
 
 
-void extern_links::SendXyflow_Predicted_ToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendXyflow_Predicted_ToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
@@ -372,13 +365,13 @@ void extern_links::SendXyflow_Predicted_ToHDF5 (int ibd, float *block_signal_pre
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
         //int reg = my_region_data.region->index;
-        bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+        BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
         int x = p->x+my_region_data.region->col;
         int y = p->y+my_region_data.region->row;
-        //printf("extern_links::SendPredicted_xyflow_ToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
-        for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+        //printf("GlobalWriter::SendPredicted_xyflow_ToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
+        for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
         {
-          int flow= my_region_data.my_flow.buff_flow[fnum];
+          int flow= flow_block_start + fnum;
           int ibd_select = select_xyflow(x,y,flow);
           if (ibd_select>=0) {
               for ( int j=0; j<npts; j++ )
@@ -392,19 +385,19 @@ void extern_links::SendXyflow_Predicted_ToHDF5 (int ibd, float *block_signal_pre
 }
 
 
-void extern_links::SendXyflow_Location_Keys_ToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendXyflow_Location_Keys_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras &my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_location_keys!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          //printf("extern_links::SendLocation_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          //printf("GlobalWriter::SendLocation_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             if (flow==0 || flow==2 || flow==5 || flow==7)
                 {
                 int ibd_select = select_xy(x,y);
@@ -422,7 +415,7 @@ void extern_links::SendXyflow_Location_Keys_ToHDF5 (int ibd, RegionalizedData &m
 }
 
 
-void extern_links::SendXyflow_Predicted_Keys_ToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendXyflow_Predicted_Keys_ToHDF5 (int ibd, float *block_signal_predicted, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
@@ -430,13 +423,13 @@ void extern_links::SendXyflow_Predicted_Keys_ToHDF5 (int ibd, float *block_signa
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
         //int reg = my_region_data.region->index;
-        bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+        BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
         int x = p->x+my_region_data.region->col;
         int y = p->y+my_region_data.region->row;
-        //printf("extern_links::SendPredicted_xyflow_ToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
-        for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+        //printf("GlobalWriter::SendPredicted_xyflow_ToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
+        for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
         {
-          int flow= my_region_data.my_flow.buff_flow[fnum];
+          int flow= flow_block_start + fnum;
           if (flow==0 || flow==2 || flow==5 || flow==7)
               {
               int ibd_select = select_xy(x,y);
@@ -458,7 +451,7 @@ void extern_links::SendXyflow_Predicted_Keys_ToHDF5 (int ibd, float *block_signa
 }
 
 
-void extern_links::SendXyflow_Corrected_Keys_ToHDF5 (int ibd, float *block_signal, RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendXyflow_Corrected_Keys_ToHDF5 (int ibd, float *block_signal, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
@@ -466,13 +459,13 @@ void extern_links::SendXyflow_Corrected_Keys_ToHDF5 (int ibd, float *block_signa
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
         //int reg = my_region_data.region->index;
-        bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+        BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
         int x = p->x+my_region_data.region->col;
         int y = p->y+my_region_data.region->row;
-        //printf("extern_links::SendPredicted_xyflow_ToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
-        for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+        //printf("GlobalWriter::SendPredicted_xyflow_ToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
+        for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
         {
-          int flow= my_region_data.my_flow.buff_flow[fnum];
+          int flow= flow_block_start + fnum;
           if (flow==0 || flow==2 || flow==5 || flow==7)
               {
               int ibd_select = select_xy(x,y);
@@ -495,7 +488,7 @@ void extern_links::SendXyflow_Corrected_Keys_ToHDF5 (int ibd, float *block_signa
 
 
 
-void extern_links::SendXyflow_Corrected_ToHDF5 (int ibd, float *block_signal, RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendXyflow_Corrected_ToHDF5 (int ibd, float *block_signal, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
@@ -503,22 +496,18 @@ void extern_links::SendXyflow_Corrected_ToHDF5 (int ibd, float *block_signal, Re
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
         //int reg = my_region_data.region->index;
-        bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+        BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
         int x = p->x+my_region_data.region->col;
         int y = p->y+my_region_data.region->row;
-        //printf("extern_links::SendCorrected_xyflow_ToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
-        for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+        //printf("GlobalWriter::SendCorrected_xyflow_ToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
+        for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
         {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             if (flow==0 || flow==2 || flow==5 || flow==7)
             {
                 int ibd_select = select_xy(x,y);
                 if (ibd_select>=0)
                 {
-                    int k = 3;
-                    if (flow==0) k=0;
-                    else if (flow==2) k=1;
-                    else if (flow==5) k=2;
                     for ( int j=0; j<npts; j++ )
                       mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_corrected,ibd_select,j,0,block_signal[j+fnum*npts] );
                     for ( int j=npts; j<max_frames; j++ )
@@ -531,22 +520,22 @@ void extern_links::SendXyflow_Corrected_ToHDF5 (int ibd, float *block_signal, Re
 }
 
 
-void extern_links::SendXyflow_Amplitude_ToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendXyflow_Amplitude_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_amplitude!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          //printf("extern_links::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          //printf("GlobalWriter::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
-                // val in 1.wells, as in extern_links::WriteAnswersToWells()
+                // val in 1.wells, as in GlobalWriter::WriteAnswersToWells()
                 // val = my_beads.params_nn[ibd].Ampl[iFlowBuffer] * my_beads.params_nn[ibd].Copies * my_regions->rp.copy_multiplier[iFlowBuffer];
                 //float val = p->Ampl[fnum] * p->Copies * my_region_data.my_regions.rp.copy_multiplier[fnum];
                 //mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_amplitude,ibd_select,0,0,p->Ampl[fnum] * p->Copies * my_region_data.my_regions.rp.copy_multiplier[fnum]);
@@ -558,19 +547,19 @@ void extern_links::SendXyflow_Amplitude_ToHDF5 (int ibd, RegionalizedData &my_re
 }
 
 
-void extern_links::SendXyflow_Residual_ToHDF5 (int ibd, error_track &err_t, RegionalizedData &my_region_data )
+void GlobalWriter::SendXyflow_Residual_ToHDF5 (int ibd, error_track &err_t, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_residual!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          //printf("extern_links::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          //printf("GlobalWriter::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
                 mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_residual,ibd_select,0,0,err_t.mean_residual_error[fnum]);
@@ -582,19 +571,19 @@ void extern_links::SendXyflow_Residual_ToHDF5 (int ibd, error_track &err_t, Regi
 
 
 
-void extern_links::SendXyflow_Kmult_ToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendXyflow_Kmult_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_kmult!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          //printf("extern_links::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          //printf("GlobalWriter::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
               mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_kmult,ibd_select,0,0,p->kmult[fnum] );
@@ -606,19 +595,19 @@ void extern_links::SendXyflow_Kmult_ToHDF5 (int ibd, RegionalizedData &my_region
 
 
 
-void extern_links::SendXyflow_Dmult_ToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendXyflow_Dmult_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_dmult!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          //printf("extern_links::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          //printf("GlobalWriter::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
               mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_dmult,ibd_select,0,0,p->dmult );
@@ -630,20 +619,20 @@ void extern_links::SendXyflow_Dmult_ToHDF5 (int ibd, RegionalizedData &my_region
 
 
 
-void extern_links::SendXyflow_SP_ToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendXyflow_SP_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_SP!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           reg_params *reg_p =  &my_region_data.my_regions.rp;
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          //printf("extern_links::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          //printf("GlobalWriter::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
               float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
@@ -656,19 +645,19 @@ void extern_links::SendXyflow_SP_ToHDF5 (int ibd, RegionalizedData &my_region_da
 
 
 
-void extern_links::SendXyflow_R_ToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendXyflow_R_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_R!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          //printf("extern_links::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          //printf("GlobalWriter::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
               mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_R,ibd_select,0,0,p->R );
@@ -680,7 +669,7 @@ void extern_links::SendXyflow_R_ToHDF5 (int ibd, RegionalizedData &my_region_dat
 
 
 
-void extern_links::SendXyflow_Timeframe_ToHDF5 (int ibd, RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendXyflow_Timeframe_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
@@ -688,13 +677,13 @@ void extern_links::SendXyflow_Timeframe_ToHDF5 (int ibd, RegionalizedData &my_re
       {
         int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
         //int reg = my_region_data.region->index;
-        bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+        BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
         int x = p->x+my_region_data.region->col;
         int y = p->y+my_region_data.region->row;
-        //printf("extern_links::SendPredicted_xyflow_ToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
-        for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+        //printf("GlobalWriter::SendPredicted_xyflow_ToHDF5... (r,b)=(%d,%d) predicted[10]=%f\n",reg,ibd,block_signal_predicted[10]);
+        for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
         {
-          int flow= my_region_data.my_flow.buff_flow[fnum];
+          int flow= flow_block_start + fnum;
           int ibd_select = select_xyflow(x,y,flow);
           if (ibd_select>=0) {
               for ( int j=0; j<npts; j++ )
@@ -710,19 +699,19 @@ void extern_links::SendXyflow_Timeframe_ToHDF5 (int ibd, RegionalizedData &my_re
 
 
 
-void extern_links::SendXyflow_Location_ToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendXyflow_Location_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_location!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          //printf("extern_links::SendLocation_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          //printf("GlobalWriter::SendLocation_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
               mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_location,ibd_select,0,0,y );
@@ -738,18 +727,18 @@ void extern_links::SendXyflow_Location_ToHDF5 (int ibd, RegionalizedData &my_reg
 
 
 
-void extern_links::SendXyflow_MM_ToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendXyflow_MM_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_mm!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
               int mm = mm_xyflow(x,y,flow);
@@ -761,18 +750,18 @@ void extern_links::SendXyflow_MM_ToHDF5 (int ibd, RegionalizedData &my_region_da
 }
 
 
-void extern_links::SendXyflow_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, int fitType[] )
+void GlobalWriter::SendXyflow_FitType_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int fitType[], int flow_block_start )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_fittype!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
               //int mm = mm_xyflow(x,y,flow);
@@ -785,19 +774,22 @@ void extern_links::SendXyflow_FitType_ToHDF5 (int ibd, RegionalizedData &my_regi
 
 
 
-void extern_links::SendXyflow_HPlen_ToHDF5 (int ibd, RegionalizedData &my_region_data )
+void GlobalWriter::SendXyflow_HPlen_ToHDF5 (int ibd, RegionalizedData &my_region_data,
+    SlicedChipExtras & extra,
+    int flow_block_start
+  )
 {
     if ( mPtrs!=NULL )
     {
       if (( mPtrs->m_beads_xyflow_hplen!=NULL ) )
       {
-          bead_params *p= &my_region_data.my_beads.params_nn[ibd];
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
           int x = p->x+my_region_data.region->col;
           int y = p->y+my_region_data.region->row;
-          //printf("extern_links::SendHPlen_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
-          for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+          //printf("GlobalWriter::SendHPlen_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          for ( int fnum=0; fnum<extra.my_flow->flowBufferCount; fnum++ )
           {
-            int flow= my_region_data.my_flow.buff_flow[fnum];
+            int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
               std::string hp = hp_xyflow(x,y,flow);
@@ -829,7 +821,7 @@ void extern_links::SendXyflow_HPlen_ToHDF5 (int ibd, RegionalizedData &my_region
 }
 
 
-int extern_links::select_xy(int x, int y)
+int GlobalWriter::select_xy(int x, int y)
 {
     int ibd_select = -1;
     if ( mPtrs!=NULL && mPtrs->m_xyflow_hashtable!=NULL)
@@ -839,7 +831,7 @@ int extern_links::select_xy(int x, int y)
 }
 
 
-int extern_links::select_xyflow(int x, int y, int flow)
+int GlobalWriter::select_xyflow(int x, int y, int flow)
 {
     int ibd_select = -1;
     if ( mPtrs!=NULL && mPtrs->m_xyflow_hashtable!=NULL)
@@ -849,7 +841,7 @@ int extern_links::select_xyflow(int x, int y, int flow)
 }
 
 
-std::string extern_links::hp_xyflow(int x, int y, int flow)
+std::string GlobalWriter::hp_xyflow(int x, int y, int flow)
 {
     std::string hp = "-1N";
     if ( mPtrs!=NULL && mPtrs->m_xyflow_hashtable!=NULL)
@@ -858,7 +850,7 @@ std::string extern_links::hp_xyflow(int x, int y, int flow)
 }
 
 
-int extern_links::mm_xyflow(int x, int y, int flow)
+int GlobalWriter::mm_xyflow(int x, int y, int flow)
 {
     int mm = -1;
     if ( mPtrs!=NULL && mPtrs->m_xyflow_hashtable!=NULL)
@@ -867,7 +859,10 @@ int extern_links::mm_xyflow(int x, int y, int flow)
 }
 
 
-void extern_links::SendXtalkToHDF5 ( int ibd, float *block_signal_xtalk, RegionalizedData &my_region_data, int max_frames )
+void GlobalWriter::SendXtalkToHDF5 ( int ibd, float *block_signal_xtalk, 
+    RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras,
+    int max_frames , int flow_block_start
+  )
 {
   // placeholder
   if ( mPtrs!=NULL )
@@ -876,9 +871,9 @@ void extern_links::SendXtalkToHDF5 ( int ibd, float *block_signal_xtalk, Regiona
     {
       int npts = std::min ( my_region_data.time_c.npts(), max_frames ); // alloced max_frames
       int reg = my_region_data.region->index;
-      for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+      for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
       {
-        int flow= my_region_data.my_flow.buff_flow[fnum];
+        int flow = flow_block_start + fnum;
         for ( int j=0; j<npts; j++ )
           mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_xtalk,reg,j,flow,block_signal_xtalk[j+fnum*npts] );
         for ( int j=npts; j<max_frames; j++ )
@@ -891,10 +886,12 @@ void extern_links::SendXtalkToHDF5 ( int ibd, float *block_signal_xtalk, Regiona
 
 // this puts our answers into the data structures where they belong
 // should be the only point of contact with the external world, but isn't
-void extern_links::WriteAnswersToWells ( int iFlowBuffer, Region *region, RegionTracker *my_regions, BeadTracker &my_beads, flow_buffer_info &my_flow )
+void GlobalWriter::WriteAnswersToWells ( int iFlowBuffer, Region *region, RegionTracker *my_regions, BeadTracker &my_beads, int flow_block_start )
 {
-  // make absolutely sure we're upt to date
-  my_regions->rp.copy_multiplier[iFlowBuffer] = CalculateCopyDrift ( my_regions->rp, my_flow.buff_flow[iFlowBuffer] );
+  int flow = flow_block_start + iFlowBuffer;
+
+  // make absolutely sure we're up to date
+  my_regions->rp.copy_multiplier[iFlowBuffer] = my_regions->rp.CalculateCopyDrift ( flow );
   //Write one flow's data to 1.wells
   for ( int ibd=0;ibd < my_beads.numLBeads;ibd++ )
   {
@@ -905,12 +902,11 @@ void extern_links::WriteAnswersToWells ( int iFlowBuffer, Region *region, Region
     if (my_beads.params_nn[ibd].my_state->pinned or my_beads.params_nn[ibd].my_state->corrupt)
       val = 0.0f; // actively suppress pinned wells in case we are so unfortunate as to have an estimate for them
 
-    rawWells->WriteFlowgram ( my_flow.buff_flow[iFlowBuffer], x, y, val );
-
+    rawWells->WriteFlowgram ( flow, x, y, val );
   }
 }
 
-void extern_links::DumpTimeAndEmphasisByRegionH5 ( int reg, TimeCompression &time_c, EmphasisClass &emphasis_data, int max_frames )
+void GlobalWriter::DumpTimeAndEmphasisByRegionH5 ( int reg, TimeCompression &time_c, EmphasisClass &emphasis_data, int max_frames )
 {
   if ( mPtrs->mEmphasisParam!=NULL )
   {
@@ -941,7 +937,7 @@ void extern_links::DumpTimeAndEmphasisByRegionH5 ( int reg, TimeCompression &tim
   }
 }
 
-void extern_links::DumpDarkMatterH5 ( int reg, TimeCompression &time_c, RegionTracker &my_reg_tracker, int max_frames )
+void GlobalWriter::DumpDarkMatterH5 ( int reg, TimeCompression &time_c, RegionTracker &my_reg_tracker, int max_frames )
 {
   if ( mPtrs->mDarkOnceParam!=NULL )
   {
@@ -957,7 +953,7 @@ void extern_links::DumpDarkMatterH5 ( int reg, TimeCompression &time_c, RegionTr
   }
 }
 
-void extern_links::DumpDarknessH5 ( int reg, reg_params &my_rp )
+void GlobalWriter::DumpDarknessH5 ( int reg, reg_params &my_rp, int flow_block_size )
 {
   ///------------------------------------------------------------------------------------------------------------
   /// darkness
@@ -965,30 +961,40 @@ void extern_links::DumpDarknessH5 ( int reg, reg_params &my_rp )
   ///------------------------------------------------------------------------------------------------------------
   if ( mPtrs->mDarknessParam!=NULL )
   {
-    for ( int i=0; i<NUMFB; i++ )
+    for ( int i=0; i<flow_block_size; i++ )
       mPtrs->copyCube_element ( mPtrs->mDarknessParam,reg,i,0,my_rp.darkness[i] );
   }
 }
 
-void extern_links::DumpRegionInitH5 ( int reg, RegionalizedData &my_region_data )
+void GlobalWriter::DumpRegionInitH5 ( int reg, RegionalizedData &my_region_data )
 {
   if ( mPtrs->mRegionInitParam!=NULL )
   {
     ///------------------------------------------------------------------------------------------------------------
-    /// regionInitParam, only once at flow+1=blocksOfFlow
+    /// regionInitParam, only once at flow+1=flow_block_size
     ///------------------------------------------------------------------------------------------------------------
     mPtrs->copyCube_element ( mPtrs->mRegionInitParam,reg,0,0,my_region_data.t_mid_nuc_start );
     mPtrs->copyCube_element ( mPtrs->mRegionInitParam,reg,1,0,my_region_data.sigma_start );
   }
 }
 
-void extern_links::DumpEmptyTraceH5 ( int reg, RegionalizedData &my_region_data )
+void GlobalWriter::DumpEmptyTraceH5 ( 
+    int reg, 
+    RegionalizedData &my_region_data,
+    SlicedChipExtras *my_region_data_extras,
+    int flow_block_start,
+    bool last,
+    int last_flow
+  )
 {
   if ( ( mPtrs->mEmptyOnceParam!=NULL ) & ( mPtrs->mBeadDC_bg!=NULL ) )
   {
-    for ( int fnum=0; fnum<my_region_data.my_flow.flowBufferCount; fnum++ )
+    for ( int fnum=0; fnum<my_region_data_extras->my_flow->flowBufferCount; fnum++ )
     {
-      int flow= my_region_data.my_flow.buff_flow[fnum];
+      int flow = flow_block_start + fnum;
+
+      // Careful; we don't want to go past the last flow that we're supposed to write.
+      if ( last && flow > last_flow ) continue;
 
       EmptyTrace *mt_trace = my_region_data.emptyTraceTracker->GetEmptyTrace ( *my_region_data.region ) ;
       ///------------------------------------------------------------------------------------------------------------
@@ -1010,13 +1016,13 @@ void extern_links::DumpEmptyTraceH5 ( int reg, RegionalizedData &my_region_data 
   }
 }
 
-void extern_links::DumpRegionOffsetH5 ( int reg, int col, int row )
+void GlobalWriter::DumpRegionOffsetH5 ( int reg, int col, int row )
 {
   if ( mPtrs->mRegionOffset!=NULL )
   {
 
     ///------------------------------------------------------------------------------------------------------------
-    /// region_size, only once at flow+1=blocksOfFlow
+    /// region_size, only once at flow+1=flow_block_size
     ///------------------------------------------------------------------------------------------------------------
     mPtrs->copyCube_element ( mPtrs->mRegionOffset,reg,0,0,col );
     mPtrs->copyCube_element ( mPtrs->mRegionOffset,reg,1,0,row );
@@ -1024,7 +1030,7 @@ void extern_links::DumpRegionOffsetH5 ( int reg, int col, int row )
   }
 }
 
-void extern_links::DumpRegionalEnzymatics ( reg_params &rp, int region_ndx, int iBlk,int &i_param )
+void GlobalWriter::DumpRegionalEnzymatics ( reg_params &rp, int region_ndx, int iBlk,int &i_param )
 {
   if ( mPtrs!=NULL )
   {
@@ -1051,7 +1057,7 @@ void extern_links::DumpRegionalEnzymatics ( reg_params &rp, int region_ndx, int 
   }
 }
 
-void extern_links::DumpRegionalBuffering ( reg_params &rp, int region_ndx, int iBlk,int &i_param )
+void GlobalWriter::DumpRegionalBuffering ( reg_params &rp, int region_ndx, int iBlk,int &i_param )
 {
   if ( mPtrs!=NULL )
   {
@@ -1079,16 +1085,15 @@ void extern_links::DumpRegionalBuffering ( reg_params &rp, int region_ndx, int i
   }
 }
 
-void extern_links::DumpRegionNucShape ( reg_params &rp, int region_ndx, int iBlk,int &i_param )
+void GlobalWriter::DumpRegionNucShape ( reg_params &rp, int region_ndx, int iBlk,int &i_param, int flow_block_size )
 {
   if ( mPtrs!=NULL )
   {
     if ( mPtrs->m_nuc_shape_param!=NULL )
     {
-      // float t_mid_nuc[NUMFB]
-      for ( int j=0; j<NUMFB; j++ )
+      for ( int j=0; j<flow_block_size; j++ )
       {
-        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.t_mid_nuc[j];
+        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.AccessTMidNuc()[j];
         i_param++;
       }
       // float t_mid_nuc_delay[NUMNUC]
@@ -1107,8 +1112,7 @@ void extern_links::DumpRegionNucShape ( reg_params &rp, int region_ndx, int iBlk
         mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.sigma_mult[j];
         i_param++;
       }
-      // float t_mid_nuc_shift_per_flow[NUMFB]
-      for ( int j=0; j<NUMFB; j++ )
+      for ( int j=0; j<flow_block_size; j++ )
       {
         mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.t_mid_nuc_shift_per_flow[j];
         i_param++;
@@ -1132,7 +1136,7 @@ void extern_links::DumpRegionNucShape ( reg_params &rp, int region_ndx, int iBlk
   }
 }
 
-void extern_links::SpecificRegionParamDump ( reg_params &rp, int region_ndx, int iBlk )
+void GlobalWriter::SpecificRegionParamDump ( reg_params &rp, int region_ndx, int iBlk, int flow_block_size )
 {
   // EXPLICIT DUMP OF REGION PARAMS BY NAME
   // float casts are toxic and obscure what we're actually dumping
@@ -1142,7 +1146,7 @@ void extern_links::SpecificRegionParamDump ( reg_params &rp, int region_ndx, int
   int b_param = 0;
   DumpRegionalBuffering ( rp, region_ndx, iBlk, b_param );
  int ns_param = 0;
-  DumpRegionNucShape ( rp, region_ndx, iBlk, ns_param );
+  DumpRegionNucShape ( rp, region_ndx, iBlk, ns_param, flow_block_size );
 
   // tshift
   int i_param=0;
@@ -1156,8 +1160,8 @@ void extern_links::SpecificRegionParamDump ( reg_params &rp, int region_ndx, int
   mPtrs->m_regional_param->At ( region_ndx, i_param, iBlk ) = COPYMULTIPLIER;
   i_param++;
 
-  // float darkness[NUMFB]
-  for ( int j=0; j<NUMFB; j++ )
+  // float darkness[]
+  for ( int j=0; j<flow_block_size; j++ )
   {
     mPtrs->m_regional_param->At ( region_ndx, i_param, iBlk ) = rp.darkness[j];
     i_param++;
@@ -1172,18 +1176,16 @@ void extern_links::SpecificRegionParamDump ( reg_params &rp, int region_ndx, int
   i_param++;
  }
 
-void extern_links::DumpRegionFitParamsH5 ( int region_ndx, int flow, reg_params &rp )
+void GlobalWriter::DumpRegionFitParamsH5 ( int region_ndx, int flow, reg_params &rp, int flow_block_size, int flow_block_id )
 {
   if ( ( mPtrs->m_regional_param !=NULL ) & ( mPtrs->m_derived_param!=NULL ) )
   {
-
-    int iBlk = CurComputeBlock ( flow );
 
     ///------------------------------------------------------------------------------------------------------------
     /// regionalParams, per compute block
     ///------------------------------------------------------------------------------------------------------------
 
-    SpecificRegionParamDump ( rp, region_ndx, iBlk );
+    SpecificRegionParamDump ( rp, region_ndx, flow_block_id, flow_block_size );
 
 
     ///------------------------------------------------------------------------------------------------------------
@@ -1191,20 +1193,26 @@ void extern_links::DumpRegionFitParamsH5 ( int region_ndx, int flow, reg_params 
     ///------------------------------------------------------------------------------------------------------------
     // This is allowed here because they are "derived" parmaeters associated with the FitParams and not individual data blocks
     // although I may regret this
-    mPtrs->m_derived_param->At ( region_ndx, 0 ,iBlk ) = GetModifiedMidNucTime ( &rp.nuc_shape,TNUCINDEX,0 );
-    mPtrs->m_derived_param->At ( region_ndx, 1 ,iBlk ) = GetModifiedMidNucTime ( &rp.nuc_shape,ANUCINDEX,0 );
-    mPtrs->m_derived_param->At ( region_ndx, 2 ,iBlk ) = GetModifiedMidNucTime ( &rp.nuc_shape,CNUCINDEX,0 );
-    mPtrs->m_derived_param->At ( region_ndx, 3 ,iBlk ) = GetModifiedMidNucTime ( &rp.nuc_shape,GNUCINDEX,0 );
-    mPtrs->m_derived_param->At ( region_ndx, 4 ,iBlk ) = GetModifiedSigma ( &rp.nuc_shape,TNUCINDEX );
-    mPtrs->m_derived_param->At ( region_ndx, 5 ,iBlk ) = GetModifiedSigma ( &rp.nuc_shape,ANUCINDEX );
-    mPtrs->m_derived_param->At ( region_ndx, 6 ,iBlk ) = GetModifiedSigma ( &rp.nuc_shape,CNUCINDEX );
-    mPtrs->m_derived_param->At ( region_ndx, 7 ,iBlk ) = GetModifiedSigma ( &rp.nuc_shape,GNUCINDEX );
+    mPtrs->m_derived_param->At ( region_ndx, 0 ,flow_block_id ) = GetModifiedMidNucTime ( &rp.nuc_shape,TNUCINDEX,0 );
+    mPtrs->m_derived_param->At ( region_ndx, 1 ,flow_block_id ) = GetModifiedMidNucTime ( &rp.nuc_shape,ANUCINDEX,0 );
+    mPtrs->m_derived_param->At ( region_ndx, 2 ,flow_block_id ) = GetModifiedMidNucTime ( &rp.nuc_shape,CNUCINDEX,0 );
+    mPtrs->m_derived_param->At ( region_ndx, 3 ,flow_block_id ) = GetModifiedMidNucTime ( &rp.nuc_shape,GNUCINDEX,0 );
+    mPtrs->m_derived_param->At ( region_ndx, 4 ,flow_block_id ) = GetModifiedSigma ( &rp.nuc_shape,TNUCINDEX );
+    mPtrs->m_derived_param->At ( region_ndx, 5 ,flow_block_id ) = GetModifiedSigma ( &rp.nuc_shape,ANUCINDEX );
+    mPtrs->m_derived_param->At ( region_ndx, 6 ,flow_block_id ) = GetModifiedSigma ( &rp.nuc_shape,CNUCINDEX );
+    mPtrs->m_derived_param->At ( region_ndx, 7 ,flow_block_id ) = GetModifiedSigma ( &rp.nuc_shape,GNUCINDEX );
 
   }
 }
 
 //
-void extern_links::WriteDebugBeadToRegionH5 ( RegionalizedData *my_region_data )
+void GlobalWriter::WriteDebugBeadToRegionH5 ( 
+    RegionalizedData *my_region_data,
+    SlicedChipExtras *my_region_data_extras,
+    int flow_block_start,
+    bool last,
+    int last_flow
+  )
 {
   if ( mPtrs->m_region_debug_bead!=NULL )
   {
@@ -1214,7 +1222,7 @@ void extern_links::WriteDebugBeadToRegionH5 ( RegionalizedData *my_region_data )
 
     if ( ibd<my_region_data->my_beads.numLBeads )
     {
-      bead_params *p;
+      BeadParams *p;
       p = &my_region_data->my_beads.params_nn[ibd];
 
       // indexing by region, debug bead(s), parameter
@@ -1233,13 +1241,16 @@ void extern_links::WriteDebugBeadToRegionH5 ( RegionalizedData *my_region_data )
 
     if ( ibd<my_region_data->my_beads.numLBeads )
     {
-      bead_params *p;
+      BeadParams *p;
       p = &my_region_data->my_beads.params_nn[ibd];
       // I may regret this decision, but I'm putting amplitude/kmult as the axis for this bead
       // which assumes exactly one debug bead per region
-      for ( int iFlowBuffer=0; iFlowBuffer<my_region_data->my_flow.flowBufferCount; iFlowBuffer++ )
+      for ( int iFlowBuffer=0; iFlowBuffer<my_region_data_extras->my_flow->flowBufferCount; iFlowBuffer++ )
       {
-        int flow = my_region_data->my_flow.buff_flow[iFlowBuffer];
+        int flow = flow_block_start + iFlowBuffer;
+
+        if ( last && flow > last_flow ) continue;
+
         mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_ak,region_ndx,0,flow,p->Ampl[iFlowBuffer] );
         mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_ak,region_ndx,1,flow,p->kmult[iFlowBuffer] );
       }
@@ -1253,7 +1264,7 @@ void extern_links::WriteDebugBeadToRegionH5 ( RegionalizedData *my_region_data )
 
     if ( ibd<my_region_data->my_beads.numLBeads )
     {
-      bead_params *p;
+      BeadParams *p;
       p = &my_region_data->my_beads.params_nn[ibd];
       mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_location,region_ndx,0,0,p->x+my_region_data->region->col );
       mPtrs->copyCube_element ( mPtrs->m_region_debug_bead_location,region_ndx,1,0,p->y+my_region_data->region->row );
@@ -1264,7 +1275,7 @@ void extern_links::WriteDebugBeadToRegionH5 ( RegionalizedData *my_region_data )
 }
 
 
-void extern_links::DumpTimeCompressionH5 ( int reg, TimeCompression &time_c,  int max_frames )
+void GlobalWriter::DumpTimeCompressionH5 ( int reg, TimeCompression &time_c,  int max_frames )
 {
   if ( mPtrs->m_time_compression!=NULL )
   {
@@ -1293,23 +1304,66 @@ void extern_links::DumpTimeCompressionH5 ( int reg, TimeCompression &time_c,  in
   }
 }
 
-void extern_links::WriteRegionParametersToDataCubes ( RegionalizedData *my_region_data, int max_frames)
+void GlobalWriter::WriteRegionParametersToDataCubes ( 
+    RegionalizedData *my_region_data, 
+    SlicedChipExtras *my_region_data_extras,
+    int max_frames, int flow_block_size, int flow_block_id, int flow_block_start,
+    bool last, int last_flow
+  )
 {
   if ( mPtrs!=NULL ) // guard against nothing at all desired
   {
     // mPtrs allows us to put the appropriate parameters directly to the data cubes
     // and then the hdf5 routine can decide when to flush
     DumpTimeAndEmphasisByRegionH5 ( my_region_data->region->index,my_region_data->time_c, my_region_data->emphasis_data, max_frames);
-    DumpEmptyTraceH5 ( my_region_data->region->index,*my_region_data );
-    DumpRegionFitParamsH5 ( my_region_data->region->index, my_region_data->my_flow.buff_flow[my_region_data->my_flow.flowBufferCount-1], my_region_data->my_regions.rp );
-    WriteDebugBeadToRegionH5 ( my_region_data );
+    DumpEmptyTraceH5 ( my_region_data->region->index,*my_region_data, my_region_data_extras, flow_block_start, last, last_flow );
+    DumpRegionFitParamsH5 ( my_region_data->region->index, 
+      flow_block_start + my_region_data_extras->my_flow->flowBufferCount-1,
+      my_region_data->my_regions.rp, flow_block_size, flow_block_id );
+    WriteDebugBeadToRegionH5 ( my_region_data, my_region_data_extras, flow_block_start, last, last_flow );
     // should be done only at the first compute block
     DumpDarkMatterH5 ( my_region_data->region->index, my_region_data->time_c, my_region_data->my_regions, max_frames );
-    DumpDarknessH5 ( my_region_data->region->index, my_region_data->my_regions.rp );
+    DumpDarknessH5 ( my_region_data->region->index, my_region_data->my_regions.rp, flow_block_size );
     DumpRegionInitH5 ( my_region_data->region->index, *my_region_data );
     DumpRegionOffsetH5 ( my_region_data->region->index, my_region_data->region->col, my_region_data->region->row );
     DumpTimeCompressionH5 ( my_region_data->region->index, my_region_data->time_c, max_frames);
   }
 }
 
+GlobalWriter::GlobalWriter() {
+  bfmask = NULL;
+  pinnedInFlow = NULL;
+  rawWells = NULL;
+  mPtrs = NULL;
+  washout_flow = NULL;
+}
 
+
+void GlobalWriter::FillExternalLinks(Mask *_bfmask, const PinnedInFlow *_pinnedInFlow, 
+                         RawWells *_rawWells, int16_t *_washout_flow){
+  rawWells = _rawWells;
+  pinnedInFlow = _pinnedInFlow;
+  bfmask = _bfmask;
+  washout_flow = _washout_flow;
+}
+
+void GlobalWriter::SetHdf5Pointer(BkgDataPointers *_my_hdf5)
+{
+  mPtrs = _my_hdf5;
+}
+
+
+void GlobalWriter::MakeDirName(const char *_results_folder){
+  dirName = _results_folder;
+}
+
+void GlobalWriter::DeLink()
+{
+  bfmask = NULL;
+  pinnedInFlow = NULL;
+  mPtrs = NULL;
+}
+
+GlobalWriter::~GlobalWriter(){
+  DeLink();
+}

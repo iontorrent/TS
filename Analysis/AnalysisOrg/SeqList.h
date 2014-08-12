@@ -2,8 +2,6 @@
 #ifndef SEQLIST_H
 #define SEQLIST_H
 
-#include <stdio.h>
-#include <stdlib.h>
 #include "SpecialDataTypes.h"
 #include "Utils.h"
 

@@ -8,27 +8,30 @@ from django.shortcuts import render_to_response, get_object_or_404, \
 from django.conf import settings
 from django.db import transaction
 from django.http import HttpResponse, HttpResponseRedirect
+from django.views.generic.detail import DetailView
 
 from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, \
     ReferenceGenome, Content, KitInfo, VariantFrequencies, dnaBarcode, \
     LibraryKey, ThreePrimeadapter, Chip, QCType, Project, Plugin, \
-    PlannedExperimentQC, Sample, GlobalConfig, Message, Experiment
+    PlannedExperimentQC, Sample, GlobalConfig, Message, Experiment, Results, EventLog
 
 from traceback import format_exc
 import json
+from urllib import unquote_plus
 import simplejson
 import uuid
 
 import logging
 from django.core import serializers
+from django.core.serializers.json import DjangoJSONEncoder
 from iondb.rundb.api import PlannedExperimentResource, RunTypeResource, \
     dnaBarcodeResource, ChipResource, ApplicationGroupResource, SampleGroupType_CVResource
 
 from django.core.urlresolvers import reverse
 
 from iondb.utils import toBoolean
-from iondb.rundb.plan.views_helper import get_projects, dict_bed_hotspot, \
-    is_valid_chars, is_invalid_leading_chars, is_valid_length
+from iondb.rundb.plan.views_helper import get_projects, dict_bed_hotspot, convert, isOCP_enabled, is_operation_supported, getChipDisplayedNamePrefix, getChipDisplayedVersion
+from iondb.utils.validation import is_valid_chars, is_valid_leading_chars, is_valid_length
 
 from iondb.rundb.plan.plan_csv_writer import get_template_data_for_batch_planning
 from iondb.rundb.plan.plan_csv_validator import validate_csv_plan
@@ -56,7 +59,6 @@ ERROR_MSG_INVALID_CHARS = " should contain only numbers, letters, spaces, and th
 ERROR_MSG_INVALID_LENGTH = " length should be %s characters maximum. "
 ERROR_MSG_INVALID_LEADING_CHARS = " should only start with numbers or letters. "
 
-
 def get_ir_config(request):
     if request.is_ajax():
         try:
@@ -78,28 +80,44 @@ def reset_page_plan_session(request):
     return HttpResponse("Page Plan Session Object has been reset")
     
 
+#20140310-retired
+#@login_required
+#def plans(request):
+#    """
+#    plan template home page
+#    """
+#
+#    ctxd = {}
+#
+#    ctx = RequestContext(request, ctxd)
+#    return render_to_response("rundb/plan/plans.html", context_instance=ctx, mimetype="text/html")
+
+
 @login_required
-def plans(request):
+def plan_templates(request):
     """
     plan template home page
     """
 
-    # Check for a postback url in the URL args. Used to redirect the planning wizard back to the postback URL.
-    if request.method == "GET":
-        if "postback" in request.GET:
-            request.session["postback"] = request.GET["postback"]
-        if "referer_site_name" in request.GET:
-            request.session["referer_site_name"] = request.GET["referer_site_name"]
-
-    ctxd = {}
+    isOCP = isOCP_enabled()
+    ##logger.debug("views.plan_templates() isOCP=%s" %(str(isOCP)))
+    
+    ctxd = {
+            'is_OCP_supported' : isOCP
+            }
 
     ctx = RequestContext(request, ctxd)
-    return render_to_response("rundb/plan/plans.html", context_instance=ctx, mimetype="text/html")
+    return render_to_response("rundb/plan/plan_templates.html", context_instance=ctx, mimetype="text/html")
 
 
 @login_required
 def page_plan_edit_template(request, template_id):
     ''' edit a template with id template_id '''
+
+    isSupported = is_operation_supported(template_id)
+    if (not isSupported):
+        return render_to_response("501.html")
+
     step_helper = StepHelperDbLoader().getStepHelperForTemplatePlannedExperiment(template_id, StepHelperType.EDIT_TEMPLATE)
     request.session['plan_step_helper'] = step_helper
     ctxd = handle_step_request(request, 'Save_template')
@@ -108,6 +126,10 @@ def page_plan_edit_template(request, template_id):
 @login_required
 def page_plan_copy_template(request, template_id):
     ''' copy a template with id template_id '''
+    isSupported = is_operation_supported(template_id)
+    if (not isSupported):
+        return render_to_response("501.html")
+
     step_helper = StepHelperDbLoader().getStepHelperForTemplatePlannedExperiment(template_id, StepHelperType.COPY_TEMPLATE)
     request.session['plan_step_helper'] = step_helper
     ctxd = handle_step_request(request, 'Save_template')
@@ -117,6 +139,11 @@ def page_plan_copy_template(request, template_id):
 def page_plan_new_template(request, code=None):
     """ Create a new template from runtype code or from scratch """
     if code:
+#        if (code == "8"):
+#            isSupported = isOCP_enabled()
+#            if (not isSupported):
+#                return render_to_response("501.html")
+            
         step_helper = StepHelperDbLoader().getStepHelperForRunType(_get_runtype_from_code(code).pk)
         request.session['plan_step_helper'] = step_helper
     else:
@@ -138,7 +165,26 @@ def page_plan_new_template_by_sample(request, sampleset_id=None):
 @login_required
 def page_plan_new_plan(request, template_id):
     ''' create a new plan from a template with id template_id '''
+
+    isSupported = is_operation_supported(template_id)
+    if (not isSupported):
+        return render_to_response("501.html")
+
     step_helper = StepHelperDbLoader().getStepHelperForTemplatePlannedExperiment(template_id, StepHelperType.CREATE_NEW_PLAN)
+
+    #Third party(hub)planning support
+    if "step_data" in request.GET:
+        step_data = json.loads(unquote_plus(request.GET["step_data"]))
+
+        #Loop through the planning data and seed values on the step_helper
+        #Ex {"Save_plan.planName": "Orange Seq Run 1"}
+        for key, value in step_data.items():
+            step_name, field_name = key.split(".")
+            step_helper.steps[step_name].savedFields[field_name] = value
+
+        #Call some util methods on some steps to parse savedFields data
+        step_helper.steps["Save_plan"].updateSavedObjectsFromSavedFields()
+
     request.session['plan_step_helper'] = step_helper
     ctxd = handle_step_request(request, 'Save_plan')
     return render_to_response(ctxd['step'].resourcePath, context_instance=ctxd)
@@ -150,6 +196,10 @@ def page_plan_new_plan_by_sample(request, template_id, sampleset_id):
     if int(template_id) == int(0):
         #we are creating a new experiment based on the sample set
         return HttpResponseRedirect(reverse('page_plan_new_template_by_sample', args=(sampleset_id,)))
+    
+    isSupported = is_operation_supported(template_id)
+    if (not isSupported):
+        return render_to_response("501.html")
 
     step_helper = StepHelperDbLoader().getStepHelperForTemplatePlannedExperiment(template_id, 
                                                                                  StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE, 
@@ -161,6 +211,12 @@ def page_plan_new_plan_by_sample(request, template_id, sampleset_id):
 @login_required
 def page_plan_new_plan_from_code(request, code):
     ''' create a new plan from a runtype code '''
+
+#    if (code == "8"):
+#        isSupported = isOCP_enabled()
+#        if (not isSupported):
+#            return render_to_response("501.html")
+ 
     runType = _get_runtype_from_code(code)
     step_helper = StepHelperDbLoader().getStepHelperForRunType(runType.pk, StepHelperType.CREATE_NEW_PLAN)
     request.session['plan_step_helper'] = step_helper
@@ -169,6 +225,12 @@ def page_plan_new_plan_from_code(request, code):
 
 @login_required
 def page_plan_edit_plan_by_sample(request, plan_id):
+
+    isSupported = is_operation_supported(plan_id)
+    if (not isSupported):
+        return render_to_response("501.html")
+                    
+
     step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan_id, StepHelperType.EDIT_PLAN_BY_SAMPLE)
     request.session['plan_step_helper'] = step_helper
     ctxd = handle_step_request(request, 'Barcode_by_sample')
@@ -178,6 +240,11 @@ def page_plan_edit_plan_by_sample(request, plan_id):
 def page_plan_edit_plan(request, plan_id):
     ''' edit plan with id plan_id '''
     #first get the plan and check if it's plan by sample set
+
+    isSupported = is_operation_supported(plan_id)
+    if (not isSupported):
+        return render_to_response("501.html")
+                        
     plan = PlannedExperiment.objects.get(pk=plan_id)
     if plan.sampleSet:
         return HttpResponseRedirect(reverse('page_plan_edit_plan_by_sample', args=(plan_id,)))
@@ -192,6 +259,11 @@ def page_plan_edit_run(request, exp_id):
     ''' retrieve and edit a plan for existing experiment '''
     try:
         plan = PlannedExperiment.objects.get(experiment=exp_id)
+        
+        isSupported = is_operation_supported(plan.id)
+        if (not isSupported):
+            return render_to_response("501.html")
+
     except PlannedExperiment.DoesNotExist:
         # experiment doesn't have a Plan - give it a copy of system default plan template
         exp = Experiment.objects.get(pk=exp_id)
@@ -203,6 +275,7 @@ def page_plan_edit_run(request, exp_id):
         plan.planName = plan.planDisplayedName = "CopyOfSystemDefault_" + exp.expName
         plan.planStatus = 'run'
         plan.planExecuted = True
+        plan.latestEAS = exp.get_EAS()
         plan.save()
         exp.plan = plan
         exp.save()
@@ -216,6 +289,11 @@ def page_plan_edit_run(request, exp_id):
 @login_required
 def page_plan_copy_plan(request, plan_id):
     ''' copy plan with id plan_id '''
+
+    isSupported = is_operation_supported(plan_id)
+    if (not isSupported):
+        return render_to_response("501.html")                    
+
     plan = PlannedExperiment.objects.get(pk=plan_id)
     if plan.sampleSet:
         return HttpResponseRedirect(reverse('page_plan_copy_plan_by_sample', args=(plan_id,)))
@@ -226,6 +304,11 @@ def page_plan_copy_plan(request, plan_id):
 
 @login_required
 def page_plan_copy_plan_by_sample(request, plan_id):
+
+    isSupported = is_operation_supported(plan_id)
+    if (not isSupported):
+        return render_to_response("501.html")
+    
     step_helper = StepHelperDbLoader().getStepHelperForPlanPlannedExperiment(plan_id, StepHelperType.COPY_PLAN_BY_SAMPLE)
     request.session['plan_step_helper'] = step_helper
     ctxd = handle_step_request(request, 'Barcode_by_sample')
@@ -316,7 +399,8 @@ def page_plan_save(request):
             # save the step helper
             step_helper_db_saver = StepHelperDbSaver()
             planTemplate = step_helper_db_saver.save(ctxd['helper'], request.user.username)
-
+            update_plan_log(step_helper_db_saver.getSavedPlansList(), ctxd['helper'], request.user.username)
+            request.session["created_plan_pks"] = step_helper_db_saver.getSavedPlansList()
             step_helper = request.session['plan_step_helper']
             if step_helper.isTemplateBySample():
                 return HttpResponseRedirect(reverse('page_plan_new_plan_by_sample', args=(planTemplate.pk, step_helper.steps['Ionreporter'].savedFields['sampleset_id'])))
@@ -325,24 +409,14 @@ def page_plan_save(request):
             logger.exception(format_exc())
             Message.error("There was an error saving your plan/template.")
 
-        #If this wizard was started with a postback url, redirect and send the planned run pks.
-        if "postback" in request.session:
-            postback_url = request.session["postback"] + "?planned_runs=" + ",".join(
-                [str(planned_run.pk) for planned_run in step_helper_db_saver.planned_runs]
-            ) + "&host_name=" + settings.HOSTNAME + "&host_url=" + settings.ROOT_URL
-
-            del request.session["postback"] # Clear postback url
-            del request.session["referer_site_name"] # Clear via title on TS
-
-            return HttpResponseRedirect(postback_url)
 
         #Otherwise redirect to a listing page
-        elif ctxd['helper'].isEditRun():
+        if ctxd['helper'].isEditRun():
             return HttpResponseRedirect('/data')
         elif ctxd['helper'].isPlan():
             return HttpResponseRedirect('/plan/planned')
         else:
-            return HttpResponseRedirect('/plan/plan')
+            return HttpResponseRedirect('/plan/plan_templates/#recents')
     else:
         # tell the context which step to go to
         ctxd['step'] = ctxd['helper'].steps[first_error_step]
@@ -358,7 +432,13 @@ def handle_step_request(request, next_step_name):
     current_step_name = request.POST.get('stepName', None)
     step_helper = request.session['plan_step_helper']
     
-    # update the step heler with the input from the step we came from
+    #logger.debug("views.handle_step_request() current_step_name=%s; next_step_name=%s" %(current_step_name, next_step_name))
+    application_step_data = step_helper.steps['Application']  
+    applProduct = application_step_data.savedObjects['applProduct']                   
+    
+    #logger.debug("views.handle_step_request() applProduct=%s" %(applProduct))
+                
+    # update the step helper with the input from the step we came from
     updated = step_helper.updateStepFromRequest(request, current_step_name)
     # raise RuntimeError("what" + '%s' % updated)
     logger.debug("Step: %s, Updated: %s" % (current_step_name, str(updated)))
@@ -374,6 +454,78 @@ def handle_step_request(request, next_step_name):
     ctxd = _create_context_from_session(request, next_step_name)
     return ctxd
 
+def update_plan_log(saved_plans, step_helper, username):
+    # Add log entry when a Plan is created or modified
+    if not saved_plans or not step_helper.isPlan():
+        return
+
+    edited_plan_pk = saved_plans[0]
+    created_plans = []
+    if step_helper.isCreate() or step_helper.isCopy():
+        created_plans = saved_plans
+        edited_plan_pk = None
+    elif len(saved_plans) > 1:
+        created_plans = saved_plans[1:]
+    
+    for pk in created_plans:
+        plan = PlannedExperiment.objects.get(pk=pk)
+        msg = 'Created Planned Run: %s (%s)' % (plan.planName, plan.pk)
+        EventLog.objects.add_entry(plan, msg, username)
+
+    if edited_plan_pk:
+        plan = PlannedExperiment.objects.get(pk=edited_plan_pk)
+        state = 'Run' if step_helper.isEditRun() else 'Planned Run'
+        msg = 'Updated %s: %s (%s).' % (state, plan.planName, plan.pk)
+        
+        # log old/new values for changed fields
+        changed = step_helper.getChangedFields()
+        changed_msg = {}
+        for key, values in changed.items():
+            if key == 'pluginIds':
+                # convert plugin ids to names
+                plugins = step_helper.steps['Plugins'].prepopulatedFields['plugins']
+                old = [ plugin.name for plugin in plugins if values[0] and str(plugin.id) in values[0].replace(' ','').split(',') ]
+                new = [ plugin.name for plugin in plugins if values[1] and str(plugin.id) in values[1].replace(' ','').split(',') ]
+                changed_msg['plugins'] = [ ', '.join(old), ', '.join(new) ]
+            elif key.startswith('plugin_config'):
+                try:
+                    old = json.loads(values[0])
+                    new = json.loads(values[1])
+                    if old != new:
+                        changed_msg[key] = [ json.dumps(old,indent=1), json.dumps(new,indent=1) ]
+                except:
+                    changed_msg[key] = [ values[0], values[1] ]
+            elif key == 'projects':
+                # convert project ids to names
+                projects = step_helper.steps['Output'].prepopulatedFields['projects']
+                old = [ project.name for project in projects if values[0] and (project.id in values[0] or str(project.id) in values[0]) ]
+                new = [ project.name for project in projects if values[1] and (project.id in values[1] or str(project.id) in values[1]) ]
+                changed_msg[key] = [ ', '.join(old), ', '.join(new) ]
+            else:
+                changed_msg[key] = [ values[0], values[1] ]
+        
+        if changed_msg:
+            EventLog.objects.add_entry(plan, json.dumps(changed_msg), username)
+            EventLog.objects.add_entry(plan, msg, username)
+
+
+def toggle_template_favorite(request, template_id):
+    ''' 
+    toggle a template to set/unset the favorite tag with id template_id 
+    '''    
+    ctxd = {}
+
+    plan_template = get_object_or_404(PlannedExperiment, pk = template_id)
+    
+    toggle_favorite = False if (plan_template.isFavorite) else True
+    plan_template.isFavorite = toggle_favorite
+
+    plan_template.save()
+    
+    ctx = RequestContext(request, ctxd)
+    return render_to_response("rundb/plan/plan_templates.html", context_instance=ctx, mimetype="text/html")
+
+
 def _get_runtype_from_code(code):
         codes = {
             '1': "AMPS",
@@ -382,7 +534,8 @@ def _get_runtype_from_code(code):
             '4': "RNA",
             '5': "AMPS_RNA",
             '6': "AMPS_EXOME",
-            '7': "TARS_16S"
+            '7': "TARS_16S",
+            '8': "AMPS_DNA_RNA"
         }
         product_code = codes.get(code, "GENS")
         return RunType.objects.get(runType=product_code)
@@ -410,7 +563,7 @@ def _create_plan_session(request):
             '7': "TARS_16S"            
         }
         product_code = codes.get(1, "GENS")
-        logger.debug("views.add_planTemplate()... code=%s, product_code=%s" % (1, product_code))
+        logger.debug("views._create_plan_session()... code=%s, product_code=%s" % (1, product_code))
     
         globalConfig_isDuplicateReads = GlobalConfig.objects.all()[0].mark_duplicates
     
@@ -430,19 +583,12 @@ def _create_plan_session(request):
 @login_required
 def planned(request):
     ctx = RequestContext(request)
+
+    if "created_plan_pks" in request.session:
+        ctx["created_plan_pks"] = request.session["created_plan_pks"]
+        del request.session["created_plan_pks"]
+
     return render_to_response("rundb/plan/planned.html", context_instance=ctx)
-
-
-@login_required
-def planned_by_template(request):
-    ctx = RequestContext(request)
-    return render_to_response("rundb/plan/planned_by_template.html", context_instance=ctx)
-
-
-@login_required
-def planned_by_sampleset(request):
-    ctx = RequestContext(request)
-    return render_to_response("rundb/plan/planned_by_sampleset.html", context_instance=ctx)
 
 
 @login_required
@@ -618,7 +764,7 @@ def _get_sampleGrouping_json(request, sampleGroup_id):
         sampleGroupResource_serialize_json = json.dumps(None)
     return sampleGroupResource_serialize_json    
 
-    
+
 
 def _review_plan(request, pk):
     per = PlannedExperimentResource()
@@ -660,6 +806,150 @@ def review_plan_run(request, _id):
     Review plan contents
     """
     return _review_plan(request, _id)
+
+
+class PlanDetailView(DetailView):
+    model = PlannedExperiment
+    template_name = 'rundb/plan/modal_plannedexperiment_detail.html'
+    context_object_name = 'plan'
+
+    def get_context_data(self, **kwargs):
+        plan = self.object
+
+        # can Review from either Report or Planned Runs pages
+        report_pk = self.kwargs.get('report_pk')
+        if report_pk:
+            result = Results.objects.get(pk=report_pk)
+            eas = result.eas
+            state = 'Plan'
+        else:
+            eas = plan.latestEAS or plan.experiment.get_EAS()
+            state = 'Template' if plan.isReusable else 'Planned Run'
+        
+        chipType = Chip.objects.filter(name=plan.get_chipType()).values_list('description',flat=True)
+        
+        # generate context for page
+        context = super(PlanDetailView, self).get_context_data(**kwargs)
+        context['extra_head'] = 'Report: %s' % result.resultsName if report_pk else ''
+        context['state'] = state
+        context['eas'] = eas
+        context['runType'] = RunType.objects.filter(runType = plan.runType)
+        context['samplePrepKit'] = KitInfo.objects.filter(name = plan.samplePrepKitName)
+        context['libraryKit'] = KitInfo.objects.filter(name = eas.libraryKitName)
+        context['templatingKit'] = KitInfo.objects.filter(name = plan.templatingKitName)
+        context['sequenceKit'] = KitInfo.objects.filter(name = plan.experiment.sequencekitname)
+        context['controlSequencekit'] = KitInfo.objects.filter(name = plan.controlSequencekitname)
+        context["chipTypePrefix"] = getChipDisplayedNamePrefix(chipType[0]) if chipType else  plan.experiment.chipType
+        context["chipTypeVersion"] = getChipDisplayedVersion(chipType[0]) if chipType else ""
+
+        context['thumbnail'] = True if report_pk and result.isThumbnail else False
+        
+        # IRU configuration
+        iru_info = eas.selectedPlugins.get('IonReporterUploader',{}).get('userInput',{})
+        iru_info = iru_info['userInputInfo'] if 'userInputInfo' in iru_info else iru_info
+        # map columns to be displayed to actual parameter names saved in userInputInfo
+        # non-empty columns will appear in the order given
+        iru_display_keys = (
+            ('Cancer Type', 'cancerType'),
+            ('Cellularity %', 'cellularityPct'),
+            ('Workflow', 'Workflow'),
+            ('Relation', 'RelationRole'),
+            ('Gender', 'Gender'),
+            ('Set ID', 'setid')
+        )
+        context['iru_config'] = {}   
+        
+        if (iru_info):
+            #unicode handling
+            iru_info = convert(iru_info)
+            #logger.debug("views.PlanDetailView - AFTER iru_info=%s" %(iru_info))
+                                               
+        for config_dict in iru_info:                
+            params = {}
+            columns = []
+            if (isinstance(config_dict, dict)): 
+                for column, key in iru_display_keys:
+                    if key in config_dict:
+                        params[column] = config_dict[key]
+                        columns.append(column)
+                        if key == 'setid':
+                            params['Set ID'] = config_dict['setid'].split('_')[0]
+                        if key == 'Workflow' and config_dict[key] == '':
+                            params['Workflow'] = 'Upload Only'
+            else:
+                logger.debug("views.PlanDetailView - SKIPPED -  config_dict.type=%s" %(type(config_dict)))
+
+            if params:
+                barcoded = config_dict.get('barcodeId') or 'nobarcode'
+                context['iru_config'][barcoded] = params
+                context['iru_columns'] = columns
+        
+        # QC thresholds
+        context['qcValues'] = []
+        for qcValue in plan.qcValues.all().order_by('qcName'):
+            context['qcValues'].append( (qcValue.qcName, PlannedExperimentQC.objects.get(plannedExperiment=plan, qcType=qcValue).threshold) )
+        
+        # plugins
+        context['plugins'] = filter(lambda d: 'export' not in d.get('features',[]), eas.selectedPlugins.values())
+        context['uploaders'] = filter(lambda d: 'export' in d.get('features',[]), eas.selectedPlugins.values())
+        
+        plugins = Plugin.objects.filter(name__in=eas.selectedPlugins.keys(), active=True)
+        for plugin in context['plugins']:
+            if plugin.get('userInput'):
+                pluginObj = plugins.filter(name=plugin['name'])
+                if pluginObj:
+                    plugin['isPlanConfig'] = pluginObj[0].isPlanConfig
+                    plugin['userInputJSON'] = json.dumps(plugin['userInput'], cls=DjangoJSONEncoder)
+        context['plugins'].sort(key=lambda d:d['name'])
+
+        # projects        
+        if report_pk:
+            context['projects'] = result.projectNames()
+        else:
+            context['projects'] = ', '.join( [p.name for p in plan.projects.all().order_by('-modified')] )
+        
+        # barcodes
+        if eas.barcodeKitName:
+            barcodedSamples = {}
+            columns = []
+            if eas.barcodedSamples:
+                bcsamples_display_keys = (
+                    ('Sample ID', 'externalId'),
+                    ('Sample Description', 'description'),
+                    ('DNA/RNA', 'nucleotideType'),
+                    ('Reference', 'reference'),
+                    ('Target Regions', 'targetRegionBedFile'),
+                    ('Hotspot Regions', 'hotSpotRegionBedFile'),
+                )
+
+                for sample, info in eas.barcodedSamples.items():
+                    for bcId in info.get('barcodes',[]):
+                        barcodedSamples[bcId] = {}
+                        barcodedSamples[bcId]['sample'] = sample
+                        
+                        barcodeSampleInfo = info.get('barcodeSampleInfo',{}).get(bcId,{})
+                        for column, key in bcsamples_display_keys:
+                            if key in barcodeSampleInfo and barcodeSampleInfo[key]:
+                                barcodedSamples[bcId][column] = barcodeSampleInfo[key]
+                                if column not in columns:
+                                    columns.append(column)
+                                if key in ['targetRegionBedFile', 'hotSpotRegionBedFile']:
+                                    barcodedSamples[bcId][column] = os.path.basename(barcodeSampleInfo[key])
+                                    
+            context['bcsamples_columns'] = columns
+            context['barcodedSamples'] = barcodedSamples
+            context['barcodes'] = dnaBarcode.objects.filter(name=eas.barcodeKitName, id_str__in=barcodedSamples.keys()).order_by('id_str')
+        
+        # log
+        history = EventLog.objects.for_model(plan)
+        for log in history:
+            try:
+                log.json_log = json.loads(log.text)
+            except:
+                pass
+        context['event_log'] = history
+        
+        return context
 
 
 @login_required
@@ -813,6 +1103,11 @@ def copy_plan_template(request, template_id):
     """
     Clone plan template in template wizard
     """
+
+    isSupported = _isSupported(request, template_id)
+    if (not isSupported):
+        return render_to_response("501.html")
+                    
     context = _plan_template_helper(request, template_id, True, "Copy")
     return render_to_response("rundb/plan/modal_plan_wizard.html", context_instance=context)
 
@@ -913,15 +1208,23 @@ def save_uploaded_plans_for_template(request):
         return HttpResponse(json.dumps({"status": "Error: batch planning file is empty"}), mimetype="text/html")
         
     index = 0
+    previous_index = 0
     plans = []
     rawPlanDataList = []
     failed = {}
     file = open(destination.name, "rU")
     reader = csv.DictReader(file)
     for index, row in enumerate(reader, start=1):
-        errorMsg, aPlanDict, rawPlanDict, isToSkipRow = validate_csv_plan(row)
+        #hard to reproduce, but sometimes, enumerate stays on the same index resulting in duplicate plans being created 
+        if previous_index == index:
+            logger.info("TS-8874-WATCH - views.save_uploaded_plans_for_template() SKIPPED DUPLICATE ROW index=%d; row=%s" %(index, row))   
+            continue
+        else:
+            previous_index = index
+            
+        errorMsg, aPlanDict, rawPlanDict, isToSkipRow = validate_csv_plan(row, request)
         
-        logger.info("views.save_uploaded_plans_for_template() index=%d; errorMsg=%s; planDict=%s" %(index, errorMsg, rawPlanDict))
+        logger.info("views.save_uploaded_plans_for_template() previous_index=%d; index=%d; errorMsg=%s; planDict=%s" %(previous_index, index, errorMsg, rawPlanDict))
         if errorMsg:
             logger.info("views.save_uploaded_plans_for_template() ERROR MESSAGE index=%d; errorMsg=%s; planDict=%s" %(index, errorMsg, rawPlanDict))
 
@@ -964,13 +1267,22 @@ def save_uploaded_plans_for_template(request):
             easObj = planFamily['eas']
             easObj.experiment = expObj
             easObj.isEditable = True
+             
+            # set default cmdline args - this is needed in case chip type or kits changed from the selected template's values
+            default_args = plan.get_default_cmdline_args()
+            for key, value in default_args.items():
+                setattr(easObj, key, value)         
             easObj.save()
             
+             # associate EAS to the plan
+            plan.latestEAS = easObj
+            plan.save()
+                       
             #saving/associating samples    
             sampleDisplayedNames = planFamily['samples']
             sampleNames = [name.replace(' ', '_') for name in sampleDisplayedNames]
-            externalId = None
-            for name, displayedName in zip(sampleNames,  sampleDisplayedNames): 
+            externalIds = planFamily['sampleIds']
+            for name, displayedName, externalId in zip(sampleNames,  sampleDisplayedNames, externalIds): 
                 sample_kwargs = {
                                 'name' : name,
                                 'displayedName' : displayedName,
@@ -1016,8 +1328,9 @@ def save_uploaded_plans_for_template(request):
     except:
         logger.exception(format_exc())
         transaction.rollback()
-        return HttpResponse(json.dumps({"status": "Error saving plans to database!" + format_exc()}), mimetype="text/html")
-        ##return HttpResponse(json.dumps({"error": "Internal error while trying to save the plan."}), mimetype="application/json")
+
+        r = {"status": "Error saving plans to database. ", "failed": failed}
+        return HttpResponse(json.dumps(r), mimetype="text/html")
     else:
         #logger.info("views.save_uploaded_plans_for_template going to transaction.COMMIT")
         
@@ -1076,7 +1389,6 @@ def _get_allApplProduct_data(isForTemplate):
 
                 applData["isPairedEndSupported"] = defaultApplProduct[0].isPairedEndSupported
                 applData["isDefaultPairedEnd"] = defaultApplProduct[0].isDefaultPairedEnd
-                applData['defaultVariantFrequency'] = defaultApplProduct[0].defaultVariantFrequency
 
                 applData['flowCount'] = defaultApplProduct[0].defaultFlowCount
                 applData['peAdapterKit'] = defaultApplProduct[0].defaultPairedEndAdapterKit
@@ -1131,7 +1443,7 @@ def _dict_IR_plugins_uploaders(isForTemplate):
     pluginCandidates = list(pluginCandidates.order_by('name', '-version'))
 
     # Issue bulk query for efficiency
-    plugin_list = [(plugin.name, plugin.pluginscript(), {'plugin':plugin}) for plugin in pluginCandidates]
+    plugin_list = [(plugin.name, plugin.pluginscript, {'plugin':plugin}) for plugin in pluginCandidates]
     from iondb.plugins.manager import pluginmanager
     pluginInfo = pluginmanager.get_plugininfo_list(plugin_list)
 
@@ -1261,9 +1573,9 @@ def save_plan_or_template(request, planOid):
     # Process Inputs
 
     # pylint:disable=E1103
-    json_data = simplejson.loads(request.raw_post_data)
+    json_data = simplejson.loads(request.body)
     submitIntent = json_data.get('submitIntent', '')
-    logger.debug('views.save_plan_or_template POST.raw_post_data... simplejson Data: "%s"' % json_data)
+    logger.debug('views.save_plan_or_template POST.body... simplejson Data: "%s"' % json_data)
     logger.debug("views.save_plan_or_template submitIntent=%s" % submitIntent)
     # saving Template or Planned Run
     isReusable = isReusable(submitIntent)
@@ -1380,7 +1692,7 @@ def save_plan_or_template(request, planOid):
                 if bcId and sample:
                     if not is_valid_chars(sample):
                         sampleValidationErrorMsg += sample + ', '
-                    elif is_invalid_leading_chars(sample):
+                    elif not is_valid_leading_chars(sample):
                         sampleValidationErrorMsg_leadingChars += sample + ", "
                     elif not is_valid_length(sample, MAX_LENGTH_SAMPLE_NAME):
                         sampleValidationErrorMsg_length += sample + ", "
@@ -1416,7 +1728,7 @@ def save_plan_or_template(request, planOid):
             if sample.strip():
                 if not is_valid_chars(sample):
                     sampleValidationErrorMsg += sample + ', '
-                elif is_invalid_leading_chars(sample):
+                elif not is_valid_leading_chars(sample):
                     sampleValidationErrorMsg_leadingChars += sample + ", "
                 elif not is_valid_length(sample, MAX_LENGTH_SAMPLE_NAME):
                     sampleValidationErrorMsg_length += sample + ", "

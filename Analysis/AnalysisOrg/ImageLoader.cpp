@@ -125,9 +125,10 @@ ImageTracker::~ImageTracker()
 
 
 
-void ImageTracker::SetUpImageLoaderInfo (CommandLineOpts &inception_state,
-                            ComplexMask &a_complex_mask, 
-                            ImageSpecClass &my_image_spec)
+void ImageTracker::SetUpImageLoaderInfo (const CommandLineOpts &inception_state,
+                            const ComplexMask &a_complex_mask, 
+                            const ImageSpecClass &my_image_spec,
+                            const FlowBlockSequence & flow_block_sequence)
 {
 
   int normStart = 5;
@@ -140,6 +141,7 @@ void ImageTracker::SetUpImageLoaderInfo (CommandLineOpts &inception_state,
   master_img_loader.cur_buffer = -1; //nonsense currently, used in individual loading
   master_img_loader.flow_buffer_size = flow_buffer_size; // not the same!!!!!!!
   master_img_loader.startingFlow = inception_state.flow_context.startingFlow;
+  master_img_loader.flow_block_sequence = flow_block_sequence;
   
   master_img_loader.img = img;  // just use ImageTracker object instead?
   master_img_loader.sdat = sdat;
@@ -166,12 +168,12 @@ void ImageTracker::SetUpImageLoaderInfo (CommandLineOpts &inception_state,
   master_img_loader.hasWashFlow = inception_state.img_control.has_wash_flow;  
   
   master_img_loader.finished = false;
-  master_img_loader.lead = ( inception_state.bkg_control.readaheadDat != 0 ) ? inception_state.bkg_control.readaheadDat : my_image_spec.LeadTimeForChipSize();
+  master_img_loader.lead = ( inception_state.img_control.readaheadDat != 0 ) ? inception_state.img_control.readaheadDat : my_image_spec.LeadTimeForChipSize();
   master_img_loader.inception_state = &inception_state;  // why must we pass globals around everywhere?
   
   printf ( "Subtract Empties: %d\n", inception_state.img_control.nn_subtract_empties );
   master_img_loader.doRawBkgSubtract = ( inception_state.img_control.nn_subtract_empties>0 );
-  master_img_loader.doEmptyWellNormalization = inception_state.bkg_control.empty_well_normalization;
+  master_img_loader.doEmptyWellNormalization = inception_state.bkg_control.trace_control.empty_well_normalization;
 }
 
 void ImageTracker::DecideOnRawDatsToBufferForThisFlowBlock()

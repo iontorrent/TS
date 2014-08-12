@@ -21,13 +21,15 @@ class XtalkCurry{
   public:
 
     Region *region;
-    CrossTalkSpecification *xtalk_spec_p;
+    TraceCrossTalkSpecification *xtalk_spec_p;
     BeadTracker *my_beads_p;
     RegionTracker *my_regions_p;
     TimeCompression *time_cp;
     PoissonCDFApproxMemo *math_poiss;
     BeadScratchSpace *my_scratch_p; // really?
-    flow_buffer_info *my_flow_p;
+    incorporation_params_block_flows *my_cur_bead_block_p;
+    buffer_params_block_flows *my_cur_buffer_block_p;
+    FlowBufferInfo *my_flow_p;
     BkgTrace *my_trace_p;
     bool use_vectorization;
 
@@ -37,14 +39,19 @@ class XtalkCurry{
     
     XtalkCurry();
     ~XtalkCurry();
-    void ExecuteXtalkFlux(int ibd, float *my_xtflux);
-    void NewXtalkFlux (int cx, int cy,float *my_xtflux);
-    void ExcessXtalkFlux (int cx, int cy,float *my_xtflux, float *my_nei_flux);
-    void ComputeTypicalCrossTalk(float *my_xtalk_buffer, float *my_nei_buffer);
-    void CloseOverPointers(Region *_region, CrossTalkSpecification *_xtalk_spec_p,
+    void ExecuteXtalkFlux(int ibd, float *my_xtflux, int flow_block_size, int flow_block_start);
+    void NewXtalkFlux (int cx, int cy,float *my_xtflux, int flow_block_size, int flow_block_start);
+    void ExcessXtalkFlux (int cx, int cy,float *my_xtflux, float *my_nei_flux, 
+                          int flow_block_size, int flow_block_start );
+    void ComputeTypicalCrossTalk(float *my_xtalk_buffer, float *my_nei_buffer, int flow_block_size,
+                          int flow_block_start );
+    void CloseOverPointers(Region *_region, TraceCrossTalkSpecification *_xtalk_spec_p,
                              BeadTracker *_my_beads_p, RegionTracker *_my_regions_p,
                              TimeCompression *_time_cp, PoissonCDFApproxMemo *_math_poiss,
-                             BeadScratchSpace *_my_scratch_p, flow_buffer_info *_my_flow_p,
+                             BeadScratchSpace *_my_scratch_p, 
+                             incorporation_params_block_flows *_my_cur_bead_block_p,
+                             buffer_params_block_flows *_my_cur_buffer_block_p,
+                             FlowBufferInfo *_my_flow_p,
                              BkgTrace *_my_trace_p, bool _use_vectorization);
     const int* GetNeighborIndexMap() const { return neiIdxMap; }
 

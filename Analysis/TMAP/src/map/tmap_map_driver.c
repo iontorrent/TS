@@ -3,6 +3,7 @@
 #include <math.h>
 #include <float.h>
 #include <config.h>
+#include <time.h>
 #ifdef HAVE_LIBPTHREAD
 #include <pthread.h>
 #endif
@@ -30,7 +31,10 @@
 #include "util/tmap_map_stats.h"
 #include "util/tmap_map_util.h"
 #include "pairing/tmap_map_pairing.h"
+
 #include "tmap_map_driver.h"
+#include "../realign/realign_c_util.h"
+
 
 // NB: do not turn these on, as they do not currently improve run time. They
 // could be useful if many duplicate lookups are performed and the hash
@@ -148,6 +152,8 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             tmap_map_driver_t *driver,
                             tmap_map_stats_t *stat,
                             tmap_rand_t *rand,
+                            // DVK - realigner
+                            struct RealignProxy* realigner,
                             int32_t do_pairing,
                             int32_t tid)
 {
@@ -390,6 +396,165 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
           // only convert to BAM and destroy the records if we are not trying to
           // estimate the pairing parameters
           if(0 == do_pairing) {
+              {
+                // DVK
+                // run realignment on all matches from records [low]->sams [II] for II from 0 to seqs_buffer[low]->n
+                // ? should the realignment be run if flowspace realignment is performed ? - yes, if both are requested from command line 
+                if (1 == driver->opt->do_realign)
+                {
+                    unsigned seqidx, matchidx;
+                    for (seqidx = 0; seqidx < seqs_buffer[low]->n; ++seqidx) 
+                    {
+                        tmap_map_sams_t* sams = records[low]->sams[seqidx];
+                        tmap_seq_t* qryseq = seqs_buffer[low]->seqs[seqidx];
+                        tmap_refseq_t* refseq = index->refseq;
+                        
+                        // extract query
+			const char* qryname = tmap_seq_get_name (qryseq)->s;
+                        tmap_string_t* qrybases = tmap_seq_get_bases (qryseq);
+                        const char* qry = qrybases->s;
+#if 0			
+			if (strcmp ("GSU0M:00191:00167", qryname) == 0)
+			  tmap_log ("\n");
+#endif                        
+                        for (matchidx = 0; matchidx < sams->n; ++matchidx)
+                        {
+                            // extract packed cigar and it's length
+                            uint32_t* orig_cigar = sams->sams [matchidx].cigar;
+                            unsigned orig_cigar_sz = sams->sams [matchidx].n_cigar;
+                            
+                            // extract seqid 
+                            unsigned ref_id = sams->sams [matchidx].seqid;
+
+                            // extract offset
+                            unsigned ref_off = sams->sams [matchidx].pos;
+                            
+                            // extract read direction in alignment
+                            uint8_t forward = (sams->sams [matchidx].strand == 0) ? 1 : 0;
+                            
+                            // make inverse/complement copy of the query if direction is reverse
+                            if (!forward)
+                            {
+                                char* qry_rev = qry_mem (realigner, qrybases->l+1);
+                                memcpy (qry_rev, qry, qrybases->l);
+                                qry_rev [qrybases->l] = 0;
+                                tmap_reverse_compliment (qry_rev, (int32_t) qrybases->l);
+                                qry = qry_rev;
+                            }
+                            
+                            // compute alignment and subject lengths
+                            unsigned q_len_cigar, r_len_cigar;
+                            unsigned al_len_cigar = seq_lens_from_bin_cigar (orig_cigar, orig_cigar_sz, &q_len_cigar, &r_len_cigar);
+                            
+                            uint8_t* ref = (uint8_t*) ref_mem (realigner, r_len_cigar);
+                            int32_t converted_cnt;
+                            
+			    //if (stat->num_realign_invocations == 624 && ref_off == 20839 && r_len_cigar == 104)
+			    //  printf ("\n");
+
+                            // extract reference. This returns reference sequence in UNPACKED but BINARY CONVERTED form - values of 0-4, one byte per base!
+                            tmap_refseq_subseq2 (refseq, ref_id+1, ref_off+1, ref_off + r_len_cigar, ref, 0, &converted_cnt);
+                            
+                            // convert reference to ascii format
+                            {
+                                int ii;
+                                for(ii = 0; ii < r_len_cigar; ++ii) 
+                                {
+                                    if (ref [ii] >= sizeof (tmap_iupac_int_to_char)) 
+                                        tmap_bug ();
+                                    ref [ii] = tmap_iupac_int_to_char [ref [ii]];
+                                }
+                                ref [r_len_cigar] = 0;
+                            }
+                            
+                            // prepare variables to hold results
+                            uint32_t* cigar_dest;
+                            unsigned cigar_dest_sz;
+                            int new_offset;
+                        
+                            ++(stat->num_realign_invocations);
+			    
+			    uint64_t apo = stat->num_realign_already_perfect;
+			    uint64_t nco = stat->num_realign_not_clipped;
+			    uint64_t swfo = stat->num_realign_sw_failures;
+			    uint64_t ucfo = stat->num_realign_unclip_failures;
+			    
+			    const char* al_proc_class = "UNKNOWN";
+
+                            // compute the alignment
+                            if (realigner_compute_alignment (realigner, 
+                                qry, 
+				qrybases->l,
+                                (const char*) ref, 
+				r_len_cigar,
+                                ref_off, 
+                                forward, 
+                                orig_cigar, 
+                                orig_cigar_sz, 
+                                &cigar_dest, 
+                                &cigar_dest_sz, 
+                                &new_offset, 
+                                &(stat->num_realign_already_perfect),
+                                &(stat->num_realign_not_clipped),
+                                &(stat->num_realign_sw_failures), 
+                                &(stat->num_realign_unclip_failures)))
+                            {
+                                // check if changes were introduced
+                                if (new_offset != ref_off || orig_cigar_sz != cigar_dest_sz || memcmp (orig_cigar, cigar_dest, orig_cigar_sz))
+                                {
+                                    ++(stat->num_realign_changed);
+                                    if (new_offset != ref_off)
+				    {
+				        // log shifted alignment
+                                        ++(stat->num_realign_shifted);
+					if (nco == stat->num_realign_not_clipped) 
+					  al_proc_class = "MOD-SHIFT";
+					else
+					  al_proc_class = "MOD-SHIFT NOCLIP";
+				    }
+				    else
+				    {
+				        // log changed alignment
+					if (nco == stat->num_realign_not_clipped) 
+   					  al_proc_class = "MOD";
+					else
+					  al_proc_class = "MOD NOCLIP";
+				    }
+                                    
+                                    // pack the alignment back into the originating structure (unallocate memory taken by the old one)
+                                    // TODO implement more intelligent alignment memory management, avoid heap operations when possible
+                                    free (sams->sams [matchidx].cigar);
+                                    sams->sams [matchidx].cigar = cigar_dest;
+                                    sams->sams [matchidx].n_cigar = cigar_dest_sz;
+                                    sams->sams [matchidx].pos = new_offset;
+                                }
+                                else
+				{
+				    // log unchanged alignment
+                                    free (cigar_dest);
+				    if (nco == stat->num_realign_not_clipped) 
+				      al_proc_class = "UNMOD";
+				    else
+				      al_proc_class = "UNMOD NOCLIP";
+				}
+                            }
+                            else
+			    {
+			        // log reason why alignment was not processed
+				if (swfo != stat->num_realign_sw_failures)
+				  al_proc_class = "SWERR";
+				else if (ucfo != stat->num_realign_unclip_failures)
+				  al_proc_class = "UNCLIPERR";
+				else if (apo != stat->num_realign_already_perfect)
+				  al_proc_class = "PERFECT";
+			    }
+			    // log 
+			    tmap_log ("%s\t%d\t%d\t%08d\t%s\n", qryname, !forward, ref_id, ref_off, al_proc_class);
+                        }
+
+                    }
+                }
+              }
               // convert the record to bam
               if(1 == seqs_buffer[low]->n) {
                   bams[low] = tmap_map_bams_init(1); 
@@ -447,7 +612,7 @@ tmap_map_driver_core_thread_worker(void *arg)
 
   tmap_map_driver_core_worker(thread_data->sam_header, thread_data->seqs_buffer, thread_data->records, thread_data->bams, 
                               thread_data->seqs_buffer_length, thread_data->buffer_idx, thread_data->index, thread_data->driver, 
-                              thread_data->stat, thread_data->rand, thread_data->do_pairing, thread_data->tid);
+                              thread_data->stat, thread_data->rand, /* DVK - realigner */ thread_data->realigner, thread_data->do_pairing, thread_data->tid);
 
   return arg;
 }
@@ -471,6 +636,7 @@ tmap_map_driver_create_threads(sam_header_t *header,
                                tmap_map_driver_thread_data_t **thread_data,
                                tmap_rand_t **rand,
                                tmap_map_stats_t **stats,
+                               struct RealignProxy** realigner,
 #endif
                                int32_t do_pairing)
 {
@@ -504,7 +670,7 @@ tmap_map_driver_create_threads(sam_header_t *header,
   if(1 == driver->opt->num_threads) {
       buffer_idx = 0;
       tmap_map_driver_core_worker(header, seqs_buffer, records, bams, 
-                                  seqs_buffer_length, &buffer_idx, index, driver, stat, rand[0], do_pairing, 0);
+                                  seqs_buffer_length, &buffer_idx, index, driver, stat, rand[0], realigner [0], do_pairing, 0);
   }
   else {
       (*attr) = tmap_calloc(1, sizeof(pthread_attr_t), "(*attr)");
@@ -527,6 +693,8 @@ tmap_map_driver_create_threads(sam_header_t *header,
           if(NULL != stats) (*thread_data)[i].stat = stats[i];
           else (*thread_data)[i].stat = NULL;
           (*thread_data)[i].rand = rand[i];
+          // DVK - realigner
+          (*thread_data)[i].realigner = realigner [i];
           (*thread_data)[i].do_pairing = do_pairing;
           (*thread_data)[i].tid = i;
           if(0 != pthread_create(&(*threads)[i], (*attr), tmap_map_driver_core_thread_worker, &(*thread_data)[i])) {
@@ -562,6 +730,8 @@ tmap_map_driver_infer_pairing(tmap_seqs_io_t *io_in,
                               tmap_map_driver_thread_data_t **thread_data,
                               tmap_rand_t **rand,
                               tmap_map_stats_t **stats,
+                              // DVK - realigner
+                              struct RealignProxy** realigner, 
 #endif
                               ...) // NB: just so that the function definition is clean
 {
@@ -592,7 +762,7 @@ tmap_map_driver_infer_pairing(tmap_seqs_io_t *io_in,
                                          rand_core,
 #endif
 #ifdef HAVE_LIBPTHREAD
-                                         attr, threads, thread_data, rand, NULL,
+                                         attr, threads, thread_data, rand, NULL, realigner, 
 #endif
                                          1)) {
       return 0;
@@ -783,6 +953,21 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
 #else
   tmap_rand_t *rand = NULL; // random # generator
 #endif
+
+  time_t start_time = time (NULL);
+  
+  if (driver->opt->report_stats)
+      tmap_file_stdout = tmap_file_fdopen(fileno(stdout), "wb", TMAP_FILE_NO_COMPRESSION);
+
+
+// DVK - realignment
+#ifdef HAVE_LIBPTHREAD
+  struct RealignProxy** realigner = NULL;
+#else
+  struct RealignProxy* realigner = NULL;
+#endif
+
+
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   tmap_rand_t *rand_core = tmap_rand_init(13); // random # generator for sampling
 #endif
@@ -852,6 +1037,40 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
   rand = tmap_rand_init(13);
 #endif
   
+// DVK - realigner  
+  {
+#ifdef HAVE_LIBPTHREAD
+  realigner = tmap_malloc (driver->opt->num_threads * sizeof (struct RealignProxy*), "realigner");
+
+  for (i = 0; i != driver->opt->num_threads;  ++i)
+  {
+      realigner [i] = realigner_create ();
+      realigner_set_scores (realigner [i], driver->opt->realign_mat_score, driver->opt->realign_mis_score, driver->opt->realign_gip_score, driver->opt->realign_gep_score);
+      realigner_set_bandwidth (realigner [i], driver->opt->realign_bandwidth);
+      realigner_set_clipping (realigner [i], (enum CLIPTYPE) driver->opt->realign_cliptype);
+  }   
+#else
+  realigner = realigner_create ();
+  realigner_set_scores (realigner, driver->opt->realign_mat_score, driver->opt->realign_mis_score, driver->opt->realign_gip_score, driver->opt->realign_gep_score);
+  realigner_set_bandwidth (realigner, driver->opt->realign_bandwidth);
+  realigner_set_clipping (realigner, (enum CLIPTYPE) driver->opt->realign_cliptype);
+#endif  
+  }  
+  
+// DVK - thread-safe logging
+  FILE* logfile = NULL;
+  {
+    if (driver->opt->realign_log)
+    {
+      logfile = fopen (driver->opt->realign_log, "w");
+      if (!logfile)
+	tmap_error ("logfile", Exit, OpenFileError );
+      tmap_log_enable (logfile);
+    }
+    else
+      tmap_log_disable ();
+  }
+
   // BAM Header
   header = tmap_seqs_io_to_bam_header(index->refseq, io_in, 
                                       driver->opt->sam_rg, driver->opt->sam_rg_num,
@@ -884,7 +1103,7 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
                                                      rand_core,
 #endif
 #ifdef HAVE_LIBPTHREAD
-                                                     &attr, &threads, &thread_data, rand, stats,
+                                                     &attr, &threads, &thread_data, rand, stats, realigner,
 #endif
                                                      0);
   if(0 == seqs_buffer_length) {
@@ -913,7 +1132,7 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
           seqs_buffer = thread_io_data.seqs_buffer; 
           thread_io_data.seqs_buffer = seqs_buffer_next;
 #else
-          seqs_buffer_length = tmap_seqs_io_read_buffer(io_in, seqs_buffer, reads_queue_size, io_out->fp->header->header);
+          seqs_buffer_length = tmap_seqs_io_read_buffer (io_in, seqs_buffer, reads_queue_size, io_out->fp->header->header);
 #endif
           seqs_loaded = 1;
           tmap_progress_print2("loaded %d reads", seqs_buffer_length);
@@ -921,6 +1140,7 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
       if(0 == seqs_buffer_length) { // are there any more?
           break;
       }
+
 #ifdef HAVE_LIBPTHREAD
       // launch a new thread that loads in the reads 
       pthread_attr_init(&attr_io);
@@ -943,7 +1163,7 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
                                              rand_core,
 #endif
 #ifdef HAVE_LIBPTHREAD
-                                             &attr, &threads, &thread_data, rand, stats,
+                                             &attr, &threads, &thread_data, rand, stats, realigner,
 #endif
                                              0)) {
           break;
@@ -1027,7 +1247,36 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
                            stat->num_after_rmdup/(double)stat->num_with_mapping,
                            stat->num_after_filter/(double)stat->num_with_mapping);
   }
-          
+
+  // OUTPUT STATS
+  if (driver->opt->report_stats)
+  {
+      time_t end_time = time (NULL);
+      tmap_file_printf (      "\nMapping completed in %d seconds.\n", end_time-start_time);
+      tmap_file_printf (      "             Total reads: %llu\n",         stat->num_reads);
+      tmap_file_printf (      "            Mapped reads: %llu (%.2f%%)\n", stat->num_with_mapping, stat->num_with_mapping * 100.0 / (double)stat->num_reads);
+      tmap_file_printf (      "           After seeding: %llu\n", stat->num_after_seeding);
+      tmap_file_printf (      "          After grouping: %llu\n", stat->num_after_grouping);
+      tmap_file_printf (      "           After scoring: %llu\n", stat->num_after_scoring);
+      tmap_file_printf (      "      After dups removal: %llu\n", stat->num_after_rmdup);
+      tmap_file_printf (      "         After filtering: %llu\n", stat->num_after_filter);
+      if (!driver->opt->do_realign)
+          tmap_file_printf (  "No realignment perormed\n");
+      else
+      {
+          tmap_file_printf (  "Realignment statistics:\n");
+          tmap_file_printf (  " Realignment invocations: %llu\n", stat->num_realign_invocations);
+          tmap_file_printf (  "    Not realigned (good): %llu\n", stat->num_realign_already_perfect);
+          if (stat->num_realign_sw_failures)
+            tmap_file_printf ("      Algorithm failures: %llu\n", stat->num_realign_sw_failures);
+          if (stat->num_realign_unclip_failures)
+            tmap_file_printf ("    Un-clipping failures: %llu\n", stat->num_realign_sw_failures);
+          tmap_file_printf (  "      Altered alignments: %llu\n", stat->num_realign_changed);
+          tmap_file_printf (  "       Altered positions: %llu\n", stat->num_realign_shifted);
+      }
+  }
+  
+  
   tmap_progress_print2("cleaning up");
 
   // cleanup the algorithm persistent data
@@ -1049,6 +1298,20 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
 #ifdef HAVE_LIBPTHREAD
   free(seqs_buffer_next);
 #endif
+      
+// DVK - realigner      
+#ifdef HAVE_LIBPTHREAD
+  for (i = 0; i != driver->opt->num_threads; ++i)
+      realigner_destroy (realigner [i]);
+  free (realigner);
+#else
+  realigner_destroy (realigner);
+#endif
+
+  tmap_log_disable ();
+  if (logfile)
+    fclose (logfile);
+  
   free(records);
   free(bams);
   tmap_map_stats_destroy(stat);
@@ -1066,6 +1329,9 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   tmap_rand_destroy(rand_core);
 #endif
+  
+  // if (driver->opt->report_stats)
+  //    tmap_file_fclose (tmap_file_stdout);
 }
 
 /* MAIN API */

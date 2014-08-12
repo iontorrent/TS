@@ -1,14 +1,14 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
-from django.conf.urls.defaults import patterns, url
+from django.conf.urls import patterns, url
+from iondb.rundb.plan.views import PlanDetailView
 
 urlpatterns = patterns(
     'iondb.rundb.plan',
     url(r'^$', 'views.plan_run_home', name="planRuns"),
-    url(r'^plan/$', 'views.plans', name="plans"),
+    ##url(r'^plan/$', 'views.plans', name="plans"),
+    url(r'^plan_templates/$', 'views.plan_templates', name="plan_templates"),
     url(r'^planned/$', 'views.planned', name="planned"),
-    url(r'^planned/planned_by_template$', 'views.planned_by_template', name="planned_by_template"),    
-    url(r'^planned/planned_by_sampleset$', 'views.planned_by_sampleset', name="planned_by_sampleset"),
     url(r'^reset_page_plan_session/$', 'views.reset_page_plan_session', name="reset_page_plan_session"),
     url(r'^page_plan_new_template/$', 'views.page_plan_new_template', name="page_plan_new_template"),
     url(r'^page_plan_new_template/(\d+)/$', 'views.page_plan_new_template', name="page_plan_new_template"),
@@ -16,7 +16,7 @@ urlpatterns = patterns(
     url(r'^page_plan_copy_template/(\d+)/$', 'views.page_plan_copy_template', name="page_plan_copy_template"),
     url(r'^page_plan_new_plan/(\d+)/$', 'views.page_plan_new_plan', name="page_plan_new_plan"),
     url(r'^get_ir_config/$', 'views.get_ir_config', name='get_ir_config'),
-    
+
     url(r'^page_plan_new_template_by_sample/(\d+)/$', 'views.page_plan_new_template_by_sample', name="page_plan_new_template_by_sample"),
     url(r'^page_plan_new_plan_by_sample/(\d+)/(\d+)$', 'views.page_plan_new_plan_by_sample', name="page_plan_new_plan_by_sample"),
     url(r'^page_plan_by_sample_barcode/$', 'views.page_plan_by_sample_barcode', name="page_plan_by_sample_barcode"),
@@ -47,9 +47,10 @@ urlpatterns = patterns(
     url(r'^template/(\d+)/copy/$', 'views.copy_plan_template', name='copy_plan_template'),
     url(r'^template/(?P<pks>[\d,]+)/delete/$', 'views.delete_plan_template', name='delete_plan_template'),
     url(r'^createplanrunfromtemplate/(\d+)/$', 'views.create_plan_from_template', name='create_plan_from_template'),
-    url(r'^reviewtemplate/(\d+)/$', 'views.review_plan_template', name='review_plan_template'),
 
-    url(r'^reviewplan/(\d+)/$', 'views.review_plan_run', name='review_plan_run'),
+    url(r'^reviewplan/(?P<pk>\d+)/$', PlanDetailView.as_view(), name='review_plan'),
+    url(r'^reviewplan/(?P<pk>\d+)/(?P<report_pk>\d+)/$', PlanDetailView.as_view(), name='review_plan'),
+
     url(r'^planned/(\d+)/edit/$', 'views.edit_plan_run', name='edit_plan_run'),
     url(r'^planned/(\d+)/copy/$', 'views.copy_plan_run', name='copy_plan_run'),
     url(r'^save/(\d+)/$', 'views.save_plan_or_template', name='save_plan_or_template'),
@@ -60,4 +61,7 @@ urlpatterns = patterns(
     url(r'^uploadplansfortemplate/$', 'views.upload_plans_for_template', name='upload_plans_for_template'),
     url(r'^saveuploadedplansfortemplate/$', 'views.save_uploaded_plans_for_template', name='save_uploaded_plans_for_template'),
     url(r'^template/(?P<templateId>\d+)/planCount/(?P<count>\d+)/getcsvforbatchplanning.csv/$', 'views.getCSV_for_batch_planning', name='getCSV_for_batch_planning'),
+    
+    url(r'^toggle_template_favorite/(\d+)/$', 'views.toggle_template_favorite', name="toggle_template_favorite"),
+       
 )

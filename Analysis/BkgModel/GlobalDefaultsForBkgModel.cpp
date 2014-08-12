@@ -7,55 +7,34 @@
 #include "IonErr.h"
 #include "json/json.h"
 #include <boost/algorithm/string/predicate.hpp>
+#include <ctype.h>
+#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include "BkgMagicDefines.h"
+#include "ChipIdDecoder.h"
 
-
-static float _kmax_default[NUMNUC]  = { 18.0,   20.0,   17.0,   18.0 };
-static float _krate_default[NUMNUC] = { 18.78,   20.032,   25.04,   31.3 };
-static float _d_default[NUMNUC]     = {159.923,189.618,227.021,188.48};
-static float _sigma_mult_default[NUMNUC] = {1.162,1.124,1.0,0.8533};
-static float _t_mid_nuc_delay_default[NUMNUC] = {0.69,1.78,0.01,0.17};
-static float _clonal_call_scale[MAGIC_CLONAL_CALL_ARRAY_SIZE] = {0.902,0.356,0.078,0.172,0.436,0.0,0.0,0.0,0.0,0.0,0.0,0.0};
-static float  _emp[NUMEMPHASISPARAMETERS]  = {6.86, 1.1575, 2.081, 1.230, 7.2625, 1.91, 0.0425, 19.995};
-static float _dntp_uM[NUMNUC] = {50.0f,50.0f,50.0f,50.0f};
-
-RegionParamDefault::RegionParamDefault()
-{
-  memcpy ( kmax_default,_kmax_default,sizeof ( float[4] ) );
-  memcpy ( krate_default,_krate_default, sizeof ( float[4] ) );
-  memcpy ( d_default,_d_default,sizeof ( float[4] ) );
-  memcpy ( sigma_mult_default, _sigma_mult_default,sizeof ( float[4] ) );
-  memcpy ( t_mid_nuc_delay_default, _t_mid_nuc_delay_default,sizeof ( float[4] ) );
-  memcpy ( dntp_uM, _dntp_uM, sizeof(float[4]));
-  sens_default = 1.256;
-  molecules_to_micromolar_conv = 0.000062f;
-  tau_R_m_default = -24.36;
-  tau_R_o_default = 25.16;
-}
 
 LocalSigProcControl::LocalSigProcControl()
 {
   AmplLowerLimit = 0.001f;
 
 // a set of relevant parameters for allowing the krate to vary
-  krate_adj_limit = 2.0f; // you must be at least this tall to ride the ride
-  dampen_kmult = 0.0f;
-  kmult_low_limit = 0.65;
-  kmult_hi_limit = 1.75f;
 
   ssq_filter = 0.0f;
   choose_time = 0; // normal time compression
 
 
   var_kmult_only = false;
-  generic_test_flag = false;
   projection_search_enable = false;
   fit_alternate = false;
-  fit_gauss_newton = false;
+  fit_gauss_newton = true;
 
   do_clonal_filter = true;
   enable_dark_matter = true;
   use_vectorization = true;
-  proton_dot_wells_post_correction = false;
+  enable_well_xtalk_correction = false;
   single_flow_fit_max_retry = 0;
   per_flow_t_mid_nuc_tracking = false;
   exp_tail_fit = false;
@@ -63,35 +42,115 @@ LocalSigProcControl::LocalSigProcControl()
   regional_sampling = false;
   regional_sampling_type = -1;
   no_RatioDrift_fit_first_20_flows = false;
+  use_alternative_etbR_equation =false;
+
   fitting_taue = false;
+  hydrogenModelType = 0;
   prefilter_beads = false;
   amp_guess_on_gpu = false;
+  recompress_tail_raw_trace = false;
   max_frames = 0;
 }
 
-TimeAndEmphasisDefaults::TimeAndEmphasisDefaults()
+void LocalSigProcControl::PrintHelp()
 {
-  nuc_flow_frame_width = 22.5;  // 1.5 seconds * 15 frames/second
-  time_left_avg = 5;
-  time_start_detail = -5;
-  time_stop_detail = 16;
-  point_emphasis_by_compression = true;
+	printf ("     LocalSigProcControl\n");
+    printf ("     --bkg-kmult-adj-low-hi  FLOAT             setup krate adjust limit [2.0]\n");
+    printf ("     --kmult-low-limit       FLOAT             setup kmult low limit [0.65]\n");
+    printf ("     --kmult-hi-limit        FLOAT             setup kmult high limit [1.75]\n");
+    printf ("     --bkg-ssq-filter-region FLOAT             setup ssq filter region [0.0]\n");
+    printf ("     --bkg-ampl-lower-limit  FLOAT             setup ampl lower limit [-0.5 for Proton; 0.001 for PGM]\n");
 
-  memcpy(emp,_emp,sizeof(float[NUMEMPHASISPARAMETERS]));
-  emphasis_ampl_default = 7.25;
-  emphasis_width_default = 2.89;
+    printf ("     --bkg-exp-tail-fit      BOOL              enable exp tail fitting [true for Proton; false for PGM]\n");
+    printf ("     --time-half-speed       BOOL              reduce choose time by half [false]\n");
+    printf ("     --bkg-pca-dark-matter   BOOL              enable pca dark matter [true for Proton; false for PGM]\n");
+    printf ("     --regional-sampling     BOOL              enable regional sampling [true for Proton; false for PGM]\n");
+    printf ("     --bkg-prefilter-beads   BOOL              use prefilter beads [false]\n");
+    printf ("     --vectorize             BOOL              use vectorization [true]\n");
+    printf ("     --limit-rdr-fit         BOOL              use no ratio drift fit first 20 flows [false]\n");
+    printf ("     --fitting-taue          BOOL              enable fitting taue [false]\n");
+    printf ("     --bkg-single-alternate  BOOL              use fit alternate [false]\n");
+    printf ("     --var-kmult-only        BOOL              use var kmult only [false]\n");
+    printf ("     --incorporation-type    INT               setup hydrogen model type [0]\n");
+    printf ("     --clonal-filter-bkgmodel            BOOL  use clonal filter [false for Proton; true for PGM]\n");
+    printf ("     --bkg-use-proton-well-correction    BOOL  enable well xtalk correction [true for Proton; false for PGM]\n");
+    printf ("     --bkg-per-flow-time-tracking        BOOL  enable per flow time tracking [true for Proton; false for PGM]\n");
+    printf ("     --dark-matter-correction            BOOL  enable dark matter correction [true]\n");
+    printf ("     --single-flow-projection-search     BOOL  enable single flow projection serch [false]\n");
+    printf ("     --use-alternative-etbr-equation     BOOL  use alternative etbR equation [false]\n");
+    printf ("     --bkg-single-gauss-newton           BOOL  use fit gauss newton [true]\n");
+    printf ("     --bkg-recompress-tail-raw-trace     BOOL  use recompress tail raw trace [false]\n");
+    printf ("     --bkg-single-flow-retry-limit       INT   setup single flow fit max retry [0]\n");
+    printf ("\n");
 }
 
-FitterDefaults::FitterDefaults()
+void LocalSigProcControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
-  memcpy(clonal_call_scale,_clonal_call_scale,sizeof(float[MAGIC_CLONAL_CALL_ARRAY_SIZE]));
-  clonal_call_penalty = 1600.0f;
-  shrink_factor = 0.0f;
+	// from PresetDefaultsForBkgModel
+	single_flow_master.krate_adj_limit = RetrieveParameterFloat(opts, json_params, '-', "bkg-kmult-adj-low-hi", 2.0);
+	single_flow_master.kmult_low_limit = RetrieveParameterFloat(opts, json_params, '-', "kmult-low-limit", 0.65);
+	single_flow_master.kmult_hi_limit = RetrieveParameterFloat(opts, json_params, '-', "kmult-hi-limit", 1.75);
+	ssq_filter = RetrieveParameterFloat(opts, json_params, '-', "bkg-ssq-filter-region", 0.0);
+
+	bool do_clonal_filter_def = true;
+	bool enable_well_xtalk_correction_def = false;
+	bool per_flow_t_mid_nuc_tracking_def = false;
+	bool exp_tail_fit_def = false;
+	bool pca_dark_matter_def = false;
+	bool regional_sampling_def = false;
+	float AmplLowerLimit_def = 0.001f;
+	int defaultSffmr = 0;
+	if(ChipIdDecoder::IsProtonChip())
+	{
+		do_clonal_filter_def = false;
+		enable_well_xtalk_correction_def = true;
+		per_flow_t_mid_nuc_tracking_def = true;
+		exp_tail_fit_def = true;
+		pca_dark_matter_def = true;
+		regional_sampling_def = true;
+		AmplLowerLimit_def = -0.5f;
+		if(!fit_gauss_newton)
+		{
+			defaultSffmr = 4;
+		}
+	}
+	do_clonal_filter = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-bkgmodel", do_clonal_filter_def);
+	enable_well_xtalk_correction = RetrieveParameterBool(opts, json_params, '-', "bkg-use-proton-well-correction", enable_well_xtalk_correction_def);
+	per_flow_t_mid_nuc_tracking = RetrieveParameterBool(opts, json_params, '-', "bkg-per-flow-time-tracking", per_flow_t_mid_nuc_tracking_def);
+	exp_tail_fit = RetrieveParameterBool(opts, json_params, '-', "bkg-exp-tail-fit", exp_tail_fit_def);
+	if(exp_tail_fit)
+	{
+		choose_time = 2;
+		bool half_speed = RetrieveParameterBool(opts, json_params, '-', "time-half-speed", false);
+		if(half_speed)
+		{
+			choose_time = 1;
+		}
+	}
+	pca_dark_matter = RetrieveParameterBool(opts, json_params, '-', "bkg-pca-dark-matter", pca_dark_matter_def);
+	regional_sampling = RetrieveParameterBool(opts, json_params, '-', "regional-sampling", regional_sampling_def);
+	regional_sampling_type = RetrieveParameterInt(opts, json_params, '-', "regional_sampling_type", 1);
+	enable_dark_matter = RetrieveParameterBool(opts, json_params, '-', "dark-matter-correction", true);
+	prefilter_beads = RetrieveParameterBool(opts, json_params, '-', "bkg-prefilter-beads", false);
+	use_vectorization = RetrieveParameterBool(opts, json_params, '-', "vectorize", true);
+	AmplLowerLimit = RetrieveParameterFloat(opts, json_params, '-', "bkg-ampl-lower-limit", AmplLowerLimit_def);
+	projection_search_enable = RetrieveParameterBool(opts, json_params, '-', "single-flow-projection-search", false);
+
+	// from OverrideDefaultsForBkgModel//changed
+	no_RatioDrift_fit_first_20_flows = RetrieveParameterBool(opts, json_params, '-', "limit-rdr-fit", false);
+	use_alternative_etbR_equation = RetrieveParameterBool(opts, json_params, '-', "use-alternative-etbr-equation", false);
+
+	fitting_taue = RetrieveParameterBool(opts, json_params, '-', "fitting-taue", false);
+	hydrogenModelType = RetrieveParameterInt(opts, json_params, '-', "incorporation-type", 0);
+//jz	generic_test_flag = RetrieveParameterBool(opts, json_params, '-', "generic-test-flag", false);
+	fit_alternate = RetrieveParameterBool(opts, json_params, '-', "bkg-single-alternate", false);
+	fit_gauss_newton = RetrieveParameterBool(opts, json_params, '-', "bkg-single-gauss-newton", true);
+	single_flow_fit_max_retry = RetrieveParameterInt(opts, json_params, '-', "bkg-single-flow-retry-limit", defaultSffmr);
+	var_kmult_only = RetrieveParameterBool(opts, json_params, '-', "var-kmult-only", false);
+	recompress_tail_raw_trace = RetrieveParameterBool(opts, json_params, '-', "bkg-recompress-tail-raw-trace", false);
 }
 
-void GlobalDefaultsForBkgModel::SetDntpUM ( float concentration, int NucID ) { region_param_start.dntp_uM[NucID] = concentration;  }
-float GlobalDefaultsForBkgModel::GetDntpUM(int NucID) { return region_param_start.dntp_uM[NucID]; }
-void GlobalDefaultsForBkgModel::SetChipType ( char *name )
+void GlobalDefaultsForBkgModel::SetChipType ( const char *name )
 {
   chipType=name;
 }
@@ -100,13 +159,95 @@ void GlobalDefaultsForBkgModel::ReadXtalk ( char *name )
   xtalk_name=name;
 }
 
-void GlobalDefaultsForBkgModel::SetAllConcentrations (float *_dntp_uM){
-    memcpy(region_param_start.dntp_uM,_dntp_uM,sizeof(float[4]));
+
+void GlobalDefaultsForBkgModel::GoptDefaultsFromJson(char *fname){
+  Json::Value all_params;
+  std::ifstream in(fname, std::ios::in);
+
+  if (!in.good()) {
+    printf("Opening gopt parameter file %s unsuccessful. Aborting\n", fname);
+    exit(1);
+  }
+  in >> all_params;
+
+  if (all_params.isMember("parameters")){
+    // strip down to the correct subset of the file
+    Json::Value gopt_params = all_params["parameters"];
+
+    region_param_start.FromJson(gopt_params);
+    data_control.FromJson(gopt_params);
+    fitter_defaults.FromJson(gopt_params);
+  }else{
+    std::cout << "ABORT: gopt file contains no parameters " << fname << "\n";
+    exit(1);
+  }
+  // echo as test
+   //std::cout << gopt_params.toStyledString();
+  in.close();
 }
 
 
 #define MAX_LINE_LEN    2048
 #define MAX_DATA_PTS    80
+
+void GlobalDefaultsForBkgModel::GoptDefaultsFromPoorlyStructuredFile(char *fname){
+  struct stat fstatus;
+  int         status;
+  FILE *param_file;
+  char *line;
+  int nChar = MAX_LINE_LEN;
+  float d[10];
+
+  int num = 0;
+
+  line = new char[MAX_LINE_LEN];
+
+  status = stat ( fname,&fstatus );
+  printf("You are trying to use an obsolete format:  please use json files instead!!!!\n");
+  printf("Continue loading the old format file for now...");
+  //exit(1);  // If I don't force failure, will never be used
+
+  if ( status == 0 )
+  {
+    // file exists
+    printf ( "GOPT: loading parameters from %s\n",fname );
+
+
+    param_file=fopen ( fname,"rt" );
+
+    bool done = false;
+
+    while ( !done )
+    {
+      int bytes_read = getline ( &line, ( size_t * ) &nChar,param_file );
+
+      if ( bytes_read > 0 )
+      {
+        if ( bytes_read >= MAX_LINE_LEN || bytes_read < 0 )
+        {
+          ION_ABORT ( "Read: " + ToStr ( bytes_read ) + " into a buffer only: " +
+                      ToStr ( MAX_LINE_LEN ) + " long for line: '" + ToStr ( line ) + "'" );
+        }
+        line[bytes_read]='\0';
+
+        region_param_start.FromCharacterLine(line);
+        data_control.FromCharacterLine(line);
+        fitter_defaults.FromCharacterLine(line);
+      }
+      else
+        done = true;
+    }
+
+    fclose ( param_file );
+  }
+  else{
+    printf ( "GOPT: parameter file %s does not exist, Aborting\n",fname );
+    exit(1);
+  }
+
+  delete [] line;
+}
+
 // Load optimized defaults from GeneticOptimizer runs
 void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname )
 {
@@ -119,172 +260,13 @@ void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname )
     isJson = true;
   //json way
   if(isJson){
-      Json::Value gopt_params;
-      std::ifstream in(fname, std::ios::in);
-
-      if (!in.good()) {
-        printf("Opening gopt parameter file %s unsuccessful. Aborting\n", fname);
-        exit(1);
-      }
-      in >> gopt_params;
-
-      const Json::Value km_const = gopt_params["parameters"]["km_const"];
-      for ( int index = 0; index < (int) km_const.size(); ++index )
-         region_param_start.kmax_default[index] = km_const[index].asFloat();
-
-      const Json::Value krate = gopt_params["parameters"]["krate"];
-      for ( int index = 0; index < (int) krate.size(); ++index )
-         region_param_start.krate_default[index] = krate[index].asFloat();
-
-      const Json::Value d_coeff = gopt_params["parameters"]["d_coeff"];
-      for ( int index = 0; index < (int) d_coeff.size(); ++index )
-         region_param_start.d_default[index] = d_coeff[index].asFloat();
-
-      const Json::Value sigma_mult = gopt_params["parameters"]["sigma_mult"];
-      for ( int index = 0; index < (int) sigma_mult.size(); ++index )
-         region_param_start.sigma_mult_default[index] = sigma_mult[index].asFloat();
-
-      const Json::Value t_mid_nuc_delay = gopt_params["parameters"]["t_mid_nuc_delay"];
-      for ( int index = 0; index < (int) t_mid_nuc_delay.size(); ++index )
-         region_param_start.t_mid_nuc_delay_default[index] = t_mid_nuc_delay[index].asFloat();
-
-      region_param_start.sens_default = gopt_params["parameters"]["sens"].asFloat();
-      region_param_start.molecules_to_micromolar_conv = gopt_params["parameters"]["molecules_to_micromolar_conv"].asFloat();
-      region_param_start.tau_R_m_default = gopt_params["parameters"]["tau_R_m"].asFloat();
-      region_param_start.tau_R_o_default = gopt_params["parameters"]["tau_R_o"].asFloat();
-
-      const Json::Value emphasis = gopt_params["parameters"]["emphasis"];
-      for ( int index = 0; index < (int) emphasis.size(); ++index )
-         data_control.emp[index] = emphasis[index].asFloat();
-
-      data_control.emphasis_ampl_default = gopt_params["parameters"]["emp_amplitude"].asFloat();
-      data_control.emphasis_width_default = gopt_params["parameters"]["emp_width"].asFloat();
-
-      const Json::Value clonal_call_scale = gopt_params["parameters"]["clonal_call_scale"];
-      for ( int index = 0; index < (int) clonal_call_scale.size(); ++index )
-         fitter_defaults.clonal_call_scale[index] = clonal_call_scale[index].asFloat();
-
-      fitter_defaults.shrink_factor = gopt_params["parameters"]["shrink_factor"].asFloat();
-
-      in.close();
+    GoptDefaultsFromJson(fname);
   } else{
       //old way
-      struct stat fstatus;
-      int         status;
-      FILE *param_file;
-      char *line;
-      int nChar = MAX_LINE_LEN;
-      float d[10];
+    GoptDefaultsFromPoorlyStructuredFile(fname);
 
-      int num = 0;
-
-      line = new char[MAX_LINE_LEN];
-
-      status = stat ( fname,&fstatus );
-
-      if ( status == 0 )
-      {
-        // file exists
-        printf ( "GOPT: loading parameters from %s\n",fname );
-
-        param_file=fopen ( fname,"rt" );
-
-        bool done = false;
-
-        while ( !done )
-        {
-          int bytes_read = getline ( &line, ( size_t * ) &nChar,param_file );
-
-          if ( bytes_read > 0 )
-          {
-            if ( bytes_read >= MAX_LINE_LEN || bytes_read < 0 )
-            {
-              ION_ABORT ( "Read: " + ToStr ( bytes_read ) + " into a buffer only: " +
-                          ToStr ( MAX_LINE_LEN ) + " long for line: '" + ToStr ( line ) + "'" );
-            }
-            line[bytes_read]='\0';
-            if ( strncmp ( "km_const",line,8 ) == 0 )
-            {
-              num = sscanf ( line,"km_const: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
-              if ( num > 0 )
-                for ( int i=0;i<NUMNUC;i++ ) region_param_start.kmax_default[i] = d[i];
-            }
-            if ( strncmp ( "krate",line,5 ) == 0 )
-            {
-              num = sscanf ( line,"krate: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
-              if ( num > 0 )
-                for ( int i=0;i<NUMNUC;i++ ) region_param_start.krate_default[i] = d[i];
-            }
-            if ( strncmp ( "d_coeff",line,7 ) == 0 )
-            {
-              num = sscanf ( line,"d_coeff: %f %f %f %f",&d[0],&d[1],&d[2],&d[3] );
-              if ( num > 0 )
-                for ( int i=0;i<NUMNUC;i++ ) region_param_start.d_default[i] = d[i];
-            }
-            if ( strncmp ( "n_to_uM_conv",line,12 ) == 0 )
-              num = sscanf ( line,"n_to_uM_conv: %f",&region_param_start.molecules_to_micromolar_conv );
-            if ( strncmp ( "sens",line,4 ) == 0 )
-              num = sscanf ( line,"sens: %f",&region_param_start.sens_default );
-            if ( strncmp ( "tau_R_m",line,7 ) == 0 )
-              num = sscanf ( line,"tau_R_m: %f",&region_param_start.tau_R_m_default );
-            if ( strncmp ( "tau_R_o",line,7 ) == 0 )
-              num = sscanf ( line,"tau_R_o: %f",&region_param_start.tau_R_o_default );
-            if ( strncmp ( "sigma_mult", line, 10 ) == 0 )
-            {
-              num = sscanf ( line,"sigma_mult: %f %f %f %f", &d[0],&d[1],&d[2],&d[3] );
-              for ( int i=0;i<num;i++ ) region_param_start.sigma_mult_default[i]=d[i];
-            }
-            if ( strncmp ( "t_mid_nuc_delay", line, 15 ) == 0 )
-            {
-              num = sscanf ( line,"t_mid_nuc_delay: %f %f %f %f", &d[0],&d[1],&d[2],&d[3] );
-              for ( int i=0;i<num;i++ ) region_param_start.t_mid_nuc_delay_default[i]=d[i];
-            }
-            if ( strncmp ( "emphasis",line,8 ) == 0 )
-            {
-              num = sscanf ( line,"emphasis: %f %f %f %f %f %f %f %f", &d[0],&d[1],&d[2],&d[3],&d[4],&d[5],&d[6],&d[7] );
-              for ( int i=0;i<num;i++ ) data_control.emp[i]=d[i];
-            }
-            if ( strncmp ( "emp_amp",line,7 ) == 0 )
-              num = sscanf ( line,"emp_amplitude: %f",&data_control.emphasis_ampl_default );
-            if ( strncmp ( "emp_width",line,7 ) == 0 )
-              num = sscanf ( line,"emp_width: %f",&data_control.emphasis_width_default );
-
-            if ( strncmp ( "clonal_call_scale",line,17 ) == 0 )
-            {
-              num = sscanf ( line,"clonal_call_scale: %f %f %f %f %f", &d[0],&d[1],&d[2],&d[3],&d[4] );
-              for ( int i=0;i<num;i++ ) fitter_defaults.clonal_call_scale[i]=d[i];
-            }
-            if ( strncmp ( "shrink_factor:", line, 14 ) == 0 )
-            {
-              float t_shrink;
-              num = sscanf ( line,"shrink_factor: %f", &t_shrink );
-              fitter_defaults.shrink_factor = t_shrink;
-            }
-            if ( strncmp ( "nuc_flow_timing", line, 15 ) == 0 )
-            {
-              num = sscanf ( line,"nuc_flow_frame_width: %f", &d[0] );
-              data_control.nuc_flow_frame_width = d[0];
-            }
-            if ( strncmp ( "time_compression", line, 16 ) == 0 )
-            {
-              num = sscanf ( line,"time_compression: %f %f %f", &d[0], &d[1],&d[2] );
-              data_control.time_left_avg = d[0];
-              data_control.time_start_detail = d[1];
-              data_control.time_stop_detail = d[2];
-            }
-          }
-          else
-            done = true;
-        }
-
-        fclose ( param_file );
-      }
-      else
-        printf ( "GOPT: parameter file %s does not exist\n",fname );
-
-      delete [] line;
   }
-
+  region_param_start.BadIdeaComputeDerivedInput();
   DumpExcitingParameters("default");
 }
 
@@ -293,25 +275,15 @@ void GlobalDefaultsForBkgModel::DumpExcitingParameters(char *fun_string)
       //output defaults used
     printf ( "%s parameters used: \n",fun_string );
 
-    printf ( "kmax: %f\t%f\t%f\t%f\n",region_param_start.kmax_default[0],region_param_start.kmax_default[1],region_param_start.kmax_default[2],region_param_start.kmax_default[3] );
-    printf ( "krate: %f\t%f\t%f\t%f\n",region_param_start.krate_default[0],region_param_start.krate_default[1],region_param_start.krate_default[2],region_param_start.krate_default[3] );
-    printf ( "d: %f\t%f\t%f\t%f\n",region_param_start.d_default[0],region_param_start.d_default[1],region_param_start.d_default[2],region_param_start.d_default[3] );
-    printf ( "sigma_mult: %f\t%f\t%f\t%f\n",region_param_start.sigma_mult_default[0],region_param_start.sigma_mult_default[1],region_param_start.sigma_mult_default[2],region_param_start.sigma_mult_default[3] );
-    printf ( "t_mid_nuc_delay: %f\t%f\t%f\t%f\n",region_param_start.t_mid_nuc_delay_default[0],region_param_start.t_mid_nuc_delay_default[1],region_param_start.t_mid_nuc_delay_default[2],region_param_start.t_mid_nuc_delay_default[3] );
-    printf ( "sens: %f\n",region_param_start.sens_default );
-    printf ( "molecules_to_micromolar_conv: %f\n",region_param_start.molecules_to_micromolar_conv );
-    printf ( "tau_R_m: %f\n",region_param_start.tau_R_m_default );
-    printf ( "tau_R_o: %f\n",region_param_start.tau_R_o_default );
+    region_param_start.DumpPoorlyStructuredText();
+    data_control.DumpPoorlyStructuredText();
+    fitter_defaults.DumpPoorlyStructuredText();
 
-    printf ( "emp: %f\t%f\t%f\t%f\t%f\t%f\t%f\t%f\n",data_control.emp[0],data_control.emp[1],data_control.emp[2],data_control.emp[3],data_control.emp[4],data_control.emp[5],data_control.emp[6],data_control.emp[7] );
-    printf ( "emp_amplitude: \t%f\n",data_control.emphasis_ampl_default );
-    printf ( "emp_width: \t%f\n",data_control.emphasis_width_default );
-    printf ( "clonal_call_scale: %f\t%f\t%f\t%f\t%f\n",fitter_defaults.clonal_call_scale[0], fitter_defaults.clonal_call_scale[1], fitter_defaults.clonal_call_scale[2], fitter_defaults.clonal_call_scale[3], fitter_defaults.clonal_call_scale[4] );
-    printf( "shrink_factor: %f\n", fitter_defaults.shrink_factor);
     printf ( "\n" );
 }
 
 // This function is used during GeneticOptimizer runs in which case the above SetGoptDefaults is disabled
+//@TODO: 300 line redundant function - why do we do things in badly structured ways?
 void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentName )
 {
   char fname[512];
@@ -594,48 +566,136 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
   }
 
   delete [] line;
+  region_param_start.BadIdeaComputeDerivedInput();
 
   DumpExcitingParameters("GOPT");
 }
 
-///-----------------yet another flow object
-
-FlowMyTears::FlowMyTears()
+void GlobalDefaultsForBkgModel::PrintHelp()
 {
-  flow_order_len = 4;
+	printf ("     GlobalDefaultsForBkgModel\n");
+	printf ("     --bkg-well-xtalk-name   FILE              well xtalk file name []\n");
+    printf ("     --gopt                  STRING            setup gopte [default]\n");
+    printf ("     --xtalk                 STRING            setup xtalk [disable]\n");
+    printf ("     --bkg-dont-emphasize-by-compression BOOL  not empasized by compression [false]\n");
+    printf ("\n");
+
+	signal_process_control.PrintHelp();
 }
 
-void FlowMyTears::SetFlowOrder ( char *_flowOrder )
+void GlobalDefaultsForBkgModel::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
-  flowOrder      = _flowOrder;
-  flow_order_len = flowOrder.length();
-  glob_flow_ndx_map.resize(flow_order_len);
+	// from SetBkgModelGlobalDefaults
+	chipType = GetParamsString(json_params, "chipType", "");
+	string results_folder = GetParamsString(json_params, "results_folder", "");
 
-  for (int i=0; i<flow_order_len; ++i)
-  {
-    switch ( toupper ( flowOrder[i] ) )
-    {
-      case 'T':
-        glob_flow_ndx_map[i]=TNUCINDEX;
-        break;
-      case 'A':
-        glob_flow_ndx_map[i]=ANUCINDEX;
-        break;
-      case 'C':
-        glob_flow_ndx_map[i]=CNUCINDEX;
-        break;
-      case 'G':
-        glob_flow_ndx_map[i]=GNUCINDEX;
-        break;
-      default:
-        glob_flow_ndx_map[i]=DEFAULTNUCINDEX;
-        break;
-    }
-  }
-}
+	string gopt = RetrieveParameterString(opts, json_params, '-', "gopt", "default");
 
-void FlowMyTears::GetFlowOrderBlock ( int *my_flow, int i_start, int i_stop )
-{
-  for ( int i=i_start; i<i_stop; i++ )
-    my_flow[i-i_start] = GetNucNdx ( i );
+	if(gopt != "disable")
+	{
+		if(gopt == "default")
+		{
+			string filename = "gopt_";
+			filename += chipType;
+			filename += ".param.json";
+
+			char *tmp_config_file = NULL;
+			tmp_config_file = GetIonConfigFile (filename.c_str());
+			SetGoptDefaults(tmp_config_file);
+			if (tmp_config_file)
+			  free(tmp_config_file);
+		}
+		else if(gopt == "opt")
+		{
+			string filename = "gopt_";
+			filename += chipType;
+			filename += ".param.json";
+
+			char *tmp_config_file = GetIonConfigFile (filename.c_str());
+
+			if (tmp_config_file == NULL){ // if gopt default file does not exist, try KnownAlternate_chiptype
+				string chipType2 = get_KnownAlternate_chiptype(chipType);
+				filename = "gopt_";
+				filename += chipType2;
+				filename += ".param.json";
+				tmp_config_file = GetIonConfigFile (filename.c_str());
+			}
+
+			SetGoptDefaults(tmp_config_file);
+			if (tmp_config_file)
+			  free(tmp_config_file);
+
+			ReadEmphasisVectorFromFile ((char*)(results_folder.c_str()));   //GeneticOptimizer run - load its vector
+		}
+		else
+		{
+		    SetGoptDefaults ((char*)(gopt.c_str())); //parameter file provided cmd-line
+			// still do opt if the emphasis_vector.txt file exists
+			char fname[512];
+			sprintf ( fname,"%s/emphasis_vector.txt", results_folder.c_str() );
+			struct stat fstatus;
+			int status = stat ( fname,&fstatus );
+			if ( status == 0 )    // file exists
+				ReadEmphasisVectorFromFile ((char*)(results_folder.c_str()));   //GeneticOptimizer run - load its vector
+		}
+	}
+
+	signal_process_control.SetOpts(opts, json_params);
+	bool dont_emphasize_by_compression = RetrieveParameterBool(opts, json_params, '-', "bkg-dont-emphasize-by-compression", false);
+	data_control.point_emphasis_by_compression = (!dont_emphasize_by_compression);
+
+	// from SetupXtalkParametersForBkgModel
+	string trace_xtalk_name = RetrieveParameterString(opts, json_params, '-', "xtalk", "disable");
+	
+	// search for config file for chip type
+	if(trace_xtalk_name.length() == 0)
+	{
+		// create default param file name
+		string filename = "xtalk_";
+		filename += chipType;
+		filename += ".param";
+		char *filename2 = NULL;
+		filename2 = GetIonConfigFile(filename.c_str());
+		if(!filename2)
+		{
+			xtalk_name = ""; // nothing found
+		}
+		else
+		{
+			trace_xtalk_name = filename2;
+		}
+	}
+
+	// set defaults if nothing set at all
+	if(trace_xtalk_name.length() > 0)
+	{
+		if(trace_xtalk_name == "local")
+		{
+			xtalk_name = results_folder;
+			xtalk_name += "/my_xtalk.txt";// rerunning in local directory for optimization purposes
+		}
+		else if(trace_xtalk_name != "disable") // disabled = don't load
+		{
+			xtalk_name = trace_xtalk_name;
+		}
+		else
+		{
+			xtalk_name = "";
+		}
+	}
+
+	// now handle well based xtalk parameters
+	// currently just set the default
+	// but need to have file, activation, etc.
+	string well_xtalk_name = RetrieveParameterString(opts, json_params, '-', "bkg-well-xtalk-name", "");
+	if(well_xtalk_name.length() > 0)
+	{
+		// assume the explicit file rather than searching all over
+		well_xtalk_master.ReadFromFile(well_xtalk_name);
+		signal_process_control.enable_well_xtalk_correction = true; // if you have speced a file, assume you want to do this
+	}
+	else
+	{
+		well_xtalk_master.DefaultPI();
+	}
 }

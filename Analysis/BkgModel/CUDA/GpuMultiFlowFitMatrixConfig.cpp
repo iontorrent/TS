@@ -3,7 +3,7 @@
 #include "CudaDefines.h"
 #include "GpuMultiFlowFitMatrixConfig.h"
 
-GpuMultiFlowFitMatrixConfig::GpuMultiFlowFitMatrixConfig(fit_descriptor* fd, CpuStep_t* Steps, int maxSteps)
+GpuMultiFlowFitMatrixConfig::GpuMultiFlowFitMatrixConfig(fit_descriptor* fd, CpuStep* Steps, int maxSteps, int flow_key, int flow_block_size)
 {
    // num of partial derivative steps to compute for this fit descriptor
    _numSteps = GetNumParDerivStepsForFitDescriptor(fd);
@@ -12,7 +12,7 @@ GpuMultiFlowFitMatrixConfig::GpuMultiFlowFitMatrixConfig(fit_descriptor* fd, Cpu
    _numSteps = _numSteps + 2; // Need to calculate FVAL and YERR always
 
    // calculate num of params to fit based on param sensitivity classification
-   _numParamsToFit = GetNumParamsToFitForDescriptor(fd);
+   _numParamsToFit = GetNumParamsToFitForDescriptor(fd, flow_key, flow_block_size);
 
    // collect partial derivative steps from Steps structure in 
    // BkgFitStructures.cpp for this fit
@@ -23,7 +23,7 @@ GpuMultiFlowFitMatrixConfig::GpuMultiFlowFitMatrixConfig(fit_descriptor* fd, Cpu
   _paramToStepMap = new unsigned int[_numParamsToFit];
   _jtjMatrixBitMap = new unsigned int[_numParamsToFit*_numParamsToFit];
 
-  CreateAffectedFlowsVector(fd);
+  CreateAffectedFlowsVector(fd, flow_key, flow_block_size);
   CreateBitMapForJTJMatrixComputation();
 }
 
@@ -36,9 +36,9 @@ GpuMultiFlowFitMatrixConfig::~GpuMultiFlowFitMatrixConfig()
   delete [] _paramToStepMap;
 }
 
-void GpuMultiFlowFitMatrixConfig::CreatePartialDerivStepsVector(fit_descriptor* fd, CpuStep_t* Steps, int maxSteps)
+void GpuMultiFlowFitMatrixConfig::CreatePartialDerivStepsVector(fit_descriptor* fd, CpuStep* Steps, int maxSteps)
 {
-  _partialDerivSteps = new CpuStep_t[_numSteps];
+  _partialDerivSteps = new CpuStep[_numSteps];
 
   if (Steps[0].PartialDerivMask == FVAL)
     _partialDerivSteps[0] = Steps[0];
@@ -59,19 +59,30 @@ void GpuMultiFlowFitMatrixConfig::CreatePartialDerivStepsVector(fit_descriptor* 
   } 
 }
 
-void GpuMultiFlowFitMatrixConfig::CreateAffectedFlowsVector(fit_descriptor* fd)
+void GpuMultiFlowFitMatrixConfig::CreateAffectedFlowsVector(
+    fit_descriptor* fd, 
+    int flow_key, 
+    int flow_block_size
+  )
 {
+  BeadParams dummyBead;
+  reg_params dummyReg;
+
   unsigned int paramIdx = 0;  
   unsigned int actualStep = 1;
   for (int i=0; fd[i].comp != TBL_END; ++i)
   {
+    // Calculate a base index for reaching into the BeadParams / reg_params structure.
+    unsigned int baseIndex = fd[i].bead_params_func ? ( dummyBead.*( fd[i].bead_params_func ))() - reinterpret_cast< float * >( & dummyBead )
+                                                    : ( dummyReg .*( fd[i].reg_params_func  ))() - reinterpret_cast< float * >( & dummyReg );
+            
     switch(fd[i].ptype)
     {
       case ParamTypeAllFlow:
-        _paramIdxMap[paramIdx] = fd[i].param_ndx;
+        _paramIdxMap[paramIdx] = baseIndex;
         _paramToStepMap[paramIdx] = actualStep;
         _affectedFlowsForParamsBitMap[paramIdx] = 0;
-        for (int j=0; j<NUMFB; ++j) 
+        for (int j=0; j<flow_block_size; ++j) 
         { 
           _affectedFlowsForParamsBitMap[paramIdx] |= (1 << j);
           //printf("%u %u %x\n", _paramToStepMap[paramIdx], paramIdx, _affectedFlowsForParamsBitMap[paramIdx]);
@@ -80,9 +91,9 @@ void GpuMultiFlowFitMatrixConfig::CreateAffectedFlowsVector(fit_descriptor* fd)
       break;
       case ParamTypeNotKey:
         // create an independent paramter per flow except for key flows
-        for (int j=KEY_LEN; j<NUMFB; ++j)
+        for (int j=flow_key; j<flow_block_size; ++j)
         {
-          _paramIdxMap[paramIdx] = fd[i].param_ndx + (j-KEY_LEN);
+          _paramIdxMap[paramIdx] = baseIndex + (j-flow_key);
           _paramToStepMap[paramIdx] = actualStep;
           _affectedFlowsForParamsBitMap[paramIdx] = 0;
           _affectedFlowsForParamsBitMap[paramIdx] |= (1 << j);
@@ -92,20 +103,20 @@ void GpuMultiFlowFitMatrixConfig::CreateAffectedFlowsVector(fit_descriptor* fd)
         break;
       case ParamTypeAllButFlow0:
         // create an independent paramter per flow except for the first flow
-        for (int j=1; j < NUMFB; ++j)
+        for (int j=1; j < flow_block_size; ++j)
         {
-	  _paramIdxMap[paramIdx] = fd[i].param_ndx+ (j-1);
-	  _paramToStepMap[paramIdx] = actualStep;
-	  _affectedFlowsForParamsBitMap[paramIdx] = 0;
-	  _affectedFlowsForParamsBitMap[paramIdx] |= (1 << j);
-	  paramIdx++;
-	}
-	break;
+          _paramIdxMap[paramIdx] = baseIndex+ (j-1);
+          _paramToStepMap[paramIdx] = actualStep;
+          _affectedFlowsForParamsBitMap[paramIdx] = 0;
+          _affectedFlowsForParamsBitMap[paramIdx] |= (1 << j);
+          paramIdx++;
+        }
+        break;
       case ParamTypePerFlow:
         // create an independent paramter per flow
-        for (int j=0; j < NUMFB; ++j)
+        for (int j=0; j < flow_block_size; ++j)
         {
-          _paramIdxMap[paramIdx] = fd[i].param_ndx + j;
+          _paramIdxMap[paramIdx] = baseIndex + j;
           _paramToStepMap[paramIdx] = actualStep;
           _affectedFlowsForParamsBitMap[paramIdx] = 0;
           _affectedFlowsForParamsBitMap[paramIdx] |= (1 << j);

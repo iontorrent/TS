@@ -1,0 +1,105 @@
+---
+# file: roles/fileserver/tasks/main.yml
+
+# iptables configuration
+- name: iptables
+  template: src=iptables.template dest=/etc/iptables.rules
+  notify: load iptables
+  
+- name: customized iptables
+  command: /usr/bin/touch /etc/iptables.custom owner=root mode=0644
+  notify: load custom iptables
+  
+- name: modify /etc/network/interfaces to enable firewall rules
+  lineinfile: dest=/etc/network/interfaces
+                state=present
+                regexp='pre-up iptables-restore.*iptables.rules'
+                line='pre-up iptables-restore < /etc/iptables.rules'
+  
+- name: modify /etc/network/interfaces to enable custom firewall rules
+  lineinfile: dest=/etc/network/interfaces
+                state=present
+                regexp='pre-up iptables-restore.*iptables.custom'
+                line='pre-up iptables-restore --noflush < /etc/iptables.custom'
+   
+# network interfaces configuration
+- name: copy network_interfaces script file
+  copy: src=network_interfaces.sh dest=/tmp/network_interfaces.sh mode=0775
+  
+- name: create interfaces
+  command: /tmp/network_interfaces.sh
+  register: output
+  notify: restart network
+  
+- debug: msg="{{item}}"
+  with_items: output.stdout_lines
+  
+# ftp configuration
+- name: install vsftpd package
+  apt: name=vsftpd state=latest
+  
+- name: copy ftp configuration script file
+  copy: src=config_ftp.sh dest=/tmp/config_ftp.sh mode=0775
+  
+- name: configure vsftpd
+  command: /tmp/config_ftp.sh
+  register: output
+  notify: restart vsftpd
+  
+- debug: msg="{{item}}"
+  with_items: output.stdout_lines
+  
+# dhcp configuration
+- name: install dhcp3-server package
+  apt: name=dhcp3-server state=latest
+  
+- name: copy dhcp configuration script file
+  copy: src=config_dhcp.sh dest=/tmp/config_dhcp.sh mode=0775
+  
+- name: configure dhcp
+  command: /tmp/config_dhcp.sh
+  register: output
+  notify: restart dhcp
+  
+- debug: msg="{{item}}"
+  with_items: output.stdout_lines
+  
+# ntp configuration
+- name: install ntp server package
+  apt: name=ntp state=latest
+  
+- name: Edit ntp.conf
+  lineinfile: dest=/etc/ntp.conf
+                regexp="^restrict 192\.168\.0\.0.*"
+                line="restrict 192.168.0.0 mask 255.255.0.0 nomodify notrap"
+  notify: restart ntp
+  
+# exportfs configuration of /results
+- name: Status of /results
+  command: /usr/bin/test -d /results
+  register: result
+  ignore_errors: yes
+- name: Exporting /results file system
+  lineinfile: dest=/etc/exports
+                state=present
+                regexp='/results.*{{ansible_default_ipv4.network}}.*'
+                line='/results {{ansible_default_ipv4.network}}/{{CIDR}}(rw,async,subtree_check)'
+  when: result|success
+  notify: restart exportfs
+
+# exportfs configuration of /rawdata
+- name: Status of /rawdata
+  command: /usr/bin/test -d /rawdata
+  register: rawdata
+  ignore_errors: yes
+- name: Exporting /rawdata file system
+  lineinfile: dest=/etc/exports
+                state=present
+                regexp='/rawdata.*{{ansible_default_ipv4.network}}.*'
+                line='/rawdata {{ansible_default_ipv4.network}}/{{CIDR}}(rw,async,subtree_check)'
+  when: rawdata|success
+  notify: restart exportfs
+
+
+  
+

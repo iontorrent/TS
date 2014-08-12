@@ -56,7 +56,7 @@ class Migration(DataMigration):
             currentTime = datetime.datetime.now()
            
             #clone the system default template
-            newSysTemplate = copy.copy(sysDefaultTemplate)
+            newSysTemplate = orm.PlannedExperiment.objects.get(planGUID=sysDefaultTemplate.planGUID)
             newSysTemplate.pk = None                      
             
             newSysTemplate.planDisplayedName = "Ion Proton Human CEPH Control 170"
@@ -84,7 +84,7 @@ class Migration(DataMigration):
 
 
             # copy Experiment
-            expObj = copy.copy(sysDefaultTemplate.experiment)
+            expObj = sysDefaultTemplate.experiment
             expObj.pk = None
             expObj.expName = newSysTemplate.planGUID
             expObj.unique = newSysTemplate.planGUID
@@ -108,11 +108,7 @@ class Migration(DataMigration):
                 print "**** 0205..  after saving new sysTemplate.experiment.eas.id=%d " % (easObj.id)  
 
             #clone the qc thresholds as well
-            qcValues = sysDefaultTemplate.plannedexperimentqc_set.all()
-
-            for qcValue in qcValues:
-                qcObj = copy.copy(qcValue)
-
+            for qcObj in sysDefaultTemplate.plannedexperimentqc_set.all():
                 qcObj.pk = None
                 qcObj.plannedExperiment = newSysTemplate
                 qcObj.save()

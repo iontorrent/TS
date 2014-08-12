@@ -1,5 +1,6 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 from __future__ import division
+import os
 import sys
 sys.path.insert(0, sys.argv[6]+"/code")
 from string import Template
@@ -16,9 +17,9 @@ DATA = PLUGIN_DIR+'/data'
 SRC = PLUGIN_DIR+'/code'
 RAW_SAM_FILE = sys.argv[1] + '/tmap.sam'
 FILTERED_SAM_FILE = sys.argv[1] + '/filtered.sam'
-OUTPUT_DIR = sys.argv[2] + '/plugin_out/'+sys.argv[4]+'_out/'
+OUTPUT_DIR = sys.argv[1] + '/'
 COUNTS_FILE = OUTPUT_DIR + 'ercc.counts'
-COUNTS_URL = sys.argv[3] + '/plugin_out/'+sys.argv[4]+'_out/ercc.counts'
+COUNTS_URL = 'ercc.counts'
 GENOME   = DATA + '/ercc.genome'
 ERCC_CONC = DATA + '/ERCCconcentration.txt'
 ERCC_CONC_COLS = {'ERCC ID': str, 'Pool1': float, 'Pool2': float, 'log2pool1': float, 'log2pool2': float}

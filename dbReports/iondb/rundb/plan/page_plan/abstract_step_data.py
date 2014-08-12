@@ -22,6 +22,7 @@ class AbstractStepData(object):
         self.prepopulatedFields = {}
         self.validationErrors = {}
         self._dependsOn = []
+        self._changedFields = {}
 
     def getCurrentSavedFieldDict(self):
         return self.savedFields
@@ -38,6 +39,9 @@ class AbstractStepData(object):
     def validate(self):
         for key in self.savedFields.keys():
             self.validateField(key, self.savedFields[key])
+
+        self.validateField_crossField_dependencies(self.savedFields.keys(), self.savedFields)
+        
         self.validateStep()
 
     def updateSavedFieldValueFromRequest(self, request, saved_field_name):
@@ -48,12 +52,19 @@ class AbstractStepData(object):
             else:
                 new_value = request.POST.get(saved_field_name, None)
             if new_value != self.savedFields[saved_field_name] and str(new_value) != str(self.savedFields[saved_field_name]):
+                self.updateChangedFields(saved_field_name, self.savedFields[saved_field_name], new_value)
                 self.savedFields[saved_field_name] = new_value
                 retval = True
         elif self.savedFields[saved_field_name]:
             self.savedFields[saved_field_name] = None
             retval = True
         return retval
+
+    def updateChangedFields(self, key, old_value, new_value):
+        if key in self._changedFields:
+            self._changedFields[key][1] = new_value
+        else:
+            self._changedFields[key] = [old_value, new_value]
 
     def validateStep(self):
         '''
@@ -67,6 +78,14 @@ class AbstractStepData(object):
         '''
         return
 
+
+    def validateField_crossField_dependencies(self, fieldNames, fieldValues):
+        '''
+        default overall cross field validations does nothing
+        '''
+        return
+
+            
     def updateSavedObjectsFromSavedFields(self):
         raise NotImplementedError('you must use a subclass to invoke this method')
 

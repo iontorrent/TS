@@ -62,7 +62,7 @@ public:
 
   /** Fill in the data with all zeros. */
   void ZeroData() {
-    fill(mData.begin(), mData.end(), 0.0f);
+    std::fill(mData.begin(), mData.end(), 0.0f);
   }
 
   /** Set the timestamps for the frames. */

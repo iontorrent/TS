@@ -4,7 +4,6 @@
 
 #include <string>
 #include <pthread.h>
-#include "KeyReporter.h"
 #include "SampleStats.h"
 #include "SampleQuantiles.h"
 #include "KeyClassifier.h"
@@ -12,11 +11,11 @@
 #define KEY_SAMPLE_SIZE 1000
 
 template <class T>
-class AvgKeyReporter : public KeyReporter<T> {
+class AvgKeyReporter { 
   
  public:
   AvgKeyReporter(const std::vector<KeySeq> &keys, const std::string &prefix, 
-                 const std::string &flowOrder, const std::string &nukeDir) {
+                 const std::string &flowOrder, const std::string &nukeDir, int nFlows, int nFrames) {
     string s = prefix + ".avg-traces.txt";
     mTraces.open(s.c_str());
     mKeys = keys;
@@ -24,6 +23,14 @@ class AvgKeyReporter : public KeyReporter<T> {
     mFlowOrder = flowOrder;
     mMinPeakSig.resize(keys.size());
     std::fill(mMinPeakSig.begin(), mMinPeakSig.end(), std::numeric_limits<double>::max() * -1);
+    mAvgTraces.resize(keys.size());
+    for (size_t key_ix = 0; key_ix < keys.size(); key_ix++) {
+      mAvgTraces[key_ix].resize(nFlows);
+      for (int flow_ix = 0; flow_ix < nFlows; flow_ix++) {
+        mAvgTraces[key_ix][flow_ix].resize(nFrames);
+      }
+      //      std::fill(mAvgTraces[key_ix][flow_ix].begin(),mAvgTraces[key_ix][flow_ix].end(),0.0f);
+    }
     pthread_mutex_init(&lock, NULL);
   }
 
@@ -37,36 +44,23 @@ class AvgKeyReporter : public KeyReporter<T> {
     mMinPeakSig[key] = val;
   }
 
-  void Report(const KeyFit &fit, 
-              const Mat<T> &wellFlows,
-              const Mat<T> &refFlows,
-              const Mat<T> &predicted) {
-    if (fit.keyIndex < 0 || fit.mad > 50 || refFlows.n_cols == 0) {
-      return;
-    }
-    if (fit.peakSig < mMinPeakSig[fit.keyIndex]) {
-      return;
-    }
+  void Report(EvaluateKey & evaluator) {
     pthread_mutex_lock(&lock);
-    if (fit.keyIndex >= (int)mAvgTraces.size()) {
-      mAvgTraces.resize(fit.keyIndex + 1);
-    }
-    if (mAvgTraces[fit.keyIndex].size() != wellFlows.n_cols) {
-      mAvgTraces[fit.keyIndex].resize(wellFlows.n_cols);
-      for (size_t flowIx = 0; flowIx < mAvgTraces[fit.keyIndex].size(); flowIx++) {
-        mAvgTraces[fit.keyIndex][flowIx].resize(wellFlows.n_rows);
-        /* for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) { */
-        /*   mAvgTraces[fit.keyIndex][flowIx][frameIx].Init(KEY_SAMPLE_SIZE); */
-        /* } */
+    for (size_t keyIx = 0; keyIx < mKeys.size(); keyIx++) {
+      if (evaluator.m_key_counts[keyIx] < 500) {
+        continue;
       }
-    }
-    for (size_t flowIx = 0; flowIx < mAvgTraces[fit.keyIndex].size(); flowIx++) {
-      for (size_t frameIx = 0; frameIx < wellFlows.n_rows; frameIx++) {
-        double d = wellFlows.at(frameIx,flowIx) - predicted.at(frameIx,flowIx);
-        mAvgTraces[fit.keyIndex][flowIx][frameIx].AddValue(d);
-      }
+      int flowFrameStride = evaluator.m_num_flows * evaluator.m_num_frames;
+      int keyOffset = keyIx * flowFrameStride;
+      for (size_t flowIx = 0; flowIx < mAvgTraces[keyIx].size(); flowIx++) {
+        for (size_t frameIx = 0; frameIx < mAvgTraces[keyIx][flowIx].size(); frameIx++) {
+          double d = evaluator.m_flow_key_avg[keyOffset + flowIx * evaluator.m_num_frames + frameIx];
+          mAvgTraces[keyIx][flowIx][frameIx].AddValue(d);
+        }
+      }      
     }
     pthread_mutex_unlock(&lock);
+
   }
 
   static std::string NameForKey(const KeySeq &key, const std::string &flowOrder) {

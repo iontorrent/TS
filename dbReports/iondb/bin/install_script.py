@@ -15,6 +15,8 @@ from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.exceptions import ObjectDoesNotExist
 
+from django.core import management
+
 int_test_file = "/opt/ion/.ion-internal-server"
 
 def add_user(username,password):
@@ -26,7 +28,7 @@ def add_user(username,password):
     except:
         #print username, "added"
         user = User.objects.create_user(username,"ionuser@iontorrent.com",password)
-        user.is_staff = True
+        #user.is_staff = True # demoted to block use of admin interface
         user.save()
         return user
 
@@ -295,6 +297,9 @@ def add_or_update_barcode_set(blist,btype,name,adapter):
                 # Make sure id string has zero padded index field
                 bc_found[0].id_str = '%s_%03d' % (name,index)
                 
+                # update type
+                bc_found[0].type = btype
+                
                 # Save changes to database
                 bc_found[0].save()
                 
@@ -438,7 +443,7 @@ def add_ion_xpress_dnabarcode_set():
            'TTAAGCGGTC',    #96
            
            ]
-    btype='none'
+    btype=''
     name='IonXpress'
     adapter = 'GAT'
     
@@ -463,7 +468,7 @@ def add_ion_xpress_rna_dnabarcode_set():
            'TCTAGAGGTC',    #15
            'TCTGGATGAC',    #16                    
            ]
-    btype='none'
+    btype='rna'
     name='IonXpressRNA'
     adapter = 'GGCCAAGGCG'
     
@@ -473,7 +478,7 @@ def add_ion_xpress_rna_dnabarcode_set():
 def add_ion_xpress_rna_adapter_dnabarcode_set():
     blist=['GGCCAAGGCG',    #adapter only                
            ]
-    btype='none'
+    btype='rna'
     name='RNA_Barcode_None'
     adapter = ''
     
@@ -503,6 +508,9 @@ def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff 
                 # Make sure id string has zero padded index field
                 bc_found[0].id_str = '%s_%02d' % (name,index)
                 
+                # update type
+                bc_found[0].type = btype
+                                
                 # Save changes to database
                 bc_found[0].save()
                 
@@ -565,7 +573,7 @@ def add_or_update_ion_dnabarcode_set():
         "TCATGATCAAC",
         "TGACCGCATCC",
         "TGGTGTAGCAC"]
-    btype='none'
+    btype=''
     name='IonSet1'
     adapter = 'CTGCTGTACGGCCAAGGCGT'
 
@@ -842,6 +850,14 @@ def add_prune_group(_item):
     obj.ruleNums = getRuleNums(_item['ruleList'])
     obj.save()
         
+
+def load_dbData(file_name):
+    """
+    load system data to db
+    """
+    print "Loading data to iondb..."
+    management.call_command('loaddata', file_name)  
+    
     
 if __name__=="__main__":
 
@@ -900,12 +916,12 @@ if __name__=="__main__":
         # information for customer support.
         lab = add_user("lab_contact","lab_contact")
         if lab is not None:
-            lab_profile = lab.get_profile()
+            lab_profile = lab.userprofile
             lab_profile.title = "Lab Contact"
             lab_profile.save()
         it = add_user("it_contact","it_contact")
         if it is not None:
-            it_profile = it.get_profile()
+            it_profile = it.userprofile
             it_profile.title = "IT Contact"
             it_profile.save()
     except:
@@ -976,17 +992,18 @@ if __name__=="__main__":
         print traceback.format_exc()
         sys.exit(1)            
         
-    try:
-        add_ThreePrimeadapter('Forward', 'Ion P1B', 'ATCACCGACTGCCCATAGAGAGGCTGAGAC', 'Default forward adapter', True)
-        add_ThreePrimeadapter('Reverse', 'Ion Paired End Rev', 'CTGAGTCGGAGACACGCAGGGATGAGATGG', 'Default reverse adapter', True)
-        add_ThreePrimeadapter('Forward', 'Ion B', 'CTGAGACTGCCAAGGCACACAGGGGATAGG', 'Ion B', False)
-        add_ThreePrimeadapter('Forward', 'Ion Truncated Fusion', 'ATCACCGACTGCCCATCTGAGACTGCCAAG', 'Ion Truncated Fusion', False)
-        ###add_ThreePrimeadapter('Forward', 'Finnzyme', 'TGAACTGACGCACGAAATCACCGACTGCCC', 'Finnzyme', False)
-        add_ThreePrimeadapter('Forward', 'Ion Paired End Fwd', 'GCTGAGGATCACCGACTGCCCATAGAGAGG', 'Ion Paired End Fwd', False)        
-    except:
-        print "Adding 3' adapter failed"
-        print traceback.format_exc()
-        sys.exit(1)
+
+#    try:
+#        add_ThreePrimeadapter('Forward', 'Ion P1B', 'ATCACCGACTGCCCATAGAGAGGCTGAGAC', 'Default forward adapter', True)
+#        add_ThreePrimeadapter('Reverse', 'Ion Paired End Rev', 'CTGAGTCGGAGACACGCAGGGATGAGATGG', 'Default reverse adapter', True)
+#        add_ThreePrimeadapter('Forward', 'Ion B', 'CTGAGACTGCCAAGGCACACAGGGGATAGG', 'Ion B', False)
+#        add_ThreePrimeadapter('Forward', 'Ion Truncated Fusion', 'ATCACCGACTGCCCATCTGAGACTGCCAAG', 'Ion Truncated Fusion', False)
+#        ###add_ThreePrimeadapter('Forward', 'Finnzyme', 'TGAACTGACGCACGAAATCACCGACTGCCC', 'Finnzyme', False)
+#        add_ThreePrimeadapter('Forward', 'Ion Paired End Fwd', 'GCTGAGGATCACCGACTGCCCATAGAGAGG', 'Ion Paired End Fwd', False)        
+#    except:
+#        print "Adding 3' adapter failed"
+#        print traceback.format_exc()
+#        sys.exit(1)
         
     try:
     	add_backupconfig()
@@ -1107,4 +1124,5 @@ if __name__=="__main__":
     ]
     for item in groupList:
         add_prune_group(item)
-        
+    
+    load_dbData("rundb/fixtures/ts_dbData.json")        

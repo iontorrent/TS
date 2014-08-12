@@ -12,6 +12,8 @@ from iondb.rundb.models import RunType, ApplProduct, ApplicationGroup,\
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.plan.page_plan.export_step_data import ExportFieldNames
 
+from iondb.rundb.plan.views_helper import isOCP_enabled, is_operation_supported
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,6 +22,7 @@ class ApplicationFieldNames():
     APPL_PRODUCT = 'applProduct'
     RUN_TYPE = 'runType'
     APPLICATION_GROUP = 'applicationGroup'
+    APPLICATION_GROUP_NAME = "applicationGroupName"
     SAMPLE_GROUPING = 'sampleGrouping'
     RUN_TYPES = 'runTypes'
     APPLICATION_GROUPS = 'applicationGroups'
@@ -28,7 +31,10 @@ class ApplicationFieldNames():
     NAME = 'Name'
     RELATIONSHIP_TYPE = 'RelationshipType'
     VALUES = 'Values'
-
+    PLAN_STATUS = "planStatus"
+    UPDATE_KITS_DEFAULTS = 'updateKitsDefaults'
+    CATEGORIES = "categories"
+    
 class ApplicationStepData(AbstractStepData):
 
     def __init__(self):
@@ -39,11 +45,24 @@ class ApplicationStepData(AbstractStepData):
         
         self.savedFields[ApplicationFieldNames.RUN_TYPE] = None
         self.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = None
+        self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = None        
         self.savedFields[ApplicationFieldNames.SAMPLE_GROUPING] = None
+        self.savedFields[ApplicationFieldNames.PLAN_STATUS] = ""
+        self.savedFields[ApplicationFieldNames.CATEGORIES] = ''
+         
         self.savedObjects[ApplicationFieldNames.RUN_TYPE] = None
         self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = None
+        self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = True
         self.prepopulatedFields[ApplicationFieldNames.RUN_TYPES] = list(RunType.objects.all().order_by('nucleotideType', 'runType'))
+
+#        isSupported = isOCP_enabled()
+#        if isSupported:
+#            self.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUPS] = ApplicationGroup.objects.filter(isActive=True).order_by('uid')
+#        else:
+#            self.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUPS] = ApplicationGroup.objects.filter(isActive=True).exclude(name = "DNA + RNA").order_by('uid')
+
         self.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUPS] = ApplicationGroup.objects.filter(isActive=True).order_by('uid')
+                                                                                                                                                             
         # self.prepopulatedFields[ApplicationFieldNames.SAMPLE_GROUPINGS] = SampleGroupType_CV.objects.filter(isActive=True).order_by('uid')
         # self._dependsOn = [StepNames.EXPORT]
 
@@ -51,7 +70,10 @@ class ApplicationStepData(AbstractStepData):
     def getStepName(self):
         return StepNames.APPLICATION
 
-    def updateSavedObjectsFromSavedFields(self):
+    def updateSavedObjectsFromSavedFields(self):        
+        #logger.debug("ENTER application_step_data.updateSavedObjectsFromSavedFields() self.savedFields=%s" %(self.savedFields))
+        previous_run_type = self.savedObjects[ApplicationFieldNames.RUN_TYPE]
+        
         if self.savedFields[ApplicationFieldNames.RUN_TYPE]:
             self.savedObjects[ApplicationFieldNames.RUN_TYPE] = RunType.objects.get(pk=self.savedFields[ApplicationFieldNames.RUN_TYPE])
             self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
@@ -59,7 +81,9 @@ class ApplicationStepData(AbstractStepData):
         else:
             self.savedObjects[ApplicationFieldNames.RUN_TYPE] = None
             self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = None
-    
+        
+        self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = previous_run_type != self.savedObjects[ApplicationFieldNames.RUN_TYPE]
+                        
     def updateFromStep(self, step_depended_on):
         pass
     #     if step_depended_on.getStepName() != StepNames.EXPORT:
@@ -80,3 +104,10 @@ class ApplicationStepData(AbstractStepData):
         #         SampleGroupType_CV.objects.filter(isActive=True, iRValue__in=ir_sample_groupings).order_by('uid')
         # else:
         #     self.prepopulatedFields[ApplicationFieldNames.SAMPLE_GROUPINGS] = SampleGroupType_CV.objects.filter(isActive=True).order_by('uid')
+
+    def validateField(self, field_name, new_field_value):
+        self.validationErrors.pop(field_name, None)
+        
+        if field_name == ApplicationFieldNames.RUN_TYPE:
+            if not new_field_value:
+                self.validationErrors[field_name] = 'Please select Target Technique'

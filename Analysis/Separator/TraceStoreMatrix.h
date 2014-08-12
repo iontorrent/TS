@@ -3,19 +3,21 @@
 #define TRACESTOREMATRIX_H
 
 #include <algorithm>
+#include <iostream>
 #include "Mask.h"
 #include "TraceStore.h"
 #include "MathOptim.h"
 #include "GridMesh.h"
 #define TSM_MIN_REF_PROBES 10
+#define TSM_OK 1
 /**
  * Abstract interface to a repository for getting traces.
  */
 template <typename T, typename IT=char>
-class TraceStoreMatrix : public TraceStore<T>
-{
+  class TraceStoreMatrix : public TraceStore<T>
+  {
 
-public:
+  public:
 
   void SetMinRefProbes (int n)
   {
@@ -104,7 +106,7 @@ public:
   size_t GetNumCols() { return mCols; }
   const std::string &GetFlowOrder() { return mFlowOrder; }
   double GetTime (size_t frame) { return mTime.at (frame); }
-  void SetTime (Col<double> &time) { mTime = time; }
+  void SetTime(double *time, int npts) { mTime.resize(npts); std::copy(time, time+npts, mTime.begin()); }
   size_t GetFlowBuff() { return mFlowsBuf; }
 
   bool HaveWell (size_t wellIx)
@@ -140,10 +142,11 @@ public:
     while (start != end) {
       *traceBegin++ = *start++;
     }
-    return OK;
+    return TSM_OK;
   }
 
-  int GetTrace (size_t wellIx, size_t flowIx, typename arma::Col<double>::col_iterator traceBegin)
+  //  int GetTrace (size_t wellIx, size_t flowIx, typename arma::Col<double>::col_iterator traceBegin)
+  int GetTrace (size_t wellIx, size_t flowIx, double *traceBegin)
   {
     int wIdx = mWellIndex[wellIx];
     int fIdx = mFlowToBufferIndex[flowIx];
@@ -154,11 +157,11 @@ public:
     while (start != end) {
       *traceBegin++ = *start++;
     }
-    return OK;
+    return TSM_OK;
   }
 
   int SetTrace (size_t wellIx, size_t flowIx,
-		typename std::vector<double>::iterator traceBegin, typename std::vector<double>::iterator traceEnd)
+                typename std::vector<double>::iterator traceBegin, typename std::vector<double>::iterator traceEnd)
   {
     int wIdx = mWellIndex[wellIx];
     assert (wIdx >= 0);
@@ -167,12 +170,12 @@ public:
       *out++ = (int16_t) (*traceBegin + .5);
       traceBegin++;
     }
-    return OK;
+    return TSM_OK;
   }
 
   int SetTrace (size_t wellIx, size_t flowIx,
-		typename arma::Col<double>::col_iterator traceBegin, 
-		typename arma::Col<double>::col_iterator traceEnd)
+                double * traceBegin, 
+                double * traceEnd)
   {
     int wIdx = mWellIndex[wellIx];
     assert (wIdx >= 0);
@@ -181,7 +184,7 @@ public:
       *out++ = (int16_t) (*traceBegin + .5);
       traceBegin++;
     }
-    return OK;
+    return TSM_OK;
   }
 
   size_t RowColToIndex (size_t rowIx, size_t colIx) { return rowIx * mCols + colIx; }
@@ -208,11 +211,11 @@ public:
         CalcMedianReference ( (rowEnd + rowStart) /2, (colEnd + colStart) /2, mRefGrids[fIdx],
                               mDist, mValues, trace);
       }
-    return OK;
+    return TSM_OK;
   }
 
   virtual int GetReferenceTrace (size_t wellIx, size_t flowIx,
-				 typename arma::Col<T>::col_iterator traceBegin)
+                                 T *traceBegin)
   {
     int wIdx = mWellIndex[wellIx];
     int fIdx = mFlowToBufferIndex[flowIx];
@@ -223,7 +226,7 @@ public:
     vector<float> &ref = mFineRefGrids[fIdx].GetItemByRowCol (row, col);
     //vector<float> &ref = mRefGrids[fIdx].GetItemByRowCol (row, col);
     copy (ref.begin(), ref.end(), traceBegin);
-    return OK;
+    return TSM_OK;
   }
 
   virtual void SetT0 (std::vector<float> &t0)
@@ -242,9 +245,9 @@ public:
   }
 
   int GetMeshDist() { return mUseMeshNeighbors; }
-float GetMaxDist() { return mMaxDist; }
+  float GetMaxDist() { return mMaxDist; }
 
-private:
+  private:
   /** wIx is the well index from mWellIndex, not the usual global one. */
   inline size_t ToIdx (size_t wIx, size_t frameIx, size_t flowIx)
   {
@@ -254,10 +257,10 @@ private:
 
 
   int CalcMedianReference (size_t row, size_t col,
-			   GridMesh<std::vector<float> > &regionMed,
-			   std::vector<double> &dist,
-			   std::vector<std::vector<float> *> &values,
-			   std::vector<float> &reference)
+                           GridMesh<std::vector<float> > &regionMed,
+                           std::vector<double> &dist,
+                           std::vector<std::vector<float> *> &values,
+                           std::vector<float> &reference)
   {
     int retVal = TraceStore<T>::TS_OK;
     regionMed.GetClosestNeighbors (row, col, mUseMeshNeighbors, dist, values);
@@ -275,24 +278,24 @@ private:
     for (size_t i = 0; i < valSize; i++)
       {
         if (values[i]->size()  == 0)
-	  {
-	    continue;
-	  }
+          {
+            continue;
+          }
         double w = TraceStore<T>::WeightDist (dist[i], mRowRefStep); //1/sqrt(dist[i]+1);
         distWeight += w;
         size_t vSize = values[i]->size();
         for (size_t j = 0; j < vSize; j++)
-	  {
-	    reference[j] += w * values[i]->at (j);
-	  }
+          {
+            reference[j] += w * values[i]->at (j);
+          }
       }
     // Divide by our total weight to get weighted mean
     if (distWeight > 0)
       {
         for (size_t i = 0; i < reference.size(); i++)
-	  {
-	    reference[i] /= distWeight;
-	  }
+          {
+            reference[i] /= distWeight;
+          }
         retVal = TraceStore<T>::TS_OK;
       }
     else
@@ -303,8 +306,8 @@ private:
   }
 
   int CalcRegionReference (int rowStart, int rowEnd,
-			   int colStart, int colEnd, size_t flowIx,
-			   std::vector<float> &trace)
+                           int colStart, int colEnd, size_t flowIx,
+                           std::vector<float> &trace)
   {
     trace.resize (mFrames);
     std::fill (trace.begin(), trace.end(), 0.0f);
@@ -314,20 +317,20 @@ private:
     for (int rowIx = rowStart; rowIx < rowEnd; rowIx++)
       {
         for (int colIx = colStart; colIx < colEnd; colIx++)
-	  {
-	    size_t wellIdx = RowColToIndex (rowIx,colIx);
-	    if (mUseAsReference[wellIdx])
-	      {
-		GetTrace (wellIdx, flowIx, traceBuffer.begin());
-		for (size_t frameIx = 0; frameIx < traceBuffer.size(); frameIx++)
-		  {
-		    if (isfinite (traceBuffer[frameIx]))
-		      {
-			matrix[frameIx].push_back (traceBuffer[frameIx]);
-		      }
-		  }
-	      }
-	  }
+          {
+            size_t wellIdx = RowColToIndex (rowIx,colIx);
+            if (mUseAsReference[wellIdx])
+              {
+                GetTrace (wellIdx, flowIx, traceBuffer.begin());
+                for (size_t frameIx = 0; frameIx < traceBuffer.size(); frameIx++)
+                  {
+                    if (isfinite (traceBuffer[frameIx]))
+                      {
+                        matrix[frameIx].push_back (traceBuffer[frameIx]);
+                      }
+                  }
+              }
+          }
       }
     size_t length = matrix[0].size();
     size_t size = matrix.size();
@@ -335,19 +338,19 @@ private:
     if (length >= minRefProbes)
       {
         for (size_t i = 0; i < size; i++)
-	  {
-	    std::sort (matrix[i].begin(), matrix[i].end());
-	    float med = 0;
-	    if (matrix[i].size() % 2 == 0)
-	      {
-		med = (matrix[i][length / 2] + matrix[i][ (length / 2)-1]) /2.0;
-	      }
-	    else
-	      {
-		med = matrix[i][length/2];
-	      }
-	    trace[i] = med;
-	  }
+          {
+            std::sort (matrix[i].begin(), matrix[i].end());
+            float med = 0;
+            if (matrix[i].size() % 2 == 0)
+              {
+                med = (matrix[i][length / 2] + matrix[i][ (length / 2)-1]) /2.0;
+              }
+            else
+              {
+                med = matrix[i][length/2];
+              }
+            trace[i] = med;
+          }
         return TraceStore<T>::TS_OK;
       }
     else
@@ -358,7 +361,7 @@ private:
   }
 
   void CalcReference (size_t rowStep, size_t colStep, size_t flowIx,
-		      GridMesh<std::vector<float> > &gridReference)
+                      GridMesh<std::vector<float> > &gridReference)
   {
     gridReference.Init (mRows, mCols, rowStep, colStep);
     int numBin = gridReference.GetNumBin();
@@ -387,7 +390,7 @@ private:
     }
   }
 
-private:
+  private:
   size_t mFrames;
   size_t mRows;
   size_t mCols;
@@ -410,11 +413,11 @@ private:
   std::vector<std::vector<float> *> mValues;
   std::vector<float> mReference;
   std::vector<float> mT0;
-  arma::Col<double> mTime;
-float mMaxDist;
+  std::vector<double> mTime;
+  float mMaxDist;
   // Cube<int8_t> mData;  // rows = frames, cols = wells,
   pthread_mutex_t mLock;
   int mUseMeshNeighbors;
-};
+  };
 
 #endif // TRACESTOREMATRIX_H

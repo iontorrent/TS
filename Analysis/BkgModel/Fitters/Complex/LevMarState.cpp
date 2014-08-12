@@ -40,7 +40,6 @@ LevMarBeadAssistant::LevMarBeadAssistant()
   for (int i=0; i<MAX_POISSON_TABLE_COL; i++)
     non_integer_penalty[i] = 0.0f;
   
-  shrink_factor = 0.0f;
   res_state = UNINITIALIZED;
   avg_resid_state = UNINITIALIZED;
 }
@@ -52,7 +51,9 @@ void LevMarBeadAssistant::AllocateBeadFitState (int _numLBeads)
   well_completed = new bool[numLBeads];
   lambda = new float[numLBeads];
   regularizer = new float [numLBeads];
+  memset(regularizer,0,sizeof(float[numLBeads]));
   residual = new float[numLBeads];
+  memset(residual,0,sizeof(float[numLBeads]));
 }
 
 void LevMarBeadAssistant::SetupActiveBeadList (float lambda_start)
@@ -195,7 +196,7 @@ void LevMarBeadAssistant::SetNonIntegerPenalty (float *clonal_call_scale, float 
 }
 
 // global_defaults.clonal_call_scale, global_defaults.clonal_call_penalty, lm_state.clonal_restrict.level
-void LevMarBeadAssistant::ApplyClonalRestriction (float *fval, bead_params *p, int npts)
+void LevMarBeadAssistant::ApplyClonalRestriction (float *fval, BeadParams *p, int npts, int flow_key, int flow_block_size)
 {
   float clonal_error_term = 0.0;
   // ASSUMES fnum = flow number for first 20 flows!!!
@@ -203,7 +204,7 @@ void LevMarBeadAssistant::ApplyClonalRestriction (float *fval, bead_params *p, i
   // p->clonal_read so we short-circuit the loop
   if (p->my_state->clonal_read)
   {
-    for (int fnum=KEY_LEN+1;fnum<NUMFB;fnum++)
+    for (int fnum=flow_key+1;fnum<flow_block_size;fnum++)
     {
       float *vb_out;
       vb_out = fval + fnum*npts;        // get ptr to start of the function evaluation for the current flow  // yet another place where bad indexing is annoying

@@ -842,7 +842,7 @@ TB.plan.wizard.initialize = function() {
             if (INTENT == "New") {
                 $('#modal_plan_wizard-title').text(INTENT + " " + applProduct.runTypeDescription + " Plan");
             } else if (INTENT == 'Plan Run' ) {
-                //Holding off with this until I confer more with Kirindi
+                //Holding off for now
                 //$('#modal_plan_wizard-title').text('New' + " " + applProduct.runTypeDescription + " Run Plan");
             }
 

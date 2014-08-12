@@ -1,0 +1,21 @@
+#!/bin/bash
+# Copyright (C) 2013-2014 Ion Torrent Systems, Inc. All Rights Reserved
+#
+# Give me a hostname and I give you the dirt
+#
+set -u
+nodename=$1
+ 
+#==============================================================================
+# Include function definition file
+#==============================================================================
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source ${TSCONFIG_SRC_DIR}/grp_functions
+
+#==============================================================================
+# Connection Tests: exit on any error
+#==============================================================================
+set -e
+address_test $nodename
+network_test $nodename
+access_test $nodename

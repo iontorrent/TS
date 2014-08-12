@@ -6,7 +6,7 @@ void TraceCurry::SingleFlowIncorporationTrace (float A,float *fval)
     // temporary
     //p->my_state.hits_by_flow[fnum]++;
     eval_count++;
-    RedTrace (fval, ivalPtr, npts, deltaFrameSeconds, deltaFrame, c_dntp_top_pc, sub_steps, i_start, C, A, SP, kr, kmax, d, molecules_to_micromolar_conversion, sens, gain, tauB, math_poiss);
+    MathModel::RedTrace (fval, ivalPtr, npts, deltaFrameSeconds, deltaFrame, c_dntp_top_pc, sub_steps, i_start, C, A, SP, kr, kmax, d, molecules_to_micromolar_conversion, sens, gain, tauB, math_poiss, reg_p->hydrogenModelType);
 }
 
 void TraceCurry::SingleFlowIncorporationTrace (float A,float kmult,float *fval)
@@ -14,12 +14,12 @@ void TraceCurry::SingleFlowIncorporationTrace (float A,float kmult,float *fval)
     //p->my_state.hits_by_flow[fnum]++;
     float tkr = region_kr*kmult; // technically would be a side effect if I reset kr.
     eval_count++;
-    RedTrace (fval, ivalPtr, npts, deltaFrameSeconds, deltaFrame, c_dntp_top_pc, sub_steps, i_start, C, A, SP, tkr, kmax, d, molecules_to_micromolar_conversion, sens, gain, tauB, math_poiss);
+    MathModel::RedTrace (fval, ivalPtr, npts, deltaFrameSeconds, deltaFrame, c_dntp_top_pc, sub_steps, i_start, C, A, SP, tkr, kmax, d, molecules_to_micromolar_conversion, sens, gain, tauB, math_poiss, reg_p->hydrogenModelType);
 }
 
 void TraceCurry::IntegrateRedObserved(float *red, float *red_obs)
 {
-    IntegrateRedFromRedTraceObserved (red,red_obs, npts, i_start, deltaFrame, tauB);
+    MathModel::IntegrateRedFromRedTraceObserved (red,red_obs, npts, i_start, deltaFrame, tauB);
 }
 
 void TraceCurry::ErrorSignal(float *obs,float *fit, float *posptr, float *negptr)
@@ -54,7 +54,7 @@ float TraceCurry::GuessAmplitude(float *red_obs)
   return(a_guess);
 }
 
-void TraceCurry::SetWellRegionParams (struct bead_params *_p,struct reg_params *_rp,int _fnum,
+void TraceCurry::SetWellRegionParams (struct BeadParams *_p,struct reg_params *_rp,int _fnum,
                                       int _nnum,int _flow,
                                       int _i_start,float *_c_dntp_top)
 {
@@ -69,8 +69,8 @@ void TraceCurry::SetWellRegionParams (struct bead_params *_p,struct reg_params *
     // it's helpful to compute this once and not in the model function
     SP = (float) (COPYMULTIPLIER * p->Copies) *pow (reg_p->CopyDrift,flow);
 
-    etbR = AdjustEmptyToBeadRatioForFlow (p->R,reg_p,NucID,flow);
-    tauB = ComputeTauBfromEmptyUsingRegionLinearModel (reg_p,etbR);
+    etbR = reg_p->AdjustEmptyToBeadRatioForFlow (p->R, p->Ampl[fnum], p->Copies, p->phi, NucID, flow);
+    tauB = reg_p->ComputeTauBfromEmptyUsingRegionLinearModel (etbR);
 
     sens = reg_p->sens*SENSMULTIPLIER;
     molecules_to_micromolar_conversion = reg_p->molecules_to_micromolar_conversion;

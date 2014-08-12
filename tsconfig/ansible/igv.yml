@@ -1,0 +1,7 @@
+---
+# file: igv.yml
+- hosts: igv
+  roles:
+    - igv
+  tags:
+    - igv

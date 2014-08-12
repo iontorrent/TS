@@ -24,31 +24,30 @@ using namespace arma;
 
 typedef pair<int,int>   well_coord;
 typedef set<well_coord> well_set;
-int mixed::mixed_first_flow = 12;
-int mixed::mixed_last_flow = 72;
-int mixed::max_iterations = 30;
 
-void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, Mask& mask, RawWells& wells, const vector<int>& key_ionogram);
+static void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, Mask& mask, RawWells& wells, const vector<int>& key_ionogram, const PolyclonalFilterOpts & opts);
 well_set sample_lib(Mask& mask, int nsamp);
+void calcMeanCovariance(mat new_sgma[2], vec new_mean[2], vec &new_alpha, const vec mean[2], const mat sgma[2], const vec& alpha, const deque<float>& ppf, const deque<float>& ssq, int option);
 
-void make_filter(clonal_filter& filter, filter_counts& counts, Mask& mask, RawWells& wells, const vector<int>& key_ionogram)
+
+void make_filter(clonal_filter& filter, filter_counts& counts, Mask& mask, RawWells& wells, const vector<int>& key_ionogram, const PolyclonalFilterOpts & opts)
 {
     // Make a clonality filter from a sample of reads from a RawWells file.
     // Record number of reads in sample that are caught by each filter.
     deque<float>  ppf;
     deque<float>  ssq;
-    count_sample(counts, ppf, ssq, mask, wells, key_ionogram);
-    make_filter(filter, counts, ppf, ssq, false); // no verbosity
+    count_sample(counts, ppf, ssq, mask, wells, key_ionogram, opts);
+    make_filter(filter, counts, ppf, ssq, false, opts); // no verbosity
 }
 
-void make_filter(clonal_filter& filter, filter_counts& counts, const deque<float>& ppf, const deque<float>& ssq, bool verbose)
+void make_filter(clonal_filter& filter, filter_counts& counts, const deque<float>& ppf, const deque<float>& ssq, bool verbose, const PolyclonalFilterOpts & opts)
 {
     // Make a clonality filter from ppf and ssq for a sample of reads.
     // Record number of putative clonal and mixed reads in the sample.
     vec  mean[2];
     mat  sigma[2];
     vec  alpha;
-    bool converged = fit_normals(mean, sigma, alpha, ppf, ssq, verbose);
+    bool converged = fit_normals(mean, sigma, alpha, ppf, ssq, verbose, opts);
 
     if(converged){
         bivariate_gaussian clonal(mean[0], sigma[0]);
@@ -59,14 +58,14 @@ void make_filter(clonal_filter& filter, filter_counts& counts, const deque<float
     if(converged){
         deque<float>::const_iterator p = ppf.begin();
         for(deque<float>::const_iterator s=ssq.begin(); s!=ssq.end(); ++p, ++s){
-            if(filter.is_clonal(*p,*s))
+            if(filter.is_clonal(*p,*s, opts.mixed_stringency))
                 ++counts._nclonal;
         }
         counts._nmixed = ppf.size() - counts._nclonal;
     }
 }
 
-void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, Mask& mask, RawWells& wells, const vector<int>& key_ionogram)
+static void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, Mask& mask, RawWells& wells, const vector<int>& key_ionogram, const PolyclonalFilterOpts & opts)
 {
     // Take sample of reads from a RawWells file, and apply some simple
     // filters to identify problem reads.
@@ -76,8 +75,8 @@ void count_sample(filter_counts& counts, deque<float>& ppf, deque<float>& ssq, M
     WellData data;
     unsigned int nflows = wells.NumFlows();
     vector<float> nrm(nflows);
-    int flow0 = mixed::mixed_first_flow;
-    int flow1 = mixed::mixed_last_flow;
+    int flow0 = opts.mixed_first_flow;
+    int flow1 = opts.mixed_last_flow;
     wells.ResetCurrentRegionWell();
     
     // Some temporary code for comparing clonal filter in background model:
@@ -153,29 +152,33 @@ inline double square(double x)
     return x * x;
 }
 
-static bool test_convergence(const vec mean[2], const mat& sgma, const vec& alpha, const vec new_mean[2], const mat& new_sgma, const vec& new_alpha)
+static bool test_convergence(const vec mean[2], const mat sgma[2], const vec& alpha, const vec new_mean[2], const mat new_sgma[2], const vec& new_alpha)
 {
     double eps        = 1e-4;
-    double mean_diff0 = max(max(new_mean[0] - mean[0]));
-    double mean_diff1 = max(max(new_mean[1] - mean[1]));
-    double sgma_diff  = max(max(new_sgma    - sgma));
-    double alpha_diff = max(max(new_alpha   - alpha));
-    double max_diff   = max(max(mean_diff0, mean_diff1), max(sgma_diff, alpha_diff));
+    double mean_diff0  = max(max(new_mean[0] - mean[0]));
+    double mean_diff1  = max(max(new_mean[1] - mean[1]));
+    double sgma_diff0  = max(max(new_sgma[0]    - sgma[0]));
+    double sgma_diff1  = max(max(new_sgma[0]    - sgma[0]));
+    double sgma_diff   = max(sgma_diff0, sgma_diff1);
+    double alpha_diff  = max(max(new_alpha   - alpha));
+    double max_diff    = max(max(mean_diff0, mean_diff1), max(sgma_diff, alpha_diff));
 
     return max_diff < eps;
 }
 
-static void print_dist(vec mean[2], mat sgma[2], vec& alpha, bool converged, int iter)
+static void print_dist(vec mean[2], mat sgma[2], vec& alpha, bool converged, int iter, int option)
 {
-    cout << "Clonal Filter: fit_normals iteration" << setw(4) << iter << endl;
-    cout << "convergence status" << endl;
-    cout << boolalpha << converged << endl;
+    cout << "Clonal Filter: fit_normals with option " << option << " at iteration" << setw(4) << iter << endl;
+    cout << "convergence status: " << boolalpha << converged << endl;
     cout << "Mean of first cluster:" << endl;
     cout << mean[0] << endl;
     cout << "Mean of mixed cluster:"<< endl;
     cout << mean[1] << endl;
-    cout << "Joint cluster covariance:" <<endl;
+    cout << "Covariance of clonal cluster:" <<endl;
     cout << sgma[0] << endl;
+    cout << "Covariance of mixed cluster:" <<endl;
+    cout << sgma[1] << endl;
+    cout << "fraction clonal vs mixed: " << alpha[0] << " & " << alpha[1] << endl;
     cout << endl;
 }
 
@@ -201,98 +204,41 @@ static void init(vec mean[2], mat sgma[2], vec& alpha)
     alpha.fill(0.5);
 }
 
-bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, const deque<float>& ssq, bool verbose)
+bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, const deque<float>& ssq, bool verbose, const PolyclonalFilterOpts & opts)
 {
     bool converged = false;
+    //verbose = true;
     
     try {
         // Initial guesses for two normal distributions:
         init(mean, sgma, alpha);
         if (verbose)
-          print_dist(mean, sgma, alpha, converged, 0);
+          print_dist(mean, sgma, alpha, converged, 0, opts.mixed_model_option);
 
-        int  max_iters = mixed::max_iterations;
+        int  max_iters = opts.max_iterations;
         int iteration = 1;
+        cout << "max_iters: " << max_iters << endl;
         for(; iteration<=max_iters and not converged; ++iteration){
-            // Re-estimate parameters for each distribution:
-            int nsamp = ppf.size();
-            vec sumw(2);
-            sumw.fill(0.0);
-
-            mat sum2(2,2);
-            sum2.fill(0.0);
-
-            vec   sum1[2];
-            sum1[0].set_size(2);
-            sum1[1].set_size(2);
-            sum1[0].fill(0.0);
-            sum1[1].fill(0.0);
-
             if(not is_pos_def(sgma[0]) or not is_pos_def(sgma[1]))
                 break;
-
-            bivariate_gaussian clone_dist(mean[0], sgma[0]);
-            bivariate_gaussian mixed_dist(mean[1], sgma[1]);
-
-            // Accumulate weighted sums for re-estimating moments:
-            for(int j=0; j<nsamp; ++j){
-                // Skip reads outside the poisson range for ppf:
-                if(mixed_ppf_cutoff() < ppf[j])
-                    continue;
-
-                // Each read gets two weights, reflecting the likelyhoods of that
-                // read being clonal or mixed.
-                vec x(2);
-                x << ppf[j] << ssq[j];
-                vec q(2);
-                q[0] = alpha[0] * clone_dist.pdf(x);
-                q[1] = alpha[1] * mixed_dist.pdf(x);
-                vec w = q / sum(q);
-
-                // Skip outliers:
-                if(not w.is_finite())
-                    continue;
-
-                // Running sums for moments are weighted:
-                sumw         += w;
-                sum1[0]      += w[0] * x;
-                sum1[1]      += w[1] * x;
-                sum2.at(0,0) += w[0] * square(ppf[j] - mean[0][0]);
-                sum2.at(0,1) += w[0] * (ppf[j] - mean[0][0]) * (ssq[j] - mean[0][1]);
-                sum2.at(1,1) += w[0] * square(ssq[j] - mean[0][1]);
-            }
-
-            // New means:
-            vec new_mean[2];
-            for(int j=0; j<2; ++j) {
-                new_mean[j].set_size(2);
-                new_mean[j] = sum1[j] / sumw[j];
-            }
-
-            // New covariance:
-            mat new_sgma(2,2);
-            new_sgma.at(0,0) = sum2.at(0,0) / sumw[0];
-            new_sgma.at(0,1) = sum2.at(0,1) / sumw[0];
-            new_sgma.at(1,0) = new_sgma.at(0,1);
-            new_sgma.at(1,1) = sum2.at(1,1) / sumw[0];
-
-            // New prior:
-            vec new_alpha = sumw / nsamp;
-
+            vec  new_mean[2];
+            mat  new_sgma[2];
+            vec  new_alpha;
+            calcMeanCovariance(new_sgma, new_mean, new_alpha, mean, sgma, alpha, ppf, ssq, opts.mixed_model_option);
             // Test for convergence:
-            if(not new_mean[0].is_finite() or not new_mean[1].is_finite() or not new_sgma.is_finite() or not new_alpha.is_finite())
+            if(not new_mean[0].is_finite() or not new_mean[1].is_finite() or not new_sgma[0].is_finite() or not new_sgma[1].is_finite() or not new_alpha.is_finite())
                 break;
-            converged = test_convergence(mean, sgma[0], alpha, new_mean, new_sgma, new_alpha);
+            converged = test_convergence(mean, sgma, alpha, new_mean, new_sgma, new_alpha);//ignore new_sigma2 comparison
 
             // Update parameters, forcing covariances to be the same for both distributions:
             alpha   = new_alpha;
             mean[0] = new_mean[0];
             mean[1] = new_mean[1];
-            sgma[0] = new_sgma;
-            sgma[1] = new_sgma;
+            sgma[0] = new_sgma[0];
+            sgma[1] = new_sgma[1];
 
             if (verbose)
-              print_dist(mean, sgma, alpha, converged, iteration);
+              print_dist(mean, sgma, alpha, converged, iteration, opts.mixed_model_option);
         }
 
         // Fallback position if failed to converge:
@@ -315,6 +261,350 @@ bool fit_normals(vec mean[2], mat sgma[2], vec& alpha, const deque<float>& ppf, 
     return converged;
 }
 
+void calcMeanCovariance(mat new_sgma[2], vec new_mean[2], vec &new_alpha, const vec mean[2], const mat sgma[2], const vec& alpha, const deque<float>& ppf, const deque<float>& ssq, int option)
+{
+  switch(option){
+    case 0:{//common covariance
+        bivariate_gaussian clone_dist(mean[0], sgma[0]);
+        bivariate_gaussian mixed_dist(mean[1], sgma[1]);
+        // Re-estimate parameters for each distribution:
+        int nsamp = ppf.size();
+        vec sumw(2);
+        sumw.fill(0.0);
+
+        mat sum2(2,2);
+        sum2.fill(0.0);
+
+        vec   sum1[2];
+        sum1[0].set_size(2);
+        sum1[1].set_size(2);
+        sum1[0].fill(0.0);
+        sum1[1].fill(0.0);
+
+        // Accumulate weighted sums for re-estimating moments:
+        for(int j=0; j<nsamp; ++j){
+            // Skip reads outside the poisson range for ppf:
+            if(mixed_ppf_cutoff() < ppf[j])
+                continue;
+
+            // Each read gets two weights, reflecting the likelyhoods of that
+            // read being clonal or mixed.
+            vec x(2);
+            x << ppf[j] << ssq[j];
+            vec q(2);
+            q[0] = alpha[0] * clone_dist.pdf(x);
+            q[1] = alpha[1] * mixed_dist.pdf(x);
+            vec w = q / sum(q);
+
+            // Skip outliers:
+            if(not w.is_finite())
+                continue;
+
+            // Running sums for moments are weighted:
+            sumw         += w;
+            sum1[0]      += w[0] * x;
+            sum1[1]      += w[1] * x;
+            sum2.at(0,0) += w[0] * square(ppf[j] - mean[0][0]);
+            sum2.at(0,1) += w[0] * (ppf[j] - mean[0][0]) * (ssq[j] - mean[0][1]);
+            sum2.at(1,1) += w[0] * square(ssq[j] - mean[0][1]);
+        }
+
+        // New means:
+        for(int j=0; j<2; ++j) {
+            new_mean[j].set_size(2);
+            new_mean[j] = sum1[j] / sumw[j];
+        }
+
+        // New covariance:
+        mat new_sgma1(2,2);
+        new_sgma1.at(0,0) = sum2.at(0,0) / sumw[0];
+        new_sgma1.at(0,1) = sum2.at(0,1) / sumw[0];
+        new_sgma1.at(1,0) = new_sgma1.at(0,1);
+        new_sgma1.at(1,1) = sum2.at(1,1) / sumw[0];
+
+        new_sgma[0] = new_sgma1;
+        new_sgma[1] = new_sgma1;
+
+        // New prior:
+        new_alpha = sumw / nsamp;
+    }
+        break;
+    case 7: {
+        //same volume and shape, different orientation: lambda*D_k*A*(D_k)'
+      bivariate_gaussian clone_dist(mean[0], sgma[0]);
+      bivariate_gaussian mixed_dist(mean[1], sgma[1]);
+      // Re-estimate parameters for each distribution:
+      int nsamp = ppf.size();
+      vec sumw(2);
+      sumw.fill(0.0);
+
+      mat sum2(2,2);
+      sum2.fill(0.0);
+
+      mat sum3(2,2);
+      sum3.fill(0.0);
+
+      vec   sum1[2];
+      sum1[0].set_size(2);
+      sum1[1].set_size(2);
+      sum1[0].fill(0.0);
+      sum1[1].fill(0.0);
+
+      // Accumulate weighted sums for re-estimating moments:
+      for(int j=0; j<nsamp; ++j){
+          // Skip reads outside the poisson range for ppf:
+          if(mixed_ppf_cutoff() < ppf[j])
+              continue;
+
+          // Each read gets two weights, reflecting the likelyhoods of that
+          // read being clonal or mixed.
+          vec x(2);
+          x << ppf[j] << ssq[j];
+          vec q(2);
+          q[0] = alpha[0] * clone_dist.pdf(x);
+          q[1] = alpha[1] * mixed_dist.pdf(x);
+          vec w = q / sum(q);
+
+          // Skip outliers:
+          if(not w.is_finite())
+              continue;
+
+          // Running sums for moments are weighted:
+          sumw         += w;
+          sum1[0]      += w[0] * x;
+          sum1[1]      += w[1] * x;
+          sum2.at(0,0) += w[0] * square(ppf[j] - mean[0][0]);
+          sum2.at(0,1) += w[0] * (ppf[j] - mean[0][0]) * (ssq[j] - mean[0][1]);
+
+          sum2.at(1,1) += w[0] * square(ssq[j] - mean[0][1]);
+          sum3.at(0,0) += w[1] * square(ppf[j] - mean[1][0]);
+          sum3.at(0,1) += w[1] * (ppf[j] - mean[1][0]) * (ssq[j] - mean[1][1]);
+
+          sum3.at(1,1) += w[1] * square(ssq[j] - mean[1][1]);
+      }
+      sum2.at(1,0) =  sum2.at(0,1);
+      sum3.at(1,0) =  sum3.at(0,1);
+
+      // New means:
+      for(int j=0; j<2; ++j) {
+          new_mean[j].set_size(2);
+          new_mean[j] = sum1[j] / sumw[j];
+      }
+
+      //calculate eigen values and vectors for sum2 and sum3
+      vec eigval_clonal;
+      mat eigvec_clonal;
+      eig_sym(eigval_clonal, eigvec_clonal, sum2);
+
+      vec eigval_mixed;
+      mat eigvec_mixed;
+      eig_sym(eigval_mixed, eigvec_mixed, sum3);
+
+      //maintain same ascending order between clonal and mixed: ascending order by default and should be no op
+      //should we bail out if eigenvalue is complex
+      if(eigval_clonal.at(0) > eigval_clonal.at(1)){
+        double temp = eigval_clonal.at(0);
+        eigval_clonal.at(0) = eigval_clonal.at(1);
+        eigval_clonal.at(1) = temp;
+        temp = eigvec_clonal.at(0, 0);
+        eigvec_clonal.at(0, 0) = eigvec_clonal.at(0, 1);
+        eigvec_clonal.at(0, 1) = temp;
+        temp = eigvec_clonal.at(1, 0);
+        eigvec_clonal.at(1, 0) = eigvec_clonal.at(1, 1);
+        eigvec_clonal.at(1, 1) = temp;
+      }
+      if(eigval_mixed.at(0) > eigval_mixed.at(1)){
+        double temp = eigval_mixed.at(0);
+        eigval_mixed.at(0) = eigval_mixed.at(1);
+        eigval_mixed.at(1) = temp;
+        temp = eigvec_mixed.at(0, 0);
+        eigvec_mixed.at(0, 0) = eigvec_mixed.at(0, 1);
+        eigvec_mixed.at(0, 1) = temp;
+        temp = eigvec_mixed.at(1, 0);
+        eigvec_mixed.at(1, 0) = eigvec_mixed.at(1, 1);
+        eigvec_mixed.at(1, 1) = temp;
+      }
+      //average out the eigenvalues
+      vec eigval_sum = eigval_clonal + eigval_mixed;
+      //calculate the new covariance
+      new_sgma[0] = eigvec_clonal * diagmat(eigval_sum) * trans(eigvec_clonal) / (sumw[0] + sumw[1]);
+      new_sgma[1] = eigvec_mixed * diagmat(eigval_sum) * trans(eigvec_mixed) / (sumw[0] + sumw[1]);
+
+      // New prior:
+      new_alpha = sumw / nsamp;
+
+    }
+        break;
+
+    case 8:{//common volume
+        bivariate_gaussian clone_dist(mean[0], sgma[0]);
+        bivariate_gaussian mixed_dist(mean[1], sgma[1]);
+        // Re-estimate parameters for each distribution:
+        int nsamp = ppf.size();
+        vec sumw(2);
+        sumw.fill(0.0);
+
+        mat sum2(2,2);
+        sum2.fill(0.0);
+
+        mat sum3(2,2);
+        sum3.fill(0.0);
+
+        vec   sum1[2];
+        sum1[0].set_size(2);
+        sum1[1].set_size(2);
+        sum1[0].fill(0.0);
+        sum1[1].fill(0.0);
+
+        // Accumulate weighted sums for re-estimating moments:
+        for(int j=0; j<nsamp; ++j){
+            // Skip reads outside the poisson range for ppf:
+            if(mixed_ppf_cutoff() < ppf[j])
+                continue;
+
+            // Each read gets two weights, reflecting the likelyhoods of that
+            // read being clonal or mixed.
+            vec x(2);
+            x << ppf[j] << ssq[j];
+            vec q(2);
+            q[0] = alpha[0] * clone_dist.pdf(x);
+            q[1] = alpha[1] * mixed_dist.pdf(x);
+            vec w = q / sum(q);
+
+            // Skip outliers:
+            if(not w.is_finite())
+                continue;
+
+            // Running sums for moments are weighted:
+            sumw         += w;
+            sum1[0]      += w[0] * x;
+            sum1[1]      += w[1] * x;
+            sum2.at(0,0) += w[0] * square(ppf[j] - mean[0][0]);
+            sum2.at(0,1) += w[0] * (ppf[j] - mean[0][0]) * (ssq[j] - mean[0][1]);
+
+            sum2.at(1,1) += w[0] * square(ssq[j] - mean[0][1]);
+            sum3.at(0,0) += w[1] * square(ppf[j] - mean[1][0]);
+            sum3.at(0,1) += w[1] * (ppf[j] - mean[1][0]) * (ssq[j] - mean[1][1]);
+            sum3.at(1,1) += w[1] * square(ssq[j] - mean[1][1]);
+        }
+        sum2.at(1,0) =  sum2.at(0,1);
+        sum3.at(1,0) =  sum3.at(0,1);
+
+        // New means:
+        for(int j=0; j<2; ++j) {
+            new_mean[j].set_size(2);
+            new_mean[j] = sum1[j] / sumw[j];
+        }
+
+        vec det(2);
+        det[0] = sqrt(sum2.at(0, 0)*sum2.at(1,1) - sum2.at(0, 1)*sum2.at(1,0));
+        det[1] = sqrt(sum3.at(0, 0)*sum3.at(1,1) - sum3.at(0, 1)*sum3.at(1,0));
+        double det_factor = (det[0] + det[1])/(sumw[0] + sumw[1]);
+
+        // New covariance:
+        mat new_sgma1(2,2);
+        new_sgma1.at(0,0) = sum2.at(0,0) * det_factor / det[0];
+        new_sgma1.at(0,1) = sum2.at(0,1) * det_factor / det[0];
+        new_sgma1.at(1,0) = new_sgma1.at(0,1);
+        new_sgma1.at(1,1) = sum2.at(1,1) * det_factor / det[0];
+
+        mat new_sgma2(2,2);
+        new_sgma2.at(0,0) = sum3.at(0,0) * det_factor / det[1];
+        new_sgma2.at(0,1) = sum3.at(0,1) * det_factor / det[1];
+        new_sgma2.at(1,0) = new_sgma2.at(0,1);
+        new_sgma2.at(1,1) = sum3.at(1,1) * det_factor / det[1];
+
+
+        new_sgma[0] = new_sgma1;
+        new_sgma[1] = new_sgma2;
+
+        // New prior:
+        new_alpha = sumw / nsamp;
+    }
+        break;
+
+    case 9:{//independent covariance
+        bivariate_gaussian clone_dist(mean[0], sgma[0]);
+        bivariate_gaussian mixed_dist(mean[1], sgma[1]);
+        // Re-estimate parameters for each distribution:
+        int nsamp = ppf.size();
+        vec sumw(2);
+        sumw.fill(0.0);
+
+        mat sum2(2,2);
+        sum2.fill(0.0);
+
+        mat sum3(2,2);
+        sum3.fill(0.0);
+
+        vec   sum1[2];
+        sum1[0].set_size(2);
+        sum1[1].set_size(2);
+        sum1[0].fill(0.0);
+        sum1[1].fill(0.0);
+
+        // Accumulate weighted sums for re-estimating moments:
+        for(int j=0; j<nsamp; ++j){
+            // Skip reads outside the poisson range for ppf:
+            if(mixed_ppf_cutoff() < ppf[j])
+                continue;
+
+            // Each read gets two weights, reflecting the likelyhoods of that
+            // read being clonal or mixed.
+            vec x(2);
+            x << ppf[j] << ssq[j];
+            vec q(2);
+            q[0] = alpha[0] * clone_dist.pdf(x);
+            q[1] = alpha[1] * mixed_dist.pdf(x);
+            vec w = q / sum(q);
+
+            // Skip outliers:
+            if(not w.is_finite())
+                continue;
+
+            // Running sums for moments are weighted:
+            sumw         += w;
+            sum1[0]      += w[0] * x;
+            sum1[1]      += w[1] * x;
+            sum2.at(0,0) += w[0] * square(ppf[j] - mean[0][0]);
+            sum2.at(0,1) += w[0] * (ppf[j] - mean[0][0]) * (ssq[j] - mean[0][1]);
+            sum2.at(1,1) += w[0] * square(ssq[j] - mean[0][1]);
+            sum3.at(0,0) += w[1] * square(ppf[j] - mean[1][0]);
+            sum3.at(0,1) += w[1] * (ppf[j] - mean[1][0]) * (ssq[j] - mean[1][1]);
+            sum3.at(1,1) += w[1] * square(ssq[j] - mean[1][1]);
+        }
+
+        // New means:
+        for(int j=0; j<2; ++j) {
+            new_mean[j].set_size(2);
+            new_mean[j] = sum1[j] / sumw[j];
+        }
+
+        // New covariance:
+        mat new_sgma1(2,2);
+        new_sgma1.at(0,0) = sum2.at(0,0) / sumw[0];
+        new_sgma1.at(0,1) = sum2.at(0,1) / sumw[0];
+        new_sgma1.at(1,0) = new_sgma1.at(0,1);
+        new_sgma1.at(1,1) = sum2.at(1,1) / sumw[0];
+
+        mat new_sgma2(2,2);
+        new_sgma2.at(0,0) = sum3.at(0,0) / sumw[1];
+        new_sgma2.at(0,1) = sum3.at(0,1) / sumw[1];
+        new_sgma2.at(1,0) = new_sgma2.at(0,1);
+        new_sgma2.at(1,1) = sum3.at(1,1) / sumw[1];
+        new_sgma[0] = new_sgma1;
+        new_sgma[1] = new_sgma2;
+
+        // New prior:
+        new_alpha = sumw / nsamp;
+    }
+        break;
+  }
+
+
+
+}
+
 ostream& operator<<(ostream& out, const filter_counts& c)
 {
     out << setw(8) << "infinite" << setw(12) << c. _ninf    << endl
@@ -327,4 +617,19 @@ ostream& operator<<(ostream& out, const filter_counts& c)
     return out;
 }
 
+//lamda * D_k * A_k * (D_k)'
+
+//alternative: using lamda from clonal
+
+//Is it possible to try different models and find the one fitting the data best?
+
+
+PolyclonalFilterOpts::PolyclonalFilterOpts()
+{
+  mixed_first_flow = 12;
+  mixed_last_flow = 72;
+  max_iterations = 30;
+  mixed_model_option = 0;
+  mixed_stringency = 0.5;
+}
 

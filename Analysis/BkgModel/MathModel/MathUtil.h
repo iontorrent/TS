@@ -11,7 +11,7 @@
 void MultiplyVectorByScalar(float *my_vec, float my_scalar, int len);
 void MultiplyVectorByVector(float *my_vec, float *my_other_vec, int len);
 void MultiplyVectorByVector(float *my_output_vec, float *my_vec, float *my_other_vec, int len);
-void AddScaledVector(float *start_vec, float *my_vec, float my_scalar, int len);
+void AddScaledVector(float *start_vec, const float *my_vec, float my_scalar, int len);
 float CheckVectorDiffSSQ(float *my_vec, float *my_other_vec, int len);
 void CopyVector(float *destination_vec, float *my_vec, int len);
 void AccumulateVector(float *destination_vec, float *my_vec, int len);

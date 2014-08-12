@@ -51,7 +51,7 @@
     <div class="row-fluid">
         <div class="span12">
             <h1 class="pull-left">Result Sets in {{project.name}}</h1>
-            <a href="/data/project/{{project.id}}/delete/" class="btn btn-primary pull-right delete_project">Delete Project</a>
+            <a href="/data/project/{{project.id}}/delete/" class="btn btn-danger pull-right delete_project">Delete Project</a>
         </div>
     </div>
     {%spaceless%}
@@ -84,11 +84,9 @@
     <div id="grid" style="margin-top: 5px; margin-bottom: 5px;"></div>
     <!--
     -->
-        <div align='center' style="margin-top: 0px;">
-            <a class="download_csv" href="/data/project/{{project.id}}/results/%s/getSelectedCSV.csv">Download Selected CSV</a>
-        </div>
+    <a class="btn btn-success pull-right download_csv" href="/data/project/{{project.id}}/results/%s/getSelectedCSV.csv">Download Selected CSV</a>
     <div class="btn-group pull-left">
-        <a id="combine_selected_dropdown" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" > Combine Selected...<span class="caret"></span> </a>
+        <a id="combine_selected_dropdown" class="btn dropdown-toggle" data-toggle="dropdown" > Combine Selected <span class="caret"></span> </a>
         <ul class="dropdown-menu">
             <li>
                 <a class="combine_alignments" href="/data/results/%s/combine/project/{{project.id}}/">&raquo;&nbsp;&nbsp; Combine Alignments</a>
@@ -96,7 +94,7 @@
         </ul>
     </div>
     <div class="btn-group pull-left">
-        <a id="action_dropdown" class="btn btn-primary dropdown-toggle" data-toggle="dropdown" > Process Selected...<span class="caret"></span> </a>
+        <a id="action_dropdown" class="btn dropdown-toggle" data-toggle="dropdown" > Process Selected <span class="caret"></span> </a>
         <ul class="dropdown-menu">
             <li>
                 <a class="send_to_project" href="/data/results/%s/project/">&raquo;&nbsp;&nbsp; Add to Project</a>
@@ -108,6 +106,7 @@
         <li><a class="dm_actions" href="{% url "dm_actions" 99999 %}" >&raquo;&nbsp;&nbsp; Data Management </a></li>
         </ul>
     </div>
+    <a href="{% url "project_compare" project.pk %}" class="btn btn-primary pull-left" style="margin-left: 5px;">Compare All</a>
 
 <script type="text/javascript">
 function initialize_search () {
@@ -162,7 +161,7 @@ $(document).ready(function(){
         dataSource: {
             type: "json",
             transport: {
-                read: "/rundb/api/v1/results/?projects={{project.id}}",
+                read: "/rundb/api/v1/projectresults/?projects={{project.id}}",
                 parameterMap: function(options) {
                     return buildParameterMap(options)
                 }
@@ -185,16 +184,13 @@ $(document).ready(function(){
             serverFiltering: true,
             serverSorting: true,
             sort: { field: "timeStamp", dir: "desc" },
-            pageSize: 50
+            pageSize: 15
         },
-        height: '408', /* shows 10 records */
         groupable: false,
-        scrollable: {
-            virtual: true
-        },
         sortable: true,
         selectable: false,
-        pageable: false,
+        pageable: true,
+        scrollable: false,
         columns: [ {
                 field: "id",
                 title: "&nbsp;",

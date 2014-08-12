@@ -2,7 +2,6 @@
 
 #include "EmptyTraceTracker.h"
 #include "SynchDatSerialize.h"
-#include "H5Replay.h"
 
 // Each SignalProcessingMasterFitter object is associated with
 // 1 Region and 1 block of flows 
@@ -13,8 +12,12 @@
 // across one or more regions per flow rather than per well/flow
 // flow handling is implicitly done by the EmptyTrace object itself
 
-EmptyTraceTracker::EmptyTraceTracker(std::vector<Region> &_regions,
-				     std::vector<RegionTiming> &_regionTiming, std::vector<float> &_sep_t0_est, CommandLineOpts& _inception_state)
+EmptyTraceTracker::EmptyTraceTracker(
+    const std::vector<Region> &_regions,
+    const std::vector<RegionTiming> &_regionTiming, 
+    const std::vector<float> &_sep_t0_est, 
+    const CommandLineOpts& _inception_state
+  )
   : regions(_regions), regionTiming(_regionTiming), sep_t0_est(_sep_t0_est), inception_state(_inception_state)
 {
   assert (regions.size() == regionTiming.size());
@@ -49,7 +52,7 @@ EmptyTraceTracker::~EmptyTraceTracker()
 // Note also that timing & t0_map in the EmptyTrace object is set by region
 // and would have to be reconciled in a change as above
 
-void EmptyTraceTracker::Allocate(Mask *bfmask, ImageSpecClass &imgSpec)
+void EmptyTraceTracker::Allocate(const Mask *bfmask, const ImageSpecClass &imgSpec, int flow_block_size)
 {
   // assumes regions are indexed over a small non-negative range
   imgFrames.resize(maxNumRegions);
@@ -75,9 +78,13 @@ void EmptyTraceTracker::Allocate(Mask *bfmask, ImageSpecClass &imgSpec)
 
     // allocate empty traces, current algorithm is 1 per region
     // each region is also used by a BkgModelFitters
-    EmptyTrace *emptyTrace = AllocateEmptyTrace(region, imgFrames[region.index]);
+    EmptyTrace *emptyTrace = AllocateEmptyTrace(region, imgFrames[region.index], flow_block_size);
 
-    emptyTrace->SetTrimWildTraceOptions(inception_state.bkg_control.do_ref_trace_trim, inception_state.bkg_control.span_inflator_min, inception_state.bkg_control.span_inflator_mult, inception_state.bkg_control.cutoff_quantile, global_defaults.data_control.nuc_flow_frame_width);
+    emptyTrace->SetTrimWildTraceOptions(inception_state.bkg_control.trace_control.do_ref_trace_trim,
+                                        inception_state.bkg_control.trace_control.span_inflator_min,
+                                        inception_state.bkg_control.trace_control.span_inflator_mult,
+                                        inception_state.bkg_control.trace_control.cutoff_quantile,
+                                        global_defaults.data_control.nuc_flow_frame_width);
   
     emptyTrace->T0EstimateToMap(sep_t0_est, &region, bfmask);
     if (doSdat){
@@ -106,12 +113,20 @@ void EmptyTraceTracker::Allocate(Mask *bfmask, ImageSpecClass &imgSpec)
     emptyTracesForBMFitter[region.index] = emptyTrace;
   }
 
-  if (inception_state.bkg_control.do_ref_trace_trim)
+  if (inception_state.bkg_control.trace_control.do_ref_trace_trim)
     InitializeDumpOutlierTracesFile();
 
 }
 
-void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(Image &img, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask, Region& region, float t_mid_nuc_start)
+void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(
+    Image &img, 
+    const PinnedInFlow &pinnedInFlow, 
+    int raw_flow, 
+    const Mask *bfmask, 
+    Region& region, 
+    float t_mid_nuc_start,
+    int flow_buffer_index
+  )
 {
   EmptyTrace *emptyTrace = NULL;
 
@@ -121,7 +136,7 @@ void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(Image &img, PinnedInFlo
   TimeCompression time_cp;
   time_cp.choose_time = global_defaults.signal_process_control.choose_time; // have to start out using the same compression as bkg model - this will become easier if we coordinate time tracker
   time_cp.SetUpTime(imgFrames[region.index],t_mid_nuc_start,global_defaults.data_control.time_start_detail,
-		    global_defaults.data_control.time_stop_detail,global_defaults.data_control.time_left_avg);
+        global_defaults.data_control.time_stop_detail,global_defaults.data_control.time_left_avg);
   float t_start = time_cp.time_start;
   
 
@@ -132,21 +147,34 @@ void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(Image &img, PinnedInFlo
   emptyTrace->SetTime(time_cp.frames_per_second);
 
   // calculate average trace across all empty wells in this region for this flow
-  emptyTrace->GenerateAverageEmptyTrace(&region, pinnedInFlow, bfmask, &img, flow);
+  emptyTrace->GenerateAverageEmptyTrace(&region, pinnedInFlow, bfmask, &img, flow_buffer_index,
+                                        raw_flow);
 
   if (emptyTrace->nOutliers > 0)
-    DumpOutlierTracesPerFlowPerRegion(flow, region, emptyTrace->nOutliers, emptyTrace->nRef);
+    DumpOutlierTracesPerFlowPerRegion(raw_flow, region, emptyTrace->nOutliers, emptyTrace->nRef);
 
   // fill the buffer neg_bg_buffers_slope
-  emptyTrace->RezeroReference(t_start, t_mid_nuc_start-MAGIC_OFFSET_FOR_EMPTY_TRACE, flow);
-  emptyTrace->PrecomputeBackgroundSlopeForDeriv (flow);
+  emptyTrace->RezeroReference(t_start, t_mid_nuc_start-MAGIC_OFFSET_FOR_EMPTY_TRACE, 
+                              flow_buffer_index);
+  emptyTrace->PrecomputeBackgroundSlopeForDeriv (flow_buffer_index);
  }
 
-void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(SynchDat &sdat, PinnedInFlow &pinnedInFlow, int flow, Mask *bfmask, Region& region, float t_mid_nuc, float sigma,float t_start, TimeCompression *time_cp)
+void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(
+    SynchDat &sdat, 
+    const PinnedInFlow &pinnedInFlow, 
+    int raw_flow, 
+    const Mask *bfmask, 
+    Region& region, 
+    float t_mid_nuc, 
+    float sigma,
+    float t_start, 
+    TimeCompression *time_cp,
+    int flow_buffer_index
+  )
 {
   EmptyTrace *emptyTrace = NULL;
 
-  // fprintf(stdout, "ETT: Setting Empty trace %lx in %lx[%d] for flow %d\n", (unsigned long)emptyTracesForBMFitter[region.index], (unsigned long)emptyTracesForBMFitter, region.index, flow);
+  // fprintf(stdout, "ETT: Setting Empty trace %lx in %lx[%d] for flow %d\n", (unsigned long)emptyTracesForBMFitter[region.index], (unsigned long)emptyTracesForBMFitter, region.index, raw_flow);
   //TraceChunk &chunk = sdat.mChunks.GetItemByRowCol(region.row, region.col);
   // TimeCompression time_cp;
   // time_cp.choose_time = global_defaults.signal_process_control.choose_time; // have to start out using the same compression as bkg model - this will become easier if we coordinate time tracker
@@ -163,34 +191,35 @@ void EmptyTraceTracker::SetEmptyTracesFromImageForRegion(SynchDat &sdat, PinnedI
   emptyTrace->SetTimeFromSdatChunk(region, sdat);
 
   // calculate average trace across all empty wells in this region for this flow
-  emptyTrace->GenerateAverageEmptyTrace( &region, pinnedInFlow, bfmask, sdat, flow);
+  emptyTrace->GenerateAverageEmptyTrace( &region, pinnedInFlow, bfmask, sdat, 
+                                           flow_buffer_index, raw_flow);
 
   // Fill The buffer neg_bg_buffers_slope
-  emptyTrace->RezeroReference(t_start, t_mid_nuc-MAGIC_OFFSET_FOR_EMPTY_TRACE, flow);
-  emptyTrace->PrecomputeBackgroundSlopeForDeriv (flow);
+  emptyTrace->RezeroReference(t_start, t_mid_nuc-MAGIC_OFFSET_FOR_EMPTY_TRACE, flow_buffer_index);
+  emptyTrace->PrecomputeBackgroundSlopeForDeriv (flow_buffer_index);
  }
 
 
-EmptyTrace *EmptyTraceTracker::AllocateEmptyTrace(Region &region, int nframes)
+EmptyTrace *EmptyTraceTracker::AllocateEmptyTrace(Region &region, int nframes, int flow_block_size)
 {
   EmptyTrace *emptyTrace;
   int ix = region.index;
 
-  if (inception_state.bkg_control.replayBkgModelData)
+  /*if (inception_state.bkg_control.replayBkgModelData)
     emptyTrace = new EmptyTraceReader(inception_state);
   else if (inception_state.bkg_control.recordBkgModelData)
     emptyTrace = new EmptyTraceRecorder(inception_state);
-  else
+  else*/
     emptyTrace = new EmptyTrace(inception_state);
 
   emptyTrace->regionIndex = region.index;
-  emptyTrace->Allocate(NUMFB, nframes);
+  emptyTrace->Allocate(flow_block_size, nframes);
 
   emptyTracesForBMFitter[ix] = emptyTrace;
   return(emptyTrace);
 }
 
-EmptyTrace *EmptyTraceTracker::GetEmptyTrace(Region &region)
+EmptyTrace *EmptyTraceTracker::GetEmptyTrace(const Region &region)
 {
   // only called after empty traces all initialized
   int r = region.index;
@@ -200,7 +229,7 @@ EmptyTrace *EmptyTraceTracker::GetEmptyTrace(Region &region)
   return(emptytrace);
 }
 
-int EmptyTraceTracker::MaxNumRegions(std::vector<Region>& regions)
+int EmptyTraceTracker::MaxNumRegions(const std::vector<Region>& regions)
 {
   int nmax = -1;
 

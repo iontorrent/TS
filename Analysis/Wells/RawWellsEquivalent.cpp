@@ -94,14 +94,13 @@ int main(int argc, const char *argv[]) {
   cout << compare.GetCount() << " total values. " << endl
        << compare.GetNumSame() << " (" << (100.0 * compare.GetNumSame())/compare.GetCount() <<  "%) are equivalent. " << endl
        << compare.GetNumDiff() << " (" << (100.0 * compare.GetNumDiff())/compare.GetCount() <<  "%) are not equivalent. " << endl 
-
        << "Correlation of: " << compare.GetCorrelation() << endl;
 
-  if((compare.GetCount() - allowedWrong) >= compare.GetNumSame() || 
-     compare.GetCorrelation() < minCorrelation) {
-    cout << "Wells files not equivalent for allowed mismatch: " << allowedWrong 
-	 << " minimum correlation: " << minCorrelation << endl;
-    return 1;
+  if((compare.GetCount() - allowedWrong) > compare.GetNumSame() || 
+     (compare.GetCorrelation() < minCorrelation && compare.GetCount() != compare.GetNumSame())) {
+     cout << "Wells files not equivalent for allowed mismatch: " << allowedWrong 
+     << " minimum correlation: " << minCorrelation << endl;
+     return 1;
   }
   cout << "Wells files equivalent for allowed mismatch: " << allowedWrong 
        << " minimum correlation: " << minCorrelation << endl;

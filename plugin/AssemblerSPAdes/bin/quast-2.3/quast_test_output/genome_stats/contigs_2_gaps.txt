@@ -1,0 +1,6 @@
+gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides
+1 1120
+3221 3430
+4131 5880
+7071 8119
+9591 10000

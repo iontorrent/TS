@@ -63,7 +63,7 @@ trap 'error ${LINENO}' ERR
 #--------------------------------------
 # Default settings
 #--------------------------------------
-version=`echo '$Revision: 25712 $'|awk '{print $2}'`
+version=`echo '$Revision$'|awk '{print $2}'`
 device="eth0"
 user_confirm=0
 DEMO=0

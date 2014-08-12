@@ -143,6 +143,7 @@ tmap_sam_io_read(tmap_sam_io_t *samio, tmap_sam_t *sam)
       // reverse compliment if necessary
       if((sam->b->core.flag & BAM_FREVERSE)) {
           tmap_sam_reverse_compliment(sam);
+	  //sam->b->core.flag -= BAM_FREVERSE;
       }
       return 1;
   }

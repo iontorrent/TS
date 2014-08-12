@@ -13,35 +13,23 @@
 
 #include "cuda_error.h"
 
+namespace StreamingKernels {
 
-
-extern "C" 
 void copySingleFlowFitConstParamAsync(ConstParams* ptr, int offset, cudaStream_t stream);
 
-extern "C"
 void copyMultiFlowFitConstParamAsync(ConstParams* ptr, int offset, cudaStream_t stream);
 
-extern "C" 
 void copyFittingConstParamAsync(ConstParams* ptr, int offset, cudaStream_t stream);
 
-
-extern "C"
 void copyXtalkConstParamAsync(ConstXtalkParams* ptr, int offset, cudaStream_t stream);
 
-extern "C" 
 void initPoissonTables(int device, float **poiss_cdf);   // PoissonCDFApproxMemo& poiss_cache);
 
-extern "C" 
 void initPoissonTablesLUT(int device, void **poissLUT);   // PoissonCDFApproxMemo& poiss_cache);
 
-
-extern "C" 
 void destroyPoissonTables(int device);
 
-
-
-extern "C"
-void  PerFlowGaussNewtonFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
+void  PerFlowGaussNewtonFit(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
   // inputs
   float* fg_buffers_base, // NxF
   float* emphasis,
@@ -60,7 +48,6 @@ void  PerFlowGaussNewtonFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem,
   float* err, // NxF
   float* fval, // NxF
   float* tmp_fval, // NxF
-  float* jac, // NxF 
   float* meanErr,
   // other inputs
   float minAmpl,
@@ -73,11 +60,11 @@ void  PerFlowGaussNewtonFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem,
   int num_frames, // 4
   bool useDynamicEmphasis,
 //  int * pMonitor,
-  int sId = 0
+  int sId /*= 0*/,
+  int flow_block_size
 ); 
 
-extern "C"
-void  PerFlowRelaxKmultGaussNewtonFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
+void  PerFlowRelaxKmultGaussNewtonFit(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
   // inputs
   float* fg_buffers_base, // NxF
   float* emphasis,
@@ -88,7 +75,7 @@ void  PerFlowRelaxKmultGaussNewtonFit_Wrapper(int l1type, dim3 grid, dim3 block,
   float* err, // NxF
   float* fval, // NxF
   float* tmp_fval, // NxF
-  float* jac, // NxF 
+  float* jac, // NxF
   float* meanErr,
   // other inputs
   float minAmpl,
@@ -101,12 +88,12 @@ void  PerFlowRelaxKmultGaussNewtonFit_Wrapper(int l1type, dim3 grid, dim3 block,
   int num_frames, // 4
   bool useDynamicEmphasis,
 //  int * pMonitor,
-  int sId = 0
+  int sId /*= 0*/,
+  int flow_block_size
 ); 
 
 
-extern "C"
-void  PerFlowHybridFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
+void  PerFlowHybridFit(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
   // inputs
   float* fg_buffers_base, // NxF
   float* emphasis, // F
@@ -118,7 +105,6 @@ void  PerFlowHybridFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cuda
   float* err, // NxF
   float* fval, // NxF
   float* tmp_fval, // NxF
-  float* jac, // NxF 
   float* meanErr,
   // other inputs 
   float minAmpl,
@@ -131,13 +117,13 @@ void  PerFlowHybridFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cuda
   int num_frames, // 4
   bool useDynamicEmphasis,
 //  int * pMonitor,
-  int sId = 0,
-  int switchToLevMar = 3
+  int sId /*= 0*/,
+  int switchToLevMar /*= 3*/,
+  int flow_block_size
 );
 
 
-extern "C"
-void  PerFlowLevMarFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
+void  PerFlowLevMarFit(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
   // inputs
   float* fg_buffers_base, // NxF
   float* emphasis,
@@ -156,7 +142,6 @@ void  PerFlowLevMarFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cuda
   float* err, // NxF
   float* fval, // NxF
   float* tmp_fval, // NxF
-  float* jac, // NxF 
   float* meanErr,
   // other inputs
   float minAmpl,
@@ -169,17 +154,18 @@ void  PerFlowLevMarFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cuda
   int num_frames, // 4
   bool useDynamicEmphasis,
 //int * pMonitor,
-  int sId = 0
+  int sId /*= 0*/,
+  int flow_block_size
 ); 
 
 
 
 ///////// Pre-processing kernel (bkg correct and well params calculation);
-extern "C"
-void PreSingleFitProcessing_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t stream,// Here FL stands for flows
+void PreSingleFitProcessing(dim3 grid, dim3 block, int smem, cudaStream_t stream,// Here FL stands for flows
   // inputs from data reorganization
   float* pCopies, // N
   float* pR, // N
+  float* pPhi, // N
   float* pgain, // N
   float* pAmpl, // FLxN
   float* sbg, // FLxF 
@@ -190,18 +176,20 @@ void PreSingleFitProcessing_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_
   int num_beads, // 4
   int num_frames, // 4
   bool alternatingFit,
-  int sId = 0
+  int sId /*= 0*/,
+  int flow_block_size
 );
 
 ///////// Xtalk computation kernel wrapper
-extern "C"
-void NeighbourContributionToXtalk_Wrapper(
+void NeighbourContributionToXtalk(
   dim3 grid, 
   dim3 block, 
   int smem, 
   cudaStream_t stream,// Here FL stands for flows
   // inputs from data reorganization
   float* pR, // N
+  float* pCopies, // N
+  float* pPhi, // N
   float* sbg, // FLxF 
   float* fgbuffers, // FLxFxN
   // other inputs 
@@ -214,8 +202,7 @@ void NeighbourContributionToXtalk_Wrapper(
   int sId =0
 );
 
-extern "C"
-void XtalkAccumulationAndSignalCorrection_Wrapper(// Here FL stands for flows
+void XtalkAccumulationAndSignalCorrection(// Here FL stands for flows
   dim3 grid, 
   dim3 block, 
   int smem, 
@@ -229,6 +216,7 @@ void XtalkAccumulationAndSignalCorrection_Wrapper(// Here FL stands for flows
   float* xtalk, // FLxN
   float* pCopies, // N
   float* pR, // N
+  float* pPhi, // N
   float* pgain, // N
   float* sbg, // FLxF 
   float* dark_matter, // FLxF
@@ -237,8 +225,7 @@ void XtalkAccumulationAndSignalCorrection_Wrapper(// Here FL stands for flows
   int sId
 );
 
-extern "C"
-void BuildMatrix_Wrapper( dim3 grid, dim3 block, int smem, cudaStream_t stream, 
+void BuildMatrix( dim3 grid, dim3 block, int smem, cudaStream_t stream, 
   float* pPartialDeriv, // S*FLxNxF   //scatch
   unsigned int * pDotProdMasks, // pxp
   int num_steps,
@@ -248,11 +235,11 @@ void BuildMatrix_Wrapper( dim3 grid, dim3 block, int smem, cudaStream_t stream,
   // outputs
   float* pJTJ, // (px(p+1)/2)xN
   float* pRHS, // pxN 
-  int vec = 1  
+  int vec /*= 1  */,
+  int flow_block_size
   );
 
-extern "C"
-void MultiFlowLevMarFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
+void MultiFlowLevMarFit(int l1type, dim3 grid, dim3 block, int smem, cudaStream_t stream,
   // inputs
   int maxEmphasis,
   float restrict_clonal,
@@ -277,11 +264,11 @@ void MultiFlowLevMarFit_Wrapper(int l1type, dim3 grid, dim3 block, int smem, cud
   int num_frames,
   // outputs
   float* presidual, // N 
-  int sId
+  int sId,
+  int flow_block_size
   );
 
-extern "C"
-void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_Wrapper(
+void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow(
   int l1type,
   dim3 grid, 
   dim3 block, 
@@ -299,7 +286,7 @@ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_Wrapper(
   float* pnon_integer_penalty, // MAX_HPLEN
   float* pdarkMatterComp, // NUMNUC * F 
   float* pbeadParamsTranspose, // we will be indexing directly into it from the parameter indices provide by CpuStep_t
-  CpuStep_t* psteps, // we need a specific struct describing this config for this well fit for GPU
+  CpuStep* psteps, // we need a specific struct describing this config for this well fit for GPU
   unsigned int* pDotProdMasks,
   float* pJTJ,
   float* pRHS,
@@ -310,11 +297,11 @@ void ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_Wrapper(
   // outputs
   float* presidual,
   float* poutput, // total bead params x FL x N x F. Need to decide on its layout 
-  int sId
+  int sId,
+  int flow_block_size
 ); 
 
-extern "C"
-void  PerFlowAlternatingFit_Wrapper(
+void  PerFlowAlternatingFit(
   dim3 grid, 
   dim3 block, 
   int smem, 
@@ -348,8 +335,7 @@ void  PerFlowAlternatingFit_Wrapper(
   int sId
 ); 
 
-extern "C"
-void TaubAdjustForExponentialTailFitting_Wrapper(
+void TaubAdjustForExponentialTailFitting(
   dim3 grid, 
   dim3 block, 
   int smem, 
@@ -357,6 +343,8 @@ void TaubAdjustForExponentialTailFitting_Wrapper(
   float* fg_buffers,
   float* Ampl,
   float* pR,
+  float* pCopies, // N
+  float* pPhi, // N
   float* avg_trc,
   float* fval,
   float* tmp_fval,
@@ -365,11 +353,11 @@ void TaubAdjustForExponentialTailFitting_Wrapper(
   int num_beads,
   int num_frames,
   float* tauAdjust,
-  int sId
+  int sId,
+  int flow_block_size
 );
 
-extern "C"
-void ExponentialTailFitting_Wrapper(
+void ExponentialTailFitting(
   dim3 grid, 
   dim3 block, 
   int smem, 
@@ -377,17 +365,19 @@ void ExponentialTailFitting_Wrapper(
   float* tauAdjust,
   float* Ampl,
   float* pR,
+  float* pCopies, // N
+  float* pPhi, // N
   float* fg_buffers,
   float* bkg_trace,
   float* tmp_fval,
   int num_beads,
   int num_frames,
   int flowNum,
-  int sId
+  int sId,
+  int flow_block_size
 );
 
-extern "C"
-void ProjectionSearch_Wrapper(
+void ProjectionSearch(
   dim3 grid, 
   dim3 block, 
   int smem, 
@@ -400,15 +390,30 @@ void ProjectionSearch_Wrapper(
   int realFnum, // starting flow number in block of 20 flows
   int num_beads,
   int num_frames,
-  int sId
+  int sId,
+  int flow_block_size
 );
 
-extern "C"
-void transposeData_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t stream,float *dest, float *source, int width, int height);
+void transposeData(dim3 grid, dim3 block, int smem, cudaStream_t stream,float *dest, float *source, int width, int height);
 
 ///////// Transpose Kernel
-extern "C"
-void transposeDataToFloat_Wrapper(dim3 grid, dim3 block, int smem, cudaStream_t stream,float *dest, FG_BUFFER_TYPE *source, int width, int height);
+void transposeDataToFloat(dim3 grid, dim3 block, int smem, cudaStream_t stream,float *dest, FG_BUFFER_TYPE *source, int width, int height);
 
+void RecompressRawTracesForSingleFlowFit(
+  dim3 grid, 
+  dim3 block, 
+  int smem, 
+  cudaStream_t stream,
+  float* fgbuffers, // FLxFxN
+  float* scratch,
+  int startFrame,
+  int oldFrames,
+  int newFrames,
+  int numFlows,
+  int num_beads,
+  int sId);
+
+
+} // namespace
 
 #endif // STREAMINGKERNELS_H

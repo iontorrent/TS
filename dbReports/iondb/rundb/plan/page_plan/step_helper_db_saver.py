@@ -3,7 +3,7 @@ from iondb.utils import toBoolean
 import json
 import uuid
 from django.core.exceptions import ValidationError
-from django.utils import simplejson
+import simplejson
 from traceback import format_exc
 from iondb.rundb.plan.page_plan.step_helper import StepHelperType
 from django.contrib.auth.models import User
@@ -48,10 +48,23 @@ class StepHelperDbSaver():
         plugins_step_data = step_helper.steps[StepNames.PLUGINS]
         ionreporter_step_data = step_helper.steps[StepNames.IONREPORTER]
         
+        isFavorite = False
+        categories = ''
         if not step_helper.isPlan():
             isFavorite = save_template_step_data.savedFields['setAsFavorite']
-        else:
-            isFavorite = False
+            categories =  application_step_data.savedFields.get('categories', "")
+
+            #if user has changed the application or target technique during template copying, reset categories value
+            applicationGroupName = application_step_data.savedFields.get("applicationGroupName", "")
+            if applicationGroupName != "DNA + RNA":
+                #logger.debug("step_helper_db_saver.__get_universal_params() applicationGroupName=%s; replacing categories=%s" %(applicationGroupName, categories))
+                if categories:
+                    categories.replace("Onconet", "");
+                    categories.replace("Oncomine", "");  
+                else:
+                    categories = ""              
+
+        #logger.debug("step_helper_db_saver.__get_universal_params() application_step_data.savedFields=%s" %(application_step_data.savedFields))
         
         runType = ''
         application_group = None
@@ -77,9 +90,12 @@ class StepHelperDbSaver():
         x_flows = kits_step_data.savedFields['flows']
         x_forward3primeadapter = kits_step_data.savedFields['forward3primeAdapter']
         x_libraryKey = kits_step_data.savedFields['libraryKey']
+        tfKey = kits_step_data.savedFields['tfKey']
         x_librarykitname = kits_step_data.savedFields['librarykitname']
         x_sequencekitname = kits_step_data.savedFields['sequencekitname']
         x_isDuplicateReads = kits_step_data.savedFields['isDuplicateReads']
+        x_base_recalibrate = kits_step_data.savedFields['base_recalibrate']
+        x_realign = kits_step_data.savedFields['realign']
         
         x_bedfile = reference_step_data.savedFields['targetBedFile']
         x_library = reference_step_data.savedFields["reference"]
@@ -87,19 +103,35 @@ class StepHelperDbSaver():
         
         selectedPluginsValue = plugins_step_data.getSelectedPluginsValue()
         
-        planStatus = "planned"
+        logger.debug("step_helper_db_saver.__get_universal_params() application_step_data.savedFields[planStatus]=%s" %(application_step_data.savedFields["planStatus"]))
+        logger.debug("step_helper_db_saver.__get_universal_params() isEditRun=%s; isEdit=%s; isIonChef=%s; isPlan=%s; isPlanBySample=%s" %(str(step_helper.isEditRun()), str(step_helper.isEdit()), str(step_helper.isIonChef()), str(step_helper.isPlan()), str(step_helper.isPlanBySample())))
+
+        planStatus = application_step_data.savedFields["planStatus"]
         if not step_helper.isEditRun():
             if step_helper.isIonChef():
                 if step_helper.isPlan() or step_helper.isPlanBySample():
+                    if step_helper.isCreate():
+                        planStatus = "pending"
+                    elif step_helper.isEdit() and application_step_data.savedFields["planStatus"] != "reserved": 
+                        planStatus = "pending"
+                    elif (step_helper.sh_type == StepHelperType.COPY_PLAN or step_helper.sh_type == StepHelperType.COPY_PLAN_BY_SAMPLE):
+                        planStatus = "pending"
+                else:
                     planStatus = "pending"
+            else:
+                #when copying a sequenced plan, reseting the plan status is necessary
+                planStatus = "planned"
+
         else:
             planStatus = "run"
+
+        #logger.debug("step_helper_db_saver.__get_universal_params() planStatus=%s" %(planStatus))
             
         retval = {
             'applicationGroup': application_group,
             'sampleGrouping' : sampleGrouping, 
             'usePreBeadfind': True,
-            'usePostBeadfind': True,
+            'usePostBeadfind': False if step_helper.isProton() else True,
             'preAnalysis': True,
             'runType': runType,
             'templatingKitName': templatingKitName,
@@ -112,7 +144,9 @@ class StepHelperDbSaver():
             'pairedEndLibraryAdapterName': '',
             'samplePrepKitName': samplePrepKitName,
             'planStatus' : planStatus,
-
+            'categories' : categories,
+            
+            'x_usePreBeadfind': True,
             'x_autoAnalyze': True,
             'x_barcodeId': x_barcodeId,
             'x_bedfile': x_bedfile,
@@ -121,16 +155,19 @@ class StepHelperDbSaver():
             'x_forward3primeadapter': x_forward3primeadapter,
             'x_library': x_library,
             'x_libraryKey': x_libraryKey,
+            'tfKey': tfKey,
             'x_librarykitname': x_librarykitname,
             'x_regionfile': x_regionfile,
             'x_selectedPlugins': selectedPluginsValue,
             'x_sequencekitname': x_sequencekitname,
             'x_variantfrequency': '',
-            'x_isDuplicateReads': False if x_isDuplicateReads is None else x_isDuplicateReads
+            'x_isDuplicateReads': False if x_isDuplicateReads is None else x_isDuplicateReads,
+            'x_base_recalibrate': False if x_base_recalibrate is None else x_base_recalibrate,
+            'x_realign': False if x_realign is None else x_realign
         }
         return retval
 
-    def __get_specific_params_by_sample(self, step_helper, index=0, sample_set_item_display_Name=None, sample_external_id='', sample_description='', sampleSet_uid=None, planTotal=1):        
+    def __get_specific_params_by_sample(self, step_helper, index=0, sample_set_item_display_Name=None, sample_external_id='', sample_description='', sampleSet_uid=None, planTotal=1):
         save_step = step_helper.steps[StepNames.SAVE_PLAN_BY_SAMPLE]
         barcoding_step = step_helper.steps[StepNames.BARCODE_BY_SAMPLE]
         sampleset = save_step.savedObjects[SavePlanBySampleFieldNames.SAMPLESET]
@@ -139,21 +176,15 @@ class StepHelperDbSaver():
 
         isReusable = False
         barcodedSamples = None
-
+        
         planDisplayedName = save_step.savedFields[SavePlanBySampleFieldNames.TEMPLATE_NAME]
 
-        if step_helper.isBarcoded():
-            if step_helper.previous_plan_id == -1:
-                planDisplayedName = '%s %s' % (planDisplayedName, sampleset.displayedName)
-        else:
-            planDisplayedName = '%s %s' % (planDisplayedName, sample_set_item_display_Name)
+        note = save_step.savedFields['note']
 
         selectedPluginsValue = plugins_step_data.getSelectedPluginsValue()
         
         if step_helper.isBarcoded():
-            barcodedSamples = json.dumps(\
-                step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedObjects[BarcodeBySampleFieldNames.SAMPLE_TO_BARCODE]\
-                )
+            barcodedSamples = json.dumps(barcoding_step.savedObjects['sampleToBarcode'])
             
         retval = {'planDisplayedName': planDisplayedName,
                   'planName': planDisplayedName.replace(' ', '_'),
@@ -164,6 +195,7 @@ class StepHelperDbSaver():
                   'x_barcodedSamples': barcodedSamples,
                   # 'x_numberOfChips' : barcoding_step.savedFields[BarcodeBySampleFieldNames.NUMBER_OF_CHIPS],
                   'x_selectedPlugins': selectedPluginsValue,
+                  'x_notes' : note,
                   'x_isSaveBySample' : True
                 }
         if ionreporter_step_data.savedFields['irworkflow'] != None:
@@ -187,9 +219,11 @@ class StepHelperDbSaver():
                               is_multi_sample=False):
         ionreporter_step_data = step_helper.steps[StepNames.IONREPORTER]
         if step_helper.isTemplateBySample():
-            planDisplayedName = step_helper.steps[StepNames.SAVE_TEMPLATE_BY_SAMPLE].savedFields['templateName']
+            save_step_data = step_helper.steps[StepNames.SAVE_TEMPLATE_BY_SAMPLE]
         else:
-            planDisplayedName = step_helper.steps[StepNames.SAVE_TEMPLATE].savedFields['templateName']
+            save_step_data = step_helper.steps[StepNames.SAVE_TEMPLATE]
+            
+        planDisplayedName = save_step_data.savedFields['templateName']
         sampleTubeLabel = ''
         isReusable = True
         note = ''
@@ -208,6 +242,11 @@ class StepHelperDbSaver():
             if step_helper.isBarcoded():
                 barcodedSamples = json.dumps(step_helper.steps[StepNames.SAVE_PLAN].savedObjects['sampleToBarcode'])
                 sampleTubeLabel = step_helper.steps[StepNames.SAVE_PLAN].savedFields['barcodeSampleTubeLabel']
+
+                #logger.debug("step_helper_db_saver.__get_specific_params() barcodedSamples=%s" %(barcodedSamples))
+        else:
+            note = save_step_data.savedFields['note']
+            
         retval = {'planDisplayedName': planDisplayedName,
                   'planName': planDisplayedName.replace(' ', '_'),
                   'sampleTubeLabel' : sampleTubeLabel,
@@ -225,21 +264,26 @@ class StepHelperDbSaver():
         
     
     def __update_non_barcode_plugins_with_ir(self, step_helper, parentDict, sampleValueDict):
-        save_plan_step_data = step_helper.steps[StepNames.SAVE_PLAN]
+        logger.debug("step_helper_db_sever.__update_non_barcode_plugins_with_ir() sampleValueDict=%s" %(sampleValueDict))
+        
+        # save_plan_step_data = step_helper.steps[StepNames.SAVE_PLAN]
         # if save_plan_step_data.prepopulatedFields['selectedIr']:
-        if step_helper.steps[StepNames.IONREPORTER].savedFields['irAccountId'] and step_helper.steps[StepNames.IONREPORTER].savedFields['irAccountId'] != '0':
+        if step_helper.steps[StepNames.IONREPORTER].savedFields['irAccountId'] not in [None, '', '-1', '0']:
             # ir_plugin = save_plan_step_data.prepopulatedFields['selectedIr']
             ir_plugin = step_helper.steps[StepNames.IONREPORTER].prepopulatedFields['IR_PLUGIN']
             
             user_input_dict = {}
-            user_input_dict['Workflow'] = sampleValueDict['irWorkflow']
-            user_input_dict['Gender'] = sampleValueDict['irGender']
+
+            #if TS establishes connection with IR on the IR chevron but loses the connection on the sample/IR config chevron, 
+            #there can be NO IR-related fields in the dictionary
+            user_input_dict['Workflow'] = sampleValueDict.get('irWorkflow', "")
+            user_input_dict['Gender'] = sampleValueDict.get('irGender', "")
             user_input_dict['sample'] = sampleValueDict['sampleName']
             user_input_dict['sampleName'] = sampleValueDict['sampleName'].strip().replace(' ', '_')
             user_input_dict['sampleExternalId'] = sampleValueDict["sampleExternalId"]
             user_input_dict['sampleDescription'] = sampleValueDict["sampleDescription"]
-            user_input_dict['Relation'] = sampleValueDict['irRelation'] or ""
-            user_input_dict['RelationRole'] = sampleValueDict['irRelationRole'] or ""
+            user_input_dict['Relation'] = sampleValueDict.get('irRelationshipType', "")
+            user_input_dict['RelationRole'] = sampleValueDict.get('irRelationRole', "")
 
             if 'irSetID' in sampleValueDict:
                 if step_helper.isEdit() or step_helper.isCopy():
@@ -282,6 +326,8 @@ class StepHelperDbSaver():
 
         
     def __update_barcode_plugins_with_ir(self, step_helper, parentDict, userInputList, suffix=None):
+        logger.debug("step_helper_db_sever.__update_barcode_plugins_with_ir() userInputList=%s" %(userInputList))
+                
         # save_plan_step_data = step_helper.steps[StepNames.SAVE_PLAN]
         # if save_plan_step_data.prepopulatedFields['selectedIr']:
         if step_helper.steps[StepNames.IONREPORTER].savedFields['irAccountId'] and step_helper.steps[StepNames.IONREPORTER].savedFields['irAccountId'] != '0':
@@ -305,17 +351,19 @@ class StepHelperDbSaver():
                     is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields['irDown'] == '1'
 
             for item in userInputList:
-                if 'setid' in item:
-                    if step_helper.isEdit() or step_helper.isCopy():
-                        try:
-                            item['setid'] = item['setid'] + step_helper.steps[StepNames.SAVE_PLAN].prepopulatedFields['setid_suffix']
-                        except:
-                            item['setid'] = item['setid'] + step_helper.steps[StepNames.BARCODE_BY_SAMPLE].prepopulatedFields['setid_suffix']
-                    else:
-                        item['setid'] = item['setid'] + '__' + suffix
+                # adding unique suffix to setid value
+                setid = item.get('setid') or ''
+                if step_helper.isEdit() or step_helper.isCopy():
+                    try:
+                        item['setid'] = setid + step_helper.steps[StepNames.SAVE_PLAN].prepopulatedFields.get('setid_suffix', '__'+suffix)
+                    except:
+                        item['setid'] = setid + step_helper.steps[StepNames.BARCODE_BY_SAMPLE].prepopulatedFields.get('setid_suffix', '__'+suffix)
+                else:
+                    item['setid'] = setid + '__' + suffix
 
             if not is_IR_Down:
-                parentDict['x_selectedPlugins']['IonReporterUploader'] = self.__get_ir_plugins_entry(ir_plugin, userInputList,
+            	if ir_plugin:
+                	parentDict['x_selectedPlugins']['IonReporterUploader'] = self.__get_ir_plugins_entry(ir_plugin, userInputList,
                                                                                         accountId, accountName, applicationType)
             elif is_IR_Down and (step_helper.isEdit() or step_helper.isCopy() or step_helper.isEditRun()) and step_helper.previous_plan_id > 0:
                 _json_selectedPlugins = PlannedExperiment.objects.get(pk=step_helper.previous_plan_id).experiment.get_EAS().selectedPlugins
@@ -335,6 +383,7 @@ class StepHelperDbSaver():
 
         for userInput in userInputList:
             userInput['ApplicationType'] = applicationType
+            if userInput['Workflow'] == 'Upload Only': userInput['Workflow'] = ''
 
         user_input = {PluginFieldNames.ACCOUNT_ID: accountId,
                       PluginFieldNames.ACCOUNT_NAME: accountName,
@@ -377,12 +426,13 @@ class StepHelperDbSaver():
         projectObjList = self.getProjectObjectList(step_helper, username)
         sampleSet_uid = str(uuid.uuid4())
         if step_helper.isPlanBySample():
+            barcoding_step_data = step_helper.steps[StepNames.BARCODE_BY_SAMPLE]
             
             if step_helper.isBarcoded():
                 kwargs = self.__get_universal_params(step_helper, username)
                 kwargs.update(self.__get_specific_params_by_sample(step_helper, sampleSet_uid=sampleSet_uid))
                 suffix = str(uuid.uuid4())
-                self.__update_barcode_plugins_with_ir(step_helper, kwargs, step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedObjects['barcodedIrPluginEntires'], suffix=suffix)
+                self.__update_barcode_plugins_with_ir(step_helper, kwargs, barcoding_step_data.savedObjects['barcodedIrPluginEntries'], suffix=suffix)
 
                 if step_helper.sh_type == StepHelperType.EDIT_PLAN_BY_SAMPLE and step_helper.previous_plan_id > 0:
                     self.savePlannedExperiment(step_helper, kwargs, projectObjList, step_helper.previous_plan_id)
@@ -392,7 +442,7 @@ class StepHelperDbSaver():
                     self.savePlannedExperiment(step_helper, kwargs, projectObjList)
             else:
                 sampleDicts = []
-                for chip, values in step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedObjects['chipToSample'].items():
+                for values in barcoding_step_data.savedObjects['samplesTableList']:
                     sampleName = values['sampleName']
                     if sampleName:
                         sampleDicts.append(values)
@@ -407,9 +457,8 @@ class StepHelperDbSaver():
                     kwargs.update(self.__get_specific_params_by_sample(step_helper, index=index, \
                             sample_set_item_display_Name=valueDict['sampleName'], sample_external_id=valueDict['sampleExternalId'], sample_description=valueDict['sampleDescription'], \
                             sampleSet_uid=sampleSet_uid, planTotal=len(sampleDicts)))
-                    self.__update_barcode_plugins_with_ir(step_helper, kwargs, [step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedObjects['barcodedIrPluginEntires'][index]], suffix=suffix)
+                    self.__update_non_barcode_plugins_with_ir(step_helper, kwargs, valueDict)
                     index += 1
-                    #self.__update_non_barcode_plugins_with_ir(step_helper, kwargs, valueDict)
                     
                     if step_helper.sh_type == StepHelperType.EDIT_PLAN_BY_SAMPLE and step_helper.previous_plan_id > 0 and firstIteration:
                         self.savePlannedExperiment(step_helper, kwargs, projectObjList, step_helper.previous_plan_id)
@@ -427,14 +476,14 @@ class StepHelperDbSaver():
             if step_helper.isBarcoded():
                 kwargs = self.__get_universal_params(step_helper, username)
                 kwargs.update(self.__get_specific_params(step_helper, username, '', '', False))
-                self.__update_barcode_plugins_with_ir(step_helper, kwargs, save_plan_step_data.savedObjects['barcodedIrPluginEntires'], suffix=str(uuid.uuid4()))
+                self.__update_barcode_plugins_with_ir(step_helper, kwargs, save_plan_step_data.savedObjects['barcodedIrPluginEntries'], suffix=str(uuid.uuid4()))
                 if step_helper.sh_type in [StepHelperType.EDIT_PLAN, StepHelperType.EDIT_RUN] and step_helper.previous_plan_id > 0:
                     self.savePlannedExperiment(step_helper, kwargs, projectObjList, step_helper.previous_plan_id)
                 else:
                     self.savePlannedExperiment(step_helper, kwargs, projectObjList)
             else:
                 sampleDicts = []
-                for chip, values in save_plan_step_data.savedObjects['chipToSamples'].items():
+                for values in save_plan_step_data.savedObjects['samplesTableList']:
                     sampleName = values['sampleName']
                     if sampleName:
                         sampleDicts.append(values)
@@ -457,7 +506,7 @@ class StepHelperDbSaver():
             return self.saveTemplate(step_helper, username, projectObjList)
 
     def saveTemplate(self, step_helper, username, projectObjList):
-        #logger.debug("step_helper_db_saver.saveTemplate() isCopy=%s; isCreate=%s; isEdit=%s; isEditRun=%s" %(str(step_helper.isCopy()), str(step_helper.isCreate()), str(step_helper.isEdit()), str(step_helper.isEditRun())))
+        logger.debug("step_helper_db_saver.saveTemplate() isCopy=%s; isCreate=%s; isEdit=%s; isEditRun=%s" %(str(step_helper.isCopy()), str(step_helper.isCreate()), str(step_helper.isEdit()), str(step_helper.isEditRun())))
         
         kwargs = self.__get_universal_params(step_helper, username)
         kwargs.update(self.__get_specific_params(step_helper, username))
@@ -478,6 +527,8 @@ class StepHelperDbSaver():
             kwargs['x_selectedPlugins']['IonReporterUploader'] = self.__get_ir_plugins_entry(step_helper.steps[StepNames.IONREPORTER].prepopulatedFields['IR_PLUGIN'],
                                                                                              '', accountId, accountName, applicationType)
 
+        logger.debug("step_helper_db_saver.saveTemplate() sh_type=%s; previous_template_id=%s" %(step_helper.sh_type, str(step_helper.previous_template_id)))
+
         if step_helper.sh_type == StepHelperType.EDIT_TEMPLATE and step_helper.previous_template_id > 0:
             return self.savePlannedExperiment(step_helper, kwargs, projectObjList, step_helper.previous_template_id)
         else:
@@ -486,16 +537,18 @@ class StepHelperDbSaver():
     def savePlannedExperiment(self, step_helper, param_dict, projectObjList, pe_id_to_update=None):
         planTemplate = None
         #if we're changing a plan from having 1 sample to say 2 samples, we need to UPDATE 1 plan and CREATE 1 plan!!
-        logger.debug("About to save, KWARGS ARE: %s" % str(param_dict))
+        logger.debug("About to savePlannedExperiment, KWARGS ARE: %s" % str(param_dict))
         for key,value in sorted(param_dict.items()):
             logger.debug('KWARG %s: %s' % (str(key), str(value)))
         if pe_id_to_update:
+            logger.debug("step_helper_db_saver.savePlannedExperiment() pe_id_to_update=%s" %(str(pe_id_to_update)))
             planTemplate, extra_kwargs = PlannedExperiment.objects.save_plan(pe_id_to_update, **param_dict)
         else:
             planTemplate, extra_kwargs = PlannedExperiment.objects.save_plan(-1, **param_dict)
         
         self.saveQc(planTemplate, step_helper.steps[StepNames.MONITORING])
         self.saveProjects(planTemplate, projectObjList)
+        self.addSavedPlansList(planTemplate.pk)
         return planTemplate
             
 
@@ -532,3 +585,13 @@ class StepHelperDbSaver():
                 planTemplate.projects.add(projectObj)
         else:
             planTemplate.projects.clear()
+            
+    def addSavedPlansList(self, plan_pk):
+        if plan_pk and plan_pk > 0:
+            if hasattr(self, 'saved_plans'):
+                self.saved_plans.append(plan_pk)
+            else:
+                self.saved_plans = [plan_pk]
+    
+    def getSavedPlansList(self):
+        return getattr(self, 'saved_plans', '')

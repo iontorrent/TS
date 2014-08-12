@@ -4,7 +4,7 @@
 Definitions for enum like constants
 """
 
-__all__ = ('Feature', 'RunType', 'RunLevel', 'lookupEnum')
+__all__ = ('Feature', 'RunType', 'RunLevel', 'lookupEnum', 'runLevelsList')
 
 def enum(**enums):
         return type('Enum', (), enums)
@@ -15,6 +15,10 @@ def lookupEnum(enum, item):
         if item == v:
             return k
     return None
+
+def runLevelsList():
+    # returns runlevels in the order launched by the pipeline
+    return [RunLevel.PRE, RunLevel.BLOCK, RunLevel.SEPARATOR, RunLevel.DEFAULT, RunLevel.POST, RunLevel.LAST]
 
 Feature = enum(
     EXPORT='export',

@@ -61,13 +61,13 @@ var columns = [{
   id: "chrom", name: "Chrom", field: "chrom", width: 56, minWidth: 40, maxWidth: 100, sortable: true,
   toolTip: "The chromosome (or contig) name in the reference genome."
 },{
-  id: "position", name: "Position", field: "position", width: 65, minWidth: 38, maxWidth: 80, sortable: true, formatter: ChromIGV,
+  id: "position", name: "Position", field: "position", width: 75, minWidth: 38, maxWidth: 80, sortable: true, formatter: ChromIGV,
   toolTip: "The one-based position in the reference genome. Click the link to open the position in IGV and view all reads covering the position."
 },{
   id: "targetid", name: "Target ID", field: "targetid", width: 70, minWidth: 40, maxWidth: 200, sortable: true,
   toolTip: "Name of the target region containing the marker variant."
 },{
-  id: "hotspotid", name: "TaqMan Assay ID", field: "hotspotid", width: 108, minWidth: 40, maxWidth: 200, sortable: true, formatter: TaqmanAssay,
+  id: "hotspotid", name: "TaqMan Assay ID", field: "hotspotid", width: 110, minWidth: 40, maxWidth: 200, sortable: true, formatter: TaqmanAssay,
   toolTip: "TaqMan Assay ID string associated with the marker variant. Click the link to place an order for this assay."
 },{
   id: "call", name: "Call", field: "call", width: 30, minWidth: 26, maxWidth: 40,
@@ -104,7 +104,7 @@ var columns = [{
   toolTip: "Number of reverse reads aligned over the reference base that did not produce a base deletion call."
 }];
 
-$("#sampleIDalleleCoverageTable").css('width','882');
+$("#sampleIDalleleCoverageTable").css('width','893');
 
 // define the grid and attach head/foot of the table
 var options = {
@@ -189,7 +189,7 @@ function loadtable() {
     if( firstPartialLoad ) {
       firstPartialLoad = false;
       var numDataRows = (numRecords < initialRowDisplay) ? numRecords : initialRowDisplay;
-      $("#SIDAC-grid").css('height',(numDataRows*25+27)+'px');
+      $("#SIDAC-grid").css('height',(numDataRows*25+25)+'px');
     }
     dataView.setItems(data);
     grid.resizeCanvas();

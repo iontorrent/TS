@@ -21,11 +21,7 @@
 	 	                                    <p style="padding-left:25px; font-size:11px;">
 	 	                                    Frequency:
 	 	                                    {% for variantFreq in planTemplateData.variantfrequencies %}
-                                            {% ifequal variantFreq.name selectedApplProductData.defaultVariantFrequency %}
-	 	                                            <input id="variantfrequency" name="variantfrequency" value="{{variantFreq.name}}" type="radio" checked="checked"> {{variantFreq.name}}
-   	                                        {% else %}
-	 	                                            <input id="variantfrequency" name="variantfrequency" value="{{variantFreq.name}}" type="radio"> {{variantFreq.name}}
-	 	                                        {% endifequal %}
+	 	                                         <input id="variantfrequency" name="variantfrequency" value="{{variantFreq.name}}" type="radio"> {{variantFreq.name}}
 	 	                                    {% endfor %}
 	 	                                    </p>
                                 {% endif %}
@@ -52,11 +48,7 @@
 	 	                                    <p style="padding-left:25px; font-size:11px;">
 	 	                                    Frequency:
 	 	                                    {% for variantFreq in planTemplateData.variantfrequencies %}
-                                            {% ifequal variantFreq.name selectedApplProductData.defaultVariantFrequency %}
-	 	                                            <input id="variantfrequency" name="variantfrequency" value="{{variantFreq.name}}" type="radio" checked="checked"> {{variantFreq.name}}
-   	                                        {% else %}
-	 	                                            <input id="variantfrequency" name="variantfrequency" value="{{variantFreq.name}}" type="radio"> {{variantFreq.name}}
-	 	                                        {% endifequal %}
+	 	                                         <input id="variantfrequency" name="variantfrequency" value="{{variantFreq.name}}" type="radio"> {{variantFreq.name}}
 	 	                                    {% endfor %}
 	 	                                    </p>                                
                                 {% endif %}

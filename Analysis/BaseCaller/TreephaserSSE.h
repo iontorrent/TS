@@ -5,6 +5,10 @@
 
 #include "DPTreephaser.h"
 
+#include <algorithm>
+#include <vector>
+#include "BaseCallerUtils.h"
+
 #ifdef _WIN32
   #define ALIGN(AAlignSize) __declspec(align(AAlignSize))
   #define ALWAYS_INLINE __forceinline
@@ -75,60 +79,70 @@ public:
   
   void InitializeVariables();
 
-  //! @brief  Set flow order and initialize internal variables
+  //! @brief     Set flow order and initialize internal variables
   //! @param[in]  flow_order  Flow order object
   //! @param[in]  windowSize  Size of the normalization window to use.
   void SetFlowOrder(const ion::FlowOrder& flow_order, const int windowSize);
 
-  //! @brief  Set the normalization window size
+  //! @brief     Set the normalization window size
   //! @param[in]  windowSize  Size of the normalization window to use.
   inline void SetNormalizationWindowSize(const int windowSize) { windowSize_ = max(kMinWindowSize_, min(windowSize, kMaxWindowSize_));}
 
+  //! @brief     Set phasing model parameters
   void SetModelParameters(double cf, double ie);
 
-  //! @brief Interface function similar to DPTreephaser Solve
+  //! @brief     Interface function similar to DPTreephaser Solve
   //! @param[out] read        Basecaller read to be solved
   //! @param[in]  begin_flow  Start solving at this flow
   //! @param[in]  end_flow    Do not solve for any flows past this one
   void SolveRead(BasecallerRead& read, int begin_flow, int end_flow);
 
+  //! @brief     Iterative solving and normalization routine
   void NormalizeAndSolve(BasecallerRead& read);
   PathRec* parent;
   int best;
 
-  //! @brief     Set popinters to recalibration model
-  void SetAsBs(vector<vector< vector<float> > > *As, vector<vector< vector<float> > > *Bs,  bool pm_model_available){
+  //! @brief     Set pointers to recalibration model
+  bool SetAsBs(const vector<vector< vector<float> > > *As, const vector<vector< vector<float> > > *Bs){
     As_ = As;
     Bs_ = Bs;
-    pm_model_available_ =  pm_model_available;
-  };
-
-  //! @brief     Enables the use of recalibration if a model is available
-  bool EnableRecalibration() {
-    if (pm_model_available_) {
-      pm_model_enabled_ = true;
-      recalibrate_predictions_ = true;
-    }
+    pm_model_available_ = (As_ != NULL) and (Bs_ != NULL);
+    recalibrate_predictions_ = pm_model_available_; // We bothered loading the model, of course we want to use it!
     return pm_model_available_;
   };
 
-  //! @brief     Disables the use of recalibration.
+  //! @brief     Enables the use of recalibration if a model is available.
+  bool EnableRecalibration() {
+    recalibrate_predictions_ = pm_model_available_;
+    return pm_model_available_;
+  };
+
+  //! @brief     Disables the use of recalibration until a new model is set.
   void DisableRecalibration() {
-    pm_model_available_ = false;
-    pm_model_enabled_   = false;
+    //pm_model_available_ = false;
     recalibrate_predictions_ = false;
   };
+
+  //! @brief  Switch to disable / enable the use of recalibration during the normalization phase
+  void SkipRecalDuringNormalization(bool skip_recal)
+    { skip_recal_during_normalization_ = skip_recal; };
 
   //! @brief  Perform a more advanced simulation to generate QV predictors
   void  ComputeQVmetrics(BasecallerRead& read);
 
 protected:
 
+  //! @brief     Solving a read
   bool  Solve(int begin_flow, int end_flow);
+  //! @brief     Normalizing a read
   void  WindowedNormalize(BasecallerRead& read, int step);
-  void sumNormMeasures();
-  void advanceState4(PathRec RESTRICT_PTR parent, int end);
-  void nextState(PathRec RESTRICT_PTR path, int nuc, int end);
+  //! @brief     Make recalibration changes to predictions explicitly visible
+  void  RecalibratePredictions(PathRec *maxPathPtr);
+  //! @brief     Resetting recalibration data structure
+  void  ResetRecalibrationStructures(int num_flows);
+  void  sumNormMeasures();
+  void  advanceState4(PathRec RESTRICT_PTR parent, int end);
+  void  nextState(PathRec RESTRICT_PTR path, int nuc, int end);
 
   // There was a small penalty in making these arrays class members, as opposed to static variables
   ALIGN(64) short ts_NextNuc[4][MAX_VALS];
@@ -159,15 +173,16 @@ protected:
   int ts_StepBeg[MAX_STEPS+1];
   int ts_StepEnd[MAX_STEPS+1];
 
-  int windowSize_;
-
-  vector< vector< vector<float> > > *As_;
-  vector< vector< vector<float> > > *Bs_;
-  bool pm_model_available_;
-  bool pm_model_enabled_;
-  bool recalibrate_predictions_;
-  bool retain_recalibration_values_;  //!< Works slightly differently in SSE version than in C++
-  bool state_inphase_enabled_;
+  
+  int windowSize_;                              //!< Adaptive normalization window size
+  double              my_cf_;                   //!< Stores the cf phasing parameter used to compute transitions
+  double              my_ie_;                   //!< Stores the ie phasing parameter used to compute transitions
+  const vector< vector< vector<float> > > *As_; //!< Pointer to recalibration structure: multiplicative constant
+  const vector< vector< vector<float> > > *Bs_; //!< Pointer to recalibration structure: additive constant
+  bool pm_model_available_;                     //!< Signals availability of a recalibration model
+  bool recalibrate_predictions_;                //!< Switch to use recalibration model during metric generation
+  bool skip_recal_during_normalization_;        //!< Switch to skip recalibration during the normalization phase
+  bool state_inphase_enabled_;                  //!< Switch to save inphase population of molecules
 
 };
 

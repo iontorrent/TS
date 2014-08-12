@@ -6,15 +6,17 @@
 
 #include "OrderedDatasetWriter.h"
 
+#include <stddef.h>
+#include <algorithm>
 #include <sstream>
-#include <iomanip>
 #include <stdio.h>
-#include <stdlib.h>
 
-#include "api/SamHeader.h"
+#include "BarcodeDatasets.h"
+
 #include "api/BamAlignment.h"
 
 using namespace std;
+namespace ion { class FlowOrder; }
 
 class ThousandsSeparator : public numpunct<char> {
 protected:
@@ -26,6 +28,10 @@ OrderedDatasetWriter::OrderedDatasetWriter()
 {
   num_regions_ = 0;
   num_regions_written_ = 0;
+  num_barcodes_ = 0;
+  num_read_groups_ = 0;
+  num_datasets_ = 0;
+  save_filtered_reads_ = false;
   pthread_mutex_init(&dropbox_mutex_, NULL);
   pthread_mutex_init(&write_mutex_, NULL);
   pthread_mutex_init(&delete_mutex_, NULL);
@@ -62,11 +68,17 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
   read_group_name_.resize(num_read_groups_);
   read_group_dataset_.assign(num_read_groups_, -1);
   read_group_num_Q20_bases_.assign(num_read_groups_,0);
+  read_group_barcode_filt_zero_err_.assign(num_read_groups_, 0);
   read_group_num_barcode_errors_.resize(num_read_groups_);
+  read_group_barcode_distance_hist_.resize(num_read_groups_);
+  read_group_barcode_bias_.resize(num_read_groups_);
 
   for (int rg = 0; rg < num_read_groups_; ++rg) {
     read_group_name_[rg] = datasets.read_group_name(rg);
     read_group_num_barcode_errors_[rg].assign(3,0);
+    read_group_barcode_bias_[rg].assign(datasets.GetBCmaxFlows(),0.0);
+    read_group_barcode_distance_hist_[rg].assign(5,0);
+
   }
 
   // New filtering and trimming accounting (per read group)
@@ -74,6 +86,7 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
   read_group_stats_.resize(num_read_groups_);
 
   bam_writer_.resize(num_datasets_, NULL);
+  sam_header_.resize(num_datasets_);
 
   for (int ds = 0; ds < num_datasets_; ++ds) {
 
@@ -81,7 +94,7 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
 
     bam_filename_[ds] = base_directory + "/" + datasets.dataset(ds)["basecaller_bam"].asString();
 
-    SamHeader sam_header;
+    SamHeader& sam_header = sam_header_[ds];
     sam_header.Version = "1.4";
     sam_header.SortOrder = "unsorted";
 
@@ -115,11 +128,10 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
       sam_header.ReadGroups.Add(read_group);
     }
 
-	for(size_t i = 0; i < comments.size(); ++i)
-	{
-		sam_header.Comments.push_back(comments[i]);
-	}
+    for(size_t i = 0; i < comments.size(); ++i)
+      sam_header.Comments.push_back(comments[i]);
 
+    /*
     // Open Bam for writing
 
     RefVector empty_reference_vector;
@@ -127,6 +139,7 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
     bam_writer_[ds]->SetCompressionMode(BamWriter::Compressed);
     //bam_writer_[ds]->SetCompressionMode(BamWriter::Uncompressed);
     bam_writer_[ds]->Open(bam_filename_[ds], sam_header, empty_reference_vector);
+    */
   }
 
 }
@@ -144,6 +157,8 @@ void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& datase
 
   for (int ds = 0; ds < num_datasets_; ++ds) {
     if (bam_writer_[ds]) {
+      if (!dataset_nickname.empty())
+        printf("%s: Generated %s with %d reads\n", dataset_nickname.c_str(), bam_filename_[ds].c_str(), num_reads_[ds]);
       bam_writer_[ds]->Close();
       delete bam_writer_[ds];
     }
@@ -156,13 +171,21 @@ void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& datase
       read_group_json["read_count"]  = (Json::UInt64)read_group_stats_[rg_index].num_reads_final_;
       read_group_json["total_bases"] = (Json::UInt64)read_group_stats_[rg_index].num_bases_final_;
       read_group_json["Q20_bases"]   = (Json::UInt64)read_group_num_Q20_bases_[rg_index];
-      read_group_json["barcode_errors_hist"][0] = (Json::UInt64)read_group_num_barcode_errors_[rg_index][0];
-      read_group_json["barcode_errors_hist"][1] = (Json::UInt64)read_group_num_barcode_errors_[rg_index][1];
-      read_group_json["barcode_errors_hist"][2] = (Json::UInt64)read_group_num_barcode_errors_[rg_index][2];
-    }
 
-    if (!dataset_nickname.empty())
-      printf("%s: Generated %s with %d reads\n", dataset_nickname.c_str(), bam_filename_[ds].c_str(), num_reads_[ds]);
+      // Log barcode statistics only for barcode read groups
+      if (read_group_json.isMember("barcode_sequence")) {
+        read_group_json["barcode_match_filtered"] = (Json::UInt64)read_group_barcode_filt_zero_err_[rg_index];
+
+        for (unsigned int iflow=0; iflow < read_group_barcode_bias_[rg_index].size(); iflow++) {
+          Json::Value av_bias_json(read_group_barcode_bias_[rg_index].at(iflow) / max(read_group_stats_[rg_index].num_reads_final_,(int64_t)1));
+    	  read_group_json["barcode_bias"][iflow] = av_bias_json;
+        }
+        for (unsigned int ibin=0; ibin < read_group_barcode_distance_hist_[rg_index].size(); ibin++)
+          read_group_json["barcode_distance_hist"][ibin] = (Json::UInt64)read_group_barcode_distance_hist_[rg_index].at(ibin);
+        for (unsigned int ierr=0; ierr < read_group_num_barcode_errors_[rg_index].size(); ierr++)
+          read_group_json["barcode_errors_hist"][ierr] = (Json::UInt64)read_group_num_barcode_errors_[rg_index][ierr];
+      }
+    }
   }
 
   for (int rg = 0; rg < num_read_groups_; ++rg)
@@ -232,13 +255,34 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
       qv_histogram_[min(quality,49)]++;
     }
 
+    // Number of barcode base errors
     int n_errors = max(0,min(2,entry->barcode_n_errors));
-    read_group_num_barcode_errors_[entry->read_group_index][n_errors]++;
+    read_group_num_barcode_errors_[entry->read_group_index].at(n_errors)++;
+    // Transfer barcode bias vector
+    if (read_group_barcode_bias_[entry->read_group_index].size() < entry->barcode_bias.size())
+      read_group_barcode_bias_[entry->read_group_index].resize(entry->barcode_bias.size(),0.0);
+    for (unsigned int iflow=0; iflow<entry->barcode_bias.size(); iflow++)
+      read_group_barcode_bias_[entry->read_group_index].at(iflow) += entry->barcode_bias.at(iflow);
+    // Barcode signal distance histogram [binned to 0.2 intervals]
+    int n_hist = min((int)(5.0*entry->barcode_distance), 4);
+    read_group_barcode_distance_hist_.at(entry->read_group_index).at(n_hist)++;
+    // 0-error filtered barcodes
+    if (entry->barcode_filt_zero_error >= 0)
+    	read_group_barcode_filt_zero_err_.at(entry->barcode_filt_zero_error)++;
 
     // Actually write out the read
 
     entry->bam.AddTag("RG","Z", read_group_name_[entry->read_group_index]);
     entry->bam.AddTag("PG","Z", string("bc"));
+
+    if (not bam_writer_[target_file_idx]) {
+      // Open Bam for writing
+      RefVector empty_reference_vector;
+      bam_writer_[target_file_idx] = new BamWriter();
+      bam_writer_[target_file_idx]->SetCompressionMode(BamWriter::Compressed);
+      //bam_writer_[ds]->SetCompressionMode(BamWriter::Uncompressed);
+      bam_writer_[target_file_idx]->Open(bam_filename_[target_file_idx], sam_header_[target_file_idx], empty_reference_vector);
+    }
     bam_writer_[target_file_idx]->SaveAlignment(entry->bam);
   }
 }

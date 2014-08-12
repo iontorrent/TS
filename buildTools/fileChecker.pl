@@ -44,6 +44,9 @@ sub checkDefines {
 my @files = @ARGV;
 my $err = 0;
 foreach my $file (@files) {
+
+    next if $file =~ /plugin\/Assembler.*\/bin\/(SPAdes|quast)/ ;
+
     $err = Check::DosEndings($file) || $err;
     $err = Check::Copyright($file) || $err;
 

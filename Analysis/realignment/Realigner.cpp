@@ -5,6 +5,9 @@
 
 #include "Realigner.h"
 
+#include <ctype.h>
+#include <stdio.h>
+#include <iostream>
 
 
 void AlignmentCell::initialize(int init_score) {
@@ -65,8 +68,8 @@ void Realigner::InitializeRealigner(unsigned int reserve_size, unsigned int clip
 
   start_anywhere_in_ref_ = true;
   stop_anywhere_in_ref_  = true;
-  soft_clip_key_end_     = false;
-  soft_clip_bead_end_    = true;
+  soft_clip_left_        = false;
+  soft_clip_right_       = true;
   isForwardStrandRead_   = true;
   verbose_               = false;
   invalid_cigar_in_input = false;
@@ -87,6 +90,8 @@ void Realigner::InitializeRealigner(unsigned int reserve_size, unsigned int clip
   DP_matrix.resize(reserve_size);
   for (unsigned int i=0; i<DP_matrix.size(); i++)
     DP_matrix[i].resize(reserve_size);
+  
+  cr_error = CR_SUCCESS;
 }
 
 // -------------------------------------------------------------------
@@ -106,41 +111,63 @@ bool Realigner::SetScores(const vector<int> score_vec) {
 
 // -------------------------------------------------------------------
 
-void Realigner::SetClipping(int clipping)
+void Realigner::SetClipping(int clipping, bool is_forward_strand)
 {
+  // These settings are set for a forward strand read
   switch (clipping) {
     case 0: // align full strings, no clipping in read or ref
       start_anywhere_in_ref_ = false;
       stop_anywhere_in_ref_  = false;
-      soft_clip_key_end_     = false;
-      soft_clip_bead_end_    = false; break;
+      soft_clip_left_        = false;
+      soft_clip_right_       = false; break;
     case 1: // start or end anywhere in ref
       start_anywhere_in_ref_ = true;
       stop_anywhere_in_ref_  = true;
-      soft_clip_key_end_     = false;
-      soft_clip_bead_end_    = false; break;
+      soft_clip_left_        = false;
+      soft_clip_right_       = false; break;
     case 2: // semi-global + soft-clip bead end of the read
       start_anywhere_in_ref_ = true;
       stop_anywhere_in_ref_  = true;
-      soft_clip_key_end_     = false;
-      soft_clip_bead_end_    = true;  break;
+      soft_clip_left_        = false;
+      soft_clip_right_       = true;  break;
     case 3: // semi-global + soft-clip key end of the read
       start_anywhere_in_ref_ = true;
       stop_anywhere_in_ref_  = true;
-      soft_clip_key_end_     = true;
-      soft_clip_bead_end_    = false; break;
+      soft_clip_left_        = true;
+      soft_clip_right_       = false; break;
     case 4: // semi-global + soft-clip both ends of read
       start_anywhere_in_ref_ = true;
       stop_anywhere_in_ref_  = true;
-      soft_clip_key_end_     = true;
-      soft_clip_bead_end_    = true;  break;
+      soft_clip_left_        = true;
+      soft_clip_right_       = true;  break;
   }
-  if (verbose_ and debug_)
-    cout << "Clipping settings:" << endl
+  // Adjust for read strand
+  SetStrand(is_forward_strand);
+  if (!is_forward_strand)
+    ReverseClipping();
+
+  if (verbose_ and debug_) {
+    cout << "Clipping settings for read from the ";
+    if (is_forward_strand) cout << "forward ";
+    else cout << "reverse ";
+    cout << "strand:" << endl
          << "start_anywhere_in_ref_" << start_anywhere_in_ref_ << endl
          << "stop_anywhere_in_ref_" << stop_anywhere_in_ref_ << endl
-         << "soft_clip_key_end_" << soft_clip_key_end_ << endl
-         << "soft_clip_bead_end_" << soft_clip_bead_end_ << endl << endl;
+         << "soft_clip_left_" << soft_clip_left_ << endl
+         << "soft_clip_right_" << soft_clip_right_ << endl << endl;
+  }
+}
+
+// -------------------------------------------------------------------
+
+void Realigner::ReverseClipping() {
+  bool temp_start_anywhere_in_ref_ = start_anywhere_in_ref_;
+  start_anywhere_in_ref_ = stop_anywhere_in_ref_;
+  stop_anywhere_in_ref_  = temp_start_anywhere_in_ref_;
+
+  bool temp_soft_clip_left = soft_clip_left_;
+  soft_clip_left_  = soft_clip_right_;
+  soft_clip_right_ = temp_soft_clip_left;
 }
 
 // -------------------------------------------------------------------
@@ -192,15 +219,15 @@ void Realigner::SetSequences(const string& q_seq, const string& t_seq, const str
 {
   if (debug_ and verbose_)
     cout << "Hello from SetSequences." << endl;
-  isForwardStrandRead_ = isForward;
+
+  // We align all sequences in forward direction
   pretty_aln_ = aln_path;
-  if (isForwardStrandRead_) {
-    q_seq_ = q_seq;
-    t_seq_ = t_seq;
-  } else {
-    q_seq_ = ComplementSequence(q_seq, true);
-    t_seq_ = ComplementSequence(t_seq, true);
-    reverseString(pretty_aln_);
+  q_seq_ = q_seq;
+  t_seq_ = t_seq;
+  // but have to worry about clipping the correct end of the alignment
+  if (isForwardStrandRead_ != isForward) {
+    ReverseClipping();
+    isForwardStrandRead_ = isForward;
   }
 
   // Resize DP_matrix if necessary
@@ -215,16 +242,6 @@ void Realigner::SetSequences(const string& q_seq, const string& t_seq, const str
   for (unsigned int q_idx=0; q_idx<q_seq_.size()+1; q_idx++)
     DP_matrix[0][q_idx].initialize(0);
   
-  /* Is that still necessary?
-  // For banded alignment
-  unsigned int until_cell = q_seq_.size()+1;
-  if (alignment_bandwidth_>0)
-    until_cell = min(alignment_bandwidth_, until_cell);
-  for (unsigned int q_idx=1; q_idx<until_cell; q_idx++)
-    DP_matrix[0][q_idx].initialize(0);
-  if (until_cell < q_seq_.size()+1)
-	DP_matrix[0][until_cell].initialize(kNotApplicable);
-  */
   if (debug_ and verbose_)
     cout << "Successfully set sequences." << endl;
 }
@@ -304,9 +321,6 @@ bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>
                        unsigned int& start_pos_update) {
 
   string dummy_string;
-
-  //AlignmentCell *best_cell;
-  //best_cell = &DP_matrix[0][0];
   
   // Compute boundaries for tubed alignment around previously found alignment
   if (!ComputeTubedAlignmentBoundaries())
@@ -324,7 +338,7 @@ bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>
 
   // --- Compute first row  and column of the matrix
   // First row: moving horizontally for insertions
-  if (!soft_clip_key_end_) {
+  if (!soft_clip_left_) {
     DP_matrix[0][1].best_path_direction = FROM_I;
     DP_matrix[0][1].best_score = kGapOpen;
     DP_matrix[0][1].scores[FROM_I] = kGapOpen;
@@ -369,7 +383,7 @@ bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>
       // Scoring for Match; Mismatch / Insertion / Deletion;
       DP_matrix[t_idx][q_idx].scores.assign(FROM_NOWHERE+1, kNotApplicable);
       DP_matrix[t_idx][q_idx].in_directions.assign(FROM_NOWHERE, FROM_NOWHERE);
-      if (soft_clip_key_end_)
+      if (soft_clip_left_)
         DP_matrix[t_idx][q_idx].scores[FROM_NOWHERE] = 0;
 
       // 1) - Match / Mismatch Score
@@ -413,23 +427,18 @@ bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>
       // Choose best move for this cell
       DP_matrix[t_idx][q_idx].best_score = kNotApplicable-1;
       DP_matrix[t_idx][q_idx].best_path_direction = FROM_NOWHERE;
-      unsigned int s_idx;
-
-      for (unsigned int i=0; i<DP_matrix[t_idx][q_idx].scores.size(); i++) {
-        // Reverse lookup for reverse strand so that InDels are placed at the beginning of HPs
-        if (isForwardStrandRead_)
-          s_idx = i;
-        else
-          s_idx = DP_matrix[t_idx][q_idx].scores.size()-1-i;
-        if (DP_matrix[t_idx][q_idx].scores[s_idx] > DP_matrix[t_idx][q_idx].best_score) {
-          DP_matrix[t_idx][q_idx].best_score = DP_matrix[t_idx][q_idx].scores[s_idx];
-          DP_matrix[t_idx][q_idx].best_path_direction = s_idx;
+      for (unsigned int iMove=0; iMove<DP_matrix[t_idx][q_idx].scores.size(); iMove++) {
+        if (DP_matrix[t_idx][q_idx].scores[iMove] > DP_matrix[t_idx][q_idx].best_score) {
+          DP_matrix[t_idx][q_idx].best_score = DP_matrix[t_idx][q_idx].scores[iMove];
+          DP_matrix[t_idx][q_idx].best_path_direction = iMove;
         }
       }
 
-      bool investigate_highscore = false;
-      if (soft_clip_bead_end_ or (stop_anywhere_in_ref_ and q_idx == q_seq_.size()))
-        investigate_highscore = true;
+      // Clipping settings determine where we search for the best scoring cell to stop aligning
+      bool valid_t_idx = stop_anywhere_in_ref_ or (t_idx == t_seq_.size());
+      bool valid_q_idx = soft_clip_right_ or (q_idx == q_seq_.size());
+      bool investigate_highscore = valid_t_idx and valid_q_idx;
+
       if (investigate_highscore and DP_matrix[t_idx][q_idx].best_score
                > DP_matrix[highest_score_cell[0]][highest_score_cell[1]].best_score) {
         highest_score_cell[0] = t_idx;
@@ -439,7 +448,9 @@ bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>
     }
   }
   // ------- end alignment matrix loop ------
-  if (!stop_anywhere_in_ref_ and !soft_clip_bead_end_) {
+
+  // Force full string alignment if desired, no matter what the score is.
+  if (!stop_anywhere_in_ref_ and !soft_clip_right_) {
     highest_score_cell[0] = t_seq_.size();
     highest_score_cell[1] = q_seq_.size();
   }
@@ -461,6 +472,7 @@ void Realigner::backtrackAlignment(unsigned int t_idx, unsigned int q_idx,
 
   CigarOp current_cigar_element;
   CigarData.clear();
+  // Determine soft clipped end of alignment
   if (q_idx < q_seq_.size()) {
     current_cigar_element.Type = 'S';
     current_cigar_element.Length = q_seq_.size() - q_idx;
@@ -471,11 +483,6 @@ void Realigner::backtrackAlignment(unsigned int t_idx, unsigned int q_idx,
   current_MD_element.Type = '=';
   current_MD_element.Length = 0;
 
-  // complement (without reversing) sequences if read is from reverse strand
-  if (!isForwardStrandRead_) {
-    t_seq_ = ComplementSequence(t_seq_, false);
-    q_seq_ = ComplementSequence(q_seq_, false);
-  }
   int current_move = DP_matrix[t_idx][q_idx].best_path_direction;
   int next_move = FROM_NOWHERE;
   int last_move = -1;
@@ -489,10 +496,8 @@ void Realigner::backtrackAlignment(unsigned int t_idx, unsigned int q_idx,
         addMDelement(FROM_MATCH, DP_matrix[t_idx][q_idx].is_match, last_move, t_idx, current_MD_element, MD_data);
         addCigarElement(FROM_MATCH, last_move, current_cigar_element, CigarData);
         pretty_aln_.push_back(ALN_MATCH);
-        if (isForwardStrandRead_ and t_idx <= start_pos_update)
+        if (t_idx <= start_pos_update)
           start_pos_update = t_idx-1;
-        else if (!isForwardStrandRead_ and start_pos_update > t_seq_.size())
-          start_pos_update = t_seq_.size() - t_idx;
         next_move = DP_matrix[t_idx][q_idx].in_directions[FROM_MATCH];
         t_idx--;
         q_idx--;
@@ -504,10 +509,8 @@ void Realigner::backtrackAlignment(unsigned int t_idx, unsigned int q_idx,
         addMDelement(FROM_MATCH, DP_matrix[t_idx][q_idx].is_match, last_move, t_idx, current_MD_element, MD_data);
         addCigarElement(FROM_MATCH, last_move, current_cigar_element, CigarData);
         pretty_aln_.push_back(ALN_MISMATCH);
-        if (isForwardStrandRead_ and t_idx <= start_pos_update)
+        if (t_idx <= start_pos_update)
           start_pos_update = t_idx-1;
-        else if (!isForwardStrandRead_ and start_pos_update > t_seq_.size())
-          start_pos_update = t_seq_.size() - t_idx;
         next_move = DP_matrix[t_idx][q_idx].in_directions[FROM_MISM];
         t_idx--;
         q_idx--;
@@ -558,16 +561,15 @@ void Realigner::backtrackAlignment(unsigned int t_idx, unsigned int q_idx,
     CigarData.push_back(current_cigar_element);
   }
 
-  if (isForwardStrandRead_ and pretty_qseq_.size()>0) {
-    // reverse strings because backtrack filled them out in reverse direction
-    reverseString(pretty_qseq_);
-    reverseString(pretty_tseq_);
-    reverseString(pretty_aln_);
-    reverseVector<CigarOp>(CigarData);
-    reverseVector<MDelement>(MD_data);
-    for (unsigned int i=0; i<MD_data.size(); i++)
-      if (MD_data[i].Type.size() > 1)
-        reverseString(MD_data[i].Type);
+  // reverse alignment strings because backtrack filled them out in reverse direction
+  reverseString(pretty_qseq_);
+  reverseString(pretty_tseq_);
+  reverseString(pretty_aln_);
+  reverseVector<CigarOp>(CigarData);
+  reverseVector<MDelement>(MD_data);
+  for (unsigned int i=0; i<MD_data.size(); i++) {
+    if (MD_data[i].Type.size() > 1)
+      reverseString(MD_data[i].Type);
   }
 
   if (verbose_) {
@@ -868,6 +870,7 @@ bool Realigner::CreateRefFromQueryBases(
     cout << endl << "Original MD tag: " << md_tag << endl;
   }
 
+  cr_error = CR_SUCCESS;
   // Initialize variables
   pretty_tseq_.clear();
   pretty_qseq_.clear();
@@ -915,6 +918,7 @@ bool Realigner::CreateRefFromQueryBases(
         else {
           if (verbose_)
             cout << "Error: invalid cigar string with soft clipped bases in the middle in the input." << endl;
+	  cr_error = CR_ERR_RECREATE_REF;
           return false;
         }
         break;
@@ -960,7 +964,8 @@ bool Realigner::CreateRefFromQueryBases(
               md_tag.at(md_idx) >= 'A' and md_tag.at(md_idx) <= 'Z') {
         if (pretty_aln_[pretty_idx] == '|') {
           if (is_deletion) {
-        	invalid_cigar_in_input = true;
+            invalid_cigar_in_input = true;
+	    cr_error = CR_ERR_RECREATE_REF;
             return false;
           }
           pretty_aln_[pretty_idx] = ' ';
@@ -981,6 +986,7 @@ bool Realigner::CreateRefFromQueryBases(
 
     if (invalid_pair) {
       invalid_cigar_in_input = true;
+      cr_error = CR_ERR_RECREATE_REF;
       return false;
     }
   }
@@ -1069,6 +1075,7 @@ bool Realigner::ClipAnchors(bool perform_clipping) {
         	  cout << "Error in ClipAnchors: position before start point is '"
                    << pretty_aln_[start_idx -1] << "'" << endl;
             RestoreAnchors();
+	    cr_error = CR_ERR_CLIP_ANCHOR;
             return true;
             break;
     	}
@@ -1111,6 +1118,7 @@ bool Realigner::ClipAnchors(bool perform_clipping) {
         if (verbose_)
           cout << "Warning: Failed to find start or end of HP on left anchor. Aligning whole read." << endl;
         RestoreAnchors();
+	cr_error = CR_ERR_CLIP_ANCHOR;
         return true;
       }
       start_idx = start_idx - offset -1;
@@ -1188,6 +1196,7 @@ bool Realigner::ClipAnchors(bool perform_clipping) {
               cout << "Error in ClipAnchors: stop point is '"
                    << pretty_aln_[stop_idx] << "'" << endl;
             RestoreAnchors();
+	    cr_error = CR_ERR_CLIP_ANCHOR;
             return true;
             break;
         }
@@ -1225,6 +1234,7 @@ bool Realigner::ClipAnchors(bool perform_clipping) {
       if (verbose_)
         cout << "Warning: Failed to find start or end of HP on right anchor. Aligning whole read." << endl;
       RestoreAnchors();
+      cr_error = CR_ERR_CLIP_ANCHOR;
       return true;
     }
 
@@ -1253,6 +1263,7 @@ bool Realigner::ClipAnchors(bool perform_clipping) {
 			  << q_start << " qseq: " << q_seq_.size() << " t: "
 			  << t_start << " tseq: " << t_seq_.size() << " p: "
 			  << start_idx << " pseq: " << pretty_aln_.size() << endl;
+	  cr_error = CR_ERR_CLIP_ANCHOR;
 	  return false;
   } else if (q_stop > q_start and (q_stop <= q_seq_.size()) and
       t_stop > t_start and (t_stop <= t_seq_.size()) and
@@ -1265,41 +1276,34 @@ bool Realigner::ClipAnchors(bool perform_clipping) {
   } else {
     if (verbose_)
 	  cout << "Nothing to realign!" << endl << endl;
-	return false;
+    return false;
   }
   if (verbose_)
     cout << "Sequences after anchor clipping: " << endl << q_seq_ << endl << pretty_aln_ << endl << t_seq_ << endl;
 
-  // Make sure clipping settings are consistent with chosen substring i.e. no softclip if anchor has been reduced
+  // Make sure clipping settings are consistent with chosen substring i.e. no soft clipping if anchor has been reduced
+  bool changed_clipping = false;
   if (clipped_anchors_.md_left.size() > 0) {
-    if (isForwardStrandRead_) {
-      soft_clip_key_end_     = false;
-      start_anywhere_in_ref_ = false;
-    } else {
-      soft_clip_bead_end_    = false;
-      stop_anywhere_in_ref_  = false;
-    }
-    if (verbose_ and debug_)
-      cout << "New clipping after anchor trimming:" << endl
-           << "soft_clip_key_end_" << soft_clip_key_end_<< endl
-           << "soft_clip_bead_end_" << soft_clip_bead_end_ << endl
-           << "start_anywhere_in_ref_" << start_anywhere_in_ref_ << endl
-           << "stop_anywhere_in_ref_" << stop_anywhere_in_ref_ << endl << endl;
+    start_anywhere_in_ref_ = false;
+    soft_clip_left_        = false;
+    changed_clipping       = true;
   }
   if (clipped_anchors_.md_right.size() > 0) {
-    if (isForwardStrandRead_) {
-      soft_clip_bead_end_    = false;
-      stop_anywhere_in_ref_  = false;
-    } else {
-      soft_clip_key_end_     = false;
-      start_anywhere_in_ref_ = false;
-    }
-    if (verbose_ and debug_)
+    stop_anywhere_in_ref_  = false;
+    soft_clip_right_       = false;
+    changed_clipping       = true;
+  }
+  if (verbose_ and debug_) {
+    if (changed_clipping) {
       cout << "New clipping after anchor trimming:" << endl
-           << "soft_clip_key_end_" << soft_clip_key_end_<< endl
-           << "soft_clip_bead_end_" << soft_clip_bead_end_ << endl
-           << "start_anywhere_in_ref_" << start_anywhere_in_ref_ << endl
-           << "stop_anywhere_in_ref_" << stop_anywhere_in_ref_ << endl << endl;
+           << " - soft_clip_left_" << soft_clip_left_<< endl
+           << " - soft_clip_right_" << soft_clip_right_ << endl
+           << " - start_anywhere_in_ref_" << start_anywhere_in_ref_ << endl
+           << " - stop_anywhere_in_ref_" << stop_anywhere_in_ref_ << endl;
+    }
+    else {
+      cout << "No change to clipping by anchor trimming." << endl;
+    }
   }
 
   return true;

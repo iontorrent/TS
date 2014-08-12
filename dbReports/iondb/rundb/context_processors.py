@@ -23,20 +23,20 @@ def base_context_processor(request):
     base_js_extra = settings.JS_EXTRA
     
     if request.user:
-        user_messages = models.Message.objects.filter(route=request.user).filter(Q(status="unread", expires="read") | ~Q(expires="read"))
+        users = [request.user.username]
+        if request.user.is_staff:
+            users.append('_StaffOnly')
+        user_messages = models.Message.objects.filter(route__in=users).filter(Q(status="unread", expires="read") | ~Q(expires="read"))
         user_msglist = [resource.full_dehydrate(Bundle(message)) for message in user_messages]
         user_serialized_messages = resource.serialize(None, user_msglist, "application/json")
 
     unread_news = 0
     if request.user.is_authenticated() and gconfig.check_news_posts:
-        unread_news = models.NewsPost.objects.filter(updated__gte=request.user.get_profile().last_read_news_post).count()
-
-    # This global template var is used with planning wizard callbacks.
-    referer_site_name = request.session.get("referer_site_name", None)
+        unread_news = models.NewsPost.objects.filter(updated__gte=request.user.userprofile.last_read_news_post).count()
 
     return {"base_site_name": gconfig.site_name, "global_messages": serialized_messages,
             "user_messages":user_serialized_messages, "base_js_extra" : base_js_extra,
-            "referer_site_name": referer_site_name, "unread_news": unread_news}
+            "unread_news": unread_news, "DEBUG": settings.DEBUG}
 
 
 def message_binding_processor(request):

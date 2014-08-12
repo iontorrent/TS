@@ -1,43 +1,22 @@
 #!/usr/bin/python
-
-from django.core.management import setup_environ
+# Copyright (C) 2013, 2014 Ion Torrent Systems, Inc. All Rights Reserved
 
 import sys
 import os
-import datetime
 
-from os import path
-sys.path.append('/opt/ion/')
-sys.path.append("/opt/ion/iondb/")
 os.environ['DJANGO_SETTINGS_MODULE'] = 'iondb.settings'
 
-import settings
-setup_environ(settings)
-
-from django.db import models
 from iondb.rundb import models
-from django.contrib.auth.models import User
-from django.core.exceptions import ObjectDoesNotExist
 
-import re
+with open('/var/spool/ion/ContactInfo.txt', 'w') as f:
 
+    desired_contacts = ["lab_contact", "it_contact"]
+    for profile in models.UserProfile.objects.filter(user__username__in=desired_contacts):
+        values = [
+                  profile.title, 
+                  profile.name,
+                  profile.user.email, 
+                  profile.phone_number
+                 ]
+        f.write("\t".join(values) + "\n")
 
-
-if __name__=="__main__":
-
-    # save results in spool directory
-    f = open('/var/spool/ion/ContactInfo.txt', 'w')
-
-    user_list = ["lab_contact", "it_contact"]
-    for user in User.objects.filter(username__in=user_list):
-        try:
-            profile = user.get_profile()
-            values = [
-                      profile.title, 
-                      profile.name,
-                      user.email, 
-                      profile.phone_number
-                     ]
-            f.write("\t".join(values) + "\n")
-        except ObjectDoesNotExist:
-            continue

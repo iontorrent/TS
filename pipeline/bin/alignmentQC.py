@@ -99,7 +99,7 @@ if __name__ == '__main__':
     parser.add_option(      '--aligner-opts-pairing',help='??', dest='aligner_opts_pairing') 
     parser.add_option(      '--mark-duplicates',    help='??', dest='mark_duplicates', action="store_true", default=False) 
     parser.add_option(      '--bidirectional',      help='??', dest='bidirectional', action="store_true", default=False) 
-    parser.add_option(      '--skip-alignStats',    help='??', dest='skip_alignStats', action="store_true", default=False) 
+    parser.add_option(      '--indexing',           help='??', dest='indexing', action="store_true", default=False) 
     parser.add_option(      '--skip-sorting',       help='??', dest='skip_sorting', action="store_true", default=False) 
     parser.add_option('-c', '--align-all-reads',    help='??', dest='align_all_reads', action="store_true", default=False) 
     parser.add_option('-a', '--genome-path',        help='??', dest='genome_path',default="/referenceLibrary:/results/referenceLibrary:/opt/ion/referenceLibrary")
@@ -126,8 +126,6 @@ if __name__ == '__main__':
         sys.stderr.write("%s: WARNING: --qscores is obsolete: Never run alignStats\n" % sys.argv[0])
     if options.sample_size is not None:
         sys.stderr.write("%s: WARNING: --sample-size is obsolete: Always align all reads\n" % sys.argv[0])
-    if options.skip_alignStats:
-        sys.stderr.write("%s: WARNING: --skip-alignStats is obsolete: Never run alignStats\n" % sys.argv[0])
     if options.align_all_reads:
         sys.stderr.write("%s: WARNING: --align-all-reads is obsolete: Always align all reads\n" % sys.argv[0])
     if options.sam_parsed:
@@ -195,6 +193,8 @@ if __name__ == '__main__':
         command += " -Y"
         if options.bidirectional:
             command += " --bidirectional"
+        if options.realign:
+            command += " --do-realign"
         if options.aligner_opts_rg:
             command += " " + options.aligner_opts_rg
         command += " -u --prefix-exclude 5"  # random seed based on read name after ignoring first 5 characters
@@ -210,17 +210,12 @@ if __name__ == '__main__':
         print "unknown aligner '%s'" % options.aligner
         sys.exit(1)
 
-    if options.realign:
-        pipe1 = bamBase + '.fifo1'
-        pipe2 = bamBase + '.fifo2'
-        command += " > %s | bamrealignment -t %s -i %s -o %s " % (pipe1,options.threads,pipe1,pipe2)
-        if not options.skip_sorting:
-            command += " | samtools sort -m 1G -l1 -p%d %s" % (options.threads,pipe2)
+    if not options.skip_sorting:
+        # bug same as in http://abrt.fedoraproject.org/faf/problems/932874/
+        # command += " | samtools sort -m 12G -l1 -p%d -" % options.threads
+        command += " | samtools sort -m 2G -l1 -p3 -"
     else:
-        if not options.skip_sorting:
-            command += " | samtools sort -m 1G -l1 -p%d -" % options.threads
-        else:
-            command += " >"
+        command += " >"
 
     if options.mark_duplicates:
         command += " %s.tmp" % bamBase
@@ -234,10 +229,6 @@ if __name__ == '__main__':
         makepipe_cmd = "mkfifo %s" % (fastqpipe)
         print makepipe_cmd
         subprocess.call(makepipe_cmd,shell=True)
-    if options.realign:
-        makepipe_cmd = "mkfifo %s %s" % (pipe1,pipe2)
-        print makepipe_cmd
-        subprocess.call(makepipe_cmd,shell=True)
 
     print command
     subprocess.call(command,shell=True)
@@ -245,10 +236,6 @@ if __name__ == '__main__':
     # cleanup
     if options.aligner == 'bowtie2':
         rmpipe_cmd = "rm %s" % (fastqpipe)
-        print rmpipe_cmd
-        subprocess.call(rmpipe_cmd,shell=True)
-    if options.realign:
-        rmpipe_cmd = "rm %s %s" % (pipe1,pipe2)
         print rmpipe_cmd
         subprocess.call(rmpipe_cmd,shell=True)
 
@@ -263,7 +250,7 @@ if __name__ == '__main__':
         print command
         subprocess.call(command,shell=True)
 
-    if not options.skip_sorting:
+    if options.indexing and not options.skip_sorting:
         command = "samtools index " + bamFile
         print command
         subprocess.call(command,shell=True)

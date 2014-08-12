@@ -1,0 +1,31 @@
+#!/bin/sh
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+#set -e
+#set -x
+echo "postinst $@"
+case "$1" in
+    configure)
+        chown -R ionadmin.ionadmin @ION_INSTALL_PREFIX@
+        chmod 777 @ION_INSTALL_PREFIX@  # How to do this in CMake?
+                
+        # Customize the CPU and RAM based on actual availability on the host
+        # Discover available RAM (kb)
+        availableRAMKb=$(grep MemTotal /proc/meminfo|awk '{print $2}'|sed 's/ //g')
+        availableRAMMb=$((availableRAMKb/1024))
+        #Reserve 4Gb for native system
+        usableRAMMb=$((availableRAMMb-4092))
+        # Discover available cores
+        availableCores=$(lscpu|awk -F: '/CPU\(s\)/{print $2}'|sed 's/ //g')
+        availableCores=$((availableCores-1))
+        if [ $availableCores -le 0 ]; then availableCores=1; fi
+        # Edit Vagrantfile
+        sed -i "s/USABLE_RAM =.*/USABLE_RAM = $usableRAMMb/" @ION_INSTALL_PREFIX@/Vagrantfile
+        sed -i "s/USABLE_CORES =.*/USABLE_CORES = $availableCores/" @ION_INSTALL_PREFIX@/Vagrantfile
+        
+        # Not sure of the benefit of this yet - at least needed to enable USB mounting
+        usermod -a -G vboxusers ionadmin
+        usermod -a -G vboxusers www-data
+    ;;
+esac
+
+exit

@@ -31,20 +31,31 @@ class Plugins_SelectMultiple(forms.CheckboxSelectMultiple):
         # add 'configure' button for plugins
         btn_html = '&nbsp; <button type="button" class="configure_plugin" id="configure_plugin_XXX" data-plugin_pk=XXX style="display: none;"> Configure </button>'
         output = ''
+        columns = 3
         for line in csm.split('<li>'):
             if line.find('value="') > 0:
-                output += '<p>' + line.split('</li>')[0]
+                columns -= 1
+                if columns == 2:
+                    output += '<div class="row-fluid">'
+                output += '<div class="span4">' + line.split('</li>')[0]
+                #output += line.split('</li>')[0]
+                if columns == 0:
+                    output += '</div>'
+                    columns = 3
+
                 pk = line.split('value="')[1].split('"')[0]
                 plugin = models.Plugin.objects.get(pk=pk)
-                if plugin.isPlanConfig():
+                if plugin.isPlanConfig:
                     output += btn_html.replace('XXX',pk)
-                output += '</p>'
+                output += '</div>'
                 # disable IRU if not configured
                 if 'IonReporterUploader' == plugin.name:
                     if 'checked' in line:
                         output = output.replace('/> IonReporterUploader', '/><span rel="tooltip" title="Edit run to configure IonReporterUploader"> IonReporterUploader</span>')
                     else:
                         output = output.replace('/> IonReporterUploader', 'disabled /><span rel="tooltip" title="Edit run to configure IonReporterUploader"> IonReporterUploader not configured</span>')
+
+        if columns != 3: output += '</div>'
 
         return mark_safe(output)
 
@@ -70,7 +81,7 @@ class DataSelect(djangoWidget.Widget):
         output.append(u'</select>')
         return mark_safe(u'\n'.join(output))
 
-    def render_option(self, selected_choices, option_value, option_label, option_data):
+    def render_option(self, selected_choices, option_value, option_label, option_pk, option_version):
         option_value = force_unicode(option_value)
         if option_value in selected_choices:
             selected_html = u' selected="selected"'
@@ -79,94 +90,69 @@ class DataSelect(djangoWidget.Widget):
                 selected_choices.remove(option_value)
         else:
             selected_html = ''
-        return u'<option data-version="%s" value="%s"%s>%s</option>' % (
-            option_data, escape(option_value), selected_html,
+        return u'<option data-pk="%s" data-version="%s" value="%s"%s>%s</option>' % (
+            option_pk, option_version, escape(option_value), selected_html,
             conditional_escape(force_unicode(option_label)))
 
     def render_options(self, choices, selected_choices):
         # Normalize to strings.
         selected_choices = set(force_unicode(v) for v in selected_choices)
         output = []
-        for option_value, option_label, option_data in chain(self.choices, choices):
-                output.append(self.render_option(selected_choices, option_value, option_label, option_data))
+        for option_value, option_label, option_pk, option_version in chain(self.choices, choices):
+                output.append(self.render_option(selected_choices, option_value, option_label, option_pk, option_version))
         return u'\n'.join(output)
+
+class CmdlineArgsField(forms.CharField):
+    
+    def __init__(self):
+        super(CmdlineArgsField, self).__init__(
+            max_length=1024,
+            required=False,
+            widget = forms.Textarea(attrs={'class':'span12','rows':4})
+        )
+    
+    def clean(self, value):
+        value = super(CmdlineArgsField, self).clean(value)
+        if not set(value).issubset(string.printable):
+            raise forms.ValidationError(("Command contains non ascii characters."))
+        return value
 
 class RunParamsForm(forms.Form):
 
     report_name = forms.CharField(max_length=128,
                                 widget=forms.TextInput(attrs={'size':'60','class':'textInput input-xlarge'}) )
-    path = forms.CharField(max_length=512,widget=forms.HiddenInput)
-
-    beadfindArgs = forms.CharField(max_length=1024,
-                           required=False,
-                           widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
-
-    analysisArgs = forms.CharField(max_length=1024,
-                           required=False,
-                           widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
-
-    prebasecallerArgs = forms.CharField(max_length=1024,
-                                     required=False,
-                                     widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
-
-    basecallerArgs = forms.CharField(max_length=1024,
-                           required=False,
-                           widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
     
-    alignmentArgs = forms.CharField(max_length=1024,
-                           required=False,
-                           widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
+    beadfindArgs = CmdlineArgsField()
+    analysisArgs = CmdlineArgsField()
+    prebasecallerArgs = CmdlineArgsField()
+    recalibArgs = CmdlineArgsField()
+    basecallerArgs = CmdlineArgsField()
+    alignmentArgs = CmdlineArgsField()
 
-    thumbnailBeadfindArgs = forms.CharField(max_length=1024,
-                                     required=False,
-                                     widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
+    thumbnailBeadfindArgs = CmdlineArgsField()
+    thumbnailAnalysisArgs = CmdlineArgsField()
+    prethumbnailBasecallerArgs = CmdlineArgsField()
+    thumbnailRecalibArgs = CmdlineArgsField()
+    thumbnailBasecallerArgs = CmdlineArgsField()
+    thumbnailAlignmentArgs = CmdlineArgsField()
 
-    thumbnailAnalysisArgs = forms.CharField(max_length=1024,
-                                          required=False,
-                                          widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
+    blockArgs = forms.CharField(max_length=128, required=False, widget=forms.HiddenInput)
 
-    prethumbnailBasecallerArgs = forms.CharField(max_length=1024,
-                                              required=False,
-                                              widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
+    libraryKey = forms.CharField(max_length=128, required=False, initial="TCAG", widget=forms.TextInput(attrs={'size':'60', 'class': 'input-xlarge'}))
+    tfKey= forms.CharField(max_length=128, required=False,initial="ATCG", widget=forms.TextInput(attrs={'size':'60', 'class': 'input-xlarge'}))
 
-    thumbnailBasecallerArgs = forms.CharField(max_length=1024,
-                                     required=False,
-                                     widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
-
-    thumbnailAlignmentArgs = forms.CharField(max_length=1024,
-                                     required=False,
-                                     widget=forms.Textarea(attrs={'size':'512','class':'textInput input-xlarge','rows':4,'cols':50}))
-
-
-    blockArgs = forms.CharField(max_length=128,
-                           required=False,
-                           widget=forms.HiddenInput)
-
-    libraryKey = forms.CharField(max_length=128,
-                           required=False,
-                           initial="TCAG",
-                           widget=forms.TextInput(attrs={'size':'60', 'class': 'input-xlarge'}))
-
-    tfKey= forms.CharField(max_length=128,
-                                 required=False,
-                                 initial="ATCG",
-                                 widget=forms.TextInput(attrs={'size':'60', 'class': 'input-xlarge'}))
-
-    tf_config = forms.FileField(required=False,
-                                widget=forms.FileInput(attrs={'size':'60', 'class':'input-file'}))
+    tf_config = forms.FileField(required=False, widget=forms.FileInput(attrs={'size':'60', 'class':'input-file'}))
+    
+    # unused?
     align_full = forms.BooleanField(required=False, initial=False)
+
     do_thumbnail = forms.BooleanField(required=False, initial=True, label="Thumbnail only")
     do_base_recal = forms.BooleanField(required=False, label="Enable Base Recalibration")
-
     realign = forms.BooleanField(required=False)
-
     mark_duplicates = forms.BooleanField(required=False, initial=False)
 
-    previousReport = forms.CharField(required=False,widget=DataSelect(attrs={'class': 'input-xlarge'}
-                                                                      ))
-
-    previousThumbReport = forms.CharField(required=False,widget=DataSelect(
-        attrs={'class': 'input-xlarge'}))
+    previousReport = forms.CharField(required=False,widget=DataSelect(attrs={'class': 'input-xlarge'}) )
+    previousThumbReport = forms.CharField(required=False,widget=DataSelect(attrs={'class': 'input-xlarge'}) )
 
     project_names = forms.CharField(max_length=1024,
                            required=False,
@@ -177,57 +163,22 @@ class RunParamsForm(forms.Form):
         Verify that the user input doesn't have chars that we don't want
         """
         reportName = self.cleaned_data.get("report_name")
+        errors = []
         if reportName[0] == "-":
-            logger.error("That Report name can not begin with '-'")
-            raise forms.ValidationError(("The Report name can not begin with '-'"))
+            errors.append(("The Report name can not begin with '-'"))
         if len(reportName) > 128:
-            raise forms.ValidationError(("Report Name needs to be less than 128 characters long"))
+            errors.append(("Report Name needs to be less than 128 characters long"))
         if not set(reportName).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "):
-            logger.error("That Report name has invalid characters. The valid values are letters, numbers, underscore and period.")
-            raise forms.ValidationError(("That Report name has invalid characters. The valid values are letters, numbers, underscore and period."))
+            errors.append(("That Report name has invalid characters. The valid values are letters, numbers, underscore and period."))
+        
+        if errors:
+            raise forms.ValidationError(errors)
         else:
             return reportName
 
-    def clean_analysisArgs(self):
-        """
-        Verify that the user input doesn't have chars that we don't want
-        """
-        analysisArgs = self.cleaned_data.get("analysisArgs")
-        if not set(analysisArgs).issubset(string.printable):
-            logger.error("The Analysis command contains non ascii characters.")
-            raise forms.ValidationError(("The Analysis command contains non ascii characters."))
-        else:
-            return analysisArgs
-
-    def clean_basecallerArgs(self):
-        """
-        Verify that the user input doesn't have chars that we don't want
-        """
-        basecallerArgs = self.cleaned_data.get("basecallerArgs")
-        if not set(basecallerArgs).issubset(string.printable):
-            logger.error("The basecaller command contains non ascii characters.")
-            raise forms.ValidationError(("The basecaller command contains non ascii characters."))
-        else:
-            return basecallerArgs
-
-
-    def clean_beadfindArgs(self):
-        """
-        Verify that the user input doesn't have chars that we don't want
-        """
-        beadfindArgs = self.cleaned_data.get("beadfindArgs")
-        if not set(beadfindArgs).issubset(string.printable):
-            logger.error("The beadfind command contains non ascii characters.")
-            raise forms.ValidationError(("The beadfind command contains non ascii characters."))
-        else:
-            return beadfindArgs
-
-
     def clean_libraryKey(self):
-        #TODO: note that because this is a hidden advanced field it will not be clear if it fails
         key = self.cleaned_data.get('libraryKey')
         if not set(key).issubset("ATCG"):
-            logger.error("This key has invalid characters. The valid values are TACG.")
             raise forms.ValidationError(("This key has invalid characters. The valid values are TACG."))
         else:
             return key
@@ -235,7 +186,6 @@ class RunParamsForm(forms.Form):
     def clean_tfKey(self):
         key = self.cleaned_data.get('tfKey')
         if not set(key).issubset("ATCG"):
-            logger.error("This key has invalid characters. The valid values are TACG.")
             raise forms.ValidationError(("This key has invalid characters. The valid values are TACG."))
         else:
             return key
@@ -252,7 +202,6 @@ class RunParamsForm(forms.Form):
               if len(name) > 64:
                   raise forms.ValidationError(("Project Name needs to be less than 64 characters long. Please separate different projects with a comma."))
               if not set(name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.- "):
-                  logger.error("Project name has invalid characters. The valid values are letters, numbers, underscore and period.")
                   raise forms.ValidationError(("Project name has invalid characters. The valid values are letters, numbers, underscore and period."))
         return ','.join(names)
 
@@ -269,12 +218,13 @@ class AnalysisSettingsForm(forms.ModelForm):
     pluginsUserInput = forms.CharField(required=False, widget=forms.HiddenInput())
     barcodeKitName = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
     threePrimeAdapter = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    barcodedReferences = forms.CharField(required=False, widget=forms.HiddenInput())
 
     def __init__(self, *args, **kwargs):
         super(AnalysisSettingsForm, self).__init__(*args, **kwargs)
         # initialize choices when form instance created
         references = models.ReferenceGenome.objects.filter(index_version=settings.TMAP_VERSION, enabled=True)
-        self.fields['reference'].choices= [('none','none')] + [(v[0],"%s (%s)" % (v[0],v[1])) for v in references.values_list('short_name', 'name')]
+        self.fields['reference'].choices= [('','none')] + [(v[0],"%s (%s)" % (v[0],v[1])) for v in references.values_list('short_name', 'name')]
         bedfiles = dict_bed_hotspot()
         self.fields['targetRegionBedFile'].choices= [('','')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('bedFiles',[])]
         self.fields['hotSpotRegionBedFile'].choices= [('','')] + [(v.file, v.path.split("/")[-1].replace(".bed", "")) for v in bedfiles.get('hotspotFiles',[])]
@@ -313,131 +263,6 @@ class ExperimentSettingsForm(forms.ModelForm):
         fields = ('sample', 'sequencekitname', 'chipBarcode', 'notes')
 
 
-def getLevelChoices():
-    #try:
-    #    numPG = models.dm_prune_group.objects.count()
-    #except:
-    #    return [""]
-    tupleToBe = []
-    #for i in range(1,numPG+1):
-    #    tupleToBe.append(("%02d" % (i), '%d'%(i)))
-    pgrps = models.dm_prune_group.objects.all()
-    for i,pgrp in enumerate(pgrps,start=1):
-        tupleToBe.append(("%s" % pgrp.name, '%d' % i))
-
-    return tuple(tupleToBe)
-
-class EditReportBackup(forms.Form):
-    def get_dir_choices():
-        basicChoice = [(None, 'None')]
-        for choice in devices.to_media(devices.disk_report()):
-            basicChoice.append(choice)
-        return tuple(basicChoice)
-    def get_loc_choices():
-        basicChoice = []
-        for loc in models.Location.objects.all():
-            basicChoice.append((loc,loc))
-        return tuple(basicChoice)
-
-    location = forms.ChoiceField(choices=(), label='Backup Location')
-    days = forms.ChoiceField(required=False, choices=tuple([(10, '10'), (30, '30'), (60, '60'), (90, '90'), (0, '-')]))
-    #autoDays = forms.ChoiceField(choices=tuple([(30, '30'), (60, '60'), (90, '90'), (180, '180'), (365, '365')]))
-    autoDays = forms.IntegerField(label="Auto-action delay (days)", min_value=0, max_value=9999)
-    autoPrune = forms.BooleanField(required=False, label="Enable Auto-action")
-    pruneLevel = forms.ChoiceField(choices=getLevelChoices(), widget=forms.RadioSelect())
-    #autoAction = forms.ChoiceField(choices=(tuple([('P', 'Prune'), ('A', 'Archive'), ('D', 'Delete')])), label='Act Automatically')
-    autoAction = forms.ChoiceField(choices=(tuple([('P', 'Prune'), ('A', 'Archive')])), label='Auto-action')
-
-    def __init__(self,*args,**kwargs):
-        super(EditReportBackup,self).__init__(*args,**kwargs)
-        def get_dir_choices():
-            basicChoice = [(None, 'None')]
-            for choice in devices.to_media(devices.disk_report()):
-                basicChoice.append(choice)
-            return tuple(basicChoice)
-
-        self.fields['pruneLevel'].choices = getLevelChoices()
-        self.fields['location'].choices = get_dir_choices()
-
-class bigPruneEdit(forms.Form):
-
-    checkField = forms.MultipleChoiceField(choices=tuple([('x','y')]), widget=forms.CheckboxSelectMultiple())
-    newField = forms.CharField(widget=forms.TextInput(attrs = {'class':'textInput validateFilenameRegex'}))
-    remField = forms.MultipleChoiceField(choices=tuple([('x', 'y')]),widget=forms.CheckboxSelectMultiple())
-
-    def __init__(self,*args,**kwargs):
-        target = kwargs.pop("pk")
-        super(bigPruneEdit,self).__init__(*args,**kwargs)
-
-        def get_selections(pkTarget):
-            ruleList = models.dm_prune_field.objects.all().order_by('pk')
-            choices = []
-            for rule in ruleList:
-                choices.append(('%s:'%target+'%s'%rule.pk, rule.rule))
-            logger.error(choices)
-            return tuple(choices)
-
-        def get_removeIDs():
-            ruleList = models.dm_prune_field.objects.all().order_by('pk')
-            choices = []
-            for rule in ruleList:
-                choices.append(('%s'%rule.pk, rule.rule))
-            return tuple(choices)
-
-        self.fields['checkField'].choices = get_selections(target)
-        self.fields['remField'].choices = get_removeIDs()
-
-class EditPruneLevels(forms.Form):
-    def get_dir_choices():
-        basicChoice = [(None, 'None')]
-        for choice in devices.to_media(devices.disk_report()):
-            basicChoice.append(choice)
-        return tuple(basicChoice)
-
-    def getLevelChoices():
-        #try:
-        #    numPG = models.dm_prune_group.objects.count()
-        #except:
-        #    return [""]
-        tupleToBe = []
-        #for i in range(1,numPG+1):
-        #    tupleToBe.append(("%02d" % (i), '%d'%(i)))
-        pgrps = models.dm_prune_group.objects.all()
-        for i,pgrp in enumerate(pgrps,start=1):
-            tupleToBe.append(("%s" % pgrp.name, '%d' % i))
-        tupleToBe.append(('add', 'Add...'))
-        tupleToBe.append(('rem', 'Remove...'))
-        return tuple(tupleToBe)
-
-    location = forms.ChoiceField(choices=())
-    autoPrune = forms.BooleanField(required=False)
-    pruneLevel = forms.MultipleChoiceField(choices=getLevelChoices(), widget=forms.CheckboxSelectMultiple())
-    editChoice = forms.MultipleChoiceField(choices=getLevelChoices(), widget=forms.RadioSelect())
-    name = forms.SlugField(label="Group Name", widget=forms.TextInput(attrs = {'class':'textInput required validatePhrase'}))
-
-    def __init__(self,*args,**kwargs):
-        super(EditPruneLevels,self).__init__(*args,**kwargs)
-        def get_dir_choices():
-            basicChoice = [(None, 'None')]
-            for choice in devices.to_media(devices.disk_report()):
-                basicChoice.append(choice)
-            return tuple(basicChoice)
-        def getLevelChoices():
-            numPG = models.dm_prune_group.objects.count()
-            tupleToBe = []
-            for i in range(1,numPG+1):
-                if i < 10:
-                    tupleToBe.append(('%s'%i, '%s'%('%s: '%i)))
-                else:
-                    tupleToBe.append((i, '%s'%('%s'%i)))
-            tupleToBe.append(('add', 'Add...'))
-            tupleToBe.append(('rem', 'Remove...'))
-            return tuple(tupleToBe)
-        #self.fields['pruneLevel'].choices = getLevelChoices()
-        self.fields['editChoice'].choices = getLevelChoices()
-        self.fields['location'].choices = get_dir_choices()
-
-
 class EmailAddress(forms.ModelForm):
     "Made to have full symetry with the EmailAddress model fields"
     class Meta:
@@ -445,8 +270,9 @@ class EmailAddress(forms.ModelForm):
 
 
 class EditReferenceGenome(forms.Form):
-    name = forms.CharField(max_length=512,required=True)
-    NCBI_name = forms.CharField(max_length=512,required=True)
+    name = forms.CharField(max_length=512,required=True, label="Short Name")
+    version = forms.CharField(max_length=100, required=False, label="Version")
+    NCBI_name = forms.CharField(max_length=512,required=True, label="Description")
     notes = forms.CharField(max_length=1048,required=False,widget=forms.Textarea(attrs={'cols': 50, 'rows': 4}))
     enabled = forms.BooleanField(required=False)
     genome_key = forms.IntegerField(widget=forms.HiddenInput(), required=True)

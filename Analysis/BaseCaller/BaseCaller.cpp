@@ -11,9 +11,17 @@
 #include <time.h>
 #include <math.h>
 #include <assert.h>
-#include <iomanip>
 #include <algorithm>
 #include <string>
+#include <pthread.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <deque>
+#include <iostream>
+#include <set>
+#include <vector>
 
 #include "json/json.h"
 #include "MaskSample.h"
@@ -25,6 +33,8 @@
 #include "Utils.h"
 #include "RawWells.h"
 
+#include "BaseCallerUtils.h"
+#include "DPTreephaser.h"
 #include "BarcodeDatasets.h"
 #include "BarcodeClassifier.h"
 #include "OrderedDatasetWriter.h"
@@ -66,10 +76,11 @@ struct BaseCallerContext {
     int                       extra_trim_left;        //!< Number of additional insert bases past key and barcode to be trimmed
     bool                      process_tfs;            //!< If set to false, TF-related BAM will not be generated
     int                       windowSize;             //!< Normalization window size
-
-    bool                      bc_adjust;
     bool                      save_hpmodel;
-    bool                      is_terminator_chem_run; //!< Switch if we have a terminator chemistry run
+    bool                      diagonal_state_prog;    //!< Switch to enable a diagonal state progression
+    bool                      only_process_unfiltered_set;
+    bool                      skip_droop;             //!< Switch to include / exclude droop in cpp basecaller
+    bool                      skip_recal_during_norm; //!< Switch to exclude recalibration from the normalization stage
 
     // Important outside entities accessed by BaseCaller
     Mask                      *mask;                  //!< Beadfind and filtering outcomes for wells
@@ -81,6 +92,7 @@ struct BaseCallerContext {
     BarcodeClassifier         *barcodes;              //!< Barcode detection and trimming
     BaseCallerRecalibration   recalibration;          //!< Base call and signal adjustment algorithm
     RecalibrationModel        recalModel;             //!< Model estimation of simulated predictions and observed measurements
+    PolyclonalFilterOpts      polyclonal_filter;      //!< User options for polyclonal filtering
 
     // Threaded processing
     pthread_mutex_t           mutex;                  //!< Shared read/write mutex for BaseCaller worker threads
@@ -189,6 +201,7 @@ void PrintHelp()
     printf ("     --phase-estimation-file FILE       Enable reusing phase estimation from provided file [off]\n");
     printf ("     --save-hpmodel          BOOL       Enable to save hpModel values to bam [off]\n");
     printf ("     --downsample-fraction   FLOAT      Only save a fraction of generated reads. 1.0 saves all reads. [1.0]\n");
+    printf ("     --only-process-unfiltered-set   on/off   Only save reads that would also go to unfiltered BAMs. [off]\n");
     printf ("\n");
 
     BaseCallerFilters::PrintHelp();
@@ -377,28 +390,19 @@ int main (int argc, const char *argv[])
     string input_directory        = opts.GetFirstString ('i', "input-dir", ".");
     string output_directory       = opts.GetFirstString ('o', "output-dir", ".");
 
-    bool bc_adjust          = opts.GetFirstBoolean('-', "bc-adjust", false);
+    //bool write_barcode_bam_tag    = opts.GetFirstBoolean('-', "barcode-bam-tag", false);
 
-    string barcodes_directory   = output_directory + "/bc_files";
     string unfiltered_untrimmed_directory   = output_directory + "/unfiltered.untrimmed";
     string unfiltered_trimmed_directory   = output_directory + "/unfiltered.trimmed";
-    string unfiltered_untrimmed_barcodes_directory   = output_directory + "/unfiltered.untrimmed/bc_files";
-    string unfiltered_trimmed_barcodes_directory   = output_directory + "/unfiltered.trimmed/bc_files";
 
     CreateResultsFolder ((char*)output_directory.c_str());
-    CreateResultsFolder ((char*)barcodes_directory.c_str());
     CreateResultsFolder ((char*)unfiltered_untrimmed_directory.c_str());
     CreateResultsFolder ((char*)unfiltered_trimmed_directory.c_str());
-    CreateResultsFolder ((char*)unfiltered_untrimmed_barcodes_directory.c_str());
-    CreateResultsFolder ((char*)unfiltered_trimmed_barcodes_directory.c_str());
 
     ValidateAndCanonicalizePath(input_directory);
     ValidateAndCanonicalizePath(output_directory);
-    ValidateAndCanonicalizePath(barcodes_directory);
     ValidateAndCanonicalizePath(unfiltered_untrimmed_directory);
     ValidateAndCanonicalizePath(unfiltered_trimmed_directory);
-    ValidateAndCanonicalizePath(unfiltered_untrimmed_barcodes_directory);
-    ValidateAndCanonicalizePath(unfiltered_trimmed_barcodes_directory);
 
     string filename_wells         = opts.GetFirstString ('-', "wells", input_directory + "/1.wells");
     string filename_mask          = opts.GetFirstString ('-', "mask", input_directory + "/analysis.bfmask.bin");
@@ -417,23 +421,14 @@ int main (int argc, const char *argv[])
     printf("\n");
     printf("Output directories summary:\n");
     printf("    --output-dir %s\n", output_directory.c_str());
-    printf("              bc %s\n", barcodes_directory.c_str());
     printf("        unf.untr %s\n", unfiltered_untrimmed_directory.c_str());
-    printf("     unf.untr.bc %s\n", unfiltered_untrimmed_barcodes_directory.c_str());
     printf("          unf.tr %s\n", unfiltered_trimmed_directory.c_str());
-    printf("       unf.tr.bc %s\n", unfiltered_trimmed_barcodes_directory.c_str());
     printf("\n");
 
 
     // Command line processing *** Various options that need cleanup
 
     BaseCallerContext bc;
-    bc.bc_adjust = bc_adjust;
-    if (bc.bc_adjust)
-    {
-        printf("\nSaving barcode adjusted errors to bam\n");
-    }
-
     bc.output_directory = output_directory;
 
     char default_run_id[6]; // Create a run identifier from full output directory string
@@ -452,23 +447,26 @@ int main (int argc, const char *argv[])
     string phase_file_name        = opts.GetFirstString ('s', "phase-estimation-file", "");
     bc.windowSize                 = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
     bc.save_hpmodel               = opts.GetFirstBoolean('-', "save-hpmodel", true);
+    bc.only_process_unfiltered_set = opts.GetFirstBoolean('-', "only-process-unfiltered-set", false);
     float downsample_fraction     = opts.GetFirstDouble ('-', "downsample-fraction", 1.0);
-    bc.is_terminator_chem_run     = opts.GetFirstBoolean('-', "terminator-chemistry", false);
+    bc.diagonal_state_prog        = opts.GetFirstBoolean('-', "diagonal-state-prog", false);
+    bc.skip_droop                 = opts.GetFirstBoolean('-', "skipDroop", true); // To be in line with 'calibrate'
+    bc.skip_recal_during_norm     = opts.GetFirstBoolean('-', "skip-recal-during-normalization", false);
 
-    // Set defaults for terminator chemistry run
-    if (bc.is_terminator_chem_run) {
+    // Check input parameters for consistency and set defaults.
+    if (bc.diagonal_state_prog) {
       // Disable recalibration since flow alignment might go crazy
       if (calibration_training >0) {
         cout << " ======================================================================================" << endl;
-        cout << " ===== Recalibration Training disabled for terminator chemistry run --- Aborting!" << endl;
+        cout << " ===== Recalibration Training disabled for selected settings --- Aborting!" << endl;
         cout << " ======================================================================================" << endl;
-        exit(-1);
+        exit(0);
       }
       if (bc.save_hpmodel)
         bc.save_hpmodel = false;
       if (bc.dephaser != "treephaser-swan") {
         cout << " ======================================================================================" << endl;
-    	cout << " ===== Terminator Chemistry Run : Using dephaser=treephaser-swan " << endl;
+    	cout << " ===== Diagonal State Progression Selected : Using dephaser=treephaser-swan " << endl;
     	cout << " ======================================================================================" << endl;
     	bc.dephaser == "treephaser-swan";
       }
@@ -627,8 +625,8 @@ int main (int argc, const char *argv[])
     bc.filters = &filters;
     bc.estimator.InitializeFromOptArgs(opts);
 
-    // Turning recalibration off for terminator chemistry runs by not initializing anything.
-    if (!bc.is_terminator_chem_run) {
+    // Turning recalibration off for alternative state progression by not initializing anything.
+    if (!bc.diagonal_state_prog) {
       bc.recalibration.Initialize(opts, bc.flow_order);
       bc.recalModel.Initialize(opts);
     }
@@ -636,11 +634,11 @@ int main (int argc, const char *argv[])
     int num_regions_x = (bc.chip_size_x +  bc.region_size_x - 1) / bc.region_size_x;
     int num_regions_y = (bc.chip_size_y +  bc.region_size_y - 1) / bc.region_size_y;
 
-    BarcodeClassifier barcodes(opts, datasets, bc.flow_order, bc.keys, output_directory, bc.chip_size_x, bc.chip_size_y);
+    BarcodeClassifier barcodes(opts, datasets, bc.flow_order, bc.keys, output_directory, bc.chip_size_x, bc.chip_size_y); // XXX
     bc.barcodes = &barcodes;
 
     // initialize the per base quality score generator
-    bc.quality_generator.Init(opts, chip_type, output_directory,bc.recalibration.is_enabled());
+    bc.quality_generator.Init(opts, chip_type, input_directory, output_directory,bc.recalibration.is_enabled());
 
     BaseCallerMetricSaver metric_saver(opts, bc.chip_size_x, bc.chip_size_y, bc.flow_order.num_flows(),
                                        bc.region_size_x, bc.region_size_y, output_directory);
@@ -680,7 +678,7 @@ int main (int argc, const char *argv[])
     MemUsage("RawWellsBasecalling");
 
     // Find distribution of clonal reads for use in read filtering:
-    filters.TrainClonalFilter(output_directory, wells, num_unfiltered, mask);
+    filters.TrainClonalFilter(output_directory, wells, num_unfiltered, mask, bc.polyclonal_filter);
 
     MemUsage("ClonalPopulation");
     ReportState(analysis_start_time,"Polyclonal Filter Training Complete");
@@ -721,6 +719,7 @@ int main (int argc, const char *argv[])
     {
         SaveModelFileToBamComments(comments, opts, bc.run_id, bc.block_col_offset, bc.block_row_offset);
     }
+    bc.filters->WriteAdaptersToBamComments(comments);
 
     bc.lib_writer.Open(output_directory, datasets, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
                        "BaseCaller",
@@ -855,6 +854,7 @@ int main (int argc, const char *argv[])
 
     // Generate BaseCaller.json
 
+    bc.filters->WriteToBaseCallerJson(basecaller_json);
     bc.lib_writer.SaveFilteringStats(basecaller_json, "lib", true);
     if (bc.process_tfs)
         bc.tf_writer.SaveFilteringStats(basecaller_json, "tf", false);
@@ -916,7 +916,9 @@ void * BasecallerWorker(void *input)
 
     TreephaserSSE treephaser_sse(bc.flow_order, bc.windowSize);
     DPTreephaser  treephaser(bc.flow_order, bc.windowSize);
-    treephaser.SetTerminatorChemistry(bc.is_terminator_chem_run);
+    treephaser.SetStateProgression(bc.diagonal_state_prog);
+    treephaser.SkipRecalDuringNormalization(bc.skip_recal_during_norm);
+    treephaser_sse.SkipRecalDuringNormalization(bc.skip_recal_during_norm);
 
 
     while (true) {
@@ -996,6 +998,9 @@ void * BasecallerWorker(void *input)
                     continue;
                 bool is_random_unfiltered = bc.unfiltered_set.count(read_index) > 0;
 
+                if (not is_random_unfiltered and bc.only_process_unfiltered_set)
+                  continue;
+
                 bc.filters->SetValid(read_index); // Presume valid until some filter proves otherwise
 
                 if (read_class == 0)
@@ -1054,62 +1059,68 @@ void * BasecallerWorker(void *input)
                 BasecallerRead read;
                 if (bc.keynormalizer == "keynorm-new") {
                     read.SetDataAndKeyNormalizeNew(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1, true);
-
                 } else { // if (bc.keynormalizer == "keynorm-old") {
                     read.SetDataAndKeyNormalize(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1);
-
                 }
 
-                bc.filters->FilterHighPPFAndPolyclonal (read_index, read_class, processed_read.filter, read.raw_measurements);
+                bc.filters->FilterHighPPFAndPolyclonal (read_index, read_class, processed_read.filter, read.raw_measurements, bc.polyclonal_filter);
                 if (!is_random_unfiltered and !bc.filters->IsValid(read_index))// No reason to waste more time
                     continue;
 
-                // Execute the iterative solving-normalization routine
+                // Equal recalibration opportunity for everybody! (except TFs!)
+                const vector<vector<vector<float> > > * aPtr = 0;
+                const vector<vector<vector<float> > > * bPtr = 0;
+                if (bc.recalModel.is_enabled() && read_class == 0) { //do not recalibrate TF read
+                  aPtr = bc.recalModel.getAs(x+bc.block_col_offset, y+bc.block_row_offset);
+                  bPtr = bc.recalModel.getBs(x+bc.block_col_offset, y+bc.block_row_offset);
+                  treephaser_sse.SetAsBs(aPtr, bPtr);  // Set recalibration model for this read
+                  treephaser.SetAsBs(aPtr, bPtr);
+                } else {
+                  // Make sure we don't inadvertently use the recalibration model of the previously processed read.
+                  treephaser_sse.DisableRecalibration();
+                  treephaser.DisableRecalibration();
+                }
+
+                // Execute the iterative solving-normalization routine - switch by specified algorithm
                 if (bc.dephaser == "treephaser-sse") {
-                    treephaser_sse.SetModelParameters(cf, ie);
-                    vector<vector<vector<float> > > * aPtr = 0;
-                    vector<vector<vector<float> > > * bPtr = 0;
-                    if (bc.recalModel.is_enabled()) {
-                        aPtr = bc.recalModel.getAs(x+bc.block_col_offset, y+bc.block_row_offset);
-                        bPtr = bc.recalModel.getBs(x+bc.block_col_offset, y+bc.block_row_offset);
-                        if (aPtr != 0 && bPtr != 0)
-                        {
-                            treephaser_sse.SetAsBs(aPtr, bPtr, true);
-                        }
-                    }
-                    treephaser_sse.NormalizeAndSolve(read);
-                    treephaser.SetModelParameters(cf, ie, 0);//to remove
-                } else if (bc.dephaser == "dp-treephaser") {
+                  treephaser_sse.SetModelParameters(cf, ie); // sse version has no hookup for droop.
+                  treephaser_sse.NormalizeAndSolve(read);
+                  treephaser.SetModelParameters(cf, ie); // Adapter trimming uses the cpp treephaser
+
+                } else { // Setup cpp treephaser
+                  if (bc.skip_droop)
+                    treephaser.SetModelParameters(cf, ie);
+                  else
                     treephaser.SetModelParameters(cf, ie, dr);
-                    treephaser.NormalizeAndSolve4(read, bc.flow_order.num_flows());
-                    treephaser.ComputeQVmetrics(read);
-                } else if (bc.dephaser == "treephaser-adaptive") {
-                    treephaser.SetModelParameters(cf, ie, 0);
-                    treephaser.NormalizeAndSolve3(read, bc.flow_order.num_flows()); // Adaptive normalization
-                    treephaser.ComputeQVmetrics(read);
-                } else { //if (bc.dephaser == "treephaser-swan") {
-                    treephaser.SetModelParameters(cf, ie, dr);
-                    vector<vector<vector<float> > > * aPtr = 0;
-                    vector<vector<vector<float> > > * bPtr = 0;
-                    if (bc.recalModel.is_enabled()) {
-                        aPtr = bc.recalModel.getAs(x+bc.block_col_offset, y+bc.block_row_offset);
-                        bPtr = bc.recalModel.getBs(x+bc.block_col_offset, y+bc.block_row_offset);
-//          printf("a: %6.4f; b: %6.4f\n", (*aPtr)[0][0][1], (*bPtr)[0][0][1]);
-                        treephaser.SetAsBs(aPtr, bPtr, true);
-                    }
-                    treephaser.NormalizeAndSolve5(read, bc.flow_order.num_flows()); // sliding window adaptive normalization
-                    treephaser.ComputeQVmetrics(read);
+
+                  if (bc.dephaser == "dp-treephaser") {
+                    // Single parameter gain estimation
+                    treephaser.NormalizeAndSolve_GainNorm(read, bc.flow_order.num_flows());
+                  } else if (bc.dephaser == "treephaser-adaptive") {
+                    // Adaptive nortmalization - resolving read from start in each iteration
+                    treephaser.NormalizeAndSolve_Adaptive(read, bc.flow_order.num_flows());
+                  } else { //if (bc.dephaser == "treephaser-swan") {
+                    // Default corresponding to (approximately) what the sse version is doing
+                	// Adaptive normalization - sliding window without resolving start
+                	treephaser.NormalizeAndSolve_SWnorm(read, bc.flow_order.num_flows());
+                  }
+
+                  // Need this function to calculate inphase population for cpp version
+                  treephaser.ComputeQVmetrics(read);
                 }
 
                 // If recalibration is enabled, generate adjusted sequence and normalized_measurements, and recompute QV metrics
-
-//      BasecallerRead readDP = read;
-                if (bc.recalibration.is_enabled()) {
+                bool calibrate_read = (bc.recalibration.is_enabled() && read_class == 0); //do not recalibrate TF read
+                if (calibrate_read) {
+                	// Change base sequence for low hps
                     bc.recalibration.CalibrateRead(x+bc.block_col_offset,y+bc.block_row_offset,read.sequence, read.normalized_measurements, read.prediction, read.state_inphase);
                     if (bc.dephaser == "treephaser-sse")
-                        treephaser_sse.ComputeQVmetrics(read);
+                      treephaser_sse.ComputeQVmetrics(read);
                     else
-                        treephaser.ComputeQVmetrics(read); // also generates updated read.prediction
+                      treephaser.ComputeQVmetrics(read);
+                } else if (bc.dephaser == "treephaser-sse") {
+                  // in case we didn't calibrate low hps, still want to have QV metrics for sse output
+                  treephaser_sse.ComputeQVmetrics(read);
                 }
 
                 // Misc data management: Generate residual, scaled_residual
@@ -1118,13 +1129,7 @@ void * BasecallerWorker(void *input)
                     scaled_residual[flow] = residual[flow] / read.state_inphase[flow];
                 }
 
-                //delay call of ComputeQVmetrics so that state_inphase would be from treephaserSSE consistently
-                if (!bc.recalibration.is_enabled() && bc.dephaser == "treephaser-sse") {
-                    treephaser_sse.ComputeQVmetrics(read);
-                }
-
                 // Misc data management: Put base calls in proper string form
-
                 processed_read.filter.n_bases = read.sequence.size();
                 processed_read.filter.is_called = true;
 
@@ -1192,10 +1197,6 @@ void * BasecallerWorker(void *input)
                 if (read_class == 0)
                 {
                     bc.barcodes->ClassifyAndTrimBarcode(read_index, processed_read, read, base_to_flow);
-                    if (bc.bc_adjust)
-                    {
-                        processed_read.bam.AddTag("XB","i", processed_read.barcode_adjust_errors);
-                    }
                 }
 
                 //

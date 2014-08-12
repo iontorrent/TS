@@ -1,0 +1,48 @@
+---
+# file: roles/webserver/tasks/main.yml
+
+- name: Install packages for webserver
+  apt: name={{ item }} state=latest force=yes
+  with_items:
+    - apache2-mpm-prefork
+    - apache2
+    - libapache2-mod-wsgi
+    - libapache2-mod-php5
+  notify: restart apache
+  
+- name: Modify apache2 logfile rotation criteria - keep 10 logs
+  lineinfile: dest={{ configfile }}
+                state=present
+                insertafter="(.*){$"
+                line="        rotate 10"
+                regexp="(\s+)rotate(.*)$"
+  
+- name: Modify apache2 logfile rotation criteria - compress immediately
+  lineinfile: dest={{ configfile }}
+                state=present
+                insertafter="(.*){$"
+                regexp='(\s+)?delaycompress'
+                line='        nodelaycompress'
+  
+- name: Add daily
+  lineinfile: dest={{ configfile }}
+                state=present
+                insertafter="(.*){$"
+                line='        daily'
+                
+- name: Remove weekly
+  lineinfile: dest={{ configfile }}
+                state=absent
+                regexp='^.*weekly$'
+  
+- name: Ensure a line is available
+  lineinfile: dest={{ configfile }}
+                state=present
+                insertafter="(.*){$"
+                line="        size 50M"
+
+- name: Run logrotate once per hour
+  copy: src=/etc/cron.daily/logrotate dest=/etc/cron.hourly/logrotate force=no
+  
+- name: Enable required apache modules
+  shell: /usr/sbin/a2enmod wsgi headers ssl setenvif deflate filter expires rewrite include

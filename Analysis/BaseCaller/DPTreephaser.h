@@ -7,9 +7,9 @@
 #ifndef DPTREEPHASER_H
 #define DPTREEPHASER_H
 
-#include <string>
-#include <iostream>
 #include <vector>
+#include <stddef.h>
+#include <algorithm>
 #include "BaseCallerUtils.h"
 #include "SystemMagicDefines.h"
 #include "PIDloop.h"
@@ -97,17 +97,17 @@ public:
   //! @brief  Perform adaptive normalization using WindowedNormalize (slow on long reads)
   //! @param[in,out]  read      Input and output information for the read
   //! @param[in]      max_flows Number of flows to process
-  void  NormalizeAndSolve3(BasecallerRead& read, int max_flows);
+  void  NormalizeAndSolve_Adaptive(BasecallerRead& read, int max_flows);
 
   //! @brief  Perform adaptive normalization using Normalize (not as accurate)
   //! @param[in,out]  read      Input and output information for the read
   //! @param[in]      max_flows Number of flows to process
-  void  NormalizeAndSolve4(BasecallerRead& read, int max_flows);
+  void  NormalizeAndSolve_GainNorm(BasecallerRead& read, int max_flows);
 
   //! @brief  Perform adaptive normalization using WindowedNormalize and solving with sliding window
   //! @param[in,out]  read      Input and output information for the read
   //! @param[in]      max_flows Number of flows to process
-  void  NormalizeAndSolve5(BasecallerRead& read, int max_flows);
+  void  NormalizeAndSolve_SWnorm(BasecallerRead& read, int max_flows);
 
   //! @brief  Tree-search-based dephasing.
   //! @param[in]  read.normalized_measurements    Normalized measurements
@@ -121,7 +121,7 @@ public:
   //! @param[in]  read.sequence     Base sequence
   //! @param[out] read.prediction   Predicted signal
   //! @param[in]  max_flows         Number of flows to process
-  void  Simulate(BasecallerRead& read, int max_flows);
+  void  Simulate(BasecallerRead& read, int max_flows, bool state_inphase=false);
 
   //! @brief  Applies signal recalibration to previously computed predicted sequence
   //! @param[in/out] read.predictions
@@ -172,37 +172,26 @@ public:
   void  PIDNormalize(BasecallerRead& read, const int num_samples);
   float PIDNormalize(BasecallerRead& read, const int start_flow, const int end_flow);
 
-  //! @brief     Set popinters to recalibration model
-  void SetAsBs(vector<vector< vector<float> > > *As, vector<vector< vector<float> > > *Bs,  bool pm_model_available){
+  //! @brief     Set pointers to recalibration model
+  bool SetAsBs(const vector<vector< vector<float> > > *As, const vector<vector< vector<float> > > *Bs){
     As_ = As;
     Bs_ = Bs;
-    pm_model_available_ =  pm_model_available and (As_ != NULL) and (Bs_ != NULL);
+    pm_model_available_ = (As_ != NULL) and (Bs_ != NULL);
+    recalibrate_predictions_ = pm_model_available_; // We bothered loading the model, of course we want to use it!
+    return(pm_model_available_);
   };
 
   //! @brief     Enables the use of recalibration if a model is available
   bool EnableRecalibration() {
-    if (pm_model_available_) {
-      pm_model_enabled_ = true;
-      recalibrate_predictions_ = true;
-    }
+    recalibrate_predictions_ = pm_model_available_;
     return pm_model_available_;
   };
 
-  //! @brief     Diasbles the use of recalibration.
+  //! @brief     Diasbles the use of recalibration and clears model information.
   void DisableRecalibration() {
-    pm_model_available_ = false;
-    pm_model_enabled_   = false;
+    //pm_model_available_ = false;
     recalibrate_predictions_ = false;
   };
-
-  //! @brief    Reset recalibration model
-  void FlushRecalValues() {
-    //retain_recalibration_values_ = false;
-    for (int i_path=0; i_path<kNumPaths; i_path++) {
-      path_[i_path].calibA.assign(flow_order_.num_flows(), 1.0f);
-      path_[i_path].calibB.assign(flow_order_.num_flows(), 0.0f);
-    }
-  }
 
   //! @brief    Treephaser's slot for partial base sequence, complete with tree search metrics and state for extending
   struct TreephaserPath {
@@ -223,14 +212,12 @@ public:
     float             per_flow_metric;          //!< Auxiliary tree search metric, useful for stack pruning
     int               dot_counter;              //!< Number of extreme mismatch flows encountered so far
 
+    // Recalibration - we actually need 1 data structure to apply this model.
+    vector<float>     calibA;                   //!< Multiplicative offset per inphase flow
+
     // PID loop state
     PIDloop           pidOffsetState;           //!< State of the pidOffset_ loop at window_start;
     PIDloop           pidGainState;             //!< State of the pidGain_ loop at window_start;
-
-    //vector<int>       flow2base_pos;          // These 2 variables are used for the recalibration model
-    //int               base_pos;               // in the c++ version of the code
-    vector<float>       calibA;                 // Bringing recalibration more in line with the SSE algorithms
-    vector<float>       calibB;                 // by purposefully introducing bad programming and mem overflow
   };
 
   TreephaserPath& path(int idx) { return path_[idx]; }
@@ -253,16 +240,26 @@ public:
   //! @param[in]     max_flow  Do not read/write past this flow
   void AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_flow) const;
 
-  //! @brief  Switch to turn on analysis for a terminator chemistry run
-  //! @param[in]  is_terminator_chemistry_run settign the internal variable terminator_chemistry_run_
-  void SetTerminatorChemistry(bool is_terminator_chemistry_run)
-  { terminator_chemistry_run_ = is_terminator_chemistry_run; };
+  //! @brief  Switch to set state progression model
+  //! @param[in]  diagonal_states : Sets attribute diagonal_states_
+  void SetStateProgression(bool diagonal_states)
+  { diagonal_states_ = diagonal_states; };
+
+
+  //! @brief  Switch to disable / enable the use of recalibration during the normalization phase
+  void SkipRecalDuringNormalization(bool skip_recal)
+  { skip_recal_during_normalization_ = skip_recal; };
 
 
 protected:
 
+  void  ResetRecalibrationStructures();
+
   int                 windowSize_;                //!< Normalization window size
 
+  double              my_cf_;                     //!< Stores the cf phasing parameter used to compute transitions
+  double              my_ie_;                     //!< Stores the ie phasing parameter used to compute transitions
+  double              my_dr_;                     //!< Stores the dr phasing parameter used to compute transitions
   ion::FlowOrder      flow_order_;                //!< Sequence of nucleotide flows
   vector<float>       transition_base_[8];        //!< Probability of polymerase incorporating and staying active
   vector<float>       transition_flow_[8];        //!< Probability of polymerase not incorporating and staying active
@@ -290,13 +287,13 @@ protected:
   const static float  kDgainG       = 0.0f;
   const static float  kInitGain     = 1.0f;
 
-  vector< vector< vector<float> > > *As_;
-  vector< vector< vector<float> > > *Bs_;
-  bool pm_model_available_;
-  bool pm_model_enabled_;
-  bool recalibrate_predictions_;
-  bool retain_recalibration_values_;   //!< Switch to purposefully create a memory overrun to mimic SSE version
-  bool terminator_chemistry_run_;
+  const vector< vector< vector<float> > > *As_; //!< Pointer to recalibration structure: multiplicative constant
+  const vector< vector< vector<float> > > *Bs_; //!< Pointer to recalibration structure: additive constant
+  bool pm_model_available_;                     //!< Signals availability of a recalibration model
+  bool recalibrate_predictions_;                //!< Switch to use recalibration model during metric generation
+  bool skip_recal_during_normalization_;        //!< Switch to skip recalibration during the normalization phase
+  bool diagonal_states_;                     //!< Turn on a diagonalized state model
+
 };
 
 #endif // DPTREEPHASER_H

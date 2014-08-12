@@ -16,6 +16,13 @@
 #include "../util/tmap_definitions.h"
 #include "tmap_file.h"
 
+#ifdef HAVE_LIBPTHREAD
+#include <pthread.h>
+#endif
+
+
+
+
 tmap_file_t *
 tmap_file_fopen(const char* path, const char *mode, int32_t compression) 
 {
@@ -464,3 +471,79 @@ tmap_file_fflush(tmap_file_t *fp, int32_t gz_flush)
 
   return ret;
 }
+
+/* thread-safe logging support */
+static FILE* log_file_pointer = NULL;
+static int32_t logging_enabled = 0;
+#ifdef HAVE_LIBPTHREAD
+static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
+#endif
+
+void tmap_log_enable (FILE* fp)
+{
+  // there is no need for preemptance guard here, worst async access can do is enable logging to wrong destination.
+  logging_enabled = 1;
+  log_file_pointer = fp;
+}
+void tmap_log_disable ()
+{
+  logging_enabled = 0;
+}
+
+int32_t tmap_log_enabled ()
+{
+  return logging_enabled;
+}
+  
+int32_t tmap_log (const char* format, ...)
+{
+  int32_t n = 0;
+  va_list ap;
+  if (!logging_enabled) 
+    return n;
+#ifdef HAVE_LIBPTHREAD
+  pthread_mutex_lock (&log_mutex);
+#endif
+  va_start(ap, format);
+  if (!log_file_pointer)
+  {
+    n = vprintf(format, ap);
+    fflush (stdout);
+  }
+  else
+  {
+    n = vfprintf(log_file_pointer, format, ap);
+    fflush (log_file_pointer);
+  }
+  va_end(ap);
+#ifdef HAVE_LIBPTHREAD
+  pthread_mutex_unlock (&log_mutex);
+#endif
+  return n;
+}
+int32_t tmap_vlog (const char* format, va_list ap)
+{
+  int32_t n = 0;
+  if (!logging_enabled) 
+    return n;
+#ifdef HAVE_LIBPTHREAD
+  pthread_mutex_lock (&log_mutex);
+#endif
+  if (!log_file_pointer)
+  {
+    n = vprintf(format, ap);
+    fflush (stdout);
+  }
+  else
+  {
+    n = vfprintf(log_file_pointer, format, ap);
+    fflush (log_file_pointer);
+  }
+  
+#ifdef HAVE_LIBPTHREAD
+  pthread_mutex_unlock (&log_mutex);
+#endif
+  return n;
+}
+
+

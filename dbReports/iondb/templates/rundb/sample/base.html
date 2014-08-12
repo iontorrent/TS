@@ -17,6 +17,7 @@
             <li><a href="{% url "configure_services" %}">Services</a></li>
             <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
             <li><a href="{% url "configure_configure" %}">Configure</a></li>
+            <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
             <li><a href="{% url "configure_account" %}">Accounts</a></li>
         </ul>
 </li>
@@ -26,7 +27,7 @@
 
 <li><a href="{% url "planRuns" %}">Plan Runs</a></li>
 <li class="active"><a href="{% url "samplesets" %}">Samples</a></li>
-<li><a href="{% url "plans" %}">Templates</a></li>
+<li><a href="{% url "plan_templates" %}">Templates</a></li>
 <li><a href="{% url "planned" %}">Planned Run List</a></li>
 
 {% endblock sub-nav %}

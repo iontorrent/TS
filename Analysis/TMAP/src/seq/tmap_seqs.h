@@ -16,10 +16,10 @@
 /*! 
   */
 typedef struct {
-    tmap_seq_t **seqs; // TODO
-    int32_t n; // TODO
-    int32_t m; // TODO
-    int32_t type; // TODO
+    tmap_seq_t **seqs; // array of pointers to sequence descriptor structures
+    int32_t n; // number of (valid) pointers to sequence descriptor structures in 'seqs' array
+    int32_t m; // allocated size of 'seqs' array (number of slots)
+    int32_t type; // (presumably) the type of DNA sequence data - enum from tmap_seq.h
 } tmap_seqs_t;
 
 /*! 

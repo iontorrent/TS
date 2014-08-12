@@ -29,12 +29,18 @@
 #include <sys/time.h>
 #include "tmap_time.h"
 
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+
+static double ONE_MILLIONTH = 1e-6;
+
 double 
 tmap_time_cputime()
 {
   struct rusage r;
   getrusage(RUSAGE_SELF, &r);
-  return r.ru_utime.tv_sec + r.ru_stime.tv_sec + 1e-6 * (r.ru_utime.tv_usec + r.ru_stime.tv_usec);
+  return r.ru_utime.tv_sec + r.ru_stime.tv_sec + ONE_MILLIONTH * (r.ru_utime.tv_usec + r.ru_stime.tv_usec);
 }
 
 double 
@@ -42,6 +48,11 @@ tmap_time_realtime()
 {
   struct timeval tp;
   struct timezone tzp;
-  gettimeofday(&tp, &tzp);
-  return tp.tv_sec + tp.tv_usec * 1e-6;
+  if (gettimeofday(&tp, &tzp) != 0)
+  {
+    printf ("gettimeofday failed, errno is %d : %s\n", errno, strerror (errno));
+    exit (1);
+  }
+  //printf ("\ntime of day is %ld sec : %ld usec\n", tp.tv_sec, tp.tv_usec);
+  return tp.tv_sec + ONE_MILLIONTH*tp.tv_usec;
 }

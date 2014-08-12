@@ -1,0 +1,84 @@
+#!/bin/bash
+# Copyright (C) 2014 Life Technologies Inc. All Rights Reserved
+# Include file for the tsvm bash scripts
+#
+# User does not have these by default
+PATH=$PATH:/usr/sbin:/sbin
+#HOME=/home/ionadmin
+HOME=/results/tsvm
+TSVM_HOME=/results/tsvm
+LOG_HOME=/var/log/ion
+export VBOX_USER_HOME=/results/tsvm/.config/VirtualBox/
+TSVM_MACHINE_FOLDER="${TSVM_HOME}/VirtualBox VMs/"
+PROVISION_LOG="${LOG_HOME}/provisioning.log"
+RUNNING_LOG="${LOG_HOME}/running.log"
+
+
+#=============================================================================
+# Functions
+#=============================================================================
+function rotate_this_pile ()
+{
+    LOG_FILESTEM="$1"
+    MAX_INDEX=5
+    INDEX=$MAX_INDEX
+    if [[ ! -e "$LOG_FILESTEM" ]]; then
+        return
+    fi
+    while [[ $INDEX -gt 1 ]]; do
+        NEW_FILE="$LOG_FILESTEM".$INDEX
+        if [[ -e $NEW_FILE ]] && [[ $MAX_INDEX -eq $INDEX ]]; then
+            rm -f $NEW_FILE
+        fi
+
+        if [[ -e "$LOG_FILESTEM".$((INDEX-1)) ]]; then
+            mv "$LOG_FILESTEM".$((INDEX-1)) $NEW_FILE
+        fi
+        INDEX=$((INDEX-1))
+    done
+    if [[ -e "$LOG_FILESTEM" ]]; then
+        mv "$LOG_FILESTEM" "$LOG_FILESTEM".1
+    fi
+}
+
+function insert_before()
+{
+    #
+    # WARNING! This will fail for some characters, like forward-slash.
+    #
+	MYFILE=$1
+	MYLINE="$2"
+	MYKEY="$3"
+    # Append MYKEY to the end of file, if its not there
+	if ! grep -q -e "$MYKEY" $MYFILE; then
+        echo $MYKEY >> $MYFILE
+	fi
+    # Insert MYLINE before MYKEY
+	if ! grep -q -e "$MYLINE" $MYFILE; then
+		# insert line before keyword
+		sed -i "/^$MYKEY/i $MYLINE" $MYFILE
+	fi
+}
+
+function enable_nfs_rule()
+{
+    FILE=/etc/iptables.custom
+    if [ -e $FILE ]; then
+        TMPFILE=$(mktemp)
+        cp $FILE $TMPFILE
+        
+        # Allows NFS traffic
+        LINE="-A INPUT -s 192.168.35.10 -j ACCEPT"
+        insert_before "$TMPFILE" "$LINE" "COMMIT"
+        insert_before "$TMPFILE" "*filter" "$LINE"  # ONLY DO THIS ONCE
+        
+        # Allows port forwarded traffic 8082->80
+        LINE="-A INPUT -p tcp -m state --state NEW -m tcp --dport 8082 -j ACCEPT"
+        insert_before "$TMPFILE" "$LINE" "COMMIT"
+        
+        sudo cp $TMPFILE $FILE
+        sudo iptables-restore < /etc/iptables.rules
+        sudo iptables-restore --noflush < $FILE
+        rm -f $TMPFILE
+    fi
+}

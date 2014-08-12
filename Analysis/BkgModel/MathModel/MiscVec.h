@@ -5,8 +5,8 @@
 
 void MultiplyVectorByScalar_Vec(float *my_vec, float my_scalar, int len);
 
-void Dfderr_Step_Vec(int numfb, float** dst, float** et, float** em, int len);
-void Dfdgain_Step_Vec(int numfb, float** dst, float** src, float** em, int len, float gain);
+void Dfderr_Step_Vec(int flow_block_size, float** dst, float** et, float** em, int len);
+void Dfdgain_Step_Vec(int flow_block_size, float** dst, float** src, float** em, int len, float gain);
 
 #endif // MISCVEC_H
 

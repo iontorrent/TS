@@ -136,6 +136,7 @@ body {
   border: 1px solid gray;
   border-top: 0;
   border-bottom: 0;
+  border-radius: 0px;
 }
 
 .tools-dialog .buttons {

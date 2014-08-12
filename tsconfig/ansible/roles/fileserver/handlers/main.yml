@@ -1,0 +1,24 @@
+---
+
+- name: load iptables
+  shell: bash -lc '/sbin/iptables-restore < /etc/iptables.rules'
+  
+- name: load custom iptables
+  shell: bash -lc '/sbin/iptables-restore --noflush < /etc/iptables.custom'
+  
+- name: restart network
+  service: name=networking state=restarted
+  
+- name: restart dhcp
+  service: name=dhcp3-server state=restarted
+  ignore_errors: yes
+  
+- name: restart vsftpd
+  service: name=vsftpd state=restarted
+  
+- name: restart ntp
+  service: name=ntp state=restarted
+  
+- name: restart exportfs
+  shell: bash -lc 'exportfs -ra'
+  

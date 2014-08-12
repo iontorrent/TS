@@ -1,5 +1,6 @@
-#ifndef _WELLVOXELTRACKER_H
-#define _WELLVOXELTRACKER_H
+/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+#ifndef WELLVOXELTRACKER_H
+#define WELLVOXELTRACKER_H
 
 #include <assert.h>
 
@@ -59,6 +60,6 @@ private:
 
 
 
-#endif /* _WELLVOXELTRACKER_H */
+#endif // WELLVOXELTRACKER_H
 
 

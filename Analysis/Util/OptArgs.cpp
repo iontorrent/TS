@@ -165,8 +165,10 @@ void OptArgs::GetOption(std::vector<double> &value, const std::string &defaultVa
 	  " use different api or specify single option");
   }
   vector<string> words;
-  split(opt->mValues[0],',',words);
   value.clear();
+  if(opt->mValues[0] == "")
+    return;
+  split(opt->mValues[0],',',words);
   for (size_t i = 0; i < words.size(); i++) {
     char *end;
     int err = errno;
@@ -192,8 +194,10 @@ void OptArgs::GetOption(std::vector<int> &value, const std::string &defaultValue
 	  " use different api or specify single option");
   }
   vector<string> words;
-  split(opt->mValues[0],',',words);
   value.clear();
+  if(opt->mValues[0] == "")
+    return;
+  split(opt->mValues[0],',',words);
   for (size_t i = 0; i < words.size(); i++) {
     char *end;
     int err = errno;
@@ -217,8 +221,10 @@ void OptArgs::GetOption(std::vector<unsigned int> &value, const std::string &def
 	  " use different api or specify single option");
   }
   vector<string> words;
-  split(opt->mValues[0],',',words);
   value.clear();
+  if(opt->mValues[0] == "")
+    return;
+  split(opt->mValues[0],',',words);
   for (size_t i = 0; i < words.size(); i++) {
     char *end;
     int err = errno;
@@ -241,8 +247,12 @@ void OptArgs::GetOption(std::vector<std::string> &value, const std::string &defa
     Abort("Multiple arguments specified for option: " + longOption + 
 	  " use different api or specify single option");
   }
+  value.clear();
+  if(opt->mValues[0] == "")
+    return;
   split(opt->mValues[0],',',value);
 }
+
 
 /**
  * Get a int option value for the given short/long key
@@ -311,6 +321,25 @@ bool OptArgs::GetFirstBoolean(char shortOption, const std::string &longOption, b
 }
 
 /**
+ * Get a boolean option value for the given short/long key
+ * If the option appears multiple times, use the earliest occurrence
+ */
+bool OptArgs::GetFirstBoolean(char shortOption, const std::string &longOption, const char * defaultValue)
+{
+  OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
+
+  if (opt->mValues.size() == 0)
+    return true;
+  if (opt->mValues[0] == "TRUE" or opt->mValues[0] == "true" or opt->mValues[0] == "ON" or opt->mValues[0] == "on")
+    return true;
+  if (opt->mValues[0] == "FALSE" or opt->mValues[0] == "false" or opt->mValues[0] == "OFF" or opt->mValues[0] == "off")
+    return false;
+
+  Abort("Don't recognize value: " + opt->mValues[0] + " for boolean");
+  return false; // Never actually reached
+}
+
+/**
  * Get a string option value for the given short/long key
  * If the option appears multiple times, use the earliest occurrence
  */
@@ -321,6 +350,17 @@ std::string OptArgs::GetFirstString(char shortOption, const std::string &longOpt
     Abort("No argument specified for option: " + longOption);
 
   return opt->mValues[0];
+}
+
+std::vector<std::string> OptArgs::GetFirstStringVector(char shortOption, const std::string &longOption, const std::string &defaultValue)
+{
+  OptArgument *opt = GetOptArgument(shortOption, longOption, defaultValue);
+  if (opt->mValues.size() == 0) {
+    Abort("No argument specified for option: " + longOption);
+  }
+  vector<string> value;
+  split(opt->mValues[0],',',value);
+  return value;
 }
 
 /**
@@ -416,6 +456,25 @@ void OptArgs::GetLeftoverArguments(std::vector<std::string> &leftover) {
 }
 
 /**
+ * Determine if string is a valid option or parameter to an option
+ */
+bool OptArgs::IsOption(const std::string &name) const {
+  if (name.length() > 0 && name[0] != '-') {
+    return false;
+  }
+  // negative number
+  else if (name.length() > 1 && name[0] == '-' && (isdigit(name[1]) || name[1] == '.')) {
+    return false;
+  }
+  else if (name.length() > 1 && name[0] == '-') {
+    return true;
+  }
+  fprintf(stderr, "Can't determine if name is an option: '%s'\n", name.c_str());
+  exit(1);
+  return false;
+}
+
+/**
  * Parse out a long option from the command line arguments, incrementing the index into
  * argv as necessary
  */ 
@@ -436,7 +495,7 @@ void OptArgs::HandleLongOption(std::string &option, int &index, int argc, const 
   size_t equalPos = option.find('=');
   if (equalPos == std::string::npos) { // No = sign found
     if (index+1 < argc) {
-      if (argv[index+1][0] != '-') { // Check if this is not just another option
+      if (!IsOption(argv[index+1])) { // Check if this is not just another option
         next = argv[index+1];
         index++;
       }
@@ -479,15 +538,11 @@ void OptArgs::HandleShortOption(std::string &option, int &index, int argc, const
     if (it != mSeenOpts.end()) {
       opt = it->second;
     }
-    if (opt.mRequiresArg || (index +1 < argc && argv[index+1][0] != '-')) {
+    if (opt.mRequiresArg || (index +1 < argc && !IsOption(argv[index+1]))) {
       if (index + 1 >= argc) {
-	    
 	Abort("Option: -" + opt.mShortName + ",--" + opt.mLongName + " requires an argument");
       }
       std::string next  = argv[index + 1];
-      if (next.find('-') == 0) {
-	Abort("Arguments to options can't start with '-'");
-      }
       index++;
       opt.mValues.push_back(next);
     }

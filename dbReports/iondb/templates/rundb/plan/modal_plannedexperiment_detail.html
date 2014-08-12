@@ -1,0 +1,421 @@
+{% load url from future %}
+{% load static from staticfiles %}
+{% load pagetools %}
+<style type="text/css">
+	.summary-section {
+		margin-bottom: 9px;
+	}
+	.break-word {
+		word-break: break-all;
+	}
+	.openclose{
+		opacity: .4;
+	}
+</style>
+<div id="modal_review_plan" title="" class="modal " style="width: 800px; left: 40%;">
+	<div class="modal-header">
+		<button type="button" class="close" data-dismiss="modal">&times;</button>
+		<h3>
+			Review {{state}}: {{plan.planDisplayedName}}
+			{% if extra_head %}<br/>&nbsp;&nbsp;{{ extra_head }}{% endif %}
+		</h3>
+	</div>
+	<div class="modal-body">
+		<div class="row-fluid">
+			<div class="span6">
+				<div class="summary-section">
+					<h3>
+						<a class='pull-right' data-toggle="collapse" href="#application"><i class="openclose icon-minus"></i></a>Application
+					</h3>
+					<div class="collapse in" id="application">
+						<table class="table table-striped table-condensed">
+							<tr>
+								<td><b>Application Group:</b></td>
+								<td>{{ plan.applicationGroup.name }}</td>
+							</tr>
+							<tr>
+								<td><b>Sample Grouping:</b></td>
+								<td>{{ plan.sampleGrouping.displayedName }}</td>
+							</tr>
+							<tr>
+								<td><b>Target Technique:</b></td>
+								<td>{{ runType.0.description }}</td>
+							</tr>
+							<tr>
+								<td><b>Sample Set:</b></td>
+								<td>{{ plan.sampleSet.displayedName }}</td>
+							</tr>
+						</table>
+					</div>
+				</div>
+				<div class="summary-section">
+					<h3>
+						<a class='pull-right' data-toggle="collapse" href="#kits"><i class="openclose icon-minus"></i></a>Kits
+					</h3>
+					<div class="collapse in" id="kits">
+						<table class="table table-striped table-condensed">
+							<tr>
+								<td><b>Sample Preparation Kit:</b></td>
+								<td>{{ samplePrepKit.0.description }}</td>
+							</tr>
+							<tr>
+								<td><b>Library Kit:</b></td>
+								<td>{{ libraryKit.0.description }}</td>
+							</tr>
+							<tr>
+								<td><b>Library Key:</b></td>
+								<td>{{ eas.libraryKey }}</td>
+							</tr>
+							<tr>
+								<td><b>3' Adapter:</b></td>
+								<td class="break-word"><small>{{ eas.threePrimeAdapter }}</small></td>
+							</tr>
+							<tr>
+								<td><b>Template Kit:</b></td>
+								<td>{{ templatingKit.0.description }}</td>
+							</tr>
+							<tr>
+								<td><b>Sequencing Kit:</b></td>
+								<td>{{ sequenceKit.0.description }}</td>
+							</tr>
+							<tr>
+								<td><b>Control Sequence:</b></td>
+								<td>{{ controlSequencekit.0.description }}</td>
+							</tr>
+							<tr>
+								<td><b>Flows:</b></td>
+								<td>{{ plan.experiment.flows }}</td>
+							</tr>
+							<tr>
+								<td><b>Chip Type:</b></td>
+								<td>{% if chipTypePrefix %}Ion {{ chipTypePrefix }}&trade; Chip {{ chipTypeVersion }}{% endif %}</td>
+							</tr>
+							<tr>
+								<td><b>Barcode Set:</b></td>
+								<td>{{ eas.barcodeKitName }}</td>
+							</tr>
+							<tr>
+								<td><b>Mark as PCR Duplicates:</b></td>
+								<td>{{ eas.isDuplicateReads }}</td>
+							</tr>
+							<tr>
+								<td><b>Enable Base Recalibration:</b></td>
+								<td>{{ eas.base_recalibrate }}</td>
+							</tr>
+							<tr>
+								<td><b>Enable Realignment:</b></td>
+								<td>{{ eas.realign }}</td>
+							</tr>
+						</table>
+					</div>
+				</div>
+			</div>
+			<div class="span6">
+				<div class="summary-section">
+					<h3>
+						<a class='pull-right' data-toggle="collapse" href="#monitor"><i class="openclose icon-minus"></i></a>Monitoring
+					</h3>
+					<div class="collapse in" id="monitor">
+						<table class="table table-striped table-condensed">
+							{% for qcType, threshold in qcValues %}
+							<tr>
+								<td><b>{{ qcType }}</b></td>
+								<td><b>&le;</b></td>
+								<td>{{ threshold }}</td>
+							</tr>
+							{% endfor %}
+						</table>
+					</div>
+				</div>
+				<div class="summary-section">
+					<h3>
+						<a class='pull-right' data-toggle="collapse" href="#reference"><i class="openclose openclose icon-minus"></i></a>Reference
+					</h3>
+					<div class="collapse in" id="reference">
+						<table class="table table-striped table-condensed">
+							<tr>
+								<td><b>Reference Library:</b></td>
+								<td>{{ eas.reference }}</td>
+							</tr>
+							<tr>
+								<td><b>Target Regions:</b></td>
+								<td class="break-word">{{ eas.targetRegionBedFile|default:''|basename }}</td>
+							</tr>
+							<tr>
+								<td><b>Hotspot Regions:</b></td>
+								<td class="break-word">{{ eas.hotSpotRegionBedFile|default:''|basename }}</td>
+							</tr>
+						</table>
+					</div>
+				</div>
+				<div class="summary-section">
+					<h3>
+						<a class='pull-right' data-toggle="collapse" href="#plugins_projects"><i class="openclose icon-minus"></i></a>Plugins & Output
+					</h3>
+					<div class="collapse in" id="plugins_projects">
+						<table class="table table-striped table-condensed">
+							<tr>
+								<td><b>Plugins:</b></td>
+								<td>
+									{% for plugin in plugins %}
+										{% if plugin.isPlanConfig %}
+											<a class="plugin_config" href="#configModal" data-href="{{plugin.isPlanConfig}}" data-json="{{plugin.userInputJSON}}">
+										{% endif %}
+										{{plugin.name}}
+										{% if plugin.name == "variantCaller" and plugin.userInput.meta.configuration %}
+											({{ plugin.userInput.meta.configuration}})
+										{% endif %}
+										{% if plugin.isPlanConfig %}</a>{% endif %}
+										{% if not forloop.last %},{% endif %}
+									{% endfor %}
+								</td>
+							</tr>
+							<tr>
+								<td><b>Projects:</b></td>
+								<td>{{ projects }}</td>
+							</tr>
+							<tr>
+								<td><b>Uploaders:</b></td>
+								<td>
+									{% for uploader in uploaders %}
+										{{ uploader.name }}
+										{% if uploader.name == "IonReporterUploader" and uploader.userInput.accountName %}
+											({{uploader.userInput.accountName}} )
+											{% endif %}
+									{% endfor %}
+								</td>
+							</tr>
+						</table>
+					</div>
+				</div>
+				<div class="summary-section">
+					<h3>
+						<a class='pull-right' data-toggle="collapse" href="#notes"><i class="openclose icon-minus"></i></a>Notes
+					</h3>
+					<div class="collapse in" id="notes">
+						<table>
+							<tr>
+								<td>{{ plan.experiment.notes }}</td>
+							</tr>
+						</table>
+					</div>
+				</div>
+			</div>
+		</div>
+		{% if not plan.isReusable %}
+		<div class="row-fluid">
+			<div class="span12">
+				<div class="summary-section">
+					<h3>
+						<a class='pull-right' data-toggle="collapse" href="#samples"><i class="openclose icon-minus"></i></a>
+						{% if eas.barcodeKitName %} Barcodes & Samples {% else %} Sample {% endif %}
+					</h3>
+					<div class="collapse in" id="samples">
+						{% if not eas.barcodeKitName %}
+							<div class="span6">
+							<table class="table table-striped table-condensed">
+							<tr>
+								<td><b>Sample Tube Label:</b></td>
+								<td>{{ plan.sampleTubeLabel }}</td>
+							</tr>
+							<tr>
+								<td><b>Sample Name:</b></td>
+								<td>{{ plan.get_sampleDisplayedName }}</td>
+							</tr>
+							<tr>
+								<td><b>Sample ID:</b></td>
+								<td>{{ plan.get_sample_external_id }}</td>
+							</tr>
+							<tr>
+								<td><b>Sample Description:</b></td>
+								<td>{{ plan.get_sample_description }}</td>
+							</tr>
+							</table>
+							</div>
+							{% if iru_config %}
+								<div class="span6">
+								<table class="table table-striped table-condensed">
+								{% for key in iru_columns %}
+									<tr>
+										<td><b>{{key}}:</b></td>
+										<td>{{iru_config.nobarcode|bracket:key|default:''}}</td>
+									</tr>
+								{% endfor %}
+								</table>
+								</div>
+							{% endif %}
+						{% else %}
+						<div style="overflow: auto;max-height:250px;padding:5px;">
+							<table class="table table-striped table-condensed">
+							<tr>
+								<td colspan=2><b>Sample Tube Label:</b></td>
+								<td colspan=3>{{ plan.sampleTubeLabel }}</td>
+							</tr>
+							<tr><td colspan=5></td></tr>
+							<tr>
+								<th>Barcode ID</th>
+								<th>Sequence</th>
+								<th>Sample Name</th>
+								{% for key in bcsamples_columns %}
+									<th>{{key}}</th>
+								{% endfor %}
+								{% if iru_config %}
+									{% for key in iru_columns %}
+										<th>{{key}}</th>
+									{% endfor %}
+								{% endif %}
+							</tr>
+							{% for barcode in barcodes %}
+								<tr>
+									<td>{{ barcode.id_str }}</td>
+									<td>{{ barcode.sequence }}</td>
+									<td>{{ barcodedSamples|bracket:barcode.id_str|bracket:'sample'|default:'' }}</td>
+									{% for key in bcsamples_columns %}
+										<td>{{ barcodedSamples|bracket:barcode.id_str|bracket:key|default:'' }}</td>
+									{% endfor %}
+									{% if iru_config %}
+										{% for key in iru_columns %}
+											<td>{{iru_config|bracket:barcode.id_str|bracket:key|default:''}}</td>
+										{% endfor %}
+									{% endif %}
+								</tr>
+							{% empty %}
+								<tr><td colspan=5>No samples are defined</td></tr>
+							{% endfor %}
+							</table>
+						</div>
+						{% endif %}
+					</div>
+				</div>
+				<div class="summary-section">
+					<h3>
+						<a class='pull-right' data-toggle="collapse" href="#args"><i class="openclose icon-plus"></i></a>Command Line Args (Advanced)
+					</h3>
+					<div class="collapse" id="args">
+						<table class="table table-striped table-condensed">
+							{% if not thumbnail %}
+							<tr>
+								<td><b>Beadfind Args:</b></td>
+								<td>{{ eas.beadfindargs }}</td>
+							</tr>
+							<tr>
+								<td><b>Analysis Args:</b></td>
+								<td>{{ eas.analysisargs }}</td>
+							</tr>
+							<tr>
+								<td><b>Pre Basecaller Args for calibration:</b></td>
+								<td>{{ eas.prebasecallerargs }}</td>
+							</tr>
+							<tr>
+								<td><b>Basecaller Args:</b></td>
+								<td>{{ eas.basecallerargs }}</td>
+							</tr>
+							<tr>
+								<td><b>Alignment Args:</b></td>
+								<td>{{ eas.alignmentargs }}</td>
+							</tr>
+							{% endif %}
+							{% if thumbnail or plan.experiment.isProton and state != 'Plan' %}
+							<tr><td>&nbsp</td></tr>
+							<tr>
+								<td><b>Thumbnail Beadfind Args:</b></td>
+								<td>{{ eas.thumbnailbeadfindargs }}</td>
+							</tr>
+							<tr>
+								<td><b>Thumbnail Analysis Args:</b></td>
+								<td>{{ eas.thumbnailanalysisargs }}</td>
+							</tr>
+							<tr>
+								<td><b>Thumbnail Pre Basecaller Args for calibration:</b></td>
+								<td>{{ eas.prethumbnailbasecallerargs }}</td>
+							</tr>
+							<tr>
+								<td><b>Thumbnail Basecaller Args:</b></td>
+								<td>{{ eas.thumbnailbasecallerargs }}</td>
+							</tr>
+							<tr>
+								<td><b>Thumbnail Alignment Args:</b></td>
+								<td>{{ eas.thumbnailalignmentargs }}</td>
+							</tr>
+							{% endif %}
+						</table>
+					</div>
+				</div>
+				{% if event_log %}
+				<div class="summary-section">
+					<h3>
+						<a class='pull-right' data-toggle="collapse" href="#log"><i class="openclose icon-plus"></i></a>History
+					</h3>
+					<div class="collapse" id="log">
+						<table class="table table-striped table-condensed">
+							<tr>
+								<th>Date</th>
+								<th>User</th>
+								<th>Log</th>
+							</tr>
+							{% for log in event_log %}
+							<tr>
+								<td style="width: 100px;">{{ log.created }}</td>
+								<td>{{ log.username }}</td>
+								<td>
+								{% if log.json_log %}
+									<table class="table table-condensed">
+									<tr>
+										<th>Parameter</th>
+										<th>Old Value</th>
+										<th>New Value</th>
+									</tr>
+									{% for key, values in log.json_log.items %}
+									<tr>
+										<td>{{ key }}</td>
+										<td class="break-word">{{ values.0|linebreaks }}</td>
+										<td class="break-word">{{ values.1|linebreaks }}</td>
+									</tr>
+									{% endfor %}
+									</table>
+								{% else %}
+									{{ log.text|linebreaks }}
+								{% endif %}
+								</td>
+							</tr>
+							{% endfor %}
+						</table>
+					</div>
+				</div>
+				{% endif %}
+			</div>
+		</div>
+		{% endif %}
+	</div>
+	<div class="modal-footer">
+		<a href="#" class="btn" data-dismiss="modal">Close</a>
+	</div>
+	<div id="configModal" class="modal hide" style="position: fixed; margin-top: -250px;">
+		<div class="modal-header">
+			<button id="configModalClose" href="#" type="button" class="close">x</button>
+			<h3 id="configModalLabel">View Plugin Configuration</h3>
+		</div>
+		<div class="modal-body">
+			<iframe width="820" height="350" id="pluginConfigIframe">
+				WARNING: Your browser does not support iFrames.
+			</iframe>
+	   </div>
+    </div>
+	<script type="text/javascript" src="{% static "resources/scripts/planplugins_common.js"%}"></script>
+	<script type="text/javascript">
+		$('.openclose').click(function(){
+			$(this).toggleClass('icon-minus icon-plus');
+		});
+		$('.plugin_config').click(function(e){
+			e.preventDefault();
+			var json_config = $(this).data('json');
+			var pluginIframe = $("#pluginConfigIframe");
+			updateIframe(pluginIframe, $(this).data("href"), json_config);
+			$('#configModal').show();
+		});
+		$("button[id=configModalClose]").click(function(){
+			$('#configModal').hide();
+		});
+	</script>
+</div>
+

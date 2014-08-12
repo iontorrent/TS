@@ -1,0 +1,232 @@
+{% extends "rundb/data/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
+{% load humanize %}
+
+{% block extra_head %}
+<style type="text/css">
+    .name {
+        font-size: 14px;
+        color: black;
+        margin-bottom: 4px;
+    }
+    #table_holder {
+        overflow-x: auto;
+    }
+</style>
+<script>
+$(function(){
+    fields_table = $("#fields");
+    fields = $("#result_table > tbody th");
+    fields_table.html('');
+    reports_table = $("#reports");
+    reports = $("#result_table > thead th").slice(1);
+    reports_table.html('');
+    for (var i = 0; i < fields.length; i++) {
+        fields_table.append('<tr><td><input type="checkbox" checked="checked" /></td><td>' + $(fields[i]).text() + '</td></tr>');
+    }
+    for (var i = 0; i < reports.length; i++) {
+        reports_table.append('<tr><td><input type="checkbox" checked="checked" /></td><td>' + $(reports[i]).find(".name").text() + '</td></tr>');
+    }
+    $("#select_fields").change(function(){
+        var checkboxes = fields_table.find('input');
+        if($(this).is(":checked")) {
+            checkboxes.attr("checked", "checked");
+        } else {
+            checkboxes.removeAttr("checked");
+        }
+    });
+    $("#select_reports").change(function(){
+        var checkboxes = reports_table.find('input');
+        if($(this).is(":checked")) {
+            checkboxes.attr("checked", "checked");
+        } else {
+            checkboxes.removeAttr("checked");
+        }
+    });
+    $("#apply_modal").click(function(){
+        var selections = $("#fields input");
+        var rows = $("#result_table > tbody tr");
+        for (var i = 0; i < selections.length; i++) {
+            if (selections[i].checked) {
+                $(rows[i]).show();
+            } else {
+                $(rows[i]).hide();
+            }
+        }
+
+        selections = $("#reports input");
+        rows = $("#result_table tr");
+        for (var i = 0; i < rows.length; i++) {
+            columns = $(rows[i]).find('td, th').slice(1);
+            for (var o = 0; o < selections.length; o++) {
+                if (selections[o].checked) {
+                    $(columns[o]).show();
+                } else {
+                    $(columns[o]).hide();
+                }
+            }
+        }
+    });
+});
+</script>
+{% endblock extra_head %}
+
+{% block content %}
+<div class="content clearfix">
+    <a id="show_modal" href="#myModal" role="button" class="btn pull-right" data-toggle="modal">Customize</a>
+    <h1>Project Comparison - {{project.name}}</h1>
+    <div class="row-fluid">
+        <div id="table_holder" class="span12">
+        <table id="result_table" class="table table-striped table-hover">
+            <thead>
+                <tr>
+                    <th>Result Name</th>
+                    {% for result in results %}
+                        <th>
+                            <a href="{% url "report" result.pk %}">
+                                <p class="name">{{result.resultsName}}</p>
+                                <img onerror="this.style.display='none';" src="{{result.reportLink}}Bead_density_70.png" />
+                            </a>
+                        </th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th>Status</th>
+                    {% for result in results %}
+                        <td>{{result.status}}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Date</th>
+                    {% for result in results %}
+                        <td>{{result.timeStamp}}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Chip</th>
+                    {% for result in results %}
+                        <td>{{result.experiment.chipType}}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Total Bases</th>
+                    {% for result in results %}
+                        <td>{{result.qualitymetrics.q0_bases|intcomma}} bp</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Total Reads</th>
+                    {% for result in results %}
+                        <td>{{result.qualitymetrics.q0_reads|intcomma}}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Key Signal</th>
+                    {% for result in results %}
+                        <td>{{result.libmetrics.aveKeyCounts|floatformat:"0"}}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Loading</th>
+                    {% for result in results %}
+                        <td>{{result.analysismetrics.loading|floatformat:"0"}}%</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Mean Read Len.</th>
+                    {% for result in results %}
+                        <td>{{result.qualitymetrics.q0_mean_read_length|stringformat:"d"}} bp</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Median Read Len.</th>
+                    {% for result in results %}
+                        <td>{{result.qualitymetrics.q0_median_read_length|stringformat:"d"}} bp</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Mode Read Len.</th>
+                    {% for result in results %}
+                        <td>{{result.qualitymetrics.q0_mode_read_length|stringformat:"d"}} bp</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Q20 Bases</th>
+                    {% for result in results %}
+                        <td>{{result.qualitymetrics.q20_bases|intcomma}} bp</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Q20 Reads</th>
+                    {% for result in results %}
+                        <td>{{result.qualitymetrics.q20_reads|intcomma}}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Q20 Read Len.</th>
+                    {% for result in results %}
+                        <td>{{result.qualitymetrics.q20_mean_read_length|stringformat:"d"}} bp</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Reference</th>
+                    {% for result in results %}
+                        <td>{{result.eas.reference}}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Aligned Bases</th>
+                    {% for result in results %}
+                        <td>{{result.libmetrics.total_mapped_target_bases|intcomma}} bp</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Aligned Reads</th>
+                    {% for result in results %}
+                        <td>{{result.libmetrics.total_mapped_reads|intcomma}}</td>
+                    {% endfor %}
+                </tr>
+            </tbody>
+        </table>
+        </div>
+        </div>
+        <div class="row-fluid">
+                <div class="pull-right">
+                    <a class="btn btn-success" href="{% url "project_compare_pdf" project.id %}"><i class="icon-file icon-white"></i> Download PDF</a>
+                    <a class="btn btn-success" href="{% url "project_compare_csv" project.id %}"><i class="icon-list-alt icon-white"></i> Download CSV</a>
+                </div>
+            </div>
+    </div>
+
+
+<div id="myModal" class="modal hide fade">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal" aria-hidden="true">&times;</button>
+        <h3>Show and Hide</h3>
+    </div>
+    <div class="modal-body">
+        <div class="row-fluid">
+            <h2 class="span6">Run Info.</h2>
+            <h2 class="span6">Result Name</h2>
+        </div>
+        <div class="row-fluid">
+            <div class="span6"><label><input id="select_fields" type="checkbox" checked> Select All/None</label></div>
+            <div class="span6"><label><input id="select_reports" type="checkbox" checked> Select All/None</label></div>
+        </div>
+        <div class="row-fluid">
+            <table id="fields" class="span6">
+            </table>
+            <table id="reports" class="span6">
+            </table>
+        </div>
+        
+    </div>
+    <div class="modal-footer">
+        <a id="apply_modal" data-dismiss="modal" href="#" class="btn btn-primary">Apply</a>
+    </div>
+</div>
+
+{% endblock content %}

@@ -15,345 +15,169 @@
 #include "BkgDataPointers.h"
 
 
-#define NN_SPAN_X (2)
-#define NN_SPAN_Y (2)
 
-float nn_even_col_map_defaultX[] = {
-  0.000,0.000,0.010,0.000,0.000,
-  0.015,0.031,0.131,0.026,0.015,
-  0.026,0.127,0.000,0.111,0.025,
-  0.015,0.117,0.133,0.110,0.013,
-  0.000,0.021,0.010,0.020,0.000,
-};
-
-float nn_odd_col_map_defaultX[] = {
-  0.000,0.031,0.010,0.026,0.000,
-  0.015,0.127,0.131,0.111,0.015,
-  0.026,0.117,0.000,0.110,0.025,
-  0.015,0.021,0.133,0.020,0.013,
-  0.000,0.000,0.010,0.000,0.000,
-};
-
-#define MEASURE_SPAN_X  (2)
-#define MEASURE_SPAN_Y  (2)
-
-
-SpatialCorrelator::SpatialCorrelator (SignalProcessingMasterFitter &_bkg) :
-    bkg (_bkg)
+SpatialCorrelator::SpatialCorrelator ()
 {
   // do nothing special
-
-  nn_odd_col_map = NULL;
-  nn_even_col_map = NULL;
-  avg_corr = 0.0f;
-
+ // data pointed at
   region = NULL;
+  region_data = NULL;
 
+
+  // things to do
   Defaults();
 
 }
 
 void SpatialCorrelator::Defaults()
 {
-  region = bkg.region_data->region;
-  
-  nn_odd_col_map = new float[25];
-  nn_even_col_map = new float[25];
-  avg_corr = -0.1f;
+  //region = region_data->region;
 
-  memcpy(nn_odd_col_map,nn_odd_col_map_defaultX,sizeof(float[25]));
-  memcpy(nn_even_col_map,nn_even_col_map_defaultX,sizeof(float[25]));
+ // my_xtalk.DefaultPI(); // set this from the master!
+  //TestRead();
+  //TestWrite();
 }
 
-SpatialCorrelator::~SpatialCorrelator()
-{
-  delete[] nn_odd_col_map;
-  delete[] nn_even_col_map;
+void SpatialCorrelator::SetRegionData(RegionalizedData *_region_data, SlicedChipExtras *extras ) {
+  region_data = _region_data;
+  region_data_extras = extras;
+  region = region_data->region;
 }
 
 
-int EvenPutIndexMap[] = {
-  -1, -1,  7, -1, -1,
-   0,  3,  8, 11, 15,
-   1,  4, -1, 12, 16,
-   2,  5,  9, 13, 17,
-  -1,  6, 10, 14, -1,
-};
-
-int OddPutIndexMap[] = {
-  -1,  3,  7, 11, -1,
-   0,  4,  8, 12, 15,
-   1,  5, -1, 13, 16,
-   2,  6,  9, 14, 17,
-  -1, -1, 10, -1, -1,
-};
-
-void SpatialCorrelator::MeasureConvolution(int *prev_same_nuc_tbl,int *next_same_nuc_tbl)
+void SpatialCorrelator::MakeSignalMap(HplusMap &signal_map, int fnum)
 {
-  arma::Mat<double> lhs;
-  arma::Mat<double> rhs;
-  arma::Mat<double> vect;
-  arma::Mat<double> lhs_build;
-  arma::Mat<double> ccoeff;
-  int mat_size = 19;
-  float *ampl_map;
-  double *result;
-  int prev,next;
+  Region *region = region_data->region;
+  signal_map.region_mean_sig = 0.0f;
+  signal_map.bead_mean_sig = 0.0f;
 
-
-  result = new double[(MEASURE_SPAN_X*2+1)*(MEASURE_SPAN_Y*2+1)];
-  memset(result,0,sizeof(double[(MEASURE_SPAN_X*2+1)*(MEASURE_SPAN_Y*2+1)]));
-
-  ampl_map = new float[region->w*region->h];
-
-  memset(ampl_map,0,sizeof(float[region->w*region->h]));
-
-  lhs.zeros(mat_size,mat_size);
-  rhs.zeros(mat_size,1);
-  vect.zeros(1,mat_size);
-
-//int ntest = 2000;
-
-  for (int fnum=0;fnum < NUMFB;fnum++)
-  {
-    float flow_avg = 0.0f;
-    prev = prev_same_nuc_tbl[fnum];
-    next = next_same_nuc_tbl[fnum];
-
-    flow_avg = MakeSignalMap(ampl_map,fnum); // warning: are we normalizing by number of beads or total area?
-
-    // find wells that are good 0-mers in this flow
-    for (int ibd=0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
-    {
-      if ((bkg.region_data->my_beads.params_nn[ibd].Ampl[fnum] < 0.5) &&
-          (bkg.region_data->my_beads.params_nn[ibd].Ampl[prev] < 0.5) &&
-          (bkg.region_data->my_beads.params_nn[ibd].Ampl[next] < 0.5))
-      {
-        int row,col;
-        row = bkg.region_data->my_beads.params_nn[ibd].y;
-        col = bkg.region_data->my_beads.params_nn[ibd].x;
-
-        if ((row - MEASURE_SPAN_Y)>=0  && (row + MEASURE_SPAN_Y)<bkg.region_data->region->h &&
-            (col - MEASURE_SPAN_X)>=0  && (col + MEASURE_SPAN_X)<bkg.region_data->region->w)
-        {
-          int *valmap;
-          if (row&0x1)
-            valmap = OddPutIndexMap;
-          else
-            valmap = EvenPutIndexMap;
-
-          int valmapndx = 0;
-          for (int dr=-MEASURE_SPAN_Y;dr <= MEASURE_SPAN_Y;dr++)
-          {
-            for (int dc=-MEASURE_SPAN_X;dc <= MEASURE_SPAN_X;dc++)
-            {
-              int ndx = valmap[valmapndx];
-
-              if (ndx != -1)
-                vect.at(ndx) = ampl_map[(row+dr)*region->w+col+dc];
-
-              valmapndx++;
-            }
-          }
-
-          vect.at(mat_size-1) = flow_avg;
-          lhs_build = trans(vect) * vect;
-          lhs = lhs + lhs_build;
-          rhs = rhs + trans(vect) * ampl_map[row*region->w+col];
-
-//          if (ntest == 0)
-//          {
-//            vect.print("vect =");
-//            lhs_build.print("lhs_build = ");
-//            lhs.print("lhs = ");
-//            rhs.print("rhs = ");
-//            exit(-1);
-//          }
-//          ntest--;
-        }
-      }
-    }
-  }
-
-
-  // solve the equation for the correlation
-  ccoeff = solve(lhs,rhs);
-
-  memset(nn_odd_col_map,0,sizeof(float[25]));
-  memset(nn_even_col_map,0,sizeof(float[25]));
-  for (int i=0;i < (MEASURE_SPAN_X*2+1)*(MEASURE_SPAN_Y*2+1);i++)
-  {
-    int ndx = EvenPutIndexMap[i];
-
-    if (ndx != -1)
-    {
-      nn_odd_col_map[i] = (float)(ccoeff.at(ndx));
-    }
-  }
-
-  for (int i=0;i < (MEASURE_SPAN_X*2+1)*(MEASURE_SPAN_Y*2+1);i++)
-  {
-    int ndx = OddPutIndexMap[i];
-
-    if (ndx != -1)
-    {
-      nn_even_col_map[i] = (float)(ccoeff.at(ndx));
-    }
-  }
-
-
-  avg_corr = ccoeff.at(mat_size-1);
-
-  if ((region->row == 0) && (region->col == 0))
-  {
-    for (int i=0;i < (MEASURE_SPAN_X*2+1)*(MEASURE_SPAN_Y*2+1);i++)
-    {
-      int ndx = EvenPutIndexMap[i];
-
-      if (ndx != -1)
-      {
-        result[i] = ccoeff.at(ndx);
-      }
-    }
-    for (int r=0;r < (MEASURE_SPAN_Y*2+1);r++)
-    {
-      for (int c=0;c < (MEASURE_SPAN_X*2+1);c++)
-      {
-        printf("%5.3lf ",result[r*(MEASURE_SPAN_X*2+1)+c]);
-      }
-      printf("\n");
-    }
-    printf("Avg correlation = %5.3lf\n",ccoeff.at(mat_size-1));
-  }
-
-  delete [] result;
-  delete [] ampl_map;
-}
-
-float SpatialCorrelator::MakeSignalMap(float *ampl_map, int fnum)
-{
-  Region *region = bkg.region_data->region;
-  float region_mean_sig = 0.0f;
-  
-  memset(ampl_map,0,sizeof(float[region->w*region->h]));
-  for (int ibd=0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
+  memset(signal_map.ampl_map,0,sizeof(float[region->w*region->h]));
+  for (int ibd=0;ibd < region_data->my_beads.numLBeads;ibd++)
   {
     int row,col;
-    bead_params *tbead = &bkg.region_data->my_beads.params_nn[ibd];
+    BeadParams *tbead = &region_data->my_beads.params_nn[ibd];
     row = tbead->y;
     col = tbead->x;
 
+    //recover h+ signal by rescaling amplitude by copies
     float bead_sig = tbead->Copies*tbead->Ampl[fnum];
-    ampl_map[row*region->w + col] = bead_sig;
+    // special cases:  poly clonal beads?
+    // special cases: washouts?
+    // special cases: crazy values?
+    // should this be multiplied by etbR?
+    signal_map.ampl_map[row*region->w + col] = bead_sig;
+    signal_map.region_mean_sig += bead_sig;
 
-
-    region_mean_sig += bead_sig;
   }
+  signal_map.bead_mean_sig = signal_map.region_mean_sig;
+  if (region_data->my_beads.numLBeads>0)
+    signal_map.bead_mean_sig /= region_data->my_beads.numLBeads;
+  signal_map.region_mean_sig /= (region->w*region->h);
 
-  region_mean_sig /= (region->w*region->h);
-  return(region_mean_sig);
 };
 
-void SpatialCorrelator::AmplitudeCorrectAllFlows()
+void SpatialCorrelator::AmplitudeCorrectAllFlows( int flow_block_size, int flow_block_start )
 {
-  for (int fnum=0; fnum<NUMFB; fnum++)
-    NNAmplCorrect(fnum);
+  my_hplus.Allocate(region);
+  for (int fnum=0; fnum<flow_block_size; fnum++)
+    if (!my_xtalk.simple_xtalk)
+      NNAmplCorrect(fnum, flow_block_start);
+  else
+      SimpleXtalk(fnum);
+  my_hplus.DeAllocate();
 }
 
-float modulate_effect_by_flow(float start_frac, float flow_num, float offset)
-{
-  float approach_one_rate = flow_num/(flow_num+offset);
-  return ( (1.0f-start_frac) * approach_one_rate + start_frac);
+HplusMap::HplusMap(){
+  ampl_map = NULL;
+  NucId=0;
+  region_mean_sig = 0.0f;
+  bead_mean_sig = 0.0f;
 }
 
-void SpatialCorrelator::NNAmplCorrect(int fnum)
+void HplusMap::Allocate(Region * region){
+  if (region==NULL)
+    printf("Alert: Null region in spatial correlator");
+  if (ampl_map==NULL)
+    ampl_map = new float[region->w*region->h];
+}
+
+void HplusMap::DeAllocate(){
+  if (ampl_map!=NULL)
+    delete[] ampl_map;
+  ampl_map = NULL;
+}
+
+
+void SpatialCorrelator::NNAmplCorrect(int fnum, int flow_block_start)
 {
-  // make a 2-d map
-  //..which is kinda what the 1.wells is...but I don't care right now
-  float *ampl_map;
-  int NucId;
+  // transform amplitudes into signal
+   MakeSignalMap(my_hplus,fnum);
 
-  ampl_map = new float[region->w*region->h];
+  my_hplus.NucId = region_data_extras->my_flow->flow_ndx_map[fnum];
+  float flow_num = flow_block_start + fnum;
+  // setup the crazy cross-talk function
+  my_xtalk.my_empirical_function.SetupFlow(flow_num, my_hplus.region_mean_sig);
 
-  float region_mean_sig = MakeSignalMap(ampl_map,fnum);
+  reg_params *my_rp = &region_data->my_regions.rp;
 
-  NucId = bkg.region_data->my_flow.flow_ndx_map[fnum];
-  float const_frac    = 0.25f;
-  float const_frac_ref = 0.86f;
-  float flow_num = bkg.region_data->my_flow.buff_flow[fnum];
-  float cscale    =  modulate_effect_by_flow(const_frac,     flow_num, 32.0f);
-  float cscale_ref = modulate_effect_by_flow(const_frac_ref, flow_num, 32.0f);
-  float etbR;
-  reg_params *my_rp = &bkg.region_data->my_regions.rp;
-  
-  for (int ibd=0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
+  for (int ibd=0;ibd < region_data->my_beads.numLBeads;ibd++)
   {
-    int row,col;
-    bead_params *tbead = &bkg.region_data->my_beads.params_nn[ibd];
-    row = tbead->y;
-    col = tbead->x;
+    BeadParams *tbead = &region_data->my_beads.params_nn[ibd];
+    float etbR = my_rp->AdjustEmptyToBeadRatioForFlow(tbead->R, tbead->Ampl[fnum], tbead->Copies, tbead->phi, my_hplus.NucId, flow_num);
+    int phase =  tbead->x & 1;
+    float bead_corrector = my_xtalk.UnweaveMap(my_hplus.ampl_map, tbead->y, tbead->x, region, my_hplus.region_mean_sig, phase);
 
-    float bead_corrector = UnweaveMap(ampl_map, row, col, region_mean_sig);
+    float hplus_corrector = my_xtalk.my_empirical_function.ComputeCorrector(etbR,bead_corrector);
 
-    etbR = AdjustEmptyToBeadRatioForFlow(tbead->R,my_rp,NucId,flow_num);
-    // "the contribution from the neighbors discounted by the dampening effect of buffering
-    // "the contribution already accounted for from the reference wells used
-    // "which sense the mean region signal
-    // "all on the scale set by the number of copies in this bead
-    // plus some mysterious values
-    // the whole effect phased in slowly over flows to maximum
-    tbead->Ampl[fnum] -= 1.425f* ( (0.33f*etbR*bead_corrector*cscale/tbead->Copies) -
-                                          ( (0.14f/const_frac_ref) *cscale_ref*region_mean_sig/tbead->Copies));
+    tbead->Ampl[fnum] -= hplus_corrector/tbead->Copies;
+
     if (tbead->Ampl[fnum]!=tbead->Ampl[fnum])
     {
-      printf("NAN: corrected to zero at %d %d %d\n", row,col,fnum);
+      printf("NAN: corrected to zero at %d %d %d\n", tbead->y,tbead->x,fnum);
       tbead->Ampl[fnum] = 0.0f;
     }
   }
-
-  delete [] ampl_map;
 }
 
+void SpatialCorrelator::SimpleXtalk(int fnum){
+  // transform amplitudes into signal
+   MakeSignalMap(my_hplus,fnum);
 
-float SpatialCorrelator::UnweaveMap(float *ampl_map, int row, int col, float default_signal)
-{
-    float sum = 0.0f;
-    float *coeffs;
-    float coeff_sum = 0.0f;
-    float coeff;
+  my_hplus.NucId = region_data_extras->my_flow->flow_ndx_map[fnum];
+  //float flow_num = region_data->my_flow.buff_flow[fnum];
+  float distortion_factor = 0.0f;
+  /*if (true){
+    float flow_num = region_data->my_flow.buff_flow[fnum];
+    distortion_factor = 1.0f*(-0.1f+0.25f*flow_num/(flow_num+32.0f));
+  }*/
+  //reg_params *my_rp = &region_data->my_regions.rp;
 
-    int lr,lc;
+  // as we fill in entries off the map with the region mean signal
+  // we can generate an empty corrector by placing the estimating point completely outside the map
+  const int OUTSIDE_THE_MAP = -100;
+  float empty_corrector = my_xtalk.UnweaveMap(my_hplus.ampl_map, OUTSIDE_THE_MAP,OUTSIDE_THE_MAP,region, my_hplus.region_mean_sig, 0);
 
-    if (col & 1)
-      //coeffs = nn_odd_col_map;
-      coeffs = nn_even_col_map;
-    else
-      //coeffs = nn_even_col_map;
-      coeffs = nn_odd_col_map;
+  for (int ibd=0;ibd < region_data->my_beads.numLBeads;ibd++)
+  {
+    BeadParams *tbead = &region_data->my_beads.params_nn[ibd];
+    //float etbR = AdjustEmptyToBeadRatioForFlow(tbead->R,my_rp,my_hplus.NucId,flow_num);
 
-    for (int r=row-NN_SPAN_Y;r<=(row+NN_SPAN_Y);r++)
+    int phase =  tbead->x & 1;
+    float bead_corrector = my_xtalk.UnweaveMap(my_hplus.ampl_map, tbead->y, tbead->x, region, my_hplus.region_mean_sig, phase);
+
+    // the obvious corrector is the local xtalk - average crosstalk seen by empties
+    // what is the correct buffering compensation here?
+    float hplus_corrector = bead_corrector - empty_corrector;
+
+    // systematic shift in all intensities: fudge factor
+   hplus_corrector += distortion_factor*my_hplus.region_mean_sig;
+
+    tbead->Ampl[fnum] -= hplus_corrector/tbead->Copies;
+
+    if (tbead->Ampl[fnum]!=tbead->Ampl[fnum])
     {
-      lr = r-row+NN_SPAN_Y;
-      for (int c=col-NN_SPAN_X;c<=(col+NN_SPAN_X);c++)
-      {
-        lc = c-col+NN_SPAN_X;
-        coeff = coeffs[lr*(2*NN_SPAN_X+1)+lc];
-        
-        if ((r < 0) || (r>=region->h) || (c < 0) || (c>=region->w))
-        {
-          // if we are on the edge of the region...as a stand-in for actual data
-          // use the region average signal
-          sum += default_signal*coeff;
-        }
-        else
-        {
-          sum += ampl_map[r*region->w+c]*coeff;
-        }
-
-        coeff_sum += coeff;
-      }
+      printf("NAN: corrected to zero at %d %d %d\n", tbead->y,tbead->x,fnum);
+      tbead->Ampl[fnum] = 0.0f;
     }
-
-    sum /= coeff_sum;
-    return(sum);
+  }
 }

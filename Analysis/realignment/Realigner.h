@@ -27,8 +27,6 @@ using namespace std;
 using namespace BamTools;
 
 
-using namespace std;
-
 // ==================================================================
 
 struct AlignmentCell {
@@ -94,7 +92,19 @@ public:
   //! @param[out] clip_cigar             cigar vector storing info about clipped bases
   bool CreateRefFromQueryBases(const string& algn_query_bases, const vector<CigarOp>& algn_cigar_data,
          const string& md_tag, const bool clip_matches_at_ends);
-
+	 
+  enum CREATE_REF_ERR_CODE
+  {
+    CR_SUCCESS,
+    CR_ERR_RECREATE_REF,
+    CR_ERR_CLIP_ANCHOR
+  };
+  
+  CREATE_REF_ERR_CODE GetCreateRefError () const
+  {
+    return cr_error;
+  }
+  
 
   //! @brief  Sets the query / target sequences and the strand in the object
   //! @param[in]  q_seq             query sequence
@@ -103,10 +113,10 @@ public:
   void SetSequences(const string& q_seq, const string& t_seq, const string& aln_path, const bool isForwardStrand);
 
   //! @brief  Set strand of read
-  void SetStrand(bool isForward) {isForwardStrandRead_ = isForward; };
+  void SetStrand(bool isForward) { isForwardStrandRead_ = isForward; };
 
   //! @brief  Set the ends to apply soft clipping
-  void SetClipping(int clipping);
+  void SetClipping(int clipping, bool is_forward_strand);
 
   //! @brief  Set the one sided alignment bandwidth
   void SetAlignmentBandwidth(int bandwidth) { alignment_bandwidth_ = bandwidth; };
@@ -188,6 +198,9 @@ protected:
   //! @brief Resets the anchors if an error in ClipAnchors() occurs.
   void RestoreAnchors();
 
+  //! @brief  Reverses the clipping settings
+  void ReverseClipping();
+
   //! @brief  Computes the boundaries of a tubed alignment around the previously found one
   bool ComputeTubedAlignmentBoundaries();
 
@@ -211,8 +224,8 @@ protected:
 
   bool             start_anywhere_in_ref_;  //!< Allow aligned read to start at any point in the reference
   bool             stop_anywhere_in_ref_;   //!< Allow aligned read to end at any point in the reference
-  bool             soft_clip_key_end_;      //!< Softclip bases on the key adapter end of the read
-  bool             soft_clip_bead_end_;     //!< Softclip bases on the bead adapter end of the read
+  bool             soft_clip_left_;         //!< Softclip bases on the key adapter end of the read
+  bool             soft_clip_right_;        //!< Softclip bases on the bead adapter end of the read
   bool             isForwardStrandRead_;    //!< Direction of the read
 
   string           q_seq_;                  //!< Query sequence internal representation
@@ -227,18 +240,21 @@ protected:
   unsigned int     alignment_bandwidth_;    //!< Diagonal bandwidth of tubed alignment around previously found one
   vector<unsigned int>   q_limit_minus_;    //!< Lower (inclusive) limit on the query index for each target index
   vector<unsigned int>   q_limit_plus_;     //!< Upper (exclusive) limit on the query index for each target index
-  ClippedAnchors         clipped_anchors_;   //!< Stores information of bases the are not realigned
+  ClippedAnchors         clipped_anchors_;  //!< Stores information of bases the are not realigned
 
   int              kMatchScore;
   int              kMismatchScore;
   int              kGapOpen;
   int              kGapExtend;
   const static int kNotApplicable = -1000000;
+  
+  
+  CREATE_REF_ERR_CODE cr_error;
 
   const static int      FROM_MATCH   = 0;   //!< The alignment was extended from a match.
-  const static int      FROM_I       = 1;   //!< The alignment was extended from an insertion.
-  const static int      FROM_D       = 2;   //!< The alignment was extended from an deletion.
-  const static int      FROM_MISM    = 3;   //!< The alignment was extended from a mismatch.
+  const static int      FROM_MISM    = 1;   //!< The alignment was extended from a mismatch.
+  const static int      FROM_I       = 2;   //!< The alignment was extended from an insertion.
+  const static int      FROM_D       = 3;   //!< The alignment was extended from an deletion.
   const static int      FROM_NOWHERE = 4;   //!< No valid incoming alignment move.
 
   const static char     ALN_DEL      = '-'; //!< A base deletion in the alignment string.

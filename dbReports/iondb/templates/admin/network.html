@@ -63,7 +63,8 @@
         "drm.appliedbiosystems.com:443",
         "ionupdates.com:80",
         "us.archive.ubuntu.com:80",
-        "security.ubuntu.com:80"
+        "security.ubuntu.com:80",
+        "support.ionupdates.com:443",
       ];
       function hey(address, friend) {
         var where = "/admin/network/how_is/" + friend + "/feeling";
@@ -298,7 +299,10 @@
         <dd>Access to "us.archive.ubuntu.com" is required to download updates for the Torrent Server's operating system (Ubuntu). This repository also provides updates to some packages which are required for the Torrent Server to operate.</dd>
 
         <dt>drm.appliedbiosystems.com:443</dt>
-        <dd>The Remote System Monitoring (RSM) agent on the Torrent Server sends system metrics & health information to this URL over port 80 to facilitate Life Technologies ability to help our customers maintain their systems in running order. If a problem with the PGM or Torrent Server is detected, the RSM agent provides real time warnings to help proactively diagnose issues before they cause any failures and downtime. Without access to the RSM agent, issues may not be detected until a failure occurs on the Torrent Server. Also please keep in mind that remote troubleshooting cannot be provided if this functionality is disabled.</dd>
+        <dd>The Remote System Monitoring (RSM) agent on the Torrent Server sends system metrics & health information to this URL over port 443 to facilitate Life Technologies ability to help our customers maintain their systems in running order. If a problem with the PGM or Torrent Server is detected, the RSM agent provides real time warnings to help proactively diagnose issues before they cause any failures and downtime. Without access to the RSM agent, issues may not be detected until a failure occurs on the Torrent Server. Also please keep in mind that remote troubleshooting cannot be provided if this functionality is disabled.</dd>
+
+        <dt>support.iontorrent.com:443</dt>
+        <dd>Access to "support.iontorrent.com" is required to initiate Customer Support Archive uploads for a run report in the event of a customer support request.</dd>
       </dl>
     </div>
   </div>

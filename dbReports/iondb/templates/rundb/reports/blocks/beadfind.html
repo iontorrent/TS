@@ -10,7 +10,7 @@
         </div>
         <div class="span6">
             <a id="key-signal" data-toggle="modal" class="usable-sequence-link showImg" href="#keySignalModal" style="display: block;">
-              <h2>{{key_signal}}</h2>
+              <h2>{{report.libmetrics.aveKeyCounts|floatformat:"0"|default:"N/A"}}</h2>
               <small>Key Signal</small>
               <i class="icon-zoom-in"></i>
             </a>
@@ -19,7 +19,7 @@
     <a data-toggle="modal" href="#beadfindModal" class="report-metric-visual bead-loading-link">
         <div id="bead-signal" data-beadloading="{{bead_loading}}"></div>
         <h2><abbr title="Ion Sphere Particles">ISP</abbr> Density</h2>
-        <img src="{{source_files|bracket:'Bead_density_1000.png'}}" class="show" style="max-height: 350px;"> <i class="icon-zoom-in"></i>
+        <img src="{{report.reportLink}}/Bead_density_1000.png" class="show" style="max-height: 350px;"> <i class="icon-zoom-in"></i>
     </a>
     <div class="modal hide" id="beadfindModal">
         <div class="modal-header">
@@ -27,7 +27,7 @@
             <h3><abbr title="Ion Sphere Particles">ISP</abbr> Density</h3>
         </div>
         <div class="modal-body" id="beadfind_body">
-            <img src="{{source_files|bracket:'Bead_density_contour.png'}}" style="height: 400px;">
+            <img src="{{report.reportLink}}/Bead_density_contour.png" style="height: 400px;">
         </div>
         <div class="modal-footer">
             <a href="#" class="btn" data-dismiss="modal">Close</a>

@@ -1,5 +1,0 @@
-genome_shortname	vibrio_cholerae
-genome_name	Vibrio cholerae
-genome_version	1
-index_version	b-0.1
-genome_length	4068432

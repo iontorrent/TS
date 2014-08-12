@@ -26,8 +26,14 @@ RcppExport SEXP AdjustEmptyToBeadRatioForFlowR(SEXP R_etbR, SEXP R_NucModifyRati
     int flow = Rcpp::as<int>(R_flow);
     bool fit_taue = Rcpp::as<bool> (R_fit_taue);
     float out_val;
-    if (!fit_taue)
-      out_val = xAdjustEmptyToBeadRatioForFlow(etbR,NucModifyRatio,RatioDrift,flow);
+    if (!fit_taue){
+      // if_use_obsolete_etbR_equation==true, therefore Copy(=1.0) and phi(=0.6) are not used
+        float local_phi = 0.6;
+        float local_Copy = 1.0;
+        float local_Ampl = 0.0;
+       
+        out_val = xAdjustEmptyToBeadRatioForFlow(etbR,local_Ampl, local_Copy, local_phi, NucModifyRatio, RatioDrift, flow, true);
+      }
     else
       out_val = xAdjustEmptyToBeadRatioForFlowWithAdjR(etbR,NucModifyRatio,RatioDrift,flow);
 
@@ -52,7 +58,7 @@ RcppExport SEXP ComputeTauBfromEmptyUsingRegionLinearModelR(SEXP R_etbR, SEXP R_
     float tau_R_m = Rcpp::as<float>(R_tau_R_m);
     float tau_R_o = Rcpp::as<float>(R_tau_R_o);
     
-    float out_val = xComputeTauBfromEmptyUsingRegionLinearModel(tau_R_m, tau_R_o, etbR);
+    float out_val = xComputeTauBfromEmptyUsingRegionLinearModel(tau_R_m, tau_R_o, etbR,4,65);
 
     ret = Rcpp::List::create(Rcpp::Named("tauB") = out_val);
 
@@ -75,7 +81,7 @@ RcppExport SEXP ComputeTauBfromEmptyUsingRegionLinearModelUsingTauER(SEXP R_etbR
     float etbR = Rcpp::as<float>(R_etbR);
     float tauE = Rcpp::as<float>(R_tauE);
     
-    float out_val = xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(tauE,etbR);
+    float out_val = xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(tauE,etbR,4,65);
     
     ret = Rcpp::List::create(Rcpp::Named("tauB") = out_val);
     

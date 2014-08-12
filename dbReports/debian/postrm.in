@@ -5,6 +5,10 @@ set -e
 echo "postrm $@"
 
 case "$1" in
+    upgrade)
+        # Ensure old symlinks (from pre-3.X collectstatic) are removed.
+        find "@ION_INSTALL_PREFIX@/iondb/media/" -type l -delete
+    ;;
     remove)
 
     #old,legacy log directory

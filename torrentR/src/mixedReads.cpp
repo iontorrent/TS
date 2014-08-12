@@ -43,7 +43,10 @@ RcppExport SEXP fitNormals(SEXP RPPF, SEXP RSSQ)
         sigma[i].set_size(2,2);
     }
 
-	bool converged = fit_normals(mean, sigma, prior, ppf, ssq, false); // avoid verbose
+// I assume here (possibly falsely) that the default options are good
+  PolyclonalFilterOpts local_opts;
+
+	bool converged = fit_normals(mean, sigma, prior, ppf, ssq, false,local_opts); // avoid verbose
 
 	// (Wrapping the results would be much simpler with RcppArmadillo.)
 	Rcpp::NumericVector RCloneMean  = Rcpp::wrap(mean[0]);

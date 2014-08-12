@@ -15,7 +15,6 @@
 #include "BAMReader.h"
 #include "BAMUtils.h"
 #include "SeqUtils.h"
-#include "StackUnwind.h"
 
 using namespace std;
 
@@ -202,8 +201,6 @@ int Trim3Prime(const string& seq, int numBases)
 
 int main(int argc, char* argv[])
 {
-    InitStackUnwind("stack.dump");
-
     assert(argc == 7);
     string bamFile(argv[1]);
     string flowOrder(argv[2]);

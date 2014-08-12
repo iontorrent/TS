@@ -6,9 +6,12 @@ set -e
 
 case "$1" in
     configure)
-    echo "Restarting publisher dependent services..."
-    service celeryd restart && service apache2 restart
-
+    #echo "Restarting publisher dependent services..."
+    #service celeryd restart && service apache2 restart
+    echo "NOTE!  Dependent services need to be restarted!"
+    echo "The following commands are suggested:"
+    echo "sudo service celeryd restart"
+    echo "sudo service apache2 restart"
     ;;
 esac
 

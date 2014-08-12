@@ -6,184 +6,218 @@
 
 #include "ExtendedReadInfo.h"
 #include "ion_util.h"
-
-void ExtendedReadInfo::GetUsefulTags(int DEBUG) {
-
-  vector<int16_t> quantizedMeasures;
-  if (!alignment.GetTag("ZM", quantizedMeasures)) {
-    cerr << "ERROR in ExtendedReadInfo::GetUsefulTags: Normalized measurements ZM:tag is not present in the BAM file provided" << endl;
-    is_happy_read = false;
-    exit(-1);
-  }
-  if (!alignment.GetTag("ZP", phase_params)) {
-    cerr << "ERROR in ExtendedReadInfo::GetUsefulTags: Phasing Parameters ZP:tag is not present in the BAM file provided" << endl;
-    is_happy_read = false;
-    exit(-1);
-  }
-  if (!alignment.GetTag("ZF", start_flow) || start_flow == 0) {
-    cerr << "ERROR  in ExtendedReadInfo::GetUsefulTags: Start Flow ZF:tag is not present in the BAM file provided or Invalid Value returned : " << start_flow << endl;
-    is_happy_read = false;
-    exit(-1);
-  }
-  if (!alignment.Name.empty()) {
-    well_rowcol.resize(2);
-    ion_readname_to_rowcol(&alignment.Name[0], &well_rowcol[0], &well_rowcol[1]);
-    // extract runid while we are at it
-       
-    int end_runid = alignment.Name.find(":");
-    runid =alignment.Name.substr(0,end_runid);
-  }
-
-  map_quality = alignment.MapQuality;
-
-  if (is_happy_read) {
-    for (size_t counter = 0; counter < quantizedMeasures.size(); counter++) {
-      measurementValue.at(counter) = ((float)quantizedMeasures.at(counter)/256);
-    }
-  }
-  // ad-hoc corrector
-  phase_params[2] = 0.0f; // zero droop
-}
+#include "ReferenceReader.h"
+#include "BAMWalkerEngine.h"
+#include "RandSchrange.h"
+#include "MiscUtil.h"
 
 // -------------------------------------------------------
 
-bool ExtendedReadInfo::CreateFlowIndex(const string &flowOrder) {
+/*
+//! @brief  Sets member variables containing alignment information
+//! @brief [in]  local_contig_sequence    reference sequence
+//! @brief [in]  aln_start_position       start position of the alignment
+static void UnpackAlignmentInfo(Alignment *rai);
 
-  bool is_happy = true;
-  read_bases = alignment.QueryBases;
-  if (!is_forward_strand)
-    RevComplementInPlace(read_bases);
+//! @brief  Populates object members flowIndex and read_seq
+static void CreateFlowIndex(Alignment *rai, const string &flow_order);
+*/
 
-  flowIndex.assign(read_bases.length(), flowOrder.length());
-  unsigned int flow = start_flow;
+void CreateFlowIndex(Alignment *rai, const string &flowOrder)
+{
+  rai->flow_index.assign(rai->read_bases.length(), flowOrder.length());
+  unsigned int flow = rai->start_flow;
   unsigned int base_idx = 0;
-  while (base_idx < read_bases.length() and flow < flowOrder.length()){
-    while (flow < flowOrder.length() and flowOrder[flow] != read_bases[base_idx])
+  while (base_idx < rai->read_bases.length() and flow < flowOrder.length()){
+    while (flow < flowOrder.length() and flowOrder[flow] != rai->read_bases[base_idx])
       flow++;
-    flowIndex[base_idx] = flow;
+    rai->flow_index[base_idx] = flow;
     base_idx++;
   }
-  if (base_idx != read_bases.length()) {
+  if (base_idx != rai->read_bases.length()) {
     cerr << "WARNING in ExtendedReadInfo::CreateFlowIndex: There are more bases in the read than fit into the flow order.";
-    is_happy = false;
+    exit(1);
   }
-  return (is_happy);
 }
 
 // -------------------------------------------------------
 
 // Sets the member variables ref_aln, seq_aln, pretty_aln, startSC, endSC
-bool ExtendedReadInfo::UnpackAlignmentInfo(const string &local_contig_sequence, unsigned int aln_start_position) {
+void UnpackAlignmentInfo(Alignment *rai)
+{
+  rai->left_sc = 0;
+  rai->right_sc = 0;
 
-  ref_aln.clear();
-  seq_aln.clear();
-  pretty_aln.clear();
-
-  leftSC = 0;
-  rightSC = 0;
-
-  bool is_happy = true;
   unsigned int num_query_bases = 0;
-  unsigned int read_pos = 0;
-  unsigned int ref_pos = aln_start_position;
   bool match_found = false;
 
-  for (vector<CigarOp>::const_iterator cigar = alignment.CigarData.begin(); cigar != alignment.CigarData.end(); ++cigar) {
+  for (vector<CigarOp>::const_iterator cigar = rai->alignment.CigarData.begin(); cigar != rai->alignment.CigarData.end(); ++cigar) {
     switch (cigar->Type) {
-      case ('M') :
-      case ('=') :
-      case ('X') :
+      case 'M':
+      case '=':
+      case 'X':
         match_found = true;
-        ref_aln.append(local_contig_sequence, ref_pos, cigar->Length);
-        seq_aln.append(alignment.QueryBases, read_pos, cigar->Length);
-        pretty_aln.append(cigar->Length, '|');
+        rai->pretty_aln.append(cigar->Length, '|');
         num_query_bases += cigar->Length;
-        read_pos += cigar->Length;
-        ref_pos  += cigar->Length;
         break;
 
-      case ('I') :
-        ref_aln.append(cigar->Length,'-');
-        seq_aln.append(alignment.QueryBases, read_pos, cigar->Length);
-        pretty_aln.append(cigar->Length, '+');
+      case 'I':
+        rai->pretty_aln.append(cigar->Length, '+');
         num_query_bases += cigar->Length;
-        read_pos += cigar->Length;
         break;
 
-      case ('S') :
-		num_query_bases += cigar->Length;
-        read_pos += cigar->Length;
+      case 'S':
+		    num_query_bases += cigar->Length;
         if (match_found)
-          rightSC = cigar->Length;
+          rai->right_sc = cigar->Length;
         else
-          leftSC = cigar->Length;
+          rai->left_sc = cigar->Length;
         break;
 
-      case ('D') :
-      case ('P') :
-      case ('N') :
-        ref_aln.append(local_contig_sequence, ref_pos, cigar->Length);
-        seq_aln.append(cigar->Length,'-');
-        pretty_aln.append(cigar->Length, '-');
-        ref_pos += cigar->Length;
+      case 'D':
+      case 'P':
+      case 'N':
+        rai->pretty_aln.append(cigar->Length, '-');
         break;
     }
   }
   // Basic alignment sanity check
-  if (num_query_bases != alignment.QueryBases.length()) {
-    cerr << "WARNING in ExtendedReadInfo::UnpackAlignmentInfo: Invalid Cigar String in Read " << alignment.Name << " Cigar: ";
-    for (vector<CigarOp>::const_iterator cigar = alignment.CigarData.begin(); cigar != alignment.CigarData.end(); ++cigar)
+  if (num_query_bases != rai->alignment.QueryBases.length()) {
+    cerr << "WARNING in ExtendedReadInfo::UnpackAlignmentInfo: Invalid Cigar String in Read " << rai->alignment.Name << " Cigar: ";
+    for (vector<CigarOp>::const_iterator cigar = rai->alignment.CigarData.begin(); cigar != rai->alignment.CigarData.end(); ++cigar)
       cerr << cigar->Length << cigar->Type;
-    cerr << " Length of query string: " << alignment.QueryBases.length() << endl;
-    //is_happy = false;
+    cerr << " Length of query string: " << rai->alignment.QueryBases.length() << endl;
+    assert(num_query_bases == rai->alignment.QueryBases.length());
   }
 
-  return (is_happy);
 }
 
-// -------------------------------------------------------
-// Increase start flow to main flow of first aligned base
-
-void ExtendedReadInfo::IncreaseStartFlow() {
-  if (is_forward_strand)
-    start_flow = flowIndex.at(leftSC);
-  else
-    start_flow = flowIndex.at(rightSC);
-}
 
 
 // -------------------------------------------------------
-unsigned int ExtendedReadInfo::GetStartSC() {
-  if (is_forward_strand)
-	return (leftSC);
-  else
-	return (rightSC);
-}
 
-unsigned int ExtendedReadInfo::GetEndSC() {
-  if (is_forward_strand)
-	return (rightSC);
-  else
-	return (leftSC);
-}
 
-// -------------------------------------------------------
-
-bool ExtendedReadInfo::UnpackThisRead(const InputStructures &global_context, const string &local_contig_sequence, int DEBUG) {
-
-  //is_happy_read = CheckHappyRead(global_context, variant_start_pos, int DEBUG);
-  is_happy_read = true;
-
-  // start working to unpack the read data we need
-  start_flow = 0;
-  start_pos = alignment.Position;
-  is_forward_strand = !alignment.IsReverseStrand();
-
-  GetUsefulTags(DEBUG);
-  if (is_happy_read) {
-    measurementValue.resize(global_context.flowOrder.length(), 0.0);
-    CreateFlowIndex(global_context.flowOrder);
-    UnpackAlignmentInfo(local_contig_sequence, alignment.Position);
+void UnpackOnLoad(Alignment *rai, const InputStructures &global_context, const ExtendParameters& parameters)
+{
+  if (not rai->alignment.IsMapped()) {
+    rai->evaluator_filtered = true;
+    return;
   }
-  return(is_happy_read); // happy to have unpacked this read
+
+  // Mapping quality filter
+  if (rai->alignment.MapQuality < parameters.min_mapping_qv) {
+    rai->evaluator_filtered = true;
+    return;
+  }
+
+
+  // Skip reads from samples other than the primary sample
+  if (not rai->primary_sample) {
+    rai->evaluator_filtered = true;
+    return;
+  }
+
+  // Absolute number of mismatches filter
+  if (rai->snp_count > parameters.read_snp_limit) {
+    rai->evaluator_filtered = true;
+    rai->worth_saving = false;
+    return;
+  }
+
+  rai->is_reverse_strand = rai->alignment.IsReverseStrand();
+
+  // Retrieve measurements from ZM tag
+
+  vector<int16_t> quantized_measurements;
+  if (not rai->alignment.GetTag("ZM", quantized_measurements)) {
+    cerr << "ERROR: Normalized measurements ZM:tag is not present in read " << rai->alignment.Name << endl;
+    exit(1);
+  }
+  if (quantized_measurements.size() > global_context.flowOrder.length()) {
+    cerr << "ERROR: Normalized measurements ZM:tag length exceeds flow order length in read " << rai->alignment.Name << endl;
+    exit(1);
+  }
+  rai->measurements.assign(global_context.flowOrder.length(), 0.0);
+  for (size_t counter = 0; counter < quantized_measurements.size(); ++counter)
+    rai->measurements[counter] = (float)quantized_measurements[counter]/256;
+  rai->measurements_length = quantized_measurements.size();
+
+  // Retrieve phasing parameters from ZP tag
+
+  if (not rai->alignment.GetTag("ZP", rai->phase_params)) {
+    cerr << "ERROR: Phasing Parameters ZP:tag is not present in read " << rai->alignment.Name << endl;
+    exit(1);
+  }
+  if (rai->phase_params.size() != 3) {
+    cerr << "ERROR: Phasing Parameters ZP:tag does not have 3 phase parameters in read " << rai->alignment.Name << endl;
+    exit(1);
+  }
+  if (rai->phase_params[0] < 0 or rai->phase_params[0] > 1 or rai->phase_params[1] < 0 or rai->phase_params[1] > 1
+      or rai->phase_params[2] < 0 or rai->phase_params[2] > 1) {
+    cerr << "ERROR: Phasing Parameters ZP:tag outside of [0,1] range in read " << rai->alignment.Name << endl;
+    exit(1);
+  }
+  rai->phase_params[2] = 0.0f;   // ad-hoc corrector: zero droop
+
+  // Parse read name
+
+  if (not rai->alignment.Name.empty()) {
+    rai->well_rowcol.resize(2);
+    ion_readname_to_rowcol(rai->alignment.Name.c_str(), &rai->well_rowcol[0], &rai->well_rowcol[1]);
+    // extract runid while we are at it
+    int end_runid = rai->alignment.Name.find(":");
+    rai->runid  = rai->alignment.Name.substr(0,end_runid);
+  }
+
+  // Populate read_bases (bases without rev-comp on reverse-mapped reads) and flow_index
+
+  rai->read_bases = rai->alignment.QueryBases;
+  if (rai->is_reverse_strand)
+    RevComplementInPlace(rai->read_bases);
+
+  // Unpack alignment
+
+  rai->pretty_aln.reserve(global_context.flowOrder.length());
+  UnpackAlignmentInfo(rai);
+  if (rai->is_reverse_strand)
+    rai->start_sc = rai->right_sc;
+  else
+    rai->start_sc = rai->left_sc;
+
+  // Generate flow index
+
+  rai->start_flow = 0;
+  if (not rai->alignment.GetTag("ZF", rai->start_flow)) {
+    uint8_t start_flow_byte = 0;
+    if (not rai->alignment.GetTag("ZF", start_flow_byte)) {
+      cerr << "ERROR: Start Flow ZF:tag not found in read " << rai->alignment.Name << endl;
+      exit(1);
+    }
+    rai->start_flow = (int)start_flow_byte;
+  }
+  if (rai->start_flow == 0) {
+    cerr << "WARNING: Start Flow ZF:tag has zero value in read " << rai->alignment.Name << endl;
+    rai->evaluator_filtered = true;
+    rai->worth_saving = false;
+    return;
+  }
+  CreateFlowIndex(rai, global_context.flowOrder);
+
+  if (global_context.resolve_clipped_bases) {
+    // Increment start flow to first aligned base
+    rai->start_flow = rai->flow_index[rai->start_sc];
+  }
+
+  // Check validity of input arguments
+  if (rai->start_flow < 0 or rai->start_flow >= global_context.treePhaserFlowOrder.num_flows()) {
+    cerr << "ERROR: Start flow outsize of [0,num_flows) range in read " << rai->alignment.Name << endl;
+    cerr << "Start flow: " << rai->start_flow << " Number of flows: " << global_context.treePhaserFlowOrder.num_flows();
+    exit(1);
+  }
+
 }
+
+
+
+
+

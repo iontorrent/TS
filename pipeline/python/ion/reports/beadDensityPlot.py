@@ -11,26 +11,26 @@ use("Agg",warn=False)
 from matplotlib import pyplot
 import matplotlib.cm as cm
 
+import Image
 import ConfigParser
 import argparse
-import sys
 import struct
 import numpy
 import math
 import scipy.ndimage
 import scipy.misc
+import scipy.signal
 
 
 # This array is convolved with the bead data in bfmask.bin to compute a sum in the range [0-100] of a 10x10 well area.
-array_ten_by_ten =  numpy.ones((10,10))
+array_ten_by_ten =  numpy.ones((10,10), dtype=numpy.int16)
 
 
 def imresize(arr, size, interp='bilinear', mode=None):
     """Backported from scipy 0.11.0; not that complicated"""
     im = scipy.misc.toimage(arr, mode=mode)
-    func = {'nearest':0,'bilinear':2,'bicubic':3,'cubic':3}
     size = size[1], size[0]
-    imnew = im.resize(size, resample=func[interp])
+    imnew = im.resize(size, resample=Image.ANTIALIAS)
     return scipy.misc.fromimage(imnew)
 
 
@@ -43,7 +43,7 @@ def calculate_scores(bfmask_data):
 def reasonable_shrink(scores, bound=1000, threshold=2000):
     """Perform a smooth downsampling of the data if it is too large."""
     h, w = scores.shape
-    largest = max((h, w))
+    largest = max(h, w)
     if largest > threshold:
         ratio = float(bound) / largest
         rh, rw = int(round(h * ratio)), int(round(w * ratio))
@@ -57,8 +57,9 @@ def makeContourMap(arr, HEIGHT, WIDTH, outputId, maskId, plt_title, average, out
     del arr
     scores = reasonable_shrink(scores)
     makeContourPlot(scores, average, HEIGHT, WIDTH, outputId, maskId, plt_title, outputdir, barcodeId, vmaxVal)
-    makeRawDataPlot(scores, outputId, outputdir)
-    makeFullBleed(scores, outputId, outputdir)
+    pil_transposed_scores =numpy.flipud(scores)
+    makeRawDataPlot(pil_transposed_scores, outputId, outputdir)
+    makeFullBleed(pil_transposed_scores, outputId, outputdir)
 
 
 def getFormatForVal(value):
@@ -86,34 +87,48 @@ def autoGetVmaxFromAverage (average):
 
 def makeRawDataPlot(scores, outputId, outputdir):
     # Writes a png file containing only the data, i.e. no axes, labels, gridlines, ticks, etc.
-    fig = pyplot.figure()
-    ax1 = fig.add_subplot(111)
-    ax1.xaxis.set_ticklabels([None])
-    ax1.yaxis.set_ticklabels([None])
-    ax1.xaxis.set_ticks([None])
-    ax1.yaxis.set_ticks([None])
-    ax1.imshow(scores, vmin=0, vmax=100, origin='lower', cmap=cm.jet)
-    fig.savefig(outputdir+'/'+outputId+'_density_raw.png', dpi=20, transparent=True, bbox_inches='tight', pad_inches=0)
+    normal_scores = scores / 100.0
+    size = 100
+    path = os.path.join(outputdir, '{0}_density_raw.png'.format(outputId))
+    h, w = normal_scores.shape
+    bound_side = get_bound_side(h, w)
+    dimensions = get_dimensions(h, w, bound_side, size)
+    write_full_bleed_map(normal_scores, dimensions, path)
     print "Plot saved to %s" % outputId+'_density_raw.png'
+
+
+def write_full_bleed_map(normal_scores, dimensions, path):
+    smaller_scores = imresize(normal_scores, dimensions, interp='bicubic', mode='F')
+    im = Image.fromarray(cm.jet(smaller_scores, bytes=True), mode='RGBA')
+    indexed_im = im.convert('RGB', palette=Image.ADAPTIVE, dither=None).convert("P", palette=Image.ADAPTIVE, dither=None)
+    indexed_im.save(path, "PNG", optimize=True)
+
+
+def get_bound_side(h, w, max_aspect_ratio=1.6):
+    h_w_ratio = float(h) / w
+    w_h_ratio = float(w) / h
+    if w_h_ratio > max_aspect_ratio or (h > w and h_w_ratio < max_aspect_ratio):
+        bound_side = w
+    else:
+        bound_side = h
+    return bound_side
+
+
+def get_dimensions(h, w, bound_side, size):
+    ratio = float(size) / bound_side
+    return int(round(h * ratio)), int(round(w * ratio))
 
 
 def makeFullBleed(scores, outputId, outputdir):
     # Writes a png file containing only the data, i.e. no axes, labels, gridlines, ticks, etc.
-    fig = pyplot.figure(figsize=(5,5))
-    ax1 = fig.add_subplot(111)
-    ax1.xaxis.set_ticklabels([None])
-    ax1.yaxis.set_ticklabels([None])
-    ax1.xaxis.set_ticks([None])
-    ax1.yaxis.set_ticks([None])
-    ax1.set_frame_on(False)
-    ax1.imshow(scores,vmin=0, vmax=100, origin='lower', cmap=cm.jet)
-    
+    normal_scores = scores / 100.0
+    h, w = normal_scores.shape
+    bound_side = get_bound_side(h, w)
     for size in (20, 70, 200, 1000):
-        fig_path = os.path.join(outputdir, '%s_density_%d.png' % 
-            (outputId, size))
-        fig.savefig(fig_path, figsize=(5,5), dpi=size/3.875, transparent=True, 
-            bbox_inches='tight', pad_inches=0)
-        print("Full bleed plot saved to %s" % fig_path)
+        path = os.path.join(outputdir, '{0}_density_{1}.png'.format(outputId, size))
+        dimensions = get_dimensions(h, w, bound_side, size)
+        write_full_bleed_map(normal_scores, dimensions, path)
+        print("Full bleed plot saved to %s" % path)
 
 
 def makeContourPlot(scores, average, HEIGHT, WIDTH, outputId, maskId, plt_title, outputdir, barcodeId=-1, vmaxVal=100):

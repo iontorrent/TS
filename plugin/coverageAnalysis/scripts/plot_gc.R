@@ -15,6 +15,9 @@ nFileIn  <- ifelse(is.na(args[1]),"fine_coverage.xls",args[1])
 # "l" or "L" output cov vs. length plot: "L" for log axis
 # "p" or "P" output mead reads vs. pool ID: "P" for log axis
 option <- ifelse(is.na(args[2]),"",args[2])
+nFileOutRoot <- ifelse(is.na(args[3]),nFileIn,args[3])
+
+nFileOutRoot <- sub(".xls$","",nFileOutRoot)
 
 if( !file.exists(nFileIn) ) {
   write(sprintf("ERROR: Could not locate input file %s\n",nFileIn),stderr())
@@ -25,7 +28,7 @@ if( !file.exists(nFileIn) ) {
 picWidth = 1.5*798
 picHeight= 1.5*264
 
-rcov <- read.table(nFileIn, header=TRUE, as.is=TRUE, sep="\t", comment.char="")
+rcov <- read.table(nFileIn, header=TRUE, as.is=TRUE, sep="\t", comment.char="", quote="")
 
 # test the type of the field in case the wrong type of targets are provided
 if( grepl("a",option) ) {
@@ -38,7 +41,7 @@ if( grepl("a",option) ) {
   legoff = 0.86
 }
 if( is.null(yprop) ) {
-  write(sprintf("ERROR: Cannot locate fields 'depth' or 'total_reads' in data file %s\n",nFileOut),stderr())
+  write(sprintf("ERROR: Cannot locate fields 'depth' or 'total_reads' in data file %s\n",nFileIn),stderr())
   q(status=1)
 }
 
@@ -84,9 +87,9 @@ get_ymax <- function(ydata) {
   return(ymax)
 }
 
-# Create GC vs. coverage scatter plot
+# Create reads vs. GC scatter plot
 if( grepl("g",option,ignore.case=TRUE) ) {
-  nFileOut <- sub(".xls$",".gc.png",nFileIn)
+  nFileOut <- paste(nFileOutRoot,".gc.png",sep="")
   png(nFileOut,width=picWidth,height=picHeight)
   par(mar=(c(4,4,2,0.2)+0.3))
 
@@ -118,9 +121,9 @@ if( grepl("g",option,ignore.case=TRUE) ) {
   legend(legoff*max(pcgc), max(ymax), legend=c(legendTitle,"0.2 x Mean"), cex=1.2, bty="n", col=c("green","red"), lty=1)
 }
   
-# Create GC vs. length scatter plot
+# Create reads vs. length scatter plot
 if( grepl("l",option,ignore.case=TRUE) ) {
-  nFileOut <- sub(".xls$",".len.png",nFileIn)
+  nFileOut <- paste(nFileOutRoot,".ln.png",sep="")
   png(nFileOut,width=picWidth,height=picHeight)
   par(mar=(c(4,4,2,0.2)+0.3))
   if( grepl("a",option) ) {
@@ -151,9 +154,9 @@ if( grepl("l",option,ignore.case=TRUE) ) {
   legend(legoff*max(tlen), max(ymax), legend=c(legendTitle,"0.2 x Mean"), cex=1.2, bty="n", col=c("green","red"), lty=1)
 }
   
-# Create GC vs. pass/fail plot
+# Create pass/fail vs. GC plot
 if( grepl("f",option,ignore.case=TRUE) ) {
-  nFileOut <- sub(".xls$",".fedora.png",nFileIn)
+  nFileOut <- paste(nFileOutRoot,".gc_rep.png",sep="")
   png(nFileOut,width=picWidth,height=picHeight)
   par(mar=(c(4,4,2,0.2)+0.3))
   lcols = c("red","green")
@@ -200,9 +203,9 @@ if( grepl("f",option,ignore.case=TRUE) ) {
   legend("topright", rev(legendTitle), cex=1.2, bty="n", fill=rev(lcols))
 } 
 
-# Create length vs. pass/fail plot
+# Create pass/fail vs. length plot
 if( grepl("k",option,ignore.case=TRUE) ) {
-  nFileOut <- sub(".xls$",".fedlen.png",nFileIn)
+  nFileOut <- paste(nFileOutRoot,".ln_rep.png",sep="")
   png(nFileOut,width=picWidth,height=picHeight)
   par(mar=(c(4,4,2,0.2)+0.3))
   lcols = c("red","green")
@@ -248,7 +251,7 @@ if( grepl("k",option,ignore.case=TRUE) ) {
   legend("topright", rev(legendTitle), cex=1.2, bty="n", fill=rev(lcols))
 } 
 
-# Create Pool representartion plots
+# Create Pool representation plots
 if( haveNVP && grepl("p",option,ignore.case=TRUE) ) {
   # extract pool information from NVP strings
   pools <- toupper(paste(NVP,";",sep=""))
@@ -300,7 +303,7 @@ if( haveNVP && grepl("p",option,ignore.case=TRUE) ) {
         dt$cov <- log10(1+dt$cov)
         yaxisTitle <- sprintf("Log10(%s)", yaxisTitle)
       }
-      nFileOut <- sub(".xls$",".pool.png",nFileIn)
+      nFileOut <- paste(nFileOutRoot,".pool.png",sep="")
       png(nFileOut,width=picWidth,height=picHeight)
       par(mar=(c(4,4,2,0.2)+0.3))
       ymax = get_ymax(dt$cov)

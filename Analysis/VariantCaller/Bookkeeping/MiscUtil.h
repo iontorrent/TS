@@ -18,12 +18,6 @@
 #include <cstring>
 using namespace std;
 
-void Tokenize(const string& str,
-              vector<string>& tokens,
-              const string& delimiters = " ");
-
-void deleteArray(float *** darray, int HT, int WD);
-void allocateArray(float *** array, int HT, int WD);
 
 char NucComplement (char nuc);
 void RevComplementInPlace(string& seq);
@@ -32,22 +26,12 @@ void ReverseComplement(string &seqContext, string &reverse_complement);
 
 std::string intToString(int x, int width);
 template<typename T>
-bool convertFromString(const std::string& s, T& r) {
-    std::istringstream iss(s);
-    iss >> r;
-    return iss.eof() ? true : false;
-}
-
-template<typename T>
 std::string convertToString(const T& r) {
     std::ostringstream iss;
     iss << r;
     return iss.str();
 }
 
-void stringToUpper(string &s);
-
-void getBaseName(const char *path, char *basename);
 
 template<typename T>
 class CircluarBuffer {

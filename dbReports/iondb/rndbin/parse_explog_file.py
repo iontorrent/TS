@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 '''Parses explog.txt and explog_final.txt'''
 from ion.utils.explogparser import load_log_path
 from ion.utils.explogparser import parse_log

@@ -22,7 +22,7 @@ public:
   void TimeStampsFromImage ( Image &img , ImageControlOpts &img_control);
   void DimensionsFromImage(Image &img, SpatialContext &loc_context);
   void DeriveSpecsFromDat ( SystemContext &sys_context,ImageControlOpts &img_control, SpatialContext &loc_context);
-  int LeadTimeForChipSize();
+  int LeadTimeForChipSize() const;
   ~ImageSpecClass();
 
  private:

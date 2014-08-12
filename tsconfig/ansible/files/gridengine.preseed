@@ -1,0 +1,8 @@
+#!/bin/bash
+set -u
+headnode=$1
+debconf-set-selections << EOF
+gridengine-exec         shared/gridenginemaster string $headnode
+gridengine-common       shared/gridenginecell   string iontorrent
+gridengine-common       shared/gridengineconfig boolean true
+EOF

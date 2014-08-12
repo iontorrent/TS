@@ -8,24 +8,62 @@
 #include "ExtendedReadInfo.h"
 #include "json/json.h"
 
-InputStructures::InputStructures() {
-    flowKey = "TCAG";
-    flowOrder = "";
-    flowSigPresent = false;
-    DEBUG = 0;
-    nFlows = 0;
-    min_map_qv = 4;
-    read_snp_limit = 10;
-    use_SSE_basecaller  = true;
-    do_snp_realignment  = true;
-    apply_normalization = false;
-    resolve_clipped_bases = false;
+InputStructures::InputStructures()
+{
+  flowKey = "TCAG";
+  flowOrder = "";
+  flowSigPresent = false;
+  DEBUG = 0;
+  nFlows = 0;
+  use_SSE_basecaller  = true;
+  apply_normalization = false;
+  resolve_clipped_bases = false;
 }
 
-void InputStructures::DetectFlowOrderzAndKeyFromBam(SamHeader &samHeader){
+
+void InputStructures::Initialize(ExtendParameters &parameters, const ReferenceReader& ref_reader, const SamHeader &bam_header)
+{
+  DEBUG                 = parameters.program_flow.DEBUG;
+
+  use_SSE_basecaller    = parameters.program_flow.use_SSE_basecaller;
+  resolve_clipped_bases = parameters.program_flow.resolve_clipped_bases;
+
+  // must do this first to detect nFlows
+  DetectFlowOrderzAndKeyFromBam(bam_header);
+  // now get recalibration information, padded to account if nFlows for some bam is large
+  do_recal.ReadRecalibrationFromComments(bam_header,nFlows-1); // protect against over-flowing nFlows, 0-based
+
+  if (parameters.sseMotifsProvided) {
+    cout << "Loading systematic error contexts." << endl;
+    read_error_motifs(parameters.sseMotifsFileName);
+    cout << "Loaded." << endl;
+  }
+
+  // Load homopolymer recalibration model
+  // why is recal model using the command line directly? <-- Because the basecaller module is programmed that way.
+  // initialize only if there's a model file
+  if (parameters.recal_model_file_name.length()>0){
+    do_recal.recalModel.Initialize(parameters.opts);
+    do_recal.use_recal_model_only = true;
+    do_recal.is_live = true;
+  }
+
+  // finally turn off recalibration if not wanted
+  // even although we have a nice set of recalibration read-in.
+  if (parameters.program_flow.suppress_recalibration) {
+    printf("Recalibration model: suppressed\n");
+    do_recal.recalModel.suppressEnabled();
+    do_recal.is_live = false;
+  }
+}
+
+
+
+
+void InputStructures::DetectFlowOrderzAndKeyFromBam(const SamHeader &samHeader){
   
 //TODO Need to handle multiple BAM files with different flowOrders, at least throw an error for now.
-    for (BamTools::SamReadGroupIterator itr = samHeader.ReadGroups.Begin(); itr != samHeader.ReadGroups.End(); ++itr) {
+    for (BamTools::SamReadGroupConstIterator itr = samHeader.ReadGroups.Begin(); itr != samHeader.ReadGroups.End(); ++itr) {
         if (itr->HasFlowOrder()) {
             string tmpflowOrder = itr->FlowOrder;
             if (bamFlowOrderVector.empty()){
@@ -79,81 +117,18 @@ void InputStructures::DetectFlowOrderzAndKeyFromBam(SamHeader &samHeader){
 
 }
 
-void InputStructures::VerifyContigsPresentInReference(SamHeader &samHeader){
-      string bamseq;
-    int ref_id = 0;
-
-    for (BamTools::SamSequenceIterator itr = samHeader.Sequences.Begin(); itr != samHeader.Sequences.End(); ++itr) {
-        bamseq = itr->Name;
-        if (DEBUG)
-            cout << "Contig Name in BAM file : " << bamseq << endl;
-        sequences.push_back(bamseq);
-        sequence_to_bam_ref_id[bamseq] = ref_id++;
-
-        bool reffound = false;
-        //check if reference fasta file provoided has the sequence name , if not exit
-        for (unsigned int i = 0; i < refSequences.size(); i++) {
-            if (refSequences[i].compare(bamseq) == 0) {
-                reffound = true;
-                break;
-
-            }
-        }
-        if (!reffound) {
-            cerr << "FATAL ERROR: Sequence Name: " << bamseq << " in BAM file is not found in Reference fasta file provoided " << endl;
-            //exit(-1);
-        }
-
-
-    }
-
-}
-
-
-void InputStructures::bam_initialize(vector<string> bams ) {
-    if (!bamMultiReader.Open(bams)) {
-        cerr << " ERROR: fail to open input bam files " << bams.size() << endl;
-        exit(-1);
-    }
-
-    if (!bamMultiReader.LocateIndexes()) {
-        cerr << "ERROR: Unable to locate BAM Index (bai) files for input BAM files specified " << endl;
-        exit(-1);
-    }
-
-
-    samHeader = bamMultiReader.GetHeader();
-    if (!samHeader.HasReadGroups()) {
-        bamMultiReader.Close();
-        cerr << "ERROR: there is no read group in BAM files specified" << bams.size() << endl;
-        exit(1);
-    }
-    // must do this first to detect nFlows
-    DetectFlowOrderzAndKeyFromBam(samHeader);
-// now get recalibration information, padded to account if nFlows for some bam is large
-    do_recal.ReadRecalibrationFromComments(samHeader,nFlows-1); // protect against over-flowing nFlows, 0-based
-
-    
-    VerifyContigsPresentInReference(samHeader);
-
-
-    if (DEBUG)
-        cout << "Finished Initialization - flowPresent = " << flowSigPresent << " flowOrder  = " << flowOrder << endl;
-
-
-}
 
 // this function is necessary because we have processed reads in sub-bams for areas of the chip
 // first we look up the run (bams may be combined)
 // then we look up the block for this area
 // different size/shape chips mean can't use same lookup table
 // inefficient for now: get the plane off the ground, then make the engines work
-string RecalibrationHandler::FindKey(string &runid, int x, int y) {
-    std::pair <std::multimap<string,pair<int,int> >:: iterator, std::multimap<string,pair<int,int> >:: iterator> blocks;
+string RecalibrationHandler::FindKey(const string &runid, int x, int y) const {
+    std::pair <std::multimap<string,pair<int,int> >:: const_iterator, std::multimap<string,pair<int,int> >:: const_iterator> blocks;
     blocks = block_hash.equal_range(runid);
     int tx,ty;
     tx = ty=0;
-    for (std::multimap<string,pair<int,int> >:: iterator it = blocks.first; it!=blocks.second; ++it) {
+    for (std::multimap<string,pair<int,int> >:: const_iterator it = blocks.first; it!=blocks.second; ++it) {
         int ax = it->second.first;
         int ay = it->second.second;
         if ((ax<=x) & (ay<=y)) {
@@ -174,7 +149,7 @@ string RecalibrationHandler::FindKey(string &runid, int x, int y) {
 };
 
 
-void RecalibrationHandler::ReadRecalibrationFromComments(SamHeader &samHeader, int max_flows_protect) {
+void RecalibrationHandler::ReadRecalibrationFromComments(const SamHeader &samHeader, int max_flows_protect) {
     // Read comment lines from Sam header
     // this will grab json files
     if (samHeader.HasComments()) {
@@ -232,12 +207,12 @@ void RecalibrationHandler::ReadRecalibrationFromComments(SamHeader &samHeader, i
     }
 }
 
-void RecalibrationHandler::getAB(MultiAB &multi_ab, string &found_key, int x, int y) {
+void RecalibrationHandler::getAB(MultiAB &multi_ab, const string &found_key, int x, int y) const {
     if (use_recal_model_only)
         recalModel.getAB(multi_ab,x,y);
     else {
       // found_key in map to get iterator
-      map<string, RecalibrationModel>::iterator it;
+      map<string, RecalibrationModel>::const_iterator it;
       it = bam_header_recalibration.find(found_key);
       if (it!=bam_header_recalibration.end()){ 
         it->second.getAB(multi_ab, x, y);
@@ -246,224 +221,5 @@ void RecalibrationHandler::getAB(MultiAB &multi_ab, string &found_key, int x, in
     }
 };
 
-void InputStructures::read_fasta(string chr_file, map<string, string> & chr_seq) {
-    //chr_seq.clear();
-    map<string,string>::iterator it;
-
-    string temp_chr_seq = "";
-    string line = "";
-    ifstream inFile(chr_file.c_str());
-    string chr_num = "";
-    int chrNumber = 0;
-    string chrName;
-    bool firstContigFound = false;
-
-    if (!inFile.is_open()) {
-        cout << "Error opening file: " << chr_file << endl;
-        return;
-    }
-    getline(inFile,line);
-
-    it = chr_seq.begin();
-
-    // Read and process records
-    while (!inFile.eof() && line.length() > 0) {
-        if (line.at(0) == '#' && !firstContigFound) {
-            getline(inFile,line);
-        } else
-            if (line.at(0) == '>' || line.at(0) == '<') {
-                firstContigFound = true;
-
-                if (chrNumber > 0) {
-                    //chr_seq.push_back(temp_chr_seq);
-                    chr_seq.insert(it, pair<string,string>(chrName,temp_chr_seq));
-                    if (DEBUG)
-                        cout << "Chromosome Name = " << chrName << endl;
-
-                    if (temp_chr_seq.length() > 0) {
-                        if (DEBUG)
-                            cout << temp_chr_seq.length() << endl;
-                        temp_chr_seq.clear();
-                    }
-
-                    //chrNumber++;
-                }
-
-                chrNumber++;
-                //find if there are more than contig name in the line
-                int firstspace = line.find(" ");
-                chrName = line.substr(1, firstspace-1);
-                if (chrName.length() == 0) {
-                    cerr << " Reference csfasta file provided has no contig name : " << line << endl;
-                    exit(-1);
-                }
-                if (DEBUG)
-                    cout << " Chr Name found in Reference csfasta : " << chrName << endl;
-                refSequences.push_back(chrName);
-
-                getline(inFile, line);
-
-            } else {
-                // Convert reference sequence to upper case characters
-                stringToUpper(line);
-                temp_chr_seq.append(line);
-                getline(inFile,line);
-            }
-
-    }
-
-    if (temp_chr_seq.length() > 0) {
-        //cout << temp_chr_seq.length() << endl;cout << "Dima's seq : " << temp_chr_seq.substr(279750,100) << endl;
-        chr_seq.insert(it, pair<string,string>(chrName,temp_chr_seq));
-    }
-
-    inFile.close();
-}
-
-void InputStructures::BringUpReferenceData(ExtendParameters &parameters) {
-
-    DEBUG                 = parameters.program_flow.DEBUG;
-    min_map_qv            = parameters.MQL0;
-    read_snp_limit        = parameters.readSnpLimit;
-
-    use_SSE_basecaller    = parameters.program_flow.use_SSE_basecaller;
-    do_snp_realignment    = parameters.program_flow.do_snp_realignment;
-    resolve_clipped_bases = parameters.program_flow.resolve_clipped_bases;
-
-    cout << "Loading reference." << endl;
-    read_fasta(parameters.fasta, reference_contigs);
-    cout << "Loaded reference. Ref length: " << reference_contigs.size() << endl;
-
-    // some recalibration information may be read from bam file header
-    bam_initialize(parameters.bams);
-
-    if (parameters.sseMotifsProvided) {
-        cout << "Loading systematic error contexts." << endl;
-        read_error_motifs(parameters.sseMotifsFileName);
-        cout << "Loaded." << endl;
-    }
-
-    // Load homopolymer recalibration model
-    // why is recal model using the command line directly? <-- Because the basecaller module is programmed that way.
-    // initialize only if there's a model file
-    if (parameters.recal_model_file_name.length()>0){
-        do_recal.recalModel.Initialize(parameters.opts);
-        do_recal.use_recal_model_only = true;
-        do_recal.is_live = true;
-    }
-    
-    // finally turn off recalibration if not wanted
-    // even although we have a nice set of recalibration read-in.
-    if (parameters.program_flow.suppress_recalibration) {
-        printf("Recalibration model: suppressed\n");
-        do_recal.recalModel.suppressEnabled();
-        do_recal.is_live = false;
-    }
-}
-
-// this is officially bad, as the scope of the reference is uncertain
-// but since it is signed in blood that our reference_contigs will persist for the whole program
-// we can pretend to be happy
-string & InputStructures::ReturnReferenceContigSequence(vcf::Variant ** current_variant) {
-    map<string,string>::iterator itr = reference_contigs.find((*current_variant)->sequenceName);
-    if (itr == reference_contigs.end()) {
-        cerr << "FATAL: Reference sequence for Contig " << (*current_variant)->sequenceName << " , not found in reference fasta file " << endl;
-        exit(-1);
-    }
-
-    return(itr->second);
-}
-
-void InputStructures::ShiftLocalBamReaderToCorrectBamPosition(BamTools::BamMultiReader &local_bamReader, vcf::Variant **current_variant) {
-    //
-    // Step 1: Use (*current_variant)->sequenceName and (*current_variant)->position to jump to the right place in BAM reader
-    //
-
-    if (sequence_to_bam_ref_id.find((*current_variant)->sequenceName) == sequence_to_bam_ref_id.end()) {
-        cerr << "FATAL: Reference sequence for Contig " << (*current_variant)->sequenceName << " not found in BAM file " << endl;
-        exit(-1);
-    }
-    int bam_ref_id = sequence_to_bam_ref_id[(*current_variant)->sequenceName];
-    // Attention: vcf-positions are 1-based; BamTools wants a 0-based position
-    if (!local_bamReader.Jump(bam_ref_id, (*current_variant)->position-1)) {
-        cerr << "Fatal ERROR: Unable to access ChrName " << bam_ref_id << " and 1-based position = " << (*current_variant)->position << " within the BAM file provoided " << endl;
-        exit(-1);
-    }
-
-    if (DEBUG)
-        cout << "VCF = " << (*current_variant)->sequenceName << ":" << (*current_variant)->position  << endl;
-}
 
 
-// ----------------------------------------------------------
-
-LiveFiles::LiveFiles() {
-    start_time = time(NULL);
-}
-
-void LiveFiles::ActivateFiles(ExtendParameters &parameters) {
-    SetBaseName(parameters);
-    ActiveOutputDir(parameters);
-    ActiveOutputVCF(parameters);
-    ActiveFilterVCF(parameters);
-    ActiveDiagnostic(parameters);
-}
-
-void LiveFiles::ActiveOutputDir(ExtendParameters &parameters) {
-    // try to create output directory
-    // because I hate having to make this manually when I run
-    //@TODO: please put in real error checks here
-    if (true) {
-        // make output directory "side effect bad"
-        mkdir(parameters.outputDir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-    }
-}
-
-void LiveFiles::ActiveDiagnostic(ExtendParameters &parameters) {
-    if (parameters.program_flow.rich_json_diagnostic || parameters.program_flow.minimal_diagnostic) {
-        // make output directory "side effect bad"
-        parameters.program_flow.json_plot_dir = parameters.outputDir + "/json_diagnostic/";
-        mkdir(parameters.program_flow.json_plot_dir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-    }
-}
-
-void LiveFiles::ActiveOutputVCF(ExtendParameters &parameters) {
-    string full_output_vcf_filename = parameters.outputDir + "/" + parameters.outputFile;
-
-    outVCFFile.open(full_output_vcf_filename.c_str());
-    if (!outVCFFile.is_open()) {
-        fprintf(stderr, "[tvc] FATAL: Cannot open %s: %s\n", full_output_vcf_filename.c_str(), strerror(errno));
-        exit(-1);
-    }
-
-
-}
-
-void LiveFiles::SetBaseName(ExtendParameters &parameters) {
-    char basename[256] = {'\0'};
-    getBaseName(parameters.outputFile.c_str(), basename);
-    file_base_name = basename;
-}
-
-void LiveFiles::ActiveFilterVCF(ExtendParameters &parameters) {
-    stringstream filterVCFFileNameStream;
-    filterVCFFileNameStream <<  parameters.outputDir;
-    filterVCFFileNameStream << "/";
-    filterVCFFileNameStream << file_base_name;
-    filterVCFFileNameStream << "_filtered.vcf";
-    string filterVCFFileName = filterVCFFileNameStream.str();
-
-    filterVCFFile.open(filterVCFFileName.c_str());
-    if (!filterVCFFile.is_open()) {
-        cerr << "[tvc] FATAL: Cannot open filter vcf file : " << filterVCFFileName << endl;
-        exit(-1);
-    }
-}
-
-
-void LiveFiles::ShutDown() {
-
-    outVCFFile.close();
-    filterVCFFile.close();
-    cout << "[tvc] Normal termination. Processing time: " << (time(NULL)-start_time) << " seconds." << endl;
-};

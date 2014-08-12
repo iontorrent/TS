@@ -1,0 +1,9 @@
+#!/bin/bash
+set -u
+
+debconf-set-selections << EOF
+tmpreaper	tmpreaper/readsecurity	note
+tmpreaper	tmpreaper/TMPREAPER_TIME	note
+tmpreaper	tmpreaper/confignowexists	note
+tmpreaper	tmpreaper/readsecurity_upgrading	note
+EOF

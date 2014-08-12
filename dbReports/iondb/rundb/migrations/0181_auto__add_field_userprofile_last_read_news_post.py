@@ -10,14 +10,24 @@ class Migration(SchemaMigration):
 
     def forwards(self, orm):
         # Adding field 'UserProfile.last_read_news_post'
-        db.add_column(u'rundb_userprofile', 'last_read_news_post',
-                      self.gf('django.db.models.fields.DateTimeField')(default=datetime.datetime(1984, 11, 5, 0, 0)),
-                      keep_default=False)
+        # this field will get added in the migrate.py file since it is needed when creating the initial superuser in database.
+        field = 'last_read_news_post'
+        sql = "SELECT column_name FROM information_schema.columns " + \
+              "WHERE table_name = 'rundb_userprofile'"
+        gc_names = db.execute(sql)
+        
+        if field not in sum(gc_names, ()):
+            db.add_column(u'rundb_userprofile', 'last_read_news_post',
+                          self.gf('django.db.models.fields.DateTimeField')(default=datetime.datetime(1984, 11, 5, 0, 0)),
+                          keep_default=False)
+        else:
+            print ("*** 0181.. %s already exists" % (field))
 
 
     def backwards(self, orm):
         # Deleting field 'UserProfile.last_read_news_post'
-        db.delete_column(u'rundb_userprofile', 'last_read_news_post')
+        #db.delete_column(u'rundb_userprofile', 'last_read_news_post')
+        pass
 
 
     models = {

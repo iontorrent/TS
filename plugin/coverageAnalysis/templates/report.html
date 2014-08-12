@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
+<html>
+<base target="_parent"/>
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=utf-8"> 
+<head>
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-layout.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/tb-styles.min.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/jquery/css/aristo/jquery-ui-1.8.7.custom.css" />
+<link type="text/css" rel="stylesheet" href="/site_media/resources/styles/print.css" media="print" />
+
+<link type="text/css" rel="stylesheet" href="lifechart/pseudo-bootstrap.css" />
+<link rel="stylesheet" type="text/css" href="lifechart/lifegrid.css"/>
+<link rel="stylesheet" type="text/css" href="flot/css/smoothness/jquery-ui-1.8.20.custom.css"/>
+
+<!--[if lt IE 9]>
+  <script type="text/javascript" src="flot/FlashCanvas/bin/flashcanvas.js"></script>
+  <script type="text/javascript" src="flot/FlashCanvas/bin/canvas2png.js"></script>
+<![endif]-->
+<script language="javascript" type="text/javascript" src="flot/js/jquery-1.7.2.min.js"></script>
+<script language="javascript" type="text/javascript" src="flot/js/jquery-ui-1.8.20.custom.min.js"></script>
+<script language="javascript" type="text/javascript" src="flot/js/jquery.rightClick.js"></script>
+<script language="javascript" type="text/javascript" src="flot/jquery.flot.min.js"></script>
+<script language="javascript" type="text/javascript" src="flot/jquery.flot.selection.min.js"></script>
+<script language="javascript" type="text/javascript" src="flot/jquery.flot.axislabels.js"></script>
+
+<script language="javascript" type="text/javascript" src="lifechart/FileLinksTable.js"></script>
+<script language="javascript" type="text/javascript" src="lifechart/PictureFrame.js"></script>
+<script language="javascript" type="text/javascript" src="lifechart/DepthOfCoverageChart.js"></script>
+<script language="javascript" type="text/javascript" src="lifechart/ReferenceCoverageChart.js"></script>
+<script language="javascript" type="text/javascript" src="lifechart/TargetCoverageChart.js"></script>
+
+{% load humanize %}
+
+<style type="text/css">
+  body {
+    background:white;
+    padding: 0;
+    margin: 8px;
+  }
+  .block-rounded {
+    padding:5px;
+    background-color:#F5F5F5;
+    border:1px solid #D6D6D6;
+    -moz-border-radius: 6px;
+    -webkit-border-radius:6px;
+    border-radius: 6px
+  }
+  .help {
+    cursor:help;
+    border-bottom: 1px dotted #A9A9A9
+  }
+</style>
+
+<title>Torrent Coverage Analysis Report</title>
+
+</head>
+
+<body>
+
+<h1><center>Coverage Analysis Report</center></h1>
+{% if Sample_Name != "" and Sample_Name != "None" %}
+<h3><center>Sample Name: {{Sample_Name}}</center></h3>
+{% endif %}
+<h3><center>{{run_name}}<center></h3>
+
+<table class="center">
+<tr><td><h4>
+  <b>Library type:</b> {{library_type}}<br/>
+  <b>Reference:</b> {{Reference_Genome}}{% if libnuc_type %} ({{libnuc_type}}){% endif %}<br/>
+{% if Target_Regions %}
+  <b>Target regions:</b> {{Target_Regions}}<br/>
+{% endif %}
+{% if Target_Padding and Target_Padding != '0' %}
+  <b>Target padding:</b> {{Target_Padding|intcomma}}<br/>
+{% endif %}
+{% if Read_Filters %}
+  <b>Read filters:</b> {{Read_Filters}}<br/>
+{% endif %}
+</h4></td></tr><tr><td>
+
+<table class="block-rounded"><tr>
+{% if rna_stats %}
+  <td><a href="{{rep_overview_png}}" title="{{help_dict.Representation_Overview}}"><img  style="height:100px" src="{{rep_overview_png}}" alt="Representation Overview"/></a></td>
+{% else %}
+  <td><a href="{{overview_png}}" title="{{help_dict.Coverage_Overview}}"><img  style="height:100px" src="{{overview_png}}" alt="Coverage Overview"/></a></td>
+{% endif %}
+  <td><div class="statsdata" style="width:{% if rna_stats %}340px{% else %}320px{% endif %}">
+  <table>
+    <tr><td class="inleft"><span title="{{help_dict.Number_of_mapped_reads}}">Number of mapped reads</span></td>
+        <td class="inright">{{Number_of_mapped_reads|intcomma}}</td></tr>
+{% if not wgn_stats %}
+    <tr><td class="inleft"><span title="{{help_dict.Percent_reads_on_target}}">Percent reads on target</span></td>
+        <td class="inright">{{Percent_reads_on_target}}</td></tr>
+{% endif %}
+{% if samp_track %}
+    <tr><td class="inleft"><span title="{{help_dict.Percent_sample_tracking_reads}}">Percent sample tracking reads</span></td>
+        <td class="inright">{{Percent_sample_tracking_reads}}</td></tr>
+{% endif %}
+{% if bas_stats %}
+    <tr><td class="inleft"><span title="{{help_dict.Average_base_coverage_depth}}">Average base coverage depth</span></td>
+        <td class="inright">{{Average_base_coverage_depth|intcomma}}</td></tr>
+    <tr><td class="inleft"><span title="{{help_dict.Uniformity_of_base_coverage}}">Uniformity of base coverage</span></td>
+        <td class="inright">{{Uniformity_of_base_coverage}}</td></tr>
+{% endif %}
+  </table></div></td>
+</tr></table>
+
+</td></tr></table>
+
+<br/>
+
+<div class="center block-rounded" style="width:{% if num_stat_tables == 2 %}{% if amp_stats %}730px{% else %}780px{% endif %}{% else %}380px{% endif %}">
+<table>
+ <tr>
+{% if amp_stats %}
+  <th><span title="{{help_dict.Amplicon_Read_Coverage}}">Amplicon Read Coverage</span></th>
+{% elif trg_stats %}
+  <th><span title="{{help_dict.Target_Coverage}}">Target Coverage</span></th>
+{% endif %}
+{% if wgn_stats %}
+  <th><span title="{{help_dict.Genome_Base_Coverage}}">Genome Base Coverage</span></th>
+{% elif bas_stats %}
+  <th><span title="{{help_dict.Target_Base_Coverage}}">Target Base Coverage</span></th>
+{% endif %}
+ </tr>
+ <tr>
+{% if amp_stats %}
+  <td><div class="statsdata" style="width:360px"> <table>
+  <tr><td class="inleft"><span title="{{help_dict.Number_of_amplicons}}">Number of amplicons</span></td>
+      <td class="inright">{{Number_of_amplicons|intcomma}}</td></tr>
+ {% if rna_stats %}
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_1_read}}">Amplicons with at least 1 read</span></td>
+      <td class="inright">{{Amplicons_with_at_least_1_read|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_10_reads}}">Amplicons with at least 10 reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_10_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_100_reads}}">Amplicons with at least 100 reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_100_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_1000_reads}}">Amplicons with at least 1000 reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_1000_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_10K_reads}}">Amplicons with at least 10K reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_10K_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_at_least_100K_reads}}">Amplicons with at least 100K reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_100K_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_with_no_strand_bias}}">Amplicons with no strand bias</span></td>
+      <td class="inright">{{Amplicons_with_no_strand_bias|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.nAmplicons_reading_end_to_end}}">Amplicons reading end-to-end</span></td>
+      <td class="inright">{{Amplicons_reading_end_to_end|intcomma}}</td></tr>
+ {% else %}
+  <tr><td class="inleft"><span title="{{help_dict.Percent_assigned_amplicon_reads}}">Percent assigned amplicon reads</span></td>
+      <td class="inright">{{Percent_assigned_amplicon_reads}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Average_reads_per_amplicon|intcomma}}">Average reads per amplicon</span></td>
+      <td class="inright">{{Average_reads_per_amplicon|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Uniformity_of_amplicon_coverage}}">Uniformity of amplicon coverage</span></td>
+      <td class="inright">{{Uniformity_of_amplicon_coverage}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Amplicons_with_at_least_1_read}}">Amplicons with at least 1 read</span></td>
+      <td class="inright">{{Amplicons_with_at_least_1_read}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Amplicons_with_at_least_20_reads}}">Amplicons with at least 20 reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_20_reads}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Amplicons_with_at_least_100_reads}}">Amplicons with at least 100 reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_100_reads}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Amplicons_with_at_least_500_reads}}">Amplicons with at least 500 reads</span></td>
+      <td class="inright">{{Amplicons_with_at_least_500_reads}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Amplicons_with_no_strand_bias}}">Amplicons with no strand bias</span></td>
+      <td class="inright">{{Amplicons_with_no_strand_bias}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Amplicons_reading_end_to_end}}">Amplicons reading end-to-end</span></td>
+      <td class="inright">{{Amplicons_reading_end_to_end}}</td></tr>
+ {% endif %}
+  </table></div></td>
+{% elif trg_stats %}
+  <td><div class="statsdata" style="width:410px"> <table>
+  <tr><td class="inleft"><span title="{{help_dict.Number_of_unmerged_targets}}">Number of unmerged targets</span></td>
+      <td class="inright">{{Number_of_unmerged_targets|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Percent_assigned_target_reads}}">Percent assigned target reads</span></td>
+      <td class="inright">{{Percent_assigned_target_reads}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Average_base_coverage_depth_per_target}}">Average base coverage depth per target</span></td>
+      <td class="inright">{{Average_base_coverage_depth_per_target|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Uniformity_of_base_coverage_per_target}}">Uniformity of base coverage per target</span></td>
+      <td class="inright">{{Uniformity_of_base_coverage_per_target}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_0x}}">Targets with base coverage at 1x</span></td>
+      <td class="inright">{{Targets_with_base_coverage_at_1x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_20x}}">Targets with base coverage at 20x</span></td>
+      <td class="inright">{{Targets_with_base_coverage_at_20x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_100x}}">Targets with base coverage at 100x</span></td>
+      <td class="inright">{{Targets_with_base_coverage_at_100x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_500x}}">Targets with base coverage at 500x</span></td>
+      <td class="inright">{{Targets_with_base_coverage_at_500x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Targets_with_no_strand_bias}}">Targets with no strand bias</span></td>
+      <td class="inright">{{Targets_with_no_strand_bias}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Targets_with_full_coverage}}">Targets with full coverage</span></td>
+      <td class="inright">{{Targets_with_full_coverage}}</td></tr>
+  </table></div></td>
+{% endif %}
+{% if bas_stats %}
+ {% if wgn_stats %}
+  <td><div class="statsdata" style="width:380px"> <table>
+  <tr><td class="inleft"><span title="{{help_dict.Bases_in_reference_genome}}">Bases in reference genome</span></td>
+      <td class="inright">{{Bases_in_reference_genome|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Average_base_coverage_depth}}">Average base coverage depth</span></td>
+      <td class="inright">{{Average_base_coverage_depth|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Uniformity_of_base_coverage}}">Uniformity of base coverage</span></td>
+      <td class="inright">{{Uniformity_of_base_coverage}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Genome_base_coverage_at_1x}}">Genome base coverage at 1x</span></td>
+      <td class="inright">{{Genome_base_coverage_at_1x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Genome_base_coverage_at_20x}}">Genome base coverage at 20x</span></td>
+      <td class="inright">{{Genome_base_coverage_at_20x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Genome_base_coverage_at_100x}}">Genome base coverage at 100x</span></td>
+      <td class="inright">{{Genome_base_coverage_at_100x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Genome_base_coverage_at_500x}}">Genome base coverage at 500x</span></td>
+      <td class="inright">{{Genome_base_coverage_at_500x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Genome_bases_with_no_strand_bias}}">Genome bases with no strand bias</span></td>
+      <td class="inright">{{Genome_bases_with_no_strand_bias}}</td></tr>
+ {% else %}
+  <td><div class="statsdata" style="width:350px"> <table>
+  <tr><td class="inleft"><span title="{{help_dict.Bases_in_target_regions}}">Bases in target regions</span></td>
+      <td class="inright">{{Bases_in_target_regions|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Percent_base_reads_on_target}}">Percent base reads on target</span></td>
+      <td class="inright">{{Percent_base_reads_on_target}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Average_base_coverage_depth}}">Average base coverage depth</span></td>
+      <td class="inright">{{Average_base_coverage_depth|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Uniformity_of_base_coverage}}">Uniformity of base coverage</span></td>
+      <td class="inright">{{Uniformity_of_base_coverage}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Target_base_coverage_at_1x}}">Target base coverage at 1x</span></td>
+      <td class="inright">{{Target_base_coverage_at_1x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Target_base_coverage_at_20x}}">Target base coverage at 20x</span></td>
+      <td class="inright">{{Target_base_coverage_at_20x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Target_base_coverage_at_100x}}">Target base coverage at 100x</span></td>
+      <td class="inright">{{Target_base_coverage_at_100x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Target_base_coverage_at_500x}}">Target base coverage at 500x</span></td>
+      <td class="inright">{{Target_base_coverage_at_500x}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Target_bases_with_no_strand_bias}}">Target bases with no strand bias</span></td>
+      <td class="inright">{{Target_bases_with_no_strand_bias}}</td></tr>
+  <tr><td class="inleft">&nbsp;</td><td class="inright">&nbsp;</td></tr>
+ {% endif %}
+ </table></div></td>
+{% endif %}
+ </tr>
+</table>
+</div></div>
+<br/>
+{% if not rna_stats %}
+<div id='DepthOfCoverageChart' datafile='{{base_cov_tsv}}' class='center' style='width:800px;height:300px'></div> <br/>
+ {% if not wgn_stats %}
+<div id='PictureFrame' gccovfile='{{scat_gc_png}}' fedorafile='{{rep_gc_png}}' poolcovfile='{{rep_pool_png}}' fedlenfile='{{rep_len_png}}' lencovfile='{{scat_len_png}}' collapse class='center' style='width:800px;height:300px'></div> <br/>
+ {% endif %}
+{% endif %}
+{% if trg_stats %}
+<div id='TargetCoverageChart' amplicons={{trg_type}} datafile='{{output_dir}}/{{finecov_tsv}}' initfile='{{aux_ttc}}' class='center' style='width:800px;height:300px'></div> <br/>
+{% endif %}
+{% if bas_stats %}
+<div id='ReferenceCoverageChart' {% if wgn_stats %}genome{% endif %} collapse bbcfile='{{output_dir}}/{{aux_bbc}}' cbcfile='{{output_dir}}/{{aux_cbc}}' chrcovfile='{{chr_cov_tsv}}' wgncovfile='{{wgn_cov_tsv}}' class='center' style='width:800px;height:300px'></div> <br/>
+{% endif %}
+<div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:420px'></div>
+
+<br/>
+<div class="footer" style="width:100%"> <div class="container"> <div class="row"> <div class="span12">
+  <img class="pull-left" src="/site_media/resources/img/ion-logo2.png" border="0">
+  <div class="pull-right">
+    <p>This is for research use only. It is not intended for any animal or human therapeutic or diagnostic use.</p>
+    <p><span class="copyright">&copy; 2014 Life Technologies Corporation. All Rights Reserved.</span>
+    <a href="http://ioncommunity.lifetechnologies.com/community/products/torrent_suite">Ion Community Support Site</a> |
+    <a href="/licenses/terms-of-use.txt">Terms &amp; Conditions</a></p>
+  </div>
+</div> </div> </div> </div>
+<br/>
+</body>
+</html>

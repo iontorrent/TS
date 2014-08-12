@@ -58,7 +58,7 @@ RcppExport SEXP CalculateCumulativeIncorporationHydrogensR(
     old_vb_out = new float [my_frame_len];
     // calculate cumulative hydrogens from amplitude (hp mixture), copies on bead, krate, kmax, diffusion
     // and of course the rate at which nuc is available above the well
-    ComputeCumulativeIncorporationHydrogens(old_vb_out,my_frame_len, old_delta_frame, old_nuc_rise, sub_steps,my_start_index,
+    MathModel::ComputeCumulativeIncorporationHydrogens(old_vb_out,my_frame_len, old_delta_frame, old_nuc_rise, sub_steps,my_start_index,
                                               max_concentration, amplitude, copies, krate,kmax, diffusion, molecules_to_micromolar_conv, &my_math,true);
 
     
@@ -129,7 +129,7 @@ RcppExport SEXP SimplifyCalculateCumulativeIncorporationHydrogensR(
     old_vb_out = new float [my_frame_len];
     // calculate cumulative hydrogens from amplitude (hp mixture), copies on bead, krate, kmax, diffusion
     // and of course the rate at which nuc is available above the well
-    ComputeCumulativeIncorporationHydrogens(old_vb_out,my_frame_len, old_delta_frame, old_nuc_rise, sub_steps,my_start_index,
+    MathModel::ComputeCumulativeIncorporationHydrogens(old_vb_out,my_frame_len, old_delta_frame, old_nuc_rise, sub_steps,my_start_index,
                                               max_concentration, amplitude, copies, krate,kmax, diffusion,molecules_to_micromolar_conv, NULL,true);
 
 
@@ -203,7 +203,7 @@ RcppExport SEXP ComplexCalculateCumulativeIncorporationHydrogensR(
     old_vb_out = new float [my_frame_len];
     // calculate cumulative hydrogens from amplitude (hp mixture), copies on bead, krate, kmax, diffusion
     // and of course the rate at which nuc is available above the well
-    ComputeCumulativeIncorporationHydrogens(old_vb_out,my_frame_len, old_delta_frame, old_nuc_rise, sub_steps,my_start_index,
+    MathModel::ComputeCumulativeIncorporationHydrogens(old_vb_out,my_frame_len, old_delta_frame, old_nuc_rise, sub_steps,my_start_index,
                                               max_concentration, amplitude, copies, krate,kmax, diffusion,molecules_to_micromolar_conv,NULL,false);
 
 
@@ -269,7 +269,7 @@ RcppExport SEXP CalculateNucRiseR(
     // use the same nucleotide rise function as the bkgmodel setup uses
     
     int i_start;
-    i_start=SigmaRiseFunction(old_vb_out,my_frame_len,old_time_frame,sub_steps,max_concentration,t_mid_nuc,sigma, nuc_span, true);
+    i_start=MathModel::SigmaRiseFunction(old_vb_out,my_frame_len,old_time_frame,sub_steps,max_concentration,t_mid_nuc,sigma, nuc_span, true);
 
     vector<double> my_vb_out;
     vector<double> my_t_out;
@@ -350,7 +350,7 @@ RcppExport SEXP CalculateNucRiseSplineR(
     // use the same nucleotide rise function as the bkgmodel setup uses
     
     int i_start;
-    i_start=SplineRiseFunction(old_vb_out,my_frame_len,old_time_frame,sub_steps,max_concentration,t_mid_nuc,sigma,tangent_zero,tangent_one);
+    i_start=MathModel::SplineRiseFunction(old_vb_out,my_frame_len,old_time_frame,sub_steps,max_concentration,t_mid_nuc,sigma,tangent_zero,tangent_one);
 
     vector<double> my_vb_out;
     for (int i=0; i<my_frame_len*sub_steps; i++)
@@ -408,7 +408,7 @@ RcppExport SEXP CalculateNucRiseSigmaR(
     // use the same nucleotide rise function as the bkgmodel setup uses
     
     int i_start;
-    i_start=SigmaXRiseFunction(old_vb_out,my_frame_len,old_time_frame,sub_steps,max_concentration,t_mid_nuc,sigma);
+    i_start=MathModel::SigmaXRiseFunction(old_vb_out,my_frame_len,old_time_frame,sub_steps,max_concentration,t_mid_nuc,sigma);
 
     vector<double> my_vb_out;
     for (int i=0; i<my_frame_len*sub_steps; i++)
@@ -468,7 +468,7 @@ RcppExport SEXP CalculateNucRiseMeasuredR(
     // use the same nucleotide rise function as the bkgmodel setup uses
     
     int i_start;
-    i_start=MeasuredNucRiseFunction(old_vb_out,my_frame_len,old_time_frame,sub_steps,max_concentration,t_mid_nuc,sigma);
+    i_start=MathModel::MeasuredNucRiseFunction(old_vb_out,my_frame_len,old_time_frame,sub_steps,max_concentration,t_mid_nuc,sigma);
 
     vector<double> my_vb_out;
     vector<double> my_t_out;

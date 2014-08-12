@@ -22,7 +22,6 @@
 <script src="/pluginMedia/IonReporterUploader/backbone.syphon.min.js"></script>
 <script src="/pluginMedia/IonReporterUploader/handlebars.min.js"></script>
 <script src="/pluginMedia/IonReporterUploader/backbone-validation-min.js"></script>
-<script src="/pluginMedia/IonReporterUploader/backbone-validation-min.js"></script>
 
 <!-- TODO remove aprise -->
 <script type="text/javascript" src="/site_media/jquery/js/apprise/apprise-1.5.min.js"></script>
@@ -32,7 +31,9 @@
 
     body {
         /*the first height has to be the max height size for the iFrame plugin */
-        height: 655px;
+        height: 755px;
+        background: #FFFFFF;
+        background: -moz-linear-gradient(center bottom , #FFFFFF 100%) repeat scroll center 100px #EFEFEF;
     }
 
     .container {
@@ -51,7 +52,7 @@
         font-weight: bold;
     }
 
-        /*get rid of the table bottom margin*/
+    /*get rid of the table bottom margin*/
     .table {
         margin-bottom: 0px;
     }
@@ -151,6 +152,24 @@
         top: 7px;
     }
 
+    .legacyRow{
+        color: #b94a48;
+    }
+
+    .legacyWarning{
+        color: #b94a48;
+        font-weight: bold;
+    }
+    
+    .oldIR{
+        color: #b94a48;
+        font-weight: bold;
+    }
+    
+    .newIR{
+        visibility: hidden;
+    }
+
 
 </style>
 
@@ -168,8 +187,10 @@
                         <span class="caret"></span>
                     </a>
                     <ul class="dropdown-menu" role="menu" aria-labelledby="dropdownMenu">
-                        <li><a id="ir1" tabindex="-1" href="#">Ion Reporter 1.x</a></li>
+                        <li><a id="ir40cloud" tabindex="-1" href="#">Ion Reporter Cloud 4.0</a></li>
                         <li><a id="ir4" tabindex="-1" href="#">Ion Reporter 4.x</a></li>
+                        <li style="float: none;" class="divider"></li>
+                        <li><a id="ir4" tabindex="-1" href="http://www.lifetechnologies.com/ionreporter" target="_blank">Signup for Ion Reporter</a></li>
                     </ul>
                 </div>
             </div>
@@ -181,9 +202,9 @@
                     <thead class="k-grid-header">
                     <tr>
                         <th class="k-header nameCol">Name</th>
-                        <th class="k-header smallCol">Version</th>
                         <th class="k-header smallCol">Default</th>
-                        <th class="k-header configCol editCol">Edit</th>
+                        <th class="k-header smallCol">Status</th>
+                        <th class="k-header smallCol centerCol">Edit</th>
                     </tr>
                     </thead>
                     <tbody id="table-body">
@@ -210,9 +231,9 @@
                 <table class="table table-striped">
                     <thead class="k-grid-header">
                     <tr>
-                        <th class="k-header nameSelectCol">Display Name</th>
-                        <th class="k-header smallCol">Version</th>
+                        <th class="k-header nameSelectCol">Name</th>
                         <th class="k-header smallCol">Default</th>
+                        <th class="k-header smallCol">Status</th>
                         <th class="k-header medCol">Launch</th>
                     </tr>
                     </thead>
@@ -244,9 +265,9 @@
 
             </div>
 
-
         </form>
 
+        <div id="whine" style="display: none;">At least one Ion Reporter account is needed. <a href="/configure/ionreporter" target="_top">Please add one now.</a></div>
 
     </div>
 
@@ -268,29 +289,38 @@
 <script type="text/template" id="row-layout">
     <td class="nameCol"><strong>{{name}}</strong>
         {{# if details }}
-        <span style="margin-left: 10px"></span>({{ details.orgname }})
+            <span style="margin-left: 10px"></span>(Version: {{humanVersion version}} | User: {{details.firstname}} {{details.lastname}} | Org: {{details.orgname}})
         {{/if}}
+
+         <span class="{{isLegacy version}}">  Ion Reporter 1.X is now obsolete. </span>
     </td>
-    <td class="smallCol">{{humanVersion version}}</td>
     <td class="smallCol centerCol">{{# if default}}<i class="icon-ok"></i>{{/if}}</td>
+    <td class="smallCol centerCol"><img id="{{id}}" class="status-icon"  data-toggle="tooltip" title="Checking account status" src="/site_media/jquery/img/throbber.gif" /></td>
     <td class="smallCol"><span class="btn config"><i class="icon-cog"></i></span></td>
 </script>
 
 <script type="text/template" id="select-row-layout">
     <td class="nameCol"><strong>{{name}}</strong>
+
         {{# if details }}
-        <span style="margin-left: 10px"></span>({{ details.orgname }})
+            <span style="margin-left: 10px"></span>(Version: {{humanVersion version}} | User: {{details.firstname}} {{details.lastname}} | Org: {{details.orgname}})
         {{/if}}
-    <td class="smallCol">{{humanVersion version}}</td>
+
+        <span class="{{isLegacy version}}">  Ion Reporter 1.X is now obsolete. </span>
+
     <td class="smallCol centerCol">{{# if default}}<i class="icon-ok"></i>{{/if}}</td>
-    <td class="medCol"><span class="btn launch btn-primary">Launch IRU</span></td>
+    <td class="smallCol centerCol"><img id="{{id}}" class="status-icon"  data-toggle="tooltip" title="Checking account status" src="/site_media/jquery/img/throbber.gif" /></td>
+
+    <td class="medCol">{{isLegacyInstance version}}</td>
+
 </script>
 
 <script type="text/template" id="modal_layout">
-    <div id="ir1config" class="row">
+    <div id="ir-config" class="row">
         <h3>Add Ion Reporter account</h3>
 
         <div class="topSpace span12">
+            <div id="timeout" class="alert alert-error" style="display: none;"></div>
 
             <form class="form-horizontal ir" autocomplete="off">
 
@@ -332,38 +362,9 @@
                     <label class="control-label" for="port">Port</label>
 
                     <div class="controls">
-                        <input type="text" id="port" name="port" placeholder="80" value="{{port}}" autocomplete="off">
+                        <input type="text" id="port" name="port" value="{{port}}" autocomplete="off">
                     </div>
                 </div>
-
-                {{#if legacy}}
-
-                <div class="control-group">
-                    <label class="control-label" for="token">Token</label>
-
-                    <div class="controls">
-                        <input class="token" type="text" name="token" id="token" placeholder="" value="{{token}}"
-                               autocomplete="off">
-                    </div>
-                </div>
-
-                <div class="control-group version-control">
-                    <label class="control-label">Version</label>
-
-                    <div class="controls version-group">
-                    </div>
-
-                </div>
-
-                <div class="control-group">
-                    <div class="controls">
-                        <span class='btn authCheck'><i class='icon-repeat'></i> Get version list</span>
-                    </div>
-                </div>
-
-                {{/if}}
-
-                {{#unless legacy}}
 
                 <div class="control-group">
                     <label class="control-label" for="userid">Username</label>
@@ -383,8 +384,6 @@
                     </div>
                 </div>
 
-                {{/unless}}
-
                 <div class="control-group">
                     <label class="control-label">Default</label>
 
@@ -397,15 +396,31 @@
                     </div>
                 </div>
 
+                <div class="control-group version-control">
+                    <label class="control-label">Version</label>
+
+                    <div class="controls version-group">
+                    </div>
+
+                </div>
+
+                {{#if confirm}}
+                <div class="control-group">
+                    <div class="controls">
+                        <span class='btn versionCheck'><i class='icon-repeat'></i> Get versions</span>
+                    </div>
+                </div>
+                {{/if}}
+
             </form>
         </div>
 
         <div class="row">
             <div class="span12 modal-button-row">
-                <span class="btn pull-left ir1back"><i class="icon-arrow-left"></i> Back</span>
+                <span class="btn pull-left ir-back"><i class="icon-arrow-left"></i> Back</span>
                 {{#if confirm}}
                 <span class="divider"></span>
-                <span class="btn ir1delete"><i class="icon-trash"></i> Delete</span>
+                <span class="btn ir-delete"><i class="icon-trash"></i> Delete</span>
                     <span class="confirm" style="display: none;">
                         <span class="confirmTest">Are you sure you want to delete this configuration?</span>
                         <span class="btn-group confirm">
@@ -414,7 +429,7 @@
                         </span>
                     </span>
                 {{/if}}
-                <span class="btn pull-right {{storeClass}}"><i class="icon-ok"></i> {{storeText}}</span>
+                <span class="btn pull-right {{storeClass}}"><i class="icon-{{icon}}"></i> {{storeText}}</span>
             </div>
         </div>
 
@@ -442,6 +457,27 @@ Handlebars.registerHelper('fullHumanVersion', function (version) {
         return ""
     }
 
+});
+
+Handlebars.registerHelper('isLegacy', function (version) {
+    var major = version[2];
+    var minor = version[3];
+    if (major == 1){
+        return "oldIR";
+    }else{
+        return "newIR";
+    }
+});
+
+Handlebars.registerHelper('isLegacyInstance', function (version) {
+    var major = version[2];
+    var minor = version[3];
+    if (major == 1){
+        var result = '<span class="btn btn-danger disabled">Disabled IRU</span>';
+    }else{
+        var result = '<span class="btn launch btn-primary">Launch IRU</span>';
+    }
+    return new Handlebars.SafeString(result);
 });
 
 //backbone validation bootstrap wrapper
@@ -482,7 +518,12 @@ _.extend(Backbone.Validation.callbacks, {
             return target.text(error);
         } else {
             if (group.find(".help-block").length === 0) {
-                group.find(".controls").append("<p class=\"help-block error-message\"></p>");
+                //Note don't change the string "Login failed" or it will show the unwanted error
+                if (error === "Login failed"){
+                    console.log("login failed");
+                }else{
+                    group.find(".controls").append("<p class=\"help-block error-message\"></p>");
+                }
             }
             target = group.find(".help-block");
             return target.text(error);
@@ -530,6 +571,43 @@ $(function () {
         generateGuid: function () {
             return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
         },
+        authCheck: function(){
+
+            var that = this;
+
+            var extend_url = iru.plugin_url + "extend/auth/";
+
+            var authXHR = $.ajax({
+                dataType: "json",
+                contentType: "application/json",
+                url: extend_url,
+                type: "POST",
+                data: JSON.stringify(that.toJSON())
+            });
+
+            authXHR.done(function(data){
+                if (data["status"] === "true"){
+                    $("#" + that.get("id")).attr("src","/pluginMedia/IonReporterUploader/img/green.png");
+                    $("#" + that.get("id")).attr("title","Account is active and working");
+                    $('.status-icon').tooltip('destroy');
+                    $(".status-icon").tooltip({"placement": "left"});
+                }else{
+                    $("#" + that.get("id")).attr("src","/pluginMedia/IonReporterUploader/img/red.png");
+                    $("#" + that.get("id")).attr("title","Account is not working");
+                    $('.status-icon').tooltip('destroy');
+                    $(".status-icon").tooltip({"placement": "left"});
+                }
+            });
+
+            authXHR.fail(function(data){
+                $("#" + that.get("id")).attr("src","/pluginMedia/IonReporterUploader/img/red.png");
+                $("#" + that.get("id")).attr("title","Account is not working, error with the IRU plugin");
+                $('.status-icon').tooltip('destroy');
+                $(".status-icon").tooltip({"placement": "left"});
+            });
+
+            return false;
+        },
         validation: {
             name: {
                 required: true,
@@ -548,48 +626,45 @@ $(function () {
             },
             token: {
                 fn: function (value, attr, computedState) {
-                    if (this.get("version") !== "IR40") {
-                        if (!computedState["token"]) {
-                            return "Token is required"
-                        }
-                    }
+                    //more legacy ir 1
+                    //this might be needed for the ir 4 version check too
                 }
             },
             userid: {
                 fn: function (value, attr, computedState) {
-                    if (this.get("version") === "IR40") {
-                        if (!computedState["userid"]) {
-                            return "Username is required"
-                        }
+                    if (!computedState["userid"]) {
+                        return "Username is required"
+                    }
+                    if (value && !computedState["token"]) {
+                        return "Login failed"
                     }
                 }
             },
             password: {
                 fn: function (value, attr, computedState) {
-                    if (this.get("version") === "IR40") {
+                    if (computedState["_details_timeout"]) {
+                        console.log("timeout validation");
+                        return ""
+                    }
+                    if (!value && !computedState["token"]) {
+                        console.log(value);
+                        console.log(attr);
                         console.log(computedState);
-                        if (!value && !computedState["token"]) {
-                            return "Password is required"
-                        }
-                        if (value && !computedState["token"]) {
-                            return "Login failed"
-                        }
-                        if (computedState["_details_failed"]) {
-                            console.log("_detailed_failed");
-                            return "Unable to login"
-                        }
+                        return "Password is required"
+                    }
+                    if (value && !computedState["token"]) {
+                        return "Login failed"
+                    }
+                    if (computedState["_details_failed"]) {
+                        console.log("_detailed_failed");
+                        return "Unable to login"
                     }
                 }
             },
             version: {
                 fn: function (value, attr, computedState) {
-                    //do something special if they have never got the list of versions
-                    if (this.get("version") !== "IR40") {
-                        $(".version-control").addClass("error");
-                        if (!computedState["version"]) {
-                            return "Version is required"
-                        }
-                    }
+                    //TODO: add again for ir 4 version selection
+                    //just keeping for legacy reasons
                 }
             }
         }
@@ -608,6 +683,7 @@ $(function () {
                 //fade in the text after deleting the last item in a collection that once had things.
                 if (iru.fresh) {
                     $("#whine").show();
+                    $(".form-horizontal").hide();
                 } else {
                     $("#whine").fadeIn(1500);
                 }
@@ -651,7 +727,6 @@ $(function () {
         },
         patch: function () {
             this.lengthCheck();
-            console.log("patching");
 
             //Build the sub JSON that we want to use to PATCH with
             var data = {};
@@ -694,6 +769,7 @@ $(function () {
         },
         template: Handlebars.compile($("#row-layout").html()),
         render: function () {
+            this.model.authCheck();
             this.$el.append(this.template(this.model.toJSON()));
             $("#table-body").append(this.el);
         }
@@ -715,23 +791,36 @@ $(function () {
             var launchObj = this.model.toJSON();
             launchObj["launchoption"] = "upload_only";
             launchObj["upload"] = $("input[name='upload']:checked").val();
-            //check to see if this plugin has already ran
-            pluginStatusURL = "/rundb/api/v1/results/" + TB_result + "/pluginresults/";
+
+            //check to see if previous instance of plugin exists and still running
             var alreadyGoing = false;
+            var pluginresult;
             $.ajax({
                 type: 'GET',
-                url: pluginStatusURL,
+                url: "/rundb/api/v1/results/" + TB_result + "/pluginresults/",
                 contentType: "application/json; charset=utf-8",
-                success: function (data) {
-                    $.each(data, function (i, plugin) {
-                        if (plugin.Name === "IonReporterUploader") {
-                            alreadyGoing = true;
-                        }
-                    });
-                },
                 async: false,
                 dataType: "json"
+            }).done(function(data){
+                pluginresult = $.map(data,function(pr) {
+                    if(pr.Name === "IonReporterUploader"){return pr;}
+                });
             });
+
+            if(pluginresult.length>0){
+                var extend_url = iru.plugin_url + "extend/lastrun/";
+                var authXHR = $.ajax({
+                    dataType: "json",
+                    contentType: "application/json",
+                    url: extend_url,
+                    type: "POST",
+                    async: false,
+                    data: JSON.stringify({'pluginresult':pluginresult[0], 'version':TB_plugin.fields.version})
+                }).done(function(data){
+                    console.log('lastrun', data);
+                    alreadyGoing = data.in_progress;
+                });
+            }
 
             if (alreadyGoing) {
                 uploadMsg = "WARNING Are you sure you want to upload this, there is already an upload in progress?";
@@ -761,6 +850,7 @@ $(function () {
         },
         template: Handlebars.compile($("#select-row-layout").html()),
         render: function () {
+            this.model.authCheck();
             this.$el.append(this.template(this.model.toJSON()));
             $("#table-body").append(this.el);
         }
@@ -768,14 +858,14 @@ $(function () {
 
     iru.ConfigModalView = Backbone.View.extend({
         events: {
-            "click .ir1back": "back",
+            "click .ir-back": "back",
             "click .add": "add",
             "click .update": "update",
-            "click .ir1delete": "confirm",
-            "click .confirmTrue": "delete",
+            "click .ir-delete": "confirm",
+            "click .confirmTrue": "deleteConfig",
             "click .confirmFalse": "confirmFalse",
             "keypress": "enterKey",
-            "click .authCheck": "authCheck",
+            "click .versionCheck": "versionCheck",
             "click .details": "details"
         },
         enterKey: function (e) {
@@ -788,39 +878,51 @@ $(function () {
             }
         },
         confirm: function () {
-            $(".ir1delete").hide();
+            $(".ir-delete").hide();
             $(".confirm").show();
         },
         confirmFalse: function () {
-            $(".ir1delete").show();
+            $(".ir-delete").show();
             $(".confirm").hide();
         },
-        delete: function () {
+        deleteConfig: function () {
             $(".confirmTrue").button('loading');
             iru.configs.remove(this.model);
             this.back();
             $(".confirmTrue").button('reset');
         },
         update: function () {
+            $(".update").button('loading');
+
+            //Get version list first
+            if (!this.model.has("_version_cache")) {
+                this.versionCheck();
+                $(".update").button('reset');
+                $(".update").html("<i class='icon-ok'></i> Update");
+                return
+            }
+
+            var orig = this.model.toJSON();
             var data = Backbone.Syphon.serialize(this);
+            delete orig["password"];
             delete data["password"];
+            var extended = _.extend(orig, data);
+
+
             //clone the the prior model data so we can try to do validation with the new info and revert if it fails
             var cloned = this.model.clone();
 
             //use silent to check validation
-            //this.model.set(data, {"silent": true});
-            this.model.set(data);
+            this.model.set(extended);
 
-            if (this.model.get("version") === "IR40") {
-                if ($("#password").val()) {
-                    this.details(true);
-                    console.log("password changed");
-                    this.model.validate();
+            if ($("#password").val()) {
+                this.details(true);
+                console.log("password changed");
+                this.model.validate();
 
-                    if (this.model.has("_details_failed")) {
-                        console.log("there isn't a _details  login failed");
-                    }
-
+                if (this.model.has("_details_failed")) {
+                    console.log("there is a _details  login failed");
+                    $(".update").button('reset');
                 }
             }
 
@@ -829,17 +931,16 @@ $(function () {
             if (!this.model.isValid()) {
                 //the validation failed to replace the data with the cloned one from earlier.
                 console.log("failed validation");
-                //this.model.set(cloned.toJSON(), {"silent": true});
+
                 //details alters the model, so we will have to as well.
+                $(".update").button('reset');
                 this.model.set(cloned.toJSON());
                 return
             }
 
-            $(".update").button('loading');
-
-            this.model.set(data);
+            this.model.set(extended);
             //set the default
-            if (data["default"] === true) {
+            if (extended["default"] === true) {
                 iru.configs.setDefault(this.model);
                 iru.configListView.render();
             }
@@ -847,30 +948,40 @@ $(function () {
             $(".update").button('reset');
         },
         add: function () {
+
+            $(".add").button('loading');
+
             var data = Backbone.Syphon.serialize(this);
-            //delete data["password"];
             this.model.set(data);
 
-            if (this.model.get("version") === "IR40") {
-                this.details(false);
-                if (!this.model.has("token")) {
-                    console.log("there isn't a token");
-                }
-            } else {
-                if (!data["version"]) {
-                    console.log("select a version");
-                    this.authCheck();
-                }
+            this.details(false);
+            if (!this.model.has("token")) {
+                $(".add").button('reset');
+                console.log("there isn't a token");
+            }
+            if (this.model.has("_details_timeout")) {
+                console.log("timeout innner");
+                this.model.validate();
+                $(".add").button('reset');
+                return
             }
 
             this.model.validate();
 
             if (!this.model.isValid()) {
-                //console.log("not valid");
+                console.log("not valid");
+                $(".add").button('reset');
                 return
             }
 
-            $(".add").button('loading');
+            //Get version list first
+            if (!this.model.has("_version_cache")) {
+                this.versionCheck();
+                $(".add").button('reset');
+                $(".add").html("<i class='icon-ok'></i> Add");
+                return
+            }
+
             //set the default
             if (data["default"] === true) {
                 iru.configs.setDefault(this.model);
@@ -885,21 +996,22 @@ $(function () {
         back: function () {
             $("#modal").html("");
             $("#list").show();
-            this.model.unset("_details_failed")
+            this.model.unset("_details_failed");
             iru.configs.lengthCheck();
         },
         template: Handlebars.compile($("#modal_layout").html()),
         versionTemplate: Handlebars.compile($("#version").html()),
         versionStatusTemplate: Handlebars.compile($("#versionStatus").html()),
-        authCheck: function () {
+        versionCheck: function () {
             // Check if name and age are valid
             $(".version-group").html("");
 
             //hold onto this view
             var that = this;
-            var data = Backbone.Syphon.serialize(that);
 
-            //that.model.validate();
+            var orig = that.model.toJSON();
+            var data = Backbone.Syphon.serialize(that);
+            var extended = _.extend(orig, data);
 
             var extend_url = iru.plugin_url + "extend/versions/";
 
@@ -911,7 +1023,7 @@ $(function () {
                 url: extend_url,
                 type: "POST",
                 async: false,
-                data: JSON.stringify(data)
+                data: JSON.stringify(extended)
             });
 
             authXHR.done(function (data) {
@@ -931,9 +1043,12 @@ $(function () {
             var orig = that.model.toJSON();
             var data = Backbone.Syphon.serialize(that);
             var extended = _.extend(orig, data);
+            delete extended["default"];
+
 
             //hold onto this view
             var extend_url = iru.plugin_url + "extend/details/";
+            var versions_url = iru.plugin_url + "extend/versions/";
 
             var authXHR = $.ajax({
                 dataType: "json",
@@ -946,15 +1061,55 @@ $(function () {
 
             authXHR.done(function (data) {
                 if (data["error"] === "none") {
+                    $("#timeout").hide();
                     that.model.set({"details": data["details"]});
                     that.model.set({"token": data["details"]["token"]});
                     that.model.unset("_details_failed");
+                    that.model.unset("_details_timeout");
+                } else if (data["error"] === "Connection" && data["protocol_error"] === false) {
+                    $("#timeout").show();
+                    $("#timeout").html("Unable to connect to server, please check the server address and port");
+                    that.model.unset("_details_failed");
+                    that.model.set({"_details_timeout": true});
+                } else if (data["protocol_error"] === true && data["error"] === "Connection") {
+                    $("#timeout").show();
+                    $("#timeout").html("Incorrect server type");
+                    console.log("bad type");
+                    that.model.unset("_details_failed");
+                    that.model.set({"_details_timeout": true});
+                } else if (data["error"] === "Timeout") {
+                    $("#timeout").show();
+                    $("#timeout").html("Unable to connect to server, please check the server address and port");
+                    console.log("timed out");
+                    that.model.unset("_details_failed");
+                    that.model.set({"_details_timeout": true});
+                } else if (data["error"] === "EULA_NOT_ACCEPPTED_EXCEPTION") {
+                    $("#timeout").html("Unable to login, user is required to accept the End User License Agreement on Ion Reporter");
+                    $("#timeout").show();
+                    console.log("EULA not accepted");
+                    that.model.set({"_details_failed": true});
+                    that.model.unset("_details_timeout");
+                    $("#password + p").html("");
+                    $("#userid + p").html("");
+                } else if (data["error"] !== "") {    
+                    $("#timeout").html("Unable to login, " + data["error"]);
+                    $("#timeout").show();
+                    console.log("generic extend api error");
+                    that.model.set({"_details_failed": true});
+                    that.model.unset("_details_timeout");
+                    $("#password + p").html("");
+                    $("#userid + p").html("");
                 } else {
-                    console.log("Failed to get token");
-                    console.log(that);
+                    //$("#timeout").hide();
+                    //console.log(that);
+                    $("#timeout").html("Unable to login, either username or password is incorrect ");
+                    $("#timeout").show();
                     that.model.unset("token");
                     console.log("Failed to check token");
                     that.model.set({"_details_failed": true});
+                    that.model.unset("_details_timeout");
+                    $("#password + p").html("");
+                    $("#userid + p").html("");
                 }
             });
 
@@ -971,7 +1126,8 @@ $(function () {
 
         },
         legacy: function () {
-            return this.model.get("version") !== "IR40"
+            //legacy code, remove later
+            return false
         },
         versionRender: function () {
             if (this.model.has("_version_cache")) {
@@ -996,8 +1152,9 @@ $(function () {
             renderTemp["legacy"] = this.legacy();
 
             if (isNew) {
-                renderTemp["storeText"] = "Add";
+                renderTemp["storeText"] = "Get Versions";
                 renderTemp["storeClass"] = "add";
+                renderTemp["icon"] = "repeat";
                 renderTemp["confirm"] = false;
                 this.isNew = true;
 
@@ -1006,8 +1163,15 @@ $(function () {
                 }
 
             } else {
-                renderTemp["storeText"] = "Update";
-                renderTemp["storeClass"] = "update";
+                if (this.model.has("_version_cache")) {
+                    renderTemp["storeText"] = "Update";
+                    renderTemp["storeClass"] = "update";
+                    renderTemp["icon"] = "ok";
+                }else{
+                    renderTemp["storeText"] = "Get Versions";
+                    renderTemp["storeClass"] = "update";
+                    renderTemp["icon"] = "repeat";
+                }
                 renderTemp["confirm"] = true;
                 this.isNew = false;
             }
@@ -1043,6 +1207,7 @@ $(function () {
         render: function () {
             $("#table-body").html("");
             this.addAll();
+            $(".status-icon").tooltip({"placement": "left"});
         },
         addOne: function (config) {
             if (!iru.instance) {
@@ -1063,23 +1228,24 @@ $(function () {
         iru.configListView = new iru.ConfigListView({collection: iru.configs});
         iru.configListView.render();
 
-        $("#ir1").click(function (e) {
+        $("#ir4").click(function (e) {
             e.preventDefault();
             var scratchModel = new iru.Config();
-            scratchModel.set();
+            scratchModel.set({"version": "IR40", "port" : "443"});
             var scratchModalView = new iru.ConfigModalView({model: scratchModel});
             //passing in true lets the view know this is a new model
             scratchModalView.render(true);
         });
 
-        $("#ir4").click(function (e) {
+        $("#ir40cloud").click(function (e) {
             e.preventDefault();
             var scratchModel = new iru.Config();
-            scratchModel.set({"version": "IR40"});
+            scratchModel.set({"version": "IR40", "port" : "443" , "server": "40.dataloader.ionreporter.lifetechnologies.com"});
             var scratchModalView = new iru.ConfigModalView({model: scratchModel});
             //passing in true lets the view know this is a new model
             scratchModalView.render(true);
         });
+
     } else {
         if (TB_result_json["fields"]["status"] !== "Completed") {
             //TODO make a better error message

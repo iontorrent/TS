@@ -1,4 +1,4 @@
-
+/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "xtalk_sim.h"
 #include "DiffEqModel.h"
 #include "utils.h"

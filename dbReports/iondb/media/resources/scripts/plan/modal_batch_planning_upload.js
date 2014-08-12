@@ -58,9 +58,17 @@ TB.plan.batchupload.ready = function(plannedUrl) {
 
         hasErrors = false;
         var error = "";
+        
+        if (msg.toLowerCase().indexOf("error") >= 0) {
+            hasErrors = true;
+        	error += "<p>" + msg + "</p>";
+        }
+        
         if (responseText.failed) {
-            error += "<p>" + msg + "</p>";
-
+        	if (!hasErrors) {
+            	error += "<p>" + msg + "</p>";        		
+        	}
+        	
             for (var key in responseText.failed) {
                 hasErrors = true;
                 error += "<ul class='unstyled'>";
@@ -77,15 +85,13 @@ TB.plan.batchupload.ready = function(plannedUrl) {
 
                 error += "</ul>";
             }
-
-            if (error) {
-                $('#modal_batch_planning_upload .modal-body #modal-error-messages').removeClass('hide').html(error);
-            }
             //console.log(error);
         }
 
-        if (!hasErrors) {
-            console.log(msg);
+        if (hasErrors) {
+            $('#modal_batch_planning_upload .modal-body #modal-error-messages').removeClass('hide').html(error);        	
+        }
+        else  {
             $('#modal_batch_planning_upload').modal("hide");
             window.location = plannedUrl;
         }

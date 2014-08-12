@@ -615,6 +615,8 @@ if is_perc_installed; then
                 echo "=============================================================================="
 
             else
+                # TODO: Check fstab for a customized mountpoint.
+                mnt_pt=$(grep $dev_UUID /etc/fstab|awk '{print $2}')
                 log "Already added ($dev_UUID) in the /etc/fstab"   #DEBUG output only
                 echo "Device $dev_part is ready for use at $mnt_pt"
                 echo "=============================================================================="
@@ -641,7 +643,7 @@ if is_perc_installed; then
                 (
                     cd $mnt_pt/STRESS
                     NUM_THREAD=$(grep processor /proc/cpuinfo | wc -l)
-                    LOG=TSaddstorage_$(basename $mnt_pt).log
+                    LOG=TSaddstorage_${service_tag}.log
                     #./stress --verbose --io $NUM_THREAD --hdd $NUM_THREAD --timeout $TIMEOUT | tee >(egrep 'info|dbug' >$LOG) | egrep 'info|writing|closing' &
                     ./stress --verbose --io $NUM_THREAD --hdd $NUM_THREAD --timeout $TIMEOUT | egrep 'info|dbug' >$LOG &
                     echo "stress test has been launched in the background (Duration: $TIMEOUT)"

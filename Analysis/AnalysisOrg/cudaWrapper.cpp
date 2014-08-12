@@ -1,6 +1,10 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+#include <algorithm>
 #include "cudaWrapper.h"
 #include "SignalProcessingFitterQueue.h"
+
+//#define ION_COMPILE_CUDA
+
 
 #ifdef ION_COMPILE_CUDA
 #include "SingleFitStream.h"
@@ -28,17 +32,17 @@ void* BkgFitWorkerGpu(void *arg)
         cudaGetDevice( &dev_id );
         cudaGetDeviceProperties( &cuda_props, dev_id );
 
-        printf( "CUDA %d: Created GPU BkgModel worker...  (%d:%s v%d.%d)\n", dev_id, dev_id, cuda_props.name, cuda_props.major, cuda_props.minor );
+        printf( "CUDA %d: Created GPU BkgModel worker...  (%d:%s v%d.%d)\n", 
+                dev_id, dev_id, cuda_props.name, cuda_props.major, cuda_props.minor );
+ 
+        SimpleFitStreamExecutionOnGpu(static_cast<WorkerInfoQueue*>(info->queue),
+		  	  	  	  	  	  	  static_cast<WorkerInfoQueue*>(info->fallbackQueue) );
 
-/*        if (info->type == GPU_SINGLE_FLOW_FIT)
-          return(SingleFlowFitGPUWorker( info->queue) );
-        else if (info->type == GPU_MULTI_FLOW_FIT)
-          return(MultiFlowFitGPUWorker( info->queue) );*/
-        return SimpleBkgFitWorkerGpu(info->queue);
-        //return BkgFitWorkerGpu( info->queue);
+        return NULL;
     }
         
-    printf( "CUDA: Failed to initialize GPU worker... (%d: %s)\n", info->gpu_index, cudaGetErrorString(err) );
+    printf( "CUDA: Failed to initialize GPU worker... (%d: %s)\n", 
+            info->gpu_index, cudaGetErrorString(err) );
 
     // Note: could fall back to a CPU worker here by setting GPU flag to false,
     //       though I'm not sure if that's always appropriate
@@ -67,41 +71,53 @@ bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, in
     return false;
   }
 
-  if ( use_all_gpus )
-  {
-    // Add all GPUs to the valid device list
-    for ( int dev = 0; dev < num_gpus;  dev++ )
-      valid_devices.push_back(dev);
-  }
-  else
-  {
-    // Only add the highest compute devices to the compute list
-    int version = 0;
-    int major = 0;
-    int minor = 0;
-    cudaDeviceProp dev_props;
-
-    // Iterate over GPUs to find the highest compute device
-    for ( int dev = 0; dev < num_gpus;  dev++ )
+  if (valid_devices.size() == 0) {
+    if ( use_all_gpus )
     {
-      cudaGetDeviceProperties( &dev_props, dev );
-      if ( (dev_props.major*10) + dev_props.minor > version )
-      {
-        version = (dev_props.major*10) + dev_props.minor;
-        major = dev_props.major;
-        minor = dev_props.minor;
-      }
+      // Add all GPUs to the valid device list
+      for ( int dev = 0; dev < num_gpus;  dev++ )
+        valid_devices.push_back(dev);
     }
-
-    for ( int dev = 0; dev < num_gpus;  dev++ )
+    else
     {
-      cudaGetDeviceProperties(&dev_props, dev);
-      if (dev_props.major == major && dev_props.minor == minor) {
-        if (dev_props.totalGlobalMem > gpu_mem) {
-    valid_devices.push_back(dev);
+      // Only add the highest compute devices to the compute list
+      int version = 0;
+      int major = 0;
+      int minor = 0;
+      cudaDeviceProp dev_props;
+
+      // Iterate over GPUs to find the highest compute device
+      for ( int dev = 0; dev < num_gpus;  dev++ )
+      {
+        cudaGetDeviceProperties( &dev_props, dev );
+        if ( (dev_props.major*10) + dev_props.minor > version )
+        {
+          version = (dev_props.major*10) + dev_props.minor;
+          major = dev_props.major;
+          minor = dev_props.minor;
         }
       }
-    } 
+
+      for ( int dev = 0; dev < num_gpus;  dev++ )
+      {
+        cudaGetDeviceProperties(&dev_props, dev);
+        if (dev_props.major == major && dev_props.minor == minor) {
+          if (dev_props.totalGlobalMem > gpu_mem) {
+            valid_devices.push_back(dev);
+          }
+        }
+      } 
+    }
+  }
+  else {
+    while (valid_devices.size() > 0) {
+      if (valid_devices.back() > (num_gpus - 1)) {
+        valid_devices.pop_back();
+      }
+      else {
+        break;
+      }
+    }
   }
 
   // Set the number of GPU workers and tell CUDA about our list of valid devices
@@ -149,44 +165,57 @@ bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, in
 
 void InitConstantMemoryOnGpu(int device, PoissonCDFApproxMemo& poiss_cache) {
 #ifdef ION_COMPILE_CUDA
-  initPoissonTablesLUT(device, (void**) poiss_cache.poissLUT);
-  //initPoissonTables(device, (float**) poiss_cache.poiss_cdf);
+  StreamingKernels::initPoissonTablesLUT(device, (void**) poiss_cache.poissLUT);
 
 #endif
 }
 
-void configureKernelExecution(GpuControlOpts opts)
+void configureKernelExecution(
+    GpuControlOpts opts, 
+    int global_max_flow_key, 
+    int global_max_flow_max
+  )
 {
 #ifdef ION_COMPILE_CUDA
-  // configure MultiFlowFit Execution
-  SimpleMultiFitStream::setBeadsPerBLockMultiF(opts.gpuThreadsPerBlockMultiFit);
-  SimpleMultiFitStream::setL1SettingMultiF(opts.gpuL1ConfigMultiFit);
-  SimpleMultiFitStream::setBeadsPerBLockPartialD(opts.gpuThreadsPerBlockPartialD);
-  SimpleMultiFitStream::setL1SettingPartialD(opts.gpuL1ConfigPartialD);
-  SimpleMultiFitStream::printSettings();
-  // configure SingleFlowFit Execution
-  SimpleSingleFitStream::setBeadsPerBLock(opts.gpuThreadsPerBlockSingleFit);
-  SimpleSingleFitStream::setL1Setting(opts.gpuL1ConfigSingleFit);
-  SimpleSingleFitStream::setFitType(opts.gpuSingleFlowFitType); 
-  //SimpleSingleFitStream::setHybridIter(opts.gpuHybridIterations); 
+	if(opts.gpuMultiFlowFit)
+	{
+		SimpleMultiFitStream::setBeadsPerBlockMultiF(opts.gpuThreadsPerBlockMultiFit);
+		SimpleMultiFitStream::setL1SettingMultiF(opts.gpuL1ConfigMultiFit);
+		SimpleMultiFitStream::setBeadsPerBlockPartialD(opts.gpuThreadsPerBlockPartialD);
+		SimpleMultiFitStream::setL1SettingPartialD(opts.gpuL1ConfigPartialD);
+		SimpleMultiFitStream::requestResources(global_max_flow_key, global_max_flow_max, 1.0f);  //0.80f
+		SimpleMultiFitStream::printSettings();
+	}
 
-  SimpleSingleFitStream::printSettings();
+	// configure SingleFlowFit Execution
+	if(opts.gpuSingleFlowFit)
+	{
+		SimpleSingleFitStream::setBeadsPerBlock(opts.gpuThreadsPerBlockSingleFit);
+		SimpleSingleFitStream::setL1Setting(opts.gpuL1ConfigSingleFit);
+		SimpleSingleFitStream::setFitType(opts.gpuSingleFlowFitType);
+		SimpleSingleFitStream::requestResources(global_max_flow_key, global_max_flow_max, 1.0f); //0.74f
+		//SimpleSingleFitStream::setHybridIter(opts.gpuHybridIterations);
+		SimpleSingleFitStream::printSettings();
+	}
 
-  cudaSimpleStreamManager::setVerbose(opts.gpuVerbose); 
-  cudaSimpleStreamExecutionUnit::setVerbose(opts.gpuVerbose);
+	cudaSimpleStreamManager::setNumMaxStreams(opts.gpuNumStreams);
+	cudaSimpleStreamManager::setVerbose(opts.gpuVerbose);
+	cudaSimpleStreamExecutionUnit::setVerbose(opts.gpuVerbose);
+
   
 #endif 
 }
 
 
-void SimpleFitStreamExecutionOnGpu(WorkerInfoQueue* q) {
+void SimpleFitStreamExecutionOnGpu(WorkerInfoQueue* q, WorkerInfoQueue * errorQueue )
+{
 #ifdef ION_COMPILE_CUDA
   int dev_id;
 
   cudaGetDevice( &dev_id );
   std::cout << "CUDA " << dev_id << ": Creating GPU StreamManager" << std::endl;
 
-  cudaSimpleStreamManager  sM( q, NUM_CUDA_FIT_STREAMS);
+  cudaSimpleStreamManager  sM( q, errorQueue );
 
   sM.DoWork();
 

@@ -1,0 +1,41 @@
+#!/bin/bash
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
+#
+#=============================================================================
+# NFS Volume Test
+#=============================================================================
+function nfs_mount_test()
+{
+    mountname=$(echo $1|sed 's_/$__')   #strip trailing slash
+    # is it a mountpoint
+    if ! /usr/bin/timelimit -q -t 10 -T 1 mountpoint -q $mountname; then
+        echo "$mountname is not a mountpoint">&2
+        return 1
+    fi
+    # is it mounted
+    if ! mount|cut -f3- -d" "|grep -q $mountname 2>/dev/null; then
+        echo "$mountname is not mounted">&2
+        return 1
+    fi
+    # can we detect nfs failure?  thinks its mounted, but we get nothing?
+    # df will fail on inaccessible nfs mount.  needs a timeout watchdog.
+    if ! /usr/bin/timelimit -q -t 10 -T 1 df $mountname >/dev/null; then
+        echo "$mountname is not available, NFS hung?">&2
+        return 1
+    fi
+    # can we read/write it
+    if touch ${mountname}/diddlydoo; then
+        rm -f ${mountname}/diddlydoo
+    else
+        echo "$mountname is not writeable">&2
+        return 1
+    fi
+    #finally
+    return 0
+}
+
+set -u
+mountname=$1
+nfs_mount_test $mountname
+
+exit

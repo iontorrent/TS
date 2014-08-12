@@ -1,0 +1,50 @@
+#!/bin/bash
+set -e
+function needs_root()
+{
+    if [ $(id -u) != 0 ]; then
+        echo "Please run this script with root permissions:"
+        echo
+        echo "sudo $0"
+        echo
+        exit 1
+    fi
+    return 0
+}
+#==============================================================================
+# Check version of installed megaraid_sas
+#==============================================================================
+function check_megaraid_driver()
+{
+    version=$(modinfo megaraid_sas|grep ^version|awk '{print $2}')
+    #echo "$version"
+    if [[ $version < 00.00.05.39 ]]; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+#==============================================================================
+# Main
+#==============================================================================
+needs_root
+
+if ! check_megaraid_driver; then
+
+    packages=( dkms megaraid )
+    for pkgname in ${packages[@]}; do
+        pkgfile=$(find ./ -name $pkgname\* -print)
+        if [[ -e $pkgfile ]]; then
+            echo "dpkg -i $pkgfile"
+            dpkg -i $pkgfile
+        else
+            # should not get here
+            echo "apt-get --assume-yes --force-yes install $pkgname"
+            apt-get --assume-yes --force-yes install $pkgname
+        fi
+    done
+    echo -e "==============================\nmegaraid_sas has been updated\n=============================="
+else
+    echo -e "=============================================\nCorrect version of megaraid_sas is installed\n============================================="
+fi

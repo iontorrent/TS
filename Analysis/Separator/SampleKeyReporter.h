@@ -14,7 +14,7 @@ class SampleKeyReporter : public KeyReporter<T> {
     pthread_mutex_init(&lock, NULL);
     mPrefix = prefix;
     mReport.resize(numWells);
-    fill(mReport.begin(), mReport.end(), false);
+    std::fill(mReport.begin(), mReport.end(), false);
   }
 
   ~SampleKeyReporter() {

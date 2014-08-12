@@ -16,10 +16,15 @@
                     </div>
                 </div>
                 <div class="control-group">
-                    <label for="mark_duplicates" class="control-label"> Mark as Duplicates Reads
-                        <br></label>
+                    <label for="mark_duplicates" class="control-label">Mark as Duplicate Reads</label>
                     <div class="controls">
                         <input name="mark_duplicates" id="mark_duplicates" type="checkbox">
+                    </div>
+                </div>
+                <div class="control-group">
+                    <label for="override_samples" class="control-label">Overwrite Sample Names</label>
+                    <div class="controls">
+                        <input name="override_samples" id="override_samples" type="checkbox">
                     </div>
                 </div>
                 {% if warnings %}
@@ -57,7 +62,7 @@
                                 <td>{{result.resultsName}}</td>
                                 <td>{{result.tmap_version}}</td>
                                 <td>{{result.alignment_version}}</td>
-                                <td>{{result.barcodeId}}</td>
+                                <td>{{result.eas.barcodeKitName}}</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -78,11 +83,45 @@
         <a class="btn" href="#" data-dismiss="modal">Cancel</a>
         <a class="btn btn-primary hide" href="#">Launch</a>
     </div>
-
+	
+	<div class="modal hide" id="modal-new_samples" data-modal-Overflow="true">
+		<div class="modal-header">
+			<button data-dismiss="modal" class="close" type="button">&times;</button>
+			<h3>Overwrite Sample Names</h3>
+		</div>
+		<div class="modal-body" style="max-height:450px;">
+			<div id="modal-error-messages" class="alert alert-error" style="display:none;"></div>
+			{% if barcodes %}
+				<table id="barcoded_samples">
+					<tr>
+						<th style="text-align: left; font-weight: bold;">BC #</th>
+						<th style="text-align: left; font-weight: bold;">Sequence</th>
+						<th style="text-align: center; font-weight: bold;">Sample Name</th>
+					</tr>
+					{% for barcode in barcodes %}
+					<tr>
+						<td class='barcode_id'>{{barcode.id_str}}</td>
+						<td>{{barcode.sequence}}</td>
+						<td><input type="text" class="sample_name" style="width:150px;"></td>
+					</tr>
+					{% endfor %}
+				</table>
+			{% else %}
+				<label class="inline">
+					<input type="text" class="sample_name" id="sample" placeholder="New sample name">
+				</label>
+			{% endif %}
+		</div>
+		<div class="modal-footer">
+			<a data-dismiss="modal" href="#" class="btn">Close</a>
+		</div>
+	</div>
+	
     <script type="text/javascript" src="{% static "resources/uni-form/js/uni-form-validation.jquery.js"%}"></script> <!-- Using updated uni-form JS -->
     <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script>
     <script type="text/javascript" src="{% static "runliveness.min.js"%}"></script>
     <script type="text/javascript">
+	var barcoded = ("{{ barcodes }}".length > 0);
     TB.data.modal_combine_results.ready('{{method}}');
     </script>
 </div>

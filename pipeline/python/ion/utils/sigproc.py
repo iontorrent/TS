@@ -199,8 +199,6 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title, exclusionMask=''):
     printtime("DEBUG: generate composite heatmap")
     if os.path.exists(bfmaskPath):
         try:
-            # Makes Bead_density_contour.png, TODO have to read multiple blocks
-            beadDensityPlot.genHeatmap(bfmaskPath, bfmaskstatspath, SIGPROC_RESULTS, plot_title)
             beadDensityPlot.genHeatmap(bfmaskPath, bfmaskstatspath, "./", plot_title)
         except:
             traceback.print_exc()
@@ -269,7 +267,7 @@ def mergeAvgNukeTraces(dirs, SIGPROC_RESULTS, key, beads):
             sumWells += wells
 
         AvgNukeTraceData = sumAvgNukeTraceData / sumWells
-        AvgNukeTraceTable = numpy.column_stack((labels,AvgNukeTraceData)) 
+        AvgNukeTraceTable = numpy.column_stack((labels,AvgNukeTraceData.astype('|S10'))) 
         numpy.savetxt(output_trace_file, AvgNukeTraceTable, fmt='%s')
 
     except:

@@ -1,7 +1,6 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include <string.h>
 #include <stdio.h>
-#include <getopt.h> // for getopt_long
 #include <stdlib.h> //EXIT_FAILURE
 #include <ctype.h>  //tolower
 #include <libgen.h> //dirname, basename
@@ -9,6 +8,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <cmath>
 
 #include "CommandLineOpts.h"
 #include "IonErr.h"
@@ -16,428 +16,39 @@
 
 using namespace std;
 
-
-void CommandLineOpts::PrintHelp()
+void ModuleControlOpts::PrintHelp()
 {
-  fprintf ( stdout, "\n" );
-  fprintf ( stdout, "Usage:\n" );
-  fprintf ( stdout, "\tAnalysis [options][data_directory]\n" );
-  fprintf ( stdout, "\tOptions:\n" );
-  fprintf ( stdout, "\t\tSee man page for Analysis for complete list of options\n" );
-  fprintf ( stdout, "\n" );
-  exit ( EXIT_FAILURE );
+	printf ("     ModuleControlOpts\n");
+    printf ("     --bfonly                BOOL              do bead finding only [false]\n");
+    printf ("     --from-beadfind         BOOL              do analysis from bead finding result [false]\n");
+    printf ("     --pass-tau              BOOL              pass tau value [true]\n");
+    printf ("\n");
 }
 
-void ModuleControlOpts::DefaultControl()
+void ModuleControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
-
-  BEADFIND_ONLY = false;
-  USE_BKGMODEL = false;
-  passTau = true;
-  reusePriorBeadfind = false; // when true, skip new beadfind
+	BEADFIND_ONLY = RetrieveParameterBool(opts, json_params, '-', "bfonly", false);
+	reusePriorBeadfind = RetrieveParameterBool(opts, json_params, '-', "from-beadfind", false);
+	passTau = RetrieveParameterBool(opts, json_params, '-', "pass-tau", true);
 }
 
-
-void ObsoleteOpts::Defaults()
+void ObsoleteOpts::PrintHelp()
 {
-  NUC_TRACE_CORRECT = 0;
-  USE_PINNED = false;
-
-  neighborSubtract = 0;
+	printf ("     ObsoleteOpts\n");
+    printf ("     --nuc-correct           INT               do nuc trace correction [0]\n");
+    printf ("     --forcenn               INT               use neighbor subtraction [0]\n");
+    printf ("     --forceNN               INT               same as forcenn [0]\n");
+    printf ("     --use-pinned            BOOL              use pinned [false]\n");
+    printf ("\n");
 }
 
-
-CommandLineOpts::CommandLineOpts ( int argc, char *argv[] )
+void ObsoleteOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
-  // backup command line arguments
-  numArgs = argc;
-  argvCopy = ( char ** ) malloc ( sizeof ( char * ) * argc );
-  for ( int i=0;i<argc;i++ )
-    argvCopy[i] = strdup ( argv[i] );
-
-  //Constructor
-  if ( argc == 1 )
-  {
-    PrintHelp();
-  }
-  // helper pointer for loading options
-  sPtr = NULL;
-  /*---   options variables       ---*/
-
-  // controls for individual modules - how we are to analyze
-
-  bkg_control.DefaultBkgModelControl();
-  bfd_control.DefaultBeadfindControl();
-
-  img_control.DefaultImageOpts();
-
-  // overall program flow control what to do?
-  mod_control.DefaultControl();
-  // contexts for program operation - what the state of the world is
-  sys_context.DefaultSystemContext();
-  loc_context.DefaultSpatialContext();
-  flow_context.DefaultFlowFormula();
-  key_context.DefaultKeys();
-
-  // obsolete
-  no_control.Defaults();
-
-  /*---   end options variables   ---*/
-
-
-  /*---   Parse command line options  ---*/
-  GetOpts ( argc, argv );
-
+	NUC_TRACE_CORRECT = RetrieveParameterInt(opts, json_params, '-', "nuc-correct", 0);
+	USE_PINNED = RetrieveParameterBool(opts, json_params, '-', "use-pinned", false);
+	neighborSubtract = RetrieveParameterInt(opts, json_params, '-', "forcenn", 0);
 }
 
-CommandLineOpts::~CommandLineOpts()
-{
-  //Destructor
-
-}
-
-/*
- *  Use getopts to parse command line
- */
-void CommandLineOpts::GetOpts ( int argc, char *argv[] )
-{
-  //DEBUG
-  //fprintf (stdout, "Number of arguments: %d\n", argc);
-  //for (int i=0;i<argc;i++)
-  //    fprintf (stdout, "%s\n", argv[i]);
-  //
-
-
-  //@TODO this structure needs sorting or replacing badly!!!
-  //@TODO: Note the bad, bad use of "optarg" a global variable to return values
-  static struct option long_options[] =
-  {
-
-    //-------what do I need to know if I'm seeking help
-    {"help",                    no_argument,    NULL,               'h'},
-    {"version",                 no_argument,        NULL,               'v'},
-
-    //---- where is everything?
-    {"no-subdir",        no_argument,       &sys_context.NO_SUBDIR, 1},
-    {"output-dir",       required_argument, NULL, 0},
-    {"local-wells-file", required_argument, NULL, 0},
-    {"well-stat-file",   required_argument, NULL, 0},
-    {"stack-dump-file",  required_argument, NULL, 0},
-    {"wells-format",     required_argument, NULL, 0},
-    {"explog-path",      required_argument, NULL, 0},
-
-//-------module execution control
-    {"analysis-mode",     required_argument,  NULL,       0},
-    {"from-wells",              required_argument,  NULL,               0}, // kept only to signal that it no longer works
-    {"bfonly",          no_argument,    &mod_control.BEADFIND_ONLY,   1},
-    {"from-beadfind",   no_argument,    NULL, 0},
-    {"wellsfileonly", no_argument, NULL, 0},
-
-
-    //---------key options
-    {"libraryKey",        required_argument,  NULL,       0},
-    {"librarykey",        required_argument,  NULL,       0},
-    {"tfKey",         required_argument,  NULL,       0},
-    {"tfkey",         required_argument,  NULL,       0},
-
-    //----------flow order control
-    {"flow-order",        required_argument,  NULL,           0},
-    {"flowlimit",       required_argument,  NULL,       0},
-    {"flowrange",      required_argument,  NULL,       0},
-    {"start-flow-plus-interval",      required_argument,  NULL,       0},
-
-//------------Beadfind options
-    {"beadfindFile",            required_argument,  NULL,               'b'},
-    {"beadfindfile",            required_argument,  NULL,               'b'},
-    {"bfold",         no_argument,    &bfd_control.BF_ADVANCED,   0},
-    {"noduds",          no_argument,    &bfd_control.noduds,   1},
-    {"beadmask-categorized",          no_argument,    &bfd_control.maskFileCategorized,   1},
-    {"beadfind-type",           required_argument,  NULL,               0},
-    {"beadfind-basis",          required_argument,  NULL,               0},
-    {"beadfind-dat",            required_argument,  NULL,               0},
-    {"beadfind-bgdat",          required_argument,  NULL,               0},
-    {"beadfind-sdasbf",          required_argument,  NULL,               0},
-    {"beadfind-bfmult",          required_argument,  NULL,               0},
-    {"beadfind-minlive",        required_argument,  NULL,               0},
-    {"beadfind-minlivesnr",     required_argument,  NULL,               0},
-    {"beadfind-min-lib-snr",    required_argument,  NULL,               0},
-    {"beadfind-min-tf-snr",     required_argument,  NULL,               0},
-    {"beadfind-lib-filt",    required_argument,  NULL,               0},
-    {"beadfind-tf-filt",     required_argument,  NULL,               0},
-    {"beadfind-lib-min-peak",    required_argument,  NULL,               0},
-    {"beadfind-tf-min-peak",     required_argument,  NULL,               0},
-    {"beadfind-skip-sd-recover",required_argument,  NULL,               0},
-    {"beadfind-thumbnail",      required_argument,  NULL,               0},
-    {"beadfind-lagone-filt",    required_argument,  NULL,               0},
-    {"beadfind-diagnostics",    required_argument,  NULL,               0},
-    {"beadfind-num-threads",    required_argument,  NULL,               0},
-    {"beadfind-sep-ref",    required_argument,  NULL,               0},
-    {"beadfind-gain-correction",    required_argument,  NULL,               0},
-    {"beadfind-blob-filter",    required_argument,  NULL,               0},
-    {"beadfind-zero-flows",    required_argument,  NULL,               0},
-    {"beadfind-predict-start",    required_argument,  NULL,               0},
-    {"beadfind-predict-end",    required_argument,  NULL,               0},
-    {"beadfind-sig-ref-type",    required_argument,  NULL,               0},
-    {"bead-washout",            no_argument,    NULL,       0},
-    {"use-beadmask",      required_argument,  NULL,       0},
-    {"bkg-use-duds",  required_argument, NULL, 0},
-    {"cfiedr-regions-size", required_argument, NULL, 0},
-    {"block-size", required_argument, NULL, 0},
-
-
-//---------------signal processing options
-    {"readaheadDat",            required_argument,  NULL,             0},
-    {"save-wells-freq",         required_argument,  NULL,             0},
-    {"wells-compression",       required_argument,  NULL,             0},
-    {"gpuWorkLoad",             required_argument,  NULL,             0},
-    {"numcputhreads",           required_argument,  NULL,       0},
-    {"gpu-amp-guess",           required_argument,  NULL,       0},
-    {"gpu-single-flow-fit",     required_argument,  NULL,       0},
-    {"gpu-single-flow-fit-blocksize",     required_argument,  NULL,       0},
-    {"gpu-single-flow-fit-l1config",     required_argument,  NULL,       0},
-    {"gpu-multi-flow-fit",      required_argument,  NULL,       0},
-    {"gpu-multi-flow-fit-blocksize",      required_argument,  NULL,       0},
-    {"gpu-multi-flow-fit-l1config",      required_argument,  NULL,       0},
-    {"gpu-single-flow-fit-type",      required_argument,  NULL,       0},
-    {"gpu-hybrid-fit-iter",      required_argument,  NULL,       0},
-    {"gpu-partial-deriv-blocksize",      required_argument,  NULL,       0},
-    {"gpu-partial-deriv-l1config",      required_argument,  NULL,       0},
-    {"gpu-fitting-only",        no_argument,  &bkg_control.gpuControl.doGpuOnlyFitting,  1},
-    {"gpu-verbose",   no_argument,    NULL, 0},
-    {"bkg-record",     no_argument,    &bkg_control.recordBkgModelData,  1},
-    {"bkg-replay",     no_argument,    &bkg_control.replayBkgModelData,   1},
-    {"restart-from",        required_argument,    NULL,   0},
-    {"restart-next",        required_argument,    NULL,   0},
-    {"no-restart-check",    no_argument,    NULL,   0},
-    {"trim-ref-trace",    required_argument,    NULL,   0},
-    {"region-list",    required_argument,    NULL,   0},
-    {"bkg-debug-param",     required_argument,    NULL,   0},
-    {"bkg-debug-region",     required_argument,    NULL,   0},
-    {"bkg-debug-trace-sse",     required_argument,    NULL,   0},
-    {"bkg-debug-trace-rcflow",     required_argument,    NULL,   0},
-    {"bkg-debug-trace-xyflow",     required_argument,    NULL,   0},
-    {"debug-all-beads",         no_argument,    &bkg_control.debug_bead_only,              0}, // turn off what is turned on
-    {"region-vfrc-debug",         no_argument,    &bkg_control.region_vfrc_debug,              1}, 
-    {"n-unfiltered-lib",        required_argument,        &bkg_control.unfiltered_library_random_sample,    1},
-    {"bkg-dbg-trace",           required_argument,  NULL,               0},
-
-    {"bkg-effort-level",        required_argument,  NULL,               0},
-    {"xtalk-correction",required_argument,     NULL,  0},
-    {"dark-matter-correction",required_argument,     NULL,  0},
-    {"clonal-filter-bkgmodel",required_argument,     NULL,  0},
-    {"bkg-use-duds",required_argument,     NULL,  0},
-    {"bkg-use-proton-well-correction",required_argument,     NULL,  0},
-    {"bkg-empty-well-normalization",required_argument,     NULL,  0},
-    {"bkg-single-flow-retry-limit", required_argument,  NULL,       0},
-    {"bkg-per-flow-time-tracking", required_argument,  NULL,       0},
-    {"bkg-exp-tail-fit",required_argument, NULL, 0},
-    {"bkg-pca-dark-matter",required_argument, NULL, 0},
-    {"regional-sampling", required_argument,  NULL,       0},
-    {"bkg-prefilter-beads", required_argument, NULL, 0},
-    {"bkg-empty-well-normalization",required_argument,     NULL,  0},
-    {"bkg-bfmask-update",required_argument,     NULL,  0},
-    {"bkg-damp-kmult",required_argument,     NULL,  0},
-    {"bkg-ssq-filter-region",required_argument,     NULL,  0},
-    {"bkg-kmult-adj-low-hi",required_argument,     NULL,  0},
-    {"bkg-emphasis",            required_argument,  NULL,               0},
-    {"dntp-uM",                 required_argument,  NULL,               0},
-    {"bkg-ampl-lower-limit",    required_argument,  NULL,               0},
-    {"gopt",                    required_argument,  NULL,               0},
-    {"xtalk",                   required_argument,  NULL,               0},
-    {"krate",                   required_argument,  NULL,               0},
-    {"kmax",                    required_argument,  NULL,               0},
-    {"diffusion-rate",          required_argument,  NULL,               0},
-    {"limit-rdr-fit",           no_argument,        &bkg_control.no_rdr_fit_first_20_flows,     1},
-    {"fitting-taue",            required_argument,        NULL,                0},
-    {"var-kmult-only",          no_argument,        &bkg_control.var_kmult_only, 1},
-    {"generic-test-flag",          no_argument,        &bkg_control.generic_test_flag, 1},
-    {"bkg-single-alternate",          no_argument,        &bkg_control.fit_alternate, 1},
-    {"bkg-single-gauss-newton", required_argument,  NULL,               0},
-    {"bkg-single-lev-mar",          no_argument,        &bkg_control.fit_gauss_newton, 1},
-    {"bkg-dont-emphasize-by-compression",          no_argument,        &bkg_control.emphasize_by_compression,0},
-    {"time-half-speed",     no_argument,    NULL,   0},
-    {"pass-tau",            required_argument,  NULL,             0},
-    {"single-flow-projection-search",required_argument,     NULL,  0},
-    {"nokey",         required_argument,  NULL,       0}, // experimental
-    {"vectorize", required_argument,  NULL,       0},
-    {"bkg-debug-files", no_argument,  &bkg_control.bkg_debug_files,      1},
-    {"mixed-first-flow", required_argument, NULL, 0},
-    {"mixed-last-flow", required_argument, NULL, 0},
-    {"max-iterations", required_argument, NULL, 0},
-
-
-//-----------------spatial control
-    {"analysis-region",         required_argument,  NULL,       0},
-    {"cropped",                 required_argument,  NULL,       0},
-    {"cropped-region-origin",   required_argument,  NULL,               0},
-    {"region-size",             required_argument,  NULL,             0},
-
-
-//------------------------image control
-    {"do-sdat",                 required_argument,  NULL,               0},
-    {"output-pinned-wells",     no_argument,    &img_control.outputPinnedWells,   0},
-    {"img-gain-correct",required_argument,     NULL,  0},
-    {"col-flicker-correct",required_argument,     NULL,  0},
-    {"col-flicker-correct-verbose",required_argument,     NULL,  0},
-    {"col-flicker-correct-aggressive",required_argument, NULL, 0},
-    {"nnMask",          required_argument,  NULL,       0},
-    {"nnmask",          required_argument,  NULL,       0},
-    {"nnMaskWH",        required_argument,  NULL,       0},
-    {"nnmaskwh",        required_argument,  NULL,       0},
-    {"smoothing-file",       required_argument,  NULL,             0}, // (APB)
-    {"smoothing",       optional_argument,  NULL,             0}, // (APB)
-    {"ignore-checksum-errors",      no_argument,  NULL,           0},
-    {"ignore-checksum-errors-1frame",   no_argument,  NULL,           0},
-    {"nn-subtract-empties",     no_argument,    NULL,   0},
-    {"frames",                  required_argument,  NULL,               'f'},
-    {"flowtimeoffset",          required_argument,  NULL,               0},
-    {"hilowfilter",             required_argument,  NULL,       0},
-    {"total-timeout",           required_argument,  NULL,       0},
-    {"threaded-file-access",    no_argument,  NULL,       0},
-
-
-
-    //----obsolete options
-    {"cycles",                  required_argument,  NULL,               'c'}, //Deprecated; use flowlimit
-    {"nuc-correct",             no_argument,        &no_control.NUC_TRACE_CORRECT, 1},
-    {"forceNN",         no_argument,    &no_control.neighborSubtract,  1},
-    {"forcenn",         no_argument,    &no_control.neighborSubtract,  1},
-    {"use-pinned",        no_argument,    &no_control.USE_PINNED,    1},
-    // soak up annoying extra arguments from blackbbird obsolete parameters
-    {"clonal-filter-solve", required_argument, NULL, 0},
-    {"cfiedr-regions-size", required_argument, NULL, 0},
-    {"block-size", required_argument, NULL,0},
-    {"ppf-filter", required_argument, NULL, 0},
-    {"cr-filter", required_argument, NULL, 0},
-    
-
-    //-----table termination
-    {NULL,                      0,                  NULL,               0}
-  };
-
-  int c;
-  int option_index = 0;
-
-
-  while ( ( c = getopt_long ( argc, argv, "b:c:f:hi:k:m:p:R:v", long_options, &option_index ) ) != -1 )
-  {
-    switch ( c )
-    {
-      case ( 0 ) :
-        {
-          char *lOption = NULL;
-	  lOption = strdup ( long_options[option_index].name );
-          ToLower ( lOption );
-
-          if ( long_options[option_index].flag != 0 ) {
-	    free (lOption);
-            break;
-	  }
-
-          // module control:  what are we doing overall?
-          SetModuleControlOption ( lOption, long_options[option_index].name );
-
-          // Image control options ---------------------------------------------------
-
-          SetAnyLongImageProcessingOption ( lOption, long_options[option_index].name );
-
-          // flow entry and manipulation --------------------------------------------
-
-          SetFlowContextOption ( lOption, long_options[option_index].name );
-
-          // keys - only two types for now --------------------------------------------
-          SetLongKeyOption ( lOption, long_options[option_index].name );
-          // end keys ------------------------------------------------------------------
-
-          // Spatial reasoning about the chip, cropped area, etc -----------------------------------
-          SetAnyLongSpatialContextOption ( lOption, long_options[option_index].name );
-
-          // System context: file manipulation, directories and names -----------------------------------
-
-          SetSystemContextOption ( lOption, long_options[option_index].name );
-
-          // All beadfind options in this section, please ---------------------------------
-          SetAnyLongBeadFindOption ( lOption, long_options[option_index].name );
-
-          // All bkg_control options in this section, please ------------------------
-          SetAnyLongSignalProcessingOption ( lOption, long_options[option_index].name );
-
-          //mixed
-          //mixed::mixed_first_flow = 52;
-          //mixed::mixed_last_flow = 112;
-          if ( strcmp (lOption, "mixed-first-flow" ) == 0 )
-          {
-            mixed::mixed_first_flow = atoi(optarg);
-          }
-          if ( strcmp (lOption, "mixed-last-flow" ) == 0 )
-          {
-            mixed::mixed_last_flow = atoi(optarg);
-          }
-          if ( strcmp (lOption, "max-iterations" ) == 0 )
-          {
-            mixed::max_iterations = atoi(optarg);
-          }
-
-          free ( lOption );
-
-          break;
-        }
-        /*  End processing long options */
-
-      case 'b':   //beadfind file name
-        /*
-        **  When this is set, we override the find-washouts default by
-        **  setting the preRun filename to NULL.
-        */
-        snprintf ( bfd_control.preRunbfFileBase, 256, "%s", optarg );
-        //sprintf (preRunbfFileBase, "");
-        bfd_control.bfFileBase[0] = '\0';
-        bfd_control.SINGLEBF = true;
-        break;
-      case 'c':
-        fprintf ( stderr,"\n* * * * * * * * * * * * * * * * * * * * * * * * * *\n" );
-        fprintf ( stderr, "The --cycles, -c keyword has been deprecated.\n"
-                  "Use the --flowlimit keyword instead.\n" );
-        fprintf ( stderr,"* * * * * * * * * * * * * * * * * * * * * * * * * *\n\n" );
-        exit ( EXIT_FAILURE );
-        break;
-      case 'f':   // maximum frames
-        long tmp_frame;
-        if ( validIn ( optarg, &tmp_frame ) )
-        {
-          fprintf ( stderr, "Option Error: %c %s\n", c,optarg );
-          exit ( EXIT_FAILURE );
-        }
-        else
-        {
-          img_control.maxFrames = ( int ) tmp_frame;
-        }
-        break;
-      case 'h': // command help
-        PrintHelp();
-        break;
-      case 'k':
-        printf("Obsolete option: -k\n");
-        break;
-
-      case 'v':   //version
-        fprintf ( stdout, "%s", IonVersion::GetFullVersion ( "Analysis" ).c_str() );
-        exit ( EXIT_SUCCESS );
-        break;
-      case '?':
-        /* getopt_long already printed an error message.*/
-        exit ( EXIT_FAILURE );
-        break;
-      default:
-        fprintf ( stderr, "What have we here? (%c)\n", c );
-        exit ( EXIT_FAILURE );
-    }
-  }
-
-  PickUpSourceDirectory ( argc,argv );
-}
-
-// set up processing variables after cmd-line options are processed
 void CommandLineOpts::SetUpProcessing()
 {
   SetSysContextLocations();
@@ -445,31 +56,11 @@ void CommandLineOpts::SetUpProcessing()
 
   SetGlobalChipID ( sys_context.explog_path );
 
-  loc_context.FindDimensionsByType ( sys_context.explog_path );
-  img_control.SetWashFlow ( sys_context.explog_path );
+  loc_context.FindDimensionsByType ( (char*)(sys_context.explog_path.c_str()) );
+  img_control.SetWashFlow ( (char*)(sys_context.explog_path.c_str()) );
 
   // now that we know chip type, can set if needed
   SetProtonDefault();
-
-  printf ( "Use dud and empty wells as reference: %s\n",bkg_control.use_dud_and_empty_wells_as_reference ? "yes" : "no" );
-  printf ( "Proton 1.wells correction enabled   : %s\n",bkg_control.proton_dot_wells_post_correction ? "yes" : "no" );
-  printf ( "Empty well normalization enabled    : %s\n",bkg_control.empty_well_normalization ? "yes" : "no" );
-  printf ( "Per flow t-mid-nuc tracking enabled : %s\n",bkg_control.per_flow_t_mid_nuc_tracking ? "yes" : "no" );
-  switch (bkg_control.regional_sampling_type) {
-  case REGIONAL_SAMPLING_SYSTEMATIC :
-    printf ( "Regional Sampling : %s\n",bkg_control.regional_sampling ? "systematic" : "no" );
-    break;
-  case REGIONAL_SAMPLING_CLONAL_KEY_NORMALIZED :
-    printf ( "Regional Sampling : %s\n",bkg_control.regional_sampling ? "clonal" : "no" );
-    break;
-  default :
-    printf ( "Regional Sampling : %s\n",bkg_control.regional_sampling ? "unknown type" : "no" );
-  }
-
-  printf ( "Image gain correction enabled       : %s\n",img_control.gain_correct_images ? "yes" : "no" );
-  printf ( "Col flicker correction enabled      : %s\n",img_control.col_flicker_correct ? "yes" : "no" );
-  printf ( "timeout                             : %d\n",img_control.total_timeout);
-  printf ( "Threaded file access for signal processsing : %s\n",img_control.threaded_file_access ? "yes" : "no" );
 }
 
 void CommandLineOpts::SetSysContextLocations ()
@@ -485,31 +76,22 @@ void CommandLineOpts::SetSysContextLocations ()
   CreateResultsFolder (sys_context.GetResultsFolder());
 }
 
-void CommandLineOpts::SetFlowContext ( char *explog_path )
+
+
+void CommandLineOpts::SetFlowContext ( string explog_path )
 {
-  flow_context.DetectFlowFormula ( explog_path ); // Set up flow order expansion
+  flow_context.DetectFlowFormula ( (char*)(explog_path.c_str()) ); // Set up flow order expansion
 }
 
 
 // explicitly set global variable
 // if we're going to do this
 // do this >once< only at the beginning
-void CommandLineOpts::SetGlobalChipID ( char *explog_path )
+void CommandLineOpts::SetGlobalChipID ( string explog_path )
 {
-  char *chipType = GetChipId ( explog_path );
+  char *chipType = GetChipId ( (char*)(explog_path.c_str()) );
   ChipIdDecoder::SetGlobalChipId ( chipType ); // @TODO: bad coding style, function side effect setting global variable
   if (chipType) free (chipType);
-}
-
-void CommandLineOpts::PickUpSourceDirectory ( int argc, char *argv[] )
-{
-  // Pick up any non-option arguments (ie, source directory)
-  //@TODO: note bad use of global variable optind
-  for ( int c_index = optind; c_index < argc; c_index++ )
-  {
-    sys_context.dat_source_directory = argv[c_index];
-    break; //cause we only expect one non-option argument
-  }
 }
 
 void CommandLineOpts::SetProtonDefault()
@@ -517,1599 +99,383 @@ void CommandLineOpts::SetProtonDefault()
   // option objects, but alas the chip Id is unknown until AFTER the command line is parsed
 
   //@TODO: global variable abuse here
-  if ( ChipIdDecoder::GetGlobalChipId() == ChipId900 )
+
+  // PZERO
+  if ( ChipIdDecoder::GetGlobalChipId() == ChipId1_0_19 )
   {
-    if ( !radio_buttons.use_dud_reference_set )
-      bkg_control.use_dud_and_empty_wells_as_reference = false;
+	  img_control.ImageControlForProton(false);
+  }
 
-    if ( !radio_buttons.empty_well_normalization_set )
-      bkg_control.empty_well_normalization = false;
-
-    if ( !radio_buttons.gain_correct_images_set )
-      img_control.gain_correct_images = true;
-
-    if ( !radio_buttons.col_flicker_correct_set )
-      img_control.col_flicker_correct = true;
-
-    if ( !radio_buttons.per_flow_t_mid_nuc_tracking_set )
-      bkg_control.per_flow_t_mid_nuc_tracking = true;
-
-    if ( !radio_buttons.regional_sampling_set )
-      bkg_control.regional_sampling = true;
-
-    if ( !radio_buttons.col_flicker_correct_aggressive_set )
-      img_control.aggressive_cnc = true;
-    fprintf ( stdout, "Option %s: %s\n", "--col-flicker-correct-aggressive",(img_control.aggressive_cnc)?"on":"off");
-
-    if ( !radio_buttons.bkg_exp_tail_fit_set ) {
-      bkg_control.exp_tail_fit = true;
-      bkg_control.choose_time = 2;
-    }
-    fprintf ( stdout, "Option %s: %s\n", "--bkg-exp-tail-fit",(bkg_control.exp_tail_fit)?"on":"off");
-
-    if ( !radio_buttons.bkg_pca_dark_matter_set )
-      bkg_control.pca_dark_matter = true;
-    fprintf ( stdout, "Option %s: %s\n", "--bkg-pca-dark-matter",(bkg_control.pca_dark_matter)?"on":"off");
-
-    if ( !radio_buttons.bkg_single_gauss_newton_set )
-      bkg_control.fit_gauss_newton = true;
-    fprintf ( stdout, "Option %s: %s\n", "--bkg-fit_gauss_newton",(bkg_control.fit_gauss_newton)?"on":"off");
-
-    if ( !radio_buttons.single_flow_fit_max_retry_set )
-      bkg_control.single_flow_fit_max_retry = bkg_control.fit_gauss_newton ? 0 : 4;
-
-    if ( !radio_buttons.use_proton_correction_set )
-    {
-      bkg_control.proton_dot_wells_post_correction = true;
-      bkg_control.enableXtalkCorrection = false;
-    }
-    if (!radio_buttons.clonal_solve_bkg_set)
-    {
-      bkg_control.enableBkgModelClonalFilter = false;
-    }
-
-    // maybe we should actually do this via the gopt file?
-    if ( !radio_buttons.amplitude_lower_limit_set )
-    {
-      bkg_control.AmplLowerLimit = -0.5;
-    }
+  // PONE
+  if ( ChipIdDecoder::GetGlobalChipId() == ChipId1_1_17 )
+  {
+	  img_control.ImageControlForProton(true);
     if (bfd_control.useSignalReferenceSet == 0) {
-      bfd_control.useSignalReference = 2;
+      bfd_control.useSignalReference = 4;
     }
   }
 
+  //PTWO TYPE CHIPS
+  if (ChipIdDecoder::GetGlobalChipId()== ChipId1_2_18){
+	  img_control.ImageControlForProton(true);
+  }
 
-  if ( ChipIdDecoder::GetGlobalChipId() == ChipId910 )
+  // HERE IS PTWO IF YOU MUST
+  if (ChipIdDecoder::GetGlobalChipId()== ChipId2_2_1){
+	  img_control.ImageControlForProton(true);
+  }
+}
+
+void CommandLineOpts::PrintHelp()
+{
+	mod_control.PrintHelp();
+	no_control.PrintHelp();
+	flow_context.PrintHelp();
+	key_context.PrintHelp();
+	loc_context.PrintHelp();
+	sys_context.PrintHelp();
+	img_control.PrintHelp();
+	bkg_control.PrintHelp();
+	bfd_control.PrintHelp();
+}
+
+void CommandLineOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
+{
+	bkg_control.DefaultBkgModelControl();
+	bkg_control.SetOpts(opts, json_params);
+	bfd_control.DefaultBeadfindControl();
+	bfd_control.SetOpts(opts, json_params);
+	img_control.DefaultImageOpts();
+	img_control.SetOpts(opts, json_params);
+	mod_control.SetOpts(opts, json_params);
+	loc_context.DefaultSpatialContext();
+	loc_context.SetOpts(opts, json_params);
+	flow_context.DefaultFlowFormula();
+	flow_context.SetOpts(opts, json_params);
+	key_context.DefaultKeys();
+	key_context.SetOpts(opts, json_params);
+	no_control.SetOpts(opts, json_params);
+	sys_context.DefaultSystemContext();
+	sys_context.SetOpts(opts, json_params);
+
+  // We can only do save and restore on an even flow block boundary.
+  // Now that all the parameters have been set, we can check their sanity.
+
+  // If we're goign to write out stuff just before a flow, the flow must exist.
+  if ( ! bkg_control.signal_chunks.restart_next.empty() && 
+       bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( flow_context.endingFlow )->begin() !=
+                                                    flow_context.endingFlow               )
   {
-    if ( !radio_buttons.use_dud_reference_set )
-      bkg_control.use_dud_and_empty_wells_as_reference = false;
+    fprintf( stderr, "Option Error: You're using --restart-next to write out a save/restore file\n"
+                     "at a flow (%d) which isn't at the start of a flow block. Perhaps %d or %d\n"
+                     "would be better choices.\n",
+       flow_context.endingFlow,
+       bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( flow_context.endingFlow )->begin(),
+       bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( flow_context.endingFlow )->end() );
 
-    if ( !radio_buttons.empty_well_normalization_set )
-      bkg_control.empty_well_normalization = false;
-
-    if ( !radio_buttons.single_flow_fit_max_retry_set )
-      bkg_control.single_flow_fit_max_retry = 4;
-
-    if ( !radio_buttons.gain_correct_images_set )
-      img_control.gain_correct_images = true;
-
-    if ( !radio_buttons.col_flicker_correct_set )
-      img_control.col_flicker_correct = true;
-
-    if ( !radio_buttons.per_flow_t_mid_nuc_tracking_set )
-      bkg_control.per_flow_t_mid_nuc_tracking = true;
-
-    if ( !radio_buttons.regional_sampling_set )
-      bkg_control.regional_sampling = true;
-
-    if ( !radio_buttons.col_flicker_correct_aggressive_set )
-      img_control.aggressive_cnc = false;
-    fprintf ( stdout, "Option %s: %s\n", "--col-flicker-correct-aggressive",(img_control.aggressive_cnc)?"on":"off");
+    exit( EXIT_FAILURE );
+  }
 
 
-    //if ( !radio_buttons.use_proton_correction_set )
-    //{
-     // bkg_control.proton_dot_wells_post_correction = true;
-    //  bkg_control.enableXtalkCorrection = false;
-    //}
-    if (!radio_buttons.clonal_solve_bkg_set)
-    {
-      bkg_control.enableBkgModelClonalFilter = false;
-    }
+  // If we're goign to read stuff in at a flow, the flow must exist.
+  if ( ! bkg_control.signal_chunks.restart_from.empty() && 
+       bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( flow_context.startingFlow )->begin() !=
+                                                    flow_context.startingFlow               )
+  {
+    fprintf( stderr, "Option Error: You're using --restart-from to read in a save/restore file\n"
+                     "at a flow (%d) which isn't at the start of a flow block. Perhaps %d or %d\n"
+                     "would be better choices.\n",
+       flow_context.startingFlow,
+       bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( flow_context.startingFlow )->begin(),
+       bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( flow_context.startingFlow )->end() );
 
-    // maybe we should actually do this via the gopt file?
-    if ( !radio_buttons.amplitude_lower_limit_set )
-    {
-      bkg_control.AmplLowerLimit = -0.5;
-    }
-    if (bfd_control.useSignalReferenceSet == 0) {
-      bfd_control.useSignalReference = 2;
-    }
+    exit( EXIT_FAILURE );
   }
 
 }
 
-std::string CommandLineOpts::GetCmdLine()
+void CommandLineOpts::PostProcessArgs(OptArgs &opts)
 {
-  std::string cmdLine = "";
-  for ( int i = 0; i < numArgs; i++ )
-  {
-    cmdLine += argvCopy[i];
-    cmdLine += " ";
-  }
-  return cmdLine;
-}
+	sys_context.FindExpLogPath();
+	SetGlobalChipID ( sys_context.explog_path );
 
-void CommandLineOpts::SetModuleControlOption ( char *lOption, const char *original_name )
-{
-
-  if ( strcmp ( lOption, "analysis-mode" ) == 0 )
-  {
-    ToLower ( optarg );
-    if ( strcmp ( optarg,"bfonly" ) == 0 )
-    {
-      mod_control.BEADFIND_ONLY = 1;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s=%s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "from-beadfind" ) == 0 )
-  {
-    mod_control.reusePriorBeadfind = true;
-  }
-
-  if ( strcmp ( lOption, "from-wells" ) == 0 )
-  {
-    fprintf ( stderr, "\n" );
-    fprintf ( stderr, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n" );
-    fprintf ( stderr, "Analysis executable no longer supports analysis from wells. Use BaseCaller executable instead.\n" );
-    fprintf ( stderr, "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n" );
-    fprintf ( stderr, "\n" );
-    exit ( EXIT_FAILURE );
-  }
-  if ( strcmp ( lOption, "wellsfileonly" ) == 0 )
-  {
-    printf ( "NOTE: wellsfileonly now redundant - this version of analysis does not do basecalling.\n" );
-  }
-
-  if ( strcmp ( lOption, "fitting-taue" ) == 0 )
-    {
-      if ( !strcmp ( optarg,"off" ) )
+	if(ChipIdDecoder::IsProtonChip())
 	{
-	  bkg_control.fitting_taue = 0;
+		if(!opts.HasOption('-', "clonal-filter-bkgmodel"))
+		{
+			bkg_control.polyclonal_filter.enable = false;
+		}
+		if(!opts.HasOption('-', "xtalk-correction"))
+		{
+			bkg_control.enable_trace_xtalk_correction = false;
+		}
+		if(!opts.HasOption('-', "col-flicker-correct"))
+		{
+			img_control.col_flicker_correct = true;
+		}
+		if(!opts.HasOption('-', "col-flicker-correct-aggressive"))
+		{
+			img_control.aggressive_cnc = true;
+		}
+		if(!opts.HasOption('-', "img-gain-correct"))
+		{
+			img_control.gain_correct_images = true;
+		}
 	}
-      else if ( !strcmp ( optarg,"on" ) )
+}
+
+ValidateOpts::ValidateOpts()
+{
+	// BkgModelControlOpts
+	m_opts["n-unfiltered-lib"] = VT_INT;
+	m_opts["xtalk-correction"] = VT_BOOL;
+	m_opts["bkg-dont-emphasize-by-compression"] = VT_INT;
+	m_opts["nokey"] = VT_BOOL;
+	m_opts["clonal-filter-bkgmodel"] = VT_BOOL;
+	m_opts["mixed-first-flow"] = VT_INT;
+	m_opts["mixed-last-flow"] = VT_INT;
+	m_opts["max-iterations"] = VT_INT;
+	m_opts["mixed-model-optio"] = VT_INT;
+	m_opts["mixed-stringency"] = VT_DOUBLE;
+	m_opts["sigproc-regional-smoothing-alpha"] = VT_FLOAT;
+	m_opts["sigproc-regional-smoothing-gamma"] = VT_FLOAT;
+
+	// GpuControlOpts
+	m_opts["gpuworkload"] = VT_FLOAT;
+	m_opts["gpuWorkLoad"] = VT_FLOAT;
+	m_opts["gpu-num-streams"] = VT_INT;
+	m_opts["gpu-amp-guess"] = VT_INT;
+	m_opts["gpu-single-flow-fit"] = VT_INT;
+	m_opts["gpu-single-flow-fit-blocksize"] = VT_INT;
+	m_opts["gpu-single-flow-fit-l1config"] = VT_INT;
+	m_opts["gpu-multi-flow-fit"] = VT_INT;
+	m_opts["gpu-multi-flow-fit-blocksize"] = VT_INT;
+	m_opts["gpu-multi-flow-fit-l1config"] = VT_INT;
+	m_opts["gpu-single-flow-fit-type"] = VT_INT;
+	m_opts["gpu-hybrid-fit-iter"] = VT_INT;
+	m_opts["gpu-partial-deriv-blocksize"] = VT_INT;	
+	m_opts["gpu-partial-deriv-l1config"] = VT_INT;	
+	m_opts["gpu-verbose"] = VT_BOOL;	
+	m_opts["gpu-device-ids"] = VT_INT;
+	m_opts["gpu-fitting-only"] = VT_BOOL;
+
+	// SignalProcessingBlockControl
+	m_opts["wells-compression"] = VT_INT;
+	m_opts["save-wells-freq"] = VT_INT;
+	m_opts["save-wells-flow"] = VT_INT;
+	m_opts["restart-from"] = VT_STRING;
+	m_opts["restart-next"] = VT_STRING;
+	m_opts["restart-check"] = VT_BOOL;
+	m_opts["numcputhreads"] = VT_INT;
+	m_opts["bkg-bfmask-update"] = VT_BOOL;
+	m_opts["sigproc-compute-flow"] = VT_STRING;
+
+	// TraceControl
+	m_opts["bkg-use-duds"] = VT_BOOL;
+	m_opts["bkg-empty-well-normalization"] = VT_BOOL;
+	m_opts["trim-ref-trace"] = VT_STRING;
+
+	// DebugMe
+	m_opts["bkg-debug-param"] = VT_INT;
+	m_opts["bkg-debug-region"] = VT_VECTOR_INT;
+	m_opts["bkg-debug-trace-sse"] = VT_STRING;
+	m_opts["bkg-debug-trace-rcflow"] = VT_STRING;
+	m_opts["bkg-debug-trace-xyflow"] = VT_STRING;
+	m_opts["bkg-dbg-trace"] = VT_VECTOR_INT;
+	m_opts["debug-bead-only"] = VT_BOOL;
+	m_opts["region-vfrc-debug"] = VT_BOOL;
+	m_opts["bkg-debug-files"] = VT_BOOL;
+
+	// BeadfindControlOpts
+	m_opts["beadfind-type"] = VT_STRING;
+	m_opts["use-beadmask"] = VT_STRING;
+	m_opts["beadmask-categorized"] = VT_BOOL;
+	m_opts["beadfind-basis"] = VT_STRING;
+	m_opts["beadfind-dat"] = VT_STRING;
+	m_opts["beadfind-bgdat"] = VT_STRING;
+	m_opts["beadfind-sdasbf"] = VT_BOOL;
+	m_opts["beadfind-bfmult"] = VT_FLOAT;
+	m_opts["beadfind-minlive"] = VT_DOUBLE;
+	m_opts["beadfind-minlivesnr"] = VT_DOUBLE;
+	m_opts["beadfind-min-tf-snr"] = VT_DOUBLE;
+	m_opts["beadfind-tf-min-peak"] = VT_FLOAT;
+	m_opts["beadfind-lib-min-peak"] = VT_FLOAT;
+	m_opts["beadfind-lib-filt"] = VT_DOUBLE;
+	m_opts["beadfind-tf-filt"] = VT_DOUBLE;
+	m_opts["beadfind-skip-sd-recover"] = VT_INT;
+	m_opts["beadfind-thumbnail"] = VT_INT;
+	m_opts["beadfind-sep-ref"] = VT_BOOL;
+	m_opts["beadfind-lagone-filt"] = VT_INT;
+	m_opts["beadfind-diagnostics"] = VT_INT;
+	m_opts["beadfind-gain-correction"] = VT_BOOL;
+	m_opts["beadfind-blob-filter"] = VT_BOOL;	
+	m_opts["beadfind-predict-start"] = VT_INT;
+	m_opts["beadfind-predict-end"] = VT_INT;
+	m_opts["beadfind-sig-ref-type"] = VT_INT;
+	m_opts["beadfind-zero-flows"] = VT_STRING;
+	m_opts["beadfind-num-threads"] = VT_INT;
+	m_opts["bfold"] = VT_BOOL;
+	m_opts["noduds"] = VT_BOOL;
+	m_opts["b"] = VT_STRING;
+	m_opts["beadfindfile"] = VT_STRING;	
+	m_opts["beadfindFile"] = VT_STRING;
+
+	//ImageControlOpts
+	m_opts["do-sdat"] = VT_BOOL;
+	m_opts["pca-test"] = VT_STRING;
+	m_opts["PCA-test"] = VT_STRING;
+	m_opts["col-flicker-correct"] = VT_BOOL;
+	m_opts["col-flicker-correct-verbose"] = VT_BOOL;
+	m_opts["col-flicker-correct-aggressive"] = VT_BOOL;	
+	m_opts["img-gain-correct"] = VT_BOOL;
+	m_opts["smoothing-file"] = VT_STRING;
+	m_opts["smoothing"] = VT_STRING;
+	m_opts["ignore-checksum-errors"] = VT_BOOL;
+	m_opts["ignore-checksum-errors-1frame"] = VT_BOOL;
+	m_opts["output-pinned-wells"] = VT_BOOL;
+	m_opts["flowtimeoffset"] = VT_INT;
+	m_opts["nn-subtract-empties"] = VT_BOOL;
+	m_opts["nnmask"] = VT_VECTOR_INT;
+	m_opts["nnMask"] = VT_VECTOR_INT;
+	m_opts["nnmaskwh"] = VT_VECTOR_INT;
+	m_opts["nnMaskWH"] = VT_VECTOR_INT;
+	m_opts["hilowfilter"] = VT_INT;
+	m_opts["total-timeout"] = VT_BOOL;
+	m_opts["readaheaddat"] = VT_INT;
+	m_opts["readaheadDat"] = VT_INT;
+	m_opts["no-threaded-file-access"] = VT_BOOL;
+	m_opts["f"] = VT_INT;
+	m_opts["frames"] = VT_INT;
+	m_opts["col-doubles-xtalk-correct"] = VT_BOOL;
+	m_opts["pair-xtalk-coeff"] = VT_FLOAT;
+
+	// ModuleControlOpts
+	m_opts["bfonly"] = VT_BOOL;
+	m_opts["from-beadfind"] = VT_BOOL;
+	m_opts["pass-tau"] = VT_BOOL;
+
+	// SpatialContext
+	m_opts["region-size"] = VT_VECTOR_INT;
+	m_opts["cropped"] = VT_VECTOR_INT;
+	m_opts["analysis-region"] = VT_VECTOR_INT;	
+	m_opts["cropped-region-origin"] = VT_VECTOR_INT;
+
+	// FlowContext
+	m_opts["flow-order"] = VT_STRING;
+	m_opts["flowlimit"] = VT_INT;
+	m_opts["start-flow-plus-interval"] = VT_INT;
+
+	// KeyContext
+	m_opts["librarykey"] = VT_STRING;
+	m_opts["libraryKey"] = VT_STRING;
+	m_opts["tfkey"] = VT_STRING;
+	m_opts["tfKey"] = VT_STRING;
+
+	// ObsoleteOpts
+	m_opts["nuc-correct"] = VT_INT;
+	m_opts["use-pinned"] = VT_BOOL;
+	m_opts["forcenn"] = VT_INT;
+	m_opts["forceNN"] = VT_INT;
+
+	// SystemContext
+	m_opts["local-wells-file"] = VT_BOOL;
+	m_opts["well-stat-file"] = VT_STRING;	
+	m_opts["stack-dump-file"] = VT_STRING;
+	m_opts["wells-format"] = VT_STRING;
+	m_opts["output-dir"] = VT_STRING;
+	m_opts["explog-path"] = VT_STRING;
+	m_opts["no-subdir"] = VT_BOOL;
+	m_opts["dat-source-directory"] = VT_STRING;
+
+	// GlobalDefaultsForBkgModel
+	m_opts["gopt"] = VT_STRING;
+	m_opts["bkg-dont-emphasize-by-compression"] = VT_BOOL;	
+	m_opts["xtalk"] = VT_STRING;
+	m_opts["bkg-well-xtalk-name"] = VT_STRING;
+
+	// LocalSigProcControl
+	m_opts["bkg-kmult-adj-low-hi"] = VT_FLOAT;
+	m_opts["kmult-low-limit"] = VT_FLOAT;
+	m_opts["kmult-hi-limit"] = VT_FLOAT;
+	m_opts["bkg-ssq-filter-region"] = VT_FLOAT;
+	m_opts["clonal-filter-bkgmodel"] = VT_BOOL;
+	m_opts["bkg-use-proton-well-correction"] = VT_BOOL;
+	m_opts["bkg-per-flow-time-tracking"] = VT_BOOL;
+	m_opts["bkg-exp-tail-fit"] = VT_BOOL;
+	m_opts["time-half-speed"] = VT_BOOL;
+	m_opts["bkg-pca-dark-matter"] = VT_BOOL;
+	m_opts["regional-sampling"] = VT_BOOL;
+	m_opts["regional_sampling_type"] = VT_INT;
+	m_opts["dark-matter-correction"] = VT_BOOL;
+	m_opts["bkg-prefilter-beads"] = VT_BOOL;
+	m_opts["vectorize"] = VT_BOOL;
+	m_opts["bkg-ampl-lower-limit"] = VT_FLOAT;
+	m_opts["single-flow-projection-search"] = VT_BOOL;
+	m_opts["limit-rdr-fit"] = VT_BOOL;
+	m_opts["use-alternative-etbr-equation"] = VT_BOOL;
+	m_opts["use-alternative-etbR-equation"] = VT_BOOL;
+	m_opts["psp4-dev"] = VT_FLOAT;
+	m_opts["fitting-taue"] = VT_BOOL;
+	m_opts["incorporation-type"] = VT_INT;
+	m_opts["bkg-single-alternate"] = VT_BOOL;
+	m_opts["bkg-single-gauss-newton"] = VT_BOOL;
+	m_opts["bkg-single-flow-retry-limit"] = VT_INT;
+	m_opts["var-kmult-only"] = VT_BOOL;
+	m_opts["bkg-recompress-tail-raw-trace"] = VT_BOOL;
+		
+	// ProcessImageToWell
+	m_opts["region-list"] = VT_VECTOR_INT;
+	m_opts["save-queue-size"] = VT_VECTOR_INT;
+}
+
+void ValidateOpts::Validate(const int argc, char *argv[])
+{
+	for(int i = 1; i < argc; ++i)
 	{
-	  bkg_control.fitting_taue = 1;
+		string s = argv[i];
+		if(s == "-" || s == "--")
+		{
+			cerr << "ERROR: command line input \"-\" must be followed by a short option name (a letter) and \"--\" must be followed by a long option name." << endl; 
+			exit ( EXIT_FAILURE );
+		}
+		else if(s == "-v" || s == "--version")
+		{
+			fprintf ( stdout, "%s", IonVersion::GetFullVersion ( "Analysis" ).c_str() );
+			exit ( EXIT_SUCCESS );
+		}
+		else if(argv[i][0] == '-') // option name
+		{
+			if((!isdigit(argv[i][1])) && (argv[i][1] != '.'))
+			{
+				s = s.substr(1, s.length() - 1);
+				if(argv[i][1] == '-') // long option
+				{
+					s = s.substr(1, s.length() - 1);
+				}
+
+				string value("");
+				int index = s.find("=");
+				int len = s.length();
+				if(index > 0) // with value
+				{
+					value = s.substr(index + 1, len - index - 1);
+					s = s.substr(0, index);
+				}
+				else if(i + 1 < argc)
+				{
+					if(argv[i + 1][0] != '-')
+					{
+						value = argv[i + 1];
+					}
+				}
+				
+				map<string, ValidTypes>::iterator iter = m_opts.find(s);
+				if(iter == m_opts.end())
+				{
+					cerr << "ERROR: option " << argv[i] << " is unexpected/unconsumed." << endl;
+					exit ( EXIT_FAILURE );
+				}
+			}
+		}
 	}
-      else
-	{
-	  fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-	  exit ( EXIT_FAILURE );
-	}
-    }
-
-  if ( strcmp ( lOption, "pass-tau" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      mod_control.passTau = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      mod_control.passTau = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-}
-
-void CommandLineOpts::SetFlowContextOption ( char *lOption, const char *original_name )
-{
-  if ( strcmp ( lOption, "flow-order" ) == 0 )
-  {
-    if ( flow_context.flowOrder )
-      free ( flow_context.flowOrder );
-    flow_context.flowOrder = strdup ( optarg );
-    flow_context.numFlowsPerCycle = strlen ( flow_context.flowOrder );
-    flow_context.flowOrderOverride = true;
-  }
-
-  if ( strcmp ( original_name, "flowlimit" ) == 0 )
-  {
-    long tmp_flowlimit;
-    if ( validIn ( optarg, &tmp_flowlimit ) )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    flow_context.SetFlowLimit( tmp_flowlimit );
-  }
-
-  if (strcmp (original_name, "start-flow-plus-interval")==0)
-  {
-    //Format: --start-flow-plus-interval=20,40
-    // Process 40 flows starting at flow 20, ie flows 20 thru 59, inclusive
-    // This is a 0 based index.  Without this argument, all flows are processed.
-    // Flowlimit controls the >total number< of flows to process, across all chunks
-    // this controls a particular "chunk" of processing
-    int startingFlow = 0;
-    int flow_interval = 0;
-    sPtr = strchr ( optarg,',' );
-    if ( sPtr )
-    {
-      int stat = sscanf ( optarg, "%d,%d", &startingFlow, &flow_interval );
-      if ( stat != 2 )
-      {
-        fprintf ( stderr, "Option Error: --%s=%s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-     }
-    else
-    {
-      fprintf ( stderr, "Option Error: --%s=%s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-
-    flow_context.SetFlowRange(startingFlow, flow_interval);
-
-  }
-}
-
-void CommandLineOpts::SetSystemContextOption ( char *lOption, const char *original_name )
-{
-  if ( strcmp ( lOption,"local-wells-file" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      sys_context.LOCAL_WELLS_FILE = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      sys_context.LOCAL_WELLS_FILE = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-
-
-
-  if ( strcmp ( lOption, "well-stat-file" ) == 0 )
-  {
-    if ( sys_context.wellStatFile )
-      free ( sys_context.wellStatFile );
-    sys_context.wellStatFile = strdup ( optarg );
-  }
-
-  if ( strcmp ( lOption, "stack-dump-file" ) == 0 )
-  {
-    if ( sys_context.stackDumpFile )
-      free ( sys_context.stackDumpFile );
-    sys_context.stackDumpFile = strdup ( optarg );
-  }
-
-  if ( strcmp ( original_name, "wells-format" ) == 0 )
-  {
-    sys_context.wellsFormat = optarg;
-    if ( sys_context.wellsFormat != "legacy" && sys_context.wellsFormat != "hdf5" )
-    {
-      fprintf ( stderr, "*Error* - Illegal option to --wells-format: %s, valid options are 'legacy' or 'hdf5'\n",
-                sys_context.wellsFormat.c_str() );
-      exit ( EXIT_FAILURE );
-    }
-  }
-
-  if ( strcmp ( lOption, "output-dir" ) == 0 )
-  {
-    sys_context.wells_output_directory = strdup ( optarg );
-  }
-
-  if ( strcmp ( lOption, "explog-path" ) == 0 )
-  {
-    FILE *explog = fopen ( optarg,"r" );
-    if ( explog != NULL )
-      fclose ( explog );
-    else
-    {
-      fprintf ( stderr, "Option Error: %s cannot open file %s\n", original_name, optarg );
-      exit ( EXIT_FAILURE );
-    }
-    sys_context.explog_path = strdup ( optarg );
-  }
-}
-
-void CommandLineOpts::SetLongKeyOption ( char *lOption, const char *original_name )
-{
-  if ( strcmp ( lOption, "librarykey" ) == 0 )
-  {
-    key_context.libKey = ( char * ) malloc ( strlen ( optarg ) +1 );
-    strcpy ( key_context.libKey, optarg );
-    ToUpper ( key_context.libKey );
-  }
-  if ( strcmp ( lOption, "tfkey" ) == 0 )
-  {
-    key_context.tfKey = ( char * ) malloc ( strlen ( optarg ) +1 );
-    strcpy ( key_context.tfKey, optarg );
-    ToUpper ( key_context.tfKey );
-  }
-}
-
-void CommandLineOpts::SetAnyLongSpatialContextOption ( char *lOption, const char *original_name )
-{
-  if ( strcmp ( lOption, "region-size" ) == 0 )
-  {
-    sPtr = strchr ( optarg,'x' );
-    if ( sPtr )
-    {
-      int stat = sscanf ( optarg, "%dx%d", &loc_context.regionXSize, &loc_context.regionYSize );
-      if ( stat != 2 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-      if ( (loc_context.regionXSize <= 0) || (loc_context.regionYSize <= 0) )
-      {
-        fprintf ( stderr, "Option Error: %s %s must be positive\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( original_name, "cropped" ) == 0 )
-  {
-    if ( optarg )
-    {
-      loc_context.numCropRegions++;
-      loc_context.cropRegions = ( Region * ) realloc ( loc_context.cropRegions, sizeof ( Region ) * loc_context.numCropRegions );
-      int stat = sscanf ( optarg, "%d,%d,%d,%d",
-                          &loc_context.cropRegions[loc_context.numCropRegions-1].col,
-                          &loc_context.cropRegions[loc_context.numCropRegions-1].row,
-                          &loc_context.cropRegions[loc_context.numCropRegions-1].w,
-                          &loc_context.cropRegions[loc_context.numCropRegions-1].h );
-      if ( stat != 4 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( original_name, "analysis-region" ) == 0 )
-  {
-    if ( optarg )
-    {
-      int stat = sscanf ( optarg, "%d,%d,%d,%d",
-                          &loc_context.chipRegion.col,
-                          &loc_context.chipRegion.row,
-                          &loc_context.chipRegion.w,
-                          &loc_context.chipRegion.h );
-      if ( stat != 4 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( original_name, "cropped-region-origin" ) == 0 )
-  {
-    if ( optarg )
-    {
-      int stat = sscanf ( optarg, "%d,%d",
-                          &loc_context.cropped_region_x_offset,
-                          &loc_context.cropped_region_y_offset );
-      if ( stat != 2 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-}
-
-void CommandLineOpts::SetAnyLongBeadFindOption ( char *lOption, const char *original_name )
-{
-  if ( strcmp ( original_name, "beadfind-type" ) == 0 )
-  {
-    bfd_control.beadfindType = optarg;
-    if ( bfd_control.beadfindType != "differential" )
-    {
-      fprintf ( stderr, "*Error* - Illegal option to --beadfind-type: %s, valid options are 'differential'\n",
-                bfd_control.beadfindType.c_str() );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "use-beadmask" ) == 0 )
-  {
-    bfd_control.beadMaskFile = strdup ( optarg );
-  }
-  if ( strcmp ( lOption, "beadmask-categorized" ) == 0 )
-  {
-    bfd_control.maskFileCategorized = 1;
-  }
-  if ( strcmp ( original_name, "beadfind-basis" ) == 0 )
-  {
-    bfd_control.bfType = optarg;
-    if ( bfd_control.bfType != "signal" && bfd_control.bfType != "buffer" )
-    {
-      fprintf ( stderr, "*Error* - Illegal option to --beadfind-basis: %s, valid options are 'signal' or 'buffer'\n",
-                bfd_control.bfType.c_str() );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( original_name, "beadfind-dat" ) == 0 )
-  {
-    bfd_control.bfDat = optarg;
-  }
-  if ( strcmp ( original_name, "beadfind-bgdat" ) == 0 )
-  {
-    bfd_control.bfBgDat = optarg;
-  }
-  if ( strcmp ( original_name, "beadfind-sdasbf" ) == 0 )
-  {
-    bfd_control.sdAsBf = atoi(optarg);
-  }
-  if ( strcmp ( original_name, "beadfind-bfmult" ) == 0 )
-  {
-    bfd_control.bfMult = atof(optarg);
-  }
-  if ( strcmp ( original_name, "beadfind-minlive" ) == 0 )
-  {
-    bfd_control.bfMinLiveRatio = atof ( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-minlivesnr" ) == 0 ||
-       strcmp ( original_name, "beadfind-min-lib-snr" ) == 0 )
-  {
-    bfd_control.bfMinLiveLibSnr = atof ( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-min-tf-snr" ) == 0 )
-  {
-    bfd_control.bfMinLiveTfSnr = atof ( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-tf-min-peak" ) == 0 )
-  {
-    bfd_control.minTfPeakMax = atof ( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-lib-min-peak" ) == 0 )
-  {
-    bfd_control.minLibPeakMax = atof ( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-lib-filt" ) == 0 )
-  {
-    bfd_control.bfLibFilterQuantile = atof ( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-tf-filt" ) == 0 )
-  {
-    bfd_control.bfTfFilterQuantile = atof ( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-skip-sd-recover" ) == 0 )
-  {
-    bfd_control.skipBeadfindSdRecover = atoi ( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-thumbnail" ) == 0 )
-  {
-    bfd_control.beadfindThumbnail = atoi ( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-sep-ref" ) == 0 )
-  {
-    if (strcmp(optarg, "on") == 0) {
-      bfd_control.beadfindUseSepRef = 1;
-    }
-    else if (strcmp(optarg, "off") == 0) {
-      bfd_control.beadfindUseSepRef = 0;
-    }
-    else {
-      bfd_control.beadfindUseSepRef = atoi ( optarg );
-    }
-  }
-  if ( strcmp ( original_name, "beadfind-lagone-filt" ) == 0 )
-  {
-    bfd_control.beadfindLagOneFilt = atoi ( optarg );
-  }
-  if ( strcmp ( original_name, "do-sdat" ) == 0 )
-  {
-    img_control.doSdat = atoi ( optarg ) > 0;
-  }
-  if ( strcmp ( original_name, "beadfind-diagnostics" ) == 0 )
-  {
-    bfd_control.bfOutputDebug = atoi ( optarg );
-  }
-  if ( strcmp ( original_name, "bead-washout" ) == 0 )
-  {
-    bfd_control.SINGLEBF = false;
-  }
-  if ( strcmp ( original_name, "beadfind-gain-correction" ) == 0 )
-  {
-    bfd_control.gainCorrection = atoi( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-blob-filter" ) == 0 )
-  {
-    bfd_control.blobFilter = atoi( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-predict-start" ) == 0 )
-  {
-    bfd_control.predictFlowStart = atoi( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-predict-end" ) == 0 )
-  {
-    bfd_control.predictFlowEnd = atoi( optarg );
-  }
-  if ( strcmp ( original_name, "beadfind-sig-ref-type") == 0) 
-  {
-    bfd_control.useSignalReference = atoi( optarg );
-    bfd_control.useSignalReferenceSet = 1;
-  }
-  if ( strcmp ( original_name, "beadfind-zero-flows" ) == 0 )
-  {
-    bfd_control.doubleTapFlows = optarg;
-  }
-  if ( strcmp ( original_name, "beadfind-num-threads" ) == 0 )
-  {
-    bfd_control.numThreads = atoi ( optarg );
-  }
-}
-
-
-void CommandLineOpts::SetAnyLongSignalProcessingOption ( char *lOption, const char *original_name )
-{
-  if ( strcmp ( lOption, "wells-compression" ) == 0 ) {
-    bkg_control.wellsCompression = atoi(optarg);
-    ION_ASSERT(bkg_control.wellsCompression >= 0 && bkg_control.wellsCompression <= 10, "--wells-compression must be between (0,10) inclusive.");
-    fprintf(stdout, "wells compression: %d\n", bkg_control.wellsCompression);
-  }
-  if ( strcmp ( lOption, "save-wells-freq" ) == 0 )
-  {
-    bkg_control.saveWellsFrequency = atoi ( optarg );
-    fprintf ( stdout, "Saving wells every %d blocks.\n", bkg_control.saveWellsFrequency );
-    if ( bkg_control.saveWellsFrequency < 1 || bkg_control.saveWellsFrequency > 100 )
-    {
-      fprintf ( stderr, "Option Error, must be between 1 and 100: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-
-  }
-  if ( strcmp ( lOption, "clonal-filter-bkgmodel" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.enableBkgModelClonalFilter = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.enableBkgModelClonalFilter = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.clonal_solve_bkg_set = true;
-  }
-  if ( strcmp ( lOption, "bkg-use-duds" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.use_dud_and_empty_wells_as_reference = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.use_dud_and_empty_wells_as_reference = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.use_dud_reference_set=true;
-  }
-  if ( strcmp ( lOption, "bkg-use-proton-well-correction" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.proton_dot_wells_post_correction = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.proton_dot_wells_post_correction = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.use_proton_correction_set=true;
-  }
-  if ( strcmp ( lOption, "bkg-per-flow-time-tracking" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.per_flow_t_mid_nuc_tracking = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.per_flow_t_mid_nuc_tracking = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.per_flow_t_mid_nuc_tracking_set = true;
-  }
-  if ( strcmp ( lOption, "bkg-exp-tail-fit" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.exp_tail_fit = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.exp_tail_fit = true;
-      bkg_control.choose_time = 2;  // if exp tail fitting is chosen...also force the necessary time compression
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.bkg_exp_tail_fit_set = true;
-  }
-  if ( strcmp ( lOption, "bkg-pca-dark-matter" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.pca_dark_matter = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.pca_dark_matter = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.bkg_pca_dark_matter_set = true;
-  }
-  if ( strcmp ( lOption, "bkg-single-gauss-newton" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.fit_gauss_newton = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.fit_gauss_newton = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.bkg_single_gauss_newton_set = true;
-  }
-
-  if ( strcmp ( lOption, "regional-sampling" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.regional_sampling = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.regional_sampling = true;
-      bkg_control.regional_sampling_type = REGIONAL_SAMPLING_SYSTEMATIC;
-    }
-    else if ( !strcmp ( optarg,"clonal" ) )
-    {
-      bkg_control.regional_sampling = true;
-      bkg_control.regional_sampling_type = REGIONAL_SAMPLING_CLONAL_KEY_NORMALIZED;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.regional_sampling_set = true;
-  }
-  
-  if ( strcmp ( lOption, "bkg-prefilter-beads" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.prefilter_beads = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.prefilter_beads = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    
-  }
-  if ( strcmp ( lOption, "bkg-empty-well-normalization" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.empty_well_normalization = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.empty_well_normalization = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.empty_well_normalization_set = true;
-  }
-  if ( strcmp ( lOption, "bkg-bfmask-update" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.updateMaskAfterBkgModel = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.updateMaskAfterBkgModel = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-
-  if ( strcmp ( lOption, "trim-ref-trace" ) == 0 )
-  {
-    if ( !strcmp ( optarg, "off") )      // usage: --trim-ref-trace off
-    {
-      bkg_control.do_ref_trace_trim = false;
-    }
-    else if ( !strcmp (optarg, "on") )   // usage: --trim-ref-trace on 
-    {
-      bkg_control.do_ref_trace_trim = true;    // default values will be used
-    }
-    else                                 // usage --trim-ref-trace 10,50,.2
-    {
-      bkg_control.do_ref_trace_trim = true;
-      int stat = sscanf ( optarg, "%f,%f,%f", &bkg_control.span_inflator_min,
-			  &bkg_control.span_inflator_mult,
-			  &bkg_control.cutoff_quantile);
-      if ( stat != 3 ) {
-	fprintf ( stderr, "Option error: If not 'on' or 'off', numeric args to --trim-ref-trace must be 3 comma-delimited floats: span_inflator_min, span_inflator_mult, cutff_quantile");
-	exit( EXIT_FAILURE );
-      }
-    }
-    if (bkg_control.do_ref_trace_trim)
-      fprintf(stdout, "Reference trimming enabled with options: span_inflator_min = %f, span_inflator_mult = %f, cutoff_quantile = %f\n", bkg_control.span_inflator_min, bkg_control.span_inflator_mult, bkg_control.cutoff_quantile);
-  }
-
-  if ( strcmp ( lOption, "restart-from" ) == 0 )
-  {
-    bkg_control.restart_from = optarg;  // path to read restart info from
-  }
-  if ( strcmp ( lOption, "restart-next" ) == 0 )
-  {
-    bkg_control.restart_next = optarg;  // path to write restart info to
-  }
-  if ( strcmp ( lOption, "no-restart-check" ) == 0 )
-  {
-    bkg_control.restart_check = false;
-  }
-
-  if ( strcmp ( lOption, "region-list" ) == 0 )
-  {
-    bkg_control.region_list = optarg;  // path to read regions from
-  }
-
-  if ( strcmp ( lOption, "xtalk-correction" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.enableXtalkCorrection = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.enableXtalkCorrection = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-    if ( strcmp ( lOption, "dark-matter-correction" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.enable_dark_matter = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.enable_dark_matter = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( original_name, "bkg-debug-param" ) == 0 )
-  {
-    bkg_control.bkgModelHdf5Debug = atoi ( optarg );
-  }
-  if ( strcmp ( original_name, "bkg-debug-region" ) == 0 )
-  {
-    //(x,y) = split(optarg)
-    vector<string> tokens;
-    split(optarg,':',tokens);
-    //assert(tokens.size()==2);
-    if (tokens.size()==2)
-    {
-        bkg_control.bkgModelHdf5Debug_region_r = atoi(tokens[0].c_str());
-        bkg_control.bkgModelHdf5Debug_region_c = atoi(tokens[1].c_str());
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-
-  if ( strcmp ( original_name, "bkg-debug-trace-sse" ) == 0 )
-  {
-    bkg_control.bkgModel_xyflow_output = true;
-    bkg_control.bkgModel_xyflow_fname_in = optarg;
-    bkg_control.bkgModel_xyflow_fname_in_type = 1;
-  }
-
-  if ( strcmp ( original_name, "bkg-debug-trace-rcflow" ) == 0 )
-  {
-      bkg_control.bkgModel_xyflow_output = true;
-      bkg_control.bkgModel_xyflow_fname_in = optarg;
-      bkg_control.bkgModel_xyflow_fname_in_type = 2;
-  }
-
-  if ( strcmp ( original_name, "bkg-debug-trace-xyflow" ) == 0 )
-  {
-      bkg_control.bkgModel_xyflow_output = true;
-      bkg_control.bkgModel_xyflow_fname_in = optarg;
-      bkg_control.bkgModel_xyflow_fname_in_type = 3;
-  }
-
-  if ( strcmp ( original_name, "bkg-record" ) == 0 )
-  {
-  }
-
-  if ( strcmp ( original_name, "bkg-record" ) == 0 )
-  {
-    if ( bkg_control.recordBkgModelData &  bkg_control.replayBkgModelData )
-    {
-      fprintf ( stderr, "Option Error, bkg-replay and bkg-record cannot both be on\n" );
-      exit ( EXIT_FAILURE );
-    }
-  }
-
-  if ( strcmp ( original_name, "bkg-replay" ) == 0 )
-  {
-    if ( bkg_control.recordBkgModelData &  bkg_control.replayBkgModelData )
-    {
-      fprintf ( stderr, "Option Error, bkg-replay and bkg-record cannot both be on\n" );
-      exit ( EXIT_FAILURE );
-    }
-  }
-
-  if ( strcmp ( lOption, "bkg-damp-kmult" ) == 0 )
-  {
-    int stat = sscanf ( optarg, "%f", &bkg_control.damp_kmult );
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.damp_kmult < 0 )
-    {
-      fprintf ( stderr, "Option Error: %s must specify a non-negative value (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "bkg-ssq-filter-region" ) == 0 )
-  {
-    int stat = sscanf ( optarg, "%f", &bkg_control.ssq_filter );
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.damp_kmult < 0 )
-    {
-      fprintf ( stderr, "Option Error: %s must specify a non-negative value (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "bkg-kmult-adj-low-hi" ) == 0 )
-  {
-    int stat = sscanf ( optarg, "%f,%f,%f", &bkg_control.krate_adj_threshold, &bkg_control.kmult_low_limit,&bkg_control.kmult_hi_limit );
-    if ( stat != 3 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.damp_kmult < 0 )
-    {
-      fprintf ( stderr, "Option Error: %s must specify a non-negative value (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( original_name, "bkg-emphasis" ) == 0 )
-  {
-    sPtr = strchr ( optarg,',' );
-    if ( sPtr )
-    {
-      int stat = sscanf ( optarg, "%f,%f", &bkg_control.bkg_model_emphasis_width, &bkg_control.bkg_model_emphasis_amplitude );
-      if ( stat != 2 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( original_name, "dntp-uM" ) == 0 ) // this is now a vector of 4, one per nuc TACG
-  {
-    if ( optarg )
-    {
-      int stat = sscanf ( optarg, "%f,%f,%f,%f", &bkg_control.dntp_uM[0],&bkg_control.dntp_uM[1],&bkg_control.dntp_uM[2],&bkg_control.dntp_uM[3] );
-      if ( stat != 4)
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( original_name, "bkg-ampl-lower-limit" ) == 0 )
-  {
-    if ( optarg )
-    {
-      int stat = sscanf ( optarg, "%f", &bkg_control.AmplLowerLimit );
-      if ( stat != 1 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-      radio_buttons.amplitude_lower_limit_set = true;
-  }
-  if ( strcmp ( original_name, "bkg-effort-level" ) == 0 )
-  {
-    if ( optarg )
-    {
-      int stat = sscanf ( optarg, "%d", &bkg_control.bkgModelMaxIter );
-      if ( stat != 1 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-
-      if ( bkg_control.bkgModelMaxIter < 5 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( original_name, "gopt" ) == 0 )
-  {
-    bkg_control.gopt = optarg;
-    if ( strcmp ( bkg_control.gopt, "disable" ) == 0 || strcmp ( bkg_control.gopt, "default" ) == 0 || strcmp ( bkg_control.gopt, "opt" ) == 0 );
-    else
-    {
-      FILE *gopt_file = fopen ( bkg_control.gopt,"r" );
-      if ( gopt_file != NULL )
-        fclose ( gopt_file );
-      else
-      {
-        fprintf ( stderr, "Option Error: %s cannot open file %s\n", original_name,optarg );
-        exit ( 1 );
-      }
-    }
-  }
-  if ( strcmp ( original_name, "xtalk" ) == 0 )
-  {
-    bkg_control.xtalk = optarg;
-    if ( strcmp ( bkg_control.xtalk, "disable" ) == 0 || strcmp ( bkg_control.xtalk, "opt" ) == 0 );
-    else
-    {
-      bkg_control.enableXtalkCorrection=true;
-      FILE *tmp_file = fopen ( bkg_control.xtalk,"r" );
-      if ( tmp_file != NULL )
-        fclose ( tmp_file );
-      else
-      {
-        fprintf ( stderr, "Option Error: %s cannot open file %s\n", original_name,optarg );
-        exit ( 1 );
-      }
-    }
-  }
-
-  if ( strcmp ( original_name, "krate" ) == 0 )
-  {
-    if ( optarg )
-    {
-      int stat = sscanf ( optarg, "%f,%f,%f,%f", &bkg_control.krate[0],&bkg_control.krate[1],&bkg_control.krate[2],&bkg_control.krate[3] );
-      if ( stat != 4 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( 1 );
-      }
-
-      for ( int i=0;i < 3;i++ )
-      {
-        if ( ( bkg_control.krate[i] < 0.01 ) || ( bkg_control.krate[i] > 100.0 ) )
-        {
-          fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-          exit ( 1 );
-        }
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( 1 );
-    }
-  }
-  if ( strcmp ( original_name, "kmax" ) == 0 )
-  {
-    if ( optarg )
-    {
-      int stat = sscanf ( optarg, "%f,%f,%f,%f", &bkg_control.kmax[0],&bkg_control.kmax[1],&bkg_control.kmax[2],&bkg_control.kmax[3] );
-      if ( stat != 4 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( 1 );
-      }
-
-      for ( int i=0;i < 3;i++ )
-      {
-        if ( ( bkg_control.kmax[i] < 0.01 ) || ( bkg_control.kmax[i] > 100.0 ) )
-        {
-          fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-          exit ( 1 );
-        }
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( 1 );
-    }
-  }
-  if ( strcmp ( original_name, "diffusion-rate" ) == 0 )
-  {
-    if ( optarg )
-    {
-      int stat = sscanf ( optarg, "%f,%f,%f,%f", &bkg_control.diff_rate[0],&bkg_control.diff_rate[1],&bkg_control.diff_rate[2],&bkg_control.diff_rate[3] );
-      if ( stat != 4 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( 1 );
-      }
-
-      for ( int i=0;i < 3;i++ )
-      {
-        if ( ( bkg_control.diff_rate[i] < 0.01 ) || ( bkg_control.diff_rate[i] > 1000.0 ) )
-        {
-          fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-          exit ( 1 );
-        }
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( 1 );
-    }
-  }
-
-  if ( strcmp ( lOption, "gpuworkload" ) == 0 )
-  {
-    int stat = sscanf ( optarg, "%f", &bkg_control.gpuControl.gpuWorkLoad );
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( ( bkg_control.gpuControl.gpuWorkLoad > 1 ) || ( bkg_control.gpuControl.gpuWorkLoad < 0 ) )
-    {
-      fprintf ( stderr, "Option Error: %s must specify a value between 0 and 1 (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "gpu-amp-guess" ) == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuAmpGuess );
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.gpuControl.gpuAmpGuess != 0 && bkg_control.gpuControl.gpuAmpGuess != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s must be either 0 or 1 (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "gpu-single-flow-fit" ) == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuSingleFlowFit );
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.gpuControl.gpuSingleFlowFit != 0 && bkg_control.gpuControl.gpuSingleFlowFit != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s must be either 0 or 1 (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "gpu-single-flow-fit-blocksize") == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuThreadsPerBlockSingleFit);
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.gpuControl.gpuThreadsPerBlockSingleFit <= 0 )
-    {
-      fprintf ( stderr, "Option Error: %s must be > 0 (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "gpu-single-flow-fit-l1config") == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuL1ConfigSingleFit);
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-
-  if ( strcmp ( lOption, "gpu-multi-flow-fit" ) == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuMultiFlowFit);
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.gpuControl.gpuMultiFlowFit != 0 && bkg_control.gpuControl.gpuMultiFlowFit != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s must be either 0 or 1 (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-
-  if ( strcmp ( lOption, "gpu-multi-flow-fit-blocksize") == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuThreadsPerBlockMultiFit);
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.gpuControl.gpuThreadsPerBlockMultiFit <= 0 )
-    {
-      fprintf ( stderr, "Option Error: %s must be > 0 (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "gpu-multi-flow-fit-l1config") == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuL1ConfigMultiFit);
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "gpu-single-flow-fit-type") == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuSingleFlowFitType);
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "gpu-hybrid-fit-iter") == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuHybridIterations);
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "gpu-partial-deriv-blocksize") == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuThreadsPerBlockPartialD);
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.gpuControl.gpuThreadsPerBlockMultiFit <= 0 )
-    {
-      fprintf ( stderr, "Option Error: %s must be > 0 (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "gpu-partial-deriv-l1config") == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.gpuControl.gpuL1ConfigPartialD);
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "gpu-verbose" ) == 0 )
-  {
-    bkg_control.gpuControl.gpuVerbose = true;
-  }
-
-
-
-  if ( strcmp ( lOption, "numcputhreads" ) == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.numCpuThreads );
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.numCpuThreads <= 0 )
-    {
-      fprintf ( stderr, "Option Error: %s must specify a value greater than 0 (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "bkg-single-flow-retry-limit" ) == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.single_flow_fit_max_retry );
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.single_flow_fit_max_retry < 0 )
-    {
-      fprintf ( stderr, "Option Error: %s must specify a value greater than or equal to 0 (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.single_flow_fit_max_retry_set = true;
-  }
-  if ( strcmp ( lOption, "readaheaddat" ) == 0 )
-  {
-    int stat = sscanf ( optarg, "%d", &bkg_control.readaheadDat );
-    if ( stat != 1 )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else if ( bkg_control.readaheadDat <= 0 )
-    {
-      fprintf ( stderr, "Option Error: %s must specify a value greater than 0 (%s invalid).\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "bkg-dbg-trace" ) == 0 )
-  {
-    sPtr = strchr ( optarg,'x' );
-    if ( sPtr )
-    {
-      Region dbg_reg;
-
-      int stat = sscanf ( optarg, "%dx%d", &dbg_reg.col, &dbg_reg.row );
-      if ( stat != 2 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-
-      bkg_control.BkgTraceDebugRegions.push_back ( dbg_reg );
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "single-flow-projection-search" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.useProjectionSearchForSingleFlowFit = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.useProjectionSearchForSingleFlowFit = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-
-  if ( strcmp ( lOption, "time-half-speed" ) == 0 )
-  {
-    bkg_control.choose_time=1;
-  }
-
-  if ( strcmp ( lOption, "nokey" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.nokey = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.nokey = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "vectorize" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      bkg_control.vectorize = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      bkg_control.vectorize = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-}
-
-void CommandLineOpts::SetAnyLongImageProcessingOption ( char *lOption, const char *original_name )
-{
-    if ( strcmp ( lOption, "col-flicker-correct" ) == 0 )
-    {
-      if ( !strcmp ( optarg,"off" ) )
-      {
-        img_control.col_flicker_correct = false;
-      }
-      else if ( !strcmp ( optarg,"on" ) )
-      {
-        img_control.col_flicker_correct = true;
-      }
-      else
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-      radio_buttons.col_flicker_correct_set = true;
-    }
-
-    if ( strcmp ( lOption, "col-flicker-correct-verbose" ) == 0 )
-    {
-      if ( !strcmp ( optarg,"off" ) )
-      {
-        img_control.col_flicker_correct_verbose = false;
-      }
-      else if ( !strcmp ( optarg,"on" ) )
-      {
-        img_control.col_flicker_correct_verbose = true;
-      }
-      else
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-    }
-    if ( strcmp ( lOption, "col-flicker-correct-aggressive" ) == 0 )
-    {
-      if ( !strcmp ( optarg,"off" ) )
-      {
-        img_control.aggressive_cnc = false;
-      }
-      else if ( !strcmp ( optarg,"on" ) )
-      {
-        img_control.aggressive_cnc = true;
-      }
-      else
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-      radio_buttons.col_flicker_correct_aggressive_set = true;
-    }
-
-  if ( strcmp ( lOption, "img-gain-correct" ) == 0 )
-  {
-    if ( !strcmp ( optarg,"off" ) )
-    {
-      img_control.gain_correct_images = false;
-    }
-    else if ( !strcmp ( optarg,"on" ) )
-    {
-      img_control.gain_correct_images = true;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    radio_buttons.gain_correct_images_set = true;
-  }
-  if ( strcmp ( lOption, "smoothing-file" ) == 0 )   // Tikhonov Smoothing (APB)
-  {
-    strncpy ( img_control.tikSmoothingFile, optarg, 256 );
-  }
-  if ( strcmp ( lOption, "smoothing" ) == 0 )   // Tikhonov Smoothing (APB)
-  {
-    if ( optarg == NULL )   // use default
-    {
-      strncpy ( img_control.tikSmoothingInternal, "10", 32 );
-    }
-    else
-    {
-      strncpy ( img_control.tikSmoothingInternal, optarg, 32 );
-    }
-  }
-  if ( strcmp ( lOption, "ignore-checksum-errors" ) == 0 )
-  {
-    img_control.ignoreChecksumErrors |= 0x01;
-  }
-  if ( strcmp ( lOption, "ignore-checksum-errors-1frame" ) == 0 )
-  {
-    img_control.ignoreChecksumErrors |= 0x02;
-  }
-  if ( strcmp ( lOption, "output-pinned-wells" ) == 0 )
-  {
-    img_control.outputPinnedWells = 1;
-  }
-  if ( strcmp ( lOption, "flowtimeoffset" ) == 0 )
-  {
-    long tmp_val;
-    if ( validIn ( optarg, &tmp_val ) )
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-    else
-    {
-      img_control.flowTimeOffset = ( int ) tmp_val;
-    }
-  }
-  if ( strcmp ( lOption, "nn-subtract-empties" ) == 0 )
-  {
-    img_control.nn_subtract_empties = 1;
-  }
-  if ( strcmp ( lOption, "nnmask" ) == 0 )
-  {
-    sPtr = strchr ( optarg,',' );
-    if ( sPtr )
-    {
-      int inner = 1, outer = 3;
-      int stat = sscanf ( optarg, "%d,%d", &inner, &outer );
-      if ( stat != 2 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-      img_control.NNinnerx = inner;
-      img_control.NNinnery = inner;
-      img_control.NNouterx = outer;
-      img_control.NNoutery = outer;
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( lOption, "nnmaskwh" ) == 0 )
-  {
-    sPtr = strchr ( optarg,',' );
-    if ( sPtr )
-    {
-      int stat = sscanf ( optarg, "%d,%d,%d,%d", &img_control.NNinnerx, &img_control.NNinnery, &img_control.NNouterx, &img_control.NNoutery );
-      if ( stat != 4 )
-      {
-        fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-        exit ( EXIT_FAILURE );
-      }
-    }
-    else
-    {
-      fprintf ( stderr, "Option Error: %s %s\n", original_name,optarg );
-      exit ( EXIT_FAILURE );
-    }
-  }
-  if ( strcmp ( original_name, "hilowfilter" ) == 0 )
-  {
-    ToLower ( optarg );
-    if ( strcmp ( optarg, "true" ) == 0 ||
-         strcmp ( optarg, "on" ) == 0 ||
-         atoi ( optarg ) == 1 )
-    {
-      img_control.hilowPixFilter = 1;
-    }
-    else
-    {
-      img_control.hilowPixFilter = 0;
-    }
-  }
-  if ( strcmp ( lOption, "total-timeout" ) == 0 )
-  {
-    img_control.total_timeout = atoi ( optarg );
-  }
-  if ( strcmp ( lOption, "threaded-file-access" ) == 0 )
-  {
-    img_control.threaded_file_access = 1;
-  }
 }

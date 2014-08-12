@@ -1,0 +1,582 @@
+TMAP Software Architecture notes
+================================
+
+This document intends to capture the design of the TMAP DNA reads mapping software by IonTorrent. It aims in documenting :
+1) the high-level structure of the code;
+2) the internal business logic;
+3) the main 'workhorse' algorithms and
+4) the supporting constructs, including internal data representation, input/output and data conversion tools, as well as 'universal' utility structures / subroutines.
+
+
+Note about the code and data structure outlines:
+------------------------------------------------
+
+The outline notation used below is very informal and misses many details. The code outlines are not actual pseudo-code and list only the details that are necessary for explaining the overall logic. The types of the variables are often omitted or replaced by generics such as 'int' or 'string'. The function names are in general kept intact, but many of them are not listed. 
+
+Blocks of code, sometimes including function calls, can be replaced by a single 'narrative' statement, starting with the  '@' symbol
+
+The data structure outlines are also only sketched and can omit fields and use generalized dsata types (or even omit them). The structure and class names are in most cases kept, but the 'typedefed' structure types are generally listed as if they were C++ structure names.
+
+The variable names are rarely mentioned and generally kept intact; their types may be omitted or generalized.
+
+
+Very High Level Structure:
+--------------------------
+The TMAP is a collection of mostly independent tools that are gathered under a single executable, and support different aspects of reads to reference mapping. They include:
+ index     - a tool for creating packed and indexed reference sequence representation
+ server    - a tool for loading reference index into shared in-memory structure accessible by other TMAP process instances
+ mappers   - 5 distinct mapping algorithms and a shell tool for applying 'staged' combinations of those. The distinct mapping algorithms are:
+	    map1      - bwa-short reads mapping
+	    map2      - bwa-long/BWASW reads mapping
+	    map3      - k-mere lookup table based mapping
+	    map4      - bwa fastmap 
+	    mapvsw    - vectorized implementation of Smith-Waterman by 'Attractive Chaos'
+ utilities - 11 distinct tools:
+	    fasta2pac - creates the packed FASTA file
+	    pac2bwt   - creates the BWT string file from the packed FASTA file
+	    bwt2sa    - creates the SA file from the BWT string file
+	    sff2fq    - converts a SFF file to a FASTQ file
+	    sff2sam   - converts a SFF file to a SAM file
+	    refinfo   - prints information about the reference
+	    pac2fasta - converts a packed FASTA to a FASTA file
+	    bwtupdate - updates the bwt hash width
+	    indexsize - gives the index size in bytes
+	    sam2fs    - pretty print SAM records in flow space
+	    sw        - simple smith waterman
+  
+TMAP is written in C and C++. All the higher level and intermediate logic, as well as utility code and most of the specific algorithms are written in C, while a series of vectorized sequence alignment implementations are written in C++. The noticeable feature of TMAP is the use of local implementations of almost all standard low-level algorithms. In many cases they are implemented as C macros to achieve generality. 
+
+The Source Tree:
+
+├── index       - index: k-tuple and bwt indexing and compression of reference
+├── io          - common i/o functions: file access, handling of in/out formats
+├── map         - common mapping buziness logic: generalized mapping wrapper (for common mapping API) and pre- and post- processing. 
+│   ├── map1    - implementation of bwa-short mapping for common mapping API
+│   ├── map2    - implementation of bwa-long/BWASW mapping for common mapping API
+│   ├── map3    - implementation of 'simplified SSAHA' (k-mere lookup) mapping for common mapping API
+│   ├── map4    - implementation of BWA fastmap for common mapping API
+│   ├── mapvsw  - implementation of direct Smith-Waterman- based mapping for common mapping API
+│   ├── mapall  - adapter for staged mapping using combination of methods, wrapped into common mapping API
+│   ├── pairing - subroutines for alignment pairs evaluation and mate resque
+│   └── util    - common utilities: data representation conversion, i/o, command lien options, statistics collection
+├── realign     - module for post-mapping realignment for compensating for systematic sequencing errors
+├── sam2fs      - sam representation in flowspace implementation
+├── seq         - sequence data formats handling (packing / unpacking, conversion, access) : fasta/fastq, sff, sam/bam
+├── server      - library for handling shared in-memory refence sequences and code for it's loading/maintanence.
+├── sw          - S-W variants: 'reference' scalar (global, local, banded); flowspace; wrapper for abstract vectorized C++ implementation
+│   └── lib     - library of vectorized SW imnplementations (reference and TopCoder), the universal wrapper/adapter and dispatcher
+└── util        - library of standard algorithms and data structure operations, including hashing / sorting  / searching variants, fibonacci heap, memory allocation, levenstein distance, deterministic random number generatr and some helper routines.  
+
+
+The tmap_main module:
+---------------------
+
+This module is a dispatcher that invokes one of the sub-tools depending on the passed first argument, and passes all ramaining command line parameters to corresponding handler function. It also pronts 'common' help mesaged if command is missing or unknown.
+
+The common data structures:
+---------------------------
+
+Many of the TMAP internal data structures embed internal memory management / allocated size tracking mechanisms. 
+The simplest one is string:
+
+    struct tmap_string_t
+    {
+        const char* s;  // heap-allocated buffer
+        unsigned l;     // length of string (used part of the buffer
+        unsigned m;     // allocated size of *s buffer
+    };
+
+Other ubiquitously used structures:
+
+Nucleotide sequences: 
+---------------------
+Three formats are supported: fasta/q, bam/sam and sff. They are not generalized / abstracted; instead, format-specific data is kept and propagated through entire processing. The sequences are stored in 2-tier structures. At the lower tier, the format-specific parts are included as union member. On upper tier, a number of lower tiers are aggregated into tmap_seqs_t. 
+
+The actual sequences are held either in character (ACGT...) format or in integer (uncompressed) format. The mapping between integers and IUPAC codes is defined in TMAP/util/tmap_definitions.h as tmap_iupac_char_to_int and tmap_iupac_int_to_char arrays.
+
+    struct tmap_fq_t
+    {
+        tmap_string_t *name;     // name string
+        tmap_string_t *comment;  // comment string
+        tmap_string_t *seq;      // sequence string
+        tmap_string_t *qual;     // quality string 
+        int is_int;              // 1 if the sequence is in integer format, 0 otherwise
+    };
+    typedef tmap_sam_t
+    {
+        bam1_t *b;               // SAM/BAM structure, asdefined in SAMtools bam.h
+        tmap_string_t *name;     // name string
+        tmap_string_t *seq;      // sequence string
+        tmap_string_t *qual;     // quality string
+        int is_int;              // 1 if the sequence is in integer format, 0 otherwise
+    };
+    struct tmap_sff_t
+    {
+        tmap_sff_header_t *gheader;      // pointer to the SFF global header, as defined in TMAP/seq/tmap_sff.h
+        tmap_sff_read_header_t *rheader; // pointer to the SFF read header
+        tmap_sff_read_t *read;           /// pointer to the SFF read
+        unsigned is_int;                 // 1 if the bases are integer values, 0 otherwise 
+    };
+    
+    // This anonymous enum defines the sequence data types that can be held in tmap_seq_t structure
+    enum 
+    {
+        TMAP_SEQ_TYPE_NOTYPE = -1,  // unknown type
+        TMAP_SEQ_TYPE_FQ = 0,       // FASTA/FASTQ
+        TMAP_SEQ_TYPE_SFF = 1,      // SFF
+        TMAP_SEQ_TYPE_SAM = 2,      // SAM
+        TMAP_SEQ_TYPE_BAM = 3       // BAM
+    };
+    
+    struct tmap_seq_t
+    {
+        int8 type;          // type associated with this structure: selector for the data union, one of the values from the above enum
+        union 
+        {
+            tmap_fq_t  *fq;    
+            tmap_sff_t *sff;  
+            tmap_sam_t *sam;  
+        } 
+        data;
+        const char *ks;                       // key sequence associated with this sequence, NULL if none
+        const char *fo;                       // flow order associated with this structure, NULL if none
+        const sam_header_record_t *rg_record; // read group record associated with this structure , NULL if none 
+        const sam_header_record_t *pg_record; // program group record associated with this structure, NULL if none
+        int fo_start_idx;                     // flow order start index associated with this structure, -1 if none */
+        ushort *flowgram;                     // flowgram 
+        int flowgram_len;                     // flowgram length
+    };
+    
+    struct tmap_seqs_t
+    {
+        tmap_seq_t **seqs;   // array of pointers to sequence descriptor structures
+        int n;               // number of (valid) pointers to sequence descriptor structures in 'seqs' array
+        int m;               // allocated size of 'seqs' array (number of slots)
+        int type;            // (presumably) the type of DNA sequence data - enum from tmap_seq.h
+    };
+    
+The aggregation of tmap_seq_t structures within tmap_seqs_t is used in sequence loading: when the tmap_seqs_t structure is loaded, it gets one sequence from each input file. 
+NOTE: The possible intention here is to multiplex file loading, but in the actual implementation they are loaded sequentially.
+NOTE: The current implementation actually fails to process multiple input files if they are of unequal length: reaching end of file on any terminates loading (see 
+NOTE: The memory management of the tmap_seqs_t requires quite specific order of operation: thus, the index in subsequent 'tmap_seqs_add' callsmay exceed already allocated limit by not more then one, memory corruption happens otherwise. 
+    
+    
+Alignments (mapping):
+---------------------
+
+    struct tmap_map_sam_t        // (bit-packing is omitted and actual types are generalized, their sizes are not preserved)
+    {
+        unsigned  algo_id;        // algorithm (ordinal) used to obtain this hit
+        unsigned  algo_stage;     // stage (ordinal) used to obtain this hit
+        unsigned  strand;         // strand (1 - forward?)
+        unsigned  seqid;          // reference index (0-based)
+        unsigned  pos;            // offset on reference
+        int       mapq;           // mapping quality
+        int       score;          // alignment score
+        int       ascore;         // base alignment score (SFF only)
+        int       pscore;         // pairing base alignment score (pairing only)
+        unsigned  proper_pair;    // 0 if not a proper pair, 1 otherwise
+        unsigned  repr_hit;       // 1 if a representative repetitive hit, 0 otherwise
+        double    num_stds;       // the number of standard deviations from the mean insert size 
+        int       pmapq;          // pairing mapping quality
+        int       score_subo;     // alignment score of the sub-optimal hit
+        int       n_cigar;        // number of cigar operators
+        unsigned *cigar;          // cigar operator array, as defined in SAMtools
+        unsigend target_len;      // internal variable, the reference length estimated by the seeding step
+        uint16_t n_seeds;         // number seeds in this hit
+        union 
+        {
+            tmap_map_map1_aux_t *map1_aux;
+            tmap_map_map2_aux_t *map2_aux;
+            tmap_map_map3_aux_t *map3_aux;
+            tmap_map_map4_aux_t *map4_aux;
+            tmap_map_map_vsw_aux_t *map_vsw_aux;
+        } 
+        aux; // auxiliary data specific to mapping method, used for map1 and map2 (bwt-derived methods), defined in tmap_map_util.h
+        tmap_vsw_result_t result; // Vectorized SW boundaries (query/target start/end and scores), defined in tmap_vsw_definitions.h
+    };
+    
+  
+    struct  tmap_map_sams_t // Stores multiple mappings for a given read
+    {
+        int n;                // number of hits
+        int max;              // number of hits before filtering
+        tmap_map_sam_t *sams; // array of hits
+    };
+
+    struct tmap_map_record_t  // multi-end record structure
+    {
+        tmap_map_sams_t **sams; // sam records
+        int n;                  // number of records (multi-end) in sams array
+    };
+    
+The aggregation of multiple tmap_sam_t's into tmap_map_sams_t is used for storing multiple mappings of the same read
+The aggregation of multiple tmap_map_sams_t's into tmap_map_record_t follows the aggregation of tmap_seq_t's into tmap_seqs_t, so that the processing of one tmap_seqs_t results in one tmap_map_record_t (?)
+
+
+
+The Architecture of the Mapping Tool:
+-------------------------------------
+
+The 'main' dispatches mapping subcommands to functions tmap_map*_main, located in TMAP/src/map/map*/tmap_map subdirectories (where star is on of 1, 2, 3, 4, vsw, all). The entire command line is passed to a chosen subcommand.
+
+The central data structures in high level logic of the mapper are 
+
+    struct tmap_map_opt_t;  // holds the parameters for the mapping method
+
+    struct tmap_map_driver_algorithm_t  // A mapping algorithm functions and workspace.
+    {
+	function* func_init;            // initializes persistent data across the program; ran once per program invocation
+	function* func_thread_init;     // initializes persistent data across that thread; ran once per thread
+	function* func_thread_map;      // maps the query to reference; ran once per query
+	function* func_thread_cleanup;  // cleanup/destroy any persistent data across the thread, ran once per thread before thread joins
+	funciton* func_cleanup;         // cleanup/destroy any persistent data across the program invocation; ran once per program invocation
+	tmap_map_opt_t *opt;            // parameters for the algorithm
+	void *data;                     // global persistent data for the algorithm
+	void **thread_data;             // thread-specific persistent data for the algorithm, array with one element per thread
+    };
+
+    struct tmap_map_driver_stage_t  // A collection of mapping algorithms to be applied in a specific stage.
+    {
+	int stage; 			           // this stage ordinal (one-based)
+	tmap_map_driver_algorithm_t **algorithms;  // array of algorithms held within at this stage
+	int num_algorithms;                        // number of algorithms pointers in the above array
+	tmap_map_opt_t *opt;                       // stage specific options 
+    };
+
+    struct tmap_map_driver_t  // Mapping driver, composed of a number of stages, each composed of a number of algorithms
+    {
+	tmap_map_driver_stage_t **stages;    // stages for the algorithms
+	int num_stages;                      // number of stage pointers in the above array
+	tmap_map_driver_func_mapq func_mapq; // function to calculate the mapping quality (also can filter results)
+	tmap_map_opt_t *opt;                 // global mapping options
+    };
+    
+    
+All the mapping tools use unified framework that abstracts and wraps the actual mapping method and uses same pre- and post- processing workflow.
+
+The operation of mapper can be described as interaction between 'workflow' and 'mapping driver' components. The driver presents various mapping methods through unified API. The workflow components calls the methods of those API according to the buziness logic of generalized mapping. The particular algorithms 'driven' by a driver differ depending on the tool used.
+
+The driver is a data structure that contains a number of 'Stage' structures, and a map_quality_meth (pointer to a function fo assessing mapping quality). Each Stage contains a number of 'Algorithm' structures. The algorithm holds pointers to methods: init, thread_init, thread_destroy, destroy, map.
+
+
+All of the mapping tools have similar structure:
+
+    tmap_map*_main () // * is one of: 1, 2, 3, 4, all, vsw
+    {
+        // initialize the driver
+        tmap_map_driver_t* driver = tmap_map_driver_init (algorithm_id, quality_and_filtering_function) // allocates memory and initializes command-line processor
+        @ parse passed command line; validate options and print help / exit if failed
+        // run mapping 
+        tmap_map*_core (driver); // the '*' is replaced with symbols that correspond to the method being run - 1,2,3,4,vsw,all
+        // release resources
+        tmap_map_driver_destroy (driver);
+    }
+    
+    tmap_map*_core (tmap_map_driver_t* driver)
+    {
+        @ populate driver's stages and algorithms: single for 1,2,3,4,vsw; as many as specified on command line for all.
+        // run the processing
+        tmap_map_driver_run (driver);
+    }
+    
+The tmap_map_driver_run invokes the generic processor that runs stages and algorithms of the passed driver structure. The code for most of this processing is contained in TMAP/src/map/tmap_map_driver.c
+
+    tmap_map_driver_run function just redirects to tmap_map_driver_core.
+    
+    tmap_map_driver_core (tmap_map_driver_t* driver)
+    {
+        // prepare input data for reading
+        tmap_seqs_io_init ();
+        // prepares to access reference index
+        tmap_index_init ();
+        // initialize algorithms
+        tmap_driver_do_init (); // calls 'init' function for each algorithm within a driver
+        @ allocate memory, initialize global and per-thread resources for processing, logging and output
+        // call pairing parameters estimator
+        tmap_map_driver_infer_pairing (); // run one chunk of sequences through mapper's multi-threaded processor (thread_core); 
+                                          // and compute pairing distance distribution parameters
+                                          // this loads seqs_buffer (if pairing enabled)
+        if (queries not loaded by infer_pairing)
+            @ load query sequences buffer   // loading is done into an array of 2-tier t_map_seqs structure, each containg a list of sequences
+            
+        while (1)
+        {
+            if (no queries loaded)
+            {
+                @ join query loading threads
+                @ swap 'active' and 'loading' sequence buffers
+                if (no queries loaded)
+                    break;
+                @ start query loading threads
+                
+                // spawn mapping threads
+                tmap_map_driver_create_threads (loaded seqs)
+                
+                for (each sequence index)
+                {
+                    if (at least one thread is still running)
+                        while (correspoinding thread (i%num_threads) did not yet process this sequence
+                        sleep (1 sec)
+                    @ write out the bam
+                    @ free bam memory
+                }
+                @ join mapping threads and free their resources
+            }
+        }
+        @ release program instance resources
+    }
+
+The main role of the above function is to prepare and run processing threads, which is done by:
+    
+    tmap_map_driver_create_threads (loaded seqs)  
+    {
+        if (threading_enabled)
+            for (thread_id from 0 to driver->opt->num_threads)
+            {
+                @ prepare environment for thread worker (in thread_data array)
+                @ create thread with tmap_map_driver_core_thread_worker as thread function, passing thread_id
+            }
+        else
+            tmap_map_driver_core_worker (loaded_seqs, ...)
+    }
+
+The worker function for the crated threads, 'tmap_map_driver_core_thread_worker', just redirects to tmap_map_driver_core_worker, that contains most of the mapping buziness logic:
+
+    tmap_map_driver_core_worker (seqs_buffer, ...tmap_map_record_t* records, ... this_thread_id) 
+    {
+        @ init thread data (for passed thread_id)
+        // 'low' is the sequence index in seqs_buffer
+        while (low < seq_buffer_length)
+        {
+            if (low % number_of_threads == this_thread_id)
+            {
+                @ make sure seqence buffer is allocated for at lease seq_buffer [low].n entries (se note on internal data structures
+                @ re-init random seeding
+                @ prepare local sequence representations (copy, rev, compl, rev/compl) for all sequences in seqs_buffer[low]
+                for (each driver's stage)
+                {
+                    for (each sequence in seqs_buffer[low] -- referred here as 'end')
+                    {
+                        if (stage max length is restricted in stage options)
+                        {
+                            @ prepare <extra copy> of local sequence representation: (copy, rev, compl and rev-compl)
+                            @  - and cut them at max_length 
+                        }
+                            
+                        for (each algorithm in a stage)
+                        {
+                            tmap_map_sams_t *sams = algorithm->func_thread_map () // method-specific mapping function
+                            tmap_sams_merge (records [low]->sams [sequence_idx], sams) // just add sequences
+                            tmap_sams_destroy (sams)
+                        }
+                        
+                        if (stage max length is restricted in stage options)
+                            @ destroy <extra copy> of local sequence representation: (copy, rev, compl and rev-compl)
+                    }
+                }
+                if (stage requires keeping all results)
+                {
+                    @ merge results from earlier stages into records [low]
+                    @ release memory held by results from earlier stages
+                    if (not a last stage)
+                        @ clone records_low as 'results from earlier stages'
+                }
+                
+                for (each query)
+                    // generate SW score - by calling 'reference' VSW
+                    tmap_map_util_sw_gen_score ()
+                    
+                for (each query)
+                    // remove duplicates
+                    @ pick random best-scoring hit from each group separated by not more then given window length
+                    
+                for (each query)
+                    @ compute mapping quality
+                    
+                
+                if (not last stage)
+                    for (each query)
+                        @ filter with stage-specific  score and quality thresholds
+                        
+                if (pairing enabled && driver support pairing)
+                {
+                    if (paired read resque enabled for a stage)
+                    {
+                        // note: in case of pairing the end's seqs [0] and [1] are used to hold members of a pair
+                        // resque reads: for either from the current read 
+                        //  - copy over best-scoring mappings 
+                        //  - recompute score (tmap_map_util_sw_gen_score ())
+                        tmap_map_pairing_read_resque ()
+                        
+                        @ recomoute qualities of resqued mappings
+                    }
+                    @ pick pairs - based on best score and mapping quality
+                }
+                else
+                {
+                    for (each query)
+                        @ filter mappings - based on best score / next best ('subordinate') score, and output parameters
+                }
+                
+                // generate the cigars
+                for (each sequence index j)
+                    records [low]->sams [j] = tmap_map_util_sw_gen_cigar ()
+                    
+                @ update stats, destroy local stats resources
+                
+                if (flowspace realignment requested)
+                {
+                    for (each query)
+                    {
+                        // realign in flowspace 
+                        tmap_map_util_fsw ()
+                        @ sort mappings by alignment score
+                    }
+                }
+                
+                if (realignment enabled)
+                {
+                    for (each sequence)
+                    {
+                        for (each match)
+                        {
+                            @ perform realignment
+                        }
+                    }
+                }
+                
+                @ convert records to bams (output)
+                
+                @ free query-based  resources
+            }
+        }
+        @ free thread resources
+    }
+    
+The recomputing of SW score function is based on the 'reference' implementation of Vectorized Smith-Waterman (VSW) algorithm.
+It is done by 'tmap_map_util_sw_gen_score' function, defined in TMAP/map/util/tmap_map_util.c 
+
+    tmap_map_util_sw_gen_score (reference, query, sams, seqs, ...)
+    // query is a pointer to plymorphic sequence 'tmap_map_seq'
+    // sams is the intented results storage,. 
+    // seqs is an array to 4 pointers: to fwd, fwd-compl, rev, rev-compl sequences
+    {
+        @ sort sams by ref_id, orientation, poition, score
+        
+        @ set soft clipping (if specified for query)
+        
+        @ initialize VSW engine
+        
+        @ group overlapping and nearby hits: form groups [num_groups] array
+        
+        // filter groups (if everything is filtered, relax settings iteratively)
+        do
+        {
+            if (group has no representative hit) // representative hit only defined for MAP4 algorithm; 
+                                                 // it is flagged by BWT if it is one kept of a group of repetitive matches
+                && (group length) > (# hits) * (stage-specific seed frequency))
+            {
+                @ do not filter the group
+            }
+            else
+                @ filter the group
+                
+            if (too few groups remain unfiltered)
+            {
+                @ unfilter all groups
+                @ reduce the stage-specific seed frequency by 2
+                if ((stage-specific seed frequency) * (# matches) > 1)
+                    break // do not filter anything 
+            }
+            else // filtering  successful
+                break;
+        }
+        while (1);
+        
+        // NOTE: the filtering logic code would benefit a lot from cleaning
+        
+        if (too few groups)
+            @ unfilter all groups
+        else if (filter unsuccessfull)
+            @ re-filter to retain needed number of groups with number of seeds below given maximum,
+            @   iteratively reducing maximum from 2 x max_groups_size, each time dividing by 2
+            @   stop when enough groups remain unfiltered
+            
+        // process unfiltered groups
+        
+        for (each group)
+        {
+            if (group filtered)
+                contnue;
+                
+            tmap_map_util_sw_gen_score_helper ()
+        }
+        
+        if (freq filter was applied && representative picking is ordered)
+        {
+            if (too many groups were filtered) 
+            {
+                // keep representatives from filtered groups
+                @ get best score from (so far) unfiltered groups. // NOTE: the mathces count is kept in variable 'j'. 
+                                                                  // sams [0:j] correspond to representatives of evaluated 
+                                                                  // (and thus unfiltered) groups.
+
+                @ pick filtered group with most number of 'seeds' (matches)
+                
+                // compute new score on those group
+                tmap_map_util_sw_gen_score_helper ()
+                @ unfilter it
+                
+                @ pick from filtered groups uniformly, compute new score for each picked, unfilter them
+                
+                @ get best score for just unfiltered groups  // note: j increased by scoring added unfiltered groups
+                                                                      // sams [k:j] are the newly added matches here
+                                                                      
+                if (best score of just unfitered is better then earlier best score)
+                {
+                    @ regenerate scores for all not-filtered groups
+                }
+            }
+        }
+    }
+    
+    tmap_map_sw_gen_score_helper ()
+    {
+        @ pick random seed from group
+        
+        @ check if long hits
+        
+        @ adjust for bandwidth
+        
+        @ get reference: allocate memory, copy subsequence
+        
+        score = vsw_proc_fwd ()
+        
+        if (more then one alignment found)
+        {
+            @ downweight subordinate scores 
+        }
+        
+        @ check for overflow
+        
+        if (score over min. threshold)
+        {
+            if (unroll banding requested and unroll possible)
+            {
+                @ unroll bands, keeping together only matches with starts close enough
+                // TODO: it is unclear how not-unrolled cases are treated 
+                @ recurse into tmap_map_sw_gen_score_helper for every single member of the group
+                set 'add_current' flag to 0 if score did not change
+            }
+            @ store adjusted alignment (positions, lengths, etc.)
+        }
+    }
+
+
+
+
+
+
+
+

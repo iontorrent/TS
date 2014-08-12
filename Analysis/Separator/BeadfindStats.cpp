@@ -1,6 +1,10 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include <iostream>
 #include <string>
+#include <stdlib.h>
+#include <algorithm>
+#include <vector>
+
 #include "BFReference.h"
 #include "DifferentialSeparator.h"
 #include "IonErr.h"

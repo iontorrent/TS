@@ -10,7 +10,8 @@
 
 // Compute the incorporation "red" hydrogen trace only without any "blue" hydrogen from the bulk or cross-talk
 // does not adjust for gain?
-void OldRedSolveHydrogenFlowInWell (float *vb_out, float *red_hydrogen, int len, int i_start,float *deltaFrame, float tauB)
+#if 0
+static void OldRedSolveHydrogenFlowInWell (float *vb_out, float *red_hydrogen, int len, int i_start,float *deltaFrame, float tauB)
 {
   float dv = 0.0f;
   float dvn = 0.0f;
@@ -36,8 +37,9 @@ void OldRedSolveHydrogenFlowInWell (float *vb_out, float *red_hydrogen, int len,
     vb_out[i] = dv = dvn;
   }
 }
+#endif
 
-void NewRedSolveHydrogenFlowInWell (float *vb_out, float *red_hydrogen, int len, int i_start, float *deltaFrame, float tauB)
+static void NewRedSolveHydrogenFlowInWell (float *vb_out, float *red_hydrogen, int len, int i_start, const float *deltaFrame, float tauB)
 {
 
   memset (vb_out,0,sizeof (float[i_start]));
@@ -61,13 +63,13 @@ void NewRedSolveHydrogenFlowInWell (float *vb_out, float *red_hydrogen, int len,
   }
 }
 
-void RedSolveHydrogenFlowInWell (float *vb_out, float *red_hydrogen, int len, int i_start,float *deltaFrame, float tauB)
+void MathModel::RedSolveHydrogenFlowInWell (float *vb_out, float *red_hydrogen, int len, int i_start,const float *deltaFrame, float tauB)
 {
   NewRedSolveHydrogenFlowInWell (vb_out,red_hydrogen,len,i_start,deltaFrame,tauB);
   //OldRedSolveHydrogenFlowInWell (vb_out,red_hydrogen,len,i_start,deltaFrame,tauB);
 }
 
-void IntegrateRedFromRedTraceObserved (float *red_hydrogen, float *red_obs, int len, int i_start, float *deltaFrame, float tauB)
+void MathModel::IntegrateRedFromRedTraceObserved (float *red_hydrogen, float *red_obs, int len, int i_start, float *deltaFrame, float tauB)
 {
 
   memset (red_hydrogen,0,sizeof (float[i_start]));
@@ -89,8 +91,9 @@ void IntegrateRedFromRedTraceObserved (float *red_hydrogen, float *red_obs, int 
   }
 }
 
+#if 0
 // generates the background trace for a well given the "empty" well measurement of blue_hydrogen ions
-void OldBlueSolveBackgroundTrace (float *vb_out, float *blue_hydrogen, int len, float *deltaFrame, float tauB, float etbR)
+static void OldBlueSolveBackgroundTrace (float *vb_out, float *blue_hydrogen, int len, float *deltaFrame, float tauB, float etbR)
 {
   float dv,dvn,dv_rs;
   float aval;
@@ -118,8 +121,9 @@ void OldBlueSolveBackgroundTrace (float *vb_out, float *blue_hydrogen, int len, 
     vb_out[i] = (dv+blue_hydrogen[i]);
   }
 }
+#endif
 
-void NewBlueSolveBackgroundTrace (float *vb_out, float *blue_hydrogen, int len, float *deltaFrame, float tauB, float etbR)
+void MathModel::NewBlueSolveBackgroundTrace (float *vb_out, const float *blue_hydrogen, int len, const float *deltaFrame, float tauB, float etbR)
 {
   int   i;
   float xt;
@@ -143,7 +147,8 @@ void NewBlueSolveBackgroundTrace (float *vb_out, float *blue_hydrogen, int len, 
   }
 }
 
-void NewBlueSolveBackgroundTrace (double *vb_out, const double *blue_hydrogen, int len, const double *deltaFrame, float tauB, float etbR)
+#if 0
+static void NewBlueSolveBackgroundTrace (double *vb_out, const double *blue_hydrogen, int len, const double *deltaFrame, float tauB, float etbR)
 {
   int   i;
   float xt;
@@ -166,15 +171,16 @@ void NewBlueSolveBackgroundTrace (double *vb_out, const double *blue_hydrogen, i
     vb_out[i] = ( (etbR+xt) *blue_hydrogen[i] - (etbR-xt) *blue_hydrogen[i-1]+ (1.0f-xt) *vb_out[i-1]) *one_over_one_plus_aval;
   }
 }
+#endif
 
-
-void BlueSolveBackgroundTrace (float *vb_out, float *blue_hydrogen, int len, float *deltaFrame, float tauB, float etbR)
+void MathModel::BlueSolveBackgroundTrace (float *vb_out, float *blue_hydrogen, int len, const float *deltaFrame, float tauB, float etbR)
 {
   NewBlueSolveBackgroundTrace (vb_out,blue_hydrogen,len,deltaFrame,tauB,etbR);
   //OldBlueSolveBackgroundTrace(vb_out,blue_hydrogen,len,deltaFrame,tauB,etbR);
 }
 
-void OldPurpleSolveTotalTrace (float *vb_out, float *blue_hydrogen, float *red_hydrogen, int len, float *deltaFrame, float tauB, float etbR)
+#if 0
+static void OldPurpleSolveTotalTrace (float *vb_out, float *blue_hydrogen, float *red_hydrogen, int len, float *deltaFrame, float tauB, float etbR)
 {
   float dv,dvn,dv_rs;
   float aval;
@@ -201,10 +207,12 @@ void OldPurpleSolveTotalTrace (float *vb_out, float *blue_hydrogen, float *red_h
     vb_out[i] = (dv+blue_hydrogen[i]);
   }
 }
+#endif
 
 //@TODO: vectorized versions of the new fucctions
 //@TODO: note that now it is most natural to use "delta-red" hydrogen flux rather than cumulative red hydrogen
-void NewPurpleSolveTotalTrace (float *vb_out, float *blue_hydrogen, float *red_hydrogen, int len, float *deltaFrame, float tauB, float etbR)
+static void NewPurpleSolveTotalTrace (float *vb_out, const float *blue_hydrogen, float *red_hydrogen, int len, 
+    const float *deltaFrame, float tauB, float etbR)
 {
   int   i;
   float xt;
@@ -228,7 +236,7 @@ void NewPurpleSolveTotalTrace (float *vb_out, float *blue_hydrogen, float *red_h
   }
 }
 
-void PurpleSolveTotalTrace (float *vb_out, float *blue_hydrogen, float *red_hydrogen, int len, float *deltaFrame, float tauB, float etbR)
+void MathModel::PurpleSolveTotalTrace (float *vb_out, const float *blue_hydrogen, float *red_hydrogen, int len, const float *deltaFrame, float tauB, float etbR)
 {
   NewPurpleSolveTotalTrace (vb_out,blue_hydrogen,red_hydrogen,len, deltaFrame, tauB, etbR);
   //OldPurpleSolveTotalTrace (vb_out,blue_hydrogen,red_hydrogen,len, deltaFrame, tauB, etbR);
@@ -237,7 +245,7 @@ void PurpleSolveTotalTrace (float *vb_out, float *blue_hydrogen, float *red_hydr
 
 // return >red_hydrogen< estimate
 // from purple_obs and blue_hydrogen
-void IntegrateRedFromObservedTotalTrace ( float *red_hydrogen, float *purple_obs, float *blue_hydrogen,  int len, float *deltaFrame, float tauB, float etbR)
+void MathModel::IntegrateRedFromObservedTotalTrace ( float *red_hydrogen, float *purple_obs, float *blue_hydrogen,  int len, float *deltaFrame, float tauB, float etbR)
 {
   int   i;
   float xt;
@@ -259,11 +267,11 @@ void IntegrateRedFromObservedTotalTrace ( float *red_hydrogen, float *purple_obs
 }
 
 // compute the trace for a single flow
-void RedTrace (float *red_out, float *ivalPtr, int npts, float *deltaFrameSeconds, float *deltaFrame, float *nuc_rise_ptr, int SUB_STEPS, int my_start,
+void MathModel::RedTrace (float *red_out, float *ivalPtr, int npts, float *deltaFrameSeconds, float *deltaFrame, float *nuc_rise_ptr, int SUB_STEPS, int my_start,
                float C, float A, float SP, float kr, float kmax, float d, float molecules_to_micromolar_conversion, float sens, float gain, float tauB,
-               PoissonCDFApproxMemo *math_poiss)
+               PoissonCDFApproxMemo *math_poiss, int incorporationModelType)
 {
-  ComputeCumulativeIncorporationHydrogens (ivalPtr, npts, deltaFrameSeconds, nuc_rise_ptr, ISIG_SUB_STEPS_SINGLE_FLOW, my_start,  C, A, SP, kr, kmax, d, molecules_to_micromolar_conversion, math_poiss);
+  MathModel::ComputeCumulativeIncorporationHydrogens (ivalPtr, npts, deltaFrameSeconds, nuc_rise_ptr, ISIG_SUB_STEPS_SINGLE_FLOW, my_start,  C, A, SP, kr, kmax, d, molecules_to_micromolar_conversion, math_poiss, incorporationModelType);
   MultiplyVectorByScalar (ivalPtr, sens,npts); // transform hydrogens to signal       // variables used for solving background signal shape
   RedSolveHydrogenFlowInWell (red_out,ivalPtr,npts,my_start,deltaFrame,tauB);
   MultiplyVectorByScalar (red_out,gain,npts);

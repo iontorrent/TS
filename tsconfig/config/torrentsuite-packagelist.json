@@ -1,7 +1,21 @@
 {
     "name": "torrentsuite-packagelist.json",
-    "version": "3.0.1",
+    "version": "4.2",
     "description": "Defines ubuntu packages to be installed on a Torrent Server",
+    "packages_12.04":{
+        "system": {
+            "allservers": [],
+            "master": [],
+            "compute": []
+        },
+        "torrentsuite": {
+            "allservers": [],
+            "master": [],
+            "compute": [],
+            "pgm": [],
+            "proton": []
+        }
+    },
     "packages": {
         "system": {
             "allservers": [
@@ -9,17 +23,11 @@
                 "ethtool",
                 "arp-scan",
                 "nmap",
-                "links",
-                "lynx",
-                "minicom",
-                "mc",
-                "screen",
                 "make",
                 "gdb",
                 "gcc",
                 "build-essential",
                 "imagemagick",
-                "emacs23",
                 "vcftools",
                 "bedtools",
                 "vim",
@@ -58,7 +66,7 @@
                 "python-requests",
                 "perl",
                 "perl-doc",
-                "openjdk-6-jre",
+                "default-jre",
                 "gnuplot-x11",
                 "putty-tools",
                 "gawk",
@@ -101,7 +109,7 @@
             ],
             "master": [
                 "ion-tsconfig",
-                "ion-plugins",
+                "ion-chefupdates",
                 "ion-jk",
                 "ion-igv",
                 "ion-docs",
@@ -109,7 +117,8 @@
                 "ion-sampledata",
                 "ion-publishers",
                 "ion-onetouchupdater",
-                "ion-dbreports"
+                "ion-dbreports",
+                "ion-plugins"
             ],
             "proton": [
                 "ion-protonupdates"

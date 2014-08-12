@@ -9,13 +9,15 @@ import traceback
 from ion.utils.blockprocessing import printtime
 
 
-''' Invoke ionstats basecaller to generate alignment-independent metrics for a single unmapped BAM '''
+''' Invoke ionstats basecaller to generate alignment-independent metrics for unmapped BAM files'''
 
-def generate_ionstats_basecaller(unmapped_bam_filename, ionstats_basecaller_filename, histogram_length):
-    
+def generate_ionstats_basecaller(unmapped_bam_filenames, ionstats_basecaller_filename, ionstats_alignment_h5_filename, basecaller_json, histogram_length):
+
     try:
         com = "ionstats basecaller"
-        com += " -i %s" % (unmapped_bam_filename)
+        com += " -i %s" % (unmapped_bam_filenames[0])
+        for unmapped_bam_filename in unmapped_bam_filenames[1:]:
+            com += ",%s" % (unmapped_bam_filename)
         com += " -o %s" % (ionstats_basecaller_filename)
         com += " -h %d" % (int(histogram_length))
         printtime("DEBUG: Calling '%s'" % com)
@@ -25,20 +27,36 @@ def generate_ionstats_basecaller(unmapped_bam_filename, ionstats_basecaller_file
         traceback.print_exc()
 
 
-''' Invoke ionstats alignment to generate alignment-based metrics for a single mapped BAM '''
+''' Invoke ionstats alignment to generate alignment-based metrics for a mapped BAM files'''
 
-def generate_ionstats_alignment(bam_filename, ionstats_alignment_filename, histogram_length):
-    
+def generate_ionstats_alignment(bam_filenames, ionstats_alignment_filename, ionstats_alignment_h5_filename, basecaller_json, histogram_length):
+
     try:
         com = "ionstats alignment"
-        com += " -i %s" % (bam_filename)
+        com += " -i %s" % (bam_filenames[0])
+        for bam_filename in bam_filenames[1:]:
+            com += ",%s" % (bam_filename)
         com += " -o %s" % (ionstats_alignment_filename)
         com += " -h %d" % (int(histogram_length))
+
+        if basecaller_json:
+            block_col_offset = basecaller_json["BaseCaller"]['block_col_offset']
+            block_row_offset = basecaller_json["BaseCaller"]['block_row_offset']
+            block_col_size   = basecaller_json["BaseCaller"]['block_col_size']
+            block_row_size   = basecaller_json["BaseCaller"]['block_row_size']
+
+            com += " --evaluate-hp true"
+            com += " --output-h5 %s" % ionstats_alignment_h5_filename
+            com += " --chip-origin %s,%s" % (block_col_offset, block_row_offset)
+            com += " --chip-dim %s,%s" % (block_col_size, block_row_size)
+            com += " --subregion-dim %s,%s" % ( min(92,block_col_size-1), min(74,block_row_size-1) )
+
         printtime("DEBUG: Calling '%s'" % com)
         subprocess.call(com,shell=True)
     except:
         printtime('Failed ionstats alignment')
         traceback.print_exc()
+
 
 ''' Invoke ionstats tf to generate test fragment statistics from a BAM mapped to TF reference '''
 
@@ -68,6 +86,19 @@ def reduce_stats (input_filename_list, output_filename):
     except:
         printtime('Failed ionstats reduce')
         traceback.print_exc()
+
+
+def reduce_stats_h5 (input_filename_list, output_filename):
+    try:
+        com = "ionstats reduce-h5"
+        com += " -o %s" % (output_filename)
+        com += " " + " ".join(input_filename_list)
+        printtime("DEBUG: Calling '%s'" % com)
+        subprocess.call(com,shell=True)
+    except:
+        printtime('Failed ionstats reduce-h5')
+        traceback.print_exc()
+
 
 ''' Use ionstats_quality.json file to generate legacy files: quality.summary '''
 
@@ -180,18 +211,5 @@ def generate_legacy_tf_files (ionstats_tf_filename, tfstats_json_filename):
     except:
         printtime('Failed to generate %s' % (tfstats_json_filename))
         traceback.print_exc()
-
-
-if __name__=="__main__":
-    
-    #generate_legacy_basecaller_files ('ionstats_basecaller.json', '')
-    #generate_legacy_tf_files ('ionstats_tf.json', 'TFStats2.json')
-    generate_ionstats_alignment('rawlib.bam', 'ionstats_alignment.json', 400)
-
-
-
-
-
-
 
 

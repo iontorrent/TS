@@ -18,7 +18,7 @@ if( $tqfh == 0 ) {
 }
 
 fwrite($tqfh,"<html><h2>Re-directing to Life Technologies TaqMan Genotyping Assay Search...</h2>\n<div style='display:none'>\n");
-fwrite($tqfh,"<form id='search_form' action='https://bioinfo.invitrogen.com/genome-database/MultipleTargets' method='POST' enctype='multipart/form-data'>");
+fwrite($tqfh,"<form id='search_form' action='https://www.lifetechnologies.com/order/genome-database/MultipleTargets' method='POST' enctype='multipart/form-data'>");
 fwrite($tqfh,"<input name='productTypeSelect' value='genotyping'/>\n");
 fwrite($tqfh,"<input name='targetTypeSelect' value='snp_all'/>\n");
 fwrite($tqfh,"<input name='species' value='' disabled='disabled'>\n");

@@ -286,7 +286,7 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 		Rcpp::IntegerVector    out_aligned_mapq(nReadOut);
 		Rcpp::IntegerVector    out_aligned_bin(nReadOut);
 		Rcpp::StringVector     out_aligned_cigar_type(nReadOut);
-		Rcpp::NumericMatrix out_aligned_cigar_len(nReadOut,maxCigarLength);
+		Rcpp::NumericMatrix    out_aligned_cigar_len(nReadOut,maxCigarLength);
 
 		Rcpp::StringVector     out_qDNA(nReadOut);
 		Rcpp::StringVector     out_match(nReadOut);
@@ -297,6 +297,12 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 		Rcpp::IntegerVector    out_q17Len(nReadOut);
 		Rcpp::IntegerVector    out_q20Len(nReadOut);
 		Rcpp::IntegerVector    out_q47Len(nReadOut);
+
+		// Extra tags for reading the spades file into R XXX
+		//Rcpp::NumericVector    out_SpadesDelta(nReadOut);
+		//Rcpp::NumericVector    out_SpadesFit(nReadOut);
+		//Rcpp::StringVector     out_SpadesAlt(nReadOut);
+
 
 		// Reopen the BAM, unless we already sampled the reads
 		BamTools::BamReader bamReader;
@@ -340,6 +346,17 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			int64_t flowClipRight = 0;
 			getTagParanoid(alignment,"ZG",flowClipRight);
 			out_flowClipRight(nReadsFromBam) = flowClipRight;
+
+			// Read extra spades tags XXX
+            //float spades_delta = 0;
+            //if (alignment.GetTag("YD", spades_delta))
+            //  out_SpadesDelta(nReadsFromBam) = spades_delta;
+            //float spades_fit = 0;
+            //if (alignment.GetTag("YF", spades_fit))
+            //  out_SpadesFit(nReadsFromBam) = spades_fit;
+            //string spades_alt;
+            //if (alignment.GetTag("YR", spades_alt))
+            //  out_SpadesAlt(nReadsFromBam) = spades_alt;
 
 			std::vector<uint16_t> flowInt;
 			if(alignment.GetTag("FZ", flowInt)){
@@ -403,8 +420,10 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 				unsigned int cigarLength = std::min(maxCigarLength, (unsigned int) alignment.CigarData.size());
 				unsigned int iCig=0;
 				std::string temp;
-				for(; iCig < cigarLength; iCig++) {
-					temp[iCig] = alignment.CigarData[iCig].Type;
+				temp.clear();
+				temp.reserve(cigarLength);
+				for(iCig=0; iCig < cigarLength; iCig++) {
+					temp.push_back(alignment.CigarData[iCig].Type);
 					out_aligned_cigar_len(nReadsFromBam,iCig)   = alignment.CigarData[iCig].Length;
 				}
 				out_aligned_cigar_type(nReadsFromBam) = temp;
@@ -489,6 +508,12 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 			Rcpp::IntegerVector    out2_q20Len(nReadsFromBam);
 			Rcpp::IntegerVector    out2_q47Len(nReadsFromBam);
 
+			// Spades XXX
+			//Rcpp::NumericVector    out2_SpadesDelta(nReadsFromBam);
+			//Rcpp::NumericVector    out2_SpadesFit(nReadsFromBam);
+			//Rcpp::StringVector     out2_SpadesAlt(nReadsFromBam);
+
+
 			for(unsigned int i=0; i<nReadsFromBam; i++) {
 				out2_id(i)               = out_id(i);
 				out2_groupID(i)          = out_readGroup(i);
@@ -533,10 +558,18 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 					out2_q17Len(i) = out_q17Len(i);
 					out2_q20Len(i) = out_q20Len(i);
 					out2_q47Len(i) = out_q47Len(i);
+
+					// Spades XXX
+					//out2_SpadesDelta(i) = out_SpadesDelta(i);
+					//out2_SpadesFit(i) = out_SpadesFit(i);
+					//out2_SpadesAlt(i) = out_SpadesAlt(i);
 				}
 			}
+
+            /// map data
             map["nFlow"]            = Rcpp::wrap( (int) std::max(my_cache.nFlowFZ,my_cache.nFlowZM));
             map["id"]               = Rcpp::wrap( out2_id );
+             map["readGroup"]        = Rcpp::wrap( out2_groupID );
 	        map["col"]              = Rcpp::wrap( out2_col );
 	        map["row"]              = Rcpp::wrap( out2_row );
 		    map["length"]           = Rcpp::wrap( out2_length );
@@ -552,6 +585,7 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
 	        map["phase"]            = Rcpp::wrap( out2_phase );
 	        map["base"]             = Rcpp::wrap( out2_base );
 	        map["qual"]             = Rcpp::wrap( out2_qual );
+
 			if(haveMappingData) {
               map["alignFlag"]       = Rcpp::wrap( out2_aligned_flag );
               map["alignBase"]       = Rcpp::wrap( out2_aligned_base );
@@ -569,6 +603,11 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
               map["q17Len"]          = Rcpp::wrap( out2_q17Len );
               map["q20Len"]          = Rcpp::wrap( out2_q20Len );
               map["q47Len"]          = Rcpp::wrap( out2_q47Len );
+              // Spades XXX
+              //map["SpadesDelta"]     = Rcpp::wrap( out2_SpadesDelta );
+              //map["SpadesFit"]      = Rcpp::wrap( out2_SpadesFit );
+              //map["SpadesAlt"]      = Rcpp::wrap( out2_SpadesAlt );
+
 			}
 		} else {
              map["nFlow"]            = Rcpp::wrap( (int) std::max(my_cache.nFlowFZ,my_cache.nFlowZM) );
@@ -608,6 +647,10 @@ RcppExport SEXP readIonBam(SEXP RbamFile, SEXP Rcol, SEXP Rrow, SEXP RmaxBases, 
               map["q17Len"]            = Rcpp::wrap( out_q17Len );
               map["q20Len"]            = Rcpp::wrap( out_q20Len );
               map["q47Len"]            = Rcpp::wrap( out_q47Len );
+              // Spades XXX
+              //map["SpadesDelta"]     = Rcpp::wrap( out_SpadesDelta );
+              //map["SpadesFit"]      = Rcpp::wrap( out_SpadesFit );
+              //map["SpadesAlt"]      = Rcpp::wrap( out_SpadesAlt );
 			}
 		}
         ret = Rcpp::wrap( map );

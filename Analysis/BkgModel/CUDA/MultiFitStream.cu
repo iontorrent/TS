@@ -10,10 +10,10 @@
 #include "cuda_runtime.h"
 
 #include "StreamingKernels.h" 
-#include "StreamManager.h"
 #include "MultiFitStream.h"
 #include "JobWrapper.h"
-
+#include "GpuMultiFlowFitControl.h"
+#include "SignalProcessingFitterQueue.h"
 
 using namespace std;
 
@@ -45,7 +45,12 @@ int SimpleMultiFitStream::l1DefaultSettingPartialD()
 /////////////////////////////////////////////////
 //MULTI FIT STREAM CLASS
 
-SimpleMultiFitStream::SimpleMultiFitStream(streamResources * res, WorkerInfoQueueItem item ) : cudaSimpleStreamExecutionUnit(res, item)
+SimpleMultiFitStream::SimpleMultiFitStream(streamResources * res, WorkerInfoQueueItem item ) : 
+  cudaSimpleStreamExecutionUnit(res, item),
+  _myJob( static_cast< BkgModelWorkInfo * >( item.private_data )->flow_key,
+          static_cast< BkgModelWorkInfo * >( item.private_data )->inception_state->
+              bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow(
+                static_cast< BkgModelWorkInfo * >( item.private_data )->flow )->size() )
 {
   setName("MultiFitStream");
 
@@ -69,52 +74,9 @@ SimpleMultiFitStream::SimpleMultiFitStream(streamResources * res, WorkerInfoQueu
     CalculateClonalityRestriction(i);
   }
 
-	//worst case scenario:
+  //worst case scenario:
 
   _fitIter = 0;
-
-  _HostConstP = NULL; // I 1
-
-  _pHostBeadParams = NULL; // I 2
-
-  _pHostFgBuffer = NULL; 
-  _pHostNucRise = NULL; 
-  _pHostSbg = NULL; 
-  _pHostEmphasis = NULL; 
-  _pHostNon_integer_penalty = NULL; 
-  _pHostDarkMatterComp = NULL; 
-
-  _pDevObservedTrace = NULL;
-  _pDevObservedTraceTranspose = NULL;
-  _pDevNucRise = NULL; 
-  _pDevSbg = NULL; 
-  _pDevEmphasis = NULL; 
-  _pDevNon_integer_penalty = NULL; 
-  _pDevDarkMatterComp = NULL; 
-  _pDevBeadParams = NULL; 
-  _pDevBeadParamsTranspose = NULL; 
-  _pDevIval = NULL; 
-  _pDevScratch_ival = NULL; 
-  _pDevResidual = NULL;
-
-
-  _DevFitData.Steps = NULL; 
-  _DevFitData.LambdaForBeadFit = NULL;
-  _DevFitData.JTJMatrixMapForDotProductComputation = NULL;
-  _DevFitData.BeadParamIdxMap = NULL;
-
-  _pDevJTJ = NULL;
-  _pDevRHS = NULL;
-  _pDevLTR = NULL;
-
-  for (int i=0; i<CUDA_MULTIFLOW_NUM_FIT; ++i)
-  {
-    _HostFitData[i].Steps = NULL;
-    _HostFitData[i].LambdaForBeadFit = NULL;
-    _HostFitData[i].JTJMatrixMapForDotProductComputation = NULL;
-    _HostFitData[i].BeadParamIdxMap = NULL;
-  }
-
 
 }
 
@@ -128,8 +90,8 @@ SimpleMultiFitStream::~SimpleMultiFitStream()
 void SimpleMultiFitStream::cleanUp()
 {
 
-   if(_verbose) cout << getLogHeader() << " clean up"  << endl;
-   CUDA_ERROR_CHECK();
+  if(_verbose) cout << getLogHeader() << " clean up"  << endl;
+  CUDA_ERROR_CHECK();
 }
 
 
@@ -139,123 +101,149 @@ void SimpleMultiFitStream::resetPointers()
 
   if(_verbose) cout << getLogHeader() << " resetting pointers for job with " << _myJob.getNumBeads() << "("<< _myJob.getPaddedN() <<") beads and " << _myJob.getNumFrames() << " frames" << endl;
 
-// fit invariant inputs
+  // fit invariant inputs
 
-   if(!_Device->checkMemory( getMaxDeviceMem(_myJob.getNumFrames(),_myJob.getNumBeads())))
-      cout << getLogHeader() << " succesfully reallocated device memory to handle Job" << endl;
-
+  try{
 
 
-
-  _HostConstP  = (ConstParams*)_Host->getSegment(sizeof(ConstParams)); CUDA_ALLOC_CHECK(_HostConstP);  
-
-  _pHostBeadParams =  (bead_params*) _Host->getSegment( _myJob.getBeadParamsSize(true)); 
-  _pDevBeadParams =  (bead_params*) _Device->getSegment( _myJob.getBeadParamsSize(true));
+    if(!_resource->checkDeviceMemory( getMaxDeviceMem(_myJob.getFlowKey(),_myJob.getFlowBlockSize(),_myJob.getNumFrames(),_myJob.getNumBeads() )))
+      cout << getLogHeader() << " Successfully reallocated device memory to handle Job" << endl;
 
 
-  _Host->startNewSegGroup();
+    _hConstP  = _resource->getHostSegment(sizeof(ConstParams));
 
-  _pHostFgBuffer = (FG_BUFFER_TYPE*)_Host->getSegment(_myJob.getFgBufferSizeShort(true)); CUDA_ALLOC_CHECK(_pHostFgBuffer); 
-  _pDevObservedTrace = (FG_BUFFER_TYPE*)_Device->getSegment(_myJob.getFgBufferSizeShort(true)); CUDA_ALLOC_CHECK(_pDevObservedTrace);
-
-  _pHostNucRise  = (float*)_Host->getSegment(_myJob.getNucRiseSize(true));  // ISIG_SUB_STEPS_SINGLE_FLOW * F * NUMFB 
-  _pDevNucRise = (float*)_Device->getSegment(_myJob.getNucRiseSize(true)); // ISIG_SUB_STEPS_SINGLE_FLOW * F * NUMFB 
-
-  _pHostSbg  = (float*)_Host->getSegment(_myJob.getShiftedBackgroundSize(true)); // NUMFB*F 
-  _pDevSbg = (float*)_Device->getSegment(_myJob.getShiftedBackgroundSize(true));// NUMFB*F
-
-  _pHostEmphasis  = (float*)_Host->getSegment(_myJob.getEmphVecSize(true)); // (MAX_POISSON_TABLE_COL)*F 
-  _pDevEmphasis = (float*)_Device->getSegment(_myJob.getEmphVecSize(true)); // (MAX_POISSON_TABLE_COL)*F
-
-  _pHostNon_integer_penalty  = (float*)_Host->getSegment(_myJob.getClonalCallScaleSize(true)); 
-  _pDevNon_integer_penalty = (float*)_Device->getSegment(_myJob.getClonalCallScaleSize(true)); 
-
-  _pHostDarkMatterComp  = (float*)_Host->getSegment(_myJob.getDarkMatterSize(true)); // NUMNUC*F 
-  _pDevDarkMatterComp = (float*)_Device->getSegment(_myJob.getDarkMatterSize(true)); // NUMNUC*F
+    _hdBeadParams = _resource->GetHostDevPair(_myJob.getBeadParamsSize(true));
 
 
-  _invariantCopyInSize = _Host->getCurrentSegGroupSize();
 
-// fit variant inputs
+    _resource->StartNewSegGroup();
 
-   // fit specific host memory allocations
-  for (int i=0; i<CUDA_MULTIFLOW_NUM_FIT; ++i) 
-  {
-    _HostFitData[i].Steps = (CpuStep_t*)_Host->getSegment( _myJob.getPartialDerivStepsMaxSize(true)); 
-    _HostFitData[i].JTJMatrixMapForDotProductComputation = (unsigned int*)_Host->getSegment(_myJob.getJTJMatrixMapMaxSize(true));
-    _HostFitData[i].BeadParamIdxMap = (unsigned int*)_Host->getSegment(_myJob.getBeadParamIdxMapMaxSize(true));  
-    _HostFitData[i].LambdaForBeadFit = (float*)_Host->getSegment(_myJob.getFloatPerBead(true));  
-  }
+    // We reuse the same buffer for both _hdFgBuffer and _dPartialDerivsOutput+_dDelta.
+    _hdFgBuffer = _resource->GetHostDevPair( _myJob.getReusedFgBufferPartialDerivsSize(true) );
+    _hdNucRise  = _resource->GetHostDevPair(_myJob.getNucRiseSize(true));  // ISIG_SUB_STEPS_SINGLE_FLOW * F * flow_block_size
+    _hdSbg  = _resource->GetHostDevPair(_myJob.getShiftedBackgroundSize(true)); // flow_block_size*F
+    _hdEmphasis  = _resource->GetHostDevPair(_myJob.getEmphVecSize(true)); // (MAX_POISSON_TABLE_COL)*F
+    _hdNon_integer_penalty  = _resource->GetHostDevPair(_myJob.getClonalCallScaleSize(true));
+    _hdDarkMatterComp  = _resource->GetHostDevPair(_myJob.getDarkMatterSize(true)); // NUMNUC*F
+
+    _hdInvariantCopyInGroup = _resource->GetCurrentPairGroup();
+
+    // fit variant inputs
 
 
-    _Device->startNewSegGroup();
+    _resource->StartNewDeviceSegGroup();
 
-    _DevFitData.Steps = (CpuStep_t*)_Device->getSegment( _myJob.getPartialDerivStepsMaxSize(true)); 
-    _DevFitData.JTJMatrixMapForDotProductComputation = (unsigned int*)_Device->getSegment(_myJob.getJTJMatrixMapMaxSize(true));
-    _DevFitData.BeadParamIdxMap = (unsigned int*)_Device->getSegment(_myJob.getBeadParamIdxMapMaxSize(true));  
-    _DevFitData.LambdaForBeadFit = (float*)_Device->getSegment(_myJob.getFloatPerBead(true));  
 
-    _fitSpecificCopyInSize = _Device->getCurrentSegGroupSize();
+    _DevFitData.Steps = _resource->getDevSegment(_myJob.getPartialDerivStepsMaxSize(true));
+    _DevFitData.JTJMatrixMapForDotProductComputation = _resource->getDevSegment(_myJob.getJTJMatrixMapMaxSize(true));
+    _DevFitData.BeadParamIdxMap = _resource->getDevSegment(_myJob.getBeadParamIdxMapMaxSize(true));
+    _DevFitData.LambdaForBeadFit = _resource->getDevSegment(_myJob.getFloatPerBead(true));
+    MemSegment FitVariantDataDeviceGroup = _resource->GetCurrentDeviceGroup();
 
-// Device work/scratch buffer:
 
-  _pDevBeadParamsEval = (float*)_Device->getSegment( _myJob.getBeadParamsSize(true)); CUDA_ALLOC_CHECK(_pDevBeadParamsEval); 
-  _pDevBeadParamsTranspose = (float*)_Device->getSegment( _myJob.getBeadParamsSize(true)); CUDA_ALLOC_CHECK(_pDevBeadParamsTranspose); 
-  _pDevObservedTraceTranspose = (float*)_Device->getSegment( _myJob.getFgBufferSize(true)); CUDA_ALLOC_CHECK(_pDevObservedTraceTranspose); 
- // we need a specific struct describing this config for this well fit for GPU
+    // fit specific host memory allocations
+    for (int i=0; i<CUDA_MULTIFLOW_NUM_FIT; ++i)
+    {
+      _resource->StartNewHostSegGroup();
+      _HostDeviceFitData[i].Steps = _resource->getHostSegment( _myJob.getPartialDerivStepsMaxSize(true));
+      _HostDeviceFitData[i].JTJMatrixMapForDotProductComputation = _resource->getHostSegment(_myJob.getJTJMatrixMapMaxSize(true));
+      _HostDeviceFitData[i].BeadParamIdxMap = _resource->getHostSegment(_myJob.getBeadParamIdxMapMaxSize(true));
+      _HostDeviceFitData[i].LambdaForBeadFit = _resource->getHostSegment(_myJob.getFloatPerBead(true));
+      MemSegment FitVariantDataHostGroup = _resource->GetCurrentHostGroup();
+      //create copy pair for each fitting.
+      _HostDeviceFitData[i].hdCopyGroup = MemSegPair(FitVariantDataHostGroup, FitVariantDataDeviceGroup);
 
-  _pDevIval = (float*)_Device->getSegment( _myJob.getFxB(true)); CUDA_ALLOC_CHECK(_pDevIval); // FLxNxF
-  _pDevScratch_ival = (float*)_Device->getSegment(_myJob.getFxB(true)); CUDA_ALLOC_CHECK(_pDevScratch_ival); // FLxNxF
-  _pDevResidual = (float*)_Device->getSegment( _myJob.getFloatPerBead(true)); CUDA_ALLOC_CHECK(_pDevResidual); // FLxNxF
+    }
+
+    // Device work/scratch buffer:
+
+    _dBeadParamsEval = _resource->getDevSegment(_myJob.getBeadParamsSize(true));
+    _dBeadParamsTranspose = _resource->getDevSegment(_myJob.getBeadParamsSize(true));
+    _dFgBufferTransposed = _resource->getDevSegment(_myJob.getFgBufferSize(true));
+
+    // we need a specific struct describing this config for this well fit for GPU
+    _dIval = _resource->getDevSegment(_myJob.getFxB(true)); // FLxNxF
+    _dScratch_ival = _resource->getDevSegment(_myJob.getFxB(true)); // FLxNxF
+    _dResidual = _resource->getDevSegment(_myJob.getFloatPerBead(true)); // FLxNxF
 
 
     // lev mar fit matrices
-  _pDevJTJ = (float*)_Device->getSegment( _myJob.getParamMatrixMaxSize(true) ); CUDA_ALLOC_CHECK(_pDevJTJ);
-  _pDevLTR = (float*)_Device->getSegment( _myJob.getParamMatrixMaxSize(true) ); CUDA_ALLOC_CHECK(_pDevLTR);
-  _pDevRHS = (float*)_Device->getSegment( _myJob.getParamRHSMaxSize(true)); CUDA_ALLOC_CHECK(_pDevRHS);
-    
-  _pd_partialDerivsOutput = (float*)_pDevObservedTrace;
-  _pd_delta = _pd_partialDerivsOutput + _myJob.getMaxSteps()*_myJob.getPaddedN()*_myJob.getNumFrames();
+    _dJTJ = _resource->getDevSegment(_myJob.getParamMatrixMaxSize(true) );
+    _dLTR = _resource->getDevSegment(_myJob.getParamMatrixMaxSize(true) );
+    _dRHS = _resource->getDevSegment(_myJob.getParamRHSMaxSize(true));
+
+    //re-use fgBuffer device segment
+    _dPartialDerivsOutput = _hdFgBuffer.getDeviceSegment();
+    _dDelta = _dPartialDerivsOutput.splitAt( sizeof(float)*_myJob.getMaxSteps()*_myJob.getPaddedN()*
+                                                           _myJob.getNumFrames() );
+
+  }
+  catch (cudaException &e)
+  {
+    cout << getLogHeader() << "Encountered Error during Resource Acquisition!" << endl;
+    throw cudaExecutionException(e.getCudaError(),__FILE__,__LINE__);
+  }
+
+  if(_verbose)cout << getLogHeader() << " " <<  _resource->Status() << endl;
 
 }
-
-
-
-
 
 void SimpleMultiFitStream::serializeFitInvariantInputs()
 {  //inputs
 
   if(_verbose) cout << getLogHeader() <<" serialize data for fit invariant asnync global mem copy" << endl;
 
+  try{
 
-  memcpy(_pHostFgBuffer, _myJob.getFgBuffer(), _myJob.getFgBufferSizeShort());
-  memcpy(_pHostBeadParams, _myJob.getBeadParams() , _myJob.getBeadParamsSize());  
-  memcpy(_pHostDarkMatterComp, _myJob.getDarkMatter(), _myJob.getDarkMatterSize()); 
-  memcpy(_pHostSbg,_myJob.getShiftedBackground(), _myJob.getShiftedBackgroundSize()); 
-  memcpy(_pHostEmphasis,_myJob.getEmphVec() , _myJob.getEmphVecSize());
-  memcpy(_pHostNucRise, _myJob.getCalculateNucRiseCoarse() , _myJob.getNucRiseCoarseSize());  
+    _hdFgBuffer.copyIn(_myJob.getFgBuffer(), _myJob.getFgBufferSizeShort());
+    _hdBeadParams.copyIn(_myJob.getBeadParams() , _myJob.getBeadParamsSize());
+    _hdDarkMatterComp.copyIn(_myJob.getDarkMatter(), _myJob.getDarkMatterSize());
+    _hdSbg.copyIn(_myJob.getShiftedBackground(), _myJob.getShiftedBackgroundSize());
+    _hdEmphasis.copyIn(_myJob.getEmphVec() , _myJob.getEmphVecSize());
+    _hdNucRise.copyIn(_myJob.getCalculateNucRiseCoarse() , _myJob.getNucRiseCoarseSize());
 
 
-  //const memory
-  *((reg_params* )_HostConstP) = *(_myJob.getRegionParams()); // 4
-  memcpy( _HostConstP->start, _myJob.getStartNucCoarse()  , _myJob.getStartNucCoarseSize() );
-  memcpy( _HostConstP->deltaFrames, _myJob.getDeltaFrames() , _myJob.getDeltaFramesSize() );
-  memcpy( _HostConstP->flowIdxMap, _myJob.getFlowIdxMap() , _myJob.getFlowIdxMapSize());  
-  memcpy(&_HostConstP->beadParamsMaxConstraints, _myJob.getBeadParamsMax(), _myJob.getBeadParamsMaxSize());
-  memcpy(&_HostConstP->beadParamsMinConstraints, _myJob.getBeadParamsMin(), _myJob.getBeadParamsMinSize());
-  _HostConstP->useDarkMatterPCA = _myJob.useDarkMatterPCA();
+    // a little hacky but we want to fill the structure in page locked memory with data
+    ConstParams* tmpConstP = _hConstP.getPtr();
+    //init the reg_param part (all we need from the reg params is non-dynamic)
+    reg_params* tmpConstPCastToReg = (reg_params*)tmpConstP;
+    *(tmpConstPCastToReg) = *(_myJob.getRegionParams()); // use the
+    // init the rest of the ConstParam buffers
+    memcpy( tmpConstP->start, _myJob.getStartNucCoarse()  , _myJob.getStartNucCoarseSize() );
+    memcpy( tmpConstP->deltaFrames, _myJob.getDeltaFrames() , _myJob.getDeltaFramesSize() );
+    memcpy( tmpConstP->flowIdxMap, _myJob.getFlowIdxMap() , _myJob.getFlowIdxMapSize());
+    memcpy( tmpConstP->non_zero_emphasis_frames, _myJob.GetNonZeroEmphasisFrames(), 
+        _myJob.GetNonZeroEmphasisFramesVecSize());
+    memcpy(&tmpConstP->beadParamsMaxConstraints, _myJob.getBeadParamsMax(), _myJob.getBeadParamsMaxSize());
+    memcpy(&tmpConstP->beadParamsMinConstraints, _myJob.getBeadParamsMin(), _myJob.getBeadParamsMinSize());
+    tmpConstP->useDarkMatterPCA = _myJob.useDarkMatterPCA();
 
+  }
+  catch (cudaException &e)
+  {
+    cout << getLogHeader() << "Encountered Error during Input Serialization!" << endl;
+    throw cudaExecutionException(e.getCudaError(),__FILE__,__LINE__);
+  }
 }
 
 void SimpleMultiFitStream::serializeFitSpecificInputs(int fit_index)
 {
   //inputs
-   if(_verbose) cout << getLogHeader() <<" serialize data for fit specific asnync global mem copy" << endl;
- 
-  memcpy(_HostFitData[fit_index].Steps, _myJob.getPartialDerivSteps(fit_index) , _myJob.getPartialDerivStepsSize(fit_index) ); 
-  memcpy(_HostFitData[fit_index].JTJMatrixMapForDotProductComputation, _myJob.getJTJMatrixMap(fit_index), _myJob.getJTJMatrixMapSize(fit_index));  
-  memcpy(_HostFitData[fit_index].BeadParamIdxMap, _myJob.getBeadParamIdxMap(fit_index), _myJob.getBeadParamIdxMapSize(fit_index) );
+  if(_verbose) cout << getLogHeader() <<" serialize data for fit specific asnync global mem copy" << endl;
+
+  try{
+
+    _HostDeviceFitData[fit_index].Steps.copyIn(_myJob.getPartialDerivSteps(fit_index) , _myJob.getPartialDerivStepsSize(fit_index) );
+    _HostDeviceFitData[fit_index].JTJMatrixMapForDotProductComputation.copyIn(_myJob.getJTJMatrixMap(fit_index), _myJob.getJTJMatrixMapSize(fit_index));
+    _HostDeviceFitData[fit_index].BeadParamIdxMap.copyIn(_myJob.getBeadParamIdxMap(fit_index), _myJob.getBeadParamIdxMapSize(fit_index) );
+
+  }
+
+  catch (cudaException &e)
+  {
+    cout << getLogHeader() << "Encountered Error during Fit Specific Input Serialization!" << endl;
+    throw cudaExecutionException(e.getCudaError(),__FILE__,__LINE__);
+  }
 
 }
 
@@ -278,18 +266,24 @@ void SimpleMultiFitStream::copyFitInvariantInputsToDevice()
   //cout << "Copy data to GPU" << endl;
   if(_verbose) cout << getLogHeader() << " Invariant Async Copy To Device" << endl;
 
-//  cudaMemcpyAsync(_pDevObservedTrace,  _pHostFgBuffer, _invariantCopyInSize, cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK();
+  try{
+     //_hdNon_integer_penalty.copyToDeviceAsync(_stream,_myJob.getClonalCallScaleSize());
+     //_hdFgBuffer.copyToDeviceAsync(_stream, _myJob.getFgBufferSizeShort());
+     //_hdDarkMatterComp.copyToDeviceAsync(_stream, _myJob.getDarkMatterSize());
+     //_hdSbg.copyToDeviceAsync(_stream, _myJob.getShiftedBackgroundSize());
+     //_hdEmphasis.copyToDeviceAsync( _stream, _myJob.getEmphVecSize());
+     //_hdNucRise.copyToDeviceAsync(_stream, _myJob.getNucRiseCoarseSize());
+    _hdInvariantCopyInGroup.copyToDeviceAsync(_stream);
 
-  cudaMemcpyAsync(_pDevNon_integer_penalty, _pHostNon_integer_penalty,_myJob.getClonalCallScaleSize(), cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK(); 
-  cudaMemcpyAsync((FG_BUFFER_TYPE*)_pDevObservedTrace, _pHostFgBuffer, _myJob.getFgBufferSizeShort(), cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK();
-  cudaMemcpyAsync(_pDevDarkMatterComp, _pHostDarkMatterComp, _myJob.getDarkMatterSize(), cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK(); 
-  cudaMemcpyAsync(_pDevSbg, _pHostSbg, _myJob.getShiftedBackgroundSize(), cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK(); 
-  cudaMemcpyAsync(_pDevEmphasis, _pHostEmphasis, _myJob.getEmphVecSize(), cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK();
-  cudaMemcpyAsync(_pDevNucRise, _pHostNucRise, _myJob.getNucRiseCoarseSize(), cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK();  
+    //  copyMultiFlowFitConstParamAsync(_HostConstP, getStreamId(),_stream);CUDA_ERROR_CHECK();
+    StreamingKernels::copyFittingConstParamAsync(_hConstP.getPtr(), getStreamId(),_stream);CUDA_ERROR_CHECK();
+  }
 
-
-//  copyMultiFlowFitConstParamAsync(_HostConstP, getStreamId(),_stream);CUDA_ERROR_CHECK();
-  copyFittingConstParamAsync(_HostConstP, getStreamId(),_stream);CUDA_ERROR_CHECK();
+  catch(cudaException &e)
+  {
+    cout << getLogHeader() << "Encountered Error during Copy to device!" << endl;
+    throw cudaExecutionException(e.getCudaError(),__FILE__,__LINE__);
+  }
 
 }
 
@@ -299,13 +293,19 @@ void SimpleMultiFitStream::copyFitSpecifcInputsToDevice(int fit_index)
   //cout << "Copy data to GPU" << endl;
   if(_verbose) cout << getLogHeader() << " Fit Specific Async Copy To Device" << endl;
 
- // cudaMemcpyAsync(_DevFitData.Steps, _HostFitData[fit_index].Steps, _fitSpecificCopyInSize  , cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK();
-   cudaMemcpyAsync(_DevFitData.Steps, _HostFitData[fit_index].Steps, _myJob.getPartialDerivStepsSize(fit_index)  , cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK(); 
+  try{
+    //_DevFitData.Steps.copyAsync(_HostDeviceFitData[fit_index].Steps, _stream, _myJob.getPartialDerivStepsSize(fit_index));
+    //_DevFitData.JTJMatrixMapForDotProductComputation.copyAsync(_HostDeviceFitData[fit_index].JTJMatrixMapForDotProductComputation, _stream, _myJob.getJTJMatrixMapSize(fit_index));
+    //_DevFitData.BeadParamIdxMap.copyAsync(_HostDeviceFitData[fit_index].BeadParamIdxMap, _stream, _myJob.getBeadParamIdxMapSize(fit_index));
+    //_DevFitData.LambdaForBeadFit.copyAsync(_HostDeviceFitData[fit_index].LambdaForBeadFit,_stream,_myJob.getFloatPerBead());
+    _HostDeviceFitData[fit_index].hdCopyGroup.copyToDeviceAsync(_stream);
+  }
 
-  cudaMemcpyAsync(_DevFitData.JTJMatrixMapForDotProductComputation, _HostFitData[fit_index].JTJMatrixMapForDotProductComputation , _myJob.getJTJMatrixMapSize(fit_index) , cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK();  
- cudaMemcpyAsync(_DevFitData.BeadParamIdxMap, _HostFitData[fit_index].BeadParamIdxMap, _myJob.getBeadParamIdxMapSize(fit_index), cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK();  
- cudaMemcpyAsync(_DevFitData.LambdaForBeadFit, _HostFitData[fit_index].LambdaForBeadFit,_myJob.getFloatPerBead() , cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK(); 
-
+  catch(cudaException &e)
+  {
+    cout << getLogHeader() << "Encountered Error during Fit Specific Copy to device!" << endl;
+    throw cudaExecutionException(e.getCudaError(),__FILE__,__LINE__);
+  }
 }
 
 
@@ -320,9 +320,9 @@ void SimpleMultiFitStream::executeTransposeToFloat()
 
 
   dim3 block(32,32);
-  dim3 grid( (F*NUMFB+ block.x-1)/block.x , (padN+block.y-1)/block.y);
-  
-  transposeDataToFloat_Wrapper(grid, block, 0 ,_stream,_pDevObservedTraceTranspose, (FG_BUFFER_TYPE*)_pDevObservedTrace, F*NUMFB, padN);
+  dim3 grid( (F*_myJob.getFlowBlockSize()+ block.x-1)/block.x , (padN+block.y-1)/block.y);
+
+  StreamingKernels::transposeDataToFloat(grid, block, 0 ,_stream,_dFgBufferTransposed.getPtr(), _hdFgBuffer.getPtr(), F*_myJob.getFlowBlockSize(), padN);
   CUDA_ERROR_CHECK();
 }
 
@@ -334,9 +334,9 @@ void SimpleMultiFitStream::executeTransposeParams()
   //cout << "TransposeParams Kernel" << endl;
 
   dim3 block(32,32);
-  int StructLength = (sizeof(bead_params)/sizeof(float));
+  int StructLength = (sizeof(BeadParams)/sizeof(float));
 
-  if((sizeof(bead_params)%sizeof(float)) != 0 )
+  if((sizeof(BeadParams)%sizeof(float)) != 0 )
   { 
     cerr << getLogHeader() <<" Structure not a multiple of sizeof(float), transpose not possible" << endl;
     exit(-1);
@@ -345,7 +345,7 @@ void SimpleMultiFitStream::executeTransposeParams()
   dim3 grid((StructLength + block.x-1)/block.x , (padN+block.y-1)/block.y);
 
    CUDA_ERROR_CHECK();
-   transposeData_Wrapper(grid, block, 0 ,_stream,_pDevBeadParamsTranspose, (float*)_pDevBeadParams, StructLength, padN);
+   StreamingKernels::transposeData(grid, block, 0 ,_stream,_dBeadParamsTranspose.getPtr(), (float*)_hdBeadParams.getPtr(), StructLength, padN);
 //  cudaThreadSynchronize();CUDA_ERROR_CHECK();
 }
 
@@ -361,20 +361,21 @@ void SimpleMultiFitStream::executeMultiFit(int fit_index)
   dim3 blockPD( getBeadsPerBlockPartialD(), 1);
   dim3 gridPD( (N+blockPD.x-1)/blockPD.x, 1 );
 
-//  int StructLength = (sizeof(bead_params)/sizeof(float));
+//  int StructLength = (sizeof(BeadParams)/sizeof(float));
 
   CUDA_ERROR_CHECK();
 
-
-  cudaMemcpyAsync(_pDevBeadParamsEval, _pDevBeadParamsTranspose, _myJob.getBeadParamsSize(true), cudaMemcpyDeviceToDevice, _stream ); CUDA_ERROR_CHECK(); 
+  //async device to device copy
+  _dBeadParamsEval.copyAsync(_dBeadParamsTranspose, _stream, _myJob.getBeadParamsSize(true));
 
   int sharedMem = _myJob.getEmphVecSize();
   for (int i=0; i<_fit_iterations[fit_index]; ++i) {
 
-    cudaMemsetAsync(_pDevJTJ, 0, _myJob.getParamMatrixMaxSize(true), _stream); CUDA_ERROR_CHECK();
-    cudaMemsetAsync(_pDevRHS, 0, _myJob.getParamRHSMaxSize(true), _stream); CUDA_ERROR_CHECK();
+    //set scratchspace to 0
+    _dJTJ.memSetAsync(0, _stream, _myJob.getParamMatrixMaxSize(true));
+    _dRHS.memSetAsync(0, _stream, _myJob.getParamRHSMaxSize(true));
 
-    ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow_Wrapper(
+    StreamingKernels::ComputePartialDerivativesForMultiFlowFitForWellsFlowByFlow(
       getL1SettingPartialD(),
       gridPD,
       blockPD,
@@ -384,58 +385,61 @@ void SimpleMultiFitStream::executeMultiFit(int fit_index)
       _myJob.getMaxEmphasis(),
       // weights for frames
       _restrict_clonal[fit_index],
-      _pDevObservedTraceTranspose, 
-      _pDevIval,
-      _pDevScratch_ival,
-      _pDevNucRise,
-      _pDevSbg,
-      _pDevEmphasis,
-      _pDevNon_integer_penalty,
-      _pDevDarkMatterComp,
-      _pDevBeadParamsTranspose,
-      _DevFitData.Steps,
-      _DevFitData.JTJMatrixMapForDotProductComputation, // pxp
-      _pDevJTJ,
-      _pDevRHS,
+      _dFgBufferTransposed.getPtr(),
+      _dIval.getPtr(),
+      _dScratch_ival.getPtr(),
+      _hdNucRise.getPtr(),
+      _hdSbg.getPtr(),
+      _hdEmphasis.getPtr(),
+      _hdNon_integer_penalty.getPtr(),
+      _hdDarkMatterComp.getPtr(),
+      _dBeadParamsTranspose.getPtr(),
+      _DevFitData.Steps.getPtr(),
+      _DevFitData.JTJMatrixMapForDotProductComputation.getPtr(), // pxp
+      _dJTJ.getPtr(),
+      _dRHS.getPtr(),
       _myJob.getNumParams(fit_index),
       _myJob.getNumSteps(fit_index),
       N,
       F,
-      _pDevResidual,
-      _pd_partialDerivsOutput,
-      getStreamId()  // stream id for offset in const memory
-    );
+      _dResidual.getPtr(),
+      _dPartialDerivsOutput.getPtr(),
+      getStreamId(), // stream id for offset in const memory
+      _myJob.getFlowBlockSize()
 
+    );
 
     dim3 block( getBeadsPerBlockMultiFit(), 1);
     dim3 grid( (N+block.x-1)/block.x, 1 );
 
-    MultiFlowLevMarFit_Wrapper(getL1SettingMultiFit(), grid, block, sharedMem, _stream,
+    StreamingKernels::MultiFlowLevMarFit(getL1SettingMultiFit(), grid, block, sharedMem, _stream,
       _myJob.getMaxEmphasis(),
       _restrict_clonal[fit_index],
-      _pDevObservedTraceTranspose,
-      _pDevIval,
-      _pDevScratch_ival, // FLxNxFx2  //scratch for both ival and fval
-      _pDevNucRise, // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
-      _pDevSbg, // FLxF
-      _pDevEmphasis, // MAX_POISSON_TABLE_COL xF // needs precomputation
-      _pDevNon_integer_penalty, // MAX_HPXLEN
-      _pDevDarkMatterComp, // NUMNUC * F  
-      _pDevBeadParamsTranspose, // we will be indexing directly into it from the parameter indices provide by CpuStep_t
-      _pDevBeadParamsEval,
-      _DevFitData.LambdaForBeadFit,
-      _pDevJTJ, // jtj matrix
-      _pDevLTR, // lower triangular matrix
-      _pDevRHS, // rhs vector
-      _pd_delta,
-      _DevFitData.BeadParamIdxMap, 
+      _dFgBufferTransposed.getPtr(),
+      _dIval.getPtr(),
+      _dScratch_ival.getPtr(),
+      _hdNucRise.getPtr(),
+      _hdSbg.getPtr(),
+      _hdEmphasis.getPtr(),
+      _hdNon_integer_penalty.getPtr(),
+      _hdDarkMatterComp.getPtr(),
+      _dBeadParamsTranspose.getPtr(), // we will be indexing directly into it from the parameter indices provide by CpuStep
+      _dBeadParamsEval.getPtr(),
+      _DevFitData.LambdaForBeadFit.getPtr(),
+      _dJTJ.getPtr(), // jtj matrix
+      _dLTR.getPtr(), // lower triangular matrix
+      _dRHS.getPtr(), // rhs vector
+      _dDelta.getPtr(),
+      _DevFitData.BeadParamIdxMap.getPtr(),
       _myJob.getNumParams(fit_index),
       N,
       F,
-      _pDevResidual, // N 
-      getStreamId());
+      _dResidual.getPtr(), // N
+      getStreamId(),
+      _myJob.getFlowBlockSize());
     }
  }
+
 
 void SimpleMultiFitStream::executeTransposeParamsBack()
 {
@@ -444,24 +448,24 @@ void SimpleMultiFitStream::executeTransposeParamsBack()
   int padN = _myJob.getPaddedN();
 
   dim3 block(32,32);
-  int StructLength = (sizeof(bead_params)/sizeof(float));
+  int StructLength = (sizeof(BeadParams)/sizeof(float));
 
   dim3 grid ((padN+block.y-1)/block.y, (StructLength + block.x-1)/block.x );
 
-  transposeData_Wrapper(grid, block, 0 ,_stream, (float*)_pDevBeadParams, _pDevBeadParamsTranspose, padN,  StructLength);
+  StreamingKernels::transposeData(grid, block, 0 ,_stream, (float*)_hdBeadParams.getPtr(), _dBeadParamsTranspose.getPtr(), padN,  StructLength);
   CUDA_ERROR_CHECK();
 }
 
 
 void SimpleMultiFitStream::copyBeadParamsToDevice()
 {
- cudaMemcpyAsync((bead_params*)_pDevBeadParams , _pHostBeadParams , _myJob.getBeadParamsSize(), cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK();
+  _hdBeadParams.copyToDeviceAsync(_stream,_myJob.getBeadParamsSize());
 }
 
 
 void SimpleMultiFitStream::copyBeadParamsToHost()
 {
- cudaMemcpyAsync( _pHostBeadParams  , (bead_params*)_pDevBeadParams, _myJob.getBeadParamsSize(), cudaMemcpyDeviceToHost, _stream); CUDA_ERROR_CHECK();
+  _hdBeadParams.copyToHostAsync(_stream,  _myJob.getBeadParamsSize());
 }
 
 
@@ -472,8 +476,7 @@ int SimpleMultiFitStream::handleResults()
 
     if(_verbose) cout <<  getLogHeader() << " Handling Results "<< _fitIter << endl;
 
-
-    memcpy( _myJob.getBeadParams(),_pHostBeadParams, _myJob.getBeadParamsSize());  
+    _hdBeadParams.copyOut(_myJob.getBeadParams(), _myJob.getBeadParamsSize());
     _myJob.KeyNormalize();   // temporary call to key normalize till we put it into a GPU kernel
 
     if(_fitIter == 0 && _myJob.performCalcPCADarkMatter())
@@ -481,11 +484,12 @@ int SimpleMultiFitStream::handleResults()
       //PCA on CPUi
       _myJob.PerformePCA();     
       // update PCA flag
-      _HostConstP->useDarkMatterPCA = _myJob.useDarkMatterPCA();      
-      copyFittingConstParamAsync(_HostConstP, getStreamId(),_stream);CUDA_ERROR_CHECK();
+      ConstParams* tmpConstP = _hConstP.getPtr();
+      tmpConstP->useDarkMatterPCA = _myJob.useDarkMatterPCA();
+      StreamingKernels::copyFittingConstParamAsync(tmpConstP, getStreamId(),_stream);CUDA_ERROR_CHECK();
       //update DarkMatterComp
-      memcpy(_pHostDarkMatterComp, _myJob.getDarkMatter(),_myJob.getDarkMatterSize());  
-      cudaMemcpyAsync(_pDevDarkMatterComp, _pHostDarkMatterComp, _myJob.getDarkMatterSize(), cudaMemcpyHostToDevice, _stream); CUDA_ERROR_CHECK(); 
+      _hdDarkMatterComp.copyIn(_myJob.getDarkMatter(),_myJob.getDarkMatterSize());
+      _hdDarkMatterComp.copyToDeviceAsync(_stream, _myJob.getDarkMatterSize());
     }
 
 
@@ -493,7 +497,7 @@ int SimpleMultiFitStream::handleResults()
 
     // if not last iteratin yet copy bead data back topagelocked mem so device can get updated
     if(_fitIter < CUDA_MULTIFLOW_NUM_FIT){
-      memcpy(_pHostBeadParams, _myJob.getBeadParams(),_myJob.getBeadParamsSize());  
+      _hdBeadParams.copyIn(_myJob.getBeadParams(),_myJob.getBeadParamsSize());
       return 1;  //signal more work to be done;
     }
 
@@ -508,25 +512,24 @@ int SimpleMultiFitStream::handleResults()
 
 void SimpleMultiFitStream::SetUpLambdaArray(int fit_index) {
   for (int i=0; i<_myJob.getNumBeads(); ++i) {
-    _HostFitData[fit_index].LambdaForBeadFit[i] = _lambda_start[fit_index];
+    _HostDeviceFitData[fit_index].LambdaForBeadFit[i] = _lambda_start[fit_index];
   }
 }
 
 void SimpleMultiFitStream::ExecuteJob()
 {
 
-  
-//  printInfo(); cout << " i: " <<  _fitIter << " numBeads: " << _myJob.getNumBeads() << " numFrames:" << _myJob.getNumFrames() << endl;
-  
+
+  //  printInfo(); cout << " i: " <<  _fitIter << " numBeads: " << _myJob.getNumBeads() << " numFrames:" << _myJob.getNumFrames() << endl;
+
 
   if(_fitIter == 0){
-    //CalculateCoarseNucRise();
     resetPointers();
 
     CalculateNonIntegerPenalty();
     serializeFitInvariantInputs();
     copyFitInvariantInputsToDevice();
-  
+
     executeTransposeToFloat();
   }
 
@@ -542,10 +545,18 @@ void SimpleMultiFitStream::ExecuteJob()
 
 }
 
+
+bool SimpleMultiFitStream::InitJob() {
+
+  _myJob.setData(static_cast<BkgModelWorkInfo *>(getJobData()));
+
+  return _myJob.ValidJob();
+}
+
 void SimpleMultiFitStream::CalculateClonalityRestriction(int fit_index)
 {
   _restrict_clonal[fit_index] = 0;
-  
+
   float hpmax = 2.0f;
   if (_clonal_restriction[fit_index] > 0)
   {
@@ -558,15 +569,12 @@ void SimpleMultiFitStream::CalculateClonalityRestriction(int fit_index)
 
 void SimpleMultiFitStream::CalculateNonIntegerPenalty()
 {
-  float clonal_call_scale[MAGIC_CLONAL_CALL_ARRAY_SIZE]; 
-  float clonal_call_penalty;
-
-  memcpy(clonal_call_scale, _myJob.getClonalCallScale(), _myJob.getClonalCallScaleSize());
-  clonal_call_penalty = _myJob.getClonalCallPenalty();
+  const float *clonal_call_scale = _myJob.getClonalCallScale();
+  float clonal_call_penalty = _myJob.getClonalCallPenalty();
 
   for (int i=0; i<MAGIC_CLONAL_CALL_ARRAY_SIZE; ++i)
   {
-    _pHostNon_integer_penalty[i] = clonal_call_penalty * clonal_call_scale[i];
+    _hdNon_integer_penalty[i] = clonal_call_penalty * clonal_call_scale[i];
   }
 }
 
@@ -599,19 +607,21 @@ int SimpleMultiFitStream::getL1SettingPartialD()
 void SimpleMultiFitStream::printStatus()
 {
 
-	cout << getLogHeader()  << " status: " << endl
-	<< " +------------------------------" << endl
-	<< " | block size MultiFit: " << getBeadsPerBlockMultiFit()  << endl
-	<< " | l1 setting MultiFit: " << getL1SettingMultiFit() << endl
-	<< " | block size PartialD: " << getBeadsPerBlockPartialD() << endl
-	<< " | l1 setting PartialD: " << getL1SettingPartialD() << endl
-	<< " | state: " << _state << endl;
-	if(_resources->isSet())
-		cout << " | streamResource acquired successfully"<< endl;
-	else
-		cout << " | streamResource not acquired"<< endl;
+
+  cout << getLogHeader()  << " status: " << endl
+  << " +------------------------------" << endl
+  << " | block size MultiFit: " << getBeadsPerBlockMultiFit()  << endl
+  << " | l1 setting MultiFit: " << getL1SettingMultiFit() << endl
+  << " | block size PartialD: " << getBeadsPerBlockPartialD() << endl
+  << " | l1 setting PartialD: " << getL1SettingPartialD() << endl
+  << " | state: " << _state << endl;
+  if(_resource->isSet())
+    cout << " | streamResource acquired successfully"<< endl;
+  else
+    cout << " | streamResource not acquired"<< endl;
     _myJob.printJobSummary();
     cout << " +------------------------------" << endl;
+
 }
 
 
@@ -620,9 +630,32 @@ void SimpleMultiFitStream::printStatus()
 // Static member function
 
 
-size_t SimpleMultiFitStream::getMaxHostMem()
+void SimpleMultiFitStream::requestResources(
+    int global_max_flow_key, 
+    int global_max_flow_block_size, 
+    float deviceFraction
+  )
 {
-  WorkSet Job;
+  // We need to check values both with key=0 and key=max_key.
+  // That way, we cover both extremes.
+  size_t devAlloc = static_cast<size_t>( deviceFraction *
+                     max( getMaxDeviceMem(global_max_flow_key, global_max_flow_block_size, 0, 0),
+                          getMaxDeviceMem(0,                   global_max_flow_block_size, 0, 0) ) );
+  size_t hostAlloc = max( getMaxHostMem(global_max_flow_key, global_max_flow_block_size),
+                          getMaxHostMem(0,                   global_max_flow_block_size) );
+
+  cout << "CUDA MultiFitStream active and resources requested dev = "<< devAlloc/(1024.0*1024) << "MB ("<< (int)(deviceFraction*100)<<"%) host = " << hostAlloc/(1024.0*1024) << "MB" << endl;
+  cudaResourcePool::requestDeviceMemory(devAlloc);
+  cudaResourcePool::requestHostMemory(hostAlloc);
+
+
+}
+
+
+
+size_t SimpleMultiFitStream::getMaxHostMem(int flow_key, int flow_block_size)
+{
+  WorkSet Job( flow_key, flow_block_size );
 
   size_t ret = 0;
 
@@ -630,7 +663,7 @@ size_t SimpleMultiFitStream::getMaxHostMem()
   ret += Job.getFgBufferSizeShort(true);
 
   ret += Job.getBeadParamsSize(true); 
-  ret += Job.getFgBufferSizeShort(true);  
+  ret += Job.getReusedFgBufferPartialDerivsSize(true);  
   ret += Job.getNucRiseSize(true);   
   ret += Job.getShiftedBackgroundSize(true); 
   ret += Job.getEmphVecSize(true); 
@@ -644,51 +677,59 @@ size_t SimpleMultiFitStream::getMaxHostMem()
     ret += Job.getFloatPerBead(true);  
   }
 
+
+
+
   return ret;
 
 }
 
-size_t SimpleMultiFitStream::getMaxDeviceMem(int numFrames, int numBeads)
+size_t SimpleMultiFitStream::getMaxDeviceMem(
+    int flow_key, 
+    int flow_block_size, 
+    int numFrames, 
+    int numBeads
+  )
 {
 
-  WorkSet Job;
+  WorkSet Job( flow_key, flow_block_size );
 
   // if numFrames/numBeads are passed overwrite the predevined maxFrames/maxBeads
   // for the size calculation
-  Job.setMaxFrames(numFrames);
-  Job.setMaxBeads(numBeads);
+  if(numFrames >0) Job.setMaxFrames(numFrames);
+  if(numBeads> 0) Job.setMaxBeads(numBeads);
 
   size_t ret = 0;
 
-  ret += Job.getBeadParamsSize(true);  //  _pDevBeadParams
-  ret += Job.getBeadParamsSize(true);  // _pDevBeadParamsEval
-  ret += Job.getBeadParamsSize(true); // _pDevBeadParamsTranspose
+  ret += Job.getBeadParamsSize(true);                  //  _hdBeadParams
 
-  ret += Job.getFgBufferSizeShort(true); //   _pDevObservedTrace
-  ret += Job.getFgBufferSize(true);  // _pDevObservedTraceTranspose
+  ret += Job.getReusedFgBufferPartialDerivsSize(true); //  _hdFgBuffer
+  ret += Job.getNucRiseSize(true);                     //  _hdNucRise
+  ret += Job.getShiftedBackgroundSize(true);           //  _hdSbg
+  ret += Job.getEmphVecSize(true);                     //  _hdEmphasis
+  ret += Job.getClonalCallScaleSize(true);             //  _hdNon_integer_penalty
+  ret += Job.getDarkMatterSize(true);                  //  _hdDarkMatterComp
 
-  ret += Job.getNucRiseSize(true); //   _pDevNucRise
-  ret += Job.getShiftedBackgroundSize(true); //   _pDevSbg
-  ret += Job.getEmphVecSize(true); // _pDevEmphasis
-  ret += Job.getClonalCallScaleSize(true);  // _pDevNon_integer_penalty
-  ret += Job.getDarkMatterSize(true);  // _pDevDarkMatterComp
+  ret += Job.getPartialDerivStepsMaxSize(true);        // _DevFitData.Steps
+  ret += Job.getJTJMatrixMapMaxSize(true);             // _D...JTJMatrixMapForDotProductComputation
+  ret += Job.getBeadParamIdxMapMaxSize(true);          // _DevFitData.BeadParamIdxMap
+  ret += Job.getFloatPerBead(true);                    // _DevFitData.LambdaForBeadFit
 
-  ret += Job.getPartialDerivStepsMaxSize(true);  // Steps
-  ret += Job.getJTJMatrixMapMaxSize(true);  // JTJMatrixMapForDotProductComputation
-  ret += Job.getBeadParamIdxMapMaxSize(true); // BeadParamIdxMap
-  ret += Job.getFloatPerBead(true); //LambdaForBeadFit
+  ret += Job.getBeadParamsSize(true);                  // _dBeadParamsEval
+  ret += Job.getBeadParamsSize(true);                  // _dBeadParamsTranspose
+  ret += Job.getFgBufferSize(true);                    // _dFgBufferTransposed
 
-  ret += Job.getFxB(true); // _pDevIval
-  ret += Job.getFxB(true); // _pDevScratch_ival
-  ret += Job.getFloatPerBead(true); // _pDevResidual
-  ret += Job.getParamMatrixMaxSize(true); // _pDevJTJ
-  ret += Job.getParamMatrixMaxSize(true); // _pDevLTR
-  ret += Job.getParamRHSMaxSize(true); // _pDevRHS 
+  ret += Job.getFxB(true);                             // _dIval
+  ret += Job.getFxB(true);                             // _dcratch_ival
+  ret += Job.getFloatPerBead(true);                    // _dResidual
+  ret += Job.getParamMatrixMaxSize(true);              // _dJTJ
+  ret += Job.getParamMatrixMaxSize(true);              // _dLTR
+  ret += Job.getParamRHSMaxSize(true);                 // _dRHS 
 
   return ret;
 }
 
-void SimpleMultiFitStream::setBeadsPerBLockMultiF(int bpb)
+void SimpleMultiFitStream::setBeadsPerBlockMultiF(int bpb)
 {
   _bpb = bpb;
 }
@@ -696,10 +737,10 @@ void SimpleMultiFitStream::setBeadsPerBLockMultiF(int bpb)
 
 void SimpleMultiFitStream::setL1SettingMultiF(int type) // 0:sm=l1, 1:sm>l1, 2:sm<l1
 {
- _l1type = type;
+  _l1type = type;
 }
 
-void SimpleMultiFitStream::setBeadsPerBLockPartialD(int bpb)
+void SimpleMultiFitStream::setBeadsPerBlockPartialD(int bpb)
 {
   _bpbPartialD = bpb;
 }
@@ -712,33 +753,33 @@ void SimpleMultiFitStream::setL1SettingPartialD(int type) // 0:sm=l1, 1:sm>l1, 2
 void SimpleMultiFitStream::printSettings()
 {
 
-  cout << "CUDA MultiFitStream SETTINGS: blocksize " << _bpb << " l1setting " << _l1type;   
+  cout << "CUDA MultiFitStream SETTINGS: blocksize = " << _bpb << " l1setting = " ;
   switch(_l1type){
     case 0:
-      cout << " (cudaFuncCachePreferEqual" << endl;;
+      cout << "cudaFuncCachePreferEqual" << endl;;
       break;
     case 1:
-      cout << " (cudaFuncCachePreferShared)" <<endl;
+      cout << "cudaFuncCachePreferShared" <<endl;
       break;
     case 2:
-      cout << " (cudaFuncCachePreferL1)" << endl;
+      cout << "cudaFuncCachePreferL1" << endl;
       break;
     default:
      cout << " GPU specific default" << endl;;
   }
-  cout << "CUDA PartialDerivative SETTINGS: blocksize " << _bpbPartialD << " l1setting " << _l1typePartialD;   
+  cout << "CUDA PartialDerivative SETTINGS: blocksize = " << _bpbPartialD << " l1setting = ";
   switch(_l1typePartialD){
     case 0:
-      cout << " (cudaFuncCachePreferEqual" << endl;;
+      cout << "cudaFuncCachePreferEqual" << endl;;
       break;
     case 1:
-      cout << " (cudaFuncCachePreferShared)" <<endl;
+      cout << "cudaFuncCachePreferShared" <<endl;
       break;
     case 2:
-      cout << " (cudaFuncCachePreferL1)" << endl;
+      cout << "cudaFuncCachePreferL1" << endl;
       break;
     default:
-     cout << " GPU specific default" << endl;
+     cout << "GPU specific default" << endl;
   }
 
 }

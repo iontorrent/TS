@@ -8,6 +8,7 @@
 #include "Region.h"
 #include "IonVersion.h"
 #include "Utils.h"
+#include "OptBase.h"
 
 class BeadfindControlOpts{
   public:
@@ -20,31 +21,33 @@ class BeadfindControlOpts{
     int beadfindThumbnail; // Is this a thumbnail chip where we need to skip smoothing across regions?
     int beadfindLagOneFilt;
     char *beadMaskFile;
-    int maskFileCategorized;
+    bool maskFileCategorized;
     char bfFileBase[MAX_PATH_LENGTH];
     char preRunbfFileBase[MAX_PATH_LENGTH];
-    int noduds;
-    int beadfindUseSepRef; // should we just use the reference wells the separator uses or go for expanded set?
+    bool noduds;
+    bool beadfindUseSepRef; // should we just use the reference wells the separator uses or go for expanded set?
     int bfOutputDebug;
     float bfMult;
     bool sdAsBf;
     bool gainCorrection;
     int useSignalReference;
-    int useSignalReferenceSet;
+    bool useSignalReferenceSet;
     std::string beadfindType;
     std::string bfType; // signal or buffer
     std::string bfDat;
     std::string bfBgDat;
     bool SINGLEBF;
-    int BF_ADVANCED;
+    bool BF_ADVANCED;
     int numThreads;
     float minTfPeakMax;
     float minLibPeakMax;
-    int blobFilter;
+    bool blobFilter;
     std::string doubleTapFlows;
     int predictFlowStart;
     int predictFlowEnd;
     void DefaultBeadfindControl();
+	void PrintHelp();
+	void SetOpts(OptArgs &opts, Json::Value& json_params);
     ~BeadfindControlOpts();
 };
 

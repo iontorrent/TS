@@ -71,8 +71,9 @@ $(function () {
 
   // configure widget size and file used from placement div attributes
   var coverageFile = $("#DepthOfCoverageChart").attr("datafile");
-  if( coverageFile == undefined ) {
-    alert("ERROR on page: DepthOfCoverageChart widget requires attribute 'datafile' is set.");
+  if( coverageFile == undefined || coverageFile == "" ) {
+    //alert("ERROR on page: DepthOfCoverageChart widget requires attribute 'datafile' is set.");
+    $('#DepthOfCoverageChart').hide();
     return;
   }
 
@@ -373,7 +374,7 @@ $(function () {
     $.ajaxSetup( {dataType:"text",async:false} );
     $.get(tsvFile, function(mem) {
       var lines = mem.split("\n");
-      var lastDepth = -1;
+      var exptDepth = 0;
       $.each(lines, function(n,row) {
         var fields = $.trim(row).split('\t').slice(0,maxLoadFields);
         if( n == 0 ) {
@@ -381,7 +382,18 @@ $(function () {
         } else if( fields[0] != "" ) {
           // important to convert numeric fields to numbers for performance
           for( var i = 0; i < fields.length; ++i ) { fields[i] = +fields[i]; }
+          // fill data that appears to be missing - typically derived fields are not even read in
+          if( fields[0] > exptDepth ) {
+            var mfields = fields.slice();
+            mfields[0] = 0;
+            for( var i = 0; i < fields.length; ++i ) { mfields[i] = fields[i]; }
+            while( exptDepth < fields[0] ) {
+              mfields[0] = exptDepth++;
+              dataTable.push( fields );
+            }
+          }
           dataTable.push( fields );
+          exptDepth = fields[0]+1;
         }
       });
     }).error(function(){

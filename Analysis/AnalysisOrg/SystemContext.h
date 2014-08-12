@@ -18,6 +18,7 @@
 #include "Utils.h"
 #include "SpecialDataTypes.h"
 #include "SeqList.h"
+#include "OptBase.h"
 
 // handles file i/o and naming conventions
 // use this when a routine needs to know the directories we're operating within
@@ -29,23 +30,23 @@
 class SystemContext{
   public:
     char *dat_source_directory;
-    char *wells_output_directory;
+	char *wells_output_directory;
     std::string analysisLocation; // full path in results_folder / terminated
 
     char wellsFileName[MAX_PATH_LENGTH];
     char tmpWellsFile[MAX_PATH_LENGTH];
     char runId[6];
     char wellsFilePath[MAX_PATH_LENGTH];
-    char *wellStatFile;
-    char *stackDumpFile;
+	std::string wellStatFile;
+	std::string stackDumpFile;
     char *results_folder;
-    int NO_SUBDIR; // when set to true, no experiment subdirectory is created for output files.
-    int LOCAL_WELLS_FILE;
+    bool NO_SUBDIR; // when set to true, no experiment subdirectory is created for output files.
+    bool LOCAL_WELLS_FILE;
     std::string wellsFormat;
-    char *explog_path;
+	std::string explog_path;
 
     //const char *GetResultsFolder();    
-    char *GetResultsFolder();    
+    char *GetResultsFolder() const;    
     char *experimentDir(char *rawdataDir, char *dirOut);
     void DefaultSystemContext();
     void GenerateContext();
@@ -57,7 +58,11 @@ class SystemContext{
 
     void CleanupTmpWellsFile();
     void CopyTmpWellFileToPermanent( char *experimentName);
-    
+
+    // what does this object need from the command line?
+	void PrintHelp();
+	void SetOpts(OptArgs &opts, Json::Value& json_params);
+
     ~SystemContext();
 };
 

@@ -3,6 +3,7 @@
 #define LINUXCOMPAT_H
 
 #ifndef _MSC_VER
+#include <sys/types.h>
 
 const char* validate_fmt( const char* fmt, const char* file, int32_t line );
 const char *validate_str(const char *src, int destsize, const char* file, int32_t line);

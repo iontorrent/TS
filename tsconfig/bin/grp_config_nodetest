@@ -1,0 +1,69 @@
+#!/bin/bash
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
+#
+# Give me a hostname and I give you the dirt
+#
+# If this script generates an error, the stdout format is <nodename>:failure
+# and the stderr will contain error string.
+#
+set -u
+nodename=$1
+
+#==============================================================================
+# Include function definition file
+#==============================================================================
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source ${TSCONFIG_SRC_DIR}/grp_functions
+
+#==============================================================================
+# Verify access before proceeding
+#==============================================================================
+if ! access_test $nodename >/dev/null; then
+    echo $nodename:failure>&1
+    echo "Cannot access node">&2
+    exit 1
+fi
+
+#==============================================================================
+# Verify script exists before proceeding
+#==============================================================================
+if ! ssh $USER@$nodename 'which /usr/sbin/grp_mount_test >/dev/null'; then
+    echo $nodename:failure>&1
+    echo "grp_mount_test script is unavailable">&2
+else
+    #==============================================================================
+    # Check remote mountpoints are configured
+    # Default File Storage location, all File Servers
+    #==============================================================================
+    dirs=$(get_report_storage 2>/dev/null; get_file_servers 2>/dev/null)
+    sorted=$(echo ${dirs[@]}|tr " " "\n"|uniq)
+    failed=false
+    echo -n nfs_mount_test:>&1
+    for mntpoint in ${sorted[@]}; do
+        if ! ssh $USER@$nodename /usr/sbin/grp_mount_test $mntpoint; then
+            failed=true
+            # failure string will be written by grp_mount_test
+        fi
+    done
+    if ! $failed; then echo success>&1; else echo failure>&1; fi
+fi
+
+#==============================================================================
+# Verify script exists before proceeding
+#==============================================================================
+if ! ssh $USER@$nodename 'which /usr/sbin/grp_configuration_test >/dev/null'; then
+    echo $nodename:failure>&1
+    echo "grp_configuration_test script is unavailable">&2
+else
+    #==============================================================================
+    # Configuration Tests
+    # Executes a script on the compute node
+    #==============================================================================
+    if ! ssh $USER@$nodename /usr/sbin/grp_configuration_test; then
+        echo $nodename:failure>&1
+        echo "grp_configuration_test script execution failed">&2
+        exit 1
+    fi
+fi
+
+exit

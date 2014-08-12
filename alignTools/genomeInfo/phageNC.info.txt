@@ -1,5 +1,0 @@
-genome_shortname	phageNC
-genome_name	Enterobacteria phage lambda, complete genome, NC_001416.1
-genome_version	gi|9626243|ref|NC_001416.1
-index_version	b-0.1
-genome_length	48502

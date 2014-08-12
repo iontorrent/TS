@@ -119,7 +119,7 @@ open( BEDFILE, "$bedfile" ) || die "Cannot open targets file $bedfile.\n";
 my $headerLine = "track type=bedDetail";
 if( !$bedout ) {
   $headerLine = sprintf "%s\t%s\t%s\t%s\t%s\t%s\toverlaps\t%s\t%s\tfwd_reads\trev_reads",
-    "contig_id", "contig_srt", "contig_end", "region_id", "gene_id", "gc",
+    "contig_id", "contig_srt", "contig_end", "region_id", "gene_id", "gc_count",
     ($usePcCov ? "fwd_cov\trev_cov" : "fwd_e2e\trev_e2e"), ($normreads ? "norm_reads" : "total_reads");
 }
 
@@ -222,7 +222,7 @@ while(1) {
   my (@targFwdReads,@targRevReads,@targFwdE2E,@targRevE2E,@targOvpReads);
   unless( $nobai ) {
     # process BAM reads covering these merged targets
-    open( MAPPINGS, "samtools view $samopt \"$bamfile\" $lastChr:$mrgSrt-$mrgEnd |" )
+    open( MAPPINGS, "samtools view $samopt \"$bamfile\" \"$lastChr:$mrgSrt-$mrgEnd\" |" )
       || die "Failed to pipe reads from $bamfile for regions in $bedfile\n";
     my $firstRegion = 0, $lastEnd = $targEnds[$nTrgs-1];
     while( <MAPPINGS> ) {

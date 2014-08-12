@@ -91,5 +91,6 @@ export(
   writeFASTQ,
   calcHypothesesDistances,
   SimulateAndSolveSeq,
-  readIonBamStack
+  readIonBamStack,
+  normalizeRead
 )

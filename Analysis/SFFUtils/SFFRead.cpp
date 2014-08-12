@@ -39,6 +39,7 @@ int printHelp ()
 	fprintf (stdout,"   -k\tSpecify the key pattern (Default is TCAG)  Please use all capital letters.\n");
 	fprintf (stdout,"   -L\tLegacy format read name in fastq file output, ie. r10|c100.\n");
 	fprintf (stdout,"   -u\tDo not trim adapters from the reads (ignores sff adapter clip values, still uses quality clip)\n");
+	fprintf (stdout,"   -b\tDon't trim barcode (really means ignore the left qual trim field)\n");
 	fprintf (stdout,"   -v\tPrint version information and exit.\n");
 	fprintf (stdout,"\n");
 	fprintf (stdout,"usage:\n   SFFRead [OPTIONS] input_sff_filename\n");
@@ -79,6 +80,7 @@ int main(int argc, char *argv[])
 	bool debug = false;
 	bool legacyReadName = false;
 	bool adapterTrim = true;
+	bool ignoreLeftQualTrim = false;
 	
 	// process command-line args
 	int argcc = 1;
@@ -137,8 +139,12 @@ int main(int argc, char *argv[])
 					exit (0);
 				break;
 			
-			  case 'u':	// prevent read clipping
+				case 'u':	// prevent read clipping
 					adapterTrim = false;
+				break;
+			
+				case 'b':	// ignore barcodes (ok really its ignoring the left qual trim)
+					ignoreLeftQualTrim = true;
 				break;
 			
 				case 'v':	// version info
@@ -277,7 +283,10 @@ int main(int argc, char *argv[])
 					if (forceClip && rh->clip_adapter_left < 4)
 						rh->clip_adapter_left = hackkeylen+1;
 
-					clip_left_index = max (1, max (rh->clip_qual_left, rh->clip_adapter_left));
+					if (ignoreLeftQualTrim)
+						clip_left_index = max (1, rh->clip_adapter_left);
+					else
+						clip_left_index = max (1, max (rh->clip_qual_left, rh->clip_adapter_left));
 					clip_right_index = min ((rh->clip_qual_right == 0 ? rh->n_bases:rh->clip_qual_right),
 											(rh->clip_adapter_right == 0 ? rh->n_bases:rh->clip_adapter_right));
 					if (debug)

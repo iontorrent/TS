@@ -39,6 +39,14 @@ def ion_readable(value):
         pass
 
 
+@register.filter(name="cleanName")
+def clean_name(name):
+    if name.startswith("R_"):
+        return name[27:]
+    else:
+        return name
+
+
 @register.filter(name='float2int')
 def float2int(value):
     try:
@@ -59,6 +67,31 @@ def latexsafe(value):
 @register.filter(name='bracewrap')
 def bracewrap(value):
     return "{" + value + "}"
+
+
+@register.filter(name='chunks')
+def chunks(iterable, chunk_size):
+    """chunks takes an iterable and yields a series of iterables of chunk_size
+    or fewer elements.  This is best used for breaking up a long list, into rows
+    of chunk_size elements, for example.
+    """
+    if not hasattr(iterable, '__iter__'):
+        # can't use "return" and "yield" in the same function
+        yield iterable
+    else:
+        i = 0
+        chunk = []
+        for item in iterable:
+            chunk.append(item)
+            i += 1
+            if not i % chunk_size:
+                yield chunk
+                chunk = []
+        if chunk:
+            # some items will remain which haven't been yielded yet,
+            # unless len(iterable) is divisible by chunk_size
+            yield chunk
+
 
 
 ion_readable.is_safe = True

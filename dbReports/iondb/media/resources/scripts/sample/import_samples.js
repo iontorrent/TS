@@ -105,8 +105,16 @@ TB.sample.batchupload.ready = function(sampleUrl) {
 
         hasErrors = false;
         var error = "";
+
+        if (msg.toLowerCase().indexOf("error") >= 0) {
+            hasErrors = true;
+        	error += "<p>" + msg + "</p>";
+        }
+
         if (responseText.failed) {
-            error += "<p>" + msg + "</p>";
+        	if (!hasErrors) {
+            	error += "<p>" + msg + "</p>";
+        	}
 
             for (var key in responseText.failed) {
                 hasErrors = true;
@@ -140,17 +148,11 @@ TB.sample.batchupload.ready = function(sampleUrl) {
             	$('.main .container-fluid .content .row-fluid .span8 #import_sample_upload #modal-error-messages').removeClass('hide').html(error);
             }
         }
-        else {
-        	if (msg.toLowerCase().indexOf("error") >= 0) {        		
-        		hasErrors = true;
-        		$('.main .container-fluid .content .row-fluid .span8 #import_sample_upload #modal-error-messages').removeClass('hide').html(msg);	
-        	}
-        	else { //20130709-TODO-to-be-tested
-        		$('#import_sample_info').html(msg);
-        	}
+
+        if (hasErrors) {
+        	$('.main .container-fluid .content .row-fluid .span8 #import_sample_upload #modal-error-messages').removeClass('hide').html(error);     	
         }
-		
-        if (!hasErrors) {
+        else  {
             $('#import_sample_upload').modal("hide");
             window.location = sampleUrl;
         }

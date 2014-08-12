@@ -169,15 +169,20 @@ makeVarsFromJson()
         if echo $line|egrep -q '(\{}|\[])'; then
             :
         else
-            line=$(echo $line|sed 's:^/::g')
-            var_name=$(echo $line|awk '{print $1}')
-            var_val=$(echo $line|awk -F'\t' '{print $2}'|sed 's/"//g')
-            index=$(basename $var_name)
+            line=${line#/}
+            var_name=$(echo $line|awk '{print $1}') # =${line%%	*}
+            var_val=$(echo $line|awk -F'\t' '{print $2}'|sed 's/"//g') #=${line##*	}  #
+            index=$(basename $var_name) #=${var_name%%/*}
+
+            # Sanitize
+            #(sampleinfo can contain more chars than are valid variable names)
+            var_name=${var_name//-/_} # $(echo $line|sed 's:-:_:g')
 
             # var_name ends in a number, its an array variable
-            if [ $index -eq $index 2>/dev/null ]; then
+            # (test fails with "integer expression expected" for non-numbers)
+            if [ "$index "-eq "$index" 2>/dev/null ]; then
                 #strip off number
-                var_name=$(dirname $var_name)
+                var_name=$(dirname $var_name) #=${var_name%%/$index}
                 #convert slashes to double underscore
                 #convert to uppercase
                 var_name=$(echo ${var_name^^}|sed 's:/:__:g')
@@ -191,8 +196,7 @@ makeVarsFromJson()
                 #echo $var_name=$var_val
                 export eval "${var_name}"="${var_val}"
             fi
-
-        fi 
+        fi
     done
 }
 
@@ -336,7 +340,7 @@ define_local_vars ()
     export TSP_URLPATH_BAI=${URL_ROOT}/download_links/${TSP_URLPATH_OUTPUT_STEM}.bam.bai
 
     export TSP_FILEPATH_PLUGIN_DIR=${RESULTS_DIR}
-    export TSP_URLPATH_PLUGIN_DIR=${URL_ROOT}/plugin_out/${PLUGINNAME}_out
+    export TSP_URLPATH_PLUGIN_DIR=${URL_ROOT}/plugin_out/$(basename ${RESULTS_DIR})
 
     export TSP_FILEPATH_BARCODE_TXT=${REPORT_ROOT_DIR}/barcodeList.txt
     export TSP_URLPATH_BARCODE_TXT=${URL_ROOT}/barcodeList.txt

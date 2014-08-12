@@ -61,7 +61,13 @@ set (GLOBAL_SOURCES              config.h
 				 src/sw/lib/AffineSWOptimization.cpp src/sw/lib/AffineSWOptimization.h 
 				 src/sw/lib/AffineSWOptimizationHash.cpp src/sw/lib/AffineSWOptimizationHash.h 
 				 src/sw/lib/AffineSWOptimizationWrapper.cpp src/sw/lib/AffineSWOptimizationWrapper.h 
-				 src/sw/tmap_vsw_bm.c )
+				 src/sw/tmap_vsw_bm.c
+				 src/realign/Realign.cpp src/realign/Realign.h
+				 src/realign/realign_proxy.cpp src/realign/realign_proxy.h
+				 src/realign/realign_wrapper.cpp src/realign/realign_wrapper.h
+				 src/realign/realign_wrapper_imp.cpp src/realign/realign_wrapper_imp.h
+				 src/realign/realign_c_util.c src/realign/realign_c_util.h
+				 src/realign/realign_util.cpp src/realign/realign_util.h)
 
 set (SAMTOOLS ${ION_TS_EXTERNAL}/samtools_tmap_e783ea9/samtools)
 
@@ -160,7 +166,7 @@ configure_file (
 
 
 add_executable(tmap ${tmap_SOURCES})
-set_target_properties(tmap PROPERTIES COMPILE_FLAGS "-msse3 -D_TMAP_BWT_RUN_TYPE=0 -D_USE_KNETFILE -DSAMTOOLS_MAIN -D__STDC_LIMIT_MACROS -DTMAP_MMAP=1")
+set_target_properties(tmap PROPERTIES COMPILE_FLAGS "-D_TMAP_BWT_RUN_TYPE=0 -D_USE_KNETFILE -DSAMTOOLS_MAIN -D__STDC_LIMIT_MACROS -DTMAP_MMAP=1")
 target_link_libraries (tmap m z pthread bz2)
 install(TARGETS tmap DESTINATION bin)
 

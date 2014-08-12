@@ -17,6 +17,12 @@
  */
 template <class T, class C=size_t, class I=uint64_t>
 class DataCube {
+  void Breakpoint() const
+  {
+    // Yeah, I know this is silly, but we need a breakpoint that lasts through compile with optimization.
+    // Plus this only gets called before an assertion, and a delete/new pair doesn't really do anything.
+    delete new int;
+  }
 
 public:
 
@@ -40,8 +46,9 @@ public:
     if (!(x >= mXStart && x < mXEnd && 
               y >= mYStart && y < mYEnd && 
                 z >= mZStart && z < mZEnd)){
-	  printf("mXStart>=x<mXEnd : y>=mYEnd<mZStart : mZStart>=z<mZEnd \n");
+	    printf("mXStart>=x<mXEnd : y>=mYEnd<mZStart : mZStart>=z<mZEnd \n");
       printf("%ld %ld %ld : %ld %ld %ld : %ld %ld %ld \n", mXStart,x,mXEnd,mYStart,y,mYEnd,mZStart,z,mZEnd);
+      Breakpoint();
     }
     // assert nearly useless as the error message doesn't give any hint as to the problem
     ION_ASSERT( x >= mXStart && x < mXEnd && 

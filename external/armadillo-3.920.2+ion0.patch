@@ -1,0 +1,84 @@
+--- CMakeLists.txt	2013-09-27 04:55:45.000000000 -0400
++++ CMakeLists.txt	2013-10-08 11:50:05.729326839 -0400
+@@ -27,12 +27,25 @@
+ 
+ project(armadillo CXX)
+ 
+-set(ARMA_USE_LAPACK  false)
+-set(ARMA_USE_BLAS    false)
+-set(ARMA_USE_ATLAS   false)
+-set(ARMA_USE_BOOST   false)
+-set(ARMA_USE_HDF5    false)
+-set(ARMA_USE_WRAPPER true )
++option(ARMA_USE_LAPACK "Use LAPACK libraries" OFF)
++mark_as_advanced(ARMA_USE_LAPACK)
++option(ARMA_USE_BLAS "Use BLAS libraries" OFF)
++mark_as_advanced(ARMA_USE_BLAS)
++option(ARMA_USE_ATLAS "Use ATLAS libraries" OFF)
++mark_as_advanced(ARMA_USE_ATLAS)
++option(ARMA_USE_BOOST "Use BOOST libraries" OFF)
++mark_as_advanced(ARMA_USE_BOOST)
++option(ARMA_USE_HDF5 "Use HDF5 libraries" OFF)
++mark_as_advanced(ARMA_USE_HDF5)
++# set this to false if you prefer to directly link with LAPACK and/or BLAS (eg. -llapack -lblas) instead of -larmadillo
++option(ARMA_USE_WRAPPER "Use WRAPPER libraries" OFF)
++mark_as_advanced(ARMA_USE_WRAPPER)
++option(ARMA_USE_MKL "Use MKL libraries" OFF)
++mark_as_advanced(ARMA_USE_MKL)
++option(ARMA_USE_ACMLMP "Use ACMLMP libraries" OFF)
++mark_as_advanced(ARMA_USE_ACMLMP)
++option(ARMA_USE_ACML "Use ACML libraries" OFF)
++mark_as_advanced(ARMA_USE_ACML)
+ 
+ # NOTE:
+ # Set ARMA_USE_WRAPPER to false if you're getting linking errors when compiling your programs,
+@@ -73,13 +86,22 @@
+ else()
+   set(ARMA_OS unix)
+   
+-  include(ARMA_FindMKL)
+-  include(ARMA_FindACMLMP)
+-  include(ARMA_FindACML)
+-  
+-  message(STATUS "   MKL_FOUND   = ${MKL_FOUND}")
+-  message(STATUS "ACMLMP_FOUND   = ${ACMLMP_FOUND}")
+-  message(STATUS "  ACML_FOUND   = ${ACML_FOUND}")
++
++  if(ARMA_USE_MKL)
++    include(ARMA_FindMKL)
++    message(STATUS "MKL_FOUND     = ${MKL_FOUND}")
++  endif()
++
++  if(ARMA_USE_ACMLMP)
++    include(ARMA_FindACMLMP)
++    message(STATUS "ACMLMP_FOUND  = ${ACMLMP_FOUND}")
++  endif()
++
++  if(ARMA_USE_ACML)  
++    include(ARMA_FindACML)
++    message(STATUS "ACML_FOUND    = ${ACML_FOUND}")
++  endif()
++
+   
+   if(MKL_FOUND OR ACMLMP_FOUND OR ACML_FOUND)
+     
+--- include/armadillo_bits/fn_norm.hpp	2013-02-21 20:00:53.000000000 -0500
++++ include/armadillo_bits/fn_norm.hpp	2013-04-05 16:02:03.293356218 -0400
+@@ -530,6 +530,7 @@
+         return T(0);
+       }
+     }
++  return T(0);
+   }
+ 
+ 
+--- include/armadillo_bits/unwrap.hpp	2013-02-28 02:58:00.000000000 -0500
++++ include/armadillo_bits/unwrap.hpp	2013-04-05 16:03:44.301359941 -0400
+@@ -1601,6 +1601,7 @@
+     //, ref( A )
+     {
+     arma_extra_debug_sigprint();
++    arma_ignore(B);
+     }
+   
+   arma_hot arma_inline eT get_val() const { return eT(1); }

@@ -76,7 +76,7 @@ int errmod_cal(const errmod_t *em, int n, int m, uint16_t *bases, float *q)
 	call_aux_t aux;
 	int i, j, k, w[32];
 
-	if (m > m) return -1;
+	//if (m > m) return -1;
 	memset(q, 0, m * m * sizeof(float));
 	if (n == 0) return 0;
 	// calculate aux.esum and aux.fsum

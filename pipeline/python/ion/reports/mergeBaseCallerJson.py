@@ -4,6 +4,7 @@
 import os
 import json
 import traceback
+import copy
 
 # BeadSummary section will be eventually obsoleted
 def merge_bead_summary(block_dirs):
@@ -58,6 +59,8 @@ def merge_filtering(block_dirs):
     rd_tf = {"adapter_trim":0,"beverly_filter":0,"bkgmodel_high_ppf":0,"bkgmodel_keypass":0,
               "bkgmodel_polyclonal":0,"failed_keypass":0,"high_ppf":0,"high_residual":0,
               "key":"ATCG","polyclonal":0,"quality_trim":0,"short":0,"valid":0,"zero":0}
+    # Bead Adapters
+    adapters = {}
     
     qv_hist = [0] * 50
     
@@ -66,6 +69,20 @@ def merge_filtering(block_dirs):
             file = open(os.path.join(dir,'BaseCaller.json'), 'r')
             block_json = json.load(file)
             file.close()
+            
+            # Merging adapter classification part of Basecaller.json
+            adapter_idx = 0
+            while ('Adapter_'+str(adapter_idx)) in block_json['Filtering'].get('BeadAdapters',{}):
+                if ('Adapter_'+str(adapter_idx)) in adapters:
+                    adapters['Adapter_'+str(adapter_idx)]['read_count'] += block_json['Filtering']['BeadAdapters']['Adapter_'+str(adapter_idx)].get('read_count',0)
+                    adapters['Adapter_'+str(adapter_idx)]['num_decisions'] += block_json['Filtering']['BeadAdapters']['Adapter_'+str(adapter_idx)].get('num_decisions',0)
+                    adapters['Adapter_'+str(adapter_idx)]['average_metric'] += block_json['Filtering']['BeadAdapters']['Adapter_'+str(adapter_idx)].get('read_count',0) * block_json['Filtering']['BeadAdapters']['Adapter_'+str(adapter_idx)].get('average_metric',0)
+                    adapters['Adapter_'+str(adapter_idx)]['average_separation'] += block_json['Filtering']['BeadAdapters']['Adapter_'+str(adapter_idx)].get('num_decisions',0) * block_json['Filtering']['BeadAdapters']['Adapter_'+str(adapter_idx)].get('average_separation',0)
+                else:
+                    adapters['Adapter_'+str(adapter_idx)] = copy.deepcopy(block_json['Filtering']['BeadAdapters']['Adapter_'+str(adapter_idx)])
+                    adapters['Adapter_'+str(adapter_idx)]['average_metric'] *= block_json['Filtering']['BeadAdapters']['Adapter_'+str(adapter_idx)]['read_count']
+                    adapters['Adapter_'+str(adapter_idx)]['average_separation'] *= block_json['Filtering']['BeadAdapters']['Adapter_'+str(adapter_idx)]['num_decisions']
+                adapter_idx +=1 
 
             bd['adapter_trim']   += block_json['Filtering'].get('BaseDetails',{}).get('adapter_trim',0)
             bd['beverly_filter'] += block_json['Filtering'].get('BaseDetails',{}).get('beverly_filter',0)
@@ -118,7 +135,14 @@ def merge_filtering(block_dirs):
         except:
             print 'mergeBaseCallerJson.merge_filtering: skipping block ' + dir
     
-    return {"BaseDetails":bd,"LibraryReport":lr,'ReadDetails':{'lib':rd_lib,'tf':rd_tf},'qv_histogram':qv_hist}    
+    # Now looping through the adapters again to turn averages back into averages
+    adapter_idx = 0
+    while ('Adapter_'+str(adapter_idx)) in adapters:
+        adapters['Adapter_'+str(adapter_idx)]['average_metric'] /= max(adapters['Adapter_'+str(adapter_idx)]['read_count'], 1)
+        adapters['Adapter_'+str(adapter_idx)]['average_separation'] /= max(adapters['Adapter_'+str(adapter_idx)]['num_decisions'], 1)
+        adapter_idx +=1
+    
+    return {"BaseDetails":bd,"BeadAdapters":adapters,"LibraryReport":lr,'ReadDetails':{'lib':rd_lib,'tf':rd_tf},'qv_histogram':qv_hist}
 
 
 

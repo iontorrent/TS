@@ -518,6 +518,7 @@ public:
 			if (good()) {
 				return itr->first;
 			}
+			return -1;
 		}
 		
 		

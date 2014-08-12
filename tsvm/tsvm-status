@@ -1,0 +1,165 @@
+#!/bin/bash
+# Copyright (C) 2014 Life Technologies Inc. All Rights Reserved
+#
+#NOTE: The only output to stdout should be one of the following STATES strings
+#.
+#set -x
+#STATES:
+# 0 - VM is not setup
+# 1 - Initializing
+# 2 - Starting
+# 3 - Running
+#(  - Saving)
+# 4 - Stopping
+# 5 - Saved
+# 6 - Stopped
+# 7 - BIOS Disabled (see ./tsvm-isvtenabled)
+# 8 - ion-tsvm package not installed
+# 9 - Error
+STATES=(
+'Not setup'
+'Initializing'
+'Starting'
+'Running'
+'Stopping'
+'Saved'
+'Stopped'
+'BIOS Disabled'
+'Not installed'
+'Error'
+)
+#=======================================================================
+# Common variables
+#=======================================================================
+WHERE=$(dirname $(readlink -f $0))
+source ${WHERE}/tsvm-include
+VERSION=$(grep -m1 TS_VERSION ${WHERE}/Vagrantfile|awk -F"'" '{print $2}')
+#=======================================================================
+# Functions
+#=======================================================================
+function get_load
+{
+    cd ${WHERE}
+    msg=$(vagrant ssh -c "qstat -f -u www-data" 2>/dev/null)
+}
+#=======================================================================
+# Check for ion-tsvm package
+#=======================================================================
+STATE=8
+if ! dpkg -l ion-tsvm >/dev/null 2>&1; then
+    echo -n ${STATES[$STATE]} >&1
+    echo -n "ion-tsvm package is not installed" >&2
+    exit
+fi
+
+#=======================================================================
+# Check for error conditions
+#=======================================================================
+STATE=9
+if ! which vagrant >/dev/null; then
+    echo -n ${STATES[$STATE]} >&1
+    echo -n "Cannot find vagrant executable" >&2
+    exit
+fi
+
+if ! which VBoxManage >/dev/null; then
+    echo -n ${STATES[$STATE]} >&1
+    echo -n "Cannot find VBoxManage executable" >&2
+    exit
+fi
+
+if ! which rdmsr >/dev/null; then
+    echo -n ${STATES[$STATE]} >&1
+    echo -n "Cannot find rdmsr executable" >&2
+    exit
+fi
+
+
+#=======================================================================
+# Check for BIOS virtualization enabled
+#=======================================================================
+STATE=7
+#N.B. This has been exised into its own script because it needs root
+# ./tsvm-isvtenabled
+
+#======================================================================
+# Check for Initializing VM state (our Vagrant initialization stage)
+#======================================================================
+STATE=1
+#Hack: How do we know vagrant is provisioning?
+if [[ -e .provisioning ]]; then
+    echo -n ${STATES[$STATE]} >&1
+    echo -n "This can take about 30 minutes or longer" >&2
+    exit
+fi
+
+#======================================================================
+# Check for no VM
+#======================================================================
+STATE=0
+no_vm=true
+IFS=$'\n'
+for item in $(VBoxManage list vms); do
+    vm_name=$(echo ${item}|awk '{print $1}'|sed 's/"//g')
+    if [[ "${vm_name}" == "TS-VM-$VERSION" ]]; then
+        no_vm=false
+        break
+    fi
+done
+unset IFS
+if $no_vm; then
+
+    #Need disk space on /results partition to install the VM
+    min_disk_space=2212607  #kilobytes
+    if [[ $(df -kP /results|tail -1|awk '{print $4}') < $min_disk_space ]]; then
+        echo -n ${STATES[$STATE]} >&1
+        echo -n "Not enough free disk space in /results to install the VM." >&2
+    else
+        echo -n ${STATES[$STATE]} >&1
+        echo -n "No VM has been configured" >&2
+    fi
+
+    exit
+fi
+
+#======================================================================
+# Check state of VM
+#======================================================================
+vm_state=$(VBoxManage showvminfo $vm_name|grep ^State|sed -r 's/.*:\s*(.*)\(.*/\1/'|sed -r 's/ //g')
+case $vm_state in
+    "poweredoff"|"aborted")
+    rm -f ${WHERE}/.stopping
+    STATE=6
+    msg=""
+    ;;
+    "saved")
+    STATE=5
+    msg=""
+    ;;
+    "stopping"|"saving")
+    STATE=4
+    msg=""
+    ;;
+    "running"|"paused")
+    STATE=3
+    get_load    # Function defines the $msg variable
+    ;;
+    "starting"|"restoring")
+    STATE=2
+    msg=""
+    ;;
+    *)
+    STATE=9
+    msg="UNKNOWN VBOX VM STATE: $vm_state"
+    ;;
+esac
+
+if [[ -e ${WHERE}/.stopping ]]; then
+    STATE=4
+    msg="VM is shutting down"
+fi
+
+echo -n ${STATES[$STATE]} >&1
+echo -n "$msg" >&2
+
+exit

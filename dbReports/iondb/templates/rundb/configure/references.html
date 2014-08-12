@@ -8,6 +8,7 @@
   <li><a href="{% url "configure_services" %}">Services</a></li>
   <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
   <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
   <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block extra_head %}
@@ -92,7 +93,7 @@
           <h1 style="float:left;">Reference Sequences</h1>
           <div class="pull-right">
             <a href="{% url "references_genome_download" %}" class="btn">Get Ion References</a>
-            <a href="{% url "references_genome_add" %}" class="btn btn-primary add_genome">Add Reference Sequence</a>
+            <a href="{% url "references_genome_add" %}" class="btn btn-primary" id="add_genome">Add Reference Sequence</a>
           </div>
         </div>
         <div id="referenceSequences"></div>
@@ -235,7 +236,7 @@ $(document).ready(function() {
         }
       },
       sort: { field: "upload_date", dir: "desc" },
-      pageSize: 100
+      pageSize: 5000
     });
     
     $.each(data.objects, function (int_index, result) {
@@ -277,9 +278,7 @@ $(document).ready(function() {
       dataSource: uploads_data,
       height: '600',
       groupable: false,
-      scrollable: {
-        virtual: true
-      },
+      scrollable: true,
       selectable: false,
       sortable: true,
       pageable: false,
@@ -315,7 +314,7 @@ $(document).ready(function() {
         }
       },
       sort: { field: "upload_date", dir: "desc" },
-      pageSize: 100
+      pageSize: 5000
     });
     
     var hotspots_data = new kendo.data.DataSource({
@@ -336,7 +335,7 @@ $(document).ready(function() {
         }
       },
       sort: { field: "upload_date", dir: "desc" },
-      pageSize: 100
+      pageSize: 5000
     });
     
     
@@ -392,9 +391,7 @@ $(document).ready(function() {
       dataSource: targets_data,
       height: '600',
       groupable: false,
-      scrollable: {
-        virtual: true
-      },
+      scrollable: true,
       selectable: false,
       sortable: true,
       pageable: false,
@@ -412,9 +409,7 @@ $(document).ready(function() {
       dataSource: hotspots_data,
       height: '600',
       groupable: false,
-      scrollable: {
-        virtual: true
-      },
+      scrollable: true,
       selectable: false,
       sortable: true,
       pageable: false,
@@ -585,20 +580,18 @@ $(document).ready(function(){
             , serverSorting: true
             , sort: { field: "date", dir: "desc" }
             , serverPaging: true                          
-          , pageSize: 50
+          , pageSize: 5000
         }
         , height: '600'
         , groupable: false
-        , scrollable: {
-          virtual: true
-    }
+        , scrollable: true
         , selectable: false
         , sortable: true
         , pageable: false
     , columns: [
       {
                 field: "short_name"
-                , title: "Name"
+                , title: "Short Name"
                 , template: "<a href='/configure/references/genome/edit/${id}' class='edit_genome'>${short_name}</a>"
             } , {
                 field: "name"
@@ -660,13 +653,11 @@ $(document).ready(function(){
             , serverSorting: true
             , sort: { field: "date", dir: "desc" }
             , serverPaging: true                          
-          , pageSize: 50
+          , pageSize: 5000
         }
         , height: '600'
         , groupable: false
-        , scrollable: {
-          virtual: true
-        }
+        , scrollable: true
         , selectable: false
         , sortable: true
         , pageable: false
@@ -744,13 +735,11 @@ $(document).ready(function(){
             , serverSorting: true
             , sort: { field: "name", dir: "desc" }
             , serverPaging: true                          
-          , pageSize: 50
+          , pageSize: 5000
         }
         , height: '600'
         , groupable: false
-        , scrollable: {
-          virtual: true
-        }
+        , scrollable: true
         , selectable: false
         , sortable: true
         , pageable: false
@@ -824,13 +813,11 @@ $(document).ready(function(){
             , serverSorting: true
             , sort: { field: "name", dir: "desc" }
             , serverPaging: true                          
-          , pageSize: 50
+          , pageSize: 5000
         }
         , height: '600'
         , groupable: false
-        , scrollable: {
-          virtual: true
-        }
+        , scrollable: true
         , selectable: false
         , sortable: true
         , pageable: false
@@ -867,27 +854,23 @@ $(document).ready(function(){
             $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
             console.log("error:", data);
-          })
-          .always(function(data) { /*console.log("complete:", data);*/ });; 
-        
+          });
       });
         }
     });
     
-    $('.add_genome').click(function (e) {
+  $('#add_genome').click(function (e) {
     e.preventDefault();
-    e.stopPropagation();
-        $('#error-messages').hide().empty();
+    $('#error-messages').hide().empty();
     $('body #modal_references_new_genome').remove();
-    $.get($(this).attr('href'), function(data) {
+    $.get($(this).attr('href')).done(function(data) {
       $('body').append(data);
       $( '#modal_references_new_genome' ).modal("show");
-      return false;
     }).fail(function(data) {
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>'); 
-            console.log("error:", data);
-        });
+      $('#error-messages').empty().show();
+        $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+        console.log("error:", data);
+    });
   });    
   $(document).bind('modal_references_new_genome_done', function () {
     refreshKendoGrid("#referenceSequences");

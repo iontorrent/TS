@@ -1,6 +1,6 @@
-genome_name	ERCC92
-genome_version	ERCC92
-genome_length	82756
+genome_name	ERCC92 without polyA tails
+genome_version	1
+genome_length	80566
 index_version	tmap-f3
-fasta_md5checksum	339e0225f3294bf2bf89ac33d71a73c2
-original_fasta_md5checksum	339e0225f3294bf2bf89ac33d71a73c2
+fasta_md5checksum	7769a3298f3559958ddd63275d81c5c3
+original_fasta_md5checksum	6192d9322307bfd4e266ebbea08100ac

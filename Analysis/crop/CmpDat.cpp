@@ -88,6 +88,7 @@ int main ( int argc, char *argv[] )
     if(argc == 2)
     {
     	// only one file name given
+        printf("rows=%d cols=%d frames_in_file=%d uncomp=%d\n",src_raw->rows,src_raw->cols,src_raw->frames,src_raw->uncompFrames);
         printf("%d frames - Timestamps:\n",src_raw->frames);
         for(int idx=0;idx<src_raw->frames;idx++)
         {

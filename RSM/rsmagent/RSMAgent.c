@@ -2,11 +2,16 @@
 // Remote Support and Monitor Agent - Torrent Server
 // (c) 2011 Life Technologies, Ion Torrent
 //
+#define _BSD_SOURCE
+// for sigprocmask
+#define _POSIX_SOURCE
 
 #include <errno.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <pthread.h>
 #include <unistd.h>
 #include <string.h>
 #include <time.h>
@@ -30,6 +35,7 @@
 #define SPOOL_DIR "/var/spool/ion"
 #define TS_VERSIONS		SPOOL_DIR "/TSConfig.txt"
 #define TS_SERVERS		SPOOL_DIR "/TSServers.txt"
+#define TS_SERVERS_OLD	SPOOL_DIR "/TSServers.old"
 #define TS_NETWORK		SPOOL_DIR "/TSnetwork.txt"
 #define TS_FILESERVERS	SPOOL_DIR "/TSFileServers.txt"
 #define TS_EXPERIMENTS	SPOOL_DIR "/TSexperiments.txt"
@@ -38,6 +44,7 @@
 #define ALT_SN			SPOOL_DIR "/serial_number.alt"
 #define LOC_FILE		SPOOL_DIR "/loc.txt"
 #define RAIDINFO_FILE	SPOOL_DIR "/raidstatus.json"
+#define LINELEN 128
 
 typedef enum {
 	STATUS_HD = 0,
@@ -47,10 +54,11 @@ typedef enum {
 	STATUS_FILESERVERS,
 	STATUS_INSTRS,
 	STATUS_CONTACTINFO,
+	STATUS_LOCATIONINFO,
 	STATUS_NETWORK,
 	STATUS_EXPERIMENT,
-	STATUS_HARDWARE,
-	STATUS_RAIDINFO
+	STATUS_RAIDINFO,
+	STATUS_GPU
 } StatusType;
 
 typedef struct {
@@ -96,9 +104,21 @@ typedef struct {
 int numFileSystems = 0;
 FileSystemList *fileSystemList = NULL;
 
+// Server status queries
+typedef struct serverStatusItem_s {
+	char *name;
+	char *status;
+} serverStatusItem_t;
+
+typedef struct serverStatus_s {
+	int count;
+	serverStatusItem_t *server;
+	size_t size;
+} serverStatus_t;
+
 // globals
 AgentInfo agentInfo;
-int ok = 1;
+int running = 1;
 int verbose = 0;
 unsigned long pingRate = 30;
 time_t curTime, timeNow;
@@ -107,42 +127,48 @@ static int nextPort = 15000;
 static double percentFull = -1.0;
 static time_t lastVersionModTime = 0;
 static time_t lastContactInfoTime = 0;
+static time_t lastLocationInfoTime = 0;
 static int wantConfigUpdate = 1;
+static char const * const gpuErrorFile = "/var/spool/ion/gpuErrors";
 
 UpdateItem updateItem[] = {
-		{STATUS_VERSIONS, 120, 0},
-		{STATUS_CONTACTINFO, 120, 0},
+		{STATUS_VERSIONS, 120, 0},		// check every 2 min but only send updates if versions have changed
+		{STATUS_CONTACTINFO, 120, 00},	// check every 2 min but only send updates if contact info has changed
+		{STATUS_LOCATIONINFO,120, 0},	// check every 2 min but only send updates if location info has changed
 		{STATUS_EXPERIMENT, 120, 0},
-		{STATUS_SERVICES, 360, 0},
+		{STATUS_SERVICES, 360, 0},		// send status of all servers every 6 minutes, even if no change
 		{STATUS_FILESERVERS, 600, 0},
 		{STATUS_INSTRS, 3600, 0},
 		//{STATUS_NETWORK, 3600, 0},
-		{STATUS_HARDWARE, 3600, 0},
 		{STATUS_RAIDINFO,  600, 0},
+		{STATUS_GPU, 120, 0},
 };
 unsigned int numUpdateItems = sizeof(updateItem) / sizeof(UpdateItem);
 webProxy_t proxyInfo;
+static pthread_t locationThreadId = 0;
+static pthread_t signalThreadId = 0;
+static int locationThreadExited = 0;
 
 int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem);
 void SendVersionInfo(AeDRMDataItem *dataItem);
 void SendServersStatus(AeDRMDataItem *dataItem);
 void GenerateVersionInfo();
 void SendFileServerStatus(AeDRMDataItem *dataItem);
-void checkEnvironmentForWebProxy (webProxy_t *proxyInfo);
-char *getTextUpToDelim(char *start, char delim, char *output, int outputSize);
+void checkEnvironmentForWebProxy();
 void readAlarmsFromJson(char const * const filename);
 void buildRaidAlarmName(const int eNum, const int sNum, char const * const iName,
 		char * aName, size_t aNameSize);
-int  numericValue(char const * const value, double *number);
 void WriteAeStringDataItem(char const * const subcat, char const * const key,
 		char const * const value, AeDRMDataItem *item);
-void WriteAeAnalogDataItem(char const * const subcat, char const * const key,
-		double value, AeDRMDataItem *item);
+void readGpuErrorFile(char const * const filename, int *gpuFound, int *allRevsValid);
 
 // file upload callbacks
 static AeBool OnFileUploadBegin(AeInt32 iDeviceId, AeFileUploadSpec **ppUploads, AePointer *ppUserData);
 static AeBool OnFileUploadData(AeInt32 iDeviceId, AeFileStat **ppFile, AeChar **ppData, AeInt32 *piSize, AePointer pUserData);
 static void OnFileUploadEnd(AeInt32 iDeviceId, AeBool bOK, AePointer pUserData);
+static void SendLocationInfo(AeDRMDataItem *dataItem);
+void *locationThreadTask(void *args __attribute__((unused)));
+void *signalThreadTask(void *args __attribute__((unused)));
 
 void trimTrailingWhitespace(char *inputBuf)
 {
@@ -152,6 +178,8 @@ void trimTrailingWhitespace(char *inputBuf)
 		return;
 
 	length = strlen(inputBuf);
+	if (length > LINELEN)
+		length = LINELEN; // sanity check
 	while (length && inputBuf[length-1] <= space)
 		inputBuf[--length] = '\0';
 }       // end trimTrailingWhitespace
@@ -176,7 +204,7 @@ int GetConfigEntry(char *configFile, char delimiter, char *entry, char *buf, int
 				if (*token == '"') token++; // skip possible opening quote
 				char *endquote = strchr(token, '"');
 				if (endquote) *endquote = 0; // NULL-out end quote
-				if (strcmp(entry, token) == 0) { // if this line's token identifier is the one we are looking for, then save the value
+				if (strcmp(entry, token) == 0) { // if this line's token is what we want, save it
 					if (*ptr == '"') ptr++; // skip possible opening quote
 					endquote = strchr(ptr, '"');
 					if (endquote) *endquote = 0;
@@ -329,13 +357,8 @@ static void SendBiosVersion(AeDRMDataItem *dataItem, const char* nameFile)
 
 void RSMInit()
 {
-	// make sure we have version info prior to init since we use the system-serial-number (dell service tag) as a hook
+	// get version info before init since we use system-serial-number (dell service tag) as a hook
 	GenerateVersionInfo();
-
-	// grab our location once when we launch
-	int rc = system(BIN_DIR "/location_helper.sh");
-	if (rc == -1)
-		printf("%s: system: %s\n", __FUNCTION__, strerror(errno));
 
 	// initialize the AgentInfo fields
 	agentInfo.modelNumber = strdup("ION-TS1");
@@ -359,7 +382,20 @@ void RSMInit()
 
 	time(&curTime); // gets time in seconds since 1970
 
-	checkEnvironmentForWebProxy(&proxyInfo);
+	checkEnvironmentForWebProxy();
+
+	// remove old data
+	int rc = unlink(TS_SERVERS_OLD);
+	if (rc && errno != ENOENT)
+		fprintf(stderr, "%s: unlink: %s\n", __FUNCTION__, strerror(errno));
+
+	rc = pthread_create(&locationThreadId, NULL, locationThreadTask, NULL);
+	if (rc)
+		fprintf(stderr, "%s: pthread_create: %s\n", __FUNCTION__, strerror(rc));
+
+	rc = pthread_detach(locationThreadId);
+	if (rc)
+		fprintf(stderr, "%s: pthread_detach: %s\n", __FUNCTION__, strerror(rc));
 }
 
 void RSMClose()
@@ -401,13 +437,37 @@ void GetSoftwareVersion(char *softwareComponent, char *subcat, AeDRMDataItem *it
 void sigint_handler(int sig __attribute__((unused)))
 {
 	printf("Got interrupt request, will process after timeout expires.\n");
-	ok = 0;
+	running = 0;
+}
+
+void setUpSignalHandling()
+{
+	// block all signals
+	sigset_t allsignals;
+	int rc = sigfillset(&allsignals);
+	if (rc)
+		fprintf(stderr, "%s: sigfillset: %s\n", __FUNCTION__, strerror(rc));
+
+	rc = sigprocmask(SIG_BLOCK, &allsignals, NULL);
+	if (rc)
+		fprintf(stderr, "%s: sigfillset: %s\n", __FUNCTION__, strerror(rc));
+
+	// create thread to respond to signals.
+	rc = pthread_create(&signalThreadId, NULL, signalThreadTask, NULL);
+	if (rc)
+		fprintf(stderr, "%s: pthread_create: %s\n", __FUNCTION__, strerror(rc));
+
+	rc = pthread_detach(signalThreadId);
+	if (rc)
+		fprintf(stderr, "%s: pthread_detach: %s\n", __FUNCTION__, strerror(rc));
 }
 
 int main(int argc, char *argv[])
 {
-	printf("RSM_TS Agent\n");
+	printf("RSM_TS Agent built " __DATE__ " " __TIME__ "\n");
 	printf("OPENSSL Version: %s\n", OPENSSL_VERSION_TEXT);
+
+	setUpSignalHandling();
 
 	char *site = 0;
 
@@ -418,6 +478,8 @@ int main(int argc, char *argv[])
 			switch (argv[argcc][1]) {
 			case 'v': // verbose bump
 				verbose++;
+				if (strlen(argv[argcc]) >= 3 && argv[argcc][2] == 'v')
+					verbose++;
 				break;
 
 			case 'c': // don't update config file
@@ -448,12 +510,16 @@ int main(int argc, char *argv[])
 		AeDRMSetLogLevel(AeLogDebug);
 
 	if (proxyInfo.useProxy) {
-		printf("Using web proxy: host:%s port:%d\n", proxyInfo.pHost, proxyInfo.iPort);
+		printf("Using web proxy: host:%s port:%d user:%s\n", proxyInfo.pHost, proxyInfo.iPort, proxyInfo.pUser);
 		rc = AeWebSetProxy(AeWebProxyProtoHTTP, proxyInfo.pHost, proxyInfo.iPort, proxyInfo.pUser, proxyInfo.pPass);
 		if (rc == AeEOK)
 			printf("Web proxy was set successfully.\n");
 		else
 			fprintf(stderr, "Failed to set proxy, connecting directly: %s\n", AeGetErrorString(rc));
+	}
+	else {
+		if (verbose)
+			printf("Not using web proxy.\n");
 	}
 
 	// set up a few options
@@ -489,15 +555,19 @@ int main(int argc, char *argv[])
 
 	AeDRMDataItem dataItem;
 
-	// install interrupt handler
-	signal(SIGINT, sigint_handler);
-
 	// main loop - sends heartbeat at ping rate, and notifies of any alarm conditions
 
 	printf("Ready\n");
 
-	ok = 1;
-	while (ok) {
+	// Identifies the type of computer hardware the server is running on.
+	// Dell T7500 or Dell T620 for example.
+	// product_info.alt file is written during RSM_launch startup script execution
+	SendHardwareName(&dataItem, "product_info.alt");
+	// Records version of BIOS installed on server
+	SendBiosVersion(&dataItem, "product_info.alt");
+
+	running = 1;
+	while (running) {
 		time(&curTime);
 		// in this loop, we check our list of updatable events and post any that trigger
 		// we loop with a minimum granularity of one second, but most items update much less frequent
@@ -539,6 +609,7 @@ int main(int argc, char *argv[])
 	return 0;
 }
 
+#if 0
 void EventPostCB(void *user, char *name, int type, double val, char *info)
 {
 	AeDRMDataItem *dataItem = (AeDRMDataItem *)user;
@@ -558,12 +629,15 @@ void EventPostCB(void *user, char *name, int type, double val, char *info)
 
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 }
+#endif
 
 int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 {
 	char cmd[CMD_LENGTH];
 	int ret = 0;
 	int rc;
+	int gpuFound, allRevsValid;
+	static int prevGpuFound = 0, prevAllRevsValid = 0;
 
 	AeGetCurrentTime(&dataItem->value.timeStamp);
 
@@ -588,12 +662,12 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 
 	case STATUS_EVENT:
 		// here we check the event log for new entries, and post any we find via our callback
-		ret = 0; // the caller will try and post if this is non-zero, so always return 0, we handle posts via the callback here
+		ret = 0; // caller will post if this is non-zero, so always return 0; handle posts via callback here
 		// eventLogCheck(EventPostCB, dataItem);
 		break;
 
 	case STATUS_VERSIONS: {
-		// check to see if the package database has been modified, if so we need to update our version information
+		// check to see if package database has been modified, if so we need to update our version info
 		struct stat buf;
 		memset(&buf, 0, sizeof(buf));
 		stat("/var/lib/dpkg/status", &buf);
@@ -629,12 +703,21 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 		}
 	} break;
 
+	case STATUS_LOCATIONINFO: {
+		// check to see if the location info has been modified and if so update Axeda
+		struct stat buf;
+		memset(&buf, 0, sizeof(buf));
+		int retVal = stat(LOC_FILE, &buf);
+		if (retVal == 0 && buf.st_mtime != lastLocationInfoTime) {
+			lastLocationInfoTime = buf.st_mtime;
+			SendLocationInfo(dataItem);
+			// no need to set ret to 1, we have already posted the data
+		}
+	} break;
+
 	case STATUS_SERVICES:
-		snprintf(cmd, CMD_LENGTH, "python %s/status.py > %s", BIN_DIR, TS_SERVERS);
-		rc = system(cmd);
-		if (rc == -1)
-			printf("%s: system: %s\n", __FUNCTION__, strerror(errno));
 		SendServersStatus(dataItem);
+		ret = 0; // caller will post data again if this is non-zero
 		break;
 
 	case STATUS_FILESERVERS:
@@ -657,20 +740,11 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 		// (see dbReports/iondb/anaserve/serve.py)
 		// if we see any experiment metrics files send them to DRM server
 		// SendExperimentMetrics deletes the files when it is done with them.
-		snprintf(cmd, CMD_LENGTH, "ls -tr1 %s/TSexperiment-*.txt > %s", SPOOL_DIR, TS_EXPERIMENTS);
+		snprintf(cmd, CMD_LENGTH, "ls -tr1 %s/TSexperiment-*.txt > %s 2>/dev/null", SPOOL_DIR, TS_EXPERIMENTS);
 		if (0 == system(cmd)) {
 			SendExperimentMetrics(dataItem, TS_EXPERIMENTS);
 		}
-	break;
-
-	case STATUS_HARDWARE:
-		// Identifies the type of computer hardware the server is running on.
-		// Dell T7500 or Dell T620 for example.
-		// product_info.alt file is written during RSM_launch startup script execution
-		SendHardwareName(dataItem, "product_info.alt");
-		// Records version of BIOS installed on server
-		SendBiosVersion(dataItem, "product_info.alt");
-	break;
+		break;
 
 	case STATUS_INSTRS:
 		// get the list of attached instruments
@@ -704,7 +778,7 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 
 		fseek(fp,0,SEEK_SET);
 
-		agentInfo.serialNumberList = (char **)malloc(sizeof(char *)*agentInfo.numInsts); // its a list of string pointers
+		agentInfo.serialNumberList = (char **)malloc(sizeof(char *)*agentInfo.numInsts); // list of string pointers
 
 		int i;
 		for (i = 0; i < agentInfo.numInsts; i++) {
@@ -722,7 +796,8 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 
 			// send list
 			if (i == 0) {
-				dataItem->pName = "TS.PGM.Default"; // can specify each instr. by name, but 'Default' instr. can still be hooked into for SAP lookups
+				// can specify each instr. by name, but 'Default' instr. can still be hooked into for SAP lookups
+				dataItem->pName = "TS.PGM.Default";
 				dataItem->value.iQuality = AeDRMDataGood;
 				dataItem->value.iType = AeDRMDataString;
 				dataItem->value.data.pString = agentInfo.serialNumberList[i];
@@ -738,14 +813,64 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 			AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 		}
 		fclose(fp);
+		break;
 
 	case STATUS_RAIDINFO:
 		readAlarmsFromJson(RAIDINFO_FILE);
+		break;
+
+	case STATUS_GPU:
+		readGpuErrorFile(gpuErrorFile, &gpuFound, &allRevsValid);
+		if (verbose)
+			printf("prevGpuFound %d prevAllRevsValid %d gpuFound %d allRevsValid %d\n",
+					prevGpuFound, prevAllRevsValid, gpuFound, allRevsValid);
+		if (gpuFound != prevGpuFound || allRevsValid != prevAllRevsValid) {
+
+			dataItem->pName = "TS.GPU";
+			dataItem->value.iQuality = AeDRMDataGood;
+			dataItem->value.iType = AeDRMDataString;
+			ret = 1;
+
+			if (gpuFound && allRevsValid)
+				dataItem->value.data.pString = "No problems.";
+			else if (!gpuFound)
+				dataItem->value.data.pString = "GPU not detected.";
+			else if (!allRevsValid)
+				dataItem->value.data.pString = "Lost connection to GPU.";
+
+			prevGpuFound = gpuFound;
+			prevAllRevsValid = allRevsValid;
+		}
 		break;
 	}
 
 	return ret;
 }
+
+void readGpuErrorFile(char const * const filename, int *gpuFound, int *allRevsValid)
+{
+	JSON_Value *root_value;
+	JSON_Object *obj;
+
+	// Read the gpuErrors file into memory.
+	root_value = json_parse_file(filename);
+	if (!root_value) {
+		//printf("readGpuErrorFile root_value null\n");
+		return;
+	}
+
+	obj = json_value_get_object(root_value);
+	if (!obj) {
+		json_value_free(root_value);
+		//printf("readGpuErrorFile object null\n");
+		return;
+	}
+
+	*gpuFound = json_object_get_boolean(obj, "gpuFound");
+	*allRevsValid = json_object_get_boolean(obj, "allRevsValid");
+
+	json_value_free(root_value);
+}	// end readGpuErrorFile
 
 void GenerateVersionInfo()
 {
@@ -765,19 +890,6 @@ void GenerateVersionInfo()
 	rc = system(cmd);
 	if (rc == -1)
 		printf("%s: system: %s\n", __FUNCTION__, strerror(errno));
-}
-
-void SendServersStatus(AeDRMDataItem *dataItem)
-{
-	AeGetCurrentTime(&dataItem->value.timeStamp);
-	GetSoftwareVersion("Crawler", "Server", dataItem, TS_SERVERS);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("Archive", "Server", dataItem, TS_SERVERS);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("Job", "Server", dataItem, TS_SERVERS);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("Plugin", "Server", dataItem, TS_SERVERS);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 }
 
 void SendFileServerStatus(AeDRMDataItem *dataItem)
@@ -825,10 +937,17 @@ void SendFileServerStatus(AeDRMDataItem *dataItem)
 				}
 				if (i == numFileSystems) { // not found, so add
 					numFileSystems++;
-					if (numFileSystems == 1)
+					if (numFileSystems == 1) {
 						fileSystemList = (FileSystemList *)malloc(sizeof(FileSystemList));
-					else
-						fileSystemList = (FileSystemList *)realloc(fileSystemList, numFileSystems * sizeof(FileSystemList));
+					}
+					else {
+						FileSystemList *tempFileSystemList = (FileSystemList *)realloc(fileSystemList,
+								numFileSystems * sizeof(FileSystemList));
+						if (tempFileSystemList)
+							fileSystemList = tempFileSystemList;
+						else
+							fprintf(stderr, "%s: realloc: out of memory\n", __FUNCTION__);
+					}
 					strcpy(fileSystemList[i].agentAttributeName, ptr);
 					strcpy(fileSystemList[i].mountedName, line);
 					fileSystemList[i].percentFull = 0.0;
@@ -859,11 +978,7 @@ void SendVersionInfo(AeDRMDataItem *dataItem)
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 	GetSoftwareVersion("analysis", "Version", dataItem, TS_VERSIONS);
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("alignment", "Version", dataItem, TS_VERSIONS);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 	GetSoftwareVersion("dbreports", "Version", dataItem, TS_VERSIONS);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("tmap", "Version", dataItem, TS_VERSIONS);
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 	GetSoftwareVersion("docs", "Version", dataItem, TS_VERSIONS);
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
@@ -883,20 +998,10 @@ void SendVersionInfo(AeDRMDataItem *dataItem)
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 	GetSoftwareVersion("serialnumber", "Config", dataItem, TS_VERSIONS);
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
+}
 
-	/*
-	GetSoftwareVersion("country", "Location", dataItem, LOC_FILE);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("region", "Location", dataItem, LOC_FILE);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("code", "Location", dataItem, LOC_FILE);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("city", "Location", dataItem, LOC_FILE);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	GetSoftwareVersion("ipaddress", "Location", dataItem, LOC_FILE);
-	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
-	 */
-
+static void SendLocationInfo(AeDRMDataItem *dataItem)
+{
 	GetSoftwareVersion("State", "Location", dataItem, LOC_FILE);
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 	GetSoftwareVersion("City", "Location", dataItem, LOC_FILE);
@@ -909,45 +1014,7 @@ void SendVersionInfo(AeDRMDataItem *dataItem)
 	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 }
 
-void checkEnvironmentForWebProxy (webProxy_t *proxyInfo)
-{
-	FILE *fp;
-	char line[LINE_LENGTH];
-
-	// initialize web proxy struct
-	proxyInfo->useProxy =   0;
-	proxyInfo->pHost[0] = '\0';
-	proxyInfo->iPort    =   0;
-	proxyInfo->pUser[0] = '\0';
-	proxyInfo->pPass[0] = '\0';
-
-	fp = fopen("/etc/environment", "r");
-	if (!fp)
-		return;
-
-	while (fgets(line, LINE_LENGTH, fp)) {
-		// sample http_proxy line:
-		// http_proxy=http://user:pass@1.2.3.4:5
-		const char *token = "http_proxy=http://";
-		const int tlen = strlen(token);
-		if (strstr(line, token)) {
-			char buf[LINE_LENGTH];
-			char *pos = line + tlen;
-
-			pos = getTextUpToDelim(pos, ':', proxyInfo->pUser, LINE_LENGTH);
-			pos = getTextUpToDelim(pos, '@', proxyInfo->pPass, LINE_LENGTH);
-			pos = getTextUpToDelim(pos, ':', proxyInfo->pHost, LINE_LENGTH);
-			pos = getTextUpToDelim(pos, '\0', buf, LINE_LENGTH);
-
-			proxyInfo->iPort = atoi(buf);
-			proxyInfo->useProxy = 1;
-			break;
-		}
-	}
-	fclose(fp);
-}
-
-char *getTextUpToDelim(char *start, char delim, char *output, int outputSize)
+char *getTextUpToDelim(char * const start, const char delim, char * const output, const int outputSize)
 {
 	char *pos;
 	int   ii = 0;
@@ -960,6 +1027,74 @@ char *getTextUpToDelim(char *start, char delim, char *output, int outputSize)
 	output[ii] = '\0';
 
 	return end + 1; // so next search can pick up where this one left off
+}
+
+// Read the proxy info directly from /etc/environment, instead of using getenv(),
+// so that we get the latest settings.
+// /etc/environment populates the environment at boot only.
+// Any changes to /etc/environment are not visible in environment till next boot.
+// We use the value of https_proxy if present
+void checkEnvironmentForWebProxy()
+{
+	FILE *fp;
+	char line[LINE_LENGTH];
+	const char *token[] = {"https_proxy=http", "http_proxy=http"}; // order is important
+	const int nTokens = sizeof(token) / sizeof(token[0]);
+
+	// initialize web proxy struct
+	proxyInfo.useProxy =   0;
+	proxyInfo.pHost[0] = '\0';
+	proxyInfo.iPort    =   0;
+	proxyInfo.pUser[0] = '\0';
+	proxyInfo.pPass[0] = '\0';
+
+	fp = fopen("/etc/environment", "r");
+	if (!fp)
+		return;
+
+	while (fgets(line, LINE_LENGTH, fp)) {
+		trimTrailingWhitespace(line);
+
+		// Remove comments (whole-line or suffixed) before we look at the text.
+		char *commentChar = strchr(line, '#');
+		if (commentChar)
+			*commentChar = '\0';
+
+		// Try to find either of the two tokens we accept.
+		for (int ii = 0; ii < nTokens; ++ii) {
+			// sample proxy lines:
+			// https_proxy=https://user:pass@1.2.3.4:5
+			// https_proxy=http://user:pass@1.2.3.4:5
+			// http_proxy=https://user:pass@1.2.3.4:5
+			// http_proxy=http://user:pass@1.2.3.4:5
+			// https_proxy=https://1.2.3.4:5
+			// https_proxy=http://1.2.3.4:5
+			// http_proxy=https://1.2.3.4:5
+			// http_proxy=http://1.2.3.4:5
+			// #https_proxy=http://1.2.3.4:5
+			// #http_proxy=http://1.2.3.4:5
+			const int tlen = strlen(token[ii]);
+			if (strstr(line, token[ii])) {
+				char buf[LINE_LENGTH];
+				char *pos = line + tlen;
+				while (*pos++ != ':') // may be http, may be https; skip to next :
+					;
+				pos += 2; // skip the // characters
+
+				if (strchr(line, '@')) { // user:pass@ may or may not be present
+					pos = getTextUpToDelim(pos, ':', proxyInfo.pUser, LINE_LENGTH);
+					pos = getTextUpToDelim(pos, '@', proxyInfo.pPass, LINE_LENGTH);
+				}
+				pos = getTextUpToDelim(pos, ':', proxyInfo.pHost, LINE_LENGTH);
+				pos = getTextUpToDelim(pos, '\0', buf, LINE_LENGTH);
+
+				proxyInfo.iPort = atoi(buf);
+				proxyInfo.useProxy = 1;
+				break; // done, don't check for the other case
+			}
+		}
+	}
+	fclose(fp);
 }
 
 // Read raidstatus.json and identify the items with non-blank, non-good status
@@ -1075,27 +1210,6 @@ void buildRaidAlarmName(const int encNum, const int slotNum,
 	}
 }	// end buildRaidAlarmName
 
-int numericValue(char const * const value, double *number)
-{
-	int success = 0;
-	int usedEntireString = 0;
-	if ((!value) || !number)
-		return 0; // fail
-
-	errno = 0;
-	char *ptrToLastCharUsed = NULL;
-	*number = strtod(value, &ptrToLastCharUsed);
-
-	char const * const ptrToEndOfValue = value + (strlen(value));
-
-	usedEntireString = ptrToEndOfValue <= ptrToLastCharUsed;
-
-	if (errno == 0 && usedEntireString)
-		success = 1;
-
-	return success;
-}	// end numericValue
-
 void WriteAeStringDataItem(char const * const subcat, char const * const key,
 		char const * const value, AeDRMDataItem *item)
 {
@@ -1110,20 +1224,189 @@ void WriteAeStringDataItem(char const * const subcat, char const * const key,
 	item->value.iQuality = AeDRMDataGood;
 }	// end WriteAeStringDataItem
 
-void WriteAeAnalogDataItem(char const * const subcat, char const * const key,
-		double value, AeDRMDataItem *item)
-{
-	static char name[2048] = {0};
-	if (subcat)
-		snprintf(name, 2048, "%s.%s", subcat, key);
-	else
-		snprintf(name, 2048, "%s", key);
-	item->pName = name;
-	item->value.data.dAnalog = value;
-	item->value.iType = AeDRMDataAnalog;
-	item->value.iQuality = AeDRMDataGood;
-}	// end WriteAeAnalogDataItem
+// Server status queries
 
+void getKeyAndValue(char *inputBuf, const char delim, char **key, char **value)
+{
+	char *cpos;
+	const char space = 32;
+
+	if ((!inputBuf) || (!key) || (!value))
+		return;
+
+	*key = NULL;
+	*value = NULL;
+
+	cpos = strchr(inputBuf, delim);
+	if (cpos) {
+		*key = inputBuf;
+		*cpos = '\0';
+		trimTrailingWhitespace(*key);
+
+		cpos++;
+		while (*cpos == space)
+			cpos++;
+		*value = cpos;
+	}
+}	// end getKeyAndValue
+
+void *growBufIfNeeded(void *buf, size_t *currentSize, size_t sizeNeeded)
+{
+	if (!currentSize) // buf can be NULL
+		return NULL;
+
+	void *newPtr = NULL;;
+	if (*currentSize < sizeNeeded)
+		newPtr = realloc(buf, sizeNeeded);
+
+	if (newPtr) {
+		*currentSize = sizeNeeded;
+		return newPtr;
+	}
+	else {
+		return buf;
+	}
+}
+
+void parseServerStatus(char const * const filename, serverStatus_t * const serverStatus)
+{
+	if (!filename || !serverStatus)
+		return;
+
+	serverStatus->count = 0;
+	serverStatus->server = NULL;
+	serverStatus->size = 0;
+
+	// Preallocate a guess at what we'll need.
+	serverStatus->server = growBufIfNeeded(
+			serverStatus->server,
+			&serverStatus->size,
+			32 * sizeof(serverStatusItem_t));
+
+	char line[LINELEN];
+	FILE *fp = fopen(filename, "rb");
+	if (fp) {
+		while (fgets(line, LINELEN, fp)) {
+			trimTrailingWhitespace(line);
+
+			char *key;
+			char *value;
+			getKeyAndValue(line, '|', &key, &value);
+
+			serverStatus->server = growBufIfNeeded(
+					serverStatus->server,
+					&serverStatus->size,
+					(serverStatus->count + 1) * sizeof(serverStatusItem_t));
+
+			if (serverStatus->server) {
+				serverStatus->server[serverStatus->count].name = strdup(key);
+				serverStatus->server[serverStatus->count].status = strdup(value);
+				serverStatus->count++;
+			}
+		}
+
+		fclose(fp);
+	}
+}
+
+void serverStatusDtor(serverStatus_t * const serverStatus)
+{
+	if (!serverStatus)
+		return;
+
+	for (int ii = serverStatus->count - 1; ii >= 0; --ii) { // loop backward, indexes are always valid
+		free(serverStatus->server[ii].name);
+		serverStatus->server[ii].name = NULL;
+
+		free(serverStatus->server[ii].status);
+		serverStatus->server[ii].status = NULL;
+
+		serverStatus->count--;
+	}
+
+	if (serverStatus->server)
+		free(serverStatus->server);
+
+	serverStatus->size = 0;
+	serverStatus->server = NULL;
+}
+
+void SendTimeStamp(char const * const name1, char const * const name2)
+{
+	AeDRMDataItem dataItem;
+	char strbuf[LINELEN] = {0};
+	struct tm tm;
+	time_t unixtime = time(NULL);
+
+	AeGetCurrentTime(&dataItem.value.timeStamp);
+	gmtime_r(&unixtime, &tm); // get GMT representation of system time
+
+	snprintf(strbuf, LINELEN, "%04d-%02d-%02d %02d:%02d:%02d GMT",
+			1900 + tm.tm_year, 1 + tm.tm_mon, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
+
+	WriteAeStringDataItem(name1, name2, strbuf, &dataItem);
+	AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, &dataItem);
+}
+
+int checkForServiceStatusChange(
+		serverStatus_t const * const serverStatusOld,
+		serverStatus_t const * const serverStatusNew, const int ii)
+{
+	if (!serverStatusOld || !serverStatusNew)
+		return -1;
+
+	if (serverStatusOld->count != serverStatusNew->count)
+		return 1;
+
+	if (strncmp(serverStatusOld->server[ii].name,   serverStatusNew->server[ii].name,   LINE_LENGTH) != 0)
+		return 1;
+
+	if (strncmp(serverStatusOld->server[ii].status, serverStatusNew->server[ii].status, LINE_LENGTH) != 0)
+		return 1;
+
+	return 0;
+}
+
+void SendServersStatus(AeDRMDataItem *dataItem)
+{
+	serverStatus_t serverStatusOld;
+	serverStatus_t serverStatusNew;
+
+	AeGetCurrentTime(&dataItem->value.timeStamp);
+
+	// Get the list of service statuses using the same code
+	// that populates the /configure/services/ page on the TS
+	char const * const cmd = "python " BIN_DIR "/status.py 1>/dev/null 2>" TS_SERVERS;
+	int rc = system(cmd);
+	if (rc == -1)
+		printf("%s: system: %s\n", __FUNCTION__, strerror(errno));
+
+	parseServerStatus(TS_SERVERS_OLD, &serverStatusOld);
+	parseServerStatus(TS_SERVERS, &serverStatusNew);
+
+	for (int ii = 0; ii < serverStatusNew.count; ++ii) {
+
+		int statusChanged = checkForServiceStatusChange(&serverStatusOld, &serverStatusNew, ii);
+
+		// If status of service has changed, send the data item for that service.
+		if (statusChanged) {
+			WriteAeStringDataItem("TS.Server",
+					serverStatusNew.server[ii].name, serverStatusNew.server[ii].status, dataItem);
+			AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
+		}
+	}
+
+	// Always send the timestamp when the service status was checked.
+	// Better to update one timestamp data item every time, than to update 15 data items, one per service.
+	SendTimeStamp("TS.Server", "lastChecked");
+
+	serverStatusDtor(&serverStatusNew);
+	serverStatusDtor(&serverStatusOld);
+
+	rc = rename(TS_SERVERS, TS_SERVERS_OLD);
+	if (rc == -1)
+		fprintf(stderr, "%s: rename: %s\n", __FUNCTION__, strerror(errno));
+}
 
 /******************************************************************************
  * Callbacks
@@ -1195,13 +1478,16 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 				srand(time(NULL));
 				nextPort = 15000 + (rand() % 1024);
 
-				// create a file containing the port that will be uploaded.  The caller will need this port information to connect!
+				// create a file containing the port info the caller needs to connect
 				FILE *fp = fopen("/tmp/rsshcmd", "w");
 				// fprintf(fp, "RSSH command: %s to rssh.iontorrent.net on port %d\n", rsshCmd, nextPort);
-				fprintf(fp, "ssh rssh.iontorrent.net as rsshUser, then run:\nssh -l ionadmin -p %d -o NoHostAuthenticationForLocalhost=yes -o StrictHostKeyChecking=no localhost", nextPort);
+				fprintf(fp, "ssh rssh.iontorrent.net as rsshUser, then run:\n"
+						"ssh -l ionadmin -p %d -o NoHostAuthenticationForLocalhost=yes -o StrictHostKeyChecking=no localhost",
+						nextPort);
 				fclose(fp);
 
-				snprintf(cmd, 1024, "script -c \"%s/reverse_ssh.sh %s 22 22 %d rssh.iontorrent.net %s %s\" /dev/null &", BIN_DIR, rsshCmd, nextPort, user, pass);
+				snprintf(cmd, 1024, "script -c \"%s/reverse_ssh.sh %s 22 22 %d rssh.iontorrent.net %s %s\" /dev/null &",
+						BIN_DIR, rsshCmd, nextPort, user, pass);
 				if (verbose > 0)
 					printf("System cmd executing: %s\n", cmd);
 				rc = system(cmd);
@@ -1278,4 +1564,46 @@ static void OnFileUploadEnd(AeInt32 iDeviceId __attribute__((unused)),
 		AeFileClose(pUpload->iCurFileHandle);
 
 	AeFree(pUpload);
+}
+
+void *locationThreadTask(void *args __attribute__((unused)))
+{
+	int rc = system(BIN_DIR "/location_helper.sh");
+	if (rc == -1)
+		printf("%s: system: %s\n", __FUNCTION__, strerror(errno));
+	locationThreadExited = 1;
+	return NULL;
+}
+
+void *signalThreadTask(void *args __attribute__((unused)))
+{
+	sigset_t allsignals;
+	int rc = sigfillset(&allsignals);
+	if (rc)
+		fprintf(stderr, "%s: sigfillset: %s\n", __FUNCTION__, strerror(rc));
+
+	while (running) {
+		int signalReceived;
+		rc = sigwait(&allsignals, &signalReceived);
+		if (rc)
+			fprintf(stderr, "%s: sigfillset: %s\n", __FUNCTION__, strerror(rc));
+
+		switch (signalReceived) {
+		case SIGINT:
+		case SIGQUIT:
+		case SIGILL:
+		case SIGTRAP:
+		case SIGABRT:
+		case SIGFPE:
+		case SIGSEGV:
+		case SIGTERM:
+		case SIGSTKFLT:
+			printf("Got interrupt request, will process after timeout expires.\n");
+			running = 0;
+			break;
+		default:
+			break;
+		}
+	}
+	return NULL;
 }

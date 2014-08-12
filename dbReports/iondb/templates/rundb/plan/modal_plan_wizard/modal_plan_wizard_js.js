@@ -120,7 +120,7 @@ TB.plan.wizard.getApplProduct = function(runType) {
     var applProduct = {};
     applProduct.GENS = {};
     applProduct.GENS.runTypeDescription = '{{planTemplateData.GENS.runType.description}}';
-    applProduct.GENS.variantFrequency = "{{planTemplateData.GENS.defaultVariantFrequency}}";
+    applProduct.GENS.variantFrequency = "";
     applProduct.GENS.isDefaultPairedEnd = "{{planTemplateData.GENS.isDefaultPairedEnd}}";
     applProduct.GENS.reference = '{{planTemplateData.GENS.reference}}';
     applProduct.GENS.targetBedFile = '{{planTemplateData.GENS.targetBedFile}}';
@@ -152,7 +152,7 @@ TB.plan.wizard.getApplProduct = function(runType) {
     	
     applProduct.AMPS = {};
     applProduct.AMPS.runTypeDescription = '{{planTemplateData.AMPS.runType.description}}';
-    applProduct.AMPS.variantFrequency = "{{planTemplateData.AMPS.defaultVariantFrequency}}";
+    applProduct.AMPS.variantFrequency = "";
     applProduct.AMPS.isDefaultPairedEnd = "{{planTemplateData.AMPS.isDefaultPairedEnd}}";
     applProduct.AMPS.reference = '{{planTemplateData.AMPS.reference}}';
     applProduct.AMPS.targetBedFile = '{{planTemplateData.AMPS.targetBedFile}}';
@@ -183,7 +183,7 @@ TB.plan.wizard.getApplProduct = function(runType) {
     	
     applProduct.TARS = {};
     applProduct.TARS.runTypeDescription = '{{planTemplateData.TARS.runType.description}}';
-    applProduct.TARS.variantFrequency = "{{planTemplateData.TARS.defaultVariantFrequency}}";
+    applProduct.TARS.variantFrequency = "";
     applProduct.TARS.isDefaultPairedEnd = "{{planTemplateData.TARS.isDefaultPairedEnd}}";
     applProduct.TARS.reference = '{{planTemplateData.TARS.reference}}';
     applProduct.TARS.targetBedFile = '{{planTemplateData.TARS.targetBedFile}}';
@@ -214,7 +214,7 @@ TB.plan.wizard.getApplProduct = function(runType) {
     	
     applProduct.WGNM = {};
     applProduct.WGNM.runTypeDescription = '{{planTemplateData.WGNM.runType.description}}';
-    applProduct.WGNM.variantFrequency = "{{planTemplateData.WGNM.defaultVariantFrequency}}";
+    applProduct.WGNM.variantFrequency = "";
     applProduct.WGNM.isDefaultPairedEnd = "{{planTemplateData.WGNM.isDefaultPairedEnd}}";
     applProduct.WGNM.reference = '{{planTemplateData.WGNM.reference}}';
     applProduct.WGNM.targetBedFile = '{{planTemplateData.WGNM.targetBedFile}}';
@@ -245,7 +245,8 @@ TB.plan.wizard.getApplProduct = function(runType) {
     	
     applProduct.RNA = {};
     applProduct.RNA.runTypeDescription = '{{planTemplateData.RNA.runType.description}}';
-    applProduct.RNA.variantFrequency = "{{planTemplateData.RNA.defaultVariantFrequency}}";
+  //20140211-retired applProduct.RNA.variantFrequency = "{{planTemplateData.RNA.defaultVariantFrequency}}";
+    applProduct.RNA.variantFrequency = "";
     applProduct.RNA.isDefaultPairedEnd = "{{planTemplateData.RNA.isDefaultPairedEnd}}";
     applProduct.RNA.reference = '{{planTemplateData.RNA.reference}}';
     applProduct.RNA.targetBedFile = '{{planTemplateData.RNA.targetBedFile}}';
@@ -276,7 +277,8 @@ TB.plan.wizard.getApplProduct = function(runType) {
     	
     applProduct.AMPS_RNA = {};
     applProduct.AMPS_RNA.runTypeDescription = '{{planTemplateData.AMPS_RNA.runType.description}}';
-    applProduct.AMPS_RNA.variantFrequency = "{{planTemplateData.AMPS_RNA.defaultVariantFrequency}}";
+  //20140211-retired applProduct.AMPS_RNA.variantFrequency = "{{planTemplateData.AMPS_RNA.defaultVariantFrequency}}";
+    applProduct.AMPS_RNA.variantFrequency = "";
     applProduct.AMPS_RNA.isDefaultPairedEnd = "{{planTemplateData.AMPS_RNA.isDefaultPairedEnd}}";
     applProduct.AMPS_RNA.reference = '{{planTemplateData.AMPS_RNA.reference}}';
     applProduct.AMPS_RNA.targetBedFile = '{{planTemplateData.AMPS_RNA.targetBedFile}}';
@@ -307,7 +309,7 @@ TB.plan.wizard.getApplProduct = function(runType) {
   	
     applProduct.AMPS_EXOME = {};
     applProduct.AMPS_EXOME.runTypeDescription = '{{planTemplateData.AMPS_EXOME.runType.description}}';
-    applProduct.AMPS_EXOME.variantFrequency = "{{planTemplateData.AMPS_EXOME.defaultVariantFrequency}}";
+    applProduct.AMPS_EXOME.variantFrequency = "";
     applProduct.AMPS_EXOME.isDefaultPairedEnd = "{{planTemplateData.AMPS_EXOME.isDefaultPairedEnd}}";
     applProduct.AMPS_EXOME.reference = '{{planTemplateData.AMPS_EXOME.reference}}';
     applProduct.AMPS_EXOME.targetBedFile = '{{planTemplateData.AMPS_EXOME.targetBedFile}}';

@@ -88,7 +88,7 @@ function loadtable() {
   var initialRowDisplay = 10;
 
   function onLoadSuccess() {
-    $("#FL-grid").css('height',(numRecords*25+2)+'px');
+    $("#FL-grid").css('height',(numRecords*25)+'px');
     dataView.setItems(data);
     grid.resizeCanvas();
     grid.render();
@@ -104,7 +104,7 @@ function loadtable() {
       $('#FL-collapseGrid').attr("title","Failed to load data.");
     }
     if( errorTrace < 0 ) {
-      alert("Could open file links data file\n'"+dataFile+"'.");
+      alert("Could not open file links data file\n'"+dataFile+"'.");
     } else {
       alert("An error occurred loading file links data from file\n'"+dataFile+"' at line "+errorTrace);
     }
@@ -121,6 +121,7 @@ function loadtable() {
     $.each(lines, function(n,row) {
       errorTrace = n;
       var fields = $.trim(row).split('\t');
+      if( fields[0] === undefined || fields[1] === undefined ) return true;
       var text = fields[0];
       if( n > 0 && text != '' ) {
         data[numRecords] = {

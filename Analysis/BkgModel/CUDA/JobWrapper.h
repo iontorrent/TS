@@ -9,50 +9,61 @@
 #include "ParamStructs.h"
 #include "WorkerInfoQueue.h"
 #include "BeadTracker.h"
+#include "NucStepCache.h"
 #include "GpuMultiFlowFitControl.h"
 #include "CudaDefines.h"
 
 #define CUDA_MULTIFLOW_NUM_FIT 2 
 
-// workset (benchmark workset, can be wrapped into a job)
+
 
 class BkgModelWorkInfo;
 
+
+//////////////////////////////////////
+//Workset class:
+//Leftover class from testing code which wrapped the previously dumped data into a Work set.
+//class was kept since it wraps all the accesses to the "private_data" field in the job item
+//and knows the # of elements + padding of all the buffers
+// therefore no changes to the single fit or multi fit code needs to be made if BgkModel code
+//gets refactored.
 
 class WorkSet 
 {
 
 
   BkgModelWorkInfo * _info;
-
+  GpuMultiFlowFitControl _multiFlowFitControl;
   GpuMultiFlowFitMatrixConfig* _fd[CUDA_MULTIFLOW_NUM_FIT];
   
+  NucStep nucRise; 
   int _maxFrames; // only set if we don't want to determine the mem sizes for a specific number of frames or no item is set
   int _maxBeads; // only set if we don't want to determine the mem sizes for a specific number of frames or no item is set
-
+  int _flow_block_size; 
+  int _flow_key;
   
 public:
-
   
-  WorkSet();
+  WorkSet( int flow_key, int flow_block_size );
   WorkSet(BkgModelWorkInfo * i);
   ~WorkSet(); 
 
   void setData(BkgModelWorkInfo * info);
-  bool isSet();
+  bool isSet() const;
 
-  int getNumBeads();  // will return maxBeads if no _info object is set
-  int getNumFrames();  // will return max Frames if no _info object is set
+  int getNumBeads()  const;  // will return maxBeads if no _info object is set
+  int getNumFrames() const;  // will return max Frames if no _info object is set
 
 
   // only used if we don't want to determine the mem sizes for a specific number of frames/beads or no item is set
   void setMaxFrames(int numFrames);
-  int getMaxFrames();
+  int getMaxFrames() const;
   void setMaxBeads(int numBeads);
-  int getMaxBeads();
+  int getMaxBeads() const;
 
-  
-
+  int getFlowBlockSize() const;
+  void setFlow(int flow_key, int flow_block_size);
+  int getFlowKey() const;
   int getAbsoluteFlowNum();
 
   int getMaxSteps();
@@ -62,9 +73,8 @@ public:
   int getNumParams(int fit_index);
  
 
- 
   reg_params * getRegionParams();
-  bead_params * getBeadParams();
+  BeadParams * getBeadParams();
   BeadTracker * getBeadTracker();
   bead_state * getBeadState();
   float * getEmphVec(); 
@@ -82,7 +92,7 @@ public:
   float* getClonalCallScale(); 
   bool useDynamicEmphasis();
 
-  CpuStep_t* getPartialDerivSteps(int fit_index);
+  CpuStep* getPartialDerivSteps(int fit_index);
   unsigned int* getJTJMatrixMap(int fit_index);
   unsigned int* getBeadParamIdxMap(int fit_index);
 
@@ -91,6 +101,7 @@ public:
 
   int getFgBufferSize( bool padded = false);
   int getFgBufferSizeShort( bool padded = false);
+  int getReusedFgBufferPartialDerivsSize( bool padded = false);
   int getRegionParamsSize( bool padded = false);
   int getBeadParamsSize( bool padded = false);
   int getBeadStateSize( bool padded = false);
@@ -125,7 +136,7 @@ public:
   int getFlxB(bool padded = false); // Flows x Beads x sizeof(float)
   int getFloatPerBead(bool padded = false);
 
-  int getPaddedN();
+  int getPaddedN() const;
   int padTo128Bytes(int size);
   int multipltbyPaddedN(int size);
 
@@ -171,7 +182,7 @@ public:
   float* getXtalkNeiMultiplier();
   float* getXtalkNeiTauTop();
   float* getXtalkNeiTauFluid();
-  bool performCrossTalkCorrection();
+  bool performCrossTalkCorrection() const;
 
   void calculateCPUXtalkForBead(int ibd, float* buf);
 
@@ -181,7 +192,32 @@ public:
   bool performCalcPCADarkMatter();
   bool useDarkMatterPCA();
   bool InitializeAmplitude();
-
+  
+  // recompress raw traces using standard timing compression 
+  // for single flow fitting
+  int GetNumUnCompressedFrames();
+  int GetNumStdCompressedFrames();
+  int GetNumETFCompressedFrames();
+  int* GetStdFramesPerPoint();
+  int* GetETFInterpolationFrames();
+  float* GetETFInterpolationMul();
+  int GetETFStartFrame();
+  int GetStdFramesPerPointSize(bool padded = false);
+  int GetETFInterpolationMulSize(bool padded = false);
+  int GetETFInterpolationFrameSize(bool padded = false); 
+  float* GetStdTimeCompEmphasis();
+  int GetStdTimeCompEmphasisSize(bool padded = false);
+  float* GetStdTimeCompNucRise();
+  int GetStdTimeCompNucRiseSize(bool padded = false);
+  float* GetStdTimeCompDeltaFrame();
+  int GetStdTimeCompDeltaFrameSize(bool padded = false);
+  float* GetStdTimeCompFrameNumber();
+  int GetStdTimeCompFrameNumberSize(bool padded = false);
+  bool performRecompressionTailRawTrace();
+  void setUpFineEmphasisVectorsForStdCompression();
+  int* GetNonZeroEmphasisFrames();
+  int* GetNonZeroEmphasisFramesForStdCompression();
+  int GetNonZeroEmphasisFramesVecSize(bool padded = false);
 };
 
 

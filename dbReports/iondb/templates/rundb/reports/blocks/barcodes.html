@@ -19,7 +19,7 @@
 </script>
     <div>
         <div class="spacer clear"></div>
-        <table id="barcodes" class="">
+        <table id="barcodes" class="table-striped" style="table-layout: auto;">
             <thead>
             <tr>
                 <th>Barcode Name</th>
@@ -49,10 +49,22 @@
                 <td><img onclick="modal_barcode_len('#= (barcode_name) ? barcode_name : "No barcode" #', '{{report.reportWebLink}}/basecaller_results/${file_prefix}.read_len_histogram.png')" src="{{report.reportWebLink}}/basecaller_results/${file_prefix}.sparkline.png"></td>
                 <td>
                     <span class="btn-group">
-                        <a class="btn #=!bam_link && 'hide'#" href="${bam_link}">BAM</a>
-                        <a class="btn #=!bam_link && 'hide'#" href="${bai_link}">BAI</a>
+                        # if (basecaller_bam_link) { #
+                            <a class="btn" href="${basecaller_bam_link}">UBAM</a>
+                        # } else { #
+                            <span class="btn disabled">UBAM</span>
+                        # } #
+                        # if (bam_link) { #
+                            <a class="btn" href="${bam_link}">BAM</a>
+                        # } else { #
+                            <span class="btn disabled">BAM</span>
+                        # } #
+                        # if (bai_link) { #
+                            <a class="btn" href="${bai_link}">BAI</a>
+                        # } else { #
+                            <span class="btn disabled">BAI</span>
+                        # } #
                     </span>
-                    <a class="btn #=!vcf_link && 'hide'#" href="${vcf_link}">VCF</a>
                 </td>
             </tr>
         </script>

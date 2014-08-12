@@ -181,6 +181,14 @@ extern "C" {
       sam_header_get_records(const sam_header_t *h, const char type_tag[2]);
 
     /*!
+      @abstract Remove the record group associated with the record type.
+      @param  h         the SAM Header
+      @param  type_tag  the record group type/tag
+     */
+    void
+      sam_header_remove_records(const sam_header_t *h, const char type_tag[2]);
+
+    /*!
       @abstract Gets a list of records of the given record group type that have the value for the tag.
       @param  h         the SAM Header 
       @param  type_tag  the record group type/tag

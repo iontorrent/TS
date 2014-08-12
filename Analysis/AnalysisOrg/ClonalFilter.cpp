@@ -5,7 +5,7 @@
 
 using namespace std;
 
-void ApplyClonalFilter(Mask& mask, std::vector<RegionalizedData *>& sliced_chip,  const deque<float>& ppf, const deque<float>& ssq);
+void ApplyClonalFilter(Mask& mask, std::vector<RegionalizedData *>& sliced_chip,  const deque<float>& ppf, const deque<float>& ssq, const PolyclonalFilterOpts & opts);
 void UpdateMask(Mask& mask, std::vector<RegionalizedData *>& sliced_chip);
 void GetFilterTrainingSample(deque<int>& row, deque<int>& col, deque<float>& ppf, deque<float>& ssq, deque<float>& nrm, std::vector<RegionalizedData *>& sliced_chip);
 void DumpPPFSSQ (const char* results_folder, const deque<int>& row, const deque<int>& col, const deque<float>& ppf, const deque<float>& ssq, const deque<float>& nrm);
@@ -30,28 +30,23 @@ static void WriteDSet(
     const char* name,
     const void* data);
 
-void AttemptClonalFilter(Mask& mask, const char* results_folder, std::vector<RegionalizedData *>& sliced_chip);
+static void AttemptClonalFilter(Mask& mask, const char* results_folder, std::vector<RegionalizedData *>& sliced_chip, const PolyclonalFilterOpts & opts);
 
-void ApplyClonalFilter (Mask& mask, const char* results_folder, std::vector<RegionalizedData *>& sliced_chip, bool doClonalFilter, int flow)
+void ApplyClonalFilter (Mask& mask, const char* results_folder, std::vector<RegionalizedData *>& sliced_chip, const PolyclonalFilterOpts & opts)
 {
-  int applyFlow = ceil(1.0*mixed::mixed_last_flow / NUMFB) * NUMFB - 1;
-  if (flow == applyFlow and doClonalFilter)
-  {
-    // Never give up just because filter failed.
-    try{
-      AttemptClonalFilter(mask,results_folder,sliced_chip);
-    }catch(exception& e){
-        cerr << "NOTE: clonal filter failed."
-             << e.what()
-             << endl;
-    }catch(...){
-        cerr << "NOTE: clonal filter failed." << endl;
-    }
-
+  // Never give up just because filter failed.
+  try{
+    AttemptClonalFilter(mask,results_folder,sliced_chip, opts);
+  }catch(exception& e){
+      cerr << "NOTE: clonal filter failed."
+           << e.what()
+           << endl;
+  }catch(...){
+      cerr << "NOTE: clonal filter failed." << endl;
   }
 }
 
-void AttemptClonalFilter(Mask& mask, const char* results_folder, std::vector<RegionalizedData *>& sliced_chip)
+static void AttemptClonalFilter(Mask& mask, const char* results_folder, std::vector<RegionalizedData *>& sliced_chip, const PolyclonalFilterOpts & opts)
 {
   deque<int>   row;
   deque<int>   col;
@@ -61,7 +56,7 @@ void AttemptClonalFilter(Mask& mask, const char* results_folder, std::vector<Reg
   GetFilterTrainingSample (row, col, ppf, ssq, nrm, sliced_chip);
   DumpPPFSSQ(results_folder, row, col, ppf, ssq, nrm);
   DumpPPFSSQtoH5(results_folder, sliced_chip);
-  ApplyClonalFilter (mask, sliced_chip, ppf, ssq);
+  ApplyClonalFilter (mask, sliced_chip, ppf, ssq, opts);
   UpdateMask(mask, sliced_chip);
 }
 
@@ -77,7 +72,7 @@ void UpdateMask(Mask& mask, std::vector<RegionalizedData *>& sliced_chip)
 
     for (int well=0; well<numWells; ++well)
     {
-      bead_params& bead  = local_patch.GetParams (well);
+      BeadParams& bead  = local_patch.GetParams (well);
       bead_state&  state = *bead.my_state;
 
       // Record clonal reads in mask:
@@ -95,11 +90,11 @@ void UpdateMask(Mask& mask, std::vector<RegionalizedData *>& sliced_chip)
   }
 }
 
-void ApplyClonalFilter (Mask& mask, std::vector<RegionalizedData *>& sliced_chip, const deque<float>& ppf, const deque<float>& ssq)
+void ApplyClonalFilter (Mask& mask, std::vector<RegionalizedData *>& sliced_chip, const deque<float>& ppf, const deque<float>& ssq, const PolyclonalFilterOpts & opts)
 {
   clonal_filter filter;
   filter_counts counts;
-  make_filter (filter, counts, ppf, ssq, false); // I dislike verbosity on trunk
+  make_filter (filter, counts, ppf, ssq, false, opts); // I dislike verbosity on trunk
 
   unsigned int numRegions = sliced_chip.size();
   for (unsigned int rgn=0; rgn<numRegions; ++rgn)
@@ -111,13 +106,13 @@ void ApplyClonalFilter (Mask& mask, std::vector<RegionalizedData *>& sliced_chip
 
     for (int well=0; well<numWells; ++well)
     {
-      bead_params& bead  = local_patch.GetParams (well);
+      BeadParams& bead  = local_patch.GetParams (well);
       bead_state&  state = *bead.my_state;
 
       int row = rowOffset + bead.y;
       int col = colOffset + bead.x;
       if(mask.Match(col, row, MaskLib))
-        state.clonal_read = filter.is_clonal (state.ppf, state.ssq);
+        state.clonal_read = filter.is_clonal (state.ppf, state.ssq, opts.mixed_stringency);
       else if(mask.Match(col, row, MaskTF))
         state.clonal_read = true;
     }
@@ -134,7 +129,7 @@ void GetFilterTrainingSample (deque<int>& row, deque<int>& col, deque<float>& pp
     int colOffset = sliced_chip[r]->region->col;
     for (int well=0; well<numWells; ++well)
     {
-      bead_params bead;
+      BeadParams bead;
       sliced_chip[r]->GetParams (well, &bead);
       const bead_state& state = *bead.my_state;
       if (state.random_samp and state.ppf<mixed_ppf_cutoff() and not state.bad_read)
@@ -187,7 +182,7 @@ void DumpPPFSSQtoH5 (const char* results_folder, std::vector<RegionalizedData *>
     int colOffset = sliced_chip[r]->region->col;
     for (int well=0; well<numWells; ++well)
     {
-      bead_params bead;
+      BeadParams bead;
       sliced_chip[r]->GetParams (well, &bead);
       const bead_state& state = *bead.my_state;
       if (state.random_samp)

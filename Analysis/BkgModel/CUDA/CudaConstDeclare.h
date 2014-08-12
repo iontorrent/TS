@@ -20,10 +20,8 @@ __constant__ static float * POISS_APPROX_TABLE_CUDA_BASE;
 __constant__ static float4 * POISS_APPROX_LUT_CUDA_BASE;
 
 
-__constant__ ConstParams CP[MAX_NUM_STREAMS];
-//__constant__ ConstParams CP_MULTIFLOWFIT[MAX_NUM_STREAMS];
-//__constant__ ConstParams CP_SINGLEFLOWFIT[MAX_NUM_STREAMS];
-__constant__ ConstXtalkParams CP_XTALKPARAMS[MAX_NUM_STREAMS];
+__constant__ ConstParams CP[MAX_ALLOWED_NUM_STREAMS];
+__constant__ ConstXtalkParams CP_XTALKPARAMS[MAX_ALLOWED_NUM_STREAMS];
 
 
 

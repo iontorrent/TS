@@ -297,9 +297,9 @@ float ApplyDarkMatterToFrame(
 // compute tmid muc. This routine mimics CPU routine in BookKeeping/RegionaParams.cpp
 __device__
 void ComputeMidNucTime_dev(float& tmid, const ConstParams* pCP, int nucId, int fnum) {
-  tmid = pCP->nuc_shape.t_mid_nuc[0];
+  tmid = pCP->nuc_shape.AccessTMidNuc()[0];
   tmid +=  pCP->nuc_shape.t_mid_nuc_delay[nucId]*
-          (pCP->nuc_shape.t_mid_nuc[0] -  pCP->nuc_shape.valve_open) /
+          (pCP->nuc_shape.AccessTMidNuc()[0] -  pCP->nuc_shape.valve_open) /
           ( pCP->nuc_shape.magic_divisor_for_timing + SAFETYZERO);
   tmid +=  pCP->nuc_shape.t_mid_nuc_shift_per_flow[fnum];
 
@@ -309,16 +309,24 @@ __device__
 void ComputeTauB_dev(float& tauB, const ConstParams* pCP , float etbR, int sId) {
 
   if (pCP->fit_taue) {
-    tauB = etbR  ? (pCP->tauE / etbR) : MINTAUB;
+    tauB = etbR  ? (pCP->tauE / etbR) : pCP->min_tauB;
   }
   else {
     tauB = pCP->tau_R_m*etbR + pCP->tau_R_o;
   }
-  clamp_streaming(tauB, MINTAUB, MAXTAUB);
+  clamp_streaming(tauB, pCP->min_tauB, pCP->max_tauB);
 }
 
 __device__ 
-void ComputeEtbR_dev(float& etbR,const ConstParams* pCP , float R, int sId, int nucid, int absFnum ) {
+void ComputeEtbR_dev(
+    float& etbR,
+    const ConstParams* pCP, 
+    float R, 
+    float Copies, 
+    float phi,
+    int sId, 
+    int nucid, 
+    int absFnum ) {
   if (CP[sId].fit_taue) { //CP_MULTIFLOWFIT
     etbR = R;
     if (etbR)
@@ -327,14 +335,28 @@ void ComputeEtbR_dev(float& etbR,const ConstParams* pCP , float R, int sId, int 
                (1.0f / etbR - 1.0f));
   }
   else {
-    etbR = R*pCP->NucModifyRatio[nucid] + 
+    if ( !CP[sId].use_alternative_etbR_equation ){
+      etbR = R*pCP->NucModifyRatio[nucid] + 
         (1.0f - R*pCP->NucModifyRatio[nucid])*
         pCP->RatioDrift*(absFnum)/SCALEOFBUFFERINGCHANGE;
+    }
+
+    else{
+      etbR = R*pCP->NucModifyRatio[nucid] + pCP->RatioDrift*Copies*phi*
+        (absFnum)/(6.0*SCALEOFBUFFERINGCHANGE);
+        // 6.0 constat: SCALEOFBUFFERINGCHANGE was 1,000, now it should be 6,000
+    }
+
   }
 }
 
 __device__
-void ComputeSP_dev(float& SP, const ConstParams *pCP, float Copies, int absFnum, int sId) {
+void ComputeSP_dev(
+    float& SP, 
+    const ConstParams *pCP, 
+    float Copies, 
+    int absFnum, 
+    int sId) {
   SP = (float)(COPYMULTIPLIER * Copies) * pow(pCP->CopyDrift,absFnum);
 }
 

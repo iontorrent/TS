@@ -21,9 +21,6 @@
 <script src="slickgrid/plugins/slick.rowselectionmodel.js"></script>
 <script src="slickgrid/slick.dataview.js"></script>
 <script src="lifegrid/lifegrid.js"></script>
-<script src="lifegrid/pager.js"></script>
-<script src="lifegrid/checkboxselectcolumn.js"></script>
-
 
 <script src="lifegrid/allelesTable.js"></script>
 <script src="bootstrap-select.js"></script>
@@ -204,13 +201,18 @@
                 <div class="span3 movedown5">
                     <span class="headvc">Parameter Settings</span>
                 </div>
-                <div class="span6">
-                    {{options.configuration}}
+                <div class="span9">
+                    <div style="float:left">
+                       <div>{{options.config_line1}}</div>
+                       <div style="color: #808080;font-size: 12px;">{{options.config_line2}}</div>
+                    </div>
+                    <div style="float:left;margin-left:10px">
                     {% if barcode %}
                       <a class="btn" href="../download.php3?name={{configuration_link}}">Parameters File</a>
                     {% else %}
                       <a class="btn" href="download.php3?name={{configuration_link}}">Parameters File</a>
                     {% endif %}
+                    </div>
                 </div>
             </div>
             
@@ -238,11 +240,11 @@
             {% if options.trim_reads %}
             <div class="row-fluid minibump">
                 <div class="span3 movedown5">
-                    <span class="headvc">Trimmed Reads</span>
+                    <span class="headvc">TVC-Processed Reads</span>
                 </div>
                 <div class="span6">
-                    <a class="btn" href="download.php3?name={{trimmed_bam_link}}">BAM</a>
-                    <a class="btn" href="download.php3?name={{trimmed_bai_link}}">BAI</a>
+                    <a class="btn" href="download.php3?name={{processed_bam_link}}">BAM</a>
+                    <a class="btn" href="download.php3?name={{processed_bai_link}}">BAI</a>
                 </div>
             </div>
             {% endif %}
@@ -368,9 +370,9 @@
                 </select></div>
 
                 <div class="filter-wrap">Var Freq
-                    <input type="text" id="AL-txtSearchFreqMin" class="input-small" size=4 value="0">
+                    <input type="text" id="AL-txtSearchFreqMin" class="input-small" size=4 value="">
                             to <input type="text" id="AL-txtSearchFreqMax" class="input-small"
-                                      size=4 value="100"></div>
+                                      size=4 value=""></div>
 
                 <div class="filter-wrap">Total Cov &ge; <input type="text" id="AL-txtSearchCovMin"
                                                           class="input-small" size=7 value=""></div>

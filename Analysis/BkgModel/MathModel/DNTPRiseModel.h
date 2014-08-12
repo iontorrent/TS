@@ -10,11 +10,13 @@
 
 #define MIN_PROC_THRESHOLD  (0.01)
 
+namespace MathModel {
 // exportable math
-int SigmaRiseFunction(float *output,int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma, float nuc_flow_span, bool splineflag);
+int SigmaRiseFunction(float *output,int npts, const float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma, float nuc_flow_span, bool splineflag);
 int SigmaXRiseFunction(float *output,int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma);
 int SplineRiseFunction(float *output, int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma, float tangent_zero, float tangent_one);
-int MeasuredNucRiseFunction(float *output, int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma);
+int MeasuredNucRiseFunction(float *output, int npts, const float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma);
+} // namespace
 
 class DntpRiseModel
 {
@@ -26,7 +28,7 @@ public:
     //  _tvals: the time associated with each data point to compute
     //  _sub_steps: the number of steps to take between each time point
     //  _npts: the number of time points
-    DntpRiseModel(int _npts,float *_C, float *_tvals,int _sub_steps);
+    DntpRiseModel(int _npts,float *_C, const float *_tvals,int _sub_steps);
 
     // Computes [dNTP] as a function of time.  t_mid_nuc controls the starting point of the
     // [dNTP] change, and sigma indicates how blurred out in time the rise is
@@ -37,7 +39,7 @@ public:
 private:
     int npts;
     int sub_steps;
-    float *tvals;
+    const float *tvals;
     float C[NUMNUC];
     int i_start;
 };

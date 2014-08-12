@@ -6,7 +6,6 @@
 
 #include "api/BamReader.h"
 
-#include "../Analysis/file-io/ion_util.h"
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -20,7 +19,6 @@
 #include "BiasGenerator.h"
 #include "SigmaGenerator.h"
 #include "SkewGenerator.h"
-#include "StackPlus.h"
 #include "ExtendParameters.h"
 #include "PosteriorInference.h"
 
@@ -78,13 +76,6 @@ public:
   vector<float> ll_record;
   vector<vector <float> > try_hyp_freq;
 
-// induced by this variant from the stack of reads
-  int variant_position;
-  string variant_contig;
-  string ref_allele;
-  // --- XXX This field does not make sense any more in a multi-allele evaluation
-  string var_allele; // all just annoying trash for a unique identifier
-
   HypothesisStack(){
      DefaultValues();
   }
@@ -99,7 +90,7 @@ public:
   void TriangulateRestart();
   float ExecuteOneRestart(vector<float> &restart_hyp);
   void ExecuteInference( );
-  void InitForInference(PersistingThreadObjects &thread_objects, StackPlus &my_data, InputStructures &global_context, int num_hyp_no_null);
+  void InitForInference(PersistingThreadObjects &thread_objects, vector<const Alignment *>& read_stack, const InputStructures &global_context, int num_hyp_no_null);
   
   // change estimates for variance
   
@@ -109,33 +100,59 @@ public:
   float ReturnMaxLL();
 };
 
-class EnsembleEval{
-  public:
-    StackPlus my_data;
-    MultiAlleleVariantIdentity multi_allele_var;
- 
-   HypothesisStack allele_eval;
-    
-    vector<int> diploid_choice;
-    
-    EnsembleEval(){
-      diploid_choice.assign(2,0);
-      diploid_choice.at(1)=1; // ref = 0, alt = 1
-    };
 
-    void SetupHypothesisChecks(ExtendParameters *parameters);
-    void ApproximateHardClassifierForReads(vector<int> &read_allele_id, vector<bool> &strand_id);
-    void ApproximateHardClassifierForReadsFromMultiAlleles(vector<int> &read_allele_id, vector<bool> &strand_id);
-    void ScanSupportingEvidence(float &mean_ll_delta, int i_allele);
-    int DetectBestAllele();
-    int DetectBestMultiAllelePair();
-    int DetectBestSingleAllele();
-    int DetectBestAlleleHardClassify();
-   void ExecuteInferenceAllAlleles();
-   void ComputePosteriorGenotype(int _alt_allele_index,float local_min_allele_freq, int &genotype_call,
-                                 float &gt_quality_score, float &reject_status_quality_score);
-   void MultiAlleleGenotype(float local_min_allele_freq,
-                            vector<int> &genotype_component, float &gt_quality_score, float &reject_status_quality_score);
+class PositionInBam;
+
+class EnsembleEval {
+public:
+
+  // Raw read information
+
+  vector<const Alignment *> read_stack;    //!< Reads spanning the variant position
+
+  // Raw alleles information
+
+  vcf::Variant * variant;                         //!< VCF record of this variant position
+  vector<AlleleIdentity> allele_identity_vector;  //!< Detailed information for each candidate allele
+  LocalReferenceContext  seq_context;             //!< Reference context of this variant position
+  int multiallele_window_start;
+  int multiallele_window_end;
+  bool doRealignment;
+
+  // Allele evaluation information
+
+  HypothesisStack allele_eval;
+    
+  vector<int> diploid_choice;
+    
+  EnsembleEval(vcf::Variant &candidate_variant) {
+    diploid_choice.assign(2,0);
+    diploid_choice[1]=1; // ref = 0, alt = 1
+    variant = &candidate_variant;
+    multiallele_window_start = -1;
+    multiallele_window_end = -1;
+    doRealignment = false;
+  };
+
+  //! @brief  Create a detailed picture about this variant and all its alleles
+  void SetupAllAlleles(const ExtendParameters &parameters, const InputStructures &global_context,
+      const ReferenceReader &ref_reader, int chr_idx);
+
+  void FilterAllAlleles(const ClassifyFilters &filter_variant, const vector<VariantSpecificParams>& variant_specific_params);
+
+  void StackUpOneVariant(const ExtendParameters &parameters, const PositionInProgress& bam_position);
+
+  void SpliceAllelesIntoReads(PersistingThreadObjects &thread_objects, const InputStructures &global_context,
+      const ReferenceReader &ref_reader, int chr_idx);
+
+  void ApproximateHardClassifierForReads(vector<int> &read_allele_id, vector<bool> &strand_id);
+  void ApproximateHardClassifierForReadsFromMultiAlleles(vector<int> &read_allele_id, vector<bool> &strand_id);
+  void ScanSupportingEvidence(float &mean_ll_delta, int i_allele);
+  int DetectBestMultiAllelePair();
+  void ComputePosteriorGenotype(int _alt_allele_index,float local_min_allele_freq, int &genotype_call,
+                                float &gt_quality_score, float &reject_status_quality_score);
+  void MultiAlleleGenotype(float local_min_allele_freq,
+                           vector<int> &genotype_component, float &gt_quality_score, float &reject_status_quality_score);
 };
 
 

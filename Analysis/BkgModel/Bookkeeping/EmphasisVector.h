@@ -16,6 +16,7 @@ class EmphasisClass
     float**            EmphasisVectorByHomopolymer;  // array of pointers to different vectors
     std::vector<float> EmphasisScale;                // scaling factor for each vector
     float              emp[NUMEMPHASISPARAMETERS];   // parameters for emphasis vector generation
+    std::vector<int>   nonZeroEmphasisFrames; // number of non zero frame values for each emphasis vector
 
     bool point_emphasis_by_compression; // avoid emphasis artifacts due to highly compressed points
 
@@ -28,7 +29,6 @@ class EmphasisClass
     int                npts; // how long the vector should be
 
     void CustomEmphasis ( float *evect, float evSel );
-    void SignalToBkgEmphasis ( int hp_val, float* signal, float* background, float basic_noise, float relative_threshold );
     void GenerateEmphasis ( int tsize, float t_center, int *frames_per_point, float *frameNumber, float amult,float width, float ampl );
     void Allocate ( int tsize );
     void Destroy();
@@ -41,6 +41,7 @@ class EmphasisClass
     ~EmphasisClass();
 
   private:
+    void DetermineNonZeroEmphasisFrames(int hp);
     void AllocateScratch();
     bool restart;
     friend class boost::serialization::access;
@@ -57,6 +58,7 @@ class EmphasisClass
       // CurrentEmphasis called in SetCrudeEmphasisVectors
       // by the RegionalizedData object that owns this EmphasisVector
       & emp
+      & nonZeroEmphasisFrames
       & emphasis_width
       & emphasis_ampl
       & my_frames_per_point
@@ -79,6 +81,7 @@ class EmphasisClass
       // & e.EmphasisVectorByHomopolymer[i];
       // & EmphasisScale
       & emp
+      & nonZeroEmphasisFrames
       & emphasis_width
       & emphasis_ampl
       & my_frames_per_point

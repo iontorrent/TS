@@ -33,6 +33,7 @@
 #include "BkgSearchAmplitude.h"
 #include "DataCube.h"
 #include "XtalkCurry.h"
+#include "SpatialCorrelator.h"
 #include "SynchDat.h"
 #include "TraceChunk.h"
 
@@ -40,13 +41,8 @@
 #include "GlobalWriter.h"
 
 #include "RegionalizedData.h"
+#include "SlicedChipExtras.h"
 
-//#include "BkgDataPointers.h"
-
-//#define FIT_DOUBLE_TAP_DATA
-
-// Initialize lev mar sparse matrices
-void InitializeLevMarSparseMatrices (int *my_nuc_block);
 
 // SHOULD be called after all SignalProcessingMasterFitter objects are deleted to free up memory
 void CleanupLevMarSparseMatrices (void);
@@ -90,17 +86,20 @@ class SignalProcessingMasterFitter
 
     // constructor used by Analysis pipeline
 
-    SignalProcessingMasterFitter (RegionalizedData *local_patch, GlobalDefaultsForBkgModel &_global_defaults, char *_results_folder, Mask *_mask, PinnedInFlow *_pinnedInFlow, RawWells *_rawWells, Region *_region, std::set<int>& sample,
-              std::vector<float>& sep_t0_est,bool debug_trace_enable,
-              int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps,  EmptyTraceTracker *emptyTraceTracker,
-                                  float sigma_guess,float t0_guess, float t0_frame_guess, 
-				  bool ignorekey=false,
-				  SequenceItem* seqList=NULL,int numSeqListItems=2,
-                                  bool restart=false, int16_t *_washout_flow=NULL);
+    SignalProcessingMasterFitter (RegionalizedData *local_patch, 
+        const struct SlicedChipExtras & local_extras, GlobalDefaultsForBkgModel &_global_defaults, 
+        const char *_results_folder, Mask *_mask, PinnedInFlow *_pinnedInFlow, 
+        class RawWells *_rawWells, 
+        Region *_region, std::set<int>& sample,
+        const std::vector<float>& sep_t0_est,bool debug_trace_enable,
+        int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps,  
+        EmptyTraceTracker *emptyTraceTracker,
+        float sigma_guess,float t0_guess, float t0_frame_guess, 
+				bool ignorekey/*=false*/,
+				SequenceItem* seqList/*=NULL*/,int numSeqListItems/*=2*/,
+        bool restart/*=false*/, int16_t *_washout_flow/*=NULL*/,
+        const CommandLineOpts *inception_state );
 
-    // constructor used for testing outside of Analysis pipeline (doesn't require mask, region, or RawWells obects)
-    SignalProcessingMasterFitter (GlobalDefaultsForBkgModel &_global_defaults, int numLBeads, int numFrames,
-              float sigma_guess=2.5,float t0_guess=35);
     void SetUpFitObjects();
 
     void SetComputeControlFlags (bool enable_xtalk_correction=true);
@@ -114,22 +113,29 @@ class SignalProcessingMasterFitter
     // trigger computation
     //bool TestAndExecuteBlock (int flow, bool last);
     //void FitUpstreamModel (int flow, bool last);
-    void MultiFlowRegionalFitting ( int flow, bool last );
-    void FitAllBeadsForInitialFlowBlock();
-    void RemainingFitStepsForInitialFlowBlock();
-    void FitEmbarassinglyParallelRefineFit();
-    void PreWellCorrectionFactors();
-    void ExportAllAndReset(int flow, bool last);
+    void MultiFlowRegionalFitting ( int flow, bool last, int flow_key, int flow_block_size , master_fit_type_table *table, int flow_block_start );
+    void FitAllBeadsForInitialFlowBlock( int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
+    void RemainingFitStepsForInitialFlowBlock( int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
+    void FitEmbarassinglyParallelRefineFit( int flow_block_size, int flow_block_start );
+    void PreWellCorrectionFactors( int flow_block_size, int flow_block_start );
+    void ExportAllAndReset(int flow, bool last, int flow_block_size, const PolyclonalFilterOpts & opts, int flow_block_id, int flow_block_start );
     bool TestAndTriggerComputation(bool last);
     //void ExecuteBlock (int flow, bool last);
+
+    // Whatever initialization we need when the flow block size might change.
+    void InitializeFlowBlock( int flow_block_size );
    
     // break apart image processing and computation
-    bool  ProcessImage (Image *img, int flow);
-    bool ProcessImage (SynchDat &data, int flow);
+    bool ProcessImage (Image *img, int raw_flow, int flow_buffer_index, int flow_block_size);
+
+    // ProcessImage had to be broken into two function, before and after GPUGenerateBeadTraces.
+    bool InitProcessImageForGPU ( Image *img, int raw_flow, int flow_buffer_index );
+    bool FinalizeProcessImageForGPU ( int flow_block_size );
+    bool ProcessImage (SynchDat &data, int raw_flow, int flow_buffer_index, int flow_block_size);
 
 
     // allow GPU code to trigger PCA Dark Matter Calculation on CPU
-    void CPU_DarkMatterPCA();
+    void CPU_DarkMatterPCA( int flow_block_size, int flow_block_start );
 
     // image process entry point for testing outside of Analysis pipeline
     // (doesn't require Image object, takes well data and background data separately)
@@ -137,11 +143,11 @@ class SignalProcessingMasterFitter
 
     void SetupTimeAndBuffers (float sigma_guess,
                               float t_mid_nuc_guess,
-                              float t0_offset);
+                              float t0_offset, int flow_block_size, int global_flow_block_size );
 
     void SetPointers (BkgDataPointers *ptrs)
     {
-      global_state.mPtrs = ptrs;
+      global_state.SetHdf5Pointer( ptrs );
     }
 
     void SetImageParams (int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps)
@@ -175,28 +181,28 @@ class SignalProcessingMasterFitter
       }
     }
 
-    Region *GetRegion (void)
+    const Region *GetRegion (void)
     {
       return region_data->region;
     }
 
     // evaluates the model function for a set of well and region parameters using the background
     // data already stored in the SignalProcessingMasterFitter object from previous calls to ProcessImage
-    int GetModelEvaluation (int iWell,struct bead_params *p,struct reg_params *rp,
+    int GetModelEvaluation (int iWell,BeadParams *p,struct reg_params *rp,
                             float **fg,float **bg,float **feval,float **isig,float **pf);
 
     void SetXtalkName (char *my_name)
     {
       char xtalk_name[512];
       strcpy (xtalk_name,my_name);
-      xtalk_spec.ReadCrossTalkFromFile (xtalk_name); //happens after initialization
+      trace_xtalk_spec.ReadCrossTalkFromFile (xtalk_name); //happens after initialization
     };
 
 
-    void DumpExemplarBead (FILE *my_fp, bool debug_only)
+    void DumpExemplarBead (FILE *my_fp, bool debug_only, int flow_block_size)
     {
       if (region_data->region!=NULL)
-        region_data->my_beads.DumpBeads (my_fp,debug_only, region_data->region->col, region_data->region->row);
+        region_data->my_beads.DumpBeads (my_fp,debug_only, region_data->region->col, region_data->region->row, flow_block_size);
     }
     void DumpDarkMatterTitle (FILE *my_fp)
     {
@@ -264,13 +270,14 @@ class SignalProcessingMasterFitter
 
     XtalkCurry& getXtalkExecute()
     {
-      return xtalk_execute;
+      return trace_xtalk_execute;
     }
-    extern_links &GetGlobalStage() { return global_state; }
+    GlobalWriter &GetGlobalStage() { return global_state; }
       
 // making this public for temporary simplicity
     // Data and parameters here --------------
     RegionalizedData *region_data;
+    SlicedChipExtras region_data_extras;
 
 
   private:
@@ -285,14 +292,16 @@ class SignalProcessingMasterFitter
     bool NeverProcessRegion();
     bool IsFirstBlock(int flow);
     
-    void DoPreComputationFiltering();    
-    void PostModelProtonCorrection();
-    void CompensateAmplitudeForEmptyWellNormalization();
+    void DoPreComputationFiltering( int flow_block_size);    
+    void PostModelProtonCorrection( int flow_block_size, int flow_block_start );
+    void CompensateAmplitudeForEmptyWellNormalization( int flow_block_size );
 
     void NothingInit();
 
-    void  BkgModelInit (bool debug_trace_enable,float sigma_guess,
-                        float t0_guess, float t0_frame_guess, std::vector<float>& sep_t0_est,std::set<int>& sample,bool nokey, SequenceItem* _seqList,int _numSeqListItems, bool restart);
+    void BkgModelInit( bool debug_trace_enable,float sigma_guess,
+                       float t0_guess, float t0_frame_guess, 
+                       const std::vector<float>& sep_t0_est,std::set<int>& sample,bool nokey, 
+                       SequenceItem* _seqList,int _numSeqListItems, bool restart );
 
 
     void NothingFitters();
@@ -306,10 +315,10 @@ class SignalProcessingMasterFitter
 
     // export data of various types per flow
     void ExportStatusToMask(int flow);
-    void ExportDataToWells();
-    void ExportDataToDataCubes (bool last);
+    void ExportDataToWells( int flow_block_start );
+    void ExportDataToDataCubes (bool last, int last_flow, int flow_block_id, int flow_block_start );
 
-    void UpdateClonalFilterData (int flow);
+    void UpdateClonalFilterData (int flow, const PolyclonalFilterOpts & opts, int flow_block_size, int flow_block_start );
     void ResetForNextBlockOfData();
 
     // emphasis vector stuff
@@ -318,25 +327,25 @@ class SignalProcessingMasterFitter
     void    SetTimeAndEmphasis (float t0_offset);
 
     /* Older function set */
-    void CPUxEmbarassinglyParallelRefineFit();
+    void CPUxEmbarassinglyParallelRefineFit( int flow_block_size, int flow_block_start );
     
     /* Relevant functions to integrate GPU multi flow fitting into signal processing pipeline*/
-    void RefineAmplitudeEstimates (double &elapsed_time, Timer &fit_timer);
-    void ApproximateDarkMatter(bool isSampled);
-    void FitAmplitudeAndDarkMatter (double &elapsed_time, Timer &fit_timer);
-    void PostKeyFit (double &elapsed_time, Timer &fit_timer);
-    void PostKeyFitAllWells(double &elapsed_time, Timer &fit_timer);
-    void FitWellParametersConditionalOnRegion (double &elapsed_time, Timer &fit_timer);
-    void BootUpModel (double &elapsed_time,Timer &fit_timer);
-    void FirstPassSampledRegionParamFit();
-    void FirstPassRegionParamFit();
+    void RefineAmplitudeEstimates (double &elapsed_time, Timer &fit_timer, int flow_block_size, int flow_block_start );
+    void ApproximateDarkMatter( const LevMarBeadAssistant & post_key_state, bool isSampled, int flow_block_size, int flow_block_start);
+    void FitAmplitudeAndDarkMatter (MultiFlowLevMar & lev_mar_fit, double &elapsed_time, Timer &fit_timer, int flow_key, int flow_block_size, int flow_block_start );
+    void PostKeyFit (MultiFlowLevMar &post_key_fit, double &elapsed_time, Timer &fit_timer, int flow_key, int flow_block_size, int flow_block_start);
+    void PostKeyFitAllWells(double &elapsed_time, Timer &fit_timer, int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
+    void FitWellParametersConditionalOnRegion ( MultiFlowLevMar & lev_mar_fit, double &elapsed_time, Timer &fit_timer);
+    void BootUpModel (double &elapsed_time,Timer &fit_timer, int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start);
+    void FirstPassSampledRegionParamFit( int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
+    void FirstPassRegionParamFit( int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
     void PickRepresentativeHighQualityWells();
-    void GuessCrudeAmplitude (double &elapsed_time, Timer &fit_timer, bool sampledOnly);
-    void FitTimeVaryingRegion (double &elapsed_time, Timer &fit_timer);
-    void RegionalFittingForInitialFlowBlock();
-    void RegionalFittingForLaterFlowBlock();
+    void GuessCrudeAmplitude (double &elapsed_time, Timer &fit_timer, bool sampledOnly, int flow_block_size, int flow_block_start);
+    void FitTimeVaryingRegion (double &elapsed_time, Timer &fit_timer, int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start);
+    void RegionalFittingForInitialFlowBlock( int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
+    void RegionalFittingForLaterFlowBlock( int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
 
-    void ChooseSampledForRegionParamFit();
+    void ChooseSampledForRegionParamFit( int flow_block_size );
 
     // debugging functions
 
@@ -352,7 +361,7 @@ class SignalProcessingMasterFitter
     GlobalDefaultsForBkgModel &global_defaults;
 
     // talking to external world
-    extern_links global_state;
+    GlobalWriter global_state;
     
     debug_collection my_debug;
     
@@ -360,17 +369,16 @@ class SignalProcessingMasterFitter
     PoissonCDFApproxMemo *math_poiss;
 
 // local region cross-talk parameters - may vary across the chip by region
-    CrossTalkSpecification xtalk_spec;
-    XtalkCurry xtalk_execute;
+    TraceCrossTalkSpecification trace_xtalk_spec;
+    XtalkCurry trace_xtalk_execute;
+    SpatialCorrelator well_xtalk_corrector;
 
     // corrector for proton
-    SpatialCorrelator *correct_spatial;
     RefineTime *refine_time_fit;
     TraceCorrector *trace_bkg_adj;
 
     // optimizers for generating fits to data
     SearchAmplitude my_search; // crude/quick guess at amplitude
-    MultiFlowLevMar *lev_mar_fit; // allocated size of beads
 
     // this controls refining the fit for a collection of beads
     RefineFit *refine_fit;
@@ -408,7 +416,7 @@ class SignalProcessingMasterFitter
       void serialize(Archive& ar, const unsigned int version) const {
       fprintf(stdout, "Serialize SignalProcessingMasterFitter\n");
         ar & 
-	  const_cast<extern_links &>(global_state) &
+	  const_cast<GlobalWriter &>(global_state) &
 	  // my_debug &
 	  // math_poiss &
 	  const_cast<CrossTalkSpecification &>(xtalk_spec);

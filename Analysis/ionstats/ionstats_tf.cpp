@@ -171,6 +171,10 @@ int IonstatsTestFragments(int argc, const char *argv[])
     if (!alignment.IsMapped() or !alignment.GetTag("MD",MD_tag))
       continue;
 
+    // The check below eliminates unexpected alignments
+    if (alignment.IsReverseStrand() or alignment.Position > 5)
+      continue;
+
     int current_tf = alignment.RefID;
 
     //

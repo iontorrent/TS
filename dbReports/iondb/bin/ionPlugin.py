@@ -1,4 +1,4 @@
-#!/teusr/bin/env python
+#!/usr/bin/env python
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 
 from twisted.web import xmlrpc, server
@@ -10,17 +10,26 @@ import traceback
 import json
 
 from djangoinit import settings
-from iondb.plugins.config import config
+#from iondb.plugins.config import config
 from iondb.plugins.runner import PluginRunner
 from iondb.plugins.manager import pluginmanager
-from iondb.plugins.launch_utils import depsolve, add_hold_jid
+from iondb.plugins.launch_utils import get_plugins_to_run, add_hold_jid
 from iondb.plugins.plugin_json import make_plugin_json
-from ion.plugin import constants
+
+from iondb.rundb.models import Results, PluginResult, User
+#from django import db
+from django.db import IntegrityError
+
+from ion.plugin.constants import Feature, RunLevel
 
 import logging
-import logging.handlers
+try:
+    from logging.config import dictConfig
+except ImportError:
+    from django.utils.log import dictConfig
 
-__version__ = filter(str.isdigit, "$Revision: 63057 $")
+
+__version__ = filter(str.isdigit, "$Revision$")
 
 # Setup log file logging
 try:
@@ -30,13 +39,50 @@ try:
 except:
     print traceback.format_exc()
     log = './ionPlugin.log'
-logger = logging.getLogger('logger')
-logger.propagate = False
-logger.setLevel(logging.DEBUG)
-handler = logging.handlers.RotatingFileHandler(log, maxBytes=1024*1024*10, backupCount=5)
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+
+LOGGING = {
+    'version': 1,
+    'formatters': {
+        'detailed': {
+            'format': '%(asctime)s %(module)-17s line:%(lineno)-4d %(levelname)-8s %(message)s',
+        },
+        'basic': {
+            'format': "%(asctime)s - %(levelname)s - %(message)s",
+        }
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'level': 'DEBUG',
+            'formatter': 'detailed',
+            'stream': 'ext://sys.stdout',
+        },
+        'pluginlog': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'formatter': 'basic',
+            'level': 'DEBUG',
+            'filename': log,
+            'mode': 'a',
+            'maxBytes': 1024*1024*10,
+            'backupCount': 5,
+        }
+    },
+    'root': {
+        'level': 'DEBUG',
+        'handlers': ['pluginlog', 'console']
+    },
+    'ionPlugin': {
+        'level': 'DEBUG',
+    },
+    'ion': {
+        'level': 'DEBUG',
+    },
+    'iondb': {
+        'level': 'DEBUG',
+    }
+}
+dictConfig(LOGGING)
+logger = logging.getLogger('ionPlugin')
 
 # distributed resource management
 try:
@@ -98,7 +144,7 @@ except (ImportError, AttributeError):
     HAVE_DRMAA = False
     InvalidJob = ValueError
 
-def SGEPluginJob(start_json):
+def SGEPluginJob(start_json, hold=False):
     """
     Spawn a thread that will start a SGE job, and wait for it to return
     after it has return it will make a PUT the API using to update the status
@@ -108,37 +154,19 @@ def SGEPluginJob(start_json):
     try:
         os.umask(0000)
 
-        # Query some essential values
-        plugin = start_json['runinfo']['plugin']
-        resultpk = start_json['runinfo']['pk']
-        analysis_name = os.path.basename(start_json['runinfo']['analysis_dir'])
         plugin_output = start_json['runinfo']['results_dir']
-
-        logger.debug("Getting ready for queue : %s %s", resultpk, plugin['name'])
-
-        # Update pluginresult status
-        h = httplib2.Http()
-        headers = {"Content-type": "application/json","Accept": "application/json"}
-        url = 'http://localhost' + '/rundb/api/v1/results/%s/plugin/' % resultpk
-        data = {
-            plugin['name']: "Pending",
-            'owner': start_json.get('owner', None),
-        }
-        resp, content = h.request(url, "PUT", body=json.dumps(data), headers=headers)
-        logger.debug("PluginResult Marked Queued : %s %s" % (resp, content))
-
         #Make sure the dirs exist
         if not os.path.exists(plugin_output):
             os.makedirs(plugin_output, 0775)
 
-        # Write start_json to startplugin.json file.
-        startpluginjson = os.path.join(plugin_output,'startplugin.json')
-        with open(startpluginjson,"w") as fp:
-            json.dump(start_json,fp,indent=2)
+        plugin = start_json['runinfo']['plugin']
+        logger.info("Preparing for SGE submission - plugin %s --v%s on result %s (%s)",
+                    plugin['name'], plugin['version'], start_json['expmeta']['results_name'], start_json['runinfo']['pk'])
 
         # Branch for launch.sh vs 3.0 plugin class
-        logger.debug("Finding plugin definition: '%s':'%s'", plugin['name'], plugin['path'])
+        #logger.debug("Finding plugin definition: '%s':'%s'", plugin['name'], plugin['path'])
         (launch, isCompat) = pluginmanager.find_pluginscript(plugin['path'], plugin['name'])
+        analysis_name = os.path.basename(start_json['runinfo']['analysis_dir'])
         if not launch or not os.path.exists(launch):
             logger.error("Analysis: %s. Path to plugin script: '%s' Does Not Exist!", analysis_name, launch)
             return 1
@@ -151,17 +179,18 @@ def SGEPluginJob(start_json):
             start_json.update({'command': ["python %s -vv" % launch]})
             launchScript = launcher.createPluginWrapper(None, start_json)
         launchWrapper = launcher.writePluginLauncher(plugin_output, plugin['name'], launchScript)
-        launcher.writePluginJson(start_json)
+        # Returns filename of startpluginjson file, passed to script below
+        startpluginjson = launcher.writePluginJson(start_json)
 
         # Prepare drmaa Job - SGE/gridengine only
         jt = _session.createJobTemplate()
         jt.nativeSpecification = " -q %s" % ("plugin.q")
-        if constants.Feature.EXPORT in plugin['features']:
+        if Feature.EXPORT in plugin['features']:
             jt.nativeSpecification += ' -l ep=1 '
 
-        hold = plugin.get('hold_jid', [])
-        if hold:
-            jt.nativeSpecification += " -hold_jid " + ','.join(str(jobid) for jobid in hold)
+        hold_jid = plugin.get('hold_jid', [])
+        if hold_jid:
+            jt.nativeSpecification += " -hold_jid " + ','.join(str(jobid) for jobid in hold_jid)
 
         jt.workingDirectory = plugin_output
         jt.outputPath = ":" + os.path.join(plugin_output, "drmaa_stdout.txt")
@@ -171,23 +200,19 @@ def SGEPluginJob(start_json):
         jt.remoteCommand = launchWrapper
         jt.args = [ "-j", startpluginjson ]
 
+        if hold:
+            jt.jobSubmissionState = drmaa.JobSubmissionState.HOLD_STATE
+
         # Submit the job to drmaa
         jobid = _session.runJob(jt)
-
-        # Update pluginresult status
-        h = httplib2.Http()
-        headers = {"Content-type": "application/json","Accept": "application/json"}
-        url = 'http://localhost' + '/rundb/api/v1/results/%s/plugin/' % resultpk
-        resp, content = h.request(url, "PUT", body=json.dumps({plugin['name']:"Queued"}), headers=headers)
-        logger.debug("PluginResult Marked Queued : %s %s" % (resp, content))
 
         logger.info("Analysis: %s. Plugin: %s. Job: %s Queued." % (analysis_name, plugin['name'], jobid))
 
         _session.deleteJobTemplate(jt)
         return jobid
     except:
-        logger.critical("SGEPluginJob method failure")
-        logger.critical(traceback.format_exc())
+        logger.exception("SGEPluginJob method failure")
+        raise
 
 class Plugin(xmlrpc.XMLRPC):
     """Provide a way to add plugings to SGE from the API
@@ -205,50 +230,122 @@ class Plugin(xmlrpc.XMLRPC):
         """
         logger.debug("SGE job start request")
         try:
-            jobid = SGEPluginJob(start_json)
+            jobid = SGEPluginJob(start_json, hold=True)
+            _session.control(jid, drmaa.JobControlAction.RELEASE) # no return value
             return jobid
         except:
             logger.error(traceback.format_exc())
             return -1
     
-    def xmlrpc_launchPlugins(self, env, plugins, plugin_basefolder, url_root):
+    def xmlrpc_launchPlugins(self, result_pk, plugins, net_location, username, runlevel=RunLevel.DEFAULT, params={}):
         """
         Launch multiple plugins with dependencies
+        For multi-runlevel plugins the input 'plugins' is common for all runlevels
         """
         msg = ''
-        logger.debug("[launchPlugins] requested plugins: " + ','.join(plugins.keys()))        
+        logger.debug("[launchPlugins] result %s requested plugins: %s" % (result_pk, ','.join(plugins.keys())) )
         
-        try:        
-            result_pk = env['primary_key']
-            runlevel = env.get('runlevel','')
+        try:
+            # get plugins to run for this runlevel
+            plugins, plugins_to_run, satisfied_dependencies = get_plugins_to_run(plugins, result_pk, runlevel)
             
-            plugins, sorted_names = depsolve(plugins, result_pk)
-            logger.debug("[launchPlugins] depsolved launch order: " + ','.join(sorted_names))
+            if len(plugins_to_run) > 0:
+                logger.debug("[launchPlugins] runlevel: %s, depsolved launch order: %s" % (runlevel, ','.join(plugins_to_run)) )
+            else:
+                logger.debug("[launchPlugins] no plugins to run at runlevel: %s" % runlevel)
+                return plugins, msg
             
-            for name in sorted_names:
-                if name not in plugins:
-                    logger.debug("[launchPlugins] dependency plugin %s already launched" % name)                    
-                    continue                
-                p = plugins[name]
-                p = add_hold_jid(p, plugins, runlevel)
-                start_json = make_plugin_json(env,p,result_pk,plugin_basefolder,url_root)
-                
-                #TS-5227:
-                # multilevel plugins (e.g. IRU) run on 'pre', 'block' and 'post' runlevels
-                # save 'pre' level plugin folder to be used as shared folder
-                # provide separate folder to store plugin 'post' level output
-                if (runlevel == 'pre'):
-                    p['results_dir'] = start_json['runinfo']['results_dir']
-                if (runlevel == 'post'):
-                    start_json['runinfo']['results_dir'] = start_json['runinfo']['results_dir'] + "/post"
-                    
-                # launch plugin
+            result = Results.objects.get(pk=result_pk)
+            report_dir = result.get_report_dir()
+            url_root = result.reportWebLink()
+            
+            # get pluginresult owner - must be a valid TS user
+            try:
+                user = User.objects.get(username=username)
+            except User.DoesNotExist:
+                user = User.objects.get(pk=1)
+                logger.error("Invalid user specified for plugin launch: %s, will use %s" % (username, user.username) )
+            
+            for name in plugins_to_run:
                 try:
-                    jid = SGEPluginJob(start_json)
+                    p = plugins[name]
+                    # get params for this plugin, make empty json value if doesn't exist
+                    plugin_params = params.setdefault('plugins',{}).setdefault(name,{})
+                    
+                    # Get pluginresult for multi-runlevel plugins or if specified to be reused by manual launch
+                    pr = None
+                    pluginresult_pk = p.get('pluginresult') or plugin_params.get('pluginresult')
+                    
+                    if pluginresult_pk:
+                        logger.debug("Searching for PluginResult: %s", pluginresult_pk)
+                        try:
+                            pr = result.pluginresult_set.get(pk=pluginresult_pk)
+                        except:
+                            logger.error("Failed to find pluginresult for plugin %s, result %s: %s" % (name, result.resultsName, pluginresult_pk) )
+                            pr = None
+                    elif Feature.EXPORT in p.get('features',[]):
+                        # Export plugins rerun in place to enable resuming upload
+                        pr = result.pluginresult_set.filter(plugin=p['id'])
+                        if pr.count() > 0:
+                            pr = pr[0]
+                            pr.owner = user
+
+                    # Create new pluginresult - this is the most common path
+                    if not pr:
+                        pr = PluginResult.objects.create(result_id=result_pk, plugin_id=p['id'], owner=user)
+                        logger.debug("New pluginresult id=%s created for plugin %s and result %s." % (pr.pk, name, result.resultsName) )
+                        # Always create new, unique output folder.
+                        # Never fallback to old *_out format.
+                        plugin_output = pr.path(create=True, fallback=False)
+                    else:
+                        # Use existing output folder
+                        plugin_output = pr.path(create=False)
+
+                    p['results_dir'] = plugin_output
+                    p['pluginresult'] = pr.pk
+                    p = add_hold_jid(p, plugins, runlevel)
+                    
+                    start_json = make_plugin_json(result_pk, report_dir, p, plugin_output, net_location, url_root, username,
+                        runlevel, params.get('blockId',''), params.get('block_dirs',["."]), plugin_params.get('instance_config',{}) )
+
+                    # Pass on run_mode (launch source - manual/instance, pipeline)
+                    start_json['runplugin']['run_mode'] = params.get('run_mode', '')
+                    
+                    # add dependency info to startplugin json
+                    if p.get('depends') and isinstance(p['depends'],list):
+                        start_json['depends'] = {}
+                        for depends_name in p['depends']:
+                            if depends_name in satisfied_dependencies:
+                                start_json['depends'][depends_name] = satisfied_dependencies[depends_name]
+                            elif depends_name in plugins and plugins[depends_name].get('pluginresult'):
+                                start_json['depends'][depends_name] = {
+                                    'pluginresult': plugins[depends_name]['pluginresult'],
+                                    'version': plugins[depends_name].get('version',''),
+                                    'pluginresult_path': plugins[depends_name].get('results_dir')
+                                }
+
+                    # prepare for launch: updates config, sets pluginresults status, generates api key
+                    pr.prepare(config = start_json['pluginconfig'])
+                    pr.save()
+                    # update startplugin json with pluginresult info
+                    start_json['runinfo']['pluginresult'] = pr.pk
+                    start_json['runinfo']['api_key'] = pr.apikey
+
+                    # NOTE: Job is held on start, and subsequently released
+                    # to avoid any race condition on updating job queue status
+                    # launch plugin
+                    jid = SGEPluginJob(start_json, hold=True)
+
+                    if jid:
+                        # Update pluginresult status
+                        PluginResult.objects.filter(pk=pr.pk).update(state='Queued', jobid=jid)
+                        # Release now that jobid and queued state are set.
+                        _session.control(jid, drmaa.JobControlAction.RELEASE) # no return value
+
                     msg += 'Launched plugin %s: jid %s, depends %s, hold_jid %s \n' % \
                            (p['name'], jid, p['depends'], p['hold_jid'])
-                    
-                    if runlevel != 'block':
+
+                    if runlevel != RunLevel.BLOCK:
                         p['jid'] = jid
                     else:
                         p.setdefault('block_jid',[]).append(jid)
@@ -256,19 +353,39 @@ class Plugin(xmlrpc.XMLRPC):
                 except:
                     logger.error(traceback.format_exc())
                     msg += 'ERROR: Plugin %s failed to launch.\n' % p['name']
+                    pr = PluginResult.objects.get(pk=pr.pk)
+                    pr.complete('Error')
+                    pr.save()
         except:
             logger.error(traceback.format_exc())
             msg += 'ERROR: Failed to launch requested plugins.'
         
         return plugins, msg
 
-    def xmlrpc_sgeStop(self, x):
+    def xmlrpc_sgeStop(self, jobid):
         """
-        TODO: Write this
+        Terminate a running SGE job
         """
         logger.debug("SGE job kill request")
-        #X might be a dict of stuff to do.
-        return x
+
+        if jobid is None:
+            return None
+        jobid = str(jobid)
+        logger.info("Terminating SGE job %s", jobid)
+        _session.control(jobid,drmaa.JobControlAction.TERMINATE) # no return value
+        status = "Unknown"
+        try:
+            jobinfo = _session.wait(jobid, timeout=20)
+            # returns JobInfo object
+            logger.info("Job %s wasAborted=%s with exit_status=%s", jobinfo.jobId, jobinfo.wasAborted, jobinfo.resourceUsage.get('exit_status'))
+            status = "Job %s wasAborted=%s with exit_status=%s" % (jobinfo.jobId, jobinfo.wasAborted, jobinfo.resourceUsage.get('exit_status'))
+        except drmaa.errors.InvalidJobException:
+            status = "Job already terminated, or started previously."
+            logger.warn("SGE job %s already terminated", jobid)
+        except drmaa.errors.ExitTimeoutException:
+            status = "Unknown. Timeout waiting for job to terminate"
+            logger.warn("SGE job %s not terminated within timeout", jobid)
+        return status
 
     def xmlrpc_uptime(self):
         """Return the amount of time the ``ionPlugin`` has been running."""
@@ -278,7 +395,7 @@ class Plugin(xmlrpc.XMLRPC):
         seconds += float(diff.microseconds)/1000000.0
         logger.debug("Uptime called - %d (s)" % seconds)
         return seconds
-        
+
     def xmlrpc_pluginStatus(self, jobid):
         """Get the status of the job"""
         try:
@@ -287,58 +404,50 @@ class Plugin(xmlrpc.XMLRPC):
         except:
             logging.error(traceback.format_exc())
             status = "DRMAA BUG"
-        return status    
+            return status
+        return _decodestatus[status]
 
-    def xmlrpc_update(self,pk,plugin,status):
+    def xmlrpc_createPR(self, resultpk, pluginpk, username=None, config={}):
+        if username is None:
+            username = "ionadmin"
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            user = User.objects.get(pk=1)
+        try:
+            pr = PluginResult.objects.create(result_id=resultpk, plugin_id=pluginpk, owner=user, pluginconfig=config)
+        except IntegrityError:
+            return False
+        #from tastypie.serializers import Serializer
+        #s = Serializer()
+        #return s.to_json(pr)
+        return True
+
+    def xmlrpc_updatePR(self,pk,state,store,jobid=None):
         """
         Because of the Apache security it is hard for crucher nodes to contact the API directly.
         This method is a simple proxy to update the status of plugins
         """
-
-        #For API updates
-        h = httplib2.Http()
-        headers = {"Content-type": "application/json","Accept": "application/json"}
-        url = 'http://localhost' + '/rundb/api/v1/results/' + str(pk) + "/plugin/"
-
-        logger.debug("Update called %s", url)
-
-        #put the updated dict - partial update
-        pluginUpdate = {plugin: status}
-        resp, content = h.request(url, "PUT", body=json.dumps(pluginUpdate), headers=headers )
-        logger.debug("Status updated : %s %s" % (resp, content))
-    
-        if resp.status in [200,201,202,203,204]:
-            return True
-        else:
-            logger.error('plugin status update API error [%d]: %s', resp.status, content)
-            return False
-
-
-    def xmlrpc_resultsjson(self,pk,plugin,msg):
-
-        #Upload the JSON results to the db
+        # update() doesn't trigger special state change behaviors...
+        #return PluginResult.objects.filter(id=pk).update(state=state, store=store)
         try:
-            JSONresults = json.loads(msg)
+            # with transaction.atomic():
+            pr = PluginResult.objects.get(id=pk)
+            if (state is not None) and (state != pr.state):
+                # Caller provided state change, trigger special events
+                if state in ('Completed', 'Error'):
+                    pr.complete(state=state)
+                elif state == 'Started':
+                    pr.start(jobid=jobid)
+            if store is not None:
+                # Validate JSON?
+                pr.store = store
+            pr.save()
         except:
-            logger.error("Unable to open or parse results.json")
+            logger.exception("Unable to update pluginresult %d: %s [%s]", pk, state, store[0:20])
             return False
 
-        h = httplib2.Http()
-        headers = {"Content-type": "application/json","Accept": "application/json"}
-        url = 'http://localhost' + '/rundb/api/v1/results/' + str(pk) + '/pluginstore/'
-
-        logger.debug("Updating plugin %s results.json: %s" % (plugin, url))
-        update = json.dumps({plugin: JSONresults})
-
-        #PUT the updated dict
-        resp, content = h.request(url,
-                            "PUT", body=update,
-                            headers=headers )
-        if resp.status in [200,201,202,203,204]:
-            return True
-        else:
-            logger.error("resultsjson API PUT returned error [%d]: %s",resp.status,content)
-            return False
+        return True
 
 
 if __name__ == '__main__':

@@ -100,7 +100,7 @@ public:
   void SetSize(size_t n) {
     mY.set_size(n);
     mX.set_size(n,2);
-    fill(mX.begin_col(0), mX.end_col(0), 1.0);
+    std::fill(mX.begin_col(0), mX.end_col(0), 1.0);
   }
 
   /** Fill the X values from index start to index end with values. */

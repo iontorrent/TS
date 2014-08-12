@@ -1,0 +1,107 @@
+#!/bin/bash
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
+#
+#	Configuration Tests
+#   Script to be run on the compute node.
+#
+#=============================================================================
+# Load Test
+#=============================================================================
+function load_test()
+{
+    # float number comparison
+    function fcomp() {
+        awk -v n1=$1 -v n2=$2 'BEGIN{ if (n1<n2) exit 0; exit 1}'
+    }
+
+    echo -n $FUNCNAME:>&1
+    # monitor average load
+    busyness=$(qstat -f|grep $(hostname)|head -1|awk '{print $4}')
+    if ! fcomp $busyness 60.0; then
+        echo failure>&1
+        echo "Node is over compute threshold (60.0): $busyness">&2
+        return
+    fi
+    # monitor error states in SGE (qstat -f output)
+    for line in $(qstat -f|grep $(hostname)); do
+        queue=$(echo $line|awk '{print $1}')
+        state=$(echo $line|awk '{print $6}')
+        if echo $state|grep -q 'E'; then
+            echo failure>&1
+            echo "$queue is in Error state">&2
+            return
+        elif echo $state|grep -q 'au'; then
+            echo failure>&1
+            echo "Cannot communicate with execd">&2
+            return
+        fi
+    done
+
+    #TODO: is it swapping? others?
+
+    # all tests passed
+    echo success>&1
+}
+#=============================================================================
+# Daemon Test
+#=============================================================================
+function daemon_test()
+{
+	echo -n $FUNCNAME:>&1
+    services=(
+        sge_execd
+        ntpd
+    )
+    failed=false
+    for service in ${services[@]}; do
+        if ! ps aux|grep $service|grep -q -v grep; then
+            echo failure>&1
+            echo "$service is not running">&2
+            failed=true
+        fi
+    done
+    if ! $failed; then echo success>&1; fi
+}
+#=============================================================================
+# Version Test
+#=============================================================================
+function version_test()
+{
+	echo -n $FUNCNAME:>&1
+    pkgs=(
+        ion-analysis
+        ion-pipeline
+        ion-gpu
+        ion-torrentr
+        ion-rsmts
+        ion-tsconfig
+    )
+    first=true
+    for pkg in ${pkgs[@]}; do
+        if ! $first; then echo -n ",">&1; fi
+        # check if package is installed
+        if dpkg -s $pkg >/dev/null 2>&1; then
+            status=$(dpkg -l $pkg 2>/dev/null|tail -1|awk '{print $1}')
+            # check if package is installed
+            if [[ "$status" == "ii" ]]; then
+                version=$(dpkg -l $pkg 2>/dev/null|tail -1|awk '{print $3}')
+                echo -n $pkg=$version>&1
+            else
+                echo $pkg=error>&1
+                echo "$pkg has installation error: $status">&2
+            fi
+        else
+            echo -n $pkg=error>&1
+            echo "$pkg is not installed">&2
+        fi
+        first=false
+    done
+    echo
+}
+
+set -u
+version_test
+daemon_test
+load_test
+
+exit 0

@@ -27,7 +27,7 @@ class ZeromerDiff
     template <class U>
     int FitZeromer (const Mat<T> &wellFlows, const Mat<T> &refFlows,
                     const Col<U> &zeroFlows, const Col<T> &time,
-                    Col<T> &param) {
+                    arma::Col<T> &param) {
       int length = zeroFlows.n_rows * wellFlows.n_rows;
       mIntegral.set_size (length);
       mSignals.set_size (length,2);
@@ -51,7 +51,7 @@ class ZeromerDiff
 
       }
 
-      param.set_size (2,1);
+      param.resize (2,1);
       //  conceptually doing: param = inv(t(mSignals)*mSignals + t(mRidge) * mRidge) * t(mSignals) * mIntegral
       //  e.g.  param = solve(((trans(mSignals) * mSignals) + mRidge),trans(mSignals)*mIntegral);
       // Add ridge regression
@@ -124,7 +124,7 @@ class ZeromerDiff
       
 
       tauB.resize(numNucs);
-      fill(tauB.begin(), tauB.end(), -1);
+      std::fill(tauB.begin(), tauB.end(), -1);
       // for each nuc do the fit
       for (int nucIx = 0; nucIx < numNucs; nucIx++) {
         double sumX2 = 0;

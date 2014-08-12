@@ -1,0 +1,132 @@
+{% extends "rundb/data/base.html" %}
+{% load url from future %}
+{% load ion_readable %}
+{% load static from staticfiles %}
+
+{% block extra_head %}
+<style type="text/css">
+	body {
+		background-color: #efefef;
+	}
+	#fast_data {
+		background-color: white;
+	}
+	img.heatmap {
+		height: 20px;
+		max-width: 60px;
+	}
+	a.expName {
+		font-size: 1em;
+	}
+	table tbody td {
+		white-space: nowrap;
+	}
+	.complete {
+		font-size: 20px;
+	}
+	td .completedrun-star {
+		margin: 0;
+		width: 18px;
+		min-width: 18px;
+		float: none;
+	}
+	tbody td:first-child {
+		width: 18px;
+	}
+	tbody td:nth-child(2) {
+		width: 20px;
+	}
+	tbody td:nth-child(9) {
+		border-right: 1px;
+	}
+	thead > tr > th:nth-child(9), thead > tr > th:nth-child(10), thead > tr > th:nth-child(11), thead > tr > th:nth-child(12) {
+		font-size: 0.8em;
+	}
+	tbody > tr > td:nth-child(9), tbody > tr > td:nth-child(10), tbody > tr > td:nth-child(11), tbody > tr > td:nth-child(12) {
+		border-left: 1px solid #ddd;
+	}
+	.long-name {
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	td .progress {
+		margin: 0;
+	}
+	td .alert-error {
+		padding: 1px 4px;
+		font-weight: bold;
+	}
+	div.content {
+		float: left;
+	}
+</style>
+{% endblock extra_head %}
+
+{% block content %}
+<div class="content">
+	<h1>Fast Data</h1>
+	<table id="fast_data" class="table table-striped table-hover">
+		<thead>
+			<tr>
+				<th></th>
+				<th></th>
+				<th>Run Name</th>
+				<th>Run Date</th>
+				<th>{% if show_status %}Status{% endif %}</th>
+				<th>Ref.</th>
+				<th>Barcode</th>
+				<th>Chip</th>
+				<th>All Bases</th>
+				<th>Reads</th>
+				<th>Length</th>
+				<th>Q20 Bases</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for exp in experiments %}
+				<tr>
+					<td>
+						{% if exp.star %}
+							<img src="{% static "resources/img/star-blue.png"%}" border="0" class="completedrun-star">
+						{% else %}
+							<img src="{% static "resources/img/star_off.png"%}" border="0" class="completedrun-star">
+						{% endif %}
+					</td>
+					<td>
+						<img class="heatmap" onerror="this.style.display='none';" src="{{exp.repResult.reportLink}}Bead_density_20.png" />
+					</td>
+					<td>
+						<div class="long-name">
+							<a class="expName" href="{% url "report" exp.repResult.id %}">{{exp.expName | cleanName}}</a>
+						</div>
+					</td>
+					<td>{{exp.date|date:"M d, Y"}}</td>
+					<td>
+						{% if exp.ftpStatus == "Complete" %}
+							{% if exp.repResult.status == "Completed" %}
+								<div class="text-success complete">&#10004;</div>
+							{% else %}
+								{{ exp.repResult.status }}
+							{% endif %}
+						{% elif exp.in_progress %}
+							<div class="progress progress-striped active"
+								title="{{ exp.progress_percent | floatformat }}% at {{ exp.ftpStatus }} / {{ exp.flows }} flows">
+								<div class="bar" style="width: {{ exp.progress_percent | floatformat }}%;"></div>
+							</div>
+						{% else %}
+							<span class="alert alert-error">{{ exp.ftpStatus }}</span>
+						{% endif %}
+					</td>
+					<td>{{exp.repResult.eas.reference}}</td>
+					<td>{{exp.repResult.eas.barcodeKitName}}</td>
+					<td>{{exp.chipType}}</td>
+					<td>{{exp.repResult.qualitymetrics.q0_bases | ion_readable | default_if_none:""}}</td>
+					<td>{{exp.repResult.qualitymetrics.q0_reads | ion_readable | default_if_none:""}}</td>
+					<td>{{exp.repResult.qualitymetrics.q0_mean_read_length | float2int | default_if_none:""}}</td>
+					<td>{{exp.repResult.qualitymetrics.q20_bases | ion_readable | default_if_none:""}}</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>
+{% endblock content %}

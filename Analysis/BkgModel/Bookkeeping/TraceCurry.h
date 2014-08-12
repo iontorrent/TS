@@ -12,10 +12,10 @@ class TraceCurry
 {
   public:
     // pointers to the BkgModel parameters for the well/region being fit
-    struct bead_params *p;
+    struct BeadParams *p;
     struct reg_params *reg_p;
     // indicates which flow we are fitting (used to set-up flow-specific parameter values)
-    // this is the 'local' flow number (0-NUMFB)
+    // this is the 'local' flow number (0-numfb)
     int fnum;
     // which nucleotide was in the flow
     int NucID;
@@ -50,7 +50,7 @@ class TraceCurry
     ~TraceCurry();
     void SingleFlowIncorporationTrace (float A,float *fval);
     void SingleFlowIncorporationTrace (float A,float kmult,float *fval);
-    void SetWellRegionParams (struct bead_params *_p,struct reg_params *_rp,int _fnum,
+    void SetWellRegionParams (struct BeadParams *_p,struct reg_params *_rp,int _fnum,
                               int _nnum,int _flow,
                               int _i_start,float *_c_dntp_top);
     void  SetContextParams(int _i_start, float *c_dntp_top, int _sub_steps, float _C,

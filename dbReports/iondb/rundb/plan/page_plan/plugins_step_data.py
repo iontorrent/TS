@@ -40,7 +40,9 @@ class PluginsStepData(AbstractStepData):
             if info:
                 if PluginFieldNames.FEATURES in info:
                     #watch out: "Export" was changed to "export" recently!
-                    if (PluginFieldNames.EXPORT in (feature.lower() for feature in info[PluginFieldNames.FEATURES])):
+                    #we now need to show all non-IRU export plugins on the Plugins chevron
+                    ##if (PluginFieldNames.EXPORT in (feature.lower() for feature in info[PluginFieldNames.FEATURES])):
+                    if "ionreporter" in p.name.lower():
                         pass
                     else:
                         self.non_ir_plugins.append(p)
@@ -50,7 +52,7 @@ class PluginsStepData(AbstractStepData):
         
         self.prepopulatedFields[PluginFieldNames.PLUGINS] = self.non_ir_plugins
         for plugin in self.prepopulatedFields[PluginFieldNames.PLUGINS]:
-            if plugin.isPlanConfig():
+            if plugin.isPlanConfig:
                 self.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id] = None
 
         self.savedFields[PluginFieldNames.PLUGIN_IDS] = None
@@ -76,7 +78,7 @@ class PluginsStepData(AbstractStepData):
                 selected = True
             
             config = None
-            if plugin.isPlanConfig() and self.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id]:
+            if plugin.isPlanConfig and self.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id]:
                 config = json.dumps(json.loads(self.savedFields[PluginFieldNames.PLUGIN_CONFIG % plugin.id]))
                 
             self.savedObjects[PluginFieldNames.PLUGINS][plugin.id] = {

@@ -135,20 +135,27 @@ def send_nightly():
                 # pluginDict = ast.literal_eval(pstore["coverageAnalysis"])
                 pluginDict = pstore["coverageAnalysis"]
                 if pluginDict is not None:
-                    extraInfo["cov"] = pluginDict["Target base coverage at 20x"]
+                    if "Target base coverage at 20x" in pluginDict.keys():
+                        extraInfo["cov"] = pluginDict["Target base coverage at 20x"]
+                    else:
+                        extraInfo["cov"] = pluginDict["Genome base coverage at 20x"]
             except:
                 extraInfo["cov"] = " "
 
             # track the duplicate rate
+            val = 0
             try:
-                # pluginDict = ast.literal_eval(pstore["duplicateReads_useAdapter"])
-                pluginDict = pstore["duplicateReads_useAdapter"]
-                if pluginDict is not None:
-                    val = float(pluginDict["duplicate_rate_chr1"])
-                    val = val * 100.0
-                    extraInfo["dup"] = str(val) + "%"
+                if result.best_lib_metrics.duplicate_reads is not None:
+                    try:
+                        val = result.best_lib_metrics.duplicate_reads / result.best_lib_metrics.total_mapped_reads
+                    except:
+                        val = 0 # assuming total_mapped_reads was 0 here
+                    # round to tenths
+                    val = int(val * 1000.0)
+                    val = float(val) / 10.0
+                    extraInfo["dup"] = str(val*100.0) + "%"
             except:
-                extraInfo["dup"] = " "
+                extraInfo["dup"] = ' '
 
             # track the variant caller SNP & InDel accuracy
             try:
@@ -197,11 +204,14 @@ def send_nightly():
                 if pluginDict is not None:
                     bestCov20 = 0.0
                     bestUnif = 0.0
-                    if pluginDict["barcoded"]:
+                    if pluginDict["barcoded"] ==  'true' or pluginDict["barcoded"] == 'True':
                         # print 'it is barcoded'
                         bc = pluginDict["barcodes"]
                         for name in bc:
-                            cov20txt = bc[name]["Target base coverage at 20x"]
+                            if "Target base coverage at 20x" in bc[name].keys():
+                                cov20txt = bc[name]["Target base coverage at 20x"]
+                            else:
+                                cov20txt = bc[name]["Genome base coverage at 20x"]
                             cov20 = float(cov20txt.rstrip('%'))
                             uniftxt = bc[name]["Uniformity of base coverage"]
                             unif = float(uniftxt.rstrip('%'))
@@ -212,7 +222,10 @@ def send_nightly():
                                 
                     else:
                         # print 'it is not barcoded'
-                        cov20txt = pluginDict["Target base coverage at 20x"]
+                        if "Target base coverage at 20x" in pluginDict.keys():
+                            cov20txt = pluginDict["Target base coverage at 20x"]
+                        else:
+                            cov20txt = pluginDict["Genome base coverage at 20x"]
                         bestCov20 = float(cov20txt.rstrip('%'))
                         uniftxt = pluginDict["Uniformity of base coverage"]
                         bestUnif = float(uniftxt.rstrip('%'))

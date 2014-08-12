@@ -27,7 +27,7 @@ struct ProcessorQueue
     for (unsigned int i=0; i<fitting_queues.size(); ++i) {
       fitting_queues[i] = NULL;
     }
-    heterogeneous_computing = true;
+    heterogeneous_computing = false;
     gpuMultiFlowFitting = true;
     gpuSingleFlowFitting = true;
   }
@@ -44,15 +44,34 @@ struct ProcessorQueue
   bool useHeterogenousCompute() { return heterogeneous_computing; }
   bool performGpuMultiFlowFitting() { return gpuMultiFlowFitting; }
   bool performGpuSingleFlowFitting() { return gpuSingleFlowFitting; }
+
   int GetNumQueues() { return fitting_queues.size();}
   std::vector<WorkerInfoQueue*>& GetQueues() { return fitting_queues; }
   std::vector<BkgFitWorkerGpuInfo>& GetGpuInfo() { return gpu_info; }
+  void SpinUpGPUThreads( struct ComputationPlanner &analysis_compute_plan );
+  static void CreateGpuThreadsForFitType(
+    std::vector<BkgFitWorkerGpuInfo> &gpuInfo,
+    WorkerInfoQueue* q,
+    WorkerInfoQueue* fallbackQ,
+    int numWorkers,
+    std::vector<int> &gpus
+   );
+  /*std::vector<BkgFitWorkerGpuInfo>& GetGpuInfo() {
+	  std::vector<BkgFitWorkerGpuInfo>::iterator iter;
+	  for(iter = gpu_info.begin(); iter!=gpu_info.end(); iter++)
+	  {
+		  (*iter).queue = GetGpuQueue();
+		  (*iter).fallbackQueue = GetCpuQueue();
+	  }
+	  return gpu_info;
+  }*/
   WorkerInfoQueue* GetCpuQueue() { return fitting_queues[CPU_QUEUE]; }
   WorkerInfoQueue* GetGpuQueue() { return fitting_queues[GPU_QUEUE]; }
 
 private:
   // Create array to hold gpu_info
   std::vector<BkgFitWorkerGpuInfo> gpu_info;
+
   std::vector<WorkerInfoQueue*> fitting_queues;
   bool heterogeneous_computing; // use both gpu and cpu
   bool gpuMultiFlowFitting;
@@ -70,7 +89,26 @@ struct BkgModelWorkInfo
   Image *img;
   bool last;
   ProcessorQueue* pq;
+  int flow_key;
+  PolyclonalFilterOpts polyclonal_filter_opts;
+  master_fit_type_table *table;
+  const CommandLineOpts *inception_state;
 };
+
+
+//prototype GPU trace generation whole block on GPU
+struct BkgModelImgToTraceInfoGPU
+{
+  int type;
+  int numfitters;
+  int regionMaxX;
+  int regionMaxY;
+  Image * img;
+  Mask * bfmask;
+  std::vector<float> * smooth_t0_est;
+  BkgModelWorkInfo * BkgInfo;
+};
+
 
 
 struct ImageInitBkgWorkInfo
@@ -84,12 +122,12 @@ struct ImageInitBkgWorkInfo
   int numRegions;
   Region *regions;
   int r;
-  char *results_folder;
+  const char *results_folder;
   
   Mask *maskPtr;        // shared, updated at end of background model processing
   PinnedInFlow *pinnedInFlow;  // shared among threads, owned by ImageTracker
   
-  RawWells *rawWells;
+  class RawWells *rawWells;
   EmptyTraceTracker *emptyTraceTracker;
 
   BkgDataPointers *ptrs;
@@ -100,16 +138,17 @@ struct ImageInitBkgWorkInfo
   int uncompFrames;
   int *timestamps;
   
-  CommandLineOpts *inception_state;
+  const CommandLineOpts *inception_state;
 
   bool nokey;
   SequenceItem *seqList;
   int numSeqListItems;
   
-  std::vector<float> *sep_t0_estimate;
+  const std::vector<float> *sep_t0_estimate;
   PoissonCDFApproxMemo *math_poiss;
   SignalProcessingMasterFitter **signal_proc_fitters;
   RegionalizedData **sliced_chip;
+  struct SlicedChipExtras *sliced_chip_extras;
   GlobalDefaultsForBkgModel *global_defaults;
   std::set<int> *sample;
   std::vector<float> *tauB;
@@ -120,8 +159,7 @@ struct ImageInitBkgWorkInfo
 };
 
 void* BkgFitWorkerCpu (void *arg);
-void* SimpleBkgFitWorkerGpu (void *arg); //SingleFlowFitGPUWorker(void* arg);
-bool CheckBkgDbgRegion (Region *r,BkgModelControlOpts &bkg_control);
+bool CheckBkgDbgRegion (const Region *r,const BkgModelControlOpts &bkg_control);
 
 
 // allocate compute resources for our analysis
@@ -172,21 +210,13 @@ void serialize(Archive& ar, ComputationPlanner& p, const unsigned int version)
   & p.lastRegionToProcess;
 */
 
-void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts &bkg_control);
-
+void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts &bkg_control );
 void SetRegionProcessOrder (int numRegions, SignalProcessingMasterFitter** fitters, ComputationPlanner &analysis_compute_plan);
 void AllocateProcessorQueue (ProcessorQueue &my_queue,ComputationPlanner &analysis_compute_plan, int numRegions);
 void AssignQueueForItem (ProcessorQueue &analysis_queue,ComputationPlanner &analysis_compute_plan);
 
 void WaitForRegionsToFinishProcessing (ProcessorQueue &analysis_queue, ComputationPlanner &analysis_compute_plan);
 //void SpinDownCPUthreads (ProcessorQueue &analysis_queue, ComputationPlanner &analysis_compute_plan);
-void SpinUpGPUThreads (ProcessorQueue &analysis_queue, ComputationPlanner &analysis_compute_plan);
-void CreateGpuThreadsForFitType(
-    std::vector<BkgFitWorkerGpuInfo> &gpuInfo,
- //   GpuFitType fitType,
-    int numWorkers, 
-    WorkerInfoQueue* q,
-    std::vector<int> &gpus); 
 bool UseGpuAcceleration(float useGpuFlag);
 
 void DoInitialBlockOfFlowsAllBeadFit (WorkerInfoQueueItem &item);

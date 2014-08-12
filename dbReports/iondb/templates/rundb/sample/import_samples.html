@@ -41,7 +41,7 @@
 
 <li><a href="{% url "planRuns" %}">Plan Runs</a></li>
 <li class="active"><a href="{% url "samplesets" %}">Samples</a></li>
-<li><a href="{% url "plans" %}">Templates</a></li>
+<li><a href="{% url "plan_templates" %}">Templates</a></li>
 <li><a href="{% url "planned" %}">Planned Run List</a></li>
 {% endblock sub-nav %}
 {% block content %}
@@ -88,7 +88,7 @@
 							<label for="sampleset" class="form-label">Select a Sample Set to Receive Samples</label>
 							<select id="sampleset" name="sampleset" multiple="multiple" class="span6" style="margin-bottom: 10px;">
                 				{% for sampleSet in sampleSet_list %}
-                					<option value="{{sampleSet.id}}" >{{sampleSet.displayedName}} ({{sampleSet.SampleGroupType_CV.displayedName}})</option>
+                					<option value="{{sampleSet.id}}" >{{sampleSet.displayedName}} {% if sampleSet.SampleGroupType_CV.displayedName %}({{sampleSet.SampleGroupType_CV.displayedName}}){% endif %}</option>
                 				{%endfor%}
 							</select>
 							<div>
@@ -106,7 +106,7 @@
 									<tbody>
 				                	<tr>
 										<div class="control-group">
-											<label class="control-label" for="new_sampleSetName">Sample Set Name:</label>
+											<label class="control-label" for="new_sampleSetName">Sample Set Name</label>
 											<div class="span6">
 												<input  maxlength="127" type="text" id="new_sampleSetName" name="new_sampleSetName" placeholder="Required">
 											</div>
@@ -115,7 +115,7 @@
 									
 									<tr>
 										<div class="control-group">
-											<label class="control-label" for="new_sampleSet_groupType">Group Type:</label>
+											<label class="control-label" for="new_sampleSet_groupType">Group Type</label>
 											<div class="span6">
 					                    		<select id="new_sampleSet_groupType" name="new_sampleSet_groupType"style="height:28px;">
 					                    			<option value="0" >.....</option>
@@ -129,7 +129,7 @@
 									
 									<tr>
 										<div class="control-group">
-											<label class="control-label" for="new_sampleSetDescription">Description:</label>
+											<label class="control-label" for="new_sampleSetDescription">Description</label>
 											<div class="span6">
 												<textarea  maxlength="1024" id="new_sampleSetDescription" name="new_sampleSetDescription" placeholder="Optional"></textarea>
 											</div>

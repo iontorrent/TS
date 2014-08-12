@@ -224,30 +224,24 @@ tmap_seqs_io_to_bam_header(tmap_refseq_t *refseq,
 
   // @SQ
   if(NULL != refseq) {
-      int32_t sq_exists = 0;
       sam_header_records_t *records = NULL;
       // NB: check to see if any SQ/SN records exist, if not, then ignore checking...
+	// ZZ: We will not checking, but instead just remove all the old header. The old way of checking is not working
       records = sam_header_get_records(header, "SQ");
-      if(NULL != records && 0 < records->n) sq_exists = 1;
+      if (NULL != records) {
+	// ZZ: remove the headers if exists.
+	sam_header_remove_records(header, "SQ");
+	records = NULL;
+      }
+      // ZZ: Now we will just add all new tags
       for(i=0;i<refseq->num_annos;i++) { // for each reference sequence
           char num[32];
-          j = 0;
-          if(1 == sq_exists) { // check to see if it already exists, if so ignore
-              record_list = sam_header_get_record(header, "SQ", "SN", refseq->annos[i].name->s, &j);
-          }
-          if(0 == j) {
-              record = sam_header_record_init("SQ"); // new reference sequence record
-              if(0 == sam_header_record_add(record, "SN", refseq->annos[i].name->s)) tmap_bug(); // reference sequence name
-              if(sprintf(num, "%u", (uint32_t)refseq->annos[i].len) < 0) tmap_bug(); // integer to string
-              if(0 == sam_header_record_add(record, "LN", num)) tmap_bug(); // reference sequence length
-              if(0 == sam_header_add_record(header, record)) tmap_bug(); // add the reference sequence record
-          }
-          else {
-              free(record_list);
-              record_list = NULL;
-          }
+          record = sam_header_record_init("SQ"); // new reference sequence record
+          if(0 == sam_header_record_add(record, "SN", refseq->annos[i].name->s)) tmap_bug(); // reference sequence name
+          if(sprintf(num, "%u", (uint32_t)refseq->annos[i].len) < 0) tmap_bug(); // integer to string
+          if(0 == sam_header_record_add(record, "LN", num)) tmap_bug(); // reference sequence length
+          if(0 == sam_header_add_record(header, record)) tmap_bug(); // add the reference sequence record
       }
-      record = NULL;
   }
 
   // @RG - read group

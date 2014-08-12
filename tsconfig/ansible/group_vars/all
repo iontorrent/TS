@@ -1,0 +1,68 @@
+---
+# Variables applicable to all
+
+ion_build_flag: "/"
+
+ion_repository_hostname: ionupdates.com
+
+ion_repository_directory: software
+
+tsconfig_dir: /etc/torrentserver
+
+ionaptrepo_file: /etc/apt/sources.list
+
+postgres_sysctl_file: /etc/sysctl.d/10-postgresql-shm.conf
+
+grub_config_file: /etc/default/grub
+
+security_limits_file: /etc/security/limits.conf
+
+MAX_FILES_OPEN: 8192
+
+common_syspkg_list:
+    - traceroute
+    - ethtool
+    - arp-scan
+    - nmap
+    - make
+    - gdb
+    - gcc
+    - build-essential
+    - imagemagick
+    - vcftools
+    - bedtools
+    - vim
+    - nano
+    - curl
+    - whois
+    - figlet
+    - binutils
+    - sshpass
+    - tk8.5
+    - libmotif-dev
+    - libxpm-dev
+    - libboost-all-dev
+    - iptables
+    - ntp
+    - nfs-kernel-server
+    - openssh-server
+    - zip
+    - libz-dev
+    - libxml2-dev
+    - python-pysam
+    - python-simplejson
+    - python-calabash
+    - python-jsonpipe
+    - python-rpy2
+    - python-gnuplot
+    - perl
+    - perl-doc
+    - default-jre
+    - gnuplot-x11
+    - putty-tools
+    - gawk
+    - tmpreaper
+    - timelimit
+    - dkms
+    - megaraid-sas-dkms
+    - libdrmaa1.0       # will be part of ion-dbreports dependency list

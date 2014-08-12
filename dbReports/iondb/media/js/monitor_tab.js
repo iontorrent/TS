@@ -17,33 +17,32 @@ $(function(){
         render: function () {
             console.log(this.model.changedAttributes());
             this.$('[rel="tooltip"]').tooltip('hide');
-            if (this.model.reports.length > 0) {
-                var king_report = this.model.reports.at(0);
-                console.log(king_report);
-                var met = king_report.get("analysis_metrics");
-                var qc = king_report.get("quality_metrics");
-            }
-            var status = this.model.get('ftpStatus');
+            console.log("Rendering report");
+            console.log(this.model);
+            var met = this.model.get("analysismetrics");
+            var qc = this.model.get("qualitymetrics");
+            var exp = this.model.get('experiment');
+            var status = exp.ftpStatus;
             context = {
-                exp: this.model.toJSON(),
-                "prettyExpName": TB.prettyPrintRunName(this.model.get('expName')),
-                "king_report": king_report && king_report.toJSON(),
-                "date_string": kendo.toString(this.model.get('date'), "MM/dd/yy hh:mm tt"),
+                exp: exp,
+                "prettyExpName": TB.prettyPrintRunName(exp.expName),
+                "king_report": this.model && this.model.toJSON(),
+                "date_string": kendo.toString(exp.date, "MM/dd/yy hh:mm tt"),
                 "bead_loading": met && Math.round(met.bead / (met.total_wells - met.excluded) * 1000) / 10,
                 "bead_live": met && Math.round(met.live / met.bead * 1000) / 10,
                 "bead_lib": met && Math.round(met.lib / met.live * 1000) / 10,
                 "usable_seq": met && qc && Math.round(qc.q0_reads / met.lib * 1000) / 10,
-                "progress_flows": (status == "Complete" ? this.model.get('flows') : status),
-                "progress_percent": status == "Complete" ? 100 : Math.round((status / this.model.get('flows')) * 100),
-                "is_proton" : this.model.get('chipInstrumentType') == "proton",
+                "progress_flows": (status == "Complete" ? exp.flows : status),
+                "progress_percent": status == "Complete" ? 100 : Math.round((status / exp.flows) * 100),
+                "is_proton" : exp.chipInstrumentType == "proton",
                 "in_progress": status != "Complete"
             };
-            var qc = this.model.get('qcThresholds'),
+            console.log(context);
+            var qc = exp.qcThresholds,
                 key_counts = context.king_report && context.king_report.libmetrics && context.king_report.libmetrics.aveKeyCounts,
                 bead_loading_threshold = qc["Bead Loading (%)"],
                 key_threshold = qc["Key Signal (1-100)"],
                 usable_sequence_threshold = qc["Usable Sequence (%)"];
-
 
             $(this.el).html(this.template.render(context));
             this.$('.bead-loading').strength(context.bead_loading, bead_loading_threshold, context.bead_loading, 'Loading');
@@ -54,7 +53,26 @@ $(function(){
         },
 
         review_plan_: function(e) {
-        	review_plan(e);
+            e.preventDefault();
+        	$('body').css("cursor", "wait");
+            $('#error-messages').hide().empty();
+            var busyDiv = '<div id="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+            $('body').prepend(busyDiv);
+
+            var url = this.$el.find('a.review-plan').attr('href');
+            console.log(url);
+
+            $('#modal_review_plan').remove();
+            $.get(url).done(function(data) {
+                $('body').append(data);
+                $("#modal_review_plan").modal("show");
+            }).fail(function(data) {
+                $('#error-messages').empty().show().append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                console.log("AJAX Reivew Plan Error:", data);
+            }).always(function(data) {
+                $('body').css("cursor", "default");
+                $('body').remove('#myBusyDiv');
+            });
     	},
 
         destroy_view: function() {
@@ -71,58 +89,61 @@ $(function(){
     TableRunView = Backbone.View.extend({
         tagName: 'tr',
 
-        initialize: function () {
-            _.bindAll(this, 'render');
+        events: {
+            'click .completedrun-star': 'toggle_star'
         },
 
-        template: Hogan.compile($("#monitor_experiment_table_template").html()),
+        initialize: function () {
+            _.bindAll(this, 'render', 'destroy_view', 'toggle_star');
+            this.model.bind('change', this.render);
+            this.model.bind('remove', this.destroy_view);
+        },
+
+        template: Hogan.compile($("#experiment_table_template").html()),
 
         render: function () {
-            // if (this.model.reports.length > 0) {
-                // var king_report = this.model.reports.at(0);
-                // console.log(king_report);
-                // var met = king_report.get("analysis_metrics");
-                // var qc = king_report.get("quality_metrics");
-            // }
-            // var status = this.model.get('ftpStatus');
-            // context = {
-                // exp: this.model.toJSON(),
-                // "king_report": king_report && king_report.toJSON(),
-                // "date_string": this.model.get('date').toString("yyyy/MM/dd hh:mm tt"),
-                // "bead_loading": met && Math.round(met.bead / (met.total_wells - met.excluded) * 1000) / 10,
-                // "bead_live": met && Math.round(met.live / met.bead * 1000) / 10,
-                // "bead_lib": met && Math.round(met.lib / met.live * 1000) / 10,
-                // "usable_seq": met && qc && Math.round(qc.q0_reads / met.lib * 1000) / 10,
-                // "progress_flows": Math.round((status == "Complete" ? 1: status / 100.0) * this.model.get('flows')),
-                // "progress_percent": status == "Complete" ? 100 : status,
-                // "in_progress": !isNaN(parseInt(status))
-            // };
-            // console.log(context);
-            // $(this.el).html(this.template.render(context));
+            console.log(this.model.changedAttributes());
+            this.$('[rel="tooltip"]').tooltip('hide');
+            console.log("Rendering report");
+            console.log(this.model);
+            var met = this.model.get("analysismetrics");
+            var qc = this.model.get("qualitymetrics");
+            var exp = this.model.get('experiment');
+            var status = exp.ftpStatus;
+            context = {
+                exp: exp,
+                "prettyExpName": TB.prettyPrintRunName(exp.expName),
+                "king_report": this.model && this.model.toJSON(),
+                "date_string": kendo.toString(this.model.get("timeStamp"), "MM/dd/yy hh:mm tt"),
+                "bead_loading": met && Math.round(met.bead / (met.total_wells - met.excluded) * 1000) / 10,
+                "bead_live": met && Math.round(met.live / met.bead * 1000) / 10,
+                "bead_lib": met && Math.round(met.lib / met.live * 1000) / 10,
+                "usable_seq": met && qc && Math.round(qc.q0_reads / met.lib * 1000) / 10,
+                "progress_flows": (status == "Complete" ? exp.flows : status),
+                "progress_percent": status == "Complete" ? 100 : Math.round((status / exp.flows) * 100),
+                "is_proton" : exp.chipInstrumentType == "proton",
+                "in_progress": status != "Complete"
+            };
+            $(this.el).html(this.template.render(context));
+        },
+
+        toggle_star: function () {
+            if (this.model.get("star")) {
+                this.model.patch({star: false});
+            } else {
+                this.model.patch({star: true});
+            }
+        },
+
+        destroy_view: function() {
+            //COMPLETELY UNBIND THE VIEW
+            this.undelegateEvents();
+            $(this.el).removeData().unbind();
+            //Remove view from DOM
+            this.remove();
+            Backbone.View.prototype.remove.call(this);
         }
     });
-
-	function review_plan(e) {
-		e.preventDefault();
-    	$('#error-messages').hide().empty();
-		url = $(e.target).attr('href');
-
-		$('body #modal_review_plan').remove();
-		$.get(url, function(data) {
-		  	$('body').append(data);
-		    $( "#modal_review_plan" ).modal("show");
-		    return false;
-		}).done(function(data) {
-	    	console.log("success:", url);
-		})
-	    .fail(function(data) {
-	    	$('#error-messages').empty().show();
-	    	$('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-	    	console.log("error:", data);
-
-	    })
-	    .always(function(data) { /*console.log("complete:", data);*/ });
-	};
 
     RunListView = Backbone.View.extend({
         el: $("#monitor_view"),
@@ -236,189 +257,21 @@ $(function(){
         },
 
         setup_table_view: function () {
-        	$("#data_panel").html('<div id="main_table"  class="table-dense"></div>');
+            console.log('setup');
+            if(this.pager !== null) {
+                this.pager.destroy_view();
+            }
+            console.log("before html");
+            var template = $("#experiment_list_table_template").html();
+            $("#data_panel").html(template);
+            console.log('pasted html');
             this.RunView = TableRunView;
-            $("#view_full").removeClass('active');
             $("#view_table").addClass('active');
-            $('#pager').hide();
-			$("#main_table").kendoGrid({
-				dataSource : {
-					type : "json",
-					transport : {
-						read : {
-							url : this.collection.baseUrl,
-							contentType : 'application/json; charset=utf-8',
-							type : 'GET',
-							dataType : 'json'
-						},
-						parameterMap : function(options) {
-							return buildParameterMap(options)
-						}
-					},
-					schema : {
-						data : "objects",
-						total : "meta.total_count",
-						model : {
-							fields : {
-								id : {
-									type : "number"
-								},
-								pgmName : {
-									type : "string"
-								},
-								expName : {
-									type : "string"
-								},
-								library : {
-									type : "string"
-								},
-								flows : {
-									type : "number"
-								},
-								barcodeId : {
-									type : "string"
-								},
-								chipDescription : {
-									type : "string"
-								},
-								star : {
-									type : "boolean"
-								},
-								date : {
-									type : "string"
-								},
-								resultDate : {
-									type : "string"
-								},
-								ftpStatus : {
-									type : "string"
-								},
-								storageOptions : {
-									type : "string"
-								},
-								notes : {
-									type : "string"
-								}
-							}
-						}
-					},
-					serverSorting : true,
-					serverFiltering : true,
-					serverPaging : true,
-					pageSize : this.collection.limit,
-					requestStart: function(e) {
-						$('#main_table *[rel=tooltip]').tooltip('destroy');
-						$('body div.tooltip').remove();
-					}
-				},
-				height : 'auto',
-				groupable : false,
-				scrollable : false,
-				selectable : false,
-				sortable : true,
-				pageable : true,
-				columns : [{
-					field : "star",
-					title : " ",
-					width : '3%',
-					template : kendo.template($("#favoriteColumnTemplate").html())
-				}, {
-					field : "pgmName",
-					width : '6%',
-					title : "Instrument",
-					template : '<span rel="tooltip" title="#= pgmName#">#=pgmName # </span>'
-				}, {
-					field : "displayName",
-					width : '17%',
-					title : "Run Name",
-					template: kendo.template($("#expNameLinkTemplate").html())
-				}, {
-					field : "ftpStatus",
-					title : "Status",
-					template : kendo.template($("#statusColumnTemplate").html())
-				}, {
-					field : "date",
-					title : "Started",
-					template : '#= kendo.toString(new Date(Date._parse(date)),"MM/dd/yy hh:mm tt") #'
-				}, {
-					field : "resultDate",
-					title : "Result Date",
-					template : '#= kendo.toString(new Date(Date._parse(resultDate)),"MM/dd/yy hh:mm tt") #'
-				}, {
-					field : "chipDescription",
-					width : '5%',
-					title : "Chip"
-				}, {
-					field : "library",
-					title : "Ref Genome",
-					width : '6%',
-					template : '#= TB.toString(library) #'
-				}, {
-					field : "barcodeId",
-					title : "Barcode",
-					width : '5%',
-					template : '#= TB.toString(barcodeId) #'
-				}, {
-					title : "Loading",
-					sortable : false,
-					width : '5%',
-					template : kendo.template($("#ispLoadingColumnTemplate").html())
-				}, {
-					title : "Live ISPs",
-					sortable : false,
-					width : '4%',
-					template : kendo.template($("#ispLiveColumnTemplate").html())
-				}, {
-					title : "Library ISPs",
-					sortable : false,
-					width : '4%',
-					template : kendo.template($("#ispLibraryColumnTemplate").html())
-				}, {
-					title : "Key Signal",
-					sortable : false,
-					width : '5%',
-					template : kendo.template($("#keySignalColumnTemplate").html())
-				}, {
-					title : "Usable Seq",
-					sortable : false,
-					width : '5%',
-					template : kendo.template($("#usableSequenceColumnTemplate").html())
-				}],
-				dataBound: function(e){
-					function clickHandler(that) {
-						function clickHandlerSuccess(_that, _attributes){
-			            	_that.off();
-			            	attributes = $.extend(_attributes, {id: _that.data('id')});
-			            	var template = kendo.template($("#favoriteColumnTemplate").html());
-			            	parentTD = _that.parent();
-			            	parentTD.html(template({data:attributes}));
-							$('.toggle-star', parentTD).click(function(e){e.preventDefault(); clickHandler($(this));});
-		                }
-						url = that.attr('href');
-						attributes = {star: !that.data('star')};
-						$.ajax({
-			                url: url,
-			                type: 'PATCH',
-			                data: JSON.stringify(attributes),
-			                contentType: 'application/json',
-			                success: clickHandlerSuccess(that, attributes)
-			            });
-			            url = null;
-			            attributes = null;
-					};
-
-					$('.toggle-star').click(function(e){e.preventDefault();clickHandler($(this));});
-					$('.review-plan').click(review_plan);
-
-					$('body div.tooltip').remove();
-					initTooltip(this.content);
-					// this.content.bind("DOMMouseScroll", hideTooltip(this.content)).bind("mousewheel", hideTooltip(this.content))
-					// this.content.find('div.k-scrollbar').bind('scroll', hideTooltip(this.content))
-				},
-				requestStart: function(e) {
-					$("#main_table").find('[rel="tooltip"]').tooltip('hide');
-				}
-			});
+            $("#view_full").removeClass('active');
+            console.log('before pager');
+            this.pager = new PaginatedView({collection: this.collection, el:$("#pager")});
+            this.pager.render();
+            $('#pager').show();
         },
 
         view_table: function () {
@@ -426,7 +279,7 @@ $(function(){
                 this.table_view = true;
                 this.router.navigate("table");
                 this.setup_table_view();
-                // this.render();
+                this.render();
             }
         }
     });

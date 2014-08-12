@@ -15,6 +15,7 @@ void EmphasisClass::Allocate ( int tsize )
   {
     my_frames_per_point.resize ( npts );
     my_frameNumber.resize ( npts );
+    nonZeroEmphasisFrames.resize(numEv);
     emphasis_vector_storage.resize ( npts*numEv );
     AllocateScratch();
   }
@@ -170,6 +171,8 @@ void EmphasisClass::BuildCurrentEmphasisTable ( float t_center, float amult )
     float *vect = EmphasisVectorByHomopolymer[vn] = &emphasis_vector_storage[npts*vn];
 
     EmphasisScale[vn] = GenerateIndividualEmphasis ( vect, vn, emp, npts, t_center, local_frames_per_point, my_frameNumber, amult,emphasis_width, emphasis_ampl ); // actual data
+  
+    DetermineNonZeroEmphasisFrames(vn);
   }
 }
 
@@ -215,36 +218,13 @@ int EmphasisClass::ReportUnusedPoints ( float threshold, int min_used )
   return ( workable ); // stop after finding a used point
 }
 
-void EmphasisClass::SignalToBkgEmphasis ( int hp_val, float *signal, float *background, float basic_noise, float relative_threshold )
-{
-  // two tuning parameters:  basic_noise, background_scale
-  // assume we have a "typical" signal and an estimate of the ph step
-  // the idea here is to auto-tune the emphasis based on these characteristics
-  float *vect = EmphasisVectorByHomopolymer[hp_val] = &emphasis_vector_storage[npts*hp_val];
-  for ( int i=0; i<npts; i++ )
-  {
-    // background drift scales by background
-    // basic_noise always happens
-    // signal has to rise above basic noise and bkg in order to strongly weight these points
-    // basic noise takes care of "no particular backround" case at the start of the flow and any zero values
-    float signal_proportion = ( signal[i]*signal[i] ) / ( basic_noise+signal[i]*signal[i]+background[i]*background[i] );
-    // always between zero and 1
-    vect[i] = signal_proportion;
-  }
-  // post process to cut off bad points
-  float v_max = 0;
-  for ( int i=0; i<npts;i++ )
-    if ( v_max<vect[i] )
-      v_max = vect[i];
-
-  float v_threshold = v_max*relative_threshold;
-  // don't know what I want here
-  for ( int i=0; i<npts; i++ )
-    if ( vect[i]>v_threshold )
-      vect[i] = 1.0f;
+void EmphasisClass::DetermineNonZeroEmphasisFrames(int hp) {
+  int zeroCnt = 0;
+  for (int i=npts-1; i>=0 ; i--) {
+    if (emphasis_vector_storage[npts*hp + i] <= CENSOR_THRESHOLD)
+      zeroCnt++;
     else
-      vect[i] = 0.0f;
-
-  RescaleVector ( vect,npts );
-  EmphasisScale[hp_val] = npts;
+      break;
+  }
+  nonZeroEmphasisFrames[hp] = npts - zeroCnt;
 }

@@ -5,7 +5,7 @@
 
 {% block page-plan-content %}
 <div class="row-fluid">
-    <div class="span4">
+    <div class="span3">
         <h4>Application</h4>
         <div class="control-group offset1">
             <div class="applicationGroupOptionsContent">
@@ -13,19 +13,19 @@
                     {% if application.pk|stringformat:'s' == step.savedFields.applicationGroup|stringformat:'s' %}
                         <label class="radio">
                             <input type="radio" name="applicationGroup" value="{{application.pk}}" checked="checked">
-                            {{application.name}}
+                            {{application.description}}
                         </label>
                     {% else %}
                         <label class="radio">
                             <input type="radio" name="applicationGroup" value="{{application.pk}}">
-                            {{application.name}}
+                            {{application.description}}
                         </label>
                     {% endif %}
                 {% endfor %}
             </div>
         </div>
     </div>
-    <div id="runTypeHolder" class="span4" style="display: none;">
+    <div id="runTypeHolder" class="span3">
         <h4>Target Technique</h4>
         <div class="control-group offset1">
             <div class="runTypeOptionsContent">
@@ -33,7 +33,47 @@
             </div>
         </div>
     </div>
+    
+    <!--20140204-WIP
+    <div class="span4">
+    <div id="seqInstrumentHolder" class="row-fluid" style="display: none;">
+        <h4>Sequencing Instrument</h4>
+        <div class="control-group offset1">
+            <div class="seqInstrumentOptionsContent">
+                 <label class="radio">
+                    <input type="radio" name="seqInstrument" value="PGM">PGM
+                </label>
+                 <label class="radio">
+                    <input type="radio" name="seqInstrument" value="Proton">Proton
+                </label>                                       
+            </div>
+        </div>
+    </div>  
+    -->
+    
+    <!--20140204-WIP
+    <div id="templatePrepInstrumentHolder" class="row-fluid" style="display: none;">
+        <h4>Template Preparation Instrument</h4>
+        <div class="control-group offset1">
+            <div class="templatePrepInstrumentOptionsContent"> 
+                 <label class="radio">
+                    <input type="radio" name="templatePrepInstrument" value="OneTouch">OneTouch
+                </label>
+                 <label class="radio">
+                    <input type="radio" name="templatePrepInstrument" value="IonChef">IonChef
+                </label>                                
+            </div>
+        </div>
+    </div>
+    </div>      
+    -->
+    
 </div>
+<div class="row-fluid">
+    {% for key, value in step.validationErrors.items %}
+        <h4 style="color: red">{{value}}</h4>
+    {% endfor %}
+</div>  
 {% endblock page-plan-content %}
 
 {% block prevnext-buttons %}
@@ -48,7 +88,7 @@
 {% block post-raw %}
 {{ block.super }}
 <script type="text/javascript">
-
+    
     updateRuntypeFromApplication = function(applicationId, selectedRuntypeId) {
         var runTypeIds = applicationToRuntype[applicationId];
         $('.runTypeOptionsContent').empty();
@@ -73,8 +113,62 @@
             $('.runTypeOptionsContent').append(inputHolder);
 
         });
-        $('#runTypeHolder').show();
+
+        updateTargetTechnique(applicationId, selectedRuntypeId);
+     };
+     
+
+    updateTargetTechnique = function(applicationId, selectedRuntypeId) {
+        if ((selectedRuntypeId == undefined) && (applicationId != "{{step.savedFields.applicationGroup}}")) {   
+            console.log("#1 undefined selectedRuntypeId.  Going to show targetTechnique!!!");
+        
+            $('.runTypeOptionsContent  :input').attr('disabled', false);
+            $('#runTypeHolder').attr('disabled', false);
+            $('#runTypeHolder').show();    
+        }        
+        else {            
+            if ((selectedRuntypeId == "{{helper.getApplProduct.applType_id}}") || ((selectedRuntypeId == undefined) && (applicationId == "{{step.savedFields.applicationGroup}}"))) {
+                var allowTargetTechniqueSelection = "{{helper.getApplProduct.isTargetTechniqueSelectionSupported}}";
+                var isAlwaysShow = "{{helper.isToMandateTargetTechniqueToShow}}";
+                
+                console.log("allowTargetTechniqueSelection=", allowTargetTechniqueSelection, "; isAlwaysShow=", isAlwaysShow);
+                
+                var isToShow = "True";
+                if (isAlwaysShow == "False") 
+                    isToShow = allowTargetTechniqueSelection;
+
+                
+                if (isToShow == "True") {
+                    $('.runTypeOptionsContent  :input').attr('disabled', false);
+                    $('#runTypeHolder').attr('disabled', false);
+                    $('#runTypeHolder').show();       
+                }
+                else {
+                    $('#runTypeHolder').attr('disabled', true); 
+                    $('#runTypeHolder').hide();                      
+                }                                      
+            }
+            else {
+                //if user selects another application group  
+                $('.runTypeOptionsContent  :input').attr('disabled', false);
+                $('#runTypeHolder').attr('disabled', false);                
+                $('#runTypeHolder').show();     
+            }
+ 
+        }    
     };
+
+    updateInstrumentFromRunType = function(applicationId, selectedRuntypeId) {
+        //var runTypeIds = applicationToRuntype[applicationId];
+        //$('.seqInstrumentOptionsContent').empty();
+
+        $('#seqInstrumentHolder').show();
+        
+        //$('.templatePrepInstrumentOptionsContent').empty();
+
+        $('#templatePrepInstrumentHolder').show();
+    };
+
 
     $(document).ready(function () {
 
@@ -82,18 +176,25 @@
             $("#selectedApplication").text(runTypeIdToAltName[$(this).val()]);
         });
         
-        
-        
         $(".applicationGroupOptionsContent input").change(function()  {
             var applicationId = $(this).val();
             updateRuntypeFromApplication(applicationId);
         });
         
         updateRuntypeFromApplication('{{step.savedFields.applicationGroup}}', '{{step.savedFields.runType}}');
-
+        updateInstrumentFromRunType('{{step.savedFields.applicationGroup}}', '{{step.savedFields.runType}}');
+                
         //display the application in the summary
         $("input[name=applicationGroup]").on('click', function(){
             $("#selectedApplication").text($(this).parent().text().trim());   
+        });
+
+        $(".seqInstrumentOptionsContent input").change(function()  {
+            $("#selectedSeqInstrument").text($(this).val());
+        });
+        
+        $(".templatePrepInstrumentOptionsContent input").change(function()  {
+            $("#selectedTemplatePrepInstrument").text($(this).val());
         });
 
     });

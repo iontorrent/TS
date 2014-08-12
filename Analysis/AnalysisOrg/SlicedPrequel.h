@@ -35,7 +35,7 @@ public:
   void WriteBeadFindForSignalProcessing();
   void LoadBeadFindForSignalProcessing(bool load);
 
-  void RestrictRegions(std::string& regions_to_use);
+  void RestrictRegions(std::vector<int>& region_list);
 
  private:
   void Elide(std::vector<unsigned int>& regions_to_use);

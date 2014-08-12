@@ -1,9 +1,8 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import dnaBarcode, Plugin
-from iondb.rundb.plan.views_helper import is_valid_chars, is_valid_length,\
-    is_invalid_leading_chars
 from iondb.rundb.plan.page_plan.step_names import StepNames
+from iondb.rundb.plan.plan_validator import validate_plan_name
 try:
     from collections import OrderedDict
 except ImportError:
@@ -19,6 +18,7 @@ class SavePlanBySampleFieldNames():
     SAMPLESET = 'sampleset'
     WARNING_MESSAGES = 'warning_messages'
     ERROR_MESSAGES = 'error_messages'
+    NOTE = 'note'
 
 class SavePlanBySampleStepData(AbstractStepData):
 
@@ -28,19 +28,19 @@ class SavePlanBySampleStepData(AbstractStepData):
         self.savedFields[SavePlanBySampleFieldNames.TEMPLATE_NAME] = None
         self.savedFields[SavePlanBySampleFieldNames.ERROR_MESSAGES] = None
         self.savedFields[SavePlanBySampleFieldNames.WARNING_MESSAGES] = None
+        self.savedFields[SavePlanBySampleFieldNames.NOTE] = None
 
 
     def getStepName(self):
         return StepNames.SAVE_PLAN_BY_SAMPLE
 
     def validateStep(self):
-        self.validationErrors['invalidPlanName'] = None
-
-        if not self.savedFields[SavePlanBySampleFieldNames.TEMPLATE_NAME]:
-            self.validationErrors['invalidPlanName'] = "Please enter a plan name"
-
-        if not self.validationErrors['invalidPlanName']:
-            self.validationErrors.pop('invalidPlanName')
+        new_field_value = self.savedFields[SavePlanBySampleFieldNames.TEMPLATE_NAME]
+        errors = validate_plan_name(new_field_value, 'Plan Name')
+        if errors:
+            self.validationErrors['invalidPlanName'] = errors
+        else:
+            self.validationErrors.pop('invalidPlanName', None)
 
     def updateSavedObjectsFromSavedFields(self):
         pass

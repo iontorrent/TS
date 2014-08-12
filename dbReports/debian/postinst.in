@@ -91,10 +91,13 @@ case "$1" in
     mkdir -p /results/analysis/output
     mkdir -p /results/analysis/output/disabled
     mkdir -p /results/chef_logs
+    mkdir -p /results/OT
     chown www-data.www-data /results/analysis/output
     chown www-data.www-data /results/analysis/output/disabled
     chown www-data.www-data /results/chef_logs
+    chown www-data.www-data /results/OT
     chmod a+w /results/chef_logs
+    chmod a+w /results/OT
 
     # some systems export a different /results for reports
     # don't want to squash that link.
@@ -106,6 +109,15 @@ case "$1" in
     if [ ! -h /var/www/chef_logs ]; then
         # link does not exist...but it might be a file or dir.
         ln -s -f /results/chef_logs /var/www/chef_logs
+    fi
+    if [ ! -h /var/www/ot_logs ]; then
+        # link does not exist...but it might be a file or dir.
+        ln -s -f /results/OT /var/www/ot_logs
+    fi
+    # /var/www/plugins replaces pluginMedia
+    if [ ! -h /var/www/plugins ]; then
+        # link does not exist...but it might be a file or dir.
+        ln -s -f /results/plugins /var/www/plugins
     fi
 
     # Note, was a symlink, now a folder
@@ -120,8 +132,11 @@ case "$1" in
 
     # Delete broken, circular symlinks that used to live here. TS-7013
     # Must be cleaned up or collectstatic hangs
-    [ -h /opt/ion/iondb/media/media ] && rm -f /opt/ion/iondb/media/media
+    [ -h "@ION_INSTALL_PREFIX@/iondb/media/media" ] && rm -f "@ION_INSTALL_PREFIX@/iondb/media/media"
     [ -h /var/www/site_media/media ] && rm -f /var/www/site_media/media
+    # Delete broken symlinks in media folder - stem from bad collectstatic runs
+    find -P "@ION_INSTALL_PREFIX@/iondb/media/" -type l -delete
+    find -P "/var/www/site_media/" -type l -delete
 
     #symLink for plugin media
     rm -f /var/www/pluginMedia
@@ -158,13 +173,9 @@ case "$1" in
     mkdir -p /var/log/ion
     chown www-data.www-data /var/log/ion
     chmod a+w /var/log/ion
-    chown www-data.ionadmin /var/spool/ion  # created in CMakeLists.txt
+    chown www-data.www-data /var/spool/ion  # created in CMakeLists.txt
     chmod g+w /var/spool/ion    # set in CMakeLists.txt but want to be certain
 
-    #special for ionPlugin who used to run as www-data
-    if [ -e /var/log/ion/ionPlugin.log ]; then
-        chmod a+w /var/log/ion/ionPlugin.log || true
-    fi
     # touchy code
     for log_file in django.log crawl.log ionPlugin.log celery_plugins.log data_management.log
     do
@@ -174,6 +185,7 @@ case "$1" in
     done
     chown ionian:www-data /var/log/ion/django.log
     chown ionian:www-data /var/log/ion/celery_plugins.log
+    chown ionian:www-data /var/log/ion/ionPlugin.log
 
     chown -R www-data:www-data @ION_INSTALL_PREFIX@/iondb
 
@@ -284,7 +296,13 @@ EOF
     python -c 'import iondb.bin.djangoinit, iondb.rundb.data.backfill_tasks as tasks; tasks.backfill_result_diskusage.apply_async(countdown=40)'
 
     # Rescan size and inode count for PluginResults
-    python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.backfill_pluginresult_diskusage.apply_async(countdown=40)'
+    python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.backfill_pluginresult_diskusage.apply_async(countdown=60)'
+    # Update status values for plugins
+    python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.cleanup_pluginresult_state.apply_async(countdown=60)'
+
+    # Check whether or not we're online for CSA support upload
+    python -c 'import iondb.bin.djangoinit, iondb.rundb.data.data_export as tasks; tasks.poll_support_site.apply_async(countdown=61)'
+
 
     #TS-6081: Create DMFileStat objs for existing Results objs without them.
     echo -n "Migrating to new Data Management..."

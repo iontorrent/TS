@@ -557,3 +557,162 @@ mat fitFirstOrder(const std::vector<double> & predictions, const std::vector<dou
         return mat();
     }
 }
+
+
+mat fitFirstOrder(const std::vector<double> & predictions, const std::vector<double> & measurements, int refHP,  const std::vector<int> & calledHPs, int nucIndex, double &corr){
+
+    //create the matrix A from predictions
+    try{
+        int numRows = predictions.size();
+        //assign predictions vec to first column and ones to second column
+        mat pmat_matched(numRows, 2);
+        mat mmat_matched(numRows, 1);
+        vec pV(numRows);
+        vec mV(numRows);
+        int samples_matched = 0;
+
+        for(int ind = 0; ind < numRows; ++ind){
+            if(measurements[ind] - predictions[ind] > 1 || predictions[ind] - measurements[ind]>1) continue;
+            if(refHP!=calledHPs[ind]) continue;
+            pmat_matched.at(samples_matched, 0) = predictions[ind];
+            pmat_matched.at(samples_matched, 1) = 1;
+            mmat_matched.at(samples_matched, 0) = measurements[ind];
+            pV.at(samples_matched) = predictions[ind];
+            mV.at(samples_matched) = measurements[ind];
+            samples_matched++;
+        }
+        mat results(2,1);
+        if(samples_matched > 0){
+            pmat_matched.resize(samples_matched,2);
+            mmat_matched.resize(samples_matched,1);
+            pV.resize(samples_matched);
+            mV.resize(samples_matched);
+            //pinv might throw runtime_error
+            results = pinv(pmat_matched) * mmat_matched;
+            mat cor_ = cor(pV, mV);
+            corr = cor_(0,0);
+        }
+        else{
+            results[0] = 1.0;
+            results[1] = 0;
+            corr = 0.0;
+        }
+        //pinv might throw runtime_error        
+        //throw std::runtime_error("runtime error probe");
+        int numSamples_used = 0;
+        float total_offset = 0;
+
+        for(int ind=0; ind < numRows; ++ind){
+            if(nucIndex==0 || nucIndex==3){
+               if(measurements[ind] - predictions[ind] > 2 || predictions[ind] - measurements[ind]>2) continue;
+            }
+            if(nucIndex==1 || nucIndex==2){
+               if(measurements[ind] - predictions[ind] > 1 || predictions[ind] - measurements[ind]>1) continue;
+            }
+            total_offset  = total_offset + (measurements[ind] - predictions[ind]*results[0]);
+            numSamples_used++;
+        }
+        if(numSamples_used>0) results[1] = total_offset/numSamples_used;
+
+        return results;
+
+    }catch (std::exception &e) {
+        printf("Exception caught during fitting: %s; empty matrix is returned.\n", e.what());
+        return mat();
+    }
+}
+
+//take more training samples as only slope is calculated with 0 intercept
+mat fitFirstOrderSlopeOnly(const std::vector<double> & predictions, const std::vector<double> & measurements){
+
+    //create the matrix A from predictions
+    try{
+        int numRows = predictions.size();
+        //assign predictions vec to first column and ones to second column
+        mat pmat(numRows, 1);
+        mat mmat(numRows, 1);
+        int samples_used = 0;
+
+        for(int ind = 0; ind < numRows; ++ind){
+            if(measurements[ind] - predictions[ind] > 2 || predictions[ind] - measurements[ind] > 2) continue;
+            pmat.at(samples_used, 0) = predictions[ind];
+            mmat.at(samples_used, 0) = measurements[ind];
+            samples_used++;
+        }
+        
+        mat results(2,1);
+
+        if(samples_used > 0){
+            pmat.resize(samples_used,1);
+            mmat.resize(samples_used,1);
+			//pinv might throw runtime_error
+			mat slope = pinv(pmat) * mmat;
+            results[0] = slope(0);
+            results[1] = 0;
+		}
+		else{
+            results[0] = 1.0;
+            results[1] = 0;
+		}
+
+        //throw std::runtime_error("runtime error probe");
+        return results;
+
+    }catch (std::exception &e) {
+        printf("Exception caught during fitting: %s; empty matrix is returned.\n", e.what());
+        return mat();
+    }
+}
+
+
+mat calculateModelStats(const std::vector<double> & predictions, const std::vector<double> & measurements){
+
+    try{
+        int numRows = predictions.size();
+        //assign predictions vec to first column and ones to second column
+        vec pV(numRows);
+        vec bV(numRows);
+        vec mV(numRows);
+        int samples_used = 0;
+
+        for(int ind = 0; ind < numRows; ++ind){
+            if(measurements[ind] - predictions[ind] > 2 || predictions[ind] - measurements[ind] > 2) continue;
+            pV.at(samples_used) = predictions[ind];
+            mV.at(samples_used) = measurements[ind];
+            bV.at(samples_used) = measurements[ind]- predictions[ind];
+            samples_used++;
+        }
+
+        pV.resize(samples_used);
+        mV.resize(samples_used);
+        bV.resize(samples_used);
+
+        double meanP = mean(pV);
+        double meanM = mean(mV);
+        double meanB = mean(bV);
+	double stdP = stddev(pV);
+	double stdM = stddev(mV);		
+        double stdB = stddev(bV);
+        double gain = meanM/meanP;
+        mat cor_ = cor(pV, mV);
+
+        mat results(1,8);
+        results[0] = meanP;
+        results[1] = meanM;
+        results[2] = meanB;
+	results[3] = stdP;
+	results[4] = stdM;
+        results[5] = stdB;
+        results[6] = gain;
+        results[7] = cor_(0,0);
+
+        //throw std::runtime_error("runtime error probe");
+        return results;
+
+    }catch (std::exception &e) {
+        printf("Exception caught during fitting: %s; empty matrix is returned.\n", e.what());
+        return mat();
+    }
+}
+
+

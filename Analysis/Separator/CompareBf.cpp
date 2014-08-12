@@ -2,11 +2,14 @@
 #include <armadillo>
 #include <iostream>
 #include <vector>
+#include <string>
+
 #include "H5File.h"
+#include "H5Arma.h"
 #include "Mask.h"
 #include "Utils.h"
 #include "NumericalComparison.h"
- 
+
 using namespace std;
 using namespace arma;
 /**
@@ -108,8 +111,8 @@ int main(int argc, const char *argv[]) {
   string path1 = argv[3] + suffix;
   string path2 = argv[4] + suffix;
   const char *col_names[] = {"index","t0","snr","mad","sd","bfmetric","a","c","g","t","peak","flag","goodlive","isref","buffmetric"};
-  H5File::ReadMatrix(path1, s1);
-  H5File::ReadMatrix(path2, s2);
+  H5Arma::ReadMatrix(path1, s1);
+  H5Arma::ReadMatrix(path2, s2);
   vector<NumericalComparison<float> > column_compare(s1.n_cols);
   size_t num_names = ArraySize(col_names);
   for (size_t cIx = 0; cIx < num_names; cIx++) {

@@ -1,3 +1,4 @@
+/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "xtalk_sim.h"
 
 #include "sim_2mer_flux_data.h"

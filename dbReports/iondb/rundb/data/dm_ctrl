@@ -1,0 +1,178 @@
+#!/usr/bin/env python
+# Copyright (C) 2014 Life Technologies Inc. All Rights Reserved
+#
+# CLI tool to manage the Data Management system
+#
+# - clear DMFileStat error states
+# - clear DMFileStat in-process states (assuming that the action is not actually running any longer)
+#
+import sys
+import argparse
+import traceback
+from iondb.bin import djangoinit
+from iondb.rundb.models import DMFileStat, FileServer, ReportStorage
+from iondb.rundb.data import data_management as dm
+from iondb.rundb.data import dmactions_types
+from django.core.cache import get_cache
+
+
+def list_errors():
+    '''List all records in DMFileStat table with action_state Error'''
+    try:
+        dms = DMFileStat.objects.filter(action_state="E")
+        print "%d objects in Error" % (dms.count())
+    except:
+        print traceback.format_exc()
+    return
+
+
+def list_inprocess():
+    '''List all records in DMFileStat table with action_state processing'''
+    try:
+        dms = DMFileStat.objects.filter(action_state__in=['AG','DG','EG','SA','SE','SD'])
+        print "%d objects in Processing" % (dms.count())
+    except:
+        print traceback.format_exc()
+    return
+
+
+def list_locks():
+    '''Shows Data Management jobs with cache locks'''
+    try:
+        #objects=["manage_manual_action", "Test.lock"]
+        objects=["manage_manual_action"]
+        file_servers = FileServer.objects.all().order_by('pk').values()
+        report_storages = ReportStorage.objects.all().order_by('pk').values()
+        for partition in dm._partitions(file_servers, report_storages):
+            for types in dmactions_types.FILESET_TYPES:
+                foo = "%s_%s" %(hex(partition['devid']),dm.slugify(types))
+                objects.append(foo)
+    except:
+        print traceback.format_exc()
+        return
+    
+    print ("%-31s %14s" % (30 * '=', 14 * '='))
+    print ("%-31s %s" % ('Name of lock', 'Name of Report'))
+    print ("%-31s %14s" % (30 * '=', 14 * '='))
+    
+    try:
+        cache = get_cache('file')
+        for lockid in sorted(list(set(objects))):
+            thislock = cache.get(lockid)
+            print ("%-31s %s" % (lockid, thislock))
+    except:
+        print traceback.format_exc()
+        
+    return
+
+
+def clear_errors():
+    '''All records in DMFileStat table with action_state Error reset to Local'''
+    try:
+        print "We will now clear the errors..."
+        dms = DMFileStat.objects.filter(action_state="E").update(action_state="L")
+        print "Cleared %d objects" % (dms)
+    except:
+        print traceback.format_exc()
+    return
+
+
+def clear_inprocess():
+    '''All records in DMFileStat table with action_state indicating "currently processing" reset to Local'''
+    try:
+        print "We will now clear the in-process objects..."
+        dms = DMFileStat.objects.filter(action_state__in=['AG','DG','EG','SA','SE','SD']).update(action_state="L")
+        print "Cleared %d objects" % (dms)
+    except:
+        print traceback.format_exc()
+    return
+
+
+def clear_locks():
+    '''Removes all locks in the lock file cache'''
+    try:
+        cache = get_cache('file')
+        cache.clear()
+    except:
+        print traceback.format_exc()
+    return
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='''
+Data Management Control Interface.
+WARNING: Some actions will affect the running state.
+There are no checks to prevent ruining ongoing DM actions.
+''')
+    parser.add_argument('--list-all',
+                        dest='list_all',
+                        action = 'store_true',
+                        default = False,
+                        help = 'List all objects in error and in process')
+    parser.add_argument('--list-errors',
+                        dest='list_errors',
+                        action = 'store_true',
+                        default = False,
+                        help = 'List objects in Error state')
+    parser.add_argument('--clear-errors',
+                        dest='clear_errors',
+                        action = 'store_true',
+                        default = False,
+                        help = 'Set state to Local for all objects in Error state')
+    parser.add_argument('--list-processing',
+                        dest='list_processing',
+                        action = 'store_true',
+                        default = False,
+                        help = 'List objects in processing state')
+    parser.add_argument('--clear-processing',
+                        dest='clear_processing',
+                        action = 'store_true',
+                        default = False,
+                        help = 'Set state to Local for all objects in processing state')
+    parser.add_argument('--list-locks',
+                        dest='list_locks',
+                        action = 'store_true',
+                        default = False,
+                        help = 'List all locks')
+    parser.add_argument('--clear-locks',
+                        dest='clear_locks',
+                        action = 'store_true',
+                        default = False,
+                        help = 'Remove all locks')
+    
+    args = parser.parse_args()
+
+    # If no arguments given, print usage and exit
+    if len(sys.argv)==1:
+        parser.print_usage()
+        sys.exit(0)
+        
+    #=========================================================================
+    # Functions which display information only
+    #=========================================================================
+    if args.list_all:
+        args.list_errors = True
+        args.list_processing = True
+        
+    if args.list_errors:
+        list_errors()
+    
+    if args.list_processing:
+        list_inprocess()
+        
+    if args.list_locks:
+        list_locks()
+    
+    #=========================================================================
+    # Action functions which modify the system
+    #=========================================================================
+    if args.clear_errors:
+        clear_errors()
+    
+    if args.clear_processing:
+        clear_inprocess()
+        
+    if args.clear_locks:
+        clear_locks()
+    
+    

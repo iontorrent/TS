@@ -10,19 +10,19 @@
 #include "cuda_error.h"
 #include "Utils.h"
 
-
 #include "StreamManager.h"
 #include "ParamStructs.h"
 #include "JobWrapper.h"
-#include "GpuMultiFlowFitControl.h"
+
 
 
 struct MultiFitData
 {
-  CpuStep_t* Steps; // we need a specific struct describing this config for this well fit for GPU
-  unsigned int * JTJMatrixMapForDotProductComputation;
-  unsigned int * BeadParamIdxMap;
-  float* LambdaForBeadFit;
+  TMemSegment<CpuStep> Steps; // we need a specific struct describing this config for this well fit for GPU
+  TMemSegment<unsigned int> JTJMatrixMapForDotProductComputation;
+  TMemSegment<unsigned int> BeadParamIdxMap;
+  TMemSegment<float> LambdaForBeadFit;
+  MemSegPair hdCopyGroup;
 };
 
 
@@ -34,7 +34,7 @@ class SimpleMultiFitStream : public cudaSimpleStreamExecutionUnit
   static int _bpbPartialD;   // beads per block
   static int _l1typePartialD; // 0:sm=l1, 1:sm>l1, 2:sm<l1
 
-
+  WorkSet _myJob;
 
   float _lambda_start[CUDA_MULTIFLOW_NUM_FIT];
   int _fit_iterations[CUDA_MULTIFLOW_NUM_FIT];
@@ -43,7 +43,7 @@ class SimpleMultiFitStream : public cudaSimpleStreamExecutionUnit
 
 
   int _fitIter; 
-  
+
   int _maxEmphasis;
   unsigned int _partialDerivMask; // mask to find out which params to compute partial derivative for
 
@@ -52,49 +52,49 @@ class SimpleMultiFitStream : public cudaSimpleStreamExecutionUnit
   size_t _fitSpecificCopyInSize;
 
 
-  ConstParams* _HostConstP;
-  //Only members starting with _Host or _Dev are 
-  //allocated. pointers with _h_p or _d_p are just pointers 
-  //referencing memory inside the _Dev/_Host buffers!!!
+  TMemSegment<ConstParams> _hConstP;
 
   //host memory
   // fit specific inputs
 
-  bead_params* _pHostBeadParams;
-  FG_BUFFER_TYPE * _pHostFgBuffer;
-  MultiFitData _HostFitData[CUDA_MULTIFLOW_NUM_FIT];
-  float* _pHostNucRise; // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
-  float* _pHostSbg; // FLxF
-  float* _pHostEmphasis; // MAX_HPLEN+1 xF // needs precomputation
-  float* _pHostNon_integer_penalty; // MAX_HPLEN+1
-  float* _pHostDarkMatterComp; // NUMNUC * F  
+  TMemSegPair<BeadParams> _hdBeadParams;
+
+  TMemSegPair<FG_BUFFER_TYPE> _hdFgBuffer;  //former _pHostFgBuffer and _pDevObservedTrace
+  TMemSegPair<float> _hdNucRise; // FL x ISIG_SUB_STEPS_MULTI_FLOW x F
+  TMemSegPair<float> _hdSbg; // FLxF
+  TMemSegPair<float> _hdEmphasis; // MAX_HPLEN+1 xF // needs precomputation
+  TMemSegPair<float> _hdNon_integer_penalty; // MAX_HPLEN+1
+  TMemSegPair<float> _hdDarkMatterComp; // NUMNUC * F
+
+  MemSegPair  _hdInvariantCopyInGroup;
+
+  MultiFitData _HostDeviceFitData[CUDA_MULTIFLOW_NUM_FIT];
+  MultiFitData _DevFitData;
+
+
+
+
 
   // allocated memory
-  MultiFitData _DevFitData;
-  FG_BUFFER_TYPE* _pDevObservedTrace; //fg
-  float* _pDevObservedTraceTranspose; //fg
-  float* _pDevNucRise; // FL x ISIG_SUB_STEPS_MULTI_FLOW x F 
-  float* _pDevSbg; // FLxF
-  float* _pDevEmphasis; // MAX_HPLEN+1 xF // needs precomputation
-  float* _pDevNon_integer_penalty; // MAX_HPLEN+1
-  float* _pDevDarkMatterComp; // NUMNUC * F  
-  bead_params* _pDevBeadParams;
-  float* _pDevBeadParamsEval;
-  float* _pDevBeadParamsTranspose;
-  // outputs
-  float* _pDevIval; // FLxNxF
-  float* _pDevScratch_ival; // FLxNxF
-  float* _pDevResidual; // N
+  TMemSegment<float> _dFgBufferTransposed; //fg
 
-  float* _pDevJTJ;
-  float* _pDevRHS;
-  float* _pDevLTR;
+  TMemSegment<float> _dBeadParamsEval;
+  TMemSegment<float> _dBeadParamsTranspose;
+
+  // outputs
+  TMemSegment<float> _dIval; // FLxNxF
+  TMemSegment<float> _dScratch_ival; // FLxNxF
+  TMemSegment<float> _dResidual; // N
+
+  TMemSegment<float> _dJTJ;
+  TMemSegment<float> _dRHS;
+  TMemSegment<float> _dLTR;
 
   // pointers pointing into allocated memory
-  float* _pd_partialDerivsOutput;
-  float* _pd_delta;
-//  float* _pd_beadParamEval; 
-  
+  TMemSegment<float> _dPartialDerivsOutput;
+  TMemSegment<float> _dDelta;
+  //  float* _pd_beadParamEval;
+
 
 protected:
 
@@ -109,19 +109,29 @@ public:
 
 
   // implementatin of stream execution methods
-  int handleResults();
+  bool InitJob();
   void ExecuteJob();
-  void printStatus();
+  int handleResults();
 
-  static void setBeadsPerBLockMultiF(int bpb);
+  void printStatus();
+  //////////////
+
+  static void setBeadsPerBlockMultiF(int bpb);
   static void setL1SettingMultiF(int type); // 0:sm=l1, 1:sm>l1, 2:sm<l1
-  static void setBeadsPerBLockPartialD(int bpb);
+  static void setBeadsPerBlockPartialD(int bpb);
   static void setL1SettingPartialD(int type); // 0:sm=l1, 1:sm>l1, 2:sm<l1
+
+  //change worst case alloc to a different number of frames or beads to reduce over-allocation
+  //best values based on empirical data
+  //need to be called to guarantee resource preallocation
+  static void requestResources(int global_max_flow_key, int global_max_flow_block_size, 
+                               float deviceFraction /*= 1.0f*/ );
 
   static void printSettings();
 
-  static size_t getMaxHostMem();
-  static size_t getMaxDeviceMem(int numFrames = 0, int numBeads = 0);
+  static size_t getMaxHostMem(int global_max_flow_key, int global_max_flow_block_size);
+                               //if no params given returns absolute or defined worst case size
+  static size_t getMaxDeviceMem(int global_max_flow_key, int global_max_flow_block_size, int numFrames /*= 0*/, int numBeads /*= 0*/);
 
   int getBeadsPerBlockMultiFit();
   int getL1SettingMultiFit();
@@ -136,14 +146,14 @@ private:
   void copyFitInvariantInputsToDevice();
   void copyBeadParamsToDevice();
   void copyBeadParamsToHost();
- 
+
   void executeTransposeToFloat();
   void executeTransposeParams();
   void executeMultiFit(int fit_index); // need to do fit invariant and fit specific
   void executeTransposeParamsBack();
 
   void copyToHost();
-  
+
   // fit specific functions
   void SetUpLambdaArray(int fit_index);  
   void prepareFitSpecificInputs(int fi_index);

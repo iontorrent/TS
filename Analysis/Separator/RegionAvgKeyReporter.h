@@ -64,6 +64,11 @@ public:
     mMinPeakSig[key] = val;
   }
 
+  void Report(EvaluateKey &evaluator) {
+    pthread_mutex_lock(&mLock);
+    pthread_mutex_unlock(&mLock);
+  }
+
   void Report(const KeyFit &fit, 
 	      const Mat<T> &wellFlows,
 	      const Mat<T> &refFlows,

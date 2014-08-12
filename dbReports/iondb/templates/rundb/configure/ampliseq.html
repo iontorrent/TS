@@ -8,11 +8,20 @@
   <li><a href="{% url "configure_services" %}">Services</a></li>
   <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
   <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
   <li class="active"><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 
 {% block content %}
 <div class="content">
+    {% if request.session.ampliseq_username %}
+        <div class="pull-right">
+            Accessing Ampliseq.com as <b>{{request.session.ampliseq_username}}</b>  
+            <form method="POST" action="{% url "configure_ampliseq_logout" %}" style="display: inline;">
+                <input type="submit" class="btn" id="logout_button" value="Logout"/>
+            </form>
+        </div>
+    {% endif %}
     <h1>AmpliSeq</h1>
     {% if form %}
     <div class="row-fluid">
@@ -27,7 +36,7 @@
                 <p class="alert">
                     Please update your AmpliSeq.com account between September 6th, 2013 to November 30,2013 to a new username and password to continue using AmpliSeq.com beyond November 30, 2013.
                     <br/>
-                    <a href="https://ampliseq.com/">Go to ampliseq.com</a>
+                    <a href="{{ ampliseq_url }}">Go to ampliseq.com</a>
                 </p>
             {% endif %}
             <form action="{{ request.path }}" method="post">
@@ -159,7 +168,7 @@
                                         {% endfor %}
                                     </td>
                                     <td>
-                                        <a href="https://www.ampliseq.com/protected/designDashboard.action?designId={{design.id}}#/?action=updateCurrentSolution&designId={{design.id}}&designSolutionId={{solution.id}}&wrapperId=ajaxSolutionsTableWrapper"  target="_blank">
+                                        <a href="{{ ampliseq_url }}/protected/designDashboard.action?designId={{design.id}}#/?action=updateCurrentSolution&designId={{design.id}}&designSolutionId={{solution.id}}&wrapperId=ajaxSolutionsTableWrapper"  target="_blank">
                                             View
                                         </a>
                                     </td>
@@ -200,11 +209,11 @@
                                     </td>
                                     <td>
                                         {% if design.type == "COMMUNITY_PANEL" %}
-                                            <a href="https://www.ampliseq.com/protected/tmpl/dashboard.action?tmplDesignType=COMMUNITY_PANEL" target="_blank">
+                                            <a href="{{ ampliseq_url }}/protected/tmpl/dashboard.action?tmplDesignType=COMMUNITY_PANEL" target="_blank">
                                                 View
                                             </a>
                                         {% elif design.type == "FIXED_PANEL" %}
-                                            <a href="https://www.ampliseq.com/protected/tmpl/dashboard.action" target="_blank">
+                                            <a href="{{ ampliseq_url }}/protected/tmpl/dashboard.action" target="_blank">
                                                 View
                                             </a>
                                         {% endif %}
@@ -248,7 +257,7 @@
                                         {% endfor %}
                                     </td>
                                     <td>
-                                        <a href="https://www.ampliseq.com/protected/designDashboard.action?designId={{design.id}}#/?action=updateCurrentSolution&designId={{design.id}}&designSolutionId={{solution.id}}&wrapperId=ajaxSolutionsTableWrapper"  target="_blank">
+                                        <a href="{{ ampliseq_url }}/protected/designDashboard.action?designId={{design.id}}#/?action=updateCurrentSolution&designId={{design.id}}&designSolutionId={{solution.id}}&wrapperId=ajaxSolutionsTableWrapper"  target="_blank">
                                             View
                                         </a>
                                     </td>
@@ -262,7 +271,7 @@
         {% endif %}
         <div class="form-actions">
             <input class="btn btn-primary" type="submit" value="Import Selected" />
-            <a href="{% url "plans" %}" class="btn">Cancel</a>
+            <a href="{% url "plan_templates" %}" class="btn">Cancel</a>
         </div>
         </form>
         <div id="api" style="display:none;">

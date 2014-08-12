@@ -1,0 +1,6 @@
+    [S1]     [E1]  |     [S2]     [E2]  |  [LEN 1]  [LEN 2]  |  [% IDY]  | [TAGS]
+=====================================================================================
+    1121     3220  |        1     2100  |     2100     2100  |   100.00  | gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides	contig1
+    3431     4130  |        1      700  |      700      700  |   100.00  | gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides	contig2
+    5881     7070  |      701     1890  |     1190     1190  |   100.00  | gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides	contig2
+    8120     9590  |     1890     3360  |     1471     1471  |   100.00  | gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides	contig2

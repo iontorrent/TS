@@ -50,7 +50,13 @@ class IonreporterStepData(AbstractStepData):
     def updateSavedObjectsFromSavedFields(self):
         if self.savedFields[IonReporterFieldNames.SAMPLE_GROUPING]:
             self.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING] = SampleGroupType_CV.objects.get(pk=self.savedFields[IonReporterFieldNames.SAMPLE_GROUPING])
+        if self.savedFields['irworkflow'] and self.savedFields['irworkflow'] == 'Upload Only':
+            self.savedFields['irworkflow'] = ''
     
     def updateFromStep(self, updated_step):
         pass
-        
+
+    def getIRU(self):
+        if self.prepopulatedFields[IonReporterFieldNames.IR_PLUGIN]:
+            return self.prepopulatedFields[IonReporterFieldNames.IR_PLUGIN]
+

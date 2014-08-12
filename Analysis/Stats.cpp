@@ -213,6 +213,46 @@ float rmsd(float *v, float *est, int n)
 }
 
 
+float rmsd_weighted(float *v, float *est, float *wt, int n,float traceMax=1)
+{
+  if(n==0)
+      return (0);
+
+  float sd = 0;
+  float totalWt = 0;
+  for (int i=0; i<n; i++)
+  {
+      float e = v[i]-est[i];
+      sd += e*e*wt[i];
+      totalWt += wt[i];
+  }
+  sd /= n;
+  if (totalWt>0)
+    sd /= totalWt;
+  sd = sqrt(sd);
+  sd /= traceMax;
+  return(sd);
+}
+
+
+float rmsd_positive(float *v, float *est, float *wt, int n)
+{
+  if(n==0)
+      return (0);
+
+  float sd = 0;
+  //float totalWt = 0;
+  for (int i=0; i<n; i++)
+  {
+      float e = v[i]-est[i];
+      if (wt[i]>0)
+        sd += e*e;
+  }
+  sd /= n;
+  return(sqrt(sd));
+}
+
+
 float sumofsquares(float *v,int n)
 {
     float ss = 0;
@@ -509,6 +549,27 @@ void linear_regression(std::vector<float>&Y, std::vector<float>&beta)
     beta[0] = sumY/npts - sumX/npts * beta[1];
 }
 
+
+void linear_regression(std::vector<float>&X, std::vector<float>&Y, std::vector<float>&beta)
+{
+    size_t npts = Y.size();
+    float sumX = 0;
+    float sumY = 0;
+    float sumXX = 0;
+    float sumXY = 0;
+    for (size_t i=0; i<npts; i++) {
+        float x = X[i];
+        float y = Y[i];
+        sumX += x;
+        sumY += y;
+        sumXX += x*x;
+        sumXY += x*y;
+    }
+    float denom = npts*sumXX - sumX*sumX;
+    beta.resize(2);
+    beta[1] = denom != 0 ? (npts*sumXY - sumX*sumY) / denom : 0;
+    beta[0] = sumY/npts - sumX/npts * beta[1];
+}
 
 
 float logistic(float z)

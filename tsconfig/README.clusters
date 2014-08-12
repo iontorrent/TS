@@ -1,0 +1,29 @@
+README.clusters
+
+Some tools available to administrators of Torrent Suite Compute Clusters.
+TS 4.2 has tools to automate software maintenance.
+To use the tools, the cluster nodes need some configuration and the node names
+need to be entered into the headnode's database.
+
+For existing clusters, there is a script which will automate the configuration.
+/usr/share/ion-tsconfig/tools/grp_addnodes.sh
+
+This script will use the existing SGE setup to figure out what the nodes are.
+Then, it will prompt you if you want to add a given node.  Answering yes will do the following.
+1. Add the node name to the Cruncher table in the database.
+2. Copy the ionadmin user's public ssh key to the node.
+3. Edit the node's sudoers file to enable passwordless commands for ionadmin user.
+
+
+Once nodes have been configured, you can update software on the cluster with the command:
+
+sudo TSconfig -s --update-cluster
+
+This will update the headnode software first, then update the software on the nodes next.
+
+You still have to disable SGE queues prior to running the command.
+So, the whole process could be
+
+qmod -d *@*
+sudo TSconfig -s --update-cluster
+qmod -e *@*

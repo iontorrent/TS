@@ -1,5 +1,6 @@
-#ifndef _UTILS_H
-#define _UTILS_H
+/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+#ifndef UTILS_H
+#define UTILS_H
 
 #include <sys/time.h>
 #include "xtalk_sim.h"
@@ -44,5 +45,5 @@ class Timer
     timeval end_time;
 };
 
-#endif /* _UTILS_H */
+#endif // UTILS_H
 

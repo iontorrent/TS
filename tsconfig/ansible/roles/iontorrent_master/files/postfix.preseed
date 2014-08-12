@@ -1,0 +1,9 @@
+#!/bin/bash
+set -u
+headnode=$1
+debconf-set-selections << EOF
+postfix postfix/mailname string $headnode
+postfix postfix/main_mailer_type string  Internet Site
+postfix shared/mailname string $headnode
+postfix shared/main_mailer_type string  Internet Site
+EOF

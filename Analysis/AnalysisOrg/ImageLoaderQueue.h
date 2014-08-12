@@ -42,7 +42,6 @@
 #include "EmptyTraceTracker.h"
 #include "TikhonovSmoother.h"
 #include "PinnedInFlow.h"
-#include "PinnedInFlowReplay.h"
 #include "SynchDat.h"
 
 // queuing system may change for coprocessor environment
@@ -56,6 +55,7 @@ struct ImageLoadWorkInfo
   int cur_buffer; // the buffer where the absolute flow value is located
   
   int flow_buffer_size; // the size of the buffer
+  FlowBlockSequence flow_block_sequence; // A full description of the flow blocks in this run.
   int startingFlow; // the flow we are starting the count from
   
   char name[512];
@@ -91,7 +91,7 @@ struct ImageLoadWorkInfo
   bool finished;
   bool doRawBkgSubtract;
   bool doEmptyWellNormalization;
-  CommandLineOpts *inception_state;
+  const CommandLineOpts *inception_state;
 };
 
 

@@ -1,6 +1,7 @@
 /* Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved */
 #include <stdio.h>
 #include <string>
+#include <sstream>
 #include <map>
 #include <limits>
 #include <list>
@@ -11,6 +12,7 @@
 #include "api/SamConstants.h"
 #include "Util/OptArgs.h"
 #include "json/json.h"
+#include "ion_util.h"
 
 using namespace BamTools;
 const int NUM_WRITER_THREADS = 6; //reasonable number of threads allocated to writing data.
@@ -112,19 +114,32 @@ class AlignCache{
     }
 
     void FlushData(int32_t refId, int32_t pos, bool reset);
+    bool saveDups;
+    std::ofstream dupFile;
 
 public:
-    int nTotalReads, nDuplicates, nWithAdaptor;
-    AlignCache( BamWriter& _writer ) : writer(&_writer), curRefId(-1), curPos(-1), nTotalReads(0), nDuplicates(0), nWithAdaptor(0) {}
+    int nTotalReads, nTotalMappedReads, nDuplicates, nWithAdaptor;
+    AlignCache( BamWriter& _writer ) : writer(&_writer), curRefId(-1), curPos(-1), saveDups(false), nTotalReads(0), nTotalMappedReads(0), nDuplicates(0), nWithAdaptor(0) {}
     void NewAlignment( BamAlignment& al );
     void FlushData(void) { FlushData(0, std::numeric_limits<int32_t>::max(), true); }
+    void OutputDuplicates( const std::string& dupsFileName ){ if((saveDups = (dupsFileName.size()>0))) dupFile.open( dupsFileName.c_str() ); }
 };
 
+inline void outputDupString( std::stringstream& duplicateStream, const char* al )
+{
+    int thisCol = 0;
+    int thisRow = 0;
+    ion_readname_to_rowcol(al, &thisRow, &thisCol);
+    duplicateStream << thisRow << " " << thisCol << " ";
+}
 
 void AlignCache::MarkDuplicatesStrand( int32_t pos, StrandMapType& strand, bool isReverse, char* str )
 {
 
     if( strand.size()==0) return;
+
+    std::stringstream duplicateStream;
+    bool hasDuplicate = false;
 
     //handle the forward strand
     StrandMapType::iterator it = strand.begin();
@@ -140,7 +155,10 @@ void AlignCache::MarkDuplicatesStrand( int32_t pos, StrandMapType& strand, bool 
 
     processedReadStore[al_first.Position].readList.push_back(al_first);
     nWithAdaptor += hasAdaptor? 1 : 0;
-    ++nTotalReads;
+    nTotalMappedReads += (al_first.IsMapped())?1:0;
+
+    if( saveDups )
+        outputDupString( duplicateStream, al_first.Name.c_str() );
 
     DBG_PRINTF("%s: %d %d %c %d\tOk First\t\t%s\n", str, al_first.Position, GetEndPosition(al_first), adaptorFlow(al_first)?'T':'F', lastFlow(al_first), al_first.Name.c_str());
 
@@ -159,10 +177,14 @@ void AlignCache::MarkDuplicatesStrand( int32_t pos, StrandMapType& strand, bool 
                 DBG_PRINTF("Pos: %d, Start: %d, Unp: %d\n", pos, currAlignment.Position, processedReadStore[currAlignment.Position].numUnprocessedRevReads);
             }
 
-            if( not ( hasAdaptor && (lastFlow(currAlignment)<maxFlow) ) ){
+            if( not ( hasAdaptor && (lastFlow(currAlignment)<maxFlow) ) && currAlignment.IsMapped() ){
                 currAlignment.SetIsDuplicate(true);
                 ++nDuplicates;
                 DBG_PRINTF("%s: %d %d %c %d\tDup Shorter/No adaptr\t\t%s\n", str, currAlignment.Position, GetEndPosition(currAlignment), hasAdaptor?'T':'F',lastFlow(currAlignment), currAlignment.Name.c_str());
+                if( saveDups ){
+                    outputDupString( duplicateStream, currAlignment.Name.c_str() );
+                    hasDuplicate = true;
+                }
             }
             else{
                 DBG_PRINTF("%s: %d %d %c %d\tOk Adaptr\t\t%s\n", str, currAlignment.Position, GetEndPosition(currAlignment), hasAdaptor?'T':'F',lastFlow(currAlignment), currAlignment.Name.c_str());
@@ -172,11 +194,14 @@ void AlignCache::MarkDuplicatesStrand( int32_t pos, StrandMapType& strand, bool 
 
             processedReadStore[currAlignment.Position].readList.push_back( currAlignment );
             nWithAdaptor += hasAdaptor? 1 : 0;
-            ++nTotalReads;
+            nTotalMappedReads += (currAlignment.IsMapped())?1:0;
             ++it;
         }
     }
     strand.clear();
+    if( saveDups && hasDuplicate && dupFile.is_open() ){
+        dupFile << duplicateStream.str() << "\n";
+    }
 }
 
 
@@ -276,6 +301,7 @@ void PrintHelp()
   printf ("  -o,--output         FILE        results file or \"stdout\" [required option]\n");
   printf ("  -d,--dir               DIR        output directory\n");
   printf ("  -j,--json               FILE       output statistics file\n");
+  printf ("  -x,--save-duplicates    FILE     save duplicate reads\n");
   printf ("\n");
 
   exit (EXIT_SUCCESS);
@@ -283,7 +309,7 @@ void PrintHelp()
 
 int main( int argc, const char* argv[] )
 {
-    std::string inputFile, outputFile, outputDir, outputJSON;
+    std::string inputFile, outputFile, outputDir, outputJSON, saveDuplicates;
 
     OptArgs opts;
     opts.ParseCmdLine(argc, argv);
@@ -300,6 +326,7 @@ int main( int argc, const char* argv[] )
     outputFile = opts.GetFirstString('o',"output","stdout");
     outputDir = opts.GetFirstString('d',"dir",".");
     outputJSON = opts.GetFirstString('j',"json","BamDuplicates.json");
+    saveDuplicates = opts.GetFirstString('x',"save-duplicates","");
     opts.CheckNoLeftovers();
 
     BamReader reader;
@@ -327,10 +354,16 @@ int main( int argc, const char* argv[] )
     writer.SetNumThreads( 6 );
 
     AlignCache cache(writer);
+    cache.OutputDuplicates( saveDuplicates );
     BamAlignment al;
     while( reader.GetNextAlignmentCore(al) ){
-        //TODO: handle case of unaligned data
-        cache.NewAlignment( al );
+        ++cache.nTotalReads;
+        if( al.IsMapped() )
+            cache.NewAlignment( al );
+        else{
+            cache.FlushData();
+            writer.SaveAlignment( al );
+        }
     }
     cache.FlushData();
 
@@ -339,10 +372,11 @@ int main( int argc, const char* argv[] )
 
     Json::Value BamDuplicates_json(Json::objectValue);
     BamDuplicates_json["total_reads"] = cache.nTotalReads;
+    BamDuplicates_json["total_mapped_reads"] = cache.nTotalMappedReads;
     BamDuplicates_json["duplicate_reads"] = cache.nDuplicates;
     BamDuplicates_json["reads_with_adaptor"] = cache.nWithAdaptor;
-    BamDuplicates_json["fraction_duplicates"] = (float)cache.nDuplicates/(cache.nTotalReads+1.);
-    BamDuplicates_json["fraction_with_adaptor"] = (float)cache.nWithAdaptor/(cache.nTotalReads+1.);
+    BamDuplicates_json["fraction_duplicates"] = (float)cache.nDuplicates/(cache.nTotalMappedReads+1.);
+    BamDuplicates_json["fraction_with_adaptor"] = (float)cache.nWithAdaptor/(cache.nTotalMappedReads+1.);
 
     std::ofstream out((outputDir+"/"+outputJSON).c_str(), std::ios::out);
     if( out.good() )

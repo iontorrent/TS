@@ -8,25 +8,34 @@ using namespace std;
 
 
 
-void FillBufferParamsBlockFlows ( buffer_params_block_flows *my_buff, bead_params *p, reg_params *reg_p, int *flow_ndx_map, int *buff_flow )
+void MathModel::FillBufferParamsBlockFlows ( 
+    buffer_params_block_flows *my_buff, BeadParams *p, const reg_params *reg_p, 
+    const int *flow_ndx_map, 
+    int flow_block_start,
+    int flow_block_size
+  )
 {
   int NucID;
-  for ( int fnum=0;fnum<NUMFB;fnum++ )
+  for ( int fnum=0;fnum<flow_block_size;fnum++ )
   {
     NucID  =flow_ndx_map[fnum];
     // calculate some constants used for this flow
-    my_buff->etbR[fnum] = AdjustEmptyToBeadRatioForFlow ( p->R,reg_p,NucID,buff_flow[fnum] );
-    my_buff->tauB[fnum] = ComputeTauBfromEmptyUsingRegionLinearModel ( reg_p,my_buff->etbR[fnum] );
+    my_buff->etbR[fnum] = reg_p->AdjustEmptyToBeadRatioForFlow ( p->R, p->Ampl[fnum], p->Copies, p->phi, NucID, flow_block_start + fnum );
+    my_buff->tauB[fnum] = reg_p->ComputeTauBfromEmptyUsingRegionLinearModel ( my_buff->etbR[fnum] );
   }
 }
 
-void FillIncorporationParamsBlockFlows ( incorporation_params_block_flows *my_inc, bead_params *p, reg_params *reg_p,int *flow_ndx_map, int *buff_flow )
+void MathModel::FillIncorporationParamsBlockFlows ( 
+    incorporation_params_block_flows *my_inc, BeadParams *p, reg_params *reg_p,
+    const int *flow_ndx_map, int flow_block_start,
+    int flow_block_size
+  )
 {
   int NucID;
 
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
-    reg_p->copy_multiplier[fnum] = CalculateCopyDrift ( *reg_p, buff_flow[fnum] );
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
+    reg_p->copy_multiplier[fnum] = reg_p->CalculateCopyDrift ( flow_block_start + fnum );
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
 
     NucID=flow_ndx_map[fnum];
@@ -43,12 +52,15 @@ void FillIncorporationParamsBlockFlows ( incorporation_params_block_flows *my_in
   }
 }
 
-void ApplyDarkMatter ( float *fval,reg_params *reg_p, vector<float>& dark_matter_compensator, int *flow_ndx_map, int npts )
+void MathModel::ApplyDarkMatter ( float *fval,const reg_params *reg_p, 
+    const vector<float>& dark_matter_compensator, 
+    const int *flow_ndx_map, int npts,
+    int flow_block_size )
 {
   // dark matter vectorized in different loop
   float darkness = reg_p->darkness[0];
-  float *dark_matter_for_flow;
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  const float *dark_matter_for_flow;
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
     dark_matter_for_flow = &dark_matter_compensator[flow_ndx_map[fnum]*npts];
 
@@ -56,7 +68,9 @@ void ApplyDarkMatter ( float *fval,reg_params *reg_p, vector<float>& dark_matter
   }
 }
 
-void ApplyPCADarkMatter ( float *fval,bead_params *p, vector<float>& dark_matter_compensator, int npts )
+void MathModel::ApplyPCADarkMatter ( float *fval,BeadParams *p, 
+    const vector<float>& dark_matter_compensator, int npts,
+    int flow_block_size )
 {
   // dark matter vectorized in different loop
   float dm[npts];
@@ -64,29 +78,34 @@ void ApplyPCADarkMatter ( float *fval,bead_params *p, vector<float>& dark_matter
   for (int icomp=0;icomp < NUM_DM_PCA;icomp++)
      AddScaledVector( dm,&dark_matter_compensator[icomp*npts],p->pca_vals[icomp],npts);
 
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
       AddScaledVector ( fval+fnum*npts,dm,1.0f,npts );
 }
 
 
 // 2nd-order background function with non-uniform bead well
-void MultiFlowComputeTraceGivenIncorporationAndBackground ( float *fval,struct bead_params *p,struct reg_params *reg_p, float *ival, float *sbg,
+void MathModel::MultiFlowComputeTraceGivenIncorporationAndBackground ( 
+    float *fval, BeadParams *p,const reg_params *reg_p, float *ival, float *sbg,
     RegionTracker &my_regions, buffer_params_block_flows &cur_buffer_block,
-    TimeCompression &time_c, flow_buffer_info &my_flow, bool use_vectorization, int bead_flow_t )
+    const TimeCompression &time_c, const FlowBufferInfo &my_flow, 
+    bool use_vectorization, int bead_flow_t,
+    int flow_block_size, int flow_block_start )
 {
-  float *vb_out[NUMFB];
-  float *bkg_for_flow[NUMFB];
-  float *new_hydrogen_for_flow[NUMFB];
+  // Save on allocation complexity; allocate enough to get to the end.
+  float **vb_out = new float*[ flow_block_size ];
+  float **bkg_for_flow = new float*[ flow_block_size ];
+  float **new_hydrogen_for_flow = new float*[ flow_block_size ];
 
   //@TODO: the natural place for vectorization is here at the flow level
   // flows are logically independent: apply "compute trace" to all flows
   // this makes for an obvious fit to solving 4 at once using the processor vectorization routines
 
   // parallel fill one bead parameter for block of flows
-  FillBufferParamsBlockFlows ( &cur_buffer_block,p,reg_p,my_flow.flow_ndx_map,my_flow.buff_flow );
+  FillBufferParamsBlockFlows ( &cur_buffer_block,p,reg_p,my_flow.flow_ndx_map, flow_block_start, 
+    flow_block_size );
 
   // parallel compute across flows
-  for ( int fnum=0;fnum<NUMFB;fnum++ )
+  for ( int fnum=0;fnum<flow_block_size;fnum++ )
   {
     vb_out[fnum] = fval + fnum*time_c.npts();        // get ptr to start of the function evaluation for the current flow
     bkg_for_flow[fnum] = &sbg[fnum*time_c.npts() ];            // get ptr to pre-shifted background
@@ -96,19 +115,20 @@ void MultiFlowComputeTraceGivenIncorporationAndBackground ( float *fval,struct b
   // do the actual computation
 #ifdef __INTEL_COMPILER
   {
-    for ( int fnum=0; fnum<NUMFB; fnum++ )
+    for ( int fnum=0; fnum<flow_block_size; fnum++ )
       PurpleSolveTotalTrace ( vb_out[fnum],bkg_for_flow[fnum], new_hydrogen_for_flow[fnum], time_c.npts(),
                               &time_c.deltaFrame[0], cur_buffer_block.tauB[fnum], cur_buffer_block.etbR[fnum] );
   }
 #else // assumed to be GCC
   if ( use_vectorization )
   {
-    PurpleSolveTotalTrace_Vec ( NUMFB, vb_out, bkg_for_flow, new_hydrogen_for_flow, time_c.npts(),
-                                &time_c.deltaFrame[0], cur_buffer_block.tauB, cur_buffer_block.etbR, p->gain );
+    MathModel::PurpleSolveTotalTrace_Vec ( vb_out, bkg_for_flow, new_hydrogen_for_flow, 
+                  time_c.npts(), &time_c.deltaFrame[0], 
+                  cur_buffer_block.tauB, cur_buffer_block.etbR, p->gain, flow_block_size );
   }
   else
   {
-    for ( int fnum=0; fnum<NUMFB; fnum++ )
+    for ( int fnum=0; fnum<flow_block_size; fnum++ )
       PurpleSolveTotalTrace ( vb_out[fnum],bkg_for_flow[fnum], new_hydrogen_for_flow[fnum],time_c.npts(),
                               &time_c.deltaFrame[0], cur_buffer_block.tauB[fnum], cur_buffer_block.etbR[fnum] );
   }
@@ -121,69 +141,102 @@ void MultiFlowComputeTraceGivenIncorporationAndBackground ( float *fval,struct b
   // Dark Matter is extra background term of unexplained origin
   // Possibly should be applied directly to the observed signal rather than synthesized here inside a loop.
   if (my_regions.missing_mass.mytype == PerNucAverage)
-     ApplyDarkMatter ( fval,reg_p,my_regions.missing_mass.dark_matter_compensator,my_flow.flow_ndx_map,time_c.npts() );
-  else
-     ApplyPCADarkMatter ( fval,p,my_regions.missing_mass.dark_matter_compensator,time_c.npts() );
+  {
+    // used to rely on "darkness" being 0.0 when this happened.
+    // making this trap more explicit.
+    if (!my_regions.missing_mass.training_only)
+     ApplyDarkMatter ( fval,reg_p,my_regions.missing_mass.dark_matter_compensator,my_flow.flow_ndx_map,time_c.npts(), flow_block_size );
+  }
+
+  if (my_regions.missing_mass.mytype==PCAVector)
+     ApplyPCADarkMatter ( fval,p,my_regions.missing_mass.dark_matter_compensator,time_c.npts(), flow_block_size );
+
+  // Cleanup.
+  delete [] vb_out;
+  delete [] bkg_for_flow;
+  delete [] new_hydrogen_for_flow;
 }
 
 
-void MultiFlowComputeCumulativeIncorporationSignal ( struct bead_params *p,struct reg_params *reg_p, float *ivalPtr,
+void MathModel::MultiFlowComputeCumulativeIncorporationSignal ( 
+    struct BeadParams *p,struct reg_params *reg_p, float *ivalPtr,
     NucStep &cache_step, incorporation_params_block_flows &cur_bead_block,
-    TimeCompression &time_c, flow_buffer_info &my_flow,  PoissonCDFApproxMemo *math_poiss )
+    const TimeCompression &time_c, const FlowBufferInfo &my_flow,  
+    PoissonCDFApproxMemo *math_poiss, int flow_block_size,
+    int flow_block_start )
 {
   // only side effect should be new values in ivalPtr
 
   // this is region wide
   //This will short-circuit if has been computed
   cache_step.CalculateNucRiseCoarseStep ( reg_p,time_c,my_flow );
+
   // pretend I'm making a parallel process
-  FillIncorporationParamsBlockFlows ( &cur_bead_block, p,reg_p,my_flow.flow_ndx_map,my_flow.buff_flow );
+  FillIncorporationParamsBlockFlows ( &cur_bead_block, p,reg_p,my_flow.flow_ndx_map,
+                                      flow_block_start, flow_block_size );
+
   // "In parallel, across flows"
-  float* nuc_rise_ptr[NUMFB];
-  float* incorporation_rise[NUMFB];
-  int my_start[NUMFB];
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  const float** nuc_rise_ptr = new const float *[flow_block_size];
+  float** incorporation_rise = new float *[flow_block_size];
+  int* my_start = new int[flow_block_size];
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
-    nuc_rise_ptr[fnum]      = cache_step.NucCoarseStep ( fnum );
-    incorporation_rise[fnum]= &ivalPtr[fnum*time_c.npts() ];
-    my_start[fnum] = cache_step.i_start_coarse_step[fnum];
+    nuc_rise_ptr[fnum]       = cache_step.NucCoarseStep ( fnum );
+    incorporation_rise[fnum] = &ivalPtr[fnum*time_c.npts() ];
+    my_start[fnum]           = cache_step.i_start_coarse_step[fnum];
   }
   // this is >almost< a parallel operation by flows now
-  bool use_my_parallel=true;
+  bool use_my_parallel= (flow_block_size%4 == 0);
   if ( use_my_parallel )
   {
     //@TODO handle cases of fewer than 4 flows remaining
-    for ( int fnum=0; fnum<NUMFB; fnum+=4 )
+    for ( int fnum=0; fnum<flow_block_size; fnum+=4 )
     {
-
-      ParallelSimpleComputeCumulativeIncorporationHydrogens ( &incorporation_rise[fnum], time_c.npts(), &time_c.deltaFrameSeconds[0],&nuc_rise_ptr[fnum],
+      MathModel::ParallelSimpleComputeCumulativeIncorporationHydrogens ( 
+          &incorporation_rise[fnum], time_c.npts(), &time_c.deltaFrameSeconds[0],
+          &nuc_rise_ptr[fnum],
           ISIG_SUB_STEPS_MULTI_FLOW,  &my_start[fnum], &p->Ampl[fnum],
-          &cur_bead_block.SP[fnum],&cur_bead_block.kr[fnum], &cur_bead_block.kmax[fnum], &cur_bead_block.d[fnum], &cur_bead_block.molecules_to_micromolar_conversion[fnum], math_poiss );
-      for ( int q=0; q<4; q++ )
-        MultiplyVectorByScalar ( incorporation_rise[fnum+q], cur_bead_block.sens[fnum+q],time_c.npts() );  // transform hydrogens to signal
+          &cur_bead_block.SP[fnum],&cur_bead_block.kr[fnum], &cur_bead_block.kmax[fnum], 
+          &cur_bead_block.d[fnum], &cur_bead_block.molecules_to_micromolar_conversion[fnum], 
+          math_poiss, reg_p->hydrogenModelType );
     }
   }
   else
   {
-    for ( int fnum=0;fnum<NUMFB;fnum++ )
+    for ( int fnum=0;fnum<flow_block_size;fnum++ )
     {
-      ComputeCumulativeIncorporationHydrogens ( incorporation_rise[fnum], time_c.npts(),
-          &time_c.deltaFrameSeconds[0], nuc_rise_ptr[fnum], ISIG_SUB_STEPS_MULTI_FLOW, my_start[fnum],
-          cur_bead_block.C[fnum], p->Ampl[fnum], cur_bead_block.SP[fnum], cur_bead_block.kr[fnum], cur_bead_block.kmax[fnum], cur_bead_block.d[fnum],cur_bead_block.molecules_to_micromolar_conversion[fnum], math_poiss );
-
-      MultiplyVectorByScalar ( incorporation_rise[fnum], cur_bead_block.sens[fnum],time_c.npts() );  // transform hydrogens to signal
+      MathModel::ComputeCumulativeIncorporationHydrogens ( incorporation_rise[fnum], time_c.npts(),
+          &time_c.deltaFrameSeconds[0], nuc_rise_ptr[fnum], ISIG_SUB_STEPS_MULTI_FLOW, 
+          my_start[fnum], cur_bead_block.C[fnum], p->Ampl[fnum], cur_bead_block.SP[fnum], 
+          cur_bead_block.kr[fnum], cur_bead_block.kmax[fnum], 
+          cur_bead_block.d[fnum],cur_bead_block.molecules_to_micromolar_conversion[fnum], 
+          math_poiss, reg_p->hydrogenModelType );
     }
   }
+
+  // transform hydrogens to signal
+  for ( int fnum=0;fnum<flow_block_size;fnum++ )
+      MultiplyVectorByScalar ( incorporation_rise[fnum], cur_bead_block.sens[fnum],time_c.npts() );
+
+  // Cleanup.
+  delete [] nuc_rise_ptr;
+  delete [] incorporation_rise;
+  delete [] my_start;
 }
 
 
 
-void MultiCorrectBeadBkg ( float *block_signal_corrected, bead_params *p,
-                           BeadScratchSpace &my_scratch, flow_buffer_info &my_flow, TimeCompression &time_c, RegionTracker &my_regions, float *sbg, bool use_vectorization )
+void MathModel::MultiCorrectBeadBkg ( 
+    float *block_signal_corrected, BeadParams *p,
+    const BeadScratchSpace &my_scratch, 
+    const buffer_params_block_flows &my_cur_buffer_block,
+    const FlowBufferInfo &my_flow, 
+    const TimeCompression &time_c, const RegionTracker &my_regions, float *sbg, 
+    bool use_vectorization, int flow_block_size )
 {
   float vb[my_scratch.bead_flow_t];
-  float* vb_out[my_flow.numfb];
-  float* sbgPtr[my_flow.numfb];
+  float* vb_out[flow_block_size];
+  float* sbgPtr[flow_block_size];
   float block_bkg_plus_xtalk[my_scratch.bead_flow_t]; // set up instead of shifted background
   memset ( vb,0,sizeof ( float[my_scratch.bead_flow_t] ) );
 
@@ -193,7 +246,7 @@ void MultiCorrectBeadBkg ( float *block_signal_corrected, bead_params *p,
 
   // compute the zeromer
   // setup pointers into the arrays
-  for ( int fnum=0; fnum<my_flow.numfb; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
     // remove zeromer background - just like oneFlowFit.
     // should include xtalk (0) so I can reuse this routine
@@ -204,30 +257,30 @@ void MultiCorrectBeadBkg ( float *block_signal_corrected, bead_params *p,
   // do the actual calculation in parallel or not
 #ifdef __INTEL_COMPILER
   {
-    for ( int fnum=0; fnum<my_flow.numfb; fnum++ )
+    for ( int fnum=0; fnum<flow_block_size; fnum++ )
       BlueSolveBackgroundTrace ( vb_out[fnum],sbgPtr[fnum],time_c.npts(),&time_c.deltaFrame[0],
-                                 my_scratch.cur_buffer_block.tauB[fnum],my_scratch.cur_buffer_block.etbR[fnum] );
+                                 my_cur_buffer_block.tauB[fnum],my_cur_buffer_block.etbR[fnum] );
   }
 #else
   if ( use_vectorization )
   {
-    BlueSolveBackgroundTrace_Vec ( my_flow.numfb, vb_out, sbgPtr, time_c.npts(), &time_c.deltaFrame[0],
-                                   my_scratch.cur_buffer_block.tauB, my_scratch.cur_buffer_block.etbR );
+    MathModel::BlueSolveBackgroundTrace_Vec ( vb_out, sbgPtr, time_c.npts(), &time_c.deltaFrame[0],
+                                   my_cur_buffer_block.tauB, my_cur_buffer_block.etbR, flow_block_size );
   }
   else
   {
-    for ( int fnum=0; fnum<my_flow.numfb; fnum++ )
+    for ( int fnum=0; fnum<flow_block_size; fnum++ )
       BlueSolveBackgroundTrace ( vb_out[fnum],sbgPtr[fnum],time_c.npts(),&time_c.deltaFrame[0],
-                                 my_scratch.cur_buffer_block.tauB[fnum],my_scratch.cur_buffer_block.etbR[fnum] );
+                                 my_cur_buffer_block.tauB[fnum],my_cur_buffer_block.etbR[fnum] );
   }
 #endif
 
   MultiplyVectorByScalar ( vb,p->gain,my_scratch.bead_flow_t );
 
   if (my_regions.missing_mass.mytype == PerNucAverage)
-     ApplyDarkMatter ( vb,&my_regions.rp, my_regions.missing_mass.dark_matter_compensator,my_flow.flow_ndx_map,time_c.npts() );
+     ApplyDarkMatter ( vb,&my_regions.rp, my_regions.missing_mass.dark_matter_compensator,my_flow.flow_ndx_map,time_c.npts(), flow_block_size );
   else
-     ApplyPCADarkMatter ( vb,p,my_regions.missing_mass.dark_matter_compensator,time_c.npts() );
+     ApplyPCADarkMatter ( vb,p,my_regions.missing_mass.dark_matter_compensator,time_c.npts(), flow_block_size );
 
   // zeromer computed, now remove from observed
   DiminishVector ( block_signal_corrected,vb,my_scratch.bead_flow_t ); // remove calculated background to produce corrected signal
@@ -235,36 +288,40 @@ void MultiCorrectBeadBkg ( float *block_signal_corrected, bead_params *p,
 }
 
 
-void IonsFromBulk ( float **model_trace, float **incorporation_rise,
-                    TimeCompression &time_c, RegionTracker &my_regions, flow_buffer_info my_flow,
+static void IonsFromBulk ( float **model_trace, float **incorporation_rise,
+                    TimeCompression &time_c, RegionTracker &my_regions, const FlowBufferInfo & my_flow,
                     bool use_vectorization,
-                    float *vec_tau_bulk )
+                    float *vec_tau_bulk, int flow_block_size )
 {
   // finally solve the way hydrogen ions diffuse out of the bulk
 #ifdef __INTEL_COMPILER
   {
-    for ( int fnum=0; fnum<NUMFB; fnum++ )
+    for ( int fnum=0; fnum<flow_block_size; fnum++ )
     {
       // Now solve the bulk
-      RedSolveHydrogenFlowInWell ( model_trace[fnum],incorporation_rise[fnum],time_c.npts(),
-                                   my_regions.cache_step.i_start_coarse_step[my_flow.flow_ndx_map[fnum]],&time_c.deltaFrame[0],vec_tau_bulk[fnum] ); // we retain hydrogen ions variably in the bulk depending on direction
+      MathModel::RedSolveHydrogenFlowInWell ( model_trace[fnum],incorporation_rise[fnum],
+        time_c.npts(), my_regions.cache_step.i_start_coarse_step[my_flow.flow_ndx_map[fnum]],
+        &time_c.deltaFrame[0],vec_tau_bulk[fnum] ); 
+        // we retain hydrogen ions variably in the bulk depending on direction
     }
   }
 #else
   if ( use_vectorization )
   {
     // Now solve the bulk
-    RedSolveHydrogenFlowInWell_Vec ( NUMFB,model_trace,incorporation_rise,time_c.npts(),&time_c.deltaFrame[0],vec_tau_bulk );
+    MathModel::RedSolveHydrogenFlowInWell_Vec ( model_trace,incorporation_rise,time_c.npts(),
+        &time_c.deltaFrame[0],vec_tau_bulk, flow_block_size );
 
   }
   else
   {
-    for ( int fnum=0; fnum<NUMFB; fnum++ )
+    for ( int fnum=0; fnum<flow_block_size; fnum++ )
     {
       // Now solve the bulk
-      RedSolveHydrogenFlowInWell ( model_trace[fnum],incorporation_rise[fnum],time_c.npts(),
-                                   my_regions.cache_step.i_start_coarse_step[fnum],&time_c.deltaFrame[0],vec_tau_bulk[fnum] ); // we retain hydrogen ions variably in the bulk depending on direction
-
+      MathModel::RedSolveHydrogenFlowInWell ( model_trace[fnum],incorporation_rise[fnum],
+        time_c.npts(), my_regions.cache_step.i_start_coarse_step[fnum],
+        &time_c.deltaFrame[0],vec_tau_bulk[fnum] ); 
+        // we retain hydrogen ions variably in the bulk depending on direction
     }
   }
 #endif
@@ -272,63 +329,68 @@ void IonsFromBulk ( float **model_trace, float **incorporation_rise,
 
 
 // note: input is incorporation_rise, returns lost_hydrogens in the same buffer, recycling the memory
-void CumulativeLostHydrogens ( float **incorporation_rise_to_lost_hydrogens, float **scratch_trace, 
+static void CumulativeLostHydrogens ( float **incorporation_rise_to_lost_hydrogens, float **scratch_trace, 
                                TimeCompression &time_c, RegionTracker &my_regions,
                                bool use_vectorization,
-                               float *vec_tau_top )
+                               float *vec_tau_top, 
+                               int flow_block_size )
 {
   // Put the model trace from buffering the incorporation_rise into scratch_trace
 #ifdef __INTEL_COMPILER
   {
-    for ( int fnum=0; fnum<NUMFB; fnum++ )
+    for ( int fnum=0; fnum<flow_block_size; fnum++ )
     {
-      RedSolveHydrogenFlowInWell ( scratch_trace[fnum],incorporation_rise_to_lost_hydrogens[fnum],time_c.npts(),my_regions.cache_step.i_start_coarse_step[fnum],&time_c.deltaFrame[0],vec_tau_top[fnum] ); // we lose hydrogen ions fast!
+      MathModel::RedSolveHydrogenFlowInWell ( scratch_trace[fnum],incorporation_rise_to_lost_hydrogens[fnum],time_c.npts(),my_regions.cache_step.i_start_coarse_step[fnum],&time_c.deltaFrame[0],vec_tau_top[fnum] ); // we lose hydrogen ions fast!
 
     }
   }
 #else
   if ( use_vectorization )
   {
-    RedSolveHydrogenFlowInWell_Vec ( NUMFB,scratch_trace,incorporation_rise_to_lost_hydrogens,time_c.npts(),&time_c.deltaFrame[0],vec_tau_top ); // we lose hydrogen ions fast!
+    MathModel::RedSolveHydrogenFlowInWell_Vec ( scratch_trace,incorporation_rise_to_lost_hydrogens,time_c.npts(),&time_c.deltaFrame[0],vec_tau_top, flow_block_size ); // we lose hydrogen ions fast!
 
   }
   else
   {
-    for ( int fnum=0; fnum<NUMFB; fnum++ )
+    for ( int fnum=0; fnum<flow_block_size; fnum++ )
     {
-      RedSolveHydrogenFlowInWell ( scratch_trace[fnum],incorporation_rise_to_lost_hydrogens[fnum],time_c.npts(),my_regions.cache_step.i_start_coarse_step[fnum],&time_c.deltaFrame[0],vec_tau_top[fnum] ); // we lose hydrogen ions fast!
+      MathModel::RedSolveHydrogenFlowInWell ( scratch_trace[fnum],incorporation_rise_to_lost_hydrogens[fnum],time_c.npts(),my_regions.cache_step.i_start_coarse_step[fnum],&time_c.deltaFrame[0],vec_tau_top[fnum] ); // we lose hydrogen ions fast!
 
     }
   }
 #endif
 
   // return lost_hydrogens in the incorporation_rise variables by subtracting the trace from the cumulative
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
     DiminishVector ( incorporation_rise_to_lost_hydrogens[fnum],scratch_trace[fnum],time_c.npts() );  // cumulative lost hydrogen ions instead of retained hydrogen ions
 
 }
 
-void IncorporationRiseFromNeighborParameters ( float **incorporation_rise, float **nuc_rise_ptr,
-    bead_params *p,
+static void IncorporationRiseFromNeighborParameters ( 
+    float **incorporation_rise, const float * const *nuc_rise_ptr,
+    BeadParams *p,
     TimeCompression &time_c, RegionTracker &my_regions,
-    BeadScratchSpace &my_scratch, PoissonCDFApproxMemo *math_poiss )
+    BeadScratchSpace &my_scratch, 
+    incorporation_params_block_flows &my_cur_bead_block,
+    PoissonCDFApproxMemo *math_poiss, int hydrogenModelType,
+    int flow_block_size)
 {
   // fill in each flow incorporation
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
     // compute newly generated ions for the amplitude of each flow
-    ComputeCumulativeIncorporationHydrogens ( incorporation_rise[fnum],
+    MathModel::ComputeCumulativeIncorporationHydrogens ( incorporation_rise[fnum],
         time_c.npts(), &time_c.deltaFrameSeconds[0], nuc_rise_ptr[fnum], ISIG_SUB_STEPS_MULTI_FLOW, my_regions.cache_step.i_start_coarse_step[fnum],
-        my_scratch.cur_bead_block.C[fnum], p->Ampl[fnum], my_scratch.cur_bead_block.SP[fnum], my_scratch.cur_bead_block.kr[fnum], my_scratch.cur_bead_block.kmax[fnum], my_scratch.cur_bead_block.d[fnum],my_scratch.cur_bead_block.molecules_to_micromolar_conversion[fnum], math_poiss );
-    MultiplyVectorByScalar ( incorporation_rise[fnum], my_scratch.cur_bead_block.sens[fnum],time_c.npts() );  // transform hydrogens to signal       // variables used for solving background signal shape
+        my_cur_bead_block.C[fnum], p->Ampl[fnum], my_cur_bead_block.SP[fnum], my_cur_bead_block.kr[fnum], my_cur_bead_block.kmax[fnum], my_cur_bead_block.d[fnum],my_cur_bead_block.molecules_to_micromolar_conversion[fnum], math_poiss, hydrogenModelType );
+    MultiplyVectorByScalar ( incorporation_rise[fnum], my_cur_bead_block.sens[fnum],time_c.npts() );  // transform hydrogens to signal       // variables used for solving background signal shape
   }
 }
 
 // rescale final trace by differences in buffering between wells
 // wells with more buffering shield from the total hydrogens floating around
-void RescaleTraceByBuffering ( float **my_trace, float *vec_tau_source, float *vec_tau_dest, int npts )
+static void RescaleTraceByBuffering ( float **my_trace, float *vec_tau_source, float *vec_tau_dest, int npts, int flow_block_size )
 {
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
     MultiplyVectorByScalar ( my_trace[fnum],vec_tau_source[fnum],npts );
     MultiplyVectorByScalar ( my_trace[fnum],1.0f/vec_tau_dest[fnum],npts );
@@ -340,10 +402,13 @@ void RescaleTraceByBuffering ( float **my_trace, float *vec_tau_source, float *v
 // Solve lost hydrogens to bulk
 // solve bulk resistance to lost hydrogens
 // this function too large, should be componentized
-void AccumulateSingleNeighborXtalkTrace ( float *my_xtflux, bead_params *p, reg_params *reg_p,
-    BeadScratchSpace &my_scratch, TimeCompression &time_c, RegionTracker &my_regions, flow_buffer_info my_flow,
+void MathModel::AccumulateSingleNeighborXtalkTrace ( float *my_xtflux, BeadParams *p, reg_params *reg_p,
+    BeadScratchSpace &my_scratch, 
+    incorporation_params_block_flows & my_cur_bead_block,
+    TimeCompression &time_c, RegionTracker &my_regions, const FlowBufferInfo & my_flow,
     PoissonCDFApproxMemo *math_poiss, bool use_vectorization,
-    float tau_top, float tau_bulk, float multiplier )
+    float tau_top, float tau_bulk, float multiplier,
+    int flow_block_size, int flow_block_start )
 {
 
   // Compute the hydrogen signal of xtalk in the bulk fluid above the affected well
@@ -359,42 +424,43 @@ void AccumulateSingleNeighborXtalkTrace ( float *my_xtflux, bead_params *p, reg_
 
   // over-ride buffering parameters for bead
   // use the same incorporation parameters, though
-  FillIncorporationParamsBlockFlows ( &my_scratch.cur_bead_block, p,reg_p,my_flow.flow_ndx_map,my_flow.buff_flow );
+  FillIncorporationParamsBlockFlows ( &my_cur_bead_block, p,reg_p,my_flow.flow_ndx_map,
+    flow_block_start, flow_block_size );
   //params_IncrementHits(p);
 
   float block_model_trace[my_scratch.bead_flow_t], block_incorporation_rise[my_scratch.bead_flow_t];
 
   // "In parallel, across flows"
-  float* nuc_rise_ptr[NUMFB];
-  float* model_trace[NUMFB];
-  float* scratch_trace[NUMFB];
-  float* incorporation_rise[NUMFB];
-  float* lost_hydrogens[NUMFB];
+  const float* nuc_rise_ptr[flow_block_size];
+  float* model_trace[flow_block_size];
+  float* scratch_trace[flow_block_size];
+  float* incorporation_rise[flow_block_size];
+  float* lost_hydrogens[flow_block_size];
   // should this be using cur_buffer_block as usual?
-  float vec_tau_top[NUMFB];
-  float vec_tau_bulk[NUMFB];
+  float vec_tau_top[flow_block_size];
+  float vec_tau_bulk[flow_block_size];
 
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
     vec_tau_top[fnum] = tau_top;
     vec_tau_bulk[fnum] = tau_bulk;
   }
 
   // setup parallel pointers into the structure
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
     nuc_rise_ptr[fnum] = my_regions.cache_step.NucCoarseStep ( fnum );
     scratch_trace[fnum]=model_trace[fnum] = &block_model_trace[fnum*time_c.npts() ];
     lost_hydrogens[fnum]=incorporation_rise[fnum] = &block_incorporation_rise[fnum*time_c.npts() ];   // set up each flow information
   }
 
-  IncorporationRiseFromNeighborParameters ( incorporation_rise, nuc_rise_ptr, p, time_c, my_regions, my_scratch, math_poiss );
+  IncorporationRiseFromNeighborParameters ( incorporation_rise, nuc_rise_ptr, p, time_c, my_regions, my_scratch, my_cur_bead_block, math_poiss, reg_p->hydrogenModelType, flow_block_size );
   // temporarily use the model_trace memory structure as scratch space
   // turn incorporation_rise into lost hydrogens
-  CumulativeLostHydrogens ( incorporation_rise, scratch_trace,time_c, my_regions, use_vectorization, vec_tau_top );
+  CumulativeLostHydrogens ( incorporation_rise, scratch_trace,time_c, my_regions, use_vectorization, vec_tau_top, flow_block_size );
   // lost_hydrogens = incorporation_rise
   // now fill in the model_trace structure for real, overwriting any temporary use of that space
-  IonsFromBulk ( model_trace,lost_hydrogens, time_c, my_regions, my_flow, use_vectorization, vec_tau_bulk );
+  IonsFromBulk ( model_trace,lost_hydrogens, time_c, my_regions, my_flow, use_vectorization, vec_tau_bulk, flow_block_size );
 
   // universal
   MultiplyVectorByScalar ( block_model_trace,multiplier,my_scratch.bead_flow_t ); // scale down the quantity of ions
@@ -403,60 +469,66 @@ void AccumulateSingleNeighborXtalkTrace ( float *my_xtflux, bead_params *p, reg_
   AccumulateVector ( my_xtflux, block_model_trace,my_scratch.bead_flow_t );
 }
 
-void IncorporationRiseFromNeighborSignal ( float **incorporation_rise, float **neighbor_local,
+static void IncorporationRiseFromNeighborSignal( float **incorporation_rise, float **neighbor_local,
     TimeCompression &time_c, RegionTracker &my_regions,
-    BeadScratchSpace &my_scratch
-                                         )
+    BeadScratchSpace &my_scratch,
+    buffer_params_block_flows & my_cur_buffer_block,
+    int flow_block_size
+  )
 {
   // fill in each flow incorporation
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
     // grab my excess hydrogen ions from the observed signal
-    IntegrateRedFromObservedTotalTrace ( incorporation_rise[fnum], neighbor_local[fnum], &my_scratch.shifted_bkg[fnum*time_c.npts() ], time_c.npts(),&time_c.deltaFrame[0], my_scratch.cur_buffer_block.tauB[fnum], my_scratch.cur_buffer_block.etbR[fnum] );
+    MathModel::IntegrateRedFromObservedTotalTrace ( incorporation_rise[fnum], neighbor_local[fnum], &my_scratch.shifted_bkg[fnum*time_c.npts() ], time_c.npts(),&time_c.deltaFrame[0], my_cur_buffer_block.tauB[fnum], my_cur_buffer_block.etbR[fnum] );
     // variables used for solving background signal shape
   }
 
   // construct the incorporation in the neighbor well just for research purposes
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
     // bad! put trace back in neighbor signal
-    RedSolveHydrogenFlowInWell ( neighbor_local[fnum],incorporation_rise[fnum],time_c.npts(),my_regions.cache_step.i_start_coarse_step[fnum],&time_c.deltaFrame[0],my_scratch.cur_buffer_block.tauB[fnum] ); // we lose hydrogen ions fast!
+    MathModel::RedSolveHydrogenFlowInWell ( neighbor_local[fnum],incorporation_rise[fnum],time_c.npts(),my_regions.cache_step.i_start_coarse_step[fnum],&time_c.deltaFrame[0],my_cur_buffer_block.tauB[fnum] ); // we lose hydrogen ions fast!
   }
 }
 
 
 
-void AccumulateSingleNeighborExcessHydrogen ( float *my_xtflux, float *neighbor_signal, bead_params *p, reg_params *reg_p,
-    BeadScratchSpace &my_scratch, TimeCompression &time_c,
-    RegionTracker &my_regions, flow_buffer_info my_flow,
+void MathModel::AccumulateSingleNeighborExcessHydrogen ( float *my_xtflux, float *neighbor_signal, BeadParams *p, reg_params *reg_p,
+    BeadScratchSpace &my_scratch, 
+    buffer_params_block_flows &my_cur_buffer_block,
+    TimeCompression &time_c,
+    RegionTracker &my_regions, const FlowBufferInfo & my_flow,
     bool use_vectorization,
-    float tau_top, float tau_bulk, float multiplier )
+    float tau_top, float tau_bulk, float multiplier,
+    int flow_block_size, int flow_block_start )
 {
   // over-ride buffering parameters for bead
 
-  FillBufferParamsBlockFlows ( &my_scratch.cur_buffer_block,p,reg_p,my_flow.flow_ndx_map,my_flow.buff_flow );
+  FillBufferParamsBlockFlows ( &my_cur_buffer_block,p,reg_p,my_flow.flow_ndx_map,flow_block_start,
+    flow_block_size );
 
   float block_model_trace[my_scratch.bead_flow_t], block_incorporation_rise[my_scratch.bead_flow_t];
 
   // "In parallel, across flows"
 
-  float* model_trace[NUMFB];
-  float* scratch_trace[NUMFB];
-  float* incorporation_rise[NUMFB];
-  float* lost_hydrogens[NUMFB];
-  float* neighbor_local[NUMFB];
+  float* model_trace[flow_block_size];
+  float* scratch_trace[flow_block_size];
+  float* incorporation_rise[flow_block_size];
+  float* lost_hydrogens[flow_block_size];
+  float* neighbor_local[flow_block_size];
   // should this be using cur_buffer_block as usual?
-  float vec_tau_top[NUMFB];
-  float vec_tau_bulk[NUMFB];
+  float vec_tau_top[flow_block_size];
+  float vec_tau_bulk[flow_block_size];
 
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
     vec_tau_top[fnum] = tau_top;
     vec_tau_bulk[fnum] = tau_bulk;
   }
 
   // setup parallel pointers into the structure
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
 
     scratch_trace[fnum]=model_trace[fnum] = &block_model_trace[fnum*time_c.npts() ];
@@ -464,13 +536,13 @@ void AccumulateSingleNeighborExcessHydrogen ( float *my_xtflux, float *neighbor_
     neighbor_local[fnum] = &neighbor_signal[fnum*time_c.npts() ];
   }
   // make incorporation_rise
-  IncorporationRiseFromNeighborSignal ( incorporation_rise,neighbor_local, time_c,my_regions, my_scratch );
+  IncorporationRiseFromNeighborSignal ( incorporation_rise,neighbor_local, time_c,my_regions, my_scratch, my_cur_buffer_block, flow_block_size );
   // use scratch_trace to hold temporary trace - same memory as model_trace because we don't need it yet
   // turn incorporation_rise into lost_hydrogens
-  CumulativeLostHydrogens ( incorporation_rise, scratch_trace,time_c, my_regions, use_vectorization, vec_tau_top );
+  CumulativeLostHydrogens ( incorporation_rise, scratch_trace,time_c, my_regions, use_vectorization, vec_tau_top, flow_block_size );
   // lost_hydrogens = incorporation_rise 
   // now get model_trace for real in cross-talk and overwrite any temporary uses of that space
-  IonsFromBulk ( model_trace,lost_hydrogens, time_c, my_regions, my_flow, use_vectorization, vec_tau_bulk );
+  IonsFromBulk ( model_trace,lost_hydrogens, time_c, my_regions, my_flow, use_vectorization, vec_tau_bulk, flow_block_size );
   
 
   // universal
@@ -487,38 +559,42 @@ void AccumulateSingleNeighborExcessHydrogen ( float *my_xtflux, float *neighbor_
 // b) "empty" well >gains< ions - based on tauE
 // c) "gained" ions will then predict bulk
 
-void AccumulateSingleNeighborExcessHydrogenOneParameter ( float *my_xtflux, float *neighbor_signal,
-    bead_params *p, reg_params *reg_p,
-    BeadScratchSpace &my_scratch, TimeCompression &time_c,
-    RegionTracker &my_regions, flow_buffer_info my_flow,
+void MathModel::AccumulateSingleNeighborExcessHydrogenOneParameter ( float *my_xtflux, float *neighbor_signal,
+    BeadParams *p, reg_params *reg_p,
+    BeadScratchSpace &my_scratch, 
+    buffer_params_block_flows &my_cur_buffer_block,
+    TimeCompression &time_c,
+    RegionTracker &my_regions, const FlowBufferInfo & my_flow,
     bool use_vectorization,
-    float multiplier, bool rescale_flag )
+    float multiplier, bool rescale_flag,
+    int flow_block_size, int flow_block_start )
 {
 
-  FillBufferParamsBlockFlows ( &my_scratch.cur_buffer_block,p,reg_p,my_flow.flow_ndx_map,my_flow.buff_flow );
+  FillBufferParamsBlockFlows ( &my_cur_buffer_block,p,reg_p,my_flow.flow_ndx_map, flow_block_start,
+    flow_block_size );
 
   float block_model_trace[my_scratch.bead_flow_t], block_incorporation_rise[my_scratch.bead_flow_t];
 
   // "In parallel, across flows"
 
-  float* model_trace[NUMFB];
-  float* scratch_trace[NUMFB];
-  float* incorporation_rise[NUMFB];
-  float* lost_hydrogens[NUMFB];
-  float* neighbor_local[NUMFB];
+  float* model_trace[flow_block_size];
+  float* scratch_trace[flow_block_size];
+  float* incorporation_rise[flow_block_size];
+  float* lost_hydrogens[flow_block_size];
+  float* neighbor_local[flow_block_size];
 
   // should this be using cur_buffer_block as usual?
-  float vec_tau_well[NUMFB];
-  float vec_tau_empty[NUMFB];
+  float vec_tau_well[flow_block_size];
+  float vec_tau_empty[flow_block_size];
 
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
-    vec_tau_well[fnum] = my_scratch.cur_buffer_block.tauB[fnum];
-    vec_tau_empty[fnum] = my_scratch.cur_buffer_block.etbR[fnum]*vec_tau_well[fnum];
+    vec_tau_well[fnum] = my_cur_buffer_block.tauB[fnum];
+    vec_tau_empty[fnum] = my_cur_buffer_block.etbR[fnum]*vec_tau_well[fnum];
   }
 
   // setup parallel pointers into the structure
-  for ( int fnum=0; fnum<NUMFB; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
   {
 
     scratch_trace[fnum] = model_trace[fnum] = &block_model_trace[fnum*time_c.npts() ];
@@ -526,16 +602,16 @@ void AccumulateSingleNeighborExcessHydrogenOneParameter ( float *my_xtflux, floa
     neighbor_local[fnum] = &neighbor_signal[fnum*time_c.npts() ];
   }
 
-  IncorporationRiseFromNeighborSignal ( incorporation_rise,neighbor_local, time_c,my_regions, my_scratch );
+  IncorporationRiseFromNeighborSignal ( incorporation_rise,neighbor_local, time_c,my_regions, my_scratch, my_cur_buffer_block, flow_block_size );
   // uses a scratch buffer here [recycles model_trace as we don't need it yet], 
   // turns incorporation_rise into lost_hydrogens
-  CumulativeLostHydrogens ( incorporation_rise, scratch_trace, time_c, my_regions, use_vectorization, vec_tau_well );
+  CumulativeLostHydrogens ( incorporation_rise, scratch_trace, time_c, my_regions, use_vectorization, vec_tau_well, flow_block_size );
   // lost_hydrogens=incorporation_rise returned as lost_hydrogens above
   // now we generate the real model_trace we're accumulating
-  IonsFromBulk ( model_trace,lost_hydrogens, time_c, my_regions, my_flow, use_vectorization, vec_tau_empty );
+  IonsFromBulk ( model_trace,lost_hydrogens, time_c, my_regions, my_flow, use_vectorization, vec_tau_empty, flow_block_size );
   
   if (rescale_flag)
-    RescaleTraceByBuffering(model_trace, vec_tau_well, vec_tau_empty,time_c.npts());
+    RescaleTraceByBuffering(model_trace, vec_tau_well, vec_tau_empty,time_c.npts(), flow_block_size);
 
   // universal
   MultiplyVectorByScalar ( block_model_trace,multiplier,my_scratch.bead_flow_t ); // scale down the quantity of ions

@@ -63,8 +63,6 @@ class LevMarBeadAssistant{
     float non_integer_penalty[MAX_POISSON_TABLE_COL];
     bool  skip_beads; // skip individual wells when doing regional optimization, pick up well parameters later
     
-    float shrink_factor;
-    
     // current optimizations
     unsigned int well_mask;
     unsigned int reg_mask;
@@ -82,7 +80,7 @@ class LevMarBeadAssistant{
     void InitializeLevMarFit(BkgFitMatrixPacker *well_fit, BkgFitMatrixPacker *reg_fit);
     void SetNonIntegerPenalty(float *clonal_call_scale, float clonal_call_penalty, int len);
     void Delete();
-    void ApplyClonalRestriction(float *fval, struct bead_params *p, int npts);
+    void ApplyClonalRestriction(float *fval, struct BeadParams *p, int npts, int flow_key, int flow_block_size);
     void ReduceRegionStep();
     bool IncreaseRegionStep();
     void IncreaseRegionRegularizer();

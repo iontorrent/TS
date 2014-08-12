@@ -6,10 +6,6 @@
 
 #include "RecalibrationModel.h"
 
-#include <string>
-#include <fstream>
-#include <stdio.h>
-#include <SystemMagicDefines.h>
 
 int NuctoInt(char nuc) {
     switch (nuc) {
@@ -141,12 +137,21 @@ void RecalibrationModel::SetupStratification(int flowStart, int flowEnd, int flo
     }
 }
 
+// --------------------------------------------------------------------
 
 void RecalibrationModel::Initialize(OptArgs& opts)
 {
+  string model_file_name = opts.GetFirstString ('-', "model-file", "");
+  int model_threshold = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
+  InitializeModel(model_file_name, model_threshold);
+}
+
+// --------------------------------------------------------------------
+
+void RecalibrationModel::InitializeModel(string model_file_name, int model_threshold)
+{
     is_enabled_ = false;
 
-    string model_file_name = opts.GetFirstString ('-', "model-file", "");
     if (model_file_name.empty() or model_file_name == "off") {
         printf("RecalibrationModel: disabled\n\n");
         return;
@@ -160,7 +165,11 @@ void RecalibrationModel::Initialize(OptArgs& opts)
         return;
     }
 
-    recalModelHPThres = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
+    if (model_threshold < 0 or model_threshold > MAX_HPXLEN) {
+      cout << "RecalibrationModel: disabled (invalid model threshold of "<< model_threshold <<")" << endl;
+      return;
+    } else
+      recalModelHPThres = model_threshold;
 
     string comment_line;
     getline(model_file, comment_line); //skip the comment time
@@ -188,18 +197,17 @@ void RecalibrationModel::Initialize(OptArgs& opts)
 
     printf("Recalibration: enabled (using calibration file %s)\n\n", model_file_name.c_str());
     is_enabled_ = true;
-    if (recalModelHPThres > MAX_HPXLEN) is_enabled_ = false;
 }
 
 void RecalibrationModel::FillIndexes(int offsetRegion, int nucInd, int refHP, int flowStart, int flowEnd, float paramA, float paramB) {
     for (int flowInd = flowStart; flowInd < flowEnd; ++flowInd) {
-        if (refHP < recalModelHPThres -1) continue;
+        if (refHP < recalModelHPThres) continue;
         stratifiedAs[offsetRegion][flowInd][nucInd][refHP] = paramA;
         stratifiedBs[offsetRegion][flowInd][nucInd][refHP] = paramB;
     }
 }
 
-void RecalibrationModel::getAB(MultiAB &multi_ab, int x, int y){
+void RecalibrationModel::getAB(MultiAB &multi_ab, int x, int y) const {
      if (!is_enabled_) {
        multi_ab.Null();
     }
@@ -215,7 +223,7 @@ void RecalibrationModel::getAB(MultiAB &multi_ab, int x, int y){
     }
 }
 
-vector<vector<vector<float> > > * RecalibrationModel::getAs(int x, int y)
+const vector<vector<vector<float> > > * RecalibrationModel::getAs(int x, int y) const
 {
     if (!is_enabled_) {
         return 0;
@@ -228,7 +236,7 @@ vector<vector<vector<float> > > * RecalibrationModel::getAs(int x, int y)
         return &(stratifiedAs[offsetRegion]);
 }
 
-vector<vector<vector<float> > > * RecalibrationModel::getBs(int x, int y)
+const vector<vector<vector<float> > > * RecalibrationModel::getBs(int x, int y) const
 {
     if (!is_enabled_) {
         return 0;

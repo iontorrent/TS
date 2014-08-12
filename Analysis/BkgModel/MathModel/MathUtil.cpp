@@ -13,7 +13,7 @@ void MultiplyVectorByScalar(float *my_vec, float my_scalar, int len)
         my_vec[i] *= my_scalar;
 }
 
-void AddScaledVector(float *start_vec, float *my_vec, float my_scalar, int len)
+void AddScaledVector(float *start_vec, const float *my_vec, float my_scalar, int len)
 {
     for (int i=0; i<len; i++)
         start_vec[i] += my_scalar * my_vec[i];

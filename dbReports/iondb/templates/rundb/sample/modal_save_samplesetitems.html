@@ -22,7 +22,7 @@
 					<!--div class="controls" -->
 					<select id="sampleset" name="sampleset" multiple="multiple" class="span4" style="margin-bottom: 10px;">
     					{% for sampleSet in sampleSet_list %}
-    						<option value="{{sampleSet.id}}" >{{sampleSet.displayedName}} ({{sampleSet.SampleGroupType_CV.displayedName}})</option>
+                            <option value="{{sampleSet.id}}" >{{sampleSet.displayedName}} {% if sampleSet.SampleGroupType_CV.displayedName %}({{sampleSet.SampleGroupType_CV.displayedName}}){% endif %}</option>    						
     					{%endfor%}
     				</select>
     				<div>
@@ -47,7 +47,7 @@
 						<tbody>
 	                	<tr>
 							<div class="control-group">
-								<label class="control-label" for="new_sampleSetName">Sample Set Name:</label>
+								<label class="control-label" for="new_sampleSetName">Sample Set Name</label>
 								<div class="span4">
 									<input  maxlength="127" type="text" id="new_sampleSetName" name="new_sampleSetName" placeholder="Required" />
 								</div>
@@ -55,7 +55,7 @@
 						</tr>						
 						<tr>
 							<div class="control-group">
-								<label class="control-label" for="new_sampleSet_groupType">Group Type:</label>
+								<label class="control-label" for="new_sampleSet_groupType">Group Type</label>
 								<div class="span4">
 		                    		<select id="new_sampleSet_groupType" name="new_sampleSet_groupType"style="height:28px;">
 		                    			<option value="0" >.....</option>
@@ -68,7 +68,7 @@
 						</tr>						
 						<tr>
 							<div class="control-group">
-								<label class="control-label" for="new_sampleSetDescription">Description:</label>
+								<label class="control-label" for="new_sampleSetDescription">Description</label>
 								<div class="span4">
 									<textarea  maxlength="1024" id="new_sampleSetDescription" name="new_sampleSetDescription" placeholder="Optional"></textarea>
 								</div>

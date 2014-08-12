@@ -1,0 +1,31 @@
+Command line: ./spades.py --test
+
+System information:
+  SPAdes version: 2.5.1
+  Python version: 2.6.5
+  OS: Linux-2.6.32-21-server-x86_64-with-Ubuntu-10.04-lucid
+
+Output dir: /rhome/ehubbell/Spades/SPAdes-2.5.1-Linux/bin/spades_test
+Mode: read error correction and assembling
+Debug mode turned OFF
+
+Dataset parameters:
+  Multi-cell mode (you should set '--sc' flag if input data was obtained with MDA (single-cell) technology
+  Reads:
+    Library number: 1, library type: paired-end
+      orientation: fr
+      left reads: ['/rhome/ehubbell/Spades/SPAdes-2.5.1-Linux/share/spades/test_dataset/ecoli_1K_1.fq.gz']
+      right reads: ['/rhome/ehubbell/Spades/SPAdes-2.5.1-Linux/share/spades/test_dataset/ecoli_1K_2.fq.gz']
+      interlaced reads: not specified
+      single reads: not specified
+Read error correction parameters:
+  Dir for temp files: /rhome/ehubbell/Spades/SPAdes-2.5.1-Linux/bin/spades_test/corrected/tmp
+  Iterations: 1
+  PHRED offset will be auto-detected
+  Corrected reads will be compressed (with gzip)
+Assembly parameters:
+  k: [21, 33, 55]
+Other parameters:
+  Threads: 16
+  Memory limit (in Gb): 250
+

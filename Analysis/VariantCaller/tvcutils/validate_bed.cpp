@@ -5,21 +5,19 @@
 #include <string>
 #include <fstream>
 #include <stdio.h>
-#include <math.h>
-#include <time.h>
 #include <ctype.h>
 #include <sys/mman.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <vector>
 #include <map>
 #include <deque>
-#include <set>
 #include <algorithm>
+#include <stdlib.h>
+#include <unistd.h>
+#include <cstring>
 
 #include "OptArgs.h"
-#include "Utils.h"
 #include "IonVersion.h"
 #include "json/json.h"
 
@@ -38,7 +36,7 @@ void ValidateBedHelp()
   printf ("Input selection options (must provide one):\n");
   printf ("     --target-regions-bed        FILE       input is a target regions BED file\n");
   printf ("     --hotspots-bed              FILE       input is a hotspots BED file\n");
-  printf ("     --hotspots-vcf              FILE       input is a hotspots VCF file\n");
+  //TODO: printf ("     --hotspots-vcf              FILE       input is a hotspots VCF file\n");
   printf ("\n");
   printf ("General options:\n");
   printf ("     --reference                 FILE       reference fasta [required]\n");
@@ -171,7 +169,6 @@ private:
 
 
 
-struct BedLine;
 
 
 enum ErrorLevel {
@@ -415,6 +412,8 @@ void parse_bed_detail_targets(char *id, char *description, int line_number, int 
     if (description[0] == '.' and description[1] == 0)
       return;
 
+    string error_details;
+
     while (*description) {
       if (*description == ';') {
         description++;
@@ -423,14 +422,25 @@ void parse_bed_detail_targets(char *id, char *description, int line_number, int 
 
       // Parse names
       string key;
+      bool invalid_char = false;
       for(; *description and *description != '=' and *description != ';'; ++description) {
         if (isalnum(*description) or *description == '_' or *description == '.' or *description == '-')
           key.push_back(*description);
-        else
+        else {
           invalid_format = true;
+          invalid_char = true;
+        }
+      }
+      if (invalid_char) {
+        if (not error_details.empty())
+          error_details += "; ";
+        error_details += "invalid character in key " + key;
       }
       if (not *description or *description == ';') {
         invalid_format = true;
+        if (not error_details.empty())
+          error_details += "; ";
+        error_details += "key " + key + " has no value";
         continue;
       }
       description++;
@@ -440,8 +450,12 @@ void parse_bed_detail_targets(char *id, char *description, int line_number, int 
       for(; *description and *description != ';'; ++description) {
         if (*description != '=')
           value.push_back(*description);
-        else
+        else {
           invalid_format = true;
+          if (not error_details.empty())
+            error_details += "; ";
+          error_details += "value for key " + key + " contains = sign";
+        }
       }
 
       if (key == "GENE_ID")
@@ -454,8 +468,11 @@ void parse_bed_detail_targets(char *id, char *description, int line_number, int 
       }
     }
 
-    if (invalid_format)
-      bed.log_column(kLineFixed, kUnsuppressable, line_number, column, bed_line, "Problem parsing description column in torrentSuiteVersion=3.6 format");
+
+    if (invalid_format) {
+      bed.log_column(kLineIgnored, kUnsuppressable, line_number, column, bed_line, "Problem parsing description column: ", error_details.c_str());
+      bed_line->filtered = true;
+    }
   }
 }
 
@@ -796,7 +813,7 @@ bool load_and_validate_bed(const string& input_file, ReferenceReader& reference_
 
     if (bed_line.start > bed_line.end) {
       if (bed.is_hotspot) {
-        bed.log_column(kLineIgnored, kUnsuppressable, bed.num_lines, 2, &bed_line, "Region start and end in reverse orde");
+        bed.log_column(kLineIgnored, kUnsuppressable, bed.num_lines, 2, &bed_line, "Region start and end in reverse order");
         //bed.valid_lines[chr_idx].pop_back();
         bed_line.filtered = true;
         continue;

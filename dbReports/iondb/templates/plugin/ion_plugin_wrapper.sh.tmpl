@@ -20,12 +20,12 @@
 #$ -l s_stack=16M
 {% if sge %}{{ sge|safe }}{% endif %}
 ## ======================================================================
-VERSION={{ version|default_if_none:"0" }}
+VERSION="{{ version|default_if_none:"0" }}"
 
 # NB: DIRNAME isn't the path to this script anymore. Path to plugin's launch.sh
-export DIRNAME={{ pluginpath }}
-export PROGRAM={{ pluginname }}
-export PLUGINNAME={{ pluginname }}
+export DIRNAME="{{ pluginpath }}"
+export PROGRAM="{{ pluginname }}"
+export PLUGINNAME="{{ pluginname }}"
 
 # Diagnostic information - Which host, SGE variables, etc.
 echo "Plugin: ${PLUGINNAME} - ${VERSION}"
@@ -37,16 +37,16 @@ if [ ! -z "${JOB_ID}" ]; then
 fi
 
 # Set initial 'Started' status, now that we have started executing
-ion-plugin-status --pk {{ runinfo.pk }} --plugin {{ runinfo.plugin_name }} --msg 'Started'
+ion-plugin-status --pk '{{ runinfo.pluginresult }}' --msg 'Started' --jobid "${JOB_ID}"
 
 # Load function library
 #sourcefile=$(find /results/plugins {{ pluginpath|default:"${DIRNAME}" }}/../ -maxdepth 3 -name plugin_functions| head -n 1)
 sourcefile=/results/plugins/plugin_functions
-if [[ ! -e $sourcefile ]]; then
+if [[ ! -e "$sourcefile" ]]; then
     echo "FATAL: Unable to find plugin_functions library"
     exit 1
 fi
-source $sourcefile
+source "$sourcefile"
 cmd_line_args "$@"
 
 {% comment %}
@@ -132,7 +132,7 @@ starttime=$(date +%s)
 function plugin_error_trap
 {
     local exit_status=$?
-    local message=${1:-"Unknown Error"}
+    local message="${1:-"Unknown Error"}"
     echo "==============================================================================="
     echo "ERROR: Plugin exited unexpectedly with error: ${exit_status} - ${message}"
     exit ${exit_status}
@@ -174,20 +174,15 @@ set -o xtrace
 RETVAL=$?
 
 echo "==============================================================================="
-#echo "$PROGRAM: completing execution of plugin code"
+#echo "$PLUGINNAME: completing execution of plugin code"
 date +'end time=%Y-%m-%d %k:%M:%S.%N'
 endtime=$(date +%s)
 elapsedtime=$[($endtime - $starttime)]
 echo "pluginelapsedtime: ${PLUGINNAME},${elapsedtime}"
 
-{% if runinfo.pk %}
+{% if runinfo.pluginresult %}
 # Both pluginUpdate commands set a 'Complete' or 'Error' status based on RETVAL
-if [ -f results.json ]; then
-    # if there is a file named results.json send PUT that to the REST API as well
-    ion-plugin-status --pk {{ runinfo.pk}} --plugin {{ runinfo.plugin.name }} --version "{{ runinfo.plugin.version }}" --convert --msg ${RETVAL} --jsonpath=${RESULTS_DIR}
-else
-    ion-plugin-status --pk {{ runinfo.pk }} --plugin {{ runinfo.plugin.name }} --version "{{ runinfo.plugin.version }}" --convert --msg ${RETVAL}
-fi
+ion-plugin-status --pk "{{ runinfo.pluginresult }}" --convert --msg "${RETVAL}" --jsonpath="${RESULTS_DIR}"
 {% endif %}
 
 if [ -f output.json ]; then

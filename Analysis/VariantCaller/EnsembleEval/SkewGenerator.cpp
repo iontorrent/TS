@@ -8,32 +8,32 @@
 
 void BasicSkewGenerator::GenerateSkew(CrossHypotheses &my_cross){
   
-  my_cross.skew_estimate = latent_skew.at(my_cross.strand_key);
+  my_cross.skew_estimate = latent_skew[my_cross.strand_key];
 }
 
 void BasicSkewGenerator::AddOneUpdateForHypothesis(int strand_key, float responsibility, vector<int> &test_flow, vector<float> &residuals){
   for (unsigned int t_flow=0; t_flow<test_flow.size(); t_flow++){
-     int j_flow = test_flow.at(t_flow);
+     int j_flow = test_flow[t_flow];
      // skew by moments = p(x>0|skew), so compute count of x>0 by responsibility
-    if (residuals.at(j_flow)>0.0f)
-       skew_up.at(strand_key) += responsibility;
+    if (residuals[j_flow]>0.0f)
+       skew_up[strand_key] += responsibility;
      else
-       skew_down.at(strand_key) += responsibility;
+       skew_down[strand_key] += responsibility;
   }
 }
 
 void BasicSkewGenerator::AddCrossUpdate(CrossHypotheses &my_cross){
    for (unsigned int i_hyp=1; i_hyp<my_cross.residuals.size(); i_hyp++){  // no outlier values count here
-      AddOneUpdateForHypothesis(my_cross.strand_key, my_cross.responsibility.at(i_hyp), my_cross.test_flow, my_cross.residuals.at(i_hyp));
+      AddOneUpdateForHypothesis(my_cross.strand_key, my_cross.responsibility[i_hyp], my_cross.test_flow, my_cross.residuals[i_hyp]);
    }
 }
 
 void BasicSkewGenerator::ResetUpdate(){
     for (unsigned int i_latent=0; i_latent<latent_skew.size(); i_latent++){
-      latent_skew.at(i_latent) = 1.0f; // fix correctly when I know what I'm doing
+      latent_skew[i_latent] = 1.0f; // fix correctly when I know what I'm doing
       // basic prior: always make sure I have non-zero weighting
-      skew_up.at(i_latent) = 0.5f*dampened_skew;
-      skew_down.at(i_latent) = 0.5f*dampened_skew;
+      skew_up[i_latent] = 0.5f*dampened_skew;
+      skew_down[i_latent] = 0.5f*dampened_skew;
       // not quite right: should dampen around mean
    }
 }
@@ -42,7 +42,7 @@ void BasicSkewGenerator::ResetUpdate(){
 void BasicSkewGenerator::DoLatentUpdate(){
   //ResetUpdate();
   for (unsigned int i_latent =0; i_latent<latent_skew.size(); i_latent++){
-    latent_skew.at(i_latent) = sqrt(skew_up.at(i_latent)/skew_down.at(i_latent));
+    latent_skew[i_latent] = sqrt(skew_up[i_latent]/skew_down[i_latent]);
   }
 }
 
@@ -54,16 +54,16 @@ void BasicSkewGenerator::UpdateSkewGenerator(ShortStack &total_theory) {
 
   //for (unsigned int i_read=0; i_read<total_theory.my_hypotheses.size(); i_read++){
   for (unsigned int i_ndx = 0; i_ndx < total_theory.valid_indexes.size(); i_ndx++) {
-    unsigned int i_read = total_theory.valid_indexes.at(i_ndx);
-    AddCrossUpdate(total_theory.my_hypotheses.at(i_read));
+    unsigned int i_read = total_theory.valid_indexes[i_ndx];
+    AddCrossUpdate(total_theory.my_hypotheses[i_read]);
   }
   DoLatentUpdate();  // new latent predictors for sigma
 }
 
 void BasicSkewGenerator::UpdateSkewEstimates(ShortStack &total_theory) {
   for (unsigned int i_ndx = 0; i_ndx < total_theory.valid_indexes.size(); i_ndx++) {
-    unsigned int i_read = total_theory.valid_indexes.at(i_ndx);
-    GenerateSkew(total_theory.my_hypotheses.at(i_read));
+    unsigned int i_read = total_theory.valid_indexes[i_ndx];
+    GenerateSkew(total_theory.my_hypotheses[i_read]);
   }
 }
 

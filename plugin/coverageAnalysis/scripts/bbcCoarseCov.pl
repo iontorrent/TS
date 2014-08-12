@@ -145,14 +145,6 @@ if( $haveWgnCov )
     $echrsize[$mi] = $chromSize[$mi] / $chromBins[$mi];
     --$xbins;
   }
-#  if( $logopt )
-#  {
-#    print STDERR "Whole genome coverage bins sizes:\n";
-#    for( my $j = 0; $j < $numChroms; ++$j )
-#    {
-#      print STDERR "$chromName[$j]($chromBins[$j])\n";
-#    }
-#  }
 }
 
 # Chrom Coverage arrays

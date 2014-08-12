@@ -29,8 +29,6 @@ import iondb.settings
 
 from django.db import models
 from iondb.utils import devices
-import json
-import simplejson
 
 from iondb.rundb import json_field
 
@@ -55,12 +53,15 @@ from django.contrib.auth.models import User, Group
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes import generic
 from django.utils.encoding import force_unicode
+from django.utils.functional import cached_property
 from django.utils import timezone
 from django.core import urlresolvers
-from django.db.models.signals import post_save, pre_delete, post_delete
+from django.db.models.signals import post_save, pre_delete, post_delete, m2m_changed
 from django.dispatch import receiver
 from distutils.version import LooseVersion
 from celery.task.control import revoke
+
+import json
 
 import copy
 
@@ -107,8 +108,10 @@ class Project(models.Model):
         projects = filter(None, projects)
         projects = [name.strip() for name in projects]
         projects = filter(None, projects)
-        projects = [name.replace(' ', '_') for name in projects]
-        return [Project.objects.get_or_create(name__iexact=name, defaults={'name':name,'creator':user})[0] for name in projects]
+        projects = ['_'.join(name.split()) for name in projects]
+
+        #for 2 projects with the same name (but just different case), __iexact will fail with MultipleObjectsReturned error
+        return [Project.objects.get_or_create(name__exact=name, defaults={'name':name,'creator':user})[0] for name in projects]
 
 
 class KitInfoManager(models.Manager):
@@ -125,10 +128,11 @@ class KitInfo(models.Model):
         ('ControlSequenceKit', "ControlSequenceKit"),
         ('SamplePrepKit', "SamplePrepKit"),
         ('IonChefPrepKit', 'IonChefPrepKit'),
-        ('AvalancheTemplateKit', 'AvalancheTemplateKit')        
+        ('AvalancheTemplateKit', 'AvalancheTemplateKit'),
+        ('ControlSequenceKitType', 'ControlSequenceKitType'), 
     )
 
-    kitType = models.CharField(max_length=20, choices=ALLOWED_KIT_TYPES)
+    kitType = models.CharField(max_length=64, choices=ALLOWED_KIT_TYPES)
     name = models.CharField(max_length=512, blank=False, unique=True)
     description = models.CharField(max_length=3024, blank=True)
     flowCount = models.PositiveIntegerField()
@@ -159,6 +163,23 @@ class KitInfo(models.Model):
     )
     #compatible instrument type
     instrumentType = models.CharField(max_length=64, choices=ALLOWED_INSTRUMENT_TYPES, default='', blank=True)
+
+
+    ALLOWED_APPLICATION_TYPES = (
+        ('', 'Any'),
+        ('AMPS_ANY', 'Any AmpliSeq Application'),
+        ('RNA', 'RNA')
+    )
+    #compatible application types
+    applicationType = models.CharField(max_length=64, choices=ALLOWED_APPLICATION_TYPES, default='', blank=True, null=True)
+
+    ALLOWED_CATEGORIES = (
+        ('', 'Any'),
+        ('flowOverridable', 'Flows can be overridden'),
+        ('bcShowSubset;bcRequired', 'Mandatory barcode kit selection'),          
+    )    
+    categories = models.CharField(max_length=64, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
+
 
     uid = models.CharField(max_length=10, unique=True, blank=False)
 
@@ -209,7 +230,8 @@ class RunType(models.Model):
     ALLOWED_NUCLEOTIDE_TYPES = (
         ('', 'Any'),
         ('dna', 'DNA'),
-        ('rna', 'RNA')
+        ('rna', 'RNA'),
+        ('dna_rna', 'DNA+RNA')
     )
 
     nucleotideType = models.CharField(max_length=64, choices=ALLOWED_NUCLEOTIDE_TYPES, default='dna', blank=True)
@@ -275,7 +297,6 @@ class ApplProduct(models.Model):
     isDefault = models.BooleanField(default = False)
     isPairedEndSupported = models.BooleanField(default = True)
     isDefaultPairedEnd = models.BooleanField(default = False)
-    defaultVariantFrequency = models.CharField(max_length = 512, blank=True, null=True)
 
     defaultFlowCount = models.PositiveIntegerField(default = 0)
     defaultPairedEndAdapterKit = models.ForeignKey(KitInfo, related_name='peAdapterKit_applProduct_set', null=True)
@@ -290,8 +311,30 @@ class ApplProduct(models.Model):
     isDefaultBarcoded = models.BooleanField(default = False)
     defaultBarcodeKitName = models.CharField(max_length=128, blank=True, null=True)
     defaultIonChefPrepKit = models.ForeignKey(KitInfo, related_name='ionChefPrepKit_applProduct_set', null=True)
+    defaultIonChefSequencingKit = models.ForeignKey(KitInfo, related_name='ionChefSeqKit_applProduct_set', null=True)
+
     defaultAvalancheTemplateKit = models.ForeignKey(KitInfo, related_name='avalancheTemplateKit_applProduct_set', null=True)
     defaultAvalancheSequencingKit = models.ForeignKey(KitInfo, related_name='avalancheSeqKit_applProduct_set', null=True)
+
+    isTargetTechniqueSelectionSupported = models.BooleanField(default = True)
+    isTargetRegionBEDFileSupported = models.BooleanField(default = True)
+    isControlSeqTypeBySampleSupported = models.BooleanField(default = False)
+    isReferenceBySampleSupported = models.BooleanField(default = False)
+    isDualNucleotideTypeBySampleSupported = models.BooleanField(default = False)
+
+    isBarcodeKitSelectionRequired = models.BooleanField(default = False)
+
+    ALLOWED_BARCODE_KIT_SELECTABLE_TYPES = (
+        ('all', 'All'),                                            
+        ('', 'Unspecified'),
+        ('dna', 'DNA'),
+        ('rna', 'RNA'),
+        ('dna+', "DNA and Unspecified"),
+        ('rna+', "RNA and Unspecified")
+    )
+    barcodeKitSelectableType = models.CharField(max_length=64, choices=ALLOWED_BARCODE_KIT_SELECTABLE_TYPES, default='', blank=True)
+    isSamplePrepKitSupported = models.BooleanField(default = True)
+
 
     ALLOWED_INSTRUMENT_TYPES = (
         ('', 'Any'),
@@ -325,6 +368,8 @@ class PlannedExperimentManager(models.Manager):
 
         extra_kwargs = {}
         extra_kwargs['x_autoAnalyze'] = kwargs.pop('x_autoAnalyze', True)
+        extra_kwargs['x_usePreBeadfind'] = kwargs.pop('x_usePreBeadfind', True)
+        extra_kwargs['x_star'] = kwargs.pop('x_star', False)
         extra_kwargs['x_barcodedSamples'] = kwargs.pop('x_barcodedSamples', {})
         extra_kwargs['x_barcodeId'] = kwargs.pop('x_barcodeId', "")
         extra_kwargs['x_bedfile'] = kwargs.pop('x_bedfile', "")
@@ -334,6 +379,7 @@ class PlannedExperimentManager(models.Manager):
         ###'_isReverseRun':  = self.isReverseRun
         extra_kwargs['x_library'] = kwargs.pop('x_library', "")
         extra_kwargs['x_libraryKey'] = kwargs.pop('x_libraryKey', "")
+        extra_kwargs['tfKey'] = kwargs.pop('tfKey', "")
         extra_kwargs['x_librarykitname'] = kwargs.pop('x_librarykitname', "")
         extra_kwargs['x_notes'] = kwargs.pop('x_notes', "")
         extra_kwargs['x_regionfile'] = kwargs.pop('x_regionfile', "")
@@ -345,8 +391,11 @@ class PlannedExperimentManager(models.Manager):
         extra_kwargs['x_sequencekitname'] = kwargs.pop('x_sequencekitname', "")
         extra_kwargs['x_variantfrequency'] = kwargs.pop('x_variantfrequency', "")
         extra_kwargs['x_isDuplicateReads'] = kwargs.pop('x_isDuplicateReads', False)
+        extra_kwargs['x_base_recalibrate'] = kwargs.pop('x_base_recalibrate', False)
+        extra_kwargs['x_realign'] = kwargs.pop('x_realign', False)
         extra_kwargs['x_isSaveBySample'] = kwargs.pop('x_isSaveBySample', False)
-        extra_kwargs['x_numberOfChips'] = kwargs.pop('x_numberOfChips', 1)
+        extra_kwargs['x_numberOfChips'] = kwargs.pop('x_numberOfChips', 1),
+        extra_kwargs['x_platform'] = kwargs.pop('x_platform', "")
 
         logger.info("EXIT PlannedExpeirmentManager.extract_extra_kwargs... extra_kwargs=%s" %(extra_kwargs))
 
@@ -434,6 +483,16 @@ class PlannedExperiment(models.Model):
 
     #planStatus
     planStatus = models.CharField(max_length=512, blank=True, choices=ALLOWED_PLAN_STATUS, default='')
+
+    # Ion Chef status tracking.
+    # The Chef moves through several processes each of which has a status label
+    # optionally a deterministic progress percentage
+    # optionally a longer message explaining the status, such as an error message
+    chefStatus = models.CharField(max_length=256, blank=True, default='')
+    chefProgress = models.FloatField(default=0.0, blank=True)
+    chefMessage = models.TextField(blank=True, default='')
+    chefLastUpdate = models.DateTimeField(null=True, blank=True)
+    chefLogPath = models.CharField(max_length=512, blank=True, null=True)
 
     #who ran this
     username = models.CharField(max_length=128, blank=True, null=True)
@@ -562,6 +621,15 @@ class PlannedExperiment(models.Model):
     sampleGrouping = models.ForeignKey("SampleGroupType_CV", blank=True, null=True, default=None)
     applicationGroup = models.ForeignKey(ApplicationGroup, null=True)
 
+    latestEAS = models.OneToOneField('ExperimentAnalysisSettings', null=True, blank=True, related_name='+', on_delete=models.SET_NULL)
+
+    ALLOWED_CATEGORIES = (
+        ('', 'Unspecified'),
+        ('OncoNet', 'OncoNet'),
+        ('Oncomine', 'Oncomine'),          
+    )    
+    categories = models.CharField(max_length=64, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
+    
     objects = PlannedExperimentManager()
 
 
@@ -628,6 +696,10 @@ class PlannedExperiment(models.Model):
 
         return None
 
+    @cached_property
+    # NOTE: This does not update latestEAS if not set
+    def latest_eas(self):
+        return self.latestEAS or self.experiment.get_EAS()
 
     def get_autoAnalyze(self):
         experiment = self.experiment
@@ -637,35 +709,20 @@ class PlannedExperiment(models.Model):
             return False
 
     def get_barcodedSamples(self):
-        experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas:
-                return latest_eas.barcodedSamples
-            else:
-                return ""
+        if self.latest_eas:
+            return self.latest_eas.barcodedSamples
         else:
             return ""
 
     def get_barcodeId(self):
-        experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas:
-                return latest_eas.barcodeKitName
-            else:
-                return ""
+        if self.latest_eas:
+            return self.latest_eas.barcodeKitName
         else:
             return ""
 
     def get_bedfile(self):
-        experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas:
-                return latest_eas.targetRegionBedFile
-            else:
-                return ""
+        if self.latest_eas:
+            return self.latest_eas.targetRegionBedFile
         else:
             return ""
 
@@ -690,46 +747,32 @@ class PlannedExperiment(models.Model):
             return 0
 
     def get_forward3primeadapter(self):
-        experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas:
-                return latest_eas.threePrimeAdapter
-            else:
-                return ""
+        if self.latest_eas:
+            return self.latest_eas.threePrimeAdapter
         else:
             return ""
 
     def get_library(self):
-        experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas:
-                return latest_eas.reference
-            else:
-                return ""
+        if self.latest_eas:
+            return self.latest_eas.reference
         else:
             return ""
 
     def get_libraryKey(self):
-        experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas:
-                return latest_eas.libraryKey
-            else:
-                return ""
+        if self.latest_eas:
+            return self.latest_eas.libraryKey
+        else:
+            return ""
+
+    def get_tfKey(self):
+        if self.latest_eas:
+            return self.latest_eas.tfKey
         else:
             return ""
 
     def get_librarykitname(self):
-        experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas:
-                return latest_eas.libraryKitName
-            else:
-                return ""
+        if self.latest_eas:
+            return self.latest_eas.libraryKitName
         else:
             return ""
 
@@ -741,88 +784,62 @@ class PlannedExperiment(models.Model):
             return ""
 
     def get_regionfile(self):
-        experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas:
-                return latest_eas.hotSpotRegionBedFile
-            else:
-                return ""
+        if self.latest_eas:
+            return self.latest_eas.hotSpotRegionBedFile
         else:
             return ""
 
-    def get_sample(self):
+    def get_sample_count(self):
         experiment = self.experiment
         if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas and latest_eas.barcodeKitName:
-                return ""
-            else:
-                if experiment.samples.count() > 0:
-                    sample = experiment.samples.values()[0]
-                    name = sample['name']
-                    return name
-                else:
-                    return ""
+            return experiment.samples.count()
+        else:
+            return 0
+
+        
+    def get_sample(self):
+        experiment = self.experiment
+        if self.latest_eas and self.latest_eas.barcodeKitName:
+            return ""
+        elif experiment.samples.count() > 0:
+            sample = experiment.samples.values()[0]
+            return sample['name']
         else:
             return ""
 
     def get_sample_external_id(self):
         experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas and latest_eas.barcodeKitName:
-                return ""
-            else:
-                if experiment.samples.count() > 0:
-                    sample = experiment.samples.values()[0]
-                    externalId = sample['externalId']
-                    return externalId
-                else:
-                    return ""
+        if self.latest_eas and self.latest_eas.barcodeKitName:
+            return ""
+        elif experiment.samples.count() > 0:
+            sample = experiment.samples.values()[0]
+            return sample['externalId']
         else:
             return ""
 
     def get_sample_description(self):
         experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas and latest_eas.barcodeKitName:
-                return ""
-            else:
-                if experiment.samples.count() > 0:
-                    sample = experiment.samples.values()[0]
-                    description = sample['description']
-                    return description
-                else:
-                    return ""
+        if self.latest_eas and self.latest_eas.barcodeKitName:
+            return ""
+        elif experiment.samples.count() > 0:
+            sample = experiment.samples.values()[0]
+            return sample['description']
         else:
             return ""
 
     def get_sampleDisplayedName(self):
         experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas and latest_eas.barcodeKitName:
-                return ""
-            else:
-                if experiment.samples.count() > 0:
-                    sample = experiment.samples.values()[0]
-                    displayedName = sample['displayedName']
-                    return displayedName
-                else:
-                    return ""
+        if self.latest_eas and self.latest_eas.barcodeKitName:
+            return ""
+        elif experiment.samples.count() > 0:
+            sample = experiment.samples.values()[0]
+            return sample['displayedName']
         else:
             return ""
 
     def get_selectedPlugins(self):
-        experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas:
-                return latest_eas.selectedPlugins
-            else:
-                return ""
+        if self.latest_eas:
+            return self.latest_eas.selectedPlugins
         else:
             return ""
 
@@ -846,13 +863,20 @@ class PlannedExperiment(models.Model):
         return False
 
     def is_duplicateReads(self):
-        experiment = self.experiment
-        if experiment:
-            latest_eas = experiment.get_EAS()
-            if latest_eas:
-                return latest_eas.isDuplicateReads
-            else:
-                return False
+        if self.latest_eas:
+            return self.latest_eas.isDuplicateReads
+        else:
+            return False
+    
+    def do_base_recalibrate(self):
+        if self.latest_eas:
+            return self.latest_eas.base_recalibrate
+        else:
+            return False
+    
+    def do_realign(self):
+        if self.latest_eas:
+            return self.latest_eas.realign
         else:
             return False
 
@@ -864,9 +888,11 @@ class PlannedExperiment(models.Model):
         if not self.planStatus:
             self.planStatus = "planned"
 
-        #if user uses the old ui to save a plan directly, planDisplayedName will have no user input
+        planName = self.planName
         if not self.planDisplayedName:
-            self.planDisplayedName = self.planName;
+            self.planDisplayedName = planName
+
+        self.planName = '_'.join(planName.split())
 
         self.date = timezone.now()
         if not self.planShortID:
@@ -933,12 +959,15 @@ class PlannedExperiment(models.Model):
         # ===================== Experiment ==================================
         exp_kwargs = {
             'autoAnalyze' : kwargs.get('x_autoAnalyze', True),
+            'usePreBeadfind' : kwargs.get('x_usePreBeadfind', True),
+            'star' : kwargs.get('x_star', False),
             'chipType' : kwargs.get('x_chipType', ""),
             'flows' : kwargs.get('x_flows', "0"),
             'isReverseRun' : kwargs.get('x_isReverseRun', False),
             'notes' : kwargs.get('x_notes', ""),
             'runMode' : self.runMode,
             'sequencekitname' : kwargs.get('x_sequencekitname', ""),
+            'platform': kwargs.get('x_platform', ""),
         }
 
         #there must be one experiment for each plan
@@ -969,7 +998,7 @@ class PlannedExperiment(models.Model):
                 'expCompInfo' : '',
                 'baselineRun' : '',
                 'flowsInOrder' : '',
-                'ftpStatus' : 'Complete',
+                'ftpStatus' : '',
                 'displayName' : '',
                 'storageHost' : ''
             })
@@ -990,13 +1019,16 @@ class PlannedExperiment(models.Model):
             'barcodeKitName' : kwargs.get('x_barcodeId', ""),
             'hotSpotRegionBedFile' : kwargs.get('x_regionfile', ""),
             'libraryKey' : kwargs.get('x_libraryKey', ""),
+            'tfKey' : kwargs.get('tfKey', ""),
             'libraryKitName' : kwargs.get('x_librarykitname', ""),
             'reference' : kwargs.get('x_library', ""),
             'selectedPlugins' : kwargs.get('x_selectedPlugins', {}),
             'status' : self.planStatus,
             'targetRegionBedFile' : kwargs.get('x_bedfile', ""),
             'threePrimeAdapter' : kwargs.get('x_forward3primeadapter' ""),
-            'isDuplicateReads' : kwargs.get('x_isDuplicateReads', False)
+            'isDuplicateReads' : kwargs.get('x_isDuplicateReads', False),
+            'base_recalibrate' : kwargs.get('x_base_recalibrate', False),
+            'realign' : kwargs.get('x_realign', False)
         }
         # add default cmdline args
         args = self.get_default_cmdline_args(libraryKitName=eas_kwargs['libraryKitName'])
@@ -1008,6 +1040,9 @@ class PlannedExperiment(models.Model):
         eas.save()
         logger.debug("PDD models.save_plannedExperiment_association() AFTER saving EAS_id=%d" %(eas.id))
 
+        self.latestEAS = eas
+        self.save()
+
         # ===================== Samples ==========================================
         if not self.isReusable:
             #if this is not a template need to create/update single sample or multiple barcoded samples
@@ -1015,9 +1050,8 @@ class PlannedExperiment(models.Model):
             barcodedSamples = kwargs.get('x_barcodedSamples', {})
 
             if barcodedSamples:
-                barcodedSampleDict = simplejson.loads(barcodedSamples)
+                barcodedSampleDict = json_field.loads(barcodedSamples)
                 for displayedName, sampleDict in barcodedSampleDict.items():
-                    name = displayedName.replace(' ', '_')
                     if barcodedSampleDict[displayedName].get('barcodeSampleInfo'):
                         externalId = barcodedSampleDict[displayedName]['barcodeSampleInfo'].values()[0].get('externalId','')
                         description = barcodedSampleDict[displayedName]['barcodeSampleInfo'].values()[0].get('description','')
@@ -1026,7 +1060,7 @@ class PlannedExperiment(models.Model):
                         description = ""
 
                     samples_kwargs.append({
-                        'name' : name,
+                        'name' : '_'.join(displayedName.split()),
                         'displayedName' : displayedName,
                         'date' : self.date,
                         'status' : self.planStatus,
@@ -1038,9 +1072,10 @@ class PlannedExperiment(models.Model):
             else:
                 displayedName = kwargs.get('x_sampleDisplayedName', "")
                 name = kwargs.get('x_sample', "") or displayedName
+
                 if name:
                     samples_kwargs.append({
-                        'name' : name.replace(' ', '_'),
+                        'name' : '_'.join(name.split()),
                         'displayedName' : displayedName or name,
                         'date' : self.date,
                         'status' : self.planStatus,
@@ -1101,7 +1136,7 @@ class PlannedExperiment(models.Model):
         templateKitName = kwargs.get('templateKitName') or self.templatingKitName
         libraryKitName = kwargs.get('libraryKitName') or self.get_librarykitname()
         samplePrepKitName = kwargs.get('samplePrepKitName') or self.samplePrepKitName
-        
+
         args = AnalysisArgs.best_match(chipType, sequenceKitName, templateKitName, libraryKitName, samplePrepKitName)
         if args:
             args_dict = args.get_args()
@@ -1111,15 +1146,17 @@ class PlannedExperiment(models.Model):
                 'analysisargs':   'Analysis',
                 'basecallerargs': 'BaseCaller',
                 'prebasecallerargs': 'BaseCaller',
+                'calibrateargs': 'calibrate',
                 'alignmentargs': '',
                 'thumbnailbeadfindargs':    'justBeadFind',
                 'thumbnailanalysisargs':    'Analysis',
                 'thumbnailbasecallerargs':  'BaseCaller',
                 'prethumbnailbasecallerargs':  'BaseCaller',
+                'thumbnailcalibrateargs': 'calibrate',
                 'thumbnailalignmentargs': ''
             }
             logger.error('No default command line args found for chip type = %s' % chipType)
-            
+
         return args_dict
 
     class Meta:
@@ -1183,15 +1220,15 @@ class Experiment(models.Model):
     chipBarcode = models.CharField(max_length=64, blank=True)
     seqKitBarcode = models.CharField(max_length=64, blank=True)
     reagentBarcode = models.CharField(max_length=64, blank=True)
-    autoAnalyze = models.BooleanField()
-    usePreBeadfind = models.BooleanField()
+    autoAnalyze = models.BooleanField(default = True)
+    usePreBeadfind = models.BooleanField(default = True)
     chipType = models.CharField(max_length=32)
     cycles = models.IntegerField()
     flows = models.IntegerField()
     expCompInfo = models.TextField(blank=True)
-    baselineRun = models.BooleanField()
+    baselineRun = models.BooleanField(default = False)
     flowsInOrder = models.TextField(blank=True)
-    star = models.BooleanField()
+    star = models.BooleanField(default = False)
     ftpStatus = models.CharField(max_length=512, blank=True)
     storageHost = models.CharField(max_length=128, blank=True, null=True)
     reverse_primer = models.CharField(max_length=128, blank=True, null=True)
@@ -1239,6 +1276,14 @@ class Experiment(models.Model):
 
     status = models.CharField(max_length=512, blank=True, choices=ALLOWED_STATUS, default='')
 
+    ALLOWED_PLATFORM_TYPES = (
+        ('', 'Unspecified'),
+        ('PGM', 'PGM'),
+        ('PROTON', 'Proton')
+    )
+    
+    platform = models.CharField(max_length=128, choices=ALLOWED_PLATFORM_TYPES, blank=True, default='')
+
     def __unicode__(self): return self.expName
 
     def runtype(self):
@@ -1261,6 +1306,7 @@ class Experiment(models.Model):
         except IndexError:
             ret = None
         return ret
+
     def sorted_results_with_reports(self):
         """returns only results that have valid reports, in inverse time order"""
         try:
@@ -1268,8 +1314,10 @@ class Experiment(models.Model):
         except IndexError:
             ret = None
         return ret
+
     def get_storage_choices(self):
         return self.STORAGE_CHOICES
+
     def best_result(self, metric):
         try:
             rset = self.results_set.all()
@@ -1279,6 +1327,7 @@ class Experiment(models.Model):
         except IndexError:
             rset = None
         return rset
+
     def best_aq17(self):
         """best 100bp aq17 score"""
         rset = self.results_set.all()
@@ -1406,17 +1455,20 @@ class Experiment(models.Model):
         else:
             return None
 
+    @cached_property
+    def latest_eas(self):
+        return self.get_EAS()
+
     def get_barcodeId(self):
-        latest_eas = self.get_EAS()
-        if latest_eas:
-            return latest_eas.barcodeKitName
+        if self.latest_eas:
+            return self.latest_eas.barcodeKitName
         else:
             return ""
 
     def get_library(self):
-        latest_eas = self.get_EAS()
-        if latest_eas:
-            return latest_eas.reference
+        self.latest_eas = self.get_EAS_cached()
+        if self.latest_eas:
+            return self.latest_eas.reference
         else:
             return ""
 
@@ -1441,6 +1493,7 @@ class Experiment(models.Model):
         """Return the first sample displayed name"""
         return self._get_firstSampleValue('displayedName')
 
+    @cached_property
     def isProton(self):
         if self.chipType:
             chips = Chip.objects.filter(name = self.chipType)
@@ -1460,6 +1513,24 @@ class Experiment(models.Model):
 
         return False
 
+    def location(self):
+        return self._location
+
+    @cached_property
+    def _location(self):
+        try:
+            loc = Rig.objects.get(name=self.pgmName).location
+        except Rig.DoesNotExist:
+            loc = Location.objects.filter(defaultlocation=True)
+            if not loc:
+                #if there is not a default, just take the first one
+                loc = Location.objects.all().order_by('pk')
+            if loc:
+                loc = loc[0]
+            else:
+                logger.critical("No Location objects exist!")
+                return False
+        return loc
 
     def save(self):
         """on save we need to sync up the log JSON and the other values that might have been set
@@ -1486,6 +1557,9 @@ class Experiment(models.Model):
                 #do not fail the save()
                 logger.info("NO kit part found at Experiment for sequencingKitBarcode=%s" % kitBarcode)
 
+        # If this is the initial save, ie, the creation of the object, set the storage_options to globalconfig default
+        if self.pk is None:
+            self.storage_options = GlobalConfig.objects.all()[0].default_storage_options
 
         super(Experiment, self).save()
 
@@ -1507,8 +1581,10 @@ def on_experiment_preDelete(sender, instance, **kwargs):
 
     for sample in instance.samples.all():
         instance.samples.remove(sample)
-        #if sample is created via loading instead of plan/run creation, keep the sample around!!
-        if (sample.experiments.count() == 0) and not (sample.status == "created"):
+        #if sample has no plans associated with it and is not a member of a sample set, we can delete the orphaned sample
+        #if sample is created via loading instead of plan/run creation, keep the sample around even if it is not assigned to a sample set yet
+        if (sample.experiments.count() == 0) and (sample.sampleSets.count() == 0) and not (sample.status == "created"):
+            logger.debug("Going to delete orphaned sample.pk=%d; sample.name=%s when deleting plan.name=%s" %(sample.id, sample.displayedName, plan.planDisplayedName))
             sample.delete()
 
     logger.info("Deleting companion records before deleting experiment=%s; pk=%d" % (instance.expName, instance.id))
@@ -1539,6 +1615,7 @@ class ExperimentAnalysisSettings(models.Model):
     barcodeKitName = models.CharField(max_length=128, blank=True, null=True)
 
     libraryKey = models.CharField(max_length=64, blank=True)
+    tfKey = models.CharField(max_length=64, blank=True)
 
     libraryKitName = models.CharField(max_length=512, blank=True, null=True)
     libraryKitBarcode = models.CharField(max_length=512, blank=True, null=True)
@@ -1566,6 +1643,8 @@ class ExperimentAnalysisSettings(models.Model):
     experiment = models.ForeignKey(Experiment, related_name='eas_set', blank=True, null=True)
 
     isDuplicateReads = models.BooleanField(default=False)
+    base_recalibrate = models.BooleanField(default=True)
+    realign = models.BooleanField(default=False)
 
     # Beadfind args
     beadfindargs = models.CharField(max_length=5000, blank=True, verbose_name="Beadfind args")
@@ -1576,6 +1655,9 @@ class ExperimentAnalysisSettings(models.Model):
     # PreBasecaller args
     prebasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Pre Basecaller args, used for recalibration")
     prethumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Pre Basecaller args, used for recalibration")
+    # Calibration args
+    calibrateargs = models.CharField(max_length=5000, blank=True, verbose_name="Calibration args, used for recalibration")
+    thumbnailcalibrateargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Calibration args, used for recalibration")
     # Basecaller args
     basecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Basecaller args")
     thumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Basecaller args")
@@ -1631,7 +1713,8 @@ class SampleAnnotation_CV(models.Model):
         ('gender', 'Gender'),
         ('relationship', 'Relationship'),
         ('relationshipRole', 'RelationshipRole'),
-        ('relationshipGroup', 'RelationshipGroup')
+        ('relationshipGroup', 'RelationshipGroup'),
+        ('cancerType', "CancerType")
     )
 
     annotationType = models.CharField(max_length = 127, blank = False, null = False, choices = ALLOWED_TYPES)
@@ -1692,6 +1775,7 @@ class SampleSetItem(models.Model):
 
     #a sample can be in many sampleSets but a sample can only associate with one sampleSetItem
     sample = models.ForeignKey("Sample", related_name = "sampleSets", blank = False, null = False)
+    dnabarcode = models.ForeignKey("dnaBarcode", blank=True, null=True)
 
     #a sampleSet can have many sampleSetItem but a sampleSetItem can only associate with one sampleSet
     sampleSet = models.ForeignKey(SampleSet, related_name = "samples", blank = False, null = False)
@@ -1710,9 +1794,14 @@ class SampleSetItem(models.Model):
     # This will be set to the current time every time the model is updated
     lastModifiedDate = models.DateTimeField(auto_now = True)
 
-    #optional sample-dnabarcode.id_str assignment
-    barcode = models.CharField(max_length = 128, blank = True, null = True)
-    
+    cancerType = models.CharField(max_length = 127, blank = True, null = True)
+    cellularityPct = models.IntegerField(blank = True, null = True)
+
+    # #optional sample-dnabarcode.id_str assignment
+    #removed by Sam Mohamed, we are replacing with a foreign key to the
+    #dnaBarcode table
+    # barcode = models.CharField(max_length = 128, blank = True, null = True)
+
     def __unicode__(self):
         return u'%s/%s/%d' % (self.sampleSet, self.sample, self.relationshipGroup)
 
@@ -1941,11 +2030,19 @@ class Results(models.Model, Lookup):
     def get_filestat(self, typeStr):
         return self.dmfilestat_set.filter(dmfileset__type=typeStr)[0]
 
+    @cached_property
     def isProton(self):
         if self.experiment:
-            return self.experiment.isProton()
+            return self.experiment.isProton
 
         return False
+
+    @cached_property
+    def isThumbnail(self):
+        if self.isProton:
+            return bool(self.metaData and self.metaData.get("thumb", False))
+        else:
+            return False
 
     #a place for plugins to store information
     # NB: These two functions facilitate compatibility with earlier model,
@@ -1963,6 +2060,7 @@ class Results(models.Model, Lookup):
             pluginDict[p.plugin.name] = p.state
         return pluginDict
 
+    @cached_property
     def planShortID(self):
         expLog = self.experiment.log
         try:
@@ -1972,38 +2070,48 @@ class Results(models.Model, Lookup):
         return plan
 
     def projectNames(self):
-      names = [p.name for p in self.projects.all().order_by('-modified')]
-      return ','.join(names)
+        return self._projectNames
 
+    @cached_property
+    def _projectNames(self):
+        names = [p.name for p in self.projects.all().order_by('-modified')]
+        return ','.join(names)
+
+    @cached_property
     def sffLinkPatch(self):
         link = self.fastqLink.replace("fastq","sff")
         return link if os.path.exists(link) else None
 
+    @cached_property
     def sffTFLinkPatch(self):
         link = self.fastqLink.replace("fastq","tf.sff")
         return link if os.path.exists(link) else None
 
     def bamLink(self):
-        """a method to used by the API to provide a link to the bam file"""
-        location = self.server_and_location()
+        return self._bamLink
 
-        if location is not False:
+    @cached_property
+    def _bamLink(self):
+        """a method to used by the API to provide a link to the bam file"""
+        if self._location:
             bamFile = self.experiment.expName + "_" + self.resultsName + ".bam"
-            webPath = self.web_path(location)
+            webPath = self.web_path(self._location)
             if not webPath:
                 logger.warning("Bam link, webpath missing for " + bamFile)
                 return False
             return os.path.join(webPath , bamFile)
         else:
-            logger.warning("Bam link, Report Storage: %s, Location: %s", self.reportstorage, location)
+            logger.warning("Bam link, Report Storage: %s, Location: %s", self.reportstorage, self._location)
             return False
 
     def reportWebLink(self):
-        """a method to used get the web url with no fuss"""
-        location = self.server_and_location()
+        return self._reportWebLink
 
-        if location is not False:
-            webPath = self.web_path(location)
+    @cached_property
+    def _reportWebLink(self):
+        """a method to used get the web url with no fuss"""
+        if self._location:
+            webPath = self.web_path(self._location)
             if not webPath:
                 logger.warning("Web link, webpath missing for %s" % self)
                 return False
@@ -2032,26 +2140,18 @@ class Results(models.Model, Lookup):
     def _basename(self):
         return "%s_%03d" % (self.resultsName, self.pk)
 
+    @cached_property
+    def _location(self):
+        return self.experiment._location
+
     def server_and_location(self):
-        if getattr(self, '_location', None):
-            return self._location
-        try:
-            loc = Rig.objects.get(name=self.experiment.pgmName).location
-        except Rig.DoesNotExist:
-            #logger.error("Rerport %s references Rig %s which does not exist." % (self, self.experiment.pgmName))
-            loc = Location.objects.filter(defaultlocation=True)
-            if not loc:
-                #if there is not a default, just take the first one
-                loc = Location.objects.all().order_by('pk')
-            if loc:
-                loc = loc[0]
-            else:
-                logger.critical("Report %s is requesting the location of PGM %s and no locations exist!" % (self, self.experiment.pgmName))
-                return False
-        setattr(self, '_location', loc)
-        return loc
+        return self._location
 
     def _findReportStorage(self):
+        return self._findReportStorageCached
+
+    @cached_property
+    def _findReportStorageCached(self):
         """
         Tries to determine the correct ReportStorage object by testing for
         a valid filesystem path using the reportLink path with the ReportStorage
@@ -2061,15 +2161,18 @@ class Results(models.Model, Lookup):
         strip off the first directory from report link and prepend the dirPath
         """
         logger.warning("Report %s is looking for it's storage." % self)
+
+        # Pre 3.0 versions had php script in reportLink.  Post 3.0 have just directory.
+        if "Default_Report.php" in self.reportLink:
+            report_directory = os.path.basename(os.path.dirname(self.reportLink))
+        else:
+            report_directory = os.path.basename(os.path.abspath(self.reportLink))
+        location_name = self.experiment._location.name
         storages = ReportStorage.objects.all()
         for storage in storages:
-            link = os.path.dirname(self.reportLink)
-            tmpPath = link.split('/')
-            index = len(tmpPath) - 3
-            linkstub = link.split('/' + tmpPath[index])
-            new_path = storage.dirPath + linkstub[1]
-            if os.path.exists(new_path):
+            if os.path.exists(os.path.join(storage.dirPath, location_name, report_directory)):
                 return storage
+
         return None
 
     def web_root_path(self, location):
@@ -2086,11 +2189,16 @@ class Results(models.Model, Lookup):
             return None
 
     def report_exist(self):
+        return self._report_exist
+
+    @cached_property
+    def _report_exist(self):
         """check to see if a report exists inside of the report path"""
         fs_path = self.get_report_path()
         #TODO: is this operation slowing down page loading?  on thousands of reports?
         return fs_path and os.path.exists(fs_path)
 
+    # Has side-effects - do not cache (self-caching anyway)
     def get_report_storage(self):
         """Returns reportstorage object"""
         if self.reportstorage == None:
@@ -2101,29 +2209,40 @@ class Results(models.Model, Lookup):
         return self.reportstorage
 
     def get_report_path(self):
+        return self._report_path
+
+    @cached_property
+    def _report_path(self):
         """Returns filesystem path to report file"""
-        if self.reportstorage == None:
-            storage = self._findReportStorage()
-            if storage is not None:
-                self.reportstorage = storage
-                self.save()
-        tmpPath = self.reportLink.split('/')
-        index = len(tmpPath) - 4
-        linkstub = self.reportLink.split('/' + tmpPath[index])
-        if self.reportstorage is not None:
-            return self.reportstorage.dirPath + linkstub[1]
+        self.get_report_storage()
+        # Pre 3.0 versions had php script in reportLink.  Post 3.0 have just directory.
+        if self.reportLink.endswith('.php') or self.reportLink.endswith('.html'):
+            report_directory = os.path.basename(os.path.dirname(self.reportLink))
         else:
-            logger.error("Cannot find the path to %s" % self)
-            return None
+            report_directory = os.path.basename(os.path.abspath(self.reportLink))
+        return os.path.join(self.reportstorage.dirPath, self.experiment._location.name, report_directory)
 
     def get_report_dir(self):
+        return self._get_report_dir
+
+    @cached_property
+    def _get_report_dir(self):
         """Returns filesystem path to results directory"""
+        output_dmfilestat = self.get_filestat(dmactions_types.OUT)
+        # this allows importing reports to create PDF file from archived location
+        if output_dmfilestat.action_state == 'IG':
+            archivepath = output_dmfilestat.archivepath
+            if archivepath and os.path.exists(archivepath):
+                return archivepath
+
         fs_path = self.get_report_path()
-        if fs_path:
-            fs_path = os.path.split(fs_path)[0]
         return fs_path
 
     def is_archived(self):
+        return self._is_archived
+
+    @cached_property
+    def _is_archived(self):
         '''Returns True in either case: Report Files deleted or archived'''
         # Pre-3.6 did not allow Report delete, only archive so we return either case here.
         return self.get_filestat(dmactions_types.OUT).isdisposed()
@@ -2163,7 +2282,8 @@ class Results(models.Model, Lookup):
             self.metaData["Log"] = []
         self.metaData["Log"].append({"Status":self.metaData.get("Status"), "Date":self.metaData.get("Date"), "Info":self.metaData.get("Info"), "Comment":comment})
         self.save()
-
+    '''
+    NOTE: BPP commented out this function Jan 23, 2014 - I think its ready to be discarded
     # TODO: Cycles -> flows hack, very temporary.
     @property
     def processedFlowsorCycles(self):
@@ -2174,15 +2294,15 @@ class Results(models.Model, Lookup):
             return self.processedflows
         else:
             return self.processedCycles * 4
-
-    @property
+    '''
+    @cached_property
     def best_metrics(self):
         try:
             ret = self.tfmetrics_set.all().order_by('-Q17Mean')[0]
         except IndexError:
             ret = None
         return ret
-    @property
+    @cached_property
     def best_lib_metrics(self):
         try:
             ret = self.libmetrics_set.all().order_by('-i50Q17_reads')[0]
@@ -2350,16 +2470,29 @@ def on_result_delete(sender, instance, **kwargs):
     logger.info("Deleting Result %d in %s" % (instance.id, directory))
     tasks.delete_that_folder.delay(directory,
                        "Triggered by Results %d deletion" % instance.id)
-    
+
     if Experiment.objects.filter(id = instance.experiment_id).exists():
         experiment = instance.experiment
-        if experiment.repResult is None:
+        results = experiment.results_set.exclude(id=instance.pk).order_by('-timeStamp')[:1]
+        if results:
+            experiment.resultDate = results[0].timeStamp
+        if experiment.repResult is None or experiment.repResult.pk==instance.pk:
             experiment.pinnedRepResult = False
-            results = experiment.results_set.order_by('-timeStamp')[:1]
             if results:
                 experiment.repResult = results[0]
-            experiment.save()
+        experiment.save()
 
+
+@receiver(m2m_changed, sender=Results.projects.through, dispatch_uid="projects_changed")
+def on_projects_added_removed(sender, instance, action, reverse, pk_set, **kwargs):
+    # update project's modified date when results added or removed
+    if action in ['post_add', 'post_remove']:
+        if reverse:
+            instance.save() # instance is a Project
+        else:
+            for project in Project.objects.filter(pk__in=pk_set):
+                project.save()
+    
 
 class TFMetrics(models.Model, Lookup):
     _CSV_METRICS = (
@@ -2417,6 +2550,11 @@ class Location(models.Model):
 
     def __unicode__(self):
         return u'%s' % self.name
+
+    @classmethod
+    def getdefault(cls):
+        '''Raises DoesNotExist exception when there is no default object'''
+        return cls.objects.filter(defaultlocation=True)[:1].get()
 
     def save(self, *args, **kwargs):
         """make sure only one location is checked."""
@@ -2489,10 +2627,20 @@ class RunScript(models.Model):
         return self.name
 
 class Cruncher(models.Model):
+    STATES = (
+        ('G', 'good'),
+        ('E', 'error'),     # connection test failed
+        ('W', 'warning'),   # configuration test failed
+        ('U', 'unknown')
+    )
+    
     name = models.CharField(max_length=200)
-    prefix = models.CharField(max_length=512)
     location = models.ForeignKey(Location)
     comments = models.TextField(blank=True)
+    state = models.CharField(max_length=8, choices=STATES, default='U')
+    date = models.DateTimeField(auto_now=True, null=True)
+    info = json_field.JSONField(blank=True, null=True)
+    
     def __unicode__(self): return self.name
 
 class AnalysisMetrics(models.Model):
@@ -2547,6 +2695,10 @@ class AnalysisMetrics(models.Model):
     sysCF = models.FloatField()
     sysIE = models.FloatField()
     sysDR = models.FloatField()
+    total = models.IntegerField(default=0)
+    adjusted_addressable = models.IntegerField(default=0)
+    loading = models.FloatField(default=0.0)
+
     def __unicode__(self):
         return "%s/%d" % (self.report, self.pk)
     class Meta:
@@ -2558,7 +2710,6 @@ class LibMetrics(models.Model):
                     ('Library_100Q10_Reads', 'i100Q10_reads'),
                     ('Library_200Q10_Reads', 'i200Q10_reads'),
                     ('Library_Mean_Q10_Length', 'q10_mean_alignment_length'),
-                    ('Library_Q10_Coverage', 'q10_coverage_percentage'),
                     ('Library_Q10_Longest_Alignment', 'q10_longest_alignment'),
                     ('Library_Q10_Mapped Bases', 'q10_mapped_bases'),
                     ('Library_Q10_Alignments', 'q10_alignments'),
@@ -2566,7 +2717,6 @@ class LibMetrics(models.Model):
                     ('Library_100Q17_Reads', 'i100Q17_reads'),
                     ('Library_200Q17_Reads', 'i200Q17_reads'),
                     ('Library_Mean_Q17_Length', 'q17_mean_alignment_length'),
-                    ('Library_Q17_Coverage', 'q17_coverage_percentage'),
                     ('Library_Q17_Longest_Alignment', 'q17_longest_alignment'),
                     ('Library_Q17_Mapped Bases', 'q17_mapped_bases'),
                     ('Library_Q17_Alignments', 'q17_alignments'),
@@ -2574,7 +2724,6 @@ class LibMetrics(models.Model):
                     ('Library_100Q20_Reads', 'i100Q20_reads'),
                     ('Library_200Q20_Reads', 'i200Q20_reads'),
                     ('Library_Mean_Q20_Length', 'q20_mean_alignment_length'),
-                    ('Library_Q20_Coverage', 'q20_coverage_percentage'),
                     ('Library_Q20_Longest_Alignment', 'q20_longest_alignment'),
                     ('Library_Q20_Mapped Bases', 'q20_mapped_bases'),
                     ('Library_Q20_Alignments', 'q20_alignments'),
@@ -2583,7 +2732,6 @@ class LibMetrics(models.Model):
                     ('Library_100Q47_Reads', 'i100Q47_reads'),
                     ('Library_200Q47_Reads', 'i200Q47_reads'),
                     ('Library_Mean_Q47_Length', 'q47_mean_alignment_length'),
-                    ('Library_Q47_Coverage', 'q47_coverage_percentage'),
                     ('Library_Q47_Longest_Alignment', 'q47_longest_alignment'),
                     ('Library_Q47_Mapped Bases', 'q47_mapped_bases'),
                     ('Library_Q47_Alignments', 'q47_alignments'),
@@ -2600,38 +2748,9 @@ class LibMetrics(models.Model):
     totalNumReads = models.IntegerField()
     total_mapped_reads = models.BigIntegerField()
     total_mapped_target_bases = models.BigIntegerField()
-    genomelength = models.IntegerField()
-    rNumAlignments = models.IntegerField()
-    rMeanAlignLen = models.IntegerField()
-    rLongestAlign = models.IntegerField()
-    rCoverage = models.FloatField()
-    r50Q10 = models.IntegerField()
-    r100Q10 = models.IntegerField()
-    r200Q10 = models.IntegerField()
-    r50Q17 = models.IntegerField()
-    r100Q17 = models.IntegerField()
-    r200Q17 = models.IntegerField()
-    r50Q20 = models.IntegerField()
-    r100Q20 = models.IntegerField()
-    r200Q20 = models.IntegerField()
-    sNumAlignments = models.IntegerField()
-    sMeanAlignLen = models.IntegerField()
-    sLongestAlign = models.IntegerField()
-    sCoverage = models.FloatField()
-    s50Q10 = models.IntegerField()
-    s100Q10 = models.IntegerField()
-    s200Q10 = models.IntegerField()
-    s50Q17 = models.IntegerField()
-    s100Q17 = models.IntegerField()
-    s200Q17 = models.IntegerField()
-    s50Q20 = models.IntegerField()
-    s100Q20 = models.IntegerField()
-    s200Q20 = models.IntegerField()
-
-    q7_coverage_percentage = models.FloatField()
+    
     q7_alignments = models.IntegerField()
     q7_mapped_bases = models.BigIntegerField()
-    q7_qscore_bases = models.BigIntegerField()
     q7_mean_alignment_length = models.IntegerField()
     q7_longest_alignment = models.IntegerField()
     i50Q7_reads = models.IntegerField()
@@ -2647,10 +2766,8 @@ class LibMetrics(models.Model):
     i550Q7_reads = models.IntegerField()
     i600Q7_reads = models.IntegerField()
 
-    q10_coverage_percentage = models.FloatField()
     q10_alignments = models.IntegerField()
     q10_mapped_bases = models.BigIntegerField()
-    q10_qscore_bases = models.BigIntegerField()
     q10_mean_alignment_length = models.IntegerField()
     q10_longest_alignment = models.IntegerField()
     i50Q10_reads = models.IntegerField()
@@ -2666,10 +2783,8 @@ class LibMetrics(models.Model):
     i550Q10_reads = models.IntegerField()
     i600Q10_reads = models.IntegerField()
 
-    q17_coverage_percentage = models.FloatField()
     q17_alignments = models.IntegerField()
     q17_mapped_bases = models.BigIntegerField()
-    q17_qscore_bases = models.BigIntegerField()
     q17_mean_alignment_length = models.IntegerField()
     q17_longest_alignment = models.IntegerField()
     i50Q17_reads = models.IntegerField()
@@ -2685,10 +2800,8 @@ class LibMetrics(models.Model):
     i550Q17_reads = models.IntegerField()
     i600Q17_reads = models.IntegerField()
 
-    q20_coverage_percentage = models.FloatField()
     q20_alignments = models.IntegerField()
     q20_mapped_bases = models.BigIntegerField()
-    q20_qscore_bases = models.BigIntegerField()
     q20_mean_alignment_length = models.IntegerField()
     q20_longest_alignment = models.IntegerField()
     i50Q20_reads = models.IntegerField()
@@ -2704,9 +2817,7 @@ class LibMetrics(models.Model):
     i550Q20_reads = models.IntegerField()
     i600Q20_reads = models.IntegerField()
 
-    q47_coverage_percentage = models.FloatField()
     q47_mapped_bases = models.BigIntegerField()
-    q47_qscore_bases = models.BigIntegerField()
     q47_alignments = models.IntegerField()
     q47_mean_alignment_length = models.IntegerField()
     q47_longest_alignment = models.IntegerField()
@@ -2733,118 +2844,7 @@ class LibMetrics(models.Model):
     align_sample = models.IntegerField()
     genome = models.CharField(max_length=512)
     genomesize = models.BigIntegerField()
-    total_number_of_sampled_reads = models.IntegerField()
-    sampled_q7_coverage_percentage = models.FloatField()
-    sampled_q7_mean_coverage_depth = models.FloatField()
-    sampled_q7_alignments = models.IntegerField()
-    sampled_q7_mean_alignment_length = models.IntegerField()
-    sampled_mapped_bases_in_q7_alignments = models.BigIntegerField()
-    sampled_q7_longest_alignment = models.IntegerField()
-    sampled_50q7_reads = models.IntegerField()
-    sampled_100q7_reads = models.IntegerField()
-    sampled_200q7_reads = models.IntegerField()
-    sampled_300q7_reads = models.IntegerField()
-    sampled_400q7_reads = models.IntegerField()
-    sampled_q10_coverage_percentage = models.FloatField()
-    sampled_q10_mean_coverage_depth = models.FloatField()
-    sampled_q10_alignments = models.IntegerField()
-    sampled_q10_mean_alignment_length = models.IntegerField()
-    sampled_mapped_bases_in_q10_alignments = models.BigIntegerField()
-    sampled_q10_longest_alignment = models.IntegerField()
-    sampled_50q10_reads = models.IntegerField()
-    sampled_100q10_reads = models.IntegerField()
-    sampled_200q10_reads = models.IntegerField()
-    sampled_300q10_reads = models.IntegerField()
-    sampled_400q10_reads = models.IntegerField()
-    sampled_q17_coverage_percentage = models.FloatField()
-    sampled_q17_mean_coverage_depth = models.FloatField()
-    sampled_q17_alignments = models.IntegerField()
-    sampled_q17_mean_alignment_length = models.IntegerField()
-    sampled_mapped_bases_in_q17_alignments = models.BigIntegerField()
-    sampled_q17_longest_alignment = models.IntegerField()
-    sampled_50q17_reads = models.IntegerField()
-    sampled_100q17_reads = models.IntegerField()
-    sampled_200q17_reads = models.IntegerField()
-    sampled_300q17_reads = models.IntegerField()
-    sampled_400q17_reads = models.IntegerField()
-    sampled_q20_coverage_percentage = models.FloatField()
-    sampled_q20_mean_coverage_depth = models.FloatField()
-    sampled_q20_alignments = models.IntegerField()
-    sampled_q20_mean_alignment_length = models.IntegerField()
-    sampled_mapped_bases_in_q20_alignments = models.BigIntegerField()
-    sampled_q20_longest_alignment = models.IntegerField()
-    sampled_50q20_reads = models.IntegerField()
-    sampled_100q20_reads = models.IntegerField()
-    sampled_200q20_reads = models.IntegerField()
-    sampled_300q20_reads = models.IntegerField()
-    sampled_400q20_reads = models.IntegerField()
-    sampled_q47_coverage_percentage = models.FloatField()
-    sampled_q47_mean_coverage_depth = models.FloatField()
-    sampled_q47_alignments = models.IntegerField()
-    sampled_q47_mean_alignment_length = models.IntegerField()
-    sampled_mapped_bases_in_q47_alignments = models.BigIntegerField()
-    sampled_q47_longest_alignment = models.IntegerField()
-    sampled_50q47_reads = models.IntegerField()
-    sampled_100q47_reads = models.IntegerField()
-    sampled_200q47_reads = models.IntegerField()
-    sampled_300q47_reads = models.IntegerField()
-    sampled_400q47_reads = models.IntegerField()
-    extrapolated_from_number_of_sampled_reads = models.IntegerField()
-    extrapolated_q7_coverage_percentage = models.FloatField()
-    extrapolated_q7_mean_coverage_depth = models.FloatField()
-    extrapolated_q7_alignments = models.IntegerField()
-    extrapolated_q7_mean_alignment_length = models.IntegerField()
-    extrapolated_mapped_bases_in_q7_alignments = models.BigIntegerField()
-    extrapolated_q7_longest_alignment = models.IntegerField()
-    extrapolated_50q7_reads = models.IntegerField()
-    extrapolated_100q7_reads = models.IntegerField()
-    extrapolated_200q7_reads = models.IntegerField()
-    extrapolated_300q7_reads = models.IntegerField()
-    extrapolated_400q7_reads = models.IntegerField()
-    extrapolated_q10_coverage_percentage = models.FloatField()
-    extrapolated_q10_mean_coverage_depth = models.FloatField()
-    extrapolated_q10_alignments = models.IntegerField()
-    extrapolated_q10_mean_alignment_length = models.IntegerField()
-    extrapolated_mapped_bases_in_q10_alignments = models.BigIntegerField()
-    extrapolated_q10_longest_alignment = models.IntegerField()
-    extrapolated_50q10_reads = models.IntegerField()
-    extrapolated_100q10_reads = models.IntegerField()
-    extrapolated_200q10_reads = models.IntegerField()
-    extrapolated_300q10_reads = models.IntegerField()
-    extrapolated_400q10_reads = models.IntegerField()
-    extrapolated_q17_coverage_percentage = models.FloatField()
-    extrapolated_q17_mean_coverage_depth = models.FloatField()
-    extrapolated_q17_alignments = models.IntegerField()
-    extrapolated_q17_mean_alignment_length = models.IntegerField()
-    extrapolated_mapped_bases_in_q17_alignments = models.BigIntegerField()
-    extrapolated_q17_longest_alignment = models.IntegerField()
-    extrapolated_50q17_reads = models.IntegerField()
-    extrapolated_100q17_reads = models.IntegerField()
-    extrapolated_200q17_reads = models.IntegerField()
-    extrapolated_300q17_reads = models.IntegerField()
-    extrapolated_400q17_reads = models.IntegerField()
-    extrapolated_q20_coverage_percentage = models.FloatField()
-    extrapolated_q20_mean_coverage_depth = models.FloatField()
-    extrapolated_q20_alignments = models.IntegerField()
-    extrapolated_q20_mean_alignment_length = models.IntegerField()
-    extrapolated_mapped_bases_in_q20_alignments = models.BigIntegerField()
-    extrapolated_q20_longest_alignment = models.IntegerField()
-    extrapolated_50q20_reads = models.IntegerField()
-    extrapolated_100q20_reads = models.IntegerField()
-    extrapolated_200q20_reads = models.IntegerField()
-    extrapolated_300q20_reads = models.IntegerField()
-    extrapolated_400q20_reads = models.IntegerField()
-    extrapolated_q47_coverage_percentage = models.FloatField()
-    extrapolated_q47_mean_coverage_depth = models.FloatField()
-    extrapolated_q47_alignments = models.IntegerField()
-    extrapolated_q47_mean_alignment_length = models.IntegerField()
-    extrapolated_mapped_bases_in_q47_alignments = models.BigIntegerField()
-    extrapolated_q47_longest_alignment = models.IntegerField()
-    extrapolated_50q47_reads = models.IntegerField()
-    extrapolated_100q47_reads = models.IntegerField()
-    extrapolated_200q47_reads = models.IntegerField()
-    extrapolated_300q47_reads = models.IntegerField()
-    extrapolated_400q47_reads = models.IntegerField()
+
     duplicate_reads = models.IntegerField(null=True,blank=True)
 
     def __unicode__(self):
@@ -2860,6 +2860,8 @@ class QualityMetrics(models.Model):
     q0_reads = models.IntegerField()
     q0_max_read_length = models.IntegerField()
     q0_mean_read_length = models.FloatField()
+    q0_median_read_length = models.IntegerField(default=0)
+    q0_mode_read_length = models.IntegerField(default=0)
     q0_50bp_reads = models.IntegerField()
     q0_100bp_reads = models.IntegerField()
     q0_150bp_reads = models.IntegerField(default=0)
@@ -2867,6 +2869,8 @@ class QualityMetrics(models.Model):
     q17_reads = models.IntegerField()
     q17_max_read_length = models.IntegerField()
     q17_mean_read_length = models.FloatField()
+    q17_median_read_length = models.IntegerField(default=0)
+    q17_mode_read_length = models.IntegerField(default=0)
     q17_50bp_reads = models.IntegerField()
     q17_100bp_reads = models.IntegerField()
     q17_150bp_reads = models.IntegerField()
@@ -2874,6 +2878,8 @@ class QualityMetrics(models.Model):
     q20_reads = models.IntegerField()
     q20_max_read_length = models.FloatField()
     q20_mean_read_length = models.IntegerField()
+    q20_median_read_length = models.IntegerField(default=0)
+    q20_mode_read_length = models.IntegerField(default=0)
     q20_50bp_reads = models.IntegerField()
     q20_100bp_reads = models.IntegerField()
     q20_150bp_reads = models.IntegerField()
@@ -2944,6 +2950,7 @@ class BackupConfig(models.Model):
         """
         return cls.objects.order_by('pk')[:1].get()
 
+#TODO: Remove this from database
 class dm_reports(models.Model):
     '''This object holds the options for report actions.
     Which level(s) to prune at, what those levels are, how far back to look when recording space saved, etc.'''
@@ -2968,7 +2975,7 @@ class dm_reports(models.Model):
         """
         return cls.objects.order_by('pk')[:1].get()
 
-
+#TODO: Remove this from database
 class dm_prune_group(models.Model):
     name = models.CharField(max_length=128, default="")
     editable = models.BooleanField(default=True)    # This actually signifies "deletable by customer"
@@ -2979,6 +2986,7 @@ class dm_prune_group(models.Model):
     def __unicode__(self):
         return self.name
 
+#TODO: Remove this from database
 class dm_prune_field(models.Model):
     rule = models.CharField(max_length=64, default = "")
     class Meta:
@@ -3005,6 +3013,19 @@ class Chip(models.Model):
             return self.description;
         else:
             return self.name;
+
+
+    def getChipDisplayedNamePrefix(self):
+        value = self.getChipDisplayedName()
+        
+        parts = value.rsplit("v", 1)
+        return parts[0]
+
+    def getChipDisplayedVersion(self):
+        value = self.getChipDisplayedName()
+        
+        parts = value.rsplit("v", 1)
+        return "v"+ parts[1]  if len(parts) > 1 else ""
 
 
 class GlobalConfig(models.Model):
@@ -3038,7 +3059,11 @@ class GlobalConfig(models.Model):
     mark_duplicates = models.BooleanField(default=False)
     realign = models.BooleanField(default=False)
     check_news_posts = models.BooleanField("check for news posts", default=True)
-
+    enable_auto_security = models.BooleanField("Enable Security Updates", default=True)
+    sec_update_status = models.CharField(max_length=128,blank=True)
+    enable_compendia_OCP = models.BooleanField("Enable OCP?", default=False)
+    enable_support_upload = models.BooleanField("Enable Support Upload?", default=False)
+    enable_nightly_email = models.BooleanField("Enable Nightly Email Notifications?", default=True)
 
     def set_TS_update_status(self,inputstr):
         self.ts_update_status = inputstr
@@ -3123,6 +3148,7 @@ class Plugin(models.Model):
     ## file containing plugin definition. launch.sh or PluginName.py
     script = models.CharField(max_length=256, blank=True, default="")
 
+    @cached_property
     def isConfig(self):
         try:
             if os.path.exists(os.path.join(self.path, "config.html")):
@@ -3132,6 +3158,7 @@ class Plugin(models.Model):
             pass
         return False
 
+    @cached_property
     def isPlanConfig(self):
         try:
             if os.path.exists(os.path.join(self.path, "plan.html")):
@@ -3141,6 +3168,7 @@ class Plugin(models.Model):
             pass
         return False
 
+    @cached_property
     def hasAbout(self):
         try:
             if os.path.exists(os.path.join(self.path, "about.html")):
@@ -3150,6 +3178,7 @@ class Plugin(models.Model):
             pass
         return False
 
+    @cached_property
     def isInstance(self):
         try:
             if os.path.exists(os.path.join(self.path, "instance.html")):
@@ -3175,6 +3204,7 @@ class Plugin(models.Model):
                 return "queued"
         return self.status.get("installStatus", "installed" )
 
+    @cached_property
     def pluginscript(self):
         # Now cached, join path and script
         if not self.script:
@@ -3193,7 +3223,7 @@ class Plugin(models.Model):
 
         context = { 'plugin': self }
         from iondb.plugins.manager import pluginmanager
-        info = pluginmanager.get_plugininfo(self.name, self.pluginscript(), context, use_cache)
+        info = pluginmanager.get_plugininfo(self.name, self.pluginscript, context, use_cache)
         # Cache is updated in background task.
         if info is not None:
             self.updateFromInfo(info)  # update persistent db cache
@@ -3298,7 +3328,12 @@ class PluginResult(models.Model):
         ('Queued', 'Queued'), # In SGE queue
         ('Pending', 'Pending'), # Prior to submitting to SGE
         ('Resource', 'Exceeded Resource Limits'), ## SGE Errors
+        ('Cancelled', 'User Cancelled'), # User killed SGE job
+        ('Archived', 'Archived'), # Soft Deletion
     )
+    # Completed, Error, Cancelled, Archived are terminal states
+    # Pending, Queued, Started are transitional states for a normal SGE launch
+    # Declined and Unknown are no longer used.
     state = models.CharField(max_length=20, choices=ALLOWED_STATES)
     store = json_field.JSONField(blank=True)
 
@@ -3317,15 +3352,38 @@ class PluginResult(models.Model):
 
     owner = models.ForeignKey(User)
 
-    def path(self):
-        return os.path.join(self.result.get_report_dir(),
-                            'plugin_out',
-                            self.plugin.name + '_out'
-                           )
+    _gc = None
+    def path(self, create=False, fallback=True):
+        if not self._gc:
+            self._gc = GlobalConfig.objects.all().order_by('pk')[0]
+
+        base_path = os.path.join(self.result.get_report_dir(),
+                                 self._gc.plugin_output_folder, # Default:'plugin_out'
+                                )
+        path = os.path.join(base_path, "%s_out.%d" % (self.plugin.name, self.pk))
+        if os.path.exists(path):
+            return path
+
+        if create:
+            os.makedirs(path, 0775)
+            return path
+
+        if not fallback:
+            return path
+
+        legacy_path = os.path.join(self.result.get_report_dir(),
+                            self._gc.plugin_output_folder, # Default:'plugin_out'
+                            "%s_out" % (self.plugin.name,))
+        if os.path.exists(legacy_path):
+            return legacy_path
+
+        return path
+
     # compat - return just size, not (size,inodes) tuple
     def calc_size(self):
-        return self._calc_size()[0]
+        return self._calc_size[0]
 
+    @cached_property
     def _calc_size(self):
         d = self.path()
         if not d or not os.path.exists(d):
@@ -3360,11 +3418,11 @@ class PluginResult(models.Model):
         return hmac.new(str(new_uuid), digestmod=sha1).hexdigest()
 
     #  Helpers for maintaining extra fields during status transitions
-    def prepare(self, config='', jobid=None):
+    def prepare(self, config=None, jobid=None):
         self.state = 'Pending'
         # Always overwrite key - possibly invalidating existing key from running instance
         self.apikey = self._generate_key()
-        if config:
+        if config is not None:
             self.config = config
         else:
             # Not cleared if empty - reuses config from last invocation.
@@ -3376,8 +3434,8 @@ class PluginResult(models.Model):
     def start(self, jobid=None):
         self.state = 'Started'
         self.starttime = timezone.now()
-        if self.jobid:
-            if self.jobid != jobid:
+        if jobid is not None:
+            if self.jobid is not None and (self.jobid != jobid):
                 logger.warn("(Re-)started as different queue jobid: '%d' was '%d'", jobid, self.jobid)
             self.jobid = jobid
 
@@ -3387,7 +3445,7 @@ class PluginResult(models.Model):
         self.state = state
         self.apikey = None
         try:
-            self.size, self.inodes = self._calc_size()
+            self.size, self.inodes = self._calc_size
         except OSError:
             logger.exception("Failed to compute plugin size: '%s'", self.path())
             self.size = self.inodes = -1
@@ -3405,7 +3463,6 @@ class PluginResult(models.Model):
         return "%s/%s" % (self.result, self.plugin)
 
     class Meta:
-        unique_together=( ('plugin', 'result'), )
         ordering = [ '-id' ]
 
 # NB: Fails if not pre-delete, as path() queries linked plugin and result.
@@ -3427,7 +3484,15 @@ class dnaBarcode(models.Model):
     """Store a dna barcode"""
     name = models.CharField(max_length=128)     # name of barcode SET
     id_str = models.CharField(max_length=128)   # id of this barcode sequence
-    type = models.CharField(max_length=64, blank=True)
+    
+    ALLOWED_BARCODE_TYPES = (
+        ('', 'Unspecified'),
+        ('none', 'None'),
+        ('dna', 'DNA'),
+        ('rna', 'RNA'),
+    )
+
+    type = models.CharField(max_length=64, choices=ALLOWED_BARCODE_TYPES, default='', blank=True)
     sequence = models.CharField(max_length=128)
     length = models.IntegerField(default=0, blank=True)
     floworder = models.CharField(max_length=128, blank=True, default="")
@@ -3446,7 +3511,7 @@ class dnaBarcode(models.Model):
 class ReferenceGenome(models.Model):
     """store info about the reference genome
     This should really hold the real path, it should also have methods for deleting the dirs for the files"""
-    #long name
+    # Description
     name = models.CharField(max_length=512)
     #short name , we can change these
     short_name = models.CharField(max_length=512, unique=False)
@@ -3497,11 +3562,13 @@ class ReferenceGenome(models.Model):
         enabled_path = os.path.join(iondb.settings.TMAP_DIR, self.short_name)
         try:
             shutil.move(self.reference_path, enabled_path)
-            self.reference_path = enabled_path
-            self.save()
         except:
             logger.exception("Failed to enable gnome %s" % self.short_name)
             return False
+        else:
+            self.reference_path = enabled_path
+            self.enabled = True
+            self.save()
         return True
 
     def disable_genome(self):
@@ -3510,11 +3577,13 @@ class ReferenceGenome(models.Model):
         disabled_path = os.path.join(iondb.settings.TMAP_DIR, "disabled", self.index_version, self.short_name)
         try:
             shutil.move(self.reference_path, disabled_path)
-            self.reference_path = disabled_path
-            self.save()
         except:
             logger.exception("Failed to disable gnome %s" % reference.short_name)
             return False
+        else:
+            self.reference_path = disabled_path
+            self.enabled = False
+            self.save()
         return True
 
     def info_text(self):
@@ -3587,7 +3656,7 @@ class ThreePrimeadapter(models.Model):
         return (self.uid,)  # must return a tuple
 
 
-    def save(self):
+    def save(self, *args, **kwargs):
         if (self.isDefault == False and ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True, chemistryType = self.chemistryType).count() == 1):
             currentDefaults = ThreePrimeadapter.objects.filter(direction=self.direction, isDefault=True, chemistryType = self.chemistryType)
             #there should only be 1 default for a given direction and chemistry type at any time
@@ -3820,7 +3889,7 @@ class LibraryKey(models.Model):
         return u'%s' % self.name
 
 
-    def save(self):
+    def save(self, *args, **kwargs):
         if (self.isDefault == False and LibraryKey.objects.filter(direction=self.direction, isDefault=True).count() == 1):
             currentDefaults = LibraryKey.objects.filter(direction=self.direction, isDefault=True)
             #there should only be 1 default for a given direction at any time
@@ -4003,7 +4072,7 @@ class DMFileSet (models.Model):
     description = models.CharField(max_length=256, null=True, blank=True)
     backup_directory = models.CharField(max_length=256, blank=True, null=True)
     bandwidth_limit = models.IntegerField(blank=True, null=True)
-    enabled = models.BooleanField(default=False)
+    enabled = models.BooleanField(default=False)    # TODO: This is not used??
     include = SeparatedValuesField(null=True, blank=True)
     exclude = SeparatedValuesField(null=True, blank=True)
     keepwith = json_field.JSONField(blank=True, null=True)
@@ -4033,6 +4102,7 @@ class DMFileStat (models.Model):
         ('EG', 'Exporting'),
         ('AD', 'Archived'),
         ('DD', 'Deleted'),
+        ('IG', 'Importing'),
         ('E', 'Error'),             # Action resulted in error
         )
 
@@ -4042,7 +4112,7 @@ class DMFileStat (models.Model):
     # path to archived filed
     archivepath = models.CharField(max_length=512, blank=True, null=True)
 
-    # kilobytes used by files
+    # megabytes used by files
     diskspace = models.FloatField(blank=True, null=True)
 
     # status of files currently being used by analysis pipeline
@@ -4118,6 +4188,7 @@ class FileMonitor(models.Model):
     progress = models.BigIntegerField(default=0)
     status = models.CharField(max_length=60, default="")
     celery_task_id = models.CharField(max_length=60, default="", blank=True)
+    md5sum = models.CharField(max_length=32, default=None, null=True, blank=True)
     tags = models.CharField(max_length=1024, default="")
 
     created = models.DateTimeField(auto_now_add=True)
@@ -4144,6 +4215,13 @@ class FileMonitor(models.Model):
 
         super(FileMonitor, self).delete()
         return True
+
+    def in_progress(self):
+        return self.status != "Complete" and self.progress < self.size
+
+    def __unicode__(self):
+        return u"FileMonitor/{0:d}".format(self.id)
+
 
 class MonitorData(models.Model):
     treeDat = json_field.JSONField(blank=True)
@@ -4182,6 +4260,9 @@ class AnalysisArgs(models.Model):
     # PreBasecaller args
     prebasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Pre Basecaller args, used for recalibration")
     prethumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Pre Basecaller args, used for recalibration")
+    # Calibration args
+    calibrateargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Calibration args, used for recalibration")
+    thumbnailcalibrateargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Calibration args, used for recalibration")
     # Basecaller args
     basecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Basecaller args")
     thumbnailbasecallerargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Basecaller args")
@@ -4195,11 +4276,13 @@ class AnalysisArgs(models.Model):
             'analysisargs': self.analysisargs,
             'basecallerargs': self.basecallerargs,
             'prebasecallerargs': self.prebasecallerargs,
+            'calibrateargs': self.calibrateargs,
             'alignmentargs': self.alignmentargs,
             'thumbnailbeadfindargs':    self.thumbnailbeadfindargs,
             'thumbnailanalysisargs':    self.thumbnailanalysisargs,
             'thumbnailbasecallerargs':  self.thumbnailbasecallerargs,
             'prethumbnailbasecallerargs':  self.prethumbnailbasecallerargs,
+            'thumbnailcalibrateargs': self.thumbnailcalibrateargs,
             'thumbnailalignmentargs': self.thumbnailalignmentargs
         }
         return args
@@ -4236,11 +4319,11 @@ class AnalysisArgs(models.Model):
                         match[i] += 1
                         if value:
                             match_no_blanks[i] += 1
-                
+
             if max(match_no_blanks) > 0:
                 best_match = args[match.index(max(match))]
             else:
-                try: 
+                try:
                     best_match = args.get(chip_default=True)
                 except:
                     best_match = None
@@ -4249,3 +4332,64 @@ class AnalysisArgs(models.Model):
 
     class Meta:
         verbose_name_plural = "Analysis Args"
+
+
+class RemoteAccount(models.Model):
+
+    # A convenience label for this account to be shown in the TS UI
+    account_label = models.CharField(max_length=64, default='Unnamed Account')
+
+    # URL of the remote service
+    remote_resource = models.CharField(max_length=2048)
+
+    # User name for the account at the remote service
+    user_name = models.CharField(max_length=255, blank=True, default='')
+
+    # Access token for remote service (OAuth 2.0)
+    access_token = models.CharField(max_length=2048, null=True, blank=True)
+
+    # Refresh token for remote service (OAuth 2.0, optional)
+    refresh_token = models.CharField(max_length=2048, null=True, blank=True)
+
+    # Expire time for the access token
+    token_expires = models.DateTimeField(null=True, blank=True)
+
+    def has_access(self):
+        return self.access_token and self.token_expires and self.token_expires > timezone.now()
+
+
+class SupportUpload(models.Model):
+
+    account = models.ForeignKey('RemoteAccount')
+
+    result = models.ForeignKey('Results', null=True, blank=True)
+
+    # Basic date tracking
+    created = models.DateTimeField(auto_now_add=True)
+    updated = models.DateTimeField(auto_now=True)
+
+    # This is the TS's processing state of the support upload
+    local_status = models.CharField(max_length=255, default='', blank=True)
+    local_message = models.CharField(max_length=2048, default='', blank=True)
+    celery_task_id = models.CharField(max_length=60, default="", blank=True)
+
+    # This references the file to be uploaded or which has been uploaded
+    file = models.OneToOneField('FileMonitor', null=True, blank=True, on_delete=models.SET_NULL)
+
+    # These models are to be collected from the user initiating the request
+    contact_email = models.EmailField(default='')
+    description = models.TextField(default='')
+    user = models.ForeignKey(User)
+
+    # These models are populated from the remote system
+    ticket_id = models.CharField(max_length=255, default="", blank=True)
+    ticket_status = models.CharField(max_length=255, default="", blank=True)
+    ticket_message = models.CharField(max_length=2048, default="", blank=True)
+
+    def delete(self):
+        # delete the files from the filesystem as well as the database
+        if self.file:
+            self.file.delete()
+        revoke(self.celery_task_id, terminate=True)
+        super(SupportUpload, self).delete()
+        return True

@@ -14,22 +14,24 @@ class BackupConfigModelTest(TestCase):
     def tearDown(self):
         shutil.rmtree(self.tempdir)
 
-    def test_save(self):
-        bc = BackupConfig()
-        bc.name = 'ArchiveTest'
-        bc.online = True
-        bc.location = self.location
-        bc.backup_directory = ''
-        bc.backup_threshold = 90
-        bc.number_to_backup = 10
-        bc.timeout = 60
-        bc.bandwidth_limit = 0
-        bc.status = '-'
-        bc.comments = ''
-        bc.save()
-        self.assertIsNotNone(bc.id, 'BackupConfig id is None')
-        return bc
+#retired_test
+#    def test_save(self):
+#        bc = BackupConfig()
+#        bc.name = 'ArchiveTest'
+#        bc.online = True
+#        bc.location = self.location
+#        bc.backup_directory = ''
+#        bc.backup_threshold = 90
+#        bc.number_to_backup = 10
+#        bc.timeout = 60
+#        bc.bandwidth_limit = 0
+#        bc.status = '-'
+#        bc.comments = ''
+#        bc.save()
+#        self.assertIsNotNone(bc.id, 'BackupConfig id is None')
+#        return bc
 
-    def test_unicode(self):
-        rs = self.test_save()
-        self.assertEquals(unicode(rs), rs.name)
+#retired_test
+#    def test_unicode(self):
+#        rs = self.test_save()
+#        self.assertEquals(unicode(rs), rs.name)

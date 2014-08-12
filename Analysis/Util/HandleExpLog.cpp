@@ -313,32 +313,35 @@ char * GetChipId (const char *filepath)
   // Method using the explog.txt
   char *argument = NULL;
   char *chipversion = NULL;
-  
+  char *chip =NULL;
   argument = GetExpLogParameter (filepath,"ChipType");
-  chipversion = GetExpLogParameter (filepath,"ChipMainVersion");
-   fprintf(stderr,"Returned  Chip Version %s from explog\n",chipversion);
+  chipversion = GetExpLogParameter (filepath,"ChipVersion");
+  if (chipversion){
+    ToLower(chipversion);
+  }else{
+    chipversion=strdup("NoVersion");
+  }
+  fprintf(stderr,"Returned  Chip Version %s from explog\n",chipversion);
+  fprintf(stderr,"Returned  Chip type %s from explog\n",argument);
+  //@TODO: BAD CODE: Chip  type/version is >only< to be handled by ChipIdDecoder
+  // NEVER assume I need to fill in the same information more than one place in the code
   if (argument)
   {
-    char *chip = (char *) malloc (10);
-    int len = strlen (argument);
-    int y = 0;
-    ToLower(argument);
-    for (int i = 0; i<len;i++)
-    {
-      if (isdigit (argument[i]))
-        chip[y++] = argument[i];
+    if ((strncmp ("314",argument,3) == 0)||(strncmp("\"314",argument,4)==0) )   chip =strdup("314");
+    else if (strncmp ("318",argument,3) == 0) chip =strdup("318");
+    else if (strncmp ("316v2",argument,5) == 0) chip =strdup("316v2");
+    else if ((strncmp ("316",argument,3) == 0)||(strncmp("\"316",argument,4)==0)) chip =strdup("316");
+    else if (strncmp ("900",argument,3) == 0) {
+        //a P chip  check chipversion
+        if      (strncmp ("p1.1.17",chipversion,7) == 0) chip = strdup("p1.1.17");
+        else if (strncmp ("p1.2.18",chipversion,7) == 0) chip = strdup("p1.2.18");
+        else if (strncmp ("p1.0.19",chipversion,7) == 0) chip = strdup("p1.0.19");
+        else if (strncmp ("p1.0.20",chipversion,7) == 0) chip = strdup("p1.0.20");
+        else if (strncmp ("p2.2.1", chipversion,6) == 0) chip = strdup("p2.2.1");
+        else                                             chip = strdup("p1.1.17");  // default
+        //Add new  P chips here and in chipIdDecoder too.
     }
-    if (chipversion){
-           if(strncmp("900",argument,3)==0 && strncmp("P1.0",chipversion,4)==0) chip[1]='1'; 
-    }
-
-
-    // Now if a chip is  316v2 or 316DEM
-    if (((len>5)&& (strncmp ("316dem",argument,6) == 0))||((len>4)&&(strncmp ("316v2",argument,5) == 0))){
-        chip[3]='v';
-        chip[4]='2';y=5;
-    }
-    chip[y] = '\0';
+     
     free (argument);
     free (chipversion);
     fprintf(stderr,"Returned  ChipId %s from explog\n",chip);
@@ -346,8 +349,11 @@ char * GetChipId (const char *filepath)
   } else {
     fprintf(stderr,"Failed to find ChipId in explog.txt\n");
   }
+  free (chipversion);
+
   return (NULL);
 }
+
 
 //@TODO: replace this by config file in json format because parsing is useless
 void GetChipDim (const char *type, int dims[2], const char *filepath)
@@ -379,7 +385,7 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
       dims[0] = 3392;
       dims[1] = 3792;
     }
-    else if ((strncmp ("900",type,4) == 0)|| (strncmp("910",type,4)==0))
+    else if ((strncmp ("p1",type,2) == 0)|| (strncmp("p2",type,2)==0))
     {
 
       // Method using the explog.txt

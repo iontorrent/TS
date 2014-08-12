@@ -18,20 +18,21 @@ enum GpuFitType {
 
 struct BkgFitWorkerGpuInfo
 {
- // GpuFitType type;
   int gpu_index;
   void* queue;
+  void* fallbackQueue;
 };
 
 bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, int use_all_gpus, 
   int &numBkgWorkers_gpu);
 
-void configureKernelExecution(GpuControlOpts opts);
+void configureKernelExecution(GpuControlOpts opts, int global_max_flow_key, 
+                                                   int global_max_flow_max);
 
 void* BkgFitWorkerGpu(void* arg); 
 void InitConstantMemoryOnGpu(int device, PoissonCDFApproxMemo& poiss_cache);
 
-void SimpleFitStreamExecutionOnGpu(WorkerInfoQueue* q);
+void SimpleFitStreamExecutionOnGpu(WorkerInfoQueue* q, WorkerInfoQueue* errorQueue );
 //void SingleFlowStreamExecutionOnGpu(WorkerInfoQueue* q);
 //void MultiFlowStreamExecutionOnGpu(WorkerInfoQueue* q);
 bool TryToAddSingleFitStream(void * vpsM, WorkerInfoQueue* q);

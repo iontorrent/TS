@@ -18,7 +18,7 @@
 #include "RegionTracker.h"
 #include "EmphasisVector.h"
 // this is a bit kludgey, but to make things easy, the single-flow lev mar fitter
-// uses struct bead_params and struct reg_params...so this include needs to be below
+// uses struct BeadParams and struct reg_params...so this include needs to be below
 // those definitions
 
 #define AMPLITUDE 0
@@ -42,8 +42,8 @@ class single_flow_optimizer
    AlternatingDirectionOneFlow *AltFit;
    
     // keep these around to avoid allocating when I need to talk to the above objects
-    float max_param[2];
-    float min_param[2];
+    float local_max_param[2];
+    float local_min_param[2];
     float val_param[2];
     float pmax_param[2];
     float pmin_param[2];
@@ -65,27 +65,23 @@ class single_flow_optimizer
     void Delete();
 
     // picks from the below options
-    int FitOneFlow (int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
-                                        flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
+    int FitOneFlow (int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
+                                        int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
     // my different optimizers
-    int FitStandardPath (int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
-        flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
+    int FitStandardPath (int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
+        int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
     void FitKrateOneFlow(int fnum, float *evect, 
-                                            bead_params *p, error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, 
-                                            int l_i_start, flow_buffer_info &my_flow, TimeCompression &time_c,
+                                            BeadParams *p, error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, 
+                                            int l_i_start, int flow_block_start, TimeCompression &time_c,
                                             EmphasisClass &emphasis_data,RegionTracker &my_regions);
-    void FitKrateOneFlow2(int fnum, float *evect, 
-                                            bead_params *p, error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, 
-                                            int l_i_start, flow_buffer_info &my_flow, TimeCompression &time_c,
-                                            EmphasisClass &emphasis_data,RegionTracker &my_regions);                                        
-    void FitThisOneFlow(int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
-                                           flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
+    void FitThisOneFlow(int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
+                                           int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
 
                                     
-    void FitProjection(int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, int NucID, float *lnucRise, int l_i_start,
-                                           flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
-    void FitAlt(int fnum, float *evect, bead_params *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
-                                           flow_buffer_info &my_flow, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions, bool krate_fit);
+    void FitProjection(int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, int NucID, float *lnucRise, int l_i_start,
+                                           int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
+    void FitAlt(int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
+                                           int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions, bool krate_fit);
                                            
     void FillDecisionThreshold(float nuc_threshold);
     
@@ -99,6 +95,7 @@ class single_flow_optimizer
     {
         retry_limit = _retry_limit;
     }
+    float AdjustEmphasisForKmult(float kmult, int retry_count);
 
     void SetUpEmphasisForLevMarOptimizer(EmphasisClass* emphasis_data)
     {

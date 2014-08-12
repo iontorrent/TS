@@ -26,6 +26,7 @@ class Halo{
     std::vector<float> dark_matter_compensator;  // compensate for systematic errors in background hydrogen modeling, "dark matter"
     float weight[NUMDM];
     DarkMatterType mytype;
+    bool training_only;
     float *dark_nuc_comp[NUMDM];
 
     Halo();

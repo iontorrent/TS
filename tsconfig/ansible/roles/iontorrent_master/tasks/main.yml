@@ -1,0 +1,69 @@
+---
+# file: roles/iontorrent_master/tasks/main.yml
+
+#-----------------------------------------------------------------------------
+# Install system packages for a master node
+#-----------------------------------------------------------------------------
+- name: preseed postfix package
+  script: postfix.preseed {{ ansible_fqdn }}
+  
+- name: preseed rabbitmq package
+  script: rabbitmq.preseed
+  
+- name: preseed samba package
+  script: samba.preseed
+
+- name: Install system packages for master node
+  apt: name={{item}} state=latest force=yes
+  with_items: ionmaster_syspkg_list
+
+#-----------------------------------------------------------------------------
+# Install Ion Torrent Packages for a master node
+#-----------------------------------------------------------------------------
+- name: Install packages for head node
+  apt: name={{ item }} state=latest force=yes
+  with_items: ionmaster_ionpkg_list
+    
+# optional install:
+# ion-pgmupdates -or- ion-protonupdates -or- both(?)
+# Check for existence of previous install of ion-protonupdates
+- command: /usr/bin/test -e /results/proton/updates
+  register: proton
+  ignore_errors: yes
+  
+- name: Install ion-protonupdates
+  apt: name=ion-protonupdates state=latest force=yes
+  when: proton|success
+
+# Ensure Ion system daemons are running
+- name: Ion Daemons
+  service: name={{ item }} state=running
+  with_items:
+    - ionCrawler
+    - ionJobServer
+    - ionPlugin
+    - celeryd
+    - rabbitmq-server
+
+#-----------------------------------------------------------------------------
+# Site Specific Database Changes
+#-----------------------------------------------------------------------------
+# Add compute node hostnames to the Crunchers table
+- name: python script to add compute node to Cruncher Table
+  when: "'{{ item }}' != '{{ ansible_nodename }}'"
+  script: 'add_cruncher.py {{ item }}'
+  with_items:
+    - "{{ groups.computes }}"
+    
+#-----------------------------------------------------------------------------
+# If there are compute nodes, we need to install apt-cacher-ng package and configure it
+#-----------------------------------------------------------------------------
+- name: Install apt-cacher-ng package
+  apt: name=apt-cacher-ng state=latest
+  when: "groups.computes|length > 0"
+- name: Configure apt-cacher-ng
+  lineinfile: dest=/etc/apt/apt.conf.d/01proxy create=true state=present
+                regexp='Acquire::http::Proxy.*'
+                line='Acquire::http::Proxy "http://localhost:3142";'
+  when: "groups.computes|length > 0"
+

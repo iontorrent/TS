@@ -43,8 +43,8 @@ def disk_report():
     for i in dat:
         key = i[0]
         report[key] = []
-        for j in i:
-            if j != '' and j != key:
+        for j in i[1:]:
+            if j != '':
                 report[key].append(j)
     devices = []
     for k, v in report.iteritems():

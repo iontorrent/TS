@@ -2,9 +2,11 @@
 
 
 #include <list>
-#include <time.h>
+#include <ctime>
 #include "OptArgs.h"
 #include "Realigner.h"
+
+#include <iomanip>
 
 
 using namespace std;
@@ -33,6 +35,7 @@ int PrintHelp()
   printf ("  -a,--anchors   (def. true)  BOOL       reduce matching anchors at the ends to `bandwidth` bases\n");
   printf ("  -b,--bandwidth (def. 10)    INT        diagonal bandwidth for tubed alignment\n");
   printf ("  -v,--verbose   (def. false) BOOL       print alignment information for each read\n");
+  printf ("  -l,--log       (def. none)  FILE       log file for categorized queries\n");
   printf ("-------------------------------------------\n");
 
   return 1;
@@ -57,13 +60,24 @@ int main (int argc, const char *argv[])
   bool   debug      = opts.GetFirstBoolean ('d', "debug", false);
   int    format     = opts.GetFirstInt     ('f', "format", 1);
   int  num_threads  = opts.GetFirstInt     ('t', "threads", 8);
-
+  string log_fname  = opts.GetFirstString  ('l', "log", "");
+  
 
   if (input_bam.empty() or output_bam.empty())
     return PrintHelp();
 
   opts.CheckNoLeftovers();
 
+  std::ofstream logf;
+  if (log_fname.size ())
+  {
+    logf.open (log_fname.c_str ());
+    if (!logf.is_open ())
+    {
+      fprintf (stderr, "bamrealignment: Failed to open log file %s\n", log_fname.c_str());
+      return 1;
+    }
+  }
 
   BamReader reader;
   if (!reader.Open(input_bam)) {
@@ -99,8 +113,20 @@ int main (int argc, const char *argv[])
   unsigned int readcounter = 0;
   unsigned int mapped_readcounter = 0;
   unsigned int realigned_readcounter = 0;
+  unsigned int modified_alignment_readcounter = 0;
   unsigned int pos_update_readcounter = 0;
+  unsigned int failed_clip_realigned_readcount = 0;
+  
+  unsigned int already_perfect_readcount = 0;
+  
+  unsigned int bad_md_tag_readcount = 0;
+  unsigned int error_recreate_ref_readcount = 0;
+  unsigned int error_clip_anchor_readcount = 0;
+  unsigned int error_sw_readcount = 0;
+  unsigned int error_unclip_readcount = 0;
+  
   unsigned int start_position_shift;
+  int orig_position;
   int new_position;
 
   string  md_tag, new_md_tag, input = "x";
@@ -120,21 +146,29 @@ int main (int argc, const char *argv[])
   BamAlignment alignment;
   while(reader.GetNextAlignment(alignment)){
     readcounter ++;
-    
-    /*if(debug) {
-      cout << alignment.Name << endl;
-      if (alignment.Name.compare("8HDVJ:00239:00175") == 0)
-	aligner.verbose_ = true;
-    }*/
+    position_shift = false;
+#if 0    
+    {
+      if (alignment.Name.compare("GSU0M:00155:00003") == 0)
+      {
+        cout << alignment.Name << endl;
+    	aligner.verbose_ = true;
+      }
+      else
+	aligner.verbose_ = false;
+    }
+#endif
     
     if ( (readcounter % 100000) == 0 )
        cout << "Processed " << readcounter << " reads. Elapsed time: " << (time(NULL) - start_time) << endl;
 
     if (alignment.IsMapped()) {
-
+      
+      
+      
+      orig_position = alignment.Position;
       mapped_readcounter++;
-      aligner.SetClipping(clipping);
-      aligner.SetStrand(!alignment.IsReverseStrand());
+      aligner.SetClipping(clipping, !alignment.IsReverseStrand());
       if (aligner.verbose_) {
     	cout << endl;
         if (alignment.IsReverseStrand())
@@ -146,20 +180,34 @@ int main (int argc, const char *argv[])
       if (!alignment.GetTag("MD", md_tag)) {
     	if (aligner.verbose_)
           cout << "Warning: Skipping read " << alignment.Name << ". It is mapped but missing MD tag." << endl;
+	if (logf.is_open ())
+	  logf << alignment.Name << '\t' << alignment.IsReverseStrand() << '\t' << alignment.RefID << '\t' << setfill ('0') << setw (8) << orig_position << '\t' << "MISSMD" << '\n';
+	bad_md_tag_readcount++;
       } else if (aligner.CreateRefFromQueryBases(alignment.QueryBases, alignment.CigarData, md_tag, anchors)) {
+	bool clipfail = false;
+	if (Realigner::CR_ERR_CLIP_ANCHOR == aligner.GetCreateRefError ())
+	{
+	  clipfail = true;
+	  failed_clip_realigned_readcount ++;
+	}
 
         if (!aligner.computeSWalignment(new_cigar_data, new_md_data, start_position_shift)) {
           if (aligner.verbose_)
             cout << "Error in the alignment! Not updating read information." << endl;
+	  if (logf.is_open ())
+	    logf << alignment.Name << '\t' << alignment.IsReverseStrand() << '\t' << alignment.RefID << '\t' << setfill ('0') << setw (8) << orig_position << '\t' << "SWERR" << '\n';
+	  error_sw_readcount++;
           writer.SaveAlignment(alignment);  // Write alignment unchanged
           continue;
         }
-        
 
         if (!aligner.addClippedBasesToTags(new_cigar_data, new_md_data, alignment.QueryBases.size())) {
           if (aligner.verbose_)
             cout << "Error when adding clipped anchors back to tags! Not updating read information." << endl;
+	  if (logf.is_open ())
+	    logf << alignment.Name << '\t' << alignment.IsReverseStrand() << '\t' << alignment.RefID << '\t' << setfill ('0') << setw (8) << orig_position << '\t' << "UNCLIPERR" << '\n';
           writer.SaveAlignment(alignment);  // Write alignment unchanged
+	  error_unclip_readcount ++;
           continue;
         }
         new_md_tag = aligner.GetMDstring(new_md_data);
@@ -174,7 +222,30 @@ int main (int argc, const char *argv[])
             alignment.Position = new_position;
           }
         }
-
+        
+        if (position_shift || alignment.CigarData.size () != new_cigar_data.size () || md_tag != new_md_tag)
+	{
+	  if (logf.is_open ())
+	  {
+	    logf << alignment.Name << '\t' << alignment.IsReverseStrand() << '\t' << alignment.RefID << '\t' << setfill ('0') << setw (8) << orig_position << '\t' << "MOD";
+	    if (position_shift)
+	      logf << "-SHIFT";
+	    if (clipfail)
+	      logf << " NOCLIP";
+	    logf << '\n';
+	  }
+	  modified_alignment_readcounter++;
+	}
+	else
+	{
+            if (logf.is_open ())
+	    {
+	      logf << alignment.Name << '\t' << alignment.IsReverseStrand() << '\t' << alignment.RefID << '\t' << setfill ('0') << setw (8) << orig_position << '\t' << "UNMOD";
+              if (clipfail)
+	        logf << " NOCLIP";
+	      logf << '\n';
+	    }
+	}
 
         if (aligner.verbose_){
           cout << alignment.Name << endl;
@@ -197,20 +268,41 @@ int main (int argc, const char *argv[])
         alignment.EditTag("MD", "Z" , new_md_tag);
 
       } // end of CreateRef else if
-      else if (aligner.verbose_) {
-        cout << alignment.Name << endl;
-        cout << "------------------------------------------" << endl;
-        // Wait for input to continue or quit program
-        if (input.size() == 0)
-          input = 'x';
-        else if (input[0] != 'c' and input[0] != 'C')
-          getline(cin, input);
-        if (input.size()>0){
-          if (input[0] == 'q' or input[0] == 'Q')
-            return 1;
-          else if (input[0] == 's' or input[0] == 'S')
-            aligner.verbose_ = false;
-        }
+      else {
+	switch (aligner.GetCreateRefError ())
+	{
+	  case Realigner::CR_ERR_RECREATE_REF:
+            if (logf.is_open ())
+	      logf << alignment.Name << '\t' << alignment.IsReverseStrand() << '\t' << alignment.RefID << '\t' << setfill ('0') << setw (8) << orig_position << '\t' << "RECRERR" << '\n';
+	    error_recreate_ref_readcount++;
+	    break;
+	  case Realigner::CR_ERR_CLIP_ANCHOR:
+            if (logf.is_open ())
+	      logf << alignment.Name << '\t' << alignment.IsReverseStrand() << '\t' << alignment.RefID << '\t' << setfill ('0') << setw (8) << orig_position << '\t' << "CLIPERR" << '\n';
+	    error_clip_anchor_readcount++;
+	    break;
+	  default:
+            if (logf.is_open ())
+	      logf << alignment.Name << '\t' << alignment.IsReverseStrand() << '\t' << alignment.RefID << '\t' << setfill ('0') << setw (8) << orig_position << '\t' << "PERFECT" << '\n';
+	    already_perfect_readcount++;
+	    break;
+	}
+	
+	if (aligner.verbose_) {
+	  cout << alignment.Name << endl;
+	  cout << "------------------------------------------" << endl;
+	  // Wait for input to continue or quit program
+	  if (input.size() == 0)
+	    input = 'x';
+	  else if (input[0] != 'c' and input[0] != 'C')
+	    getline(cin, input);
+	  if (input.size()>0){
+	    if (input[0] == 'q' or input[0] == 'Q')
+	      return 1;
+	    else if (input[0] == 's' or input[0] == 'S')
+	      aligner.verbose_ = false;
+	  }
+	}
       }
 
       // --- Debug output for Rajesh ---
@@ -237,11 +329,29 @@ int main (int argc, const char *argv[])
 
   // ----------------------------------------------------------------
   // program end -- output summary information
-  cout << "File " << input_bam << " contained " << readcounter << " reads; "
-       << mapped_readcounter << " of which where mapped." << endl
-       << "Realigned " << realigned_readcounter << " reads and " << pos_update_readcounter << " changed their start position."
-       << endl << "Processing time: " << (time(NULL)-start_time) << " seconds." << endl;
-    cout << "INFO: The output BAM file may be unsorted." << endl;
+  cout   << "                            File: " << input_bam    << endl
+         << "                     Total reads: " << readcounter  << endl
+         << "                    Mapped reads: " << mapped_readcounter << endl;
+  if (bad_md_tag_readcount)
+    cout << "            Skipped: bad MD tags: " << bad_md_tag_readcount << endl;
+  if (error_recreate_ref_readcount)
+    cout << " Skipped: unable to recreate ref: " << error_recreate_ref_readcount << endl;
+  if (error_clip_anchor_readcount)
+    cout << "  Skipped: error clipping anchor: " << error_clip_anchor_readcount << endl;
+  cout  <<  "       Skipped:  already perfect: " << already_perfect_readcount << endl
+        <<  "           Total reads realigned: " << mapped_readcounter - already_perfect_readcount - bad_md_tag_readcount - error_recreate_ref_readcount - error_clip_anchor_readcount << endl;
+  if (failed_clip_realigned_readcount)
+    cout << "                      (including  " << failed_clip_realigned_readcount << " that failed to clip)" << endl;
+  if (error_sw_readcount)
+    cout << " Failed to complete SW alignment: " << error_sw_readcount << endl;
+  if (error_unclip_readcount)
+    cout << "         Failed to unclip anchor: " << error_unclip_readcount << endl;
+  cout   << "           Succesfully realigned: " << realigned_readcounter << endl
+         << "             Modified alignments: " << modified_alignment_readcounter << endl
+         << "                Shifted position: " << pos_update_readcounter << endl;
+  
+  cout << "Processing time: " << (time(NULL)-start_time) << " seconds." << endl;
+  cout << "INFO: The output BAM file may be unsorted." << endl;
   cout << "------------------------------------------" << endl;
   return 0;
 }

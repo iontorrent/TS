@@ -95,6 +95,7 @@
 {% block sub-nav %}
     <li class="active"><a href="{% url "data" %}">Completed Runs &amp; Results</a></li>
     <li><a href="{% url "projects" %}">Projects</a></li>
+    <li><a href="{% url "datamanagement" %}">Data Management</a></li>
 {% endblock sub-nav %}
 {% block content %}
 <div id="data_view" class="content group">
@@ -215,6 +216,8 @@
                     <option value="-chipType">Chip Desc.</option>
                     <option value="flows">No. of Flows Asc.</option>
                     <option value="-flows">No. of Flows Desc.</option>
+                    <option value="repResult__qualitymetrics__q0_bases">Output Asc.</option>
+                    <option value="-repResult__qualitymetrics__q0_bases">Output Desc.</option>
                 </select>
             </div>
             <div class="search-field" style="width: 40px;">
@@ -326,7 +329,7 @@
             </h4>
         </div>
         <div class="span1">
-            <img onerror="this.style.display='none';" src="{{king_report.reportLink}}sigproc_results/Bead_density_70.png" />
+            <img onerror="this.style.display='none';" src="{{king_report.reportLink}}Bead_density_70.png" />
         </div>
         <div class="completedrun-items span3">
             <ul class="unstyled">
@@ -345,14 +348,18 @@
         <div class="run-actions pull-right">
             <a class="btn btn-tertiary reanalyze-run btn75" href="/report/analyze/{{exp.id}}/0" >Reanalyze</a>
             <a class="btn btn-tertiary btn75" href="/plan/page_plan_edit_run/{{exp.id}}/">Edit</a>
+            {{#comment}}
             <div class="btn-group storage">
 				{{#exp.archived}}
 				<button type="btn" class="storage" title="Signal Processing Input data has been {{exp.archived}}" disabled>{{exp.archived}}</button>
 				{{/exp.archived}}
 				{{^exp.archived}}
-				<label><input id="autoExempt_{{exp.id}}" class="storage-exempt" type="checkbox" {{#exp.keep}} checked="checked" {{/exp.keep}} > <b>Keep</b> </label>
+				<label rel="tooltip" title="Keep data files needed for re-Analysis">
+                    <input id="autoExempt_{{exp.id}}" class="storage-exempt" type="checkbox" {{#exp.keep}} checked="checked" {{/exp.keep}}> <b>Keep</b>
+                </label>
 				{{/exp.archived}}
             </div>
+            {{/comment}}
         </div>
     </div>
     <div class="table_container row-fluid"></div>
@@ -407,7 +414,7 @@
                     <li><a class="send_to_project" href="/data/results/{{id}}/project/"> Add Report to Project</a></li>
                     <li class="divider"></li>
                     <li>
-                        <a href="/configure/services/log/{{id}}" class="reportLog" data-pk="{{id}}" data-toggle="modal" data-target="#modal_report_log">
+                        <a href="/data/datamanagement/log/{{id}}" class="reportLog" data-pk="{{id}}" data-toggle="modal" data-target="#modal_report_log">
 {% endraw %}
                             View Log&nbsp;&nbsp;<img src="{% static "images/View_Log_Blue.png"%}"/>
 {% raw %}
@@ -462,7 +469,7 @@
                     <th class="k-header">Total Reads</th>
                     <th class="k-header">Mean Read Len.</th>
                     <th class="k-header">Q20 Bases</th>
-                    <th class="k-header">Output</th>
+                    <th class="k-header"><a class="sort_link" data-name="repResult__qualitymetrics__q0_bases" href="#">Output<span class="order_indicator"></span></a></th>
                     <th class="k-header"></th>
                 </tr>
             </thead>

@@ -1,5 +1,10 @@
 {% extends "rundb/plan/page_plan/base.html" %}
 {% load url from future %}
+{% block extra_head %}
+    {{ block.super }}
+    {% load static %}
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
+{% endblock extra_head %}
 
 {% block main-title %}{% endblock main-title %}
 
@@ -9,11 +14,13 @@
         <label for="templateName">Template Name (required): </label>
         <input style="width: 700px;" type="text" id="templateName" name="templateName" value="{{step.getCurrentSavedFieldDict.templateName|default_if_none:""}}" />
     </div>
+
 </div>
+<div id="irerror" style="color:red;"></div>
 <div class="row-fluid">
     <div class="span7">
         <p class="form-label">
-            Set as Favorite:
+            Set as Favorite
             {% if step.getCurrentSavedFieldDict.setAsFavorite %}
                 <input type="checkbox" id="setAsFavorite" name="setAsFavorite" checked="checked"/>
             {% else %}
@@ -22,6 +29,26 @@
         </p>
     </div>
 </div>
+
+<div class="row-fluid">
+    <div class="span12">
+        <label for="note" class="form-label">Add a note</label>
+        <textarea id="note" name="note" style="width:70%;height:100px;">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
+        <br>
+    </div>
+</div>
+<div id="noteerror" style="color:red;"></div>
+{% if step.validationErrors and "note" in step.validationErrors %}
+    <div class="row-fluid">
+    {% for error in step.validationErrors.note %}
+        <h4 style="color: red">{{error}}</h4>
+    {% endfor %}
+    </div>
+{% endif %}
+<div class="row-fluid">
+    <div id="errors" style="color:red;font-weight:bold;"></div>
+</div>
+
 <div class="row-fluid">  
     {% for key, values in step.validationErrors.items %}
         {% for value in values %}
@@ -54,7 +81,30 @@
 {{ block.super }}
 <script type="text/javascript">
     $(document).ready(function () {
-
+        $("#templateName").on('keyup', function(){
+            $("#irerror").html('');
+            //call the Regex test function identified in validation.js file
+            if (!is_valid_chars($(this).val())) {
+                $("#irerror").html('Error, Template Name should contain only numbers, letters, spaces, and the following: . - _');
+            }
+            //call the check max length function that's in validation.js
+            if(!is_valid_length($(this).val(), 512)) {
+                $("#irerror").html('Error, Template Name length should be 512 characters maximum');   
+            }
+        });
+        
+        $("#note").on('keyup', function(){
+            $("#noteerror").html('');
+            //call the Regex test function identified in validation.js file
+            if (!is_valid_chars($(this).val())) {
+                $("#noteerror").html('Error, Notes should contain only numbers, letters, spaces, and the following: . - _');
+            }
+            //call the check max length function that's in validation.js
+            if(!is_valid_length($(this).val(), 1024)) {
+                $("#noteerror").html('Error, Notes length should be 1024 characters maximum');   
+            } 
+        });
+        
     });
 </script>
 {% endblock post-raw %}

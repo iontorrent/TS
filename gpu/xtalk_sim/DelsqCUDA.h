@@ -1,5 +1,6 @@
-#ifndef _DELSQCUDA_H
-#define _DELSQCUDA_H
+/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+#ifndef DELSQCUDA_H
+#define DELSQCUDA_H
 
 #include <stdlib.h>
 #include "DiffEqModel.h"
@@ -87,5 +88,5 @@ public:
 
 };
 
-#endif //_DELSQCUDA_H
+#endif // DELSQCUDA_H
 

@@ -10,13 +10,17 @@
 #include <string>
 #include <vector>
 #include <deque>
+#include <pthread.h>
+#include <sys/types.h>
 
 #include "api/SamHeader.h"
 #include "api/BamAlignment.h"
 #include "api/BamWriter.h"
 
+#include "json/json.h"
+
 #include "BaseCallerUtils.h"
-#include "BarcodeDatasets.h"
+class BarcodeDatasets;
 
 using namespace std;
 using namespace BamTools;
@@ -50,6 +54,12 @@ struct ReadFilteringHistory {
   int     n_bases_after_quality_trim;
   int     n_bases_after_adapter_trim;
   int     n_bases_filtered;                     //!< Final 3' trim position or zero if filtered
+
+  // Information about adapter classification XXX
+  //int     num_adapters;  // This does not really belong here. Find a better place.
+  //int     adapter_type;
+  //double  adpter_score;
+  //double  adapter_separation;
 };
 
 
@@ -90,6 +100,11 @@ public:
   int64_t     num_reads_removed_adapter_trim_;
   int64_t     num_reads_removed_quality_trim_;
   int64_t     num_reads_final_;
+
+  // Accounting for adapter trimming XXX
+  //vector<uint64_t>    adapter_class_num_reads_;           //!< Number of reads per library adapter
+  //vector<double>      adapter_class_av_score_;            //!< Average classification score for library reads
+  //vector<double>      adapter_class_av_separation_;       //!< Average separation between adapter types
 };
 
 
@@ -98,14 +113,20 @@ public:
 
 struct ProcessedRead {
   ProcessedRead() {
-    read_group_index = 0;
-    barcode_n_errors = 0;
-	barcode_adjust_errors = 0;
+    read_group_index        = 0;
+    barcode_n_errors        = 0;
+	barcode_filt_zero_error = -1;
+	barcode_distance        = 0.0;
   }
 
+  // Variables storing barcode classification results
   int                   read_group_index;         //!< Read group index, generally based on barcode classification.
-  int                   barcode_n_errors;         //!< Number of base mismatches in barcode sequence
-  int                   barcode_adjust_errors;    //!< Number of base mismatches in barcode sequence
+  int                   barcode_n_errors;         //!< Number of base mismatches in barcode sequence.
+  int                   barcode_filt_zero_error;  //!< Inidcator whether a hard decision match was filtered in signal space.
+  float                 barcode_distance;         //!< Distance to barcode in signal space.
+  vector<float>         barcode_bias;             //!< A bias vector for the barcode found.
+
+  //
 
   ReadFilteringHistory  filter;
   BamAlignment          bam;
@@ -162,7 +183,6 @@ private:
   vector<string>            read_group_name_;
   int                       num_read_groups_;
 
-
   int                       num_regions_;           //!< Total number of regions to expect
   int                       num_regions_written_;   //!< Number of regions physically written thus far
   vector<bool>              region_ready_;          //!< Which regions are ready for writing?
@@ -177,10 +197,14 @@ private:
   bool                      save_filtered_reads_;
 
   vector<uint64_t>          read_group_num_Q20_bases_;         //!< Number of >=Q20 bases written per read group
-  vector<vector<uint64_t> > read_group_num_barcode_errors_;    //!< Number of reads with N base errors in barcode
   vector<uint64_t>          qv_histogram_;
+  vector<vector<uint64_t> > read_group_num_barcode_errors_;    //!< Number of reads with N base errors in barcode
+  vector<vector<uint64_t> > read_group_barcode_distance_hist_; //!< Distance histogram for barcodes
+  vector<vector<double> >   read_group_barcode_bias_;          //!< Bias vector for barcodes
+  vector<uint64_t>          read_group_barcode_filt_zero_err_; //!< Number of reads filtered that matched a barcode in base space.
 
   vector<BamWriter *>       bam_writer_;
+  vector<SamHeader>         sam_header_;
 
   vector<ReadFilteringStats>  read_group_stats_;
   ReadFilteringStats        combined_stats_;

@@ -12,14 +12,17 @@ Axion::Axion (SignalProcessingMasterFitter &_bkg) :
 }
 
 
-void Axion::AccumulateOneBead(bead_params *p, reg_params *reg_p, int max_fnum, float my_residual, float res_threshold)
+void Axion::AccumulateOneBead(BeadParams *p, reg_params *reg_p, int max_fnum, 
+    float my_residual, float res_threshold, int flow_block_size, int flow_block_start )
 {
     float tmp_res[bkg.region_data->my_scratch.bead_flow_t];
   
-    bkg.region_data->my_scratch.FillObserved (bkg.region_data->my_trace, p->trace_ndx);
+    bkg.region_data->my_scratch.FillObserved (bkg.region_data->my_trace, p->trace_ndx, flow_block_size);
     //params_IncrementHits(p);
-    MultiFlowComputeCumulativeIncorporationSignal (p,reg_p,bkg.region_data->my_scratch.ival,bkg.region_data->my_regions.cache_step,bkg.region_data->my_scratch.cur_bead_block,bkg.region_data->time_c,bkg.region_data->my_flow,bkg.math_poiss);
-    MultiFlowComputeTraceGivenIncorporationAndBackground (bkg.region_data->my_scratch.fval,p,reg_p,bkg.region_data->my_scratch.ival,bkg.region_data->my_scratch.shifted_bkg,bkg.region_data->my_regions,bkg.region_data->my_scratch.cur_buffer_block,bkg.region_data->time_c,bkg.region_data->my_flow,bkg.global_defaults.signal_process_control.use_vectorization, bkg.region_data->my_scratch.bead_flow_t);    // evaluate the function
+    MathModel::MultiFlowComputeCumulativeIncorporationSignal (p,reg_p,bkg.region_data->my_scratch.ival,bkg.region_data->my_regions.cache_step,*bkg.region_data_extras.cur_bead_block,bkg.region_data->time_c,
+      *bkg.region_data_extras.my_flow,bkg.math_poiss, flow_block_size, flow_block_start);
+    MathModel::MultiFlowComputeTraceGivenIncorporationAndBackground (bkg.region_data->my_scratch.fval,p,reg_p,bkg.region_data->my_scratch.ival,bkg.region_data->my_scratch.shifted_bkg,bkg.region_data->my_regions,*bkg.region_data_extras.cur_buffer_block,bkg.region_data->time_c,
+      *bkg.region_data_extras.my_flow,bkg.global_defaults.signal_process_control.use_vectorization, bkg.region_data->my_scratch.bead_flow_t, flow_block_size, flow_block_start);    // evaluate the function
     // calculate error b/w current fit and actual data
     bkg.region_data->my_scratch.MultiFlowReturnResiduals (tmp_res);  // wait, didn't I just compute the my_residual implicitly here?
 
@@ -33,38 +36,44 @@ void Axion::AccumulateOneBead(bead_params *p, reg_params *reg_p, int max_fnum, f
       if ((my_residual>res_threshold) && (p->Ampl[fnum]<0.3) )
         continue;
 
-      bkg.region_data->my_regions.missing_mass.AccumulateDarkMatter(&tmp_res[bkg.region_data->time_c.npts()*fnum],bkg.region_data->my_flow.flow_ndx_map[fnum]);
+      bkg.region_data->my_regions.missing_mass.AccumulateDarkMatter(
+        &tmp_res[bkg.region_data->time_c.npts()*fnum],
+        bkg.region_data_extras.my_flow->flow_ndx_map[fnum]);
 
     }
 }
 
 
-void Axion::AccumulateResiduals(reg_params *reg_p, int max_fnum, float *residual, float res_threshold)
+void Axion::AccumulateResiduals(reg_params *reg_p, int max_fnum, float *residual, float res_threshold, int flow_block_size, int flow_block_start)
 {
 
   for (int ibd=0;ibd < bkg.region_data->my_beads.numLBeads;ibd++)
   {
     if ( bkg.region_data->my_beads.Sampled(ibd) ) {
       // get the current parameter values for this bead
-      bead_params *p = &bkg.region_data->my_beads.params_nn[ibd];
-      AccumulateOneBead(p,reg_p, max_fnum, residual[ibd], res_threshold);
+      BeadParams *p = &bkg.region_data->my_beads.params_nn[ibd];
+      AccumulateOneBead(p,reg_p, max_fnum, residual[ibd], res_threshold, flow_block_size, flow_block_start);
     }
   }
 }
 
-void Axion::CalculateDarkMatter (int max_fnum, float *residual, float res_threshold)
+void Axion::CalculateDarkMatter (int max_fnum, float *residual, float res_threshold,
+    int flow_block_size, int flow_block_start
+  )
 {
   bkg.region_data->my_regions.missing_mass.mytype = PerNucAverage;
   bkg.region_data->my_regions.missing_mass.ResetDarkMatter();
   // prequel, set up standard bits
   reg_params *reg_p = & bkg.region_data->my_regions.rp;
-  bkg.region_data->my_scratch.FillShiftedBkg(*bkg.region_data->emptytrace, reg_p->tshift, bkg.region_data->time_c, true);
-  bkg.region_data->my_regions.cache_step.ForceLockCalculateNucRiseCoarseStep(reg_p,bkg.region_data->time_c,bkg.region_data->my_flow);
+  bkg.region_data->my_scratch.FillShiftedBkg(*bkg.region_data->emptytrace, reg_p->tshift, bkg.region_data->time_c, true, flow_block_size);
+  bkg.region_data->my_regions.cache_step.ForceLockCalculateNucRiseCoarseStep(
+    reg_p,bkg.region_data->time_c,*bkg.region_data_extras.my_flow);
 
-  AccumulateResiduals(reg_p,max_fnum, residual, res_threshold);
+  AccumulateResiduals(reg_p,max_fnum, residual, res_threshold, flow_block_size, flow_block_start);
 
   bkg.region_data->my_regions.missing_mass.NormalizeDarkMatter ();
   // make sure everything is happy in the rest of the code
+  bkg.region_data->my_regions.missing_mass.training_only = false; // now we've trained
   bkg.region_data->my_regions.cache_step.Unlock();
 }
 
@@ -88,17 +97,18 @@ void Axion::smooth_kern(float *out, float *in, float *kern, int dist, int npts)
    }
 }
 
-int Axion::Average0MerOneBead(int ibd,float *avg0p)
+int Axion::Average0MerOneBead(int ibd,float *avg0p, int flow_block_size, int flow_block_start )
 {
-   float block_signal_corrected[bkg.region_data->my_trace.bead_flow_t];
+   float block_signal_corrected[bkg.region_data->my_trace.npts * flow_block_size];
 
-   bkg.trace_bkg_adj->ReturnBackgroundCorrectedSignal (block_signal_corrected, ibd);
+   bkg.trace_bkg_adj->ReturnBackgroundCorrectedSignal (block_signal_corrected, ibd, flow_block_size,
+      flow_block_start );
 
    float tmp[bkg.region_data->time_c.npts()];
    memset(tmp,0,sizeof(tmp));
 
    int ncnt=0;
-   for (int fnum = 0; fnum < NUMFB; fnum++)
+   for (int fnum = 0; fnum < flow_block_size; fnum++)
       if (bkg.region_data->my_beads.params_nn[ibd].Ampl[fnum] < 0.5f)
       {
          for (int i = 0; i < bkg.region_data->time_c.npts(); i++)
@@ -245,7 +255,7 @@ void Axion::PCACalc(arma::fmat &avg_0mers,bool region_sampled)
    }
 }
 
-void Axion::CalculatePCADarkMatter (bool region_sampled)
+void Axion::CalculatePCADarkMatter (bool region_sampled, int flow_block_size, int flow_block_start )
 {
    bkg.region_data->my_regions.missing_mass.mytype = PCAVector;
    bkg.region_data->my_regions.missing_mass.ResetDarkMatter();
@@ -257,8 +267,9 @@ void Axion::CalculatePCADarkMatter (bool region_sampled)
    if (bkg.region_data->my_beads.numLBeads < MIN_AVG_DM_SET_SIZE)
       return;
 
-   bkg.region_data->my_scratch.FillShiftedBkg(*bkg.region_data->emptytrace, bkg.region_data->my_regions.rp.tshift, bkg.region_data->time_c, true);
-   bkg.region_data->my_regions.cache_step.ForceLockCalculateNucRiseCoarseStep(&bkg.region_data->my_regions.rp,bkg.region_data->time_c,bkg.region_data->my_flow);
+   bkg.region_data->my_scratch.FillShiftedBkg(*bkg.region_data->emptytrace, bkg.region_data->my_regions.rp.tshift, bkg.region_data->time_c, true, flow_block_size);
+   bkg.region_data->my_regions.cache_step.ForceLockCalculateNucRiseCoarseStep(
+    &bkg.region_data->my_regions.rp,bkg.region_data->time_c,*bkg.region_data_extras.my_flow);
 
    arma::fmat avg_0mers;
 
@@ -272,7 +283,7 @@ void Axion::CalculatePCADarkMatter (bool region_sampled)
 
       if ((region_sampled && bkg.region_data->my_beads.Sampled(ibd)) || ~region_sampled)
       {
-         Average0MerOneBead(ibd,avg_0mer);
+         Average0MerOneBead(ibd,avg_0mer, flow_block_size, flow_block_start);
 
          // now add this to the list of observed traces
          for (int i=0;i < bkg.region_data->time_c.npts();i++)

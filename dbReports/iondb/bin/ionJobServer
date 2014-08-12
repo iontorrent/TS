@@ -15,8 +15,7 @@
 # Depend on lsb-base (>= 3.0-6) to ensure that this file is present.
 . /lib/lsb/init-functions
 
-EXEC='/opt/ion/iondb/anaserve/serve.py'
-EXEC_CMD="/usr/bin/python -- ${EXEC}"
+DAEMON='/opt/ion/iondb/anaserve/serve.py'
 DAEMON_NAME='ionJobServer'
 USERID='www-data'
 PIDFILE="/var/run/${DAEMON_NAME}.pid"
@@ -24,7 +23,7 @@ PIDFILE="/var/run/${DAEMON_NAME}.pid"
 function start_function ()
 {
     # Start the Job Server
-    if [ -f ${EXEC} ]
+    if [ -f ${DAEMON} ]
     then
         start-stop-daemon \
             --start \
@@ -33,8 +32,8 @@ function start_function ()
             --pidfile ${PIDFILE} \
             --make-pidfile \
             --background \
-            --startas $EXEC_CMD
-        
+            --startas $DAEMON
+
         if [ $? -eq 0 ]
         then
             pid=`cat ${PIDFILE}`
@@ -52,14 +51,18 @@ function start_function ()
 function stop_function ()
 {
     echo "Stopping $DAEMON_NAME"
-    start-stop-daemon --stop --user ${USERID} --pidfile ${PIDFILE} --retry 5
+    start-stop-daemon \
+        --stop \
+        --user ${USERID} \
+        --pidfile ${PIDFILE} \
+        --retry 5
     rm -f ${PIDFILE}
 }
 
 function status ()
 {
     if [ -f ${PIDFILE} ]; then
-        pidofproc ${PIDFILE%*.*} $DAEMON_NAME
+        status_of_proc -p $PIDFILE $DAEMON $DAEMON_NAME && exit 0 || exit $?
     else
         echo "No pid file: ${PIDFILE}"
         return 1

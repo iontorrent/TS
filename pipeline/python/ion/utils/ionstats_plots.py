@@ -75,6 +75,7 @@ def read_length_sparkline(ionstats_basecaller_filename, output_png_filename, max
         ax.set_xlim(-10,max_length)
         fig.patch.set_alpha(0.0)
         fig.savefig(output_png_filename)
+        plt.close() # Figures created through the pyplot interface (`matplotlib.pyplot.figure`) are retained until explicitly closed and may consume too much memory.
 
     except:
         printtime('Unable to generate plot %s' % output_png_filename)
@@ -114,6 +115,7 @@ def read_length_histogram(ionstats_basecaller_filename, output_png_filename, max
         ax.set_xlabel("Read Length")
         fig.patch.set_alpha(0.0)
         fig.savefig(output_png_filename)
+        plt.close()
 
     except:
         printtime('Unable to generate plot %s' % output_png_filename)
@@ -148,6 +150,7 @@ def old_read_length_histogram(ionstats_basecaller_filename, output_png_filename,
         ax.set_xlabel('Read Length')
         ax.set_ylabel('Count')
         fig.savefig(output_png_filename)
+        plt.close()
 
     except:
         printtime('Unable to generate plot %s' % output_png_filename)
@@ -275,6 +278,7 @@ def alignment_rate_plot(alignStats, ionstats_basecaller_filename, output_png_fil
     ax.set_ylim(0,1.2*max_y)
     fig.patch.set_alpha(0.0)
     fig.savefig(output_png_filename)
+    plt.close()
     
     if not y_ticks:
         alignment_rate_plot(alignStats, ionstats_basecaller_filename, "large_" + output_png_filename,graph_max_x,y_ticks=True)
@@ -324,6 +328,7 @@ def alignment_rate_plot2(ionstats_alignment_filename, output_png_filename, graph
             fig = plt.figure(figsize=(7,5),dpi=100)
 
         max_x = min(graph_max_x, len(ionstats_alignment['full']['read_length_histogram']))
+        max_y_true = max(histogram_full)
         max_y = max(histogram_full)+1
 
         if not y_ticks:
@@ -368,12 +373,13 @@ def alignment_rate_plot2(ionstats_alignment_filename, output_png_filename, graph
                 fontsize=fontsize_small, zorder=4, color=color_back,weight='bold',stretch='condensed')
         ax.text(0.8*max_x,0.8*max_y,' %d%%'%unmap_percent,horizontalalignment='center',verticalalignment='center', fontsize=fontsize_big, zorder=4, color=color_back,weight='bold',stretch='condensed')
         if not y_ticks:
-            ax.text(-0.06*max_x,1.02*max_y,intWithCommas(max_y),horizontalalignment='left',verticalalignment='bottom',  zorder=4, color="black")
+            ax.text(-0.06*max_x,1.02*max_y,intWithCommas(max_y_true),horizontalalignment='left',verticalalignment='bottom',  zorder=4, color="black")
            
         ax.set_xlim(0,max_x)
         ax.set_ylim(0,1.2*max_y)
         fig.patch.set_alpha(0.0)
         fig.savefig(output_png_filename)
+        plt.close()
 
         if not y_ticks:
             alignment_rate_plot2(ionstats_alignment_filename, "large_" + output_png_filename, graph_max_x,y_ticks=True)
@@ -430,6 +436,7 @@ def base_error_plot(ionstats_alignment_filename, output_png_filename, graph_max_
         #ax.subplots_adjust(left=0.2, right=0.9, top=0.9, bottom=0.1)
         fig.patch.set_alpha(0.0)
         fig.savefig(output_png_filename)
+        plt.close()
         
     except:
         printtime('Unable to generate plot %s' % output_png_filename)
@@ -467,6 +474,7 @@ def old_aq_length_histogram(ionstats_alignment_filename, output_png_filename, aq
         ax.set_xlim(0,xmax)
         ax.set_ylim(0,ymax)
         fig.savefig(output_png_filename)
+        plt.close()
         
     except:
         printtime('Unable to generate plot %s' % output_png_filename)
@@ -525,6 +533,7 @@ def quality_histogram(ionstats_basecaller_filename,output_png_filename):
         ax.set_ylim(-0.1*max_y,1.2*max_y)
         fig.patch.set_alpha(0.0)
         fig.savefig(output_png_filename)
+        plt.close()
 
     except:
         printtime('Unable to generate plot %s' % output_png_filename)
@@ -573,6 +582,7 @@ def tf_length_histograms(ionstats_tf_filename, output_dir):
             ax.set_xlim(0,num_bases+2)
             fig.patch.set_alpha(0.0)
             fig.savefig(output_png_filename)
+            plt.close()
             
             # Step 2: New AQ10
             
@@ -597,7 +607,8 @@ def tf_length_histograms(ionstats_tf_filename, output_dir):
             ax.set_xlim(0,num_bases+2)
             fig.patch.set_alpha(0.0)
             fig.savefig(output_png_filename)
-            
+            plt.close()
+
     except:
         printtime('Unable to generate TF plots')
         traceback.print_exc()

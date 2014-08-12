@@ -1,0 +1,10 @@
+---
+# Variables applicable to database servers
+
+# postgresql configuration modification values
+kernel_shmmax: 1073741824
+shared_buffers: 512MB
+checkpoint_segments: 16
+commit_delay: 1000
+work_mem: 2MB
+effective_cache_size: 16GB

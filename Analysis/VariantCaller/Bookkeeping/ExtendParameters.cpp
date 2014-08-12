@@ -22,8 +22,9 @@ void VariantCallerHelp() {
   printf("  -r,--reference                        FILE        reference fasta file [required]\n");
   printf("  -b,--input-bam                        FILE        bam file with mapped reads [required]\n");
   printf("  -g,--sample-name                      STRING      sample for which variants are called (In case of input BAM files with multiple samples) [optional if there is only one sample]\n");
+  printf("     --force-sample-name                STRING      force all read groups to have this sample name [off]\n");
   printf("  -t,--target-file                      FILE        only process targets in this bed file [optional]\n");
-  printf("  -R --region                           STRING      only process <chrom>:<start_position>-<end_position> [optional] \n") ;
+  printf("     --trim-ampliseq-primers            on/off      match reads to targets and trim the ends that reach outside them [off]\n");
   printf("  -D,--downsample-to-coverage           INT         ?? [2000]\n");
   printf("     --model-file                       FILE        HP recalibration model input file.\n");
   printf("     --recal-model-hp-thres             INT         Lower threshold for HP recalibration.\n");
@@ -43,11 +44,8 @@ void VariantCallerHelp() {
   printf("     --allow-mnps                       on/off      allow generation of mnp candidates [on]\n");
   printf("     --allow-complex                    on/off      allow generation of block substitution candidates [off]\n");
   printf("     --max-complex-gap                  INT         maximum number of reference alleles between two alternate alleles to allow merging of the alternate alleles [1]\n");
-  printf("     --use-reference-allele             on/off      generate bogus alt=ref candidates for all non-variant locations [off]\n");
-  //printf("     --left-align-indels                on/off      Experimental: Left align Indels in candidate generation [off]\n");
   printf("  -m,--use-best-n-alleles               INT         maximum number of snp alleles [2]\n");
   printf("  -M,--min-mapping-qv                   INT         do not use reads with mapping quality below this [4]\n");
-  //printf("  -q,--min-base-qv                      INT         do not use reads with base quality below this [4]\n");
   printf("  -U,--read-snp-limit                   INT         do not use reads with number of snps above this [10]\n");
   printf("  -z,--read-max-mismatch-fraction       FLOAT       do not use reads with fraction of mismatches above this [1.0]\n");
   printf("     --gen-min-alt-allele-freq          FLOAT       minimum required alt allele frequency to generate a candidate [0.2]\n");
@@ -68,6 +66,7 @@ void VariantCallerHelp() {
   printf("     --heavy-tailed                     INT         degrees of freedom in t-dist modeling signal residual heavy tail [3]\n");
   printf("     --suppress-recalibration           on/off      Suppress homopolymer recalibration [on].\n");
   printf("     --do-snp-realignment               on/off      Realign reads in the vicinity of candidate snp variants [on].\n");
+  printf("     --do-mnp-realignment               on/off      Realign reads in the vicinity of candidate mnp variants [do-snp-realignment].\n");
   printf("\n");
 
   printf("Advanced variant candidate scoring options:\n");
@@ -88,17 +87,31 @@ void VariantCallerHelp() {
   printf("  -k,--snp-min-coverage                 INT         filter out snps with total coverage below this [6]\n");
   printf("  -C,--snp-min-cov-each-strand          INT         filter out snps with coverage on either strand below this [1]\n");
   printf("  -B,--snp-min-variant-score            FLOAT       filter out snps with QUAL score below this [2.5]\n");
-  printf("  -s,--snp-strand-bias                  FLOAT       filter out snps with strand bias above this [0.95]\n");
+  printf("  -s,--snp-strand-bias                  FLOAT       filter out snps with strand bias above this [0.95] given pval < snp-strand-bias-pval\n");
+  printf("     --snp-strand-bias-pval             FLOAT       filter out snps with pval below this [1.0] given strand bias > snp-strand-bias\n");
+  //  printf("  -s,--snp-strand-bias                FLOAT       filter out snps with strand bias above this [0.95]\n");
   printf("  -A,--snp-min-allele-freq              FLOAT       minimum required alt allele frequency for non-reference snp calls [0.2]\n");
+
+  printf("     --mnp-min-coverage                 INT         filter out mnps with total coverage below this [snp-min-coverage]\n");
+  printf("     --mnp-min-cov-each-strand          INT         filter out mnps with coverage on either strand below this, [snp-min-coverage-each-strand]\n");
+  printf("     --mnp-min-variant-score            FLOAT       filter out mnps with QUAL score below this [snp-min-variant-score]\n");
+  printf("     --mnp-strand-bias                  FLOAT       filter out mnps with strand bias above this [snp-strand-bias] given pval < mnp-strand-bias-pval\n");
+  printf("     --mnp-strand-bias-pval             FLOAT       filter out mnps with pval below this [snp-strand-bias-pval] given strand bias > mnp-strand-bias\n");
+  printf("     --mnp-min-allele-freq              FLOAT       minimum required alt allele frequency for non-reference mnp calls [snp-min-allele-freq]\n");
+
   printf("     --indel-min-coverage               INT         filter out indels with total coverage below this [30]\n");
   printf("     --indel-min-cov-each-strand        INT         filter out indels with coverage on either strand below this [1]\n");
   printf("     --indel-min-variant-score          FLOAT       filter out indels with QUAL score below this [2.5]\n");
-  printf("  -S,--indel-strand-bias                FLOAT       filter out indels with strand bias above this [0.85]\n");
+  printf("  -S,--indel-strand-bias                FLOAT       filter out indels with strand bias above this [0.95] given pval < indel-strand-bias-pval\n");
+  printf("     --indel-strand-bias-pval           FLOAT       filter out indels with pval below this [1.0] given strand bias > indel-strand-bias\n");
+  //  printf("  -S,--indel-strand-bias                FLOAT       filter out indels with strand bias above this [0.85]\n");
   printf("     --indel-min-allele-freq            FLOAT       minimum required alt allele frequency for non-reference indel call [0.2]\n");
   printf("     --hotspot-min-coverage             INT         filter out hotspot variants with total coverage below this [6]\n");
   printf("     --hotspot-min-cov-each-strand      INT         filter out hotspot variants with coverage on either strand below this [1]\n");
   printf("     --hotspot-min-variant-score        FLOAT       filter out hotspot variants with QUAL score below this [2.5]\n");
-  printf("     --hotspot-strand-bias              FLOAT       filter out hotspot variants with strand bias above this [0.95]\n");
+  printf("     --hotspot-strand-bias              FLOAT       filter out hotspot variants with strand bias above this [0.95] given pval < hotspot-strand-bias-pval\n");
+  printf("     --hotspot-strand-bias-pval         FLOAT       filter out hotspot variants with pval below this [1.0] given strand bias > hotspot-strand-bias\n");
+  //  printf("     --hotspot-strand-bias              FLOAT       filter out hotspot variants with strand bias above this [0.95]\n");
   printf("  -H,--hotspot-min-allele-freq          FLOAT       minimum required alt allele frequency for non-reference hotspot variant call [0.2]\n");
   // Filters not depending on the variant score
   printf("  -L,--hp-max-length                    INT         filter out indels in homopolymers above this [8]\n");
@@ -111,17 +124,15 @@ void VariantCallerHelp() {
   printf("     --filter-unusual-predictions       FLOAT       posterior log likelihood threshold for accepting bias estimate [0.3]\n");
   printf("     --filter-deletion-predictions      FLOAT       check post-evaluation systematic bias in deletions [100.0]\n");
   printf("     --filter-insertion-predictions     FLOAT       check post-evaluation systematic bias in insertions [100.0]\n");
-  printf("     --heal-snps                        on/off      suppress in/dels not participating in diploid variant genotypes if the genotype contains a SNP [on].\n");
+  printf("     --heal-snps                        on/off      suppress in/dels not participating in diploid variant genotypes if the genotype contains a SNP or MNP [on].\n");
   printf("\n");
 
   printf("Debugging:\n");
   printf("  -d,--debug                            INT         (0/1/2) display extra debug messages [0]\n");
-  printf("  -3,--diagnostic-input-vcf             FILE        (devel) list of candidate variant locations and alleles [optional]\n");
-  printf("     --skip-candidate-generation        on/off      (devel) bypass candidate generation and use diagnostic-input-vcf [off]\n");
   printf("     --do-json-diagnostic               on/off      (devel) dump internal state to json file (uses much more time/memory/disk) [off]\n");
+  printf("     --postprocessed-bam                FILE        (devel) save tvc-processed reads to an (unsorted) BAM file [optional]");
   printf("     --do-minimal-diagnostic            on/off      (devel) provide minimal read information for called variants [off]\n");
   printf("     --override-limits                  on/off      (devel) disable limit-check on input parameters [off].\n");
-  //printf("  -G,--reference-sample                 STRING      ?? [optional]\n");
   printf("\n");
 }
 
@@ -156,24 +167,10 @@ ProgramControlSettings::ProgramControlSettings() {
   minimal_diagnostic = false;
   json_plot_dir = "./json_diagnostic/";
   inputPositionsOnly = false;
-  skipCandidateGeneration = false;
   suppress_recalibration = true;
-  do_snp_realignment = true;
   resolve_clipped_bases = false;
 }
 
-ExtendParameters::ExtendParameters(void) : Parameters() {
-
-  vcfProvided = false;
-  sseMotifsProvided = false;
-  //Input files
-  inputBAM = "";
-  outputDir = ".";
-
-  candidateVCFFileName = "";
-  recalModelHPThres = 4;
-
-}
 
 int GetParamsInt(Json::Value& json, const string& key, int default_value) {
   if (not json.isMember(key))
@@ -330,6 +327,8 @@ void ClassifyFilters::SetOpts(OptArgs &opts, Json::Value & tvc_params) {
   minRatioReadsOnNonErrorStrand         = RetrieveParameterDouble(opts, tvc_params, '-', "min-ratio-reads-non-sse-strand", 0.2);
   sse_relative_safety_level             = RetrieveParameterDouble(opts, tvc_params, '-', "sse-relative-safety-level", 0.025);
   // min ratio of reads supporting variant on non-sse strand for variant to be called
+  do_snp_realignment                    = RetrieveParameterBool  (opts, tvc_params, '-', "do-snp-realignment", true);
+  do_mnp_realignment                    = RetrieveParameterBool  (opts, tvc_params, '-', "do-mnp-realignment", do_snp_realignment);
 
 }
 
@@ -349,7 +348,7 @@ void ControlCallAndFilters::CheckParameterLimits() {
   filter_variant.CheckParameterLimits();
   CheckParameterLowerBound<float>     ("data-quality-stringency",  data_quality_stringency,  0.0f);
   CheckParameterLowerUpperBound<float>("read-rejection-threshold", read_rejection_threshold, 0.0f, 1.0f);
-  CheckParameterLowerUpperBound<int>  ("downsample-to-coverage",   downSampleCoverage,       20, 10000);
+  CheckParameterLowerUpperBound<int>  ("downsample-to-coverage",   downSampleCoverage,       20, 100000);
 
  // CheckParameterLowerUpperBound<float>("tune-xbias",      xbias_tune,     0.001f, 1000.0f);
   CheckParameterLowerUpperBound<float>("tune-sbias",      sbias_tune,     0.001f, 1000.0f);
@@ -359,13 +358,22 @@ void ControlCallAndFilters::CheckParameterLimits() {
   CheckParameterLowerUpperBound<float>("snp-min-allele-freq",      filter_snps.min_allele_freq,     0.0f, 1.0f);
   CheckParameterLowerBound<int>       ("snp-min-coverage",         filter_snps.min_cov,             0);
   CheckParameterLowerUpperBound<float>("snp-strand-bias",          filter_snps.strand_bias_threshold,  0.5f, 1.0f);
+  CheckParameterLowerUpperBound<float>("snp-strand-bias-pval",     filter_snps.strand_bias_pval_threshold,  0.0f, 1.0f);
 //  CheckParameterLowerBound<float>     ("snp-beta-bias",            filter_snps.beta_bias_filter,    0.0f);
+
+  CheckParameterLowerBound<int>       ("mnp-min-cov-each-strand",  filter_mnp.min_cov_each_strand, 0);
+  CheckParameterLowerBound<float>     ("mnp-min-variant-score",    filter_mnp.min_quality_score,   0.0f);
+  CheckParameterLowerUpperBound<float>("mnp-min-allele-freq",      filter_mnp.min_allele_freq,     0.0f, 1.0f);
+  CheckParameterLowerBound<int>       ("mnp-min-coverage",         filter_mnp.min_cov,             0);
+  CheckParameterLowerUpperBound<float>("mnp-strand-bias",          filter_mnp.strand_bias_threshold,  0.5f, 1.0f);
+  CheckParameterLowerUpperBound<float>("mnp-strand-bias-pval",     filter_mnp.strand_bias_pval_threshold,  0.0f, 1.0f);
 
   CheckParameterLowerBound<int>       ("indel-min-cov-each-strand",  filter_hp_indel.min_cov_each_strand, 0);
   CheckParameterLowerBound<float>     ("indel-min-variant-score",    filter_hp_indel.min_quality_score,   0.0f);
   CheckParameterLowerUpperBound<float>("indel-min-allele-freq",      filter_hp_indel.min_allele_freq,     0.0f, 1.0f);
   CheckParameterLowerBound<int>       ("indel-min-coverage",         filter_hp_indel.min_cov,             0);
   CheckParameterLowerUpperBound<float>("indel-strand-bias",          filter_hp_indel.strand_bias_threshold,  0.5f, 1.0f);
+  CheckParameterLowerUpperBound<float>("indel-strand-bias-pval",     filter_hp_indel.strand_bias_pval_threshold,  0.0f, 1.0f);
 //  CheckParameterLowerBound<float>     ("indel-beta-bias",            filter_hp_indel.beta_bias_filter,    0.0f);
 
   CheckParameterLowerBound<int>       ("hotspot-min-cov-each-strand",  filter_hotspot.min_cov_each_strand, 0);
@@ -373,6 +381,7 @@ void ControlCallAndFilters::CheckParameterLimits() {
   CheckParameterLowerUpperBound<float>("hotspot-min-allele-freq",      filter_hotspot.min_allele_freq,     0.0f, 1.0f);
   CheckParameterLowerBound<int>       ("hotspot-min-coverage",         filter_hotspot.min_cov,             0);
   CheckParameterLowerUpperBound<float>("hotspot-strand-bias",          filter_hotspot.strand_bias_threshold,  0.5f, 1.0f);
+  CheckParameterLowerUpperBound<float>("hotspot-strand-bias-pval",     filter_hotspot.strand_bias_pval_threshold,  0.0f, 1.0f);
 //  CheckParameterLowerBound<float>     ("hotspot-beta-bias",            filter_hotspot.beta_bias_filter,    0.0f);
 }
 
@@ -404,7 +413,14 @@ void ControlCallAndFilters::SetOpts(OptArgs &opts, Json::Value& tvc_params) {
   filter_snps.min_allele_freq           = RetrieveParameterDouble(opts, tvc_params, 'A', "snp-min-allele-freq", 0.2);
   filter_snps.min_cov                   = RetrieveParameterInt   (opts, tvc_params, 'k', "snp-min-coverage", 6);
   filter_snps.strand_bias_threshold     = RetrieveParameterDouble(opts, tvc_params, 's', "snp-strand-bias", 0.95);
-//  filter_snps.beta_bias_filter          = RetrieveParameterDouble(opts, tvc_params, '-', "snp-beta-bias", 8.0f);
+  filter_snps.strand_bias_pval_threshold= RetrieveParameterDouble(opts, tvc_params, 's', "snp-strand-bias-pval", 1.0);
+
+  filter_mnp.min_cov_each_strand    = RetrieveParameterInt   (opts, tvc_params, '-', "mnp-min-cov-each-strand", filter_snps.min_cov_each_strand);
+  filter_mnp.min_quality_score      = RetrieveParameterDouble(opts, tvc_params, '-', "mnp-min-variant-score", filter_snps.min_quality_score);
+  filter_mnp.min_allele_freq        = RetrieveParameterDouble(opts, tvc_params, 'H', "mnp-min-allele-freq", filter_snps.min_allele_freq);
+  filter_mnp.min_cov                = RetrieveParameterInt   (opts, tvc_params, '-', "mnp-min-coverage", filter_snps.min_cov);
+  filter_mnp.strand_bias_threshold  = RetrieveParameterDouble(opts, tvc_params, '-', "mnp-strand-bias", filter_snps.strand_bias_threshold);
+  filter_mnp.strand_bias_pval_threshold= RetrieveParameterDouble(opts, tvc_params, 's', "mnp-strand-bias-pval", filter_snps.strand_bias_pval_threshold);
 
   // hp_indels are more complex
   filter_hp_indel.min_cov_each_strand   = RetrieveParameterInt   (opts, tvc_params, '-', "indel-min-cov-each-strand", 1);
@@ -412,7 +428,7 @@ void ControlCallAndFilters::SetOpts(OptArgs &opts, Json::Value& tvc_params) {
   filter_hp_indel.min_allele_freq       = RetrieveParameterDouble(opts, tvc_params, '-', "indel-min-allele-freq", 0.2);
   filter_hp_indel.min_cov               = RetrieveParameterInt   (opts, tvc_params, '-', "indel-min-coverage", 15);
   filter_hp_indel.strand_bias_threshold = RetrieveParameterDouble(opts, tvc_params, 'S', "indel-strand-bias", 0.85);
-//  filter_hp_indel.beta_bias_filter      = RetrieveParameterDouble(opts, tvc_params, '-', "indel-beta-bias", 8.0f);
+  filter_hp_indel.strand_bias_pval_threshold= RetrieveParameterDouble(opts, tvc_params, 's', "indel-strand-bias-pval", 1.0);
 
 
   // derive hotspots by default from SNPs
@@ -422,7 +438,7 @@ void ControlCallAndFilters::SetOpts(OptArgs &opts, Json::Value& tvc_params) {
   filter_hotspot.min_allele_freq        = RetrieveParameterDouble(opts, tvc_params, 'H', "hotspot-min-allele-freq", filter_snps.min_allele_freq);
   filter_hotspot.min_cov                = RetrieveParameterInt   (opts, tvc_params, '-', "hotspot-min-coverage", filter_snps.min_cov);
   filter_hotspot.strand_bias_threshold  = RetrieveParameterDouble(opts, tvc_params, '-', "hotspot-strand-bias", filter_snps.strand_bias_threshold);
-//  filter_hotspot.beta_bias_filter       = RetrieveParameterDouble(opts, tvc_params, '-', "hotspot-beta-bias", filter_snps.beta_bias_filter);
+  filter_hotspot.strand_bias_pval_threshold= RetrieveParameterDouble(opts, tvc_params, 's', "hotspot-strand-bias-pval", filter_snps.strand_bias_pval_threshold);
 
 }
 
@@ -446,9 +462,7 @@ void ProgramControlSettings::SetOpts(OptArgs &opts, Json::Value &tvc_params) {
 
 
   inputPositionsOnly                    = RetrieveParameterBool  (opts, tvc_params, '-', "process-input-positions-only", false);
-  skipCandidateGeneration               = RetrieveParameterBool  (opts, tvc_params, '-', "skip-candidate-generation", false);
   suppress_recalibration                = RetrieveParameterBool  (opts, tvc_params, '-', "suppress-recalibration", true);
-  do_snp_realignment                    = RetrieveParameterBool  (opts, tvc_params, '-', "do-snp-realignment", true);
   resolve_clipped_bases                 = RetrieveParameterBool  (opts, tvc_params, '-', "resolve-clipped-bases", false);
 }
 
@@ -464,17 +478,10 @@ void ExtendParameters::SetupFileIO(OptArgs &opts) {
 
   // freeBayes slot
   variantPriorsFile                     = opts.GetFirstString('c', "input-vcf", "");
-  vcfProvided = true;
   if (variantPriorsFile.empty()) {
-    vcfProvided = false;
     cerr << "INFO: No input VCF (Hotspot) file specified via -c,--input-vcf" << endl;
     //exit(1);
   }
-
-  //THIS IS FOR R&D USE ONLY
-  candidateVCFFileName                  = opts.GetFirstString('3', "diagnostic-input-vcf", "");
-  if (candidateVCFFileName.empty())
-    program_flow.skipCandidateGeneration = false;
 
   sseMotifsFileName                     = opts.GetFirstString('e', "error-motifs", "");
   sseMotifsProvided = true;
@@ -498,16 +505,11 @@ void ExtendParameters::SetupFileIO(OptArgs &opts) {
     exit(1);
   }
 
-  opts.GetOption(regions, "", 'R', "region");
-  if (!candidateVCFFileName.empty() && !variantPriorsFile.empty()) {
-    cerr << "Fatal ERROR: Both Hotspot VCF file and diagnostic VCF were specified at the same time" << endl;
-    cerr << "Fatal ERROR: For diagnostic use please specify only <diagnostic-input-vcf> " << endl;
-    exit(1);
-  }
-  else if (!candidateVCFFileName.empty()) {
-    //pass on the diagnostics VCF file to freebayes for allele generation.
-    variantPriorsFile = candidateVCFFileName;
-  }
+  postprocessed_bam                     = opts.GetFirstString('-', "postprocessed-bam", "");
+
+  sampleName                            = opts.GetFirstString('g', "sample-name", "");
+  force_sample_name                     = opts.GetFirstString('-', "force-sample-name", "");
+
 }
 
 // ------------------------------------------------------------
@@ -517,28 +519,27 @@ void ExtendParameters::SetFreeBayesParameters(OptArgs &opts, Json::Value& fb_par
   // primarily used in candidate generation
 
   targets                               = opts.GetFirstString('t', "target-file", "");
+  trim_ampliseq_primers                 = opts.GetFirstBoolean('-', "trim-ampliseq-primers", false);
+  if (targets.empty() and trim_ampliseq_primers) {
+    cerr << "ERROR: --trim-ampliseq-primers enabled but no --target-file provided" << endl;
+    exit(1);
+  }
 
   allowIndels                           = RetrieveParameterBool  (opts, fb_params, '-', "allow-indels", true);
   allowSNPs                             = RetrieveParameterBool  (opts, fb_params, '-', "allow-snps", true);
   allowMNPs                             = RetrieveParameterBool  (opts, fb_params, '-', "allow-mnps", true);
   allowComplex                          = RetrieveParameterBool  (opts, fb_params, '-', "allow-complex", false);
-  leftAlignIndels                       = RetrieveParameterBool  (opts, fb_params, '-', "left-align-indels", false);
-  if (leftAlignIndels) {
-    cout << "WARNING: left-align-indels is an experimental feature." << endl;
-  }
+  // deprecated:
+  // leftAlignIndels                       = RetrieveParameterBool  (opts, fb_params, '-', "left-align-indels", false);
+  RetrieveParameterBool  (opts, fb_params, '-', "left-align-indels", false);
   
+  //useBestNAlleles = 0;
   useBestNAlleles                       = RetrieveParameterInt   (opts, fb_params, 'm', "use-best-n-alleles", 2);
-  forceRefAllele                        = RetrieveParameterBool  (opts, fb_params, '-', "use-reference-allele", false);
   onlyUseInputAlleles                   = RetrieveParameterBool  (opts, fb_params, '-', "use-input-allele-only", false);
-  MQL0                                  = RetrieveParameterInt   (opts, fb_params, 'M', "min-mapping-qv", 4);
-  //BQL0                                  = RetrieveParameterInt   (opts, fb_params, 'q', "min-base-qv", 4);
-  BQL0                                  = 0; // Do not use base qv filter!
-  readSnpLimit                          = RetrieveParameterInt   (opts, fb_params, 'U', "read-snp-limit", 10);
+  min_mapping_qv                        = RetrieveParameterInt   (opts, fb_params, 'M', "min-mapping-qv", 4);
+  read_snp_limit                        = RetrieveParameterInt   (opts, fb_params, 'U', "read-snp-limit", 10);
   readMaxMismatchFraction               = RetrieveParameterDouble(opts, fb_params, 'z', "read-max-mismatch-fraction", 1.0);
   maxComplexGap                         = RetrieveParameterInt   (opts, fb_params, '!', "max-complex-gap", 1);
-  // more FreeBayes parameters derived from other parameters
-  if (forceRefAllele)
-    useRefAllele = true;
   // read from json or command line, otherwise default to snp frequency
   minAltFraction                        = RetrieveParameterDouble(opts, fb_params, '-', "gen-min-alt-allele-freq", my_controls.filter_snps.min_allele_freq);
   minCoverage                           = RetrieveParameterInt   (opts, fb_params, '-', "gen-min-coverage", my_controls.filter_snps.min_cov);
@@ -547,37 +548,38 @@ void ExtendParameters::SetFreeBayesParameters(OptArgs &opts, Json::Value& fb_par
 
   if (program_flow.DEBUG > 0)
     debug = true;
-  if (program_flow.DEBUG > 1)
-    debug2 = true;
 
   if (program_flow.inputPositionsOnly) {
     processInputPositionsOnly = true;
   }
 
-  if (!vcfProvided && (processInputPositionsOnly || onlyUseInputAlleles) ) {
-    cerr << "FATAL ERROR: Parameter error - Process-input-positions-only: " << processInputPositionsOnly << " use-input-allele-only: " << onlyUseInputAlleles << " :  Specified without Input VCF File " << endl;
-    exit(-1);
+  if (variantPriorsFile.empty() && (processInputPositionsOnly || onlyUseInputAlleles) ) {
+    cerr << "ERROR: Parameter error - Process-input-positions-only: " << processInputPositionsOnly << " use-input-allele-only: " << onlyUseInputAlleles << " :  Specified without Input VCF File " << endl;
+    exit(1);
   }
 }
 
 // ------------------------------------------------------------
 
-void ExtendParameters::ParametersFromJSON(OptArgs &opts, Json::Value &tvc_params, Json::Value &freebayes_params) {
+void ExtendParameters::ParametersFromJSON(OptArgs &opts, Json::Value &tvc_params, Json::Value &freebayes_params, Json::Value &params_meta) {
   string parameters_file                = opts.GetFirstString('-', "parameters-file", "");
   Json::Value parameters_json(Json::objectValue);
   if (not parameters_file.empty()) {
     ifstream in(parameters_file.c_str(), ifstream::in);
+
     if (!in.good()) {
-      fprintf(stderr, "[tvc] ERROR: cannot open %s\n", parameters_file.c_str());
+      fprintf(stderr, "[tvc] FATAL ERROR: cannot open %s\n", parameters_file.c_str());
+      exit(-1);
     }
-    else {
-      in >> parameters_json;
-      in.close();
-      if (parameters_json.isMember("pluginconfig"))
-        parameters_json = parameters_json["pluginconfig"];
-      tvc_params = parameters_json.get("torrent_variant_caller", Json::objectValue);
-      freebayes_params = parameters_json.get("freebayes", Json::objectValue);
-    }
+    
+    in >> parameters_json;
+    in.close();
+    if (parameters_json.isMember("pluginconfig"))
+      parameters_json = parameters_json["pluginconfig"];
+
+    tvc_params = parameters_json.get("torrent_variant_caller", Json::objectValue);
+    freebayes_params = parameters_json.get("freebayes", Json::objectValue);
+    params_meta = parameters_json.get("meta", Json::objectValue);
   }
 }
 
@@ -590,10 +592,10 @@ void ExtendParameters::CheckParameterLimits() {
   program_flow.CheckParameterLimits();
 
   // Checking FreeBayes parameters
-  CheckParameterLowerUpperBound<int>  ("use-best-n-alleles",         useBestNAlleles,         1,    20);
-  CheckParameterLowerBound<int>       ("min-mapping-qv",             MQL0,                    0);
-  CheckParameterLowerBound<int>       ("read-snp-limit",             readSnpLimit,            0);
-  CheckParameterLowerUpperBound<float>("read-max-mismatch-fraction", readMaxMismatchFraction, 0.0f, 1.0f);
+  CheckParameterLowerUpperBound<int>  ("use-best-n-alleles",         useBestNAlleles,              0,    20);
+  CheckParameterLowerBound<int>       ("min-mapping-qv",             min_mapping_qv,               0);
+  CheckParameterLowerBound<int>       ("read-snp-limit",             read_snp_limit,               0);
+  CheckParameterLowerUpperBound<float>("read-max-mismatch-fraction", readMaxMismatchFraction,      0.0f, 1.0f);
 
   CheckParameterLowerUpperBound<long double>("gen-min-alt-allele-freq",       minAltFraction,      0.0, 1.0);
   CheckParameterLowerBound<int>             ("gen-min-coverage",              minCoverage,         0);
@@ -604,7 +606,34 @@ void ExtendParameters::CheckParameterLimits() {
 
 // ------------------------------------------------------------
 
-ExtendParameters::ExtendParameters(int argc, char** argv)  {
+ExtendParameters::ExtendParameters(int argc, char** argv)
+{
+  // i/o parameters:
+  fasta = "";                // -f --fasta-reference
+  targets = "";              // -t --targets
+  outputFile = "";
+
+  // operation parameters
+  trim_ampliseq_primers = false;
+  useDuplicateReads = false;      // -E --use-duplicate-reads
+  useBestNAlleles = 0;         // -n --use-best-n-alleles
+  allowIndels = true;            // -i --no-indels
+  allowMNPs = true;            // -X --no-mnps
+  allowSNPs = true;          // -I --no-snps
+  allowComplex = false;
+  maxComplexGap = 3;
+  onlyUseInputAlleles = false;
+  min_mapping_qv = 0;                    // -m --min-mapping-quality
+  readMaxMismatchFraction = 1.0;    //  -z --read-max-mismatch-fraction
+  read_snp_limit = 10000000;       // -$ --read-snp-limit
+  minAltFraction = 0.2;  // require 20% of reads from sample to be supporting the same alternate to consider
+  minIndelAltFraction = 0.2;
+  minAltCount = 2; // require 2 reads in same sample call
+  minAltTotal = 1;
+  minCoverage = 0;
+  debug = false;
+
+  processInputPositionsOnly = false;
 
   //OptArgs opts;
   opts.ParseCmdLine(argc, (const char**)argv);
@@ -623,12 +652,10 @@ ExtendParameters::ExtendParameters(int argc, char** argv)  {
 
   Json::Value tvc_params(Json::objectValue);
   Json::Value freebayes_params(Json::objectValue);
-  ParametersFromJSON(opts, tvc_params, freebayes_params);
+  Json::Value params_meta(Json::objectValue);
+  ParametersFromJSON(opts, tvc_params, freebayes_params, params_meta);
 
   SetupFileIO(opts);
-
-  sampleName                            = opts.GetFirstString('g', "sample-name", "");
-  //referenceSampleName                   = opts.GetFirstString('G', "reference-sample", "");
 
   my_controls.SetOpts(opts, tvc_params);
   my_eval_control.SetOpts(opts, tvc_params);
@@ -640,6 +667,23 @@ ExtendParameters::ExtendParameters(int argc, char** argv)  {
 
   SetFreeBayesParameters(opts, freebayes_params);
   bool overrideLimits          = RetrieveParameterBool  (opts, tvc_params, '-', "override-limits", false);
+
+  params_meta_name = params_meta.get("name",string()).asString();
+  params_meta_details = params_meta.get("configuration", string()).asString();
+  string repository_id = params_meta.get("repository_id",string()).asString();
+  string ts_version = params_meta.get("ts_version","").asString();
+  if (not repository_id.empty()) {
+    if (not params_meta_details.empty())
+      params_meta_details += ", ";
+    params_meta_details += repository_id;
+  }
+  if (not ts_version.empty()) {
+    if (not params_meta_details.empty())
+      params_meta_details += ", ";
+    params_meta_details += "TS version: ";
+    params_meta_details += ts_version;
+  }
+
 
   opts.CheckNoLeftovers();
   // Sanity checks on input variables once all are set.

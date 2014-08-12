@@ -90,7 +90,7 @@ case "$1" in
 
         if [ $NEED_INSTALL -eq 1 ]; then
             echo "Installing $LIB"
-            rm -f $LIB # clear any previous downloaded files
+            rm -f /tmp/$LIB # clear any previous downloaded files
 
             src=${src-$(find /media -maxdepth 4 -type d -name Rmodules 2>/dev/null| head -1)}    # defines src if it is not defined yet
             #                                                               ensure there is only one directory defined by $src
@@ -98,9 +98,12 @@ case "$1" in
                 #echo "Failed to locate local source for $LIB file"
                 # Try network location
                 if ! wget -P /tmp http://ionupdates.com/plugins/$LIB > /tmp/install_$LIBNAME.log 2>&1; then
-                    #double fail. abort
-                    echo "Failed to locate source for $LIB file"
-                    exit 1
+                    echo "Failed to access ionupdates.com.  Trying updates.iontorrent.com..."
+                    if ! wget -P /tmp http://updates.iontorrent.com/plugins/$LIB > /tmp/install_$LIBNAME.log 2>&1; then
+                        #double fail. abort
+                        echo "Failed to locate source for $LIB file. See tmp/install_$LIBNAME.log"
+                        exit 1
+                    fi
                 fi
             else
                 cp -v ${src}/$LIB /tmp

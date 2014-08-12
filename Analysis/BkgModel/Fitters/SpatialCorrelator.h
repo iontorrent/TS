@@ -2,29 +2,50 @@
 #ifndef SPATIALCORRELATOR_H
 #define SPATIALCORRELATOR_H
 
-#include "SignalProcessingMasterFitter.h"
+#include "RegionalizedData.h"
+#include "SlicedChipExtras.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <iostream>
+#include <fstream>
+#include "json/json.h"
+#include "WellXtalk.h"
 
+
+class HplusMap{
+public:
+  float *ampl_map;
+  int NucId;
+  float region_mean_sig;
+  float bead_mean_sig;
+
+  void Allocate(Region *region);
+  void DeAllocate();
+  HplusMap();
+};
 
 class SpatialCorrelator
 {
   public:
-    SignalProcessingMasterFitter &bkg; // reference to source class for now
 
-    // hacky cross-talk info
-    float *nn_odd_col_map;
-    float *nn_even_col_map;
-    float avg_corr;
+    RegionalizedData *region_data;
+    SlicedChipExtras *region_data_extras;
+    Region *region; // extract for convenience
 
-    Region *region; // extract from bkg model for convenience
+    WellXtalk my_xtalk;
+    HplusMap my_hplus;
 
-    SpatialCorrelator (SignalProcessingMasterFitter &);
-    ~SpatialCorrelator();
+    SpatialCorrelator();
+
     void Defaults();
-    float MakeSignalMap(float *ampl_map, int fnum);
-    float UnweaveMap(float *ampl_map, int row, int col, float default_signal);
-    void MeasureConvolution(int *prev_same_nuc_tbl,int *next_same_nuc_tbl);
-    void NNAmplCorrect(int fnum);
-    void AmplitudeCorrectAllFlows();
+    void SetRegionData(RegionalizedData *_region_data, SlicedChipExtras *_region_data_extras);
+    void MakeSignalMap(HplusMap &signal_map, int fnum);
+    void NNAmplCorrect(int fnum, int flow_block_start);
+    void SimpleXtalk(int fnum);
+    void AmplitudeCorrectAllFlows( int flow_block_size, int flow_block_start );
+
+
 };
 
 #endif // SPATIALCORRELATOR_H

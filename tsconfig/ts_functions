@@ -3,6 +3,11 @@
 #---    ---#
 function print_help()
 {
+    if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
+        source /opt/ion/bin/ion-tsconfig.version.env
+        echo
+        echo "ion-tsconfig version: "`IonVersionGetMajor`"."`IonVersionGetMinor`"."`IonVersionGetRelease`" ("`IonVersionGetSvnRev`")"
+    fi
     echo
     echo "Usage: TSconfig [options]"
     echo -e "\t--configure-server            Configure this server as a head node (WARNING: This will update the Torrent Suite)"
@@ -25,6 +30,11 @@ function print_help()
     #echo -e "\t--unconfigure-server          Unconfigures head-node or compute-node specific settings"
     echo -e "\t--skip-init                   Do not execute passwd reset, timezone setup during --configure* operations"
     echo -e "\t--skip-pgm-config             Disables FTP,DHCP,IPTABLES configuration during --configure* operations"
+    echo -e "\t--configure-ftp               Configures FTP Service.  Only makes sense with these options: --configure-server --skip-pgm-config"
+    echo -e "\t--configure-ntp               Configures Network Time Protocol Service.  Only makes sense with these options: --configure-server --skip-pgm-config"
+    echo -e "\t--security-update             Check for and install packages with security updates"
+    echo -e "\t--update-cluster              Check for and install Ion Software updates on the cluster nodes"
+    echo -e "\t--configure-apt-cache         Installs apt-cacher-ng and configures headnode"
     echo
 }
 #---    ---#
@@ -121,6 +131,11 @@ function config_ionSoftware()
     # Install/Update system-level software packages
     preinst_system_packages
     install_system_packages
+    if [ $SECURITY_UPDATE == 1 ]; then
+        install_security_upgrades
+    else
+        log "Skipping security upgrade"
+    fi
     config_system_packages
     # Install/Update Torrent Suite software packages
     preinst_ion_packages
@@ -356,6 +371,10 @@ function scrub_torrentserver()
 	nxclient
 	nxnode
 	nxserver
+    python-django
+    python-django-celery
+    python-django-kombu
+    python-django-picklefield
     )
     user_msg "=================================================================="
     user_msg "Packages which will be removed (using apt-get remove command )"
@@ -458,23 +477,29 @@ function ion_daemon_ctrl()
 {
     case $1 in
         start)
+        echo "=================================================================="
+        echo "Starting Torrent Suite daemons"
+        echo "=================================================================="
         if [ -e /etc/init.d/ionJobServer  ]; then invoke-rc.d ionJobServer start 1>&2; fi
         if [ -e /etc/init.d/ionCrawler  ]; then invoke-rc.d ionCrawler start 1>&2; fi
-        if [ -e /etc/init.d/ionArchive  ]; then invoke-rc.d ionArchive start 1>&2; fi
         if [ -e /etc/init.d/ionPlugin  ]; then invoke-rc.d ionPlugin start 1>&2; fi
         if [ -e /etc/init.d/celeryd ]; then invoke-rc.d celeryd start 1>&2; fi
         ;;
         stop)
+        echo "=================================================================="
+        echo "Stopping Torrent Suite daemons"
+        echo "=================================================================="
         if [ -e /etc/init.d/ionJobServer  ]; then invoke-rc.d ionJobServer stop 1>&2; fi
         if [ -e /etc/init.d/ionCrawler  ]; then invoke-rc.d ionCrawler stop 1>&2; fi
-        if [ -e /etc/init.d/ionArchive  ]; then invoke-rc.d ionArchive stop 1>&2; fi
         if [ -e /etc/init.d/ionPlugin  ]; then invoke-rc.d ionPlugin stop 1>&2; fi
         if [ -e /etc/init.d/celeryd ]; then invoke-rc.d celeryd stop 1>&2; fi
         ;;
         restart)
+        echo "=================================================================="
+        echo "Restarting Torrent Suite daemons"
+        echo "=================================================================="
         if [ -e /etc/init.d/ionJobServer  ]; then invoke-rc.d ionJobServer restart 1>&2; fi
         if [ -e /etc/init.d/ionCrawler  ]; then invoke-rc.d ionCrawler restart 1>&2; fi
-        if [ -e /etc/init.d/ionArchive  ]; then invoke-rc.d ionArchive restart 1>&2; fi
         if [ -e /etc/init.d/ionPlugin  ]; then invoke-rc.d ionPlugin restart 1>&2; fi
         if [ -e /etc/init.d/celeryd  ]; then invoke-rc.d celeryd restart 1>&2; fi
         ;;
@@ -496,7 +521,7 @@ function network_tests()
     #   Test Case:
     #
     #---    end docs    ---#
-    log "Testing Network Connectivity"
+    echo "Testing Network Connectivity" 1>&2
     user_msg "=================================================================="
     user_msg "Testing Network Connectivity"
     user_msg "=================================================================="
@@ -507,7 +532,7 @@ function network_tests()
     fi
 
     if /sbin/ifconfig $device > /dev/null; then
-        log "Network device $device is enabled"
+        echo "Network device $device is enabled" 1>&2
     else
         user_msg "Network device $device is not enabled"
         return 1
@@ -515,7 +540,7 @@ function network_tests()
 
     # check for connectivity
     if (/sbin/ifconfig $device | grep UP | grep MTU &> /dev/null); then
-        log "GOOD - the '$device' ethernet port is UP"
+        echo "GOOD - the '$device' ethernet port is UP" 1>&2
     else
         user_msg "***ERROR***"
         user_msg "The '$device' network port is not UP."
@@ -524,24 +549,24 @@ function network_tests()
 
     # test name resolution
     hName=$(hostname -f)
-    log "Test name resolution for host $hName"
+    echo "Test name resolution for host $hName" 1>&2
     if address=$(dig +short +search $hName); then
         if [ "$address" != "" ]; then
-            log "Good this server's hostname ($hName) resolves to address $address"
+            echo "Good this server's hostname ($hName) resolves to address $address" 1>&2
         else
-            log "This server's hostname ($hName) does not resolve to an IP address"
-            log "using the command: dig +short +search $hName"
+            echo "This server's hostname ($hName) does not resolve to an IP address" 1>&2
+            echo "using the command: dig +short +search $hName" 1>&2
         fi
     else
-        log "This server's hostname ($hName) does not resolve to an IP address"
-        log "using the command: dig +short +search $hName"
-        log "returns this error:"
-        log $address
+        echo "This server's hostname ($hName) does not resolve to an IP address" 1>&2
+        echo "using the command: dig +short +search $hName" 1>&2
+        echo "returns this error:" 1>&2
+        $address 1>&2
     fi
 
 
     if (/bin/netstat -r | grep default &> /dev/null); then
-        log "GOOD - we can connect to the local network"
+        echo "GOOD - we can connect to the local network" 1>&2
     else
         user_msg "a little trouble...  we're not able to find a default route to the local network."
         user_msg
@@ -553,11 +578,11 @@ function network_tests()
     fi
 
     # print IP address netmask
-    log "Full Hostname:   $(hostname -f)"
-    log "Simple Hostname: $(hostname)"
-    log "Server Domain:   $(hostname -d)"
+    echo "Full Hostname:   $(hostname -f)" 1>&2
+    echo "Simple Hostname: $(hostname)" 1>&2
+    echo "Server Domain:   $(hostname -d)" 1>&2
 
-    log "No network issues detected"
+    "No network issues detected" 1>&2
     return 0
 }
 
@@ -838,7 +863,9 @@ function test_name_resolution ()
 
 function get_Netmask ()
 {
-    ETH_DEV=${ETH_DEV-"eth0"}   #default if not defined elsewhere
+    port=$(outbound_net_port)
+    [[ -z $port ]] && port="eth0"
+    ETH_DEV=${ETH_DEV-"$port"}   #default if not defined elsewhere
     IP=$(/sbin/ifconfig ${ETH_DEV} | awk '/inet / { print $2 } ' | sed -e s/addr://)
     MASK=$(/sbin/ifconfig ${ETH_DEV} | awk '/inet a/ { print $4 } ' | sed -e s/Mask://)
     if [ "$IP" = "" ]||[ "$MASK" = "" ]; then
@@ -1045,7 +1072,7 @@ function pkg_installation ()
         #---    Test for access to update servers                   ---#
         #---                                                        ---#
         errCnt=0
-        ubuntu_codename=`lsb_release -s -c`
+        ubuntu_codename=$(distrib_name)
         if ! wget -nv -o /tmp/_wget.log -P /tmp ${TSCONFIG_ION_UPDATE_URL}/updates/software/${ubuntu_codename}/Packages.gz; then
             user_msg "Failed to contact Ion Software update server (${TSCONFIG_ION_UPDATE_URL})."
             user_msg "can not download files from ${TSCONFIG_ION_UPDATE_URL}/updates/software/${ubuntu_codename}/"
@@ -1123,6 +1150,24 @@ function pkg_installation ()
     cleanup_tmp_src_list $TMP_SRC_LST
 }
 
+
+function install_security_upgrades ()
+{
+    user_msg "=================================================================="
+    user_msg "\tInstalling security upgrades"
+    user_msg "=================================================================="
+    #unattended-upgrade --dry-run --debug 1>&2
+    unattended-upgrade --debug 1>&2
+    
+    #Alternate method used by Update Server GUI
+    #Tests show both methods update the same packages
+    #grep lucid-security /etc/apt/sources.list > /etc/apt/secsrc.list
+    #apt-get -o Dir::Etc::sourcelist=secsrc.list -o Dir::Etc::sourceparts=- update
+    #secpkglist=( $(apt-get --dry-run upgrade|grep ^Inst|awk '{print $2}') )
+    #echo ${secpkglist[@]}
+    #apt-get upgrade
+    #apt-get update
+}
 
 #
 #   NOTE: This function will be called from TSconfig.py as well.  Watch the
@@ -1318,25 +1363,24 @@ function config_ion_packages ()
     # Make sure Ion system daemons are running
     #----------------------------------
     if is_master; then
+
         if ! service ionCrawler status > /dev/null; then
-            /etc/init.d/ionCrawler start || error ${LINENO} "In function install_ion_packages"
+            /etc/init.d/ionCrawler start || error ${LINENO} "In function config_ion_packages"
         fi
         if ! service ionJobServer status > /dev/null; then
-            /etc/init.d/ionJobServer start || error ${LINENO} "In function install_ion_packages"
-        fi
-        if [ -e /etc/init.d/ionArchive  ]; then
-            if ! service ionArchive status > /dev/null; then
-                /etc/init.d/ionArchive start || error ${LINENO} "In function install_ion_packages"
-            fi
+            /etc/init.d/ionJobServer start || error ${LINENO} "In function config_ion_packages"
         fi
         if ! service ionPlugin status > /dev/null; then
-            /etc/init.d/ionPlugin start || error ${LINENO} "In function install_ion_packages"
-        fi
-        if ! service celeryd status > /dev/null; then
-            /etc/init.d/celeryd start || error ${LINENO} "In function install_ion_packages"
+            /etc/init.d/ionPlugin start || error ${LINENO} "In function config_ion_packages"
         fi
         if ! service rabbitmq-server status > /dev/null; then
-            service rabbitmq-server start || error ${LINENO} "In function install_ion_packages"
+            service rabbitmq-server start || error ${LINENO} "In function config_ion_packages"
+        fi
+        if ! service celeryd status > /dev/null; then
+            /etc/init.d/celeryd start || error ${LINENO} "In function config_ion_packages"
+        fi
+        if ! service tomcat6 status > /dev/null; then
+            /etc/init.d/tomcat6 start || error ${LINENO} "In function config_ion_packages"
         fi
     fi
 
@@ -1443,11 +1487,6 @@ function config_system_packages ()
     # SGE changes:
     set_sge_open_files
 
-    # Disable ipv6
-    if [ -f /etc/sysctl.d/20-disable-ipv6.conf ]; then
-        sysctl -p /etc/sysctl.d/20-disable-ipv6.conf 1>&2
-    fi
-
 }
 
 function logrotate_iondb ()
@@ -1462,6 +1501,7 @@ function logrotate_iondb ()
 	compress
 	compressext .gz
 	nodelaycompress
+    copytruncate
 	create 644 postgres postgres
 #	dateext
 	prerotate
@@ -1645,6 +1685,11 @@ function config_apache2 ()
         echo "There was an error setting up logrotate to run once an hour"
         echo "Not critical so configuration script will continue."
     fi
+
+    # Enable required apache modules
+    /usr/sbin/a2enmod wsgi headers ssl setenvif deflate filter expires rewrite include 1>&2
+    # Note: wsgi and ssl are non-core and installed separately. Check depends list
+
 }
 
 function deny_ssh_access ()
@@ -1665,7 +1710,7 @@ function deny_ssh_access ()
 
 function config_ftp()
 {
-    log "Configuring FTP server"
+    echo "Configuring FTP server" 1>&2
     user_msg "=================================================================="
     user_msg "Configuring FTP server"
     user_msg "=================================================================="
@@ -1674,7 +1719,7 @@ function config_ftp()
     if [ -f /etc/vsftpd.conf ]; then
         # create ftp user, if it doesn't yet exist
         if ! getent passwd | grep -q "^$ftpUser:"; then
-        sudo useradd -m $ftpUser
+        sudo useradd -m $ftpUser -s /bin/sh
         sudo passwd $ftpUser <<EOFftp
 $ftpPass
 $ftpPass
@@ -1801,7 +1846,7 @@ function config_postgresql_cluster_access()
 
 function config_postgres()
 {
-    log "Postgresql Configuration"
+    echo "Postgresql Configuration" 1>&2
     user_msg "=================================================================="
     user_msg "Configuring Postgresql"
     user_msg "=================================================================="
@@ -1811,14 +1856,14 @@ function config_postgres()
     if [ "$PS_SCRIPT" != "" ]; then
         if ! $PS_SCRIPT status 1>&2; then
             if ! $PS_SCRIPT start 1>&2; then
-                log "Could not start postgres database service"
+                echo "Could not start postgres database service" 1>&2
                 error ${LINENO} 1
             fi
         else
-            log "Postgresql service is running..."
+            echo "Postgresql service is running..." 1>&2
         fi
     else
-        log "Could not find postgres start-up script.  Is postgresql package installed?"
+        echo "Could not find postgres start-up script.  Is postgresql package installed?" 1>&2
         error ${LINENO} 1
     fi
 
@@ -1836,8 +1881,8 @@ GRANT ALL PRIVILEGES ON DATABASE iondb to ion;
 EOFdb
 
     else
-        log "Missing psql executable.  Is postgresql package installed?"
-        log "run apt-get install postgresql"
+        echo "Missing psql executable.  Is postgresql package installed?" 1>&2
+        echo "run apt-get install postgresql" 1>&2
         user_msg "=================================================================="
         user_msg "ERROR. Could not configure postgresql database"
         user_msg "=================================================================="
@@ -1928,7 +1973,8 @@ EOFdb
     # To remove an existing database, do the following commands
     # service ionCrawler stop
     # service ionJobServer stop
-    # service ionArchive stop
+    # service ionPlugin stop
+    # service celeryd stop
     # service apache2 stop
     # dropdb -i -e iondb -U postgres
 }
@@ -2043,7 +2089,7 @@ function default_slots ()
 function config_master_sge()
 {
     currentNodeName=$(hostname -f)
-    log "Configuring Sun Grid Engine"
+    echo "Configuring Sun Grid Engine" 1>&2
     user_msg "=================================================================="
     user_msg "Configuring Sun Grid Engine"
     user_msg "=================================================================="
@@ -2068,7 +2114,7 @@ function config_master_sge()
     # add user
     user_name=$(grep ^name /usr/share/ion-tsconfig/sge-configuration/user.template|awk '{print $2}')
     if ! qconf -suserl | grep -q $user_name; then
-        #NOT indempotent
+        #NOT idempotent
         if ! qconf -Auser /usr/share/ion-tsconfig/sge-configuration/user.template 1>&2; then
             echo "ERROR: SGE config failed setting user"
             return 1
@@ -2083,7 +2129,7 @@ function config_master_sge()
     for qname in ${sgequeues[@]}; do
         #echo "Checking $qname sge queue"
         if ! qconf -sql | grep -q $qname; then
-            #NOT indempotent
+            #NOT idempotent
             qtmpfile=`mktemp`
             sed s/QUEUENAME/$qname/g /usr/share/ion-tsconfig/sge-configuration/queue.template > $qtmpfile
             if ! qconf -Aq $qtmpfile 1>&2; then
@@ -2103,12 +2149,12 @@ function config_master_sge()
                 return 1
             fi
         else
-            log "$qname queue already exists.  Nothing to do."
+            echo "$qname queue already exists.  Nothing to do." 1>&2
         fi
     done
 
     #Special case:T620 hardware in standalone systems to change number of slots to 4.
-    hardwarename=$(dmidecode -s system-product-name 2>/dev/null | sed 's/^[ \t]*//;s/[ \t]*$//')
+    hardwarename=$(echo_system_product_name)
     if [ "$hardwarename" == "PowerEdge T620" ]; then
         # Assume that only TS serving Proton instruments will have ion-protonupdates installed.
         if is_proton_ts; then
@@ -2127,7 +2173,7 @@ function config_master_sge()
     if ! qconf -sel | grep -q $currentNodeName; then
         hosttmpfile=`mktemp`
         sed s/YOUR_TS_HOSTNAME/$currentNodeName/g /usr/share/ion-tsconfig/sge-configuration/host.template > $hosttmpfile
-        #NOT indempotent
+        #NOT idempotent
         if ! qconf -Ae $hosttmpfile 1>&2; then
             user_msg "ERROR: SGE config failed setting host node"
             return 1
@@ -2135,13 +2181,13 @@ function config_master_sge()
         rm -f $hosttmpfile
     fi
 
-    # add submission host; indempotent
+    # add submission host; idempotent
     if ! qconf -as $currentNodeName 1>&2; then
         user_msg "ERROR: SGE config failed setting submission host"
         return 1
     fi
 
-    #add host to queues; indempotent
+    #add host to queues; idempotent
     for qname in ${sgequeues[@]}; do
         if ! qconf -aattr queue hostlist $currentNodeName $qname 1>&2; then
             user_msg "ERROR: SGE config failed setting hostlist"
@@ -2162,7 +2208,7 @@ function config_master_sge()
 #    else
 #        set_slots=$(default_slots)
 #    fi
-#    #set number of slots for this host;indempotent
+#    #set number of slots for this host;idempotent
 #    if ! qconf -aattr queue slots "[$currentNodeName=$set_slots]" all.q; then
 #        echo "ERROR: SGE config failed setting slots"
 #        return 1
@@ -2180,7 +2226,7 @@ function config_master_sge()
 #    else
 #        set_slots=$slots_tlq
 #    fi
-#    #set number of slots for this host;indempotent
+#    #set number of slots for this host;idempotent
 #    if ! qconf -aattr queue slots "[$currentNodeName=$set_slots]" tl.q; then
 #        echo "ERROR: SGE config failed setting slots"
 #        return 1
@@ -2189,14 +2235,14 @@ function config_master_sge()
     # Create parallel environment
     pe_name=$(grep ^pe_name /usr/share/ion-tsconfig/sge-configuration/ion_pe.template|awk '{print $2}')
     if ! qconf -spl | grep -q $pe_name; then
-        #NOT indempotent
+        #NOT idempotent
         if ! qconf -Ap /usr/share/ion-tsconfig/sge-configuration/ion_pe.template 1>&2; then
             user_msg "ERROR: SGE config failed creating ion_pe parallel environment"
             return 1
         fi
     fi
 
-    # Add parallel environment to the queue; indempotent
+    # Add parallel environment to the queue; idempotent
     for qname in ${sgequeues[@]}; do
         if ! qconf -aattr queue pe_list ion_pe $qname 1>&2; then
             user_msg "ERROR: SGE config failed adding to $qname ion_pe parallel environment"
@@ -2207,10 +2253,10 @@ function config_master_sge()
     # Add ionadmin user as sge admin (if ionadmin is a valid user)
     if getent passwd | grep -q "^ionadmin:"; then
         if ! qconf -sm | grep -q ionadmin; then
-            #NOT indempotent
+            #NOT idempotent
             qconf -am ionadmin 1>&2
         else
-            log "WARNING: Could not add ionadmin user as an sge administrator"
+            echo "WARNING: Could not add ionadmin user as an sge administrator" 1>&2
         fi
     fi
 
@@ -2262,6 +2308,7 @@ function config_master_sge()
     if qconf -sq plugin.q > /dev/null; then
         setupQueue=0
         # Ensure current hostname is in plugin queue configuration
+        qname="plugin.q"
         if ! qconf -aattr queue hostlist $currentNodeName $qname 1>&2; then
             user_msg "ERROR: SGE config failed setting hostlist"
             return 1
@@ -2303,8 +2350,8 @@ function config_master_sge()
             # Queue cannot set default value for mem_free or virtual_free complex resources
             # echo "complex_values   mem_free=20G" >> # /tmp/pluginqueue.template
 
-            sed -i "s/^prolog.*/prolog                  /usr/share/ion-tsconfig/gridengine-scripts/plugin-prolog.sh" /tmp/pluginqueue.template
-            sed -i "s/^epilog.*/epilog                  /usr/share/ion-tsconfig/gridengine-scripts/plugin-epilog.sh" /tmp/pluginqueue.template
+            sed -i "s|^prolog.*|prolog                  /usr/share/ion-tsconfig/gridengine-scripts/plugin-prolog.sh|" /tmp/pluginqueue.template
+            sed -i "s|^epilog.*|epilog                  /usr/share/ion-tsconfig/gridengine-scripts/plugin-epilog.sh|" /tmp/pluginqueue.template
 
             sed -i "s/np_load_avg=.*/np_load_avg=75.0/" /tmp/pluginqueue.template
 
@@ -2314,7 +2361,7 @@ function config_master_sge()
 
             rm -f /tmp/pluginqueue.template
     else
-        log "plugin.q already exists"
+        echo "plugin.q already exists" 1>&2
 
         # Ensure that existing queue has non-infinite limits on runtime
         if qconf -sq plugin.q | grep s_rt | grep -v "${S_RT_LIMIT}"; then
@@ -2375,7 +2422,7 @@ function config_compute_sge()
 {
     currentNodeName=$(hostname -f)
 
-    log "Configuring Sun Grid Engine"
+    echo "Configuring Sun Grid Engine" 1>&2
     user_msg "=================================================================="
     user_msg "Configuring Sun Grid Engine"
     user_msg "=================================================================="
@@ -2384,7 +2431,7 @@ function config_compute_sge()
     if ! qconf -sel | grep -q $currentNodeName; then
         hosttmpfile=`mktemp`
         sed s/YOUR_TS_HOSTNAME/$currentNodeName/g /usr/share/ion-tsconfig/sge-configuration/host.template > $hosttmpfile
-        #NOT indempotent
+        #NOT idempotent
         if ! qconf -Ae $hosttmpfile 1>&2; then
             user_msg "ERROR: SGE config failed setting host node"
             return 1
@@ -2407,13 +2454,13 @@ function config_compute_sge()
         return 1
     fi
 
-#    # FIXME - get correct number of CPUs;indempotent
+#    # FIXME - get correct number of CPUs;idempotent
 #    if ! qconf -aattr queue slots "[$currentNodeName=$(default_slots)]" all.q; then
 #        echo "ERROR: error setting slots"
 #        return 1
 #    fi
 
-    # FIXME - get correct memory value;indempotent
+    # FIXME - get correct memory value;idempotent
     if ! qconf -mattr exechost complex_values mem_free=48G $currentNodeName 1>&2; then
         user_msg "ERROR: error setting mem_free"
         return 1
@@ -2452,7 +2499,7 @@ function config_compute_sge()
         return 1
     fi
 
-    # Set ourselves as a submit host; indempotent
+    # Set ourselves as a submit host; idempotent
     if ! qconf -as $currentNodeName 1>&2; then
         user_msg "ERROR: could not set this host as a submit host"
         return 1
@@ -2461,10 +2508,10 @@ function config_compute_sge()
     # Add ionadmin user as sge admin (if ionadmin is a valid user)
     if getent passwd | grep -q "^ionadmin:"; then
         if ! qconf -sm | grep -q ionadmin; then
-            #NOT indempotent
+            #NOT idempotent
             qconf -am ionadmin 1>&2
         else
-            log "WARNING: Could not add ionadmin user as an sge administrator"
+            echo "WARNING: Could not add ionadmin user as an sge administrator" 1>&2
         fi
     fi
 
@@ -2538,7 +2585,7 @@ function change_hostname_sge ()
 
 function config_iptables()
 {
-    log "Configuring Firewall (iptables)"
+    echo "Configuring Firewall (iptables)" 1>&2
     user_msg "=================================================================="
     user_msg "Configuring Firewall (iptables)"
     user_msg "=================================================================="
@@ -2748,7 +2795,7 @@ done
 
 function config_dhcp()
 {
-    log "Configuring DHCP Server"
+    echo "Configuring DHCP Server" 1>&2
     user_msg "=================================================================="
     user_msg "Configuring DHCP Server"
     user_msg "=================================================================="
@@ -2868,7 +2915,7 @@ EOFDHCLIENT
 
 function config_ntp_server ()
 {
-    log "Configuring Network Time Protocol server"
+    echo "Configuring Network Time Protocol server" 1>&2
     user_msg "=================================================================="
     user_msg "Configuring Network Time Protocol server"
     user_msg "=================================================================="
@@ -2906,7 +2953,7 @@ function needs_root()
 
 function config_samba()
 {
-    log "Configuring Samba Server"
+    echo "Configuring Samba Server" 1>&2
     user_msg "=================================================================="
     user_msg "Configuring Samba Server"
     user_msg "=================================================================="
@@ -2995,6 +3042,31 @@ function rotate_log()
     done
 }
 
+
+function echo_system_serial_number()
+{
+    # use the dell service tag, if present
+    if ! dmidecode -s system-serial-number 2>/dev/null; then
+    	# no dell service tag present.  perhaps we are in a vm.
+    	if [ -f /var/spool/ion/serial_number.alt ]; then
+    		# no dell service tag is present, but there is already a serial number set up.  use that.
+    		cat /var/spool/ion/serial_number.alt | sed s/^serialnumber://
+    	else
+    		# no dell service tag present, and no serial number has been assigned; pick a random one.
+			sn=`uuidgen`
+			# since this case occurs only when in a vm, prefix the serial number with tsvm.
+			echo tsvm$sn
+		fi
+    fi
+}
+
+function echo_system_product_name()
+{
+    if ! dmidecode -s system-product-name 2>/dev/null | sed 's/^[ \t]*//;s/[ \t]*$//'; then
+        echo "Not Specified"
+    fi
+}
+
 #---                                                            ---#
 #---    This creates/edits the tsconf.conf file                 ---#
 #---                                                            ---#
@@ -3021,24 +3093,25 @@ function write_conf_file()
         sed -i "s/^mode:.*/mode:$mode/" ${conflog}
 
         #--- change the configuration   ---#
-        #TODO: indicate Dual-Torrent Server configuration
-        conf="standalone"
+        #TODO: handle all possible configurations
+        #( 'standalone' 'tsvm' 'rtsvm' )
+        conf=$(get_hw_conf)
         sed -i "s/^configuration:.*/configuration:$conf/" ${conflog}
 
         #--- change the serial number   ---#
-        sn=$(dmidecode -s system-serial-number 2>/dev/null)
+        sn=$(echo_system_serial_number)
         sn=$(echo $sn|sed 's/\///')    # remove any forward slashes
         sed -i "s/^serialnumber:.*/serialnumber:$sn/" ${conflog}
 
         #--- change the hardware name   ---#
-        hardwarename=$(dmidecode -s system-product-name 2>/dev/null | sed 's/^[ \t]*//;s/[ \t]*$//')
+        hardwarename=$(echo_system_product_name)
         if ! grep -q ^hardwarename ${conflog}; then
             echo "hardwarename:\"${hardwarename}\"" >> $conflog
         else
             sed -i "s/^hardwarename:.*/hardwarename:\"${hardwarename}\"/"  ${conflog}
         fi
         #--- change the version ---#
-        version="@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@-@ION_VERSION_RELEASE@"
+        version="@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@.@ION_VERSION_RELEASE@"
         sed -i "s/^version:.*/version:$version/" ${conflog}
 
     else
@@ -3064,18 +3137,34 @@ function write_conf_file()
         echo -n "mode:" >> $conflog
         if [ -f /opt/ion/.masternode ]; then echo "master" >> $conflog; else echo "compute" >> $conflog; fi
         echo -n "configuration:" >> $conflog
-        #TODO: indicate Dual-Torrent Server configuration
-        conf="standalone"
-        echo $conf >> $conflog
+        echo $(get_hw_conf) >> $conflog
         echo -n "serialnumber:" >> $conflog
-        echo $(dmidecode -s system-serial-number 2>/dev/null) >> $conflog
-        hardwarename=$(dmidecode -s system-product-name 2>/dev/null | sed 's/^[ \t]*//;s/[ \t]*$//')
+        echo $(echo_system_serial_number) >> $conflog
+        hardwarename=$(echo_system_product_name)
         echo "hardwarename:\"${hardwarename}\"" >> $conflog
         echo -n "version:" >> $conflog
-        echo -e "@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@-@ION_VERSION_RELEASE@\n" >> $conflog
+        echo -e "@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@.@ION_VERSION_RELEASE@\n" >> $conflog
     fi
 
     return 0
+}
+
+#=============================================================================
+# Determine configuration
+# Hardware, TS-VM, Raptor VM
+#=============================================================================
+function get_hw_conf()
+{
+    hardwarename=$(echo_system_product_name)
+    if echo $hardwarename|grep -q VirtualBox; then
+        echo "tsvm"
+    elif echo $hardwarename|grep -q Bochs; then
+        echo "raptorvm"
+    elif echo $hardwarename|grep -q "VMware Virtual Platform"; then
+        echo "vmware"
+    else
+        echo "standalone"
+    fi
 }
 
 #---
@@ -3100,12 +3189,12 @@ function update_conf_file()
         fi
 
         #--- update the serial number   ---#
-        sn=$(dmidecode -s system-serial-number 2>/dev/null)
+        sn=$(echo_system_serial_number)
         sn=$(echo $sn|sed 's/\///')    # remove any forward slashes
         sed -i "s/^serialnumber:.*/serialnumber:$sn/" ${conflog}
 
         #--- update the hardware name   ---#
-        hardwarename=$(dmidecode -s system-product-name 2>/dev/null | sed 's/^[ \t]*//;s/[ \t]*$//')
+        hardwarename=$(echo_system_product_name)
         if ! grep -q ^hardwarename ${conflog}; then
             echo "hardwarename:\"${hardwarename}\"" >> $conflog
         else
@@ -3113,7 +3202,7 @@ function update_conf_file()
         fi
 
         #--- update the version ---#
-        version="@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@-@ION_VERSION_RELEASE@"
+        version="@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@.@ION_VERSION_RELEASE@"
         sed -i "s/^version:.*/version:$version/" ${conflog}
 
     else
@@ -3285,10 +3374,18 @@ function read_packagelist_file()
     #
     # Third argument should be a variable to get defined
     #
-    FILEPATH=$TSCONFIG_PACKAGELIST_FILE
-    LISTTYPE=$1
-    SERVERTYPE=$2
+    local FILEPATH=$TSCONFIG_PACKAGELIST_FILE
+    local LISTTYPE=$1
+    local SERVERTYPE=$2
     local __resultvar=$3
+
+    local version=$(distrib_rel)
+
+    if [[ "$version" == "10.04" ]]; then
+        PACKAGES='packages'
+    else
+        PACKAGES=packages_${version}
+    fi
 
     if [ ! -r $FILEPATH ]; then
         echo "Cannot read $FILEPATH" 1>&2
@@ -3300,7 +3397,7 @@ function read_packagelist_file()
         exit 1
     fi
 
-    list=$(jsonpipe < $FILEPATH | grep "/packages/$LISTTYPE/$SERVERTYPE/" | cut -f2 | sed 's/"/ /g')
+    list=$(jsonpipe < $FILEPATH | grep "/$PACKAGES/$LISTTYPE/$SERVERTYPE/" | cut -f2 | sed 's/"/ /g')
     if [ ${PIPESTATUS[0]} -ne 0 ]; then
         echo "Error parsing $FILEPATH.  Cannot proceed" 1>&2
         exit 1
@@ -3411,7 +3508,7 @@ function is_proton_ts ()
 function updated_mirror_check()
 {
     SRCLIST="/etc/apt/sources.list"
-    APT_ENTRY="deb http://ionupdates.com/updates/software `lsb_release -cs`/"
+    APT_ENTRY="deb ${TSCONFIG_ION_UPDATE_URL}/updates/software `lsb_release -cs`/"
 
     if [ ! -e $SRCLIST ]; then
         echo "Does not exist:${SRCLIST}" 1>&2
@@ -3429,15 +3526,19 @@ function updated_mirror_check()
     sed -i '/updates.iontorrent.com/d' $SRCLIST
 
     # If file does not contain new address, add it
-    if ! grep -q "ionupdates.com" $SRCLIST; then
+    if ! grep -q "${TSCONFIG_ION_UPDATE_URL}" $SRCLIST; then
         echo "The desired apt repository entry does not exist" 1>&2
         echo $APT_ENTRY >> $SRCLIST
     else
         echo "An apt repository entry with desired web address exists" 1>&2
     fi
 
-    # Force re-load of apt packages
-    apt-get update 1>&2 || true
+    # Force re-load of apt packages; if its not a USB stick install
+    # Its not a USB install when this variable is undefined.
+    if [ -z $APT_USB ]; then APT_USB=0; fi
+    if [ $APT_USB -eq 0 ]; then
+        apt-get update 1>&2 || true
+    fi
 
     return 0
 }
@@ -3447,10 +3548,10 @@ function config_apt_cache() {
     cachepath=$(apt-config dump|grep "^Dir "|awk '{print $2}'|sed 's:[";]::g')
     cachepath=${cachepath}$(apt-config dump|grep "^Dir::Cache "|awk '{print $2}'|sed 's:[";]::g')
     cachepath=${cachepath}$(apt-config dump|grep "^Dir::Cache::archives "|awk '{print $2}'|sed 's:[";]::g')
-    log Current apt cache location is $cachepath
+    echo Current apt cache location is $cachepath 1>&2
 
     # compute nodes mount a remote /results; do not use that location
-    if is_master; then
+    if ! mountpoint -q /results; then
         rootdir="/"
         cachedir="results/cache/apt/"
         archivedir="archives/"
@@ -3463,7 +3564,7 @@ function config_apt_cache() {
 
     # Already using the new cache location
     if [[ "$cachepath" == "$newcachepath" ]]; then
-        log "Current and new cache location: $newcachepath"
+        echo "Current and new cache location: $newcachepath" 1>&2
 
         #TS-8169 - patching previous error of not cleaning up deb pgks
         mv /var/cache/apt/archives/*.deb $newcachepath || true
@@ -3489,9 +3590,9 @@ function config_apt_cache() {
 
             # move pkgs from old cache location
             mv /var/cache/apt/archives/*.deb $newcachepath || true
-            apt-get update || true
+            apt-get update 1>&2 || true
         else
-            log "Partition capacity is over $threshold_kb kbytes"
+            echo  "Partition capacity is over $threshold_kb kbytes" 1>&2
         fi
     fi
 
@@ -3503,4 +3604,28 @@ function config_apt_cache() {
 
 }
 
+function outbound_net_port()
+{
+    port=$(/sbin/route | grep ^default | awk '{print $8}')
+    if [[ ! -z $port ]]; then
+        echo $port
+    fi
+}
 
+# =============================================================================
+# Returns release version number, ie 10.04, 12.04
+# =============================================================================
+function distrib_rel()
+{
+    #echo $(awk -F'=' '/DISTRIB_RELEASE/{print $2}' /etc/lsb-release)
+    echo $(lsb_release -s -r)
+}
+
+# =============================================================================
+# Returns release code name, ie, lucid, raring
+# =============================================================================
+function distrib_name()
+{
+    #echo $(awk -F'=' '/DISTRIB_CODENAME/{print $2}' /etc/lsb-release)
+    echo $(lsb_release -s -c)
+}

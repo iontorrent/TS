@@ -3,235 +3,215 @@
 #include <assert.h>
 #include <iostream>
 #include <sstream>
+#include <string>
+#include <vector>
 #include "BkgControlOpts.h"
+#include "IonErr.h"
+#include "Utils.h"
 
+using namespace std;
+
+SignalProcessingBlockControl::SignalProcessingBlockControl(){
+  save_wells_flow = 60;
+  wellsCompression = 3;
+  restart = false;
+  restart_from = "";
+  restart_next = "";
+  restart_check = true;
+  updateMaskAfterBkgModel = true;
+  numCpuThreads = 0;
+  flow_block_sequence.Defaults();
+}
+
+void SignalProcessingBlockControl::PrintHelp()
+{
+	printf ("     SignalProcessingBlockControl\n");
+    printf ("     --numcputhreads         INT               number of CPU threads [0]\n");
+    printf ("     --wells-compression     INT               set wells compression level [3]\n");
+    printf ("     --save-wells-freq       INT               set saveWellsFrequency []\n");
+    printf ("     --save-wells-flow       INT               set save_wells_flow (=saveWellsFrequency*20) [60]\n");
+    printf ("     --sigproc-compute-flow  STRING            set flow block sequence []\n");
+    printf ("     --restart-from          STRING            restart from []\n");
+    printf ("     --restart-next          STRING            restart next []\n");
+    printf ("     --restart-check         BOOL              restart check [true]\n");
+	printf ("     --bkg-bfmask-update     BOOL              update mask after background modeling [true]\n");
+    printf ("\n");
+}
+
+void SignalProcessingBlockControl::SetOpts(OptArgs &opts, Json::Value& json_params)
+{
+	wellsCompression = RetrieveParameterInt(opts, json_params, '-', "wells-compression", 3);
+    ION_ASSERT(wellsCompression >= 0 && wellsCompression <= 10, "--wells-compression must be between (0,10) inclusive.");
+	fprintf(stdout, "wells compression: %d\n", wellsCompression);
+	int saveWellsFrequency = RetrieveParameterInt(opts, json_params, '-', "save-wells-freq", -1);
+	if(saveWellsFrequency > 0)
+	{
+		save_wells_flow = 20 * saveWellsFrequency;
+        fprintf ( stdout, "Warning: --save-wells-freq is obsolete. Please use --save-wells-flow\n"
+                        "         instead, with a value 20 times the old save-wells-freq value.\n");
+	}
+	else
+	{
+		save_wells_flow = RetrieveParameterInt(opts, json_params, '-', "save-wells-flow", 60);
+	}
+    fprintf ( stdout, "Saving wells every %d flows.\n", save_wells_flow );
+
+
+    if ( save_wells_flow < 20 || save_wells_flow > 2000 )
+    {
+	  fprintf ( stderr, "Option Error, must be between 20 and 2000: save-wells-flow %d\n", save_wells_flow );
+      exit ( EXIT_FAILURE );
+    }
+	restart_from = RetrieveParameterString(opts, json_params, '-', "restart-from", "");
+	restart_next = RetrieveParameterString(opts, json_params, '-', "restart-next", "");
+	restart_check = RetrieveParameterBool(opts, json_params, '-', "restart-check", true);
+	numCpuThreads = RetrieveParameterInt(opts, json_params, '-', "numcputhreads", 0);
+	updateMaskAfterBkgModel = RetrieveParameterBool(opts, json_params, '-', "bkg-bfmask-update", true);
+
+	string s = RetrieveParameterString(opts, json_params, '-', "sigproc-compute-flow", "");
+	if (s.length() > 0) 
+	{
+    // See if the FlowSequence can deal with it.
+		if ( ! flow_block_sequence.Set( s.c_str() ) )
+		{
+		  fprintf ( stderr, "Option Error: --sigproc-compute-flow=%s\n", s.c_str() );
+		  exit( EXIT_FAILURE );
+		}
+	}
+}
 
 void BkgModelControlOpts::DefaultBkgModelControl()
 {
-    bkg_debug_files = 0;
-    bkgModelHdf5Debug = 1;
-    bkgModelHdf5Debug_region_r = -1;
-    bkgModelHdf5Debug_region_c = -1;
-    bkgModel_xyflow_output = false;
-    bkgModel_xyflow_fname_in_type = -1;
-    bkgModel_xyflow_fname_in = "";
-    bkg_model_emphasis_width = 32.0;
-    bkg_model_emphasis_amplitude = 4.0;
-    for (int i_nuc=0; i_nuc<4; i_nuc++) dntp_uM[i_nuc] = -1.0f;
-    AmplLowerLimit = 0.001;
-    bkgModelMaxIter = 17;
-    gopt = "default"; // "default" enables per-chip optimizations; other options: "disable" use the old hard-coded defaults, "opt" used only during optimization, and path to any optimized param file would load the file.
-    xtalk = "disable";
-    //xtalk= NULL;
-    for (int i=0;i<4;i++)
-    {
-        krate[i] = -1.0;
-        diff_rate[i] = -1.0;
-        kmax[i] = -1.0;
-    }
-    no_rdr_fit_first_20_flows = 0;
-    fitting_taue = 0;
-    var_kmult_only = 0;
-    generic_test_flag = 0;
-    fit_alternate = 0;
-    fit_gauss_newton = 0;
-    emphasize_by_compression=1; // by default turned to the old method
-    BkgTraceDebugRegions.clear();
-    bkgDebugParam = 0;
+  polyclonal_filter.enable = true;
+  emphasize_by_compression=1; // by default turned to the old method
+  // cross-talk all together
+  enable_trace_xtalk_correction = true;
+  
+  gpuControl.DefaultGpuControl();
 
-    enableXtalkCorrection = true;
-    enable_dark_matter = true;
-    enableBkgModelClonalFilter = true;
-    updateMaskAfterBkgModel = true;
+  unfiltered_library_random_sample = 100000;
+  nokey = false;
 
-    // options for replay
-    replayBkgModelData = false;
-    recordBkgModelData = false;
-
-    restart = false;
-    restart_from = "";
-    restart_next = "";
-    restart_check = true;
-
-    damp_kmult = 0;
-    kmult_hi_limit = 1.75;
-    kmult_low_limit = 0.65;
-    krate_adj_threshold = 2.0;
-
-    ssq_filter = 0.0f; // no filtering
-    
-    // how to do computation
-    vectorize = 1;
-    gpuControl.DefaultGpuControl();
-
-    numCpuThreads = 0;
-    readaheadDat = 0;
-    saveWellsFrequency = 3;
-    wellsCompression = 3;
-    useProjectionSearchForSingleFlowFit = false;
-    choose_time = 0; // default standard time compression
-    exp_tail_fit = false;
-    pca_dark_matter = false;
-
-    use_dud_and_empty_wells_as_reference = false;
-    proton_dot_wells_post_correction = false;
-    empty_well_normalization = false;
-    single_flow_fit_max_retry = 0;
-    per_flow_t_mid_nuc_tracking = false;
-    regional_sampling = false;
-    //regional_sampling_type = REGIONAL_SAMPLING_SYSTEMATIC;
-    regional_sampling_type = REGIONAL_SAMPLING_CLONAL_KEY_NORMALIZED;
-    prefilter_beads = false;
-
-    unfiltered_library_random_sample = 100000;
-
-    // diagnostics
-    debug_bead_only = 1;  // only debug bead
-    region_vfrc_debug = 0; // off
-    // emptyTrace outlier (wild trace) removal
-    do_ref_trace_trim = false;
-    span_inflator_min = 10;
-    span_inflator_mult = 10;
-    cutoff_quantile = .2;
-
-    region_list = "";
-    nokey = false;
+  // Regional smoothing defaults.
+  regional_smoothing.alpha = 1.f;
+  regional_smoothing.gamma = 1.f;
 }
 
+TraceControl::TraceControl(){
+  // emptyTrace outlier (wild trace) removal
+  do_ref_trace_trim = false;
+  span_inflator_min = 10;
+  span_inflator_mult = 10;
+  cutoff_quantile = .2;
 
-bool BkgModelControlOpts::read_file_sse(HashTable_xyflow &xyf_hash, int numFlows)
+  use_dud_and_empty_wells_as_reference = false;
+  empty_well_normalization = false;
+}
+
+void TraceControl::PrintHelp()
 {
-    xyf_hash.clear();
-    xyf_hash.setFilename(bkgModel_xyflow_fname_in);
-    //xyf_hash.set_xyflow_limits(numFlows);
-    std::ifstream infile;
-    infile.open(bkgModel_xyflow_fname_in.c_str());
-    if (infile.is_open()) { /* ok, proceed with output */
-        std::string line;
-        //std::getline (infile,line); // header line
-        int nLines = 0;
-        while(!infile.eof()){
-          //read data from file
-          std::getline (infile,line);
-          if (line.length()==0)
-              break;
-          nLines++;
-          std::vector<std::string> tokens;
-          std::vector<std::string> elem;
-          split(line,'\t',tokens);
-          if (tokens.size()<9) {
-              split(line,' ',tokens);
-              if (tokens.size()<9) {
-                  std::cerr << "read_file_sse() parsing error: not enough number of tokens in line " << nLines << ": " << line << std::endl << std::flush;
-                  //assert(tokens.size()>=9);
-                  break;
-              }
-          }
-          split(tokens[1],':',elem);
-          int nTokens = elem.size();
-          int r = atoi(elem[nTokens-2].c_str());
-          int c = atoi(elem[nTokens-1].c_str());
-          int f = atoi(tokens[4].c_str());
-          bool mm = tokens[6].compare("1")==0 ? 1:0;
-          std::string hp = tokens[8];
-          xyf_hash.insert_rcflow(r,c,f,mm,hp);
-          xyf_hash.insert_rc(r,c);
-          //std::cout << r << " " << c << " " << flow << std::endl;
-        }
-        std::cout << nLines << " lines read by read_file_sse()..."  << std::endl << std::flush;
-        std::cout << "xyf_hash.size() = " << xyf_hash.size()  << std::endl << std::flush;
-        std::cout << "xyf_hash.size_xy() = " << xyf_hash.size_xy()  << std::endl << std::flush;
-        //xyf_hash.print();
-    }
-    else {
-        std::cerr << "read_file_sse() open error!!!"  << std::endl << std::flush;
-        return (false);
-    }
-    infile.close();
-    return (true);
+	printf ("     TraceControl\n");
+    printf ("     --trim-ref-trace        STRING            on or off to set do_ref_trace_trim; float vector of 3 to set span_inflator_min, span_inflator_mult and cutoff_quantile [10,10,0.2]\n");
+    printf ("     --bkg-use-duds          BOOL              use dud and empty wells as reference [false]\n");
+	printf ("     --bkg-empty-well-normalization      BOOL  enable empty well normalization [false]\n");
+    printf ("\n");
 }
 
-
-bool BkgModelControlOpts::read_file_rcflow(HashTable_xyflow &xyf_hash, int numFlows)
+void TraceControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
-    xyf_hash.clear();
-    xyf_hash.setFilename(bkgModel_xyflow_fname_in);
-    //xyf_hash.set_xyflow_limits(numFlows);
-    std::ifstream infile;
-    infile.open(bkgModel_xyflow_fname_in.c_str());
-    if (infile.is_open()) { /* ok, proceed with output */
-        std::string line;
-        int nLines = 0;
-        while(!infile.eof()){
-          //read data from file
-          std::getline (infile,line);
-          if (line.length()==0)
-              break;
-          nLines++;
-          std::vector<std::string> tokens;
-          std::vector<std::string> elem;
-          split(line,'\t',tokens);
-          if (tokens.size()<2) {
-              split(line,' ',tokens);
-              if (tokens.size()<2) {
-                  std::cerr << "read_file_rcflow() parsing error: not enough number of tokens in line: " << line << std::endl << std::flush;
-                  assert(tokens.size()>=2);
-              }
-          }
-          split(tokens[0],':',elem);
-          //int nTokens = elem.size();
-          int r = atoi(tokens[0].c_str());
-          int c = atoi(tokens[1].c_str());
-          int f = atoi(tokens[2].c_str());
-          xyf_hash.insert_rcflow(r,c,f);
-          xyf_hash.insert_rc(r,c);
-          //std::cout << r << " " << c << " " << flow << std::endl;
-        }
-        std::cout << nLines << " lines read by read_file_rcflow()..."  << std::endl << std::flush;
-        //xyf_hash.print();
-    }
-    else {
-        std::cerr << "read_file_rcflow() open error!!!"  << std::endl << std::flush;
-        return (false);
-    }
-    infile.close();
-    return (true);
+	use_dud_and_empty_wells_as_reference = RetrieveParameterBool(opts, json_params, '-', "bkg-use-duds", false);
+	empty_well_normalization = RetrieveParameterBool(opts, json_params, '-', "bkg-empty-well-normalization", false);
+	string s = RetrieveParameterString(opts, json_params, '-', "trim-ref-trace", "");
+	if(s.length() > 0)
+	{
+		if(s == "off")
+		{
+			do_ref_trace_trim = false;
+		}
+		else if(s == "on")
+		{
+			do_ref_trace_trim = true;
+		}
+		else
+		{
+			vector<float> vec;
+			RetrieveParameterVectorFloat(opts, json_params, '-', "trim-ref-trace", "10,10,0.2", vec);
+			if(vec.size() == 3)
+			{
+				do_ref_trace_trim = true;
+				span_inflator_min = vec[0];
+				span_inflator_mult = vec[1];
+				cutoff_quantile = vec[2];
+			}
+		}
+	}
+	if (do_ref_trace_trim)
+		fprintf(stdout, "Reference trimming enabled with options: span_inflator_min = %f, span_inflator_mult = %f, cutoff_quantile = %f\n", span_inflator_min, span_inflator_mult, cutoff_quantile);
 }
 
-
-bool BkgModelControlOpts::read_file_xyflow(HashTable_xyflow &xyf_hash, int numFlows)
+void BkgModelControlOpts::PrintHelp()
 {
-    xyf_hash.clear();
-    xyf_hash.setFilename(bkgModel_xyflow_fname_in);
-    //xyf_hash.set_xyflow_limits(numFlows);
-    std::ifstream infile;
-    infile.open(bkgModel_xyflow_fname_in.c_str());
-    if (infile.is_open()) { /* ok, proceed with output */
-        std::string line;
-        int nLines = 0;
-        while(!infile.eof()){
-          //read data from file
-          std::getline (infile,line);
-          if (line.length()==0)
-              break;
-          nLines++;
-          std::vector<std::string> tokens;
-          split(line,' ',tokens);
-          int x = atoi(tokens[0].c_str());
-          int y = atoi(tokens[1].c_str());
-          int f = atoi(tokens[2].c_str());
-          xyf_hash.insert_xyflow(x,y,f);
-          xyf_hash.insert_xy(x,y);
-          //std::cout << r << " " << c << " " << flow << std::endl;
-        }
-        std::cout << nLines << " lines read by read_file_xyflow()..."  << std::endl << std::flush;
-        //xyf_hash.print();
-    }
-    else {
-        std::cerr << "read_file_xyflow() open error!!!"  << std::endl << std::flush;
-        return (false);
-    }
-    infile.close();
-    return (true);
+	printf ("     BkgModelControlOpts\n");
+    printf ("     --mixed-first-flow      INT               mixed first flow of polyclonal filter [12]\n");
+    printf ("     --mixed-last-flow       INT               mixed last flow of polyclonal filter [72]\n");
+    printf ("     --max-iterations        INT               max iterations of polyclonal filter [30]\n");
+    printf ("     --mixed-model-option    INT               mixed model option of polyclonal filter [0]\n");
+    printf ("     --mixed-stringency      DOUBLE            mixed stringency of polyclonal filter [0.5]\n");
+	printf ("     --nokey                 BOOL              nokey [false]\n");
+	printf ("     --xtalk-correction      BOOL              enable trace xtalk correction [false for Proton; true for PGM]\n");
+    printf ("     --n-unfiltered-lib      INT               number of unfiltered library random samples [100000]\n");
+    printf ("     --bkg-dont-emphasize-by-compression INT   emphasize by compression [1]\n");
+	printf ("     --clonal-filter-bkgmodel            BOOL  enable polyclonal filter [false for Proton; true for PGM]\n");
+    printf ("     --sigproc-regional-smoothing-alpha  FLOAT sigproc regional smoothing alpha [1.0]\n");
+    printf ("     --sigproc-regional-smoothing-gamma  FLOAT sigproc regional smoothing gamma [1.0]\n");
+    printf ("\n");
+
+	signal_chunks.PrintHelp();
+	trace_control.PrintHelp();
+	pest_control.PrintHelp();
+	gpuControl.PrintHelp();
 }
 
+void BkgModelControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
+{
+	gpuControl.SetOpts(opts, json_params);
+	signal_chunks.SetOpts(opts, json_params);
+	pest_control.SetOpts(opts, json_params);
+	trace_control.SetOpts(opts, json_params);
+	//jz the following comes from CommandLineOpts::GetOpts
+	unfiltered_library_random_sample = RetrieveParameterInt(opts, json_params, '-', "n-unfiltered-lib", 100000);
+	enable_trace_xtalk_correction = RetrieveParameterBool(opts, json_params, '-', "xtalk-correction", true);
+	emphasize_by_compression = RetrieveParameterInt(opts, json_params, '-', "bkg-dont-emphasize-by-compression", 1);
+	nokey = RetrieveParameterBool(opts, json_params, '-', "nokey", false);
+
+	polyclonal_filter.enable = RetrieveParameterBool(opts, json_params, '-', "clonal-filter-bkgmodel", true);
+	polyclonal_filter.mixed_first_flow = RetrieveParameterInt(opts, json_params, '-', "mixed-first-flow", 12);
+	polyclonal_filter.mixed_last_flow = RetrieveParameterInt(opts, json_params, '-', "mixed-last-flow", 72);
+	polyclonal_filter.max_iterations = RetrieveParameterInt(opts, json_params, '-', "max-iterations", 30);
+	polyclonal_filter.mixed_model_option = RetrieveParameterInt(opts, json_params, '-', "mixed-model-option", 0);
+	double stringency = RetrieveParameterDouble(opts, json_params, '-', "mixed-stringency", 0.5);
+	if(stringency < 0)
+	{
+		stringency = 0;
+	}
+	if(stringency > 1)
+	{
+		stringency = 1;
+	}
+	//transform it to log scale
+	if(stringency > 0.5)
+	{
+		polyclonal_filter.mixed_stringency = 0.5 * std::log10((stringency - 0.5)*18 + 1) + 0.5;
+	}
+	else if (stringency< 0.5)
+	{
+		polyclonal_filter.mixed_stringency = 0.5 - 0.5 * std::log10(( 0.5 - stringency)*18 + 1);
+	} 
+	else
+	{
+		polyclonal_filter.mixed_stringency = 0.5;
+	}
+
+	regional_smoothing.alpha = RetrieveParameterFloat(opts, json_params, '-', "sigproc-regional-smoothing-alpha", 1.0f);
+	regional_smoothing.gamma = RetrieveParameterFloat(opts, json_params, '-', "sigproc-regional-smoothing-gamma", 1.0f);
+}

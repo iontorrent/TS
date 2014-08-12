@@ -1,5 +1,4 @@
-# Ok or expected warnings
-
+// Ok or expected warnings
 # RSM demo code - should probably not check in
 resourceLeak:RSM/rsmagent/AgentEmbedded-5.3-252/DemoNT/RSMAgent.c:79 (error) Resource leak: fp
 # RSM libraries 
@@ -68,3 +67,422 @@ memleak:Analysis/VariantCaller/SpliceVariantsToReads.h:40 (possible error) Memor
 unusedStructMember:Analysis/TMAP/src/index/tmap_bwt_gen.c:85 (style) struct or union member 'tmap_bwt_gen_t::occMajorSizeInWord' is never used
 resourceLeak:Analysis/TMAP/src/index/tmap_bwt_gen.c:1578 (error) Resource leak: packedFile
 unusedStructMember:Analysis/TMAP/src/map/map3/tmap_map3.c:109 (style) struct or union member 'tmap_map3_thread_data_t::ptr' is never used
+# Get passing now and fix later
+uninitVar:Analysis/AnalysisOrg/BkgDataPointers.h:14 (warning) Member variable 'BkgDataPointers::mRegionOffset' is not initialized in the constructor.
+clarifyCondition:Analysis/AnalysisOrg/ClonalFilter.cpp:247 (style) Boolean result is used in bitwise operation. Clarify expression with parentheses
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:775 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:834 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:940 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:964 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:985 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1006 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1166 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1180 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1194 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1208 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1223 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1237 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1247 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1262 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1276 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1285 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1294 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1303 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1317 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1356 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1371 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1386 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1404 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1422 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1440 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1459 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1486 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1513 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1590 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1639 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1653 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1948 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:1986 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:2008 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:2210 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/AnalysisOrg/IO/CommandLineOpts.cpp:2232 (warning) scanf without field width limits can crash with huge input data
+unusedPrivateFunction:Analysis/AnalysisOrg/IO/ProgramState.h:27 (style) Unused private function 'ProgramState::SetBkgControl'
+unusedPrivateFunction:Analysis/AnalysisOrg/IO/ProgramState.h:31 (style) Unused private function 'ProgramState::SetKeyContext'
+unusedPrivateFunction:Analysis/AnalysisOrg/IO/ProgramState.h:35 (style) Unused private function 'ProgramState::SetSysContext'
+uninitVar:Analysis/AnalysisOrg/ImageLoader.cpp:65 (warning) Member variable 'ImageTracker::master_img_loader' is not initialized in the constructor.
+invalidscanf:Analysis/AnalysisOrg/SystemContext.cpp:350 (warning) scanf without field width limits can crash with huge input data
+nullPointer:Analysis/AnalysisOrg/justBeadFind/SeparatorInterface.cpp:213 (error) Possible null pointer dereference: diffSeparator - otherwise it is redundant to check if diffSeparator is null at line 224
+unreadVariable:Analysis/BaseCaller/BarcodeClassifier.cpp:192 (style) Variable 'baseAdapter' is assigned a value that is never used
+unreadVariable:Analysis/BaseCaller/BarcodeClassifier.cpp:193 (style) Variable 'flowAdapter' is assigned a value that is never used
+invalidscanf:Analysis/BaseCaller/BarcodeDatasets.cpp:181 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BaseCaller/BarcodeDatasets.cpp:195 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BaseCaller/BaseCaller.cpp:545 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BaseCaller/BaseCaller.cpp:574 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BaseCaller/BaseCaller.cpp:580 (warning) scanf without field width limits can crash with huge input data
+postfixOperator:Analysis/BaseCaller/BaseCaller.cpp:815 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/BaseCaller/BaseCaller.cpp:828 (performance) Prefer prefix ++/-- operators for non-primitive types.
+uninitVar:Analysis/BaseCaller/BaseCallerFilters.cpp:406 (warning) Member variable 'BaseCallerFilters::generate_bead_summary_' is not initialized in the constructor.
+invalidscanf:Analysis/BaseCaller/BaseCallerFilters.cpp:524 (warning) scanf without field width limits can crash with huge input data
+uninitVar:Analysis/BaseCaller/DPTreephaser.cpp:17 (warning) Member variable 'DPTreephaser::As_' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/DPTreephaser.cpp:17 (warning) Member variable 'DPTreephaser::Bs_' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/OrderedDatasetWriter.cpp:27 (warning) Member variable 'OrderedDatasetWriter::num_datasets_' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/OrderedDatasetWriter.cpp:27 (warning) Member variable 'OrderedDatasetWriter::num_barcodes_' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/OrderedDatasetWriter.cpp:27 (warning) Member variable 'OrderedDatasetWriter::num_read_groups_' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/OrderedDatasetWriter.cpp:27 (warning) Member variable 'OrderedDatasetWriter::save_filtered_reads_' is not initialized in the constructor.
+postfixOperator:Analysis/BaseCaller/OrderedDatasetWriter.cpp:211 (performance) Prefer prefix ++/-- operators for non-primitive types.
+uninitVar:Analysis/BaseCaller/PerBaseQual.cpp:25 (warning) Member variable 'PerBaseQual::save_predictors_' is not initialized in the constructor.
+invalidscanf:Analysis/BaseCaller/PhaseEstimator.cpp:92 (warning) scanf without field width limits can crash with huge input data
+postfixOperator:Analysis/BaseCaller/PhaseEstimator.cpp:715 (performance) Prefer prefix ++/-- operators for non-primitive types.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::parent' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::best' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::ts_Transition' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::ts_Transition4' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::rd_NormMeasure' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::rd_SqNormMeasureSum' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::sv_pathBuf' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::ft_stepNorms' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::ad_FlowEnd' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::ad_Idx' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::ad_End' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::ad_Beg' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::ad_Buf' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::ad_Adv' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::As_' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:206 (warning) Member variable 'TreephaserSSE::Bs_' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::parent' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::best' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::ts_Transition' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::ts_Transition4' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::rd_NormMeasure' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::rd_SqNormMeasureSum' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::sv_pathBuf' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::ft_stepNorms' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::ad_FlowEnd' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::ad_Idx' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::ad_End' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::ad_Beg' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::ad_Buf' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::ad_Adv' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::As_' is not initialized in the constructor.
+uninitVar:Analysis/BaseCaller/TreephaserSSE.cpp:213 (warning) Member variable 'TreephaserSSE::Bs_' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Bookkeeping/BeadScratch.cpp:7 (warning) Member variable 'BeadScratchSpace::WhichEmphasis' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Bookkeeping/BeadScratch.cpp:7 (warning) Member variable 'BeadScratchSpace::num_derivatives' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Bookkeeping/BeadTracker.cpp:14 (warning) Member variable 'BeadTracker::params_high' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Bookkeeping/BeadTracker.cpp:14 (warning) Member variable 'BeadTracker::params_low' is not initialized in the constructor.
+postfixOperator:Analysis/BkgModel/Bookkeeping/BeadTracker.cpp:726 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/BkgModel/Bookkeeping/BeadTracker.cpp:771 (performance) Prefer prefix ++/-- operators for non-primitive types.
+invalidscanf:Analysis/BkgModel/Bookkeeping/CrossTalkSpec.cpp:330 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/Bookkeeping/CrossTalkSpec.cpp:339 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/Bookkeeping/CrossTalkSpec.cpp:349 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/Bookkeeping/CrossTalkSpec.cpp:358 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/Bookkeeping/CrossTalkSpec.cpp:364 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/Bookkeeping/CrossTalkSpec.cpp:373 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/Bookkeeping/CrossTalkSpec.cpp:381 (warning) scanf without field width limits can crash with huge input data
+uninitVar:Analysis/BkgModel/Bookkeeping/DarkHalo.cpp:9 (warning) Member variable 'Halo::npts' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Bookkeeping/DarkHalo.cpp:9 (warning) Member variable 'Halo::weight' is not initialized in the constructor.
+arrayIndexOutOfBounds:Analysis/BkgModel/Bookkeeping/RegionParams.cpp:418 (error) Array 'cur.t_mid_nuc[0]' index 0 out of bounds
+publicAllocationError:Analysis/BkgModel/Bookkeeping/TraceCurry.cpp:137 (warning) Possible leak in public function. The pointer 'ivalPtr' is not deallocated before it is allocated.
+operatorEqVarError:Analysis/BkgModel/CUDA/dumper.cpp:84 (warning) Member variable 'DumpBuffer::_externData' is not assigned a value in 'DumpBuffer::operator='
+catchExceptionByValue:Analysis/BkgModel/Fitters/Complex/BkgFitMatrixPacker.cpp:98 (style) Exception should be caught by reference.
+clarifyCondition:Analysis/BkgModel/Fitters/Complex/MultiLevMar.cpp:55 (style) Boolean result is used in bitwise operation. Clarify expression with parentheses
+clarifyCondition:Analysis/BkgModel/Fitters/Complex/MultiLevMar.cpp:112 (style) Boolean result is used in bitwise operation. Clarify expression with parentheses
+clarifyCondition:Analysis/BkgModel/Fitters/Complex/MultiLevMar.cpp:586 (style) Boolean result is used in bitwise operation. Clarify expression with parentheses
+uninitVar:Analysis/BkgModel/Fitters/FitExpDecay.h:21 (warning) Member variable 'FitExpDecay::params' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/FitExpDecay.h:21 (warning) Member variable 'FitExpDecay::i_start' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/FitExpDecay.h:21 (warning) Member variable 'FitExpDecay::i_end' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/FitExpDecay.h:21 (warning) Member variable 'FitExpDecay::min_params' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/FitExpDecay.h:21 (warning) Member variable 'FitExpDecay::max_params' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFit.h:20 (warning) Member variable 'BkgModSingleFlowFit::_emphasis_data' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::params' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::reg_p' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::fnum' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::NucID' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::flow' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::SP' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::etbR' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::tauB' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::sens' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::dmult' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::Copies' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::phi' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::gain' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::t_mid_nuc' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::sigma' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::nuc_flow_span' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::min_params' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/BkgModSingleFlowFitTMidNuc.h:23 (warning) Member variable 'BkgModSingleFlowFitTMidNuc::max_params' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/SingleFlowFit.cpp:5 (warning) Member variable 'single_flow_optimizer::math_poiss' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/SingleFlowFit.cpp:5 (warning) Member variable 'single_flow_optimizer::pmax_param' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Fitters/SingleFlowFit.cpp:5 (warning) Member variable 'single_flow_optimizer::pmin_param' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:27 (warning) Member variable 'RegionParamDefault::tau_E_default' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:76 (warning) Member variable 'TimeAndEmphasisDefaults::numEv' is not initialized in the constructor.
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:212 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:218 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:224 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:229 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:231 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:233 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:235 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:238 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:243 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:248 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:252 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:254 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:258 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:264 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:269 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:274 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:345 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/BkgModel/GlobalDefaultsForBkgModel.cpp:352 (warning) scanf without field width limits can crash with huge input data
+duplicateBreak:Analysis/BkgModel/LocalTrace/TraceClassifier.cpp:2565 (style) Consecutive return, break, continue, goto or throw statements are unnecessary
+arrayIndexThenCheck:Analysis/BkgModel/LocalTrace/TraceClassifier.cpp:725 (style) Array index ith is used before limits check
+uninitVar:Analysis/BkgModel/MathModel/MathOptim.cpp:120 (warning) Member variable 'MixtureMemo::occ_vec' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/MathModel/MathOptim.cpp:120 (warning) Member variable 'MixtureMemo::_inv_scale' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Sampling/SampleClonality.cpp:8 (warning) Member variable 'Clonality::buffer' is not initialized in the constructor.
+uninitVar:Analysis/BkgModel/Sampling/SampleClonality.cpp:8 (warning) Member variable 'Clonality::max_allowable_peaks' is not initialized in the constructor.
+postfixOperator:Analysis/BkgModel/Sampling/SampleClonality.cpp:586 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/BkgModel/Sampling/SampleClonality.cpp:597 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/BkgModel/Sampling/SampleClonality.cpp:627 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/BkgModel/Sampling/SampleClonality.cpp:636 (performance) Prefer prefix ++/-- operators for non-primitive types.
+nullPointer:Analysis/BkgModel/Writers/GlobalWriter.cpp:832 (error) Possible null pointer dereference: mPtrs - otherwise it is redundant to check if mPtrs is null at line 830
+nullPointer:Analysis/BkgModel/Writers/GlobalWriter.cpp:842 (error) Possible null pointer dereference: mPtrs - otherwise it is redundant to check if mPtrs is null at line 840
+unreadVariable:Analysis/BkgModel/Writers/GlobalWriter.cpp:513 (style) Variable 'k' is assigned a value that is never used
+duplicateExpression:Analysis/Image/AdvCompr.cpp:1354 (style) Same expression on both sides of '&&'.
+uninitVar:Analysis/Image/AdvCompr.cpp:29 (warning) Member variable 'AdvCompr::ntrcsL' is not initialized in the constructor.
+uninitVar:Analysis/Image/AdvCompr.cpp:29 (warning) Member variable 'AdvCompr::tikhonov_k' is not initialized in the constructor.
+uninitVar:Analysis/Image/AdvCompr.cpp:29 (warning) Member variable 'AdvCompr::spline_order' is not initialized in the constructor.
+uninitVar:Analysis/Image/AdvCompr.cpp:29 (warning) Member variable 'AdvCompr::gainCorr' is not initialized in the constructor.
+uninitVar:Analysis/Image/AdvCompr.cpp:29 (warning) Member variable 'AdvCompr::ThreadNum' is not initialized in the constructor.
+publicAllocationError:Analysis/Image/ChannelXTCorrection.h:38 (warning) Possible leak in public function. The pointer 'xt_vector_storage' is not deallocated before it is allocated.
+invalidscanf:Analysis/Image/AdvCompr.cpp:266 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Image/AdvCompr.cpp:272 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Image/AdvCompr.cpp:278 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Image/AdvCompr.cpp:283 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Image/AdvCompr.cpp:288 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Image/AdvCompr.cpp:321 (warning) scanf without field width limits can crash with huge input data
+nullPointer:Analysis/Image/ChipIdDecoder.cpp:50 (error) Possible null pointer dereference: id_str_from_explog - otherwise it is redundant to check if id_str_from_explog is null at line 34
+unreadVariable:Analysis/Image/ComparatorNoiseCorrector.cpp:1150 (style) Variable 'centroid' is assigned a value that is never used
+mismatchAllocDealloc:Analysis/Image/DfcComprExample.cpp:282 (error) Mismatching allocation and deallocation: keyFrameI
+mismatchAllocDealloc:Analysis/Image/DfcComprExample.cpp:283 (error) Mismatching allocation and deallocation: keyFrameQ
+mismatchAllocDealloc:Analysis/Image/DfcComprExample.cpp:284 (error) Mismatching allocation and deallocation: bitsPerFreq
+mismatchAllocDealloc:Analysis/Image/DfcComprExample.cpp:285 (error) Mismatching allocation and deallocation: scaleVectorI
+mismatchAllocDealloc:Analysis/Image/DfcComprExample.cpp:286 (error) Mismatching allocation and deallocation: scaleVectorQ
+mismatchAllocDealloc:Analysis/Image/DfcComprExample.cpp:287 (error) Mismatching allocation and deallocation: deltaI
+mismatchAllocDealloc:Analysis/Image/DfcComprExample.cpp:288 (error) Mismatching allocation and deallocation: deltaQ
+mismatchAllocDealloc:Analysis/Image/DfcComprExample.cpp:289 (error) Mismatching allocation and deallocation: newImage
+nullPointer:Analysis/Image/Image.cpp:1912 (error) Possible null pointer dereference: fp - otherwise it is redundant to check if fp is null at line 1910
+nullPointer:Analysis/Image/Image.cpp:1935 (error) Possible null pointer dereference: fp - otherwise it is redundant to check if fp is null at line 1933
+unreadVariable:Analysis/Image/Image.cpp:293 (style) Variable 'totalLen' is assigned a value that is never used
+unreadVariable:Analysis/Image/Image.cpp:1284 (style) Variable 'innercount' is assigned a value that is never used
+invalidscanf:Analysis/Image/Image.cpp:206 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Image/Image.cpp:239 (warning) scanf without field width limits can crash with huge input data
+catchExceptionByValue:Analysis/Image/LSRowImageProcessor.cpp:242 (style) Exception should be caught by reference.
+resourceLeak:Analysis/Image/TikhonovSmoother.cpp:242 (error) Resource leak: infd
+resourceLeak:Analysis/Image/deInterlace.cpp:127 (error) Resource leak: rc
+invalidscanf:Analysis/Mask/BeadmaskMerge.cpp:36 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Mask/BeadmaskMerge.cpp:46 (warning) scanf without field width limits can crash with huge input data
+nullPointer:Analysis/Mask/BeadmaskParse.cpp:127 (error) Possible null pointer dereference: outputDir - otherwise it is redundant to check if outputDir is null at line 122
+uninitVar:Analysis/NormWells/NoKeyCall.cpp:8 (warning) Member variable 'NoKeyCall::max_allowable_peaks' is not initialized in the constructor.
+uninitVar:Analysis/NormWells/NoKeyCall.cpp:8 (warning) Member variable 'NoKeyCall::adhoc' is not initialized in the constructor.
+uninitVar:Analysis/NormWells/NoKeyCall.cpp:8 (warning) Member variable 'NoKeyCall::beadx' is not initialized in the constructor.
+uninitVar:Analysis/NormWells/NoKeyCall.cpp:8 (warning) Member variable 'NoKeyCall::beady' is not initialized in the constructor.
+postfixOperator:Analysis/NormWells/NoKeyCall.cpp:657 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/NormWells/NoKeyCall.cpp:668 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/NormWells/NoKeyCall.cpp:698 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/NormWells/NoKeyCall.cpp:707 (performance) Prefer prefix ++/-- operators for non-primitive types.
+invalidscanf:Analysis/Obsolete/bkgFit.cpp:190 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Obsolete/bkgFit.cpp:195 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Obsolete/bkgFit.cpp:242 (warning) scanf without field width limits can crash with huge input data
+unreadVariable:Analysis/Recall/FlowAlignment.cpp:432 (style) Variable 'tseqStart' is assigned a value that is never used
+postfixOperator:Analysis/Recall/Recall.cpp:138 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/Recall/Recall.cpp:315 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/Recall/Recall.cpp:338 (performance) Prefer prefix ++/-- operators for non-primitive types.
+nullPointer:Analysis/Recall/SeqBoost.cpp:1106 (error) Possible null pointer dereference: arg - otherwise it is redundant to check if arg is null at line 818
+nullPointer:Analysis/Recall/SeqBoost.cpp:1108 (error) Possible null pointer dereference: arg - otherwise it is redundant to check if arg is null at line 818
+nullPointer:Analysis/Recall/calibrate.cpp:1512 (error) Possible null pointer dereference: arg - otherwise it is redundant to check if arg is null at line 1196
+postfixOperator:Analysis/Recall/calibrate.cpp:1715 (performance) Prefer prefix ++/-- operators for non-primitive types.
+uninitVar:Analysis/Replay/H5Replay.cpp:11 (warning) Member variable 'ReplayH5DataSet::mSize' is not initialized in the constructor.
+unreadVariable:Analysis/SFFCorrection/sffCorrection.cpp:1966 (style) Variable 't_flows' is assigned a value that is never used
+unreadVariable:Analysis/SFFCorrection/sffCorrection.cpp:2002 (style) Variable 't_flows' is assigned a value that is never used
+unreadVariable:Analysis/SFFCorrection/sffCorrection.cpp:2302 (style) Variable 'correctedBasesString' is assigned a value that is never used
+unusedVariable:Analysis/SFFCorrection/sffCorrection.cpp:3177 (style) Unused variable: line
+postfixOperator:Analysis/SFFCorrection/sffCorrection.cpp:1330 (performance) Prefer prefix ++/-- operators for non-primitive types.
+uninitVar:Analysis/SamUtils/alignStats.cpp:23 (warning) Member variable 'AlignStats::queue_ready' is not initialized in the constructor.
+uninitVar:Analysis/SamUtils/alignStats.cpp:23 (warning) Member variable 'AlignStats::you_should_run' is not initialized in the constructor.
+uninitVar:Analysis/SamUtils/alignStats.cpp:23 (warning) Member variable 'AlignStats::total_reads_to_read' is not initialized in the constructor.
+uninitVar:Analysis/SamUtils/alignStats.cpp:23 (warning) Member variable 'AlignStats::total_reads_cached' is not initialized in the constructor.
+uninitVar:Analysis/SamUtils/alignStats.cpp:23 (warning) Member variable 'AlignStats::total_reads_processed' is not initialized in the constructor.
+uninitVar:Analysis/SamUtils/alignStats.cpp:23 (warning) Member variable 'AlignStats::score_flows' is not initialized in the constructor.
+unreadVariable:Analysis/SamUtils/coverage.cpp:73 (style) Variable 'moreReads' is assigned a value that is never used
+unreadVariable:Analysis/Separator/FindSlopeChange.h:56 (style) Variable 'bestsc0' is assigned a value that is never used
+unreadVariable:Analysis/Separator/FindSlopeChange.h:56 (style) Variable 'bestsc1' is assigned a value that is never used
+arrayIndexThenCheck:Analysis/Separator/BFReference.cpp:700 (style) Array index fIx is used before limits check
+uninitVar:Analysis/Separator/Traces.h:36 (warning) Member variable 'Traces::mRefOut' is not initialized in the constructor.
+noConstructor:Analysis/Separator/ZeromerModelBulk.h:692 (style) The class 'ZeromerModelBulkJob<double>' does not have a constructor.
+postfixOperator:Analysis/Separator/TraceStoreMatrix.h:168 (performance) Prefer prefix ++/-- operators for non-primitive types.
+arrayIndexThenCheck:Analysis/Separator/KeyClassifyTauEJob.h:195 (style) Array index frameEnd is used before limits check
+uninitVar:Analysis/Separator/KeyClassifyTauEJob.h:108 (warning) Member variable 'KeyClassifyTauEJob::mIncorp' is not initialized in the constructor.
+uninitVar:Analysis/Separator/KeyClassifyTauEJob.h:20 (warning) Member variable 'NucDarkMatterReporter<double>::mStore' is not initialized in the constructor.
+uninitVar:Analysis/Separator/KeyClassifyTauEJob.h:20 (warning) Member variable 'NucDarkMatterReporter<double>::mKeys' is not initialized in the constructor.
+uninitVar:Analysis/Separator/DifferentialSeparator.cpp:65 (warning) Member variable 'LoadSDatJob::mTraceStore' is not initialized in the constructor.
+arrayIndexThenCheck:Analysis/Separator/KeyClassifier.cpp:58 (style) Array index flowIx is used before limits check
+arrayIndexThenCheck:Analysis/Separator/KeyClassifier.cpp:216 (style) Array index flowIx is used before limits check
+nullPointer:Analysis/Separator/Separator.cpp:383 (error) Possible null pointer dereference: fp - otherwise it is redundant to check if fp is null at line 385
+bufferAccessOutOfBounds:Analysis/Separator/Separator.cpp:40 (error) Buffer access out-of-bounds: experimentDir
+bufferAccessOutOfBounds:Analysis/Separator/Separator.cpp:137 (error) Buffer access out-of-bounds: experimentDir
+uninitVar:Analysis/Separator/Separator.cpp:29 (warning) Member variable 'Separator::uncomp_start' is not initialized in the constructor.
+uninitVar:Analysis/Separator/Separator.cpp:29 (warning) Member variable 'Separator::frameStride' is not initialized in the constructor.
+uninitVar:Analysis/Separator/Separator.cpp:29 (warning) Member variable 'Separator::percentForSample' is not initialized in the constructor.
+cstyleCast:Analysis/SynchDat/DelicatoDatCompression.cpp:1489 (style) C-style pointer casting
+cstyleCast:Analysis/SynchDat/DelicatoDatCompression.cpp:1491 (style) C-style pointer casting
+unusedStructMember:Analysis/SynchDat/DelicatoDatCompression.cpp:868 (style) struct or union member 'ScoreCalc<RANKA,NROWSA>::base' is never used
+unusedStructMember:Analysis/SynchDat/DelicatoDatCompression.cpp:869 (style) struct or union member 'ScoreCalc<RANKA,NROWSA>::baseV4' is never used
+unusedStructMember:Analysis/SynchDat/DelicatoDatCompression.cpp:868 (style) struct or union member 'ScoreCalc<RANKB,NROWSB>::base' is never used
+unusedStructMember:Analysis/SynchDat/DelicatoDatCompression.cpp:869 (style) struct or union member 'ScoreCalc<RANKB,NROWSB>::baseV4' is never used
+unusedStructMember:Analysis/SynchDat/DelicatoDatCompression.cpp:868 (style) struct or union member 'ScoreCalc<NRANK_GOOD,MAX_N>::base' is never used
+unusedStructMember:Analysis/SynchDat/DelicatoDatCompression.cpp:869 (style) struct or union member 'ScoreCalc<NRANK_GOOD,MAX_N>::baseV4' is never used
+unusedStructMember:Analysis/SynchDat/DelicatoDatCompression.cpp:868 (style) struct or union member 'ScoreCalc<NRANK_BAD,MAX_NBAD>::base' is never used
+unusedStructMember:Analysis/SynchDat/DelicatoDatCompression.cpp:869 (style) struct or union member 'ScoreCalc<NRANK_BAD,MAX_NBAD>::baseV4' is never used
+noConstructor:Analysis/SynchDat/DelicatoDatCompression.cpp:593 (style) The class 'RowExtractor<NRANK_GOOD,MAX_N>' does not have a constructor.
+noConstructor:Analysis/SynchDat/DelicatoDatCompression.cpp:593 (style) The class 'RowExtractor<MAX_L,MAX_NBAD>' does not have a constructor.
+uninitVar:Analysis/SynchDat/DelicatoDatCompression.cpp:72 (warning) Member variable 'FixedVector<S>::V' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/DelicatoDatCompression.cpp:72 (warning) Member variable 'FixedVector<4>::V' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/DelicatoDatCompression.cpp:72 (warning) Member variable 'FixedVector<RANK>::V' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/DelicatoDatCompression.cpp:72 (warning) Member variable 'FixedVector<RANKA>::V' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/DelicatoDatCompression.cpp:72 (warning) Member variable 'FixedVector<RANKB>::V' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/DelicatoDatCompression.cpp:72 (warning) Member variable 'FixedVector<NRANK_GOOD+NRANK_BAD>::V' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/DelicatoDatCompression.cpp:72 (warning) Member variable 'FixedVector<NRANK_BAD>::V' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/DelicatoDatCompression.cpp:72 (warning) Member variable 'FixedVector<NRANK_GOOD>::V' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/HuffmanEncode.h:29 (warning) Member variable 'Huffman::cnt' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/PsyhoCompression.cpp:96 (warning) Member variable 'RangeEncoder::tptr' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/PsyhoCompression.cpp:198 (warning) Member variable 'RangeDecoder::pdata' is not initialized in the constructor.
+uninitVar:Analysis/SynchDat/PsyhoCompression.cpp:198 (warning) Member variable 'RangeDecoder::tlo' is not initialized in the constructor.
+unreadVariable:Analysis/SynchDat/TraceChunk.cpp:211 (style) Variable 'count' is assigned a value that is never used
+unreadVariable:Analysis/SynchDat/TraceDriver.cpp:223 (style) Variable 'sum' is assigned a value that is never used
+assignmentInAssert:Analysis/T0CalcMt.h:101 (warning) Assert statement modifies 'size'.
+unusedVariable:Analysis/TMAP/src/io/tmap_file.c:331 (style) Unused variable: len
+toomanyconfigs:Analysis/TMAP/src/map/map2/tmap_map2_aux.c:0 (information) Interrupted checking because of too many #ifdef configurations.
+toomanyconfigs:Analysis/TMAP/src/map/tmap_map_driver.c:0 (information) Interrupted checking because of too many #ifdef configurations.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution.cpp:8 (warning) Member variable 'Solution::max_qlen' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution.cpp:8 (warning) Member variable 'Solution::max_tlen' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::n' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::m' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::segNo' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::len' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::XP' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::M0' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::M1' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::V' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::POS' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::INVALID_POS_NO' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::lastMax' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::opt' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution4.cpp:218 (warning) Member variable 'Solution4::n_best' is not initialized in the constructor.
+unreadVariable:Analysis/TMAP/src/sw/lib/Solution5.cpp:1262 (style) Variable 'escape' is assigned a value that is never used
+unreadVariable:Analysis/TMAP/src/sw/lib/Solution5.cpp:1637 (style) Variable 'escape' is assigned a value that is never used
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::opt' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::query_end' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::target_end' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::task_id' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::match_score' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::mismatch_score' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::gap_open' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::gap_extension' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::direction' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::sizeq' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::counter_task2' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::int_buffer' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::short_buffer' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::vdeg' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::vfirst' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::measure_id' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::est_opt' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::first_j' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::last_j' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::valid0' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution5.cpp:148 (warning) Member variable 'Solution5::encode_idx' is not initialized in the constructor.
+selfAssignment:Analysis/TMAP/src/sw/lib/Solution7.cpp:692 (warning) Redundant assignment of "local_position" to itself
+uninitVar:Analysis/TMAP/src/sw/lib/Solution7.cpp:797 (warning) Member variable 'Solution7::m_workarea_u8' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution7.cpp:797 (warning) Member variable 'Solution7::m_workarea_i16' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::Reference' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::MatchScore' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::MismatchScore' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::GapOpen' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::GapExtension' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::Opt' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::QueryEnd' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::TargetEnd' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::NBest' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::QuerySize' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::TargetSize' is not initialized in the constructor.
+uninitVar:Analysis/TMAP/src/sw/lib/Solution9.cpp:158 (warning) Member variable 'Solution9::TargetSizeInSIMDBlocks' is not initialized in the constructor.
+toomanyconfigs:Analysis/TMAP/src/sw/tmap_sw.c:0 (information) Interrupted checking because of too many #ifdef configurations.
+toomanyconfigs:Analysis/TMAP/src/util/tmap_definitions.c:0 (information) Interrupted checking because of too many #ifdef configurations.
+invalidscanf:Analysis/Util/HandleExpLog.cpp:125 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Util/HandleExpLog.cpp:178 (warning) scanf without field width limits can crash with huge input data
+postfixOperator:Analysis/Util/OptArgs.cpp:381 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/Util/OptArgs.cpp:393 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/Util/OptionArgs.cpp:309 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/Util/OptionArgs.cpp:384 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/Util/OptionArgs.cpp:456 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/Util/OptionArgs.cpp:489 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/Util/OptionArgs.cpp:510 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/Util/OptionArgsBase.cpp:94 (performance) Prefer prefix ++/-- operators for non-primitive types.
+arrayIndexThenCheck:Analysis/Util/SeqUtils.cpp:49 (style) Array index seqPos is used before limits check
+memleakOnRealloc:Analysis/Util/Utils.cpp:28 (error) Common realloc mistake: 'line' nulled but not freed upon failure
+invalidscanf:Analysis/Util/Utils.cpp:162 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Util/Utils.cpp:172 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Util/Utils.cpp:184 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Util/Utils.cpp:865 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Util/Utils.cpp:928 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Util/Utils.cpp:948 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/Util/Utils.cpp:968 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/VariantCaller/ReferenceReader.h:56 (warning) scanf without field width limits can crash with huge input data
+unreadVariable:Analysis/VariantCaller/EnsembleEval/StackEngine.cpp:403 (style) Variable 'i_ndx' is assigned a value that is never used
+clarifyCondition:Analysis/VariantCaller/Filter/DecisionTreeData.cpp:82 (style) Boolean result is used in bitwise operation. Clarify expression with parentheses
+invalidscanf:Analysis/VariantCaller/TargetsManager.cpp:165 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/VariantCaller/tvcutils/prepare_hotspots.cpp:148 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/VariantCaller/tvcutils/validate_bed.cpp:100 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/VariantCaller/tvcutils/validate_bed.cpp:379 (warning) scanf without field width limits can crash with huge input data
+uninitVar:Analysis/Wells/RawWells.cpp:117 (warning) Member variable 'RawWells::mWriteOnClose' is not initialized in the constructor.
+uninitVar:Analysis/Wells/RawWells.cpp:122 (warning) Member variable 'RawWells::mWriteOnClose' is not initialized in the constructor.
+uninitVar:Analysis/Wells/RawWells.cpp:127 (warning) Member variable 'RawWells::mWriteOnClose' is not initialized in the constructor.
+uninitVar:Analysis/Wells/RawWellsV1.cpp:22 (warning) Member variable 'RawWellsV1::rawflowgrams' is not initialized in the constructor.
+uninitVar:Analysis/Wells/RawWellsV1.cpp:42 (warning) Member variable 'RawWellsV1::rawflowgrams' is not initialized in the constructor.
+uninitVar:Analysis/coverage/interval_tree.cpp:57 (warning) Member variable 'IntervalTree::currentParent' is not initialized in the constructor.
+unreachableCode:Analysis/coverage/interval_tree.cpp:341 (style) Statements following return, break, continue, goto or throw will never be executed
+unreachableCode:Analysis/coverage/interval_tree.cpp:343 (style) Statements following return, break, continue, goto or throw will never be executed
+unreadVariable:Analysis/crop/Acq.cpp:379 (style) Variable 'rframe' is assigned a value that is never used
+invalidscanf:Analysis/crop/ChkDat.cpp:165 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/crop/ChkDat.cpp:184 (warning) scanf without field width limits can crash with huge input data
+unreadVariable:Analysis/crop/Ranger.cpp:41 (style) Variable 'doAscii' is assigned a value that is never used
+arrayIndexThenCheck:Analysis/file-io/ion_util.c:101 (style) Array index i is used before limits check
+invalidscanf:Analysis/file-io/ion_util.c:256 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/file-io/ion_util.c:259 (warning) scanf without field width limits can crash with huge input data
+invalidscanf:Analysis/file-io/sff.c:356 (warning) scanf without field width limits can crash with huge input data
+unreadVariable:Analysis/ionstats/ionstats_alignment.cpp:86 (style) Variable 'hasBc' is assigned a value that is never used
+unreadVariable:Analysis/realignment/Realigner.cpp:437 (style) Variable 'valid_q_idx' is assigned a value that is never used
+postfixOperator:Analysis/realignment/Realigner.cpp:741 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/realignment/Realigner.cpp:750 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/realignment/Realigner.cpp:759 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/realignment/Realigner.cpp:768 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/realignment/Realigner.cpp:782 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/realignment/Realigner.cpp:785 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/realignment/Realigner.cpp:798 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/realignment/Realigner.cpp:801 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/realignment/Realigner.cpp:807 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/realignment/Realigner.cpp:841 (performance) Prefer prefix ++/-- operators for non-primitive types.
+unreadVariable:Analysis/realignment/bamrealignment.cpp:109 (style) Variable 'position_shift' is assigned a value that is never used
+unreadVariable:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:501 (style) Variable 'totMatchLen' is assigned a value that is never used
+postfixOperator:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:682 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:687 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:726 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:753 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:795 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/strandBiasExtractor/strandBiasExtractor.cpp:1180 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/utest/H5File_Test.cpp:14 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/utest/H5File_Test.cpp:22 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/utest/H5File_Test.cpp:34 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/utest/H5File_Test.cpp:57 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/utest/OptionArgs_Test.cpp:181 (performance) Prefer prefix ++/-- operators for non-primitive types.
+postfixOperator:Analysis/utest/OptionArgs_Test.cpp:248 (performance) Prefer prefix ++/-- operators for non-primitive types.

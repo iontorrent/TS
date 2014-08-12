@@ -9,6 +9,7 @@
 #include "Region.h"
 #include "IonVersion.h"
 #include "Utils.h"
+#include "OptBase.h"
 
 // cropping, displacing, locating items on the chip
 // some of this is probably part of bkgmodel controls (analysis regions)
@@ -49,6 +50,8 @@ class SpatialContext{
       regionYSize = ysize;
     }
     inline bool IsSetRegionXYSize(){  return ( regionXSize != 0 );}
+	void PrintHelp();
+	void SetOpts(OptArgs &opts, Json::Value& json_params);
 
     ~SpatialContext();
 };

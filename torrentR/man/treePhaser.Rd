@@ -15,8 +15,12 @@
     ie,
     dr,
     keySeq      = "",
-    basecaller  = c("treephaser-swan","dp-treephaser", "treephaser-adaptive"),
-    terminatorChemistryRun=0
+    basecaller  = c("treephaser-swan", "dp-treephaser", "treephaser-adaptive", "treephaser-solve"),
+    diagonalStates=0,
+    RecalModelFile="",
+    RecalModelThreshold=4,
+    xval=NA,
+    yval=NA
   )
 }
 \arguments{
@@ -35,11 +39,26 @@
     be performed.
   }
   \item{basecaller}{
-    The variant of treePhaser to be used - options are "treephaser-swan" (the
-    default), "dp-treephaser" and "treephaser-adaptive"
+    The variant of treePhaser to be used - options are 
+    "treephaser-swan"      Sliding window adaptive normalization (default)
+    "treephaser-adaptive"  Adaptive normalization
+    "dp-treephaser"        Solve with older normalization method
+    "treephaser-solve"     Solve without doing any normalization
   }
-  \item{terminatorChemistryRun}{
-    Switch to analyze a run with terminator chemistry.
+  \item{diagonalStates}{
+    Switch to enable a diagonal state progression model.
+  }
+  \item{RecalModelFile}{
+    Filename of a HP recalibration file to be loaded.
+  }
+  \item{RecalModelThreshold}{
+    Lower (inclusive) threshold for model HP recalibration. (default 4)
+  }
+  \item{xval}{
+    x coordinates of the wells. Required when RecalModelFile is provided.
+  }
+  \item{yval}{
+    y coordinates of the wells. Required when RecalModelFile is provided.
   }
 }
 \value{

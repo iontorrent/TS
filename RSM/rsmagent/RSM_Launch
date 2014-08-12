@@ -12,6 +12,9 @@
 
 PROGNAME=RSMAgent_TS
 LOGFILE=/var/log/$PROGNAME.log
+SERIALNUMFILE=/var/spool/ion/serial_number.alt
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source $TSCONFIG_SRC_DIR/ts_functions
 
 function start()
 {
@@ -19,16 +22,22 @@ function start()
   if [ "$pid" == "" ]
   then
     echo -n "Starting service: RSMAgent_TS"
-    echo serialnumber:`dmidecode -s system-serial-number` > /var/spool/ion/serial_number.alt
+
+    # set the serial number.
+    # Must be run as root so dmidecode (in echo_system_serial_number()) can succeed.
+    sn=$(echo_system_serial_number)
+    sn=$(echo $sn|sed 's/\///')    # remove any forward slashes
+    echo $sn | sed "s/^serialnumber:.*/serialnumber:$sn/" > $SERIALNUMFILE
+
     # Note multiline input into product_info.alt
     echo hardwarename:`dmidecode -s system-product-name` > /var/spool/ion/product_info.alt
     echo biosversion:`dmidecode -s bios-version` >> /var/spool/ion/product_info.alt
-    
+
     # create log file while we have root priv, make it writable by agent
 	touch $LOGFILE
 	chown ionadmin:ionadmin $LOGFILE
 	chmod 664 $LOGFILE
-    
+
     start-stop-daemon --start --chuid ionadmin --background --chdir "/var/spool/ion" --exec "/opt/ion/RSM/RSMAgent.sh"
   else
     echo "RSMAgent_TS already running?"

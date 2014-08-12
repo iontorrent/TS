@@ -38,7 +38,6 @@ void TrackProgress::WriteProcessParameters (CommandLineOpts &inception_state)
 {
   //  Dump the processing parameters to a file
   fprintf ( fpLog, "[global]\n" );
-  fprintf ( fpLog, "Command line = %s\n", inception_state.GetCmdLine().c_str() );
   fprintf ( fpLog, "dataDirectory = %s\n", inception_state.sys_context.dat_source_directory );
   fprintf ( fpLog, "Smoothing File = %s\n", inception_state.img_control.tikSmoothingFile );
   fprintf ( fpLog, "runId = %s\n", inception_state.sys_context.runId );

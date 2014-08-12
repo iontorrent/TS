@@ -27,14 +27,14 @@ configure_file (
 )
 
 set(PLUGINS
-Alignment
+AssemblerSPAdes
 RunRecognitION
 coverageAnalysis
 sampleID
 variantCaller
 IonReporterUploader
 ERCC_Analysis
-TorrentSuiteCloud
+RunTransfer
 FilterDuplicates
 FileExporter
 )

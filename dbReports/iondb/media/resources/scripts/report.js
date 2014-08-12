@@ -11,21 +11,21 @@ String.prototype.endsWith = function (str) {
     return (this.match(str + "$") == str);
 };
 
-function resizeiFrames(){
+function resizeiFrames() {
     //Resize the iframe blocks
-    
-    $(".pluginBlock:visible").each(function(){
+
+    $(".pluginBlock:visible").each(function () {
         var height = $(this).contents().height(),
             width = $(this).parent().css("width");
-        if($(this).height() != height) $(this).height(height);
-        if($(this).width() != width) $(this).width(width);
+        if ($(this).height() != height) $(this).height(height);
+        if ($(this).width() != width) $(this).width(width);
     });
 
-    $(".pluginMajorBlock:visible").each(function(){
+    $(".pluginMajorBlock:visible").each(function () {
         var height = $(this).contents().find("body").height() + 20;
         //console.log($(this).attr("id") + " " + height);
-        var width = parseInt($(".section").css("width"),10) - 20;
-        if ($(this).height() != height ) $(this).height(height);
+        var width = parseInt($(".section").css("width"), 10) - 20;
+        if ($(this).height() != height) $(this).height(height);
         if ($(this).width() != width)  $(this).width(width);
     });
 
@@ -36,7 +36,7 @@ function update_plugin_show(controls) {
         type: 'POST',
         url: api_plugin_show_url,
         data: JSON.stringify(controls),
-        contentType : 'application/json',
+        contentType: 'application/json',
         datType: 'json'
     });
 }
@@ -68,19 +68,20 @@ function pluginStatusLoad() {
                 var name_row = plugin_major_template(data[i]);
                 var majorblock = $(name_row).appendTo("#major_blocks");
                 var plugin_links = majorblock.find(".plugin_links")
-                for (var o = 0; o < data[i].Links.length; o++) { 
-                    plugin_links.append('<a href="'+ data[i].URL + data[i].Links[o]+'">'+ data[i].Links[o] +'</a>');
+                for (var o = 0; o < data[i].Links.length; o++) {
+                    plugin_links.append('<a href="' + data[i].URL + data[i].Links[o] + '">' + data[i].Links[o] + '</a>');
                 }
                 if (data[i].Files.length == 0) {
                     majorblock.append('<div class="section">No plugin output at this time.</div>');
                 }
                 for (var j = 0; j < data[i].Files.length; j++) {
-                    majorblock.append('<div class="section"><iframe scrolling="'+ iframescroll +'" id="' + data[i].Name + '" class="pluginMajorBlock" src="' + data[i].URL + data[i].Files[j] + '" frameborder="0" height="0px" ></iframe></div>');
+                    majorblock.append('<div class="section"><iframe scrolling="' + iframescroll + '" id="' + data[i].Name + '" class="pluginMajorBlock" src="' + data[i].URL + data[i].Files[j] + '" frameborder="0" height="0px" ></iframe></div>');
                 }
             }
         },
-        error: function () {
+        error: function (event, request, settings) {
             $('#major_blocks').text('Failed to get Plugin Status');
+            console.log("Error fetching" + settings.url + ": " + event.responseText);
         }
     });
     $("#pluginStatusTable").fadeOut();
@@ -97,8 +98,8 @@ function pluginStatusLoad() {
                 var row = plugin_status_template(data[i]);
                 var name = data[i].Name;
                 table_plugin_names.push(name);
-                (function(name){
-                    $("#pluginStatusTable").append(row).find(".plugin-collapse:last").click(function(){
+                (function (name) {
+                    $("#pluginStatusTable").append(row).find(".plugin-collapse:last").click(function () {
                         $(this).text($(this).text() == '-' ? '+' : '-');
                         var block = $(this).closest(".pluginGroup").find(".pluginGroupList");
                         var is_visible = block.is(":visible");
@@ -119,7 +120,7 @@ function pluginStatusLoad() {
     $('#pluginRefresh').activity(false);
 }
 
-function progress_load(){
+function progress_load() {
     $.ajax({
         type: 'GET',
         url: reportAPI,
@@ -128,12 +129,14 @@ function progress_load(){
         async: false,
         success: function (data) {
             $("#progress_message").html(data.status);
-            
+
             if (data.status.indexOf("Completed") === 0) {
                 clearInterval($(document).data('report_progress'));
                 if (data.status === "Completed") {
                     $("#progress_message").html("The report has been completed. The page will reload in 5 seconds");
-                    setTimeout(function(){location.reload();}, 10000);
+                    setTimeout(function () {
+                        location.reload();
+                    }, 10000);
                 }
             }
         },
@@ -143,8 +146,38 @@ function progress_load(){
     });
 
 }
+function start_iru(launchObj){
+    //start the iru upload based on the upload type selection
+    console.log(launchObj);
+    pluginAPIJSON = { "plugin": ["IonReporterUploader"], "pluginconfig": launchObj };
+    pluginAPIJSON = JSON.stringify(pluginAPIJSON);
 
-$(document).ready(function(){
+    $.blockUI();
+
+    var iru_launch = $.ajax({
+        type: 'POST',
+        url: pluginURL,
+        contentType: "application/json; charset=utf-8",
+        data: pluginAPIJSON,
+        dataType: "json"
+    });
+
+    iru_launch.done(function (data) {
+        $.unblockUI();
+        //TODO, also so the plugin list refresh function
+        bootbox.alert("Upload to Ion Reporter has started.", function() {
+
+        });
+    });
+
+    iru_launch.fail(function (data) {
+        $.unblockUI();
+        alert("Failed to start IRU upload");
+    });
+}
+
+
+$(document).ready(function () {
     plugin_status_template = kendo.template($("#pluginStatusTemplate").html());
     plugin_major_template = kendo.template($("#pluginMajorBlockTemplate").html());
     console.log("Get ready");
@@ -155,38 +188,123 @@ $(document).ready(function(){
     webLink = $("#report").data("web");
     reportAPI = "/rundb/api/v1/results/" + djangoPK + "/";
     djangoURL = "/rundb/api/v1/results/" + djangoPK + "/pluginresults/";
+    pluginURL = "/rundb/api/v1/results/" + djangoPK + "/plugin/";
+
+    //If IRU is has configs then add them to a dropdown button for easy uploading
+    var iru_xhr = $.ajax({
+        url: "/rundb/api/v1/plugin/IonReporterUploader/extend/configs/?format=json",
+        type: "GET"
+    }).done(function (data) {
+
+        var template = kendo.template($("#iru-list-tmpl").html());
+
+        var result = template(data); //Execute the template
+        $("#iru-list").html(result); //Append the result
+
+        $('#iru-button').on("click", ".iru-account", function (event) {
+            event.preventDefault();
+            var id = $(this).data("id");
+
+            var launchObj;
+            $.each(data, function (k, v) {
+                if (v["id"] === id) {
+                    launchObj = v;
+                }
+            });
+
+            launchObj["launchoption"] = "upload_only";
+
+            var alreadyGoing = false;
+
+            var check_iru = $.ajax({
+                type: 'GET',
+                url: djangoURL,
+                contentType: "application/json; charset=utf-8",
+                async: false,
+                dataType: "json"
+            });
+
+            check_iru.done(function (data) {
+                $.each(data, function (i, plugin) {
+                    if (plugin.Name === "IonReporterUploader") {
+                        alreadyGoing = true;
+                        //TODO: make this give an additional warning to the users
+                        //TODO: check to make sure the account authCheck works from here
+                        //console.log("going already " + alreadyGoing);
+                    }
+                });
+            });
+
+            var upload = "";
+
+            bootbox.dialog("Are you sure you want to upload this report to Ion Reporter?", [
+                {
+                    "label": "Upload just BAM",
+                    "class": "btn-primary",
+                    "callback": function () {
+                        launchObj["upload"] = "bam_only";
+                        start_iru(launchObj);
+                    }
+                },
+                {
+                    "label": "Upload just VCF",
+                    "class": "btn-primary",
+                    "callback": function () {
+                        launchObj["upload"] = "vcf_only";
+                        start_iru(launchObj);
+                    }
+                },
+                {
+                    "label": "Upload BAM & VCF",
+                    "class": "btn-primary",
+                    "callback": function () {
+                        launchObj["upload"] = "both";
+                        start_iru(launchObj);
+                    }
+                },
+                {
+                    "label": "Cancel",
+                    "callback": function () {
+                        upload = false;
+                    }
+                }
+            ]);
+
+
+
+        });
+
+    });
 
     //remove the focus from the report dropdown
     $("#resultList").blur();
 
+    $("#resultList").chosen();
+
     //keep this incase we want to bind to something
-    $('#barcodes tr').click(function() {
-        var id =  $(this).find('td:first').text().trim(); 
+    $('#barcodes tr').click(function () {
+        var id = $(this).find('td:first').text().trim();
     });
     //keep this incase we want to bind to something
-    $('#CA_barcodes tr').click(function() {
-        var id =  $(this).find('td:first').text().trim(); 
+    $('#CA_barcodes tr').click(function () {
+        var id = $(this).find('td:first').text().trim();
     });
 
-    $.colorbox.close = function(){
+    $.colorbox.close = function () {
         //TODO THIS IS HUGE HACK fix it for 3.0
         //I can't close colorbox so I reload the page
         location.reload();
     };
 
     //remove and turn off the progres indicator 
-    $("#close_progress").click(function(){
+    $("#close_progress").click(function () {
         $("#backdrop_progress, #progress").remove();
         clearInterval($(document).data('report_progress'));
     });
 
-    //proton 
-    protonData = $("#report").data("php") + " #isMap"; 
-    $("#proton").load(protonData);
-
     //load the tabs
     var q30_quality = $("#q30_quality").data("percent");
-    $("#q30_quality").strength(q30_quality, 'undefined', q30_quality, 
+    $("#q30_quality").strength(q30_quality, 'undefined', q30_quality,
         'Sequence >= Q30');
 
     //init modal
@@ -196,34 +314,33 @@ $(document).ready(function(){
     });
 
     //report list
-    $("#resultList").change(function(){
+    $("#resultList").change(function () {
         window.location = "/report/" + $(this).val();
     });
 
     //plan popup modal
-    $('#review_plan').click(function(e){
+    $('#review_plan').click(function (e) {
         e.preventDefault();
         $('#error-messages').hide().empty();
-        pk = $(this).data("pk");
-        url = "/plan/reviewplan/" + pk + "/";
-        
+        var url = $(this).attr("href");
+
         $('body #modal_review_plan').remove();
-        $.get(url, function(data) {
-              $('body').append(data);
-            $( "#modal_review_plan" ).modal("show");
+        $.get(url,function (data) {
+            $('body').append(data);
+            $("#modal_review_plan").modal("show");
             return false;
-        }).done(function(data) { 
+        }).done(function (data) {
             // $(that).trigger('remove_from_project_done', {values: e.values});
-        })
-        .fail(function(data) {
+        }).fail(function (data) {
             $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');          
-        })
-        .always(function(data) { /*console.log("complete:", data);*/ });        
-    });   
+            $('#error-messages').append('<p class="alert error">ERROR: ' + data.responseText + '</p>');
+        }).always(function (data) {
+            /*console.log("complete:", data);*/
+        });
+    });
 
 
-    $("#copy_plan").click(function(e) {
+    $("#copy_plan").click(function (e) {
         $('body').css("cursor", "wait");
         e.preventDefault();
         $('#error-messages').hide().empty();
@@ -232,19 +349,19 @@ $(document).ready(function(){
 
         pk = $(this).data("pk");
         url = "/plan/planned/" + pk + "/copy/";
-        
+
         $('body #modal_plan_wizard').remove();
         $('body #modal_plan_run').remove();
-        $.get(url, function(data) {
+        $.get(url,function (data) {
             $('body').append(data);
 
             setTab('#ws-1');
             $("#modal_plan_wizard").modal("show");
             return false;
-        }).done(function(data) {
+        }).done(function (data) {
             console.log("success:", url);
             // $(that).trigger('remove_from_project_done', {values: e.values});
-        }).fail(function(data) {
+        }).fail(function (data) {
             $('body').css("cursor", "default");
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
@@ -253,20 +370,30 @@ $(document).ready(function(){
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
 
-        }).always(function(data) {/*console.log("complete:", data);*/
+        }).always(function (data) {/*console.log("complete:", data);*/
             $('body').css("cursor", "default");
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
             delete busyDiv;
         });
-    }); 
-    
+    });
+
+    // Data Management actions popup
+    $('#dm_actions').click(function (e) {
+        e.preventDefault();
+        $.get($(this).attr('href'), function (data) {
+            $('body').append(data);
+            $("#modal_dm_actions").modal("show");
+        });
+        return false;
+    });
+
     //do the initial plugin status load
     pluginStatusLoad();
 
     // Remove plugin result (post delete trigger will delete content)
     // confirm that it should be deleted
-    $('.pluginRemove').live("click", function(e) {
+    $('.pluginRemove').live("click", function (e) {
         e.preventDefault();
         var url = $(this).attr("href");
         var parent = $(this).closest('div.pluginGroup');
@@ -275,11 +402,14 @@ $(document).ready(function(){
             type: 'DELETE',
             url: url,
             async: true,
-            beforeSend: function() {
-                parent.animate({'backgroundColor':'#fb6c6c'},300);
+            beforeSend: function () {
+                parent.animate({'backgroundColor': '#fb6c6c'}, 300);
             }
+        }).fail(function (msg) {
+            parent.append('<div class=" alert alert-error" data-dismiss="alert">Failed to remove plugin result.</div>')
         }).done(function () {
-            parent.fadeOut(300, function () { 
+            parent.append('<div class="alert alert-info" data-dismiss="alert">Successfully removed plugin result.</div>')
+            parent.fadeOut(3000, function () {
                 parent.remove();
             });
         });
@@ -303,32 +433,58 @@ $(document).ready(function(){
             speed: 1.5,
             padding: '3'
         });
+        var $modal_plugin_log = $('#modal_plugin_log');
+        $modal_plugin_log.find('.modal-body').html('')
+        $modal_plugin_log.find('.modal-header h3').text(title);
         $.get(url, function (responseText) {
-            logParent.activity(false);
-            var $modal_plugin_log = $('#modal_plugin_log'); 
             $modal_plugin_log.find('.modal-body').html('<pre class="log">' + htmlEscape(responseText) + '</pre>');
-            $modal_plugin_log.find('.modal-header h3').text(title);
-            $modal_plugin_log.modal('show');
-        });
+        })
+            .fail(function (msg) {
+                $modal_plugin_log.find('.modal-body').html('<div class="log alert alert-error">Unable to read plugin log:' + htmlEscape(msg.statusText) + '</div>');
+            })
+            .always(function () {
+                logParent.activity(false);
+                $modal_plugin_log.modal('show');
+            });
         //prevent the browser to follow the link
         return false;
     });
+
+
+    /* Click handler for button to terminate running SGE job */
+    $('.pluginCancel').live("click", function (e) {
+        e.preventDefault();
+        var prpk = $(this).data('id');
+        var jobid = $(this).data('jobid');
+        $.post("/rundb/api/v1/pluginresult/" + prpk + "/control/"
+            , function () {
+                $('pluginStatusLoad').append('<div class="alert alert-info" data-dismiss="alert">Plugin Job ' + jobid + ' is being terminated via SGE</div>')
+            }, 'json')
+            .fail(function (msg) {
+                $('pluginStatusLoad').append('<div class="alert alert-error" data-dismiss="alert">Failed to terminate SGE Job ' + jobid + '</div>')
+            })
+            .always(function () {
+                // refresh plugin data
+                setTimeout(pluginStatusLoad, 3000);
+            });
+    });
+
     $("#pluginRefresh").click(function () {
         pluginStatusLoad();
     });
-    $("#pluginExpandAll").click(function(){
+    $("#pluginExpandAll").click(function () {
         $("#pluginStatusTable .plugin-collapse").text('-');
         $("#pluginStatusTable .pluginGroupList").slideDown('fast');
         var controls = {};
-        for (var i=0; i < table_plugin_names.length; i++)
+        for (var i = 0; i < table_plugin_names.length; i++)
             controls[table_plugin_names[i]] = true;
         update_plugin_show(controls);
     });
-    $("#pluginCollapseAll").click(function(){
+    $("#pluginCollapseAll").click(function () {
         $("#pluginStatusTable .plugin-collapse").text('+');
         $("#pluginStatusTable .pluginGroupList").slideUp('fast');
         var controls = {};
-        for (var i=0; i < table_plugin_names.length; i++)
+        for (var i = 0; i < table_plugin_names.length; i++)
             controls[table_plugin_names[i]] = false;
         update_plugin_show(controls);
     });
@@ -343,7 +499,7 @@ $(document).ready(function(){
 
         //get the list of plugins from the API
         $.ajax({
-            url: '/rundb/api/v1/plugin/?selected=true&limit=0&format=json&order_by=name',
+            url: '/rundb/api/v1/plugin/?selected=true&limit=0&order_by=name',
             dataType: 'json',
             type: 'GET',
             async: false,
@@ -358,46 +514,29 @@ $(document).ready(function(){
                 plugins = data.objects.sort(function (a, b) {
                     return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
                 });
-                //build the query string in a way that works with IE7 and IE8
-                plugin_ids = "";
-                $.each(plugins, function (count, value) {
-                    plugin_ids += value.id;
-                    if (count + 1 != plugins.length) {
-                        plugin_ids += ";";
+                for (var i = 0; i < plugins.length; i++) {
+                    val = plugins[i];
+                    if (val.isInstance) {
+                        // Plugin needs parameters, popup instance config page
+                        $("#plugin_table").append(
+                            '<tr><td><a href="' + val.input +
+                                '?report=' + djangoPK +
+                                '" class="plugin_input_class plugin_link colorinput" data-id="' + val.id +
+                                '" id="' + val.name +
+                                '_plugin">' + val.name + '</a> <small>&#8212; v' + val.version + '</small></td></tr>'
+                        );
                     }
-                });
-                //get plugin metadata
-                $.ajax({
-                    url: "/rundb/api/v1/plugin/set/" + plugin_ids + "/type/?format=json",
-                    success: function (plugin_types) {
-                        for (var i = 0; i < plugins.length; i++) {
-                            val = plugins[i];
-                            data = plugin_types[val.id];
-                            if (data.input !== undefined) {
-                                $("#plugin_table").append(
-                                    '<tr><td><a href="' + data.input + 
-                                    '?report=' + djangoPK + 
-                                    '" class="plugin_input_class plugin_link colorinput" data-id="' + val.id + 
-                                    '" id="' + val.name + 
-                                    '_plugin">' + val.name + '</a> <small>&#8212; v' + val.version + '</small></td></tr>'
-                                );
-                            }
-                            else {
-                                $("#plugin_table").append(
-                                    '<tr><td><a href="#pluginDialog" class="plugin_class" data-id="' + val.id + 
-                                    '" id="' + val.name + 
-                                    '_plugin">' + val.name + 
-                                    '</a> <small>&#8212; v' + val.version + 
-                                    '</small></td></tr>'
-                                );
-                            }
-                        }
-                    },
-                    async: false,
-                    type: 'GET',
-                    dataType: 'json'
-                });
-
+                    else {
+                        // Plugin has no instance config, just run it.
+                        $("#plugin_table").append(
+                            '<tr><td><a href="#PluginOutput" class="plugin_class" data-id="' + val.id +
+                                '" id="' + val.name +
+                                '_plugin">' + val.name +
+                                '</a> <small>&#8212; v' + val.version +
+                                '</small></td></tr>'
+                        );
+                    }
+                }
                 $("#pluginLoad").html("");
             }
         });
@@ -422,16 +561,21 @@ $(document).ready(function(){
             pluginName = pluginName.substring(0, pluginName.length - 7);
             //build the JSON to post
             pluginAPIJSON = {
-                "plugin": [pluginName]
+                //"result": "/rundb/api/v1/results/" + djangoPK + "/",
+                "plugin": { "id": id, "name": pluginName },
+                "pluginconfig": {}
             };
+            //"plugin": { "id": id, "name": pluginName },
+            //"pluginresult": pr_id, // rerun only
             pluginAPIJSON = JSON.stringify(pluginAPIJSON);
             $.ajax({
                 type: 'POST',
-                url: djangoURL,
+                url: pluginURL,
                 async: true,
                 contentType: "application/json; charset=utf-8",
                 data: pluginAPIJSON,
                 dataType: "json",
+                processData: false,
                 beforeSend: function () {
                     $("#pluginList").html("");
                     $("#pluginLoad").html("<span>Launching Plugin " + pluginName + " <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
@@ -439,14 +583,17 @@ $(document).ready(function(){
                 success: function () {
                     $('#plugin-modal').modal('hide');
                     pluginStatusLoad();
+                },
+                failure: function () {
+                    $("#pluginLoad").html("<span>ERROR: Failed to launch Plugin " + pluginName + "</span>");
                 }
             });
         });
     });
 
     //if this is a print view, unroll the tabs, and reformat the page as needed
-    if ($.QueryString.no_header){
-        $(".tab-pane").each(function(){
+    if ($.QueryString.no_header) {
+        $(".tab-pane").each(function () {
             $(this).removeClass("tab-pane");
             $(this).addClass("tabBox");
             $(this).prepend("<h2>" + $(this).data("title") + "</h2><hr/>");
@@ -460,34 +607,36 @@ $(document).ready(function(){
         $("#alignMap, #rawAligned").removeClass("span3").addClass("span6");
 
         $(".tabBox").css({
-          "border": "3px black solid",
-          "margin": "20px"
+            "border": "3px black solid",
+            "margin": "20px"
         });
         $(".pluginGroup").css({
-          "border": "1px black solid",
-          "margin": "10px"
+            "border": "1px black solid",
+            "margin": "10px"
         });
 
         $(".unaligned .well").css("min-height", "390px");
-        $(".aligned .well").css({"min-height" : "370px" , "height" : "370px"});
+        $(".aligned .well").css({"min-height": "370px", "height": "370px"});
 
         //remove the shadows around the content
-        $(".content").css({"box-shadow" : "0px 0px",
-                           "border-radius": "0px",
-                           "border" : "0px"
-                        });
+        $(".content").css({"box-shadow": "0px 0px",
+            "border-radius": "0px",
+            "border": "0px"
+        });
 
-    }else{
+    } else {
 
         //Only do these things for the non print view
 
         //try to resize the plugin block all the time
         //Once a second is Plenty for this.
 
-        resizeIntervalTimer = setInterval(function(){ resizeiFrames(); }, 1000); 
+        resizeIntervalTimer = setInterval(function () {
+            resizeiFrames();
+        }, 1000);
 
         //init the Kendo Grids
-        if (typeof CA_barcodes_json !== 'undefined'){
+        if (typeof CA_barcodes_json !== 'undefined') {
             $("#CA_barcodes").kendoGrid({
                 dataSource: {
                     data: CA_barcodes_json,
@@ -498,7 +647,7 @@ $(document).ready(function(){
                                 Filtered_Mapped_Bases_in_Q7_Alignments: { type: "integer" },
                                 Total_number_of_Reads: { type: "integer" },
                                 Filtered_Q7_Mean_Alignment_Length: { type: "integer" }
-                           }
+                            }
                         }
                     },
                     pageSize: 10
@@ -511,30 +660,34 @@ $(document).ready(function(){
                     mode: "multiple",
                     allowUnsort: true
                 },
-                pageable : {pageSizes:[5,10,20,50,100,1000]},
+                pageable: {pageSizes: [5, 10, 20, 50, 100, 1000]},
                 columns: [
-                {
-                    field: "ID",
-                    title: "Barcode Name"
-                }, {
-                    field: "Filtered_Mapped_Bases_in_Q7_Alignments",
-                    title: "Aligned Output"
-                }, {
-                    field: "Total_number_of_Reads",
-                    title: "Reads"
-                }, {
-                    field: "Filtered_Q7_Mean_Alignment_Length",
-                    title: "Mean Aligned Read Length"
-                }, {
-                    title: "BAM",
-                    sortable: false
-                }
+                    {
+                        field: "ID",
+                        title: "Barcode Name"
+                    },
+                    {
+                        field: "Filtered_Mapped_Bases_in_Q7_Alignments",
+                        title: "Aligned Output"
+                    },
+                    {
+                        field: "Total_number_of_Reads",
+                        title: "Reads"
+                    },
+                    {
+                        field: "Filtered_Q7_Mean_Alignment_Length",
+                        title: "Mean Aligned Read Length"
+                    },
+                    {
+                        title: "BAM",
+                        sortable: false
+                    }
                 ],
                 rowTemplate: kendo.template($("#CA_barcodesRowTemplate").html())
             });
         }
 
-        if (typeof barcodes_json !== 'undefined'){
+        if (typeof barcodes_json !== 'undefined') {
             $("#barcodes").kendoGrid({
                 dataSource: {
                     data: barcodes_json,
@@ -550,8 +703,9 @@ $(document).ready(function(){
                                 filtered: { type: "boolean" },
                                 file_prefix: { type: "string"},
                                 bam_link: { type: "string"},
-                                bai_link: { type: "string"}
-                           }
+                                bai_link: { type: "string"},
+                                basecaller_bam_link: { type: "string"}
+                            }
                         }
                     },
                     pageSize: 10
@@ -564,40 +718,47 @@ $(document).ready(function(){
                     mode: "multiple",
                     allowUnsort: true
                 },
-                pageable : {pageSizes:[5,10,20,50,100,1000]},
+                pageable: {pageSizes: [5, 10, 20, 50, 100, 1000]},
                 columns: [
-                {
-                    field: "barcode_name",
-                    title: "Barcode Name"
-                }, {
-                    field: "sample",
-                    title: "Sample"
-                }, {
-                    field: "total_bases",
-                    title: "Bases"
-                }, {
-                    field: "Q20_bases",
-                    title: ">=Q20 Bases"
-                }, {
-                    field: "read_count",
-                    title: "Reads"
-                }, {
-                    field: "mean_read_length",
-                    title: "Mean Read Length"
-                }, {
-                    title: "Read Length Histogram",
-                    sortable: false
-                }, {
-                    title: "BAM",
-                    sortable: false
-                }
+                    {
+                        field: "barcode_name",
+                        title: "Barcode Name"
+                    },
+                    {
+                        field: "sample",
+                        title: "Sample"
+                    },
+                    {
+                        field: "total_bases",
+                        title: "Bases"
+                    },
+                    {
+                        field: "Q20_bases",
+                        title: ">=Q20 Bases"
+                    },
+                    {
+                        field: "read_count",
+                        title: "Reads"
+                    },
+                    {
+                        field: "mean_read_length",
+                        title: "Mean Read Length"
+                    },
+                    {
+                        title: "Read Length Histogram",
+                        sortable: false
+                    },
+                    {
+                        title: "BAM",
+                        sortable: false
+                    }
                 ],
                 rowTemplate: kendo.template($("#barcodesRowTemplate").html())
             });
         }
         $("#file_table").kendoGrid({
             dataSource: {
-                    pageSize: 10
+                pageSize: 10
             },
             height: 'auto',
             groupable: false,
@@ -606,10 +767,10 @@ $(document).ready(function(){
             sortable: false,
             pageable: false
         });
-        
+
         $("#test_fragments").kendoGrid({
             dataSource: {
-                    pageSize: 10
+                pageSize: 10
             },
             height: 'auto',
             groupable: false,

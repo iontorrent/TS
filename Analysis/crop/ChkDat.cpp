@@ -32,6 +32,9 @@
 #include "crop/Acq.h"
 #include "IonVersion.h"
 
+#include <iostream>
+using namespace std;
+
 uint32_t numThreads=12;
 uint32_t numDirs = 0;
 uint32_t numAcq = 0;
@@ -66,16 +69,41 @@ void GetFileName(uint32_t idx, uint32_t num, char *fname, int len)
 }
 
 
-void ChkFile(char *fname)
+void ChkFile(char *fname, size_t maxX=0, size_t maxY=0, size_t maxF=0, bool verbose=false)
 {
 	Image loader;
 
 	if (loader.LoadRaw(fname))
 	{
-		loader.Close();
-		// this one is ok
-		printf("File %s OK\n",fname);
-	}
+        // this one is ok
+        //printf("File %s OK\n",fname);
+        cout << fname << " rows=" << loader.GetRows() << " cols=" << loader.GetCols() << " fames=" << loader.GetFrames() << endl << flush;
+        const RawImage *raw = loader.GetImage();
+
+        if (verbose)
+        {
+            size_t frames = loader.GetFrames();
+            size_t rows = loader.GetRows();
+            size_t cols = loader.GetCols();
+            size_t stride = rows*cols;
+            cout << "flow\tx(col)\ty(row)\tvalue" << endl << flush;
+            for (size_t f = 0; f < frames; f++) {
+                if (maxF>0 && f>=maxF)
+                    break;
+              // First image copied in for this frame
+              for (size_t r = 0; r < rows; r++) {
+                  if (maxY>0 && r>=maxY)
+                      break;
+                for (size_t c = 0; c < cols; c++) {
+                    if (maxX>0 && c>=maxX)
+                        break;
+                  cout << f << "\t" << c << "\t" << r << "\t" << raw->image[r * cols + c + stride * f] << endl << flush;
+                }
+              }
+            }
+        }
+        loader.Close();
+    }
 	else
 	{
 		printf("File %s FAILED\n",fname);
@@ -176,6 +204,10 @@ int main(int argc, char *argv[])
 //	int cropx = 624, cropy = 125, cropw = 100, croph = 100;
 	uint64_t i;
 
+    size_t maxX = 0;
+    size_t maxY = 0;
+    size_t maxF = 0;
+
 	int argcc = 1;
 	while (argcc < argc) {
 		switch (argv[argcc][1]) {
@@ -183,29 +215,44 @@ int main(int argc, char *argv[])
 				argcc++;
 				sscanf(argv[argcc],"%d",&numThreads);
 				printf("NumThreads = %d\n",numThreads);
-			break;
+                break;
 
 			case 'f':
 				argcc++;
 				oneFile = argv[argcc];
 				printf("File to check = %s\n",oneFile);
-			break;
+                break;
 
 			case 'r':
 				argcc++;
 				DstDir = argv[argcc];
 				printf("Directory to check = %s\n",DstDir);
-			break;
-
-			case 'w':
-				dont_wait = 1;
-			break;
+                break;
 
 			case 'v':
 				verbose=1;
-			break;
+                break;
 
-			case 'H':
+            case 'w':
+                dont_wait = 1;
+                break;
+
+            case 'X':
+                argcc++;
+                maxX = atoi(argv[argcc]);
+                break;
+
+            case 'Y':
+                argcc++;
+                maxY = atoi(argv[argcc]);
+                break;
+
+            case 'F':
+                argcc++;
+                maxF = atoi(argv[argcc]);
+                break;
+
+            case 'H':
 			default:
 				argcc++;
 				fprintf (stdout, "\n");
@@ -214,7 +261,10 @@ int main(int argc, char *argv[])
 				fprintf (stdout, "   -n <numThr> \tNumber of threads\n");
 				fprintf (stdout, "   -v\tverbose\n");
 				fprintf (stdout, "   -f\tfile to check\n");
-				fprintf (stdout, "   -r\trecursive directory to check\n");
+                fprintf (stdout, "   -F\tmax flow\n");
+                fprintf (stdout, "   -X\tmax x (cols)\n");
+                fprintf (stdout, "   -Y\tmax y (rows)\n");
+                fprintf (stdout, "   -r\trecursive directory to check\n");
 				fprintf (stdout, "   -w\tdon't wait for files\n");
 				fprintf (stdout, "   -H\tPrints this message and exits.\n");
 				fprintf (stdout, "\n");
@@ -229,7 +279,7 @@ int main(int argc, char *argv[])
 	if(oneFile)
 	{
 		// check the single file
-		ChkFile(oneFile);
+        ChkFile(oneFile,maxX,maxY,maxF,verbose);
 	}
 	else
 	{

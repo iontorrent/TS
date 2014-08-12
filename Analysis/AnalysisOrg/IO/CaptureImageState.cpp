@@ -2,7 +2,10 @@
 
 #include "CaptureImageState.h"
 #include "H5File.h"
+#include "H5Arma.h"
 #include "ImageTransformer.h"
+#include "Vecs.h"
+#include <malloc.h>
 
 CaptureImageState::CaptureImageState(std::string _h5File)
 {
@@ -42,7 +45,7 @@ void CaptureImageState::LoadImageGainCorrection(int rows, int cols)
   H5File::ReadVector (h5_name, gain);  
   
   if (ImageTransformer::gain_correction == NULL) {
-    ImageTransformer::gain_correction = new float[rows*cols];  
+    ImageTransformer::gain_correction = (float *)memalign(VEC8F_SIZE_B,sizeof(float)*rows*cols);
   }
   std::fill(ImageTransformer::gain_correction, ImageTransformer::gain_correction + rows * cols, 0);
   std::copy(gain.begin(), gain.end(), ImageTransformer::gain_correction);
@@ -68,7 +71,7 @@ void CaptureImageState::WriteXTCorrection()
   if ( ImageTransformer::custom_correction_data != NULL ){  
     ChannelXTCorrectionDescriptor xt_vectors = ImageTransformer::custom_correction_data->GetCorrectionDescriptor();
     if ( xt_vectors.xt_vector_ptrs != NULL ){
-      printf("[CaptureImageState] Writing XTalk correction to %s\n",h5file.c_str());
+      printf("[CaptureImageState] Writing electrical XeTalk correction to %s\n",h5file.c_str());
       
       float **vects = xt_vectors.xt_vector_ptrs;
       int nvects = xt_vectors.num_vectors;
@@ -92,7 +95,7 @@ void CaptureImageState::WriteXTCorrection()
         for ( int vn=0; vn < vector_len; vn++ )  
           H5vectors.at (vndx, vn) = vects[vndx][vn];
       }
-      H5File::WriteMatrix (h5_name+"xt_vectors", H5vectors, false);
+      H5Arma::WriteMatrix (h5_name+"xt_vectors", H5vectors, false);
       
     } 
   }
@@ -103,7 +106,7 @@ void CaptureImageState::LoadXTCorrection()
   std::string h5_name = h5file + ":/XTalk_corr/";
   
   if (H5File::DatasetExist<std::string> (h5_name+"xt_vectors")){
-    printf("[CaptureImageState] Loading XTalk correction from %s\n",h5file.c_str());
+    printf("[CaptureImageState] Loading electrical XeTalk correction from %s\n",h5file.c_str());
     
     //vector number and length
     std::vector<int> H5num_and_len;
@@ -117,7 +120,7 @@ void CaptureImageState::LoadXTCorrection()
     
     //vectors
     arma::Mat<float> H5vectors;
-    H5File::ReadMatrix (h5_name+"xt_vectors", H5vectors);
+    H5Arma::ReadMatrix (h5_name+"xt_vectors", H5vectors);
     
     //Create image transformer objects  
     ChannelXTCorrection *xtptr = new ChannelXTCorrection();
@@ -135,7 +138,7 @@ void CaptureImageState::LoadXTCorrection()
     ImageTransformer::selected_chip_xt_vectors = ImageTransformer::custom_correction_data->GetCorrectionDescriptor();
   }
   else{
-    printf("[CaptureImageState] No XTalk correction found\n");
+    printf("[CaptureImageState] No electrical XeTalk correction found\n");
   }
 }
 

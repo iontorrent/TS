@@ -42,7 +42,6 @@
 #include "EmptyTraceTracker.h"
 #include "TikhonovSmoother.h"
 #include "PinnedInFlow.h"
-#include "PinnedInFlowReplay.h"
 #include "SynchDat.h"
 
 #include "ImageLoaderQueue.h"
@@ -68,9 +67,10 @@ class ImageTracker
     void FinishFlow (int flow);
     void WaitForFlowToLoad (int flow);
     void FireUpThreads();
-    void SetUpImageLoaderInfo (CommandLineOpts &inception_state,
-                           ComplexMask &a_complex_mask,
-                           ImageSpecClass &my_image_spec);
+    void SetUpImageLoaderInfo (const CommandLineOpts &inception_state,
+                           const ComplexMask &a_complex_mask,
+                           const ImageSpecClass &my_image_spec,
+                           const FlowBlockSequence &flow_block_sequence);
                            
     int FlowBufferFromFlow(int flow);  // which buffer contains this flow
 

@@ -1,7 +1,0 @@
-genome_shortname	hg19
-genome_name	Homo sapiens
-genome_version	hg19
-index_version	b-0.1
-genome_length	2897310462
-read_sample_size	100000
-read_exclude_length	24

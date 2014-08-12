@@ -1,0 +1,44 @@
+All statistics are based on contigs of size >= 500 bp, unless otherwise noted (e.g., "# contigs (>= 0 bp)" and "Total length (>= 0 bp)" include all contigs).
+
+Assembly                        contigs_1   contigs_2 
+# contigs (>= 0 bp)             3           4         
+# contigs (>= 1000 bp)          3           2         
+Total length (>= 0 bp)          6710        5870      
+Total length (>= 1000 bp)       6710        5460      
+# contigs                       3           2         
+Largest contig                  3980        3360      
+Total length                    6710        5460      
+Reference length                10000       10000     
+GC (%)                          51.28       52.44     
+Reference GC (%)                52.07       52.07     
+N50                             3980        3360      
+NG50                            1610        2100      
+N75                             1610        2100      
+L50                             1           1         
+LG50                            2           2         
+L75                             2           2         
+# misassemblies                 1           2         
+# misassembled contigs          1           1         
+Misassembled contigs length     3980        3360      
+# local misassemblies           0           0         
+# unaligned contigs             0 + 0 part  0 + 0 part
+Unaligned length                0           0         
+Genome fraction (%)             67.120      54.610    
+Duplication ratio               1.000       1.000     
+# N's per 100 kbp               0.00        0.00      
+# mismatches per 100 kbp        0.00        0.00      
+# indels per 100 kbp            0.00        0.00      
+# genes                         5 + 4 part  1 + 6 part
+# operons                       1 + 1 part  0 + 2 part
+# predicted genes (unique)      7           6         
+# predicted genes (>= 0 bp)     7           6         
+# predicted genes (>= 300 bp)   6           5         
+# predicted genes (>= 1500 bp)  1           1         
+# predicted genes (>= 3000 bp)  0           0         
+Largest alignment               2030        2100      
+NA50                            1950        1470      
+NGA50                           1610        700       
+NA75                            1610        1190      
+LA50                            2           2         
+LGA50                           3           4         
+LA75                            3           3         

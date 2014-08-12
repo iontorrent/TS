@@ -22,9 +22,6 @@ else:
 
 from ion.utils import template as Template
 
-NUMPY_VERSION = reduce(lambda acc,x: acc*10 + x,
-        map(int, pylab.np.version.version.split('.')), 0)
-
 class DataFormatError(Exception):
     def __init__(self, format):
         self.format = format
@@ -68,7 +65,7 @@ class Plotter:
             'comments':str,
         }
         for k,v in kwargs.iteritems():
-            if options.has_key(k) and isinstance(v, options[k]):
+            if k in options and isinstance(v, options[k]):
                 setattr(self, k, v)
     def get_color(self,nuc):
         color_dic = {}
@@ -110,11 +107,11 @@ class Plotter:
             ('show', lambda x: x == 'yes' and pylab.show()),
             ('xlabel', lambda x: pylab.xlabel(str(x))),
             ('ylabel', lambda x: pylab.ylabel(str(x))),
-            ('ret', lambda x: retOptions.has_key(x) and retOptions[x](str(kwargs.get('fname', None))))
+            ('ret', lambda x: x in retOptions and retOptions[x](str(kwargs.get('fname', None))))
         )
         ret = None
         for k,v in options:
-            if kwargs.has_key(k):
+            if k in kwargs:
                 ret = v(kwargs[k])
                 pylab.ioff()
         return ret
@@ -309,8 +306,6 @@ class SignalOverlap(Plotter):
                 'bins':self.numbins,
                 'normed':True
             }
-            if NUMPY_VERSION <= 121:
-                hist_kwargs['new'] = True
             vals = self.remove_outliers2(vals, group_ndx)
             bins,edges = pylab.histogram(vals, **hist_kwargs)
             edges = edges[:-1]
@@ -875,8 +870,6 @@ class BeadfindHist(Plotter):
         pylab.figure()
         all = self.empty + self.weak + self.bead
         hist_kwargs = {}
-        if NUMPY_VERSION <= 121:
-            hist_kwargs['new'] = True
         bins,edges = pylab.histogram(all, len(all)/50, **hist_kwargs)
 
         types = [self.empty, self.weak, self.bead]
@@ -1273,8 +1266,6 @@ class LiveDudHist(Plotter):
         pylab.figure()
         all = self.live + self.dud
         hist_kwargs = {}
-        if NUMPY_VERSION <= 121:
-            hist_kwargs['new'] = True
         bins,edges = pylab.histogram(all, len(all)/50, **hist_kwargs)
 
         types = [self.dud, self.live]

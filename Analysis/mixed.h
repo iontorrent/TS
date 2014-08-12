@@ -9,6 +9,7 @@
 #include <vector>
 #include <armadillo>
 #include "bivariate_gaussian.h"
+#include "polyclonal_filter.h"
 
 class Mask;
 class RawWells;
@@ -21,24 +22,6 @@ inline float mixed_pos_threshold()
 {
   return 0.25;
 }
-/*
-inline int   mixed_first_flow()
-{
-  return 12;
-}
-inline int   mixed_last_flow()
-{
-  return 72;
-}
-*/
-
-struct mixed{
-  static int mixed_first_flow;
-  static int mixed_last_flow;
-  static int max_iterations;
-};
-
-
 
 template <class T>
 bool all_finite (T first, T last)
@@ -88,7 +71,8 @@ bool fit_normals (
   arma::vec& alpha,
   const std::deque<float>& ppf,
   const std::deque<float>& ssq,
-  bool verbose
+  bool verbose,
+  const PolyclonalFilterOpts & opts
 );
 
 class clonal_filter
@@ -108,7 +92,21 @@ class clonal_filter
       arma::vec x;
       x.set_size (2);
       x << ppf << ssq;
+
       return ppf<_ppf_cutoff and _clonal.pdf (x) > _mixed.pdf (x);
+    }
+    inline bool is_clonal (float ppf, float ssq, double stringency) const
+    {
+      arma::vec x;
+      x.set_size (2);
+      x << ppf << ssq;
+      if(ppf <_ppf_cutoff){
+        double clonal_pdf = _clonal.pdf (x);
+        double mixed_pdf = _mixed.pdf (x);
+        return clonal_pdf / (mixed_pdf + clonal_pdf) > stringency;
+      }
+      else
+        return false;
     }
 
   private:
@@ -141,10 +139,10 @@ std::ostream& operator<< (std::ostream& out, const filter_counts& counts);
 
 // Make a clonality filter from a sample of reads from a RawWells file.
 // Record number of reads in sample that are caught by each filter.
-void make_filter (clonal_filter& filter, filter_counts& counts, Mask& mask, RawWells& wells, const std::vector<int>& key_ionogram);
+void make_filter (clonal_filter& filter, filter_counts& counts, Mask& mask, RawWells& wells, const std::vector<int>& key_ionogram, const PolyclonalFilterOpts & opts);
 
 // Make a clonality filter given ppf and ssq for a random sample of wells:
-void make_filter (clonal_filter& filter, filter_counts& counts, const std::deque<float>& ppf, const std::deque<float>& ssq, bool verbose);
+void make_filter (clonal_filter& filter, filter_counts& counts, const std::deque<float>& ppf, const std::deque<float>& ssq, bool verbose, const PolyclonalFilterOpts & opts);
 
 #endif // MIXED_H
 

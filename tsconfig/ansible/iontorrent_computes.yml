@@ -1,0 +1,10 @@
+---
+# file: iontorrent_computes.yml
+- hosts: iontorrent_computes
+  roles:
+    - iontorrent_computes
+  tags:
+    - iontorrent_computes
+  tasks:
+    - include: roles/common/tasks/write_tsconf.yml
+

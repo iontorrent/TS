@@ -53,76 +53,87 @@ class ResultsTest(TestCase):
         result = self.test_save()
         self.assertEquals(unicode(result), result.resultsName)
 
-    def test__findReportStorage_none(self):
-        result = self.test_save()
-        result.reportstorage = None
-        result.reportLink = path.join(self.reportstorage.webServerPath, self.reportstorage.name, result._basename(),'')
-        logger.debug(result.reportLink)
-        self.assertIsNone(result._findReportStorage(), 'Should be None')
-        return result
+#retired_test
+#    def test__findReportStorage_none(self):
+#        result = self.test_save()
+#        result.reportstorage = None
+#        result.reportLink = path.join(self.reportstorage.webServerPath, self.reportstorage.name, result._basename(),'')
+#        logger.debug(result.reportLink)
+#        self.assertIsNone(result._findReportStorage(), 'Should be None')
+#        return result
 
-    def test__findReportStorage_found(self):
-        result = self.test__findReportStorage_none()
-        resultFSDirectory = path.join(self.reportstorage.dirPath ,self.reportstorage.name, result._basename())
-        os.makedirs(resultFSDirectory)
-        self.assertTrue(os.path.exists(resultFSDirectory), 'Directory should exist')
-        
-        self.assertIsNotNone(result._findReportStorage(), 'Should not be None')
-        self.assertEqual(self.reportstorage.id, result._findReportStorage().id, 'Should be same')
-        return result
+#retired_test
+#    def test__findReportStorage_found(self):
+#        result = self.test__findReportStorage_none()
+#        resultFSDirectory = path.join(self.reportstorage.dirPath ,self.reportstorage.name, result._basename())
+#        os.makedirs(resultFSDirectory)
+#        self.assertTrue(os.path.exists(resultFSDirectory), 'Directory should exist')
+#        
+#        self.assertIsNotNone(result._findReportStorage(), 'Should not be None')
+#        self.assertEqual(self.reportstorage.id, result._findReportStorage().id, 'Should be same')
+#        return result
 
-    def test_get_report_dir_is_none(self):
-        result = self.test__findReportStorage_none()
-        result.reportstorage = None
-        self.assertIsNone(result.get_report_dir(), 'Expecting None')
+#retired_test
+#    def test_get_report_dir_is_none(self):
+#        result = self.test__findReportStorage_none()
+#        result.reportstorage = None
+#        self.assertIsNone(result.get_report_dir(), 'Expecting None')
 
-    def test_get_report_path_is_none(self):
-        result = self.test__findReportStorage_none()
-        result.reportstorage = None
-        self.assertIsNone(result.get_report_path(), 'Expecting None')
-        return result
+#retired_test
+#    def test_get_report_path_is_none(self):
+#        result = self.test__findReportStorage_none()
+#        result.reportstorage = None
+#        self.assertIsNone(result.get_report_path(), 'Expecting None')
+#        return result
 
-    def test_get_report_path_is_found(self):
-        result = self.test__findReportStorage_found()
-        result.reportstorage = None
-        self.assertIsNotNone(result.get_report_path(), 'Expecting None')
-        _expected = path.join(self.reportstorage.dirPath ,self.reportstorage.name, result._basename(), '')
-        self.assertEqual(_expected, result.get_report_path(), 'Expecting valid path %s' % _expected)
-        self.assertIsNotNone(result.reportstorage, 'Should have been set')
-        return result
+#retired_test
+#    def test_get_report_path_is_found(self):
+#        result = self.test__findReportStorage_found()
+#        result.reportstorage = None
+#        self.assertIsNotNone(result.get_report_path(), 'Expecting None')
+#        _expected = path.join(self.reportstorage.dirPath ,self.reportstorage.name, result._basename(), '')
+#        self.assertEqual(_expected, result.get_report_path(), 'Expecting valid path %s' % _expected)
+#        self.assertIsNotNone(result.reportstorage, 'Should have been set')
+#        return result
 
-    def test_get_report_dir_is_found(self):
-        result = self.test__findReportStorage_found()
-        result.reportstorage = None
-        self.assertIsNotNone(result.get_report_dir(), 'Expecting None')
-        _expected = path.join(self.reportstorage.dirPath ,self.reportstorage.name, result._basename())
-        self.assertEqual(_expected, result.get_report_dir(), 'Expecting valid path %s' % _expected)
-        self.assertIsNotNone(result.reportstorage, 'Should have been set')
+#retired_test
+#    def test_get_report_dir_is_found(self):
+#        result = self.test__findReportStorage_found()
+#        result.reportstorage = None
+#        self.assertIsNotNone(result.get_report_dir(), 'Expecting None')
+#        _expected = path.join(self.reportstorage.dirPath ,self.reportstorage.name, result._basename())
+#        self.assertEqual(_expected, result.get_report_dir(), 'Expecting valid path %s' % _expected)
+#        self.assertIsNotNone(result.reportstorage, 'Should have been set')
 
-    def test_is_archived_false(self):
-        result = self.test__findReportStorage_found()
-        self.assertFalse(result.is_archived(), 'Should be archivable (not archived yet)')
-        return result
+#retired_test
+#    def test_is_archived_false(self):
+#        result = self.test__findReportStorage_found()
+#        self.assertFalse(result.is_archived(), 'Should be archivable (not archived yet)')
+#        return result
 
     def _mark_fs_archived(self, result):
         for f in ['report.pdf', "%s.support.zip" % os.path.basename(result.get_report_dir())]:
             _file = path.join(result.get_report_dir(), f)
             touch(_file)
 
-    def test_is_archived_true(self):
-        result = self.test__findReportStorage_found()
-        self._mark_fs_archived(result)
-        self.assertTrue(result.is_archived(), 'Should be archived (not archived yet)')
+#retired_test
+#    def test_is_archived_true(self):
+#        result = self.test__findReportStorage_found()
+#        self._mark_fs_archived(result)
+#        self.assertTrue(result.is_archived(), 'Should be archived (not archived yet)')
 
-    def test_report_exist_none(self):
-        result = self.test_get_report_path_is_none()
-        self.assertFalse(result.report_exist())
+#retired_test
+#    def test_report_exist_none(self):
+#        result = self.test_get_report_path_is_none()
+#        self.assertFalse(result.report_exist())
 
-    def test_report_exist_false(self):
-        result = self.test_get_report_path_is_found()
-        shutil.rmtree(result.get_report_dir())
-        self.assertFalse(result.report_exist())
+#retired_test
+#    def test_report_exist_false(self):
+#        result = self.test_get_report_path_is_found()
+#        shutil.rmtree(result.get_report_dir())
+#        self.assertFalse(result.report_exist())
 
-    def test_report_exist_true(self):
-        result = self.test_get_report_path_is_found()
-        self.assertTrue(result.report_exist())
+#retired_test
+#    def test_report_exist_true(self):
+#        result = self.test_get_report_path_is_found()
+#        self.assertTrue(result.report_exist())

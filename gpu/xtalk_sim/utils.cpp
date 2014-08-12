@@ -1,4 +1,4 @@
-
+/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include <math.h>
 #include <stdio.h>
 #include "utils.h"

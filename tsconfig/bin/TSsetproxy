@@ -38,7 +38,7 @@ trap 'error ${LINENO}' ERR
 #--------------------------------------
 # Default settings
 #--------------------------------------
-version=`echo '$Revision: 76606 $'|awk '{print $2}'`
+version=`echo '$Revision$'|awk '{print $2}'`
 DEMO=0
 interactive=1
 REMOVE=0

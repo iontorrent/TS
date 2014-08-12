@@ -19,8 +19,8 @@ BeadScratchSpace::BeadScratchSpace()
   bead_flow_t = 0;
   npts = 0;
 
-  for (int j=0; j<NUMFB; j++)
-    custom_emphasis_scale[j] = 1.0; // might be so unfortunate as to divide by this
+  custom_emphasis_scale = 0;
+  WhichEmphasis = 0;
 }
 
 BeadScratchSpace::~BeadScratchSpace()
@@ -39,19 +39,19 @@ BeadScratchSpace::~BeadScratchSpace()
   if (shifted_bkg!=NULL) delete[] shifted_bkg;
   if (custom_emphasis!=NULL) delete [] custom_emphasis;
 
+  delete [] custom_emphasis_scale;
+  delete [] WhichEmphasis;
+
 }
 
-void BeadScratchSpace::Allocate (int _npts,int _num_derivatives)
+void BeadScratchSpace::Allocate (int _npts,int _num_derivatives, int flow_block_size)
 {
   npts = _npts;
   num_derivatives = _num_derivatives;
-  // now that I know how many points we have
-  bead_flow_t = NUMFB*npts; // the universal unit of currency flows by time
-  AllocateScratch();
-}
 
-void BeadScratchSpace::AllocateScratch()
-{
+  // now that I know how many points we have
+  bead_flow_t = flow_block_size*npts; // the universal unit of currency flows by time
+
   int scratchSpace_nElem = bead_flow_t*num_derivatives;
   int scratchSpace_len = sizeof (float) * scratchSpace_nElem;
   scratchSpace = new float[scratchSpace_nElem];
@@ -62,55 +62,67 @@ void BeadScratchSpace::AllocateScratch()
   observed = new float [bead_flow_t];
   shifted_bkg = new float [bead_flow_t];
   custom_emphasis = new float [bead_flow_t];
+
+  custom_emphasis_scale = new float[ flow_block_size ];
+  WhichEmphasis = new int[ flow_block_size ];
+
+  for (int j=0; j<flow_block_size; j++)
+    custom_emphasis_scale[j] = 1.0; // might be so unfortunate as to divide by this
 }
 
-void BeadScratchSpace::ResetXtalkToZero()
+void BeadScratchSpace::ResetXtalkToZero() const
 {
   memset (cur_xtflux_block,0,sizeof (float[bead_flow_t]));  // no cross-talk for projection search
 }
 
-void BeadScratchSpace::FillObserved (BkgTrace &my_trace,int ibd)
+void BeadScratchSpace::FillObserved (const BkgTrace &my_trace,int ibd, int flow_block_size) const
 {
-  my_trace.MultiFlowFillSignalForBead(observed,ibd);
+  my_trace.MultiFlowFillSignalForBead(observed,ibd, flow_block_size);
 }
 
-void BeadScratchSpace::FillShiftedBkg(EmptyTrace &emptytrace, float tshift, TimeCompression &time_c, bool force_fill)
+void BeadScratchSpace::FillShiftedBkg(
+    const EmptyTrace &emptytrace, 
+    float tshift, 
+    const TimeCompression &time_c, 
+    bool force_fill, 
+    int flow_block_size
+  )
 {
   if (tshift!=cur_shift || force_fill) // dangerous
-    emptytrace.GetShiftedBkg(tshift, time_c, shifted_bkg);
+    emptytrace.GetShiftedBkg(tshift, time_c, shifted_bkg, flow_block_size);
   cur_shift=tshift; // keep current
 }
 
-// copies per-HP emphasis vectors into a contiguous custom emphasis vector for all NUMFB flows
-void MAKE_CUSTOM_EMPHASIS_VECT (float *output,float *SourceEmphasisVector[],int *MyEmphasis,int npts)
+void BeadScratchSpace::FillEmphasis (int *my_emphasis, float *source_emphasis[], 
+    const vector<float>& source_emphasis_scale,
+    int flow_block_size
+  )
 {
-  for (int fnum=0;fnum < NUMFB;fnum++)
-    memcpy (&output[fnum*npts],SourceEmphasisVector[MyEmphasis[fnum]],sizeof (float[npts]));
-}
+  for (int fnum =0; fnum<flow_block_size; fnum++)
+  {
+    // copies per-HP emphasis vectors into a contiguous custom emphasis vector for all flows
+    memcpy (&custom_emphasis[fnum*npts],source_emphasis[my_emphasis[fnum]],sizeof (float[npts]));
 
-void BeadScratchSpace::FillEmphasis (int *my_emphasis, float *source_emphasis[], const vector<float>& source_emphasis_scale)
-{
-  MAKE_CUSTOM_EMPHASIS_VECT (custom_emphasis,source_emphasis,my_emphasis,npts);
-  for (int fnum =0; fnum<NUMFB; fnum++)
     custom_emphasis_scale[fnum] = source_emphasis_scale[my_emphasis[fnum]];
+  }
 }
 
-void BeadScratchSpace::CreateEmphasis(float *source_emphasis[], const vector<float>& source_emphasis_scale)
+void BeadScratchSpace::CreateEmphasis(float *source_emphasis[], const vector<float>& source_emphasis_scale, int flow_block_size)
 {
-  FillEmphasis(WhichEmphasis,source_emphasis,source_emphasis_scale);
+  FillEmphasis(WhichEmphasis,source_emphasis,source_emphasis_scale, flow_block_size);
 }
 
-void BeadScratchSpace::SetEmphasis(float *Ampl, int max_emphasis)
+void BeadScratchSpace::SetEmphasis(float *Ampl, int max_emphasis, int flow_block_size)
 {
-  ComputeEmphasisOneBead(WhichEmphasis,Ampl,max_emphasis);
+  BeadParams::ComputeEmphasisOneBead(WhichEmphasis,Ampl,max_emphasis, flow_block_size);
 }
 
-float BeadScratchSpace::CalculateFitError (float *per_flow_output, int numfb)
+float BeadScratchSpace::CalculateFitError (float *per_flow_output, int flow_block_size)
 {
   // filled scratch, now evaluate
   float tot_err=0.0f;
   float scale = 0.0f;
-  for (int nflow=0;nflow < numfb;nflow++)
+  for ( int nflow=0 ; nflow < flow_block_size ; nflow++ )
   {
     float flow_err = 0.0f;
     
@@ -155,4 +167,44 @@ void BeadScratchSpace::MultiFlowReturnFval(float *per_flow_fval, int numfb)
       per_flow_fval[ti] = fval[ti];
     }
   }
+}
+
+incorporation_params_block_flows::incorporation_params_block_flows( int flow_block_size )
+{
+  NucID = new int[ flow_block_size ];
+  SP = new float[ flow_block_size ];
+  sens = new float[ flow_block_size ];
+  d = new float[ flow_block_size ];
+  kr = new float[ flow_block_size ];
+  kmax = new float[ flow_block_size ];
+  C = new float[ flow_block_size ];
+  molecules_to_micromolar_conversion = new float[ flow_block_size ];
+  nuc_rise_ptr = new float*[ flow_block_size ];
+  ival_output = new float*[ flow_block_size ];
+}
+
+incorporation_params_block_flows::~incorporation_params_block_flows()
+{
+  delete [] NucID;
+  delete [] SP;
+  delete [] sens;
+  delete [] d;
+  delete [] kr;
+  delete [] kmax;
+  delete [] C;
+  delete [] molecules_to_micromolar_conversion;
+  delete [] nuc_rise_ptr;
+  delete [] ival_output;
+}
+
+buffer_params_block_flows::buffer_params_block_flows( int flow_block_size )
+{
+  etbR = new float[ flow_block_size ];
+  tauB = new float[ flow_block_size ];
+}
+
+buffer_params_block_flows::~buffer_params_block_flows()
+{
+  delete [] etbR;
+  delete [] tauB;
 }

@@ -27,6 +27,15 @@ def get_raid_status(raidinfojson):
     else:
         return None
 
+def load_raid_status_json(filename='/var/spool/ion/raidstatus.json'):
+    contents = {}
+    try:
+        with open(filename) as f:
+            contents = json.load(f)
+            contents['date'] = datetime.strptime(contents['date'], "%Y-%m-%d %H:%M:%S.%f")
+    except:
+        pass
+    return contents
 
 def get_raid_status_json(raidinfojson):
     '''
@@ -73,6 +82,16 @@ def get_raid_status_json(raidinfojson):
                     return GOOD
             except:
                 return ''    # Expect value to be "N/A" in this case
+        elif key == "Slot Status":
+            # This keyword exists only when the slot is empty
+            return WARN
+        elif key == 'lv_status':
+            if value == 'Optimal':
+                return GOOD
+            elif value == 'Degraded':
+                return WARN
+            else:
+                return ERROR
         else:
             return ''
 
@@ -87,7 +106,9 @@ def get_raid_status_json(raidinfojson):
     for adapter in raidjson['adapters']:
         for enclosure in adapter['enclosures']:
             drive_status = []
+            logical_drive_status = []
             enclosure_status = GOOD
+
             for drive in enclosure['drives']:
                 name = "NONE"
                 status = GOOD
@@ -100,7 +121,7 @@ def get_raid_status_json(raidinfojson):
                         name = value
                     if key == "Firmware state":
                         firmware_state = value
-                    if 'Slot' in key:
+                    if key == "Slot":
                         slot = value
                     param_status = status_rules(key, value)
                     info.append((key, value, param_status))
@@ -111,18 +132,43 @@ def get_raid_status_json(raidinfojson):
                     'name': name,
                     'status': status,
                     'info': info,
-                    'firmware_state': firmware_state,
+                    'firmware_state': firmware_state or "Empty",
                     'slot': slot
                 })
                 if enclosure_status != ERROR and status != GOOD:
                     enclosure_status = status
+
+            for drive in enclosure.get('logical_drives',[]):
+                name = "NONE"
+                status = GOOD
+                info = []
+                slot = ''
+                for key, value in drive.iteritems():
+                    if 'lv_size' in key:
+                        lv_size = value
+                    if 'lv_status' in key:
+                        lv_status = value
+                    if 'lv_name' in key:
+                        lv_name = value
+                    param_status = status_rules(key, value)
+                    info.append((key, value, param_status))
+                    if status != ERROR and param_status and param_status != GOOD:
+                        status = param_status
+                # build drives array
+                logical_drive_status.append({
+                    'name': lv_name,
+                    'status': lv_status,
+                    'size': lv_size,
+                })
+
 
             # status array for an adapter/enclosure pair
             d = {
                 "adapter_id": adapter['id'],
                 "enclosure_id": enclosure['id'],
                 "status": enclosure_status,
-                "drives": drive_status
+                "drives": drive_status,
+                "logical_drives": logical_drive_status
             }
             if adapter['id'].startswith("PERC H710"):
                 # show primary storage on top

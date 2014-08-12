@@ -36,11 +36,34 @@ class TimeCompression
 {
   public:
 
-  // time compression information
+  float frames_per_second;
+
+  // exponential tail fit time compression information
+  int etf_tail_start_frame;
+  std::vector<float> etf_frameNumber;// for each averaged data point, the mean frame number
+  std::vector<float> etf_deltaFrame;    // the delta of each data point from the last
+  std::vector<float> etf_deltaFrameSeconds; // in seconds
+  std::vector<int> etf_frames_per_point;      // helper table used to construct average of incoming data
+  std::vector<float> etf_interpolate_mult; 
+  std::vector<int> etf_interpolate_frame; 
+  std::vector<float> etf_mTimePoints;
+ 
+  // standard timing compression information
+  std::vector<float> std_frameNumber; 
+  std::vector<float> std_deltaFrame;    // the delta of each data point from the last
+  std::vector<float> std_deltaFrameSeconds; // in seconds
+  std::vector<int> std_frames_per_point; // helper table used to construct average of incoming data
+  std::vector<float> std_interpolate_mult; 
+  std::vector<int> std_interpolate_frame; 
+  std::vector<float> std_mTimePoints;
+ 
+  // what is ultimately accessed by Bkgmodel objects...Will be removed once different compression types
+  // will be created as different objects and all this information queried will return the correction
+  // compression depending on the compression type in use 
+ 
   std::vector<float> frameNumber;// for each averaged data point, the mean frame number
   std::vector<float> deltaFrame;    // the delta of each data point from the last
   std::vector<float> deltaFrameSeconds; // in seconds
-  float frames_per_second;
   std::vector<int> frames_per_point;      // helper table used to construct average of incoming data
   
   float time_start; // when real points exist in the data we take
@@ -65,17 +88,40 @@ class TimeCompression
   inline int Coverage(int s1, int e1, int s2, int e2) { 
     return  std::max(0, std::min(e1,e2) - std::max(s1,s2));
   }
-	int npts(int npt);  // setter for npts
-	inline int npts() { return (int)_npts; }         // getter for npts
+	
+  inline int npts() const { return (int)_npts; }         // getter for npts
+
+
+
+  // TO DO: seperate ETF and Std compression into different c++ objects
+  void UseStandardCompression();
+  void UseETFCompression();
+  void CompressionFromStdFramesPerPoint();
+  void CompressionFromETFFramesPerPoint();
+  void SetStandardFrames(int npt);
+  void SetETFFrames(int npt);
+  void SetUpInterpolationVectorsForETF(int imgFrames);
+  void SetUpInterpolationVectorsForStd(int imgFrames);
+  int GetETFStartFrame() { return etf_tail_start_frame; }
+  int GetStdFrames() { return _stdFrames; }
+  int GetETFFrames() { return _etfFrames; }
+  int GetUncompressedFrames() { return _uncompressedFrames; }
+  std::vector<int>& GetETFInterpolationFrame() { return etf_interpolate_frame; }
+  std::vector<int>& GetETFFramesPerPoint() { return etf_frames_per_point; }
+  std::vector<float>& GetETFInterpolationMul() { return etf_interpolate_mult; }
+  std::vector<int>& GetStdInterpolationFrame() { return std_interpolate_frame; }
+  std::vector<int>& GetStdFramesPerPoint() { return std_frames_per_point; }
+  std::vector<float>& GetStdInterpolationMul() { return std_interpolate_mult; }
+  std::vector<float>& GetStdFrameNumber() { return std_frameNumber; }
+  std::vector<float>& GetStdDeltaFrame() { return std_deltaFrame; }
+  void StandardFramesPerPoint(int imgFrames,float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
+
+
 
   void SetUpTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg); // interface
   void SetUpOldTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
-  void SetUpStandardTime(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
-  void StandardFramesPerPoint(int imgFrames,float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
   void ExponentialFramesPerPoint(int imgFrames, float t_comp_start, int start_detailed_time, float geom_ratio);
   void HyperTime(int imgFrames, float t_comp_start, int start_detailed_time);
-  void StandardAgain(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
-  void ETFCompatible(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
   void HalfSpeedSampling(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
   void SetupConvertVfcTimeSegments(int frames, int *timestamps, int baseFrameRate, int frameStep);
   void WriteLinearTransformation(int frameStep);
@@ -226,19 +272,48 @@ class TimeCompression
   size_t SecondsToIndex(float seconds);
 
  private:
+  void SetUncompressedFrames(int imgFrames) { _uncompressedFrames = imgFrames; }
+  void SetUpETFCompression(float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
+  void SetUpStandardCompression(float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
+  void StandardAgain(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
+  void ETFCompatible(int imgFrames, float t_comp_start, int start_detailed_time, int stop_detailed_time, int left_avg);
+  void npts(int npt);  // setter for npts
+
+ private:
   size_t _npts;           // number of data points after time compression
+  size_t _stdFrames;  // number of data points after standard time compression
+  size_t _etfFrames; // number of data points after exponential tail fit time compression
+  size_t _uncompressedFrames; // orignal uncompressed image frames
+  bool _standardCompression;
 
   // Serialization section
   friend class boost::serialization::access;
   template<typename Archive>
     void serialize(Archive& ar, const unsigned version) {
-    ar & 
+      ar & 
+      etf_tail_start_frame &
+      etf_frameNumber & 
+      etf_deltaFrame &
+      etf_deltaFrameSeconds &
+      etf_frames_per_point &
+      etf_interpolate_mult &
+      etf_interpolate_frame &
+      std_frameNumber &
+      std_deltaFrame &
+      std_deltaFrameSeconds &
+      std_frames_per_point &
+      std_interpolate_mult &
+      std_interpolate_frame &
       frameNumber &
       deltaFrame &
       deltaFrameSeconds &
       frames_per_second &
       frames_per_point &
       _npts &
+      _stdFrames &
+      _etfFrames &
+      _uncompressedFrames &
+      _standardCompression &
       time_start &
       t0 &
       choose_time &

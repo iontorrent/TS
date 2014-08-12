@@ -39,7 +39,7 @@ public:
     // passes in params and reg_params pointers for the well/region we are fitting
     // also indicates which flow we are fitting
     // !!!!! This function damages the _fg structure it is passed!!!!!!  It is not safe!!!!
-    void SetWellRegionParams(float _Copies,float _R,float _gain,float _dmult,float _kmult,struct reg_params *_rp,int _fnum,
+    void SetWellRegionParams(float _Ampl, float _Copies, float _phi, float _R, float _gain, float _dmult,float _kmult,struct reg_params *_rp,int _fnum,
                              int _nnum,int _flow)
     {
         reg_p = _rp;
@@ -57,8 +57,8 @@ public:
         // it's helpful to compute this once and not in the model function
         SP =  (float)(COPYMULTIPLIER * Copies)*pow(reg_p->CopyDrift,flow);
 
-        etbR = AdjustEmptyToBeadRatioForFlow(_R,reg_p,NucID,flow);
-        tauB = ComputeTauBfromEmptyUsingRegionLinearModel(reg_p,etbR);
+        etbR = reg_p->AdjustEmptyToBeadRatioForFlow(_R, _Ampl, _Copies, _phi, NucID, flow);
+        tauB = reg_p->ComputeTauBfromEmptyUsingRegionLinearModel(etbR);
         sens = reg_p->sens*SENSMULTIPLIER;
 
         sigma = GetModifiedSigma (& (_rp->nuc_shape),NucID);
@@ -141,7 +141,7 @@ private:
     float *deltaFrameSeconds;
 
     // indicates which flow we are fitting (used to set-up flow-specific parameter values)
-    // this is the 'local' flow number (0-NUMFB)
+    // this is the 'local' flow number relative to this block of flows
     int fnum;
     // which nucleotide was in the flow
     int NucID;
@@ -153,12 +153,11 @@ private:
     // pre-computed values
     float SP,etbR,tauB,sens;
     float dmult;
-    float Copies,gain;
+    float Copies, phi, gain;
     float t_mid_nuc;
     float sigma;
     float nuc_flow_span;
 
-    int i_start;
 
     void SingleFlowIncorporationTrace(float A,float delta_t_mid_nuc,float kmult,float *fval)
     {
@@ -171,10 +170,10 @@ private:
         kmax = reg_p->kmax[NucID];
         C = reg_p->nuc_shape.C[NucID];
 
-        i_start = SigmaRiseFunction(c_dntp_top_pc,npts,xvals,ISIG_SUB_STEPS_SINGLE_FLOW,C,t_mid_nuc+delta_t_mid_nuc,sigma,nuc_flow_span,true);
-        ComputeCumulativeIncorporationHydrogens(ivalPtr,npts, deltaFrameSeconds, c_dntp_top_pc, ISIG_SUB_STEPS_SINGLE_FLOW, i_start,  C, A, SP, kr, kmax, d, reg_p->molecules_to_micromolar_conversion, math_poiss);
+        int i_start = MathModel::SigmaRiseFunction(c_dntp_top_pc,npts,xvals,ISIG_SUB_STEPS_SINGLE_FLOW,C,t_mid_nuc+delta_t_mid_nuc,sigma,nuc_flow_span,true);
+        MathModel::ComputeCumulativeIncorporationHydrogens(ivalPtr,npts, deltaFrameSeconds, c_dntp_top_pc, ISIG_SUB_STEPS_SINGLE_FLOW, i_start,  C, A, SP, kr, kmax, d, reg_p->molecules_to_micromolar_conversion, math_poiss, reg_p->hydrogenModelType);
         MultiplyVectorByScalar(ivalPtr, sens,npts);  // transform hydrogens to signal       // variables used for solving background signal shape
-        RedSolveHydrogenFlowInWell(fval,ivalPtr,npts,i_start,deltaFrame,tauB);
+        MathModel::RedSolveHydrogenFlowInWell(fval,ivalPtr,npts,i_start,deltaFrame,tauB);
         MultiplyVectorByScalar(fval,gain,npts);
    }
 

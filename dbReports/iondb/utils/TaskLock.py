@@ -2,19 +2,33 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
 from iondb.bin import djangoinit
-#from django.core.cache import get_cache
-from django.core.cache import cache
+from django.core.cache import get_cache
+#from django.core.cache import cache
 
 
 class TaskLock:
 
-    def __init__(self, lock_id):
+    def __init__(self, lock_id, timeout=None):
         self.lock_id = lock_id
-        #self.cache = get_cache('dm_action')
-        self.cache = cache
+        self.cache = get_cache('file')
+        #self.cache = cache
+        if timeout:
+            self.timeout = timeout
+        else:
+            self.timeout = 86400
 
     def lock(self):
-        val = self.cache.add(self.lock_id, "fubar", 86400)
+        val = self.cache.add(self.lock_id, "init", self.timeout)
+        return val
+
+    def update(self, value):
+        '''Creates, or updates this key'''
+        val = self.cache.set(self.lock_id, value, self.timeout)
+        return val
+
+    def get(self):
+        '''Show cache value'''
+        val = self.cache.get(self.lock_id)
         return val
 
     def unlock(self):

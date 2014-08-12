@@ -13,11 +13,11 @@
 <div>
 	<table class="table table-condensed raid_table">
 	{% for drive in array_status %}
-		{% cycle '<tr><td>' '<td>' '<td>' '<td>' '<td>' '<td>'%}
+		{% if forloop.counter0|divisibleby:cols %}<tr><td>{% else %}<td>{% endif %}
 			<div class="text-{{drive.status}} raid_well">
 				Slot {{drive.slot}}: {{drive.firmware_state}}
 			</div>
-		{% cycle '</td>' '</td>' '</td>' '</td>' '</td>' '</td></tr>'%}
+		{% if forloop.counter|divisibleby:cols %}</td></tr>{% else %}</td>{% endif %}
 	{% endfor %}
 	</table>
 </div>

@@ -6,6 +6,7 @@
     }
   });
 
+ //TODO - now that the default paging no longer exists this code is all overkill
   function CheckboxSelectColumn(options) {
     var _grid;
     var _self = this;
@@ -21,8 +22,8 @@
       toolTipOn: "Deselect All",
       toolTipOff: "Select All",
       toolTipDisabled: "Selected",
-      checkColumnOn: "<img id='checkAll' src='lifegrid/images/checkbox_tick.png'>",
-      checkColumnOff: "<img id='checkAll' src='lifegrid/images/checkbox_empty.png'>",
+      checkColumnOn: "<img class='checkAll' src='lifegrid/images/checkbox_tick.png'>",
+      checkColumnOff: "<img class='checkAll' src='lifegrid/images/checkbox_empty.png'>",
       checkColumnDisabled: "",
       width: 28
     };
@@ -110,6 +111,7 @@
     }
 
     function handleClick(e,args) {
+        console.log("butt");
       // clicking on a row select checkbox
       _clickSelect = true;
       _origCell = _targCell = args.cell;

@@ -1,5 +1,5 @@
-# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 #!/usr/bin/env python
+# Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 '''
 fileserver_space_check() is a periodic task that gets executed by celery daemon
 on a repeating schedule.  If there are any actions to take, it will execute a
@@ -17,6 +17,7 @@ import time
 from datetime import timedelta, datetime
 from celery.task import task
 from celery.task import periodic_task
+from celery.exceptions import SoftTimeLimitExceeded
 from celery.utils.log import get_task_logger
 from django.db.models import Q
 from django.utils import timezone
@@ -36,32 +37,34 @@ from iondb.rundb.data.dmactions import slugify
 from iondb.anaserve import client
 from iondb.rundb.data import tasks as datatasks
 logger = get_task_logger('data_management')
-
+d = {'logid':"%s" % ('DM')}
 
 #at celeryd start-up, dump an entry into log file.
 from celery.signals import celeryd_after_setup
 @celeryd_after_setup.connect
 def configure_workers(sender=None, conf=None, **kwargs):
     if 'periodic' in sender:
-        logger.info("Restarted: %s" % sender)
+        logger.info("Restarted: %s" % sender, extra = {'logid':"%s" % ('DM')})
 
 
 @task(queue="periodic", expires=15)
 def manage_manual_action():
-    logger.debug("manage_manual_action")
+    logger.debug("manage_manual_action", extra = {'logid':"%s" % ('manual_action')})
     try:
         #Create lock file to prevent more than one celery task for manual action (export or archive)
         lock_id = 'manual_action_lock_id'
+        d = {'logid':"%s" % (lock_id)}
         applock = TaskLock(lock_id)
+
         if not(applock.lock()):
-            logger.debug("failed to acquire lock file: %d" % os.getpid())
-            logger.info("manage_manual_action task still executing")
+            logger.debug("lock file exists: %s(%s)" % (lock_id, applock.get()), extra = d)
             return
 
-        logger.debug("Worker PID %d lock_id created %s" % (os.getpid(),lock_id))
+        logger.debug("lock file created: %s(%s)" % (lock_id, applock.get()), extra = d)
 
     except Exception as e:
-        logger.exception(e)
+        logger.error(traceback.format_exc(), extra = d)
+
 
     try:
         #
@@ -77,21 +80,22 @@ def manage_manual_action():
             user_comment = actiondmfilestat.user_comment.get('user_comment', 'Manual Action')
 
             dmfileset = actiondmfilestat.dmfileset
+            applock.update(actiondmfilestat.result.resultsName)
             if actiondmfilestat.action_state == 'SA':
-                logger.info("Manual Archive Action: %s from %s" % (dmfileset.type,actiondmfilestat.result.resultsName))
+                logger.info("Manual Archive Action: %s from %s" % (dmfileset.type,actiondmfilestat.result.resultsName), extra = d)
                 archive_action(user, user_comment, actiondmfilestat, lock_id, msg_banner = True)
             elif actiondmfilestat.action_state == 'SE':
-                logger.info("Manual Export Action: %s from %s" % (dmfileset.type,actiondmfilestat.result.resultsName))
+                logger.info("Manual Export Action: %s from %s" % (dmfileset.type,actiondmfilestat.result.resultsName), extra = d)
                 export_action(user, user_comment, actiondmfilestat, lock_id, msg_banner = True)
             elif actiondmfilestat.action_state == 'SD':
-                logger.info("Delete Action: %s from %s" % (dmfileset.type,actiondmfilestat.result.resultsName))
+                logger.info("Delete Action: %s from %s" % (dmfileset.type,actiondmfilestat.result.resultsName), extra = d)
                 delete_action(user, "Continuing delete action after being suspended", actiondmfilestat, lock_id, msg_banner = True)
             else:
-                logger.warn("Dev Error: we don't handle this '%s' here" % actiondmfilestat.action_state)
+                logger.warn("Dev Error: we don't handle this '%s' here" % actiondmfilestat.action_state, extra = d)
 
         else:
             applock.unlock()
-            logger.debug("Worker PID %d lock_id destroyed on exit %s" % (os.getpid(),lock_id))
+            logger.debug("Worker PID %d lock_id destroyed on exit %s" % (os.getpid(),lock_id), extra = d)
 #NOTE: all these exceptions are also handled in manage_data() below.  beaucoup de duplication de code
     except (DMExceptions.FilePermission,
             DMExceptions.InsufficientDiskSpace,
@@ -112,12 +116,13 @@ def manage_manual_action():
         msg = "Src Dir not found: %s. Setting action_state to Deleted" % e.message
         EventLog.objects.add_entry(actiondmfilestat.result,msg,username='dm_agent')
         actiondmfilestat.setactionstate('DD')
-        logger.info(msg)
+        logger.info(msg, extra = d)
     except Exception as e:
         applock.unlock()
         msg = "action error on %s " % actiondmfilestat.result.resultsName
         msg += " Error: %s" % str(e)
-        logger.exception("%s - %s" % (dmfileset.type, msg))
+        logger.error("%s - %s" % (dmfileset.type, msg), extra = d)
+        logger.error(traceback.format_exc(), extra = d)
         dmactions.add_eventlog(actiondmfilestat,"%s - %s" % (dmfileset.type, msg),username='dm_agent')
         # Revert this dmfilestat object action-state to Local
         actiondmfilestat.setactionstate('L')
@@ -127,20 +132,20 @@ def manage_manual_action():
 
 @task(queue="periodic", expires=15)
 def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_action_enabled):
-    logger.debug("manage_data: %s %s %s" % (dmfileset['auto_action'], hex(deviceid),dmfileset['type']))
+    logger.debug("manage_data: %s %s" % (dmfileset['auto_action'], dmfileset['type']), extra = {'logid':"%s" % ('manage_data')})
 
     def getfirstnotpreserved(dmfilestats, action, threshdate):
         '''QuerySet of DMFileStat objects.  Returns first instance of an object
         with preserve_data set to False and passes the action_validation test'''
-        logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
-        logger.debug("Looking at %d dmfilestat objects" % dmfilestats.count())
+        logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra = d)
+        logger.debug("Looking at %d dmfilestat objects" % dmfilestats.count(), extra = d)
         for archiveme in dmfilestats:
             if not archiveme.getpreserved():
                 try:
                     dmactions.action_validation(archiveme,action)
                     return archiveme
                 except(DMExceptions.FilesInUse,DMExceptions.FilesMarkedKeep):
-                    logger.debug("%s Failed action_validation.  Try next fileset" % archiveme.result.resultsName)
+                    logger.debug("%s Failed action_validation.  Try next fileset" % archiveme.result.resultsName, extra = d)
                 except DMExceptions.BaseInputLinked:
                     # want to allow Basecalling Input delete if all results are expired
                     relatedObjs = DMFileStat.objects.filter(result__experiment=archiveme.result.experiment, dmfileset__type=dmactions_types.BASE)
@@ -148,29 +153,31 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                         archiveme.allow_delete = True
                         return archiveme
                     else:
-                        logger.debug("%s Failed action_validation.  Try next fileset" % archiveme.result.resultsName)
+                        logger.debug("%s Failed action_validation.  Try next fileset" % archiveme.result.resultsName, extra = d)
                 except:
-                    logger.error(traceback.format_exc())
+                    logger.error(traceback.format_exc(), extra = d)
             else:
-                logger.debug("Skipped a preserved fileset: %s" % archiveme.result.resultsName)
+                logger.debug("Skipped a preserved fileset: %s" % archiveme.result.resultsName, extra = d)
 
-        logger.info("%d filestat objects are preserved." % dmfilestats.count())
+        logger.info("%d filestat objects are preserved." % dmfilestats.count(), extra = d)
         raise DMExceptions.NoDMFileStat("NONE FOUND")
 
     try:
-        #logger.debug("manage_data lock for %s (%d)" % (dmfileset['type'], os.getpid()))
+        #logger.debug("manage_data lock for %s (%d)" % (dmfileset['type'], os.getpid()), extra = d)
         #Create lock file to prevent more than one celery task for each process_type and partition
         lock_id = "%s_%s" % (hex(deviceid),slugify(dmfileset['type']))
+        d = {'logid':"%s" % (lock_id)}
         applock = TaskLock(lock_id)
 
         if not(applock.lock()):
-            logger.info("Did not acquire lock file: %s" % lock_id)
+            logger.debug("lock file exists: %s(%s)" % (lock_id, applock.get()), extra = d)
             return
 
-        logger.debug("Worker PID %d lock_id created %s" % (os.getpid(),lock_id))
+        logger.debug("lock file created: %s(%s)" % (lock_id, applock.get()), extra = d)
 
     except Exception as e:
-        logger.exception(e)
+        logger.error(traceback.format_exc(), extra = d)
+
 
     try:
         #---------------------------------------------------------------------------
@@ -186,12 +193,13 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
         # Select objects not yet processed
         dmfilestats = dmfilestats.filter(action_state__in=['L','S','N','A'])
         tot_act = dmfilestats.count()
-        logger.info("(%s)Total %s: %d Active: %d" %(hex(deviceid),dmfileset['type'],tot_obj,tot_act))
+        #logger.info("Total %s: %d Active: %d" %(dmfileset['type'],tot_obj,tot_act), extra = d)
 
         # Select objects that are old enough
         threshdate = datetime.now(pytz.UTC) - timedelta(days=dmfileset['auto_trigger_age'])
         dmfilestats = dmfilestats.filter(created__lt=threshdate)
-        logger.info("(%s)Total %s: %d Expired: %d" %(hex(deviceid),dmfileset['type'],tot_obj,dmfilestats.count()))
+        tot_exp = dmfilestats.count()
+        #logger.info("Total %s: %d Expired: %d" %(dmfileset['type'],tot_obj,tot_exp), extra = d)
 
         # Select objects stored on the deviceid
         query = Q()
@@ -206,15 +214,19 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                 query |= Q(result__reportstorage__dirPath__startswith=path)
 
         dmfilestats = dmfilestats.filter(query)
-        logger.info("(%s)Total %s: %d On '%s' path: %d" %(hex(deviceid),dmfileset['type'],tot_obj,path,dmfilestats.count()))
+        tot_onpath = dmfilestats.count()
+        #logger.info("Total %s: %d On '%s' path: %d" %(dmfileset['type'],tot_obj,path,tot_onpath), extra = d)
 
         # Exclude objects marked 'Keep' upfront to optimize db access
         if dmfileset['type'] == dmactions_types.SIG:
             dmfilestats = dmfilestats.exclude(result__experiment__storage_options="KI")
         else:
             dmfilestats = dmfilestats.exclude(preserve_data=True)
-        logger.info("(%s)Total %s: %d Not Preserved: %d" %(hex(deviceid),dmfileset['type'],tot_obj,dmfilestats.count()))
+        tot_notpreserved = dmfilestats.count()
+        #logger.info("Total %s: %d Not Preserved: %d" %(dmfileset['type'],tot_obj, tot_notpreserved), extra = d)
 
+        # Compress to single log entry
+        logger.info("Total: %d Active: %d Expired: %d On Path: %d Not Preserved: %d" %(tot_obj, tot_act, tot_exp, tot_onpath, tot_notpreserved), extra = d)
 
         #---------------------------------------------------------------------------
         # Archive
@@ -228,28 +240,29 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
             4) Archiving does not require 'S' -> 'N' -> 'A' progression before action
             5) Do not include filesets marked 'E' in auto-action - can get stuck on that fileset forever
             '''
-            logger.info("(%s)Exceed %d days. Eligible to archive: %d" %(hex(deviceid),dmfileset['auto_trigger_age'],dmfilestats.count()))
+            logger.info("Exceed %d days. Eligible to archive: %d" %(dmfileset['auto_trigger_age'],dmfilestats.count()), extra = d)
             actiondmfilestat = None
             #Bail out if disabled
             if auto_action_enabled != True:
-                logger.info("Data management auto-action is disabled.")
+                logger.info("Data management auto-action is disabled.", extra = d)
                 applock.unlock()
-                logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
                 return
 
             # Select first object stored on the deviceid
             try:
                 actiondmfilestat = getfirstnotpreserved(dmfilestats, dmactions.ARCHIVE, threshdate)
-                logger.info("(%s)Picked: %s" % (hex(deviceid),actiondmfilestat.result.resultsName))
+                logger.info("Picked: %s" % (actiondmfilestat.result.resultsName), extra = d)
             except DMExceptions.NoDMFileStat:
-                logger.debug("No filesets to archive on this device: %s" % hex(deviceid))
+                logger.debug("No filesets to archive on this device", extra = d)
                 applock.unlock()
-                logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
             except:
-                logger.error(traceback.format_exc())
+                logger.error(traceback.format_exc(), extra = d)
                 applock.unlock()
-                logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
             else:
+                applock.update(actiondmfilestat.result.resultsName)
                 archive_action('dm_agent', user_comment, actiondmfilestat, lock_id)
 
         #---------------------------------------------------------------------------
@@ -266,10 +279,10 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                     promote to 'A'
                 delete an 'A' fileset
             '''
-            logger.info("(%s)Exceed %d days. Eligible to delete: %d" %(hex(deviceid),dmfileset['auto_trigger_age'],dmfilestats.count()))
+            logger.info("Exceed %d days. Eligible to delete: %d" %(dmfileset['auto_trigger_age'],dmfilestats.count()), extra = d)
             if auto_acknowledge_enabled:
                 if dmfileset['type'] == dmactions_types.SIG:
-                    logger.debug("Sig Proc Input Files auto acknowledge enabled")
+                    logger.debug("Sig Proc Input Files auto acknowledge enabled", extra = d)
                 '''
                 Do not require 'S' -> 'N' -> 'A' progression before action; mark 'A' and process
                 '''
@@ -280,33 +293,33 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                     #deleteme = A_list[0]
                     try:
                         actiondmfilestat = getfirstnotpreserved(A_list, dmactions.DELETE, threshdate)
-                        logger.info("(%s)Picked: %s" % (hex(deviceid),actiondmfilestat.result.resultsName))
+                        logger.info("Picked: %s" % (actiondmfilestat.result.resultsName), extra = d)
                     except DMExceptions.NoDMFileStat:
-                        logger.info("(%s) No filesets to delete on this device" % hex(deviceid))
+                        logger.info("No filesets to delete on this device", extra = d)
                         applock.unlock()
-                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
                     except:
-                        logger.error(traceback.format_exc())
+                        logger.error(traceback.format_exc(), extra = d)
                         applock.unlock()
-                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
 
                 if actiondmfilestat == None:
                     # Select oldest fileset regardless if its 'L','S','N','A'.  This covers situation where user
                     # recently enabled auto-acknowledge
                     try:
                         actiondmfilestat = getfirstnotpreserved(dmfilestats, dmactions.DELETE, threshdate)
-                        logger.info("(%s)Picked: %s" % (hex(deviceid),actiondmfilestat.result.resultsName))
+                        logger.info("Picked: %s" % (actiondmfilestat.result.resultsName), extra = d)
                     except DMExceptions.NoDMFileStat:
-                        logger.info("(%s) No filesets to delete on this device" % hex(deviceid))
+                        logger.info("No filesets to delete on this device", extra = d)
                         applock.unlock()
-                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
                     except:
-                        logger.error(traceback.format_exc())
+                        logger.error(traceback.format_exc(), extra = d)
                         applock.unlock()
-                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
             else:
                 if dmfileset['type'] == dmactions_types.SIG:
-                    logger.debug("Sig Proc Input Files auto acknowledge disabled")
+                    logger.debug("Sig Proc Input Files auto acknowledge disabled", extra = d)
                     '''
                     Need to select # of filesets and mark 'S'
                     Need to find 'S' filesets and notify (set to 'N')
@@ -327,7 +340,7 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
                     N_list = exps.filter(results_set__dmfilestat__in = dmfilestats.filter(action_state='N')).distinct()
                     A_list = exps.filter(results_set__dmfilestat__in = dmfilestats.filter(action_state='A')).distinct()
 
-                    logger.info("Experiments (Keep=False) L:%d S:%d N:%d A:%d" % (L_list.count(),S_list.count(),N_list.count(),A_list.count()))
+                    logger.info("Experiments (Keep=False) L:%d S:%d N:%d A:%d" % (L_list.count(),S_list.count(),N_list.count(),A_list.count()), extra = d)
                     queue_length = 5
                     to_select = queue_length - (A_list.count() + N_list.count() + S_list.count())
                     if to_select > 0:
@@ -343,7 +356,7 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
 
                     # Send Selected items to be notified
                     if selected.count() > 0 and auto_action_enabled:
-                        logger.debug("notify recipient %s" % (recipient))
+                        logger.debug("notify recipient %s" % (recipient), extra = d)
                         if notify([dmfilestat.result.resultsName for dmfilestat in selected],recipient):
                             selected.update(action_state = 'N')
                             for dmfilestat in selected:
@@ -351,41 +364,42 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
 
                     try:
                         actiondmfilestat = getfirstnotpreserved(dmfilestats.filter(action_state='A'), dmactions.DELETE, threshdate)
-                        logger.info("(%s)Picked: %s" % (hex(deviceid),actiondmfilestat.result.resultsName))
+                        logger.info("Picked: %s" % (actiondmfilestat.result.resultsName), extra = d)
                     except DMExceptions.NoDMFileStat:
-                        logger.info("(%s) No filesets to delete on this device" % hex(deviceid))
+                        logger.info("No filesets to delete on this device", extra = d)
                         applock.unlock()
-                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
                     except:
-                        logger.error(traceback.format_exc())
+                        logger.error(traceback.format_exc(), extra = d)
                         applock.unlock()
-                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
 
                 else:
                     try:
                         actiondmfilestat = getfirstnotpreserved(dmfilestats, dmactions.DELETE, threshdate)
-                        logger.info("(%s)Picked: %s" % (hex(deviceid),actiondmfilestat.result.resultsName))
+                        logger.info("Picked: %s" % (actiondmfilestat.result.resultsName), extra = d)
                     except DMExceptions.NoDMFileStat:
-                        logger.info("(%s) No filesets to delete on this device" % hex(deviceid))
+                        logger.info("No filesets to delete on this device", extra = d)
                         applock.unlock()
-                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
                     except:
-                        logger.error(traceback.format_exc())
+                        logger.error(traceback.format_exc(), extra = d)
                         applock.unlock()
-                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                        logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
 
             #Bail out if disabled
             if auto_action_enabled != True:
-                logger.info("Data management auto-action is disabled.")
+                logger.info("Data management auto-action is disabled.", extra = d)
                 applock.unlock()
-                logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id))
+                logger.debug("Worker PID %d lock_id destroyed %s" % (os.getpid(),lock_id), extra = d)
                 return
 
             if actiondmfilestat is not None:
+                applock.update(actiondmfilestat.result.resultsName)
                 delete_action('dm_agent', user_comment, actiondmfilestat, lock_id, confirmed=getattr(actiondmfilestat,'allow_delete',False) )
 
         else:
-            logger.error("Unknown or unhandled action: %s" % dmfileset['auto_action'])
+            logger.error("Unknown or unhandled action: %s" % dmfileset['auto_action'], extra = d)
             applock.unlock()
 
     except (DMExceptions.FilePermission,
@@ -405,14 +419,15 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
         msg = "Src Dir not found: %s. Setting action_state to Deleted" % e.message
         EventLog.objects.add_entry(actiondmfilestat.result,msg,username='dm_agent')
         actiondmfilestat.setactionstate('DD')
-        logger.info(msg)
+        logger.info(msg, extra = d)
     except Exception as inst:
         applock.unlock()
         msg = ''
         if actiondmfilestat:
             msg = "Auto-action error on %s " % actiondmfilestat.result.resultsName
         msg += " Error: %s" % str(inst)
-        logger.exception("%s - %s" % (dmfileset['type'], msg))
+        logger.error("%s - %s" % (dmfileset['type'], msg), extra = d)
+        logger.error(traceback.format_exc(), extra = d)
 
         if actiondmfilestat:
             EventLog.objects.add_entry(actiondmfilestat.result,"%s - %s" % (dmfileset['type'], msg),username='dm_agent')
@@ -420,106 +435,111 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
     return
 
 
-@periodic_task(run_every=timedelta(seconds=60), expires=15, queue="periodic")
+@periodic_task(run_every=timedelta(seconds=60), expires=15, soft_time_limit=55, queue="periodic")
 #@task
 def fileserver_space_check():
     '''For each file server, compare disk usage to backup threshold value.
     If disk usage exceeds threshold, launch celery task to delete/archive
     raw data directories.
     '''
-    # Get GlobalConfig object in order to access auto-acknowledge bit
-    gc = GlobalConfig.get()
-    auto_acknowledge = gc.auto_archive_ack
-    auto_action_enabled = gc.auto_archive_enable
+    d = {'logid':"%s" % ('DM')}
+    try:
+        starttime = time.time()
+        # Get GlobalConfig object in order to access auto-acknowledge bit
+        gc = GlobalConfig.get()
+        auto_acknowledge = gc.auto_archive_ack
+        auto_action_enabled = gc.auto_archive_enable
 
-    # Get list of File Server objects
-    file_servers = FileServer.objects.all().order_by('pk').values()
+        # Get list of File Server objects
+        file_servers = FileServer.objects.all().order_by('pk').values()
 
-    # Get list of Report Storage objects
-    report_storages = ReportStorage.objects.all().order_by('pk').values()
+        # Get list of Report Storage objects
+        report_storages = ReportStorage.objects.all().order_by('pk').values()
 
-    # dict of fileset cateogries each with list of partition ids that can be acted upon.
-    category_list = {}
-    #-------------------------------------------------
-    # DELETE action only happens if threshold reached
-    #-------------------------------------------------
-    for dmfileset in DMFileSet.objects.filter(version=settings.RELVERSION).filter(auto_action='DEL').values():
+        # dict of fileset cateogries each with list of partition ids that can be acted upon.
+        category_list = {}
+        #-------------------------------------------------
+        # DELETE action only happens if threshold reached
+        #-------------------------------------------------
+        for dmfileset in DMFileSet.objects.filter(version=settings.RELVERSION).filter(auto_action='DEL').values():
 
-        cat_name = slugify(dmfileset['type'])
-        category_list[cat_name] = {
-            'dmfileset':dmfileset,
-            'devlist':[],
-            'partitions':[],
-        }
+            cat_name = slugify(dmfileset['type'])
+            category_list[cat_name] = {
+                'dmfileset':dmfileset,
+                'devlist':[],
+                'partitions':[],
+            }
 
-        for partition in _partitions(file_servers,report_storages):
+            for partition in _partitions(file_servers,report_storages):
+                d_loc = {'logid':"%s" % (hex(partition['devid']))}
 
-            if partition['diskusage'] >= dmfileset['auto_trigger_usage']:
+                if partition['diskusage'] >= dmfileset['auto_trigger_usage']:
 
-                logger.info("%s %s %.2f%% exceeds %s %.0f%%" % (
-                    hex(partition['devid']),
-                    partition['path'],
-                    partition['diskusage'],
-                    dmfileset['type'],
-                    dmfileset['auto_trigger_usage']))
+                    logger.info("%s %.2f%% exceeds %s %.0f%%" % (
+                        partition['path'],
+                        partition['diskusage'],
+                        dmfileset['type'],
+                        dmfileset['auto_trigger_usage']), extra = d_loc)
 
+                    category_list[cat_name]['devlist'].append(partition['devid'])
+                    category_list[cat_name]['partitions'].append(partition)
+
+                else:
+
+                    logger.info("%s %.2f%% below %s %.0f%%" % (
+                        partition['path'],
+                        partition['diskusage'],
+                        dmfileset['type'],
+                        dmfileset['auto_trigger_usage']), extra = d_loc)
+
+            # uniquify the deviceid list
+            category_list[cat_name]['devlist'] = list(set(category_list[cat_name]['devlist']))
+
+        #-------------------------------------------------------------------------------
+        #ARCHIVE action happens as soon as grace period has expired (no threshold check)
+        #-------------------------------------------------------------------------------
+        for dmfileset in DMFileSet.objects.filter(version=settings.RELVERSION).filter(auto_action='ARC').values():
+
+            cat_name = slugify(dmfileset['type'])
+            category_list[cat_name] = {
+                'dmfileset':dmfileset,
+                'devlist':[],
+                'partitions':[],
+            }
+
+            for partition in _partitions(file_servers,report_storages):
+                logger.debug("%s %s" %( partition['path'],hex(partition['devid'])), extra = d)
                 category_list[cat_name]['devlist'].append(partition['devid'])
                 category_list[cat_name]['partitions'].append(partition)
 
-            else:
-
-                logger.info("%s %s %.2f%% below %s %.0f%%" % (
-                    hex(partition['devid']),
-                    partition['path'],
-                    partition['diskusage'],
-                    dmfileset['type'],
-                    dmfileset['auto_trigger_usage']))
-
-        # uniquify the deviceid list
-        category_list[cat_name]['devlist'] = list(set(category_list[cat_name]['devlist']))
-
-    #-------------------------------------------------------------------------------
-    #ARCHIVE action happens as soon as grace period has expired (no threshold check)
-    #-------------------------------------------------------------------------------
-    for dmfileset in DMFileSet.objects.filter(version=settings.RELVERSION).filter(auto_action='ARC').values():
-
-        cat_name = slugify(dmfileset['type'])
-        category_list[cat_name] = {
-            'dmfileset':dmfileset,
-            'devlist':[],
-            'partitions':[],
-        }
-
-        for partition in _partitions(file_servers,report_storages):
-            logger.debug("%s %s" %( partition['path'],hex(partition['devid'])))
-            category_list[cat_name]['devlist'].append(partition['devid'])
-            category_list[cat_name]['partitions'].append(partition)
-
-        # uniquify the deviceid list
-        category_list[cat_name]['devlist'] = list(set(category_list[cat_name]['devlist']))
+            # uniquify the deviceid list
+            category_list[cat_name]['devlist'] = list(set(category_list[cat_name]['devlist']))
 
 
-    #-------------------------------------------------------------
-    # Action loop - for each category, launch action per deviceid
-    #-------------------------------------------------------------
-    if not auto_action_enabled:
-        logger.info("Data management auto-action is disabled.")
+        #-------------------------------------------------------------
+        # Action loop - for each category, launch action per deviceid
+        #-------------------------------------------------------------
+        if not auto_action_enabled:
+            logger.info("Data management auto-action is disabled.", extra = d)
 
-    # update any DMFileStats that are in use by active analysis jobs
-    try:
-        update_files_in_use()
-    except:
-        logger.error('Unable to update active DMFileStats')
-        logger.error(traceback.format_exc())
+        # update any DMFileStats that are in use by active analysis jobs
+        try:
+            update_files_in_use()
+        except:
+            logger.error('Unable to update active DMFileStats', extra = d)
+            logger.error(traceback.format_exc(), extra = d)
 
-    # Checks for manual export and archive requests.
-    manage_manual_action.delay()
+        # Checks for manual export and archive requests.
+        manage_manual_action.delay()
 
-    for category,dict in category_list.iteritems():
-        for deviceid in dict['devlist']:
-            pathlist = [item['path'] for item in dict['partitions'] if item['devid'] == deviceid]
-            async_task_result = manage_data.delay(deviceid, dict['dmfileset'], pathlist, auto_acknowledge, auto_action_enabled)
-
+        for category,dict in category_list.iteritems():
+            for deviceid in dict['devlist']:
+                pathlist = [item['path'] for item in dict['partitions'] if item['devid'] == deviceid]
+                async_task_result = manage_data.delay(deviceid, dict['dmfileset'], pathlist, auto_acknowledge, auto_action_enabled)
+        endtime = time.time()
+        logger.info("Disk Check: %f s" % (endtime-starttime), extra = d)
+    except SoftTimeLimitExceeded:
+        logger.error("fileserver_space_check exceeded execution time limit", extra = d)
     return
 
 
@@ -552,6 +572,7 @@ def backfill_create_dmfilestat():
     Migrates pre-TS3.6 servers to the new data management schema.  Called from postinst.in
     '''
     from datetime import date
+    d = {'logid':"%s" % ('DM')}
 
     def get_result_version(result):
         #get the major version the report was generated with
@@ -571,7 +592,7 @@ def backfill_create_dmfilestat():
         track.write("Generated on: %s\n" % date.today())
         track.write("====================================================\n")
     except:
-        logger.error(traceback.format_exc())
+        logger.error(traceback.format_exc(), extra = d)
 
     # set of all dmfileset objects
     DMFileSets = DMFileSet.objects.filter(version=settings.RELVERSION)
@@ -675,7 +696,7 @@ def backfill_create_dmfilestat():
                 except IndexError:
                     pass
                 except:
-                    logger.warn(traceback.format_exc())
+                    logger.warn(traceback.format_exc(), extra = d)
                 finally:
                     if origbackupdate:
                         dmfilestat.save()
@@ -729,7 +750,7 @@ def backfill_create_dmfilestat():
             versions = dict(v.split(':') for v in analysisVersion.split(",") if v)
             version = float(simple_version.match(versions['db']).group(1))
         except Exception:
-            if not setVersion == '2.2':
+            if setVersion == '3.6':
                 to_fix.append(pk)
 
     dmfilestats = DMFileStat.objects.filter(pk__in=to_fix)
@@ -777,10 +798,10 @@ def notify(name_list, recipient):
         try:
             mail.send_mail(subject_line, message, reply_to, recipient)
         except:
-            logger.warning(traceback.format_exc())
+            logger.warning(traceback.format_exc(), extra = d)
             return False
         else:
-            logger.info("Notification email sent for user acknowledgement")
+            logger.info("Notification email sent for user acknowledgement", extra = d)
             return True
 
 def update_files_in_use():
@@ -798,7 +819,7 @@ def update_files_in_use():
         try:
             result = Results.objects.get(pk=item[2])
         except ObjectDoesNotExist:
-            logger.warn("Results object does not exist: %d" % (item[2]))
+            logger.warn("Results object does not exist: %d" % (item[2]), extra = d)
             continue
         # check the status - completed results still show up on the running list for a short time
         if result.status == 'Completed' or result.status == 'TERMINATED':
@@ -823,7 +844,7 @@ def update_files_in_use():
 
     # reset files_in_use to blank for any non-active dmfilestats
     num = old_in_use.exclude(pk__in=active).update(files_in_use='')
-    logger.debug('update_files_in_use(): %s dmilestats in use by active jobs, %s released for dmactions' % (len(active), num))
+    logger.debug('update_files_in_use(): %s dmilestats in use by active jobs, %s released for dmactions' % (len(active), num), extra = d)
 
 
 def test_tracker():

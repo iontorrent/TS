@@ -1,0 +1,30 @@
+---
+# file: group_vars/iontorrent_master
+
+# APT package list
+ionmaster_syspkg_list:
+    - postfix
+    - rabbitmq-server
+    - samba
+    - nxclient
+    - nxnode
+    - nxserver
+
+ionmaster_ionpkg_list:
+    - ion-dbreports
+    - ion-gpu
+    - ion-analysis
+    - ion-pipeline
+    - samtools
+    - ion-rsmts
+    - ion-samita
+    - ion-torrentr
+    - ion-chefupdates
+    - ion-docs
+    - ion-referencelibrary
+    - ion-sampledata
+    - ion-publishers
+    - ion-onetouchupdater
+    - ion-plugins
+    - ion-usbmount
+    - ion-pgmupdates

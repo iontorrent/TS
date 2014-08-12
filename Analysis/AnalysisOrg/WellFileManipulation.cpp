@@ -46,7 +46,6 @@ void GetMetaDataForWells(char *explog_path, RawWells &rawWells, const char *chip
 
 void CreateWellsFileForWriting (RawWells &rawWells, Mask *maskPtr,
                                 CommandLineOpts &inception_state,
-                                int num_fb,
                                 int numFlows,
                                 int numRows, int numCols,
                                 const char *chipType)
@@ -54,14 +53,14 @@ void CreateWellsFileForWriting (RawWells &rawWells, Mask *maskPtr,
   // set up wells data structure
   MemUsage ("BeforeWells");
   //rawWells.SetFlowChunkSize(flowChunk);
-  rawWells.SetCompression (inception_state.bkg_control.wellsCompression);
+  rawWells.SetCompression (inception_state.bkg_control.signal_chunks.wellsCompression);
   rawWells.SetRows (numRows);
   rawWells.SetCols (numCols);
   rawWells.SetFlows (numFlows);
   rawWells.SetFlowOrder (inception_state.flow_context.flowOrder); // 6th duplicated code
   SetWellsToLiveBeadsOnly (rawWells,maskPtr);
   // any model outputs a wells file of this nature
-  GetMetaDataForWells (inception_state.sys_context.explog_path,rawWells,chipType);
+  GetMetaDataForWells ((char*)(inception_state.sys_context.explog_path.c_str()),rawWells,chipType);
   
   rawWells.OpenForWrite();
   rawWells.WriteRanks(); // dummy, written for completeness
@@ -69,39 +68,4 @@ void CreateWellsFileForWriting (RawWells &rawWells, Mask *maskPtr,
   rawWells.Close(); // just create in this routine
   MemUsage ("AfterWells");
 }
-
-void OpenExistingWellsForOneChunk(RawWells &rawWells,  int start_of_chunk, int chunk_depth)
-{
-    rawWells.SetChunk (0, rawWells.NumRows(), 0, rawWells.NumCols(), start_of_chunk, chunk_depth);
-    rawWells.OpenForReadWrite();
-}
-
-
-void WriteOneChunkAndClose(RawWells &rawWells, SumTimer &timer)
-{
-  timer.StartInterval();
-  rawWells.WriteWells();
-  timer.EndInterval();
-  rawWells.Close();
-}
-
-// void WriteOneChunkAndClose(RawWells &rawWells)
-// {
-//     rawWells.WriteWells();
-//     rawWells.Close();
-// }
-
-// our logic here:  either we are writing an entire chunk_depth
-// or we are writing to the end of the current block
-int FigureChunkDepth(int flow, int numFlows, int write_well_flow_interval)
-{
-  return(min (write_well_flow_interval,numFlows-flow));
-}
-
-bool NeedToOpenWellChunk(int flow, int write_well_flow_interval)
-{
-  return( flow % write_well_flow_interval==0);
-}
-
-
 

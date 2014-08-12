@@ -3,16 +3,14 @@
 #include "TreephaserSSE.h"
 
 #include <vector>
-#include <string>
 #include <algorithm>
 #include <math.h>
-#include <x86intrin.h>
 #include <cstring>
-#include <cstdio>
 #include <cassert>
 
-#include <fenv.h>
-
+#include <x86intrin.h>
+#include "BaseCallerUtils.h"
+#include "DPTreephaser.h"
 
 using namespace std;
 
@@ -191,6 +189,8 @@ inline void sumVectFloatSSE(float RESTRICT_PTR dst, float RESTRICT_PTR src, int 
 #endif
 }
 
+#ifdef __SSE__
+// Function for recalibrating single prediction flow 
 inline __m128 applyRecalModel(__m128 current_value, PathRec RESTRICT_PTR current_path, int i){
     __m128 rCoeffA = _mm_set1_ps(current_path->calib_A[i]);
     __m128 rCoeffB = _mm_set1_ps(current_path->calib_B[i]);
@@ -198,6 +198,9 @@ inline __m128 applyRecalModel(__m128 current_value, PathRec RESTRICT_PTR current
     current_value = _mm_add_ps(current_value, rCoeffB);
     return current_value;
 }
+#else
+#pragma message NO_SSE_MESSAGE
+#endif
 
 };
 
@@ -217,7 +220,7 @@ TreephaserSSE::TreephaserSSE(const ion::FlowOrder& flow_order, const int windowS
 	SetFlowOrder(flow_order, windowSize);
 }
 
-// --------------------------------
+// ----------------------------------------------------------------
 // Initilizes all float variables to NAN so that they cause mayhem if we read out of bounds
 // and so that valgrind does not complain about uninitialized variables
 void TreephaserSSE::InitializeVariables() {
@@ -273,8 +276,7 @@ void TreephaserSSE::InitializeVariables() {
 }
 
 
-
-// --------------------------------
+// ----------------------------------------------------------------
 
 // Initialize Object
 void TreephaserSSE::SetFlowOrder(const ion::FlowOrder& flow_order, const int windowSize)
@@ -322,21 +324,21 @@ void TreephaserSSE::SetFlowOrder(const ion::FlowOrder& flow_order, const int win
   
   // The initialization of the recalibration fields for all paths is necessary since we are
   // over-running memory in the use of the recalibration parameters
-  for (int p = 0; p <= 8; ++p) {
-	setValueSSE(&(sv_PathPtr[p]->calib_A[0]), 1.0f, MAX_VALS);
-	setZeroSSE(&(sv_PathPtr[p]->calib_B[0]), MAX_VALS*sizeof(float));
-  }
+  ResetRecalibrationStructures(MAX_VALS);
 
-  pm_model_available_          = false;
-  pm_model_enabled_            = false;
-  recalibrate_predictions_     = false;
-  retain_recalibration_values_ = false;
-  state_inphase_enabled_       = false;
+  pm_model_available_              = false;
+  recalibrate_predictions_         = false;
+  state_inphase_enabled_           = false;
+  skip_recal_during_normalization_ = false;
 }
 
+// ----------------------------------------------------------------
 
 void TreephaserSSE::SetModelParameters(double cf, double ie)
 {
+  if (cf == my_cf_ and ie == my_ie_)
+    return;
+  
   double dist[4] = { 0.0, 0.0, 0.0, 0.0 };
 
   for(int flow = 0; flow < num_flows_; ++flow) {
@@ -350,25 +352,30 @@ void TreephaserSSE::SetModelParameters(double cf, double ie)
     ts_Transition4[flow][3] = ts_Transition[3][flow] = float(dist[3]*(1-ie));
     dist[3] *= cf;
   }
+  my_cf_ = cf;
+  my_ie_ = ie;
 }
 
-
+// ----------------------------------------------------------------
 
 void TreephaserSSE::NormalizeAndSolve(BasecallerRead& read)
 {
-  //retain_recalibration_values_ = false; // Idea to keep recal values inlast round of normalization
   copySSE(rd_NormMeasure, &read.raw_measurements[0], num_flows_*sizeof(float));
+  // Disable recalibration during normalization stage if requested
+  if (skip_recal_during_normalization_)
+    recalibrate_predictions_ = false;
+
   for(int step = 0; step < ts_StepCnt; ++step) {
-	//if (step == ts_StepCnt-1 and pm_model_available_)
-	//  retain_recalibration_values_ = true;
     bool is_final = Solve(ts_StepBeg[step], ts_StepEnd[step]);
     WindowedNormalize(read, step);
     if (is_final)
       break;
   }
-  if(pm_model_available_) pm_model_enabled_ = true;  
+
   //final stage of solve and calculate the state_inphase for QV prediction
   state_inphase_enabled_ = true;
+  // And turn recalibration back on (if available) for the final solving part
+  EnableRecalibration();
 
   Solve(ts_StepBeg[ts_StepCnt], ts_StepEnd[ts_StepCnt]);
 
@@ -381,27 +388,16 @@ void TreephaserSSE::NormalizeAndSolve(BasecallerRead& read)
   setZeroSSE(&read.state_inphase[0], num_flows_*sizeof(float));
   copySSE(&read.state_inphase[0], sv_PathPtr[MAX_PATHS]->state_inphase, to_flow*sizeof(float));
 
-  // This bit of code resets the memory for recalibration to the virgin state for the next use of the object
-  // --> important to cope with the memory overrun
-  // reset to 1 and zero for calib_A and calib_B as window_end will be larger than flow
-  if(pm_model_enabled_){
-    for (int p = 0; p <= 8; ++p) {
-      setValueSSE(&(sv_PathPtr[p]->calib_A[0]), 1.0f, num_flows_);
-      setZeroSSE(&(sv_PathPtr[p]->calib_B[0]), num_flows_*sizeof(float));
-    }
-  }
-  pm_model_enabled_ = false;
-  //reset state_inphase
+  // copy inphase population and reset state_inphase flag
   if(state_inphase_enabled_){
     for (int p = 0; p <= 8; ++p) {
       setZeroSSE(&(sv_PathPtr[p]->state_inphase[0]), num_flows_*sizeof(float));
     }
   }
   state_inphase_enabled_ = false;
-  //retain_recalibration_values_ = false;
 }
 
-
+// ----------------------------------------------------------------------
 
 // nextState is only used for the simulation step.
 
@@ -649,7 +645,8 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
     _mm_store_ps((float RESTRICT_PTR)(&(ad_Buf[j*4+AD_PRED_OFS])), rTemp1s);
 
     // apply recalibration model paramters to predicted signal if model is available
-    if(pm_model_enabled_ && parent->calib_B[i]){
+    // XXX Recalibration application in vectorized code
+    if(recalibrate_predictions_ && !((parent->calib_A[i]==1.0) && (parent->calib_B[i]==0.0))){
         rTemp1s = applyRecalModel(rTemp1s, parent, i);
     }
 
@@ -721,10 +718,10 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
       rTemp1s = _mm_add_ps(rTemp1s, rS);
 
       _mm_store_ps((float RESTRICT_PTR)(&(ad_Buf[j*4+AD_PRED_OFS])), rTemp1s);
-
-      if(pm_model_enabled_ && parent->calib_B[i]){ //disabling this makes difference
+      // XXX Recalibration application in vectorized code
+      if(recalibrate_predictions_ && !((parent->calib_A[i]==1.0) && (parent->calib_B[i]==0.0))){
           rTemp1s = applyRecalModel(rTemp1s, parent, i);
-       }
+      }
 
       rS = _mm_load_ss(&rd_NormMeasure[i]);
       rS = SHUF_PS(rS, _MM_SHUFFLE(0, 0, 0, 0));
@@ -770,7 +767,8 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
 
       _mm_store_ps((float RESTRICT_PTR)(&(ad_Buf[j*4+AD_PRED_OFS])), rTemp1s);  
 
-      if(pm_model_enabled_ && parent->calib_B[i]){
+      // XXX Recalibration application in vectorized code
+      if(recalibrate_predictions_ && !((parent->calib_A[i]==1.0) && (parent->calib_B[i]==0.0))){
           rTemp1s = applyRecalModel(rTemp1s, parent, i);
       }
 
@@ -827,8 +825,9 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
 
       _mm_store_ps((float RESTRICT_PTR)(&(ad_Buf[j*4+AD_PRED_OFS])), rS);
 
-      if(pm_model_enabled_ && parent->calib_B[i]){
-           rS = applyRecalModel(rS, parent, i);
+      // XXX Recalibration application in vectorized code
+      if(recalibrate_predictions_ && !((parent->calib_A[i]==1.0) && (parent->calib_B[i]==0.0))){
+            rS = applyRecalModel(rS, parent, i);
       }
 
       rTemp1s = _mm_load_ss(&rd_NormMeasure[i]);
@@ -905,7 +904,8 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
 
       _mm_store_ps((float RESTRICT_PTR)(&(ad_Buf[j*4+AD_PRED_OFS])), rTemp1s);
 
-      if(pm_model_enabled_ && parent->calib_B[i]){
+      // XXX Recalibration application in vectorized code
+      if(recalibrate_predictions_ && !((parent->calib_A[i]==1.0) && (parent->calib_B[i]==0.0))){
            rTemp1s = applyRecalModel(rTemp1s, parent, i);
       }
 
@@ -976,7 +976,8 @@ void TreephaserSSE::advanceState4(PathRec RESTRICT_PTR parent, int end)
 
       _mm_store_ps((float RESTRICT_PTR)(&(ad_Buf[j*4+AD_PRED_OFS])), rS);
 
-      if(pm_model_enabled_ && parent->calib_B[i]){
+      // XXX Recalibration application in vectorized code
+      if(recalibrate_predictions_ && !((parent->calib_A[i]==1.0) && (parent->calib_B[i]==0.0))){
            rS = applyRecalModel(rS, parent, i);
       }
 
@@ -1032,6 +1033,28 @@ void TreephaserSSE::sumNormMeasures() {
 
 // -------------------------------------------------
 
+void TreephaserSSE::RecalibratePredictions(PathRec *maxPathPtr)
+{
+  // Distort predictions according to recalibration model
+  int to_flow = min(maxPathPtr->flow+1, num_flows_);
+
+  for (int flow=0; flow<to_flow; flow++) {
+    maxPathPtr->pred[flow] =
+        maxPathPtr->pred[flow] * maxPathPtr->calib_A[flow]
+          + maxPathPtr->calib_B[flow];
+  }
+
+}
+
+void TreephaserSSE::ResetRecalibrationStructures(int num_flows) {
+  for (int p = 0; p <= 8; ++p) {
+    setValueSSE(&(sv_PathPtr[p]->calib_A[0]), 1.0f, num_flows_);
+	setZeroSSE(&(sv_PathPtr[p]->calib_B[0]), num_flows_*sizeof(float));
+  }
+}
+
+// --------------------------------------------------
+
 void TreephaserSSE::SolveRead(BasecallerRead& read, int begin_flow, int end_flow)
 {
   copySSE(rd_NormMeasure, &(read.normalized_measurements[0]), num_flows_*sizeof(float));
@@ -1041,30 +1064,7 @@ void TreephaserSSE::SolveRead(BasecallerRead& read, int begin_flow, int end_flow
 
   Solve(begin_flow, end_flow);
 
-  // Distort predictions according to recalibration model
-  int to_flow = min(sv_PathPtr[MAX_PATHS]->flow+1, num_flows_);
-  /* / --- Hard check on window end_flow
-  if (sv_PathPtr[MAX_PATHS]->window_end > num_flows_) {
-    cout << "Error in TreephaserSSE::SolveRead: window _end is larger than num_flows_!"  
-         << sv_PathPtr[MAX_PATHS]->window_end << " > " << num_flows_ << endl;
-    //exit(-1);
-  } //*/ // XXX
-  if (recalibrate_predictions_) {
-    for (int flow=0; flow<to_flow; flow++) {
-      sv_PathPtr[MAX_PATHS]->pred[flow] =
-          sv_PathPtr[MAX_PATHS]->pred[flow] * sv_PathPtr[MAX_PATHS]->calib_A[flow]
-            + sv_PathPtr[MAX_PATHS]->calib_B[flow];
-    }
-  }
-  // And reset recal model for memory overrun and next use
-  if(pm_model_enabled_){
-    for (int p = 0; p <= 8; ++p) {
-      setValueSSE(&(sv_PathPtr[p]->calib_A[0]), 1.0f, num_flows_);
-      setZeroSSE(&(sv_PathPtr[p]->calib_B[0]), num_flows_*sizeof(float));
-    }
-  }
-
-  to_flow = min(sv_PathPtr[MAX_PATHS]->window_end, num_flows_);
+  int to_flow = min(sv_PathPtr[MAX_PATHS]->window_end, num_flows_);
   read.sequence.resize(sv_PathPtr[MAX_PATHS]->sequence_length);
   copySSE(&(read.sequence[0]), sv_PathPtr[MAX_PATHS]->sequence, sv_PathPtr[MAX_PATHS]->sequence_length*sizeof(char));
   copySSE(&(read.normalized_measurements[0]), rd_NormMeasure, num_flows_*sizeof(float));
@@ -1092,12 +1092,6 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
   parent->sequence_length = 0;
   parent->last_hp = 0;
   parent->pred[0] = 0.0f;
-  //setZeroSSE(parent->pred, num_flows_*sizeof(float));
-  // Reset done for all paths in the parent functions of Solve.
-  //if(pm_model_enabled_) {
-  //  setValueSSE(parent->calib_A, 1.0f, num_flows_);
-  //  setZeroSSE(parent->calib_B, num_flows_*sizeof(float));
-  //}
 
   int pathCnt = 1;
   float bestDist = 1e20;
@@ -1128,9 +1122,8 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
         }
         parent->pred[k] += parent->state[k];
       }
-      // Recalibration part of the initial simulation
-      // XXX Test: Always log recalibration coefficients for simulation part
-      if(pm_model_available_) {
+      // Recalibration part of the initial simulation: log coefficients for simulation part
+      if(recalibrate_predictions_) {
         parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
         parent->calib_B[parent->flow] = (*Bs_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
       }
@@ -1246,13 +1239,12 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
       float newSignal = rd_NormMeasure[child->flow];
       
       // XXX Right here we are having a memory overrun: We copied up to parent->flow but use until parent->window_end
+      // Check 'dot' criterion
       if(child->flow < parent->window_end){
-          if(!pm_model_enabled_)
-            newSignal -= parent->pred[child->flow];
-          else{
-            newSignal -= (parent->calib_A[child->flow]*parent->pred[child->flow]+parent->calib_B[child->flow]);
-          }
-
+        if (recalibrate_predictions_)
+          newSignal -= (parent->calib_A[child->flow]*parent->pred[child->flow]+parent->calib_B[child->flow]);
+        else
+          newSignal -= parent->pred[child->flow];
       }
       newSignal /= *((float RESTRICT_PTR)(pn+child->flow*16+(AD_STATE_OFS-AD_NRES_OFS+16)));
       child->dotCnt = 0;
@@ -1269,22 +1261,28 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
       ++n;
     }
 
+    // XXX Right here we are having a memory overrun: We copied up to parent->flow but use until parent->window_end of calibA and calibB
     // Computing squared distance between parent's predicted signal and normalized measurements
-     // XXX Right here we are having a memory overrun: We copied up to parent->flow but use until parent->window_end of calibA and calibB
     float dist = parent->res+(rd_SqNormMeasureSum[parent->window_end]-rd_SqNormMeasureSum[end_flow]);
     for(int i = parent->window_start; i < parent->window_end; ++i) {
       if((i & 3) == 0) {
-          if(!pm_model_enabled_)
-              dist += sumOfSquaredDiffsFloatSSE((float RESTRICT_PTR)(&(rd_NormMeasure[i])), (float RESTRICT_PTR)(&(parent->pred[i])), parent->window_end-i);
-          else
-              dist += sumOfSquaredDiffsFloatSSE_recal((float RESTRICT_PTR)(&(rd_NormMeasure[i])),
-                                                      (float RESTRICT_PTR)(&(parent->pred[i])), (float RESTRICT_PTR)(&(parent->calib_A[i])), (float RESTRICT_PTR)(&(parent->calib_B[i])), parent->window_end-i);
+        if (recalibrate_predictions_) {
+          dist += sumOfSquaredDiffsFloatSSE_recal((float RESTRICT_PTR)(&(rd_NormMeasure[i])),
+                                                  (float RESTRICT_PTR)(&(parent->pred[i])),
+                                                  (float RESTRICT_PTR)(&(parent->calib_A[i])),
+                                                  (float RESTRICT_PTR)(&(parent->calib_B[i])),
+                                                   parent->window_end-i);
+        } else {
+          dist += sumOfSquaredDiffsFloatSSE((float RESTRICT_PTR)(&(rd_NormMeasure[i])),
+                                            (float RESTRICT_PTR)(&(parent->pred[i])),
+                                             parent->window_end-i);
+        }
         break;
       }
-      if(!pm_model_enabled_)
-          dist += Sqr(rd_NormMeasure[i]-parent->pred[i]);
+      if (recalibrate_predictions_)
+        dist += Sqr(rd_NormMeasure[i]-parent->pred[i]*parent->calib_A[i]-parent->calib_B[i]);
       else
-          dist += Sqr(rd_NormMeasure[i]-parent->pred[i]*parent->calib_A[i]-parent->calib_B[i]);
+        dist += Sqr(rd_NormMeasure[i]-parent->pred[i]);
     }
     // Finished computing squared distance
 
@@ -1325,8 +1323,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
         if(state_inphase_enabled_){
             if(child->flow > 0){
               int cpSize = (parent->flow+1)*sizeof(float);
-              //memcpy(child->state_inphase, parent->state_inphase, cpSize);
-              copySSE(child->state_inphase, parent->state_inphase, cpSize); // XXX
+              copySSE(child->state_inphase, parent->state_inphase, cpSize);
             }
             //extending from parent->state_inphase[parent->flow] to fill the gap
             for(int tempInd = parent->flow; tempInd <= child->flow; tempInd++){
@@ -1342,9 +1339,9 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
           child->last_hp = parent->last_hp;
         child->last_hp++;
 
-        // copy whole vector to avoid memory access to fields that have been written to by (longer) previously discarded paths
-        // --> Reintroducing memory overrun since it seems to yield better performance in this mess of a model
-        if (pm_model_available_ and (pm_model_enabled_ or retain_recalibration_values_)) {
+        // copy whole vector to avoid memory access to fields that have been written to by (longer) previously discarded paths XXX
+        // --> Reintroducing memory overrun since it seems to yield better performance
+        if (recalibrate_predictions_) {
           if(child->flow > 0){
             // --- Reverting to old code with memory overrun
             int cpSize = (parent->flow+1) << 2;
@@ -1359,8 +1356,9 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
             child->calib_A[tempInd] = 1.0f;
             child->calib_B[tempInd] = 0.0f;
           }
-          child->calib_A[child->flow] = (*As_).at(child->flow).at(flow_order_.int_at(child->flow)).at(child->last_hp);
-          child->calib_B[child->flow] = (*Bs_).at(child->flow).at(flow_order_.int_at(child->flow)).at(child->last_hp);
+          int hp_length = min(child->last_hp, MAX_HPXLEN);
+          child->calib_A[child->flow] = (*As_).at(child->flow).at(flow_order_.int_at(child->flow)).at(hp_length);
+          child->calib_B[child->flow] = (*Bs_).at(child->flow).at(flow_order_.int_at(child->flow)).at(hp_length);
         }
         ++pathCnt;
       }
@@ -1388,8 +1386,8 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
       parent->last_hp++;
       parent->sequence_length++;
 
-      //update calib_A and calib_B
-      if (pm_model_available_ and (pm_model_enabled_ or retain_recalibration_values_)) {
+      //update calib_A and calib_B for parent
+      if (recalibrate_predictions_) {
         // This for-loop should not be necessary if the arrays where copied properly
         for(int tempInd = parent->flow + 1; tempInd < child->flow; tempInd++){
           child->calib_A[tempInd] = 1.0f;
@@ -1422,6 +1420,12 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
 
   } while(pathCnt > 0);
 
+  // At the end change predictions according to recalibration model and reset data structures
+  if (recalibrate_predictions_) {
+    RecalibratePredictions(sv_PathPtr[MAX_PATHS]);
+    ResetRecalibrationStructures(end_flow);
+  }
+
   return false;
 }
 
@@ -1452,6 +1456,7 @@ void TreephaserSSE::WindowedNormalize(BasecallerRead& read, int num_steps)
         median_set[median_set_size++] = read.raw_measurements[estim_flow] - sv_PathPtr[MAX_PATHS]->pred[estim_flow];
 
     if (median_set_size > 5) {
+      //cout << step << ":" << median_set_size << ":" << windowSize_ << endl;
       std::nth_element(median_set, median_set + median_set_size/2, median_set + median_set_size);
       next_normalizer = median_set[median_set_size / 2];
       if (step == 0)
@@ -1461,6 +1466,7 @@ void TreephaserSSE::WindowedNormalize(BasecallerRead& read, int num_steps)
     float delta = (next_normalizer - normalizer) / static_cast<float>(windowSize_);
 
     for (; apply_flow < window_middle and apply_flow < num_flows_; ++apply_flow) {
+      //cout << apply_flow << ":" << window_middle << ":" << num_flows_ << endl;
       rd_NormMeasure[apply_flow] = read.raw_measurements[apply_flow] - normalizer;
       read.additive_correction[apply_flow] = normalizer;
       normalizer += delta;
@@ -1557,6 +1563,11 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
 
       int called_nuc = 0;
 
+      if(recalibrate_predictions_) {
+        parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
+        parent->calib_B[parent->flow] = (*Bs_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
+      }
+
       // compute child path flow states, predicted signal,negative and positive penalties
       advanceState4(parent, flow_order_.num_flows());
 
@@ -1637,6 +1648,10 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
     read.state_total[solution_flow] = max(recent_state_total, 0.01f);
   }
 
+  if(recalibrate_predictions_) {
+    RecalibratePredictions(parent);
+    ResetRecalibrationStructures(num_flows_);
+  }
   setZeroSSE(&read.prediction[0], num_flows_*sizeof(float));
   copySSE(&read.prediction[0], parent->pred, parent->window_end*sizeof(float));
 }

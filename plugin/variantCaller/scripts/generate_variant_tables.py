@@ -69,7 +69,12 @@ def write_alleles2_line(fid, **kwargs):
     fid.write(('Context Error-'         if header else allele['sse_minus'])             + '\t')
     fid.write(('Filter'                 if header else allele['sse_minus_filter'])      + '\t')
     fid.write(('Context Strand Bias'    if header else allele['sssb'])                  + '\t')
-    fid.write(('Filter'                 if header else allele['sssb_filter'])           + '\n')
+    fid.write(('Filter'                 if header else allele['sssb_filter'])           + '\t')
+    
+    # More fields to aid dealing with multiple samples
+    fid.write(('Sample Name'            if header else allele['sample'])                + '\t')
+    fid.write(('Barcode'                if header else allele['barcode'])               + '\t')
+    fid.write(('Run Name'               if header else allele['run_name'])              + '\n')
 
 
                     
@@ -98,11 +103,13 @@ def main():
     parser = OptionParser()
     parser.add_option('-i', '--input-vcf',      help='Input vcf file to be sorted', dest='input') 
     parser.add_option('-r', '--region-bed',     help='Region bed file (optional)', dest='region') 
+    parser.add_option('-B', '--barcode',        help='Barcode name (optional)', dest='barcode')
+    parser.add_option('-R', '--run-name',       help='Run name (optional)', dest='run_name')
     parser.add_option('-s', '--hotspots',       help='Generate hotspot ID column', dest='hotspot', action="store_true", default=False)
     parser.add_option('-o', '--output-xls',     help='Variant table tab-delimited file', dest='output')
     parser.add_option('-a', '--alleles-xls',    help='Alleles table tab-delimited file', dest='alleles')
     parser.add_option('-b', '--alleles2-xls',   help='Extended alleles table tab-delimited file', dest='alleles2')
-    parser.add_option('-c', '--chromosome-png', help='Bar plot of # variants per chromosome', dest='chrom_png')
+    parser.add_option('-c', '--concatenated-xls', help='Concatenated alleles table', dest='concatenated_xls')
     parser.add_option('-S', '--scatter-png',    help='Scatterplot of coverage vs. frequency for variants', dest='scatter_png')
     parser.add_option('-j', '--summary-json',   help='Variant summary in json file', dest='summary')
     (options, args) = parser.parse_args()
@@ -165,6 +172,12 @@ def main():
     if options.alleles2:
         alleles2_xls = open(options.alleles2,'w')
         write_alleles2_line(alleles2_xls,header=True)
+
+    if options.concatenated_xls:
+        skip_header = os.path.exists(options.concatenated_xls)
+        concatenated_xls = open(options.concatenated_xls,'a')
+        if not skip_header:
+            write_alleles2_line(concatenated_xls,header=True)
 
     observed_chr_order = []
     chr_calls_total = {}
@@ -285,7 +298,7 @@ def main():
             if list_pos >= 0 and int(pos) <= region_end[chr][list_pos]:
                 (region_id,gene_name) = region_ids[chr][list_pos]
                     
-       # get the vairiant ploidy
+        # get the vairiant ploidy
         genotype = format.get('GT','./.')
         genotype_parts = genotype.split('/')
         
@@ -359,12 +372,10 @@ def main():
         output_xls.write("%s\t%s\t" % (fields[3],fields[4])) # Ref, Variant
         output_xls.write("%s\t%s\t%s\t%s\t%s" % (sum(var_freq2),qual,total_cov2,FRO,sum(FAO)))
         
-        is_hotspot = 0
         if options.hotspot:
             hotspot_annotation = id
             if hotspot_annotation != '.':
                 output_xls.write("\t"+hotspot_annotation)
-                is_hotspot = 1
             else:
                 output_xls.write("\t---")
         
@@ -382,6 +393,9 @@ def main():
                 continue
             idx = alt.index(omapalt)
 
+            if oid == '.' and genotype1_int != (idx+1) and genotype2_int != (idx+1):
+                continue
+
             allele = {}
             allele['chrom']             = chr
             allele['pos']               = opos
@@ -395,6 +409,10 @@ def main():
             allele['gene']              = gene_name
             allele['submitted_region']  = region_id
             allele['qual']              = qual
+            
+            allele['sample']            = summary_json.get('sample_name','N/A')
+            allele['barcode']           = options.barcode if options.barcode else 'N/A'
+            allele['run_name']          = options.run_name if options.run_name else 'N/A'
 
 
             ref_len = len(oref.strip('-'))
@@ -559,52 +577,64 @@ def main():
             if options.alleles2:
                 write_alleles2_line(alleles2_xls,data=allele)
             
+            if options.concatenated_xls:
+                write_alleles2_line(concatenated_xls,data=allele)
         
+            
         
-        if chr not in observed_chr_order:
-            observed_chr_order.append(chr)
-            chr_calls_total[chr] = 0
-            chr_calls_het_snp[chr] = 0
-            chr_calls_hom_snp[chr] = 0
-            chr_calls_het_indel[chr] = 0
-            chr_calls_hom_indel[chr] = 0
-            chr_calls_other[chr] = 0
-            chr_calls_none[chr] = 0
-        
-        if ploidy == 'Het' and variant_type == 'SNP':
-            chr_calls_total[chr] += 1
-            hotspot_total += is_hotspot
-            chr_calls_het_snp[chr] += 1
-            hotspot_het_snp += is_hotspot
-        elif ploidy == 'Hom' and variant_type == 'SNP':
-            chr_calls_total[chr] += 1
-            hotspot_total += is_hotspot
-            chr_calls_hom_snp[chr] += 1
-            hotspot_hom_snp += is_hotspot
-        elif ploidy == 'Het' and variant_type in ['INS','DEL']:
-            chr_calls_total[chr] += 1
-            hotspot_total += is_hotspot
-            chr_calls_het_indel[chr] += 1
-            hotspot_het_indel += is_hotspot
-        elif ploidy == 'Hom' and variant_type in ['INS','DEL']:
-            chr_calls_total[chr] += 1
-            hotspot_total += is_hotspot
-            chr_calls_hom_indel[chr] += 1
-            hotspot_hom_indel += is_hotspot
-        elif ploidy == 'Ref' or ploidy == 'NC':
-            chr_calls_none[chr] += 1
-            hotspot_none += is_hotspot
-        else:
-            chr_calls_total[chr] += 1
-            hotspot_total += is_hotspot
-            chr_calls_other[chr] += 1
-            hotspot_other += is_hotspot
+            if chr not in observed_chr_order:
+                observed_chr_order.append(chr)
+                chr_calls_total[chr] = 0
+                chr_calls_het_snp[chr] = 0
+                chr_calls_hom_snp[chr] = 0
+                chr_calls_het_indel[chr] = 0
+                chr_calls_hom_indel[chr] = 0
+                chr_calls_other[chr] = 0
+                chr_calls_none[chr] = 0
+            
+            if allele['call'] == 'Heterozygous' and allele['type'] == 'SNP':
+                chr_calls_total[chr] += 1
+                chr_calls_het_snp[chr] += 1
+                if oid != '.':
+                    hotspot_total += 1
+                    hotspot_het_snp += 1
+            elif allele['call'] == 'Homozygous' and allele['type'] == 'SNP':
+                chr_calls_total[chr] += 1
+                chr_calls_hom_snp[chr] += 1
+                if oid != '.':
+                    hotspot_total += 1
+                    hotspot_hom_snp += 1
+            elif allele['call'] == 'Heterozygous' and allele['type'] in ['INS','DEL']:
+                chr_calls_total[chr] += 1
+                chr_calls_het_indel[chr] += 1
+                if oid != '.':
+                    hotspot_total += 1
+                    hotspot_het_indel += 1
+            elif allele['call'] == 'Homozygous' and allele['type'] in ['INS','DEL']:
+                chr_calls_total[chr] += 1
+                chr_calls_hom_indel[chr] += 1
+                if oid != '.':
+                    hotspot_total += 1
+                    hotspot_hom_indel += 1
+            elif allele['call'] == 'Absent' or allele['call'] == 'No Call':
+                chr_calls_none[chr] += 1
+                if oid != '.':
+                    hotspot_none += 1
+            else:
+                chr_calls_total[chr] += 1
+                chr_calls_other[chr] += 1
+                if oid != '.':
+                    hotspot_total += 1
+                    hotspot_other += 1
+            
             
     input_vcf.close()
     output_xls.close()
     if options.alleles2:
         alleles2_xls.close()
 
+    if options.concatenated_xls:
+        concatenated_xls.close()
 
     for chr in observed_chr_order:
         summary_json['variants_total']['variants']      += chr_calls_total[chr]

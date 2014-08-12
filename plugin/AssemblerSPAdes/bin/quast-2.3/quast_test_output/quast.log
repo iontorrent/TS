@@ -1,0 +1,167 @@
+/results/plugins/AssemblerSPAdes/quast-2.3/quast.py --test
+
+Version 2.3, build 28.02.2014 16:10
+
+System information:
+  OS: Linux-2.6.32-21-server-x86_64-with-Ubuntu-10.04-lucid (linux_64)
+  Python version: 2.6.5
+  CPUs number: 24
+
+Started: 2014-04-29 15:16:26
+
+Logging to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/quast.log
+
+NOTICE: Maximum number of threads is set to 24 (use --threads option to set it manually)
+
+Reference:
+  test_data/reference.fasta.gz ==> reference
+
+Contigs:
+  test_data/contigs_1.fasta ==> contigs_1
+  test_data/contigs_2.fasta ==> contigs_2
+WARNING: matplotlib version is rather old! Please use matplotlib version 1.0 or higher for better results.
+
+2014-04-29 15:16:28
+Running Basic statistics processor...
+  Reference genome:
+    reference.fasta, Reference length = 10000, Reference GC % = 52.07
+  Contig files: 
+    1  contigs_1
+    2  contigs_2
+  Calculating N50 and L50...
+    1  contigs_1, N50 = 3980, L50 = 1, Total length = 6710, GC % = 51.28, # N's per 100 kbp =  0.00
+    2  contigs_2, N50 = 3360, L50 = 1, Total length = 5460, GC % = 52.44, # N's per 100 kbp =  0.00
+  Drawing cumulative plot...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/basic_stats/cumulative_plot.pdf
+  Drawing GC content plot...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/basic_stats/GC_content_plot.pdf
+  Drawing Nx plot...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/basic_stats/Nx_plot.pdf
+  Drawing NGx plot...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/basic_stats/NGx_plot.pdf
+Done.
+
+2014-04-29 15:16:29
+Running Contig analyzer...
+Compiling MUMmer (details are in /results/plugins/AssemblerSPAdes/quast-2.3/libs/MUMmer3.23-linux/make.log and make.err)
+make -C libs/MUMmer3.23-linux > libs/MUMmer3.23-linux/make.log 2> libs/MUMmer3.23-linux/make.err
+  1  contigs_1
+  2  contigs_2
+  2  Logging to files /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/contigs_report_contigs_2.stdout and contigs_report_contigs_2.stderr...
+  1  Logging to files /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/contigs_report_contigs_1.stdout and contigs_report_contigs_1.stderr...
+  2  Running Nucmer
+  1  Running Nucmer
+  2  libs/MUMmer3.23-linux/nucmer -c 65 -l 65 --maxmatch -p quast_test_output/contigs_reports/nucmer_output/contigs_2 \
+     quast_test_output/quast_corrected_input/reference.fasta quast_test_output/quast_corrected_input/contigs_2.fasta \
+     >> quast_test_output/contigs_reports/contigs_report_contigs_2.stdout 2>> quast_test_output/contigs_reports/contigs_report_contigs_2.stderr
+  1  libs/MUMmer3.23-linux/nucmer -c 65 -l 65 --maxmatch -p quast_test_output/contigs_reports/nucmer_output/contigs_1 \
+     quast_test_output/quast_corrected_input/reference.fasta quast_test_output/quast_corrected_input/contigs_1.fasta \
+     >> quast_test_output/contigs_reports/contigs_report_contigs_1.stdout 2>> quast_test_output/contigs_reports/contigs_report_contigs_1.stderr
+  1  libs/MUMmer3.23-linux/delta-filter -i 95 quast_test_output/contigs_reports/nucmer_output/contigs_1.delta \
+     > quast_test_output/contigs_reports/nucmer_output/contigs_1.fdelta 2> quast_test_output/contigs_reports/contigs_report_contigs_1.stderr
+  2  libs/MUMmer3.23-linux/delta-filter -i 95 quast_test_output/contigs_reports/nucmer_output/contigs_2.delta \
+     > quast_test_output/contigs_reports/nucmer_output/contigs_2.fdelta 2> quast_test_output/contigs_reports/contigs_report_contigs_2.stderr
+  1  libs/MUMmer3.23-linux/show-coords quast_test_output/contigs_reports/nucmer_output/contigs_1.delta \
+     > quast_test_output/contigs_reports/nucmer_output/contigs_1.coords_tmp 2> quast_test_output/contigs_reports/contigs_report_contigs_1.stderr
+  2  libs/MUMmer3.23-linux/show-coords quast_test_output/contigs_reports/nucmer_output/contigs_2.delta \
+     > quast_test_output/contigs_reports/nucmer_output/contigs_2.coords_tmp 2> quast_test_output/contigs_reports/contigs_report_contigs_2.stderr
+  1  libs/MUMmer3.23-linux/show-snps -S -T -H quast_test_output/contigs_reports/nucmer_output/contigs_1.delta \
+     < quast_test_output/contigs_reports/nucmer_output/contigs_1.coords.headless > \
+     quast_test_output/contigs_reports/nucmer_output/contigs_1.all_snps 2> quast_test_output/contigs_reports/contigs_report_contigs_1.stderr
+  2  libs/MUMmer3.23-linux/show-snps -S -T -H quast_test_output/contigs_reports/nucmer_output/contigs_2.delta \
+     < quast_test_output/contigs_reports/nucmer_output/contigs_2.coords.headless > \
+     quast_test_output/contigs_reports/nucmer_output/contigs_2.all_snps 2> quast_test_output/contigs_reports/contigs_report_contigs_2.stderr
+  1  Alignments: quast_test_output/contigs_reports/alignments_contigs_1.tsv
+  2  Alignments: quast_test_output/contigs_reports/alignments_contigs_2.tsv
+  1  Analysis is finished.
+
+  2  Analysis is finished.
+
+  Creating total report...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/misassemblies_report.txt, misassemblies_report.tsv, and misassemblies_report.tex
+  Creating total report...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/contigs_reports/unaligned_report.txt, unaligned_report.tsv, and unaligned_report.tex
+Done.
+
+2014-04-29 15:16:50
+Running NA-NGA calculation...
+  1  contigs_1, Largest alignment = 2030, NA50 = 1950, NGA50 = 1610, LA50 = 2, LGA50 = 3
+  2  contigs_2, Largest alignment = 2100, NA50 = 1470, NGA50 = 700, LA50 = 2, LGA50 = 4
+  Drawing cumulative plot...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/aligned_stats/cumulative_plot.pdf
+  Drawing NAx plot...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/aligned_stats/NAx_plot.pdf
+  Drawing NGAx plot...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/aligned_stats/NGAx_plot.pdf
+Done.
+
+2014-04-29 15:16:50
+Running Genome analyzer...
+  Loaded 10 genes
+  Loaded 2 operons
+  1  contigs_1
+  2  contigs_2
+  1  Analysis is finished.
+  2  Analysis is finished.
+  Drawing genes cumulative plot...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/genome_stats/genes_cumulative_plot.pdf
+  Drawing # complete genes histogram...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/genome_stats/complete_genes_histogram.pdf
+  Drawing operons cumulative plot...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/genome_stats/operons_cumulative_plot.pdf
+  Drawing # complete operons histogram...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/genome_stats/complete_operons_histogram.pdf
+  Drawing Genome fraction, % histogram...
+    saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/genome_stats/genome_fraction_histogram.pdf
+Done.
+
+2014-04-29 15:16:51
+Running GlimmerHMM...
+Compiling GlimmerHMM...
+    make -C libs/glimmer/src > libs/glimmer/src/make.log 2> libs/glimmer/src/make.err
+  1  contigs_1
+  2  contigs_2
+  2    libs/glimmer/glimmerhmm quast_test_output/predicted_genes/tmp/tmpxyuFCO/contig1.fasta \
+       -d libs/glimmer/trained/arabidopsis -g -o quast_test_output/predicted_genes/tmp/tmpxyuFCO/contig1.gff \
+       >> quast_test_output/predicted_genes/contigs_2_glimmer.stderr 2>> quast_test_output/predicted_genes/contigs_2_glimmer.stderr
+  1    libs/glimmer/glimmerhmm quast_test_output/predicted_genes/tmp/tmpRZgfk3/contig1.fasta \
+       -d libs/glimmer/trained/arabidopsis -g -o quast_test_output/predicted_genes/tmp/tmpRZgfk3/contig1.gff \
+       >> quast_test_output/predicted_genes/contigs_1_glimmer.stderr 2>> quast_test_output/predicted_genes/contigs_1_glimmer.stderr
+  1    libs/glimmer/glimmerhmm quast_test_output/predicted_genes/tmp/tmpRZgfk3/contig2.fasta \
+       -d libs/glimmer/trained/arabidopsis -g -o quast_test_output/predicted_genes/tmp/tmpRZgfk3/contig2.gff \
+       >> quast_test_output/predicted_genes/contigs_1_glimmer.stderr 2>> quast_test_output/predicted_genes/contigs_1_glimmer.stderr
+  2    libs/glimmer/glimmerhmm quast_test_output/predicted_genes/tmp/tmpxyuFCO/contig2.fasta \
+       -d libs/glimmer/trained/arabidopsis -g -o quast_test_output/predicted_genes/tmp/tmpxyuFCO/contig2.gff \
+       >> quast_test_output/predicted_genes/contigs_2_glimmer.stderr 2>> quast_test_output/predicted_genes/contigs_2_glimmer.stderr
+  1    libs/glimmer/glimmerhmm quast_test_output/predicted_genes/tmp/tmpRZgfk3/contig3.fasta \
+       -d libs/glimmer/trained/arabidopsis -g -o quast_test_output/predicted_genes/tmp/tmpRZgfk3/contig3.gff \
+       >> quast_test_output/predicted_genes/contigs_1_glimmer.stderr 2>> quast_test_output/predicted_genes/contigs_1_glimmer.stderr
+  2    Genes = 6 unique, 6 total
+  2    Predicted genes (GFF): /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/predicted_genes/contigs_2_glimmer_genes.gff
+  1    Genes = 7 unique, 7 total
+  1    Predicted genes (GFF): /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/predicted_genes/contigs_1_glimmer_genes.gff
+Done.
+
+2014-04-29 15:16:53
+Drawing large plots...
+This may take a while: press Ctrl-C to skip this step..
+  1 of 2: Creating contig alignment plot...
+  2 of 2: Creating PDF with all tables and plots...
+Done
+
+2014-04-29 15:16:54
+RESULTS:
+  Text versions of total report are saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/report.txt, report.tsv, and report.tex
+  Text versions of transposed total report are saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/transposed_report.txt, transposed_report.tsv, and transposed_report.tex
+  HTML version (interactive tables and plots) saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/report.html
+  PDF version (tables and plots) saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/report.pdf
+  Contig alignment plot: /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/alignment.svg
+  Log saved to /results/plugins/AssemblerSPAdes/quast-2.3/quast_test_output/quast.log
+
+Finished: 2014-04-29 15:16:54
+Elapsed time: 0:00:28.196570
+NOTICEs: 1; WARNINGs: 1; non-fatal ERRORs: 0
+
+Thank you for using QUAST!
+
+TEST PASSED with WARNINGS!

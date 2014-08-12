@@ -12,7 +12,6 @@
 #include "GridMesh.h"
 #include "AvgKeyReporter.h"
 #include "IonErr.h"
-#define KEY_SAMPLE_SIZE 1000
 
 template <class T>
 class KeyRegionSummary {
@@ -22,53 +21,44 @@ public:
     mSampleSize = sampSize;
   }
   
-  void Init(int nRows, int nCols, int rowStep, int colStep, const KeySeq &key) {
+  void Init(int nRows, int nCols, int nFrames, int rowStep, int colStep, const KeySeq &key) {
     mKey = key;
     mGlobalTraces.resize(key.usableKeyFlows);
+    mGlobalWeight = 0;
+    for (size_t i = 0; i < mGlobalTraces.size(); i++) {
+      mGlobalTraces[i].resize(nFrames);
+      for (size_t fIx = 0; fIx < mGlobalTraces[i].size(); fIx++) {
+        std::fill(mGlobalTraces[i].begin(), mGlobalTraces[i].end(), 0.0f);
+      }
+    }
+  }
+
+  void Report(EvaluateKey &evaluator, int keyIx) {
+    int flowFrameStride = evaluator.m_num_flows * evaluator.m_num_frames;
+    int keyOffset = keyIx * flowFrameStride;
+    mGlobalWeight += evaluator.m_key_counts[keyIx];
+    for (size_t frameIx = 0; frameIx < evaluator.m_num_frames; frameIx++) {
+      for (size_t flowIx = 0; flowIx < evaluator.m_num_flows; flowIx++) {        
+        mGlobalTraces[flowIx][frameIx] += (evaluator.m_flow_key_avg[keyOffset + flowIx * evaluator.m_num_frames + frameIx] * evaluator.m_key_counts[keyIx]);
+      }
+    }
   }
 
   void Report(const KeyFit &fit, 
               const Mat<T> &wellFlows,
               const Mat<T> &refFlows,
               const Mat<T> &predicted) {
-    for (size_t flowIx = 0; flowIx < mGlobalTraces.size() && flowIx < wellFlows.n_cols; flowIx++) {
-      if (mGlobalTraces[flowIx].size() == 0 && wellFlows.n_rows > 0) {
-        if (mGlobalTraces[flowIx].size() > 0) {
-          ION_ABORT("Shouldn't have different sizes.");
-        }
-        mGlobalTraces[flowIx].resize(wellFlows.n_rows);
-        for (size_t i = 0; i < mGlobalTraces[flowIx].size(); i++) {
-          mGlobalTraces[flowIx][i].Init(mSampleSize);
-        }
-      }
-      size_t size = min(mGlobalTraces[flowIx].size(), (size_t)wellFlows.n_rows);
-      for (size_t frameIx = 0; frameIx < size; frameIx++) {
-        float d = wellFlows.at(frameIx,flowIx) - predicted.at(frameIx,flowIx);
-        mGlobalTraces[flowIx][frameIx].AddValue(d);
-      }
-    }
   }
 
   void Finish() {
     mGlobalAvg.resize(mGlobalTraces.size());
-    for (size_t flowIx = 0; flowIx < mGlobalTraces.size(); flowIx++) {
-      if (mGlobalAvg[flowIx].empty()) {
-        size_t maxSize = 0;
-        for (size_t i = 0; i < mGlobalTraces.size(); i++) {
-          maxSize = max(mGlobalTraces[i].size(),maxSize);
-        }
-        mGlobalAvg[flowIx].resize(maxSize);
-        for (size_t frameIx = 0; frameIx < mGlobalAvg[flowIx].size(); frameIx++) {
-          if (mGlobalTraces[flowIx][frameIx].GetNumSeen() > 10) {
-            mGlobalAvg[flowIx][frameIx].AddValue(mGlobalTraces[flowIx][frameIx].GetMedian());
-          }
-        }
+    for (size_t flowIx = 0; flowIx < mGlobalTraces.size(); flowIx++) {        
+      mGlobalAvg[flowIx].resize(mGlobalTraces[flowIx].size());
+      for (size_t frameIx = 0; frameIx < mGlobalTraces[flowIx].size(); frameIx++) {
+        mGlobalTraces[flowIx][frameIx] /= mGlobalWeight;
+        mGlobalAvg[flowIx][frameIx].AddValue(mGlobalTraces[flowIx][frameIx]);
       }
     }
-  }
-
-  double GetSD(int flowIx, int frameIx) {
-    return mGlobalTraces[flowIx][frameIx].GetIqrSd();
   }
 
   std::vector<SampleStats<T> > &GetFlowTrace(int flowIx) {
@@ -78,40 +68,52 @@ public:
 private:
   int mSampleSize;
   KeySeq mKey;
-  std::vector<std::vector<SampleQuantiles<float> > > mGlobalTraces;
+  std::vector<std::vector<double > > mGlobalTraces;
+  double mGlobalWeight;
   std::vector<std::vector<SampleStats<T> > > mGlobalAvg;
-  const static int mMinCount = 100;
 };
 
 template <class T>
 class KeySummaryReporter : public KeyReporter<T> {
   
 public:
+
+  KeySummaryReporter() { 
+    mFrames = 0;
+    pthread_mutex_init(&mLock, NULL);
+  }
+
+  ~KeySummaryReporter() {
+    pthread_mutex_destroy(&mLock);
+  }
   
   void Init(const std::string &flowOrder, const std::string &prefix, 
-            int nRows, int nCols,
+            int nRows, int nCols, int nFrames,
             int rowStep, int colStep, const std::vector<KeySeq> &keys) {
     mFlowOrder = flowOrder;
     mPrefix = prefix;
-    pthread_mutex_init(&mLock, NULL);
+    mFrames = nFrames;
+
     mKeyRegions.resize(keys.size());
     for (size_t i = 0; i < mKeyRegions.size(); i++) {
-      mKeyRegions[i].Init(nRows, nCols, rowStep, colStep, keys[i]);
-      
+      mKeyRegions[i].Init(nRows, nCols, nFrames, rowStep, colStep, keys[i]);
     }
     mKeys = keys;
     mMinPeakSig.resize(keys.size());
     std::fill(mMinPeakSig.begin(), mMinPeakSig.end(), std::numeric_limits<double>::max() * -1);
   }
 
-  ~KeySummaryReporter() {
-    pthread_mutex_destroy(&mLock);
-  }
-
   void SetMinKeyThreshold(int key, double val) {
     mMinPeakSig[key] = val;
   }
 
+  void Report(EvaluateKey &evaluator) {
+    pthread_mutex_lock(&mLock);
+    for (size_t keyIx = 0; keyIx < mKeys.size(); keyIx++) {
+      mKeyRegions[keyIx].Report(evaluator, keyIx);
+    }
+    pthread_mutex_unlock(&mLock);
+  }
   
   void Report(const KeyFit &fit, 
 	      const Mat<T> &wellFlows,
@@ -137,19 +139,13 @@ public:
       string file = mPrefix + "/avgNukeTrace_" + name + ".txt"; 
       ofstream avgTrace;
       avgTrace.open(file.c_str());
-      ofstream sdTrace;
-      file = mPrefix + "/sdNukeTrace_" + name + ".txt"; 
-      sdTrace.open(file.c_str());
       for (size_t flowIx = 0; flowIx < mKeys[keyIx].usableKeyFlows; flowIx++) {
         avgTrace << flowIx;
-        sdTrace << flowIx;
         std::vector<SampleStats<double> > &flowTrace = mKeyRegions[keyIx].GetFlowTrace(flowIx);
         for (size_t frameIx = 0; frameIx < flowTrace.size(); frameIx++) {
           avgTrace << " " << flowTrace[frameIx].GetMean();
-          sdTrace << " " << mKeyRegions[keyIx].GetSD(flowIx, frameIx);
         }
         avgTrace << endl;
-        sdTrace << endl;
       }
       vector<int> seen(mKeys[keyIx].flows.size(), 0);
       for (size_t flowIx = 0; flowIx < mKeys[keyIx].flows.size(); flowIx++) {
@@ -175,10 +171,13 @@ public:
   }
 
 private:
+  ION_DISABLE_COPY_ASSIGN(KeySummaryReporter)
+
   std::string mFlowOrder;
   std::vector<KeyRegionSummary<T> > mKeyRegions;
   std::vector<double> mMinPeakSig;
   std::string mPrefix;
+  int mFrames;
   std::vector<KeySeq> mKeys;
   pthread_mutex_t mLock;  
 };

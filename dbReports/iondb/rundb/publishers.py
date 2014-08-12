@@ -401,6 +401,14 @@ def upload_status(request, contentupload_id, frame=False):
     
     logs = list(upload.logs.all())
     logs.sort(key=lambda x: x.timeStamp)
+
+    file_log = ""
+    try:
+        with open(os.path.dirname(upload.file_path)+"/publisher.log",'r') as f:
+            file_log = f.read()
+    except Exception as err:
+        #file_log = str(err)
+        pass
         
     upload_type = 'Target Regions'
     if upload.meta.get('hotspot',False):
@@ -467,6 +475,7 @@ def upload_status(request, contentupload_id, frame=False):
                 {"contentupload": upload,
                  "upload_name": os.path.basename(upload.file_path),
                  "logs" : logs,
+                 "file_log" : file_log,
                  "upload_type": upload_type,
                  "upload_date": upload_date,
                  "file_size_string": file_size_string,

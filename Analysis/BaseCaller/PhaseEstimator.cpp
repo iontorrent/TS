@@ -8,21 +8,20 @@
 #include <vector>
 #include <string>
 #include <cassert>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <fcntl.h>
+#include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "PhaseEstimator.h"
 #include "RawWells.h"
 #include "Mask.h"
 #include "IonErr.h"
 #include "DPTreephaser.h"
-#include "Utils.h"
+#include "BaseCallerUtils.h"
+
 
 #include <iostream>
-#include <fstream>
+//#include <fstream>
 
 
 void PhaseEstimator::PrintHelp()

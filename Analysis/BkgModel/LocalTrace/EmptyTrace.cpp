@@ -7,7 +7,7 @@
 #include "TraceClassifier.h"
 #include "Stats.h"
 
-EmptyTrace::EmptyTrace ( CommandLineOpts &clo )
+EmptyTrace::EmptyTrace ( const CommandLineOpts &clo )
 {
   imgFrames = 0;
   // imgCols = 0;
@@ -16,13 +16,13 @@ EmptyTrace::EmptyTrace ( CommandLineOpts &clo )
   neg_bg_buffers_slope = NULL;
   bg_buffers = NULL;
   bg_dc_offset = NULL;
-  numfb = 0;
+  scratch_size = 0;
   t0_mean = 0;
   nRef = -1;
   secondsPerFrame = 0;
   regionIndex = -1;
 
-  if ( clo.bkg_control.use_dud_and_empty_wells_as_reference )
+  if ( clo.bkg_control.trace_control.use_dud_and_empty_wells_as_reference )
     referenceMask = ( MaskType ) ( MaskReference | MaskDud );
   else
     referenceMask = MaskReference;
@@ -42,7 +42,7 @@ EmptyTrace::EmptyTrace ()  // needed for serialization
   neg_bg_buffers_slope = NULL;
   bg_buffers = NULL;
   bg_dc_offset = NULL;
-  numfb = 0;
+  scratch_size = 0;
   t0_mean = 0;
   nRef = -1;
   secondsPerFrame = 0;
@@ -59,16 +59,16 @@ EmptyTrace::EmptyTrace ()  // needed for serialization
   trace_used = false;
 }
 
-void EmptyTrace::Allocate ( int _numfb, int _imgFrames )
+void EmptyTrace::Allocate ( int global_flow_max, int _imgFrames )
 {
   // bg_buffers and neg_bg_buffers_slope
   // are contiguous arrays organized as a trace per flow in a block of flows
-  assert ( _numfb > 0 );
+  assert ( global_flow_max > 0 );
   assert ( _imgFrames > 0 );
   assert ( bg_buffers == NULL );  //logic only checked for one-time allocation
   assert ( neg_bg_buffers_slope == NULL );
   assert ( bg_dc_offset == NULL );
-  numfb = _numfb;
+  scratch_size = global_flow_max;
 
   imgFrames = _imgFrames;
 
@@ -77,10 +77,10 @@ void EmptyTrace::Allocate ( int _numfb, int _imgFrames )
 
 void EmptyTrace::AllocateScratch()
 {
-  bg_buffers  = new float [numfb*imgFrames];
-  neg_bg_buffers_slope  = new float [numfb*imgFrames];
-  bg_dc_offset = new float [numfb];
-  memset ( bg_dc_offset,0,sizeof ( float[numfb] ) );
+  bg_buffers  = new float [scratch_size*imgFrames];
+  neg_bg_buffers_slope  = new float [scratch_size*imgFrames];
+  bg_dc_offset = new float [scratch_size];
+  memset ( bg_dc_offset,0,sizeof ( float[scratch_size] ) );
 }
 
 EmptyTrace::~EmptyTrace()
@@ -118,12 +118,11 @@ void EmptyTrace::SavitskyGolayComputeSlope ( float *local_slope,float *source_va
 }
 
 
-void EmptyTrace::PrecomputeBackgroundSlopeForDeriv ( int flow )
+void EmptyTrace::PrecomputeBackgroundSlopeForDeriv ( int flow_buffer_index )
 {
   // calculate the slope of the background curve at every point
-  int iFlowBuffer = flowToBuffer ( flow );
-  float *bsPtr = &neg_bg_buffers_slope[iFlowBuffer*imgFrames];
-  float *bPtr  = &bg_buffers[iFlowBuffer*imgFrames];
+  float *bsPtr = &neg_bg_buffers_slope[flow_buffer_index*imgFrames];
+  float *bPtr  = &bg_buffers[flow_buffer_index*imgFrames];
 
   // expand into frames
   assert (secondsPerFrame > 0.0f);
@@ -160,7 +159,7 @@ void EmptyTrace::PrecomputeBackgroundSlopeForDeriv ( int flow )
 // move the average empty trace in flow so it has zero mean
 // for time points between t_start and t_end (units = frames, not seconds)
 // data in bg_buffers changes
-void EmptyTrace::RezeroReference ( float t_start, float t_end, int flow )
+void EmptyTrace::RezeroReference ( float t_start, float t_end, int flow_buffer_index )
 {
   if (t_start > t_end) {
     // code crashes unless t_start <= t_end
@@ -168,21 +167,19 @@ void EmptyTrace::RezeroReference ( float t_start, float t_end, int flow )
     t_end = t_start;
   }
 
-  int iFlowBuffer = flowToBuffer ( flow );
-
-  float *bPtr = &bg_buffers[iFlowBuffer*imgFrames];
+  float *bPtr = &bg_buffers[flow_buffer_index*imgFrames];
 
   float dc_zero = ComputeDcOffsetEmpty ( bPtr,t_start,t_end );
   for ( int pt = 0;pt < imgFrames;pt++ )
     bPtr[pt] -= dc_zero;
 
-  bg_dc_offset[iFlowBuffer] += dc_zero; // track this
+  bg_dc_offset[flow_buffer_index] += dc_zero; // track this
 }
 
-void EmptyTrace::RezeroReferenceAllFlows ( float t_start, float t_end )
+void EmptyTrace::RezeroReferenceAllFlows ( float t_start, float t_end, int flow_block_size )
 {
   // re-zero the traces in all flows
-  for ( int fnum=0; fnum<numfb; fnum++ )
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
     {
       RezeroReference ( t_start, t_end, fnum );
     }
@@ -224,19 +221,26 @@ float EmptyTrace::ComputeDcOffsetEmpty ( float *bPtr, float t_start, float t_end
   return ( dc_zero );
 }
 
-void EmptyTrace::GetShiftedBkg ( float tshift, TimeCompression &time_cp, float *bkg )
+void EmptyTrace::GetShiftedBkg ( 
+    float tshift, 
+    const TimeCompression &time_cp, 
+    float *bkg ,
+    int flow_block_size
+  ) const
 {
-  ShiftMe ( tshift, time_cp, bg_buffers, bkg );
+  ShiftMe ( tshift, time_cp, bg_buffers, bkg, flow_block_size );
 }
 
-void EmptyTrace::ShiftMe (float tshift, TimeCompression &time_cp, float *my_buff, float *out_buff)
+void EmptyTrace::ShiftMe (
+    float tshift, const TimeCompression &time_cp, const float *my_buff, float *out_buff,
+    int flow_block_size ) const
 {
-  for (int fnum=0;fnum<numfb;fnum++)
+  for (int fnum=0;fnum<flow_block_size;fnum++)
     {
       float *fbkg = out_buff + fnum*time_cp.npts();
-      float *bg = &my_buff[fnum*imgFrames];         // get ptr to start of neighbor background
+      const float *bg = &my_buff[fnum*imgFrames];         // get ptr to start of neighbor background
       memset (fbkg,0,sizeof (float[time_cp.npts()])); // on general principles
-      // fprintf(stdout, "tshift %f\n", tshift);
+      //fprintf(stdout, "tshift %f\n", tshift);
       
       for (int i=0;i < time_cp.npts();i++){
         // get the frame number of this data point (might be fractional because this point could be
@@ -254,19 +258,23 @@ void EmptyTrace::ShiftMe (float tshift, TimeCompression &time_cp, float *my_buff
     }
 }
 
-void EmptyTrace::GetShiftedSlope ( float tshift, TimeCompression &time_cp, float *bkg )
+void EmptyTrace::GetShiftedSlope ( 
+    float tshift, 
+    TimeCompression &time_cp, 
+    float *bkg, 
+    int flow_block_size 
+  )
 {
-  ShiftMe ( tshift, time_cp, neg_bg_buffers_slope, bkg );
+  ShiftMe ( tshift, time_cp, neg_bg_buffers_slope, bkg, flow_block_size );
 }
 
 // dummy function, returns 0s
-void EmptyTrace::FillEmptyTraceFromBuffer ( short *bkg, int flow )
+void EmptyTrace::FillEmptyTraceFromBuffer ( short *bkg, int flow_buffer_index )
 {
-  int iFlowBuffer = flowToBuffer ( flow );
-  memset ( &bg_buffers[iFlowBuffer*imgFrames],0,sizeof ( float [imgFrames] ) );
+  memset ( &bg_buffers[flow_buffer_index*imgFrames],0,sizeof ( float [imgFrames] ) );
 
   // copy background trace, linearize it from pH domain to [] domain
-  float *bPtr = &bg_buffers[iFlowBuffer*imgFrames];
+  float *bPtr = &bg_buffers[flow_buffer_index*imgFrames];
   int kount = 0;
   for ( int frame=0;frame<imgFrames;frame+=1 )
     {
@@ -306,20 +314,26 @@ void EmptyTrace::RemoveEmptyTrace ( float *bPtr, float *tmp_shifted, float w )
 // of a region doesn't match BgkModel's idea of a region, the empty trace may not
 // be what you think it should be
 
-void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, Image *img, int flow )
+void EmptyTrace::GenerateAverageEmptyTrace ( 
+    Region *region, 
+    const PinnedInFlow& pinnedInFlow, 
+    const Mask *bfmask, 
+    Image *img, 
+    int flow_buffer_index,
+    int raw_flow
+  )
 {
-  int iFlowBuffer = flowToBuffer ( flow );
   // these are used by both the background and live-bead
   float tmp[imgFrames];         // scratch space used to hold un-frame-compressed data before shifting it
   float tmp_shifted[imgFrames]; // scratch space used to time-shift data before averaging/re-compressing
 
-  bg_dc_offset[iFlowBuffer] = 0;  // zero out in each new block
+  bg_dc_offset[flow_buffer_index] = 0;  // zero out in each new block
 
-  memset ( &bg_buffers[iFlowBuffer*imgFrames],0,sizeof ( float [imgFrames] ) );
+  memset ( &bg_buffers[flow_buffer_index*imgFrames],0,sizeof ( float [imgFrames] ) );
   float *bPtr;
 
   float total_weight = 0.0001;
-  bPtr = &bg_buffers[iFlowBuffer*imgFrames];
+  bPtr = &bg_buffers[flow_buffer_index*imgFrames];
 
   assert ( nRef >= 0 );
 
@@ -343,7 +357,7 @@ void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinne
       for ( int ax=region->col;ax<region->col+region->w;ax++ )
         {
           int ix = bfmask->ToIndex ( ay, ax );
-          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( flow, ix ) );
+          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( raw_flow, ix ) );
           if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned )   // valid reference well
             {
 
@@ -372,7 +386,7 @@ void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinne
             }
         }
     }
-  // fprintf(stdout, "GenerateAverageEmptyTrace: iFlowBuffer=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", iFlowBuffer, region->row, region->col, total_weight, flow);
+  // fprintf(stdout, "GenerateAverageEmptyTrace: flow_buffer_index=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", flow_buffer_index, region->row, region->col, total_weight, flow);
 
   //if ((regionIndex == 132) && (flow==19))
   //  fprintf(stdout, "Debug stop");
@@ -448,18 +462,24 @@ void EmptyTrace::SetTimeFromSdatChunk(Region& region, SynchDat &sdat) {
 // If reference traces in this region span multiple sdat regions then their
 // timing may be different and will be interpolated to match the timing of
 // the EmptyTrace
-void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, SynchDat &sdat, int flow )
+void EmptyTrace::GenerateAverageEmptyTrace ( 
+    Region *region, 
+    const PinnedInFlow& pinnedInFlow, 
+    const Mask *bfmask, 
+    SynchDat &sdat, 
+    int flow_buffer_index,
+    int raw_flow
+  )
 {
-  int iFlowBuffer = flowToBuffer ( flow );
   // these are used by both the background and live-bead
-  bg_dc_offset[iFlowBuffer] = 0;  // zero out in each new block
+  bg_dc_offset[flow_buffer_index] = 0;  // zero out in each new block
 
-  memset ( &bg_buffers[iFlowBuffer*imgFrames],0,sizeof ( float [imgFrames] ) );
+  memset ( &bg_buffers[flow_buffer_index*imgFrames],0,sizeof ( float [imgFrames] ) );
   float *bPtr;
   std::vector<float> tmp ( imgFrames, 0 );
 
   float total_weight = 0.0001f;
-  bPtr = &bg_buffers[iFlowBuffer*imgFrames];
+  bPtr = &bg_buffers[flow_buffer_index*imgFrames];
 
   assert ( nRef >= 0 );
 
@@ -484,7 +504,7 @@ void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinne
         {
 
           int ix = bfmask->ToIndex ( ay, ax );
-          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( flow, ix ) );
+          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( raw_flow, ix ) );
           if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned ) // valid empty well
             {
               float w=1.0f;
@@ -508,7 +528,7 @@ void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinne
             }
         }
     }
-  // fprintf(stdout, "GenerateAverageEmptyTrace: iFlowBuffer=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", iFlowBuffer, region->row, region->col, total_weight, flow);
+  // fprintf(stdout, "GenerateAverageEmptyTrace: flow_buffer_index=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", flow_buffer_index, region->row, region->col, total_weight, flow);
   float final_weight = total_weight;
   if ( do_ref_trace_trim )
     {
@@ -530,18 +550,25 @@ void EmptyTrace::GenerateAverageEmptyTrace ( Region *region, PinnedInFlow& pinne
 
 }
 
-void EmptyTrace::GenerateAverageEmptyTraceUncomp ( TimeCompression &time_cp, Region *region, PinnedInFlow& pinnedInFlow, Mask *bfmask, SynchDat &sdat, int flow )
+void EmptyTrace::GenerateAverageEmptyTraceUncomp ( 
+    TimeCompression &time_cp, 
+    Region *region,     
+    PinnedInFlow& pinnedInFlow,   
+    Mask *bfmask,   
+    SynchDat &sdat,   
+    int flow_buffer_index,
+    int raw_flow
+  )
 {
   //  doingSdat = true;
-  int iFlowBuffer = flowToBuffer ( flow );
   // these are used by both the background and live-bead
-  bg_dc_offset[iFlowBuffer] = 0;  // zero out in each new block
-  memset ( &bg_buffers[iFlowBuffer*imgFrames],0,sizeof ( float [imgFrames] ) );
+  bg_dc_offset[flow_buffer_index] = 0;  // zero out in each new block
+  memset ( &bg_buffers[flow_buffer_index*imgFrames],0,sizeof ( float [imgFrames] ) );
   float *bPtr;
   std::vector<float> tmp ( imgFrames, 0 );
 
   float total_weight = 0.0001f;
-  bPtr = &bg_buffers[iFlowBuffer*imgFrames];
+  bPtr = &bg_buffers[flow_buffer_index*imgFrames];
 
   assert ( nRef >= 0 );
 
@@ -564,7 +591,7 @@ void EmptyTrace::GenerateAverageEmptyTraceUncomp ( TimeCompression &time_cp, Reg
         {
 
           int ix = bfmask->ToIndex ( ay, ax );
-          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( flow, ix ) );
+          bool isStillUnpinned = ! ( pinnedInFlow.IsPinned ( raw_flow, ix ) );
           if ( ReferenceWell ( ax,ay,bfmask ) & isStillUnpinned ) // valid empty well
             {
               float w=1.0f;
@@ -587,7 +614,7 @@ void EmptyTrace::GenerateAverageEmptyTraceUncomp ( TimeCompression &time_cp, Reg
             }
         }
     }
-  // fprintf(stdout, "GenerateAverageEmptyTrace: iFlowBuffer=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", iFlowBuffer, region->row, region->col, total_weight, flow);
+  // fprintf(stdout, "GenerateAverageEmptyTrace: flow_buffer_index=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", flow_buffer_index, region->row, region->col, total_weight, flow);
   float final_weight = total_weight;
   if ( do_ref_trace_trim )
     {
@@ -602,7 +629,7 @@ void EmptyTrace::GenerateAverageEmptyTraceUncomp ( TimeCompression &time_cp, Reg
     }
 }
 
-void EmptyTrace::T0EstimateToMap ( std::vector<float>& sep_t0_est, Region *region, Mask *bfmask )
+void EmptyTrace::T0EstimateToMap ( const std::vector<float>& sep_t0_est, const Region *region, const Mask *bfmask )
 {
   assert ( t0_map.size() == 0 );  // no behavior defined for resetting t0_map
   int img_cols = bfmask->W(); //whole image
@@ -616,24 +643,24 @@ void EmptyTrace::T0EstimateToMap ( std::vector<float>& sep_t0_est, Region *regio
 
 
 
-void EmptyTrace::DumpEmptyTrace ( FILE *my_fp, int x, int y )
+void EmptyTrace::DumpEmptyTrace ( FILE *my_fp, int x, int y, int flow_block_size )
 {
   // dump out the time-shifted empty trace value that gets computed
   // if this region is unused then the buffers are not initialized
   float value_to_dump = -1.0f;
-  for ( int fnum=0; fnum<numfb; fnum++ )
-    {
-      if ( GetUsed() )
-	value_to_dump = bg_dc_offset[fnum];
-      fprintf ( my_fp, "%d\t%d\t%d\t%0.3f", x,y,fnum, value_to_dump);
+  for ( int fnum=0; fnum<flow_block_size; fnum++ )
+  {
+    if ( GetUsed() )
+	    value_to_dump = bg_dc_offset[fnum];
+    fprintf ( my_fp, "%d\t%d\t%d\t%0.3f", x,y,fnum, value_to_dump);
 
-      for ( int j=0; j<imgFrames; j++ ) {
-	if (GetUsed() )
-	  value_to_dump = bg_buffers[fnum*imgFrames+j];
-        fprintf ( my_fp,"\t%0.3f", value_to_dump);
-      }
-      fprintf ( my_fp,"\n" );
+    for ( int j=0; j<imgFrames; j++ ) {
+	    if (GetUsed() )
+	      value_to_dump = bg_buffers[fnum*imgFrames+j];
+      fprintf ( my_fp,"\t%0.3f", value_to_dump);
     }
+    fprintf ( my_fp,"\n" );
+  }
 }
 
 void EmptyTrace::Dump_bg_buffers ( char *ss, int start, int len )
@@ -642,7 +669,7 @@ void EmptyTrace::Dump_bg_buffers ( char *ss, int start, int len )
 }
 
 
-int EmptyTrace::CountReferenceTraces ( Region& region, Mask *bfmask )
+int EmptyTrace::CountReferenceTraces ( const Region& region, const Mask *bfmask )
 {
   int count = 0;
   for ( int ay=region.row; ay<region.row + region.h; ay++ )
@@ -685,7 +712,7 @@ float EmptyTrace::TrimWildTraces ( Region *region, float *bPtr,
                                    std::vector<float>& valsAtT0,
                                    std::vector<float>& valsAtT1,
                                    std::vector<float>& valsAtT2, float total_weight,
-                                   Mask *bfmask, Image *img, SynchDat *sdat )
+                                   const Mask *bfmask, Image *img, SynchDat *sdat )
 {
   // find anything really wild and trim it out
   // by adjusting values in the float array bPtr

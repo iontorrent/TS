@@ -7,9 +7,9 @@
 #include "DiffEqModel.h"
 
 struct FitExpDecayParams {
-    float Ampl;
-    float tau;
-    float dc_offset;
+    float  Signal ;  //units of counts, not amplitude
+    float tau;  // units of frames
+    float dc_offset;  // units of counts
 };
 
 class FitExpDecay : public LevMarFitterV2

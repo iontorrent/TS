@@ -1,6 +1,16 @@
 <?php
-//Include PHP parser
-include("parsefiles.php");
+
+if (file_exists("expMeta.dat")) {
+    include("parsefiles.php");
+    $meta       = parseVersion("expMeta.dat");
+    $djangoPK   = parse_to_keys("primary.key");
+    $istoplevel = True;
+} else {
+    include("../parsefiles.php");
+    $meta       = parseVersion("../expMeta.dat");
+    $djangoPK   = parse_to_keys("../primary.key");
+    $istoplevel = False;
+}
 
 $explog_dict = array();
 if (file_exists("explog.txt")) {
@@ -55,19 +65,10 @@ $template = explode("[PHP]", $blank_report);
 $header   = $template[0];
 $footer   = $template[1];
 
-if (file_exists("expMeta.dat")) {
-    $meta       = parseVersion("expMeta.dat");
-    $djangoPK   = parse_to_keys("primary.key");
-    $istoplevel = True;
-} else {
-    $meta       = parseVersion("../expMeta.dat");
-    $djangoPK   = parse_to_keys("../primary.key");
-    $istoplevel = False;
-}
-$resultsName = $meta["Analysis Name"];
-$libName     = $meta["Library"];
-$expName     = $meta["Run Name"];
-$base_name   = $expName . '_' . $resultsName;
+$resultsName   = $meta["Analysis Name"];
+$referenceName = $meta["Reference"];
+$expName       = $meta["Run Name"];
+$base_name     = $expName . '_' . $resultsName;
 
 
 
@@ -98,19 +99,10 @@ if ($is_proton) {
 $sigproc_results    = "sigproc_results/";
 $basecaller_results = "basecaller_results/";
 $alignment_results  = "./";
-if (file_exists($alignment_results . "fwd_alignment.summary")) {
-    $PairedEnd      = True;
-    $corrected_path = "./corrected/";
-    $fwdmeta        = parseVersion("fwd_expMeta.dat");
-    $revmeta        = parseVersion("rev_expMeta.dat");
-    $reporttitle    = $resultsName;
-} else {
-    $PairedEnd   = False;
-    $reporttitle = $resultsName;
-}
+$reporttitle = $resultsName;
 
 //Hide the Library Summary when library is set to none
-if ($libName == "Library:none") {
+if ($ReferenceName == "Reference:none") {
     $tf_only = true;
 } else {
     $tf_only = false;
@@ -148,15 +140,7 @@ print $header;
 <div id='inner'>
 
 <?php
-if ($PairedEnd) {
-    print '<h1>Paired End Report for ' . $reporttitle . '</h1>';
-    print '<center>based on<br>';
-    print '<h3><a href="fwd_folder/Default_Report.php">' . $fwdmeta["Analysis Name"] . '</a><br>';
-    print '<a href="rev_folder/Default_Report.php">' . $revmeta["Analysis Name"] . '</a></h3>';
-    print '</center><br>';
-} else {
     print '<h1>Report for ' . $reporttitle . '</h1>';
-}
 /*Check to see if there are any unfinished parts of the Analysis.
 if the analysis is not fully complete present the user with a
 verbose explination of what remains to be done */
@@ -216,14 +200,6 @@ START_WARNING;
 END_WARNING;
 }
 
-//PE Tooltips
-$toolTipArray = array(
-    "Union" => " The combined output from forward and <br/> reverse runs and the joined, corrected <br/> reads from the composite report",
-    "Corrected" => "The single reads that have been created from <br/> overlapping forward and reverse pairs",
-    "Unpaired Forward" => "Forward reads that have no reverse partner",
-    "Unpaired Reverse" => "Reverse reads that have no forward partner"
-);
-
 //Start Library Summary
 print '<div id="LibrarySummary" class="report_block">';
 
@@ -240,297 +216,93 @@ print '<h3>Based on Predicted Per-Base Quality Scores - Independent of Alignment
 $json   = file_get_contents('report_layout.json', FILE_IGNORE_NEW_LINES and FILE_SKIP_EMPTY_LINES);
 $layout = json_decode($json, true);
 
-if ($PairedEnd) {
-    $union_as              = parse_to_keys($basecaller_results . "quality.summary");
-    $fwd_as                = parse_to_keys($basecaller_results . "fwd_quality.summary");
-    $display_fwd_as        = False;
-    $rev_as                = parse_to_keys($basecaller_results . "rev_quality.summary");
-    $display_rev_as        = False;
-    $corr_as               = parse_to_keys("corrected.quality.summary");
-    $paired_fwd_as         = parse_to_keys("Paired_Fwd.quality.summary");
-    $display_paired_fwd_as = False;
-    $paired_rev_as         = parse_to_keys("Paired_Rev.quality.summary");
-    $paired_rev_as         = False;
-    $singleton_fwd_as      = parse_to_keys("Singleton_Fwd.quality.summary");
-    $singleton_rev_as      = parse_to_keys("Singleton_Rev.quality.summary");
-} else {
-    // $as = parse_to_keys($layout["Quality Summary"]["file_path"]);
-    $as = parse_to_keys($basecaller_results . "quality.summary");
-}
+// $isb = parse_to_keys($layout["Quality Summary"]["file_path"]);
 
-if ($PairedEnd) {
-    print '<table id="pairing_statistics" class="heading">';
-    print "<col width='445px' />";
-    print "<col width='400px' />";
-    print "<thead><tr></tr></thead>";
-    print "<tbody>";
+if (file_exists($basecaller_results . "datasets_basecaller.json")) {
 
-    print "<tr>";
-    print "<th><span class='tip' title='Pairing rate is defined as the percentage<br/> of forward reads that have a reverse read pair'>";
-    print "<span class='tippy'>Pairing Rate</span>";
-    print "</span></th>";
-    print "<td>" . try_number_format(($paired_fwd_as['Number of Reads at Q0'] + $corr_as['Number of Reads at Q0']) / $fwd_as['Number of Reads at Q0'] * 100, 2) . "  %</td>";
-    print "</tr>";
-
-    print "<tr>";
-    print "<th>Number of reads present in FWD and REV (corrected)</th>";
-    print "<td>" . try_number_format(($corr_as['Number of Reads at Q0']) / $fwd_as['Number of Reads at Q0'] * 100, 2) . "  %</td>";
-    print "</tr>";
-
-    print "<tr>";
-    print "<th>Number of reads present in FWD and REV (non corrected)</th>";
-    print "<td>" . try_number_format($paired_fwd_as['Number of Reads at Q0'] / $fwd_as['Number of Reads at Q0'] * 100, 2) . "  %</td>";
-    print "</tr>";
-
-    print "<tr>";
-    print "<th>Number of reads present in FWD but not in REV</th>";
-    print "<td>" . try_number_format($singleton_fwd_as['Number of Reads at Q0'] / $fwd_as['Number of Reads at Q0'] * 100, 2) . "  %</td>";
-    print "</tr>";
-
-    print "<tr>";
-    print "<th>Rev mean read length / Fwd mean read length</th>";
-    print "<td>" .  try_number_format( $rev_as['Mean Read Length at Q0']/$fwd_as['Mean Read Length at Q0'] * 100 ,2 )."  %</td>";
-    print "</tr>";
-
-    $revkey = parse_to_keys("rev_raw_peak_signal");
-    $fwdkey = parse_to_keys("fwd_raw_peak_signal");
-    print "<tr>";
-    print "<th>Rev library key signal, Fwd library key signal, Ratio </th>";
-    print "<td>" .  try_number_format( $revkey['Library'] ) . ", " . try_number_format( $fwdkey['Library'] ) . ", " . try_number_format( $revkey['Library'] / $fwdkey['Library'], 2 ) . "  </td>";
-    print "</tr>";
-
-    $json = file_get_contents($basecaller_results . "rev_BaseCaller.json", FILE_IGNORE_NEW_LINES and FILE_SKIP_EMPTY_LINES);
-    $bc = json_decode($json,true);
-    $rev_ISP_valid       = $bc["Filtering"]["LibraryReport"]["final_library_reads"];
-    $json = file_get_contents($basecaller_results . "fwd_BaseCaller.json", FILE_IGNORE_NEW_LINES and FILE_SKIP_EMPTY_LINES);
-    $bc = json_decode($json,true);
-    $fwd_ISP_valid       = $bc["Filtering"]["LibraryReport"]["final_library_reads"];
-    print "<tr>";
-    print "<th>Rev Final Library Reads / Fwd Final Library Reads </th>";
-    print "<td>" .  try_number_format(  $rev_ISP_valid / $fwd_ISP_valid , 2  ) . " </td>";
-    print "</tr>";
-
-    print "</tbody></table>";
+    //$json = file_get_contents($basecaller_results . 'datasets_basecaller.json', FILE_IGNORE_NEW_LINES and FILE_SKIP_EMPTY_LINES);
+    //$dsb = json_decode($json, true);
 
 }
 
+//if (file_exists("ionstats_alignment.json")) {
+//
+//    $json   = file_get_contents('ionstats_alignment.json', FILE_IGNORE_NEW_LINES and FILE_SKIP_EMPTY_LINES);
+//    $ionstats = json_decode($json, true);
+//
+//} else
+if (file_exists($basecaller_results . "ionstats_basecaller.json")) {
 
-if (file_exists($basecaller_results . "quality.summary") or file_exists("fwd_quality.summary")) {
+    $json   = file_get_contents($basecaller_results . 'ionstats_basecaller.json', FILE_IGNORE_NEW_LINES and FILE_SKIP_EMPTY_LINES);
+    $ionstats = json_decode($json, true);
+
+}
+
+if (isset($ionstats)) {
     print '<table id="q_alignment" class="heading">';
-    if ($PairedEnd) {
-        print "<col width='100px' />";
-        if ($union_as)
-            print "<col width='70px' />";
-        if ($display_fwd_as)
-            print "<col width='70px' />";
-        if ($display_rev_as)
-            print "<col width='70px' />";
-        if ($corr_as)
-            print "<col width='80px' />";
-        if ($display_paired_fwd_as)
-            print "<col width='70px' />";
-        if ($paired_rev_as)
-            print "<col width='70px' />";
-        if ($singleton_fwd_as)
-            print "<col width='70px' />";
-        if ($singleton_rev_as)
-            print "<col width='70px' />";
-    } else {
-        print "<col width='325px' />";
-        print "<col width='520px' />";
-    }
-
-    if ($PairedEnd) {
-        print "<thead><tr>";
-
-        //header info here
-        print "<th></th>";
-
-
-        function tableHead($label)
-        {
-            global $toolTipArray;
-            print "<th><span class='tip' title='" . $toolTipArray[$label] . "'>";
-            print "<span class='tippy'>" . $label . "</span>";
-            print "</span></th>";
-        }
-
-        if ($union_as)
-            tableHead("Union");
-        if ($display_fwd_as)
-            tableHead("Forward");
-        if ($display_rev_as)
-            tableHead("Reverse");
-        if ($corr_as)
-            tableHead("Corrected");
-        if ($display_paired_fwd_as)
-            tableHead("Paired Forward");
-        if ($paired_rev_as)
-            tableHead("Paired Reverse");
-        if ($singleton_fwd_as)
-            tableHead("Unpaired Forward");
-        if ($singleton_rev_as)
-            tableHead("Unpaired Reverse");
-
-        print "</tr></thead>";
-    } else {
-        print "<thead>";
-        print "</thead>";
-    }
-
-
+    print "<col width='325px' />";
+    print "<col width='520px' />";
+    print "<thead>";
+    print "</thead>";
     print '<tbody>';
+
     print "<tr>";
     print "<th>Total Number of Bases [Mbp]</th>";
-    if ($PairedEnd) {
-        //print "<td>" . try_number_format( ($fwd_as['Number of Bases at Q0']+$rev_as['Number of Bases at Q0'])/1000000 , 2 ) ."</td>";
-        if ($union_as)
-            print "<td>" . try_number_format($union_as['Number of Bases at Q0'] / 1000000, 2) . "</td>";
-        if ($display_fwd_as)
-            print "<td>" . try_number_format($fwd_as['Number of Bases at Q0'] / 1000000, 2) . "</td>";
-        if ($display_rev_as)
-            print "<td>" . try_number_format($rev_as['Number of Bases at Q0'] / 1000000, 2) . "</td>";
-        if ($corr_as)
-            print "<td>" . try_number_format($corr_as['Number of Bases at Q0'] / 1000000, 2) . "</td>";
-        if ($display_paired_fwd_as)
-            print "<td>" . try_number_format($paired_fwd_as['Number of Bases at Q0'] / 1000000, 2) . "</td>";
-        if ($paired_rev_as)
-            print "<td>" . try_number_format($paired_rev_as['Number of Bases at Q0'] / 1000000, 2) . "</td>";
-        if ($singleton_fwd_as)
-            print "<td>" . try_number_format($singleton_fwd_as['Number of Bases at Q0'] / 1000000, 2) . "</td>";
-        if ($singleton_rev_as)
-            print "<td>" . try_number_format($singleton_rev_as['Number of Bases at Q0'] / 1000000, 2) . "</td>";
-    } else {
-        print "<td>" . try_number_format($as['Number of Bases at Q0'] / 1000000, 2) . "</td>";
-    }
+    print "<td>" . try_number_format($ionstats['full']['num_bases'] / 1000000, 2) . "</td>";
     print "</tr>";
+    //$total_bases = 0;
+    //foreach ($dsb['read_groups'] as &$value) {
+    //    $total_bases += $value['total_bases'];
+    //}
+    //print "<tr>";
+    //print "<th>Total Number of Bases [Mbp]</th>";
+    //print "<td>" . try_number_format($total_bases / 1000000, 2) . "</td>";
+    //print "</tr>";
 
-    if ($display_q17) {
-    print "<tr>";
-    print "<th class='subhead'>&#8227; Number of Q17 Bases [Mbp]</th>";
-    if ($PairedEnd) {
-        //print "<td>" . try_number_format( ($fwd_as['Number of Bases at Q17']+$rev_as['Number of Bases at Q20'])/1000000 , 2 ) ."</td>";
-        if ($union_as)
-            print "<td>" . try_number_format($union_as['Number of Bases at Q17'] / 1000000, 2) . "</td>";
-        if ($display_fwd_as)
-            print "<td>" . try_number_format($fwd_as['Number of Bases at Q17'] / 1000000, 2) . "</td>";
-        if ($display_rev_as)
-            print "<td>" . try_number_format($rev_as['Number of Bases at Q17'] / 1000000, 2) . "</td>";
-        if ($corr_as)
-            print "<td>" . try_number_format($corr_as['Number of Bases at Q17'] / 1000000, 2) . "</td>";
-        if ($display_paired_fwd_as)
-            print "<td>" . try_number_format($paired_fwd_as['Number of Bases at Q17'] / 1000000, 2) . "</td>";
-        if ($paired_rev_as)
-            print "<td>" . try_number_format($paired_rev_as['Number of Bases at Q17'] / 1000000, 2) . "</td>";
-        if ($singleton_fwd_as)
-            print "<td>" . try_number_format($singleton_fwd_as['Number of Bases at Q17'] / 1000000, 2) . "</td>";
-        if ($singleton_rev_as)
-            print "<td>" . try_number_format($singleton_rev_as['Number of Bases at Q17'] / 1000000, 2) . "</td>";
-    } else {
-        print "<td>" . try_number_format($as['Number of Bases at Q17'] / 1000000, 2) . "</td>";
-    }
-    print "</tr>";
-    }
+
 
     print "<tr>";
     print "<th class='subhead'>&#8227; Number of Q20 Bases [Mbp]</th>";
-    if ($PairedEnd) {
-        //print "<td>" . try_number_format( ($fwd_as['Number of Bases at Q20']+$rev_as['Number of Bases at Q20'])/1000000 , 2 ) ."</td>";
-        if ($union_as)
-            print "<td>" . try_number_format($union_as['Number of Bases at Q20'] / 1000000, 2) . "</td>";
-        if ($display_fwd_as)
-            print "<td>" . try_number_format($fwd_as['Number of Bases at Q20'] / 1000000, 2) . "</td>";
-        if ($display_rev_as)
-            print "<td>" . try_number_format($rev_as['Number of Bases at Q20'] / 1000000, 2) . "</td>";
-        if ($corr_as)
-            print "<td>" . try_number_format($corr_as['Number of Bases at Q20'] / 1000000, 2) . "</td>";
-        if ($display_paired_fwd_as)
-            print "<td>" . try_number_format($paired_fwd_as['Number of Bases at Q20'] / 1000000, 2) . "</td>";
-        if ($paired_rev_as)
-            print "<td>" . try_number_format($paired_rev_as['Number of Bases at Q20'] / 1000000, 2) . "</td>";
-        if ($singleton_fwd_as)
-            print "<td>" . try_number_format($singleton_fwd_as['Number of Bases at Q20'] / 1000000, 2) . "</td>";
-        if ($singleton_rev_as)
-            print "<td>" . try_number_format($singleton_rev_as['Number of Bases at Q20'] / 1000000, 2) . "</td>";
-    } else {
-        print "<td>" . try_number_format($as['Number of Bases at Q20'] / 1000000, 2) . "</td>";
-    }
+    print "<td>" . try_number_format(array_sum(array_slice($ionstats['qv_histogram'],20)) / 1000000, 2) . "</td>";
     print "</tr>";
+    //$sumq20 = 0;
+    //foreach ($dsb['read_groups'] as &$value) {
+    //    $sumq20 += $value['Q20_bases'];
+    //}
+    //print "<tr>";
+    //print "<th class='subhead'>&#8227; sum datasets_basecaller readgroups... </th>";
+    //print "<td>" . try_number_format($sumq20 / 1000000, 2) . "</td>";
+    //print "</tr>";
+    //print "<tr>";
+    //print "<th class='subhead'>&#8227; Number of Q20 Bases from ionstats_basecaller.json mimics AQ20 - don't use[Mbp]</th>";
+    //print "<td>" . try_number_format($ionstats['Q20']['num_bases'] / 1000000, 2) . "</td>";
+    //print "</tr>";
+
 
     print "<tr>";
     print "<th>Total Number of Reads</th>";
-    if ($PairedEnd) {
-        //print "<td>" . try_number_format( $fwd_as['Number of Reads at Q0']+$rev_as['Number of Reads at Q0'] ) ."</td>";
-        if ($union_as)
-            print "<td>" . try_number_format($union_as['Number of Reads at Q0']) . "</td>";
-        if ($display_fwd_as)
-            print "<td>" . try_number_format($fwd_as['Number of Reads at Q0']) . "</td>";
-        if ($display_rev_as)
-            print "<td>" . try_number_format($rev_as['Number of Reads at Q0']) . "</td>";
-        if ($corr_as)
-            print "<td>" . try_number_format($corr_as['Number of Reads at Q0']) . "</td>";
-        if ($display_paired_fwd_as)
-            print "<td>" . try_number_format($paired_fwd_as['Number of Reads at Q0']) . "</td>";
-        if ($paired_rev_as)
-            print "<td>" . try_number_format($paired_rev_as['Number of Reads at Q0']) . "</td>";
-        if ($singleton_fwd_as)
-            print "<td>" . try_number_format($singleton_fwd_as['Number of Reads at Q0']) . "</td>";
-        if ($singleton_rev_as)
-            print "<td>" . try_number_format($singleton_rev_as['Number of Reads at Q0']) . "</td>";
-    } else {
-        print "<td>" . try_number_format($as['Number of Reads at Q0']) . "</td>";
-    }
+    print "<td>" . try_number_format($ionstats['full']['num_reads']) . "</td>";
     print "</tr>";
+    //$num_reads = 0;
+    //foreach ($dsb['read_groups'] as &$value) {
+    //    $num_reads += $value['read_count'];
+    //}
+    //print "<tr>";
+    //print "<th>Total Number of Reads</th>";
+    //print "<td>" . try_number_format($num_reads) . "</td>";
+    //print "</tr>";
 
     print "<tr>";
     print "<th>Mean Length [bp]</th>";
-    if ($PairedEnd) {
-        //print "<td>" . try_number_format(($fwd_as['Mean Read Length at Q0']*$fwd_as['Number of Reads at Q0']+$rev_as['Mean Read Length at Q0']*$rev_as['Number of Reads at Q0'])/($fwd_as['Number of Reads at Q0']+$rev_as['Number of Reads at Q0']) ) ."</td>";
-        if ($union_as)
-            print "<td>" . try_number_format($union_as['Mean Read Length at Q0']) . "</td>";
-        if ($display_fwd_as)
-            print "<td>" . try_number_format($fwd_as['Mean Read Length at Q0']) . "</td>";
-        if ($display_rev_as)
-            print "<td>" . try_number_format($rev_as['Mean Read Length at Q0']) . "</td>";
-        if ($corr_as)
-            print "<td>" . try_number_format($corr_as['Mean Read Length at Q0']) . "</td>";
-        if ($display_paired_fwd_as)
-            print "<td>" . try_number_format($paired_fwd_as['Mean Read Length at Q0']) . "</td>";
-        if ($paired_rev_as)
-            print "<td>" . try_number_format($paired_rev_as['Mean Read Length at Q0']) . "</td>";
-        if ($singleton_fwd_as)
-            print "<td>" . try_number_format($singleton_fwd_as['Mean Read Length at Q0']) . "</td>";
-        if ($singleton_rev_as)
-            print "<td>" . try_number_format($singleton_rev_as['Mean Read Length at Q0']) . "</td>";
-    } else {
-        print "<td>" . try_number_format($as['Mean Read Length at Q0']) . "</td>";
-    }
+    print "<td>" . try_number_format($ionstats['full']['mean_read_length']) . "</td>";
     print "</tr>";
 
     print "<tr>";
     print "<th>Longest Read [bp]</th>";
-    if ($PairedEnd) {
-        //print "<td>" . try_number_format( max($fwd_as['Max Read Length at Q0'],$rev_as['Max Read Length at Q0']) ) ."</td>";
-        if ($union_as)
-            print "<td>" . try_number_format($union_as['Max Read Length at Q0']) . "</td>";
-        if ($display_fwd_as)
-            print "<td>" . try_number_format($fwd_as['Max Read Length at Q0']) . "</td>";
-        if ($display_rev_as)
-            print "<td>" . try_number_format($rev_as['Max Read Length at Q0']) . "</td>";
-        if ($corr_as)
-            print "<td>" . try_number_format($corr_as['Max Read Length at Q0']) . "</td>";
-        if ($display_paired_fwd_as)
-            print "<td>" . try_number_format($paired_fwd_as['Max Read Length at Q0']) . "</td>";
-        if ($paired_rev_as)
-            print "<td>" . try_number_format($paired_rev_as['Max Read Length at Q0']) . "</td>";
-        if ($singleton_fwd_as)
-            print "<td>" . try_number_format($singleton_fwd_as['Max Read Length at Q0']) . "</td>";
-        if ($singleton_rev_as)
-            print "<td>" . try_number_format($singleton_rev_as['Max Read Length at Q0']) . "</td>";
-    } else {
-        print "<td>" . try_number_format($as['Max Read Length at Q0']) . "</td>";
-    }
-    print "</tr></tbody></table>";
+    print "<td>" . try_number_format($ionstats['full']['max_read_length']) . "</td>";
+    print "</tr>";
+
+    print "</tbody></table>";
 
 } else {
     print '<div class="not_found">No predicted per-base quality scores found.</div>';
@@ -558,97 +330,50 @@ print '<div style="clear: both;"></div>';
 
 print '<h3>Reference Genome Information</h3>';
 
-//If there is a Reference Genome print the info
-$json   = file_get_contents('report_layout.json', FILE_IGNORE_NEW_LINES and FILE_SKIP_EMPTY_LINES);
-$layout = json_decode($json, true);
-$as     = parse_to_keys($layout["Alignment Summary"]["file_path"]);
-if ($as) {
+if ($meta['Reference']) {
+
+    $reference_info = parseReferenceInfo("/results/referenceLibrary/tmap-f3/" . $meta['Reference'] . "/" . $meta['Reference'] . ".info.txt");
+
     print "<table class='noheading'>";
     print "<col width='325px' />";
     print "<col width='520px' />";
-    foreach (array_keys($layout['Alignment Summary']['pre_metrics']) as $label) {
-        print "<tr>";
-        print "<th>$label</th>";
-        if (count($layout['Alignment Summary']['pre_metrics'][$label]) > 1) {
-            $l     = $layout['Alignment Summary']['pre_metrics'][$label][0];
-            $units = $layout['Alignment Summary']['pre_metrics'][$label][1];
-            print "<td>";
-            print try_number_format($as[$l]);
-            print " $units</td>";
-        } else {
-            $l = $layout['Alignment Summary']['pre_metrics'][$label];
-            if ($label == "Genome Name") {
-                print "<td class='italic'>";
-            } else {
-                print "<td>";
-            }
-            print "" . $as[$l] . "</td>";
-        }
-        print "</tr>";
-    }
+
+    print "<tr>";
+    print "<th>Genome Name</th>";
+    print "<td class='italic'>" . $reference_info['genome_name'] . "</td>";
+    print "</tr>";
+
+    print "<tr>";
+    print "<th>Genome Size</th>";
+    print "<td>" . $reference_info['genome_length'] . "</td>";
+    print "</tr>";
+
+    print "<tr>";
+    print "<th>Genome Version</th>";
+    print "<td>" . $reference_info['genome_version'] . "</td>";
+    print "</tr>";
+
+    print "<tr>";
+    print "<th>Index Version</th>";
+    print "<td>" . $reference_info['index_version'] . "</td>";
+    print "</tr>";
+
     print "</table>";
     print "<br/>";
-} elseif (file_exists("alignment.error")) {
-    print '<div class="not_found">';
-    print '<p>There was an alignment error. For details see the <a href="log.html">Report Log</a></p>';
-    //print the contents of the alignment.error file
-    $alignerror     = "alignment.error";
-    $fh             = fopen($alignerror, 'r');
-    $alignErrorData = fread($fh, filesize($alignerror));
-    fclose($fh);
-    //a missing library will generage an error.  Print that here.
-    $no_ref = alignQC_noref();
-    if ($no_ref) {
-        print '<p>  Unable to process alignment for genome, because the <strong>' . $no_ref . '</strong> reference library was not found.</p>';
-    }
-    print '</div>';
 }
-
-// paired end report
-if ($PairedEnd) {
-    $alignmentSummaryFilelist = array(
-        "Union" => $alignment_results . "alignment.summary",
-        //"Forward" => $alignment_results . "fwd_alignment.summary",
-        //"Reverse" => $alignment_results . "rev_alignment.summary",
-        "Corrected" => $alignment_results . "corrected.alignment.summary",
-        //"Paired Forward"  => $alignment_results . "Paired_Fwd.alignment.summary",
-        //"Paired Reverse"  => $alignment_results . "Paired_Rev.alignment.summary",
-        "Unpaired Forward" => $alignment_results . "Singleton_Fwd.alignment.summary",
-        "Unpaired Reverse" => $alignment_results . "Singleton_Rev.alignment.summary"
-    );
-} else {
-    $alignmentSummaryFilelist = array(
-        "default" => $alignment_results . "alignment.summary"
-    );
-}
-
 
 //If there is alignment info, print it
 $json   = file_get_contents('report_layout.json', FILE_IGNORE_NEW_LINES and FILE_SKIP_EMPTY_LINES);
 $layout = json_decode($json, true);
-$as     = parse_to_keys($layout["Alignment Summary"]["file_path"]);
-//once we have as we can check to see if it contains the full data, or the sampled data
-if (isset($as['Total number of Sampled Reads'])) {
-    $align_full = false;
-    print '<h3>Based on Sampled Library Alignment to Provided Reference</h3>';
-} else {
-    $align_full = true;
-    print '<h3>Based on Full Library Alignment to Provided Reference</h3>';
-}
 
+print '<h3>Based on Full Library Alignment to Provided Reference</h3>';
 
-//start alignment.summary
-foreach ($alignmentSummaryFilelist as $alignTableName => $alignFile) {
-    if (file_exists($alignFile)) {
-        $as = parse_to_keys($alignFile);
-        if (count($alignmentSummaryFilelist) > 1) {
-            print "<span class='tip_r' title='" . $toolTipArray[$alignTableName] . "'>";
-            print "<span class='headerTip'>" . $alignTableName . "</span>";
-            print "</span>";
-        }
+    if (file_exists('ionstats_alignment.json')) {
+        //$json   = file_get_contents($layout["Alignment Summary"]["file_path"], FILE_IGNORE_NEW_LINES and FILE_SKIP_EMPTY_LINES);
+        $json   = file_get_contents('ionstats_alignment.json', FILE_IGNORE_NEW_LINES and FILE_SKIP_EMPTY_LINES);
+        $isa = json_decode($json, true);
 
-
-        if ($align_full == true && $as) {
+        if ($isa) {
             print '<table id="alignment" class="heading">';
             if ($display_q17) {
                 print "<col width='325px' />";
@@ -676,188 +401,53 @@ foreach ($alignmentSummaryFilelist as $alignTableName => $alignFile) {
             print "<th>Total Number of Bases [Mbp]</th>";
             //Convert bases to megabases
             if ($display_q17) {
-               print "<td>" . try_number_format($as['Filtered Mapped Bases in Q17 Alignments'] / 1000000, 2) . "</td>";
+               print "<td>" . try_number_format($isa['AQ17']['num_bases'] / 1000000, 2) . "</td>";
             }
-            print "<td>" . try_number_format($as['Filtered Mapped Bases in Q20 Alignments'] / 1000000, 2) . "</td>";
-            print "<td>" . try_number_format($as['Filtered Mapped Bases in Q47 Alignments'] / 1000000, 2) . "</td>";
+            print "<td>" . try_number_format($isa['AQ20']['num_bases'] / 1000000, 2) . "</td>";
+            print "<td>" . try_number_format($isa['AQ47']['num_bases'] / 1000000, 2) . "</td>";
             print "</tr>";
 
             print "<tr>";
             print "<th>Mean Length [bp]</th>";
             if ($display_q17) {
-               print "<td>" . try_number_format($as['Filtered Q17 Mean Alignment Length']) . "</td>";
+               print "<td>" . try_number_format($isa['AQ17']['mean_read_length']) . "</td>";
             }
-            print "<td>" . try_number_format($as['Filtered Q20 Mean Alignment Length']) . "</td>";
-            print "<td>" . try_number_format($as['Filtered Q47 Mean Alignment Length']) . "</td>";
+            print "<td>" . try_number_format($isa['AQ20']['mean_read_length']) . "</td>";
+            print "<td>" . try_number_format($isa['AQ47']['mean_read_length']) . "</td>";
             print "</tr>";
 
             print "<tr>";
             print "<th>Longest Alignment [bp]</th>";
             if ($display_q17) {
-               print "<td>" . try_number_format($as['Filtered Q17 Longest Alignment']) . "</td>";
+               print "<td>" . try_number_format($isa['AQ17']['max_read_length']) . "</td>";
             }
-            print "<td>" . try_number_format($as['Filtered Q20 Longest Alignment']) . "</td>";
-            print "<td>" . try_number_format($as['Filtered Q47 Longest Alignment']) . "</td>";
+            print "<td>" . try_number_format($isa['AQ20']['max_read_length']) . "</td>";
+            print "<td>" . try_number_format($isa['AQ47']['max_read_length']) . "</td>";
             print "</tr>";
+            if ($reference_info) {
 
-            print "<tr>";
-            print "<th>Mean Coverage Depth</th>";
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Filtered Q17 Mean Coverage Depth'], 2) . "&times;</td>";
+                print "<tr>";
+                print "<th>Mean Coverage Depth</th>";
+                if ($display_q17) {
+                    print "<td>" . try_number_format($isa['AQ17']['num_bases'] / $reference_info['genome_length'], 2) . "&times;</td>";
+                }
+                print "<td>" . try_number_format($isa['AQ20']['num_bases'] / $reference_info['genome_length'], 2) . "&times;</td>";
+                print "<td>" . try_number_format($isa['AQ47']['num_bases'] / $reference_info['genome_length'], 2) . "&times;</td>";
+                print "</tr>";
+
+                print "<tr>";
+                print "<th>Percentage of Library Covered</th>";
+                if ($display_q17) {
+                   print "<td> N/A" . "%</td>";
+                }
+                print "<td> N/A" . "%</td>";
+                print "<td> N/A" . "%</td>";
+                print "</tr>";
             }
-            print "<td>" . try_number_format($as['Filtered Q20 Mean Coverage Depth'], 2) . "&times;</td>";
-            print "<td>" . try_number_format($as['Filtered Q47 Mean Coverage Depth'], 2) . "&times;</td>";
-            print "</tr>";
-
-            print "<tr>";
-            print "<th>Percentage of Library Covered</th>";
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Filtered Q17 Coverage Percentage']) . "%</td>";
-            }
-            print "<td>" . try_number_format($as['Filtered Q20 Coverage Percentage']) . "%</td>";
-            print "<td>" . try_number_format($as['Filtered Q47 Coverage Percentage']) . "%</td>";
-            print "</tr>";
-
-            print "</tbody>";
-            print "</table>";
-
-        } elseif ($align_full == false && $as) {
-            print '<table id="alignment" class="heading">';
-            print "<col width='325px' />";
-
-            print "<col width='86px' />";
-            print "<col width='86px' />";
-            print "<col width='86px' />";
-            print "<col width='86px' />";
-            print "<col width='86px' />";
-            print "<col width='86px' />";
-
-
-            print "<thead><tr> <th class='empty'> </th>";
-            print "<th colspan=3 class='tiptop'>Random sample of " . try_number_format($as['Total number of Sampled Reads']) . " reads</th>";
-            print "<th colspan=3 class='tiptop'>Extrapolation to all " . try_number_format($as['Total number of Reads']) . " reads</th></tr>";
-
-            //header info here
-            print "<th> </th>";
-            if ($display_q17) {
-               print "<th>AQ17</th>";
-            }
-            print "<th>AQ20</th>";
-            print "<th>Perfect</th>";
-            if ($display_q17) {
-               print "<th>AQ17</th>";
-            }
-            print "<th>AQ20</th>";
-            print "<th>Perfect</th>";
-
-            print "</tr></thead><tbody>";
-
-            print "<tr>";
-            print "<th>Total Number of Bases [Mbp]</th>";
-            //Convert bases to megabases
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Sampled Filtered Mapped Bases in Q17 Alignments'] / 1000000, 2) . "</td>";
-            }
-            print "<td>" . try_number_format($as['Sampled Filtered Mapped Bases in Q20 Alignments'] / 1000000, 2) . "</td>";
-            print "<td>" . try_number_format($as['Sampled Filtered Mapped Bases in Q47 Alignments'] / 1000000, 2) . "</td>";
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Extrapolated Filtered Mapped Bases in Q17 Alignments'] / 1000000, 2) . "</td>";
-            }
-            print "<td>" . try_number_format($as['Extrapolated Filtered Mapped Bases in Q20 Alignments'] / 1000000, 2) . "</td>";
-            print "<td>" . try_number_format($as['Extrapolated Filtered Mapped Bases in Q47 Alignments'] / 1000000, 2) . "</td>";
-            print "</tr>";
-
-            print "<tr>";
-            print "<th>Mean Length [bp]</th>";
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Sampled Filtered Q17 Mean Alignment Length']) . "</td>";
-            }
-            print "<td>" . try_number_format($as['Sampled Filtered Q20 Mean Alignment Length']) . "</td>";
-            print "<td>" . try_number_format($as['Sampled Filtered Q47 Mean Alignment Length']) . "</td>";
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Extrapolated Filtered Q17 Mean Alignment Length']) . "</td>";
-            }
-            print "<td>" . try_number_format($as['Extrapolated Filtered Q20 Mean Alignment Length']) . "</td>";
-            print "<td>" . try_number_format($as['Extrapolated Filtered Q47 Mean Alignment Length']) . "</td>";
-            print "</tr>";
-
-            print "<tr>";
-            print "<th>Longest Alignment [bp]</th>";
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Sampled Filtered Q17 Longest Alignment']) . "</td>";
-            }
-            print "<td>" . try_number_format($as['Sampled Filtered Q20 Longest Alignment']) . "</td>";
-            print "<td>" . try_number_format($as['Sampled Filtered Q47 Longest Alignment']) . "</td>";
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Extrapolated Filtered Q17 Longest Alignment']) . "</td>";
-            }
-            print "<td>" . try_number_format($as['Extrapolated Filtered Q20 Longest Alignment']) . "</td>";
-            print "<td>" . try_number_format($as['Extrapolated Filtered Q47 Longest Alignment']) . "</td>";
-            print "</tr>";
-
-            print "<tr>";
-            print "<th>Mean Coverage Depth</th>";
-
-
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Sampled Filtered Q17 Mean Coverage Depth'], 2);
-               print (is_numeric($as['Sampled Filtered Q17 Mean Coverage Depth'])) ? "&times; </td>" : " </td>";
-            }
-
-            print "<td>" . try_number_format($as['Sampled Filtered Q20 Mean Coverage Depth'], 2);
-            print (is_numeric($as['Sampled Filtered Q20 Mean Coverage Depth'])) ? "&times; </td>" : " </td>";
-
-            print "<td>" . try_number_format($as['Sampled Filtered Q47 Mean Coverage Depth'], 2);
-            print (is_numeric($as['Sampled Filtered Q47 Mean Coverage Depth'])) ? "&times; </td>" : " </td>";
-
-
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Extrapolated Filtered Q17 Mean Coverage Depth'], 2);
-               print (is_numeric($as['Extrapolated Filtered Q17 Mean Coverage Depth'])) ? "&times; </td>" : " </td>";
-            }
-
-            print "<td>" . try_number_format($as['Extrapolated Filtered Q20 Mean Coverage Depth'], 2);
-            print (is_numeric($as['Extrapolated Filtered Q20 Mean Coverage Depth'])) ? "&times; </td>" : " </td>";
-
-            print "<td>" . try_number_format($as['Extrapolated Filtered Q47 Mean Coverage Depth'], 2);
-            print (is_numeric($as['Extrapolated Filtered Q47 Mean Coverage Depth'])) ? "&times; </td>" : " </td>";
-            print "</tr>";
-
-            print "<tr>";
-            //slightly special case because we only print % in the cell if the call has a number
-            print "<th>Percentage of Library Covered</th>";
-
-
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Sampled Filtered Q17 Coverage Percentage']);
-               print (is_numeric($as['Sampled Filtered Q17 Coverage Percentage'])) ? "% </td>" : " </td>";
-            }
-
-            print "<td>" . try_number_format($as['Sampled Filtered Q20 Coverage Percentage']);
-            print (is_numeric($as['Sampled Filtered Q20 Coverage Percentage'])) ? "% </td>" : " </td>";
-
-            print "<td>" . try_number_format($as['Sampled Filtered Q47 Coverage Percentage']);
-            print (is_numeric($as['Sampled Filtered Q47 Coverage Percentage'])) ? "% </td>" : " </td>";
-
-
-            if ($display_q17) {
-               print "<td>" . try_number_format($as['Extrapolated Filtered Q17 Coverage Percentage']);
-               print (is_numeric($as['Extrapolated Filtered Q17 Coverage Percentage'])) ? "% </td>" : " </td>";
-            }
-
-            print "<td>" . try_number_format($as['Extrapolated Filtered Q20 Coverage Percentage']);
-            print (is_numeric($as['Extrapolated Filtered Q20 Coverage Percentage'])) ? "% </td>" : " </td>";
-
-            print "<td>" . try_number_format($as['Extrapolated Filtered Q47 Coverage Percentage']);
-            print (is_numeric($as['Extrapolated Filtered Q47 Coverage Percentage'])) ? "% </td>" : " </td>";
-
-            print "</tr>";
-
             print "</tbody>";
             print "</table>";
         }
     }
-}
 
 
 
@@ -898,8 +488,7 @@ if (file_exists("alignment_barcode_summary.csv") and $istoplevel) {
 
 }
 
-
-if (!$PairedEnd) {
+if ($istoplevel) {
     //Start TF Summary
     print "<div id='TFSummary' class='report_block'>";
 
@@ -993,7 +582,6 @@ if (!$PairedEnd) {
     //End TF Summary Div
 }
 
-
 //start ion sphere
 
 print '<div id="IonSphere" class="report_block">';
@@ -1008,7 +596,7 @@ if ($is_proton_composite) {
         print "<tr class='slimRow'>";
         foreach ($dataX as $dx) {
             $needle      = 'block_X' . $dx . '_Y' . $dy;
-            $needleImage = $needle . "/sigproc_results/Bead_density_raw.png";
+            $needleImage = $needle . "/Bead_density_raw.png";
             print '<td class="slim">';
             print '<a href="' . $needle . '/Default_Report.php">';
             if (file_exists($needle . '/badblock.txt')) {
@@ -1107,22 +695,6 @@ function printISPTableEntry($category, $tip1, $tip2, $count, $total, $indent, $s
     print "</tr>";
 }
 
-// paired end report
-if ($PairedEnd) {
-    $bflist  = array(
-        "Forward" => $sigproc_results . "fwd_bfmask.stats",
-        "Reverse" => $sigproc_results . "rev_bfmask.stats"
-    );
-    $bftlist = array(
-        "Forward" => $basecaller_results . "fwd_BaseCaller.json",
-        "Reverse" => $basecaller_results . "rev_BaseCaller.json"
-    );
-    $pnglist = array(
-        "Forward" => $sigproc_results . "fwd_Bead_density_contour.png",
-        "Reverse" => $sigproc_results . "rev_Bead_density_contour.png"
-    );
-
-} else {
     $bflist  = array(
         "default" => $sigproc_results . "analysis.bfmask.stats"
     );
@@ -1133,9 +705,8 @@ if ($PairedEnd) {
         "default" => $basecaller_results . "BaseCaller.json"
     );
     $pnglist = array(
-        "default" => $sigproc_results . "Bead_density_contour.png"
+        "default" => "Bead_density_contour.png"
     );
-}
 
 foreach ($bflist as $bfName => $bfFile) {
     print '<div style="overflow: hidden;">'; //start wrapper
@@ -1322,11 +893,7 @@ print '</div>';
 print '<div id="ReportInfo" class="report_block">';
 
 
-if ($PairedEnd) {
-    print '<h2>Paired End Report Information</h2>';
-} else {
-    print '<h2>Report Information</h2>';
-}
+print '<h2>Report Information</h2>';
 
 print '<div>'; // report information
 
@@ -1334,28 +901,6 @@ print '<div>'; //<!-- start wrapper -->
 print '<h3>Analysis Info</h3>';
 print '<div id="AnalysisInfo">';
 
-if ($PairedEnd) {
-    print '<table class="noheading">';
-    print '<col width="180px" />';
-    print '<col width="360px" />';
-    print '<col width="360px" />';
-    print "<th></th>";
-    print "<th>Forward</th>";
-    print "<th>Reverse</th>";
-
-    if ($fwdmeta and $revmeta) {
-        foreach ($fwdmeta as $key => $value) {
-            if ($fwdmeta["$key"] == $revmeta["$key"]) {
-                print "<tr><th>$key</th><td>" . wordwrap($value, 30, "</br>", true) . "</td><td>" . $revmeta["$key"] . "</td></tr>";
-            } else {
-                print "<tr><th>$key</th><td style='color:red'>" . wordwrap($value, 30, "</br>", true) . "</td><td style='color:red'>" . $revmeta["$key"] . "</td></tr>";
-            }
-        }
-    }
-
-    print '</table>';
-
-} else {
     print '<table class="noheading">';
     print '<col width="325px" />';
     print '<col width="520px" />';
@@ -1371,16 +916,12 @@ if ($PairedEnd) {
     }
 
     print '</table>';
-}
+
 print '</div>';
 print '</div>'; //<!--  end wrapper -->
 
 print '<h3>Software Version</h3>';
 print '<div id="SoftwareVersion">';
-if ($PairedEnd) {
-    $versiontxt_fwd = parseVersion("fwd_version.txt");
-    $versiontxt_rev = parseVersion("rev_version.txt");
-}
 $versiontxt           = parseVersion("version.txt");
 $versiontxt_blacklist = array(
     "ion-onetouchupdater" => "",
@@ -1423,12 +964,6 @@ if ($versiontxt):
         print '<tr>';
         print '<th>' . $name . '</th>';
         print '<td>' . $version;
-        //append version information if different
-        if ($PairedEnd and array_key_exists($name, $versiontxt_fwd)) {
-            if ($versionstxt["$name"] != $versiontxt_fwd["$name"] or $versionstxt["$name"] != $versiontxt_rev["$name"]) {
-                print ' (fwd: ' . $versiontxt_fwd["$name"] . ') (rev: ' . $versiontxt_rev["$name"] . ')';
-            }
-        }
         print '</td>';
         print '</tr>';
     endforeach;
@@ -1455,89 +990,6 @@ if ($istoplevel) {
     $baifile              = 'rawlib.bam.bai';
 }
 
-//If the Analysis is done, present the files
-if (!$progress) {
-    if ($PairedEnd) {
-        print "<thead><tr>";
-
-        //header info here
-        //	                  print "<th></th>";
-        print "<th>Union</th>";
-        print "<th>Corrected</th>";
-        //                  print "<th>Paired Forward</th>";
-        //                  print "<th>Paired Reverse</th>";
-        print "<th>Unpaired Forward</th>";
-        print "<th>Unpaired Reverse</th>";
-
-        print "</tr></thead>";
-    } else {
-        print "<thead>";
-        print "</thead>";
-    }
-
-    if (!$align_full) {
-        print "<tr><td><a href='$bamfile'>Sampled Library Alignments (BAM)</a ></td> </tr>";
-        print "<tr><td><a href='$baifile'>Sampled Library Alignments (BAI)</a ></td> </tr>";
-    } else {
-        print "<tr>";
-        if (!$is_proton_composite) {
-            print "<td><a href='$bamfile'>Full Library Alignments (BAM)</a></td>";
-        }
-        if ($PairedEnd) {
-            print "<td><a href='$bamfile_corrected'>Full Library Alignments (BAM)</a></td> ";
-            //                                            print "<td><a href='$bamfile_fwd'>Full Library Alignments (BAM)</a></td> ";
-            //                                            print "<td><a href='$bamfile_rev'>Full Library Alignments (BAM)</a></td> ";
-            print "<td><a href='$bamfile_singleton_fwd'>Full Library Alignments (BAM)</a></td> ";
-            print "<td><a href='$bamfile_singleton_rev'>Full Library Alignments (BAM)</a></td> ";
-        }
-        print "</tr>";
-
-        print "<tr>";
-        if (!$is_proton_composite) {
-            print "<td><a href='$baifile'>Full Library Alignments (BAI)</a></td>";
-        }
-        if ($PairedEnd) {
-            print "<td><a href='$baifile_corrected'>Full Library Alignments (BAI)</a></td> ";
-            //                                            print "<td><a href='$baifile_fwd'>Full Library Alignments (BAI)</a></td> ";
-            //                                            print "<td><a href='$baifile_rev'>Full Library Alignments (BAI)</a></td> ";
-            print "<td><a href='$baifile_singleton_fwd'>Full Library Alignments (BAI)</a></td> ";
-            print "<td><a href='$baifile_singleton_rev'>Full Library Alignments (BAI)</a></td> ";
-        }
-        print "</tr>";
-    }
-
-    if (file_exists("barcodeList.txt")) {
-        if (file_exists($basecaller_results."barcodeFilter.txt")) {
-            print "<tr><td><a href='$basecaller_results/barcodeFilter.txt'>Barcode read frequency filter</a></td> </tr>";
-        }
-    }
-
-    if (file_exists("alignment_barcode_summary.csv")) {
-        //if there are barcodes zip the bam and bai files
-
-        print "<tr><td><a href='alignment_barcode_summary.csv'>Barcode Alignment Summary</a ></td> </tr>";
-        print "<tr><td><a href='$base_name.barcode.bam.zip'>Barcode-specific Library Alignments (BAM)</a></td> </tr>";
-        print "<tr><td><a href='$base_name.barcode.bam.bai.zip'>Barcode-specific Library Alignments (BAI)</a></td> </tr>";
-    }
-
-    if ($PairedEnd) {
-        print '</table><table class="noheading">';
-    }
-    $page_url = "/". parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH) . "?no_header=True";
-	$url_1 = "/". parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH);
-	$url_2 = substr($url_1, 0, strrpos($url_1, '_'));
-	$url_split = explode('_', $url_1);
-	$url_split = array_reverse($url_split);
-	$pk = substr($url_split[0], 0, -1);
-	if(substr($pk, 0, 1) == '0') {
-	    $pk = substr($pk, 1);
-	}
-
-    print "<tr><td><a href='Default_Report.php?do_print=True'>PDF of this Report </a> </td> </tr>";
-
-
-}
-
 if (file_exists("drmaa_stdout_block.txt")) {
     print "<tr><td><a href='drmaa_stdout_block.txt'>Developer link: Block stdout</a> </td> </tr>";
 }
@@ -1549,6 +1001,17 @@ if (file_exists("drmaa_stdout.txt")) {
 }
 if (file_exists("sigproc_results/sigproc.log")) {
     print "<tr><td><a href='sigproc_results/sigproc.log'>Developer link: sigproc.log</a> </td> </tr>";
+}
+
+if ($istoplevel) {
+    $url_1 = "/". parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH);
+    $url_split = explode('_', $url_1);
+    $url_split = array_reverse($url_split);
+    $pk = substr($url_split[0], 0, -1);
+    if(substr($pk, 0, 1) == '0') {
+        $pk = substr($pk, 1);
+    }
+    print "<tr><td><a href='../../../report/" . $pk . "'>Plugins</a> </td> </tr>";
 }
 
 if (file_exists("/opt/ion/.developerversion")) {
@@ -1563,37 +1026,6 @@ if (file_exists("/opt/ion/.developerversion")) {
 print "</table></div></div>";
 
 ?>
-<!--  end of files -->
-<div id="pluginStatus" class='report_block'>
-    <h2>Plugin Summary</h2>
-
-    <div>
-        <div id="toolbar" class="ui-widget-header ui-corner-all">
-            <a id="pluginDialogButton" name="pluginDialogButton">Select Plugins To
-            Run</a> <span style="left: 200px; position: relative;" id=
-            "pluginLoadMsg"></span> <a id="pluginRefresh" name=
-            "pluginRefresh">Refresh Plugin Status</a>
-        </div>
-
-        <div id="pluginStatusLoad"></div>
-
-        <table id="pluginStatusTable">
-            <col width='70%' />
-            <col width='30%' />
-        </table>
-    </div><!--plugin status wrapper -->
-</div>
-
-<div id="pluginDialog">
-    <div id="pluginLoad"></div>
-
-    <div id="pluginList"></div>
-</div>
-<pre id="logBox" style="display:hidden"></pre>
-<!--  end plugin dialog -->
-
-</div>
-
 <script type="text/javascript">
 
 function htmlEscape(str) {
@@ -1605,94 +1037,11 @@ String.prototype.endsWith = function (str) {
     return (this.match(str + "$") == str)
 }
 
-//get the status of the plugins from the API
-function pluginStatusLoad() {
-    //init the spinner -- this is inside of the refresh button
-    $('#pluginRefresh').activity({
-        segments: 10,
-        width: 3,
-        space: 2,
-        length: 3,
-        color: '#252525',
-        speed: 1.5,
-        padding: '3',
-        align: 'left'
-    });
-    $("#pluginStatusTable").fadeOut();
-    $("#pluginStatusTable").html("");
-    $.ajax({
-        type: 'GET',
-        url: djangoURL,
-        contentType: "application/json; charset=utf-8",
-        dataType: "json",
-        async: false,
-        success: function (data) {
-            for (var i = 0; i < data.length; i++) {
-                var row = "";
-                //Write plugin name
-                row += "<tr><th>";
-                row += data[i].Name;
-                row += " &#8212; v";
-                row += data[i].Version;
-                row += "</th><th>";
-                //Write the job status
-                row += data[i].State;
-                row += '<span style="float: right;"><a class="pluginLog ui-icon ui-icon-script" data-title="Log for ' + data[i].Name + '" title="Log File for ' + data[i].Name + '" href="plugin_out/' + data[i].Name + '_out/drmaa_stdout.txt">log</a></span>';
-                row += "</th></tr>";
-                //for each file make a new row under the plugin name
-                //if it ends with _block.html or _block.php then render that to a div inline
-                row += '<tr colspan=2 id="' + data[i].Name + '">';
-                if (data[i].Files) {
-                    for (var j = 0; j < data[i].Files.length; j++) {
-                        if (data[i].Files[j].endsWith("_block.html") || data[i].Files[j].endsWith("_block.php")) {
-                            row += '<tr ><td  colspan=2 style="padding: 0px;"><div class="pluginLevel1">';
-                            row += '<iframe id="' + data[i].Name + '" class="pluginBlock" src="plugin_out/' + data[i].Name + '_out/' + data[i].Files[j] + '" width="95%" frameborder="0" height="0px" ></iframe>';
-                            row += "</div></td></td>";
-                        }
-                        else {
-                            row += '<tr><td colspan=2 style="padding: 0px;">';
-                            row += '<div class="pluginLevel1">&#8227; <a href=plugin_out/' + data[i].Name + '_out/' + data[i].Files[j] + '>';
-                            row += data[i].Files[j];
-                            row += "</a></div></td></td>";
-                        }
-                    }
-                }
-                row += '</tr>';
-                $("#pluginStatusTable").append(row);
-                $('.pluginLog').tipTip({
-                    position: 'left'
-                });
-            }
-        },
-        error: function (msg) {
-            $("#pluginStatusTable").text("Failed to get Plugin Status: " + msg);
-        }
-    }); //for ajax call
-    $("#pluginStatusTable").fadeIn();
-    $('#pluginRefresh').activity(false);
-    //not pretty
-    //try to resize the iframes for a while
-    for (i = 100; i < 10000; i = i + 200) {
-        setTimeout("resizeiFrames()", 200);
-    }
-}
-
-function resizeiFrames(){
-    //Resize the iframe blocks
-    $(".pluginBlock").each(function(){
-        $(this).height($(this).contents().height());
-    });
-}
-
-
 $(document).ready(function(){
 
 //remove the old header
 $(".topbar").remove()
 
-$(window).scroll(function () {
-    resizeiFrames();
-});
 
 <?php
 //write the javascript var with php
@@ -1719,162 +1068,6 @@ $('.tip').tipTip({
 });
 $('.tip_r').tipTip({
     position: 'bottom'
-});
-//do the initial plugin status load
-pluginStatusLoad();
-//provide the SGE log for plugins
-$('.pluginLog').live("click", function () {
-    var url = $(this).attr("href");
-    dialog = $("#logBox");
-    dialog.html("");
-    var title = $($(this)).data("title");
-    // load remote content
-    var logParent = $($(this).parent());
-    logParent.activity({
-        segments: 10,
-        width: 3,
-        space: 2,
-        length: 2.5,
-        color: '#252525',
-        speed: 1.5,
-        padding: '3'
-    });
-    $.get(
-    url, function (responseText) {
-        dialog.html(htmlEscape(responseText));
-        logParent.activity(false);
-        dialog.dialog({
-            width: 900,
-            height: 600,
-            title: title,
-            buttons: [{
-                text: "Close",
-                click: function () {
-                    $(this).dialog("close");
-                }
-            }]
-        });
-    });
-    //prevent the browser to follow the link
-    return false;
-});
-$("#pluginRefresh").button({
-    icons: {
-        primary: 'ui-icon-refresh'
-    }
-}).click(function () {
-    pluginStatusLoad()
-});
-//the plugin launcher
-$("#pluginDialogButton").button({
-    icons: {
-        primary: 'ui-icon-wrench'
-    }
-}).click(function () {
-    //open the dialog
-    $("#pluginDialog").dialog({
-        width: 500,
-        height: 600,
-        title: "Plugin List",
-        buttons: [{
-            text: "Close",
-            click: function () {
-                $(this).dialog("close");
-            }
-        }]
-    });
-    //init the loader
-    $("#pluginList").html("");
-    $("#pluginLoad").html("<span>Loading Plugin List <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
-    $("#pluginList").html("");
-    $("#pluginList").hide();
-    //get the list of plugins from the API
-    $.ajax({
-        url: '/rundb/api/v1/plugin/?selected=true&limit=0&format=json&order_by=name',
-        dataType: 'json',
-        type: 'GET',
-        async: false,
-        success: function (data) {
-            var items = [];
-            if (data.objects.length == 0) {
-                $("#pluginLoad").html("");
-                $("#pluginList").html("<p> There are no plugins what are enabled </p>");
-                return false;
-            }
-            $("#pluginList").html('<ul id="pluginUL" class="expandable"></ul>');
-            plugins = data.objects.sort(function (a, b) {
-                return a.name.toLowerCase() > b.name.toLowerCase() ? 1 : -1;
-            });
-            //build the query string in a way that works with IE7 and IE8
-            plugin_ids = "";
-            $.each(plugins, function (count, value) {
-                plugin_ids += value.id;
-                if (count + 1 != plugins.length) {
-                    plugin_ids += ";";
-                }
-            });
-            //get plugin metadata
-            $.ajax({
-                url: "/rundb/api/v1/plugin/set/" + plugin_ids + "/type/?format=json",
-                success: function (plugin_types) {
-                    for (var i = 0; i < plugins.length; i++) {
-                        val = plugins[i];
-                        data = plugin_types[val.id];
-                        if (data.input != undefined) {
-                            $("#pluginUL").append('<li data-id="' + val.id + '" class="plugin_input_class" id="' + val.name + '_plugin"><a href="' + data.input + '?report=' + djangoPK + '" class="plugin_link colorinput">' + val.name + '</a>' + '<span>' + " &#8212; v" + val.version + '</span></li>');
-                        }
-                        else {
-                            $("#pluginUL").append('<li data-id="' + val.id + '" class="plugin_class" id="' + val.name + '_plugin"><a href="#pluginDialog">' + val.name + '</a>' + '<span>' + " &#8212; v" + val.version + '</span></li>');
-                        }
-                    }
-                },
-                async: false,
-                type: 'GET',
-                dataType: 'json'
-            });
-            $(".colorinput").colorbox({
-                width: "90%",
-                height: "90%",
-                iframe: true
-            })
-            $("#pluginLoad").html('<h5>' + "Click a plugin to run:" + '</h5>');
-            $("#pluginList").show();
-        }
-    });
-    //now the the for each is done, show the list
-    $(".plugin_input_class").die("click");
-    $(".plugin_input_class").live("click", function () {
-        $("#pluginDialog").dialog("close");
-    });
-    $(".plugin_class").die("click");
-    $(".plugin_class").live('click', function () {
-        //get the plugin id
-        var id = $(this).data('id');
-        var pluginName = $(this).attr("id");
-        //get the plugin name
-        pluginName = pluginName.substring(0, pluginName.length - 7)
-        //build the JSON to post
-        pluginAPIJSON = {
-            "plugin": [pluginName]
-        };
-        pluginAPIJSON = JSON.stringify(pluginAPIJSON);
-        $.ajax({
-            type: 'POST',
-            url: djangoURL,
-            async: true,
-            contentType: "application/json; charset=utf-8",
-            data: pluginAPIJSON,
-            dataType: "json",
-            beforeSend: function () {
-                $("#pluginList").html("");
-                $("#pluginLoad").html("<span>Launching Plugin " + pluginName + " <img src='/site_media/jquery/colorbox/images/loading.gif'></img></span>");
-            },
-            success: function () {
-                $("#pluginDialog").dialog("close");
-                pluginStatusLoad();
-            }
-        });
-    });
 });
 $('h2').append('<a href="javascript:;" class="expandCollapseButton" title="Collapse Section"></a>');
 $('.expandCollapseButton').toggle(function () {

@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include "SampleStats.h"
 
+#define NC_CORRELATION_EPSILON .00001
+
 /**
  * Class to keep track of differences between two sets of paired
  * numbers. Designed initially for integration testing to keep see if
@@ -18,18 +20,24 @@ public:
 
   /** Constructor */
   NumericalComparison() {
-    mEpsilon = 0;
-    mNumDiff = 0;
-    mNumSeen = 0;
+    Init(0);
   }
 
   /** Constructor, epsilon is the maximum allowed difference to be
       considered the same. */
   NumericalComparison(const T &epsilon) {
+    Init(epsilon);
+  }
+
+  /** Initialize */
+  void Init(const T &epsilon) {
     mEpsilon = epsilon;
     mNumDiff = 0;
     mNumSeen = 0;
   }
+
+  /** Should we tolerate non-finite values like NaNs and Infs */
+  void SetTolerateNaN(bool value) { mTolerateNans = value; }
 
   /** Set the name of the column */
   void SetName(const std::string &name) { mName = name; }
@@ -40,6 +48,12 @@ public:
    * particiular x & y are closer than epsilon, false otherwise.
   */
   bool AddPair(const T &x, const T &y) {
+    if (isnan(x) && isnan(y)) {
+      return true;
+    }
+    if (isinf(x) && isinf(y)) {
+      return true;
+    }
     bool closeEnough = true;
     mNumSeen++;
     T xy = x * y;
@@ -73,6 +87,13 @@ public:
     return correlation;
   }
 
+  bool CorrelationOk(double min_value, double epsilon=NC_CORRELATION_EPSILON) {
+    if (GetCorrelation() + epsilon >= min_value) {
+      return true;
+    }
+    return false;
+  }
+
   const SampleStats<T> &GetXStats() const { return mX; };
 
   const SampleStats<T> &GetYStats() const { return mY; };
@@ -99,6 +120,7 @@ public:
   COUNT mNaN;
   COUNT mNumDiff;
   COUNT mNumSeen;
+  bool mTolerateNans; // quietly ignore nans, and infs
   T mEpsilon;
 };
 

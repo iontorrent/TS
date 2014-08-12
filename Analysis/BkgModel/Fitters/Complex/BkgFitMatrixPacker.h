@@ -7,6 +7,8 @@
 #include <stdlib.h>
 #include <float.h>
 #include "BkgMagicDefines.h"
+#include "BeadParams.h"
+#include "RegionParams.h"
 
 class BkgFitMatDat;
 
@@ -73,10 +75,26 @@ struct PartialDeriv_comp_list_item {
 
 // structure that holds all the information to describe how a single jtj or rhs
 // matrix element can be constructed from pieceis of two different PartialDeriv components
-struct mat_assy_input_line {
+class mat_assy_input_line {
+  mat_assy_input_line( const mat_assy_input_line & );             // Don't do this.
+  mat_assy_input_line & operator=( const mat_assy_input_line & ); // Don't do this, either.
+
+  int * affected_flows;
+public:
+  mat_assy_input_line() { 
+    affected_flows = 0;
+    comp1 = comp2 = TBL_END;
+    mat_row = mat_col = 0;
+    matId = JTJ_MAT;
+  }
+  ~mat_assy_input_line() { delete [] affected_flows; }
+  void realloc( int size ) { delete [] affected_flows; affected_flows = new int[size]; }
+
   PartialDerivComponent comp1;
   PartialDerivComponent comp2;
-  int affected_flows[NUMFB];
+
+  int GetAffectedFlow( int which ) { return affected_flows[which]; }
+  void SetAffectedFlow( int which, int value ) { affected_flows[which] = value; }
 
   AssyMatID matId;
   int mat_row;
@@ -104,7 +122,9 @@ struct mat_assembly_instruction {
 // to the params structure
 struct delta_mat_output_line {
   int delta_ndx;
-  int param_ndx;
+  float * ( BeadParams::* bead_params_func )();
+  float * ( reg_params::*  reg_params_func  )();
+  int array_index;
 };
 
 // collection of all input and output instruction information for a single fit configuration
@@ -124,9 +144,9 @@ typedef enum {
 class BkgFitMatrixPacker
 {
  public:
-  BkgFitMatrixPacker(int imgLen,fit_instructions &fi,PartialDeriv_comp_list_item *PartialDeriv_list,int PartialDeriv_list_len);
+  BkgFitMatrixPacker(int imgLen,fit_instructions &fi,PartialDeriv_comp_list_item *PartialDeriv_list,int PartialDeriv_list_len, int flow_block_size);
 
-  LinearSolverResult GetOutput(float *dptr,double lambda, double regularizer);
+  LinearSolverResult GetOutput(BeadParams *bp, reg_params *rp,double lambda, double regularizer);
 
   unsigned int GetPartialDerivMask(void) {return PartialDeriv_mask;}
 	
@@ -144,7 +164,7 @@ class BkgFitMatrixPacker
 
   float *GetPartialDerivComponent(PartialDerivComponent comp);
 
-  void CreateInstrFromInputLine(mat_assembly_instruction *p,mat_assy_input_line *src,int imgLen);
+  void CreateInstrFromInputLine(mat_assembly_instruction *p,mat_assy_input_line *src,int imgLen, int flow_block_size);
 
   delta_mat_output_line *outputList;
   int nOutputs;

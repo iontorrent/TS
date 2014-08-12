@@ -39,7 +39,7 @@ def list_directory(path):
         full = os.path.join(path, name)
         try :
             stats = os.stat(full)
-        except OSError, e:
+        except OSError as e:
             if e.errno == errno.ENOENT and os.path.islink(full):
                 stats = os.lstat(full)
                 logger.error("Path %s is a broken symlink" % full)

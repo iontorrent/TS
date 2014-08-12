@@ -26,10 +26,41 @@
                                 "Allowed values: Integers >= 0 ",
                                 "Recommended values between 5 and 20 "],
 
-        "snp_strand_bias":["Filter: proportion of variant alleles comes overwhelmingly from one strand.",
+        "snp_strand_bias":["Filter: when proportion of variant alleles comes overwhelmingly from one strand and given snp_strand_bias_pval filter is activated.",
                                "Related VCF field: STB",
                                "Allowed values: Decimal numbers between 0.5 and 1.0",
                                "Recommended 0.95"],
+
+        "snp_strand_bias_pval":["Filter: when bootstrap pval of strand bias unequal on each strand is less than this and given snp_strand_bias filter is activated.",
+                               "Related VCF field: STBP",
+                               "Allowed values: Decimal numbers between 0 and 1.0",
+                               "Recommended 0.01"],    
+
+         "mnp_min_cov_each_strand":["Filter: Minimum coverage required on each strand",
+                                     "Allowed values: Integers >= 0",
+                                     "Recommended values to match snp_min_cov_each_strand" ],
+
+        "mnp_min_variant_score":["Filter: Phred-scaled evidence that the reads support a variant above minimum frequency",
+                                  "Quality: Integers >= 0",
+                                  "Recommended values > mnp_min_variant_score "],
+
+        "mnp_min_allele_freq":["Frequency cutoff for supporting a variant",
+                                "Allowed values: Decimal numbers between 0 and 1.0",
+                                "Recommended values to match snp_min_allele_freq"],
+
+        "mnp_min_coverage":["total coverage required of reads or no-call",
+                                "Allowed values: Integers >= 0 ",
+                                "Recommended values to match snp_min_coverage"],
+
+        "mnp_strand_bias":["Filter: when proportion of variant alleles comes overwhelmingly from one strand and given snp_strand_bias_pval filter is activated.",
+                               "Related VCF field: STB",
+                               "Allowed values: Decimal numbers between 0.5 and 1.0",
+                               "Recommended to match snp_strand_bias"],
+
+        "mnp_strand_bias_pval":["Filter: when bootstrap pval of strand bias unequal on each strand is less than this and given snp_strand_bias filter is activated.",
+                               "Related VCF field: STBP",
+                               "Allowed values: Decimal numbers between 0 and 1.0",
+                               "Recommended snp_strand_bias_pval"],    
 
         "indel_min_cov_each_strand":["Filter: Minimum coverage required on each strand",
                                      "Allowed values: Integers >= 0",
@@ -47,11 +78,16 @@
                                 "Allowed values: Integers >= 0",
                                 "Recommended values between 15 and 30"],
 
-        "indel_strand_bias":["Filter: proportion of variant alleles comes overwhelmingly from one strand.",
+        "indel_strand_bias":["Filter: proportion of variant alleles comes overwhelmingly from one strand and given indel_strand_bias_pval filter is activated.",
                                "Related VCF field: STB",
                                "Allowed values: Decimal numbers between 0.5 and 1.0",
                                "Recommended 0.95"],
         
+        "indel_strand_bias_pval":["Filter: when bootstrap pval of strand bias unequal on each strand is less than this and given indel_strand_bias filter is activated.",
+                               "Related VCF field: STBP",
+                               "Allowed values: Decimal numbers between 0 and 1.0",
+                               "Recommended 1.0"],    
+
         "hotspot_min_cov_each_strand":["Filter: Minimum coverage required on each strand",
                                      "Allowed values: Integers >= 0",
                                      "Recommended >= 3" ],
@@ -68,10 +104,15 @@
                                 "Allowed values: Integers >=0",
                                 "Recommended values between 5 and 20"],
 
-        "hotspot_strand_bias":["Filter:  proportion of variant alleles comes overwhelmingly from one strand.",
+        "hotspot_strand_bias":["Filter:  proportion of variant alleles comes overwhelmingly from one strand and given hotspot_strand_bias_pval filter is activated.",
                                "Related VCF field: STB",
                                "Allowed values: Decimal numbers between 0.5 and 1.0",
                                "Recommended 0.95"],
+
+        "hotspot_strand_bias_pval":["Filter: when bootstrap pval of strand bias unequal on each strand is less than this and given hotspot_strand_bias filter is activated.",
+                               "Related VCF field: STBP",
+                               "Allowed values: Decimal numbers between 0 and 1.0",
+                               "Recommended 1.0"],    
         
         "prediction_precision":["Number of pseudo-data-points suggesting our predictions match the measurements without bias",
                                 "Allowed values: Decimal numbers >= 0  ",
@@ -115,7 +156,7 @@
                                 
         "do_snp_realignment":["Realign reads in the vicinity of SNP candidates.",
                               "Allowed values: 0 = do not realign, 1 = realign",
-                              "Recommended value: (germline) 0, (somatic) 1"],
+                              "Recommended value: PGM: (germline) 0, (somatic) 1; Proton: (germline) 1, (somatic) 1"],
                                 
         "suppress_recalibration": ["Recalibration values from pipeline used or not (experimental)",
                                    "No related fields, changes basecalling behavior",

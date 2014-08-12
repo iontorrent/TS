@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <armadillo>
 #include "H5File.h"
+#include "H5Arma.h"
 
 using namespace std;
 using namespace arma;
@@ -15,9 +16,9 @@ TEST(H5Handle_Test, QuickMatrixTest) {
     *i = count++;
   }
   //  mymat.raw_print(cout);
-  H5File::WriteMatrix("tmp.h5:/path/to/mat", mymat, false);
+  H5Arma::WriteMatrix("tmp.h5:/path/to/mat", mymat, false);
   Mat<float> m;
-  H5File::ReadMatrix("tmp.h5:/path/to/mat", m);
+  H5Arma::ReadMatrix("tmp.h5:/path/to/mat", m);
   Mat<float>::iterator gold, test;
   for (gold = mymat.begin(), test = m.begin(); gold != mymat.end(); gold++, test++) {
     float g = *gold;
@@ -39,9 +40,9 @@ TEST(H5Handle_Test, MatrixTest) {
     H5File file;
     file.SetFile("tmp.h5");
     file.Open(true);
-    H5DataSet *ds = file.CreateDataSet("/tmp/fun/mat", mymat, 0);
+    H5DataSet *ds = H5Arma::CreateDataSet(file,"/tmp/fun/mat", mymat, 0);
     //H5DataSet *ds = file.CreateDataSet("mat", mymat, 0);
-    ds->WriteMatrix(mymat);
+    H5Arma::WriteMatrix(*ds, mymat);
     ds->Close();
   }
   {
@@ -51,7 +52,7 @@ TEST(H5Handle_Test, MatrixTest) {
     H5DataSet *ds = file.OpenDataSet("/tmp/fun/mat");
     //    H5DataSet *ds = file.OpenDataSet("mat");
     Mat<float> m;
-    ds->ReadMatrix(m);
+    H5Arma::ReadMatrix(*ds, m);
     //    m.raw_print(cout);
     Mat<float>::iterator gold, test;
     for (gold = mymat.begin(), test = m.begin(); gold != mymat.end(); gold++, test++) {

@@ -1,0 +1,17 @@
+reference chromosomes:
+	gi|49175990|ref|NC_000913.2|_Escherichia_coli_str._K-12_substr._MG1655__complete_genome__cropped_to_first_10000_nucleotides (10000 bp)
+
+total genome size: 10000
+
+gap min size: 50
+partial gene/operon min size: 100
+
+genes loaded: 10
+operons loaded: 2
+
+
+assembly                 | genome    | duplication | gaps      | genes     | partial   | operons   | partial   |
+                         | fraction  | ratio       | number    |           | genes     |           | operons   |
+================================================================================================================
+contigs_1                | 67.12000% | 1.00000     | 3         | 5         | 4         | 1         | 1         |
+contigs_2                | 54.61000% | 1.00000     | 5         | 1         | 6         | 0         | 2         |

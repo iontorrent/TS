@@ -7,19 +7,23 @@
 #include <fstream>
 #include "Mask.h"
 #include "BFReference.h"
-#include "KeyClassifier.h"
+//#include "KeyClassifier.h"
 #include "Separator.h"
 #include "RegionAvgKeyReporter.h"
 #include "Traces.h"
 #include "TraceStore.h"
-#include "TraceStoreMatrix.h"
+#include "TraceStoreCol.h"
 #include "H5File.h"
 #include "RawWells.h"
+#include "AdvCompr.h"
+#include "ImageNNAvg.h"
+#include "TauEFitter.h"
 #define FRAMEZERO 0
 #define FRAMELAST 100
 #define FIRSTDCFRAME 3
 #define LASTDCFRAME 12
 #define BUFFEREXTRA 20
+class TraceSaver;
 
 /** Collection of different options for doing beadfind and separation. */
 class DifSepOpt
@@ -33,12 +37,12 @@ class DifSepOpt
       predictWidth = 0;
 
       maxKeyFlowLength = 7;
-      flowOrder = "TCAG";
+      flowOrder = "TACG";
       reportStepSize = 0;
       maxMad = 30;
       bfThreshold = .5;
       minSnr = 8;
-      minBfGoodWells = 30;
+      minBfGoodWells = 100;
       bfMeshStep = 50;
       clusterMeshStep = 50;
       t0MeshStep = 50;
@@ -46,7 +50,7 @@ class DifSepOpt
       tauEEstimateStep = 50;
       nCores = -1;
 
-      minTauESnr = 13;
+      minTauESnr = 6;
       sigSdMult = 6;
       doMeanFilter = true;
       doSigVarFilter = true;
@@ -88,10 +92,12 @@ class DifSepOpt
       referenceStep = 50;
       referencePickStep = 25;
       blobFilter = true;
-      blobFilterStep = 100;
+      blobFilterStep = 50;
       predictFlowStart = -1;
       predictFlowEnd = -1;
       predictRegion = "300,200,300,200";
+      gainMult = 1;
+      skipBuffer = false;
       //      predictRegion = "0,100,0,100";
       //      predictRegion = "0,20,0,20";
       //      predictFlowStart = 0;
@@ -174,6 +180,8 @@ class DifSepOpt
     int predictFlowStart, predictFlowEnd;
     int predictRow,predictHeight,predictCol,predictWidth;
     string predictRegion; // row, height, col width
+    int gainMult;
+    bool skipBuffer;
 };
 
 /**
@@ -186,13 +194,13 @@ class DifferentialSeparator : public AvgKeyIncorporation
 
   public:
   enum FilterType {
-    Initialized,
-    GoodWell,          // 1
-    PinnedExcluded,    // 2 
-    NotCompressable,   // 3
-    LowTraceSd,        // 4
-    BeadfindFiltered,  // 5
-    RegionTraceSd,     // 6
+    GoodWell,          // 0
+    PinnedExcluded,    // 1 
+    NotCompressable,   // 2
+    LowTraceSd,        // 3
+    BeadfindFiltered,  // 4
+    RegionTraceSd,     // 5
+    WellDevZeroNorm,   // 6
   };
 
   static std::string NameForFilter(enum FilterType filter) {
@@ -209,6 +217,9 @@ class DifferentialSeparator : public AvgKeyIncorporation
       return "BeadfindFilt";
     case RegionTraceSd :
       return "RegionTraceSd";
+    case WellDevZeroNorm :
+      return "WellDevZeroNorm";
+      
     default:
       return "Unknown";
     }
@@ -262,26 +273,18 @@ class DifferentialSeparator : public AvgKeyIncorporation
                         float maxMad,
                         float minBeadSnr,
                         size_t minGoodWells,
-                        BFReference &reference,
+                        vector<float> &bfMetric,
                         vector<KeyFit> &wells,
                         double trim,
+                        bool doCenter,
                         MixModel &model);
 
 
-  void ReportPinned(Mask &mask, const std::string &header="") {
-    int sum = 0;
-    size_t nWells = mask.H() * mask.W();
-    for (size_t i = 0; i < nWells; i++) {
-      if (mask[i] & MaskPinned) {
-        sum++;
-      }
-    }
-    std::cout  << header << " - Num Pinned is: " << sum << endl;
-  }
-
-  /** Load mask or make a mask with all empties (for cropped sets) */
-	void LoadInitialMask(Mask *preMask, const std::string &maskFile, const std::string &imgFile, Mask &mask, int ignoreChecksumErrors = 0);
-
+    /** Load mask or make a mask with all empties (for cropped sets) */
+    void LoadInitialMask(Mask *preMask, const std::string &maskFile, const std::string &imgFile, Mask &mask, int ignoreChecksumErrors = 0);
+    
+        void FilterPixelSd(struct RawImage *raw, float min_val, vector<char> &well_filters);
+        
     /** Make usual TCAG and ATCG keys. */
     void MakeStadardKeys (std::vector<KeySeq> &keys);
 
@@ -289,22 +292,48 @@ class DifferentialSeparator : public AvgKeyIncorporation
     void SetKeys (const std::vector<KeySeq> &_keys) {keys = _keys; }
 
     /** Set the keys from Analysis binary format. */
-    void SetKeys (SequenceItem *seqList, int numSeqListItems, float minLibSnr, float minTfSnr);
+    void SetKeys (SequenceItem *seqList, int numSeqListItems, 
+                  float minLibSnr, float minTfSnr,
+                  float minLibPeak, float minTfPeak);
+    
 
     /** Utility function to print keys to stdout. */
     void PrintKey (const KeySeq &k, int kIx);
 
     /** Don't do separation just clustering from beadfind statistic */
-    void DoJustBeadfind (DifSepOpt &opts, BFReference &reference);
+    void DoJustBeadfind (DifSepOpt &opts, vector<float> &bfMetric);
 
     void CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, const std::string &file);
-    void CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec, const std::string &file);
-    void CalcRegionEmptyStat(H5File &h5File, GridMesh<MixModel> &mesh, TraceStore<double> &store, 
+    void CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, std::vector<float> &ssq, Image &img);
+    void CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec, std::vector<float> &ssq, const std::string &file);
+    void CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec, std::vector<float> &ssq, Image &img, bool filt);
+    void CalcRegionEmptyStat(H5File &h5File, GridMesh<MixModel> &mesh, TraceStore &store, 
                              const string &fileName, 
                              vector<int> &flows, Mask &mask);
-    static void PrintVec(Col<double> &vec);
-    static void PrintWell(TraceStore<double> &store, int well, int flow);    
-  /** Do a beadfind/bead classification based on options passed in. */
+    static void PrintVec(Col<float> &vec);
+    static void PrintWell(TraceStore &store, int well, int flow);    
+    /** Do a beadfind/bead classification based on options passed in. */
+    void FitTauE(DifSepOpt &opts, TraceStoreCol &traceStore, GridMesh<struct FitTauEParams> &emptyEstimates,
+                 std::vector<char> &filteredWells, std::vector<float> &ftime, std::vector<int> &allZeroFlowsx);
+    void FitKeys(DifSepOpt &opts, GridMesh<struct FitTauEParams> &emptyEstimates, 
+                 TraceStoreCol &traceStore, std::vector<KeySeq> &keys, 
+                 std::vector<float> &ftime, TraceSaver &saver,
+                 Mask &mask, std::vector<KeyFit> &wells);
+    void FitKeys(PJobQueue &jQueue, DifSepOpt &opts, GridMesh<struct FitTauEParams> &emptyEstimates, 
+                 TraceStoreCol &traceStore, std::vector<KeySeq> &keys, 
+                 std::vector<float> &ftime, TraceSaver &saver,
+                 Mask &mask, std::vector<KeyFit> &wells);
+
+    void DoRegionClustering(DifSepOpt &opts, Mask &mask, vector<float> &bfMetric, float madThreshold,
+                            std::vector<KeyFit> &wells, GridMesh<MixModel> &modelMesh);
+    void ClusterIndividualWells(DifSepOpt &opts, Mask &bfMask, Mask &mask, TraceStoreCol &traceStore,
+                                GridMesh<MixModel> &modelMesh, std::vector<KeyFit> &wells, std::vector<char> &clusters);
+    void AssignAndCountWells(DifSepOpt &opts, std::vector<KeyFit> &wells, Mask &bfMask, 
+                             std::vector<char> &filteredWells,int minLibPeak, int minTfPeak,
+                             float sepRefSdThresh, float madThreshold );
+    void HandleDebug(std::vector<KeyFit> &wells, DifSepOpt &opts, const std::string &h5SummaryRoot, 
+                     TraceSaver &saver, Mask &mask, TraceStoreCol &traceStore, GridMesh<MixModel> &modelMesh);
+    void OutputStats(DifSepOpt &opts, Mask &bfMask);
   int Run(DifSepOpt opts);
   void CalculateFrames(SynchDat &sdat, int &minFrame, int &maxFrame); 
   void FilterRegionBlobs(Mask &mask, int rowStart, int rowEnd, int colStart, int colEnd, int chipWidth,
@@ -313,45 +342,26 @@ class DifferentialSeparator : public AvgKeyIncorporation
   void FilterBlobs(Mask &mask, int step,
                    Col<float> &metric, vector<char> &filteredWells, int smoothWindow,
                    int filtWindow, float filtThreshold);
-  void LoadKeySDats(PJobQueue &jQueue, TraceStore<double> &traceStore, BFReference &reference, DifSepOpt &opts);
-  void LoadKeyDats(PJobQueue &jQueue, TraceStoreMatrix<double> &traceStore, BFReference &reference, DifSepOpt &opts, std::vector<float> &traceSd, Col<int> &zeroFlows);
-
-    void SetReportSet (int rows, int cols,
-                       const std::string &wellsReportFile,
-                       int reportStepSize)
-    {
-      reportSet.SetSize (rows, cols);
-      if (wellsReportFile.empty())
-      {
-        reportSet.SetStepSize (reportStepSize);
-      }
-      else
-      {
-        reportSet.ReadSetFromFile (wellsReportFile, 0);
-      }
-    }
+  //  void LoadKeySDats(PJobQueue &jQueue, TraceStore &traceStore, vector<float> &bfMetric, DifSepOpt &opts);
+  void LoadKeyDats(PJobQueue &jQueue, TraceStoreCol &traceStore, vector<float> &bfMetric, DifSepOpt &opts, std::vector<float> &traceSd, Col<int> &zeroFlows);
 
     /** Return mask used */
-    Mask *GetMask()
-    {
+    Mask *GetMask() {
       return &bfMask;
     }
 
     /** Get the average key signal for a region (for initializing bkmodels) */
-    float *GetAvgKeySig (int region, int rStart, int rEnd, int cStart, int cEnd)
-    {
+    float *GetAvgKeySig (int region, int rStart, int rEnd, int cStart, int cEnd) {
       return mRegionIncorpReporter.GetAvgKeySig (region, rStart, rEnd, cStart, cEnd);
     }
 
     /** Get the average key signal length (for initializing bkmodels) */
-    double GetAvgKeySigLen()
-    {
+    double GetAvgKeySigLen()  {
       return mRegionIncorpReporter.GetAvgKeySigLen();
     }
 
     /** Get the nucleotide incorporating start (in frames) */
-    float GetStart (int region, int rStart, int rEnd, int cStart, int cEnd)
-    {
+    float GetStart (int region, int rStart, int rEnd, int cStart, int cEnd)  {
       return mRegionIncorpReporter.GetStart (region, rStart, rEnd, cStart, cEnd);
     }
 
@@ -359,12 +369,25 @@ class DifferentialSeparator : public AvgKeyIncorporation
     std::vector<float> GetT0() { return t0; }
 
     /** Get estimated t0 for a particular well. */
-    float GetWellT0 (int wellIndex)
-    {
-      return t0[wellIndex];
-    }
+    float GetWellT0 (int wellIndex) { return t0[wellIndex]; }
 
-    void RankWellsBySignal(int flow0, int flow1, TraceStore<double> &store,
+    void WellDeviation(TraceStoreCol &store,
+                       int rowStep, int colStep,
+                       vector<char> &filter,
+                       vector<float> &mad);
+
+    void WellDeviationRegion(TraceStoreCol &store,
+                             int row_start, int row_end,
+                             int col_start, int col_end,
+                             int frame_start, int frame_end,
+                             int flow_start, int flow_end,
+                             float *mean, float *m2,
+                             float *normalize,
+                             float *summary,
+                             vector<char> &filters,
+                             vector<float> &mad);
+
+    void RankWellsBySignal(int flow0, int flow1, TraceStore &store,
                            float iqrMult,
                            int numBasis,
                            Mask &mask,
@@ -374,7 +397,7 @@ class DifferentialSeparator : public AvgKeyIncorporation
                            std::vector<char> &filter,
                            std::vector<float> &mad);
     
-    void CreateSignalRef(int flow0, int flow1, TraceStore<double> &store,
+    void CreateSignalRef(int flow0, int flow1, TraceStore &store,
                          int rowStep, int colStep,
                          float iqrMult,
                          int numBasis,
@@ -383,25 +406,29 @@ class DifferentialSeparator : public AvgKeyIncorporation
                          std::vector<char> &filter,
                          std::vector<float> &mad);
 
-    void PickCombinedRank(BFReference &reference, vector<vector<float> > &mads,
+    void PickCombinedRank(vector<float> &bfMetric, vector<vector<float> > &mads,
                           vector<char> &filter, vector<char> &refWells,
                           int numWells,
                           int rowStart, int rowEnd, int colStart, int colEnd);
 
     /** Pick reference wells using a combined ranking of buffering and signal difference.*/ 
-    void PickCombinedRank(BFReference &reference, vector<vector<float> > &mads,
+    void PickCombinedRank(vector<float> &bfMetric, vector<vector<float> > &mads,
                           int rowStep, int colStep,
-                          int numWells,
+                          float minPercent, int numWells,
                           vector<char> &filter, vector<char> &refWells);
 
     /** Pick flows for this key that have 1mer and 0mer with same nuc. */
-    bool Find0merAnd1merFlows(KeySeq &key, TraceStore<double> &store,
+    bool Find0merAnd1merFlows(KeySeq &key, TraceStore &store,
                               int &flow0mer, int &flow1mer);
 
     /** Find flow where all keys are 0 and 1 */
     bool FindCommon0merAnd1merFlows(std::vector<KeySeq> &key_vectors,
-                                    TraceStore<double> &store,
+                                    TraceStore &store,
                                     int &flow0mer, int &flow1mer);
+
+    bool FindKey0merAnd1merFlows(KeySeq &key,
+                                 TraceStore &store,
+                                 std::vector<int>  &flow0mer, std::vector<int> &flow1mer);
 
     /** 
      * Create our initial set of reference wells using the filters set up in the BFReference object
@@ -413,50 +440,26 @@ class DifferentialSeparator : public AvgKeyIncorporation
      *
      * In short to pick good empty wells that aren't outliers in some other way.
      */
-    void PickReference(TraceStore<double> &store,
-                       BFReference &reference, 
+    void PickReference(TraceStoreCol &store,
+                       vector<float> &bfMetric, 
                        int rowStep, int colStep,
                        int useKeySignal,
                        float iqrMult,
                        int numBasis,
+                       float minPercent,
                        Mask &mask,
                        int minWells,
                        vector<char> &filter,
                        vector<char> &refWells);
 
-
     float LowerQuantile (SampleQuantiles<float> &s);
 
-    float IQR (SampleQuantiles<float> &s);
-
-    void DetermineBfFile (const std::string &resultsDir, bool &signalBased,         const std::string &bfType, const string &bfDat,
-                          const std::string &bfBgDat,
-                          std::string &bfFile, std::string &bfFile2, std::string &bfBkgFile);
-
-    void PredictFlow (const std::string &datFile,
-                      const std::string &outFile, int ignoreChecksumErrors, DifSepOpt &opts,
-                      TraceStore<double> &store,
-                      ZeromerModelBulk<double> &zModelBulk);
-
-    void PredictFlow(const std::string &datFile, const std::string &debugFile,
-                     DifSepOpt &opts, Mask &mask,
-                     std::vector<KeyFit> &fits, std::vector<float> &metric, 
-                     Col<double> &time);
-
-    void PredictWellsFlow(DifSepOpt &opts, Mask &mask,
-                          Mat<float> &raw_frames,
-                          Mat<float> &predicted_frames,
-                          Mat<float> &reference_frames,
-                          RawWells &sep_wells,
-                          int flow,
-                          ZeromerModelBulk<double> &zBulk,
-                          Col<double> &time);
+    static float IQR (SampleQuantiles<float> &s);
 
     bool InSpan (size_t rowIx, size_t colIx,
                  const std::vector<int> &rowStarts,
                  const std::vector<int> &colStarts,
                  int span);
-
 
     double GetAvg1mer (int row, int col,
                        Mask &mask, enum MaskType type,
@@ -472,27 +475,27 @@ class DifferentialSeparator : public AvgKeyIncorporation
 
     void PinHighLagOneSd (Traces &traces, float iqrMult);
 
-    void CheckFirstAcqLagOne (DifSepOpt &opts);
-    void CheckT0VFC(std::vector<float> &t, std::vector<int> &stamps);
     void CalcNumFrames(int tx, std::vector<int> &stamps, int &before_last, int &after_last, int maxStep);
 
     /**
      * Return the fit from the ZeromerModelBulk for a particular well. NULL if
      * data not available (e.g. excluded wells, pinned wells, etc.)
      */
-    const KeyBulkFit *GetBulkFit (size_t wellIx) { return zModelBulk.GetKeyBulkFit (wellIx); }
+    //    const KeyBulkFit *GetBulkFit (size_t wellIx) { return zModelBulk.GetKeyBulkFit (wellIx); }
+    float GetTauE (size_t wellIx) { return wells[wellIx].tauE; }
+    float GetTauB (size_t wellIx) { return wells[wellIx].tauB; }
 
   private:
 
-    void OutputOutliers (DifSepOpt &opts, TraceStore<double> &store,
-                         ZeromerModelBulk<double> &bg,
+    void OutputOutliers (DifSepOpt &opts, TraceStore &store,
+                         ZeromerModelBulk<float> &bg,
                          const vector<KeyFit> &wells,
                          double sdNoKeyHighT, double sdKeyLowT,
                          double madHighT, double bfNoKeyHighT, double bfKeyLowT,
                          double lowKeySignalT);
 
-    void OutputOutliers (TraceStore<double> &store,
-                         ZeromerModelBulk<double> &bg,
+    void OutputOutliers (TraceStore &store,
+                         ZeromerModelBulk<float> &bg,
                          const vector<KeyFit> &wells,
                          int outlierType,
                          const vector<int> &outputIdx,
@@ -501,8 +504,8 @@ class DifferentialSeparator : public AvgKeyIncorporation
                          std::ostream &bgOut
                         );
 
-    void OutputWellInfo (TraceStore<double> &store,
-                         ZeromerModelBulk<double> &bg,
+    void OutputWellInfo (TraceStore &store,
+                         ZeromerModelBulk<float> &bg,
                          const vector<KeyFit> &wells,
                          int outlierType,
                          int wellIdx,
@@ -512,18 +515,23 @@ class DifferentialSeparator : public AvgKeyIncorporation
 
 
     RegionAvgKeyReporter<double> mRegionIncorpReporter;
-    ReportSet reportSet;
     Mask mask;
     Mask bfMask;
     std::vector<char> keyAssignments;
     std::vector<KeySeq> keys;
     std::vector<float> t0;
-    ZeromerModelBulk<double> zModelBulk;
+    ZeromerModelBulk<float> zModelBulk;
     vector<KeyFit> wells;
-    Col<double> mTime;
+    Col<float> mTime;
     vector<char> mFilteredWells;
     vector<char> mRefWells;
     vector<int> mBFTimePoints;
+    vector<float> mBfSdFrame;
+    vector<float> mBfSSQ;
+    vector<float> mAcqSSQ;
+    vector<float> mBfMetric;
+    std::map<std::string, Image *> mImageCache;
+    //    ImageNNAvg mImageNN;
 };
 
 #endif // DIFFERENTIALSEPARATOR_H

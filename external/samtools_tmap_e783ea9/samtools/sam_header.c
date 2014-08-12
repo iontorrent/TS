@@ -557,6 +557,24 @@ sam_header_get_records(const sam_header_t *h, const char type_tag[2])
   return k == kh_end(hash) ? NULL : kh_val(hash, k);
 }
 
+// ZZ: This function differs from destroy_records in that it takes care to maintain the correct hash structure so the
+// structure sam_header_t *h can still work. 
+void
+sam_header_remove_records(const sam_header_t *h, const char type_tag[2])
+{
+  khash_t(records) *hash = NULL;
+  if (NULL == h) return;
+  hash = (khash_t(records)*)h->hash;
+  khiter_t k;
+  sam_header_tag_t key; key.tag[0] = type_tag[0]; key.tag[1] = type_tag[1];
+  k = kh_get(records, hash, key);
+  if (k == kh_end(hash)) return;
+  sam_header_records_destroy(kh_val(hash, k));
+  kh_val(hash, k) = NULL;
+  kh_del(records, hash, k);
+}
+  
+
 sam_header_record_t**
 sam_header_get_record(const sam_header_t *h, char type_tag[2], char tag[2], char *value, int32_t *n)
 {

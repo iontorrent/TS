@@ -1,0 +1,7 @@
+---
+# file: gridengine_clients.yml
+- hosts: gridengine_clients
+  roles:
+    - gridengine_clients
+  tags:
+    - gridengine

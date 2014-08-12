@@ -13,6 +13,9 @@
 #include <stdint.h>
 #include "OptArgs.h"
 
+#include "json/json.h"
+
+
 using namespace std;
 
 //! @brief    Determination of base qualities from predictors
@@ -37,8 +40,9 @@ public:
   //! @brief  Initialize the object and load phred table.
   //! @param[in]  opts                Command line options
   //! @param[in]  chip_type           Chip type, may determine default phred table
+  //! @param[in]  input_directory     Directory where 1.wells could be found
   //! @param[in]  output_directory    Directory where predictor dump file may be saved
-  void Init(OptArgs& opts, const string& chip_type, const string &output_directory, bool recalib);
+  void Init(OptArgs& opts, const string& chip_type, const string &input_directory, const string &output_directory, bool recalib);
 
   //! @brief  Generate quality values for all bases in a read.
   //! @param[in]  read_name           Read name used in predictor dump
@@ -117,7 +121,7 @@ protected:
   bool                    save_predictors_;           //!< If true, dump predictor values for each processed read and base
   ofstream                predictor_dump_;            //!< File to which predictor values are dumped
   pthread_mutex_t         predictor_mutex_;           //!< Mutex protecting writes to predictor dump file
-
+  //string                  enzyme_name_;               //!< Name of the "enzyme"
 
 private:
   float transform_P1(float p);
@@ -131,7 +135,14 @@ private:
 
 public:
   bool hasBinaryExtension(string &filename);
+  char *get_KnownAlternate_PhredTable(string chip_type, bool recalib, string enzymeName="", bool binTable=true);
+  char *get_phred_table_name(string chip_type, bool recalib, string enzymeName="");
 
+private:
+  string add_Recal_to_phredTableName(string phred_table_file, bool recalib=true);
+  bool startswith(const string &fullString, const string &teststring);
+  bool endswith(const string &fullString, const string &teststring);
+  bool contains(const string &fullString, const string &teststring);
 };
 
 

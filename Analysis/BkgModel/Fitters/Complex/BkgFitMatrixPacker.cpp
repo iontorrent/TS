@@ -20,7 +20,7 @@ BkgFitMatrixPacker::~BkgFitMatrixPacker()
   delete data;
 }
 
-BkgFitMatrixPacker:: BkgFitMatrixPacker (int imgLen,fit_instructions &fi,PartialDeriv_comp_list_item *PartialDeriv_list,int PartialDeriv_list_len)
+BkgFitMatrixPacker:: BkgFitMatrixPacker (int imgLen,fit_instructions &fi,PartialDeriv_comp_list_item *PartialDeriv_list,int PartialDeriv_list_len, int flow_block_size)
     : my_fit_instructions (fi)
 {
   nInstr = fi.input_len;
@@ -44,7 +44,7 @@ BkgFitMatrixPacker:: BkgFitMatrixPacker (int imgLen,fit_instructions &fi,Partial
   for (int i=0;i<fi.input_len;i++)
   {
     instList[i].si = NULL;
-    CreateInstrFromInputLine (instList+i,&fi.input[i],imgLen);
+    CreateInstrFromInputLine (instList+i,&fi.input[i],imgLen, flow_block_size);
     PartialDeriv_mask |= fi.input[i].comp1 | fi.input[i].comp2;
   }
 
@@ -74,7 +74,7 @@ void BkgFitMatrixPacker::BuildMatrix (bool accum)
   }
 }
 
-LinearSolverResult BkgFitMatrixPacker::GetOutput (float *dptr,double lambda, double regularizer)
+LinearSolverResult BkgFitMatrixPacker::GetOutput (BeadParams *bp, reg_params *rp, double lambda, double regularizer)
 {
   bool delta_ok = true;
   Mat<double> jtj_lambda;
@@ -115,14 +115,18 @@ LinearSolverResult BkgFitMatrixPacker::GetOutput (float *dptr,double lambda, dou
   {
     // put outputs in the right place
     for (int i=0;i < nOutputs;i++){
+      // What is that right place?
+      float *dptr = outputList[i].bead_params_func ? (bp->*( outputList[i].bead_params_func ))() 
+                                                   : (rp->*( outputList[i].reg_params_func  ))();
+      dptr += outputList[i].array_index;
       // safe extraction double->double
       double tmp_eval = data->delta->at (outputList[i].delta_ndx);
       // float added to double safe promotion
-      tmp_eval += dptr[outputList[i].param_ndx];
+      tmp_eval += *dptr;
       if ((tmp_eval<(-FLT_MAX)) or (tmp_eval>FLT_MAX))
-        tmp_eval = dptr[outputList[i].param_ndx];
+        tmp_eval = *dptr;
       // now that tmp_eval is safe, put back
-      dptr[outputList[i].param_ndx] = tmp_eval ;
+      *dptr = tmp_eval ;
     }
   }
   else
@@ -166,7 +170,7 @@ float* BkgFitMatrixPacker::GetPartialDerivComponent (PartialDerivComponent comp)
   return NULL;
 }
 
-void BkgFitMatrixPacker::CreateInstrFromInputLine (mat_assembly_instruction *p,mat_assy_input_line *src,int imgLen)
+void BkgFitMatrixPacker::CreateInstrFromInputLine (mat_assembly_instruction *p,mat_assy_input_line *src,int imgLen, int flow_block_size)
 {
   float *src1_base = GetPartialDerivComponent (src->comp1);
   float *src2_base = GetPartialDerivComponent (src->comp2);
@@ -181,9 +185,9 @@ void BkgFitMatrixPacker::CreateInstrFromInputLine (mat_assembly_instruction *p,m
   int cnt = 0;
 
   // we do this twice...once to figure out how many there are...
-  for (int i=0;i<NUMFB;i++)
+  for (int i=0;i<flow_block_size;i++)
   {
-    if (src->affected_flows[i])
+    if (src->GetAffectedFlow(i))
     { 
       if (nlen == 0)
         nstart = i;
@@ -210,9 +214,9 @@ void BkgFitMatrixPacker::CreateInstrFromInputLine (mat_assembly_instruction *p,m
   nstart = -1;
   nlen = 0;
   cnt = 0;
-  for (int i=0;i<NUMFB;i++)
+  for (int i=0;i<flow_block_size;i++)
   {
-    if (src->affected_flows[i])
+    if (src->GetAffectedFlow(i))
     {
       if (nlen == 0)
         nstart = i;

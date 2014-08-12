@@ -1,6 +1,9 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "SetUpForProcessing.h"
 #include <fstream>
+#include <iostream>
+
+using namespace std;
 
 void SetUpKeys(SeqListClass &my_keys, KeyContext &key_context, FlowContext &flow_context)
 {
@@ -21,10 +24,7 @@ void SetUpToProcessImages ( ImageSpecClass &my_image_spec, CommandLineOpts &ince
   ImageCropping::SetCroppedRegionOrigin ( inception_state.loc_context.cropped_region_x_offset,inception_state.loc_context.cropped_region_y_offset );
 
   ImageTransformer::CalibrateChannelXTCorrection ( inception_state.sys_context.dat_source_directory,"lsrowimage.dat" );
-
-  //Again smuggling "global" variables using static variables for side effects
-  if ( inception_state.img_control.gain_correct_images)
-    ImageTransformer::CalculateGainCorrectionFromBeadfindFlow ( inception_state.sys_context.dat_source_directory,inception_state.img_control.gain_debug_output );
+  strncpy(ImageTransformer::PCATest,inception_state.img_control.PCATest,sizeof(ImageTransformer::PCATest)-1);
 
   //@TODO: this mess has nasty side effects on the arguments.
   my_image_spec.DeriveSpecsFromDat ( inception_state.sys_context, inception_state.img_control, inception_state.loc_context ); // dummy - only reads 1 dat file
@@ -33,7 +33,8 @@ void SetUpToProcessImages ( ImageSpecClass &my_image_spec, CommandLineOpts &ince
 
 void SetUpOrLoadInitialState(CommandLineOpts &inception_state, SeqListClass &my_keys, TrackProgress &my_progress, ImageSpecClass &my_image_spec, SlicedPrequel& my_prequel_setup)
 {
-  if ( !inception_state.bkg_control.restart_from.empty() )
+
+  if ( !inception_state.bkg_control.signal_chunks.restart_from.empty() )
   {
     // restarting from saved computational state
     // beadfind, bfmask.bin and beadfind.h5 will be ignored
@@ -46,7 +47,7 @@ void SetUpOrLoadInitialState(CommandLineOpts &inception_state, SeqListClass &my_
 
     inception_state.SetProtonDefault();
   }
-  else if (inception_state.mod_control.reusePriorBeadfind && inception_state.bkg_control.restart_from.empty())
+  else if (inception_state.mod_control.reusePriorBeadfind && inception_state.bkg_control.signal_chunks.restart_from.empty())
   {
     // starting execution fresh, justBeadFind already run
     
@@ -59,6 +60,7 @@ void SetUpOrLoadInitialState(CommandLineOpts &inception_state, SeqListClass &my_
     {
       fprintf(stdout, "Unable to copy beadfind analysisState.json");
     }
+
     SetUpKeys(my_keys, inception_state.key_context, inception_state.flow_context);
     ProgramState state ( stateFile );
     state.Save ( inception_state,my_keys,my_image_spec );
@@ -100,6 +102,8 @@ void SetUpOrLoadInitialState(CommandLineOpts &inception_state, SeqListClass &my_
 				 inception_state.loc_context.regionYSize );
    my_prequel_setup.FileLocations ( inception_state.sys_context.analysisLocation );
  }
+  strncpy(ImageTransformer::PCATest,inception_state.img_control.PCATest,sizeof(ImageTransformer::PCATest)-1);
+
   fprintf(stdout, "Analysis region size is width %d, height %d\n", inception_state.loc_context.regionXSize, inception_state.loc_context.regionYSize);
 }
 

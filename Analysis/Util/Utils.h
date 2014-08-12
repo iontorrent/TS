@@ -2,14 +2,10 @@
 #ifndef UTILS_H
 #define UTILS_H
 
-#include <stdio.h>
-#include <stdlib.h>
+#include <stddef.h>
+#include <cstdio>
+#include <time.h>
 #include <string>
-#include <string.h>
-#include <errno.h>
-#include <sys/types.h>
-#include <math.h>
-#include <unistd.h>
 #include <vector>
 #include <map>
 #include <sstream>
@@ -32,6 +28,7 @@
   Class(const Class &);\
   Class &operator=(const Class &);
 
+#define FREEZ(ptr) { if (*ptr) { free(*ptr); *ptr = NULL; } }
 
 //void CreateResultsFolder(char *experimentName);
 void CreateResultsFolder(const char *experimentName);
@@ -39,8 +36,6 @@ bool    isDir (const char *path);
 bool    isFile (const char *path);
 bool    IsValid (const double *vals, int numVals);
 bool    isNumeric (char const* input, int numberBase = 10);
-short   GetPinHigh();
-short   GetPinLow();
 bool    validIn (char *inStr, long *value);
 int     numCores ();
 void  ToUpper (char *str);
@@ -75,6 +70,7 @@ int GetAbsoluteFreeSystemMemoryInKB();
 int GetFreeSystemMem();
 int GetCachedSystemMem();
 int GetSystemMemInBuffers();
+
 
 //string utils
 int     count_char (std::string s, char c);
@@ -158,43 +154,61 @@ class ClockTimer
     void StartTimer()
     {
       gettimeofday (&st, NULL);
+      st_last = st;
+      usec = usec_last = 0;
     }
+    
+    void UpdateLast(const struct timeval &t) { st_last = t; }
 
-    size_t GetSeconds()
-    {
+    void CalcMicroSec() {
       struct timeval et;
       gettimeofday (&et, NULL);
-      return ( ( (et.tv_sec*1.0e6+et.tv_usec) - (st.tv_sec * 1.0e6 + st.tv_usec)) /1.0e6);
+      usec = (et.tv_sec*1.0e6+et.tv_usec) - (st.tv_sec * 1.0e6 + st.tv_usec);
+      usec_last = (et.tv_sec*1.0e6+et.tv_usec) - (st_last.tv_sec * 1.0e6 + st_last.tv_usec);
+      UpdateLast(et);
     }
 
-    size_t GetMicroSec()
-    {
-      struct timeval et;
-      gettimeofday (&et, NULL);
-      return ( ( (et.tv_sec*1.0e6+et.tv_usec) - (st.tv_sec * 1.0e6 + st.tv_usec)));
+    size_t GetSeconds() {
+      CalcMicroSec();
+      return usec / 1e6;
     }
 
-    size_t GetMinutes()
-    {
-      return GetSeconds() / 60;
+    size_t GetMicroSec() {
+      CalcMicroSec();
+      return usec;
     }
 
-    void PrintSeconds (std::ostream &out, const std::string &prefix)
-    {
+    size_t GetMinutes() { return GetSeconds() / 60; }
+
+    void PrintSeconds (std::ostream &out, const std::string &prefix) {
       out << prefix << " " << GetSeconds() << " seconds." << std::endl;
     }
-    void PrintMicroSeconds (std::ostream &out, const std::string &prefix)
-    {
-      out << prefix << " " << GetMicroSec() / 1e6 << " seconds." << std::endl;
+
+    void PrintMicroSecondsUpdate(FILE *out, const std::string &prefix) {
+      CalcMicroSec();
+      fprintf(out, "%s since_last: %.2f seconds total: %.2f seconds\n", prefix.c_str(), usec_last/1e6, usec/1e6);
     }
 
-    void PrintMilliSeconds (std::ostream &out, const std::string &prefix)
-    {
-      out << prefix << " " << GetMicroSec() / 1e3 << " milli seconds." << std::endl;
+    void USecUp(FILE *out, const std::string &prefix) {
+      CalcMicroSec();
+      fprintf(out, "%s since_last: %.2f seconds total: %.2f seconds\n", prefix.c_str(), usec_last/1e6, usec/1e6);
+    }
+
+    void PrintMicroSeconds (std::ostream &out, const std::string &prefix) {
+      CalcMicroSec();
+      out << prefix << " " << usec / 1e6 << " seconds." << std::endl;
+    }
+
+    void PrintMilliSeconds (std::ostream &out, const std::string &prefix)  {
+      CalcMicroSec();
+      out << prefix << " " << usec / 1e3 << " milli seconds." << std::endl;
     }
 
   private:
+    size_t usec;
+    size_t usec_last;
     struct timeval st;
+    struct timeval st_last;
 };
 
 /** For timing repetitive jobs. */
@@ -205,12 +219,12 @@ public:
   void StartTimer() { mUsecTotal = 0.0; mTimer.StartTimer(); mCalls=0; }
   void StartInterval() { mTimer.StartTimer(); }
   void EndInterval() { mUsecTotal += mTimer.GetMicroSec(); mCalls++;}
-  double GetTotalUsec() { return mUsecTotal; }
-  size_t GetCalls() { return mCalls; }
-  void PrintSeconds (std::ostream &out, const std::string &prefix) { 
+  double GetTotalUsec() const { return mUsecTotal; }
+  size_t GetCalls() const { return mCalls; }
+  void PrintSeconds (std::ostream &out, const std::string &prefix) const { 
     out << prefix << " " << GetTotalUsec() / 1e6 << " seconds in " << mCalls << " intervals." << std::endl; 
   }
-  void PrintMilliSeconds (std::ostream &out, const std::string &prefix) { 
+  void PrintMilliSeconds (std::ostream &out, const std::string &prefix) const { 
     out << prefix << " " << GetTotalUsec() / 1e3 << " milli seconds in " << mCalls << " intervals." << std::endl;
   }
   

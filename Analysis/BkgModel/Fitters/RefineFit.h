@@ -13,17 +13,17 @@ class RefineFit
     SignalProcessingMasterFitter &bkg; // reference to source class for now
 
     single_flow_optimizer my_single_fit;
-    EmphasisClass *local_emphasis; // computation is currently cheap, save per flow
     ExpTailFitter my_exp_tail_fit;
 
     RefineFit (SignalProcessingMasterFitter &);
     void InitSingleFlowFit();
-    void    FitAmplitudePerFlow ();
-    void    FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step);
-    void SupplyMultiFlowSignal(float *block_signal_corrected, int ibd);
-    void SpecializedEmphasisFunctions();
+    void FitAmplitudePerFlow ( int flow_block_size, int flow_block_start );
+    void FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step, int flow_block_size, int flow_block_start);
+    void SupplyMultiFlowSignal(float *block_signal_corrected, int ibd, int flow_block_size,
+                               int flow_block_start );
     void SetupLocalEmphasis();
-    void TestXtalk();
+    void TestXtalk(int flow_block_size, int flow_block_start);
+    void CrazyDumpToHDF5(BeadParams *p, int ibd, float * block_signal_predicted, float *block_signal_corrected, int *fitType,error_track &err_t, int flow_block_start );
     ~RefineFit();
 };
 

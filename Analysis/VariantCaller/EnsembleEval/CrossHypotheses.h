@@ -13,7 +13,6 @@
 #include <math.h>
 #include <vector>
 #include <armadillo>
-#include <cblas.h>
 
 
 #include "ExtendedReadInfo.h"
@@ -136,7 +135,7 @@ public:
   };
   void  CleanAllocate(int num_hyp, int num_flow);
   void  SetModPredictions();
-  void  FillInPrediction(PersistingThreadObjects &thread_objects, ExtendedReadInfo &my_read, InputStructures &global_context);
+  void  FillInPrediction(PersistingThreadObjects &thread_objects, const Alignment &my_read, const InputStructures &global_context);
   void  InitializeDerivedQualities();
   void  InitializeTestFlows();
   void  ComputeBasicResiduals();

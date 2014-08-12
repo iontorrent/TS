@@ -1,0 +1,6 @@
+#!/bin/bash
+set -u
+
+debconf-set-selections << EOF
+rabbitmq-server rabbitmq-server/upgrade_previous note
+EOF

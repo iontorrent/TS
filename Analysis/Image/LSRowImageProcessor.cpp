@@ -106,6 +106,7 @@ ChannelXTCorrection *LSRowImageProcessor::GenerateCorrection(const char *lsimg_p
     if(nread != tot_pts)
     {
         printf("Ivalid lsrowfile detected\n");
+        delete [] img;
         fclose(lsrowfile);
         return NULL;
     }

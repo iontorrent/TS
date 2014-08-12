@@ -3,31 +3,49 @@ from django import http, template
 from django.core import urlresolvers
 from django.core import serializers
 from django.conf import settings
+from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
-from django.shortcuts import render_to_response, get_object_or_404, redirect
+from django.shortcuts import render_to_response, get_object_or_404, redirect, render
 from django.template import RequestContext
+from django.template.loader import render_to_string
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.core.servers.basehttp import FileWrapper
+from django.core.serializers.json import DjangoJSONEncoder
 
 import json
 import cStringIO
 import csv
-from os import path
+import os
+import tempfile
+import shutil
+import subprocess
+import glob
+import time
 from iondb.rundb.models import (
     Experiment,
     Results,
     Project,
     Location,
     ReportStorage,
-    EventLog, GlobalConfig, ReferenceGenome, RunType, dnaBarcode, Content, KitInfo, ContentType,
-    VariantFrequencies, Plugin, LibraryKey, ThreePrimeadapter, ExperimentAnalysisSettings, Sample)
+    EventLog, GlobalConfig, ReferenceGenome, dnaBarcode, KitInfo, ContentType, Plugin, ExperimentAnalysisSettings, Sample,
+    DMFileSet, DMFileStat, FileServer)
 from iondb.rundb.api import CompositeExperimentResource, ProjectResource
 from iondb.rundb.report.views import build_result, _report_started
+from iondb.rundb.report import file_browse
 from iondb.rundb import forms
 from iondb.anaserve import client
 from iondb.rundb.data import dmactions_types
+from iondb.rundb.configure.archiver_utils import disk_usage_stats
+from iondb.rundb.data import tasks as dmtasks
+from iondb.rundb.data import dmactions
+from iondb.rundb.data.data_management import update_files_in_use
+from iondb.rundb.data import exceptions as DMExceptions
+from iondb.rundb.data.data_import import find_data_to_import, data_import
+from iondb.utils.files import disk_attributes
 
-from django.http import HttpResponse, HttpResponseServerError
+from django.http import HttpResponse, HttpResponseServerError, HttpResponseNotFound
 from datetime import datetime
 import logging
 from django.core.urlresolvers import reverse
@@ -79,8 +97,7 @@ def rundb_redirect(request):
     return redirect(url, permanent=True)
 
 
-def data_context(request):
-    pageSize = GlobalConfig.objects.all()[0].records_to_display
+def get_serialized_exps(request, pageSize):
     resource = CompositeExperimentResource()
     objects = resource.get_object_list(request)
     paginator = resource._meta.paginator_class(
@@ -97,13 +114,17 @@ def data_context(request):
         for obj in to_be_serialized['objects']
     ]
     serialized_exps = resource.serialize(None, to_be_serialized, 'application/json')
-    #This needs some fixing...
-    _data = {
+    return serialized_exps
+
+
+def data_context(request):
+    pageSize = GlobalConfig.objects.all()[0].records_to_display
+    context = {
         'search': get_search_parameters(),
-        'inital_query': serialized_exps,
+        'inital_query': get_serialized_exps(request, pageSize),
         'pageSize': pageSize
     }
-    return _data
+    return context
 
 
 @login_required
@@ -113,8 +134,25 @@ def data(request):
     if context is None:
         context = data_context(request)
         cache.set("data_tab_context", context, 29)
-    return render_to_response("rundb/data/data.html", context,
-                              context_instance=RequestContext(request))
+    return render(request, "rundb/data/data.html", context)
+
+@login_required
+def data_fast(request):
+    pageSize = GlobalConfig.objects.all()[0].records_to_display
+    show_status = False
+    q = Experiment.objects.select_related("repResult", "repResult__qualitymetrics", "repResult__eas").exclude(repResult=None).order_by('-repResult__timeStamp')[:pageSize]
+    for exp in q:
+        if exp.ftpStatus != "Complete":
+            show_status = True
+            exp.in_progress = exp.ftpStatus.isdigit()
+            if exp.in_progress:
+                exp.progress_percent = 100 * float(exp.ftpStatus) / float(exp.flows)
+
+    context = {
+        "experiments": q,
+        "show_status": show_status
+    }
+    return render(request, "rundb/data/fast.html", context)
 
 
 def data_table(request):
@@ -220,12 +258,11 @@ def getCSV(request):
     ret['Content-Disposition'] = 'attachment; filename=metrics_%s.csv' % now
     return ret
 
-def get_project_CSV(request, results_pks, project_pk):
+def get_project_CSV(request, project_pk, result_pks):
     projectName = Project.objects.get(id=project_pk).name
-    
+    result_ids = result_pks.split(",")
     base_object_list = Results.objects.select_related('experiment').prefetch_related('libmetrics_set', 'tfmetrics_set', 'analysismetrics_set', 'pluginresult_set__plugin')
-    base_object_list = base_object_list.filter(projects = project_pk)
-    base_object_list = base_object_list.filter(id__in=results_pks.split(',')).order_by('-timeStamp')
+    base_object_list = base_object_list.filter(id__in=result_ids).order_by('-timeStamp')
     CSVstr = _makeCSVstr(base_object_list)
     ret = http.HttpResponse(CSVstr, mimetype='text/csv')
     ret['Content-Disposition'] = 'attachment; filename=%s_metrics_%s.csv' % (projectName, str(datetime.now().strftime("%Y_%m_%d_%H_%M_%S")))
@@ -314,6 +351,134 @@ def project_results(request, pk):
     ctx = template.RequestContext(request, {"project": selected, 'filter_thumbnails': thumbs_exist})
     return render_to_response("rundb/data/project_results.html", context_instance=ctx)
 
+def get_result_metrics(result):
+    metrics = [
+        result.timeStamp,
+        result.experiment.chipType,
+        result.qualitymetrics.q0_bases,
+        result.qualitymetrics.q0_reads,
+        result.qualitymetrics.q0_mean_read_length,
+        result.qualitymetrics.q20_bases,
+        result.qualitymetrics.q20_reads,
+        result.qualitymetrics.q20_mean_read_length,
+        result.eas.reference,
+        result.libmetrics.total_mapped_target_bases,
+        result.libmetrics.total_mapped_reads
+    ]
+    return metrics
+
+
+def project_compare_context(pk):
+    project = get_object_or_404(Project, pk=pk)
+    results = Results.objects.filter(projects=project).select_related()
+    context = {
+        "project": project,
+        "results": results,
+        "result_ids": [str(r.id) for r in results]
+    }
+    return context
+
+
+def project_compare_make_latex(pk):
+    context = project_compare_context(pk)
+    latex_template = render_to_string("rundb/data/print_multi_report.tex", context)
+
+    directory = tempfile.mkdtemp(prefix="project_compare_", dir="/tmp")
+    latex_path = os.path.join(directory, "comparison_report.tex")
+    pdf_path = os.path.join(directory, "comparison_report.pdf")
+    with open(latex_path, 'w') as latex_file:
+        latex_file.write(latex_template)
+    logger.debug("Creating PDF directory %s" % directory)
+    cmd = [
+        "pdflatex", latex_path,
+        "-output-directory", directory,
+        "-interaction", 
+        "nonstopmode"
+    ]
+    logger.debug(' '.join(cmd))
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=directory)
+    stdout, stderr = proc.communicate()
+    if 0 <= proc.returncode <= 1:
+        return directory, pdf_path
+    else:
+        logger.error("PDF stdout: %s" % stdout)
+        raise Exception("Project Comparison PDF generation failure")
+
+def project_compare_pdf(request, pk):
+    project = get_object_or_404(Project, pk=pk)
+    directory, pdf_path = project_compare_make_latex(pk)
+    if not os.path.exists(pdf_path):
+        return HttpResponse(open(os.path.join(directory, "comparison_report.log")).read(), "text/plain")
+    response = HttpResponse(FileWrapper(open(pdf_path)),
+                           content_type="application/pdf")
+    response['Content-Length'] = os.path.getsize(pdf_path)    
+    response['Content-Disposition'] = "attachment; filename=project_compare_%s.pdf" % project.name
+    return response
+
+
+def project_compare(request, pk):
+    context = project_compare_context(pk)
+
+    return render(request, "rundb/data/project_compare.html", context)
+
+
+def get_value(obj, path, default=None):
+    attributes = path.split('.')
+    length = len(attributes)
+    value = default
+    missing = False
+    for i in xrange(length - 1):
+        if hasattr(obj, attributes[i]):
+            obj = getattr(obj, attributes[i])
+        else:
+            missing = True
+            break
+    if not missing and length > 0:
+        value = getattr(obj, attributes[-1], default)
+    return value
+
+
+def project_compare_csv(request, pk):
+    comparison = project_compare_context(pk)
+    out_obj = cStringIO.StringIO()
+    writer = csv.writer(out_obj)
+    table = [
+        ('Result Name',     'resultsName'),
+        ('Status',          'status'),
+        ('Date',            'timeStamp'),
+        ('Chip',            'experiment.chipType'),
+        ('Total Bases',     'qualitymetrics.q0_bases'),
+        ('Total Reads',     'qualitymetrics.q0_reads'),
+        ('Key Signal',      'libmetrics.aveKeyCounts'),
+        ('Loading',         'analysismetrics.loading'),
+        ('Mean Read Len.',  'qualitymetrics.q0_mean_read_length'),
+        ('Median Read Len.','qualitymetrics.q0_median_read_length'),
+        ('Mode Read Len.',  'qualitymetrics.q0_mode_read_length'),
+        ('Q20 Bases',       'qualitymetrics.q20_bases'),
+        ('Q20 Reads',       'qualitymetrics.q20_reads'),
+        ('Q20 Read Len.',   'qualitymetrics.q20_mean_read_length'),
+        ('Reference',       'eas.reference'),
+        ('Aligned Bases',   'libmetrics.total_mapped_target_bases'),
+        ('Aligned Reads',   'libmetrics.total_mapped_reads')
+    ]
+    # above we define the header name and column's value path toether in a tuple
+    # for visual clarity and to help catch typos when making changes
+    # here we separate them again for use in the loop.
+    header, columns = zip(*table)
+    writer.writerow(header)
+    for result in comparison['results']:
+        row = [get_value(result, c, '') for c in columns]
+        writer.writerow(row)
+
+    filename = "project_compare_{0}.csv".format(comparison['project'].name)
+    csv_content = out_obj.getvalue()
+    size = len(csv_content)
+    out_obj.close()
+    response = HttpResponse(csv_content, content_type="text/csv")
+    response['Content-Length'] = size
+    response['Content-Disposition'] = "attachment; filename=" + filename
+    return response
+
 
 def results_from_project(request, results_pks, project_pk):
     action = 'Remove'
@@ -332,7 +497,7 @@ def results_to_project(request, results_pks):
             "method": 'POST'})
         return render_to_response("rundb/data/modal_projects_select.html", context_instance=ctx)
     if request.method == 'POST':
-        json_data = json.loads(request.raw_post_data)
+        json_data = json.loads(request.body)
         try:
             project_pks = json_data['projects']
         except KeyError:
@@ -363,11 +528,11 @@ def _results_to_project_helper(request, project_pk, result_pks, action):
     EventLog.objects.add_entry(project, message, request.user.username)
 
 
-def validate_results_to_combine(selected_results):
+def validate_results_to_combine(selected_results, override_samples=False):
     # validate selected reports
     warnings = []
     ver_map = {'analysis': 'an', 'alignment': 'al', 'dbreports': 'db', 'tmap': 'tm'}
-    barcoded = False
+    common = {}
     for r in selected_results:
         version = {}
         for name, shortname in ver_map.iteritems():
@@ -377,12 +542,13 @@ def validate_results_to_combine(selected_results):
         if not version['tmap']: r.tmap_version = version['analysis']
         if not version['alignment']: r.alignment_version = version['analysis']
         
-        r.barcodeId = r.eas.barcodeKitName
-        if r.barcodeId:
-            r.barcodedSamples = json.dumps(r.eas.barcodedSamples)
-            barcoded = True
-        else:
-            r.sample = r.experiment.get_sample()
+        if not common:
+            common = {
+                'floworder': r.experiment.flowsInOrder,
+                'barcodeId': r.eas.barcodeKitName,
+                'barcodedSamples': r.eas.barcodedSamples if r.eas.barcodeKitName else {},
+                'sample': r.experiment.get_sample() if not r.eas.barcodeKitName else ''               
+            }
 
     if len(set([getattr(r, 'tmap_version') for r in selected_results])) > 1:
         warnings.append("Selected results have different TMAP versions.")
@@ -390,34 +556,41 @@ def validate_results_to_combine(selected_results):
         warnings.append("Selected results have different Alignment versions.")
     if len(set([r.experiment.flowsInOrder for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
         warnings.append("Selected results have different FlowOrder Sequences.")
-    if len(set([r.barcodeId for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
+        common['floworder'] = ''
+    if len(set([r.eas.barcodeKitName for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
         warnings.append("Selected results have different Barcode Sets.")
-        barcoded = False
+        common['barcodeId'] = ''
     
-    if barcoded:
-        if len(set([r.barcodedSamples for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
-            warnings.append("Selected results have different Samples.")
-    else:
-        if len(set([r.sample for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
-            warnings.append("Selected results have different Samples.")
+    if not override_samples:
+        if common['barcodeId']:
+            if len(set([json.dumps(r.eas.barcodedSamples) for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
+                warnings.append("Selected results have different Samples.")
+                common['barcodedSamples'] = {}
+        else:
+            if len(set([r.experiment.get_sample() for r in selected_results if r.resultsType != 'CombinedAlignments'])) > 1:
+                warnings.append("Selected results have different Samples.")
+                common['sample'] = ''
         
-    return warnings
+    return warnings, common
 
 
 def results_to_combine(request, results_pks, project_pk):
     if request.method == 'GET':
         selected_results = Results.objects.filter(id__in=results_pks.split(',')).order_by('-timeStamp')
-        warnings = validate_results_to_combine(selected_results)
-
+        warnings, common = validate_results_to_combine(selected_results)
+        barcodes = ''
+        if common['barcodeId']:
+            barcodes = dnaBarcode.objects.filter(name=common['barcodeId']).order_by('name', 'index')
+            
         ctx = template.RequestContext(request, {
             "results_pks": results_pks, "project_pk": project_pk, "selected_results": selected_results,
-            "warnings": warnings,
+            "warnings": warnings, "barcodes": barcodes,
             "action": urlresolvers.reverse('results_to_combine', args=(results_pks, project_pk)),
             "method": 'POST'})
         return render_to_response("rundb/data/modal_combine_results.html", context_instance=ctx)
     if request.method == 'POST':
         try:
-            json_data = json.loads(request.raw_post_data)
+            json_data = json.loads(request.body)
             result = _combine_results_sendto_project(project_pk, json_data, request.user.username)
             ctx = _report_started(request, result.pk)
             return render_to_response("rundb/reports/analysis_started.html", context_instance=ctx)
@@ -432,6 +605,8 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     name = json_data['name']
     mark_duplicates = json_data['mark_duplicates']
     ids_to_merge = json_data['selected_pks']
+    override_samples = json_data.get('override_samples',False) == 'on'
+    
     parents = Results.objects.filter(id__in=ids_to_merge).order_by('-timeStamp')
 
     # test if reports can be combined and get common field values
@@ -441,18 +616,19 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         
         if parent.pk == parents[0].pk:
             reference = parent.reference
-            floworder = parent.experiment.flowsInOrder
-            barcodeId = parent.eas.barcodeKitName
-            barcodeSamples = parent.eas.barcodedSamples
         else:
             if not reference == parent.reference:
                 raise Exception("Selected results do not have the same Alignment Reference.")
-            if not floworder == parent.experiment.flowsInOrder:
-                floworder = ''
-            if not barcodeId == parent.eas.barcodeKitName:
-                barcodeId = ''
-            if not barcodeSamples == parent.eas.barcodedSamples:
-                barcodeSamples = {}
+    
+    warnings, common = validate_results_to_combine(parents, override_samples)
+    floworder = common['floworder']
+    barcodeId = common['barcodeId']
+    if override_samples:
+        sample = json_data.get('sample','')
+        barcodeSamples = json_data.get('barcodedSamples',{})
+    else:
+        sample = common['sample']
+        barcodeSamples = common['barcodedSamples']
 
     # create new entry in DB for combined Result
     delim = ':'
@@ -461,7 +637,7 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     result.resultsType = 'CombinedAlignments'
     result.parentIDs = delim + delim.join(ids_to_merge) + delim
     result.reference = reference
-    result.sffLink = path.join(result.reportLink, "%s_%s.sff" % (filePrefix, result.resultsName))
+    result.sffLink = os.path.join(result.reportLink, "%s_%s.sff" % (filePrefix, result.resultsName))
     
     result.projects.add(project)
 
@@ -498,7 +674,7 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         # BAM files location
         dmfilestat = parent.dmfilestat_set.get(dmfileset__type=dmactions_types.OUT)
         reportDir = dmfilestat.archivepath if dmfilestat.action_state == 'AD' else parent.get_report_dir()
-        bams.append(path.join(reportDir, bamFile))
+        bams.append(os.path.join(reportDir, bamFile))
 
         #need Plan info for VariantCaller etc. plugins: but which plan to use??
         try:
@@ -511,7 +687,7 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
 
     try:
         genome = ReferenceGenome.objects.all().filter(short_name=reference, index_version=settings.TMAP_VERSION, enabled=True)[0]
-        if path.exists(genome.info_text()):
+        if os.path.exists(genome.info_text()):
             genomeinfo = genome.info_text()
         else:
             genomeinfo = ""
@@ -528,7 +704,7 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         'parentNames': names,
         'parentLinks': links,
         'parentBAMs': bams,
-        'libraryName': result.reference,
+        'referenceName': result.reference,
         'tmap_version': settings.TMAP_VERSION,
         'mark_duplicates': mark_duplicates,
         'plan': plan,
@@ -538,12 +714,14 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         'project': projectName,
         'barcodeId': barcodeId,
         'barcodeSamples': json.dumps(barcodeSamples),
+        'sample': sample,
+        'override_samples': override_samples,
         'experimentAnalysisSettings': eas_json,
-        'warnings': validate_results_to_combine(parents)
+        'warnings': warnings
     }
 
     from distutils.sysconfig import get_python_lib
-    scriptpath = path.join(get_python_lib(), 'ion', 'reports', 'combineReports.py')
+    scriptpath = os.path.join(get_python_lib(), 'ion', 'reports', 'combineReports.py')
 
     try:
         with open(scriptpath, "r") as f:
@@ -563,7 +741,7 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     files.append(('expMeta.dat', '\n'.join(lines)))
     files.append(("primary.key", "ResultsPK = %s" % result.pk))
 
-    webRootPath = result.web_root_path(_location())
+    webRootPath = result.web_root_path(Location.getdefault())
 
     try:
         host = "127.0.0.1"
@@ -596,19 +774,8 @@ def create_combined_result(resultsName):
 
     storage = ReportStorage.objects.filter(default=True)[0]
 
-    result = build_result(exp, resultsName, storage, _location())
+    result = build_result(exp, resultsName, storage, Location.getdefault())
     return result, exp
-
-
-def _location():
-    loc = Location.objects.filter(defaultlocation=True)
-    if not loc:
-        #if there is not a default, just take the first one
-        loc = Location.objects.all().order_by('pk')
-        if not loc:
-            logger.critical("There are no Location objects")
-            raise ObjectDoesNotExist("There are no Location objects, at all.")
-    return loc[0]
 
 
 def _blank_Exp(blankName):
@@ -750,4 +917,560 @@ def experiment_edit(request, pk):
         
     ctxd = {"exp_form": exp_form, "eas_form": eas_form, "pk":pk, "name": exp.expName, "barcodes":json.dumps(barcodes)}
     return render_to_response("rundb/data/modal_experiment_edit.html", context_instance=template.RequestContext(request, ctxd))
+    
+
+def is_mounted(path):
+    try:
+        path = os.path.abspath(path)
+        while path != os.path.sep:
+            if os.path.ismount(path):
+                return path
+            path = os.path.dirname(path)
+    except:
+        pass
+    return ''
+
+@login_required
+def datamanagement(request):
+
+    fs_stats = disk_usage_stats()
+    gc = GlobalConfig.objects.all().order_by('pk')[0]
+
+    if os.path.exists("/opt/ion/.ion-internal-server"):
+        # split Data Management tables per fileserver
+        dm_tables = []
+        for path in FileServer.objects.all().order_by('pk').values_list('filesPrefix', flat=True):
+            dm_tables.append({
+                "filesPrefix": path,
+                "url": "/rundb/api/v1/compositedatamanagement/?format=json&expDir__startswith=%s" % path
+            })
+    else:
+        dm_tables = [{
+            "filesPrefix": "",
+            "url": "/rundb/api/v1/compositedatamanagement/?format=json"
+        }]
+
+    dm_filesets = DMFileSet.objects.filter(version=settings.RELVERSION).order_by('pk')
+    for dmfileset in dm_filesets:
+        if dmfileset.backup_directory in ['None',None,'']:
+            dmfileset.mounted = False
+        else:
+            dmfileset.mounted = bool( is_mounted(dmfileset.backup_directory) )
+
+    # mounted paths for Disk Usage section
+    archive_stats = {}
+    backup_dirs = get_dir_choices()[1:]
+    for bdir,name in backup_dirs:
+        mounted = is_mounted(bdir)
+        if mounted and mounted not in archive_stats and mounted not in fs_stats:
+            try:
+                total, availSpace, freeSpace, bsize = disk_attributes(mounted)
+                total_gb = float(total*bsize)/(1024*1024*1024)
+                avail_gb = float(availSpace*bsize)/(1024*1024*1024)
+                #free_gb = float(freeSpace*bsize)/(1024*1024*1024)
+                percentfull = 100-(float(availSpace)/float(total)*100) if total > 0 else 0
+            except:
+                percentfull = ""
+                total_gb = ""
+                avail_gb = ""
+
+            archive_stats[mounted] = {
+                'percentfull': percentfull,
+                'disksize': total_gb,
+                'diskfree': avail_gb,
+            }
+
+    ctxd = {
+        "autoArchive": gc.auto_archive_ack,
+        "autoArchiveEnable": gc.auto_archive_enable,
+        "dm_filesets": dm_filesets,
+        "dm_tables": dm_tables,
+        "archive_stats": archive_stats,
+        "fs_stats": fs_stats,
+        "dm_stats": dm_category_stats()
+    }    
+    
+    ctx = template.RequestContext(request, ctxd)
+    return render_to_response("rundb/data/data_management.html", context_instance=ctx)
+
+
+def dm_actions(request, results_pks):
+    results = Results.objects.filter(pk__in=results_pks.split(','))
+
+    # update disk space info if needed
+    to_update = DMFileStat.objects.filter(diskspace=None, result__in=results_pks.split(','))
+    for dmfilestat in to_update:
+        dmtasks.update_dmfilestats_diskspace.delay(dmfilestat)
+    if len(to_update) > 0:
+        time.sleep(2)
+
+    dm_files_info = []
+    for category in dmactions_types.FILESET_TYPES:
+        info = ''
+        for result in results:
+            dmfilestat = result.dmfilestat_set.get(dmfileset__type=category)
+            if not info:
+                info = {
+                'category':dmfilestat.dmfileset.type,
+                'description':dmfilestat.dmfileset.description,
+                'action_state': dmfilestat.get_action_state_display(),
+                'keep': dmfilestat.getpreserved(),
+                'diskspace': dmfilestat.diskspace,
+                'in_process': dmfilestat.in_process()
+            }
+            else:
+                # multiple results
+                if info['action_state'] != dmfilestat.get_action_state_display():
+                    info['action_state'] = '*'
+                if info['keep'] != dmfilestat.getpreserved():
+                    info['keep'] = '*'
+                if (info['diskspace'] is not None) and (dmfilestat.diskspace is not None):
+                    info['diskspace'] += dmfilestat.diskspace
+                else:
+                    info['diskspace'] = None
+                info['in_process'] &= dmfilestat.in_process()
+
+        dm_files_info.append(info)
+
+    if len(results) == 1:
+        name = "Report Name: %s" % result.resultsName
+        subtitle = "Run Name: %s" % result.experiment.expName
+    else:
+        # multiple results (available from Project page)
+        name = "Selected %s results." % len(results)
+        subtitle = "(%s)" % ', '.join(results_pks.split(','))
+
+    backup_dirs = get_dir_choices()[1:]
+    ctxd = {
+        "dm_files_info": dm_files_info,
+        "name": name,
+        "subtitle": subtitle,
+        "results_pks": results_pks,
+        "backup_dirs": backup_dirs,
+        "isDMDebug": os.path.exists("/opt/ion/.ion-dm-debug"),
+        }
+    ctx = RequestContext(request, ctxd)
+    return render_to_response("rundb/data/modal_dm_actions.html", context_instance=ctx)
+
+
+def dm_action_selected(request, results_pks, action):
+    '''
+    file categories to process: data['categories']
+    user log entry comment: data['comment']
+    results_pks could contain more than 1 result
+    '''
+    logger = logging.getLogger('data_management')
+
+    data = json.loads(request.body)
+    logger.info("dm_action_selected: request '%s' on report(s): %s" % (action, results_pks))
+
+    '''
+    organize the dmfilestat objects by result_id, we make multiple dbase queries
+    but it keeps them organized.  Most times, this will be a single query anyway.
+    '''
+    dmfilestat_dict = {}
+    try:
+        # update any dmfilestats in use by running analyses
+        update_files_in_use()
+
+        backup_directory = data['backup_dir'] if data['backup_dir'] != 'default' else None
+
+        for resultPK in results_pks.split(','):
+            logger.debug("Matching dmfilestats contain %s reportpk" % resultPK)
+            dmfilestat_dict[resultPK] = DMFileStat.objects.select_related() \
+                .filter(dmfileset__type__in=data['categories'], result__id=int(resultPK))
+
+            for dmfilestat in dmfilestat_dict[resultPK]:
+                # validate export/archive destination folders
+                if action in ['export', 'archive']:
+                    dmactions.destination_validation(dmfilestat, backup_directory, manual_action=True)
+
+                # validate files not in use
+                try:
+                    dmactions.action_validation(dmfilestat, action, data['confirmed'])
+                except DMExceptions.FilesInUse as e:
+                    # warn if exporting files currently in use, allow to proceed if confirmed
+                    if action=='export':
+                        if not data['confirmed']:
+                            return HttpResponse(json.dumps({'warning':str(e)+'<br>Exporting now may produce incomplete data set.'}), mimetype="application/json")
+                    else:
+                        raise e
+                except DMExceptions.BaseInputLinked as e:
+                    # warn if deleting basecaller files used in any other re-analysis started from BaseCalling
+                    if not data['confirmed']:
+                        return HttpResponse(json.dumps({'warning':str(e)}), mimetype="application/json")
+
+                # warn if archiving data marked Keep
+                if action=='archive' and dmfilestat.getpreserved():
+                    if not data['confirmed']:
+                        return HttpResponse(json.dumps({'warning':'%s currently marked Keep.' % dmfilestat.dmfileset.type}), mimetype="application/json")
+                    else:
+                        dmfilestat.setpreserved(False)
+
+                # if further processing an archived dataset, error if archive drive is not mounted
+                if dmfilestat.isarchived() and not os.path.exists(dmfilestat.archivepath):
+                    return HttpResponseServerError("%s archive location %s is not available." % (dmfilestat.dmfileset.type, dmfilestat.archivepath))
+
+        async_task_result = dmtasks.action_group.delay(request.user.username, data['categories'], action, dmfilestat_dict, data['comment'], backup_directory, data['confirmed'])
+
+        if async_task_result:
+            logger.debug(async_task_result)
+
+    except DMExceptions.SrcDirDoesNotExist as e:
+        dmfilestat.setactionstate('DD')
+        msg = "Source directory %s no longer exists. Setting action_state to Deleted" % e.message
+        logger.info(msg)
+        EventLog.objects.add_entry(dmfilestat.result, msg, username=request.user.username)
+    except Exception as e:
+        logger.error("dm_action_selected: error: %s" % str(e))
+        return HttpResponseServerError("%s" % str(e))
+
+    test = {'pks':results_pks, 'action':action, 'data':data}
+    return HttpResponse(json.dumps(test), mimetype="application/json");
+
+@login_required
+@staff_member_required
+def dm_configuration(request):
+    config = GlobalConfig.objects.all()[0]
+    dm_contact, created = User.objects.get_or_create(username='dm_contact')
+
+    if request.method == 'GET':
+        dm_filesets = DMFileSet.objects.filter(version=settings.RELVERSION).order_by('pk')
+        backup_dirs = get_dir_choices()
+
+        config.email = dm_contact.email
+
+        ctx = RequestContext(request, {
+            "dm_filesets": dm_filesets,
+            "config": config,
+            "backup_dirs": backup_dirs,
+            "categories": dmactions_types.FILESET_TYPES
+        })
+        return render_to_response("rundb/data/dm_configuration.html", context_instance=ctx)
+
+    elif request.method == 'POST':
+        dm_filesets = DMFileSet.objects.all()
+        log = 'SAVED Data Management Configuration<br>'
+        data = json.loads(request.body)
+        try:
+            for key, value in data.items():
+                if key == 'filesets':
+                    for category, params in value.items():
+                        dm_filesets.filter(type=category).update(**params)
+                        log += '<b>%s:</b> %s<br>' % (category, json.dumps(params).translate(None, "{}\"\'") )
+                elif key == 'email':
+                    dm_contact.email = value
+                    dm_contact.save()
+                    log += '<b>Email:</b> %s<br>' % value
+                elif key == 'auto_archive_ack':
+                    GlobalConfig.objects.all().update(auto_archive_ack = True if value=='True' else False)
+                    log += '<b>Auto Acknowledge Delete:</b> %s<br>' % value
+            _add_dm_configuration_log(request, log)
+        except Exception as e:
+            logger.exception("dm_configuration: error: %s" % str(e))
+            return HttpResponseServerError("Error: %s" % str(e))
+
+        return HttpResponse()
+
+def _add_dm_configuration_log(request, log):
+    # add log entry. Want to save with the DMFileSet class, not any single object, so use fake object_pk.
+    ct = ContentType.objects.get_for_model(DMFileSet)
+    ev = EventLog(object_pk=0, content_type=ct, username=request.user.username, text=log)
+    ev.save()
+
+def delete_ack(request):
+    runPK = request.POST.get('runpk', False)
+    runState = request.POST.get('runstate', False)
+
+    if not runPK:
+        return HttpResponse(json.dumps({"status": "error, no runPK POSTed"}), mimetype="application/json")
+    if not runState:
+        return HttpResponse(json.dumps({"status": "error, no runState POSTed"}), mimetype="application/json")
+
+    # Also change the experiment user_ack value.
+    exp = Results.objects.get(pk=runPK).experiment
+    exp.user_ack = runState
+    exp.save()
+
+    # If multiple reports per experiment update all sigproc action_states.
+    results_pks = exp.results_set.values_list('pk', flat=True)
+    ret = DMFileStat.objects.filter(result__pk__in=results_pks, dmfileset__type=dmactions_types.SIG).update(action_state=runState)
+
+    for result in exp.results_set.all():
+        msg = '%s deletion ' % dmactions_types.SIG
+        msg += 'is Acknowledged' if runState == 'A' else ' Acknowledgement is removed'
+        EventLog.objects.add_entry(result, msg, username=request.user.username)
+
+    return HttpResponse(json.dumps({"runState": runState, "count": ret, "runPK": runPK}), mimetype="application/json")
+
+@login_required
+def preserve_data(request):
+    # Sets flag to preserve data for a single DMFileStat object
+    if request.method == 'POST':
+
+        reportPK = request.POST.get('reportpk', False)
+        expPK = request.POST.get('exppk', False)
+        keep = True if request.POST.get('keep')=='true' else False
+        dmtype = request.POST.get('type', '')
+
+        if dmtype == 'sig':
+            typeStr = dmactions_types.SIG
+        elif dmtype == 'base':
+            typeStr = dmactions_types.BASE
+        elif dmtype == 'out':
+            typeStr = dmactions_types.OUT
+        elif dmtype == 'intr':
+            typeStr = dmactions_types.INTR
+        elif dmtype == 'reanalysis':
+            typeStr = dmactions_types.SIG
+        else:
+            return HttpResponseServerError("error, unknown DMFileStat type")
+
+        try:
+            if reportPK:
+                if dmtype == 'sig':
+                    expPKs = Results.objects.filter(pk__in=reportPK.split(',')).values_list('experiment', flat=True)
+                    results = Results.objects.filter(experiment__in=expPKs)
+                else:
+                    results = Results.objects.filter(pk__in=reportPK.split(','))
+            elif expPK:
+                results = Experiment.objects.get(pk=expPK).results_set.all()
+            else:
+                return HttpResponseServerError("error, no object pk specified")
+
+            msg = '%s marked exempt from auto-action' if keep else '%s no longer exempt from auto-action'
+            msg = msg % typeStr
+            for result in results:
+                filestat = result.get_filestat(typeStr)
+                filestat.setpreserved(keep)
+                
+                if dmtype == 'reanalysis':
+                    # Keep BASE category data for Proton fullchip for re-analysis from on-instrument files
+                    if result.experiment.log.get('oninstranalysis','')=='yes' and not result.isThumbnail:
+                        result.get_filestat(dmactions_types.BASE).setpreserved(keep)
+
+                EventLog.objects.add_entry(result, msg, username=request.user.username)
+        except Exception as err:
+            return HttpResponseServerError("error, %s" % err)
+
+        return HttpResponse(json.dumps({"reportPK": reportPK, "type":typeStr, "keep":filestat.getpreserved()}), mimetype="application/json")
+
+def get_dir_choices():
+    from iondb.utils import devices
+    basicChoice = [(None, 'None')] + devices.to_media(devices.disk_report())
+ 
+    # add selected directories to choices
+    for choice in set(DMFileSet.objects.exclude(backup_directory__in=['','None']).values_list('backup_directory', flat=True)):
+        if choice and not (choice,choice) in basicChoice:
+            choice_str = choice if bool(is_mounted(choice)) else '%s (not mounted)' % choice
+            basicChoice.append( (choice,choice_str) )
+
+    return tuple(basicChoice)
+
+def dm_log(request, pk=None):
+    if request.method == 'GET':
+        selected = get_object_or_404(Results, pk=pk)
+        ct = ContentType.objects.get_for_model(selected)
+        title = "Data Management Actions for %s (%s):" % (selected.resultsName, pk)
+        ctx = RequestContext(request, {"title": title, "pk": pk, "cttype": ct.id})
+        return render_to_response("rundb/common/modal_event_log.html", context_instance=ctx)
+
+def dm_configuration_log(request):
+    if request.method == 'GET':
+        ct = ContentType.objects.get_for_model(DMFileSet)
+        title = "Data Management Configuration History"
+        ctx = RequestContext(request, {"title": title, "pk": 0, "cttype": ct.id})
+        return render_to_response("rundb/common/modal_event_log.html", context_instance=ctx)
+    elif request.method == 'POST':
+        log = request.POST.get('log')
+        _add_dm_configuration_log(request, log)
+        return HttpResponse()
+
+def dm_history(request):
+    logs = EventLog.objects.for_model(Results)
+    usernames = set(logs.values_list('username', flat=True))
+    ctx = RequestContext(request, {'usernames':usernames})
+    return render_to_response("rundb/data/dm_history.html", context_instance=ctx)
+
+def dm_list_files(request, resultPK, action):
+    """Returns the list of files that are selected for the given file categories for the given Report"""
+    data = json.loads(request.body)
+    dmfilestat = DMFileStat.objects.select_related() \
+                .filter(dmfileset__type__in=data['categories'], result__id=int(resultPK))
+    dmfilestat = dmfilestat[0]
+
+    # Hack - generate serialized json file for the DataXfer plugin
+    dmactions.write_serialized_json(dmfilestat.result, dmfilestat.result.get_report_dir())
+
+    to_process, to_keep = dmactions.get_file_list(dmfilestat)
+    payload = {
+        'files_to_transfer': to_process,
+        'start_dirs': [dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir],
+    }
+    return HttpResponse(json.dumps(payload), mimetype="application/json");
+
+@login_required
+def browse_backup_dirs(request, path):
+    from iondb.utils import devices
+    def bread_crumbs(path):
+        crumbs = []
+        while path != '/':
+            if os.path.ismount(path):
+                crumbs.insert(0, (path, path))
+                break
+            head, tail = os.path.split(path)
+            crumbs.insert(0, (path, tail))
+            path = head
+        return crumbs
+
+    backup_dirs = get_dir_choices()[1:]
+    breadcrumbs = []
+    dir_info = []
+    file_info = []
+    path_allowed = True
+    if path:
+        if not os.path.isabs(path): path = os.path.join('/',path)
+        # only allow directories inside mount points
+        path_allowed = any([path.startswith(d) for d,n in backup_dirs])
+        if not path_allowed:
+            return HttpResponseServerError("Directory not allowed: %s" % path)
+
+    exclude_archived = request.GET.get('exclude_archived','false')
+
+    if path and path_allowed:
+        breadcrumbs = bread_crumbs(path)
+        try:
+            dirs, files = file_browse.list_directory(path)
+        except Exception as e:
+            return HttpResponseServerError(str(e))
+        dirs.sort()
+        files.sort()
+        for name, full_dir_path, stat in dirs:
+            dir_path = full_dir_path
+            if exclude_archived == 'true':
+                if name == 'archivedReports' or name == 'exportedReports' or glob.glob(os.path.join(full_dir_path, 'serialized_*.json')):
+                    dir_path = ''
+
+            date = datetime.fromtimestamp(stat.st_mtime)
+            try:
+                size = file_browse.dir_size(full_dir_path)
+            except:
+                size = ''
+            dir_info.append((name, dir_path, date, size))
+        for name, full_file_path, stat in files:
+            file_path = os.path.join(path, name)
+            date = datetime.fromtimestamp(stat.st_mtime)
+            try:
+                size = file_browse.format_units(stat.st_size)
+            except:
+                size = ''
+            file_info.append((name, file_path, date, size))
+
+    ctxd = {"backup_dirs": backup_dirs, "selected_path": path, "breadcrumbs": breadcrumbs, "dirs": dir_info, "files": file_info, "exclude_archived": exclude_archived }
+    return render_to_response("rundb/data/modal_browse_dirs.html", ctxd)
+
+def import_data(request):
+    if request.method == "GET":
+        backup_dirs = get_dir_choices()
+        return render_to_response("rundb/data/modal_import_data.html", context_instance=RequestContext(request, {"backup_dirs": backup_dirs}) )
+    elif request.method == "POST":
+        postData = json.loads(request.body)
+        for result in postData:
+            name = result.pop('name')
+            copy_data = bool(result.pop('copy_data',False))
+            copy_report = bool(result.pop('copy_report',False))
+            async_result = data_import.delay(name, result, request.user.username, copy_data, copy_report)
+        return HttpResponse()
+
+def import_data_find(request, path):
+    # search directory tree for importable data
+    if not os.path.isabs(path): path = os.path.join('/',path.strip())
+    if path and os.path.exists(path):
+        found_results = find_data_to_import(path)
+        if len(found_results) == 0:
+            return HttpResponseNotFound('Did not find any data exported or archived with TS version 4.0 or later in %s.' % path)
+        else:
+            results_list = []
+            for result in found_results:
+                results_list.append({
+                    'name': result['name'],
+                    'report': result['categories'].get(dmactions_types.OUT),
+                    'basecall': result['categories'].get(dmactions_types.BASE),
+                    'sigproc': result['categories'].get(dmactions_types.SIG)
+                })
+            ctxd = {
+                "dm_types": [dmactions_types.OUT, dmactions_types.BASE, dmactions_types.SIG],
+                'results_list':results_list
+            }
+            return render_to_response("rundb/data/modal_import_data.html", ctxd)
+    else:
+        return HttpResponseNotFound('Cannot access path: %s.' % path)
+
+def import_data_log(request, path):
+    # display log file
+    if not os.path.isabs(path): path = os.path.join('/',path)
+    contents = ''
+    with open(path, 'rb') as f:
+        contents = f.read()
+
+    response = '<div><pre>%s</pre></div>' % contents
+    # add some js to overwrite modal header
+    response += '<script type="text/javascript">$(function() { $("#modal_report_log .modal-header").find("h2").text("Data Import Log");});</script>'
+    return HttpResponse(response, mimetype='text/plain')
+
+def dmactions_jobs(request):
+    active_dmfilestats = DMFileStat.objects.filter(action_state__in=['AG','DG','EG','SA','SE','SD','IG']).select_related('result','dmfileset')
+    active_logs = EventLog.objects.filter(object_pk__in=active_dmfilestats.values_list('result__pk',flat=True))
+    dmactions_jobs = []
+    for dmfilestat in active_dmfilestats:
+        d = {
+            'pk': dmfilestat.pk,
+            'state': dmfilestat.get_action_state_display(),
+            'diskspace': "%.1f" % dmfilestat.diskspace,
+            'result_pk': dmfilestat.result.pk,
+            'resultsName': dmfilestat.result.resultsName,
+            'category': dmfilestat.dmfileset.type,
+            'destination': dmfilestat.archivepath if dmfilestat.archivepath else ''
+        }
+        # parse date and comment from logs
+        for log in active_logs.filter(object_pk=d['result_pk']).order_by('-created'):
+            if d['category'] in log.text and d['state'] in log.text:
+                d['started_on'] = log.created
+                d['username'] = log.username
+                try:
+                    d['comment'] = log.text.split('User Comment:')[1].strip()
+                except:
+                    d['comment'] = log.text
+        
+        dmactions_jobs.append(d)
+    
+    ctx = json.dumps({'objects': dmactions_jobs, 'total':len(dmactions_jobs)}, cls=DjangoJSONEncoder)
+    return HttpResponse(ctx, content_type="application/json")
+
+def cancel_pending_dmaction(request, pk):
+    dmfilestat = DMFileStat.objects.get(pk=pk)
+    msg = 'Canceled %s for %s' % (dmfilestat.get_action_state_display(), dmfilestat.dmfileset.type)
+    if dmfilestat.action_state in ['SA', 'SE']:
+        dmfilestat.setactionstate('L')
+        EventLog.objects.add_entry(dmfilestat.result, msg, username=request.user.username)
+    return HttpResponse()
+
+def dm_category_stats():
+    stats = []
+    dmfilestats = DMFileStat.objects.exclude(result__experiment__expDir="")
+    for dmtype in dmactions_types.FILESET_TYPES:
+        by_type = dmfilestats.filter(dmfileset__type=dmtype)
+        keepers = by_type.filter(preserve_data=True) if dmtype!=dmactions_types.SIG else by_type.filter(result__experiment__storage_options="KI")
+        dmtype_stats = {
+            'Total': by_type.count(),
+            'Keep': keepers.filter(action_state__in=['L','S','N','A','SE','EG','E']).count(),
+            'Local': by_type.filter(action_state__in=['L','S','N']).count(),
+            'Archived': by_type.filter(action_state='AD').count(),
+            'Deleted': by_type.filter(action_state='DD').count(),
+            'In_process': by_type.filter(action_state__in=['AG','DG','EG','SA','SE','SD','IG']).count(),
+            'Error': by_type.filter(action_state='E').count(),
+        }
+        stats.append((dmtype, dmtype_stats))
+
+    return stats
     

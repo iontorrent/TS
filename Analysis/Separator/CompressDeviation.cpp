@@ -1,7 +1,6 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include <armadillo>
 #include <iostream>
-#include <fstream>
 #include <vector>
 #include <string>
 #include "IonErr.h"

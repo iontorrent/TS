@@ -4,6 +4,7 @@
 
 #include <vector>
 #include "Serialization.h"
+#include "json/json.h"
 
 // this specifies the effect of nearest neighbors on the well known as "crosstalk"
 // we have a global background trace for a region
@@ -14,7 +15,7 @@
 // c) the residence time/buffering of the bulk determines how fast we contribute to this measure
 // This would be easier if we had an "inferred bulk" trace already instead of an "average case empty"
 
-class CrossTalkSpecification
+class TraceCrossTalkSpecification
 {
   public:
 
@@ -23,31 +24,16 @@ class CrossTalkSpecification
     std::vector<int> cx;
     std::vector<int> cy;
 
-    // how strong the influence of this neighbor is
-    std::vector<float> mix;
-
-    // how much to delay the nuc rise
-    std::vector<float> delay;
-
     // Earl's reformulated parameters
     std::vector<float> multiplier;
     std::vector<float> tau_top;
     std::vector<float> tau_fluid;
 
-    // resistance to change in the 'box' above the well
-    // includes rate of flow
-    // and conductance/buffering of bulk fluid
-    float tau_bulk;
-    // global scaling for the strength of neighbor effect
-    float cbulk;
-    // reduction/increase for number of neighbors
-    // this is oddly constructed to move in the opposite direction
-    // so it should be re-examined from scratch
-    float nscale;
+
     // are we hex_packed?
     bool hex_packed;
     bool three_series; // are we one clas of chips
-    int initialPhase;
+    int initial_phase;
     //do we do this at all?
     bool do_xtalk_correction;
     bool simple_model;
@@ -61,7 +47,6 @@ class CrossTalkSpecification
     void SetAggressiveHexGrid();
     void SetNewHexGrid();
     void SetNewHexGridP0();
-    float ClawBackBuffering ( int nei_total );
     void ReadCrossTalkFromFile ( const char * );
     // different chips unfortunately have different layouts
     void NeighborByGridPhase ( int &ncx, int &ncy, int cx, int cy, int cxd, int cyd, int phase );
@@ -73,7 +58,12 @@ class CrossTalkSpecification
     // should be able to read in this effect from a file
     // should be able to assign this by region to vary it across the chip
 
-    CrossTalkSpecification();
+    TraceCrossTalkSpecification();
+    // redo the IO sensibly
+    void PackTraceXtalkInfo(Json::Value &json);
+    void SerializeJson(const Json::Value &json);
+    void LoadJson(Json::Value & json, const std::string& filename_json);
+    void WriteJson(const Json::Value & json, const std::string& filename_json);
 
   private:
     // Boost serialization support:
@@ -86,16 +76,12 @@ class CrossTalkSpecification
       & nei_affected
       & cx
       & cy
-      & mix
-      & delay
       & multiplier
       & tau_top
       & tau_fluid
-      & tau_bulk
-      & cbulk
-      & nscale
       & hex_packed
       & three_series
+          & initial_phase
       & do_xtalk_correction
       & simple_model
       & rescale_flag;

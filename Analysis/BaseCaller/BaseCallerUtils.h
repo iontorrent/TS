@@ -34,14 +34,14 @@ public:
     BuildFullArrays();
   }
 
-  char operator[](int flow) const { return full_nucs_[flow]; }
+  char operator[](int flow) const { return full_nucs_.at(flow); }
 
   const std::string& str() const { return cycle_nucs_; }
   const char *c_str() const { return cycle_nucs_.c_str(); }
   bool is_ok() const { return num_flows_ > 0 and not cycle_nucs_.empty(); }
 
-  int int_at(int flow) const { return full_ints_[flow]; }
-  char nuc_at(int flow) const { return full_nucs_[flow]; }
+  int int_at(int flow) const { return full_ints_.at(flow); }
+  char nuc_at(int flow) const { return full_nucs_.at(flow); }
 
   int num_flows() const { return num_flows_; }
   const char *full_nucs() const { return full_nucs_.c_str(); }

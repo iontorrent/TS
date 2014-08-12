@@ -1,10 +1,10 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "KClass.h"
 
-void KClass::FillInData(TraceStore<double> &traceStore,
+void KClass::FillInData(TraceStore &traceStore,
                         int nFlows,
                         KeyFit &fit) {
-  Col<double> trace;
+  Col<float> trace;
   int minFrame = 0;
   int maxFrame = traceStore.GetNumFrames();
   // int minFrame = max(traceStore.GetT0(fit.wellIdx)-4, 0.0f);
@@ -17,8 +17,8 @@ void KClass::FillInData(TraceStore<double> &traceStore,
   }
 
   trace.resize(traceStore.GetNumFrames());
-  fill(refFlows.begin(), refFlows.end(), 0);
-  fill(wellFlows.begin(), wellFlows.end(), 0);
+  std::fill(refFlows.begin(), refFlows.end(), 0);
+  std::fill(wellFlows.begin(), wellFlows.end(), 0);
 
   for (size_t flowIx = 0; flowIx < (size_t)nFlows; flowIx++) {
     traceStore.GetTrace(fit.wellIdx, flowIx, trace.begin());
@@ -30,10 +30,10 @@ void KClass::FillInData(TraceStore<double> &traceStore,
 }
 
 void KClass::InitialClassifyWell(Mask &mask,
-                                 ZeromerDiff<double> &bg,
+                                 ZeromerDiff<float> &bg,
                                  std::vector<KeySeq> &keys, 
                                  //               std::vector<Traces> &traces,
-                                 TraceStore<double> &traceStore,
+                                 TraceStore &traceStore,
                                  int nFlows,
                                  Col<double> &time,
                                  vector<KeyReporter<double> *>&report,
@@ -55,9 +55,9 @@ void KClass::InitialClassifyWell(Mask &mask,
 
 void KClass::ClassifyWellKnownTau(Mask &mask,
                                   //                                  ZeromerDiff<double> &bg,
-                                  ZeromerModelBulk<double> &bg,
+                                  ZeromerModelBulk<float> &bg,
                                   std::vector<KeySeq> &keys, 
-                                 TraceStore<double> &traceStore,
+                                 TraceStore &traceStore,
                                  int nFlows,
                                   //                                  std::vector<Traces> &traces,
                                   Col<double> &time,

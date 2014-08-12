@@ -21,7 +21,7 @@ class MatchedCube
     H5DataSet *h5_set;
 
     // build a basic matched cube
-    void InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, int chunk_size, char *set_name, char *set_description,const char *param_root );
+    void InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, char *set_name, char *set_description,const char *param_root );
     void Close();
     DataCube<float> *Ptr()
     {
@@ -44,7 +44,7 @@ class MatchedCubeInt
     H5DataSet *h5_set;
 
     // build a basic matched cube
-    void InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, int chunk_size, char *set_name, char *set_description,char *param_root );
+    void InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, char *set_name, char *set_description,char *param_root );
     void Close();
     DataCube<int> *Ptr()
     {
@@ -86,7 +86,15 @@ class BkgParamH5
       Close();
     }
 
-    void Init ( char *results_folder,SpatialContext &loc_context,   ImageSpecClass &my_image_spec,int numFlows, int write_params_flag, int _max_frames );
+    void Init ( const char *results_folder, 
+        const SpatialContext &loc_context, 
+        const ImageSpecClass &my_image_spec,
+        int numFlows,         // Total number of flows in the universe.
+        int write_params_flag, 
+        int _max_frames,
+        int flow_block_size,         // Maximum number of flows in a flow block.
+        int num_flow_blocks   // Total number of flow blocks. (used to be ceil( numFlows/flow_max).
+      );
 
     void IncrementalWriteParam ( DataCube<float> &cube, H5DataSet *set, int flow );
     void IncrementalWriteParam ( DataCube<int> &cube, H5DataSet *set, int flow );
@@ -96,7 +104,10 @@ class BkgParamH5
     void WriteOneFlowBlock ( DataCube<int> &cube, H5DataSet *set, int flow, int chunksize );
     void IncrementalWriteBeads ( int flow,int iBlk );
     void IncrementalWriteRegions(int flow, int iBlk);
-    void IncrementalWrite (  int flow, bool last_flow ); // this is the interface to trigger a write
+
+    // this is the interface to trigger a write
+    void IncrementalWrite ( int flow, bool last_flow, FlowBlockSequence::const_iterator flow_block, 
+                            int flow_block_id ); 
 
     void Close();
     void CloseBeads();
@@ -108,12 +119,12 @@ class BkgParamH5
     void InitRegionEmphasisVector ( H5File &h5_local_ref );
     void InitRegionalParamCube(H5File &h5_local_ref);
     void InitRegionDebugBead (H5File &h5_local_ref);
-    void TryInitRegionParams ( H5File &h5_local_ref, ImageSpecClass &my_image_spec );
+    void TryInitRegionParams ( H5File &h5_local_ref, const ImageSpecClass &my_image_spec );
 
     // all beads in the best region
-    void Init2 (int write_params_flag,int nBeads_live,Region *);
+    void Init2 (int write_params_flag,int nBeads_live,const Region *);
     void TryInitBeads_BestRegion ( H5File &h5_local_ref, int nBeads_live,Region *);
-    void InitBeads_BestRegion (H5File &h5_local_ref, int nBeads_live, Region *);
+    void InitBeads_BestRegion (H5File &h5_local_ref, int nBeads_live, const Region *);
     void IncrementalWriteBestRegion(int flow, bool lastflow);
 
   public: // should be private eventually
@@ -141,7 +152,8 @@ class BkgParamH5
     MatchedCube empty_dc;
     MatchedCube region_init_val;
     MatchedCubeInt region_offset_val;
-    
+    //By the way, if you are working on hdf5 parameters.
+    //Is it possible to split parameters "derived_param", "enzymatics", 'nuc_shape', misc, buffering into separate parameters.
     MatchedCube regional_params;
     MatchedCube nuc_shape_params;
     MatchedCube enzymatics_params;
@@ -216,8 +228,8 @@ class BkgParamH5
     std::string local_results_directory;
 
     // derived parameters controlling the file
-    int blocksOfFlow;
-    int nFlowBlks;
+    int flow_block_size;       // Otherwise known as flow_max.
+    int nFlowBlks;                                        
     //beads
     int datacube_numflows;
     // usually the whole matrix, may be by region if we're sampling

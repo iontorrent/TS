@@ -28,20 +28,21 @@ using namespace ion;*/
 // Function to calculate signal predictions
 int CalculateHypPredictions(
 		PersistingThreadObjects  &thread_objects,
-        ExtendedReadInfo         &my_read,
-        InputStructures          &global_context,
+		const Alignment          &my_read,
+        const InputStructures    &global_context,
         const vector<string>     &Hypotheses,
         vector<vector<float> >   &predictions,
-        vector<vector<float> >   &normalizedMeasurements);
+        vector<vector<float> >   &normalizedMeasurements,
+        int flow_upper_bound);
 
 // Does what the name says
 void InitializeBasecallers(PersistingThreadObjects &thread_objects,
-		                   ExtendedReadInfo        &my_read,
-	                       InputStructures         &global_context);
+                         const Alignment         &my_read,
+	                       const InputStructures   &global_context);
 
 // Solve for hard and soft clipped bases at the start of the read, before start_flow
 int GetStartOfMasterRead(PersistingThreadObjects  &thread_objects,
-		                  const ExtendedReadInfo   &my_read,
+		                    const Alignment          &my_read,
 	                      const InputStructures    &global_context,
 	                      const vector<string>     &Hypotheses,
 	                      const int                &nFlows,
@@ -50,7 +51,7 @@ int GetStartOfMasterRead(PersistingThreadObjects  &thread_objects,
 // Print out some messages
 void PredictionGenerationVerbose(const vector<string>         &Hypotheses,
 		                         const vector<BasecallerRead> &hypothesesReads,
-		                         const ExtendedReadInfo       &my_read,
+		                         const Alignment              &my_read,
 		                         const vector<vector<float> > &predictions,
 		                         const int                    &prefix_size,
 		                         const InputStructures        &global_context);

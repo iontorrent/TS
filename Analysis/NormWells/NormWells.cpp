@@ -7,7 +7,6 @@
 #include <numeric>
 #include "OptArgs.h"
 #include "H5Replay.h"
-#include "FileBkgReplay.h"
 #include "NoKeyCall.h"
 
 #define MAXTHREADS 16

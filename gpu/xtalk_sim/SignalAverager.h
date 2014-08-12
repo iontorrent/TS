@@ -1,5 +1,6 @@
-#ifndef _SIGNAL_AVERAGER_H
-#define _SIGNAL_AVERAGER_H
+/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+#ifndef SIGNALAVERAGER_H
+#define SIGNALAVERAGER_H
 
 
 class SignalAverager {
@@ -102,6 +103,5 @@ private:
 
 };
 
-
-#endif
+#endif // SIGNALAVERAGER_H
 

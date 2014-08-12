@@ -7,48 +7,13 @@
   <li class="active"><a href="{% url "configure_services" %}">Services</a></li>
   <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
   <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
   <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
 <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
-<link href="{% static "css/ui.daterangepicker.css"%}" rel="stylesheet"/>
-<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
-<style type="text/css">
-    .search-field {
-        display: inline-block;
-        zoom: 1;
-		*display: inline;
-        width: 200px;
-        height: 10px;
-        float: left;
-        margin: 0 15px 15px 0;
-    }
-    .search-field [name=rangeA] {
-        margin: 0px;
-        width: 190px;
-    }
-    .icon-unchecked {
-        opacity: 0.25;
-        /*Dragging IE into the 21st century*/
-        filter: alpha(opacity=25);
-    }
-    .icon-unchecked:hover {
-        opacity: 1.0;
-        /*Dragging IE into the 21st century*/
-        filter: alpha(opacity=100);
-    }
-	.filter-field {
-		width:100px;
-		margin:0px;
-		font-size:small;
-	}
-</style>
-
 <script type="text/javascript" src="{% static "jquery/js/apprise/apprise-1.5.min.js"%}"></script>
 <script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
-<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
-<script src="{% static "js/date.min.js"%}"></script>
-<script src="{% static "js/jquery.daterangepicker.js"%}"></script>
 
 <script type="text/javascript">
 function terminate_job(url,name){
@@ -61,70 +26,6 @@ function terminate_job(url,name){
 			});
 		}
 	});
-}
-
-function filter(e){
-	  e.preventDefault();
-	  e.stopPropagation();
-
-	  var id = $(e.currentTarget).data('id');
-	  var daterange = $("#rangeA_"+id).val();
-
-    if (daterange) {
-        if (!/ - /.test(daterange)) {
-            daterange = daterange + ' - ' + daterange;
-        }
-        daterange = daterange.replace(/ - /," 00:00,") + " 23:59";
-    }
-
-	  $("#grid_"+id).data("kendoGrid").dataSource.filter([
-		  {
-			  field: "timeStamp",
-			  operator: "__range",
-			  value: daterange
-		  }
-		  , {
-			  field: "search_name",
-			  operator: "",
-			  value: $("#search_text_"+id).val()
-		  }
-		  , {
-			field: "sigproc_filter",
-			operator: "",
-			value: $("#filter_sigproc_"+id).val()
-		  }
-		  , {
-			field: "basecall_filter",
-			operator: "",
-			value: $("#filter_basecall_"+id).val()
-		  }
-		  , {
-			field: "output_filter",
-			operator: "",
-			value: $("#filter_output_"+id).val()
-		  }
-		  , {
-			field: "misc_filter",
-			operator: "",
-			value: $("#filter_misc_"+id).val()
-		  }
-	  ]);
-}
-
-function show_ack(data){
-    if(data.sigproc_keep=='true'){
-        return false;
-    } else if (data.sigproc_state == 'Notified' || data.sigproc_state == 'Selected' || data.sigproc_state == 'Acknowledged'){
-        return true;
-    }
-    return false;
-}
-
-function refresh_grid_timer(source, refresh){
-	var grid = $(source).data('kendoGrid');
-	clearInterval(grid.update_timer);
-	if (refresh)
-		grid.update_timer = setInterval(function(){ grid.dataSource.read(); }, 10000);
 }
 
 function showModal(elem, modal_id){
@@ -144,302 +45,31 @@ $(document).ready(function () {
 		showModal(this, 'modal_queuestat');
 		return false;
 	});
-	
+
 	$('.raid_details').click(function(e){
 		e.preventDefault();
 		e.stopPropagation();
 		showModal(this, 'modal_raid_info');
 	});
-	
+
 	$('.raid_status').click(function(){
 		$(this).next('tr').toggle();
 		$(this).find('i').toggleClass('icon-minus').toggleClass('icon-plus');
 		return false;
 	});
-	
-	$('#data_import').click(function(e){
+
+	$('#refresh_cluster_info').click(function(e){
 		e.preventDefault();
-		$.get($(this).attr('href'), function(data) {
-			$('body').append(data);
-			$( "#modal_import_data" ).modal("show");
-		 }).done(function(){
-			$('body #modal_import_data').on('modal_import_data_done', function (e, data) {
-				console.log('modal_import_data_done', data);
-				$('#data_import_status').html(data).show();
-			});
+		var $div = $(this).next('div');
+		$div.removeClass('hidden');
+		$.get($(this).attr('href'), function(data){
+			$div.html('<h4>Success!</h4>');
+			setTimeout(function(){ window.location.reload(true); }, 1000);
+		}).fail(function(data){
+			$div.html('<h4>Failed, '+data.statusText+'</h4>');
 		});
 	});
-
-	$("#enable_archive").change(function(){
-		var enabled = $(this).is(':checked');
-		$.ajax({
-			type: "PATCH",
-			dataType: 'json',
-			url: "/rundb/api/v1/globalconfig/1/",
-			data: '{"auto_archive_enable":'+enabled+'}',
-			contentType: 'application/json'
-		}).done(function(data) {
-			if (enabled) {
-				var log_entry = 'ENABLED Data Management automatic action';
-			} else {
-				var log_entry = 'DISABLED Data Management automatic action';
-			}
-			$.post('{% url "dm_configuration_log" %}', {log: log_entry});
-		});
-	});
-
-	$("#dm_config_log").click(function(e){
-		e.preventDefault();
-		showModal(this, 'modal_event_log');
-	});
-	
-	$('[name=rangeA]').each(function(){ $(this).daterangepicker({dateFormat: 'yy-mm-dd'}); });
-	$('.rangeA').change(function (e) { filter(e); });
-	$('.search_text').change(function (e) { filter(e); });
-	$('.filter_state').change(function (e) { filter(e); });
-	$('.clear_filters').click(function (e) {
-		var id = $(e.currentTarget).data('id');
-		$('#search_bar_'+id).find('input').each(function(){$(this).val(''); });
-		$('#search_bar_'+id).find('select').each(function(){$(this).val(''); });
-		filter(e);
-	});
-
-	// Data Space Management tables
-	{% for server in dm_tables %}
-		console.log('url', "{{server.url|safe}}")
-		$("#grid_"+"{{forloop.counter}}").kendoGrid({
-			dataSource: {
-				type: "json",
-				transport: {
-					read: "{{server.url|safe}}",
-					parameterMap: function(options) {
-						return buildParameterMap(options)
-					}
-				},
-				schema: {
-					data: "objects",
-					total: "meta.total_count",
-					model: {
-						fields: {
-							id: {type: "number"},
-							resultsName: { type: "string" },
-							expName: { type: "string" },
-							reportLink: { type: "string" },
-							timeStamp: { type: "string" },
-							diskusage: {type:"string"},
-							sigproc_state: {type:"string"},
-							basecall_state: {type:"string"},
-							output_state: {type:"string"},
-							misc_state: {type:"string"},
-							sigproc_keep: {type:"string"},
-							basecall_keep: {type:"string"},
-							output_keep: {type:"string"},
-							misc_keep: {type:"string"}
-						}
-					}
-				},
-				serverPaging: true,
-				serverFiltering: true,
-				serverSorting: true,
-				sort: { field: "timeStamp", dir: "desc" },
-				pageSize: 10
-			},
-			height: 'auto',
-			groupable: false,
-			sortable: true,
-			selectable: false,
-			pageable: {
-    			pageSizes: [10, 20, 50, 100]
-			},
-			scrollable: false,
-			columns: [ {
-					field: "resultsName",
-					title: "Report Name",
-					width: '25%',
-					template: "<a href=/report/${id}>${resultsName}</a>"
-				} , {
-					field: "userAck",
-					title: "Acknowledge",
-					sortable: false,
-					width: '90px',
-					template: kendo.template($("#ackDeleteTemplate").html())
-				} , {
-					field: "expName",
-					title: "Run Name",
-					width: '25%',
-				} , {
-					field: "timeStamp",
-					title: "Date",
-					width: '10%',
-					template: '#= kendo.toString(new Date(Date._parse(timeStamp)),"yyyy/MM/dd hh:mm tt") #'
-				} , {
-					field: "diskusage",
-					title: "Size (MB)",
-					sortable: false,
-					width: '65px'
-				} , {
-					field: "sigproc_keep",
-					title: "Keep",
-					sortable: false,
-					width: '45px',
-					template: kendo.template($("#keepSigproc").html())
-				} , {
-					field: "sigproc_state",
-					title: "SignalProcessing",
-					sortable: false,
-					width: '110px',
-				} , {
-					field: "basecall_keep",
-					title: "Keep",
-					sortable: false,
-					width: '45px',
-					template: kendo.template($("#keepBasecall").html())
-				} , {
-					field: "basecall_state",
-					title: "Basecalling",
-					sortable: false,
-					width: '80px',
-				} , {
-					field: "output_keep",
-					title: "Keep",
-					sortable: false,
-					width: '45px',
-					template: kendo.template($("#keepOutput").html())
-				} , {
-					field: "output_state",
-					title: "Output",
-					sortable: false,
-					width: '70px',
-				} , {
-					field: "misc_keep",
-					title: "Keep",
-					sortable: false,
-					width: '45px',
-					template: kendo.template($("#keepMisc").html())
-				} , {
-					field: "misc_state",
-					title: "Intermediate",
-					sortable: false,
-					width: '85px',
-				} , {
-					title: "",
-					sortable: false,
-					width: '55px',
-					template: kendo.template($("#ActionColumnTemplate").html())
-				}
-			],
-			dataBound: function(e) {
-				var source = "#grid_"+"{{forloop.counter}}";
-
-				$(source + " .dm-actions").click(function(e){
-					e.preventDefault();
-					$('body #modal_dm_actions').remove();
-					url = $(this).attr('href');
-					$.get(url, function(data) {
-						$('body').append(data);
-						$( "#modal_dm_actions" ).modal("show");
-						$('body #modal_dm_actions').on('modal_dm_actions_done', function () {
-							refreshKendoGrid(source);
-							refresh_grid_timer(source, true);
-						});
-						return false;
-					});
-				});
-
-				$(source + " .dm-log").click(function(e){
-					e.preventDefault();
-					showModal(this, 'modal_event_log');
-				});
-
-				$(".autoExempt").click(function (e) {
-					e.preventDefault();
-					var pk = $(this).attr('data-pk');
-					var type = $(this).attr('data-type');
-					var checked = $(this).is(':checked');
-					$.post('preserve_data/', "reportpk=" + pk + "&keep=" + checked + "&type=" + type, function(data){
-						console.log(data);
-						refreshKendoGrid(source);
-					});
-				});
-
-				$(".acknowledge").click(function (e) {
-					e.preventDefault();
-					var pk = $(this).attr('data-pk');
-					var runstate = $(this).is(':checked') ? "A":"S";
-					$.post('ack/', "runpk=" + pk + "&runstate=" + runstate, function(data){
-					    console.log(data);
-						refreshKendoGrid(source);
-						return false;
-					});
-				});
-
-				var gridDataArray = this._data;
-				var hide_userAck = true;
-				var in_process_state = false;
-				for( var i=0; i<gridDataArray.length;i++) {
-					if( show_ack(gridDataArray[i]) ) hide_userAck = false;
-					if( gridDataArray[i].in_process ) in_process_state = true;
-				}
-				// hide Acknowledge column if no runs need to be acknowledged
-				if(hide_userAck){
-					this.hideColumn("userAck");
-				}
-				else{
-					this.showColumn("userAck");
-				}
-				// periodically refresh data when states are in-process
-				refresh_grid_timer(source, in_process_state);
-			}
-		});
-	{% endfor %}
 });
-</script>
-
-<script id="ActionColumnTemplate" type="text/x-kendo-template">
-	<div class="btn-group">
-    <a class="btn dropdown-toggle" data-toggle="dropdown" href="\\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"></img></a>
-		<ul class="dropdown-menu pull-right">
-			<li>
-				<a class="dm-actions" href="#= '{% url "dm_actions" '99999' %}'.replace('99999',id)#" title="Data Management Actions">Actions</a>
-			</li>
-			<li>
-				<a class="dm-log" href="#= '{% url "dm_log" '99999' %}'.replace('99999',id)#" title="Data Management Log">View Log</a>
-			</li>
-
-		</ul>
-	</div>
-</script>
-
-<script id="keepSigproc" type="text/x-kendo-template">
-	# if (data.sigproc_keep) { #
-    <input id='keepSig-#=id#' type='checkbox' class="autoExempt" data-pk="#=id#" data-type="sig" # if(data.sigproc_keep=='true'){ # checked="checked" # } # >
-	# } #
-</script>
-<script id="keepBasecall" type="text/x-kendo-template">
-	# if (data.basecall_keep) { #
-    <input id='keepBase-#=id#' type='checkbox' class="autoExempt" data-pk="#=id#" data-type="base" # if(data.basecall_keep=='true'){ # checked="checked" # } # >
-	# } #
-</script>
-<script id="keepOutput" type="text/x-kendo-template">
-	# if (data.output_keep) { #
-    <input id='keepOut-#=id#' type='checkbox' class="autoExempt" data-pk="#=id#" data-type="out" # if(data.output_keep=='true'){ # checked="checked" # } # >
-	# } #
-</script>
-<script id="keepMisc" type="text/x-kendo-template">
-	# if (data.misc_keep) { #
-    <input id='keepIntr-#=id#' type='checkbox' class="autoExempt" data-pk="#=id#" data-type="intr" # if(data.misc_keep=='true'){ # checked="checked" # } # >
-	# } #
-</script>
-
-<script id="ackDeleteTemplate" type="text/x-kendo-template">
-	# if (show_ack(data)) { #
-		<input id='ackDelete-#=id#' type='checkbox' class="acknowledge" data-pk="#=id#"
-		# if (data.sigproc_state == 'Acknowledged') { #
-			checked="checked"
-		# } #
-		>
-		<label class="acknowledgeLabel" for="ackDelete-#=id#"> Delete </label>
-	# } #
 </script>
 
 	<div class="content clearfix">
@@ -602,7 +232,8 @@ $(document).ready(function () {
 		{% endif %}
 	</div>
 	<div class="content clearfix">
-		<h1>RAID Info</h1>
+		<h1>RAID Info <small>(last updated {{ raid_status_updated }})</small></h1>
+        {% if raid_err_msg %}<div class="text-error">Error: {{raid_err_msg}}</div><br>{% endif %}
 		{% if raid_status %}
 			<table class="table table-condensed table-hover">
 				{% for entry in raid_status %}
@@ -617,200 +248,80 @@ $(document).ready(function () {
 				</tr>
 				<tr {% if not forloop.first %}class="hide"{% endif %}>
 					<td colspan=2 style="border:none;">
-						{% include "rundb/configure/raid_info.html" with array_status=entry.drives %}
+						{% include "rundb/configure/raid_info.html" with array_status=entry.drives cols=entry.cols|default:4 %}
 					</td>
 				</tr>
+				<!-- TEST CODE -->
+				{% for item in entry.logical_drives %}
+				<tr>
+					<td>Logical Volume: {{item.name}}</td>
+					<td>Size: {{item.size}}</td>
+					<td>Status: {{item.status}}</td>
+				</tr>
+				{% endfor %}
+				<!-- END TEST CODE -->
 				{% endfor %}
 			</table>
 		{% else %}
 			<p>No RAID information available.</p>
 		{% endif %}
 	</div>
-	<div class="content clearfix">
-		<h1>Data Management</h1>
-		<div class="content">
-			<h2>Configuration</h2>
-			<br/>
-			<table class="data-table" border="0">
-				<thead>
-					<tr>
-						<th></th>
-						<th>Enabled</th>
-						<th>Auto-Acknowledge</th>
-						<th></th>
-					</tr>
-				</thead>
-				<tbody>
-					{% spaceless %}
-					<tr class="{% cycle 'row1' 'row2' %}">
-						<td>
-							<a href="{% url "dm_configuration" %}">Configure</a>
-						</td>
-						<td class='archive_td'>
-							<input {% if autoArchiveEnable %}checked{% endif %} type='checkbox' id="enable_archive">
-						</td>
-						<td>
-							{% if autoArchive %}Enabled{% else %}Disabled{% endif %}
-						</td>
-						<td>
-							<a href= {% url "dm_configuration_log" %} id="dm_config_log" class="btn">Configuration Log</a>
-							<a href= {% url "dm_history" %} id="dm_history" class="btn" style="margin-left:5px">History</a>
-						</td>
-					</tr>
-					{% endspaceless %}
-				</tbody>
-			</table>
-			<br />
-			<table class="data-table" border="0">
-				<thead>
-					<tr>
-						<th>File Category</th>
-						<th>Auto Action</th>
-						<th>Data Age Threshold (days)</th>
-						<th>Disk Full Threshold (Percent)</th>
-						<th>Archive Directory</th>
-						<th>Mounted</th>
-					</tr>
-				</thead>
-				<tbody>
-					{% for entry in dm_filesets %}
-					{% spaceless %}
-						<tr class="{% cycle 'row1' 'row2' %}">
-							<td>{{ entry.type }}</td>
-							<td>{{ entry.get_auto_action_display }}</td>
-							<td>{{ entry.auto_trigger_age }}</td>
-							<td>{{ entry.auto_trigger_usage }}</td>
-							<td>{{ entry.backup_directory }}</td>
-							<td>{% if entry.mounted %} Mounted {% else %} Not Mounted {% endif %}</td>
-						</tr>
-					{% endspaceless %}
-					{% endfor %}
-				</tbody>
-			</table>
-		</div>
-		<div class="content">
-			<h2>Data Import</h2>
-			<a href="{% url "import_data" %}" id="data_import" class="btn">Import</a>
-			<div id="data_import_status" class="alert" style="display: none; margin-top: 10px"></div>
-		</div>
-		<div id="advancedSec" class="content">
-			<h2>Disk Usage</h2>
-			<div class="">
-				<table class="data-table" border="0">
-					<thead>
-						<tr>
-							<th>Filesystem</th>
-							<th>Used Space</th>
-							<th>Used Space</th>
-							<th>Size (GB)</th>
-							<th>Free (GB)</th>
-							<th>Raw Data (GB)</th>
-							<th>Reports (GB)</th>
-							<th>Other (GB)</th>
-						</tr>
-					</thead>
-					<tbody>
-						{% for key,v in fs_stats.items %}
-							<tr>
-								<td align="center">{{ key }}</td>
-								<td align="left"><img title="Thresholds shown for: S=Signal Processing Input, B=Basecalling Input, O=Output Files, I=Intermediate Files"
-													  src="{{ v.percentfull|floatformat:1 }}/file_server_status.png"></td>
-								<td>{{ v.percentfull|floatformat:1 }}%</td>
-								<td>{{ v.disksize|floatformat:1 }}</td>
-								<td>{{ v.diskfree|floatformat:1 }}</td>
-								<td>{{ v.rawused|floatformat:1 }}</td>
-								<td>{{ v.reportsused|floatformat:1 }}</td>
-								<td>{{ v.other|floatformat:1 }}</td>
-							</tr>
-						{% endfor %}
-						{% for key,v in archive_stats.items %}
-							<tr>
-								<td>{{ key }}</td>
-								<td><img src="archive_drivespace.png/?path={{ key }}"></td>
-								<td>{{ v.percentfull|floatformat:1 }}%</td>
-								<td>{{ v.disksize|floatformat:1 }}</td>
-								<td>{{ v.diskfree|floatformat:1 }}</td>
-								<td></td>
-								<td></td>
-								<td></td>
-							</tr>
-						{% endfor %}<br />
-					</tbody>
-				</table>
-				<br />
-			</div>
-		</div>
-		<div class="content">
-			<h2>Disk Space Management
-				<small>
-					Signal Processing Data will not be automatically removed unless authorized. Click the Acknowledge check box to authorize removal.
-				</small>
-			</h2>
-			<br />
-			{% for server in dm_tables %}
-				<h2> {{server.filesPrefix|safe}} </h2>
-				<div id="search_bar_{{forloop.counter}}" class="well" style="margin-top:5px;">
-					{%spaceless%}
-					<div class="row-fluid">
-						<div class="search-field">
-							<label for="rangeA" class="hide">Report Date</label>
-							<input type="text" name="rangeA" class="rangeA" data-id="{{forloop.counter}}" id="rangeA_{{forloop.counter}}" placeholder="Report Date"/>
-						</div>
-						<div class="input-append search-field">
-							<label for="search_text" class="hide">Search Report Names</label>
-							<input id="search_text_{{forloop.counter}}" data-id="{{forloop.counter}}" class="search_text" type="text" placeholder="Search names" style="width: 150px;" />
-							<button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
-						</div>
-						<button id="clear_filters_{{forloop.counter}}" data-id="{{forloop.counter}}" class="btn pull-left clear_filters" type="button" style="margin: 0 0 0 10px">Clear</button>
-						<div class="pull-right">
-							Filter:<small> SigProc
-							<select id='filter_sigproc_{{forloop.counter}}' data-id="{{forloop.counter}}" class="filter-field filter_state" title="Signal Processing Input">
-								<option value="">Any</option>
-								<option value="K">Keep</option>
-								<option value="L">Local</option>
-								<option value="AD">Archived</option>
-								<option value="DD">Deleted</option>
-								<option value="P">In-process</option>
-								<option value="E">Error</option>
-							</select>
-							Basecalling
-							<select id='filter_basecall_{{forloop.counter}}' data-id="{{forloop.counter}}" class="filter-field filter_state" title="Basecalling Input">
-								<option value="">Any</option>
-								<option value="K">Keep</option>
-								<option value="L">Local</option>
-								<option value="AD">Archived</option>
-								<option value="DD">Deleted</option>
-								<option value="P">In-process</option>
-								<option value="E">Error</option>
-							</select>
-							Output
-							<select id='filter_output_{{forloop.counter}}' data-id="{{forloop.counter}}" class="filter-field filter_state" title="Output Files">
-								<option value="">Any</option>
-								<option value="K">Keep</option>
-								<option value="L">Local</option>
-								<option value="AD">Archived</option>
-								<option value="DD">Deleted</option>
-								<option value="P">In-process</option>
-								<option value="E">Error</option>
-							</select>
-							Intermediate
-							<select id='filter_misc_{{forloop.counter}}' data-id="{{forloop.counter}}" class="filter-field filter_state" title="Intermediate Files">
-								<option value="">Any</option>
-								<option value="K">Keep</option>
-								<option value="L">Local</option>
-								<option value="AD">Archived</option>
-								<option value="DD">Deleted</option>
-								<option value="P">In-process</option>
-								<option value="E">Error</option>
-							</select>
-							</small>
-						</div>
-					</div>
-					{%endspaceless%}
-				</div>
-				<div id="grid_{{forloop.counter}}" style="margin-top: 5px; margin-bottom: 5px;"></div>
-			{% endfor %}
-		<div class="clear"></div>
-	</div>
 
+	{% if crunchers %}
+	<div class="content clearfix">
+		<h1>Cluster Info
+			<a title="Refresh Cluster Info" id="refresh_cluster_info" href="{% url 'cluster_info_refresh' %}"><i class="icon-refresh"></i></a>
+			<div class="hidden" style="display:inline-block;">
+				<h4>Refreshing cluster info, please wait <img src="{% static "resources/kendo/styles/Uniform/loading.gif"%}"></h4>
+			</div>
+		</h1>
+		<table class="table table-condensed">
+			{% for node in crunchers %}
+				<tr class="{{node.get_state_display}} raid_status">
+					<td>{{node.name}}</td>
+					<td>{{node.comments}}</td>
+					{% if node.state == 'E' %}
+						<td><span class="label label-important">Error</span></td>
+						<td>{{node.info.error|linebreaksbr}}</td>
+					{% elif node.state == 'W' %}
+						<td><span class="label label-warning">Error</span></td>
+						<td>{{node.info.error|linebreaksbr}}</td>
+					{% elif node.state == 'G'%}
+						<td colspan="2"><span class="label label-success">Good</span></td>
+					{% elif node.state == 'U'%}
+						<td colspan="2"><span class="label label-default">Unknown</span></td>
+					{% endif %}
+				</tr>
+				<tr class="hide">
+					<td></td>
+					<td colspan=2>
+						<table class="table table-condensed">
+							{% for test,status in node.info.connect_tests %}
+								<tr {%if status == 'failure' %}class="text-error"{%endif%}>
+									<td>{{test}}</td><td>{{status}}</td>
+								</tr>
+							{% endfor %}
+							{% for test,status in node.info.config_tests %}
+								<tr {%if status == 'failure' %}class="text-warning"{%endif%}>
+									<td>{{test}}</td><td>{{status}}</td>
+								</tr>
+							{% endfor %}
+							{% if node.info.error %}
+								<tr class="text-error">
+									<td>Error:</td>
+									<td>{{node.info.error|linebreaksbr}}{{node.info.version_test_errors|linebreaksbr}}</td>
+								</tr>
+							{%endif%}
+						</table>
+					</td>
+				</tr>
+			{% endfor %}
+		</table>
+	</div>
+	{% endif %}
+	
+    <div class="content clearfix">
+		<h1>Data Management</h1>
+		Go to <a href="{% url "datamanagement" %}"> Data Management </a>
+    </div>
 {% endblock content %}

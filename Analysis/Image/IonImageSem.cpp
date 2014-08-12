@@ -134,7 +134,7 @@ void IonImageSem::Take()
 #else
 		uint32_t i;
 		static const uint32_t sleepUsecs = 10000;
-		static const uint32_t limit=(10*60*(1000000/sleepUsecs));
+		static const uint32_t limit=(2*60*(1000000/sleepUsecs));
 		
 		for(i=0;i<limit;i++)
 		  {

@@ -1,0 +1,36 @@
+#iptables.rules for Torrent Server
+*nat
+:PREROUTING ACCEPT [22:1936]
+:POSTROUTING ACCEPT [2:127]
+:OUTPUT ACCEPT [2:127]
+-A POSTROUTING -s {{c_address_1}}/24 -o eth0 -j MASQUERADE
+-A POSTROUTING -s {{c_address_2}}/24 -o eth0 -j MASQUERADE
+-A POSTROUTING -s {{c_address_3}}/24 -o eth0 -j MASQUERADE
+-A POSTROUTING -s {{c_address_4}}/24 -o eth0 -j MASQUERADE
+-A POSTROUTING -s {{c_address_5}}/24 -o eth0 -j MASQUERADE
+
+COMMIT
+*filter
+:INPUT DROP [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [3:364]
+-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -i lo -j ACCEPT
+-A INPUT -p icmp -j ACCEPT
+
+#Allow SSH and Torrent Browser access
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 80 -j ACCEPT
+
+#Uncomment the line below to allow connections on port 443/HTTPS
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
+
+#Allow all traffic from PGM subnet
+-A INPUT -s {{c_address_1}}/24 -j ACCEPT
+-A INPUT -s {{c_address_2}}/24 -j ACCEPT
+-A INPUT -s {{c_address_3}}/24 -j ACCEPT
+-A INPUT -s {{c_address_4}}/24 -j ACCEPT
+-A INPUT -s {{c_address_5}}/24 -j ACCEPT
+
+COMMIT
+

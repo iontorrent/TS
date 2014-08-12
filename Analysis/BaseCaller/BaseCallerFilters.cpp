@@ -7,13 +7,20 @@
 #include "BaseCallerFilters.h"
 
 #include <stdio.h>
-#include <iomanip>
+#include <stddef.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <algorithm>
+#include <iostream>
 
 #include "LinuxCompat.h"
 #include "Stats.h"
 #include "IonErr.h"
 #include "RawWells.h"
 #include "Mask.h"
+#include "BaseCallerUtils.h"
+#include "DPTreephaser.h"
+#include "OrderedDatasetWriter.h"
 
 using namespace std;
 
@@ -35,6 +42,7 @@ enum FilteringOutcomes {
   kFilteredAvalancheTrim        //!< Read filtered out, too short after Avalanche trimming
 };
 
+
 class ThousandsSeparator : public numpunct<char> {
 protected:
     string do_grouping() const { return "\03"; }
@@ -43,7 +51,7 @@ protected:
 
 
 
-//--------
+// ----------------------------------------------------------------------------
 
 int EncodeFilteringDetails(int n_base, int n_prefix)
 {
@@ -52,6 +60,7 @@ int EncodeFilteringDetails(int n_base, int n_prefix)
   return max(0,n_base - n_prefix);
 }
 
+// ----------------------------------------------------------------------------
 
 ReadFilteringHistory::ReadFilteringHistory()
 {
@@ -74,7 +83,14 @@ ReadFilteringHistory::ReadFilteringHistory()
   n_bases_after_quality_trim = -1;
   n_bases_after_adapter_trim = -1;
   n_bases_filtered = -1;
+
+  //num_adapters = 0;  // This does not really belong here. Find a better place. XXX
+  //adapter_type = -1;
+  //adpter_score = -1;
+  //adapter_separation = -1;
 }
+
+// ----------------------------------------------------------------------------
 
 void ReadFilteringHistory::GenerateZDVector(vector<int16_t>& zd_vector)
 {
@@ -94,6 +110,7 @@ void ReadFilteringHistory::GenerateZDVector(vector<int16_t>& zd_vector)
   zd_vector[12]= EncodeFilteringDetails(n_bases_filtered,                  n_bases_prefix);
 }
 
+// ----------------------------------------------------------------------------
 
 ReadFilteringStats::ReadFilteringStats()
 {
@@ -123,6 +140,7 @@ ReadFilteringStats::ReadFilteringStats()
   num_reads_final_ = 0;
 }
 
+// ----------------------------------------------------------------------------
 
 void ReadFilteringStats::AddRead(const ReadFilteringHistory& read_filtering_history)
 {
@@ -214,6 +232,7 @@ void ReadFilteringStats::AddRead(const ReadFilteringHistory& read_filtering_hist
 
 }
 
+// ----------------------------------------------------------------------------
 
 void ReadFilteringStats::MergeFrom(const ReadFilteringStats& other)
 {
@@ -242,6 +261,8 @@ void ReadFilteringStats::MergeFrom(const ReadFilteringStats& other)
   num_reads_removed_quality_trim_         += other.num_reads_removed_quality_trim_;
   num_reads_final_                        += other.num_reads_final_;
 }
+
+// ----------------------------------------------------------------------------
 
 void ReadFilteringStats::PrettyPrint (const string& table_header)
 {
@@ -307,6 +328,7 @@ void ReadFilteringStats::PrettyPrint (const string& table_header)
   cout << table.str();
 }
 
+// ----------------------------------------------------------------------------
 
 void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& class_name, bool library_report)
 {
@@ -362,11 +384,7 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
 }
 
 
-
-
-
-
-
+// ----------------------------------------------------------------------------
 
 void BaseCallerFilters::PrintHelp()
 {
@@ -395,6 +413,7 @@ void BaseCallerFilters::PrintHelp()
   printf ("\n");
 }
 
+// ----------------------------------------------------------------------------
 
 BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
     const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, const Mask& mask)
@@ -407,12 +426,12 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
 
   // Retrieve command line options
 
-  filter_keypass_enabled_         = opts.GetFirstBoolean('k', "keypass-filter", true);
-  filter_min_read_length_         = opts.GetFirstInt    ('-', "min-read-length", 8);
-  filter_clonal_enabled_tfs_      = opts.GetFirstBoolean('-', "clonal-filter-tf", false);
-  filter_clonal_enabled_          = opts.GetFirstBoolean('-', "clonal-filter-solve", false);
-  filter_residual_enabled_        = opts.GetFirstBoolean('-', "cr-filter", false);
-  filter_residual_enabled_tfs_    = opts.GetFirstBoolean('-', "cr-filter-tf", false);
+  filter_keypass_enabled_      = opts.GetFirstBoolean('k', "keypass-filter", true);
+  filter_min_read_length_      = opts.GetFirstInt    ('-', "min-read-length", 8);
+  filter_clonal_enabled_tfs_   = opts.GetFirstBoolean('-', "clonal-filter-tf", false);
+  filter_clonal_enabled_       = opts.GetFirstBoolean('-', "clonal-filter-solve", false);
+  filter_residual_enabled_     = opts.GetFirstBoolean('-', "cr-filter", false);
+  filter_residual_enabled_tfs_ = opts.GetFirstBoolean('-', "cr-filter-tf", false);
 
   //! \todo Get this to work right. May require "unwound" flow order, so incompatible with current wells.FlowOrder()
   //flt_control.cafieResMaxValueByFlowOrder[std::string ("TACG") ] = 0.06;  // regular flow order
@@ -421,17 +440,29 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
   filter_residual_max_value_      = opts.GetFirstDouble ('-',  "cr-filter-max-value", 0.08);
 
   // SFFTrim options
-  trim_adapter_                   = opts.GetFirstString ('-', "trim-adapter", "ATCACCGACTGCCCATAGAGAGGCTGAGAC");
-  trim_adapter_cutoff_            = opts.GetFirstDouble ('-', "trim-adapter-cutoff", 16.0);
-  trim_adapter_min_match_         = opts.GetFirstInt    ('-', "trim-adapter-min-match", 6);
-  trim_adapter_mode_              = opts.GetFirstInt    ('-', "trim-adapter-mode", 1);
-  trim_adapter_tf_                = opts.GetFirstString ('-', "trim-adapter-tf", "");
-  trim_qual_window_size_          = opts.GetFirstInt    ('-', "trim-qual-window-size", 30);
-  trim_qual_cutoff_               = opts.GetFirstDouble ('-', "trim-qual-cutoff", 15.0);
-  trim_min_read_len_              = opts.GetFirstInt    ('-', "trim-min-read-len", 8);
+  trim_adapter_                = opts.GetFirstStringVector ('-', "trim-adapter", "ATCACCGACTGCCCATAGAGAGGCTGAGAC");
+  trim_adapter_cutoff_         = opts.GetFirstDouble       ('-', "trim-adapter-cutoff", 16.0);
+  trim_adapter_separation_     = opts.GetFirstDouble       ('-', "trim-adapter-separation", 0.0);
+  trim_adapter_min_match_      = opts.GetFirstInt          ('-', "trim-adapter-min-match", 6);
+  trim_adapter_mode_           = opts.GetFirstInt          ('-', "trim-adapter-mode", 1);
+  trim_adapter_tf_             = opts.GetFirstStringVector ('-', "trim-adapter-tf", "");
+  trim_qual_window_size_       = opts.GetFirstInt          ('-', "trim-qual-window-size", 30);
+  trim_qual_cutoff_            = opts.GetFirstDouble       ('-', "trim-qual-cutoff", 15.0);
+  trim_min_read_len_           = opts.GetFirstInt          ('-', "trim-min-read-len", filter_min_read_length_);
 
-  if (trim_adapter_tf_ == "off")
-    trim_adapter_tf_ = "";
+  // Turn adapter trimming off if 'off' is specified in options string
+  if (trim_adapter_.size() > 0 and trim_adapter_.at(0) == "off")
+    trim_adapter_.clear();
+  if (trim_adapter_tf_.size() >0 and trim_adapter_tf_.at(0) == "off")
+    trim_adapter_tf_.clear();
+  // Validate adapter strings so that they contains only ACGT characters.
+  ValidateBaseStringVector(trim_adapter_);
+  ValidateBaseStringVector(trim_adapter_tf_);
+  // Initialize accounting
+  adapter_class_num_reads_.assign(trim_adapter_.size()+1, 0);
+  adapter_class_num_decisions_.assign(trim_adapter_.size(), 0);
+  adapter_class_av_score_.assign(trim_adapter_.size(), 0.0);
+  adapter_class_av_separation_.assign(trim_adapter_.size(), 0.0);
 
   //string filter_beverly_args      = opts.GetFirstString ('-', "beverly-filter", "0.03,0.03,8");
   string filter_beverly_args      = opts.GetFirstString ('-', "beverly-filter", "off");
@@ -449,12 +480,12 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
     filter_beverly_args = "off";
   }
 
-  avalanche_mid_pos_             = opts.GetFirstInt    ('-', "avalanche_start_pos", -1);
-  avalanche_min_pos_             = opts.GetFirstInt    ('-', "avalanche_stop_pos", -1);
-  avalanche_max_pos_             = opts.GetFirstInt    ('-', "avalanche_max_pos", -1);
-  trim_qual_avalanche_max_       = opts.GetFirstDouble ('-', "avalanche_qual_max", 25.0);
-  trim_qual_avalanche_hi_        = opts.GetFirstDouble ('-', "avalanche_qual_hi", 15.0);
-  trim_qual_avalanche_lo_        = opts.GetFirstDouble ('-', "avalanche_qual_lo", 1.0);
+  avalanche_mid_pos_           = opts.GetFirstInt    ('-', "avalanche_start_pos", -1);
+  avalanche_min_pos_           = opts.GetFirstInt    ('-', "avalanche_stop_pos", -1);
+  avalanche_max_pos_           = opts.GetFirstInt    ('-', "avalanche_max_pos", -1);
+  trim_qual_avalanche_max_     = opts.GetFirstDouble ('-', "avalanche_qual_max", 25.0);
+  trim_qual_avalanche_hi_      = opts.GetFirstDouble ('-', "avalanche_qual_hi", 15.0);
+  trim_qual_avalanche_lo_      = opts.GetFirstDouble ('-', "avalanche_qual_lo", 1.0);
   filter_avalanche_enabled_ = avalanche_mid_pos_ >= 0 ? true : false;
 
   if (filter_avalanche_enabled_) { // force other filters off     
@@ -479,8 +510,26 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
   printf("             --cr-filter %s\n", filter_residual_enabled_ ? "on" : "off");
   printf("          --cr-filter-tf %s\n", filter_residual_enabled_tfs_ ? "on" : "off");
   printf("   --cr-filter-max-value %1.3f\n", filter_residual_max_value_);
-  printf("          --trim-adapter %s\n", trim_adapter_.c_str());
-  printf("       --trim-adapter-tf %s\n", trim_adapter_tf_.empty() ? "off" : trim_adapter_tf_.c_str());
+  //printf("          --trim-adapter %s\n", trim_adapter_.c_str());
+  printf("          --trim-adapter ");
+  if (!trim_adapter_.empty()) {
+    for (unsigned int adpt_idx=0; adpt_idx<trim_adapter_.size()-1; adpt_idx++)
+      cout << trim_adapter_.at(adpt_idx) << ",";
+    cout << trim_adapter_.at(trim_adapter_.size()-1) << endl;
+  }
+  else {
+    cout << "off" << endl;
+  }
+  //printf("       --trim-adapter-tf "); //%s\n", trim_adapter_tf_.empty() ? "off" : trim_adapter_tf_.c_str());
+  printf("       --trim-adapter-tf ");
+  if (!trim_adapter_tf_.empty()) {
+    for (unsigned int adpt_idx=0; adpt_idx<trim_adapter_tf_.size()-1; adpt_idx++)
+      cout << trim_adapter_tf_.at(adpt_idx) << ",";
+    cout << trim_adapter_tf_.at(trim_adapter_tf_.size()-1) << endl;
+  }
+  else {
+    cout << "off" << endl;
+  }
   printf("     --trim-adapter-mode %d\n", trim_adapter_mode_);
   printf("   --trim-adapter-cutoff %1.1f (0.0 means disabled)\n", trim_adapter_cutoff_);
   printf("--trim-adapter-min-match %d\n", trim_adapter_min_match_);
@@ -527,8 +576,9 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
   }
 }
 
+// ----------------------------------------------------------------------------
 
-void BaseCallerFilters::TrainClonalFilter(const string& output_directory, RawWells& wells, int num_unfiltered, Mask& mask)
+void BaseCallerFilters::TrainClonalFilter(const string& output_directory, RawWells& wells, int num_unfiltered, Mask& mask, const PolyclonalFilterOpts & opts)
 {
   if (!filter_clonal_enabled_ and !filter_clonal_enabled_tfs_)
     return;
@@ -538,13 +588,12 @@ void BaseCallerFilters::TrainClonalFilter(const string& output_directory, RawWel
   filter_counts counts;
   int nlib = mask.GetCount(static_cast<MaskType> (MaskLib));
   counts._nsamp = min(nlib, num_unfiltered); // In the future, a parameter separate from num_unfiltered
-  make_filter(clonal_population_, counts, mask, wells, key_ionogram);
+  make_filter(clonal_population_, counts, mask, wells, key_ionogram, opts);
   cout << counts << endl;
   wells.Close();
 }
 
-
-
+// ----------------------------------------------------------------------------
 
 void BaseCallerFilters::TransferFilteringResultsToMask(Mask &mask) const
 {
@@ -573,6 +622,7 @@ void BaseCallerFilters::TransferFilteringResultsToMask(Mask &mask) const
   }
 }
 
+// ----------------------------------------------------------------------------
 
 int BaseCallerFilters::NumWellsCalled() const
 {
@@ -585,6 +635,7 @@ int BaseCallerFilters::NumWellsCalled() const
   return num_called;
 }
 
+// ----------------------------------------------------------------------------
 
 
 void BaseCallerFilters::SetValid(int read_index)
@@ -604,6 +655,7 @@ bool BaseCallerFilters::IsPolyclonal(int read_index) const
 }
 
 
+// ----------------------------------------------------------------------------
 
 
 void BaseCallerFilters::SetBkgmodelHighPPF(int read_index, ReadFilteringHistory& filter_history)
@@ -637,8 +689,11 @@ void BaseCallerFilters::SetBkgmodelFailedKeypass(int read_index, ReadFilteringHi
 }
 
 
+// ----------------------------------------------------------------------------
+
 void BaseCallerFilters::FilterHighPPFAndPolyclonal (int read_index, int read_class, ReadFilteringHistory& filter_history,
-    const vector<float>& measurements)
+    const vector<float>& measurements,
+    const PolyclonalFilterOpts & opts)
 {
   if (filter_history.is_filtered)
     return;
@@ -648,8 +703,8 @@ void BaseCallerFilters::FilterHighPPFAndPolyclonal (int read_index, int read_cla
   if (read_class != 0 and !filter_clonal_enabled_tfs_)  // Filter disabled for TFs?
     return;
 
-  vector<float>::const_iterator first = measurements.begin() + mixed::mixed_first_flow;
-  vector<float>::const_iterator last  = measurements.begin() + mixed::mixed_last_flow;
+  vector<float>::const_iterator first = measurements.begin() + opts.mixed_first_flow;
+  vector<float>::const_iterator last  = measurements.begin() + opts.mixed_last_flow;
   float ppf = percent_positive(first, last);
   float ssq = sum_fractional_part(first, last);
 
@@ -668,6 +723,8 @@ void BaseCallerFilters::FilterHighPPFAndPolyclonal (int read_index, int read_cla
 }
 
 
+// ----------------------------------------------------------------------------
+
 void BaseCallerFilters::FilterZeroBases(int read_index, int read_class, ReadFilteringHistory& filter_history)
 {
   if (filter_history.is_filtered)
@@ -680,6 +737,8 @@ void BaseCallerFilters::FilterZeroBases(int read_index, int read_class, ReadFilt
     filter_history.is_filtered = true;
   }
 }
+
+// ----------------------------------------------------------------------------
 
 
 void BaseCallerFilters::FilterShortRead(int read_index, int read_class, ReadFilteringHistory& filter_history)
@@ -697,6 +756,7 @@ void BaseCallerFilters::FilterShortRead(int read_index, int read_class, ReadFilt
 }
 
 
+// ----------------------------------------------------------------------------
 
 void BaseCallerFilters::FilterFailedKeypass(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<char>& sequence)
 {
@@ -720,6 +780,7 @@ void BaseCallerFilters::FilterFailedKeypass(int read_index, int read_class, Read
 }
 
 
+// ----------------------------------------------------------------------------
 
 void BaseCallerFilters::FilterHighResidual(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& residual)
 {
@@ -738,6 +799,9 @@ void BaseCallerFilters::FilterHighResidual(int read_index, int read_class, ReadF
     filter_history.is_filtered = true;
   }
 }
+
+
+// ----------------------------------------------------------------------------
 
 void BaseCallerFilters::FilterBeverly(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& scaled_residual,
     const vector<int>& base_to_flow)
@@ -804,6 +868,8 @@ void BaseCallerFilters::FilterBeverly(int read_index, int read_class, ReadFilter
   }
 }
 
+// ----------------------------------------------------------------------------
+
 
 double BaseCallerFilters::MedianAbsoluteCafieResidual(const vector<float> &residual, unsigned int use_flows)
 {
@@ -818,182 +884,287 @@ double BaseCallerFilters::MedianAbsoluteCafieResidual(const vector<float> &resid
   return ionStats::median(abs_residual);
 }
 
+// ----------------------------------------------------------------------------
 
+void BaseCallerFilters::ValidateBaseStringVector(vector<string>& string_vector) {
+
+  unsigned int num_fails = 0;
+
+  for (unsigned int string_idx=0; string_idx<string_vector.size(); string_idx++) {
+
+	bool is_ok = true;
+
+    if (string_vector.at(string_idx).empty()) {
+      cerr << "WARNING in BaseCallerFilters: Supplied adapter sequence " << string_idx
+           << " is an empty string. Removing it from classification." << endl;
+      num_fails++;
+      continue;
+    }
+
+    // Loop through string to make sure it's upper case and a valid base
+    unsigned int pos_idx=0;
+    do {
+      switch (string_vector.at(string_idx).at(pos_idx)) {
+        case 'A':
+        case 'C':
+        case 'G':
+        case 'T': break;
+        case 'a':
+          string_vector.at(string_idx).at(pos_idx) = 'A'; break;
+        case 'c':
+          string_vector.at(string_idx).at(pos_idx) = 'C'; break;
+        case 'g':
+          string_vector.at(string_idx).at(pos_idx) = 'G'; break;
+        case 't':
+          string_vector.at(string_idx).at(pos_idx) = 'T'; break;
+        default:
+          is_ok = false;
+      }
+      pos_idx++;
+    } while (is_ok and pos_idx < string_vector.at(string_idx).length());
+
+    if (not is_ok) {
+      // verbose failure and erase this adapter
+      cerr << "WARNING in BaseCallerFilters: Supplied adapter sequence " << string_idx << ": " << string_vector.at(string_idx)
+           << " contains non-ACGT characters. Removing it from classification." << endl;
+      string_vector.at(string_idx).clear();
+      num_fails++;
+    }
+
+    // No point doing adapter classification if all sequences failed
+    if (num_fails == string_vector.size())
+      string_vector.clear();
+  }
+}
+
+
+// ----------------------------------------------------------------------------
+// Adapter detection based on adapter predicted signal
+
+bool BaseCallerFilters::TrimAdapter_PredSignal(float& best_metric, int& best_start_flow, int& best_start_base, int& best_adapter_overlap,
+                         const string& effective_adapter, DPTreephaser& treephaser, const BasecallerRead& read) {
+
+  bool adapter_found = false;
+  // Initialize metrics for adapter search
+  best_metric = -0.1; // Inverted to negative value: The larger the better.
+  best_start_flow = -1;
+  best_start_base = -1;
+  best_adapter_overlap = -1;
+
+  DPTreephaser::TreephaserPath& called_path = treephaser.path(0);   //simulates the main sequence
+  DPTreephaser::TreephaserPath& adapter_path = treephaser.path(1);  //branches off to simulate adapter
+  treephaser.InitializeState(&called_path);
+
+  for (int adapter_start_base = 0; adapter_start_base < (int)read.sequence.size(); ++adapter_start_base) {
+
+    // Step 1. Consider current position as hypothetical adapter start
+
+    adapter_path.prediction = called_path.prediction;
+    int window_start = max(0,called_path.window_start - 8);
+    treephaser.AdvanceState(&adapter_path,&called_path, effective_adapter.at(0), flow_order_.num_flows());
+    int inphase_flow = called_path.flow;
+    float state_inphase = called_path.state[inphase_flow];
+
+    int adapter_bases = 0;
+    for (int adapter_pos = 1; adapter_pos < (int)effective_adapter.length(); ++adapter_pos) {
+      treephaser.AdvanceStateInPlace(&adapter_path, effective_adapter.at(adapter_pos), flow_order_.num_flows());
+      if (adapter_path.flow < flow_order_.num_flows())
+        adapter_bases++;
+    }
+    float xy = 0, xy2 = 0, yy = 0;
+    for (int metric_flow = window_start; metric_flow < adapter_path.flow; ++metric_flow) {
+      xy  += adapter_path.prediction[metric_flow] * read.normalized_measurements[metric_flow];
+      xy2 += read.prediction[metric_flow] * read.normalized_measurements[metric_flow];
+      yy  += read.normalized_measurements[metric_flow] * read.normalized_measurements[metric_flow];
+    }
+    if (yy > 0) {
+      xy  /= yy;
+      xy2 /= yy;
+    }
+
+    float metric_num = 0;
+    float metric_den = 0;
+    for (int metric_flow = window_start; metric_flow < adapter_path.flow; ++metric_flow) {
+      float delta_adapter  = read.normalized_measurements[metric_flow]*xy - adapter_path.prediction[metric_flow];
+      float delta_sequence = read.normalized_measurements[metric_flow]*xy2 - read.prediction[metric_flow];
+      metric_num += delta_adapter*delta_adapter - delta_sequence*delta_sequence;
+      metric_den += state_inphase;
+    }
+
+    // Changing metric sign to negative so that both algorithms maximize the metric
+    float adapter_score = -(metric_num/metric_den + 0.2/adapter_bases);
+    if (adapter_score > best_metric) {
+      adapter_found = true;
+      best_metric = adapter_score;
+      best_start_flow = inphase_flow;
+      best_start_base = adapter_start_base;
+    }
+
+    // Step 2. Continue to next position
+    treephaser.AdvanceStateInPlace(&called_path, read.sequence[adapter_start_base], flow_order_.num_flows());
+  }
+  return adapter_found;
+}
+
+
+// ----------------------------------------------------------------------------
+// Adapter detection using a flow space sequence alignment
+
+bool BaseCallerFilters::TrimAdapter_FlowAlign(float& best_metric, int& best_start_flow,
+		                    int& best_start_base, int& best_adapter_overlap,
+		                    const string& effective_adapter, const vector<float>& scaled_residual,
+		                    const vector<int>& base_to_flow, const BasecallerRead& read) {
+
+  bool adapter_found = false;
+  // Initialize metrics for adapter search
+  best_metric = -1e10; // The larger the better
+  best_start_flow = -1;
+  best_start_base = -1;
+  best_adapter_overlap= -1;
+  int sequence_pos = 0;
+
+  for (int adapter_start_flow = 0; adapter_start_flow < flow_order_.num_flows(); ++adapter_start_flow) {
+
+    while (sequence_pos < (int)read.sequence.size() and base_to_flow[sequence_pos] < adapter_start_flow)
+      sequence_pos++;
+    if (sequence_pos >= (int)read.sequence.size())
+      break;
+    // Only consider start flows that agree with adapter start
+    if (effective_adapter.at(0) != flow_order_[adapter_start_flow])
+      continue;
+
+    // Evaluate this starting position
+    int adapter_pos = 0;
+    float score_match = 0;
+    int score_len_flows = 0;
+    int local_sequence_pos = sequence_pos;
+    int local_start_base = sequence_pos;
+
+    for (int flow = adapter_start_flow; flow < flow_order_.num_flows(); ++flow) {
+
+      int base_delta = 0;
+      while (adapter_pos < (int)effective_adapter.length() and effective_adapter.at(adapter_pos) == flow_order_[flow]) {
+        adapter_pos++;
+        base_delta--;
+      }
+      while (local_sequence_pos < (int)read.sequence.size() and base_to_flow[local_sequence_pos] == flow) {
+        local_sequence_pos++;
+        base_delta++;
+      }
+      if (flow != adapter_start_flow or base_delta < 0) {
+        if (trim_adapter_mode_ == 0)
+          score_match += base_delta*base_delta;
+        else
+          score_match += base_delta*base_delta + 2*base_delta*scaled_residual[flow] + scaled_residual[flow]*scaled_residual[flow];
+      } else
+        local_start_base += base_delta;
+      score_len_flows++;
+
+      if (adapter_pos == (int)effective_adapter.length() or local_sequence_pos == (int)read.sequence.size())
+        break;
+    }
+
+    score_match /= score_len_flows;
+
+    // Does this adapter alignment match our minimum acceptance criteria? If yes, is it better than other matches seen so far?
+
+    if (adapter_pos < trim_adapter_min_match_)  // Match too short
+      continue;
+    if (score_match * 2 * effective_adapter.length() > trim_adapter_cutoff_)  // Match too dissimilar
+      continue;
+    float final_metric = adapter_pos / (float)effective_adapter.length() - score_match; // The higher the better
+
+    if (final_metric > best_metric) {
+      adapter_found = true;
+      best_metric = final_metric;
+      best_start_flow = adapter_start_flow;
+      best_start_base = local_start_base;
+      best_adapter_overlap = adapter_pos;
+    }
+  }
+  return adapter_found;
+}
+
+
+// ----------------------------------------------------------------------------
 
 void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRead& processed_read, const vector<float>& scaled_residual,
     const vector<int>& base_to_flow, DPTreephaser& treephaser, const BasecallerRead& read)
 {
-  if(trim_adapter_cutoff_ <= 0.0 or trim_adapter_.empty())  // Zero means disabled
+  if(trim_adapter_cutoff_ <= 0.0 or trim_adapter_.empty())  // Zero cutoff means disabled
     return;
-
   if (read_class != 0 and trim_adapter_tf_.empty())  // TFs only trimmed if explicitly enabled
     return;
 
-  const string& effective_adapter = (read_class == 0) ? trim_adapter_ : trim_adapter_tf_;
+  int   best_adapter = -1;
+  int   temp_start_flow,      best_start_flow = -1;
+  int   temp_start_base,      best_start_base = -1;
+  int   temp_adapter_overlap, best_adapter_overlap = -1;
+  float best_metric = (trim_adapter_mode_ == 2) ? -0.1 : -1e10;
+  float temp_metric, second_best_metric = best_metric;
 
-  int best_start_flow = -1;
-  int best_start_base = -1;
-  int best_adapter_overlap = -1;
+  const vector<string>& effective_adapter = (read_class == 0) ? trim_adapter_ : trim_adapter_tf_;
 
-  if (trim_adapter_mode_ == 2) {
+  // Loop over adapter possible sequences and evaluate positions for each.
+  for (unsigned int adapter_idx=0; adapter_idx<effective_adapter.size(); adapter_idx++) {
 
-    //
-    // New predicted-signal-based
-    //
+	if (effective_adapter.at(adapter_idx).empty())
+	  continue;
 
-    float best_metric = 0.1; // The lower the better
-
-    DPTreephaser::TreephaserPath& called_path = treephaser.path(0);   //simulates the main sequence
-    DPTreephaser::TreephaserPath& adapter_path = treephaser.path(1);  //branches off to simulate adapter
-
-    treephaser.InitializeState(&called_path);
-
-    for (int adapter_start_base = 0; adapter_start_base < (int)read.sequence.size(); ++adapter_start_base) {
-
-      // Step 1. Consider current position as hypothetical adapter start
-
-      adapter_path.prediction = called_path.prediction;
-      int window_start = max(0,called_path.window_start - 8);
-      treephaser.AdvanceState(&adapter_path,&called_path, effective_adapter[0], flow_order_.num_flows());
-
-      int inphase_flow = called_path.flow;
-      float state_inphase = called_path.state[inphase_flow];
-
-      int adapter_bases = 0;
-      for (int adapter_pos = 1; adapter_pos < (int)effective_adapter.length(); ++adapter_pos) {
-        treephaser.AdvanceStateInPlace(&adapter_path, effective_adapter[adapter_pos], flow_order_.num_flows());
-        if (adapter_path.flow < flow_order_.num_flows())
-          adapter_bases++;
-      }
-
-      float xy = 0, xy2 = 0, yy = 0;
-      for (int metric_flow = window_start; metric_flow < adapter_path.flow; ++metric_flow) {
-        xy  += adapter_path.prediction[metric_flow] * read.normalized_measurements[metric_flow];
-        xy2 += read.prediction[metric_flow] * read.normalized_measurements[metric_flow];
-        yy  += read.normalized_measurements[metric_flow] * read.normalized_measurements[metric_flow];
-      }
-      if (yy > 0) {
-        xy  /= yy;
-        xy2 /= yy;
-      }
-
-      float metric_num = 0;
-      float metric_den = 0;
-      for (int metric_flow = window_start; metric_flow < adapter_path.flow; ++metric_flow) {
-        float delta_adapter  = read.normalized_measurements[metric_flow]*xy - adapter_path.prediction[metric_flow];
-        float delta_sequence = read.normalized_measurements[metric_flow]*xy2 - read.prediction[metric_flow];
-        metric_num += delta_adapter*delta_adapter - delta_sequence*delta_sequence;
-        metric_den += state_inphase;
-      }
-
-      float adapter_score = metric_num/metric_den + 0.2/adapter_bases;
-
-      if (adapter_score < best_metric) {
-        best_metric = adapter_score;
-        best_start_flow = inphase_flow;
-        best_start_base = adapter_start_base;
-      }
-      // Step 2. Continue to next position
-
-      treephaser.AdvanceStateInPlace(&called_path, read.sequence[adapter_start_base], flow_order_.num_flows());
+	bool adapter_found = false;
+    if (trim_adapter_mode_ == 2) {
+      adapter_found = TrimAdapter_PredSignal(temp_metric, temp_start_flow, temp_start_base, temp_adapter_overlap,
+                                         effective_adapter.at(adapter_idx), treephaser, read);
+    } else {
+      adapter_found = TrimAdapter_FlowAlign(temp_metric, temp_start_flow, temp_start_base, temp_adapter_overlap,
+                                         effective_adapter.at(adapter_idx), scaled_residual, base_to_flow, read);
     }
-
-
-
-
-  } else {
-
-    //
-    // Classic adapter trimming strategies
-    //
-
-
-    float best_metric = -1e10;
-    int sequence_pos = 0;
-
-    for (int adapter_start_flow = 0; adapter_start_flow < flow_order_.num_flows(); ++adapter_start_flow) {
-
-      while (sequence_pos < (int)read.sequence.size() and base_to_flow[sequence_pos] < adapter_start_flow)
-        sequence_pos++;
-
-      if (sequence_pos >= (int)read.sequence.size())
-        break;
-
-      // Only consider start flows that agree with adapter start
-      if (effective_adapter[0] != flow_order_[adapter_start_flow])
-        continue;
-
-      // Evaluate this starting position
-      int adapter_pos = 0;
-      float score_match = 0;
-      int score_len_flows = 0;
-      int local_sequence_pos = sequence_pos;
-      int local_start_base = sequence_pos;
-
-      for (int flow = adapter_start_flow; flow < flow_order_.num_flows(); ++flow) {
-
-        int base_delta = 0;
-        while (adapter_pos < (int)effective_adapter.length() and effective_adapter[adapter_pos] == flow_order_[flow]) {
-          adapter_pos++;
-          base_delta--;
-        }
-
-        while (local_sequence_pos < (int)read.sequence.size() and base_to_flow[local_sequence_pos] == flow) {
-          local_sequence_pos++;
-          base_delta++;
-        }
-
-        if (flow != adapter_start_flow or base_delta < 0) {
-          if (trim_adapter_mode_ == 0)
-            score_match += base_delta*base_delta;
-          else
-            score_match += base_delta*base_delta + 2*base_delta*scaled_residual[flow] + scaled_residual[flow]*scaled_residual[flow];
-        } else
-          local_start_base += base_delta;
-        score_len_flows++;
-
-        if (adapter_pos == (int)effective_adapter.length() or local_sequence_pos == (int)read.sequence.size())
-          break;
+    // Find & record best matching adapter sequence
+    if (adapter_found) {
+      if (temp_metric > best_metric) {
+        best_adapter = adapter_idx;
+        second_best_metric = best_metric;
+        best_metric = temp_metric;
+        best_start_flow = temp_start_flow;
+        best_start_base = temp_start_base;
+        best_adapter_overlap = temp_adapter_overlap;
       }
-
-      score_match /= score_len_flows;
-
-      // Does this adapter alignment match our minimum acceptance criteria? If yes, is it better than other matches seen so far?
-
-      if (adapter_pos < trim_adapter_min_match_)  // Match too short
-        continue;
-
-      if (score_match * 2 * effective_adapter.length() > trim_adapter_cutoff_)  // Match too dissimilar
-        continue;
-
-      float final_metric = adapter_pos / (float)effective_adapter.length() - score_match; // The higher the better
-
-      if (final_metric > best_metric) {
-        best_metric = final_metric;
-        best_start_flow = adapter_start_flow;
-        best_start_base = local_start_base;
-        best_adapter_overlap = adapter_pos;
+      else if (temp_metric > second_best_metric) {
+        second_best_metric = temp_metric;
       }
     }
   }
 
-
-  if (best_start_flow == -1)    // No suitable match
+  // Do not use adapter classification if we're not confident
+  if (fabs(best_metric - second_best_metric) < trim_adapter_separation_)
+    best_start_flow = -1;
+  if (best_start_flow == -1) {   // No suitable match
+    adapter_class_num_reads_.at(trim_adapter_.size())++;
     return;
+  }
 
-  // Save trimming results
+  // --- Save trimming results
+
+  if (read_class == 0) {
+    adapter_class_num_reads_.at(best_adapter)++;
+    adapter_class_av_score_.at(best_adapter) += best_metric;
+    if (second_best_metric != ((trim_adapter_mode_ == 2) ? -0.1 : -1e10)) {
+      adapter_class_num_decisions_.at(best_adapter)++;
+      adapter_class_av_separation_.at(best_adapter) += (best_metric - second_best_metric);
+    }
+  }
 
   processed_read.bam.AddTag("ZA", "i", max(best_start_base - processed_read.filter.n_bases_prefix, 0));
   processed_read.bam.AddTag("ZG", "i", best_start_flow);
   processed_read.bam.AddTag("ZB", "i", best_adapter_overlap);
 
-  vector<int> pcr_duplicate_signature(3,0);
-
-  pcr_duplicate_signature[0] = best_start_flow;                       // Signature entry 1 - flow incorporating the first adapter base
+  vector<int> pcr_duplicate_signature(4,0);
+  pcr_duplicate_signature[0] = best_start_flow;                       // Signature entry 1 - flow incorporating the first adapter base.
   if (best_start_base > 0)
-    pcr_duplicate_signature[1] = base_to_flow[best_start_base-1];     // Signature entry 2 - flow containing last insert base
+    pcr_duplicate_signature[1] = base_to_flow[best_start_base-1];     // Signature entry 2 - flow containing last insert base.
   for (int reverse_pos = best_start_base-1; reverse_pos >= 0 and base_to_flow[best_start_base-1] == base_to_flow[reverse_pos]; --reverse_pos)
-    pcr_duplicate_signature[2]++;                                     // Signature entry 3 - length of last insert HP
+    pcr_duplicate_signature[2]++;                                     // Signature entry 3 - length of last insert HP.
+  pcr_duplicate_signature[3] = best_adapter;                          // Signature entry 4 - type of adapter sequence found.
 
   processed_read.bam.AddTag("ZC", pcr_duplicate_signature);
 
@@ -1015,7 +1186,7 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
 
 }
 
-
+// ----------------------------------------------------------------------------
 
 void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
 {
@@ -1064,6 +1235,7 @@ void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilterin
   }
 }
 
+// ----------------------------------------------------------------------------
 
 void BaseCallerFilters::TrimAvalanche_setup(int maxflows)
 {
@@ -1193,6 +1365,7 @@ void BaseCallerFilters::TrimAvalanche_setup(int maxflows)
     //count_passed = 0;
 }
 
+// ----------------------------------------------------------------------------
 
 void BaseCallerFilters::TrimAvalanche(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
 {
@@ -1282,13 +1455,73 @@ void BaseCallerFilters::TrimAvalanche(int read_index, int read_class, ReadFilter
   }
 }
 
+// ----------------------------------------------------------------------------------
 
+void BaseCallerFilters::WriteAdaptersToBamComments(vector<string> &comments) {
 
+  Json::Value json(Json::objectValue);
+  stringstream adapter_stream;
+  for (unsigned int adapter_idx=0; adapter_idx<trim_adapter_.size(); adapter_idx++) {
+    adapter_stream.str(std::string());
+    adapter_stream << "Adapter_" << adapter_idx;
+    json["BeadAdapters"][adapter_stream.str()]["adapter_sequence"] = trim_adapter_.at(adapter_idx);
+  }
+  Json::FastWriter writer;
+  string str = writer.write(json);
+  // trim unwanted newline added by writer
+  int last_char = str.size()-1;
+  if (last_char>=0 and str[last_char]=='\n') {
+    str.erase(last_char,1);
+  }
+  comments.push_back(str);
+}
 
+// ----------------------------------------------------------------------------------
 
+void BaseCallerFilters::WriteToBaseCallerJson(Json::Value &json) {
 
+  // Store adapter classification results in basecaller json object
+  stringstream adapter_stream;
 
+  for (unsigned int adapter_idx=0; adapter_idx<trim_adapter_.size(); adapter_idx++) {
+    adapter_stream.str(std::string());
+    adapter_stream << "Adapter_" << adapter_idx;
+    json["Filtering"]["BeadAdapters"][adapter_stream.str()]["adapter_sequence"] = trim_adapter_.at(adapter_idx);
+    json["Filtering"]["BeadAdapters"][adapter_stream.str()]["read_count"] = (Json::UInt64)(adapter_class_num_reads_.at(adapter_idx));
+    json["Filtering"]["BeadAdapters"][adapter_stream.str()]["num_decisions"] = (Json::UInt64)(adapter_class_num_decisions_.at(adapter_idx));
 
+    Json::Value av_score(adapter_class_av_score_.at(adapter_idx) / max(adapter_class_num_reads_.at(adapter_idx),(uint64_t)1));
+    json["Filtering"]["BeadAdapters"][adapter_stream.str()]["average_metric"] = av_score;
 
+    Json::Value av_sep(adapter_class_av_separation_.at(adapter_idx) / max(adapter_class_num_reads_.at(adapter_idx),(uint64_t)1));
+    json["Filtering"]["BeadAdapters"][adapter_stream.str()]["average_separation"] = av_sep;
+  }
 
+  json["Filtering"]["BeadAdapters"]["no_match"]["read_count"] = (Json::UInt64)(adapter_class_num_reads_.at(trim_adapter_.size()));
 
+  // Pretty print a little summary to stdout
+
+  adapter_stream.str(std::string());
+  adapter_stream.imbue(locale(adapter_stream.getloc(), new ThousandsSeparator));
+  adapter_stream << endl;
+
+  adapter_stream << setw(25) << "Bead Adapters";
+  adapter_stream << setw(23) << "Num Reads" << setw(53) << "Adapter Sequence" << endl;
+
+  adapter_stream << setw(25) << " ";
+  adapter_stream << setw(23) << "--------------------" << setw(53) << "--------------------------------------------------" << endl;
+
+  for (unsigned int adapter_idx=0; adapter_idx<trim_adapter_.size(); adapter_idx++) {
+    adapter_stream << setw(25) << "Adapter " << adapter_idx;
+    adapter_stream << setw(23) << adapter_class_num_reads_.at(adapter_idx) << setw(53) << trim_adapter_.at(adapter_idx) << endl;
+  }
+
+  adapter_stream << setw(25) << "No Match";
+  adapter_stream << setw(23) << adapter_class_num_reads_.at(trim_adapter_.size()) << setw(53) << " " << endl;
+
+  adapter_stream << setw(25) << " ";
+  adapter_stream << setw(23) << "--------------------" << setw(53) << "--------------------------------------------------" << endl << endl;
+
+  cout << adapter_stream.str();
+
+}

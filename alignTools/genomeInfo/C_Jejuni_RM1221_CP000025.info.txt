@@ -1,5 +1,0 @@
-genome_shortname	C_Jejuni_RM1221_CP000025
-genome_name	Campylobacter jejuni RM1221
-genome_version	gi|57165696|gb|CP000025.1
-index_version	b-0.1
-genome_length	1777833

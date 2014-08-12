@@ -9,6 +9,7 @@
   <li><a href="{% url "configure_services" %}">Services</a></li>
   <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
   <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
   <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block extra_head %}
@@ -158,19 +159,24 @@
             });});
           </script>
         {% endif %}
-        <h1>{{ name }}</h1>
+        <h1>{{ reference.short_name }} <small>{{ reference.name }}</small></h1>
         <form action="" method='post' enctype="multipart/form-data">
           <table id="referenceDetails">
             <tbody>
             <tr>
               <th>{{ temp.name.label }}</th>
-              <td>{{ temp.name }}</td>
+              <td>{{ temp.name.as_hidden }}{{ reference.short_name }}</td>
               <td>{{ temp.name.errors }}</td>
             </tr>
             <tr>
               <th>{{ temp.NCBI_name.label }}</th>
               <td>{{ temp.NCBI_name }}</td>
               <td>{{ temp.NCBI_name.errors }}</td>
+            </tr>
+            <tr>
+              <th>{{ temp.version.label }}</th>
+              <td>{{ temp.version }}</td>
+              <td>{{ temp.version.errors }}</td>
             </tr>
             <tr>
               <th>{{ temp.notes.label }}</th>

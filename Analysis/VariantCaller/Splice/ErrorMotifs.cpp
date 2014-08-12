@@ -7,39 +7,52 @@
 #include "ErrorMotifs.h"
 
 //-----------------------------------------------------
-void TIonMotifSet::add_motif(string motif, TMetaData * mdata) {
+void TIonMotifSet::add_motif(string motif, const TMetaData &mdata) {
 
   unsigned hpPos = 0;
   int firstBase = -1;
-  while (hpPos < motif.length() && !isdigit(motif[hpPos])) { if (motif[hpPos] != '.' && firstBase == -1) firstBase = hpPos; hpPos++;}
-  if (hpPos == 0) { cout << "bad motif " << motif << endl; return;}
 
-  int key = get_key(motif[hpPos-1], atoi(&motif[hpPos]));
-   
-  if(key>=(int)(4*MAX_HP_SIZE)) return;
+  while (hpPos < motif.length() && !isdigit(motif.at(hpPos))) {
+    if (motif.at(hpPos) != '.' && firstBase == -1)
+      firstBase = hpPos;
+    hpPos++;
+  }
+  if (hpPos == 0) {
+    cout << "TIonMotifSet: bad motif " << motif << endl;
+    return;
+  }
+
+  int key = get_key(motif.at(hpPos-1), atoi(&motif.at(hpPos)));
+  if (key >= (int)(4*MAX_HP_SIZE))
+    return;
   
   int pref_length = hpPos - 1 - firstBase;
-  if (pref_length > motif_table[key].left_size) motif_table[key].left_size = pref_length;
+  if (pref_length > motif_table.at(key).left_size)
+    motif_table.at(key).left_size = pref_length;
+
   string submotif = (pref_length <= 0 ? "" : motif.substr(firstBase, pref_length));
   submotif += "|";
 
   int i = hpPos, suff_start = -1, lastBase = -1;
   while (i < (int)motif.length()) {
-    if (!isdigit(motif[i]) && suff_start == -1) suff_start = i;
-    if (motif[i] != '.' && suff_start != -1) lastBase = i + 1;
+    if (!isdigit(motif.at(i)) && suff_start == -1) suff_start = i;
+    if (motif.at(i) != '.' && suff_start != -1) lastBase = i + 1;
     i++;
   }
 
   int suff_length = lastBase - suff_start;
-  if (suff_length > motif_table[key].right_size) motif_table[key].right_size = suff_length;
+  if (suff_length > motif_table.at(key).right_size)
+    motif_table.at(key).right_size = suff_length;
   submotif += (suff_length <= 0 ? "" : motif.substr(suff_start, suff_length));
 
   //cout << key << " " << submotif << " " << mdata->covered_sse << " " << mdata->covered_nonsse << endl;
-  add_motif(key, submotif, mdata, 0);
+  add_my_motif(key, submotif, mdata, 0);
   isempty = false;
 }
+
+
 //-----------------------------------------------------
-unsigned TIonMotifSet::make_hashkey(string motif) {
+unsigned TIonMotifSet::make_hashkey(string motif) const {
   unsigned hashKey = 1;
   for (unsigned i = 0;i < motif.length(); i++) {
     hashKey <<= 2;
@@ -52,21 +65,24 @@ unsigned TIonMotifSet::make_hashkey(string motif) {
   return hashKey;
 }
 
+
 //-----------------------------------------------------
-void TIonMotifSet::add_motif(short key, string motif, TMetaData * mdata, unsigned pos) {
-  for (unsigned i = pos;i < motif.length(); i++)
-    if (motif[i] == '.') {
-      motif[i] = 'A'; add_motif(key, motif, mdata, pos + 1);
-      motif[i] = 'C'; add_motif(key, motif, mdata, pos + 1);
-      motif[i] = 'G'; add_motif(key, motif, mdata, pos + 1);
-      motif[i] = 'T'; add_motif(key, motif, mdata, pos + 1);
+void TIonMotifSet::add_my_motif(short key, string motif, const TMetaData &mdata, unsigned pos) {
+  for (unsigned i = pos; i < motif.length(); i++)
+    if (motif.at(i) == '.') {
+      motif[i] = 'A'; add_my_motif(key, motif, mdata, pos + 1);
+      motif[i] = 'C'; add_my_motif(key, motif, mdata, pos + 1);
+      motif[i] = 'G'; add_my_motif(key, motif, mdata, pos + 1);
+      motif[i] = 'T'; add_my_motif(key, motif, mdata, pos + 1);
       return;
     }
   //cout << key << "-" << motif << " " << mdata->covered_sse << " " << mdata->covered_nonsse << endl;
-  motif_table[key].add(make_hashkey(motif), mdata);
+  motif_table.at(key).add(make_hashkey(motif), mdata);
 }
+
+
 //-----------------------------------------------------
-short TIonMotifSet::get_key(char hpChar, int hpSize) {
+short TIonMotifSet::get_key(char hpChar, int hpSize) const {
   hpSize = 4 * (hpSize - 1);
   switch (hpChar) {
     case 'T': hpSize++;
@@ -75,6 +91,7 @@ short TIonMotifSet::get_key(char hpChar, int hpSize) {
   }
   return (short)hpSize;
 }
+
 
 //-----------------------------------------------------
 void TIonMotifSet::load_from_file(const char * fname) {
@@ -101,9 +118,8 @@ void TIonMotifSet::load_from_file(const char * fname) {
         }
         if (i < 2) cerr << "skipping corrupted motif record " <<  line << endl;
         else {
-          TMetaData * mdata = new TMetaData(val[0], val[1]);
+          TMetaData mdata(val[0], val[1]);
           add_motif(motif, mdata);
-          delete mdata;
         }
       }
     }
@@ -113,7 +129,7 @@ void TIonMotifSet::load_from_file(const char * fname) {
 
 }
 //-----------------------------------------------------
-float TIonMotifSet::get_sse_probability(string context, unsigned err_base_pos) {
+float TIonMotifSet::get_sse_probability(string context, unsigned err_base_pos) const {
 
   if (err_base_pos >= context.length()) {
     cout << "TIonMotifSet::get_sse_probability() position is out of context. context='" << context << "' pos=" << err_base_pos << endl;
@@ -121,33 +137,38 @@ float TIonMotifSet::get_sse_probability(string context, unsigned err_base_pos) {
   }
 
   int i = err_base_pos - 1, j = err_base_pos + 1;
-  while (i >= 0 && context[i] == context[err_base_pos]) i--;
-  while (j < (int)context.length() && context[j] == context[err_base_pos]) j++;
+  while (i >= 0 && context.at(i) == context.at(err_base_pos))
+    i--;
+  while (j < (int)context.length() && context.at(j) == context.at(err_base_pos))
+    j++;
 
   int hpLen = (err_base_pos - 1) - i + 1 + j - (err_base_pos + 1);
-  int key = get_key(context[err_base_pos], hpLen);
+  int key = get_key(context.at(err_base_pos), hpLen);
   float weight = 0;
   
-  if(key>=(int)(4*MAX_HP_SIZE)) return weight;
+  if(key>=(int)(4*MAX_HP_SIZE))
+    return weight;
   
-  if (!motif_table[key].isEmpty()) {
-    unsigned left_size = motif_table[key].left_size;
-    unsigned right_size = motif_table[key].right_size;
+  if (!(motif_table.at(key).isEmpty())) {
+    unsigned left_size = motif_table.at(key).left_size;
+    unsigned right_size = motif_table.at(key).right_size;
 
     string prefix = i < 0 ? "" : context.substr(0, i + 1);
     string suffix = j >= (int)context.length() ? "" : context.substr(j);
 
-    if (prefix.length() > left_size) prefix = prefix.substr(prefix.length() - left_size);
-    if (suffix.length() > right_size) suffix = suffix.substr(0, right_size);
-
-//cout << prefix << " " << (char) context[err_base_pos] << hpLen << " " << suffix << endl;
+    if (prefix.length() > left_size)
+      prefix = prefix.substr(prefix.length() - left_size);
+    if (suffix.length() > right_size)
+      suffix = suffix.substr(0, right_size);
+    //cout << prefix << " " << (char) context[err_base_pos] << hpLen << " " << suffix << endl;
 
     TMetaData md(0, 0);
     for (i = 0;i <= (int)prefix.length();i++)
       for (j = 0;j <= (int)suffix.length();j++)
-        if (motif_table[key].has_hashkey(make_hashkey((i < (int)prefix.length() ? prefix.substr(i) : "") + "|" + (j > 0 ? suffix.substr(0, j) : "")), md)) {
+        if (motif_table.at(key).has_hashkey(make_hashkey((i < (int)prefix.length() ? prefix.substr(i) : "") + "|" + (j > 0 ? suffix.substr(0, j) : "")), md)) {
           float tmp_weight = md.calculate_probability();
-          if (tmp_weight > weight) weight = tmp_weight;
+          if (tmp_weight > weight)
+            weight = tmp_weight;
         }
   }
   return weight;

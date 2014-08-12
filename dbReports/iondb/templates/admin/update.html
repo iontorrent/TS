@@ -73,7 +73,10 @@
         <h2 id="update_status">Checking status</h2>
         <div id="update_actions">
           <p id="instructions">Your system will automatically check for updates periodically.  You can click Check below to manually check for new updates.</p>
-          <div><input type="checkbox" id="auto_download" /> Automatically download but do not install updates.</div>
+        <div id="security_update_actions" title="All server packages with security updates will be installed when TS is updated">
+          <div><input type="checkbox" id="checkbox_auto_security" /> Automatically install security updates when TS software is updated.</div>
+        </div>
+        <div><input type="checkbox" id="auto_download" /> Automatically download but do not install updates.</div>
           <button id="check_update">Check</button>
           <button id="confirm_update" disabled="disabled">Update Server</button>
             {% if not allow_update %}
@@ -141,7 +144,7 @@
         <p>Please check the Release Notes on the <a href="http://ioncommunity.lifetechnologies.com/welcome">Ion Community</a> for more details.</p>
         <p>After the Torrent Suite upgrade is completed, don't forget to also upgrade your instruments to the same software level to ensure they are compatible.</p>
       </div>
-    </div>
+    </div>  <!--END update_control-->
   </div>
   <script>
     var global_config_initial = {{ global_config_json|safe }};
@@ -156,18 +159,19 @@
         el: $('#update_control'),
 
         events: {
-          'click #start_update': 'start_update',
-          'click #auto_download': 'toggle_auto_download',
           'click #check_update': 'check_update',
           'click #confirm_update': 'confirm_update',
+          'click #start_update': 'start_update',
           'click #cancel': 'no_update_thx',
-          'click #version_lock': 'toggle_version_lock'
+          'click #auto_download': 'toggle_auto_download',
+          'click #version_lock': 'toggle_version_lock',
+          'click #checkbox_auto_security': 'toggle_auto_security'
         },
 
         initialize: function(){
           _.bindAll(this, 'render', 'start_update', 'toggle_auto_download',
             'poll', 'check_update', 'confirm_update', 'no_update_thx',
-            'toggle_version_lock');
+            'toggle_version_lock', 'toggle_auto_security');
           _.each(this.handle_status, function(func, name, list){
             this.handle_status[name] = _.bind(func, this);
           }, this);
@@ -191,6 +195,7 @@
             this.handle_status[status]();
             this.previous_status = status;
           }
+          this.$("#checkbox_auto_security").attr("checked", this.config.get("enable_auto_security"));
         },
 
         handle_status: {
@@ -294,6 +299,13 @@
           var checked = this.$("#auto_download").attr("checked") || false;
           this.config.save({
             "enable_auto_pkg_dl": checked
+          });
+        },
+
+        toggle_auto_security: function(){
+          var checked = this.$("#checkbox_auto_security").attr("checked") || false;
+          this.config.save({
+            "enable_auto_security": checked
           });
         },
 

@@ -62,7 +62,7 @@ same OS that the Torrent Server runs.
          sudo R CMD INSTALL $PKG
      done
      for PKG in fields_6.3.tar.gz; do
-       wget http://cran.r-project.org/src/contrib/$PKG
+       wget http://cran.r-project.org/src/contrib/Archive/fields/$PKG 
        sudo R CMD INSTALL $PKG
      done
 

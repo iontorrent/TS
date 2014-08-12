@@ -22,7 +22,6 @@
 //#include "ByteHandler.h"
 #include "HuffmanEncode.h"
 #include "compression.h"
-#include "VencoLossless.h"
 #include "SampleStats.h"
 #include "SampleQuantiles.h"
 #include <x86intrin.h>
@@ -276,11 +275,13 @@ static void mulAndOrthError(fmat &score, fvec &orthError, const fmat &basisGood,
         for (int k = L; k % 8 != 0; ++k) ((float*)rowV)[k] = 0.0f;
         // -------------------------------------------------------------------------
 
+#ifndef __INTEL_COMPILER
+// ICC has issues with tmpScore[ii].v lines (variable length arrays)
         // -------------------------- calculate score ------------------------------
         //f4vector tmpScore[ RANK_GOOD ];
-	f4vector tmpScore[ basisGood.n_cols ];
+        f4vector tmpScore[ basisGood.n_cols ];
         //rep(k, RANK_GOOD) tmpScore[k].v = (v4sf)VZERO; 
-	rep(k, basisGood.n_cols) tmpScore[k].v = (v4sf)VZERO; 
+        rep(k, basisGood.n_cols) tmpScore[k].v = (v4sf)VZERO; 
         rep(k, L4) {
             const v4sf rowK = rowV[k];
             const f4vector *const B = base[k];
@@ -304,6 +305,9 @@ static void mulAndOrthError(fmat &score, fvec &orthError, const fmat &basisGood,
         }
         orthError(i) = lengthV.sum(); // store to output vector
         // --------------------------------------------------------------------------
+#else
+#pragma message "WARNING, code not implemented for ICC"
+#endif
     }
 }
 

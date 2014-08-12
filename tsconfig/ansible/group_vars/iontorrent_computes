@@ -1,0 +1,14 @@
+---
+# file: group_vars/iontorrent_computes
+
+# APT package list
+ioncompute_syspkg_list:
+
+ioncompute_ionpkg_list:
+    - ion-gpu
+    - ion-analysis
+    - ion-pipeline
+    - samtools
+    - ion-rsmts
+    - ion-samita
+    - ion-torrentr

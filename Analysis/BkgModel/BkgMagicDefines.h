@@ -5,10 +5,6 @@
 #include <sys/types.h>
 #include "SystemMagicDefines.h"
 
-// the single most widely abused macro
-// chunk size of number of flows
-#define NUMFB                   20
-
 // Amount in frames forward from t0 to use for VFC compression in TimeCompression.h
 // @hack - Note this must be kept in synch with T0_LEFT_OFFSET in DifferentialSeparator.cpp
 #define VFC_T0_OFFSET 6
@@ -23,12 +19,17 @@
 #define POISSON_TABLE_STEP 0.05f
 
 // magic numbers
-#define SCALEOFBUFFERINGCHANGE 1000.0f
-#define MINTAUB 4.0f
-#define MAXTAUB 65.0f
+#define SCALEOFBUFFERINGCHANGE 1000.0f 
+#define xMINTAUB 4.0f //-vm:
+#define xMAXTAUB 65.0f
 
-#define MIN_RDR_HIGH_LIMIT  2.0f
+#define MIN_RDR_HIGH_LIMIT  10.0f // -vm: 
+#define MIN_RDR_HIGH_LIMIT_OLD  2.0f 
 
+// try to define some timing issues
+const float MIN_INCORPORATION_TIME_PI = 6.0f;
+const float MIN_INCORPORATION_TIME_PER_MER_PI_VERSION_ONE = 2.0f;
+const float MIN_INCORPORATION_TIME_PER_MER_PI_VERSION_TWO = 1.75f;
 
 #define SINGLE_BKG_IMAGE
 
@@ -73,13 +74,14 @@
 #define NUMSINGLEFLOWITER_LEVMAR 40
 #define NUMSINGLEFLOWITER_GAUSSNEWTON 8
 
-#define MAX_BOUND_CHECK(param) {if (bound->param < cur->param) cur->param = bound->param;}
-#define MIN_BOUND_CHECK(param) {if (bound->param > cur->param) cur->param = bound->param;}
+#define MAX_BOUND_CHECK(param) {if (bound->param < this->param) this->param = bound->param;}
+#define MIN_BOUND_CHECK(param) {if (bound->param > this->param) this->param = bound->param;}
 
-#define MAX_BOUND_PAIR_CHECK(param,bparam) {if (bound->bparam < cur->param) cur->param = bound->bparam;}
-#define MIN_BOUND_PAIR_CHECK(param,bparam) {if (bound->bparam > cur->param) cur->param = bound->bparam;}
+#define MAX_BOUND_PAIR_CHECK(param,bparam) {if (bound->bparam < this->param) this->param = bound->bparam;}
+#define MIN_BOUND_PAIR_CHECK(param,bparam) {if (bound->bparam > this->param) this->param = bound->bparam;}
 
 #define EFFECTIVEINFINITY 1000
+#define SMALLINFINITY 100
 #define SAFETYZERO 0.000001f
 
 #define SENSMULTIPLIER 0.00002f
@@ -117,7 +119,7 @@ typedef int16_t FG_BUFFER_TYPE;
 
 // speedup flags to accumulate 2x all together
 #define CENSOR_ZERO_EMPHASIS 1
-#define CENSOR_THRESHOLD 0.01f
+#define CENSOR_THRESHOLD 0.001f
 #define MIN_CENSOR 1
 
 // levmar state
@@ -130,8 +132,11 @@ typedef int16_t FG_BUFFER_TYPE;
 #define MAX_COMPRESSED_FRAMES 61
 // to accommodate exponential tail fit large number of frames in GPU code
 #define MAX_COMPRESSED_FRAMES_GPU 61
+#define MAX_UNCOMPRESSED_FRAMES_GPU 110
 #define MAX_PREALLOC_COMPRESSED_FRAMES_GPU 48
 
+// Just for the GPU version, how many flows can be in a block (like numfb).
+#define MAX_NUM_FLOWS_IN_BLOCK_GPU 32
 
 // random values to keep people from iterating
 #define TIME_FOR_NEXT_BLOCK -1
@@ -145,11 +150,6 @@ typedef int16_t FG_BUFFER_TYPE;
 
 #define LARGE_PRIME 104729
 #define SMALL_PRIME 541
-
-//CUDA / GPU SPECIFIC MACROS
-
-#define MAX_CUDA_DEVICES 4
-#define NUM_CUDA_FIT_STREAMS 2
 
 
 #endif // BKGMAGICDEFINES_H

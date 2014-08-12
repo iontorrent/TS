@@ -12,8 +12,6 @@
 #include "FlowBuffer.h"
 #include "BkgDataPointers.h"
 #include "ImageLoader.h"
-#include "RegionTrackerReplay.h"
-#include "BkgModelReplay.h"
 
 #include "SlicedPrequel.h"
 #include "Serialization.h"
@@ -25,13 +23,14 @@
 //#include <unordered_map>
 #include <map>
 
-
 class BkgFitterTracker
 {
+  void InitBeads_BestRegion(const CommandLineOpts &inception_state);
+  int numFitters;
 public:
   std::vector<RegionalizedData *> sliced_chip;
+  std::vector<class SlicedChipExtras>   sliced_chip_extras;
   std::vector<SignalProcessingMasterFitter *> signal_proc_fitters;
-  int numFitters;
 
   GlobalDefaultsForBkgModel global_defaults;  // shared across everything
 
@@ -53,54 +52,64 @@ public:
 
 
   bool IsGpuAccelerationUsed() { return analysis_compute_plan.use_gpu_acceleration; }
-
-  void ThreadedInitialization ( GlobalDefaultsForBkgModel &global_defaults, 
-                                RawWells &rawWells, CommandLineOpts &inception_state, ComplexMask &a_complex_mask,
-                                char *results_folder,ImageSpecClass &my_image_spec, std::vector<float> &smooth_t0_est,
+  void ThreadedInitialization ( RawWells &rawWells, const CommandLineOpts &inception_state, 
+                                const ComplexMask &a_complex_mask,
+                                const char *results_folder,const ImageSpecClass &my_image_spec, 
+                                const std::vector<float> &smooth_t0_est,
                                 std::vector<Region> &regions,
-                                std::vector<RegionTiming> &region_timing,
-                                SeqListClass &my_keys,
-  bool restart);
+                                const std::vector<RegionTiming> &region_timing,
+                                const SeqListClass &my_keys,
+                                bool restart,
+                                int num_flow_blocks );
   void InitCacheMath();
-  void ExecuteFitForFlow ( int flow, ImageTracker &my_img_set, bool last );
-  void SetUpTraceTracking ( SlicedPrequel &my_prequel_setup, CommandLineOpts &inception_state, ImageSpecClass &my_image_spec, ComplexMask &cmask );
-  void PlanComputation ( BkgModelControlOpts &bkg_control );
-  void SpinUp();
-  void UnSpinGpuThreads();
+  void ExecuteFitForFlow ( int raw_flow, ImageTracker &my_img_set, bool last, 
+                           int flow_key, master_fit_type_table *table,
+                           const CommandLineOpts * inception_state );
+  void SetUpTraceTracking ( const SlicedPrequel &my_prequel_setup, const CommandLineOpts &inception_state, const ImageSpecClass &my_image_spec, const ComplexMask &cmask, int flow_block_size );
+  void PlanComputation ( BkgModelControlOpts &bkg_control);
+  void SpinUpGPUThreads();
+  void UnSpinGPUThreads();
 //  void UnSpinMultiFlowFitGpuThreads();
-  void SetRegionProcessOrder(CommandLineOpts &inception_state);
+  void SetRegionProcessOrder(const CommandLineOpts &inception_state);
   int findRegion(int x, int y);
 
   BkgFitterTracker ( int numRegions );
-  void AllocateRegionData(std::size_t numRegions);
+  void AllocateRegionData(std::size_t numRegions, const CommandLineOpts * inception_state);
   void DeleteFitters();
   ~BkgFitterTracker();
   
   // text based diagnostics in blocks of flows
-  void DumpBkgModelRegionInfo ( char *results_folder,int flow,bool last_flow );
-  void DumpBkgModelBeadInfo ( char *results_folder, int flow, bool last_flow, bool debug_bead_only );
-  void DumpBkgModelBeadParams ( char *results_folder,  int flow, bool debug_bead_only );
-  void DumpBkgModelBeadOffset ( char *results_folder, int flow, bool debug_bead_only );
-  void DumpBkgModelEmphasisTiming ( char *results_folder, int flow );
-  void DumpBkgModelInitVals ( char *results_folder, int flow );
-  void DumpBkgModelDarkMatter ( char *results_folder, int flow );
-  void DumpBkgModelEmptyTrace ( char *results_folder, int flow );
-  void DumpBkgModelRegionParameters ( char *results_folder,int flow );
+  void DumpBkgModelRegionInfo ( char *results_folder,int flow,bool last_flow, 
+                                FlowBlockSequence::const_iterator flow_block ) const;
+  void DumpBkgModelBeadInfo ( char *results_folder, int flow, bool last_flow, bool debug_bead_only, 
+                              FlowBlockSequence::const_iterator flow_block ) const;
+  void DumpBkgModelBeadParams ( char *results_folder,  int flow, bool debug_bead_only, int flow_block_size ) const;
+  void DumpBkgModelBeadOffset ( char *results_folder, int flow, bool debug_bead_only ) const;
+  void DumpBkgModelEmphasisTiming ( char *results_folder, int flow ) const;
+  void DumpBkgModelInitVals ( char *results_folder, int flow ) const;
+  void DumpBkgModelDarkMatter ( char *results_folder, int flow ) const;
+  void DumpBkgModelEmptyTrace ( char *results_folder, int flow, int flow_block_size ) const;
+  void DumpBkgModelRegionParameters ( char *results_folder,int flow, int flow_block_size ) const;
   // text based diagnostics
-  void DetermineMaxLiveBeadsAndFramesAcrossAllRegionsForGpu();
-
+  void DetermineAndSetGPUAllocationAndKernelParams( BkgModelControlOpts &bkg_control, 
+                                      int global_max_flow_key, int global_max_flow_max );
   // for beads in the bestRegion
   std::pair<int, int> bestRegion;
-  Region *bestRegion_region;
-  void InitBeads_BestRegion(CommandLineOpts &inception_state);
-  void InitBeads_xyflow(CommandLineOpts &inception_state);
+  const Region *bestRegion_region;
+  void InitBeads_xyflow(const CommandLineOpts &inception_state);
 
   // xyflow
   //std::vector<XYFlow_class> xyf_hash;
   HashTable_xyflow xyf_hash;
 
- private:
+  // sliced_chip_cur_bead_block and sliced_chip_cur_buffer_block are scratch regions that
+  // should just match sliced_chip.
+  void AllocateSlicedChipScratchSpace( int global_flow_max );
   
+  int getMaxFrames(const ImageSpecClass &my_image_spec, const std::vector<RegionTiming> &region_timing);
+
+ private:
+
   BkgFitterTracker(){
     all_emptytrace_track = NULL;
     bkinfo = NULL;
@@ -115,16 +124,18 @@ public:
     {
       // fprintf(stdout, "Serialization: save BkgFitterTracker ... ");
       ar & 
-	sliced_chip &
-	global_defaults &      // serialize out before signal_proc_fitters as ref'd
-	// signal_proc_fitters &  // rebuilt in ThreadedInitialization
-	numFitters &
-        washout_flow &
-	all_emptytrace_track;
-	// poiss_cache &   // rebuilt in ThreadedInitialization
-	// bkinfo;         // rebuilt in ThreadedInitialization
+	    sliced_chip &
+	    global_defaults &      // serialize out before signal_proc_fitters as ref'd
+	    // signal_proc_fitters &  // rebuilt in ThreadedInitialization
+	    numFitters &
+      washout_flow &
+	    all_emptytrace_track;
+	
+      // poiss_cache &   // rebuilt in ThreadedInitialization
+	    // bkinfo;         // rebuilt in ThreadedInitialization
 
       signal_proc_fitters.resize(numFitters); // see constructor
+
       // fprintf(stdout, "done BkgFitterTracker\n");
     }
   template<typename Archive>

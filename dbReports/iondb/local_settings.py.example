@@ -1,0 +1,167 @@
+# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+# Local settings for dev work
+
+import os.path as path
+
+## NOTE: Without this, uses system installed postgres database, shared between instances.
+#DATABASES = {
+#  'default': {
+#    'ENGINE': 'django.db.backends.sqlite3', # Add 'postgresql_psycopg2', 'postgresql', 'mysql', 'sqlite3' or 'oracle'.
+#    'NAME': 'rundb-dev.db',                 # Or path to database file if using sqlite3.
+#    'USER': '',       # Not used with sqlite3.
+#    'PASSWORD': '',   # Not used with sqlite3.
+#    'HOST': '',       # Set to empty string for localhost. Not used with sqlite3.
+#    'PORT': '',       # Set to empty string for default. Not used with sqlite3.
+#  }
+#}
+
+CELERY_ALWAYS_EAGER=True
+
+SOUTH_TESTS_MIGRATE=False
+moorea = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql_psycopg2',
+        'NAME': 'iondb',
+        'USER': 'ion',
+        'PASSWORD': 'ion',
+        'HOST': 'localhost',
+        'PORT': '8999'
+    }
+}
+
+#DATABASES = moorea
+# Override logging in local view
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'root': {
+        'level': 'INFO',
+        'handlers': ['default'],
+    },
+    'formatters': {
+        'verbose': {
+            'format': '%(levelname)s %(asctime)s (%(pathname)s:%(lineno)d) %(message)s'
+        },
+    },
+    ## NOTE: Handlers overridden with StreamHandler (console)
+    'handlers': {
+        'default': {
+            'level': 'DEBUG',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose'
+        },
+    },
+
+    'loggers': {
+        # The logger name '' indicates the root of all loggers in Django, so
+        # logs from any application in this project will go here.
+        '': {
+            'handlers': ['default'],
+            'level': 'DEBUG',
+            'propagate': True
+        },
+        # When DEBUG is True, django.db will log every SQL query.  That is too
+        # much stuff that we don't normally need, so it's logged elsewhere.
+        'django.db': {
+            'handlers': ['default'],
+            'level': 'ERROR',
+            'propagate': False
+        },
+        # When DEBUG is True, django.db will log every SQL query.  That is too
+        # much stuff that we don't normally need, so it's logged elsewhere.
+        'iondb.rundb.events': {
+            'handlers': ['default'],
+            'level': 'ERROR',
+            'propagate': False
+        },
+    }
+
+}
+
+TEST_INSTALL = True
+LOCALPATH = path.dirname(__file__)
+TEMPLATE_DIRS = ((TEST_INSTALL and path.join(LOCALPATH, "templates")))
+DEBUG = True
+TEMPLATE_DEBUG = True
+TASTYPIE_FULL_DEBUG = True
+
+# Add httpproxy to list of INSTALLED_APPS from settings.py
+INSTALLED_APPS = (
+    'django.contrib.auth',
+    'django.contrib.admin',
+    'django.contrib.contenttypes',
+    'django.contrib.sessions',
+    'django.contrib.messages',
+    'django.contrib.admindocs',
+    'django.contrib.sites',
+    'django.contrib.staticfiles',
+    'django.contrib.humanize',
+    'django.contrib.messages',
+    'iondb.rundb',
+    'tastypie',
+    'djcelery',
+    'south',
+#    'django_extensions',
+    'django_nose',
+#    'tastypie_swagger',
+)
+#TASTYPIE_SWAGGER_API_MODULE = 'iondb.rundb.urls.v1_api'
+
+TEMPLATE_LOADERS = (
+    'django.template.loaders.filesystem.Loader',
+    'django.template.loaders.app_directories.Loader',
+)
+
+MIDDLEWARE_CLASSES = (
+    'iondb.rundb.middleware.ChangeRequestMethodMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'iondb.rundb.middleware.DeleteSessionOnLogoutMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    #'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'iondb.rundb.login.middleware.BasicAuthMiddleware',
+    'iondb.rundb.middleware.LocalhostAuthMiddleware',
+    'django.contrib.auth.middleware.RemoteUserMiddleware',
+    'iondb.bin.startup_housekeeping.StartupHousekeeping'
+#    'debug_toolbar.middleware.DebugToolbarMiddleware',
+)
+
+INTERNAL_IPS = ('127.0.0.1',)
+
+DEBUG_TOOLBAR_PANELS = (
+    'debug_toolbar.panels.version.VersionDebugPanel',
+    'debug_toolbar.panels.timer.TimerDebugPanel',
+    'debug_toolbar.panels.settings_vars.SettingsVarsDebugPanel',
+    'debug_toolbar.panels.headers.HeaderDebugPanel',
+    'debug_toolbar.panels.request_vars.RequestVarsDebugPanel',
+    'debug_toolbar.panels.template.TemplateDebugPanel',
+    'debug_toolbar.panels.sql.SQLDebugPanel',
+    'debug_toolbar.panels.signals.SignalDebugPanel',
+    'debug_toolbar.panels.logger.LoggingPanel',
+)
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': '/var/tmp/django_cache',
+    }
+}
+
+# Serve static files in /output via httpproxy
+# You might need this. Needs updating for django 1.4
+#STATIC_URL = '/output/'
+#STATICFILES_DIRS = (
+#    ('output', '/results/analysis/output/'),
+#)
+STATIC_ROOT = '/static/'
+
+MEDIA_ROOT = path.join(LOCALPATH, "media")
+# Configure http_proxy
+
+# http proxy module for serving output from static server
+PROXY_DOMAIN = 'localhost'
+#PROXY_PORT=80
+ROOT_URLCONF = 'iondb.local_urls'
+
+TEST_SERVER_URL = 'http://192.168.75.139'

@@ -24,7 +24,10 @@ $(function () {
 
         template: Hogan.compile($("#report_template").html()),
 
+        runView: null,
+
         render: function () {
+            console.log("ReportView render");
             $(this.el).html(this.template.render({
                 "report": this.model.toJSON(),
                 "total_q20bp": function(){
@@ -56,7 +59,7 @@ $(function () {
 			e.preventDefault();
 			$(e.currentTarget).closest('.dropdown-menu').parent().children('.dropdown-toggle').dropdown('toggle');
 			$('body #modal_dm_actions').remove();
-			var url = '/configure/services/dm_actions/' + this.model.id + '/';
+			var url = '/data/datamanagement/dm_actions/' + this.model.id + '/';
 			$.get(url, function(data) {
 				$('body').append(data);
 				$( "#modal_dm_actions" ).modal("show");
@@ -103,11 +106,8 @@ $(function () {
         },
 
         toggle_representative: function() {
-            if (this.model.get("representative")) {
-                this.model.patch({representative: false});
-            } else {
-                this.model.patch({representative: true});
-            }
+            console.log("Toggle ReportView", this.runView);
+            this.runView.change_representative(this.model);
         }
     });
 
@@ -129,7 +129,10 @@ $(function () {
 
         template: Hogan.compile($("#report_list_template").html()),
 
+        runView: null,
+
         render: function () {
+            console.log("ReportListView render");
             $(this.el).html(this.template.render({
                 'count': this.collection.length,
                 'more_reports': this.collection.length > 2,
@@ -154,6 +157,7 @@ $(function () {
             var tmpReportView = new ReportView({
                 model: report
             });
+            tmpReportView.runView = this.runView;
             tmpReportView.render();
             if (index < 2) {
                 this.elBody.append(tmpReportView.el);
@@ -204,24 +208,27 @@ $(function () {
 			'click .storage-exempt': function(e){
 				var checked = $(e.currentTarget).is(':checked');
                 // This post has no error handling
-				$.post('/configure/services/preserve_data/', "exppk="+ this.model.id+ "&keep="+ checked+ "&type=sig", function(data){
+				$.post('/data/datamanagement/preserve_data/', "exppk="+ this.model.id+ "&keep="+ checked+ "&type=reanalysis", function(data){
 				});
         	}
         },
 
         initialize: function () {
-            _.bindAll(this, 'render', 'reanalyze', 'edit', 'toggle_star',
-                'set_storage', 'destroy_view');
+            _.bindAll(this, 'render', 'reanalyze', 'edit', 'toggle_star', 'destroy_view',
+                'change_representative');
             this.model.bind('change', this.render);
             this.model.bind('remove', this.destroy_view);
             this.reports = new ReportListView({
                 collection: this.model.reports
             });
+            this.reports.runView = this;
+            console.log("Init CardRunView", this.reports.runView);
         },
 
         template: Hogan.compile($("#experiment_template").html()),
 
         render: function () {
+            console.log("CardRunView render");
             this.$('[rel="tooltip"]').tooltip('hide');
             var status = this.model.get("ftpStatus");
             $(this.el).html(this.template.render({
@@ -234,8 +241,8 @@ $(function () {
                 "in_progress": !isNaN(parseInt(status)),
                 "is_proton" : this.model.get('chipInstrumentType') == "proton"
             }));
+            this.reports.setElement(this.$('.table_container'));
             this.reports.render();
-            this.$('.table_container').html(this.reports.el);
         },
 
         reanalyze: function () {
@@ -269,8 +276,37 @@ $(function () {
             }
         },
 
-        set_storage: function(storage) {
-            this.model.patch({"storage_options": storage});
+        change_representative: function(report) {
+            console.log("Toggling experiment");
+            var url = report.url() + 'representative/';
+            var data;
+            var others = this.reports.collection.where({representative: true});
+            var state = report.get("representative");
+            console.log(url, state, others, report);
+            _(others).each(function(other){
+                other.set("representative", false, {silent: true});
+            });
+            if (state) {
+                report.set("representative", false, {silent: true});
+                data = {representative: false};
+            } else {
+                report.set("representative", true, {silent: true});
+                data = {representative: true};
+            }
+            this.trigger('change');
+            data = JSON.stringify(data);
+            var experiment = this.model;
+            $.ajax({
+                type: "POST",
+                contentType: "application/json; charset=utf-8",
+                url: url,
+                data: data,
+                dataType: 'json',
+                success: function () {
+                    console.log("Fetching!");
+                    experiment.fetch();
+                }
+            });
         },
 
         destroy_view: function() {
@@ -421,7 +457,8 @@ $(function () {
             _.bindAll(this, 'render', 'addRun', 'search', 'setup_full_view',
                 'view_full', 'setup_table_view', 'view_table', 'start_update',
                 'toggle_live_update', 'clear_update', 'poll_update',
-                'csv_download', 'countdown_update', 'appendRun');
+                'csv_download', 'countdown_update', 'appendRun', 'fetchStart',
+                'fetchAlways');
             $(".chzn-select").chosen({no_results_text:"No results matched", "allow_single_deselect":true});
             $('.chzn-drop').css('width', $(".chzn-select").outerWidth()-2);  //Patched per https://github.com/harvesthq/chosen/issues/453#issuecomment-8884310
             $('.chzn-search input').css('width', $(".chzn-select").outerWidth()*.815);  //Patched per https://github.com/harvesthq/chosen/issues/453#issuecomment-8884310
@@ -429,6 +466,8 @@ $(function () {
             this.current_view = null;
             this.collection.bind('add', this.addRun);
             this.collection.bind('reset', this.render);
+            this.collection.bind('fetchStart', this.fetchStart);
+            this.collection.bind('fetchAlways', this.fetchAlways);
             this.pager = null;
             this.router = this.options.router;
             this.router.on("route:full_view", this.view_full);
@@ -454,6 +493,17 @@ $(function () {
             var tmpView = new this.RunView({model: run});
             tmpView.render();
             $("#main_list", this.el).append(tmpView.el);
+        },
+
+        fetchStart: function () {
+            console.log("Fetchnig started");
+            var busyDiv = '<div id="myBusyDiv"><div class="k-loading-mask" style="width:100%;height:100%"><span class="k-loading-text">Loading...</span><div class="k-loading-image"><div class="k-loading-color"></div></div></div></div>';
+            $('body').prepend(busyDiv);
+        },
+
+        fetchAlways: function () {
+            console.log("fetching finished");
+            $('#myBusyDiv').remove();
         },
 
         setup_full_view: function () {

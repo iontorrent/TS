@@ -1,5 +1,0 @@
-genome_shortname	e_coli_k12
-genome_name	E. coli K-12 MG1655
-genome_version	gi|49175990|ref|NC_000913.2
-index_version	b-0.1
-genome_length	4638919

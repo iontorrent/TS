@@ -51,10 +51,10 @@ Mask::Mask ( const char *fileName, bool fillMask )
     mask.resize(nelements);
     elements_read = fread ( &mask[0], nbytes, 1, in );
     assert ( elements_read == 1 );
-    fclose ( in );
   } else {
     mask.clear();
   }
+  fclose ( in );
 }
 
 Mask::~Mask()

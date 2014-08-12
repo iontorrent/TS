@@ -36,9 +36,11 @@ set(ENV{PHASE_INC}="${PROJECT_SOURCE_DIR}/../Analysis/BaseCaller")
 set(ENV{UTIL_INC}="${PROJECT_SOURCE_DIR}/../Analysis/Util")
 set(ENV{WELLS_INC}="${PROJECT_SOURCE_DIR}/../Analysis/Wells")
 set(ENV{ANALYSIS_LIB}="${PROJECT_BINARY_DIR}/Analysis")
+set(ENV{JSON_INC}="${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.0-rc1")
 
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/AnalysisOrg )
+include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BaseCaller )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Image )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Mask )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BkgModel )
@@ -49,6 +51,7 @@ include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BkgModel/Bookkeeping )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Util )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Wells )
 include_directories( /usr/local/lib/R/site-library/Rcpp/lib )
+include_directories( ${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.0-rc1 )
 
 
 add_custom_target(LIBTORRENTRCLEAN ALL

@@ -15,33 +15,37 @@ namespace ionStats
 {
 float  min(std::vector<float> &v);
 double min(std::vector<double> &v);
-float  min(float  *x, unsigned int n);
 double min(double *x, unsigned int n);
+float  min(float  *x, unsigned int n);
 
 float  max(std::vector<float> &v);
 double max(std::vector<double> &v);
-float  max(float  *x, unsigned int n);
 double max(double *x, unsigned int n);
+float  max(float  *x, unsigned int n);
 
 float  average(std::vector<float> &v);
 float  mean(std::vector<float> &v);
 double mean(std::vector<double> &v);
-float  mean(float  *x, unsigned int n);
 double mean(double *x, unsigned int n);
+float  mean(float  *x, unsigned int n);
 
 float  median(std::vector<float> &v);
 double median(std::vector<double> &v);
-float  median(float  *x, unsigned int n);
 double median(double *x, unsigned int n);
+float  median(float  *x, unsigned int n);
+
 double sd(double *x, unsigned int n);
 float sd(vector<float> &v);
 float rmsd(vector<float> &data,vector<float> &est);
 float rmsd(float *data,float *est, int n);
+float rmsd_weighted(float *data,float *est, float *wt,int n, float traceMax);
+float rmsd_positive(float *data,float *est, float *wt,int n);
 float sumofsquares(float *data,int n);
 
 float percentile(vector<float> &v,float percent);
 void linear_regression(float *trace, int npts, float *beta);
 void linear_regression(std::vector<float>&Y, std::vector<float>&beta);
+void linear_regression(std::vector<float>&X, std::vector<float>&Y, std::vector<float>&beta);
 void logistic_regression(std::vector<float>&X,std::vector<float>&Y,std::vector<float>&beta);
 float logistic(float z);
 void cumsum(vector<float> &v, vector<float> &cum);

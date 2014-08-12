@@ -14,7 +14,8 @@ export DJANGO_SETTINGS_MODULE="iondb.settings"
 export PATH="${PATH:+$PATH:}/usr/sbin:/sbin"
 
 # Name of nodes to start, here we have a single node
-CELERYD_NODES="w1 plugins periodic slowlane transfer"
+# Edits to NODES need to be in iondb/rundb/configure/views.py - services tab reporting
+CELERYD_NODES="w1 plugins periodic slowlane transfer diskutil"
 
 # Where to chdir at start.
 CELERYD_CHDIR="/opt/ion"
@@ -110,7 +111,9 @@ multi_command () {
         --concurrency:slowlane=1    \
         --queue:slowlane=slowlane   \
         --concurrency:transfer=1    \
-        --queue:transfer=transfer
+        --queue:transfer=transfer   \
+        --queue:diskutil=diskutil   \
+        --concurrency:diskutil=2
 }
 
 start_workers () {

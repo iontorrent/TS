@@ -1,0 +1,61 @@
+---
+# file: roles/nfs_client/tasks/main.yml
+#-----------------------------------------------------------------------------
+# Mount NAS resources
+# Except, if a node is exporting, then it should not mount its own resource
+#-----------------------------------------------------------------------------  
+- name: Create external storage mountpoints
+  when: "nas_mounts is defined and '{{ ansible_nodename }}' != '{{ item.name }}'"
+  shell: bash -lc 'if [ ! -d {{ item.mountpoint }} ]; then mkdir -p {{ item.mountpoint }}; chmod 0777 {{ item.mountpoint }}; fi'
+  with_items:
+    - "{{nas_mounts}}"
+  
+- name: Create fstab entry
+  when: "nas_mounts is defined and '{{ ansible_nodename }}' != '{{ item.name }}'"
+  lineinfile: dest=/etc/fstab
+                state=present
+                regexp='{{item.name}}:{{item.directory}}.*'
+                line='{{item.name}}:{{item.directory}} {{item.mountpoint}} nfs defaults 0 0'
+  with_items:
+    - "{{nas_mounts}}"
+
+- name: Execute mount command
+  when: "nas_mounts is defined and '{{ ansible_nodename }}' != '{{ item.name }}'"
+  shell: bash -lc 'if ! mount|grep "{{ item.name }}:{{ item.directory }}"; then mount {{ item.mountpoint }}; fi'
+  with_items:
+    - "{{nas_mounts}}"
+  
+- shell: bash -lc 'echo "{{ ansible_nodename }} does not equal {{ item.name }}"'
+  when: "'{{ ansible_nodename }}' != '{{ item.name }}' and nas_mounts is defined"
+  with_items:
+    - "{{nas_mounts}}"
+  
+
+#-----------------------------------------------------------------------------
+# Remove what we have done - for development only
+#-----------------------------------------------------------------------------
+#- name: Unmount mountpoints
+#  when: (nas_mounts is defined)
+#  shell: bash -lc 'umount {{item.mountpoint}}'
+#  with_items:
+#    - "{{nas_mounts}}"
+#  ignore_errors: yes
+#  tags: delete
+#    
+#- name: Delete mountpoints
+#  when: (nas_mounts is defined)
+#  file: dest={{item.mountpoint}}
+#          state=absent
+#          recurse=no
+#  with_items:
+#    - "{{nas_mounts}}"
+#  tags: delete
+#          
+#- name: Remove fstab entry
+#  when: (nas_mounts is defined)
+#  lineinfile: dest=/etc/fstab
+#                state=absent
+#                regexp='{{item.name}}:{{item.directory}}.*'
+#  with_items:
+#    - "{{nas_mounts}}"
+#  tags: delete

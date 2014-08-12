@@ -1,0 +1,36 @@
+#!/bin/bash
+#
+# Wrapper for /usr/bin/cssh
+# Generates list of hosts on the fly from TS database entries in Cruncher table
+#
+set -u
+set -e
+#==============================================================================
+# Include function definition file
+#==============================================================================
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source $TSCONFIG_SRC_DIR/ts_params
+source $TSCONFIG_SRC_DIR/grp_functions
+
+
+#==============================================================================
+# Write a temporary cluster ssh definition file
+#==============================================================================
+CLUSTER_FILE=mktemp
+echo -n "all " > $CLUSTER_FILE
+IFS=','
+for host in $(get_crunchers); do
+    echo -n "$USER@$host " >> $CLUSTER_FILE
+done
+echo >> $CLUSTER_FILE
+unset IFS
+
+
+#==============================================================================
+# Launch cluster ssh
+#==============================================================================
+/usr/bin/cssh --cluster-file $CLUSTER_FILE all
+
+rm -f $CLUSTER_FILE
+
+exit

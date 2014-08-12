@@ -4,14 +4,71 @@
 #include "PinnedInFlow.h"
 #include "Utils.h"
 #include "IonErr.h"
-
+#include "Vecs.h"
+#include <malloc.h>
+#ifdef __AVX__
+#include <xmmintrin.h>
+#endif
 
 using namespace std;
+
+// get pin values high and low
+short GetPinHigh()
+{
+  // should this be a supplied parameter like chip type?
+  // no guarantee that chip type always defines pin values
+
+  // default 16 bit
+  short pin_high = 0x3fff;
+  // default 14 bit
+  if (ChipIdDecoder::IsProtonChip())
+     pin_high = 16380;
+
+  return (pin_high);
+}
+
+short GetPinLow()
+{
+  short pin_low = 0;
+  return (pin_low);
+}
+
+void PinnedInFlow::InitMutex(){
+  bool retry = false;
+    do{
+      int ierr  = pthread_mutex_init(&mutex_setPin, NULL);
+      switch(ierr){
+        case 0:
+          //no error
+          break;
+        case EAGAIN:
+          cout << "The system lacked the necessary resources (other than memory) to initialize another mutex" << endl;
+          retry = !retry;
+          break;
+        case ENOMEM:
+          cout << "Insufficient memory exists to initialize the mutex." << endl;
+          break;
+        case EPERM:
+          cout << "The caller does not have the privilege to perform the operations needed to initialize the mutex" << endl;
+          break;
+        case EBUSY:
+          cout << "The implementation has detected an attempt to re-initialize the object referenced by mutex, a previously initialized, but not yet destroyed, mutex." << endl;
+          break;
+        default:
+          cout << " An error with unknown error code " << ierr << " occurred during mutex initialization" << endl;
+          break;
+      }
+      if(retry) cout << "retry mutex initialization" <<endl;
+      else assert(ierr == 0); //die if after retry we still get an error
+    }while(retry);
+}
+
 
 PinnedInFlow::PinnedInFlow(Mask *maskPtr, int numFlows)
 { 
   mNumWells = maskPtr->W() *maskPtr->H();
   mNumFlows = numFlows;
+  InitMutex();
 
 }
 
@@ -19,6 +76,23 @@ PinnedInFlow::~PinnedInFlow()
 {
   mPinnedInFlow.clear();
   mPinsPerFlow.clear();
+
+  int ierr = pthread_mutex_destroy(&mutex_setPin);
+  switch (ierr){
+    case 0:
+      //no error
+      break;
+    case EBUSY:
+      cout << "The implementation has detected an attempt to destroy the object referenced by mutex while it is locked or referenced (for example, while being used in a pthread_cond_wait() or pthread_cond_timedwait()) by another thread." << endl;
+      break;
+    case EINVAL:
+      cout << "The value specified by mutex is invalid." << endl;
+      break;
+    default:
+      cout << " An error with unknown error code " << ierr << " occurred during mutex destruction" << endl;
+      break;
+  }
+
 }
 
 
@@ -27,6 +101,7 @@ void PinnedInFlow::Initialize (Mask *maskPtr)
   // allocate
   mPinnedInFlow.resize(mNumWells);
   mPinsPerFlow.resize(mNumFlows);
+
 
   // wells marked as -1 are valid unpinned wells
   // wells that become pinned as flows load are set to that flow value
@@ -81,12 +156,41 @@ void PinnedInFlow::UpdateMaskWithPinned (Mask *maskPtr)
 void PinnedInFlow::SetPinned(int idx, int flow)
 {
 	int16_t currFlow;
+
+#if 1
+
+	int ierr = pthread_mutex_lock (&mutex_setPin);
+	switch(ierr){
+	  case EINVAL:
+	    cout << "The value specified by mutex does not refer to an initialised mutex object." << endl;
+	    break;
+	  case EAGAIN:
+	    cout << "The mutex could not be acquired because the maximum number of recursive locks for mutex has been exceeded." << endl;
+	    break;
+	  default:
+	    break;
+	    //nop
+	}
+	assert(ierr == 0);
+	//critical section perform test set on pinned mask
+	currFlow = mPinnedInFlow[idx];
+	if ((currFlow < 0) || (currFlow > flow))   // new pins per flow
+	{
+	  mPinnedInFlow[idx] = flow;
+	  mPinsPerFlow[flow]++; // add pin to sum of pins in this flow
+	  if(currFlow > 0) mPinsPerFlow[currFlow]--; //if already wrongly recorded for currFlow remove from currFlow sum
+	}
+	pthread_mutex_unlock (&mutex_setPin);
+
+#else
 	currFlow = mPinnedInFlow[idx];
 	// pixel is pinned high or low
 	if ((currFlow < 0) | (currFlow > flow))   // new pins per flow
 	{
 		currFlow = flow;
 		mPinnedInFlow[idx] = flow;
+		//NOT THREAD SAFE!  there can be a set in a different thread
+		//after this thread already exited after the test,set,test cycle
 		while (((short volatile *) &mPinnedInFlow[0])[idx] > currFlow)
 		{
 			// race condition, a later flow already updated this well, keep trying
@@ -94,17 +198,10 @@ void PinnedInFlow::SetPinned(int idx, int flow)
 		}
 		mPinsPerFlow[flow]++; // this needs to be protected...
 	}
+#endif
 }
 
-#define PPIX_VEC_SIZE 8
-#define PPIX_VEC_SIZE_B 32
 #define MAX_GAIN_CORRECT 16383
-
-typedef float vecf_t __attribute__ ((vector_size (PPIX_VEC_SIZE_B)));
-typedef union {
-	float A[PPIX_VEC_SIZE];
-	vecf_t V;
-}vecf_u;
 
 int PinnedInFlow::Update (int flow, Image *img, float *gainPtr)
 {
@@ -118,19 +215,13 @@ int PinnedInFlow::Update (int flow, Image *img, float *gainPtr)
   int rows = raw->rows;
   int cols = raw->cols;
   int frames = raw->frames;
-  int x, y, frame;
+  int frame;
 //  int pinnedLowCount = 0;
 //  int pinnedHighCount = 0;
-  int i = 0;
+  int idx;
   const uint32_t pinHigh = GetPinHigh();
   const uint32_t pinLow = GetPinLow();
-  int16_t *pixPtr;
-  uint32_t val;
-  double fval;
-  bool isLow,isHigh;
-  uint32_t frameStride=rows*cols;
-  float gainFactor;
-  uint32_t pinned;
+//  uint32_t pinned;
 
 //  double stopT,startT = TinyTimer();
 
@@ -140,83 +231,98 @@ int PinnedInFlow::Update (int flow, Image *img, float *gainPtr)
     exit (EXIT_FAILURE);
   }
 
-  if((cols % PPIX_VEC_SIZE) != 0)
-  {
-	// check for pinned pixels in this flow
-	for (y = 0; y < rows; y++) {
-		for (x = 0; x < cols; x++) {
-			i = y * cols + x;
-			pixPtr = raw->image + i;
-			if (gainPtr)
-				gainFactor = gainPtr[i];
-			else
-				gainFactor = 1.0f;
-			pinned=0;
+#ifdef __AVX__
+	if ((cols % VEC8_SIZE) == 0 && gainPtr != NULL)
+	{
+		int k, idx;
+		int frameStride = rows * cols;
+		short int *src;
+		v8f_u highV, lowV;
+		v8f_u tmpV;
+		v8f *gainPtrV;
+		v8f_u pinnedV;
+		short int *sptr;
 
-			for (frame = 0; frame < frames; frame++) {
-				fval = (float) pixPtr[frame * frameStride];
-				fval *= gainFactor;
-				val = fval;
-				if (val > MAX_GAIN_CORRECT)
-					val = MAX_GAIN_CORRECT;
+		highV.V = LD_VEC8F(pinHigh);
+		lowV.V = LD_VEC8F(pinLow);
 
-				pixPtr[frame * frameStride] = (int16_t) val;
+		src = (short int *) (raw->image);
+		gainPtrV=(v8f *)gainPtr;
+		for(idx=0;idx<frameStride;idx+=VEC8_SIZE,src+=VEC8_SIZE)
+		{
+			pinnedV.V = LD_VEC8F(0);
 
-				isLow = val <= pinLow;
-				isHigh = val >= pinHigh;
-				if (!pinned && (isLow || isHigh)) {
-					pinned=1;
-					SetPinned(i, flow);
-				}
-			} // end frame loop
-		}  // end x loop
-	} // end y loop
-  }
-  else
-  {
-	  int j,fs;
-	  vecf_u gainFactorV;
-	  vecf_u fvalV;
-	  uint32_t pinnedA[PPIX_VEC_SIZE];
+//			for (k = 0; k < VEC8_SIZE; k++)
+//			{
+//				gainTmp.A[k] = gainPtr[idx+k];
+//			}
+			for (frame = 0; frame < frames; frame++)
+			{
+				sptr=&src[frame*frameStride];
 
-//	  printf("Doing vectorized code\n");
-		// check for pinned pixels in this flow
-		for (y = 0; y < rows; y++) {
-			for (x = 0; x < cols; x+=PPIX_VEC_SIZE) {
-				i = y * cols + x;
-				pixPtr = raw->image + i;
-				for(j=0;j<PPIX_VEC_SIZE;j++)
+				LD_VEC8S_CVT_VEC8F(sptr,tmpV);
+
+				// now, do the pinned pixel comparisons
+				pinnedV.V += __builtin_ia32_cmpps256(tmpV.V , lowV.V, _CMP_LT_OS);
+				pinnedV.V += __builtin_ia32_cmpps256(highV.V, tmpV.V, _CMP_LT_OS);
+
+				// gain correct
+//				tmpV.V *= gainTmp.V;
+				tmpV.V *= *gainPtrV;
+
+				CVT_VEC8F_VEC8S((*(v8s_u *)sptr),tmpV);
+			}
+			gainPtrV++;
+			// if any of the 8 pixels are pinned
+			if(__builtin_ia32_ptestnzc256((v4di)pinnedV.V,(v4di){-1,-1,-1,-1}) )
+			{
+				for (k = 0; k < VEC8_SIZE; k++)
 				{
-					pinnedA[j]=0;
-					if (gainPtr)
-						gainFactorV.A[j] = gainPtr[i+j];
-					else
-						gainFactorV.A[j] = 1.0f;
+					if(pinnedV.A[k])
+						SetPinned(idx+k, flow);
 				}
+			}
+		}
+	}
 
-				for (frame = 0; frame < frames; frame++) {
-					fs = frame*frameStride;
-					for(j=0;j<PPIX_VEC_SIZE;j++){
-						fvalV.A[j] = (float) pixPtr[fs + j];
-					}
-					fvalV.V *= gainFactorV.V;
+	else
+#endif
+  {
+	  int16_t *pixPtr;
+	  int16_t *sPtr;
+	  uint32_t val;
+	  double fval;
+	  bool isOutOfRange;
+	  int frameStride=rows*cols;
+	  float gainFactor;
 
-					for(j=0;j<PPIX_VEC_SIZE;j++){
-						val = (uint16_t)fvalV.A[j];
-						if (val > MAX_GAIN_CORRECT)
-							val = MAX_GAIN_CORRECT;
-						pixPtr[fs + j] = val;
+	  // check for pinned pixels in this flow
+	for (idx = 0; idx < frameStride; idx++) {
+		pixPtr = raw->image + idx;
+		if (gainPtr)
+			gainFactor = gainPtr[idx];
+		else
+			gainFactor = 1.0f;
+		isOutOfRange=0;
+		for (frame = 0; frame < frames; frame++) {
+			sPtr = &pixPtr[frame*frameStride];
+			fval = (float) *sPtr;
+			fval *= gainFactor;
+			val = fval;
+//				if (val > MAX_GAIN_CORRECT)
+//					val = MAX_GAIN_CORRECT;
 
-						if(!pinnedA[j] && (val >= pinHigh || val <= pinLow))
-						{
-							pinnedA[j]=1;
-							SetPinned(i+j, flow);
-						}
-					}
-				} // end frame loop
-			}  // end x loop
-		} // end y loop
+			*sPtr = (int16_t) val;
+
+			if(val < pinLow || pinHigh < val)
+				isOutOfRange =1;
+		} // end frame loop
+		if (isOutOfRange) {
+			SetPinned(idx, flow);
+		}
+	} // end idx loop
   }
+
   // char s[512];
   // int n = sprintf(s,  "PinnedInFlow::UpdatePinnedWells: %d pinned pixels <=  %d or >= %d in flow %d (%d low, %d high)\n", (pinnedLowCount+pinnedHighCount), pinLow, pinHigh, flow, pinnedLowCount, pinnedHighCount);
   // assert(n<511);
@@ -247,7 +353,7 @@ int PinnedInFlow::Update (int flow, class SynchDat *img, float *gainPtr) {
   }
   for (size_t rIx = 0; rIx < img->GetNumBin(); rIx++) {
     TraceChunk &chunk = img->GetChunk(rIx);
-    if (chunk.mWidth % PPIX_VEC_SIZE != 0) {
+    if (chunk.mWidth % VEC8_SIZE != 0) {
       for (size_t r = 0; r < chunk.mHeight; r++) {
 	for (size_t c = 0; c < chunk.mWidth; c++) {
 	  size_t chipIdx = (r + chunk.mRowStart) * cols + (c + chunk.mColStart);
@@ -278,15 +384,15 @@ int PinnedInFlow::Update (int flow, class SynchDat *img, float *gainPtr) {
     }
     else {
       int j;
-      vecf_u gainFactorV;
-      vecf_u fvalV;
+      v8f_u gainFactorV;
+      v8f_u fvalV;
       int32_t val;
-      uint32_t pinnedA[PPIX_VEC_SIZE];
+      uint32_t pinnedA[VEC8_SIZE];
       for (size_t r = 0; r < chunk.mHeight; r++) {
-	for (size_t c = 0; c < chunk.mWidth; c+=PPIX_VEC_SIZE) {
+	for (size_t c = 0; c < chunk.mWidth; c+=VEC8_SIZE) {
 	  size_t chipIdx = (r + chunk.mRowStart) * cols + (c + chunk.mColStart);
 	  int16_t *p = &chunk.mData[0] + r * chunk.mWidth + c;
-	  for(j=0;j<PPIX_VEC_SIZE;j++){
+	  for(j=0;j<VEC8_SIZE;j++){
 	    pinnedA[j]=0;
 	    if (gainPtr)
 	      gainFactorV.A[j] = gainPtr[chipIdx+j];
@@ -295,13 +401,13 @@ int PinnedInFlow::Update (int flow, class SynchDat *img, float *gainPtr) {
 	  }
 	  for (size_t frame = 0; frame < chunk.mDepth; frame++) {      
 	    int16_t *t = p;
-	    for (j = 0; j < PPIX_VEC_SIZE; j++) {
+	    for (j = 0; j < VEC8_SIZE; j++) {
 	      fvalV.A[j] = (float) *t;
 	      t++;
 	    }
 	    t = p;
 	    fvalV.V *= gainFactorV.V;
-	    for(j=0; j < PPIX_VEC_SIZE; j++) {
+	    for(j=0; j < VEC8_SIZE; j++) {
 	      val = (int32_t)fvalV.A[j];
 	      if (val > MAX_GAIN_CORRECT)
 		val = MAX_GAIN_CORRECT;
@@ -377,6 +483,35 @@ int PinnedInFlow::Update (int flow, class SynchDat *img, float *gainPtr) {
 //   mPinsPerFlow[flow] = pinnedLowCount+pinnedHighCount;
 //   return (pinnedLowCount+pinnedHighCount);
 // }
+
+int PinnedInFlow::QuickUpdate(int flow, Image *img)
+{
+	// if any well at (x,y) is first pinned in this flow & this flow's img,
+	// set the value in mPinnedInFlow[x,y] to that flow
+	const RawImage *raw = img->GetImage(); // the raw image
+	int rows = raw->rows;
+	int cols = raw->cols;
+
+
+	if (rows <= 0 || cols <= 0)
+	{
+		cout << "Why bad row/cols for flow: " << flow << " rows: " << rows
+				<< " cols: " << cols << endl;
+		exit(EXIT_FAILURE);
+	}
+	int16_t *pixPtr=raw->image;
+	int frameStride = rows * cols;
+
+	// check for pinned pixels in this flow
+	for (int idx = 0; idx < frameStride; idx++)
+	{
+		if (pixPtr[idx] == 0) // advCompr sets all values to zero if pinned..
+		{
+			SetPinned(idx, flow);
+		}
+	} // end idx loop
+	return 0;
+}
 
 void PinnedInFlow::DumpSummaryPinsPerFlow (char *experimentName)
 {

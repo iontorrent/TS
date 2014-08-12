@@ -25,95 +25,72 @@ class SimpleSingleFitStream : public cudaSimpleStreamExecutionUnit
   static int _bpb; // beads per block
   static int _l1type;  // 0:sm=l1, 1:sm>l1, 2:sm<l1
   static int _fittype; // 0:gauss newton, 1:lev mar, 2:hybrid
-  static int _hybriditer; //num iter after hyubrid switchens from GN to LM
+  static int _hybriditer; //num iter after hybrid switchens from GN to LM
+
+  WorkSet _myJob;
 
   int _N;
   int _F;
 
   int _padN; 
-  int _copyInSize;
-  int _copyOutSize;
 
-  //Only members starting with _Host or _Dev are 
-  //allocated. pointers with _h_p or _d_p are just pointers 
-  //referencing memory inside the _Dev/_Host buffers!!!
 
-  //host memory
-  ConstParams* _HostConstP;
-  FG_BUFFER_TYPE * _HostFgBuffer;
+  //MemorySegmentPairs In and Output data pointers for async copy
+  TMemSegPair<FG_BUFFER_TYPE> _hdFgBuffer; //FG_BUFFER_TYPE
 
-  //host pointers
-  bead_params* _h_pBeadParams; // N 
-  bead_state* _h_pBeadState; // N
-  float* _h_pDarkMatter; // NUMNUC*F
-  float* _h_pEmphVector; // (MAX_HPLEN+1) *F
-  float* _h_pShiftedBkg; //NUMFB*F  
-  float* _h_pNucRise; // ISIG_SUB_STEPS_SINGLE_FLOW * F * NUMFB
+  TMemSegPair<BeadParams> _hdBeadParams; //BeadParams*
+  TMemSegPair<bead_state> _hdBeadState;  //bead_state*
 
-  //device memory
-  
-  float* _DevWeightFgBuffer; // NxF*NUMFB
-  FG_BUFFER_TYPE * _d_pFgBuffer;
-  float * _DevFgBufferFloat;
-  char * _DevBeadBase;
-  float * _DevWorkBase;
-  float * _DevBeadParamTransp;
-  float * _DevBeadStateTransp;
+  TMemSegPair<float> _hdDarkMatter; //float*
+  TMemSegPair<float> _hdDarkEmphVector; //float*
+  TMemSegPair<float> _hdShiftedBkg; //float*
+  TMemSegPair<float> _hdEmphVector; //float*
+  TMemSegPair<float> _hdNucRise; //float*
+  TMemSegPair<float> _hdStdTimeCompEmphVec; //float*
+  TMemSegPair<float> _hdStdTimeCompNucRise; //float*
 
-  //device pointers
-  bead_params* _d_pBeadParams; // N 
-  bead_state* _d_pBeadState; // N
-  float* _d_pDarkMatter; // NUMNUC*F
-  float* _d_pEmphVector; // (MAX_HPLEN+1) *F
-  float* _d_pShiftedBkg; //NUMFB*F  
-  float* _d_pNucRise; // ISIG_SUB_STEPS_SINGLE_FLOW * F * NUMFB
+  //MemorySegmentPairGroups to wrap copy into single call
+  MemSegPair _hdCopyOutGroup;
+  MemSegPair _hdCopyInGroup;
 
+  //Host Only Buffers for Async Constant init
+  TMemSegment<ConstParams> _hConstP;  //ConstParams*
+
+
+  //Device Only Buffers
+  TMemSegment<float> _dFgBufferFloat; //float*
+  TMemSegment<float> _dWorkBase; //scartch space, float*
+  TMemSegment<float> _dBeadParamTransp; //float*/int*
 
   // device pointers to transposed 
   // bead params
-  float* _d_pR; //N
-  float* _d_pCopies; //N
-  float* _d_pAmpl; // N * NUMFB
-  float* _d_pKmult; // N * NUMFB
-  float* _d_pDmult; // N
-  float* _d_pGain; // N
-  float* _d_pTau_Adj; // N
-  float* _d_pPCA_Vals; // N * NUM_DM_PCA
-
-  //device pointers to transposed
-  //bead state 
-  bool *bad_read;     // bad key, infinite signal,
-  bool *clonal_read;  // am I a high quality read that can be used for some parameter fitting purposes?
-  bool *corrupt;      // has this bead been lost for whatever reason
-  bool *pinned;       // this bead got pinned in some flow
-  bool *random_samp;  // process this bead no matter how the above flags are set
-  // track classification entities across blocks of flows
-  float *key_norm;
-  float *ppf;
-  float *ssq;
-  // track cumulative average error looking to detect corruption
-  float *avg_err;
+  TMemSegment<float> _dR; //N
+  TMemSegment<float> _dCopies; //N
+  TMemSegment<float> _dAmpl; // N * flow_block_size
+  TMemSegment<float> _dKmult; // N * flow_block_size
+  TMemSegment<float> _dDmult; // N
+  TMemSegment<float> _dGain; // N
+  TMemSegment<float> _dTau_Adj; // N
+  TMemSegment<float> _dPCA_Vals; // N * NUM_DM_PCA
+  TMemSegment<float> _dPhi; // N
 
   //device scratch space pointers
-  float* _d_err; // NxF
-  float* _d_fval; // NxF
-  float* _d_tmp_fval; // NxF
-  float* _d_jac; // 3xNxF 
-  float* _d_pMeanErr; // NxNUMFB
-  float* _d_avg_trc; // NxF
+  TMemSegment<float> _derr; // NxF
+  TMemSegment<float> _dfval; // NxF
+  TMemSegment<float> _dtmp_fval; // NxF
+  TMemSegment<float> _djac; // 3xNxF
+  TMemSegment<float> _dMeanErr; // Nxflow_block_size
+  TMemSegment<float> _davg_trc; // NxF
 
-  // host and device pointer for xtalk
-  ConstXtalkParams* _HostConstXtalkP;
-  int* _HostNeiIdxMap;
-  float* _d_pXtalk;
-  float* _d_pNeiContribution;
-  int* _d_pNeiIdxMap;
-  float* _d_pXtalkScratch;
+  //host xtalk pointers
+  TMemSegment<ConstXtalkParams> _hConstXtalkP; //ConstXtalkParams*
+  TMemSegment<int> _hNeiIdxMap; //int*
+  //device Xtalk pointers
+  TMemSegment<float> _dNeiContribution; //float*
+  TMemSegment<float> _dXtalk; //float*
+  TMemSegment<int> _dNeiIdxMap; //int*
+  TMemSegment<float> _dXtalkScratch; //float*
 
- //TODO Monitor
- // int * _DevMonitor;   
- // int * _HostMonitor;
- // static int * _IterBuffer;
 protected:
 
   void cleanUp();
@@ -130,6 +107,7 @@ public:
   void preProcessCpuSteps();
 
   // implementation of interface stream execution methods
+  bool InitJob();
   void ExecuteJob();
   int handleResults();
 
@@ -139,19 +117,23 @@ public:
   int getBeadsPerBlock();
   int getL1Setting();
 
-  static void setBeadsPerBLock(int bpb);
+
+  //need to be called to guarantee resource preallocation
+  static void requestResources(int flow_key, int flow_block_size, float deviceFraction );
+
+
+  static void setBeadsPerBlock(int bpb);
   static void setL1Setting(int type); // 0:sm=l1, 1:sm>l1, 2:sm<l1
   static void setFitType(int type); // 0:gauss newton, 1:lev mar
-  static void setHybridIter(int hybridIter); 
+  static void setHybridIter(int hybridIter);
 
   static void printSettings();
 
+  static size_t getScratchSpaceAllocSize(const WorkSet & Job);
+  static size_t getMaxHostMem(int flow_key, int flow_block_size);
+  //if no params given returns absolute or defined worst case size
+  static size_t getMaxDeviceMem(int flow_key, int flow_block_size, int numFrames/*=0*/, int numBeads/*=0*/);
 
-  static size_t getScratchSpaceAllocSize(WorkSet Job);
-  static size_t getMaxHostMem();  
-  static size_t getMaxDeviceMem(int numFrames = 0, int numBeads = 0);
-
-  //static void printDeleteMonitor();
 
 private:
   void prepareInputs();

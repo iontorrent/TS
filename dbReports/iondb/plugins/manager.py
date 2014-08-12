@@ -88,7 +88,7 @@ class PluginManager(object):
                 if self.disable(plugin):
                     count += 1
                 # No need to uninstall - the path is already missing
-            elif not plugin.pluginscript():
+            elif not plugin.pluginscript:
                 # Path but no launch script anymore. [TS-5019]
                 if self.disable(plugin):
                     #plugin.uninstall() ## Uninstall will force remove. Just deactivate
@@ -469,7 +469,7 @@ class PluginManager(object):
             logger.error("Cannot enable plugin with no path information")
             return False
 
-        if not plugin.pluginscript():
+        if not plugin.pluginscript:
             logger.error("No plugin script found at path '%s'. Unable to enable plugin", plugin.path)
             return False
 

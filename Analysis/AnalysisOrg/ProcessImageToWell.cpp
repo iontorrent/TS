@@ -3,12 +3,12 @@
 #include "BkgFitterTracker.h"
 #include "BkgModelHdf5.h"
 #include "EmptyTraceTracker.h"
-#include "GlobalDefaultsFromBkgControl.h"
 #include "Image.h"
 #include "ImageTransformer.h"
 #include "IonErr.h"
 #include "json/json.h"
 #include "MaskFunctions.h"
+#include "FlowSequence.h"
 
 #include "SeparatorInterface.h"
 #include "TrackProgress.h"
@@ -16,6 +16,7 @@
 #include "ClonalFilter.h"
 #include "ComplexMask.h"
 #include "Serialization.h"
+#include "GpuMultiFlowFitControl.h"
 
 #include <boost/serialization/vector.hpp>
 #include <boost/archive/binary_iarchive.hpp>
@@ -24,128 +25,58 @@
 
 using namespace std;
 
-void MakeDecisionOnGpuMultiFlowFit(CommandLineOpts &inception_state)
+typedef struct writeFlowDataFuncArg
 {
-  // shut off gpu multi flow fit if starting flow is not in first 20
-  if (inception_state.flow_context.startingFlow >= NUMFB)
-  {
-    inception_state.bkg_control.gpuControl.gpuMultiFlowFit = 0;
-  }
+  RWH5DataSet* wells;
+  SemQueue* packQueuePtr;
+  SemQueue* writeQueuePtr;
+} writeFlowDataFuncArg;
 
-  // shut off gpu multifit if regional sampling is not enabled
-  if (!inception_state.bkg_control.regional_sampling)
-  {
-    inception_state.bkg_control.gpuControl.gpuMultiFlowFit = 0;
-  }
-}
+bool CheckForMinimumNumberOfFlows(CommandLineOpts &inception_state) {
 
-//@TODO: have I mentioned how much I hate static variables recently?
-void TinyInitializeUglyStaticForSignalProcessing ( GlobalDefaultsForBkgModel &global_defaults,CommandLineOpts &inception_state)
-{
-  int my_nuc_block[NUMFB];
-  int flow_start = 0;
-  // TODO: Objects should be isolated!!!!
-  global_defaults.flow_global.GetFlowOrderBlock ( my_nuc_block,flow_start,flow_start+NUMFB );
-  // @TODO these matrices never get updated for later blocks of nucs and should be updated during iterations
-  InitializeLevMarSparseMatrices ( my_nuc_block );
-}
+  int startingFlow = inception_state.flow_context.startingFlow; 
+  if (startingFlow == 0) {
 
-void TinyDestroyUglyStaticForSignalProcessing()
-{
-  CleanupLevMarSparseMatrices();
-}
-
-void OutputRegionAvg(RegionalizedData *rdata, int reg, int maxWidth, ofstream &meanOut, ofstream &timeOut) {
-  for (int flowIx = 0; flowIx < 10; flowIx++) {
-    meanOut << reg << "\t" << rdata->region->row << "\t" << rdata->region->col << "\t" << flowIx;
-    timeOut << reg << "\t" << rdata->region->row << "\t" << rdata->region->col << "\t" << flowIx;
-    vector<double> mean(rdata->time_c.npts(), 0.0);
-    int count = 0;
-    for (int ibd = 0; ibd < rdata->my_trace.numLBeads; ibd++) {
-      FG_BUFFER_TYPE *fgPtr = &rdata->my_trace.fg_buffers[rdata->my_trace.bead_flow_t*ibd+flowIx*rdata->time_c.npts()];
-      for (int i = 0; i < rdata->time_c.npts(); i++) {
-        mean[i] += fgPtr[i];
-      }
-      count++;
-    }
-    count = max(count, 1);
-    int eIx = 0;
-    int frames = 0;
-    for (eIx = 0; eIx < rdata->time_c.npts(); eIx++) {
-      frames += rdata->time_c.frames_per_point[eIx];
-      meanOut << "\t" << mean[eIx]/count;
-      timeOut << "\t" << frames;
-    }
-    for (; eIx < maxWidth; eIx++) {
-      meanOut << "\t0";
-      timeOut << "\t0";
-    }
-    meanOut << endl;
-    timeOut << endl;
-  }
-}
-
-void WriteSampleRegion(const std::string &results_folder, BkgFitterTracker &GlobalFitter, int flow, bool doWrite) {
-  if(flow + 1 == NUMFB && doWrite) {
-    string s = results_folder + "/vfrc-empties.txt";
-    ofstream emptyFile(s.c_str());
-    string sm = results_folder + "/vfrc-region-mean.txt";
-    ofstream avgFile(sm.c_str());
-    sm = results_folder + "/vfrc-region-time.txt";
-    ofstream timeFile(sm.c_str());
-    s = results_folder + "/vfrc-live.txt";
-    ofstream liveFile(s.c_str());
-    int reg = GlobalFitter.sliced_chip.size()/2;
-    RegionalizedData *rdata = NULL;
-    int maxWidth = 0;
-    for (size_t i = 0; i < GlobalFitter.sliced_chip.size(); i++) {
-      maxWidth = max(GlobalFitter.sliced_chip[i]->time_c.npts(), maxWidth);
-    }
-    for (size_t i = 0; i < GlobalFitter.sliced_chip.size(); i++) {
-      OutputRegionAvg(GlobalFitter.sliced_chip[i],i, maxWidth, avgFile, timeFile);
-    }
-    avgFile.close();
-    timeFile.close();
-    rdata = GlobalFitter.sliced_chip[GlobalFitter.sliced_chip.size()/2];
-    cout << "Region is: " << reg << "\t" << rdata->region->row << "\t" << rdata->region->col << endl;
-    cout << "Tmid nuc is: " << rdata->t_mid_nuc_start << "\t" << rdata->sigma_start << endl;
-    float bempty[2056];
-    cout << "Tshift is: " << rdata->my_regions.rp.tshift << endl;
+    const FlowBlockSequence &flow_block_sequence = 
+        inception_state.bkg_control.signal_chunks.flow_block_sequence;
+    FlowBlockSequence::const_iterator flow_block = flow_block_sequence.BlockAtFlow( startingFlow );
     
-    rdata->emptytrace->GetShiftedBkg(rdata->my_regions.rp.tshift, rdata->time_c, bempty);
-    cout << "Timing frames region 0: ";
-    float deltaFrame = 0, deltaSec = 0;
-    for (int eIx = 0; eIx < rdata->time_c.npts(); eIx++) {
-      deltaFrame += rdata->time_c.deltaFrame[eIx];
-      cout << "\t" << deltaFrame;
+    size_t minFlows = inception_state.flow_context.endingFlow - startingFlow + 1;
+    if (minFlows < flow_block->size())
+      return false;
+  } 
+
+  return true;
+}
+
+void* WriteFlowDataFunc(void* arg0)
+{
+  fprintf ( stdout, "SaveWells: saving thread starts\n");
+
+  writeFlowDataFuncArg* arg = (writeFlowDataFuncArg*)arg0;
+  RawWellsWriter writer;
+
+  bool quit = false;
+  while(!quit) {
+    ChunkFlowData* chunkData = (arg->writeQueuePtr)->deQueue();
+    if(NULL == chunkData) {
+      continue;
     }
-    cout << endl;
-    cout << "Timing seconds region 0: ";
-    for (int eIx = 0; eIx < rdata->time_c.npts(); eIx++) {
-      deltaSec += rdata->time_c.deltaFrameSeconds[eIx];
-      cout << "\t" << deltaSec;
+
+    quit = chunkData->lastFlow;
+
+    if(writer.WriteWellsData(*(arg->wells), chunkData->chunk, chunkData->data) < 0 ) {
+      ION_ABORT ( "ERROR - Unsuccessful write to HDF5 file: " +
+        ToStr ( chunkData->chunk.rowStart ) + "," + ToStr ( chunkData->chunk.colStart ) + "," +
+        ToStr ( chunkData->chunk.rowHeight ) + "," + ToStr ( chunkData->chunk.colWidth ) + " x " +
+        ToStr ( chunkData->chunk.flowStart ) + "," + ToStr ( chunkData->chunk.flowDepth ));
     }
-    cout << endl;
-    for (int fIx = 0; fIx < 10; fIx++) {
-      emptyFile << fIx;
-      for (int eIx = 0; eIx < rdata->time_c.npts(); eIx++) {
-        emptyFile << '\t' << bempty[fIx * rdata->time_c.npts() + eIx];
-      }
-      emptyFile << endl;
-    }
-    for (int ibd = 0; ibd < rdata->my_trace.numLBeads; ibd++) {
-      for (size_t flowIx = 0; flowIx < 10; flowIx++) {
-        FG_BUFFER_TYPE *fgPtr = &rdata->my_trace.fg_buffers[rdata->my_trace.bead_flow_t*ibd+flowIx*rdata->time_c.npts()];
-        int x = rdata->my_beads.params_nn[ibd].x + rdata->region->col;
-        int y = rdata->my_beads.params_nn[ibd].y + rdata->region->row;
-        liveFile << x << "\t" << y << "\t" << ibd << "\t" << flowIx;
-        for (int i = 0; i < rdata->time_c.npts(); i++) {
-          liveFile << "\t" << fgPtr[i];
-        }
-          liveFile << endl;
-      }
-    }
+
+    (arg->packQueuePtr)->enQueue(chunkData);
   }
+
+  fprintf ( stdout, "SaveWells: saving thread exits\n");
+  return NULL;
 }
 
 void WriteWashoutFile(BkgFitterTracker &bgFitter, const std::string &dirName) {
@@ -158,46 +89,88 @@ void WriteWashoutFile(BkgFitterTracker &bgFitter, const std::string &dirName) {
   o.close();
 }
 
-void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask &from_beadfind_mask,  char *chipType,
-                                  ImageSpecClass &my_image_spec, SlicedPrequel &my_prequel_setup,SeqListClass &my_keys, bool pass_tau,
-				  BkgFitterTracker *bkg_fitter_tracker)
+static void DoThreadedSignalProcessing( 
+	OptArgs &opts, 
+	CommandLineOpts &inception_state, 
+    const ComplexMask &from_beadfind_mask,  
+    const char *chipType,
+    const ImageSpecClass &my_image_spec, 
+    SlicedPrequel &my_prequel_setup,
+    const SeqListClass &my_keys, 
+    const bool pass_tau,
+		const BkgFitterTracker *bkg_fitter_tracker
+  )
 {
+  // This is the main routine, more or less, as far as the background model goes.
+  // Our job is to wait for the ImageLoader to load everything necessary,
+  // and then apply the background model to flow blocks.
 
+  // So... Let's start with the monitoring tools, for gathering statistics on these runs.
   MemUsage ( "StartingBackground" );
   time_t init_start;
   time ( &init_start );
-
-  bool restart = not inception_state.bkg_control.restart_from.empty();
+  bool restart = not inception_state.bkg_control.signal_chunks.restart_from.empty();
   
+  const std::string wellsFile = string(inception_state.sys_context.wellsFilePath) + "/" + 
+                                       inception_state.sys_context.wellsFileName;
+
+  const FlowBlockSequence & flow_block_sequence = 
+    inception_state.bkg_control.signal_chunks.flow_block_sequence;
+
+  // shut off gpu multi flow fit if starting flow is not in first 20
+  if ( ! flow_block_sequence.HasFlowInFirstFlowBlock( inception_state.flow_context.startingFlow ) )
+  {
+    inception_state.bkg_control.gpuControl.gpuMultiFlowFit = 0;
+  }
+ 
+  Json::Value json_params;
+  bool regional_sampling_def = false;
+  string sChipType = chipType;
+  if(ChipIdDecoder::IsProtonChip())
+  {
+	regional_sampling_def = true;
+  }
+  bool regional_sampling = RetrieveParameterBool(opts, json_params, '-', "regional-sampling", regional_sampling_def);
+  // shut off gpu multifit if regional sampling is not enabled
+  if(!regional_sampling)
+  {
+    inception_state.bkg_control.gpuControl.gpuMultiFlowFit = 0;
+  }
+
+  // Make a BkgFitterTracker object, and then either load its state from above,
+  // or build it fresh.
   BkgFitterTracker GlobalFitter ( my_prequel_setup.num_regions );
-  const std::string wellsFile = string(inception_state.sys_context.wellsFilePath) + "/" + inception_state.sys_context.wellsFileName;
-
-  MakeDecisionOnGpuMultiFlowFit(inception_state);
-
   if( restart ){
+    // Get the object that came from serialization.
     GlobalFitter = *bkg_fitter_tracker;
   }
   else {
     GlobalFitter.global_defaults.flow_global.SetFlowOrder ( inception_state.flow_context.flowOrder ); // @TODO: 2nd duplicated code instance
     // Build everything
-    SetBkgModelGlobalDefaults ( GlobalFitter.global_defaults, inception_state.bkg_control,chipType,inception_state.sys_context.GetResultsFolder() );
-    // >does not open wells file<
+    json_params["chipType"] = chipType;
+    json_params["results_folder"] = inception_state.sys_context.GetResultsFolder();
+    GlobalFitter.global_defaults.SetOpts(opts, json_params);
+	
+	// >does not open wells file<
     fprintf(stdout, "Opening wells file %s ... ", wellsFile.c_str());
     RawWells preWells ( inception_state.sys_context.wellsFilePath, inception_state.sys_context.wellsFileName );
     fprintf(stdout, "done\n");
-    CreateWellsFileForWriting ( preWells,from_beadfind_mask.my_mask, inception_state, NUMFB,
-                              inception_state.flow_context.GetNumFlows(), my_image_spec.rows, my_image_spec.cols, chipType );
+    CreateWellsFileForWriting ( preWells,from_beadfind_mask.my_mask, inception_state, 
+                              inception_state.flow_context.GetNumFlows(), 
+                              my_image_spec.rows, my_image_spec.cols, chipType );
     // build trace tracking
-    GlobalFitter.SetUpTraceTracking ( my_prequel_setup, inception_state, my_image_spec, from_beadfind_mask );
-    GlobalFitter.AllocateRegionData(my_prequel_setup.region_list.size());
-
-
+    GlobalFitter.SetUpTraceTracking ( my_prequel_setup, inception_state, my_image_spec, 
+                                      from_beadfind_mask, 
+                                      flow_block_sequence.MaxFlowsInAnyFlowBlock() );
+    GlobalFitter.AllocateRegionData(my_prequel_setup.region_list.size(), & inception_state );
   }
-  
-  TinyInitializeUglyStaticForSignalProcessing ( GlobalFitter.global_defaults , inception_state);
 
+  // One way (fresh creation) or the other (serialization), we need to allocate scratch space,
+  // now that the GlobalFitter has been built.
+  GlobalFitter.AllocateSlicedChipScratchSpace( flow_block_sequence.MaxFlowsInAnyFlowBlock() );
+  
   // plan (this happens whether we're from-disk or not):
-  GlobalFitter.PlanComputation ( inception_state.bkg_control );
+  GlobalFitter.PlanComputation ( inception_state.bkg_control);
 
   // tweaking global defaults for bkg model if GPU is used
   if (GlobalFitter.IsGpuAccelerationUsed()) {
@@ -209,11 +182,53 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
   // do we have a wells file?
   ION_ASSERT( isFile(wellsFile.c_str()), "Wells file "+ wellsFile + " does not exist" );
 
-  RawWells rawWells ( inception_state.sys_context.wellsFilePath, inception_state.sys_context.wellsFileName );
-  // plan (this happens whether we're from-disk or not):
-  GlobalFitter.ThreadedInitialization ( GlobalFitter.global_defaults,
-                                        rawWells, inception_state, from_beadfind_mask, inception_state.sys_context.GetResultsFolder(), my_image_spec,
-					my_prequel_setup.smooth_t0_est,my_prequel_setup.region_list, my_prequel_setup.region_timing, my_keys, restart);
+  ChunkyWells rawWells ( inception_state.sys_context.wellsFilePath, 
+                         inception_state.sys_context.wellsFileName,
+                         inception_state.bkg_control.signal_chunks.save_wells_flow, 
+                         inception_state.flow_context.startingFlow, 
+                         inception_state.flow_context.endingFlow
+                       );
+
+  // Image Loading thread setup to grab flows in the background
+
+  // ImageTracker constructed to load flows
+  // must contact the GlobalFitter data that it will be associated with
+
+  // from thin air each time:
+  ImageTracker my_img_set ( inception_state.flow_context.getFlowSpan(),
+                            inception_state.img_control.ignoreChecksumErrors,
+                            inception_state.img_control.doSdat,
+                            inception_state.img_control.total_timeout );
+  my_img_set.SetUpImageLoaderInfo ( inception_state, from_beadfind_mask, my_image_spec,
+                                    flow_block_sequence );
+  my_img_set.DecideOnRawDatsToBufferForThisFlowBlock();
+  my_img_set.FireUpThreads();
+
+  master_fit_type_table *LevMarSparseMatrices = 0;
+  
+  // The number of flow blocks here is going to the hdf5 writer,
+  // which needs to build structures containing all the flow blocks,
+  // not just the ones that might be part of this run.
+  int num_flow_blocks = flow_block_sequence.FlowBlockCount( 0, inception_state.flow_context.endingFlow );
+
+  GlobalFitter.ThreadedInitialization ( rawWells, inception_state, from_beadfind_mask, 
+                                        inception_state.sys_context.GetResultsFolder(), 
+                                        my_image_spec,
+                                        my_prequel_setup.smooth_t0_est,
+                                        my_prequel_setup.region_list, 
+                                        my_prequel_setup.region_timing, my_keys, restart,
+                                        num_flow_blocks );
+
+  // need to have initialized the regions for this
+  GlobalFitter.SetRegionProcessOrder (inception_state);
+
+  // init trace-output for the --bkg-debug-trace-sse/xyflow/rcflow options
+  GlobalFitter.InitBeads_xyflow(inception_state);
+
+  // Get the GPU ready, if we're using it.
+  GlobalFitter.DetermineAndSetGPUAllocationAndKernelParams( inception_state.bkg_control, KEY_LEN,
+                                              flow_block_sequence.MaxFlowsInAnyFlowBlock() );
+  GlobalFitter.SpinUpGPUThreads();
 
   MemUsage ( "AfterBgInitialization" );
   time_t init_end;
@@ -221,46 +236,51 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
 
   fprintf ( stdout, "InitModel: %0.3lf sec.\n", difftime ( init_end,init_start ) );
   
-  // Image Loading thread setup to grab flows in the background
+  // JZ start flow data writer thread
+  pthread_t flowDataWriterThread;
+  SemQueue packQueue;
+  SemQueue writeQueue;
 
-  // ImageTracker constructed to load flows
-  // must contact the GlobalFitter data that it will be associated with
+  int saveQueueSize = RetrieveParameterInt(opts, json_params, '-', "save-queue-size", 0);
+  if(saveQueueSize > 0) {
+    rawWells.OpenForReadWrite();
 
-  // from thin air each time:
-  ImageTracker my_img_set ( inception_state.flow_context.getFlowSpan(),inception_state.img_control.ignoreChecksumErrors,inception_state.img_control.doSdat,inception_state.img_control.total_timeout );
-  my_img_set.SetUpImageLoaderInfo ( inception_state, from_beadfind_mask, my_image_spec );
-  my_img_set.DecideOnRawDatsToBufferForThisFlowBlock();
-  my_img_set.FireUpThreads();
+    unsigned int queueSize = (unsigned int)saveQueueSize;
+    packQueue.init(queueSize);
+    writeQueue.init(queueSize);
+    size_t stepSize = rawWells.GetStepSize();
+    size_t flowDepth = inception_state.bkg_control.signal_chunks.save_wells_flow;
+    unsigned int bufferSize = stepSize * stepSize * flowDepth;
+    for(int item = 0; item < saveQueueSize; ++item) {
+      ChunkFlowData* chunkData = new ChunkFlowData(bufferSize);
+      packQueue.enQueue(chunkData);
+    }
 
+    writeFlowDataFuncArg writerArg;
+    writerArg.wells = rawWells.GetH5WellsPtr();
+    writerArg.packQueuePtr = &packQueue;
+    writerArg.writeQueuePtr = &writeQueue;
 
-  // Now do threaded solving, going through all the flows
-
-  GlobalFitter.SpinUp();
-  // need to have initialized the regions for this
-  GlobalFitter.SetRegionProcessOrder (inception_state);
-
-  // init h5 for the bestRegion, this could be done in ThreadedInitialization(), and had to wait until setRegionProcessOrder
-  GlobalFitter.InitBeads_BestRegion(inception_state);
-
-  // init trace-output for the --bkg-debug-trace-sse/xyflow/rcflow options
-  GlobalFitter.InitBeads_xyflow(inception_state);
-
-  // determine maximum beads in a region for gpu memory allocations
-  GlobalFitter.DetermineMaxLiveBeadsAndFramesAcrossAllRegionsForGpu();
-
-  // ideally these are part of the rawWells object itself
-  int write_well_flow_interval = inception_state.bkg_control.saveWellsFrequency*NUMFB; // goes with rawWells
-  int flow_to_write_wells = -1000; // never happens unless we set it to happen
-  
+    pthread_create(&flowDataWriterThread, NULL, WriteFlowDataFunc, &writerArg);
+  }
+      
   // process all flows...
   // using actual flow values
   Timer flow_block_timer;
   Timer signal_proc_timer;
-  SumTimer wellsWriteTimer;
-  for ( int flow = inception_state.flow_context.startingFlow; flow < (int)inception_state.flow_context.endingFlow; flow++ )
+  for ( int flow = inception_state.flow_context.startingFlow; 
+            flow < (int)inception_state.flow_context.endingFlow; flow++ )
   {
-    if ((flow % NUMFB) == 0)
+    FlowBlockSequence::const_iterator flow_block = flow_block_sequence.BlockAtFlow( flow );
+
+    if ( flow == flow_block->begin() || flow == inception_state.flow_context.startingFlow ) {
       flow_block_timer.restart();
+
+      // Build some matrices to work with.
+      LevMarSparseMatrices = new master_fit_type_table( GlobalFitter.global_defaults.flow_global, 
+                                                        flow_block->begin(), max( KEY_LEN - flow_block->begin() , 0), 
+                                                        flow_block->size() );
+    }
 
     // coordinate with the ImageLoader threads for this flow to be read in
     // WaitForFlowToLoad guarantees all flows up this one have been read in
@@ -269,65 +289,83 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
     // ----- handle set up for processing this flow before we do anything needing
     bool last_flow = ( ( flow ) == ( inception_state.flow_context.GetNumFlows()- 1 ) ); // actually the literal >last< flow, not just the flow in a chunk, so we can handle not having a full chunk.
 
-    // always write intervals starting at wherever we are starting
-    // logic here:  open wells file at startingFlow, tell at what flow we need to write things out.
-    if (NeedToOpenWellChunk(flow-inception_state.flow_context.startingFlow, write_well_flow_interval))
-    {
-      // chunk size is flow interval unless we run out of things to do in this interval
-      int chunk_depth = FigureChunkDepth(flow,inception_state.flow_context.endingFlow,write_well_flow_interval);
-      OpenExistingWellsForOneChunk(rawWells,flow,chunk_depth); // start
-      flow_to_write_wells = flow+chunk_depth-1; 
-    }
-    
     // done with set up for anything this flow needs   
     signal_proc_timer.restart();
 
     // computation that modifies data
-    GlobalFitter.ExecuteFitForFlow ( flow,my_img_set,last_flow ); // isolate this object so it can carry out actions in any order it chooses.
-    ApplyClonalFilter ( *from_beadfind_mask.my_mask, inception_state.sys_context.GetResultsFolder(), GlobalFitter.sliced_chip,inception_state.bkg_control.enableBkgModelClonalFilter, flow );
+    // isolate this object so it can carry out actions in any order it chooses.
+    GlobalFitter.ExecuteFitForFlow ( flow, my_img_set, last_flow, 
+                                     max( KEY_LEN - flow_block->begin(), 0 ),
+                                     LevMarSparseMatrices, & inception_state );
+
+    // Find the flow that's the last runnable flow in the "mixed_last_flow" block.
+    int applyFlow = flow_block_sequence.BlockAtFlow(
+        inception_state.bkg_control.polyclonal_filter.mixed_last_flow - 1 )->end() - 1;
+
+    if ( flow == applyFlow and inception_state.bkg_control.polyclonal_filter.enable )
+      ApplyClonalFilter ( *from_beadfind_mask.my_mask, 
+                          inception_state.sys_context.GetResultsFolder(), 
+                          GlobalFitter.sliced_chip, inception_state.bkg_control.polyclonal_filter );
 
     // no more computation
-   
     signal_proc_timer.elapsed(); 
-    fprintf ( stdout, "SigProc: pure compute time for flow %d: %.1f sec.\n", flow, signal_proc_timer.elapsed());
+    printf ( "SigProc: pure compute time for flow %d: %.1f sec.\n", 
+             flow, signal_proc_timer.elapsed());
     MemUsage ( "Memory_Flow: " + ToStr ( flow ) );
-    if (inception_state.bkg_control.bkg_debug_files) {
-      GlobalFitter.DumpBkgModelRegionInfo ( inception_state.sys_context.GetResultsFolder(),flow,last_flow );
-      GlobalFitter.DumpBkgModelBeadInfo ( inception_state.sys_context.GetResultsFolder(),flow,last_flow, inception_state.bkg_control.debug_bead_only>0 );
+
+    if (inception_state.bkg_control.pest_control.bkg_debug_files) {
+      GlobalFitter.DumpBkgModelRegionInfo ( inception_state.sys_context.GetResultsFolder(),
+                                            flow, last_flow, flow_block );
+      GlobalFitter.DumpBkgModelBeadInfo( inception_state.sys_context.GetResultsFolder(),
+                                         flow,last_flow, 
+                                         inception_state.bkg_control.pest_control.debug_bead_only>0, flow_block );
     }
 
     // hdf5 dump of bead and regional parameters in bkgmodel
-    if (inception_state.bkg_control.bkg_debug_files)
-      GlobalFitter.all_params_hdf.IncrementalWrite (  flow,  last_flow );
+    if (inception_state.bkg_control.pest_control.bkg_debug_files)
+      GlobalFitter.all_params_hdf.IncrementalWrite ( flow, last_flow, flow_block,
+                                                     flow_block_sequence.FlowBlockIndex( flow ) );
 
     // done capturing parameters, close out this flow
 
-    // logic here: wells file knows when it needs to write something out
-    if (flow==flow_to_write_wells)
-      WriteOneChunkAndClose(rawWells, wellsWriteTimer);
-
-    // Needed for 318 chips. Decide how many DATs to read ahead for every block of NUMFB flows
+    // Needed for 318 chips. Decide how many DATs to read ahead for every flow block
     // also report timing for block of 20 flows from reading dat to writing 1.wells for this block 
-    if ((flow % NUMFB) == (NUMFB - 1))
+    if ( flow == flow_block->end() - 1 )
       my_img_set.DecideOnRawDatsToBufferForThisFlowBlock();
 
-    // report timing for block of 20 flows from reading dat to writing 1.wells for this block 
-    if (((flow % NUMFB) == (NUMFB - 1)) || last_flow)
+    // End of block cleanup.
+    if ( (flow == flow_block->end() - 1 ) || last_flow) {
+      // Make sure that we've written everything.
+      if(saveQueueSize > 0) {
+        rawWells.DoneUpThroughFlow( flow, &packQueue, &writeQueue );
+      }
+      else {
+        rawWells.DoneUpThroughFlow( flow );
+      }
+
+      // report timing for block of 20 flows from reading dat to writing 1.wells for this block 
       fprintf ( stdout, "Flow Block compute time for flow %d to %d: %.1f sec.\n",
-              ((flow + 1) - NUMFB), flow, flow_block_timer.elapsed());
+              flow_block->begin(), flow, flow_block_timer.elapsed());
+
+      // Cleanup.
+      delete LevMarSparseMatrices;
+      LevMarSparseMatrices = 0;
+    }
 
     // coordinate with the ImageLoader threads that this flow is done with
     // and release resources associated with this image
     // my_img_set knows what buffer is associated with the absolute flow
     my_img_set.FinishFlow ( flow );
-
-/*    // stop GPU thread computing doing fitting of first block of flows
-    if (flow == (NUMFB - 1))
-      GlobalFitter.UnSpinMultiFlowFitGpuThreads();*/
   }
-  
-  if ( not inception_state.bkg_control.restart_next.empty() ){
-    string filePath = inception_state.sys_context.analysisLocation + inception_state.bkg_control.restart_next;
+
+  if(saveQueueSize > 0) {
+    pthread_join(flowDataWriterThread, NULL);
+    packQueue.clear();
+    writeQueue.clear();
+  }
+
+  if ( not inception_state.bkg_control.signal_chunks.restart_next.empty() ){
+    string filePath = inception_state.sys_context.analysisLocation + inception_state.bkg_control.signal_chunks.restart_next;
     ofstream outStream(filePath.c_str(), ios_base::trunc);
     assert(outStream.good());
     //boost::archive::text_oarchive outArchive(outStream);
@@ -338,7 +376,7 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
     time_t begin_save_time;
     time ( &begin_save_time );
 
-    ComplexMask *from_beadfind_mask_ptr = &from_beadfind_mask;
+    const ComplexMask *from_beadfind_mask_ptr = &from_beadfind_mask;
     BkgFitterTracker *GlobalFitter_ptr = &GlobalFitter;
     string svn_rev = IonVersion::GetSvnRev();
     
@@ -355,13 +393,11 @@ void DoThreadedSignalProcessing ( CommandLineOpts &inception_state, ComplexMask 
 	      filePath.c_str(), difftime ( finish_save_time, begin_save_time ));
   }
   rawWells.Close();
-  wellsWriteTimer.PrintMilliSeconds(std::cout, "Timer: Wells total writing time:");
+  rawWells.GetWriteTimer().PrintMilliSeconds(std::cout, "Timer: Wells total writing time:");
 
-  GlobalFitter.UnSpinGpuThreads ();
+  GlobalFitter.UnSpinGPUThreads ();
 
-  TinyDestroyUglyStaticForSignalProcessing();
-
-  if ( inception_state.bkg_control.updateMaskAfterBkgModel )
+  if ( inception_state.bkg_control.signal_chunks.updateMaskAfterBkgModel )
     from_beadfind_mask.pinnedInFlow->UpdateMaskWithPinned ( from_beadfind_mask.my_mask ); //update maskPtr
 
   from_beadfind_mask.pinnedInFlow->DumpSummaryPinsPerFlow ( inception_state.sys_context.GetResultsFolder() );
@@ -372,6 +408,7 @@ void IsolatedSignalProcessing (
   SlicedPrequel    &my_prequel_setup,
   ImageSpecClass   &my_image_spec,
   Region           &wholeChip,
+  OptArgs		   &opts,
   CommandLineOpts  &inception_state,
   string           &analysisLocation,
   SeqListClass     &my_keys,
@@ -380,8 +417,9 @@ void IsolatedSignalProcessing (
   BkgFitterTracker *bkg_fitter_tracker)
 {
 //@TODO: split function here as we immediately pick up the files
-  ComplexMask from_beadfind_mask;
-  if(!(inception_state.bkg_control.restart_from.empty()))
+
+  ComplexMask from_beadfind_mask; //Todo: check if we can move this one level up so it is at the same level as the read in from the archive.
+  if(!(inception_state.bkg_control.signal_chunks.restart_from.empty()))
   {
     from_beadfind_mask = *complex_mask;
   }
@@ -392,9 +430,13 @@ void IsolatedSignalProcessing (
 
     my_prequel_setup.LoadBeadFindForSignalProcessing ( true );
 
-    if (!inception_state.bkg_control.region_list.empty() ){
-      my_prequel_setup.RestrictRegions(inception_state.bkg_control.region_list);
-    }
+	Json::Value json1;
+    vector<int> region_list;
+	RetrieveParameterVectorInt(opts, json1, '-', "region-list", "", region_list);
+	if(!region_list.empty())
+	{
+		my_prequel_setup.RestrictRegions(region_list);
+	}
 
     if ( inception_state.bfd_control.beadMaskFile != NULL )
     {
@@ -423,7 +465,7 @@ void IsolatedSignalProcessing (
   // we might use some other model here
   if ( true )
   {
-    DoThreadedSignalProcessing ( inception_state, from_beadfind_mask, ChipIdDecoder::GetChipType(), my_image_spec,
+    DoThreadedSignalProcessing ( opts, inception_state, from_beadfind_mask, ChipIdDecoder::GetChipType(), my_image_spec,
                                  my_prequel_setup,my_keys, inception_state.mod_control.passTau, bkg_fitter_tracker);
 
   } // end BKG_MODL
@@ -447,6 +489,7 @@ void IsolatedSignalProcessing (
 // output from this are a functioning wells file and a beadfind mask
 // images are only known internally to this.
 void RealImagesToWells (
+  OptArgs &opts,
   CommandLineOpts& inception_state,
   SeqListClass&    my_keys,
   TrackProgress&   my_progress,
@@ -457,7 +500,7 @@ void RealImagesToWells (
   ComplexMask*      complex_mask       = 0;
   BkgFitterTracker* bkg_fitter_tracker = 0;
    
-  if(inception_state.bkg_control.restart_from.empty())
+  if(inception_state.bkg_control.signal_chunks.restart_from.empty())
   {
     // do separator if necessary: generate mask
     IsolatedBeadFind ( my_prequel_setup, my_image_spec, wholeChip, inception_state,
@@ -469,7 +512,7 @@ void RealImagesToWells (
     // restarting execution from known state, restore my_prequel_setup
     // no matter what I do seems like all restoration has to happen in this scope
 
-    string filePath = inception_state.sys_context.analysisLocation + inception_state.bkg_control.restart_from;
+    string filePath = inception_state.sys_context.analysisLocation + inception_state.bkg_control.signal_chunks.restart_from;
 
     time_t begin_load_time;
     time ( &begin_load_time );
@@ -477,7 +520,7 @@ void RealImagesToWells (
     ifstream ifs(filePath.c_str(), ifstream::in);
     assert(ifs.good());
 
-    //boost::archive::text_iarchive in_archive(ifs);
+   // boost::archive::text_iarchive in_archive(ifs);
     boost::archive::binary_iarchive in_archive(ifs);
     string saved_svn_rev;
     in_archive >> saved_svn_rev
@@ -492,7 +535,7 @@ void RealImagesToWells (
     fprintf ( stdout, "Loading restart state from archive %s took %0.1f sec\n",
 	      filePath.c_str(), difftime ( finish_load_time, begin_load_time ));
 
-    if ( inception_state.bkg_control.restart_check ){
+    if ( inception_state.bkg_control.signal_chunks.restart_check ){
       string svn_rev = IonVersion::GetSvnRev();
       ION_ASSERT( (saved_svn_rev.compare(svn_rev) == 0),
 		  "This SVN rev " + svn_rev + " of Analysis does not match the SV rev " + saved_svn_rev + " where " + filePath + " was saved; disable this check by using --no-restart-check");
@@ -502,12 +545,25 @@ void RealImagesToWells (
     my_prequel_setup.FileLocations ( inception_state.sys_context.analysisLocation );
   }
 
+  // Check if we have enoguh flows to perform signal processing.
+  // If we are starting from flow 0 we should have at least number of flows 
+  // equalling flow block size (currently 20) to perform regional paramter 
+  // fitting in background model and derive any actional information for the 
+  // next set of flows. If we dont have thes minimum number of flows then give
+  // an appropriate message and error out
+  if (!CheckForMinimumNumberOfFlows(inception_state)) {
+    std::cout << "ERROR: Insufficient number of flows to start signal processing. "
+              << "Minimum number of flows required is 20." << std::endl;
+    exit(EXIT_FAILURE);
+  }
+ 
   // do signal processing generate wells conditional on a separator
-  IsolatedSignalProcessing ( my_prequel_setup, my_image_spec, wholeChip, inception_state,
+  IsolatedSignalProcessing ( my_prequel_setup, my_image_spec, wholeChip, opts, inception_state,
                              inception_state.sys_context.analysisLocation,  my_keys, my_progress, complex_mask, bkg_fitter_tracker );
 
   // @TODO cleanup causes crash when restarted, why?
   // if (complex_mask != NULL) delete complex_mask;
   // if (bkg_fitter_tracker != NULL) delete bkg_fitter_tracker;
 }
+
 

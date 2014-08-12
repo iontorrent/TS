@@ -14,9 +14,10 @@
 # To match files ONLY in top level directory, ".[^/]*?arcodeList.txt" - need to remove at least one char from beginning and prepend the funny stuff.
 # r'.[^/]*?' will match all characters except forward slash.
 #
+# There is a special code hack that filters onboard_results when dealing with a thumbnail dataset in dmactions._file_selector().
+#
 import sys
 import traceback
-import iondb.settings as settings
 from djangoinit import *
 from iondb.rundb import models
 from iondb.rundb.data import dmactions_types
@@ -35,7 +36,7 @@ DM_FILE_SETS = [
             '.[^/]*?xplog\.txt',
             '.[^/]*?xplog_final\.txt',
             '.[^/]*?nitLog.*?txt',
-            '.[^/]*?nitVals.*?txt',
+            '.[^/]*?nitValsW.*?txt',
             '.[^/]*?awInit\.txt',
             '.[^/]*?cript_.*?txt',
             '.[^/]*?curves\.txt',
@@ -45,8 +46,6 @@ DM_FILE_SETS = [
             'DataCollect\.config',
             'debug',
             # not required, but want to clean these up if exist
-            'jpg/.*?',
-            '.[^/]*?\.jpg',
             ],
         'exclude':[
             '.[^/]*?onboard_results.*?',
@@ -162,8 +161,6 @@ DM_FILE_SETS = [
             '.*?filtered.trimmed.*?',
             '.*?unfiltered.untrimmed.*?',
             '.*?unfiltered.trimmed.*?',
-            # from sigproc directory
-            'InitRawTrace0.png',
             ],
         'keepwith':{
             dmactions_types.BASE:[
@@ -190,12 +187,18 @@ DM_FILE_SETS = [
             '.*?unfiltered.untrimmed',
             '.*?block_.*?/.*?',
             '.*?onboard_results.*?',
+            # from sigproc directory
+            'jpg/.*?',
+            '.[^/]*?\.jpg',
+            '.[^/]*?hipCalImage\.bmp\.bz2',
+            'InitRawTrace0.png',
             ],
         'exclude':[
             # Specific Files
             '.[^/]*?support\.zip',
             'report.pdf',
             'backupPDF.pdf',
+            '.[^/]*?\-full\.pdf',
             'pgm_logs.zip',
             # From other categories' include list
             # Signal Processing category
@@ -207,7 +210,7 @@ DM_FILE_SETS = [
             '.*?explog\.txt',
             '.*?explog_final\.txt',
             '.*?InitLog.*?txt',
-            '.*?InitVals.*?txt',
+            '.*?InitValsW.*?txt',
             '.*?RawInit\.txt',
             '.*?Script_.*?\.txt',
             '.*?scurves\.txt',
@@ -219,6 +222,7 @@ DM_FILE_SETS = [
             # not required, but want to clean these up if exist
             'jpg/.*?',
             '.[^/]*?\.jpg',
+            '.[^/]*?hipCalImage\.bmp\.bz2',
             # Basecaller category
             'sigproc_results/1\.wells',
             'sigproc_results/.[^/]*?\.bin',
@@ -320,7 +324,7 @@ DM_FILE_SETS = [
             '.[^/]*?xplog\.txt',
             '.[^/]*?xplog_final\.txt',
             '.[^/]*?nitLog.*?txt',
-            '.[^/]*?nitVals.*?txt',
+            '.[^/]*?nitValsW.*?txt',
             '.[^/]*?awInit\.txt',
             '.[^/]*?cript_.*?txt',
             '.[^/]*?curves\.txt',
@@ -330,8 +334,6 @@ DM_FILE_SETS = [
             'DataCollect\.config',
             'debug',
             # not required, but want to clean these up if exist
-            'jpg/.*?',
-            '.[^/]*?\.jpg',
             ],
         'exclude':[
             '.[^/]*?onboard_results.*?',
@@ -418,8 +420,6 @@ DM_FILE_SETS = [
             '.*?filtered.trimmed.*?',
             '.*?unfiltered.untrimmed.*?',
             '.*?unfiltered.trimmed.*?',
-            # from sigproc directory
-            'InitRawTrace0.png',
             ],
         'keepwith':{
             dmactions_types.BASE:[
@@ -446,12 +446,17 @@ DM_FILE_SETS = [
             '.*?unfiltered.untrimmed',
             '.*?block_.*?/.*?',
             '.*?onboard_results.*?',
+            # from sigproc directory
+            'jpg/.*?',
+            '.[^/]*?\.jpg',
+            'InitRawTrace0.png',
             ],
         'exclude':[
             # Specific Files
             '.[^/]*?support\.zip',
             'report.pdf',
             'backupPDF.pdf',
+            '.[^/]*?\-full\.pdf',
             'pgm_logs.zip',
             # From other categories' include list
             # Signal Processing category
@@ -463,7 +468,7 @@ DM_FILE_SETS = [
             '.*?explog\.txt',
             '.*?explog_final\.txt',
             '.*?InitLog.*?txt',
-            '.*?InitVals.*?txt',
+            '.*?InitValsW.*?txt',
             '.*?RawInit\.txt',
             '.*?Script_.*?\.txt',
             '.*?scurves\.txt',

@@ -12,12 +12,12 @@ urlpatterns = patterns(
     url(r'^(?P<pk>\d+)/metal/(?P<path>.*)', 'views.metal', name='report_metal'),
     url(r'^(?P<pk>\d+)/log$', 'views.report_log', name='report_log'),
     url(r'^(?P<pk>\d+)/CSA.zip$', 'views.getCSA', name='report_csa'),
-    url(r'^getPDF/(\d+).pdf/$', 'views.getPDF'),
-    url(r'^getPlugins/(\d+).pdf/$', 'views.getPlugins'),
-    url(r'^latex/(\d+).pdf/$', 'views.getlatex'),
+    url(r'^getPDF/(\d+).pdf/$', 'views.get_summary_pdf'),
+    url(r'^getPlugins/(\d+).pdf/$', 'views.get_plugin_pdf'),
+    url(r'^latex/(\d+).pdf/$', 'views.get_report_pdf'),
     url(r'^analyze/(?P<exp_pk>\d+)/(?P<report_pk>\d+)/$', 'views.analyze', name="report_analyze"),
 
-    url(r'^action/(?P<pk>\d+)/(?P<action>[\w.,/_\-]+)$', 'views.report_action', name='report_action'),
+	url(r'^action/(?P<pk>\d+)/(?P<action>[\w.,/_\-]+)$', 'views.report_action', name='report_action'),
 	url(r'^(?P<pk>\d+)/getZip/$', 'views.getZip', name="getZip"),
 	url(r'^(?P<pk>\d+)/getVCF/$', 'views.getVCF', name="getVCF"),
-    )
+	)

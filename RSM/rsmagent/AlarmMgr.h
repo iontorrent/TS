@@ -1,6 +1,6 @@
-#ifndef __AlarmMgr__
-#define __AlarmMgr__
-
+/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+#ifndef ALARMMGR_H
+#define ALARMMGR_H
 #include <time.h>
 
 #include "AeOSLocal.h"
@@ -21,4 +21,4 @@ void AlarmMgrSave(void);
 void AlarmMgr_AddAlarmByName(char const * const AlarmName, char const * const AlarmTxt);
 void AlarmMgr_DelAlarmByName(char const * const AlarmName);
 
-#endif // __AlarmMgr__
+#endif // ALARMMGR_H

@@ -1,0 +1,157 @@
+---
+# file: roles/common/tasks/main.yml
+
+#-----------------------------------------------------------------------------
+# Install Ion APT Repository location
+#-----------------------------------------------------------------------------
+- name: Ion Torrent APT repository added
+  lineinfile: dest={{ionaptrepo_file}}
+                state=present
+                regexp="deb.*{{ ion_repository_hostname }}.*"
+                line="deb http://{{ ion_repository_hostname }}/updates/software {{ansible_distribution_release}}{{ ion_build_flag }}"
+                
+- name: apt cache update
+  apt: update_cache=yes
+  
+#-----------------------------------------------------------------------------
+# Install system packages common to all servers
+#-----------------------------------------------------------------------------
+- name: preseed tmpreaper package
+  script: tmpreaper.preseed
+  
+- name: Install system packages
+  apt: name={{item}} state=installed force=yes
+  with_items: common_syspkg_list
+
+
+#    named_core_files
+- name: Enable named core files
+  sysctl: name=kernel.core_pattern
+            reload=yes
+            state=present
+            value='core.%e.%p.%h.%t'
+            
+
+#    config_grub_menu || true
+#		sed -i 's/\(GRUB_HIDDEN_TIMEOUT_QUIET=\).*/\1false/' /etc/default/grub
+#		sed -i 's/\(GRUB_HIDDEN_TIMEOUT=\).*/\15/' /etc/default/grub
+#		/usr/sbin/update-grub
+- name: Enable grub hidden timeout
+  lineinfile: dest={{ grub_config_file }}
+                state=present
+                regexp='GRUB_HIDDEN_TIMEOUT_QUIET=.*'
+                line='GRUB_HIDDEN_TIMEOUT_QUIET=false'
+  notify: update grub
+                
+- name: Set grub hidden timeout period
+  lineinfile: dest={{ grub_config_file }}
+                state=present
+                regexp='GRUB_HIDDEN_TIMEOUT=.*'
+                line='GRUB_HIDDEN_TIMEOUT=15'
+  notify: update grub
+        
+#NOTE: required: ionian user be created prior to initial installation of ion-dbreports
+# initialize_system_users
+
+# Initialize ionian group
+- name: Add group ionian
+  group: name=ionian gid=1100 state=present system=yes
+  
+# Initialize ionadmin
+- shell: bash -lc '/usr/bin/getent passwd | grep -q "^ionadmin:"'
+  register: result
+  ignore_errors: yes
+  
+- name: Initialize ionadmin user
+  when: result|failed
+  shell: /usr/sbin/useradd -m -s /bin/bash -p $(perl -e "print crypt(ionadmin, 'password')" $password) -G admin,ionian,www-data ionadmin;
+
+# Initialize ionian
+- name: Add group ionian
+  group: name=ionian gid=1100 state=present system=yes
+
+- shell: bash -lc '/usr/bin/getent passwd | grep -q "^ionian:"'
+  register: result
+  ignore_errors: yes
+  
+- name: Initialize ionian user
+  when: result|failed
+  shell: adduser --system --uid 1100 --ingroup ionian --disabled-password ionian
+  
+# Add www-data to the ionian group
+- name: Add www-data user to the ionian group
+  shell: bash -lc 'if ! groups www-data | cut -d":" -f2 | grep -qw ionian; then adduser www-data ionian; fi'
+
+#    set_logfile_size_limit
+- name: Set logfile size limit
+  lineinfile: dest=/etc/logrotate.conf
+                state=present
+                regexp='# Torrent Server maximum log file limit'
+                line='# Torrent Server maximum log file limit'
+                insertbefore=BOF
+                
+- name: Set logfile size limit
+  lineinfile: dest=/etc/logrotate.conf
+                state=present
+                regexp='^size.*'
+                line='size 100M'
+                insertafter='# Torrent Server maximum log file limit'
+
+# Remove motd regarding available OS upgrade: do not want TS customers to do this.
+- name: Remove message regarding available OS upgrade
+  file: dest=/etc/update-motd.d/91-release-upgrade state=absent
+
+# Disable checking for updates
+- name: disable checking for updates
+  lineinfile: dest=/etc/update-manager/release-upgrades
+                state=present
+                regexp='^[Pp]rompt=.*'
+                line='prompt=never'
+
+# Configure tmpreaper package to purge old files from /tmp directory
+#    if [ -e /etc/tmpreaper.conf ]; then
+#        sed -i 's/^SHOWWARNING=true/#SHOWWARNING=true/' /etc/tmpreaper.conf
+#        sed -i 's/^.*TMPREAPER_TIME=.*/TMPREAPER_TIME=7d/' /etc/tmpreaper.conf
+#    fi
+- name: Configure tmpreaper
+  lineinfile: dest=/etc/tmpreaper.conf state=present
+                regexp='^SHOWWARNING=true'
+                line='#SHOWWARNING=true'
+- name: Configure tmpreaper
+  lineinfile: dest=/etc/tmpreaper.conf state=present
+                regexp='^.*TMPREAPER_TIME=.*'
+                line='TMPREAPER_TIME=7d'
+
+    # Configure maximum number of open file descriptors allowed
+#    set_max_open_files
+    # The four lines we want are:
+    #*                soft    nofile          8192
+    #*                hard    nofile          8192
+    #root             soft    nofile          8192
+    #root             hard    nofile          8192
+
+- name: Set soft limit
+  lineinfile: dest={{ security_limits_file }} state=present
+                regexp='(\*.*soft.*nofile).*'
+                line='\1          {{ MAX_FILES_OPEN }}'
+                insertbefore='# End of file'
+
+- name: Set hard limit
+  lineinfile: dest={{ security_limits_file }} state=present
+                regexp='(\*.*hard.*nofile).*'
+                line='\1          {{ MAX_FILES_OPEN }}'
+                insertbefore='# End of file'
+
+- name: Set soft limit
+  lineinfile: dest={{ security_limits_file }} state=present
+                regexp='(^root.*soft.*nofile).*'
+                line='\1          {{ MAX_FILES_OPEN }}'
+                insertbefore='# End of file'
+    
+- name: Set hard limit
+  lineinfile: dest={{ security_limits_file }} state=present
+                regexp='(^root.*hard.*nofile).*'
+                line='\1          {{ MAX_FILES_OPEN }}'
+                insertbefore='# End of file'
+                
+

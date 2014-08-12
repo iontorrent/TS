@@ -376,7 +376,7 @@ void TopCoderCompressor::ToTopCoder(TraceChunk &chunk, std::vector<int> &output)
   }
   int offset = 3;
   output.resize(size);
-  fill(output.begin(), output.end(), 0.0f);
+  std::fill(output.begin(), output.end(), 0.0f);
   uint16_t *out = (uint16_t *)(&output.front());
   out[0] = (uint16_t) col;
   out[1] = (uint16_t) row;
@@ -402,7 +402,7 @@ void TopCoderCompressor::FromTopCoder(const std::vector<int> &input, TraceChunk 
   ION_ASSERT(chunk.mWidth = col, "Cols don't match expected.");
   ION_ASSERT(chunk.mDepth = frames, "Frames don't match expected.");
   chunk.mData.resize(row * col * frames);
-  fill(chunk.mData.begin(), chunk.mData.end(), 0.0f);
+  std::fill(chunk.mData.begin(), chunk.mData.end(), 0.0f);
   for (size_t rIx = 0; rIx < row; rIx++) {
     for (size_t cIx = 0; cIx < col; cIx++) {
       for (size_t fIx = 0; fIx < frames; fIx++) {
@@ -418,7 +418,7 @@ void TopCoderCompressor::Compress(TraceChunk &tc, int8_t **compressed, size_t *o
   vector<int> data;
   ToTopCoder(tc, data);
   TraceChunk test = tc;
-  fill(test.mData.begin(), test.mData.end(), 0.0f);
+  std::fill(test.mData.begin(), test.mData.end(), 0.0f);
   FromTopCoder(data, test);
   vector<int> dcComp = mCompressor->compress(data);
   if(*compressed != NULL) {
@@ -432,9 +432,9 @@ void TopCoderCompressor::Compress(TraceChunk &tc, int8_t **compressed, size_t *o
 void TopCoderCompressor::Decompress(TraceChunk &tc, const int8_t *compressed, size_t size) {
   vector<int> data;
   tc.mData.resize(tc.mHeight * tc.mWidth * tc.mDepth);
-  fill(tc.mData.begin(), tc.mData.end(), 0.0f);
+  std::fill(tc.mData.begin(), tc.mData.end(), 0.0f);
   data.resize(ceil(size/(sizeof(int) * 1.0f)));
-  fill(data.begin(), data.end(), 0.0f);
+  std::fill(data.begin(), data.end(), 0.0f);
   memcpy(&data[0], compressed, size);
   vector<int> ready = mCompressor->decompress(data);
   ION_ASSERT(tc.mHeight = ready[1], "Rows don't match expected.");

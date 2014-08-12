@@ -2,6 +2,7 @@
 #include "FlowContext.h"
 #include "HandleExpLog.h"
 #include <assert.h>
+#include "Utils.h"
 
 #define  PROCESSCHUNKSIZE 20
 
@@ -24,7 +25,7 @@ FlowContext::~FlowContext()
     free ( flowOrder );
 }
 
-char FlowContext::ReturnNucForNthFlow(int flow)
+char FlowContext::ReturnNucForNthFlow(int flow) const
 {
   return(flowOrder[flow % strlen ( flowOrder ) ]);
 }
@@ -91,7 +92,7 @@ void FlowContext::CheckLimits()
   {
     if ( flowLimitSet < PROCESSCHUNKSIZE )
     {
-      fprintf ( stderr, "Option Error: Minimum number of flows is %d.\n", PROCESSCHUNKSIZE );
+      fprintf ( stderr, "Option Error: Minimum number of flows is %d. Perhaps you need a --flowlimit option *before* --start-flow-plus-interval.\n", PROCESSCHUNKSIZE );
       exit ( EXIT_FAILURE );
     }
   }
@@ -125,4 +126,48 @@ void FlowContext::SetFlowLimit( long flowlimit )
   flowLimitSet = ( unsigned int ) flowlimit;
 
   CheckLimits();
+}
+
+void FlowContext::PrintHelp()
+{
+	printf ("     FlowContext\n");
+    printf ("     --flow-order            STRING            setup flow order []\n");
+    printf ("     --flowlimit             INT               setup flow limit [-1]\n");
+    printf ("     --start-flow-plus-interval          INT VECTOR OF 2  setup flow range [0,0]\n");
+    printf ("\n");
+}
+
+void FlowContext::SetOpts(OptArgs &opts, Json::Value& json_params)
+{
+	string fo = RetrieveParameterString(opts, json_params, '-', "flow-order", "");
+	if(fo.length() > 0)
+	{
+		if ( flowOrder )
+			free ( flowOrder );
+		
+		flowOrder = strdup ( fo.c_str() );
+		numFlowsPerCycle = strlen ( flowOrder );
+		flowOrderOverride = true;
+	}
+
+	int tmp_flowlimit = RetrieveParameterInt(opts, json_params, '-', "flowlimit", -1);
+	if(tmp_flowlimit >= 0)
+	{
+		SetFlowLimit( tmp_flowlimit );
+	}
+
+	vector<int> vec;
+	RetrieveParameterVectorInt(opts, json_params, '-', "start-flow-plus-interval", "0,0", vec);
+	if(vec.size() == 2)
+	{
+		if( vec[1] > 0)
+		{
+			SetFlowRange(vec[0], vec[1]);
+		}
+	}
+	else
+	{
+        fprintf ( stderr, "Option Error: start-flow-plus-interval format wrong, not size = 2\n" );
+        exit ( EXIT_FAILURE );
+	}
 }

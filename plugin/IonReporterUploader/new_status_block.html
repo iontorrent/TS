@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>IRU</title>
+
+    <link rel="stylesheet" media="all" href="/site_media/resources/bootstrap/css/bootstrap.min.css"/>
+
+    <script src="/site_media/resources/jquery/jquery-1.8.2.min.js"></script>
+    <script src="/site_media/resources/bootstrap/js/bootstrap.min.js"></script>
+
+    <!--make local copies of these -->
+    <script src="/pluginMedia/IonReporterUploader/handlebars.min.js"></script>
+
+    <style>
+        body {
+            background: #FFFFFF;
+        }
+    </style>
+
+
+    <script type="text/template" id="progressTmpl">
+
+        <h3>IRU upload status to {{ plugin.pluginconfig.name }} ({{fullHumanVersion plugin.pluginconfig.version}})
+            as {{ plugin.pluginconfig.userid }}
+        </h3>
+
+        <div id="barWrap" class="progress progress-striped active">
+            <div class="bar" style="width: {{ status.totalProgress }}%;"></div>
+        </div>
+
+        <a href="status.html">View the detailed status</a>
+    </script>
+
+    <script type="text/template" id="finishedTmpl">
+
+        <h3>IRU upload to {{ plugin.pluginconfig.name }} ({{fullHumanVersion plugin.pluginconfig.version}})
+            as {{ plugin.pluginconfig.userid }} has finished
+        </h3>
+
+        <a href="status.html">View the detailed status</a>
+    </script>
+
+    <script>
+        Handlebars.registerHelper('humanVersion', function (version) {
+            if (version) {
+                var major = version[2];
+                var minor = version[3];
+                return major + "." + minor
+            } else {
+                return ""
+            }
+
+        });
+        Handlebars.registerHelper('fullHumanVersion', function (version) {
+            if (version) {
+                var major = version[2];
+                var minor = version[3];
+                return "Ion Reporter " + major + "." + minor
+            } else {
+                return ""
+            }
+
+        });
+        var timer = null;
+        $(document).ready(function () {
+            var finishedTemplate = Handlebars.compile($("#finishedTmpl").html());
+            var progressTemplate = Handlebars.compile($("#progressTmpl").html());
+
+            $.get("startplugin.json", function (plugin) {
+                var extend_url = "/rundb/api/v1/plugin/IonReporterUploader/extend/uploadStatus/?format=json&plugin_result_id=" + plugin.runinfo.pluginresult;
+
+                var updateStatus = function () {
+                    $.get(extend_url, function (data) {
+                        var context = {
+                            status: data,
+                            plugin: plugin
+                        };
+                        console.log(context);
+                        if (data.status.totalProgress == 100) {
+                            clearInterval(timer);
+                            $("#main").html(finishedTemplate(context));
+                        } else {
+                            timer = setTimeout(updateStatus, 5000);
+                            $("#main").html(progressTemplate(context));
+                        }
+                    }).fail(function(){
+                        console.log("IRU Status Check API failure.");
+                    });
+                };
+                // Start the status polling initially;  It'll rerun itself as needed.
+                updateStatus();
+            });
+
+        });
+    </script>
+
+
+</head>
+
+<body>
+
+<div id="main" class="container">
+</div>
+
+</body>
+</html>

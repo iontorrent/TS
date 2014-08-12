@@ -1,0 +1,13 @@
+*.jpg binary
+*.gif binary
+*.pdf binary
+*.png binary
+*.h5 binary
+*.jar binary
+*.bin binary
+*.bz2 binary
+*.tgz binary
+*.gz binary
+*.tar binary
+*.zip binary
+*.sh text eol=lf

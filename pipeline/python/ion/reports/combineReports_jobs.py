@@ -7,11 +7,90 @@ import subprocess
 import os
 import json
 import socket
+import re
 
-from ion.utils.blockprocessing import merge_bam_files, printtime
+from ion.utils.blockprocessing import printtime
 from ion.utils.compress import make_zip
 os.environ['MPLCONFIGDIR'] = '/tmp'
-from ion.utils import ionstats, ionstats_plots
+from ion.utils import ionstats_plots
+
+def merge_bam_files(bamfilelist, composite_bam_filepath, mark_duplicates, new_sample_name=''):
+
+    composite_bai_filepath = composite_bam_filepath.replace('.bam','.bam.bai')
+    composite_header_filepath = composite_bam_filepath + '.header.sam'
+    
+    try:
+        # generate file headers and merge them using picard tools
+        for bamfile in bamfilelist:
+            cmd = 'samtools view -H %s > %s.header.sam' % (bamfile,bamfile,)
+            printtime("DEBUG: Calling '%s'" % cmd)
+            subprocess.call(cmd,shell=True)
+
+        cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/MergeSamFiles.jar'
+        for bamfile in bamfilelist:
+            cmd = cmd + ' I=%s.header.sam' % bamfile
+        cmd = cmd + ' O=%s' % composite_header_filepath
+        cmd = cmd + ' VERBOSITY=WARNING' # suppress INFO on stderr
+        cmd = cmd + ' QUIET=true' # suppress job-summary on stderr
+        cmd = cmd + ' VALIDATION_STRINGENCY=SILENT'
+        printtime("DEBUG: Calling '%s'" % cmd)
+        subprocess.call(cmd,shell=True)
+
+        # overwrite sample names in header SM tag
+        if new_sample_name:
+            header = []
+            with open(composite_header_filepath,'r') as f:
+                for line in f.readlines():
+                    if line.startswith('@RG'):
+                        line = re.sub('SM:(.+?)\t','SM:%s\t' % new_sample_name, line)
+                    header.append(line)
+            with open(composite_header_filepath,'w') as f:
+                f.writelines(header)
+    except:
+        traceback.print_exc()
+
+    try:
+        # do BAM files merge
+        cmd = 'samtools merge -l1 -p8'
+        if mark_duplicates:
+            cmd += ' - '
+        else:
+            cmd += ' %s' % (composite_bam_filepath)
+        
+        for bamfile in bamfilelist:
+            cmd += ' %s' % bamfile
+        cmd += ' -h %s' % composite_header_filepath
+        
+        if mark_duplicates:
+            json_name = ('BamDuplicates.%s.json')%(os.path.normpath(composite_bam_filepath)) if os.path.normpath(composite_bam_filepath)!='rawlib.bam' else 'BamDuplicates.json'
+            cmd += ' | BamDuplicates -i stdin -o %s -j %s' % (composite_bam_filepath, json_name)
+        
+        printtime("DEBUG: Calling '%s'" % cmd)
+        subprocess.call(cmd,shell=True)
+    except:
+        traceback.print_exc()
+
+    try:
+        if composite_bai_filepath:
+            cmd = 'samtools index %s %s' % (composite_bam_filepath,composite_bai_filepath)
+            printtime("DEBUG: Calling '%s'" % cmd)
+            subprocess.call(cmd,shell=True)
+    except:
+        traceback.print_exc()
+
+
+def generate_ionstats(bam_filename, ionstats_filename, ionstats_h5_filename, histogram_length):
+    try:
+        com = "ionstats alignment"
+        com += " -i %s" % (bam_filename)
+        com += " -o %s" % (ionstats_filename)
+        com += " -h %d" % (int(histogram_length))
+        com += " --output-h5 %s" % ionstats_h5_filename
+        printtime("DEBUG: Calling '%s'" % com)
+        subprocess.call(com,shell=True)
+    except:
+        printtime('Failed generating ionstats')
+        traceback.print_exc()
 
 if __name__=="__main__":
 
@@ -20,9 +99,9 @@ if __name__=="__main__":
     parser.add_argument('-m', '--merge-bams', dest='merge_out', action='store', default = "", help='merge bam files')
     parser.add_argument('-d', '--mark-duplicates', dest='duplicates', action='store_true', default = False, help='mark duplicates')
     parser.add_argument('-a', '--align-stats', dest='align_stats', action='store_true', default = "", help='generate alignment stats')
-    parser.add_argument('-g', '--genomeinfo', dest='genomeinfo', action='store', default = "", help='genome info file for alignment stats')
     parser.add_argument('-p', '--merge-plots', dest='merge_plots', action='store_true', default = "", help='generate report plots')
     parser.add_argument('-z', '--zip', dest='zip', action='store', default = "", help='zip input files')
+    parser.add_argument('-s', '--new-sample-name', dest='sample', action='store', default = "", help='overwrite BAM header sample name')
 
     args = parser.parse_args()
     
@@ -33,7 +112,7 @@ if __name__=="__main__":
        outputBAM = args.merge_out
        printtime("Merging bam files to %s, mark duplicates is %s" % (outputBAM, args.duplicates))
        try:
-          merge_bam_files(args.files, outputBAM, outputBAM.replace('.bam','.bam.bai'), args.duplicates)
+          merge_bam_files(args.files, outputBAM, args.duplicates, args.sample)
        except:
           traceback.print_exc()
        
@@ -44,9 +123,12 @@ if __name__=="__main__":
         for bamfile in args.files:
             if bamfile == 'rawlib.bam':
                ionstats_file = 'ionstats_alignment.json'
+               error_summary_file = 'ionstats_error_summary.h5'
             else:
                ionstats_file = bamfile.split('.bam')[0] + '.ionstats_alignment.json'
-            ionstats.generate_ionstats_alignment(bamfile, ionstats_file, graph_max_x)
+               error_summary_file = bamfile.split('.bam')[0] + '.ionstats_error_summary.h5'
+            
+            generate_ionstats(bamfile, ionstats_file, error_summary_file, graph_max_x)
        
     if args.merge_plots:          
         printtime("Generating plots for merged report")

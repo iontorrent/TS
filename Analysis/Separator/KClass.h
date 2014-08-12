@@ -18,7 +18,7 @@ class KClass {
 void InitialClassifyWell(Mask &mask,
                                  ZeromerDiff<double> &bg,
                                  std::vector<KeySeq> &keys, 
-                                 TraceStore<double> &traceStore,
+                                 TraceStore &traceStore,
                                  int nFlows,
                                  Col<double> &time,
                                  vector<KeyReporter<double> *>&report,
@@ -30,7 +30,7 @@ void InitialClassifyWell(Mask &mask,
   void ClassifyWellKnownTau(Mask &mask,
                                   ZeromerModelBulk<double> &bg,
                                   std::vector<KeySeq> &keys, 
-                                 TraceStore<double> &traceStore,
+                                 TraceStore &traceStore,
                                  int nFlows,
                                   Col<double> &time,
                                   Mat<double> *darkMatter,
@@ -44,7 +44,7 @@ void InitialClassifyWell(Mask &mask,
                                   std::vector<std::vector<float> *> &distValues,
                             KeyFit &fit);
 	
-  void FillInData(TraceStore<double> &traceStore,
+  void FillInData(TraceStore &traceStore,
                   int nFlows,
                   KeyFit &fit);
 

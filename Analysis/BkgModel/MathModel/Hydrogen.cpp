@@ -6,10 +6,12 @@
 
 
 // shielding layer to insulate from choice
-void ComputeCumulativeIncorporationHydrogens (float *ival_offset, int npts, float *deltaFrameSeconds,
-    float *nuc_rise_ptr, int SUB_STEPS, int my_start, float C,
+void MathModel::ComputeCumulativeIncorporationHydrogens (
+    float *ival_offset, int npts, const float *deltaFrameSeconds,
+    const float *nuc_rise_ptr, int SUB_STEPS, int my_start, float C,
     float A, float SP,
-    float kr, float kmax, float d, float molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss, bool do_simple) // default value for external calls
+    float kr, float kmax, float d, float molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss,
+    int incorporationModelType ) // default value for external calls
 {
   bool purely_local = false;
   if (math_poiss==NULL)
@@ -25,13 +27,22 @@ void ComputeCumulativeIncorporationHydrogens (float *ival_offset, int npts, floa
   if (A<0.0f)
     tA = -A;
 
-  if (do_simple)
-  {
-    SimplifyComputeCumulativeIncorporationHydrogens (ival_offset,npts,deltaFrameSeconds,nuc_rise_ptr,SUB_STEPS,my_start,C,tA,SP,kr,kmax,d, molecules_to_micromolar_conversion, math_poiss);
-    //SuperSimplifyComputeCumulativeIncorporationHydrogens(ival_offset,npts,deltaFrameSeconds,nuc_rise_ptr,SUB_STEPS,my_start,C,A,SP,kr,kmax,d,math_poiss);
+  switch( incorporationModelType ){
+    case 1:
+      MathModel::ReducedComputeCumulativeIncorporationHydrogens (ival_offset,npts,deltaFrameSeconds,nuc_rise_ptr,SUB_STEPS,my_start,C,tA,SP,kr,kmax,d,molecules_to_micromolar_conversion, math_poiss);
+      break;
+    case 2:
+      MathModel::Reduced2ComputeCumulativeIncorporationHydrogens (ival_offset,npts,deltaFrameSeconds,nuc_rise_ptr,SUB_STEPS,my_start,C,tA,SP,kr,kmax,d,molecules_to_micromolar_conversion, math_poiss);
+      break;
+    case 3:
+        MathModel::Reduced3ComputeCumulativeIncorporationHydrogens (ival_offset,npts,deltaFrameSeconds,nuc_rise_ptr,SUB_STEPS,my_start,C,tA,SP,kr,kmax,d,molecules_to_micromolar_conversion, math_poiss);
+        break;
+
+    case 0:
+    default:
+      MathModel::SimplifyComputeCumulativeIncorporationHydrogens (ival_offset,npts,deltaFrameSeconds,nuc_rise_ptr,SUB_STEPS,my_start,C,tA,SP,kr,kmax,d, molecules_to_micromolar_conversion, math_poiss);
+      break;
   }
-  else
-    ComplexComputeCumulativeIncorporationHydrogens (ival_offset,npts,deltaFrameSeconds,nuc_rise_ptr,SUB_STEPS,my_start,C,tA,SP,kr,kmax,d,molecules_to_micromolar_conversion, math_poiss);
 
   if (purely_local)
   {
@@ -47,11 +58,13 @@ void ComputeCumulativeIncorporationHydrogens (float *ival_offset, int npts, floa
 
 #define FLOW_STEP 4
 
-void ParallelSimpleComputeCumulativeIncorporationHydrogens (float **ival_offset, int npts, float *deltaFrameSeconds,
-    float **nuc_rise_ptr, int SUB_STEPS, int *my_start,
+void MathModel::ParallelSimpleComputeCumulativeIncorporationHydrogens (
+    float **ival_offset, int npts, const float *deltaFrameSeconds,
+    const float *const *nuc_rise_ptr, int SUB_STEPS, int *my_start,
     float *A, float *SP,
-    float *kr, float *kmax, float *d, float *molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss)
+    float *kr, float *kmax, float *d, float *molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss, int incorporationModelType)
 {
+
   // handle sign here by function composition
   float tA[FLOW_STEP];
   for (int q=0; q<FLOW_STEP; q++)
@@ -60,7 +73,31 @@ void ParallelSimpleComputeCumulativeIncorporationHydrogens (float **ival_offset,
     else
       tA[q] = A[q];
 
-  UnsignedParallelSimpleComputeCumulativeIncorporationHydrogens (ival_offset,npts,deltaFrameSeconds,nuc_rise_ptr,SUB_STEPS,my_start,tA,SP,kr,kmax,d,molecules_to_micromolar_conversion,math_poiss);
+  switch( incorporationModelType ){
+    case 1:
+          for (int q=0; q<FLOW_STEP; q++){
+              ReducedComputeCumulativeIncorporationHydrogens (ival_offset[q],npts,deltaFrameSeconds,nuc_rise_ptr[q],SUB_STEPS,
+                                                              my_start[q],0,tA[q],SP[q],kr[q],kmax[q],d[q],molecules_to_micromolar_conversion[q], math_poiss);
+          }
+          break;
+    case 2:
+        for (int q=0; q<FLOW_STEP; q++){
+            Reduced2ComputeCumulativeIncorporationHydrogens (ival_offset[q],npts,deltaFrameSeconds,nuc_rise_ptr[q],SUB_STEPS,
+                                                            my_start[q],0,tA[q],SP[q],kr[q],kmax[q],d[q],molecules_to_micromolar_conversion[q], math_poiss);
+        }
+        break;
+    case 3:
+      for (int q=0; q<FLOW_STEP; q++){
+          Reduced3ComputeCumulativeIncorporationHydrogens (ival_offset[q],npts,deltaFrameSeconds,nuc_rise_ptr[q],SUB_STEPS,
+                                                          my_start[q],0,tA[q],SP[q],kr[q],kmax[q],d[q],molecules_to_micromolar_conversion[q], math_poiss);
+      }
+      break;
+    case 0:
+    default:
+          UnsignedParallelSimpleComputeCumulativeIncorporationHydrogens (ival_offset,npts,deltaFrameSeconds,nuc_rise_ptr,SUB_STEPS,my_start,tA,SP,kr,kmax,d,molecules_to_micromolar_conversion,math_poiss);
+          break;
+  }
+
 
   // flip sign - we never really have negative incorporation, but we can "over-subtract" cross-talk
   for (int q=0; q<FLOW_STEP; q++)
@@ -73,8 +110,9 @@ void ParallelSimpleComputeCumulativeIncorporationHydrogens (float **ival_offset,
 // SUB_STEPS always the same
 // pretend we are vectorizing this function
 // by the crude example of doing arrays pretending to be vectors for all.
-void UnsignedParallelSimpleComputeCumulativeIncorporationHydrogens (float **ival_offset, int npts, float *deltaFrameSeconds,
-    float **nuc_rise_ptr, int SUB_STEPS, int *my_start,
+void MathModel::UnsignedParallelSimpleComputeCumulativeIncorporationHydrogens (
+    float **ival_offset, int npts, const float *deltaFrameSeconds,
+    const float * const *nuc_rise_ptr, int SUB_STEPS, int *my_start,
     float *A, float *SP,
     float *kr, float *kmax, float *d, float *molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss)
 {
@@ -87,6 +125,7 @@ void UnsignedParallelSimpleComputeCumulativeIncorporationHydrogens (float **ival
   float  hplus_events_sum[FLOW_STEP], hplus_events_current[FLOW_STEP]; // mean events per molecule, cumulative and current
   float enzyme_dt[FLOW_STEP];
   float Aint[FLOW_STEP];
+
 // A a pointer, so isolate by copying
   for (int q=0;q<FLOW_STEP;q++)
     Aint[q] = A[q];
@@ -219,8 +258,9 @@ void UnsignedParallelSimpleComputeCumulativeIncorporationHydrogens (float **ival
 
 
 // try to simplify
-void SimplifyComputeCumulativeIncorporationHydrogens (float *ival_offset, int npts, float *deltaFrameSeconds,
-    float *nuc_rise_ptr, int SUB_STEPS, int my_start, float C,
+void MathModel::SimplifyComputeCumulativeIncorporationHydrogens (
+    float *ival_offset, int npts, const float *deltaFrameSeconds,
+    const float *nuc_rise_ptr, int SUB_STEPS, int my_start, float C,
     float A, float SP,
     float kr, float kmax, float d, float molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss)
 {
@@ -308,10 +348,270 @@ void SimplifyComputeCumulativeIncorporationHydrogens (float *ival_offset, int np
   }
 }
 
+//Reduced model that ignores diffusion rate
+void MathModel::ReducedComputeCumulativeIncorporationHydrogens (float *ival_offset, int npts, const float *deltaFrameSeconds,
+    const float *nuc_rise_ptr, int SUB_STEPS, int my_start, float C,
+    float A, float SP,
+    float kr, float kmax, float d, float molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss)
+{
+  int i;
+  float totocc, totgen;
+//    mixed_poisson_struct mix_ctrl;
+  MixtureMemo mix_memo;
+
+  float pact,pact_new;
+  float   c_dntp_bot;
+  float  hplus_events_sum, hplus_events_current; // mean events per molecule, cumulative and current
+
+  float enzyme_dt;
+
+  (void)d; (void)molecules_to_micromolar_conversion;
+
+  A = mix_memo.Generate (A,math_poiss);
+
+  mix_memo.ScaleMixture (SP);
+
+  pact = mix_memo.total_live;  // active polymerases
+  totocc = SP*A;  // how many hydrogens we'll eventually generate
+
+  totgen = totocc;  // number remaining to generate
+
+  c_dntp_bot = 0.0f; // concentration of dNTP in the well
+
+  hplus_events_sum = hplus_events_current = 0.0f; // Events per molecule
+
+  memset (ival_offset,0,sizeof (float[my_start]));  // zero the points we don't compute
+
+  float half_kr = kr *0.5f/SUB_STEPS; // for averaging
+
+  // first non-zero index of the computed [dNTP] array for this nucleotide
+  int c_dntp_top_ndx = my_start*SUB_STEPS;
+  float c_dntp_bot_plus_kmax = 1.0f/kmax;
+  float c_dntp_old_effect = 0.0f;
+  float c_dntp_new_effect = 0.0f;
+  int st;
+
+  for (i=my_start;i < npts;i++)
+  {
+    if (totgen > 0.0f)
+    {
+      enzyme_dt = half_kr*deltaFrameSeconds[i];
+
+      for (st=1; (st <= SUB_STEPS) && (totgen > 0.0f);st++)
+      {
+
+        // assume instantaneous equilibrium within the well
+        c_dntp_bot = nuc_rise_ptr[c_dntp_top_ndx];
+        c_dntp_top_ndx++;
+
+        c_dntp_bot_plus_kmax = 1 / (c_dntp_bot + kmax); // scale for michaelis-menten kinetics, assuming nucs are limiting factor
+
+        // Now compute effect of concentration on enzyme rate
+        c_dntp_old_effect = c_dntp_new_effect;
+        c_dntp_new_effect = c_dntp_bot*c_dntp_bot_plus_kmax; // current effect of concentration on enzyme rate
+
+        // update events per molecule
+        hplus_events_current = enzyme_dt* (c_dntp_new_effect+c_dntp_old_effect); // events per molecule is average rate * time of rate
+        hplus_events_sum += hplus_events_current;
+
+        // how many active molecules left at end of time period given poisson process with total intensity of events
+        // exp(-t) * (1+t+t^2/+t^3/6+...) where we interpolate between polynomial lengths by A
+        // exp(-t) ( 1+... + frac*(t^k/k!)) where k = ceil(A-1) and frac = A-floor(A), for A>=1
+        pact_new = mix_memo.GetStep (hplus_events_sum);
+        pact += pact_new;
+        pact *= 0.5f;
+        // how many hplus were generated
+        totgen -= pact * hplus_events_current;  // active molecules * events per molecule
+        pact = pact_new;
+      }
+
+      if (totgen < 0.0f) totgen = 0.0f;
+
+      ival_offset[i] = (totocc-totgen);
+    }
+    else
+    {
+      ival_offset[i] = totocc;
+    }
+
+  }
+}
+
+//Reduced model that ignores diffusion rate
+void MathModel::Reduced2ComputeCumulativeIncorporationHydrogens (float *ival_offset, int npts, const float *deltaFrameSeconds,
+    const float *nuc_rise_ptr, int SUB_STEPS, int my_start, float C,
+    float A, float SP,
+    float kr, float kmax, float d, float molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss)
+{
+  int i;
+  float totocc, totgen;
+//    mixed_poisson_struct mix_ctrl;
+  MixtureMemo mix_memo;
+
+  float pact,pact_new;
+  float   c_dntp_bot;
+  float  hplus_events_sum, hplus_events_current; // mean events per molecule, cumulative and current
+
+  float enzyme_dt;
+
+  (void)d; (void)molecules_to_micromolar_conversion;
+
+  A = mix_memo.Generate (A,math_poiss);
+
+  mix_memo.ScaleMixture (SP);
+
+  pact = mix_memo.total_live;  // active polymerases
+  totocc = SP*A;  // how many hydrogens we'll eventually generate
+
+  totgen = totocc;  // number remaining to generate
+
+  c_dntp_bot = 0.0f; // concentration of dNTP in the well
+
+  hplus_events_sum = hplus_events_current = 0.0f; // Events per molecule
+
+  memset (ival_offset,0,sizeof (float[my_start]));  // zero the points we don't compute
+
+  float half_kr = kr *0.5f/SUB_STEPS; // for averaging
+
+  // first non-zero index of the computed [dNTP] array for this nucleotide
+  int c_dntp_top_ndx = my_start*SUB_STEPS;
+  float c_dntp_old_effect = 0.0f;
+  float c_dntp_new_effect = 0.0f;
+  int st;
+
+  for (i=my_start;i < npts;i++)
+  {
+    if (totgen > 0.0f)
+    {
+      enzyme_dt = half_kr*deltaFrameSeconds[i];
+
+      for (st=1; (st <= SUB_STEPS) && (totgen > 0.0f);st++)
+      {
+
+        // assume instantaneous equilibrium within the well
+        c_dntp_bot = nuc_rise_ptr[c_dntp_top_ndx] / 50.;
+        c_dntp_top_ndx++;
+
+        // Now compute effect of concentration on enzyme rate
+        c_dntp_old_effect = c_dntp_new_effect;
+        c_dntp_new_effect = c_dntp_bot; // current effect of concentration on enzyme rate
+
+        // update events per molecule
+        hplus_events_current = enzyme_dt* (c_dntp_new_effect+c_dntp_old_effect); // events per molecule is average rate * time of rate
+        hplus_events_sum += hplus_events_current;
+
+        // how many active molecules left at end of time period given poisson process with total intensity of events
+        // exp(-t) * (1+t+t^2/+t^3/6+...) where we interpolate between polynomial lengths by A
+        // exp(-t) ( 1+... + frac*(t^k/k!)) where k = ceil(A-1) and frac = A-floor(A), for A>=1
+        pact_new = mix_memo.GetStep (hplus_events_sum);
+        pact += pact_new;
+        pact *= 0.5f;
+        // how many hplus were generated
+        totgen -= pact * hplus_events_current;  // active molecules * events per molecule
+        pact = pact_new;
+      }
+
+      if (totgen < 0.0f) totgen = 0.0f;
+
+      ival_offset[i] = (totocc-totgen);
+    }
+    else
+    {
+      ival_offset[i] = totocc;
+    }
+
+  }
+}
+
+//Reduced model that ignores diffusion rate
+void MathModel::Reduced3ComputeCumulativeIncorporationHydrogens (float *ival_offset, int npts, const float *deltaFrameSeconds,
+    const float *nuc_rise_ptr, int SUB_STEPS, int my_start, float C,
+    float A, float SP,
+    float kr, float kmax, float d, float molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss)
+{
+  int i;
+  float totocc, totgen;
+//    mixed_poisson_struct mix_ctrl;
+  MixtureMemo mix_memo;
+
+  float pact,pact_new;
+  float   c_dntp_bot;
+  float  hplus_events_sum, hplus_events_current; // mean events per molecule, cumulative and current
+
+  float enzyme_dt;
+
+  (void)d; (void)molecules_to_micromolar_conversion;
+
+  A = mix_memo.Generate (A,math_poiss);
+
+  mix_memo.ScaleMixture (SP);
+
+  pact = mix_memo.total_live;  // active polymerases
+  totocc = SP*A;  // how many hydrogens we'll eventually generate
+
+  totgen = totocc;  // number remaining to generate
+
+  c_dntp_bot = 0.0f; // concentration of dNTP in the well
+
+  hplus_events_sum = hplus_events_current = 0.0f; // Events per molecule
+
+  memset (ival_offset,0,sizeof (float[my_start]));  // zero the points we don't compute
+
+  float half_kr = kr/SUB_STEPS; // for averaging
+
+  // first non-zero index of the computed [dNTP] array for this nucleotide
+  int c_dntp_top_ndx = my_start*SUB_STEPS;
+  float c_dntp_new_effect = 0.0f;
+  int st;
+
+  for (i=my_start;i < npts;i++)
+  {
+    if (totgen > 0.0f)
+    {
+      enzyme_dt = half_kr*deltaFrameSeconds[i];
+
+      for (st=1; (st <= SUB_STEPS) && (totgen > 0.0f);st++)
+      {
+
+        // assume instantaneous equilibrium within the well
+        c_dntp_bot = nuc_rise_ptr[c_dntp_top_ndx] / 50.;
+        c_dntp_top_ndx++;
+
+        // Now compute effect of concentration on enzyme rate
+        c_dntp_new_effect = c_dntp_bot; // current effect of concentration on enzyme rate
+
+        // update events per molecule
+        hplus_events_current = enzyme_dt*c_dntp_new_effect; // events per molecule is average rate * time of rate
+        hplus_events_sum += hplus_events_current;
+
+        // how many active molecules left at end of time period given poisson process with total intensity of events
+        // exp(-t) * (1+t+t^2/+t^3/6+...) where we interpolate between polynomial lengths by A
+        // exp(-t) ( 1+... + frac*(t^k/k!)) where k = ceil(A-1) and frac = A-floor(A), for A>=1
+        pact_new = mix_memo.GetStep (hplus_events_sum);
+        pact += pact_new;
+        pact *= 0.5f;
+        // how many hplus were generated
+        totgen -= pact * hplus_events_current;  // active molecules * events per molecule
+        pact = pact_new;
+      }
+
+      if (totgen < 0.0f) totgen = 0.0f;
+
+      ival_offset[i] = (totocc-totgen);
+    }
+    else
+    {
+      ival_offset[i] = totocc;
+    }
+
+  }
+}
+
+
 // try to simplify
 // use the "update state" idea for the poisson process
 // may be slower because of compiler annoyances
-void SuperSimplifyComputeCumulativeIncorporationHydrogens (float *ival_offset, int npts, float *deltaFrameSeconds,
+void MathModel::SuperSimplifyComputeCumulativeIncorporationHydrogens (float *ival_offset, int npts, const float *deltaFrameSeconds,
     float *nuc_rise_ptr, int SUB_STEPS, int my_start, float C,
     float A, float SP,
     float kr, float kmax, float d, float molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss)
@@ -409,8 +709,9 @@ void SuperSimplifyComputeCumulativeIncorporationHydrogens (float *ival_offset, i
 // and the average dntp concentration in the well during this time step.
 // note c_dntp_int is the integral of the dntp concentration in the well during the
 // time step, which is equal to the average [dntp] in the well times the timestep duration
-void ComplexComputeCumulativeIncorporationHydrogens (float *ival_offset, int npts, float *deltaFrameSeconds,
-    float *nuc_rise_ptr, int SUB_STEPS, int my_start, float C,
+void MathModel::ComplexComputeCumulativeIncorporationHydrogens (
+    float *ival_offset, int npts, const float *deltaFrameSeconds,
+    const float *nuc_rise_ptr, int SUB_STEPS, int my_start, float C,
     float A, float SP,
     float kr, float kmax, float d, float molecules_to_micromolar_conversion, PoissonCDFApproxMemo *math_poiss)
 {

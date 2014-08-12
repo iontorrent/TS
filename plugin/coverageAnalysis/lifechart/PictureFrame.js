@@ -46,7 +46,9 @@ $(function () {
 
 
   if( gccovFile === '' && lencovFile === '' && fedoraFile === '' && fedlenFile === '' && poolcovFile === '' ) {
-    alert("ERROR on page: PictureFrame widget requires a file attribute set.");
+    // in tradition of HTML, an empty div results in no complaints
+    //alert("ERROR on page: PictureFrame widget requires a file attribute set.");
+    $('#PictureFrame').hide();
     return;
   }
   if( gccovFile === '' ) $("#PF-display option[value=0]").hide();

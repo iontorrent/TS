@@ -131,26 +131,19 @@ void SlicedPrequel::LoadBeadFindForSignalProcessing(bool load)
   }
 }
 
-void SlicedPrequel::RestrictRegions(std::string& region_list)
+void SlicedPrequel::RestrictRegions(std::vector<int>& region_list)
 {
   if (region_list.empty())  // do nothing
     return;
 
   std::vector<unsigned int>regions_to_use;
-  std::istringstream in (region_list);
-  int iregion;
-  // expected input comma delimited integers. e.g. "0,1,2,4"
-  while (in.good() ) {
-    std::string val = "";
-    getline(in, val, ',');
-    iregion = atoi(val.c_str());
-    fprintf(stdout, "Adding region %d in %d total\n", iregion, num_regions);
-    assert (iregion >= 0);
-    assert (iregion < num_regions);
-
-    regions_to_use.push_back(iregion);
+  for(size_t i = 0; i < region_list.size(); ++i)
+  {
+	  if(region_list[i] >= 0 && region_list[i] < num_regions)
+	  {
+		  regions_to_use.push_back((unsigned int)region_list[i]);
+	  }
   }
-  in.clear();
 
   Elide (regions_to_use);
 }

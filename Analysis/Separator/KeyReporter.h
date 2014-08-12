@@ -4,6 +4,7 @@
 
 #include <string>
 #include "KeyClassifier.h"
+#include "EvaluateKey.h"
 
 template <class T>
 class KeyReporter {

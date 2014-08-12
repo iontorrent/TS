@@ -14,14 +14,13 @@ import httplib2
 import urlparse
 import time
 import datetime
-import glob
 from django.utils import timezone
 from pprint import pformat
 from celery.task import task
 import celery.exceptions
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.contrib.admin.views.decorators import staff_member_required
+from django.views.decorators.http import require_POST
 from django.shortcuts import render_to_response, get_object_or_404, get_list_or_404
 from django.template import RequestContext, Context
 from django.http import Http404, HttpResponsePermanentRedirect, HttpResponse, HttpResponseRedirect, \
@@ -30,18 +29,15 @@ from django.core.servers.basehttp import FileWrapper
 from django.core.urlresolvers import reverse
 from django.forms.models import model_to_dict
 import ion.utils.TSversion
-from iondb.rundb.configure.archiver_utils import exp_list, disk_usage_stats
-from iondb.rundb.forms import EmailAddress as EmailAddressForm, EditReportBackup,\
-    bigPruneEdit, EditPruneLevels, UserProfileForm
+from iondb.rundb.forms import EmailAddress as EmailAddressForm, UserProfileForm
 from iondb.rundb.forms import AmpliseqLogin
 from iondb.rundb import tasks, publishers
 from iondb.anaserve import client
 from iondb.plugins.manager import pluginmanager
 from django.contrib.auth.models import User
 from iondb.rundb.models import dnaBarcode, Plugin, GlobalConfig,\
-    EmailAddress, Publisher, Location, dm_reports, dm_prune_group, Experiment,\
-    Results, Template, UserProfile, dm_prune_field, FileServer, DMFileSet, DMFileStat,\
-    FileMonitor, EventLog, ContentType
+    EmailAddress, Publisher, Location, Experiment, Results, Template, UserProfile, \
+    FileMonitor, EventLog, ContentType, Cruncher
 from iondb.rundb.data import rawDataStorageReport, reportLogStorage
 from iondb.rundb.configure.genomes import search_for_genomes
 from iondb.rundb.plan import ampliseq
@@ -50,15 +46,8 @@ from django.core.serializers.json import DjangoJSONEncoder
 from iondb.rundb.configure.util import plupload_file_upload
 from ion.utils import makeCSA
 from django.core import urlresolvers
-from iondb.rundb.data import tasks as dmtasks
-from iondb.rundb.data import dmactions
-import iondb.rundb.data.dmactions_types as dmactions_types
-from iondb.rundb.data.data_management import update_files_in_use
-from iondb.rundb.data import exceptions as DMExceptions
-from iondb.rundb.data.data_import import find_data_to_import, data_import
-from iondb.rundb.report import file_browse
-from iondb.utils.files import disk_attributes
-from iondb.utils.raid import get_raid_status, get_raid_status_json
+from iondb.utils.raid import get_raid_status, get_raid_status_json, load_raid_status_json
+from iondb.servelocation import serve_wsgi_location
 logger = logging.getLogger(__name__)
 
 
@@ -75,6 +64,14 @@ def configure_about(request):
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/about.html", context_instance=ctx)
 
+@login_required
+def configure_ionreporter(request):
+    iru = Plugin.objects.get(name__iexact='IonReporterUploader', active=True)
+    ctxd = { "iru" : iru }
+
+    ctx = RequestContext(request, ctxd)
+    return render_to_response("rundb/configure/ionreporter.html", context_instance=ctx)
+
 
 def timeout_raid_info():
     async_result = tasks.get_raid_stats.delay()
@@ -90,319 +87,69 @@ def timeout_raid_info():
 
 def timeout_raid_info_json():
     async_result = tasks.get_raid_stats_json.delay()
+    err_msg = None
     try:
         raidinfo = async_result.get(timeout=20)
         if async_result.failed():
+            err_msg = "RAID status check failed."
+            logger.error(err_msg)
             raidinfo = None
     except celery.exceptions.TimeoutError as err:
-        logger.warning("RAID status check timed out, taking longer than 20 seconds.")
+        err_msg = "RAID status check timed out, taking longer than 20 seconds."
+        logger.warning(err_msg)
         raidinfo = None
-    return raidinfo
+    return raidinfo, err_msg
 
+def sort_drive_array_for_display(raidstatus):
+    # sorts array to be displayed matching physical arrangement in enclosure
+    slots=12
+    for d in raidstatus:
+        adapter_id = d.get('adapter_id','')
+        drives = d.get('drives',[])
+        if not adapter_id or len(drives) < slots:
+            continue
+
+        if adapter_id.startswith("PERC H710"):
+            d['cols'] = 4
+        elif adapter_id.startswith("PERC H810"):
+            ncols = 4
+            temp = [drives[i:i+(slots/ncols)] for i in range(0, slots, slots/ncols)]
+            d['drives'] = sum( map(list, zip(*temp)), [])
+            d['cols'] = ncols
 
 @login_required
 def configure_services(request):
-    def is_mounted(path):
-        try:
-            path = os.path.abspath(path)
-            while path != os.path.sep:
-                if os.path.ismount(path):
-                    return path
-                path = os.path.dirname(path)
-        except:
-            pass
-        return ''
 
     jobs = current_jobs(request)
     crawler = _crawler_status(request)
     processes = process_set()
-    fs_stats = disk_usage_stats()
-    gc = GlobalConfig.objects.all().order_by('pk')[0]
 
-    if os.path.exists("/opt/ion/.ion-internal-server"):
-        # split Data Management tables per fileserver
-        dm_tables = []
-        for path in FileServer.objects.all().order_by('pk').values_list('filesPrefix', flat=True):
-            dm_tables.append({
-                "filesPrefix": path,
-                "url": "/rundb/api/v1/compositedatamanagement/?format=json&expDir__startswith=%s" % path
-            })
-    else:
-        dm_tables = [{
-            "filesPrefix": "",
-            "url": "/rundb/api/v1/compositedatamanagement/?format=json"
-        }]
-
-    dm_filesets = DMFileSet.objects.filter(version=settings.RELVERSION).order_by('pk')
-    for dmfileset in dm_filesets:
-        if dmfileset.backup_directory in ['None',None,'']:
-            dmfileset.mounted = False
-        else:
-            dmfileset.mounted = bool( is_mounted(dmfileset.backup_directory) )
-
-    # mounted paths for Disk Usage section
-    archive_stats = {}
-    backup_dirs = get_dir_choices()[1:]
-    for bdir,bdir in backup_dirs:
-        mounted = is_mounted(bdir)
-        if mounted and mounted not in archive_stats and mounted not in fs_stats:
-            try:
-                total, availSpace, freeSpace, bsize = disk_attributes(mounted)
-                total_gb = float(total*bsize)/(1024*1024*1024)
-                avail_gb = float(availSpace*bsize)/(1024*1024*1024)
-                #free_gb = float(freeSpace*bsize)/(1024*1024*1024)
-                percentfull = 100-(float(availSpace)/float(total)*100) if total > 0 else 0
-            except:
-                percentfull = ""
-                total_gb = ""
-                avail_gb = ""
-
-            archive_stats[mounted] = {
-                'percentfull': percentfull,
-                'disksize': total_gb,
-                'diskfree': avail_gb,
-            }
-
-    raidinfo = timeout_raid_info_json()
+    # RAID Info
+    raidinfo, raid_err_msg = timeout_raid_info_json()
+    raid_status_updated = datetime.datetime.now()
+    
+    if raidinfo:
+        raid_status = get_raid_status(raidinfo)
+    elif raid_err_msg:
+        # attempt to load previously generated raidstatus file
+        contents = load_raid_status_json()
+        raid_status = contents.get('raid_status')
+        raid_status_updated = contents.get('date')
+    
+    if raid_status:
+        sort_drive_array_for_display(raid_status)
 
     ctxd = {
         "processes": processes,
         "jobs": jobs,
         "crawler": crawler,
-        "autoArchive": gc.auto_archive_ack,
-        "autoArchiveEnable": gc.auto_archive_enable,
-        "dm_filesets": dm_filesets,
-        "dm_tables": dm_tables,
-        "archive_stats": archive_stats,
-        "fs_stats": fs_stats,
-        "raid_status": get_raid_status(raidinfo),
+        "raid_status": raid_status,
+        "raid_status_updated": raid_status_updated,
+        "raid_err_msg": raid_err_msg,
+        'crunchers': Cruncher.objects.all(),
         }
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/services.html", context_instance=ctx)
-
-@login_required
-@staff_member_required
-def dm_configuration(request):
-    config = GlobalConfig.objects.all()[0]
-    dm_contact, created = User.objects.get_or_create(username='dm_contact')
-
-    if request.method == 'GET':
-        dm_filesets = DMFileSet.objects.filter(version=settings.RELVERSION).order_by('pk')
-        backup_dirs = get_dir_choices()
-
-        config.email = dm_contact.email
-
-        ctx = RequestContext(request, {
-            "dm_filesets": dm_filesets,
-            "config": config,
-            "backup_dirs": backup_dirs,
-            "categories": dmactions_types.FILESET_TYPES
-        })
-        return render_to_response("rundb/configure/dm_configuration.html", context_instance=ctx)
-
-    elif request.method == 'POST':
-        dm_filesets = DMFileSet.objects.all()
-        log = 'SAVED Data Management Configuration<br>'
-        data = json.loads(request.raw_post_data)
-        try:
-            for key, value in data.items():
-                if key == 'filesets':
-                    for category, params in value.items():
-                        dm_filesets.filter(type=category).update(**params)
-                        log += '<b>%s:</b> %s<br>' % (category, json.dumps(params).translate(None, "{}\"\'") )
-                elif key == 'email':
-                    dm_contact.email = value
-                    dm_contact.save()
-                    log += '<b>Email:</b> %s<br>' % value
-                elif key == 'auto_archive_ack':
-                    GlobalConfig.objects.all().update(auto_archive_ack = True if value=='True' else False)
-                    log += '<b>Auto Acknowledge Delete:</b> %s<br>' % value
-            _add_dm_configuration_log(request, log)
-        except Exception as e:
-            logger.exception("dm_configuration: error: %s" % str(e))
-            return HttpResponseServerError("Error: %s" % str(e))
-
-        return HttpResponse()
-
-def _add_dm_configuration_log(request, log):
-    # add log entry. Want to save with the DMFileSet class, not any single object, so use fake object_pk.
-    ct = ContentType.objects.get_for_model(DMFileSet)
-    ev = EventLog(object_pk=0, content_type=ct, username=request.user.username, text=log)
-    ev.save()
-
-def delete_ack(request):
-    runPK = request.POST.get('runpk', False)
-    runState = request.POST.get('runstate', False)
-
-    if not runPK:
-        return HttpResponse(json.dumps({"status": "error, no runPK POSTed"}), mimetype="application/json")
-    if not runState:
-        return HttpResponse(json.dumps({"status": "error, no runState POSTed"}), mimetype="application/json")
-
-    # Also change the experiment user_ack value.
-    exp = Results.objects.get(pk=runPK).experiment
-    exp.user_ack = runState
-    exp.save()
-
-    # If multiple reports per experiment update all sigproc action_states.
-    results_pks = exp.results_set.values_list('pk', flat=True)
-    ret = DMFileStat.objects.filter(result__pk__in=results_pks, dmfileset__type=dmactions_types.SIG).update(action_state=runState)
-
-    for result in exp.results_set.all():
-        msg = '%s deletion ' % dmactions_types.SIG
-        msg += 'is Acknowledged' if runState == 'A' else ' Acknowledgement is removed'
-        EventLog.objects.add_entry(result, msg, username=request.user.username)
-
-    return HttpResponse(json.dumps({"runState": runState, "count": ret, "runPK": runPK}), mimetype="application/json")
-
-def dm_log(request, pk=None):
-    if request.method == 'GET':
-        selected = get_object_or_404(Results, pk=pk)
-        ct = ContentType.objects.get_for_model(selected)
-        title = "Data Management Actions for %s (%s):" % (selected.resultsName, pk)
-        ctx = RequestContext(request, {"title": title, "pk": pk, "cttype": ct.id})
-        return render_to_response("rundb/common/modal_event_log.html", context_instance=ctx)
-
-def dm_configuration_log(request):
-    if request.method == 'GET':
-        ct = ContentType.objects.get_for_model(DMFileSet)
-        title = "Data Management Configuration History"
-        ctx = RequestContext(request, {"title": title, "pk": 0, "cttype": ct.id})
-        return render_to_response("rundb/common/modal_event_log.html", context_instance=ctx)
-    elif request.method == 'POST':
-        log = request.POST.get('log')
-        _add_dm_configuration_log(request, log)
-        return HttpResponse()
-
-def dm_history(request):
-    logs = EventLog.objects.for_model(Results)
-    usernames = set(logs.values_list('username', flat=True))
-    ctx = RequestContext(request, {'usernames':usernames})
-    return render_to_response("rundb/configure/dm_history.html", context_instance=ctx)
-
-def dm_actions(request, results_pks):
-    results = Results.objects.filter(pk__in=results_pks.split(','))
-
-    # update disk space info if needed
-    to_update = DMFileStat.objects.filter(diskspace=None, result__in=results_pks.split(','))
-    for dmfilestat in to_update:
-        dmtasks.update_dmfilestats_diskspace.delay(dmfilestat)
-    if len(to_update) > 0:
-        time.sleep(2)
-
-    dm_files_info = []
-    for category in dmactions_types.FILESET_TYPES:
-        info = ''
-        for result in results:
-            dmfilestat = result.dmfilestat_set.get(dmfileset__type=category)
-            if not info:
-                info = {
-                'category':dmfilestat.dmfileset.type,
-                'description':dmfilestat.dmfileset.description,
-                'action_state': dmfilestat.get_action_state_display(),
-                'diskspace': dmfilestat.diskspace,
-                'in_process': dmfilestat.in_process()
-            }
-            else:
-                # multiple results
-                if info['action_state'] != dmfilestat.get_action_state_display():
-                    info['action_state'] = '*'
-                if (info['diskspace'] is not None) and (dmfilestat.diskspace is not None):
-                    info['diskspace'] += dmfilestat.diskspace
-                else:
-                    info['diskspace'] = None
-                info['in_process'] &= dmfilestat.in_process()
-
-        dm_files_info.append(info)
-
-    if len(results) == 1:
-        name = "Report Name: %s" % result.resultsName
-        subtitle = "Run Name: %s" % result.experiment.expName
-    else:
-        # multiple results (available from Project page)
-        name = "Selected %s results." % len(results)
-        subtitle = "(%s)" % ', '.join(results_pks.split(','))
-
-    backup_dirs = get_dir_choices()[1:]
-    ctxd = {
-        "dm_files_info": dm_files_info,
-        "name": name,
-        "subtitle": subtitle,
-        "results_pks": results_pks,
-        "backup_dirs": backup_dirs,
-        "isDMDebug": os.path.exists("/opt/ion/.ion-dm-debug"),
-        }
-    ctx = RequestContext(request, ctxd)
-    return render_to_response("rundb/configure/modal_dm_actions.html", context_instance=ctx)
-
-def dm_action_selected(request, results_pks, action):
-    '''
-    file categories to process: data['categories']
-    user log entry comment: data['comment']
-    results_pks could contain more than 1 result
-    '''
-    logger = logging.getLogger('data_management')
-
-    data = json.loads(request.raw_post_data)
-    logger.info("dm_action_selected: request '%s' on report(s): %s" % (action, results_pks))
-
-    '''
-    organize the dmfilestat objects by result_id, we make multiple dbase queries
-    but it keeps them organized.  Most times, this will be a single query anyway.
-    '''
-    dmfilestat_dict = {}
-    try:
-        # update any dmfilestats in use by running analyses
-        update_files_in_use()
-
-        backup_directory = data['backup_dir'] if data['backup_dir'] != 'default' else None
-
-        for resultPK in results_pks.split(','):
-            logger.debug("Matching dmfilestats containg %s reportpk" % resultPK)
-            dmfilestat_dict[resultPK] = DMFileStat.objects.select_related() \
-                .filter(dmfileset__type__in=data['categories'], result__id=int(resultPK))
-
-            for dmfilestat in dmfilestat_dict[resultPK]:
-                # validate export/archive destination folders
-                if action in ['export', 'archive']:
-                    dmactions.destination_validation(dmfilestat, backup_directory, manual_action=True)
-
-                # validate files not in use
-                try:
-                    dmactions.action_validation(dmfilestat, action, data['confirmed'])
-                except DMExceptions.FilesInUse as e:
-                    # warn if exporting files currently in use, allow to proceed if confirmed
-                    if action=='export':
-                        if not data['confirmed']:
-                            return HttpResponse(json.dumps({'warning':str(e)+'<br>Exporting now may produce incomplete data set.'}), mimetype="application/json")
-                    else:
-                        raise e
-                except DMExceptions.BaseInputLinked as e:
-                    # warn if deleting basecaller files used in any other re-analysis started from BaseCalling
-                    if not data['confirmed']:
-                        return HttpResponse(json.dumps({'warning':str(e)}), mimetype="application/json")
-
-                # warn if archiving data marked Keep
-                if action=='archive' and dmfilestat.getpreserved():
-                    if not data['confirmed']:
-                        return HttpResponse(json.dumps({'warning':'%s currently marked Keep.' % dmfilestat.dmfileset.type}), mimetype="application/json")
-
-        async_task_result = dmtasks.action_group.delay(request.user.username, data['categories'], action, dmfilestat_dict, data['comment'], backup_directory, data['confirmed'])
-
-        if async_task_result:
-            logger.debug(async_task_result)
-
-    except DMExceptions.SrcDirDoesNotExist as e:
-        dmfilestat.setactionstate('DD')
-        msg = "Source directory %s no longer exists. Setting action_state to Deleted" % e.message
-        logger.info(msg)
-        EventLog.objects.add_entry(dmfilestat.result, msg, username=request.user.username)
-    except Exception as e:
-        logger.error("dm_action_selected: error: %s" % str(e))
-        return HttpResponseServerError("%s" % str(e))
-
-    test = {'pks':results_pks, 'action':action, 'data':data}
-    return HttpResponse(json.dumps(test), mimetype="application/json");
 
 
 @login_required
@@ -480,6 +227,33 @@ def configure_plugins_plugin_configure(request, action, pk):
 
     context = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/modal_configure_plugins_plugin_configure.html", context_instance=context)
+
+
+@login_required
+def configure_plugins_pluginmedia(request, action, pk, path):
+    # note action is ignored, just serve pluginmedia on relative path
+
+    plugin = get_object_or_404(Plugin, pk=pk)
+    fspath = plugin.path
+
+    # Map given relative URL to fspath, then back to transformed URL
+    prefix = "/results/plugins/"
+    if not fspath.startswith(prefix):
+        raise Http404("Invalid Plugin path '%s'", fspath)
+    if not os.path.exists(os.path.join(fspath, "pluginMedia")):
+        raise Http404("Request for pluginMedia for plugin with no pluginMedia folder")
+
+    # Security Note: May allows access to any plugin file with ".."
+
+    # Strip prefix from filesystem path, replace with "/pluginMedia/"
+    servepath="plugins/" + fspath[len(prefix):] + "/pluginMedia/" + path
+    # example: "/plugins/" + "examplePlugin" + "/" + "pluginMedia/img.png"
+    # example: "/plugins/" + "instances/12345667/exampleZeroConf" + "/" + "pluginMedia/img.png"
+    logger.debug("Redirecting pluginMedia request '%s' to '%s'", path, servepath)
+
+    # Serve redirects to /private/plugins/,
+    # which is mapped to /results/plugins/ in apache
+    return serve_wsgi_location(request, servepath)
 
 
 @login_required
@@ -566,7 +340,8 @@ def configure_plugins_plugin_usage(request, pk):
 def configure_configure(request):
     ctx = RequestContext(request, {})
     emails = EmailAddress.objects.all().order_by('pk')
-    ctx.update({"email": emails})
+    enable_nightly = GlobalConfig.objects.all().order_by('pk')[0].enable_nightly_email
+    ctx.update({"email": emails, "enable_nightly": enable_nightly})
     config_contacts(request, ctx)
     config_site_name(request, ctx)
     return render_to_response("rundb/configure/configure.html", context_instance=ctx)
@@ -580,115 +355,6 @@ def config_publishers(request, ctx):
     publishers.search_for_publishers(globalconfig)
     pubs = Publisher.objects.all().order_by('name')
     ctx.update({"publishers": pubs})
-
-
-def get_dir_choices():
-    from iondb.utils import devices
-    basicChoice = [(None, 'None')]
-    for choice in devices.to_media(devices.disk_report()):
-        basicChoice.append(choice)
-    # add selected directories to choices
-    for choice in set(DMFileSet.objects.exclude(backup_directory__in=['','None']).values_list('backup_directory', flat=True)):
-        if choice and not (choice,choice) in basicChoice:
-            basicChoice.append( (choice,choice) )
-
-    return tuple(basicChoice)
-
-def _configure_report_data_mgmt(request, pk=None):
-    logger = logging.getLogger("data_management")
-
-    def getRuleList(grps):
-        rList = []
-        for j, grp in enumerate(grps, start=1):
-            grp.idStr = "%02d" % (j)
-            rList.append([grp.name, 'T' if grp.editable else 'F', grp.idStr, grp.pk])
-        return rList
-
-    def getReportStorageSavings(days):
-        result = []
-        for day in days:
-            try:
-                mbtotal = reportLogStorage.getSavedSpace(day)
-            except:
-                mbtotal = 0
-                logger.error(traceback.format_exc())
-
-            gbtotal = round(mbtotal/(1024), 3)
-            result.append([day, mbtotal, gbtotal])
-
-        return result
-
-    if not pk:
-        qs = dm_reports.objects.all().order_by('-pk')
-        if qs.exists():
-            model = qs[0]
-            model.save()
-        else:
-            model = dm_reports()
-            model.save()
-        pk = model.pk
-
-    model = get_object_or_404(dm_reports, pk=pk)
-
-    reportStr = getReportStorageSavings([1, 7, 14, 30, 90, 365])
-    grps = dm_prune_group.objects.all().order_by('pk')
-    rList = getRuleList(grps)
-    if request.method == "POST":
-        form = EditReportBackup(request.POST)
-        if form.is_valid():
-            _autoType = form.cleaned_data['autoAction']
-            if model.autoType != _autoType:
-                model.autoType = _autoType
-                logger.info("dm_reports configuration changed: autoType set to %s" % model.autoType)
-
-            _autoAge = form.cleaned_data['autoDays']
-            if model.autoAge != _autoAge:
-                model.autoAge = _autoAge
-                logger.info("dm_reports configuration changed: autoAge set to %d" % model.autoAge)
-
-            _pruneLevel = form.cleaned_data['pruneLevel']
-            if model.pruneLevel != _pruneLevel:
-                model.pruneLevel = _pruneLevel
-                logger.info("dm_reports configuration changed: pruneLevel set to %s" % model.pruneLevel)
-
-            _location = form.cleaned_data['location']
-            if model.location != _location:
-                model.location = _location
-                logger.info("dm_reports configuration changed: archive location set to %s" % model.location)
-
-            _autoPrune = form.cleaned_data['autoPrune']
-            if model.autoPrune != _autoPrune:
-                model.autoPrune = _autoPrune
-                logger.info("dm_reports configuration changed: auto-action set to %s" % model.autoPrune)
-
-            model.save()
-            url = reverse('configure_configure')
-            return HttpResponsePermanentRedirect(url)
-    else:
-        form = EditReportBackup()
-        form.fields['location'].initial = model.location
-        form.fields['autoPrune'].initial = model.autoPrune
-        form.fields['autoDays'].initial = model.autoAge
-        if '%s' % model.pruneLevel == '':
-            form.fields['pruneLevel'].initial = ['No-op']
-        else:
-            form.fields['pruneLevel'].initial = model.pruneLevel
-        form.fields['autoAction'].initial = model.autoType
-    ctxd = {"form": form, "spaceSaved": reportStr, "ruleList": rList}
-    ctx = RequestContext(request, ctxd)
-    return ctx
-
-
-@login_required
-def configure_report_data_mgmt_prunegroups(request, pk=None):
-    ctx = _configure_report_data_mgmt(request, pk)
-    return ctx if isinstance(ctx, HttpResponsePermanentRedirect) else render_to_response("rundb/configure/blocks/configure_report_data_mgmt_prunegroups.html", context_instance=ctx)
-
-
-@login_required
-def configure_report_data_mgmt(request, pk=None):
-    ctx = _configure_report_data_mgmt(request, pk)
-    return ctx if isinstance(ctx, HttpResponsePermanentRedirect) else render_to_response("rundb/configure/configure_report_data_mgmt.html", context_instance=ctx)
 
 
 def _crawler_status(request):
@@ -809,55 +475,9 @@ def process_set():
     # pids should contain something like '[{rabbit@TSVMware,18442}].'
     proc_set["RabbitMQ"] = complicated_status("/var/run/rabbitmq/pid", int)
 
-    for node in ['celerybeat', 'celery_w1', 'celery_plugins', 'celery_periodic']:
+    for node in ['celerybeat', 'celery_w1', 'celery_plugins', 'celery_periodic', 'celery_slowlane', 'celery_transfer', 'celery_diskutil']:
         proc_set[node] = complicated_status("/var/run/celery/%s.pid" % node, int)
     return sorted(proc_set.items())
-
-
-@login_required
-def preserve_data(request):
-    # Sets flag to preserve data for a single DMFileStat object
-    if request.method == 'POST':
-
-        reportPK = request.POST.get('reportpk', False)
-        expPK = request.POST.get('exppk', False)
-        keep = True if request.POST.get('keep')=='true' else False
-        dmtype = request.POST.get('type', '')
-
-        if dmtype == 'sig':
-            typeStr = dmactions_types.SIG
-        elif dmtype == 'base':
-            typeStr = dmactions_types.BASE
-        elif dmtype == 'out':
-            typeStr = dmactions_types.OUT
-        elif dmtype == 'intr':
-            typeStr = dmactions_types.INTR
-        else:
-            return HttpResponse(json.dumps({"status": "error, unknown DMFileStat type"}), mimetype="application/json")
-
-        try:
-            if reportPK:
-                if dmtype == 'sig':
-                    results = Results.objects.get(pk=reportPK).experiment.results_set.all()
-                else:
-                    results = Results.objects.filter(pk=reportPK)
-            elif expPK:
-                results = Experiment.objects.get(pk=expPK).results_set.all()
-            else:
-                return HttpResponse(json.dumps({"status": "error, no object pk specified"}), mimetype="application/json")
-
-            for result in results:
-                filestat = result.get_filestat(typeStr)
-                filestat.setpreserved(keep)
-                if keep:
-                    msg = '%s marked exempt from auto-action' % typeStr
-                else:
-                    msg = '%s no longer exempt from auto-action' % typeStr
-                EventLog.objects.add_entry(filestat.result, msg, username=request.user.username)
-        except Exception as err:
-            return HttpResponse(json.dumps({"status": "error, %s" % err}), mimetype="application/json")
-
-        return HttpResponse(json.dumps({"reportPK": reportPK, "type":typeStr, "keep":filestat.getpreserved()}), mimetype="application/json")
 
 
 @login_required
@@ -1186,10 +806,8 @@ def configure_system_stats_data(request):
 def raid_info(request, index=0):
     # display RAID info for a drives array from saved file /var/spool/ion/raidstatus.json
     # index is the adapter/enclosure row clicked on services page
-    with open(os.path.join('/var','spool','ion','raidstatus.json'),'r') as f:
-        raid_status = json.load(f)
-
-    array_status = raid_status['raid_status'][int(index)]['drives']
+    contents = load_raid_status_json()
+    array_status = contents['raid_status'][int(index)]['drives']
     return render_to_response("rundb/configure/modal_raid_info.html", {"array_status": array_status})
 
 def config_contacts(request, context):
@@ -1263,190 +881,6 @@ def delete_email(request, pk=None):
             'action': reverse('delete_email', args=[pk, ]), 'actions': json.dumps([])
         })
         return render_to_response("rundb/common/modal_confirm_delete.html", context_instance=ctx)
-
-@login_required
-def configure_report_data_mgmt_editPruneGroups(request):
-    logger = logging.getLogger("data_management")
-
-    reportOptList = dm_reports.objects.all().order_by('-pk')
-    bk = reportOptList[0]
-    groupList = dm_prune_group.objects.all().order_by('pk')
-    ruleList = dm_prune_field.objects.all().order_by('pk')
-    readonlyGroupList = dm_prune_group.objects.filter(editable=False).order_by('pk')
-    editableGroupList = dm_prune_group.objects.filter(editable=True).order_by('pk')
-    rulesUsedByReadonlyGroups = set(filter(None, set([item for g in readonlyGroupList for item in g.ruleNums.split(',')])))
-    fieldPKList = []
-    for field in ruleList:
-        fieldPKList.append('%s' % field.pk)
-    if request.method == 'GET':
-        temp = []
-        for grp in groupList:
-            kwargs = {"pk": grp.pk}
-            temp.append(bigPruneEdit(**kwargs))
-            tempList = string.split('%s' % grp.ruleNums, ',')
-            list = []
-            for num in tempList:
-                if num in fieldPKList:
-                    list.append('%s' % grp.pk + ':' + '%s' % num)
-            temp[-1].fields['checkField'].initial = list
-
-        #for rTemp in temp:
-        #    logger.error(rTemp.fields['checkField'].widget.choices)
-        #    logger.error(rTemp.fields['checkField'].initial)
-
-        ctxd = {"bk": bk, "groups": groupList, "fields": ruleList, "temp": temp, "selected": bk.pruneLevel, "rulesUsedByReadonlyGroups":rulesUsedByReadonlyGroups}
-        context = RequestContext(request, ctxd)
-        return render_to_response("rundb/configure/modal_configure_report_data_mgmt_edit_pruning_config.html",
-                                  context_instance=context)
-
-    elif request.method == 'POST':
-        # This field contains pk of rules to remove: from dm_prune_rules table and from prune_groups that reference it
-        #TODO: TS-4965: log rule removal, prune group edits, new field addition
-        # Remove rule(s) marked for removal
-        removeList = set(request.POST.getlist('remField'))
-        removeNames = []    # string list of rules removed
-        logger.info(removeList)
-        removeList = removeList - rulesUsedByReadonlyGroups  #removing any rules that are used by uneditable dm_prune_groups
-
-        for pk in removeList:
-            rule = dm_prune_field.objects.get(pk=pk)
-            name = rule.rule
-            removeNames.append(name)
-            rule.delete()
-            logger.info("prune_field deleted: %s" % name)
-
-        # Edit prune group objects and remove rules marked for removal
-        for pgrp in editableGroupList:
-            newList = []    # new list to contain valid rules only
-            for rule in pgrp.ruleNums.split(','):
-                if len(rule) > 0 and rule not in removeList:
-                    newList.append(int(rule))
-            newNums = ','.join(['%d' % i for i in newList])
-            #pks can be in any order so we sort them to see if they are different.
-            if sorted(newList) != sorted([int(i) for i in pgrp.ruleNums.split(',') if len(i) > 0]):
-                pgrp.ruleNums = newNums
-                pgrp.save()
-                logger.info("dm_prune_group edited: %s (removed %s)" % (pgrp.name, removeNames))
-
-        checkList = (request.POST.getlist('checkField'))
-        for grp in editableGroupList:
-            newList = []    # new list to contain valid rules only
-            for box in checkList:
-                if ':' in box:
-                    opt = string.split(box, ':')
-                    if str(grp.pk) == str(opt[0]):
-                        newList.append(int(opt[1]))
-                else:
-                    logger.debug('checkField list entry is: \'%s\'' % box)
-            newNums = ','.join(['%d' % i for i in newList])
-            #pks can be in any order so we sort them to see if they are different.
-            if sorted(newList) != sorted([int(i) for i in grp.ruleNums.split(',') if len(i) > 0]):
-                grp.ruleNums = newNums
-                grp.save()
-                logger.info("dm_prune_group edited(rule change): %s" % grp.name)
-
-        addString = request.POST['newField']
-        #in case someone tries to enter a list...
-        #don't want to give the impression that entering '*.bam, *.bai' would work, since each rule is for individual file (type)s.
-        addString = string.replace(addString, ' ', '')
-        addString = string.replace(addString, '"', '')
-        addString = string.replace(addString, '[', '')
-        addString = string.replace(addString, ']', '')
-        addString = string.replace(addString, "'", '')
-        addString = string.replace(addString, ",", '')
-
-        if addString != '':
-            obj = dm_prune_field()
-            obj.rule = addString
-            obj.save()
-            logger.info("dm_prune_field created: %s" % obj.rule)
-
-        url = reverse('configure_report_data_mgmt')
-        return HttpResponsePermanentRedirect(url)
-
-
-@login_required
-def configure_report_data_mgmt_remove_pruneGroup(request, pk):
-    logger = logging.getLogger("data_management")
-
-    pgrp = dm_prune_group.objects.get(pk=pk)
-
-    if request.method == 'GET':
-        type = "Prune Group"
-        pks = []
-        actions = []
-        ctx = RequestContext(request, {
-            "id": pk, "ids": json.dumps(pks), "method": "POST", "names": pgrp.name, 'methodDescription': 'Delete', "readonly": False, 'type': type, 'action': reverse('configure_report_data_mgmt_remove_prune_group', args=[pk, ]), 'actions': json.dumps(actions)
-        })
-        return render_to_response("rundb/common/modal_confirm_delete.html", context_instance=ctx)
-        pass
-    elif request.method == "POST":
-        #Remove the specified prune_group object
-        try:
-            name = pgrp.name
-            pgrp.delete()
-            logger.info("dm_prune_group deleted: %s" % name)
-        except:
-            raise
-
-        # If the removed prune group was also marked as the default prune group level, then clear the default prune group level in configuration object
-        reportOptList = dm_reports.objects.all().order_by('-pk')
-        bk = reportOptList[0]
-        if name == bk.pruneLevel:
-            bk.pruneLevel = 'No-op'
-            bk.save()
-            logger.info("dm_reports configuration change: default prune level from %s to No-op" % name)
-
-        return HttpResponse(json.dumps({"status": "success"}), mimetype="application/json")
-
-
-def getRules(nums):
-    '''nums is array of pks of prune_field'''
-    ruleString = []
-    for num in nums:
-        rule = dm_prune_field.objects.get(pk=num)
-        ruleString.append(rule.rule)
-    return ruleString
-
-
-@login_required
-def configure_report_data_mgmt_pruneEdit(request):
-    logger = logging.getLogger("data_management")
-
-    grps = dm_prune_group.objects.all().order_by('pk').reverse()
-    ruleList = dm_prune_field.objects.all().order_by('pk')
-    reportOptList = dm_reports.objects.all().order_by('-pk')
-    bk = reportOptList[0]
-    if request.method == 'GET':
-        temp = EditPruneLevels(request.GET)
-        kwargs = {'pk': 0}
-        rTemp = bigPruneEdit(**kwargs)
-        ctxd = {"groups": grps, "fields": ruleList, "bk": bk, "temp": temp, "ruleTemp": rTemp}
-        context = RequestContext(request, ctxd)
-        return render_to_response("rundb/configure/modal_configure_report_data_mgmt_add_prune_group.html",
-                                  context_instance=context)
-    elif request.method == 'POST':
-        name = request.POST['name'] if request.POST['name'] != '' else 'Untitled'
-
-        try:
-            #check for an existing prune group with the given name, return an error if found.
-            grp = dm_prune_group.objects.get(name=name)
-            return HttpResponseBadRequest("Error: Cannot create Duplicate Prune Group!")
-        except:
-            # Adding a new prune group
-            grp = dm_prune_group()
-            checkList = (request.POST.getlist('checkField'))
-            ruleNums = []
-            for box in checkList:
-                opt = string.split(box, ':')
-                ruleNums.append(int(opt[1]))
-            grp.ruleNums = ','.join(['%d' % i for i in ruleNums])
-            grp.name = name
-            grp.save()
-            logger.info("dm_prune_group created: %s - Rules = %s" % (grp.name, getRules(ruleNums)))
-
-            url = reverse('configure_report_data_mgmt')
-            return HttpResponsePermanentRedirect(url)
 
 
 def get_sge_jobs():
@@ -1644,6 +1078,16 @@ def get_ampliseq_fixed_designs(user, password):
         return response, None
 
 
+@require_POST
+@login_required
+def configure_ampliseq_logout(request):
+    if "ampliseq_username" in request.session:
+        del request.session["ampliseq_username"]
+    if "ampliseq_password" in request.session:
+        del request.session["ampliseq_password"]
+    return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq"))
+
+
 @login_required
 def configure_ampliseq(request, pipeline=None):
     ctx = {
@@ -1694,14 +1138,16 @@ def configure_ampliseq(request, pipeline=None):
                 ctx['unordered_solutions'] = []
                 for design in designs:
                     for solution in design['DesignSolutions']:
-                        if solution.get('ordered', False):
-                            ctx['ordered_solutions'].append((design, solution))
-                        else:
-                            ctx['unordered_solutions'].append((design, solution))
+                        if match(solution):
+                            if solution.get('ordered', False):
+                                ctx['ordered_solutions'].append((design, solution))
+                            else:
+                                ctx['unordered_solutions'].append((design, solution))
                 ctx['designs_pretty'] = json.dumps(designs, indent=4, sort_keys=True)
                 ctx['fixed_designs_pretty'] = json.dumps(fixed, indent=4, sort_keys=True)
     ctx['form'] = form
     ctx['ampliseq_account_update'] = timezone.now() < timezone.datetime(2013, 11, 30, tzinfo=timezone.utc)
+    ctx['ampliseq_url'] = settings.AMPLISEQ_URL
     return render_to_response("rundb/configure/ampliseq.html", ctx,
         context_instance=RequestContext(request))
 
@@ -1787,111 +1233,9 @@ def cache_status(request):
     )
     return render_to_response("rundb/configure/cache_status.html", ctx)
 
-@login_required
-def browse_backup_dirs(request, path):
-    from iondb.utils import devices
-    def bread_crumbs(path):
-        crumbs = []
-        while path != '/':
-            if os.path.ismount(path):
-                crumbs.insert(0, (path, path))
-                break
-            head, tail = os.path.split(path)
-            crumbs.insert(0, (path, tail))
-            path = head
-        return crumbs
-
-    backup_dirs = get_dir_choices()[1:]
-    breadcrumbs = []
-    dir_info = []
-    file_info = []
-    path_allowed = True
-    if path:
-        if not os.path.isabs(path): path = os.path.join('/',path)
-        # only allow directories inside mount points
-        path_allowed = any([path.startswith(d) for d,n in backup_dirs])
-        if not path_allowed:
-            return HttpResponseServerError("Directory not allowed: %s" % path)
-
-    exclude_archived = request.GET.get('exclude_archived','false')
-    
-    if path and path_allowed:
-        breadcrumbs = bread_crumbs(path)
-        try:
-            dirs, files = file_browse.list_directory(path)
-        except Exception as e:
-            return HttpResponseServerError(str(e))
-        dirs.sort()
-        files.sort()
-        for name, full_dir_path, stat in dirs:
-            dir_path = full_dir_path
-            if exclude_archived == 'true':
-                if name == 'archivedReports' or name == 'exportedReports' or glob.glob(os.path.join(full_dir_path, 'serialized_*.json')):
-                    dir_path = ''
-
-            date = datetime.datetime.fromtimestamp(stat.st_mtime)
-            try:
-                size = file_browse.dir_size(full_dir_path)
-            except:
-                size = ''
-            dir_info.append((name, dir_path, date, size))
-        for name, full_file_path, stat in files:
-            file_path = os.path.join(path, name)
-            date = datetime.datetime.fromtimestamp(stat.st_mtime)
-            try:
-                size = file_browse.format_units(stat.st_size)
-            except:
-                size = ''
-            file_info.append((name, file_path, date, size))
-
-    ctxd = {"backup_dirs": backup_dirs, "selected_path": path, "breadcrumbs": breadcrumbs, "dirs": dir_info, "files": file_info, "exclude_archived": exclude_archived }
-    return render_to_response("rundb/configure/modal_browse_dirs.html", ctxd)
-
-def import_data(request):
-    if request.method == "GET":
-        backup_dirs = get_dir_choices()
-        return render_to_response("rundb/configure/modal_import_data.html", context_instance=RequestContext(request, {"backup_dirs": backup_dirs}) )
-    elif request.method == "POST":
-        postData = json.loads(request.body)
-        for result in postData:
-            name = result.pop('name')
-            copy_all = bool(result.pop('copy_all',False))
-            async_result = data_import.delay(name, result, request.user.username, copy_all)
-        return HttpResponse()
-
-def import_data_find(request, path):
-    # search directory tree for importable data
-    if not os.path.isabs(path): path = os.path.join('/',path.strip())
-    if path and os.path.exists(path):
-        found_results = find_data_to_import(path)
-        if len(found_results) == 0:
-            return HttpResponseNotFound('Did not find any data exported or archived with TS version 4.0 or later in %s.' % path)
-        else:
-            results_list = []
-            for result in found_results:
-                results_list.append({
-                    'name': result['name'],
-                    'report': result['categories'].get(dmactions_types.OUT),
-                    'basecall': result['categories'].get(dmactions_types.BASE),
-                    'sigproc': result['categories'].get(dmactions_types.SIG)
-                })
-            ctxd = {
-                "dm_types": [dmactions_types.OUT, dmactions_types.BASE, dmactions_types.SIG],
-                'results_list':results_list
-            }
-            return render_to_response("rundb/configure/modal_import_data.html", ctxd)
-    else:
-        return HttpResponseNotFound('Cannot access path: %s.' % path)
-
-def import_data_log(request, path):
-    # display log file
-    if not os.path.isabs(path): path = os.path.join('/',path)
-    contents = ''
-    with open(path, 'rb') as f:
-        contents = f.read()
-
-    response = '<div><pre>%s</pre></div>' % contents
-    # add some js to overwrite modal header
-    response += '<script type="text/javascript">$(function() { $("#modal_report_log .modal-header").find("h2").text("Data Import Log");});</script>'
-    return HttpResponse(response, mimetype='text/plain')
-
+def cluster_info_refresh(request):
+    try:
+        result = tasks.get_cluster_status.delay().get(timeout=60)
+    except:
+        return HttpResponseServerError(traceback.format_exc())
+    return HttpResponse()

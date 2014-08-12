@@ -19,8 +19,8 @@
 	<script type='text/javascript'>
 		var extraCount = 1;
 		// barcode check.
-		var selectCode = 'Field %NUMNUM: <select name="select_dialog" id="select_dialog_id" onchange="report(this.value)"><option value="">Select option</option><option value="TSP_RUN_NAME">Run Name</option><option value="TSP_ANALYSIS_NAME">Report Name</option><option value="TSP_ANALYSIS_DATE">Report Date</option><option value="TSP_CHIPTYPE">Chip Type</option><option value="TSP_PGM_NAME">Sequencer Name</option><option value="TSP_SAMPLE">Sample ID</option><option value="OPT_BARCODE">Barcode Info. (if applicable)</option></select>, ';
-		var selectCodeDefault = 'Field 1: <select name="select_dialog" id="select_dialog_id" onchange="report(this.value)"><option value="">Select option</option><option value="TSP_RUN_NAME" selected="selected">Run Name</option><option value="TSP_ANALYSIS_NAME">Report Name</option><option value="TSP_ANALYSIS_DATE">Report Date</option><option value="TSP_CHIPTYPE">Chip Type</option><option value="TSP_PGM_NAME">Sequencer Name</option><option value="TSP_SAMPLE">Sample ID</option><option value="OPT_BARCODE">Barcode Info. (if applicable)</option></select>, ';
+		var selectCode = 'Field %NUMNUM: <select name="select_dialog" id="select_dialog_id" onchange="report(this.value)"><option value="">Select option</option><option value="TSP_RUN_NAME">Run Name</option><option value="TSP_ANALYSIS_NAME">Report Name</option><option value="TSP_ANALYSIS_DATE">Report Date</option><option value="TSP_CHIPTYPE">Chip Type</option><option value="TSP_PGM_NAME">Sequencer Name</option><option value="TSP_SAMPLE">Sample Name</option><option value="OPT_BARCODE">Barcode Info. (if applicable)</option></select>, ';
+		var selectCodeDefault = 'Field 1: <select name="select_dialog" id="select_dialog_id" onchange="report(this.value)"><option value="">Select option</option><option value="TSP_RUN_NAME" selected="selected">Run Name</option><option value="TSP_ANALYSIS_NAME">Report Name</option><option value="TSP_ANALYSIS_DATE">Report Date</option><option value="TSP_CHIPTYPE">Chip Type</option><option value="TSP_PGM_NAME">Sequencer Name</option><option value="TSP_SAMPLE">Sample Name</option><option value="OPT_BARCODE">Barcode Info. (if applicable)</option></select>, ';
 		pluginGET = "";
 		
 		$(document).ready(function(){
@@ -59,13 +59,44 @@
 							document.getElementById("vcCreate").checked = true;
 						}
 					}
-					if(key == "zipCreate")
+					if(key == "zipBAM")
 					{
 						if (val == "on")
 						{
-							document.getElementById("zipCreate").checked = true;
+							document.getElementById("zipBAM").checked = true;
 						}
 					}
+					if(key == "zipSFF")
+					{
+						if (val == "on")
+						{
+							document.getElementById("zipSFF").checked = true;
+						}
+					}
+					if(key == "zipFASTQ")
+					{
+						if (val == "on")
+						{
+							document.getElementById("zipFASTQ").checked = true;
+						}
+					}
+					if(key == "zipVCF")
+					{
+						if (val == "on")
+						{
+							document.getElementById("zipVCF").checked = true;
+						}
+					}
+                                        if(key == "compressedType")
+                                        {
+                                                if (val == "zip")
+                                                {
+                                                        document.getElementsByName("compressedType")[0].checked = true;
+                                                } else if (val == "tar")
+                                                {
+                                                        document.getElementsByName("compressedType")[1].checked = true;
+                                                }
+                                        }
 					if(key == "delimiter_select")
 					{
 						document.getElementById("delimiter_select").value = val;
@@ -243,8 +274,18 @@
                                 obj["fastqCreate"] = 'off'
                         if (!document.getElementById("vcCreate").checked)
                                 obj["vcCreate"] = 'off'
-                        if (!document.getElementById("zipCreate").checked)
-                                obj["zipCreate"] = 'off'
+                        if (!document.getElementById("zipBAM").checked)
+                                obj["zipBAM"] = 'off'
+                        if (!document.getElementById("zipSFF").checked)
+                                obj["zipSFF"] = 'off'
+                        if (!document.getElementById("zipFASTQ").checked)
+                                obj["zipFASTQ"] = 'off'
+                        if (!document.getElementById("zipVCF").checked)
+                                obj["zipVCF"] = 'off'
+                        if (document.getElementsByName("compressedType")[0].checked)
+                                obj["compressedType"] = 'zip'
+                        else if (document.getElementsByName("compressedType")[1].checked)
+                                obj["compressedType"] = 'tar'
                         pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
                         pluginAPIJSON = JSON.stringify(pluginAPIJSON);
                         pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
@@ -272,7 +313,13 @@
 			Create SFF?  <input type="checkbox" id="sffCreate" name="sffCreate" /><br>
 			Create FASTQ? <input type="checkbox" id="fastqCreate" name="fastqCreate" /><br>
 			Include Variant Caller Files (if available)? <input type="checkbox" id="vcCreate" name="vcCreate" /><br>
-			Zip results? <input type="checkbox" id="zipCreate" name="zipCreate" /><br>
+			<div>Compressed type: &nbsp;&nbsp;&nbsp;<input type="radio" name="compressedType" value="zip"> zip <input type="radio" name="compressedType" value="tar"> tar.bz2</div>
+			Compressed contents:
+				BAM/BAI: <input type="checkbox" id="zipBAM" name="zipBAM" />&nbsp;&nbsp;&nbsp;
+				SFF: <input type="checkbox" id="zipSFF" name="zipSFF" />&nbsp;&nbsp;&nbsp;
+				FASTQ: <input type="checkbox" id="zipFASTQ" name="zipFASTQ" />&nbsp;&nbsp;&nbsp;
+				VCF: <input type="checkbox" id="zipVCF" name="zipVCF" />&nbsp;&nbsp;&nbsp;
+			<br>
 			<h1>Customize file names</h1>
 			<p>Delimiter selection:
 				<select name="delimiter_select" id="delimiter_select" onchange="report(this.value)">
@@ -290,7 +337,7 @@
 					<option value="TSP_ANALYSIS_DATE">Report Date</option>
 					<option value="TSP_CHIPTYPE">Chip Type</option>
 					<option value="TSP_PGM_NAME">Sequencer Name</option>
-					<option value="TSP_SAMPLE">Sample ID</option>
+					<option value="TSP_SAMPLE">Sample Name</option>
 					<option value="OPT_BARCODE">Barcode Info. (if applicable)</option>
 				</select>
 			</span>

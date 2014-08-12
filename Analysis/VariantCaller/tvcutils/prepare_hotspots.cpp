@@ -1,22 +1,19 @@
 /* Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved */
 
-#include "tvcutils.h"
-
 #include <string>
-#include <fstream>
 #include <stdio.h>
-#include <math.h>
-#include <time.h>
 #include <ctype.h>
 #include <sys/mman.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <cstring>
 #include <vector>
 #include <map>
 #include <deque>
 #include <set>
 #include <algorithm>
+#include <stdlib.h>
+#include <unistd.h>
 
 #include "OptArgs.h"
 #include "Utils.h"
@@ -41,7 +38,7 @@ void PrepareHotspotsHelp()
   printf ("  -o,--output-vcf                FILE       output post-processed hotspots in VCF format [none]\n");
   printf ("  -r,--reference                 FILE       reference fasta [required]\n");
   printf ("  -a,--left-alignment            on/off     perform left-alignment of indels [off]\n");
-  printf ("  -s,--allow-block-substitutions on/off     do not filter out block substitution hotspots [off]\n");
+  printf ("  -s,--allow-block-substitutions on/off     do not filter out block substitution hotspots [on]\n");
   printf ("\n");
 }
 
@@ -67,11 +64,14 @@ void PrepareHotspotsHelp()
 struct Allele;
 
 struct LineStatus {
-  LineStatus(int _line_number) : line_number(_line_number), filter_message_prefix(0), allele(0) {}
+  LineStatus(int _line_number) : line_number(_line_number), filter_message_prefix(0), chr_idx(-1),opos(-1) {}
   int line_number;
   const char *filter_message_prefix;
   string filter_message;
-  Allele *allele;
+//  Allele *allele;
+  int chr_idx;
+  long opos;
+  string id;
 };
 
 struct Allele {
@@ -80,13 +80,23 @@ struct Allele {
   string id;
   string ref, oref;
   string alt, oalt;
+  map<string,string>  custom_tags;
   bool filtered;
   LineStatus *line_status;
 };
 
 bool compare_alleles (const Allele& a, const Allele& b)
 {
-  return a.pos < b.pos;
+  if (a.pos < b.pos)
+    return true;
+  if (a.pos > b.pos)
+    return false;
+  if (a.ref.length() < b.ref.length())
+    return true;
+  if (a.ref.length() > b.ref.length())
+    return false;
+  return a.alt < b.alt;
+  //return a.pos < b.pos;
 }
 
 
@@ -117,7 +127,7 @@ int PrepareHotspots(int argc, const char *argv[])
   string reference_filename       = opts.GetFirstString ('r', "reference", "");
   bool left_alignment             = opts.GetFirstBoolean('a', "left-alignment", false);
   bool filter_bypass              = opts.GetFirstBoolean('f', "filter-bypass", false);
-  bool allow_block_substitutions  = opts.GetFirstBoolean('s', "allow-block-substitutions", false);
+  bool allow_block_substitutions  = opts.GetFirstBoolean('s', "allow-block-substitutions", true);
   opts.CheckNoLeftovers();
 
   if((input_bed_filename.empty() == input_vcf_filename.empty()) or
@@ -242,6 +252,16 @@ int PrepareHotspots(int argc, const char *argv[])
           current_ref = next;
         else if (strncmp(next,"OBS=",4) == 0)
           current_alt = next;
+        else if (strncmp(next,"ANCHOR=",7) == 0) {
+          // ignore ANCHOR
+        } else {
+          char *value = next;
+          while (*value and *value != '=')
+            ++value;
+          if (*value == '=')
+            *value++ = 0;
+          allele.custom_tags[next] = value;
+        }
       }
       if (!current_ref or !current_alt) {
         line_status.push_back(LineStatus(line_number));
@@ -259,7 +279,10 @@ int PrepareHotspots(int argc, const char *argv[])
       allele.oref = allele.ref;
       allele.oalt = allele.alt;
       alleles[allele.chr_idx].push_back(allele);
-      line_status.back().allele = &alleles[allele.chr_idx].back();
+      //line_status.back().allele = &alleles[allele.chr_idx].back();
+      line_status.back().chr_idx = allele.chr_idx;
+      line_status.back().opos = allele.opos;
+      line_status.back().id = allele.id;
     }
 
     fclose(input);
@@ -302,6 +325,9 @@ int PrepareHotspots(int argc, const char *argv[])
       char *current_id = strtok(NULL, "\t\r\n");
       char *current_ref = strtok(NULL, "\t\r\n");
       char *current_alt = strtok(NULL, "\t\r\n");
+      strtok(NULL, "\t\r\n"); // Ignore QUAL
+      strtok(NULL, "\t\r\n"); // Ignore FILTER
+      char *current_info = strtok(NULL, "\t\r\n");
 
       if (!current_chr or !current_start or !current_id or !current_ref or !current_alt) {
         line_status.push_back(LineStatus(line_number));
@@ -331,6 +357,63 @@ int PrepareHotspots(int argc, const char *argv[])
         *pos = toupper(*pos);
 
 
+      // Process custom tags
+      vector<string>  bstrand;
+      vector<string>  hp_max_length;
+      if (current_info) {
+        string raw_oid;
+        string raw_omapalt;
+        string raw_bstrand;
+        string raw_hp_max_length;
+        for (char *next = strtok(current_info, ";"); next; next = strtok(NULL, ";")) {
+
+          char *value = next;
+          while (*value and *value != '=')
+            ++value;
+          if (*value == '=')
+            *value++ = 0;
+
+          if (strcmp(next, "TYPE") == 0)
+            continue;
+          if (strcmp(next, "HRUN") == 0)
+            continue;
+          if (strcmp(next, "HBASE") == 0)
+            continue;
+          if (strcmp(next, "FR") == 0)
+            continue;
+          if (strcmp(next, "OPOS") == 0)
+            continue;
+          if (strcmp(next, "OREF") == 0)
+            continue;
+          if (strcmp(next, "OALT") == 0)
+            continue;
+          if (strcmp(next, "OID") == 0) {
+            raw_oid = value;
+            continue;
+          }
+          if (strcmp(next, "OMAPALT") == 0) {
+            raw_omapalt = value;
+            continue;
+          }
+          if (strcmp(next, "BSTRAND") == 0) {
+            raw_bstrand = value;
+            continue;
+          }
+          if (strcmp(next, "hp_max_length") == 0) {
+            raw_hp_max_length = value;
+            continue;
+          }
+        }
+
+        if (not raw_bstrand.empty())
+          split(raw_bstrand, ',', bstrand);
+        if (not raw_hp_max_length.empty())
+          split(raw_hp_max_length, ',', hp_max_length);
+
+      }
+
+
+      unsigned int allele_idx = 0;
       for (char *sub_alt = strtok(current_alt,","); sub_alt; sub_alt = strtok(NULL,",")) {
 
         Allele allele;
@@ -348,8 +431,23 @@ int PrepareHotspots(int argc, const char *argv[])
         allele.opos = allele.pos;
         allele.oref = allele.ref;
         allele.oalt = allele.alt;
+
+        if (allele_idx < bstrand.size()) {
+          if (bstrand[allele_idx] != ".")
+            allele.custom_tags["BSTRAND"] = bstrand[allele_idx];
+        }
+
+        if (allele_idx < hp_max_length.size()) {
+          if (hp_max_length[allele_idx] != ".")
+            allele.custom_tags["hp_max_length"] = hp_max_length[allele_idx];
+        }
+
         alleles[allele.chr_idx].push_back(allele);
-        line_status.back().allele = &alleles[allele.chr_idx].back();
+        //line_status.back().allele = &alleles[allele.chr_idx].back();
+        line_status.back().chr_idx = allele.chr_idx;
+        line_status.back().opos = allele.opos;
+        line_status.back().id = allele.id;
+        allele_idx++;
       }
     }
 
@@ -493,12 +591,23 @@ int PrepareHotspots(int argc, const char *argv[])
 
     if (output_bed) {
       // Sort - without anchor base
-      sort(alleles[chr_idx].begin(), alleles[chr_idx].end(), compare_alleles);
+      stable_sort(alleles[chr_idx].begin(), alleles[chr_idx].end(), compare_alleles);
 
       // Write
       for (deque<Allele>::iterator I = alleles[chr_idx].begin(); I != alleles[chr_idx].end(); ++I) {
         if (I->filtered)
           continue;
+
+        fprintf(output_bed, "%s\t%ld\t%ld\t%s\tREF=%s;OBS=%s",
+            ref_index[chr_idx].chr.c_str(), I->pos, I->pos + I->ref.size(), I->id.c_str(),
+            I->ref.c_str(), I->alt.c_str());
+
+        for (map<string,string>::iterator C = I->custom_tags.begin(); C != I->custom_tags.end(); ++C)
+          fprintf(output_bed, ";%s=%s", C->first.c_str(), C->second.c_str());
+
+        fprintf(output_bed, "\tNONE\n");
+
+        /*
         if (I->pos)
           fprintf(output_bed, "%s\t%ld\t%ld\t%s\t0\t+\tREF=%s;OBS=%s;ANCHOR=%c\tNONE\n",
               ref_index[chr_idx].chr.c_str(), I->pos, I->pos + I->ref.size(), I->id.c_str(),
@@ -507,6 +616,7 @@ int PrepareHotspots(int argc, const char *argv[])
           fprintf(output_bed, "%s\t%ld\t%ld\t%s\t0\t+\tREF=%s;OBS=%s;ANCHOR=\tNONE\n",
               ref_index[chr_idx].chr.c_str(), I->pos, I->pos + I->ref.size(), I->id.c_str(),
               I->ref.c_str(), I->alt.c_str());
+        */
       }
     }
 
@@ -530,7 +640,7 @@ int PrepareHotspots(int argc, const char *argv[])
       }
 
       // Sort - with anchor base
-      sort(alleles[chr_idx].begin(), alleles[chr_idx].end(), compare_alleles);
+      stable_sort(alleles[chr_idx].begin(), alleles[chr_idx].end(), compare_alleles);
 
 
       // Merge alleles, remove block substitutions, write
@@ -543,6 +653,7 @@ int PrepareHotspots(int argc, const char *argv[])
             max_ref = B->ref;
 
         bool filtered = true;
+        map<string,set<string> > unique_alts_and_ids;
         for (deque<Allele>::iterator I = A; I != B; ++I) {
           if (I->filtered)
             continue;
@@ -557,19 +668,40 @@ int PrepareHotspots(int argc, const char *argv[])
 
           I->ref = max_ref;
           I->alt = new_alt;
+
+          // Filter alleles with duplicate ALT + ID pairs
+          map<string,set<string> >::iterator alt_iter = unique_alts_and_ids.find(new_alt);
+          if (alt_iter != unique_alts_and_ids.end()) {
+            if (alt_iter->second.count(I->id) > 0) {
+              I->filtered = true;
+              I->line_status->filter_message_prefix = "Duplicate allele and ID";
+              continue;
+            }
+          }
+          unique_alts_and_ids[new_alt].insert(I->id);
+
           filtered = false;
         }
 
         if (not filtered) {
 
+
+
           fprintf(output_vcf, "%s\t%ld\t.\t%s\t",
               ref_index[chr_idx].chr.c_str(), A->pos+1, max_ref.c_str());
 
           bool comma = false;
-          set<string> unique_alt_alleles;
+
+          map<string,map<string,string> > unique_alts_and_tags;
+          set<string> unique_tags;
+
           for (deque<Allele>::iterator I = A; I != B; ++I) {
             if (I->filtered)
               continue;
+            unique_alts_and_tags[I->alt].insert(I->custom_tags.begin(), I->custom_tags.end());
+            for (map<string,string>::iterator S = I->custom_tags.begin(); S != I->custom_tags.end(); ++S)
+              unique_tags.insert(S->first);
+            /*
             if (unique_alt_alleles.count(I->alt) > 0)
               continue;
             unique_alt_alleles.insert(I->alt);
@@ -577,6 +709,14 @@ int PrepareHotspots(int argc, const char *argv[])
               fprintf(output_vcf, ",");
             comma = true;
             fprintf(output_vcf, "%s", I->alt.c_str());
+            */
+          }
+
+          for (map<string,map<string,string> >::iterator Q = unique_alts_and_tags.begin(); Q != unique_alts_and_tags.end(); ++Q) {
+            if (comma)
+              fprintf(output_vcf, ",");
+            comma = true;
+            fprintf(output_vcf, "%s", Q->first.c_str());
           }
 
           fprintf(output_vcf, "\t.\t.\tOID=");
@@ -634,6 +774,22 @@ int PrepareHotspots(int argc, const char *argv[])
             fprintf(output_vcf, "%s", I->alt.c_str());
           }
 
+          for (set<string>::iterator S = unique_tags.begin(); S != unique_tags.end(); ++S) {
+            fprintf(output_vcf, ";%s=", S->c_str());
+            comma=false;
+            for (map<string,map<string,string> >::iterator Q = unique_alts_and_tags.begin(); Q != unique_alts_and_tags.end(); ++Q) {
+              if (comma)
+                fprintf(output_vcf, ",");
+              comma = true;
+              map<string,string>::iterator W = Q->second.find(*S);
+              if (W == Q->second.end())
+                fprintf(output_vcf, ".");
+              else
+                fprintf(output_vcf, "%s", W->second.c_str());
+            }
+          }
+//            fprintf(output_vcf, ";%s=%s", S->first.c_str(), S->second.c_str());
+
           fprintf(output_vcf, "\n");
         }
 
@@ -657,8 +813,8 @@ int PrepareHotspots(int argc, const char *argv[])
   int lines_ignored = 0;
   for (deque<LineStatus>::iterator L = line_status.begin(); L != line_status.end(); ++L) {
     if (L->filter_message_prefix) {
-      if (L->allele)
-        printf("Line %d ignored: [%s:%ld %s] %s%s\n", L->line_number, ref_index[L->allele->chr_idx].chr.c_str(), L->allele->opos+1, L->allele->id.c_str(),
+      if (L->chr_idx >= 0)
+        printf("Line %d ignored: [%s:%ld %s] %s%s\n", L->line_number, ref_index[L->chr_idx].chr.c_str(), L->opos+1, L->id.c_str(),
             L->filter_message_prefix, L->filter_message.c_str());
       else
         printf("Line %d ignored: %s%s\n", L->line_number, L->filter_message_prefix, L->filter_message.c_str());

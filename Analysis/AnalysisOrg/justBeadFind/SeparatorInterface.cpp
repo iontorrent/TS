@@ -5,6 +5,7 @@
 void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOpts &inception_state, Mask *maskPtr, string &analysisLocation, SequenceItem *seqList, int numSeqListItems)
 {
   DifSepOpt opts;
+  opts.doGainCorrect = inception_state.img_control.gain_correct_images;
   opts.doubleTapFlows = inception_state.bfd_control.doubleTapFlows;
   opts.predictFlowStart = inception_state.bfd_control.predictFlowStart;
   opts.predictFlowEnd = inception_state.bfd_control.predictFlowEnd;
@@ -17,7 +18,7 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.ignoreChecksumErrors = inception_state.img_control.ignoreChecksumErrors;
   opts.noduds = inception_state.bfd_control.noduds;
   opts.outputDebug = inception_state.bfd_control.bfOutputDebug;
-  if (opts.outputDebug == 0 && inception_state.bkg_control.bkg_debug_files) {
+  if (opts.outputDebug == 0 && inception_state.bkg_control.pest_control.bkg_debug_files) {
     opts.outputDebug = 1;
   }
   opts.useSignalReference = inception_state.bfd_control.useSignalReference;
@@ -54,14 +55,16 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   cout << "Out Data: " << opts.outData << endl;
   cout << "Analysis location: " << opts.analysisDir << endl;
   if (inception_state.bfd_control.bfMinLiveTfSnr < 0) {
-    if ( ChipIdDecoder::GetGlobalChipId() == ChipId900 ) {
+    if ( ChipIdDecoder::IsProtonChip() ) {
       inception_state.bfd_control.bfMinLiveTfSnr = 4;
     }
     else {
       inception_state.bfd_control.bfMinLiveTfSnr = 7;
     }
   }
-  diffSeparator->SetKeys (seqList, numSeqListItems, inception_state.bfd_control.bfMinLiveLibSnr, inception_state.bfd_control.bfMinLiveTfSnr);
+  diffSeparator->SetKeys (seqList, numSeqListItems, 
+                          inception_state.bfd_control.bfMinLiveLibSnr, inception_state.bfd_control.bfMinLiveTfSnr, 
+                          inception_state.bfd_control.minLibPeakMax, inception_state.bfd_control.minTfPeakMax);
   if (inception_state.bfd_control.beadfindLagOneFilt > 0)
   {
     opts.filterLagOneSD = true;
@@ -105,34 +108,22 @@ void SetupForBkgModelTiming (DifferentialSeparator *diffSeparator, std::vector<f
 
 void getTausFromSeparator (Mask *maskPtr, DifferentialSeparator *diffSeparator, std::vector<float> &tauB, std::vector<float> &tauE)
 {
-  const KeyBulkFit *tempKbf;
   std::vector<float> tempTauB;
   std::vector<float> tempTauE;
   tempTauB.reserve (maskPtr->W() * maskPtr->H());
   tempTauE.reserve (maskPtr->W() * maskPtr->H());
   for (size_t ik = 0; ik < (size_t) maskPtr->W() * maskPtr->H(); ++ik)
   {
-    tempKbf = diffSeparator->GetBulkFit (ik);
-    // get the average here
-    float avgTauB = 0;
-    float avgTauE = 0;
-    if (tempKbf != NULL)
-    {
-      avgTauB = tempKbf->param.at (TraceStore<double>::A_NUC,0) +tempKbf->param.at (TraceStore<double>::C_NUC,0) +tempKbf->param.at (TraceStore<double>::G_NUC,0) +tempKbf->param.at (TraceStore<double>::T_NUC,0);
-      avgTauB /= 4;
-      avgTauE = tempKbf->param.at (TraceStore<double>::A_NUC,1) +tempKbf->param.at (TraceStore<double>::C_NUC,1) +tempKbf->param.at (TraceStore<double>::G_NUC,1) +tempKbf->param.at (TraceStore<double>::T_NUC,1);
-      avgTauE /= 4;
-    }
-    //cout << "avgTauB=" << avgTauB << "\t" << "avgTauE=" << avgTauE << endl;
+    float avgTauB = diffSeparator->GetTauB(ik);
+    float avgTauE = diffSeparator->GetTauE(ik);
+    if (!isfinite(avgTauB)) { avgTauB = 0; }
+    if (!isfinite(avgTauE)) { avgTauE = 0; }
     tempTauB.push_back (avgTauB);
     tempTauE.push_back (avgTauE);
   }
   tauB = tempTauB;
   tauE = tempTauE;
 }
-
-
-
 
 
 // distance to NN-smooth the t_zero (not t_mid_nuc!!!) estimate from the separator

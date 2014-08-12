@@ -104,6 +104,17 @@ $(function() {  //DOM ready handler
         });
     });
     
+    $("#enable_nightly").change(function(){
+		var enabled = $(this).is(':checked');
+		$.ajax({
+			type: "PATCH",
+			dataType: 'json',
+			url: "/rundb/api/v1/globalconfig/1/",
+			data: '{"enable_nightly_email":'+enabled+'}',
+			contentType: 'application/json'
+		});
+    });
+    
     $(document).bind('modal_configure_edit_email_done modal_confirm_delete_done', function () {
 		refreshKendoGrid("#email_table");
 	});

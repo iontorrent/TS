@@ -127,6 +127,19 @@ tmap_sam_convert_replace_tagA(bam1_t *b, const char tag[2], char value, tmap_sam
   bam_aux_append(b, tag, 'A', 1, (uint8_t*)&value);
 }
 
+// ZZ: add a function to remove tag.
+static inline void
+tmap_sam_convert_remove_tag(bam1_t *b, const char tag[2],  tmap_sam_convert_tag_opt_t *t)
+{
+  uint8_t *ex_s = NULL;
+  // check if it exists
+  if(1 == tmap_sam_convert_tag_opt_get(t, tag)) {
+      ex_s = bam_aux_get(b, tag);
+      if(NULL == ex_s) tmap_bug();
+      bam_aux_del(b, ex_s); // Delete
+  }
+}
+
 static inline void
 tmap_sam_convert_replace_tagi(bam1_t *b, const char tag[2], int32_t value, tmap_sam_convert_tag_opt_t *t)
 {
@@ -539,7 +552,24 @@ tmap_sam_convert_unmapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t b
       }
       // NB: name/bases/qualities should already be set
       // check the cigar
-      tmap_sam_convert_replace_cigar(b, 0, NULL);
+      t = tmap_sam_convert_tag_opt_init(b);
+      tmap_sam_convert_replace_cigar(b, 0, NULL); 
+      // ZZ: Here, we need to remove old tags from previous tmap run, if the input bam is a mapped bam
+      tmap_sam_convert_remove_tag(b, "MD", t); 
+      tmap_sam_convert_remove_tag(b, "NM", t);
+      tmap_sam_convert_remove_tag(b, "AS", t);
+      tmap_sam_convert_remove_tag(b, "XM", t);
+      tmap_sam_convert_remove_tag(b, "NH", t);
+      tmap_sam_convert_remove_tag(b, "XA", t);
+      tmap_sam_convert_remove_tag(b, "XZ", t);
+      tmap_sam_convert_remove_tag(b, "YP", t);
+      tmap_sam_convert_remove_tag(b, "YS", t);
+      // these 5 below are printed in map/util/tmap_map_util.c, not here in the mapped part. ZZ.
+      tmap_sam_convert_remove_tag(b, "XS", t);
+      tmap_sam_convert_remove_tag(b, "XT", t);
+      tmap_sam_convert_remove_tag(b, "XI", t);
+      tmap_sam_convert_remove_tag(b, "XE", t);
+      tmap_sam_convert_remove_tag(b, "XF", t);
   }
   else {
       // init the BAM structure
@@ -547,11 +577,9 @@ tmap_sam_convert_unmapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t b
                                 NULL, 0, 
                                 tmap_seq_get_bases(seq),
                                 tmap_seq_get_qualities(seq));
+      t = tmap_sam_convert_tag_opt_init(b);
   }
   
-  // hash optional tags
-  t = tmap_sam_convert_tag_opt_init(b);
-
   // set the flag
   // NB: these are additive
   b->core.flag |= 0x4;
@@ -616,7 +644,7 @@ tmap_sam_convert_unmapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t b
 
 inline bam1_t*
 tmap_sam_convert_mapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t bidirectional, int32_t seq_eq, tmap_refseq_t *refseq,
-                      uint8_t strand, uint32_t seqid, uint32_t pos, int32_t aln_num,
+                      uint8_t strand, uint32_t seqid, uint32_t pos, uint32_t t_len, int32_t aln_num,
                       uint32_t end_num, uint32_t m_unmapped, uint32_t m_prop, double m_num_std, uint32_t m_strand,
                       uint32_t m_seqid, uint32_t m_pos, uint32_t m_tlen,
                       uint8_t mapq, uint32_t *cigar, int32_t n_cigar,
@@ -708,7 +736,7 @@ tmap_sam_convert_mapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t bid
       b->data = tmap_calloc(o->m_data, sizeof(uint8_t), "b->data");
       memcpy(b->data, o->data, sizeof(uint8_t) * o->m_data); // o->data_len
       // NB: name/bases/qualities should already be set
-      if(1 == strand) { // reset bases and qualities on the reverse strand (should be the same length)
+      //if(1 == strand) { // reset bases and qualities on the reverse strand (should be the same length)
           // seq
           for(i=0;i<bases->l;i++) {
               bam1_seq_seti(bam1_seq(b), i, bam_nt16_table[(int)bases->s[i]]); 
@@ -717,7 +745,7 @@ tmap_sam_convert_mapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t bid
           for(i=0;i<qualities->l;i++) {
               bam1_qual(b)[i] = qualities->s[i] - 33;
           }
-      }
+      //}
       // update the cigar
       if(0 < n_cigar) {
           tmap_sam_convert_replace_cigar(b, n_cigar, cigar);
@@ -788,6 +816,10 @@ tmap_sam_convert_mapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t bid
 
   // AS
   tmap_sam_convert_replace_tagi(b, "AS", score, t);
+
+  // XM for target length
+
+  tmap_sam_convert_replace_tagi(b, "XM", t_len, t); 
 
   // NH
   if(1 < nh) tmap_sam_convert_replace_tagi(b, "NH", nh, t);

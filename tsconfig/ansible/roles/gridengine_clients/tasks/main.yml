@@ -1,0 +1,61 @@
+---
+# file: roles/gridengine_clients/tasks/main.yml
+
+#N.B. THIS REMOVAL OF PKGS IS PART OF CURRENT ION_TSCONFIG CONFIGURATION: STILL NEEDED??
+# Remove gridengine packages to force re-init
+#- name: Removing gridengine packages in preparation to re-install and re-configure
+#  apt: pkg={{ item }} state=absent purge=yes
+#  with_items:
+#    - gridengine-common
+#    - gridengine-client
+#    - gridengine-exec
+
+# gridengine preseed
+- name: Preseed gridengine debconf values
+  script: "files/gridengine.preseed {{ groups.gridengine_master[0] }}"
+  
+- name: Install GridEngine APT packages
+  action: apt pkg={{item}} state=latest force=yes
+  with_items:
+    - gridengine-client
+    - gridengine-exec
+
+- name: configure gridengine execd
+  lineinfile: dest=/var/lib/gridengine/iontorrent/common/act_qmaster
+                regexp='.*'
+                line="{{groups.gridengine_master[0]}}"
+  notify: restart gridengine-exec
+
+# Copy gridengine scripts
+- name: Create /usr/share/ion-tsconfig/gridengine-scripts directory
+  file: dest={{SCRIPT_PATH}} state=directory mode=755 owner=root
+  
+- name: Copy gridengine scripts
+  copy: src={{item['name']}} dest={{item['path']}} force=yes
+  with_items:
+    - { 'name':'{{LOCAL_EPILOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{EPILOG_SCRIPT}}' }
+    - { 'name':'{{LOCAL_PROLOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{PROLOG_SCRIPT}}' }
+    
+# set number of slots
+#    qconf -aattr queue slots $set_slots $qname
+#TODO: special case T620 hardware to get 4 slots
+- name: Modify number of slots per queue
+  shell: bash -lc 'qconf -rattr queue slots [{{ansible_hostname}}={{item['slots']}}] {{item['name']}}'
+  with_items:
+    - "{{queues}}"
+
+#    set_sge_open_files
+# The configuration line we want:
+#execd_params              S_DESCRIPTORS=8192,H_DESCRIPTORS=8192
+# filename required to be "global" to update the global configuration
+- name: Generate global setting file
+  shell: bash -lc 'qconf -sconf global > /tmp/global'
+
+- name: Edit the global file
+  lineinfile: dest=/tmp/global state=present
+                  regexp='(^execd_params.*)'
+                  line='execd_params S_DESCRIPTORS={{ MAX_FILES_OPEN }},H_DESCRIPTORS={{ MAX_FILES_OPEN }}'
+
+- name: enable the global settings
+  shell: bash -lc 'qconf -Mconf /tmp/global ; rm -f /tmp/global'
+  

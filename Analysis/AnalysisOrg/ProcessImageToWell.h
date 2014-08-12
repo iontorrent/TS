@@ -12,9 +12,11 @@
 #include "TrackProgress.h"
 #include "SlicedPrequel.h"
 #include "ImageSpecClass.h"
+#include "OptBase.h"
 
 void RealImagesToWells ( 
-                        CommandLineOpts &inception_state,                        
+						OptArgs &opts,
+						CommandLineOpts &inception_state,                        
                         SeqListClass &my_keys,
                         TrackProgress &my_progress, 
                         ImageSpecClass &my_image_spec,

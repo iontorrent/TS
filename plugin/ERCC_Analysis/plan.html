@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+  <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+
+  <style type='text/css'>
+        #formwrap {
+                line-height: 2em;
+                background: #eef;
+                margin: 10px;
+                padding: 10px;
+                height: 340px;
+                text-align: center;
+        }
+
+        #status, #progress {
+                margin: 10px;
+                background: #eef;
+                padding: 10px;
+                height: 120px;
+                overflow: auto;
+        }
+
+        body {
+                font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+                font-size: 14px;
+        }
+
+  </style>
+
+  <script type='text/javascript'>
+    //grab the global parameter value for input_text via the RESTful API
+    pluginGET = "";
+    $(document).ready(function(){
+     $.ajax({
+      url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json",
+      dataType:"json",
+      type: "GET",
+      async: false,
+      success:function(data){
+       //get the plugin data
+       pluginGET = data;
+       
+       //delete the resource_uri
+       delete pluginGET.resource_uri;
+    
+       $.each(pluginGET.config, function(key,val){
+        if(key == "minrsquared"){
+          document.getElementById("minrsquared").value = val;
+          $("#default_rsquared").text("The current default minimum R-squared is "+val+".");
+        } 
+        if(key == "mincounts"){
+          document.getElementById("mincounts").value = val;
+          $("#default_mincounts").text("The current default minimum counts per transcript is "+val+".");
+        } 
+        if(key == "ercc_pool"){
+          document.getElementById("erccpool").value = val;
+          $("#default_erccpool").text("The current default ERCC Pool is Pool"+val+".");
+        }
+        if(key == "barcode"){
+          document.getElementById("barcode").value = val;
+		  if (val){
+            $("#default_barcode").text("The current default Barcode is "+val+".");
+		  }
+		}
+		});
+      }
+     });
+    });
+    $(function() {
+        $.fn.serializeObject = function()
+        {
+            var o = {};
+            var a = this.serializeArray();
+            $.each(a,
+            function() {
+                if (o[this.name] != null) {
+                    if (!o[this.name].push) {
+                        o[this.name] = [o[this.name]];
+                    }
+                    o[this.name].push(this.value || '');
+                } else {
+                    o[this.name] = this.value || '';
+                }
+            });
+            return o;
+        };
+        
+    });
+  </script>
+
+</head>
+        <body>
+        <div id="formwrap">
+            <form id="ERCCform" align="center">
+                Minimum acceptable R-squared value :
+                <input type="text" id="minrsquared" name="minrsquared" value="" />
+                <p id="default_rsquared"></p>
+                Minimum acceptable counts per ERCC transcript :
+                <input type="text" id="mincounts" name="mincounts" value="" />
+                <p id="default_mincounts"></p>
+				ERCC Pool used (1 or 2):
+				<input type="text" id="erccpool" name="erccpool" value="1" />
+				<p id="default_erccpool"></p>
+				Barcode of interest:
+				<input type="text" id="barcode" name="barcode" value="" />
+				<p id="default_barcode"></p>
+				<p>Enter the barcodes EXACTLY as they appears at the top of this report, under "Barcode name" (you may want to copy and paste), comma-delimited with no space. Leave blank if all barcodes need to be analyzed or no barcodes are used.</p>
+				<p>To change the default values, go to the Config tab of the Torrent Suite.</p>
+            </form>
+        </div>
+        <div id="status"> </div>
+    </body>
+
+</html>

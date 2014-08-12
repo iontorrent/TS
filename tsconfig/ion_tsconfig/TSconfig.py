@@ -4,6 +4,7 @@
 import os
 import sys
 import json
+import time
 import traceback
 import subprocess
 import logging
@@ -130,7 +131,12 @@ def is_proton_ts():
                     logger.debug("This is not a Proton TS")
                     return False
     else:
-        logger.error(stderr)
+        # stderr might return: "No packages found matching ion-protonupdates."
+        # Should not be logged as an error.
+        if "No packages found matching ion-protonupdates." in stderr:
+            logger.debug("This is not a Proton TS")
+        else:
+            logger.error(stderr)
         return False
 
 
@@ -196,6 +202,7 @@ class GetAcquireProgress(apt.progress.base.AcquireProgress):
 
         return True
 
+
 class GetInstallProgress(apt.progress.base.InstallProgress):
     '''
     Handle the package install process for apt.Cache
@@ -250,6 +257,7 @@ class TSconfig (object):
         self.SYS_PKG_LIST_MASTER_ONLY=[]
         self.ION_PKG_LIST=[]
         self.ION_PKG_LIST_MASTER_ONLY=[]
+        self.SEC_PKG_LIST=[]
 
         # Internal states
         self.upst = {
@@ -287,6 +295,7 @@ class TSconfig (object):
         self.pkgprogress = None             # String of format "3/12" where package number of total package number progress.
         self.dbaccess = False               # Set when we can talk to database
         self.pkglist = []                   # List of packages with an update available
+        self.securityinstall = False        # Flag enables installing security updates
         self.logger = logger
         self.packageListFile = os.path.join('/','usr','share','ion-tsconfig','torrentsuite-packagelist.json')
         self.updatePackageLists()
@@ -344,8 +353,7 @@ class TSconfig (object):
             self.state = new_state
         except Exception as err:
             self.logger.error("Failed setting GlobalConfig ts_update_status to '%s'" % new_state)
-            self.logger.exception(traceback.format_exc())
-            raise err
+            self.logger.debug(traceback.format_exc())
 
     def reset_pkgprogress(self, current=0, total=0):
         self.progress_current = current
@@ -357,7 +365,7 @@ class TSconfig (object):
             try:
                 models.GlobalConfig.objects.update(ts_update_status=status)
             except:
-                self.logger.exception("Unable to update database with progress")
+                self.logger.error("Unable to update database with progress")
 
     def add_pkgprogress(self, progress=1):
         self.progress_current += progress
@@ -368,37 +376,92 @@ class TSconfig (object):
     def get_pkgprogress(self,current,total):
         return self.pkgprogress
 
-    def set_autodownloadflag(self,flag):
+    def set_autodownloadflag(self, flag):
         self.autodownloadenabled = flag
 
     def get_autodownloadflag(self):
         return self.autodownloadenabled
 
-    def set_userackdownload(self,flag):
+    def set_userackdownload(self, flag):
         self.userackdownload = flag
 
     def get_userackdownload(self):
         return self.userackdownload
 
-    def set_userackinstall(self,flag):
+    def set_userackinstall(self, flag):
         self.userackinstall = flag
 
     def get_userackinstall(self):
         return self.userackinstall
 
+    def set_securityinstall(self, flag):
+        self.securityinstall = flag
+
+    def get_securityinstall(self):
+        return self.securityinstall
+
     def get_syspkglist(self):
+        '''Returns list of system packages and security update packages'''
         if host_is_master():
             list = self.SYS_PKG_LIST_MASTER_ONLY + self.SYS_PKG_LIST
         else:
             list = self.SYS_PKG_LIST
+
+        list += self.SEC_PKG_LIST
         return list
 
+
     def get_ionpkglist(self):
+        '''Returns list of Ion packages'''
         if host_is_master():
             list = self.ION_PKG_LIST + self.ION_PKG_LIST_MASTER_ONLY
         else:
             list = self.ION_PKG_LIST
         return list
+
+
+    def get_security_pkg_list(self):
+        '''Returns list of packages with security updates available'''
+        logger.debug("Function: %s()" % sys._getframe().f_code.co_name)
+        pkglist = []
+        #---------------------------------------------------------------------
+        #Get security repositories listed in sources.list and save to temporary
+        #---------------------------------------------------------------------
+        cmd = ["grep", "lucid-security", "/etc/apt/sources.list"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        with open("/etc/apt/secsrc.list", "w") as fh:
+            fh.write(stdout)
+
+        #---------------------------------------------------------------------
+        #Update apt-get with packages from security repositories only
+        #---------------------------------------------------------------------
+        cmd = ["apt-get", "-o", "Dir::Etc::sourcelist=secsrc.list", "-o", "Dir::Etc::sourceparts=-", "update"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        if proc.returncode:
+            #logger.error(stderr)
+            raise subprocess.CalledProcessError(proc.returncode, stderr)
+
+        #---------------------------------------------------------------------
+        #Get list of package names
+        #---------------------------------------------------------------------
+        cmd = ["apt-get", "--dry-run", "upgrade"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = proc.communicate()
+        for line in stdout.split('\n'):
+            if line.startswith('Inst'):
+                pkglist.append(line.split()[1])
+        logger.info("\n".join(pkglist))
+
+        #---------------------------------------------------------------------
+        #Cleanup apt-get
+        #---------------------------------------------------------------------
+        cmd = ["apt-get", "update"]
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        return pkglist
+
 
     ################################################################################
     #
@@ -407,27 +470,59 @@ class TSconfig (object):
     ################################################################################
     def updatePackageLists(self):
 
+        def get_distrib_rel():
+            with open('/etc/lsb-release','r') as fp:
+                for line in fp.readlines():
+                    if line.startswith('DISTRIB_RELEASE'):
+                        return line.split('=')[1].strip()
+
         try:
 
             self.logger.info("parsing %s" % self.packageListFile)
             with open(self.packageListFile,'r') as fp:
                 pkgObj = json.load(fp)
 
-            self.SYS_PKG_LIST               = pkgObj['packages']['system']['allservers']
+            # Backwards compatability
+            distrib_rel = get_distrib_rel()
+            if distrib_rel == "10.04":
+                PACKAGE = 'packages'
+            else:
+                PACKAGE = "packages_"+distrib_rel
 
-            self.SYS_PKG_LIST_MASTER_ONLY   = pkgObj['packages']['system']['master']
+            # DEBUGGING CODE
+            self.logger.debug("pkglist ver: %s" % (pkgObj['version']))
 
-            self.ION_PKG_LIST               = pkgObj['packages']['torrentsuite']['allservers']
+            self.SYS_PKG_LIST               = pkgObj[PACKAGE]['system']['allservers']
 
-            self.ION_PKG_LIST_MASTER_ONLY   = pkgObj['packages']['torrentsuite']['master']
+            self.SYS_PKG_LIST_MASTER_ONLY   = pkgObj[PACKAGE]['system']['master']
+
+            self.ION_PKG_LIST               = pkgObj[PACKAGE]['torrentsuite']['allservers']
+
+            self.ION_PKG_LIST_MASTER_ONLY   = pkgObj[PACKAGE]['torrentsuite']['master']
 
             # ion-protonupdates is installed if T620 is determined, OR ion-pgmupdates is installed by default
             if is_proton_ts():
-                self.ION_PKG_LIST_MASTER_ONLY += pkgObj['packages']['torrentsuite']['proton']
-                logger.debug("Adding %s to master ion package list", ','.join(pkgObj['packages']['torrentsuite']['proton']))
+                self.ION_PKG_LIST_MASTER_ONLY += pkgObj[PACKAGE]['torrentsuite']['proton']
+                logger.debug("Adding %s to master ion package list", ','.join(pkgObj[PACKAGE]['torrentsuite']['proton']))
             else:
-                self.ION_PKG_LIST_MASTER_ONLY += pkgObj['packages']['torrentsuite']['pgm']
-                logger.debug("Adding %s to master ion package list", ','.join(pkgObj['packages']['torrentsuite']['pgm']))
+                self.ION_PKG_LIST_MASTER_ONLY += pkgObj[PACKAGE]['torrentsuite']['pgm']
+                logger.debug("Adding %s to master ion package list", ','.join(pkgObj[PACKAGE]['torrentsuite']['pgm']))
+
+            self.SEC_PKG_LIST = []
+            if self.securityinstall:
+                retry = 5   # try five times
+                sleepy = 2  # wait a couple seconds
+                while retry:
+                    try:
+                        self.SEC_PKG_LIST = self.get_security_pkg_list()
+                        logger.info("get_security_pkg_list succeeded")
+                    except:
+                        logger.error(traceback.format_exc())
+                        logger.warn("Waiting for get_security_pkg_list() to succeed")
+                        time.sleep(sleepy)
+                        retry -=1
+            else:
+                logger.debug("Skipping get_security_pkg_list")
 
         except:
             self.logger.exception(traceback.format_exc())
@@ -440,15 +535,23 @@ class TSconfig (object):
     ################################################################################
     def updatePkgDatabase(self):
         '''Update apt cache '''
-        try:
-            self.apt_cache = apt.Cache()
-            self.apt_cache.update()
-            self.apt_cache.open(None)
-            self.logger.debug("Successfully updated apt cache")
-            return True
-        except:
-            self.logger.debug("Unable to retrieve apt cache")
-            return False
+        retry = 5   # try five times
+        sleepy = 2  # wait a couple seconds
+        while retry:
+            try:
+                self.apt_cache = apt.Cache()
+                self.apt_cache.update()
+                self.apt_cache.open(None)
+                self.logger.debug("Successfully updated apt cache")
+                return True
+            except:
+                logger.warn("Waiting to get apt cache")
+                time.sleep(sleepy)
+                retry -=1
+        self.logger.debug("Unable to retrieve apt cache")
+        return False
+
+
     ################################################################################
     #
     # Check which packages need to be installed/upgraded
@@ -526,6 +629,7 @@ class TSconfig (object):
 
             return ionpkglist
 
+
     ################################################################################
     #
     # Purge package files
@@ -542,7 +646,7 @@ class TSconfig (object):
             else:
                 self.logger.info ("Error during autoclean: %s" % stderr)
         except:
-            self.logger.exception(traceback.format_exc())
+            self.logger.error(traceback.format_exc())
 
     ################################################################################
     #
@@ -604,7 +708,7 @@ class TSconfig (object):
 
         try:
             thisisinsane = apt_cache.commit(GetAcquireProgress(self),GetInstallProgress(self))
-            self.logger.error("Returned %s" % str(thisisinsane))
+            self.logger.debug("Returned %s" % str(thisisinsane))
             return True
         except:
             self.logger.error(traceback.format_exc())
@@ -651,7 +755,7 @@ class TSconfig (object):
 
     ################################################################################
     #
-    # Available disk space in the /var partition
+    # Available disk space in the given partition
     #
     ################################################################################
     def freespace(self, directory):
@@ -659,7 +763,7 @@ class TSconfig (object):
         try:
             s = os.statvfs(directory)
         except:
-            self.logger.exception(traceback.format_exc())
+            self.logger.error(traceback.format_exc())
             mbytes = -1
         else:
             mbytes = (s.f_bsize * s.f_bavail) / (1024 * 1024)
@@ -721,7 +825,7 @@ class TSconfig (object):
         p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p1.communicate()
         self.logger.debug(stdout)
-        self.logger.error(stderr)
+        self.logger.debug(stderr)
 
     def TSpreinst_syspkg(self):
         self.logger.debug("preinst_system_packages")
@@ -731,7 +835,7 @@ class TSconfig (object):
         p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p1.communicate()
         self.logger.debug(stdout)
-        self.logger.error(stderr)
+        self.logger.debug(stderr)
 
     def TSpostinst_syspkg(self):
         self.logger.debug("config_system_packages")
@@ -741,7 +845,7 @@ class TSconfig (object):
         p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p1.communicate()
         self.logger.debug(stdout)
-        self.logger.error(stderr)
+        self.logger.debug(stderr)
 
     def TSpreinst_ionpkg(self):
         self.logger.debug("preinst_ionpkg")
@@ -751,7 +855,7 @@ class TSconfig (object):
         p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p1.communicate()
         self.logger.debug(stdout)
-        self.logger.error(stderr)
+        self.logger.debug(stderr)
 
     def TSpostinst_ionpkg(self):
         self.logger.debug("config_ion_packages")
@@ -761,7 +865,7 @@ class TSconfig (object):
         p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p1.communicate()
         self.logger.debug(stdout)
-        self.logger.error(stderr)
+        self.logger.debug(stderr)
 
     def TSupdate_conf_file(self):
         self.logger.debug("update_conf_file")
@@ -771,7 +875,7 @@ class TSconfig (object):
         p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = p1.communicate()
         self.logger.debug(stdout)
-        self.logger.error(stderr)
+        self.logger.debug(stderr)
 
 
     ################################################################################
@@ -781,6 +885,8 @@ class TSconfig (object):
     ################################################################################
     def TSexec_update(self):
 
+        sys_result = None
+        ion_result = None
         try:
             self.set_state('I')
             self.logger.debug("Inside TSexec_update")
@@ -853,7 +959,7 @@ class TSconfig (object):
             self.TSupdated_mirror_check()
 
         except:
-            self.logger.exception(traceback.format_exc())
+            self.logger.error(traceback.format_exc())
 
         success = sys_result and ion_result
         if success:

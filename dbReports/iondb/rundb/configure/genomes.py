@@ -1,4 +1,5 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+import csv
 import datetime
 import os
 import shutil
@@ -118,15 +119,16 @@ def _read_genome_info(info_path):
     here we will find and return that as a string
     if False is returned the genome can be considered broken
     """
+    #build a dict with the values from the info.txt
+    genome_dict = {"genome_name": None, "genome_version": None, "index_version": None}
     try:
-        #build a dict with the values from the info.txt
-        genome_dict = {"genome_name": None, "genome_version": None, "index_version": None}
-        for line in open(info_path):
-            line = line.strip().split("\t")
-            genome_dict[line[0]] = line[1]
-    except (IOError, IndexError):
-        genome_dict = {}
-
+        for line in csv.reader(open(info_path), dialect='excel-tab'):
+            if len(line) == 2:
+                genome_dict[line[0]] = line[1]
+    except IOError as err:
+        logger.error("Could not read genome info file '{0}': {1}".format(info_path, err))
+        return None
+    
     return genome_dict
 
 
@@ -224,7 +226,7 @@ def edit_genome(request, pk_or_name):
             verbose_error = _verbose_error_trim(rg.verbose_error)
             genome_fasta, genome_size = _genome_get_fasta(rg.pk)
 
-            ctxd = {"temp": rfd, "name": rg.short_name, "key": rg.pk, "enabled": rg.enabled,
+            ctxd = {"temp": rfd, "name": rg.short_name, "reference": rg, "key": rg.pk, "enabled": rg.enabled,
                     "genome_dict": genome_dict, "status": rg.status, "verbose_error": verbose_error,
                     "genome_fasta": genome_fasta, "genome_size": genome_size,
                     "bedFiles": bedFiles, "processingBedFiles": processingBedFiles,
@@ -250,7 +252,7 @@ def edit_genome(request, pk_or_name):
 
         stale_index = rg.index_version != settings.TMAP_VERSION and rg.status != "Rebuilding index"
 
-        ctxd = {"temp": temp, "name": rg.short_name, "key": rg.pk, "enabled": rg.enabled,
+        ctxd = {"temp": temp, "name": rg.short_name, "reference": rg, "key": rg.pk, "enabled": rg.enabled,
                 "genome_dict": genome_dict, "status": rg.status, "verbose_error": verbose_error,
                 "genome_fasta": genome_fasta, "genome_size": genome_size,
                 "index_version": rg.index_version, "fastaOrig": fastaOrig,
@@ -329,7 +331,7 @@ def search_for_genomes():
                         if rg.index_version != genome_dict["index_version"]:
                             logger.debug("Updating genome status to 'found' for %s id=%d index=%s" % (
                             str(rg), rg.id, rg.index_version))
-                            rg.status = "found"
+                            rg.status = "complete"
                             rg = set_common(rg, genome_dict, ref_dir, lib)
                             rg.save()
                     else:
@@ -339,7 +341,7 @@ def search_for_genomes():
                         rg = ReferenceGenome()
                         rg.short_name = lib
                         rg.date = datetime.datetime.now()
-                        rg.status = "found"
+                        rg.status = "complete"
                         rg.enabled = True
 
                         rg.index_version = ""
@@ -364,7 +366,7 @@ def new_genome(request):
         name = request.POST.get('name', False)
         short_name = request.POST.get('short_name', False)
         fasta = request.POST.get('target_file', False)
-        version = request.POST.get('version', False)
+        version = request.POST.get('version', "")
         notes = request.POST.get('notes', "")
 
         #optional
@@ -376,7 +378,7 @@ def new_genome(request):
         why_delete = ""
 
         #if any of those were false send back a failed message
-        if not all((name, short_name, fasta, version)):
+        if not all((name, short_name, fasta)):
             return render_to_json({"status": "Form validation failed", "error": True})
 
         if not set(short_name).issubset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"):
@@ -476,7 +478,7 @@ def start_index_rebuild(request, reference_id):
         """Add a job to rebuild the reference index for reference to the SGE queue
         """
         logger.info("Queuing TMAP reference index rebuild of %s" % reference.short_name)
-        reference.status = "Rebuilding index"
+        reference.status = "indexing"
         result = build_tmap_index.delay(reference.id)
         reference.celery_task_id = result.task_id
         reference.save()
@@ -498,7 +500,7 @@ def start_index_rebuild(request, reference_id):
 
 def get_references():
     h = httplib2.Http()
-    response, content = h.request("http://ionupdates.com/reference_downloads/references_list.json")
+    response, content = h.request(settings.REFERENCE_LIST_URL)
     if response['status'] == '200':
         references = json.loads(content)
         for ref in references:

@@ -1,0 +1,16 @@
+---
+# file: roles/igv/tasks/main.yml
+
+#-----------------------------------------------------------------------------
+# Install system packages for igv
+#-----------------------------------------------------------------------------
+- name: Install system packages for master node
+  apt: name={{item}} state=latest force=yes
+  with_items: igv_syspkg_list
+
+#-----------------------------------------------------------------------------
+# Install Ion Torrent Packages for igv
+#-----------------------------------------------------------------------------
+- name: Install packages for head node
+  apt: name={{ item }} state=latest force=yes
+  with_items: igv_ionpkg_list

@@ -7,6 +7,7 @@
   <li><a href="{% url "configure_services" %}">Services</a></li>
   <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
   <li><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
   <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block extra_head %}
@@ -75,7 +76,7 @@ $(document).ready(function(){
                 }
             }
             , serverSorting: true
-            , sort: { field: "name", dir: "desc" }
+            , sort: { field: "id_str", dir: "asc" }
             , serverPaging: true                        	
         	, pageSize: 5
         }
@@ -106,6 +107,11 @@ $(document).ready(function(){
 			, {
                 field: "annotation"
                 , title: "Annotation"
+            }
+			, {
+                field: "type",
+                title: "Type",
+                template: "<span style='text-transform: uppercase;'>${type}</span>"
             }  
             , {
                 title: "Action",

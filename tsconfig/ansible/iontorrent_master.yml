@@ -1,0 +1,9 @@
+---
+# file: iontorrent_master.yml
+- hosts: iontorrent_master
+  roles:
+    - iontorrent_master
+  tags:
+    - iontorrent_master
+  tasks:
+    - include: roles/common/tasks/write_tsconf.yml

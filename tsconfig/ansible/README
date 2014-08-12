@@ -1,0 +1,75 @@
+Purpose of this development is to enable Configuration Management on the Ion Torrent Server.  This
+effectively replaces the ad-hoc scripts (ts_functions, et al.) currently used to configure a server. 
+The goal is to enable consistent configuration management for stand-alone servers as well as Ion
+Clusters.
+
+===== 
+Before running the provisioning command, each compute node needs to have secure-key access
+setup.  For each compute node, run:
+
+ssh-copy ionadmin@<<compute hostname>>
+
+This assumes you are running as ionadmin user on the headnode, and that you have previously created an
+ssh key with:
+
+ssh-keygen
+
+=====
+Still a work in progress.  But for now, there are two files which need manual editing.
+
+ansible_hosts:
+
+Modify the hostname under [headnode] and [computes].
+
+1 - If it is a stand-alone server with direct connected instruments, put the hostname in headnode.
+
+2 - If it is a cluster, put the hostname(s) of the compute nodes.
+
+vars/nfs_client:
+
+1 - If there are NAS storage units that need to be NFS mounted on each resource, add them under the
+nas_mounts: category with an entry like so:
+
+  - { name: <<nas hostname>>, directory: <<exported directory>>, mountpoint: <<local mountpoint>> }
+  
+Note: Space character after the colon is important!
+
+host_vars/<<hostname>>:
+
+Put site-specific variable definitions in this file.
+For instance, to override the default apt repository (ionupdates.com) for an Ion internal site:
+The following would use lucid-alpha at updates.ite:
+
+---
+ion_repository_hostname: updates.ite
+ion_build_flag: "-alpha/"
+
+
+==================================
+ION CLUSTER IN STANDALONE
+==================================
+This refers to a system like TRI which started with a single Torrent Server, then expanded to three and made one of the Torrent Servers the master and the rest compute nodes.  The new master node exports its /results partition.  This needs to be entered into vars/nfs_client file as
+
+nas_mounts:
+  - { name: <<hostname>>, directory: /results, mountpoint: /results }
+  
+The nfs_client configuration knows enough not to mount this volume upon the same host that is exporting.
+
+
+==================================
+ION CLUSTER SETUP DETAILED NOTES
+==================================
+Assumes the headnode will not be a compute node.
+
+Assumes that the /results partition will be on an external NAS.  This requires that the /results NFS mount be completed prior to installing the iontorrent_master role because some Ion packages install by default to the /results directory.  ie. nfs_client needs to execute prior to iontorrent_master.
+
+Assumes no instruments will be direct connected.  Thus, we can skip the fileserver role.  Edit hosts inventory file and remove any entry under [fileserver].
+
+
+==================================
+ANSIBLE PACKAGE DEPENDENCIES
+==================================
+python-jinja2
+python-yaml
+python-paramiko
+sshpass

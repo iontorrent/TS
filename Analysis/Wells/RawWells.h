@@ -4,12 +4,17 @@
 
 #include <stdio.h>
 #include <map>
-#include <string>
+#include <string.h>
 #include <algorithm>
 #include <vector>
 #include <iostream>
 #include "hdf5.h"
 #include "Utils.h"
+
+#include <pthread.h>
+#include <semaphore.h>
+#include <queue>
+#include <exception>
 
 struct WellHeader {
   unsigned int numWells;
@@ -87,6 +92,132 @@ class RawWellsWriter {
   int WriteWellsData(RWH5DataSet &dataSet, WellChunk &chunk, float *data);
 };
 
+/** class for multithreading queue. */
+class ChunkFlowData {
+public:
+  ChunkFlowData() {
+    data = NULL;
+    dataSize = 0;
+    lastFlow = false;
+  }
+
+  ChunkFlowData(unsigned int size) {
+    data = new float[size];
+    dataSize = size;
+    lastFlow = false;
+  }
+
+  ~ChunkFlowData() {
+    delete [] data;
+    data = NULL;
+  }
+
+  void clear() {
+    if(data) {
+      memset(data, 0, dataSize * sizeof(unsigned int));
+    }
+  }
+
+  WellChunk chunk;
+  float* data;
+  unsigned int dataSize;
+  bool lastFlow;
+};
+
+/** semaphore control queue for multithreading. */
+class SemQueue
+{
+public:
+  SemQueue() {
+    pthread_mutex_init(&mMutex, NULL);
+    sem_init(&mSemout, 0, 0);
+    mMaxSize = 0;
+  }
+
+  SemQueue(unsigned int maxSize) {
+    pthread_mutex_init(&mMutex, NULL);
+    sem_init(&mSemin, 0, maxSize);
+    sem_init(&mSemout, 0, 0);
+    mMaxSize = maxSize;
+  }
+
+  ~SemQueue() {
+    pthread_mutex_destroy(&mMutex);
+    sem_destroy(&mSemin);
+    sem_destroy(&mSemout);
+  }
+
+  void init(unsigned int maxSize) {
+    sem_init(&mSemin, 0, maxSize);
+    mMaxSize = maxSize;
+  }
+
+  size_t size() {
+    size_t sz = 0;
+    pthread_mutex_lock(&mMutex);
+    sz = mQueue.size();
+    pthread_mutex_unlock(&mMutex);
+
+    return sz;
+  }
+
+  void clear() {
+    while(!mQueue.empty()) {
+      ChunkFlowData* item = mQueue.front();
+      mQueue.pop();
+
+      delete item;
+      item = NULL;
+    }
+  }
+
+  void enQueue(ChunkFlowData* item) {
+    sem_wait(&mSemin);
+
+    int qs;
+    pthread_mutex_lock(&mMutex);
+    qs = mQueue.size();
+    pthread_mutex_unlock(&mMutex);
+
+    while(qs >= mMaxSize) {
+      usleep(10);
+
+      pthread_mutex_lock(&mMutex);
+      qs = mQueue.size();
+      pthread_mutex_unlock(&mMutex);
+    }
+
+    pthread_mutex_lock(&mMutex);
+    mQueue.push(item);
+    pthread_mutex_unlock(&mMutex);
+
+    sem_post(&mSemout);
+  }
+
+  ChunkFlowData* deQueue() {
+    ChunkFlowData* item = NULL;
+
+    sem_wait(&mSemout);
+
+    pthread_mutex_lock(&mMutex);
+    if(!mQueue.empty()) {
+      item = mQueue.front();
+      mQueue.pop();
+    }
+    pthread_mutex_unlock(&mMutex);
+
+    sem_post(&mSemin);
+
+    return item;
+  }
+
+private:
+  std::queue<ChunkFlowData*> mQueue;
+  pthread_mutex_t mMutex;
+  int mMaxSize;
+  sem_t mSemin;
+  sem_t mSemout;
+};
 
 /** 
  * Represents the cube of results 
@@ -165,7 +296,7 @@ public:
   RawWells(const char *wellsFilePath, int rows, int cols);
 
   /* Destructor. */ 
-  ~RawWells();
+  virtual ~RawWells();
 
   /* Initialization and setup. */
   void Init(const char *experimentPath, const char *rawWellsName, int rows, int col,  int flows);
@@ -189,6 +320,10 @@ public:
   void WriteToHdf5(const std::string &file);
   void WriteToHdf5() { WriteToHdf5(mFilePath); }
   void Close();
+  void CloseWithoutCleanupHdf5();
+
+  RWH5DataSet* GetH5WellsPtr() { return &mWells; }
+  size_t GetStepSize() { return mStepSize; }
 
   /* Accessors */
   size_t NumRows() const { return mRows; }
@@ -210,11 +345,13 @@ public:
   float At(size_t row, size_t col, size_t flow) const;
   /** well idx is based on row major order like c */
   float At(size_t well, size_t flow) const;
+  float AtWithoutChecking(size_t row, size_t col, size_t flow) const;
+  float AtWithoutChecking(size_t well, size_t flow) const;
   /** Warning - Subsequent calls to this function will overwrite returned data pointed too */
   const WellData *ReadXY(int x, int y); 
   void Set(size_t row, size_t col, size_t flow, float val) { Set(ToIndex(col, row), flow, val); }
   void Set(size_t idx, size_t flow, float val);
-  void WriteFlowgram(size_t flow, size_t x, size_t y, float val);
+  virtual void WriteFlowgram(size_t flow, size_t x, size_t y, float val);
 
   void ResetCurrentWell() { mCurrentWell = 0; }
   void ResetCurrentRegionWell() { mCurrentRow = 0, mCurrentCol = -1, mCurrentRegionRow = 0, mCurrentRegionCol = 0; }
@@ -251,10 +388,17 @@ public:
   size_t GetNextRegionData();
 
   void WriteWells();
+  void WriteWells(SemQueue* packQueue, SemQueue* writeQueue, bool lastFlow);
   void ReadWells();
   void OpenForIncrementalRead();
   void WriteRanks();
   void WriteInfo();
+
+  // Somewhat higher level interaction.
+  void OpenExistingWellsForOneChunk(int start_of_chunk, int chunk_depth);
+  void OpenExistingWellsForOneChunkWithoutReopenHdf5(int start_of_chunk, int chunk_depth);
+
+  const SumTimer & GetWriteTimer() const { return writeTimer; }
 
  private:
   bool InChunk(size_t row, size_t col);
@@ -302,8 +446,10 @@ public:
   int WELL_NOT_LOADED;   /* not currently in memory. */
   int WELL_NOT_SUBSET; /* non-live well, assumed all zero all the time. */
   /* For our window/region of interest. */
+protected:
   WellChunk mChunk;
 
+private:
   /* Data structures containing actual data. */
   Info mInfo;         ///< Any key,value information associated with this hdf5 file.
   std::vector<uint32_t> mRankData;  ///< All zeros since we don't use it, when can we just drop?
@@ -331,8 +477,49 @@ public:
   size_t mCurrentRow;
   size_t mCurrentCol;
   bool mIsLegacy;
+
+  // We keep around a write timer.
+  SumTimer writeTimer;
 private:
   RawWells(); // not implemented, don't call!
+};
+
+// A class that can accumulate flow data, and automatically write chunks when appropriate.
+class ChunkyWells : public RawWells {
+  // Some basic variables about flows that we get at initialization.
+  int idealChunkSize;
+  int startingFlow;
+  int endingFlow;
+
+  // We'll have a buffer for flowgrams that are beyond the current chunk.
+  struct FlowGram {
+    size_t flow, x, y;
+    float val;
+  };
+  std::vector< FlowGram > pendingFlowgrams;
+
+public:
+  ChunkyWells( const char *experimentPath, 
+               const char *rawWellsName,
+               int _idealChunkSize,          // # flows in a chunk (save_wells_flow)
+               int _startingFlow,            // Starting flow (from flow_context)
+               int _endingFlow               // Ending flow (from flow_context)
+               );
+
+  // Figure out what the chunk size should be, and open the underlying wells.
+  void StartChunk( int chunkStart );
+  void StartChunkWithoutReopenHdf5( int chunkStart );
+
+  // Check and advance the chunk, if you're doing things serially.
+  void MarkFlowComplete( int flow );
+
+  // We have to buffer stuff that isn't in the current chunk.
+  void WriteFlowgram(size_t flow, size_t x, size_t y, float val);
+
+  // Because of parallel stuff, we don't always know when an individual flow is done.
+  // We only know about the end of a flow block.
+  void DoneUpThroughFlow( int flow );
+  void DoneUpThroughFlow( int flow, SemQueue* packQueue, SemQueue* writeQueue );
 };
 
 #endif // RAWWELLS_H

@@ -1,0 +1,169 @@
+---
+# files: roles/griengine_master/tasks/main.yml
+
+# gridengine preseed
+- name: Preseed gridengine debconf values
+  script: "files/gridengine.preseed {{ groups.headnode[0] }}"
+  
+- name: Install GridEngine APT packages
+  action: apt pkg={{item}} state=latest force=yes
+  with_items:
+    - gridengine-master
+    - gridengine-client
+    - gridengine-common
+    - gridengine-qmon
+    - gridengine-exec
+
+# add submission host
+- name: add the frontend as submission host
+  shell: bash -lc 'qconf -as {{groups.headnode[0]}}'
+
+# this is necessary if the compute node configures itself.
+- name: add admin hosts
+  shell: bash -lc 'qconf -ah {{item}}'
+  with_items:
+    - '{{groups.computes}}'
+
+# add user if user does not exist
+- name: upload user configuration file
+  template: src=user.template dest=/tmp/user.{{item}}.conf
+  with_items:
+    - sge_usernames
+  
+- name: add user
+  shell: bash -lc 'if ! qconf -suserl | grep -q {{item}}; then qconf -Auser /tmp/user.{{item}}.conf; fi ; rm /tmp/user.{{item}}.conf'
+  with_items:
+    - sge_usernames
+  
+# configure queue if queue does not exist
+- name: upload queue configuration files
+  template: src=queue.template dest=/tmp/{{item['name']}}.conf
+  with_items:
+    - '{{queues}}'
+  
+- name: setup queues
+  shell: bash -lc 'if ! qconf -sql | grep -q {{item['name']}}; then qconf -Aq /tmp/{{item['name']}}.conf; fi ; rm /tmp/{{item['name']}}.conf'
+  with_items:
+    - '{{queues}}'
+    
+# set number of slots
+#    qconf -aattr queue slots $set_slots $qname
+#TODO: special case T620 hardware to get 4 slots
+- name: Assign number of slots per queue
+  shell: bash -lc 'qconf -aattr queue slots {{item.slots}} {{item.name}}'
+  with_items:
+    - '{{queues}}'
+
+# Make mem_free a consumable resource
+- name: create consumable resource file
+  shell: bash -lc 'qconf -sc > /tmp/consumable'
+  
+- name: set mem_free complex resource
+  lineinfile: dest=/tmp/consumable
+                state=present
+                regexp='mem_free.*'
+                line='mem_free            mf         MEMORY      <=   YES         YES        0        0'
+  
+- name: set export_plugins complex resource
+  lineinfile: dest=/tmp/consumable
+                state=present
+                regexp='export_plugins.*'
+                line='export_plugins            ep         INT      <=   YES         YES        0        0'
+                
+- name: update complex resources
+  shell: bash -lc 'qconf -Mc /tmp/consumable; rm /tmp/consumable'
+  
+- name: For network-using plugins, set a consumable resource to control bandwidth utilization
+  shell: bash -lc 'qconf -aattr exechost complex_values export_plugins=10 global'
+  
+# create plugin queue
+- name: upload plugin.q configuration file
+  template: src=plugin.q.template dest=/tmp/plugin.q.conf
+  
+- name: setup plugin.q
+  shell: bash -lc 'if ! qconf -sql | grep -q plugin.q; then qconf -Aq /tmp/plugin.q.conf; fi; rm /tmp/plugin.q.conf'
+
+# add execution hosts
+- name: upload host configuration file
+  template: src=host.template dest=/tmp/host.{{item}}.conf
+  with_items:
+    - '{{groups.computes}}'
+    - '{{groups.headnode[0]}}'
+    
+- name: add execution hosts
+  shell: bash -lc 'if ! qconf -sel | grep -q {{item}}; then qconf -Ae /tmp/host.{{item}}.conf;fi'
+  with_items:
+    - '{{groups.computes}}'
+    - '{{groups.headnode[0]}}'
+    
+# add master host to queues
+- name: add master host to queues
+  shell: bash -lc 'qconf -aattr queue hostlist {{item[0]}} {{item[1].name}}'
+  with_nested:
+    - "{{groups.headnode[0]}}"
+    - '{{queues}}'
+    
+# add compute hosts to queues
+- name: add compute hosts to queues
+  shell: bash -lc 'qconf -aattr queue hostlist {{item[0]}} {{item[1].name}}'
+  with_nested:
+    - "{{groups.computes}}"
+    - '{{queues}}'
+
+# configure parallel environment
+- name: upload PE configuration file
+  template: src=ion_pe.template dest=/tmp/ion_pe.conf
+
+- name: create PE
+  shell: bash -lc 'if ! qconf -spl | grep -q ion_pe; then qconf -Ap /tmp/ion_pe.conf; fi ; rm /tmp/ion_pe.conf'
+  
+- name: add PE to the queues
+  shell: bash -lc 'qconf -aattr queue pe_list ion_pe {{item['name']}}'
+  with_items:
+    - '{{queues}}'
+
+# add ionadmin as sge admin user
+- name: Add ionadmin user as sge admin
+  shell: bash -lc 'if ( getent passwd | grep -q "^ionadmin:" ) && ( ! qconf -sm | grep -q ionadmin );then qconf -am ionadmin;fi'
+  
+# modify scheduler interval to 4 seconds
+- name: generate scheduler config file
+  shell: bash -lc 'qconf -ssconf > /tmp/sconf.conf'
+  
+- name: edit scheduler interval
+  replace: dest=/tmp/sconf.conf
+             regexp='schedule_interval.*'
+             replace='schedule_interval                 0:0:04'
+             
+- name: enable new schedule_interval
+  shell: bash -lc 'qconf -Msconf /tmp/sconf.conf; rm /tmp/sconf.conf'
+
+# SGE: Set per-host maximum mem_free to be node physical mem
+# Must be manually set to be consumable resource
+- name: set maximum free memory for all hosts
+  shell: bash -lc 'qhost | awk 'NR>3{print "qconf -mattr exechost complex_values mem_free=" $5,$1}'|sh'
+
+# Copy gridengine scripts
+- name: Create /usr/share/ion-tsconfig/gridengine-scripts directory
+  file: dest={{SCRIPT_PATH}} state=directory mode=755 owner=root
+  
+- name: Copy gridengine scripts
+  copy: src={{item['name']}} dest={{item['path']}} force=yes
+  with_items:
+    - { 'name':'{{LOCAL_EPILOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{EPILOG_SCRIPT}}' }
+    - { 'name':'{{LOCAL_PROLOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{PROLOG_SCRIPT}}' }
+    
+#    set_sge_open_files
+# The configuration line we want:
+#execd_params              S_DESCRIPTORS=8192,H_DESCRIPTORS=8192
+# filename required to be "global" to update the global configuration
+- name: Generate global setting file
+  shell: bash -lc 'qconf -sconf global > /tmp/global'
+
+- name: Edit the global file
+  lineinfile: dest=/tmp/global state=present
+                  regexp='(^execd_params.*)'
+                  line='execd_params S_DESCRIPTORS={{ MAX_FILES_OPEN }},H_DESCRIPTORS={{ MAX_FILES_OPEN }}'
+
+- name: enable the global settings
+  shell: bash -lc 'qconf -Mconf /tmp/global ; rm -f /tmp/global'

@@ -6,14 +6,17 @@
 {% block page-plan-content %}
 <div class="row-fluid">
     <div class="span6">
-        <label>Sample Preparation Kit:</label>
-        <select id="samplePreparationKit" name="samplePreparationKit" style="width: 350px;">
+        <input type="hidden" id="selectedTemplateKitType" name="selectedTemplateKitType" value="" />
+        <input type="hidden" id="isBarcodeKitRequired" name="isBarcodeKitRequired" value="" />
+
+        <label>Sample Preparation Kit (optional):</label>
+        <select id="samplePreparationKit" name="samplePreparationKit" style="width: 350px;" {% if not helper.getApplProduct.isSamplePrepKitSupported %} disabled="disabled" {% endif %}>
             <option value=""></option>
             {% for spk in step.getPrePopulatedFieldDict.samplePrepKits %}
                 {% ifequal spk.name step.getCurrentSavedFieldDict.samplePreparationKit %}
-                    <option SELECTED value="{{spk.name}}">{{spk}}</option>
+                    <option SELECTED value="{{spk.name}}">{{spk.description}}</option>
                 {% else %}
-                    <option value="{{spk.name}}">{{spk}}</option>
+                    <option value="{{spk.name}}">{{spk.description}}</option>
                 {% endifequal %}
             {% endfor %}
         </select>
@@ -24,9 +27,9 @@
             <option value=""></option>
             {% for kit in step.getPrePopulatedFieldDict.controlSeqKits %}
                 {% ifequal kit.name step.getCurrentSavedFieldDict.controlsequence %}
-                    <option SELECTED value="{{kit.name}}">{{kit.name}}</option>
+                    <option SELECTED value="{{kit.name}}">{{kit.description}}</option>
                 {% else %}
-                    <option value="{{kit.name}}">{{kit.name}}</option>
+                    <option value="{{kit.name}}">{{kit.description}}</option>
                 {% endifequal %}
             {% endfor %}
         </select>
@@ -47,24 +50,25 @@
         </select>
     </div>
     <div class="span6">                                     
-        <label>Chip Type (required):</label>
+        <label>Chip Type{%if step.prepopulatedFields.is_chipType_required%} (required){%endif%}:</label>
         <select id="chipType" name="chipType">
             {% if helper.isEditRun %}
                 <option SELECTED value="{{step.getCurrentSavedFieldDict.chipType}}">Ion 
                 {% if step.getPrePopulatedFieldDict.chipTypes %}
-                    {{step.getPrePopulatedFieldDict.chipTypes.0.getChipDisplayedName}}
+                    {{step.getPrePopulatedFieldDict.chipTypes.0.getChipDisplayedNamePrefix}}&trade; Chip {{chipType.0.getChipDisplayedVersion}}
                 {% else %}
-                    {{step.getCurrentSavedFieldDict.chipType}}
+                    {{step.getCurrentSavedFieldDict.chipType.getChipDisplayedNamePrefix}}&trade; Chip {{chipType.getChipDisplayedVersion}}
                 {% endif %}
-                &trade; Chip</option>
+                </option>
             {% else %}
                 <option value=""></option>
                 {% for chipType in step.getPrePopulatedFieldDict.chipTypes %}
                     {% if chipType.name == step.getCurrentSavedFieldDict.chipType or chipType.name == helper.getStepDict.Application.savedObjects.applProduct.defaultChipType %}
-                        <option SELECTED value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+                        <option SELECTED 
                     {% else %}
-                        <option value="{{chipType.name}}">Ion {{chipType.getChipDisplayedName}}&trade; Chip</option>
+                        <option 
                     {% endif %}
+                    value="{{chipType.name}}">Ion {{chipType.getChipDisplayedNamePrefix}}&trade; Chip {{chipType.getChipDisplayedVersion}}</option>
                 {% endfor %}
             {% endif %}
         </select>
@@ -83,6 +87,9 @@
                 {% endifequal %}
             {% endfor %}
         </select>
+        <label>Test Fragment Key:</label>
+        <input type="text" name="tfKey" value={{step.getCurrentSavedFieldDict.tfKey}}
+               onkeyup="if('atcgATCG'.indexOf(this.value.slice(-1))<0) alert('Invalid TF key character');">
     </div>
     <div class="span6">                                     
         <label>Forward 3' Adapter:</label>
@@ -107,12 +114,12 @@
                 {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
                 	{% ifequal kitTypeName "Avalanche" %}
                 	{% else %}
-                    	<input checked="checked" type="radio" name="templatekitType" value="{{kitTypeName}}" />{{kitTypeName}}
+                    	<input checked="checked" type="radio"  id="{{kitTypeName}}__templatekitType" name="templatekitType" value="{{kitTypeName}}" />{{kitTypeName}}
                     {% endifequal %}
                 {% else %}
             		{% ifequal kitTypeName "Avalanche" %}
              		{% else %}
-                    	<input type="radio" name="templatekitType" value="{{kitTypeName}}" />{{kitTypeName}}
+                    	<input type="radio"  id="{{kitTypeName}}__templatekitType" name="templatekitType" value="{{kitTypeName}}" />{{kitTypeName}}
                     {% endifequal  %}
                 {% endifequal %}
             {% endfor %}
@@ -135,6 +142,10 @@
         </span>
         </p>
         <div id="templateKitHolder">
+            {% if not step.getCurrentSavedFieldDict.templatekitType %}
+                <input id="templateKit_comment" name="templateKit_comment" type="text" placeholder="Choose instrument to view Template Kit menu" style="width: 335px" disabled>
+            {% endif %}
+            
             {% for kitTypeName, kitDict in step.getPrePopulatedFieldDict.templateKitTypes.items %}
                 {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
                     <select id="{{kitTypeName}}__templatingKit" name="templatekitname" style="width: 350px;">
@@ -148,7 +159,7 @@
                         <option SELECTED value="{{kit.name}}">{{kit.description}}</option>
                     {% elif kit.name == kitDict.applDefault.name %}
                         {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
-                            <option {{step.getCurrentSavedFieldDict.templatekitname|yesno:",,SELECTED"}} value="{{kit.name}}">{{kit.descripition}}</option>
+                            <option {{step.getCurrentSavedFieldDict.templatekitname|yesno:",,SELECTED"}} value="{{kit.name}}">{{kit.description}}</option>
                         {% else %}
                             <option SELECTED value="{{kit.name}}">{{kit.description}}</option>
                         {% endifequal %}
@@ -162,23 +173,15 @@
     </div>
 
     <div class="span6">                                     
-        <label>Barcode Set (optional):</label>
+        <label id="barcodeKitLabel">Barcode Set {% if helper.getApplProduct.isBarcodeKitSelectionRequired %}(required){% else %}(optional){% endif %}:</label>
         <select id="barcodeId" name="barcodeId" {% if helper.isPlanBySample %}disabled="disabled"{% endif %}>
             <option value=""></option>
             {% for kit in step.getPrePopulatedFieldDict.barcodes %}
-                {%if helper.isPlanBySample%}
-                    {% ifequal kit.name helper.getStepDict.Barcode_by_sample.getCurrentSavedFieldDict.barcodeId %}
-                        <option SELECTED value="{{kit.name}}">{{kit.name}}</option>
-                    {% else %}
-                        <option value="{{kit.name}}">{{kit.name}}</option>
-                    {% endifequal %}
-                {%else%}
-                    {% ifequal kit.name step.getCurrentSavedFieldDict.barcodeId %}
-                        <option SELECTED value="{{kit.name}}">{{kit.name}}</option>
-                    {% else %}
-                        <option value="{{kit.name}}">{{kit.name}}</option>
-                    {% endifequal %}
-                {%endif%}
+                {% ifequal kit.name step.getCurrentSavedFieldDict.barcodeId %}
+                    <option SELECTED value="{{kit.name}}">{{kit.name}}</option>
+                {% else %}
+                    <option value="{{kit.name}}">{{kit.name}}</option>
+                {% endifequal %}
             {% endfor %}
         </select>
     </div>
@@ -198,13 +201,18 @@
         </select>
     </div>
     <div class="span6">
-        <p class="form-label">Mark as PCR Duplicates 
-            {% if step.getCurrentSavedFieldDict.isDuplicateReads %}
-                <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads"  checked="checked" style="vertical-align:top;">
-            {% else %}
-                <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads" style="vertical-align:top;">
-            {% endif %}
-        </p>      
+        <p class="form-label" rel="tooltip" title="Filter out PCR duplicates"><i class="icon-info-sign"></i> Mark as Duplicates Reads 
+            <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads" 
+                {% if step.getCurrentSavedFieldDict.isDuplicateReads %}checked="checked"{% endif %} style="vertical-align:top;">
+            
+        </p>
+        <p class="form-label" rel="tooltip" title="Recalibrate signal measurements for homopolymers"><i class="icon-info-sign"></i> Enable Base Recalibration
+            <input type="checkbox" id="base_recalibrate" name="base_recalibrate" 
+                {% if step.getCurrentSavedFieldDict.base_recalibrate %}checked="checked"{% endif %} style="vertical-align:top;">               
+        </p>
+        <p class="form-label" rel="tooltip" title="Optional analysis step to adjust the alignment, primarily in the CIGAR string"><i class="icon-info-sign"></i> Enable Realignment
+            <input type="checkbox" id="realign" name="realign" {% if step.getCurrentSavedFieldDict.realign %}checked="checked"{% endif %} style="vertical-align:top;">           
+        </p>
     </div>
 </div>
 <div class="row-fluid">
@@ -248,12 +256,37 @@
         {%endfor%}
 
 
+        var seq_kits_to_categories_map = {};
+
+        {%for kitinfoobj in step.getPrePopulatedFieldDict.seqKits %}
+            seq_kits_to_categories_map["{{kitinfoobj.name}}"] = "{{kitinfoobj.categories}}";
+        {%endfor%}
+        
         var template_kits_to_flows_map = {};        
 
         {%for templateKitInfoObj in step.getPrePopulatedFieldDict.templateKits %}
             template_kits_to_flows_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.flowCount}}";
         {%endfor%}
+        
 
+        var lib_kits_to_categories_map = {};
+
+        {%for kitinfoobj in step.getPrePopulatedFieldDict.libKits %}
+            lib_kits_to_categories_map["{{kitinfoobj.name}}"] = "{{kitinfoobj.categories}}";
+        {%endfor%}        
+        
+        var barcode_kits_subset_list = [];
+        
+        {% for barcodeKit in step.getPrePopulatedFieldDict.barcodes_subset %}
+            barcode_kits_subset_list.push("{{barcodeKit.name}}");
+        {% endfor %}
+        
+        var barcode_kits_all_list = [];
+        
+        {% for barcodeKit in step.getPrePopulatedFieldDict.barcodes %}
+            barcode_kits_all_list.push("{{barcodeKit.name}}");
+        {% endfor %}
+        
         
         var defaultAvalancheTemplateKitObj = "{{step.getPrePopulatedFieldDict.templateKitTypes.Avalanche.applDefault}}";
         var defaultAvalancheTemplateKitName = "{{step.getCurrentSavedFieldDict.avalancheTemplateKitName}}";
@@ -391,15 +424,137 @@
 //    		}
     	}
 
+
+        function handleTemplateKitSelectionForFlowOverride(selectedTemplateKitName) {
+            selectedSeqKit = $("#sequenceKit option:selected").val();
+            var seqKitFlowCount = seq_kits_to_flows_map[selectedSeqKit];
+                                
+            if (selectedTemplateKitName) {
+                var templateKitFlowCount = template_kits_to_flows_map[selectedTemplateKitName];
+            
+                if (templateKitFlowCount > 0) {
+                     
+                    if (selectedSeqKit) {
+                        var categories = seq_kits_to_categories_map[selectedSeqKit];
+ 
+                        if (categories.toLowerCase().indexOf("flowoverridable") >= 0) {                                                       
+                            $('input[name = "flows"]').val(templateKitFlowCount);
+                            $("#selectedFlows").text($('input[name = "flows"]').val());
+                        }
+                    }
+                }               
+            }    
+        }
+        
+
+        function handleFlowOverridableSeqKitSelection(selectedSeqKitName, seqKitFlowCount) {
+                                
+            var selectedTemplateKit = null;
+            //if the selected templating kit has a flow count value, use that
+            
+            //WORKAROUND: $('input[name="templatekitType"]').val() is NOT always CORRECT!!!
+            var templateKitType = $('input[name="selectedTemplateKitType"]').val();
+
+            if (templateKitType == "") {            
+                templateKitType = $('input[name="templatekitType"]').val(); 
+            }
+                 
+            if (templateKitType == "OneTouch") {                  
+                selectedTemplateKit = $("#OneTouch__templatingKit option:selected").val();
+            }
+            else if (templateKitType == "IonChef") {                  
+                selectedTemplateKit = $("#IonChef__templatingKit option:selected").val();
+            }
+             
+            if (selectedTemplateKit) {
+                var templateKitFlowCount = template_kits_to_flows_map[selectedTemplateKit];
+                
+                if (templateKitFlowCount > 0) {
+                    $('input[name = "flows"]').val(templateKitFlowCount);
+                }
+                else {                 
+                    $('input[name = "flows"]').val(seqKitFlowCount);
+                }                                   
+            }
+            else {                        
+                $('input[name = "flows"]').val(seqKitFlowCount);
+            } 
+            
+            $("#selectedFlows").text($('input[name = "flows"]').val());          
+        }
+        
+
+        function setBarcodeKitSelectionList(selectedLibKit, categories) {
+            if (categories.toLowerCase().indexOf("bcshowsubset") >= 0) {
+                var $selects = $("#barcodeId");
+                set_barcodeKit_to_select($selects, barcode_kits_subset_list);
+            }
+            else {                
+                var $selects = $("#barcodeId");                                           
+                set_barcodeKit_to_select($selects, barcode_kits_all_list);
+            }
+        }
+        
+        function  set_barcodeKit_to_select($selects, value_list) {
+            $selects.empty();
+            $selects.append($("<option></option>"));
+            
+            //loop through the barcode kits
+            $.each(value_list, function(i) {
+                var value = value_list[i];
+                
+                var $opt = $("<option></option>");
+                if (value == "{{step.getCurrentSavedFieldDict.barcodeId}}") {
+                    $opt.attr("selected","selected");
+                }                
+                $opt.attr('value', value);
+                $opt.text(value);
+                $selects.append($opt);
+            });
+                
+        }        
+        
     	//at document.ready...
     	handleAvalancheForPreviousSelection();
 
+        //at document.ready...
+        //set up barcode kit label selection based on library kit selection
+        var selectedLibKit = "{{step.getCurrentSavedFieldDict.librarykitname}}";
+        
+        if (selectedLibKit) {
+            var categories = lib_kits_to_categories_map[selectedLibKit];            
+            if (categories.toLowerCase().indexOf("bcrequired") >= 0) {
+                $('#barcodeKitLabel').text("Barcode Set (required)");
+                $('input[name = "isBarcodeKitRequired"]').val("true");
+            }
+            else {
+                $('#barcodeKitLabel').text("Barcode Set (optional)");
+                $('input[name = "isBarcodeKitRequired"]').val("false");
+            }
+            
+            setBarcodeKitSelectionList(selectedLibKit, categories);
+        }
+        else {
+            $('input[name = "isBarcodeKitRequired"]').val("false");
+        }
         
         $("#sequenceKit").on('change', function(){
             if (!$("#flows").prop('readonly')){
                 var flowCount = seq_kits_to_flows_map[$(this).val()];
-                $("#flows").val(flowCount);
-                $("#selectedFlows").text(flowCount);
+
+                var selectedSequenceKitName = $(this).val();
+                
+                var categories = seq_kits_to_categories_map[$(this).val()];
+                                
+                if (categories.toLowerCase().indexOf("flowoverridable") >= 0) {
+                    handleFlowOverridableSeqKitSelection($(this).val(), flowCount);
+                }
+                else {
+                    $('input[name = "flows"]').val(flowCount);
+                    $("#selectedFlows").text(flowCount);
+                }
+
+                $("#selectedSequenceKit").text(seqKitNameToDesc[$(this).val()]);
             }
         });
 
@@ -409,6 +564,29 @@
         
         $("#libraryKitType").change(function()  {
         	$("#selectedLibraryKitType").text(libKitNameToDesc[$(this).val()]);
+
+        	//update barcode kit selection list on library kit selection changed
+        	var libKitName = $(this).val();
+        	console.log("at libraryKitType.change() libKitName=", libKitName);
+        	
+        	if (libKitName) {
+            	var categories = lib_kits_to_categories_map[libKitName];
+                
+                if (categories.toLowerCase().indexOf("bcrequired") >= 0) {
+                    $('#barcodeKitLabel').text("Barcode Set (required)");
+                    $('input[name = "isBarcodeKitRequired"]').val("true");
+                }
+                else {
+                    $('#barcodeKitLabel').text("Barcode Set (optional)");
+                    $('input[name = "isBarcodeKitRequired"]').val("false");
+                }
+                
+                setBarcodeKitSelectionList(libKitName, categories);
+            }
+            else {
+                $('#barcodeKitLabel').text("Barcode Set (optional)");   
+                setBarcodeKitSelectionList(libKitName, "");         
+            }
         });
 
         //logic to support avalanche 
@@ -426,22 +604,25 @@
         
         $('input[name="templatekitType"]').change(function () {
             var checkedRadioButton = $(this)
-            
 
+            $("#templateKit_comment").hide();
+                
             console.log("templatekitType - checkedRadioButton=", checkedRadioButton);
             
             var templateType = checkedRadioButton.val();
 
-            if (templateType == "IonChef") {
+			//WORKAROUND
+            $('input[name = "selectedTemplateKitType"]').val(templateType);
+            
+            if (templateType == "IonChef") {             
             	$('input[name = "templatekitSubType"]').removeAttr('checked');
             	$('input[name = "templatekitSubType"]').attr("disabled", true);
                 
                 updateNonAvalanche3PrimeAdapter();
                 updateNonAvalancheFlowCount();
             	$("#selectedTemplatingKitName").text($("select[name='templatekitname']").find("option:selected").val());
-
             }
-            else {
+            else {             
             	$('input[name = "templatekitSubType"]').removeAttr('disabled'); 
                	
             	var selectedTemplateKit = $("select[name='templatekitname']").val();
@@ -462,6 +643,8 @@
                     currentSelect.attr('style', 'width: 350px;');
                     currentSelect.attr('name', 'templatekitname');
                     $("#selectedTemplatingKitName").text(currentSelect.find("option:selected").val());
+
+                    handleTemplateKitSelectionForFlowOverride(currentSelect.find("option:selected").val());
                 } else {
                     currentSelect.attr('style', 'width: 350px; display: none;');
                     currentSelect.attr('name', currentSelect.attr('id').replace('__templatingKit', '') + '__templatekitname');
@@ -497,6 +680,8 @@
         			updateNonAvalancheFlowCount();        			
         		}
         	}
+
+        	handleTemplateKitSelectionForFlowOverride(selectedVal);
         	
             $("#selectedTemplatingKitName").text($(this).find("option:selected").val());
         });
@@ -550,11 +735,7 @@
             	updateAvalancheFlowCount();       	
             }
         });
-        
-        $("#sequenceKit").change(function()  {
-        	updateNonAvalancheFlowCount();
-            $("#selectedSequenceKit").text(seqKitNameToDesc[$(this).val()]);
-        });
+
                 
         var flowsSpinner = $("#flows").spinner({min: 0, max: 10000});
         flowsSpinner.spinner("value", '{{step.getCurrentSavedFieldDict.flows}}');

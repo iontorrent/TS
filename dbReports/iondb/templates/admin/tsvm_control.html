@@ -1,0 +1,202 @@
+{% extends "admin/base_site.html" %}
+{% load url from future %}
+
+{% block title %}Management Options{% endblock %}
+
+{% block content %}
+<div id="content-main">
+    <h1>Torrent Server Virtual Machine</h1>
+    <pre id="msg" class="alert" style="display: none; width:70%;"></pre>
+    <div id="msg_update" class="alert alert-success" style="display: none; width:70%;">
+        <button href="update/" id="update" class="action" title="Only one TS-VM may exist at a time">Update</button>
+    </div>
+    
+    <div id="no_tsvm" style="display: none;">
+        <h2>No TS-VM found</h2>
+        <div>
+            <h3>Available versions:</h3>
+            {% for version in versions %}
+            <p style="padding-left: 30px;">
+                <label class="radio">
+                    <input type="radio" name="version" value="{{version}}" {%if forloop.first%}checked{%endif%}> TS {{version}}
+                </label>
+            </p>
+            {% endfor %}
+        </div>
+        <button href="setup/" id="setup" class="action">Start TS-VM setup</button>
+    </div>
+    <div id="tsvm" style="display: none;">
+        <h2>TS-VM is <span id="state"></span></h2>
+        <div id="goto_vm">
+            To access the TS-VM, try address <a href="http://ts-vm-{{host}}/" target='_blank'>ts-vm-{{host}}</a> 
+            or <a href="http://{{host}}:8082/" target='_blank'>{{host}}:8082</a>
+        </div>
+        </br>
+        <div>
+            <button href="start/" id="start" class="action">Start</button>
+            <button href="stop/" id="stop" class="action">Stop</button>
+            <button href="suspend/" id="suspend" class="action">Suspend</button>
+            <button href="destroy/" id="destroy" class="action">Delete</button>
+        </div>
+        </br>
+        {% if log_files %}
+        <div>
+            Download Logs:
+            <ul>
+            {% for log in log_files %}
+                <li><a href="{%url 'tsvm_log' log %}">{{log}}</a></li>
+            {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+    </br>
+    <div id="log" data-url="{%url 'tsvm_log' 'provisioning.log' %}" style="display:none; width:70%; background-color:#F3F3F3;">
+        <a id="close_log" href="#" class="close" style="position:fixed;left:67%;">&times;</a>
+        <pre style="height:400px; overflow:scroll;"></pre>
+    </div>
+</div>
+<script type="text/javascript">
+    function inProcess(state){
+        var in_process_states = ['Initializing', 'Starting', 'Stopping', 'Unknown'];
+        return in_process_states.indexOf(state)>=0;
+    }
+    
+    function vmExists(state){
+        var exists_states = ['Initializing', 'Starting', 'Running', 'Stopping', 'Saved', 'Stopped', 'Stopping'];
+        return exists_states.indexOf(state)>=0;
+    }
+    
+    function vmNotSetup(state){
+        var notsetup_states = ['Not setup'];
+        return notsetup_states.indexOf(state)>=0;
+    }
+    
+    function showMsg(state, msg, elem){
+        elem = elem || '#msg';
+        if (state == 'Error'){
+            $(elem).html("ERROR: "+msg).addClass('alert-error').removeClass('alert-info').show();
+        } else {
+            $(elem).html(msg).removeClass('alert-error').addClass('alert-info').show();
+        }
+    }
+    
+    function check_update(){
+        $.post("check_update/", function(data){
+            console.log('check_update returned:', data);
+            if (data.state=='Upgradable'){
+                $('#msg_update').prepend(data.msg).show();
+            } else if (data.state=='Error'){
+                showMsg(data.state, 'tsvm update check: '+data.msg, '#msg_update');
+            }
+        });
+    }
+    
+    $(function(){
+        
+        var update_timer = null;
+        var retry_check_status = 0;
+        check_status();
+        check_update();
+        
+        function check_status(){
+            // check the status of VM
+            $.post("status/", function(data){
+                console.log('check_status returned', data);
+                handle_status(data);
+            }).fail(function(){
+                retry_check_status+= 1;
+                if (retry_check_status >= 3){
+                    retry_check_status= 0;
+                    showMsg('Error', 'Failed to get TS-VM status');
+                    clearInterval(update_timer);
+                }
+            });
+        }
+        
+        function handle_status(status){
+            var previous_state = $('#state').text();
+            console.log('handle_status', previous_state, status.state);
+
+            // get log
+            if (status.state == 'Initializing' || previous_state == 'Initializing'){
+                $el = $('#log').find('pre');
+                $.get($('#log').data('url'), function(data){
+                    if(status.state != previous_state) $el.parent().show();
+                    $el.text(data);
+                    $el.scrollTop( $el.prop("scrollHeight") );
+                }).fail(function(data){
+                    showMsg('Error', data.statusText+"<br/>"+data.responseText);
+                });
+            }
+            
+            if (status.state == previous_state && update_timer != null)
+                return;
+
+            if(!inProcess(status.state)){
+                clearInterval(update_timer);
+            } else if (update_timer == null || !inProcess(previous_state)){
+                // start check status timer if it's not already running
+                update_timer = setInterval(check_status, 10000);
+            }
+            
+            $('#state').text(status.state);
+            
+            if (vmNotSetup(status.state)){
+                $('#no_tsvm').show();
+                $('#tsvm').hide();
+            } else if (vmExists(status.state)){
+                $('#no_tsvm').hide();
+                $('#tsvm').show();
+            }
+
+            if (status.msg) showMsg(status.state, status.msg);
+
+            // update buttons
+            $("button").prop('disabled', true);
+            $("#goto_vm").hide();
+            if (status.state == 'Running'){
+                $('#stop, #suspend, #destroy').prop('disabled',false);
+                $("#goto_vm").show();
+            } else if (status.state == 'Stopped' || status.state == 'Saved'){
+                $('#start, #destroy').prop('disabled',false);
+            } else if (status.state == 'Not setup'){
+                $('#setup').prop('disabled',false);
+                $('#update').prop('disabled',false).removeAttr('title');
+            }
+        }
+        
+        $('.action').click(function(){
+            $('#msg').hide();
+            var url = $(this).attr('href');
+            var action = this.id;
+            if (action == 'setup'){
+                var selected_version = $('[name=version]:checked').val();
+                url += '?version=' + selected_version;
+                // the setup task takes a long time to return:
+                //     change state to Initializing imediately to kick off status update function
+                handle_status({'state': "Initializing"});
+            } else if (action == 'update'){
+                $('#msg_update').hide();
+                $("button").prop('disabled', true);
+                showMsg('', 'Updating ion-tsvm ...');
+            }
+            
+            $.post(url, function( data ) {
+                console.log(url, 'returned:', data);
+                handle_status(data);
+                if ( (action=='destroy' && data.state=='Stopped') || (action=='update' && data.state=='Success') ){
+                    // VM is removed, reload page
+                    setTimeout(function(){
+                        window.location.reload(true);
+                    }, 1000);
+                }
+            }).fail(function(data){
+                showMsg('Error', data.statusText+"<br/>"+data.responseText);
+            });
+        });
+        
+        $('#close_log').click(function(){ $('#log').hide(); });
+    });
+</script>
+{% endblock %}

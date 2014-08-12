@@ -2,7 +2,7 @@
 
 #include "DNTPRiseModel.h"
 
-DntpRiseModel::DntpRiseModel(int _npts,float *_C,float *_tvals,int _sub_steps)
+DntpRiseModel::DntpRiseModel(int _npts,float *_C,const float *_tvals,int _sub_steps)
 {
     npts = _npts;
     tvals = _tvals;
@@ -122,7 +122,7 @@ float MeasuredNucRiseInterpolation(float x)
 }
 
 // time warp the measured nuc rise function to make stretched or squashed versions for anywhere in the chip
-int MeasuredNucRiseFunction(float *output, int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma)
+int MathModel::MeasuredNucRiseFunction(float *output, int npts, const float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma)
 {
     int ndx = 0;
     float tlast = 0.0f;
@@ -182,7 +182,7 @@ inline float instant_spline_val(float scaled_dt)
 }
 
 // spline with one knot
-int SplineRiseAndFallFunction(float *output, int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma, float nuc_time_offset)
+static int SplineRiseAndFallFunction(float *output, int npts, const float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma, float nuc_time_offset)
 {
     int ndx = 0;
     float tlast = 0.0f;
@@ -233,7 +233,7 @@ int SplineRiseAndFallFunction(float *output, int npts, float *frame_times, int s
 }
 
 // spline with one knot
-int SplineRiseFunction(float *output, int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma, float tangent_zero, float tangent_one)
+int MathModel::SplineRiseFunction(float *output, int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc, float sigma, float tangent_zero, float tangent_one)
 {
     int ndx = 0;
     float tlast = 0.0f;
@@ -295,7 +295,7 @@ int SplineRiseFunction(float *output, int npts, float *frame_times, int sub_step
 }
 
 // can probably delete this
-int SigmaXRiseFunction(float *output,int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma)
+int MathModel::SigmaXRiseFunction(float *output,int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma)
 {
     int ndx = 0;
     float tlast = 0.0f;
@@ -342,7 +342,7 @@ int SigmaXRiseFunction(float *output,int npts, float *frame_times, int sub_steps
 
 
 
-int SigmaRiseFunction(float *output,int npts, float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma, float nuc_flow_span, bool splineflag)
+int MathModel::SigmaRiseFunction(float *output,int npts, const float *frame_times, int sub_steps, float C, float t_mid_nuc,float sigma, float nuc_flow_span, bool splineflag)
 {
 if (splineflag)
     return(SplineRiseAndFallFunction(output,npts,frame_times,sub_steps,C,t_mid_nuc,sigma,nuc_flow_span));
@@ -352,6 +352,6 @@ else
 
 int DntpRiseModel::CalcCDntpTop(float *output,float t_mid_nuc,float sigma, float nuc_flow_span, int i_nuc)
 {
-    return(SigmaRiseFunction(output,npts,tvals,sub_steps,C[i_nuc],t_mid_nuc,sigma, nuc_flow_span, splineflag));
+    return(MathModel::SigmaRiseFunction(output,npts,tvals,sub_steps,C[i_nuc],t_mid_nuc,sigma, nuc_flow_span, splineflag));
 }
 

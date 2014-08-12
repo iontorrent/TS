@@ -16,13 +16,13 @@ class Acq {
 		void	SetWellTrace(double *trace, int x, int y);
 		void	Clear();
 		void	Write();
-		bool	Write(const char *name, int ox, int oy, int ow, int oh);
-		bool    WriteVFC(const char *name, int ox, int oy, int ow, int oh);
-		bool	WriteAscii(const char *acqName, int ox, int oy, int ow, int oh);
+        bool	Write(const char *name, int ox, int oy, int ow, int oh);
+        bool    WriteVFC(const char *name, int ox, int oy, int ow, int oh, bool verbose=false);
+        bool	WriteAscii(const char *acqName, int ox, int oy, int ow, int oh);
 		int	PinnedLow() {return pinnedLow;}
 		int	PinnedHigh() {return pinnedHigh;}
 		uint16_t get_val(uint32_t x, uint32_t y, uint32_t rframe, uint32_t numFrames);
-		int     PrevFrameSubtract(int elems, int16_t *framePtr, int16_t *prevFramePtr, int16_t *results, uint64_t *out_len, uint32_t ow, uint32_t oh);
+//		int     PrevFrameSubtract(int elems, int16_t *framePtr, int16_t *prevFramePtr, int16_t *results, uint64_t *out_len, uint32_t ow, uint32_t oh);
 
                 void CalculateNumOfRegions(uint32_t ow, uint32_t oh);
                 void PopulateRegionalAcquisitionWindow(
@@ -48,6 +48,7 @@ class Acq {
                 unsigned int GetCompressedFrameNum(unsigned int unCompressedFrameNum);
                 unsigned int GetUncompressedFrames(unsigned int compressedFrames);
                 bool WriteTimeBasedAcq(char *acqName, int ox, int oy, int ow, int oh);
+                bool WritePFV(char *acqName, int ox, int oy, int ow, int oh, char *options);
                 void PopulateCroppedRegionalAcquisitionWindow(
                     const char* t0InfoFile, 
 		    const char* regionAcqT0File,
@@ -100,6 +101,8 @@ class Acq {
                 std::vector<float> region_acq_end;
                 std::vector<int> excludedRegions;
 };
+extern int PrevFrameSubtract(uint32_t w, uint32_t h, int16_t *framePtr, int16_t *prevFramePtr,
+		int16_t *results, uint64_t *out_len, uint32_t *comprType);
 
 #endif // ACQ_H
 

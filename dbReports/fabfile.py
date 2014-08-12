@@ -123,7 +123,7 @@ def _verify_local_settings():
         abort('\n\t' + '\n\t'.join(errors))
 
 
-def test(reusedb=0, verbosity=2, coverage=1, viewcoverage=1, fail=0):
+def test(reusedb=0, verbosity=2, coverage=1, viewcoverage=1, fail=1):
     '''Run the test suite and bail out if it fails
     
         :reusedb=[0|1] 1 will reuse an existing test db (test_iondb)
@@ -148,17 +148,18 @@ def test(reusedb=0, verbosity=2, coverage=1, viewcoverage=1, fail=0):
             %s \
             iondb" % (reusedb, verbosity, options)
     flag = subprocess.call(cmd, shell=True)
-    
-    if not flag and fail:
-        # TODO: ADD SOMETHING HERE TO NOTIFY USERS OF FAILURE
-        pass
-    else:
-        # install()
-        pass
+
     if int(coverage) == 1 and int(viewcoverage) == 1:
         local('firefox file://$PWD/reports/coverage/index.html')
     if int(coverage) == 1:
         _verify_coverage(fail=fail==1)
+    
+    if not flag and fail:
+        sys.exit(1)
+    else:
+        sys.exit(0)
+        pass
+    # 
 
 
 def clean():

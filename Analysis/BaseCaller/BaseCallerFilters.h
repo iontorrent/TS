@@ -9,15 +9,17 @@
 
 #include <string>
 #include <vector>
-#include <set>
 #include "json/json.h"
 
 #include "BaseCallerUtils.h"
-#include "DPTreephaser.h"
-#include "OrderedDatasetWriter.h"
 #include "Mask.h"
 #include "mixed.h"
 #include "OptArgs.h"
+
+class DPTreephaser;
+struct BasecallerRead;
+struct ProcessedRead;
+struct ReadFilteringHistory;
 
 using namespace std;
 
@@ -53,7 +55,8 @@ public:
   //! @param    wells               Wells file reader object, source of filter training reads
   //! @param    sample_size         Max number of reads to sample for training
   //! @param    mask                Mask for determining which reads are eligible for training set
-  void TrainClonalFilter(const string& output_directory, RawWells& wells, int sample_size, Mask& mask);
+  //! @param    opts                User options for polyclonal filter and flows
+  void TrainClonalFilter(const string& output_directory, RawWells& wells, int sample_size, Mask& mask, const PolyclonalFilterOpts & opts);
 
   //! @brief    Once filtering is complete, transfer filtering outcomes to Mask object.
   //!
@@ -93,7 +96,8 @@ public:
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    measurements        Key-normalized flow signal from wells
-  void FilterHighPPFAndPolyclonal   (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& measurements);
+  //! @param    opts                User options for how filters work
+  void FilterHighPPFAndPolyclonal   (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& measurements, const PolyclonalFilterOpts & opts);
 
   //! @brief    Apply zero-length filter to a valid read.
   //! @param    read_index          Read index
@@ -158,9 +162,27 @@ public:
   //! @param    read_index          Read index
   bool IsPolyclonal(int read_index) const;
 
+  // Write the bead adapters to comments for BAM header
+  void WriteAdaptersToBamComments(vector<string> &comments);
+
+  //! @brief    Saving adapter classification results to json
+  void WriteToBaseCallerJson(Json::Value &json);
+
 
 
 protected:
+
+  //! @brief    Check input strings from non-ACGT characters
+  void ValidateBaseStringVector(vector<string>& string_vector);
+
+  //! @brief    Adapter trimmer using the predicted signal to determine the adapter position
+  bool TrimAdapter_PredSignal(float& best_metric, int& best_start_flow, int& best_start_base, int& best_adapter_overlap,
+           const string& effective_adapter, DPTreephaser& treephaser, const BasecallerRead& read);
+
+  //! @brief    Adapter trimmer using a flowspace alignment to determine the adapter position
+  bool TrimAdapter_FlowAlign(float& best_metric, int& best_start_flow, int& best_start_base, int& best_adapter_overlap,
+  		   const string& effective_adapter, const vector<float>& scaled_residual,
+  		   const vector<int>& base_to_flow, const BasecallerRead& read);
 
   // General information
   ion::FlowOrder      flow_order_;                        //!< Flow order object, also stores number of flows
@@ -186,14 +208,21 @@ protected:
   int                 filter_beverly_min_read_length_;    //!< If Beverly filter trims and makes the read shorter than this, the read is filtered
 
   // Adapter and quality trimming
-  string              trim_adapter_;                      //!< Adapter sequence
+  vector<string>      trim_adapter_;                      //!< Adapter sequences
   double              trim_adapter_cutoff_;               //!< Adapter detection threshold
+  double              trim_adapter_separation_;           //!< Minimum separation between found adapter sequences
   int                 trim_adapter_min_match_;            //!< Minimum number of overlapping adapter bases for detection
   int                 trim_adapter_mode_;                 //!< Selects algorithm and metric used for adapter detection
   int                 trim_qual_window_size_;             //!< Size of averaging window used by quality trimmer
   double              trim_qual_cutoff_;                  //!< Quality cutoff used by quality trimmer
   int                 trim_min_read_len_;                 //!< If adapter or quality trimming makes the read shorter than this, the read is filtered
-  string              trim_adapter_tf_;                   //!< Test Fragment adapter sequence. If empty, do not perform adapter trimming on TFs.
+  vector<string>      trim_adapter_tf_;                   //!< Test Fragment adapter sequences. If empty, do not perform adapter trimming on TFs.
+  // Accounting for adapter trimming
+  vector<uint64_t>    adapter_class_num_reads_;           //!< Number of reads per library adapter
+  vector<uint64_t>    adapter_class_num_decisions_;        //!< Reporting in how many cases more than one adapter where found
+  vector<double>      adapter_class_av_score_;            //!< Average classification score for library reads
+  vector<double>      adapter_class_av_separation_;       //!< Average separation between adapter types
+
 
   // Avalanche filter (sort readlength filter, higher QV on shorter reads, and lower QV for longer reads)
   bool                filter_avalanche_enabled_;          //!< Is Avalanche filter enabled?

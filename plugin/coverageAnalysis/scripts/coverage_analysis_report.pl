@@ -1,5 +1,7 @@
 #!/usr/bin/perl
-# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
+
+# This file is now used for generating partial a HTML report for cmd-line run_coverage_analysis.sh
 
 use File::Basename;
 
@@ -24,7 +26,7 @@ my $OPTIONS = "Options:
   -W <msg> General Warning message to be output to the report (after -w). Default: ''
   -D <dir> Directory path for working directory where input files are found and output files saved.
   -N <title> Name prefix for any output files for display and links. Default: 'tca_auxillary'.
-  -A <file> Auxillary help text file defining fly-over help for HTML titles. Default: <script dir>/help_tags.txt.
+  -A <file> Auxillary help file for fly-over help for HTML titles. Assumes JSON format if ext is '.json'. Default: <script dir>/help_tags.txt.
   -s <title> Stats table header text (Plain text. Fly-over help added if <title> is matched to help text.) Default 'All Reads'.
   -T <file> Name for HTML Table row summary file.
   -t <title> Secondary title for report. Default: ''.";
@@ -167,7 +169,7 @@ print OUTFILE "</table>\n";
 print OUTFILE "<br/>\n";
 
 # table headers
-printf OUTFILE "<div class=\"statshead center\" style=\"width:%dpx\">\n", ($have2stats ? ($trgcoverage ? 780 : 730) : 370);
+printf OUTFILE "<div class=\"statshead center\" style=\"width:%dpx\">\n", ($have2stats ? ($trgcoverage ? 780 : 730) : 380);
 print OUTFILE "<table>\n <tr>\n";
 if( $ampcoverage ) {
   $hotLable = getHelp("Amplicon Read Coverage",1);
@@ -202,13 +204,13 @@ if( $ampcoverage )
   push( @keylist, "Amplicons with no strand bias" );
   push( @keylist, $passingcov ? "Amplicons with passing coverage" : "Amplicons reading end-to-end" );
   $txt = subTable( $statsfile, \@keylist );
-  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:360px\">$txt</div></td>\n";
+  print OUTFILE "  <td><div class=\"statsdata\">$txt</div></td>\n";
 } elsif( $trgcoverage ) {
   @keylist = ( "Number of unmerged targets", "Percent assigned target reads", "Average base coverage depth per target",
     "Uniformity of base coverage per target", "Targets with base coverage at 1x", "Targets with base coverage at 20x",
     "Targets with base coverage at 100x", "Targets with base coverage at 500x", "Targets with no strand bias", "Targets with full coverage" );
   $txt = subTable( $statsfile, \@keylist );
-  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:410px\">$txt</div></td>\n";
+  print OUTFILE "  <td><div class=\"statsdata\">$txt</div></td>\n";
 }
 if( $basecoverage )
 {
@@ -224,7 +226,7 @@ if( $basecoverage )
     "$tagU base coverage at 20x", "$tagU base coverage at 100x", "$tagU base coverage at 500x", "$tagU bases with no strand bias" ) );
   push( @keylist, '' ) if( $amplicons || $trgcoverage );
   my $txt = subTable( $statsfile, \@keylist );
-  print OUTFILE "  <td><div class=\"statsdata\" style=\"width:360px\">$txt</div></td>\n";
+  print OUTFILE "  <td><div class=\"statsdata\">$txt</div></td>\n";
 }
 print OUTFILE " </tr>\n</table>\n</div>\n</div>\n";
 
@@ -352,6 +354,7 @@ sub loadHelpText
 {
   my $hfile = $_[0];
   $hfile = "$Bin/help_tags.txt" if( $hfile eq "" );
+  loadHelpJson($hfile) if( $hfile =~ /\.json$/ );
   unless( open( HELPFILE, $hfile ) )
   {
     print STDERR "Warning: no help text file found at $hfile\n";
@@ -362,7 +365,7 @@ sub loadHelpText
   while( <HELPFILE> )
   {
     chomp;
-    next if( ! /\S/ );
+    next unless( /\S/ );
     if( s/^@// )
     {
       $helptext{$title} = $text if( $title ne "" );
@@ -378,9 +381,39 @@ sub loadHelpText
   close( HELPFILE );
 }
 
+sub loadHelpJson
+{
+  # This only read pseudo-json: 1 level deep and no arrays
+  my $hfile = $_[0];
+  $hfile = "$Bin/../templates/stats_dict.json" if( $hfile eq "" );
+  unless( open( HELPFILE, $hfile ) )
+  {
+    print STDERR "Warning: no help text file found at $hfile\n";
+    return;
+  }
+  my $title = "";
+  my $text = "";
+  while( <HELPFILE> )
+  {
+    chomp;
+    next unless( /\S/ );
+    next if( /^\s*[{}]/ );
+    ($title,$text) = split(':',$_,2);
+    $title =~ s/^\s+|\s+$//g;
+    $text =~ s/^\s+|\s+$//g;
+    $title =~ s/^"|"$//g;
+    $text =~ s/^"|"$//g;
+    $helptext{$title} = $text if( $title ne "" );
+  }
+  close( HELPFILE );
+}
+
 sub getHelp
 {
-  my $help = $helptext{$_[0]};
+  my $help = $_[0];
+  $help =~ s/[^0-9A-Za-z]/_/g unless( defined($helptext{$help}) );
+  $help =~ s/^Amplicons with at/nAmplicons with at/ if( $rnacoverage );
+  $help = $helptext{$help};
   my $htmlWrap = $_[1];
   $help = $_[0] if( $help eq "" );
   $help = "<span title=\"$help\">$_[0]</span>" if( $htmlWrap == 1 );
@@ -406,7 +439,7 @@ sub writeLinksToFiles
   $style = " style=\"$style\"" if( $style ne "" );
   if( -f "$workdir/$pic" )
   {
-    print OUTFILE "<td class=\"imageplot\"><a href=\"$pic\" title=\"$desc\"><img $style src=\"$pic\" alt=\"$alt\"/></a>";
+    print OUTFILE "<td class=\"imageplot\" style=\"background-color:#F5F5F5\"><a href=\"$pic\" title=\"$desc\"><img $style src=\"$pic\" alt=\"$alt\"/></a>";
   }
   else
   {
@@ -446,6 +479,7 @@ sub subTable
       {
         $v =~ s/^\s*//;
         my $nf = ($v =~ /^(\d*)(\.?.*)/) ? commify($1).$2 : $v;
+        # corection for percentages vs. numbers for AmpliSeq-RNA
         $n = getHelp($n,1);
         $htmlText .= "  <tr><td class=\"inleft\">$n</td>";
         $htmlText .= ($v ne "") ? "<td class=\"inright\">$nf</td></tr>\n" : "</td>\n";

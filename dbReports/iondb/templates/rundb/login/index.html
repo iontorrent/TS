@@ -64,7 +64,7 @@
             background: transparent;
         }
         .login-form {
-            background-color: white;
+            background-color: transparent;
         }
         .jumbo-brand-block {
             position: absolute;
@@ -157,7 +157,7 @@ $(document).ready(function(){
         });
         
     };
-    $.get('/login/ajax/?next={{ request.GET.next|default:"/data/"}}', function(data){
+    $.get('/login/ajax/?next={{ request.GET.next|default:"/data/"|urlencode}}', function(data){
         $('#login_html').append(data.form);
         TB.utilities.form.focus();
         $('#login-form').submit(submitHandler);

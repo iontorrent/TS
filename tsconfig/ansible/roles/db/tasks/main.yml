@@ -1,0 +1,87 @@
+---
+# file: roles/db/tasks/main.yml
+
+- name: Install postgresql package
+  apt: pkg=postgresql state=latest
+  
+- name: Need python-psycopg2
+  apt: name=python-psycopg2 state=installed force=yes
+
+- name: Determine postgresql version string
+  shell: "psql --version | grep ^psql | awk '{print $3}' | cut -f1-2 -d."
+  register: psql_version
+  notify: restart postgresql
+- debug: msg='Postgresql version {{ psql_version.stdout }}'
+
+
+#Create config files, if they do not exist
+- name: Setup postgresql cluster files
+  command: /usr/bin/pg_createcluster {{ psql_version.stdout }} main
+           creates=/etc/postgresql/{{ psql_version.stdout }}/main/pg_hba.conf
+
+#Modify the configuration of postgresql
+- name: Modify pg_hba.conf file
+  sudo_user: postgres
+  replace: dest=/etc/postgresql/{{ psql_version.stdout }}/main/pg_hba.conf
+             regexp='(.*)(peer|ident|md5|ident sameuser)' replace='\1trust'
+             
+- name: Modify postgresql.conf - effective_cache_size
+  sudo_user: postgres
+  lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
+                regexp='.*effective_cache_size.*'
+                line='effective_cache_size = {{ effective_cache_size }}'
+             
+- name: Modify postgresql.conf - work_mem
+  sudo_user: postgres
+  lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
+                regexp='.*work_mem.*'
+                line='work_mem = {{ work_mem }}'
+             
+- name: Modify postgresql.conf - commit_delay
+  sudo_user: postgres
+  lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
+                regexp='.*commit_delay.*'
+                line='commit_delay = {{ commit_delay }}'
+             
+- name: Modify postgresql.conf - checkpoint_segments
+  sudo_user: postgres
+  lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
+                regexp='.*checkpoint_segments.*'
+                line='checkpoint_segments = {{ checkpoint_segments }}'
+
+# SPECIAL CASE: Only make this edit if /etc/sysctl.d/10-postgresql-shm.conf file exists
+- name: Test for {{ postgres_sysctl_file }}
+  command: /usr/bin/test -e {{ postgres_sysctl_file }}
+  register: response
+  ignore_errors: yes
+  
+- name: Modify postgresql.conf - modify shared_buffers
+  lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
+                regexp='.*shared_buffers.*'
+                line='shared_buffers = {{ shared_buffers }}'
+  when: response|success
+
+- name: Modify {{ postgres_sysctl_file }} - modify kernel.shmmax
+  lineinfile: dest={{ postgres_sysctl_file }}
+                regexp='(kernel.shmmax)(.*)'
+                line='kernel.shmmax = {{ kernel_shmmax }}'
+  when: response|success
+  notify: reload sysctl
+  
+# I would like to call the existing handler here but no way to just trigger it?
+- name: Reload postgresql
+  service: name=postgresql-{{ psql_version.stdout }} state=reloaded enabled=yes
+  
+# Initialize the iondb database and default user
+- name: Initialize postgresql database
+  postgresql_db: name=iondb state=present
+  sudo_user: postgres
+  
+- name:  Initialize ion user in database
+  postgresql_user: name="ion"
+                     password="ion"
+                     db="iondb"
+                     role_attr_flags=SUPERUSER
+                     priv=ALL
+                     state=present
+  sudo_user: postgres

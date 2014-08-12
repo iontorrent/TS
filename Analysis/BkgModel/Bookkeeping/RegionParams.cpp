@@ -2,13 +2,13 @@
 #include "RegionParams.h"
 #include <math.h>
 
-void reg_params_ApplyUpperBound(reg_params *cur, reg_params *bound)
+void reg_params::ApplyUpperBound(const reg_params *bound, int flow_block_size)
 {
   
-  for (int i=0;i<NUMFB;i++)
+  for (int i=0;i<flow_block_size;i++)
   {
     // MAX_BOUND_CHECK(nuc_shape.t_mid_nuc_shift_per_flow);
-    MAX_BOUND_CHECK(nuc_shape.t_mid_nuc[i]);
+    MAX_BOUND_CHECK(nuc_shape.AccessTMidNuc()[i]);
     MAX_BOUND_CHECK(darkness[i]);
   }
 
@@ -33,12 +33,12 @@ void reg_params_ApplyUpperBound(reg_params *cur, reg_params *bound)
   MAX_BOUND_CHECK(tauE);
 }
 
-void reg_params_ApplyLowerBound(reg_params *cur, reg_params *bound)
+void reg_params::ApplyLowerBound(const reg_params *bound, int flow_block_size)
 {
-  for (int i=0;i<NUMFB;i++)
+  for (int i=0;i<flow_block_size;i++)
   {
     // MIN_BOUND_CHECK(nuc_shape.t_mid_nuc_shift_per_flow);
-    MIN_BOUND_CHECK(nuc_shape.t_mid_nuc[i]);
+    MIN_BOUND_CHECK(nuc_shape.AccessTMidNuc()[i]);
     MIN_BOUND_CHECK(darkness[i]);
   }
 
@@ -62,39 +62,46 @@ void reg_params_ApplyLowerBound(reg_params *cur, reg_params *bound)
   MIN_BOUND_CHECK(tauE);
 }
 
-float xComputeTauBfromEmptyUsingRegionLinearModel(float tau_R_m,float tau_R_o, float etbR)
+float xComputeTauBfromEmptyUsingRegionLinearModel(float tau_R_m,float tau_R_o, float etbR, float min_tauB, float max_tauB)
 {
   float tauB = (tau_R_m*etbR+tau_R_o);
-  if (tauB < MINTAUB) tauB = MINTAUB;
-  if (tauB > MAXTAUB) tauB = MAXTAUB;
+  if (tauB < min_tauB) tauB = min_tauB;
+  if (tauB > max_tauB) tauB = max_tauB;
   return (tauB);
 }
 
-float xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(float tauE,float etbR)
+float xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(float tauE,float etbR, float min_tauB, float max_tauB)
 {
-  float tauB = MINTAUB;
+  float tauB = min_tauB;
   if (etbR != 0)
     tauB = tauE/etbR;
-  if (tauB < MINTAUB) tauB = MINTAUB;
-  if (tauB > MAXTAUB) tauB = MAXTAUB;
+  if (tauB < min_tauB) tauB = min_tauB;
+  if (tauB > max_tauB) tauB = max_tauB;
   return (tauB);
 }
 
-float ComputeTauBfromEmptyUsingRegionLinearModel(reg_params *reg_p, float etbR)
+float reg_params::ComputeTauBfromEmptyUsingRegionLinearModel(float etbR) const
 {
-  if (reg_p->fit_taue)
-    return(xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(reg_p->tauE,etbR));
+  if (fit_taue)
+    return(xComputeTauBfromEmptyUsingRegionLinearModelWithAdjR(tauE,etbR,min_tauB,max_tauB));
   else
-    return(xComputeTauBfromEmptyUsingRegionLinearModel(reg_p->tau_R_m,reg_p->tau_R_o,etbR));
+    return(xComputeTauBfromEmptyUsingRegionLinearModel(tau_R_m,tau_R_o,etbR,min_tauB,max_tauB));
 }
 
-float xAdjustEmptyToBeadRatioForFlow(float etbR_original, float NucModifyRatio, float RatioDrift, int flow)
+float xAdjustEmptyToBeadRatioForFlow(float etbR_original, float Ampl, float Copy, float phi, float NucModifyRatio, 
+             float RatioDrift, int flow, bool if_use_alternative_etbR_equation)
 {
-  float ModifiedRatio, TimeAdjust, etbR;
+
+  float ModifiedRatio, etbR;
   ModifiedRatio = etbR_original*NucModifyRatio;
-  TimeAdjust = RatioDrift*flow/SCALEOFBUFFERINGCHANGE;
-  etbR = ModifiedRatio + (1.0f-ModifiedRatio) * TimeAdjust;   // smooth adjustment towards being as fast as an empty
-  return (etbR);
+  
+  if (!if_use_alternative_etbR_equation)
+    etbR = ModifiedRatio + (1.0f-ModifiedRatio) * RatioDrift * flow / SCALEOFBUFFERINGCHANGE; // smooth adjustment towards being as fast as an empty
+  else
+    // 6.0 constat: SCALEOFBUFFERINGCHANGE was 1,000, now it needs to be 6,000
+    etbR = ModifiedRatio + RatioDrift * phi * Copy * flow / (6.0 * SCALEOFBUFFERINGCHANGE) ; 
+  
+  return etbR;
 }
 
 float xAdjustEmptyToBeadRatioForFlowWithAdjR(float etbR_original, float NucModifyRatio, float RatioDrift, int flow)
@@ -111,129 +118,142 @@ float xAdjustEmptyToBeadRatioForFlowWithAdjR(float etbR_original, float NucModif
   return (etbR);
 }
 
-float AdjustEmptyToBeadRatioForFlow(float etbR_original, reg_params *reg_p, int nuc_id, int flow)
+float reg_params::AdjustEmptyToBeadRatioForFlow(float etbR_original, float Ampl, float Copy, float phi, int nuc_id, int flow) const
 {
 
-  if (reg_p->fit_taue)
-    return(xAdjustEmptyToBeadRatioForFlowWithAdjR(etbR_original,reg_p->NucModifyRatio[nuc_id],reg_p->RatioDrift,flow));
+  if (fit_taue)
+    return(xAdjustEmptyToBeadRatioForFlowWithAdjR(etbR_original,NucModifyRatio[nuc_id],RatioDrift,flow));
+  else 
+    return(xAdjustEmptyToBeadRatioForFlow(etbR_original, Ampl, Copy, phi, NucModifyRatio[nuc_id], RatioDrift, flow, use_alternative_etbR_equation));
+}
+
+
+void reg_params::SetStandardHigh( float t0_start, int flow_block_size)
+{
+  // per-region parameters
+  for (int j=0;j<flow_block_size;j++)
+  {
+    darkness[j] = 2.0f;
+    copy_multiplier[j] = 1.0f;
+    nuc_shape.AccessTMidNuc()[j]     = t0_start+6.0f; // really????
+    nuc_shape.t_mid_nuc_shift_per_flow[j] = 0.0f+3.0f;
+  }
+
+
+  fit_taue = false;
+  use_alternative_etbR_equation = false; 
+
+  tshift    = 3.5f;
+  nuc_shape.sigma = 8.5f; // increase for super slow project
+
+  if (use_alternative_etbR_equation)
+    RatioDrift = 5.0f; 
   else
-    return(xAdjustEmptyToBeadRatioForFlow(etbR_original,reg_p->NucModifyRatio[nuc_id],reg_p->RatioDrift,flow));
-}
+    RatioDrift = 10.0f; //-vm:
 
+  CopyDrift = 1.0f;
 
-void reg_params_setStandardHigh(reg_params *cur, float t0_start)
-{
-  // per-region parameters
-  for (int j=0;j<NUMFB;j++)
-  {
-    cur->darkness[j] = 2.0f;
-    cur->copy_multiplier[j] = 1.0f;
-    cur->nuc_shape.t_mid_nuc[j]     = t0_start+6.0f; // really????
-    cur->nuc_shape.t_mid_nuc_shift_per_flow[j] = 0.0f+3.0f;
-  }
+  krate[TNUCINDEX] = 100.0f;
+  krate[ANUCINDEX] = 100.0f;
+  krate[CNUCINDEX] = 100.0f;
+  krate[GNUCINDEX] = 100.0f;
+  sens = 250.0f;       // counts per 10K protons generated
 
+  d[TNUCINDEX] =  1000.0f; // decreased
+  d[ANUCINDEX] =  1000.0f;
+  d[CNUCINDEX] =  1000.0f;
+  d[GNUCINDEX] =  1000.0f;
 
-  cur->fit_taue = false;
+  kmax[TNUCINDEX] = 20000.0f;
+  kmax[ANUCINDEX] = 20000.0f;
+  kmax[CNUCINDEX] = 20000.0f;
+  kmax[GNUCINDEX] = 20000.0f;
+  tau_R_m = 100.0f;
+  tau_R_o = 400.0f;
+  tauE = 20.0f;
+  min_tauB = 4.0f;
+  max_tauB = 65.0f;
 
-  cur->tshift    = 3.5f;
-  cur->nuc_shape.sigma = 8.5f; // increase for super slow project
-  cur->RatioDrift = 5.0f;
-  cur->CopyDrift = 1.0f;
-
-  cur->krate[TNUCINDEX] = 100.0f;
-  cur->krate[ANUCINDEX] = 100.0f;
-  cur->krate[CNUCINDEX] = 100.0f;
-  cur->krate[GNUCINDEX] = 100.0f;
-  cur->sens = 250.0f;       // counts per 10K protons generated
-
-  cur->d[TNUCINDEX] =  1000.0f; // decreased
-  cur->d[ANUCINDEX] =  1000.0f;
-  cur->d[CNUCINDEX] =  1000.0f;
-  cur->d[GNUCINDEX] =  1000.0f;
-
-  cur->kmax[TNUCINDEX] = 20000.0f;
-  cur->kmax[ANUCINDEX] = 20000.0f;
-  cur->kmax[CNUCINDEX] = 20000.0f;
-  cur->kmax[GNUCINDEX] = 20000.0f;
-  cur->tau_R_m = 100.0f;
-  cur->tau_R_o = 400.0f;
-  cur->tauE = 20.0f;
-  cur->NucModifyRatio[TNUCINDEX] = 1.1f;
-  cur->NucModifyRatio[ANUCINDEX] = 1.1f;
-  cur->NucModifyRatio[CNUCINDEX] = 1.1f;
-  cur->NucModifyRatio[GNUCINDEX] = 1.1f;
+  NucModifyRatio[TNUCINDEX] = 1.1f;
+  NucModifyRatio[ANUCINDEX] = 1.1f;
+  NucModifyRatio[CNUCINDEX] = 1.1f;
+  NucModifyRatio[GNUCINDEX] = 1.1f;
   
-  cur->nuc_shape.t_mid_nuc_delay[TNUCINDEX] = 3.1f;
-  cur->nuc_shape.t_mid_nuc_delay[ANUCINDEX] = 3.1f;
-  cur->nuc_shape.t_mid_nuc_delay[CNUCINDEX] = 3.1f;
-  cur->nuc_shape.t_mid_nuc_delay[GNUCINDEX] = 3.1f;
-  cur->nuc_shape.sigma_mult[TNUCINDEX] = 2.1f;
-  cur->nuc_shape.sigma_mult[ANUCINDEX] = 2.1f;
-  cur->nuc_shape.sigma_mult[CNUCINDEX] = 2.1f;
-  cur->nuc_shape.sigma_mult[GNUCINDEX] = 2.1f;
+  nuc_shape.t_mid_nuc_delay[TNUCINDEX] = 3.1f;
+  nuc_shape.t_mid_nuc_delay[ANUCINDEX] = 3.1f;
+  nuc_shape.t_mid_nuc_delay[CNUCINDEX] = 3.1f;
+  nuc_shape.t_mid_nuc_delay[GNUCINDEX] = 3.1f;
+  nuc_shape.sigma_mult[TNUCINDEX] = 2.1f;
+  nuc_shape.sigma_mult[ANUCINDEX] = 2.1f;
+  nuc_shape.sigma_mult[CNUCINDEX] = 2.1f;
+  nuc_shape.sigma_mult[GNUCINDEX] = 2.1f;
   
   for (int i_nuc=0; i_nuc<NUMNUC; i_nuc++)
-    cur->nuc_shape.C[i_nuc]    =  500.0f;
+    nuc_shape.C[i_nuc]    =  500.0f;
   
-    cur->nuc_shape.valve_open = 15.0f; // frames(!)
-    cur->nuc_shape.nuc_flow_span = 60.0f; // frames = 15.0f per second
-    cur->nuc_shape.magic_divisor_for_timing = 20.7; // frames(!)
+    nuc_shape.valve_open = 15.0f; // frames(!)
+    nuc_shape.nuc_flow_span = 60.0f; // frames = 15.0f per second
+    nuc_shape.magic_divisor_for_timing = 20.7; // frames(!)
 }
 
-void reg_params_setStandardLow(reg_params *cur, float t0_start)
+void reg_params::SetStandardLow(float t0_start, int flow_block_size)
 {
   // per-region parameters
-  for (int j=0;j<NUMFB;j++)
+  for (int j=0;j<flow_block_size;j++)
   {
-    cur->darkness[j] = 0.0f;
-    cur->copy_multiplier[j] = 0.0f; // can drift very low
-    cur->nuc_shape.t_mid_nuc[j]      = t0_start-6.0f; // really???
-    cur->nuc_shape.t_mid_nuc_shift_per_flow[j] = 0.0f-3.0f;
+    darkness[j] = 0.0f;
+    copy_multiplier[j] = 0.0f; // can drift very low
+    nuc_shape.AccessTMidNuc()[j]      = t0_start-6.0f; // really???
+    nuc_shape.t_mid_nuc_shift_per_flow[j] = 0.0f-3.0f;
   }
 
-  cur->fit_taue = false;
-  cur->tshift    = -1.5f;
-  cur->nuc_shape.sigma  = 0.4f;
-  cur->RatioDrift    = 0.0f;
-  cur->CopyDrift    = 0.99f;
+  fit_taue = false;
+  use_alternative_etbR_equation = false; 
 
-  cur->krate[TNUCINDEX] = 0.01f;
-  cur->krate[ANUCINDEX] = 0.01f;
-  cur->krate[CNUCINDEX] = 0.01f;
-  cur->krate[GNUCINDEX] = 0.01f;
-  cur->sens =  0.5f;
+  tshift    = -1.5f;
+  nuc_shape.sigma  = 0.4f;
+  RatioDrift    = 0.0f;
+  CopyDrift    = 0.99f;
 
-  cur->d[TNUCINDEX] =  0.1f;
-  cur->d[ANUCINDEX] =  0.1f;
-  cur->d[CNUCINDEX] =  0.1f;
-  cur->d[GNUCINDEX] =  0.1f;
+  krate[TNUCINDEX] = 0.01f;
+  krate[ANUCINDEX] = 0.01f;
+  krate[CNUCINDEX] = 0.01f;
+  krate[GNUCINDEX] = 0.01f;
+  sens =  0.5f;
 
-  cur->kmax[TNUCINDEX] = 5.0f;
-  cur->kmax[ANUCINDEX] = 5.0f;
-  cur->kmax[CNUCINDEX] = 5.0f;
-  cur->kmax[GNUCINDEX] = 5.0f;
-  cur->tau_R_m = -100.0f;
-  cur->tau_R_o = -100.0f;
-  cur->tauE = 1.0f;
-  cur->NucModifyRatio[TNUCINDEX] = 0.9f;
-  cur->NucModifyRatio[ANUCINDEX] = 0.9f;
-  cur->NucModifyRatio[CNUCINDEX] = 0.9f;
-  cur->NucModifyRatio[GNUCINDEX] = 0.9f;
-  cur->nuc_shape.t_mid_nuc_delay[TNUCINDEX] = -3.0f;
-  cur->nuc_shape.t_mid_nuc_delay[ANUCINDEX] = -3.0f;
-  cur->nuc_shape.t_mid_nuc_delay[CNUCINDEX] = -3.0f;
-  cur->nuc_shape.t_mid_nuc_delay[GNUCINDEX] = -3.0f;
-  cur->nuc_shape.sigma_mult[TNUCINDEX] = 0.5f;
-  cur->nuc_shape.sigma_mult[ANUCINDEX] = 0.5f;
-  cur->nuc_shape.sigma_mult[CNUCINDEX] = 0.5f;
-  cur->nuc_shape.sigma_mult[GNUCINDEX] = 0.5f;
+  d[TNUCINDEX] =  0.1f;
+  d[ANUCINDEX] =  0.1f;
+  d[CNUCINDEX] =  0.1f;
+  d[GNUCINDEX] =  0.1f;
+
+  kmax[TNUCINDEX] = 5.0f;
+  kmax[ANUCINDEX] = 5.0f;
+  kmax[CNUCINDEX] = 5.0f;
+  kmax[GNUCINDEX] = 5.0f;
+  tau_R_m = -100.0f;
+  tau_R_o = -100.0f;
+  tauE = 1.0f;
+  min_tauB = 4.0f;
+  max_tauB = 65.0f;
+  NucModifyRatio[TNUCINDEX] = 0.9f;
+  NucModifyRatio[ANUCINDEX] = 0.9f;
+  NucModifyRatio[CNUCINDEX] = 0.9f;
+  NucModifyRatio[GNUCINDEX] = 0.9f;
+  nuc_shape.t_mid_nuc_delay[TNUCINDEX] = -3.0f;
+  nuc_shape.t_mid_nuc_delay[ANUCINDEX] = -3.0f;
+  nuc_shape.t_mid_nuc_delay[CNUCINDEX] = -3.0f;
+  nuc_shape.t_mid_nuc_delay[GNUCINDEX] = -3.0f;
+  nuc_shape.sigma_mult[TNUCINDEX] = 0.5f;
+  nuc_shape.sigma_mult[ANUCINDEX] = 0.5f;
+  nuc_shape.sigma_mult[CNUCINDEX] = 0.5f;
+  nuc_shape.sigma_mult[GNUCINDEX] = 0.5f;
   
   for (int i_nuc=0; i_nuc<NUMNUC; i_nuc++)
-    cur->nuc_shape.C[i_nuc]    = 1.0f;
+    nuc_shape.C[i_nuc]    = 1.0f;
   
-    cur->nuc_shape.valve_open = 15.0f; // frames(!)
-    cur->nuc_shape.nuc_flow_span = 15.0f; // frames = 15.0f per second
-    cur->nuc_shape.magic_divisor_for_timing = 20.7; // frames(!)
+    nuc_shape.valve_open = 15.0f; // frames(!)
+    nuc_shape.nuc_flow_span = 15.0f; // frames = 15.0f per second
+    nuc_shape.magic_divisor_for_timing = 20.7; // frames(!)
 }
 
 void reg_params_setKrate(reg_params *cur, float *krate_default)
@@ -292,7 +312,12 @@ void reg_params_setBuffModel(reg_params *cur, float tau_R_m_default, float tau_R
 {
   cur->tau_R_m = tau_R_m_default;
   cur->tau_R_o = tau_R_o_default;
-  cur->tauE = 5;
+  cur->RatioDrift = 2.5f;
+}
+
+void reg_params_setBuffModel(reg_params *cur, float tau_E_default)
+{
+  cur->tauE = tau_E_default;
   cur->RatioDrift = 2.5f;
 }
 
@@ -313,102 +338,124 @@ void reg_params_setNoRatioDriftValues(reg_params *cur)
     cur->nuc_shape.sigma_mult[GNUCINDEX] = 1.0f;
 }
 
-void reg_params_setStandardValue(reg_params *cur, float t_mid_nuc_start, float sigma_start, float *dntp_concentration_in_uM, bool _fit_taue)
+void reg_params::SetTshift(float _tshift){
+  tshift = _tshift;
+}
+
+//@TODO: can this be exported to a sensible JSON file?
+void reg_params::SetStandardValue(float t_mid_nuc_start, float sigma_start, 
+        float *dntp_concentration_in_uM, bool _fit_taue, bool _use_alternative_etbR_equation,
+        int _hydrogenModelType, int flow_block_size)
 {
   // per-region parameters
-  for (int j=0;j<NUMFB;j++)
+  for (int j=0;j<flow_block_size;j++)
   {
-    cur->darkness[j] = 0.0f;
-    cur->copy_multiplier[j] = 1.0f;
-    cur->nuc_shape.t_mid_nuc[j]      = t_mid_nuc_start;
-    cur->nuc_shape.t_mid_nuc_shift_per_flow[j] = 0.0f;
+    darkness[j] = 0.0f;
+    copy_multiplier[j] = 1.0f;
+    nuc_shape.AccessTMidNuc()[j]      = t_mid_nuc_start;
+    nuc_shape.t_mid_nuc_shift_per_flow[j] = 0.0f;
   }
+  min_tauB = 4.0f;
+  max_tauB = 65.0f;
 
-  cur->molecules_to_micromolar_conversion = 0.000062; // 3 micron wells
+  molecules_to_micromolar_conversion = 0.000062; // 3 micron wells
 
+  fit_taue = _fit_taue;
+  use_alternative_etbR_equation = _use_alternative_etbR_equation;
 
-  cur->fit_taue = _fit_taue;
-  cur->tshift = 0.4f;
-  cur->nuc_shape.sigma  = sigma_start;
+  hydrogenModelType = _hydrogenModelType;
+
+  tshift = 0.4f;
+  nuc_shape.sigma  = sigma_start;
   // This is correct Nuc flow time. We need it logged in explog so that 
   // we use whatever timing is used for the experiment
-  //cur->nuc_shape.nuc_flow_span = 16.5f;
-  cur->nuc_shape.nuc_flow_span = 22.5f;
-  cur->CopyDrift    = 0.9987f;
+  //nuc_shape.nuc_flow_span = 16.5f;
+  nuc_shape.nuc_flow_span = 22.5f;
+  CopyDrift    = 0.9987f;
 
-  cur->RatioDrift    = 2.0f;
+  RatioDrift    = 2.0f;
 
 
   for (int i_nuc=0; i_nuc<NUMNUC; i_nuc++)
-    cur->nuc_shape.C[i_nuc]    =  dntp_concentration_in_uM[i_nuc];
+    nuc_shape.C[i_nuc]    =  dntp_concentration_in_uM[i_nuc];
   
     // defaults consistent w/ original v7 behavior
-    cur->nuc_shape.t_mid_nuc_delay[TNUCINDEX] =  0.69f;
-    cur->nuc_shape.t_mid_nuc_delay[ANUCINDEX] =  1.78f;
-    cur->nuc_shape.t_mid_nuc_delay[CNUCINDEX] =  0.0f;
-    cur->nuc_shape.t_mid_nuc_delay[GNUCINDEX] =  0.17f;
+    nuc_shape.t_mid_nuc_delay[TNUCINDEX] =  0.69f;
+    nuc_shape.t_mid_nuc_delay[ANUCINDEX] =  1.78f;
+    nuc_shape.t_mid_nuc_delay[CNUCINDEX] =  0.0f;
+    nuc_shape.t_mid_nuc_delay[GNUCINDEX] =  0.17f;
 
-    cur->nuc_shape.sigma_mult[TNUCINDEX] = 1.162f;
-    cur->nuc_shape.sigma_mult[ANUCINDEX] = 1.124f;
-    cur->nuc_shape.sigma_mult[CNUCINDEX] = 1.0f;
-    cur->nuc_shape.sigma_mult[GNUCINDEX] = 0.8533f;
+    nuc_shape.sigma_mult[TNUCINDEX] = 1.162f;
+    nuc_shape.sigma_mult[ANUCINDEX] = 1.124f;
+    nuc_shape.sigma_mult[CNUCINDEX] = 1.0f;
+    nuc_shape.sigma_mult[GNUCINDEX] = 0.8533f;
 
     //@TODO: this is denominated in frames per second = 15
     //@TODO: please can we not do this operation at all
-    cur->nuc_shape.valve_open = 15.0f; // frames(!)
-    cur->nuc_shape.magic_divisor_for_timing = 20.7; // frames(!)
+    nuc_shape.valve_open = 15.0f; // frames(!)
+    nuc_shape.magic_divisor_for_timing = 20.7; // frames(!)
 
-  cur->NucModifyRatio[TNUCINDEX] = 1.0f;
-  cur->NucModifyRatio[ANUCINDEX] = 1.0f;
-  cur->NucModifyRatio[CNUCINDEX] = 1.0f;
-  cur->NucModifyRatio[GNUCINDEX] = 1.0f;
+  NucModifyRatio[TNUCINDEX] = 1.0f;
+  NucModifyRatio[ANUCINDEX] = 1.0f;
+  NucModifyRatio[CNUCINDEX] = 1.0f;
+  NucModifyRatio[GNUCINDEX] = 1.0f;
 }
 
-void DumpRegionParamsTitle(FILE *my_fp)
+void reg_params::DumpRegionParamsTitle(FILE *my_fp, int flow_block_size)
 {
   fprintf(my_fp,"row\tcol\td[0]\td[1]\td[2]\td[3]\tkr[0]\tkr[1]\tkr[2]\tkr[3]\tkmax[0]\tkmax[1]\tkmax[2]\tkmax[3]\tt_mid_nuc\tt_mid_nuc[0]\tt_mid_nuc[1]\tt_mid_nuc[2]\tt_mid_nuc[3]\tsigma\tsigma[0]\tsigma[1]\tsigma[2]\tsigma[3]\tNucModifyRatio[0]\tNucModifyRatio[1]\tNucModifyRatio[2]\tNucModifyRatio[3]\ttau_m\ttau_o\ttauE\trdr\tpdr\ttshift");
-  for (int i=0; i<NUMFB; i++)
+  for (int i=0; i<flow_block_size; i++)
     fprintf(my_fp,"\tt_mid_flow[%d]",i);
   fprintf(my_fp,"\n");
 }
 
 
 
-void DumpRegionParamsLine(FILE *my_fp,int my_row, int my_col, reg_params &rp)
+void reg_params::DumpRegionParamsLine(FILE *my_fp,int my_row, int my_col, int flow_block_size)
 {
   // officially the wrong way to do this
   fprintf(my_fp,"%4d\t%4d\t", my_row,my_col);
-  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",rp.d[TNUCINDEX],rp.d[ANUCINDEX],rp.d[CNUCINDEX],rp.d[GNUCINDEX]);
-  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",rp.krate[TNUCINDEX],rp.krate[ANUCINDEX],rp.krate[CNUCINDEX],rp.krate[GNUCINDEX]);
-  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",rp.kmax[TNUCINDEX],rp.kmax[ANUCINDEX],rp.kmax[CNUCINDEX],rp.kmax[GNUCINDEX]);
-  fprintf(my_fp,"%5.3f\t",rp.nuc_shape.t_mid_nuc[0]);
-  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",GetModifiedMidNucTime(&rp.nuc_shape,TNUCINDEX,0),GetModifiedMidNucTime(&rp.nuc_shape,ANUCINDEX,0),GetModifiedMidNucTime(&rp.nuc_shape,CNUCINDEX,0),GetModifiedMidNucTime(&rp.nuc_shape,GNUCINDEX,0));
-  fprintf(my_fp,"%5.3f\t",rp.nuc_shape.sigma);
-  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",GetModifiedSigma(&rp.nuc_shape,TNUCINDEX),GetModifiedSigma(&rp.nuc_shape,ANUCINDEX),GetModifiedSigma(&rp.nuc_shape,CNUCINDEX),GetModifiedSigma(&rp.nuc_shape,GNUCINDEX));
-  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",rp.NucModifyRatio[TNUCINDEX],rp.NucModifyRatio[ANUCINDEX],rp.NucModifyRatio[CNUCINDEX],rp.NucModifyRatio[GNUCINDEX]);
-  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t%5.3f\t%5.3f\t",rp.tau_R_m,rp.tau_R_o,rp.tauE,rp.RatioDrift,rp.CopyDrift,rp.tshift);
-  for (int i=0; i<NUMFB; i++)
-    fprintf(my_fp,"%5.3f\t",rp.nuc_shape.t_mid_nuc_shift_per_flow[i]);
+  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",d[TNUCINDEX],d[ANUCINDEX],d[CNUCINDEX],d[GNUCINDEX]);
+  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",krate[TNUCINDEX],krate[ANUCINDEX],krate[CNUCINDEX],krate[GNUCINDEX]);
+  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",kmax[TNUCINDEX],kmax[ANUCINDEX],kmax[CNUCINDEX],kmax[GNUCINDEX]);
+  fprintf(my_fp,"%5.3f\t",nuc_shape.AccessTMidNuc()[0]);
+  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",GetModifiedMidNucTime(&nuc_shape,TNUCINDEX,0),GetModifiedMidNucTime(&nuc_shape,ANUCINDEX,0),GetModifiedMidNucTime(&nuc_shape,CNUCINDEX,0),GetModifiedMidNucTime(&nuc_shape,GNUCINDEX,0));
+  fprintf(my_fp,"%5.3f\t",nuc_shape.sigma);
+  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",GetModifiedSigma(&nuc_shape,TNUCINDEX),GetModifiedSigma(&nuc_shape,ANUCINDEX),GetModifiedSigma(&nuc_shape,CNUCINDEX),GetModifiedSigma(&nuc_shape,GNUCINDEX));
+  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t",NucModifyRatio[TNUCINDEX],NucModifyRatio[ANUCINDEX],NucModifyRatio[CNUCINDEX],NucModifyRatio[GNUCINDEX]);
+  fprintf(my_fp,"%5.3f\t%5.3f\t%5.3f\t%5.3f\t%5.3f\t%5.3f\t",tau_R_m,tau_R_o,tauE,RatioDrift,CopyDrift,tshift);
+  for (int i=0; i<flow_block_size; i++)
+    fprintf(my_fp,"%5.3f\t",nuc_shape.t_mid_nuc_shift_per_flow[i]);
   fprintf(my_fp,"\n");
 }
 
 float GetTypicalMidNucTime(nuc_rise_params *cur)
 {
-    return(cur->t_mid_nuc[0]);
+    return(cur->AccessTMidNuc()[0]);
 }
 
-void ResetPerFlowTimeShift(nuc_rise_params *cur)
+void nuc_rise_params::ResetPerFlowTimeShift(int flow_block_size)
 {
-  for (int fnum=0; fnum<NUMFB; fnum++)
-    cur->t_mid_nuc_shift_per_flow[fnum] = 0.0f;
+  for (int fnum=0; fnum<flow_block_size; fnum++)
+    t_mid_nuc_shift_per_flow[fnum] = 0.0f;
 }
 
 float GetModifiedMidNucTime(nuc_rise_params *cur, int NucID, int fnum)
 {
-  float retval_time = cur->t_mid_nuc[0];
-  retval_time +=  cur->t_mid_nuc_delay[NucID]* (cur->t_mid_nuc[0]-cur->valve_open) /(cur->magic_divisor_for_timing+SAFETYZERO);
+  float retval_time = cur->AccessTMidNuc()[0];
+  retval_time +=  cur->t_mid_nuc_delay[NucID]* (cur->AccessTMidNuc()[0]-cur->valve_open) /(cur->magic_divisor_for_timing+SAFETYZERO);
   retval_time += cur->t_mid_nuc_shift_per_flow[fnum];
   return(retval_time);
+}
+
+float GetModifiedIncorporationEnd(nuc_rise_params *cur, int NucID, int fnum, float mer_guess){
+  float my_t_mid_nuc = GetModifiedMidNucTime(cur,NucID,fnum);
+
+  // estimated average end of incorporation
+  // for PI chip
+
+  float fi_end = my_t_mid_nuc + MIN_INCORPORATION_TIME_PI + MIN_INCORPORATION_TIME_PER_MER_PI_VERSION_ONE*mer_guess;
+  return(fi_end);
 }
 
 float GetModifiedSigma(nuc_rise_params *cur, int NucID)
@@ -416,9 +463,9 @@ float GetModifiedSigma(nuc_rise_params *cur, int NucID)
     return(cur->sigma*cur->sigma_mult[NucID]);  // to make sure we knwo that this is modified
 }
 
-float CalculateCopyDrift(reg_params &rp, int absolute_flow)
+float reg_params::CalculateCopyDrift(int absolute_flow) const
 {
-    return pow (rp.CopyDrift,absolute_flow);
+    return pow (CopyDrift,absolute_flow);
 }
 
 void SetAverageDiffusion(reg_params &rp)
@@ -445,7 +492,7 @@ void ResetRegionBeadShiftsToZero(reg_params *reg_p)
 void DumpRegionParamsCSV(FILE *my_fp, reg_params *reg_p)
 {
     fprintf(my_fp,"%10.5f,%10.5f,%10.5f,%10.5f,%10.5f,%10.5f,%10.5f,%10.5f,%10.5f,%10.5f,%10.5f,%10.5f,%10.5f,",
-            reg_p->nuc_shape.sigma,reg_p->RatioDrift,reg_p->CopyDrift,reg_p->nuc_shape.t_mid_nuc[0],reg_p->tshift,reg_p->krate[0],reg_p->krate[1],reg_p->krate[2],reg_p->krate[3],reg_p->d[0],reg_p->d[1],reg_p->d[2],reg_p->d[3]);
+            reg_p->nuc_shape.sigma,reg_p->RatioDrift,reg_p->CopyDrift,reg_p->nuc_shape.AccessTMidNuc()[0],reg_p->tshift,reg_p->krate[0],reg_p->krate[1],reg_p->krate[2],reg_p->krate[3],reg_p->d[0],reg_p->d[1],reg_p->d[2],reg_p->d[3]);
 }
 
 
@@ -476,7 +523,7 @@ void reg_params_copyTo_reg_params_H5 ( reg_params &rp, reg_params_H5 &rp5 )
     rp5.kmax[i] = rp.kmax[i];
     rp5.NucModifyRatio[i] = rp.NucModifyRatio[i];
   }
-  for ( int i=0; i<NUMFB; i++ )
+  for ( int i=0; i<MAX_NUM_FLOWS_IN_BLOCK_GPU; i++ )
   {
     rp5.darkness[i] = rp.darkness[i];
   }
@@ -500,7 +547,7 @@ void reg_params_H5_copyTo_reg_params ( reg_params_H5 &rp5, reg_params &rp )
     rp.kmax[i] = rp5.kmax[i];
     rp.NucModifyRatio[i] = rp5.NucModifyRatio[i];
   }
-  for ( int i=0; i<NUMFB; i++ )
+  for ( int i=0; i<MAX_NUM_FLOWS_IN_BLOCK_GPU; i++ )
   {
     rp.darkness[i] = rp5.darkness[i];
   }

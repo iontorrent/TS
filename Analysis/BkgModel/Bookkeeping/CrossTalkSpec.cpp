@@ -8,68 +8,78 @@ using namespace std;
 
 // set up cross-talk information in a clean way
 
-void CrossTalkSpecification::Allocate(int size)
+void TraceCrossTalkSpecification::Allocate(int size)
 {
     nei_affected = size;
     cx.resize(size);
     cy.resize(size);
-    mix.resize(size);
-    delay.resize(size);
     tau_top.resize(size);
     tau_fluid.resize(size);
     multiplier.resize(size);
 }
 
-CrossTalkSpecification::CrossTalkSpecification()
+TraceCrossTalkSpecification::TraceCrossTalkSpecification()
 {
     nei_affected = 0;
-    tau_bulk = -1.0;
-    cbulk = 1;
-    nscale = 0;
+
     hex_packed = false;
     three_series = true;
-    initialPhase = 0;
+    initial_phase = 0;
     do_xtalk_correction = true;
     simple_model = false;
     rescale_flag = false;
 }
 
-// this is of unknown utility
-void CrossTalkSpecification::SetStandardGrid()
+void TraceCrossTalkSpecification::PackTraceXtalkInfo(Json::Value &json)
 {
-    hex_packed = false;
-    Allocate(5); // how many neighbors are significant
-    int ndx=0;
-    cx[ndx] = -1;
-    cy[ndx] = 0;
-    delay[ndx] = 3.0;
-    mix[ndx] = 1.0;
-    ndx++;
-    cx[ndx] = 1, cy[ndx] = 1;
-    delay[ndx] = 3.0;
-    mix[ndx] = 1.0;
-    ndx++;
-    cx[ndx] = 0;
-    cy[ndx] = -1;
-    delay[ndx] = 3.0;
-    mix[ndx] = 1.0;
-    ndx++;
-    cx[ndx] = 0;
-    cy[ndx] = 1;
-    delay[ndx] = 3.0;
-    mix[ndx] = 0.7;
-    ndx++;
-    cx[ndx] = 1;
-    cy[ndx] = 1;
-    delay[ndx] = 6.0;
-    mix[ndx] = 0.8;
-    ndx++;
-    tau_bulk = 14.0;
-    cbulk = 45;
-    nscale = 4.0;
+  json["NeiAffected"] = nei_affected;
+  for (int mi=0; mi<nei_affected; mi++){
+    // for each neighbor
+    json["CX"][mi] = cx[mi];
+    json["CY"][mi] = cy[mi];
+    json["TauTop"][mi] = tau_top[mi];
+    json["TauFluid"][mi] = tau_fluid[mi];
+    json["Multiplier"][mi] = multiplier[mi];
+  }
+  // grid specification is "complicated"
+  json["OldGrid"]["hexpacked"] = hex_packed ? 1:0;
+  json["OldGrid"]["three_series"] = three_series? 1:0;
+  json["OldGrid"]["initial_phase"] = initial_phase;
+
+  json["Xtype"] = simple_model ? "simple": "complex";
+  json["Rescale"] = rescale_flag ? "rescale": "noscale";
+
 }
 
-void CrossTalkSpecification::SetNewQuadGrid()
+void TraceCrossTalkSpecification::SerializeJson(const Json::Value &json){
+
+  std::cerr << json.toStyledString();
+}
+
+
+void TraceCrossTalkSpecification::LoadJson(Json::Value & json, const std::string& filename_json)
+{
+  std::ifstream inJsonFile(filename_json.c_str(), std::ios::in);
+  if (inJsonFile.good())
+    inJsonFile >> json;
+  else
+    std::cerr << "[TraceXtalk] Unable to read JSON file " << filename_json << std::endl;
+  inJsonFile.close();
+}
+
+void TraceCrossTalkSpecification::WriteJson(const Json::Value & json, const std::string& filename_json)
+{
+  std::ofstream outJsonFile(filename_json.c_str(), std::ios::out);
+  if (outJsonFile.good())
+    outJsonFile << json.toStyledString();
+  else
+    std::cerr << "[TraceXtalk] Unable to write JSON file " << filename_json << std::endl;
+  outJsonFile.close();
+}
+
+
+
+void TraceCrossTalkSpecification::SetNewQuadGrid()
 {
     //printf("Quad Grid set\n");
     hex_packed = false;
@@ -115,50 +125,7 @@ void CrossTalkSpecification::SetNewQuadGrid()
 
 }
 
-// this is fictitious and has never been used
-// because of course we don't tell the analysis program that the chip is a 318
-// or at least not the background model
-void CrossTalkSpecification::SetHexGrid()
-{
-    hex_packed = true;
-    Allocate(6); // how many neighbors are significant
-    int ndx = 0;
-    cx[ndx] = -1;
-    cy[ndx] = 0;
-    delay[ndx] = 3.0;
-    mix[ndx] = 1.0;
-    ndx++;
-    cx[ndx] = 1;
-    cy[ndx] = 1;
-    delay[ndx] = 3.0;
-    mix[ndx] = 1.0;
-    ndx++;
-    cx[ndx] = 0;
-    cy[ndx] = -1;
-    delay[ndx] = 3.0;
-    mix[ndx] = 1.0;
-    ndx++;
-    cx[ndx] = 0;
-    cy[ndx] = 1;
-    delay[ndx] = 3.0;
-    mix[ndx] = 0.7;
-    ndx++;
-    cx[ndx] = -1;
-    cy[ndx] = 1;
-    delay[ndx] = 6.0;
-    mix[ndx] = 0.6;
-    ndx++;
-    cx[ndx] = -1;
-    cy[ndx] = -1;
-    delay[ndx] = 6.0;
-    mix[ndx]= 0.6;
-    ndx++;
-    tau_bulk = 14.0;
-    cbulk = 35;
-    nscale = 4.0;
-}
-
-void CrossTalkSpecification::SetNewHexGrid()
+void TraceCrossTalkSpecification::SetNewHexGrid()
 {
     hex_packed = true;
     Allocate(6);
@@ -204,11 +171,11 @@ void CrossTalkSpecification::SetNewHexGrid()
     ndx++;
 }
 
-void CrossTalkSpecification::SetNewHexGridP0()
+void TraceCrossTalkSpecification::SetNewHexGridP0()
 {
     hex_packed = true;
     three_series = false;
-    initialPhase = 1;
+    initial_phase = 1;
     Allocate(6);
     int ndx = 0;
     // left/right
@@ -248,7 +215,7 @@ void CrossTalkSpecification::SetNewHexGridP0()
 }
 
 // same spec currently 
-void CrossTalkSpecification::SetAggressiveHexGrid()
+void TraceCrossTalkSpecification::SetAggressiveHexGrid()
 {
     hex_packed = true;
     three_series = false;
@@ -295,24 +262,8 @@ void CrossTalkSpecification::SetAggressiveHexGrid()
     ndx++;
 }
 
-// hypothetically, claw back some of the intensity due to the buffering of the neighbors
-// whether or not they supplied hydrogen ions
-// but this is of course written wrongly to multiply by the number of neighbors
-// but this is the way v7 rolls
-float CrossTalkSpecification::ClawBackBuffering(int nei_total)
-{
-    // Rescale by the number of neighbors included in the calculation
-    // to account for possible buffering of neighbors
-    // but this happens in the wrong direction, so who knows what it is really doing?
-    float scale = 1.0;
-    if (nei_total>0)
-        scale = nscale/nei_total;
-
-    return 1.0/(cbulk*scale);
-}
-
 #define MAX_LINE_LEN    512
-void CrossTalkSpecification::ReadCrossTalkFromFile(const char *fname)
+void TraceCrossTalkSpecification::ReadCrossTalkFromFile(const char *fname)
 {
     struct stat fstatus;
     int         status;
@@ -377,7 +328,7 @@ void CrossTalkSpecification::ReadCrossTalkFromFile(const char *fname)
                 }                
                 if (strncmp("initial_phase",line,13)==0)
                 {
-                    sscanf(line,"initial_phase: %d", &initialPhase);
+                    sscanf(line,"initial_phase: %d", &initial_phase);
                     //printf("initial_phase: %d\n", initialPhase);
                 }
                if (strncmp("rescale_flag",line,12)==0)
@@ -423,7 +374,7 @@ void CrossTalkSpecification::ReadCrossTalkFromFile(const char *fname)
     delete [] line;
 }
 
-void CrossTalkSpecification::NeighborByGridPhase(int &ncx, int &ncy, int cx, int cy, int cxd, int cyd, int phase)
+void TraceCrossTalkSpecification::NeighborByGridPhase(int &ncx, int &ncy, int cx, int cy, int cxd, int cyd, int phase)
 {
     if (phase==0)
     {
@@ -443,7 +394,7 @@ void CrossTalkSpecification::NeighborByGridPhase(int &ncx, int &ncy, int cx, int
 
 // bb operates the other direction
 
-void CrossTalkSpecification::NeighborByGridPhaseBB(int &ncx, int &ncy, int cx, int cy, int cxd, int cyd, int phase)
+void TraceCrossTalkSpecification::NeighborByGridPhaseBB(int &ncx, int &ncy, int cx, int cy, int cxd, int cyd, int phase)
 {
         ncx = cx+cxd; // neighbor columns are always correct
         ncy = cy+cyd; // map is correct
@@ -451,7 +402,7 @@ void CrossTalkSpecification::NeighborByGridPhaseBB(int &ncx, int &ncy, int cx, i
             ncy -= phase; // up/down levels are offset alternately on cols
 }
 
-void CrossTalkSpecification::NeighborByChipType(int &ncx, int &ncy, int bead_rx, int bead_ry, int nei_idx, int region_x, int region_y)
+void TraceCrossTalkSpecification::NeighborByChipType(int &ncx, int &ncy, int bead_rx, int bead_ry, int nei_idx, int region_x, int region_y)
 {
   // the logic has now become complex, so encapsulate it
         // phase for hex-packed
@@ -462,14 +413,14 @@ void CrossTalkSpecification::NeighborByChipType(int &ncx, int &ncy, int bead_rx,
         if (three_series)
           NeighborByGridPhase (ncx,ncy,bead_rx,bead_ry,cx[nei_idx],cy[nei_idx], (region_y + bead_ry+1) % 2); // maybe????
         else
-          NeighborByGridPhaseBB(ncx,ncy,bead_rx,bead_ry,cx[nei_idx],cy[nei_idx], (region_x + bead_rx+1+initialPhase) % 2); // maybe????
+          NeighborByGridPhaseBB(ncx,ncy,bead_rx,bead_ry,cx[nei_idx],cy[nei_idx], (region_x + bead_rx+1+initial_phase) % 2); // maybe????
       }
 
 }
 
 
 
-void CrossTalkSpecification::BootUpXtalkSpec(bool can_do_xtalk_correction, const char *chipType, const char *xtalk_name)
+void TraceCrossTalkSpecification::BootUpXtalkSpec(bool can_do_xtalk_correction, const char *chipType, const char *xtalk_name)
 {
     if (can_do_xtalk_correction)
     {
@@ -480,9 +431,11 @@ void CrossTalkSpecification::BootUpXtalkSpec(bool can_do_xtalk_correction, const
         } else {
             if ((strcmp (chipType, "318") == 0)||(strcmp (chipType, "316v2") == 0))
                 SetNewHexGrid(); // find out who we really are!
-            else if(strcmp (chipType, "910") == 0)
+            else if(strcmp (chipType, "p1.0.19") == 0)
                 SetNewHexGridP0();
-            else if (strcmp(chipType,"900")==0)
+            else if(strcmp (chipType, "p1.0.20") == 0)
+                SetNewHexGridP0();
+            else if (strcmp(chipType,"p1.1.17")==0)
                 SetAggressiveHexGrid(); // 900 may have different cross-talk!
             else
                 SetNewQuadGrid();

@@ -13,6 +13,8 @@
 #include "RegionTracker.h"
 #include "EmphasisVector.h"
 
+// Constified by hzable 11-14-2013
+
 // Important: this is separate from the LevMar optimization group of items
 // I am unhappy with this except insofar as it removes one method from the "golden hammer" routine
 
@@ -21,18 +23,19 @@
 // why do I need so >many< things just to do this?????
 class SearchAmplitude{
   public:
-    PoissonCDFApproxMemo *math_poiss;
-    BkgTrace *my_trace;
-    EmptyTrace *empty_trace;
-    BeadScratchSpace *my_scratch;
-    RegionTracker *pointer_regions;
-    TimeCompression *time_c;
-    flow_buffer_info *my_flow;
-    EmphasisClass *emphasis_data;
+          PoissonCDFApproxMemo *math_poiss;
+    const BkgTrace *my_trace;
+    const EmptyTrace *empty_trace;
+          BeadScratchSpace *my_scratch;
+          incorporation_params_block_flows *my_cur_bead_block;
+          buffer_params_block_flows *my_cur_buffer_block;
+          RegionTracker *pointer_regions;
+    const TimeCompression *time_c;
+    const FlowBufferInfo *my_flow;
+    const EmphasisClass *emphasis_data;
     float negative_amplitude_limit;
     
     bool use_vectorization;
-    bool rate_fit;
     
     // bad!  Parasite on pointers I'm not supposed to see
     // because we need so much context when generating a trace
@@ -42,32 +45,38 @@ class SearchAmplitude{
     // scratch space->? (should it wrap the incorporation model? - point to buffers?)
     // context objec
     void ParasitePointers(PoissonCDFApproxMemo *_math_poiss,
-			  BkgTrace *_my_trace,
-			  EmptyTrace *_empty_trace,
-			  BeadScratchSpace *_my_scratch,
-			  RegionTracker *_my_regions,
-			  TimeCompression *_time_c,
-			  flow_buffer_info *_my_flow,
-			  EmphasisClass *_emphasis_data)
+			  const BkgTrace *_my_trace,
+			  const EmptyTrace *_empty_trace,
+			        BeadScratchSpace *_my_scratch,
+              incorporation_params_block_flows *_my_cur_bead_block,
+              buffer_params_block_flows *_my_cur_buffer_block,
+			        RegionTracker *_my_regions,
+			  const TimeCompression *_time_c,
+			  const FlowBufferInfo *_my_flow,
+			  const EmphasisClass *_emphasis_data)
     {
       math_poiss = _math_poiss;
       my_trace = _my_trace;
       empty_trace = _empty_trace;
       my_scratch = _my_scratch;
+      my_cur_bead_block = _my_cur_bead_block;
+      my_cur_buffer_block = _my_cur_buffer_block;
       pointer_regions = _my_regions;
       time_c = _time_c;
       my_flow = _my_flow;
       emphasis_data = _emphasis_data;
     };
-    void EvaluateAmplitudeFit(bead_params *p, float *avals,float *error_by_flow);
+    void EvaluateAmplitudeFit(BeadParams *p, const float *avals, float *error_by_flow, int flow_block_size, int flow_block_start ) const;
 
-    void BinarySearchOneBead(bead_params *p, float min_step, bool restart);
-    void BinarySearchAmplitude(BeadTracker &my_beads, float min_step,bool restart);
+    void BinarySearchOneBead(BeadParams *p, float min_step, bool restart, int flow_block_size, int flow_block_start ) const;
+    void BinarySearchAmplitude(BeadTracker &my_beads, float min_step,bool restart, int flow_block_size,
+        int flow_block_start ) const;
     SearchAmplitude();
     ~SearchAmplitude();
     // second method
-    void ProjectionSearchAmplitude(BeadTracker &my_beads, bool _rate_fit, bool sampledOnly);
-    void ProjectionSearchOneBead(bead_params *p);
+    void ProjectionSearchAmplitude(BeadTracker &my_beads, bool , bool sampledOnly, 
+        int flow_block_size, int flow_block_start ) const;
+    void ProjectionSearchOneBead(BeadParams *p, int flow_block_size, int flow_block_start) const;
 
     
 };

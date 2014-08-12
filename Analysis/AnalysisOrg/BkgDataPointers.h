@@ -30,6 +30,7 @@ class BkgDataPointers {
       
       mEmptyOnceParam = NULL;
       mRegionInitParam = NULL;
+      mRegionOffset = NULL;
       m_regional_param = NULL;
       m_nuc_shape_param = NULL;
       m_enzymatics_param = NULL;

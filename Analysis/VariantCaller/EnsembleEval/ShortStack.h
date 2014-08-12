@@ -7,7 +7,6 @@
 
 #include "api/BamReader.h"
 
-#include "../Analysis/file-io/ion_util.h"
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -17,7 +16,6 @@
 #include <vector>
 
 #include "ExtendedReadInfo.h"
-#include "StackPlus.h"
 #include "CrossHypotheses.h"
 #include "ExtendParameters.h"
 
@@ -28,7 +26,7 @@ class ShortStack{
   vector<int> valid_indexes;
   void FindValidIndexes(); // only loop over reads where we successfully filled in variants
   
-  void FillInPredictions(PersistingThreadObjects &thread_objects, StackPlus &my_data, InputStructures &global_context);
+  void FillInPredictions(PersistingThreadObjects &thread_objects, vector<const Alignment *>& read_stack, const InputStructures &global_context);
   void ResetQualities();
   void InitTestFlow();
   float PosteriorFrequencyLogLikelihood(const vector<float> &hyp_freq, const vector<float> &prior_frequency_weight, float prior_log_normalization, float my_reliability, int strand_key);

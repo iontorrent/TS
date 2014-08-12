@@ -531,13 +531,22 @@ function detailInit(e) {
 //								required: false
 //							}
 						},
-						barcode : {
+						dnabarcode : {
 							type : "string"
-						}
+						},
+						dnabarcodeKit : {
+							type : "string"
+						},						
+						cancerType : {
+							type : "string"
+						},
+						cellarlarityPct: {
+							type : "number"
+						}						
 					}
 				}
 			},
-            pageSize: 100,
+            pageSize: 10000,
 			serverPaging : true,
 			serverSorting : false,
 			filter : {
@@ -648,17 +657,25 @@ function getColumns() {
          title: "Sample ID",         
          sortable: true,
          //template: kendo.template($('#sample_id_kendo_template').html())
+     } , {
+         field: "dnabarcodeKit",
+         title: "Barcode Kit",        
+         sortable: false         
+     } , {
+         field: "dnabarcode",
+         title: "Barcode",        
+         sortable: true         
+     } , {
+         field: "sampleDescription",
+         title: "Description",        
+         sortable: false,
+         //template: kendo.template($('#sample_barcoding_id_kendo_template').html())         
      } , {    	 
          field: "gender",
          title: "Gender",       
          sortable: true,
          //template: kendo.template($('#sample_libperpbarcode_kendo_template').html())
-     } , {
-         field: "sampleDescription",
-         title: "Description",        
-         sortable: false,
-         //template: kendo.template($('#sample_barcoding_id_kendo_template').html())
-     } , {
+     } , {    	 
          field: "relationshipRole",
          title: "Type",        
          sortable: true,
@@ -670,9 +687,15 @@ function getColumns() {
          editor : relationshipGroupDropDownSelector,
          //template: "#=relationshipGroup.displayedName#"
      } , {
-         field: "barcode",
-         title: "Barcode",        
-         sortable: true
+         field: "cancerType",
+         title: "Cancer Type",       
+         sortable: true,
+         //template: kendo.template($('#sample_cancerType_kendo_template').html())
+     } , {
+         field: "cellularityPct",
+         title: "Cellularity %",       
+         sortable: true,
+         //template: kendo.template($('#sample_cellularityPct_kendo_template').html())         
      }];
 
 //    var default_last_columnArray = [

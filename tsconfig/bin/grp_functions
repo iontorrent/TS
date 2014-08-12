@@ -1,0 +1,130 @@
+#!/bin/bash
+# Copyright (C) 2013-2014 Ion Torrent Systems, Inc. All Rights Reserved
+
+#==============================================================================
+# GLOBAL VARIABLES
+#==============================================================================
+USER=ionadmin
+TOOL='pdsh'
+
+#==============================================================================
+# FUNCTIONS
+#==============================================================================
+# Retrieve Cruncher records from database
+function get_crunchers
+{
+python << END
+import sys
+from iondb.bin import djangoinit
+from iondb.rundb.models import Cruncher
+#computes = Cruncher.objects.filter(online=True).values_list('name', flat=True)
+computes = Cruncher.objects.all().values_list('name', flat=True)
+first=True
+for compute in computes:
+    if not first:
+        sys.stdout.write(",")
+    first = False
+    sys.stdout.write(compute)
+END
+}
+
+#Add hostnames to Cruncher table in database
+function add_node
+{
+    NODENAME=$1
+python << END
+import sys
+from iondb.bin import djangoinit
+from iondb.rundb.models import Cruncher, Location
+newnode, created = Cruncher.objects.get_or_create(name='$NODENAME', location=Location.getdefault())
+if created:
+    print "$NODENAME added"
+else:
+    print "$NODENAME already exists"
+END
+}
+
+# Get all nodes listed in SGE config
+function get_sge_nodes
+{
+    HEADNODE=${1-localhost}
+    QUEUE=( `ssh -l ionadmin ${HEADNODE} "qstat -f|egrep '(all.q|plugin.q|tl.q|thumbnail.q)'"|awk '{print $1}'|awk -F@ '{print $2}'|sort -V -u` )
+    echo ${QUEUE[@]}
+}
+
+# Get the default Report Storage object name
+function get_report_storage
+{
+python << END
+from iondb.bin import djangoinit
+from iondb.rundb.models import ReportStorage
+reportstorage = ReportStorage.objects.get(default=True)
+print "/"+reportstorage.dirPath.split('/')[1]+"/"
+END
+}
+
+# Get the File Server object names
+function get_file_servers
+{
+python << END
+from iondb.bin import djangoinit
+from iondb.rundb.models import FileServer
+servers = FileServer.objects.all()
+for server in servers:
+    print server.filesPrefix
+END
+}
+
+#=============================================================================
+# IP Address Test
+#=============================================================================
+function address_test()
+{
+	nodename=$1
+    echo -n $FUNCNAME:>&1
+    ip=$(nslookup $nodename|grep ^Address|grep -v '#'|awk '{print $2}')
+    if [[ -z $ip ]] ;then
+    	echo failure>&1
+        echo "Cannot resolve hostname $nodename to an IP address">&2
+        return 1
+    else
+    	#echo $ip>&1
+    	echo success>&1
+        return 0
+    fi
+}
+#=============================================================================
+# Network Test
+#=============================================================================
+function network_test()
+{
+	nodename=$1
+    echo -n $FUNCNAME:>&1
+
+	if ! ping -n -q -c 3 $nodename 2>/dev/null 1>&2; then
+    	echo failure >&1
+        echo "No response (ping) from server $nodename">&2
+        return 1
+    else
+        echo success >&1
+        return 0
+    fi
+
+}
+#=============================================================================
+# Access Test
+#=============================================================================
+function access_test()
+{
+	nodename=$1
+    echo -n $FUNCNAME:>&1
+
+    if ssh -o PasswordAuthentication=no ${USER}@$nodename "hostname -f" >/dev/null; then
+        echo success>&1
+        return 0
+    else
+        echo failure>&1
+        echo "Cannot access server $nodename with secure shell">&2
+        return 1
+    fi
+}

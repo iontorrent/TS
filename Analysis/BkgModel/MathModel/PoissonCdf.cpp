@@ -1,9 +1,7 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "PoissonCdf.h"
 #include <cstring>
-
-
-
+#include <iostream>
 
 PoissonCDFApproxMemo::PoissonCDFApproxMemo()
 {
@@ -73,6 +71,10 @@ void PoissonCDFApproxMemo::GenerateValues()
     {
       tmp_sum += poiss_cdf[ei][i];
       poiss_cdf[ei][i] = tmp_sum;
+
+      // In case you want to compare with the full computed value, uncomment this.
+      // std::cout << "poiss_cdf["<<ei<<"]["<<i<<"]="<<poiss_cdf[ei][i]
+      //          <<"\tPoissonCDF( "<<ei<<", "<<scale*i<<" ) = "<<PoissonCDF(ei+1,scale*i)<<"\n";
     }
   }
   // generate integrated values

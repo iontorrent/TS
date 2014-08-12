@@ -1,8 +1,5 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "RegionalizedData.h"
-#include <iostream>
-#include <fstream>
-#include "IonErr.h"
 
 using namespace std;
 
@@ -115,8 +112,14 @@ void RegionalizedData::SetTimeAndEmphasis (GlobalDefaultsForBkgModel &global_def
            break;
      }
 
-     if (iend < time_c.npts())
-        time_c.npts(iend);
+     if (iend < time_c.npts()) { 
+        time_c.SetETFFrames(iend);
+        time_c.UseETFCompression();
+     }
+
+     if (global_defaults.signal_process_control.recompress_tail_raw_trace)
+       // Generate emphasis vector object for standard time compression
+       SetUpEmphasisForStandardCompression(global_defaults);
   }
   else
      // check the points that we need
@@ -132,8 +135,9 @@ void RegionalizedData::SetTimeAndEmphasis (GlobalDefaultsForBkgModel &global_def
        trial_emphasis.point_emphasis_by_compression = global_defaults.data_control.point_emphasis_by_compression;
        //    trial_emphasis.BuildCurrentEmphasisTable (t_mid_nuc_start, FINEXEMPHASIS);
        trial_emphasis.BuildCurrentEmphasisTable (t0_offset, FINEXEMPHASIS);
-   //    int old_pts = time_c.npts;
-       time_c.npts(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR)); // threshold the points for the number actually needed by emphasis
+       //time_c.npts(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR)); // threshold the points for the number actually needed by emphasis
+       time_c.SetStandardFrames(trial_emphasis.ReportUnusedPoints (CENSOR_THRESHOLD, MIN_CENSOR));
+       time_c.UseStandardCompression();
 
        // don't bother monitoring this now
        //printf ("Saved: %f = %d of %d\n", (1.0*time_c.npts) / (1.0*old_pts), time_c.npts, old_pts);
@@ -148,20 +152,23 @@ void RegionalizedData::SetTimeAndEmphasis (GlobalDefaultsForBkgModel &global_def
 }
 
 
-void RegionalizedData::SetupTimeAndBuffers (GlobalDefaultsForBkgModel &global_defaults,float sigma_guess,
+void RegionalizedData::SetupTimeAndBuffers (
+    GlobalDefaultsForBkgModel &global_defaults,float sigma_guess,
     float t_mid_nuc_guess,
-    float t0_offset)
+    float t0_offset, int flow_block_size,
+    int global_flow_max
+  )
 {
   sigma_start = sigma_guess;
   t_mid_nuc_start = t_mid_nuc_guess;
   t0_frame = t0_offset;
-  my_regions.InitRegionParams (t_mid_nuc_start,sigma_start, global_defaults);
+  my_regions.InitRegionParams (t_mid_nuc_start,sigma_start, global_defaults, flow_block_size);
 
   SetTimeAndEmphasis (global_defaults, t_mid_nuc_guess, t0_offset);
 
-  AllocTraceBuffers();
+  AllocTraceBuffers( global_flow_max );
 
-  AllocFitBuffers();
+  AllocFitBuffers( global_flow_max );
 }
 
 void RegionalizedData::SetTshiftLimitsForSynchDat()
@@ -176,45 +183,46 @@ void RegionalizedData::SetTshiftLimitsForSynchDat()
     
 }
 
-void RegionalizedData::AllocFitBuffers()
+void RegionalizedData::AllocFitBuffers( int flow_block_size )
 {
   // so we need to make sure these structures match
-  my_scratch.Allocate (time_c.npts(),1);
-  my_regions.AllocScratch (time_c.npts());
+  my_scratch.Allocate (time_c.npts(),1, flow_block_size);
+  my_regions.AllocScratch (time_c.npts(), flow_block_size);
 }
 
-void RegionalizedData::AllocTraceBuffers()
+void RegionalizedData::AllocTraceBuffers( int flow_block_size )
 {
   // now do the traces set up for time compression
-  my_trace.Allocate (my_flow.numfb,NUMFB*time_c.npts(),my_beads.numLBeads);
+  my_trace.Allocate (time_c.npts(),my_beads.numLBeads, flow_block_size);
   my_trace.time_cp = &time_c; // point to the global time compression
 
 }
 
-void RegionalizedData::AddOneFlowToBuffer (GlobalDefaultsForBkgModel &global_defaults, int flow)
+void RegionalizedData::AddOneFlowToBuffer (GlobalDefaultsForBkgModel &global_defaults, 
+                  FlowBufferInfo & my_flow, int flow)
 {
   // keep track of which flow # is in which buffer
   // also keep track of which nucleotide is associated with each flow
-  my_flow.SetBuffFlow (flow);
   my_flow.SetFlowNdxMap (global_defaults.flow_global.GetNucNdx (flow));
   my_flow.SetDblTapMap (global_defaults.flow_global.IsDoubleTap (flow));
 
   // reset parameters for beads when we actually start fitting the beads
 }
 
-bool RegionalizedData::LoadOneFlow (SynchDat &data, GlobalDefaultsForBkgModel &global_defaults, int flow)
+bool RegionalizedData::LoadOneFlow (SynchDat &data, GlobalDefaultsForBkgModel &global_defaults, 
+                  FlowBufferInfo & my_flow, int flow, int flow_block_size)
 {
   doDcOffset = false;
   //  TraceChunk &chunk = data.GetItemByRowCol (get_region_row(), get_region_col());
   //  ION_ASSERT(chunk.mHeight == (size_t)region->h && chunk.mWidth == (size_t)region->w, "Wrong Region size.");
-  AddOneFlowToBuffer (global_defaults,flow);
-  UpdateTracesFromImage (data, flow);
+  AddOneFlowToBuffer (global_defaults,my_flow, flow);
+  UpdateTracesFromImage (data, my_flow, flow, flow_block_size);
   my_flow.Increment();
   //return (false);
   return (true);
 }
 
-bool RegionalizedData::LoadOneFlow (Image *img, GlobalDefaultsForBkgModel &global_defaults, int flow)
+bool RegionalizedData::LoadOneFlow (Image *img, GlobalDefaultsForBkgModel &global_defaults,  FlowBufferInfo & my_flow, int flow, int flow_block_size)
 {
   doDcOffset = true;
   const RawImage *raw = img->GetImage();
@@ -224,28 +232,78 @@ bool RegionalizedData::LoadOneFlow (Image *img, GlobalDefaultsForBkgModel &globa
     return true;
   }
 
-  AddOneFlowToBuffer (global_defaults,flow);
+  AddOneFlowToBuffer (global_defaults,my_flow, flow);
 
-  UpdateTracesFromImage (img, flow);
+  UpdateTracesFromImage (img, my_flow, flow, flow_block_size);
 
   my_flow.Increment();
 
   return (false);
 }
 
-void RegionalizedData::UpdateTracesFromImage (Image *img, int flow)
+//prototype GPU execution functions
+// UpdateTracesFromImage had to be broken into two function, before and after GPUGenerateBeadTraces.
+bool RegionalizedData::PrepareLoadOneFlowGPU (Image *img, 
+  GlobalDefaultsForBkgModel &global_defaults, FlowBufferInfo & my_flow, int flow)
 {
+  doDcOffset = true;
+  const RawImage *raw = img->GetImage();
+  if (!raw)
+  {
+    fprintf (stderr, "ERROR: no image data\n");
+    return true;
+  }
+
+  AddOneFlowToBuffer (global_defaults, my_flow, flow);
+
+  //UpdateTracesFromImage (img, flow);
+  //break UpdateTracesFromImage into Pre-GenerateBeadTraces and Post-BeadTraces
   my_trace.SetRawTrace(); // buffers treated as raw traces
 
-  // populate bead traces from image file and
-  // time-shift traces for uniform start times; compress traces to flows buffer
-  my_trace.GenerateAllBeadTrace (region,my_beads,img, my_flow.flowBufferWritePos);
-  // subtract mean signal in time before flow starts from traces in flows buffer
+  // here we are setup for GPU execution
+  return (false);
+}
 
+//Prototype GPU second half of UpdateTracesFromImage:
+bool RegionalizedData::FinalizeLoadOneFlowGPU ( FlowBufferInfo & my_flow, int flow_block_size )
+{
+  //break UpdateTracesFromImage into Pre-GenerateBeadTraces and Post-BeadTraces
   float t_mid_nuc =  GetTypicalMidNucTime (&my_regions.rp.nuc_shape);
   float t_offset_beads = my_regions.rp.nuc_shape.sigma;
   my_trace.RezeroBeads (time_c.time_start, t_mid_nuc-t_offset_beads,
-                        my_flow.flowBufferWritePos);
+      my_flow.flowBufferWritePos, flow_block_size);
+  // calculate average trace across all empty wells in a region for a flow
+  // to FileLoadWorker at Image load time, should be able to go here
+  // emptyTraceTracker->SetEmptyTracesFromImageForRegion(*img, global_state.pinnedInFlow, flow, global_state.bfmask, *region, t_mid_nuc);
+  emptytrace = emptyTraceTracker->GetEmptyTrace (*region);
+  // sanity check images are what we think
+  assert (emptytrace->imgFrames == my_trace.imgFrames);
+
+  my_flow.Increment();
+
+  return (false);
+}
+
+
+void RegionalizedData::UpdateTracesFromImage (Image *img, FlowBufferInfo &my_flow, int flow, int flow_block_size)
+{
+  my_trace.SetRawTrace(); // buffers treated as raw traces
+
+  float t_mid_nuc =  GetTypicalMidNucTime (&my_regions.rp.nuc_shape);
+  float t_offset_beads = my_regions.rp.nuc_shape.sigma;
+
+#if 1
+  // populate bead traces from image file and
+  // time-shift traces for uniform start times; compress traces to flows buffer
+  my_trace.GenerateAllBeadTrace (region,my_beads,img, my_flow.flowBufferWritePos, flow_block_size);
+  // subtract mean signal in time before flow starts from traces in flows buffer
+  my_trace.RezeroBeads (time_c.time_start, t_mid_nuc-t_offset_beads,
+                        my_flow.flowBufferWritePos, flow_block_size);
+#else
+  //Do it all at once.. generate bead trace and rezero like it is done in the new GPU pipeline
+  my_trace.GenerateAllBeadTraceAnRezero(region,my_beads,img, my_flow.flowBufferWritePos, flow_block_size,
+                                time_c.time_start, t_mid_nuc-t_offset_beads);
+#endif
 
   // calculate average trace across all empty wells in a region for a flow
   // to FileLoadWorker at Image load time, should be able to go here
@@ -256,15 +314,15 @@ void RegionalizedData::UpdateTracesFromImage (Image *img, int flow)
   assert (emptytrace->imgFrames == my_trace.imgFrames);
 }
 
-void RegionalizedData::UpdateTracesFromImage (SynchDat &chunk, int flow)
+void RegionalizedData::UpdateTracesFromImage (SynchDat &chunk, FlowBufferInfo &my_flow, int flow, int flow_block_size)
 {
   ION_ASSERT(my_trace.time_cp->npts() <= (int)chunk.NumFrames(region->row, region->col), "Wrong number of frames.")
   my_trace.SetRawTrace(); // buffers treated as raw traces
   // populate bead traces from image file, just filling in data already saved
-  my_trace.GenerateAllBeadTrace (region,my_beads,chunk, my_flow.flowBufferWritePos, regionAndTimingMatchSdat);
+  my_trace.GenerateAllBeadTrace (region,my_beads,chunk, my_flow.flowBufferWritePos, regionAndTimingMatchSdat, flow_block_size);
   float t_mid_nuc =  GetTypicalMidNucTime (&my_regions.rp.nuc_shape);
   float t_offset_beads = my_regions.rp.nuc_shape.sigma;
-  my_trace.RezeroBeads(time_c.time_start, t_mid_nuc-t_offset_beads, my_flow.flowBufferWritePos);
+  my_trace.RezeroBeads(time_c.time_start, t_mid_nuc-t_offset_beads, my_flow.flowBufferWritePos, flow_block_size);
   // calculate average trace across all empty wells in a region for a flow
   // to FileLoadWorker at Image load time, should be able to go here
   emptytrace = emptyTraceTracker->GetEmptyTrace (*region);
@@ -274,31 +332,31 @@ void RegionalizedData::UpdateTracesFromImage (SynchDat &chunk, int flow)
 
 // t_offset_beads = nuc_shape.sigma
 // t_offset_empty = 4.0
-void RegionalizedData::RezeroTraces (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty, int fnum)
+void RegionalizedData::RezeroTraces (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty, int flow_buffer_index, int flow_block_size)
 {
-  emptytrace->RezeroReference (t_start, t_mid_nuc-t_offset_beads, fnum);
-  my_trace.RezeroBeads (t_start, t_mid_nuc - t_offset_beads, fnum);
+  emptytrace->RezeroReference (t_start, t_mid_nuc-t_offset_beads, flow_buffer_index);
+  my_trace.RezeroBeads (t_start, t_mid_nuc - t_offset_beads, flow_buffer_index, flow_block_size);
 }
 
-void RegionalizedData::RezeroTracesAllFlows (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty)
+void RegionalizedData::RezeroTracesAllFlows (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty, int flow_block_size)
 {
   my_trace.RezeroBeadsAllFlows (t_start, t_mid_nuc-t_offset_beads);
-  emptytrace->RezeroReferenceAllFlows (t_start, t_mid_nuc - t_offset_empty);
+  emptytrace->RezeroReferenceAllFlows (t_start, t_mid_nuc - t_offset_empty, flow_block_size);
 }
 
-void RegionalizedData::RezeroByCurrentTiming()
+void RegionalizedData::RezeroByCurrentTiming(int flow_block_size)
 {
-  RezeroTracesAllFlows (time_c.time_start, GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), my_regions.rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE);
+  RezeroTracesAllFlows (time_c.time_start, GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), my_regions.rp.nuc_shape.sigma, MAGIC_OFFSET_FOR_EMPTY_TRACE, flow_block_size);
 }
 
-void RegionalizedData::PickRepresentativeHighQualityWells (float ssq_filter)
+void RegionalizedData::PickRepresentativeHighQualityWells (float ssq_filter, int flow_block_size)
 {
-  my_beads.my_mean_copy_count = my_beads.KeyNormalizeReads (false); // retain fitted key values for snr purposes
+  my_beads.my_mean_copy_count = my_beads.KeyNormalizeReads (false, false, flow_block_size); // retain fitted key values for snr purposes
   // use only high quality beads from now on when regional fitting
   if (ssq_filter>0.0f)
-    my_beads.LowSSQRatioBeadsAreLowQuality (ssq_filter);
+    my_beads.LowSSQRatioBeadsAreLowQuality (ssq_filter, flow_block_size);
   my_beads.LowCopyBeadsAreLowQuality (my_beads.my_mean_copy_count);
-  my_beads.KeyNormalizeReads (true); // force all beads to read the "true key" in the key flows
+  my_beads.KeyNormalizeReads (true, false, flow_block_size); // force all beads to read the "true key" in the key flows
 }
 
 /** Given uninitialized vectors key_zeromer, key_onemer, keyLen
@@ -308,16 +366,18 @@ void RegionalizedData::PickRepresentativeHighQualityWells (float ssq_filter)
  *  and    key_len     to contain the length of the key per bead
  *  (both of length numLBeads).
  */
-void RegionalizedData::ZeromerAndOnemerAllBeads(Clonality& sc, size_t const t0_ix, size_t const t_end_ix, std::vector<float>& key_zeromer, std::vector<float>& key_onemer, std::vector<int>& keyLen)
+void RegionalizedData::ZeromerAndOnemerAllBeads(Clonality& sc, size_t const t0_ix, 
+    size_t const t_end_ix, std::vector<float>& key_zeromer, std::vector<float>& key_onemer, 
+    std::vector<int>& keyLen, int flow_block_size)
 {
   for (int ibd=0; ibd < my_beads.numLBeads; ibd++) {
 
     // find key for this bead
     keyLen[ibd] = 0;
     int key_id = my_beads.key_id[ibd];
-    std::vector<int> key(NUMFB,-1);
+    std::vector<int> key(flow_block_size,-1);
     if (key_id >= 0)  // library or TF bead assumed to have key, go get it
-      my_beads.SelectKeyFlowValuesFromBeadIdentity (&key[0], NULL, key_id, keyLen[ibd]);
+      my_beads.SelectKeyFlowValuesFromBeadIdentity (&key[0], NULL, key_id, keyLen[ibd], flow_block_size);
 
     // find signal for this bead in its key flows
     std::vector<float> signal(keyLen[ibd], 0);
@@ -326,7 +386,7 @@ void RegionalizedData::ZeromerAndOnemerAllBeads(Clonality& sc, size_t const t0_i
       // approximate measure related to signal computed from trace
       // trace is assumed zero'd
       vector<float> trace(time_c.npts(), 0);
-      my_trace.AccumulateSignal(&trace[0],ibd,fnum,time_c.npts());
+      my_trace.AccumulateSignal(&trace[0],ibd,fnum,time_c.npts(), flow_block_size);
       // signal[fnum] = sc.Incorporation(t0_ix, t_end_ix, trace);
       signal[fnum] = sc.Incorporation(t0_ix, t_end_ix, trace, fnum);
     }
@@ -371,7 +431,7 @@ void RegionalizedData::ZeromerAndOnemerOneBead(std::vector<int> const& key, int 
   }
 }
 
-void RegionalizedData::CalculateFirstBlockClonalPenalty(float nuc_flow_frame_width, std::vector<float>& penalty, const int penalty_type)
+void RegionalizedData::CalculateFirstBlockClonalPenalty(float nuc_flow_frame_width, std::vector<float>& penalty, const int penalty_type, int flow_block_size)
 {
   if (my_beads.ntarget >= my_beads.numLBeads) {
     // all beads will be sampled anyway
@@ -383,8 +443,8 @@ void RegionalizedData::CalculateFirstBlockClonalPenalty(float nuc_flow_frame_wid
   // MonoClonal Sampling scheme
   Clonality *sc = new Clonality();
   {
-    std::vector<float> shifted_bkg(NUMFB*time_c.npts(), 0);
-    (emptyTraceTracker->GetEmptyTrace (*region))->GetShiftedBkg(my_regions.rp.tshift, time_c, &shifted_bkg[0]);
+    std::vector<float> shifted_bkg(flow_block_size*time_c.npts(), 0);
+    (emptyTraceTracker->GetEmptyTrace (*region))->GetShiftedBkg(my_regions.rp.tshift, time_c, &shifted_bkg[0], flow_block_size);
     sc->SetShiftedBkg(shifted_bkg);
   }
 
@@ -402,9 +462,9 @@ void RegionalizedData::CalculateFirstBlockClonalPenalty(float nuc_flow_frame_wid
   std::vector<float> key_zeromer(my_beads.numLBeads, 0);
   std::vector<int> keyLen(my_beads.numLBeads, 0);
 
-  ZeromerAndOnemerAllBeads(*sc, t0_ix, t_end_ix, key_zeromer, key_onemer, keyLen);
+  ZeromerAndOnemerAllBeads(*sc, t0_ix, t_end_ix, key_zeromer, key_onemer, keyLen, flow_block_size);
 
-  for (int fnum=0; fnum < NUMFB; fnum++)
+  for (int fnum=0; fnum < flow_block_size; fnum++)
   {
     std::vector<float> signalInFlow(my_beads.numLBeads, 0);
 
@@ -413,7 +473,7 @@ void RegionalizedData::CalculateFirstBlockClonalPenalty(float nuc_flow_frame_wid
       // approximate measure related to signal computed from trace
       // trace is assumed zero'd
       vector<float> trace(time_c.npts(), 0);
-      my_trace.AccumulateSignal(&trace[0],ibd,fnum,time_c.npts());
+      my_trace.AccumulateSignal(&trace[0],ibd,fnum,time_c.npts(), flow_block_size);
       // signalInFlow[ibd] = sc->Incorporation(t0_ix, t_end_ix, trace);
       signalInFlow[ibd] = sc->Incorporation(t0_ix, t_end_ix, trace, fnum);
     }
@@ -446,15 +506,19 @@ void RegionalizedData::CalculateFirstBlockClonalPenalty(float nuc_flow_frame_wid
 }
 
 
+RegionalizedData::RegionalizedData( const CommandLineOpts * inception_state ) :
+  my_regions( inception_state )
+{
+  NoData();
+}
+
 RegionalizedData::RegionalizedData()
 {
   NoData();
-
 }
 
 RegionalizedData::~RegionalizedData()
 {
-
 }
 
 
@@ -471,12 +535,36 @@ void RegionalizedData::SetFineEmphasisVectors()
     emphasis_data.BuildCurrentEmphasisTable (GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), FINEXEMPHASIS);
 }
 
+void RegionalizedData::GenerateFineEmphasisForStdTimeCompression()
+{
+    std_time_comp_emphasis.BuildCurrentEmphasisTable (
+        GetTypicalMidNucTime (& (my_regions.rp.nuc_shape)), 
+        FINEXEMPHASIS);
+}
 
-void RegionalizedData::DumpEmptyTrace (FILE *my_fp)
+
+
+void RegionalizedData::DumpEmptyTrace (FILE *my_fp, int flow_block_size)
 {
   assert (emptyTraceTracker != NULL);   //sanity
   if (region!=NULL)
   {
-    (emptyTraceTracker->GetEmptyTrace (*region))->DumpEmptyTrace (my_fp,region->col,region->row);
+    (emptyTraceTracker->GetEmptyTrace (*region))->
+      DumpEmptyTrace (my_fp,region->col,region->row, flow_block_size);
   }
+}
+
+void RegionalizedData::SetUpEmphasisForStandardCompression(GlobalDefaultsForBkgModel &global_defaults)
+{
+   std_time_comp_emphasis.SetDefaultValues (
+       global_defaults.data_control.emp,
+       global_defaults.data_control.emphasis_ampl_default, 
+       global_defaults.data_control.emphasis_width_default);
+   std_time_comp_emphasis.SetupEmphasisTiming (
+       time_c.GetStdFrames(), 
+       &((time_c.GetStdFramesPerPoint())[0]),
+       &((time_c.GetStdFrameNumber())[0]));
+   std_time_comp_emphasis.point_emphasis_by_compression = 
+       global_defaults.data_control.point_emphasis_by_compression;
+
 }

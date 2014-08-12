@@ -190,6 +190,18 @@ __tmap_map_opt_option_print_func_double_init(sample_reads)
 #endif
 __tmap_map_opt_option_print_func_int_init(vsw_type)
 __tmap_map_opt_option_print_func_verbosity_init()
+
+__tmap_map_opt_option_print_func_tf_init(do_realign)
+__tmap_map_opt_option_print_func_int_init(realign_mat_score)
+__tmap_map_opt_option_print_func_int_init(realign_mis_score)
+__tmap_map_opt_option_print_func_int_init(realign_gip_score)
+__tmap_map_opt_option_print_func_int_init(realign_gep_score)
+__tmap_map_opt_option_print_func_int_init(realign_bandwidth)
+__tmap_map_opt_option_print_func_int_init(realign_cliptype)
+
+__tmap_map_opt_option_print_func_tf_init(report_stats)
+__tmap_map_opt_option_print_func_chars_init(realign_log, "")
+
 // flowspace
 __tmap_map_opt_option_print_func_int_init(fscore)
 __tmap_map_opt_option_print_func_tf_init(softclip_key)
@@ -438,6 +450,12 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
       "8 - venco (Top Coder #5) [not working]",
       "9 - Bladze (Top Coder #6)",
       "10 - ngthuydiem (Top Coder #7) [Farrar cut-and-paste]",
+      NULL};
+  static char *realignment_clip_type[] = {"0 - global realignment",
+      "1 - semiglobal (can start/end anywhere in reference)",
+      "2 - semiglobal with soft clip on bead side of a read",
+      "3 - semiglobal with soft clip on key side of a read",
+      "4 - local (semiglobal with soft clip on both sides of a read",
       NULL};
   static char *output_type[] = {"0 - SAM", "1 - BAM (compressed)", "2 - BAM (uncompressed)", NULL};
   static char *pairing[] = {"0 - no pairing is to be performed", "1 - mate pairs (-S 0 -P 1)", "2 - paired end (-S 1 -P 0)", NULL};
@@ -691,6 +709,64 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            "print verbose progress information",
                            NULL,
                            tmap_map_opt_option_print_func_verbosity,
+                           TMAP_MAP_ALGO_GLOBAL);
+  
+  // realignment options
+  tmap_map_opt_options_add(opt->options, "do-realign", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "perform realignment of the found matches",
+                           NULL,
+                           tmap_map_opt_option_print_func_do_realign,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "r-mat", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "realignment match score",
+                           NULL,
+                           tmap_map_opt_option_print_func_realign_mat_score,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "r-mis", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "realignment mismatch score",
+                           NULL,
+                           tmap_map_opt_option_print_func_realign_mis_score,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "r-gip", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "realignment gap opening score",
+                           NULL,
+                           tmap_map_opt_option_print_func_realign_gip_score,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "r-gep", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "realignment gap extension score",
+                           NULL,
+                           tmap_map_opt_option_print_func_realign_gep_score,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "r-bw", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "realignment bandwidth",
+                           NULL,
+                           tmap_map_opt_option_print_func_realign_bandwidth,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "r-clip", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "realignment clip type",
+                           realignment_clip_type,
+                           tmap_map_opt_option_print_func_realign_cliptype,
+                           TMAP_MAP_ALGO_GLOBAL);
+    
+  tmap_map_opt_options_add(opt->options, "stats", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "report processing statistics",
+                           NULL,
+                           tmap_map_opt_option_print_func_report_stats,
+                           TMAP_MAP_ALGO_GLOBAL);
+			   
+  tmap_map_opt_options_add(opt->options, "r-log", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_FILE,
+                           "the realignment log file name",
+                           NULL,
+                           tmap_map_opt_option_print_func_realign_log,
                            TMAP_MAP_ALGO_GLOBAL);
   
   // flowspace options
@@ -1148,6 +1224,18 @@ tmap_map_opt_init(int32_t algo_id)
   opt->sample_reads = 1.0;
 #endif
   opt->vsw_type = 4;
+  
+  opt->do_realign = 0;
+  opt->realign_mat_score =  4;
+  opt->realign_mis_score = -6;
+  opt->realign_gip_score = -5;
+  opt->realign_gep_score = -2;
+  opt->realign_bandwidth = 10;
+  opt->realign_cliptype = 2;
+  
+  opt->report_stats = 0;
+  
+  opt->realign_log = NULL;
 
   // flowspace options
   opt->fscore = TMAP_MAP_OPT_FSCORE;
@@ -1273,6 +1361,8 @@ tmap_map_opt_destroy(tmap_map_opt_t *opt)
       free(opt->sam_rg[i]);
   }
   free(opt->sam_rg);
+  
+  free (opt->realign_log);
 
   for(i=0;i<opt->num_sub_opts;i++) {
       tmap_map_opt_destroy(opt->sub_opts[i]);
@@ -1628,7 +1718,40 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
       else if(0 == c && 0 == strcmp("end-repair", options[option_index].name)) {
           opt->end_repair = atoi(optarg);
       }
+      
       // End of global options
+      
+      // realignment options
+      else if (0 == c && 0 == strcmp ("do-realign", options [option_index].name)) {
+          opt->do_realign = 1;
+      }
+      else if (0 == c && 0 == strcmp ("r-mat", options [option_index].name)) {
+          opt->realign_mat_score = atoi (optarg);
+      }
+      else if (0 == c && 0 == strcmp ("r-mis", options [option_index].name)) {
+          opt->realign_mis_score = atoi (optarg);
+      }
+      else if (0 == c && 0 == strcmp ("r-gip", options [option_index].name)) {
+          opt->realign_gip_score = atoi (optarg);
+      }
+      else if (0 == c && 0 == strcmp ("r-gep", options [option_index].name)) {
+          opt->realign_gep_score = atoi (optarg);
+      }
+      else if (0 == c && 0 == strcmp ("r-bw", options [option_index].name)) {
+          opt->realign_bandwidth = atoi (optarg);
+      }
+      else if (0 == c && 0 == strcmp ("r-clip", options [option_index].name)) {
+          opt->realign_cliptype = atoi (optarg);
+      }
+      else if (0 == c && 0 == strcmp ("stats", options [option_index].name)) {
+          opt->report_stats = 1;
+      }
+      else if (0 == c && 0 == strcmp ("r-log", options [option_index].name)) {       
+          free(opt->realign_log);
+          opt->realign_log = tmap_strdup(optarg);
+      }
+      
+      
       // Flowspace options
       else if(c == 'F' || (0 == c && 0 == strcmp("final-flowspace", options[option_index].name))) {       
           opt->aln_flowspace = 1;
@@ -2179,6 +2302,18 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   tmap_error_cmd_check_int(opt->read_rescue, 0, 1, "-L");
   tmap_error_cmd_check_int(opt->read_rescue_std_num+0.99, 0, INT32_MAX, "-l");
   tmap_error_cmd_check_int(opt->read_rescue_mapq_thr, 0, INT32_MAX, "-m");
+  
+  // realignment
+  tmap_error_cmd_check_int(opt->do_realign, 0, 1, "--do-realign");
+  tmap_error_cmd_check_int(opt->realign_mat_score, -127, 128, "--r-mat");
+  tmap_error_cmd_check_int(opt->realign_mis_score, -127, 128, "--r-mis");
+  tmap_error_cmd_check_int(opt->realign_gip_score, -127, 128, "--r-gip");
+  tmap_error_cmd_check_int(opt->realign_gep_score, -127, 128, "--r-gep");
+  tmap_error_cmd_check_int(opt->realign_bandwidth, 0, 256, "--r-bw");
+  tmap_error_cmd_check_int(opt->realign_cliptype, 0, 4, "--r-clip");
+
+  // stats report  
+  tmap_error_cmd_check_int(opt->report_stats, 0, 1, "--stats");
 
   // stage/algorithm options
   if(-1 != opt->min_seq_len) tmap_error_cmd_check_int(opt->min_seq_len, 1, INT32_MAX, "--min-seq-length");

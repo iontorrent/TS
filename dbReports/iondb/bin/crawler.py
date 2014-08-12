@@ -30,18 +30,16 @@ import json
 import logging
 import os
 import socket
-import subprocess
 import sys
 import threading
 import time
 import traceback
 import urllib
-import copy
+import argparse
 
 from iondb.bin.djangoinit import *
 from django import db
 from django.db import connection
-from django.core.exceptions import ObjectDoesNotExist
 
 from twisted.internet import reactor
 from twisted.internet import task
@@ -51,17 +49,13 @@ from iondb.rundb import models
 from iondb.rundb.data import backfill_tasks as tasks
 from ion.utils.explogparser import load_log
 from ion.utils.explogparser import parse_log
-from iondb.utils.crawler_utils import getFlowOrder
-from iondb.utils.crawler_utils import folder_mtime, explog_time
-from iondb.utils.crawler_utils import tdelt2secs
 
-__version__ = filter(str.isdigit, "$Revision: 75064 $")
+__version__ = filter(str.isdigit, "$Revision$")
 
 LOG_BASENAME = "explog.txt"
 LOG_FINAL_BASENAME = "explog_final.txt"
 
 
-# TODO: these are defined in backup.py as well.  Needs to be consolidated.
 # These strings will be displayed in Runs Page under FTP Status field
 RUN_STATUS_COMPLETE = "Complete"
 RUN_STATUS_MISSING = "Missing File(s)"
@@ -80,7 +74,9 @@ class CrawlLog(object):
     BASE_LOG_NAME = "crawl.log"
     PRIVILEGED_BASE = "/var/log/ion"
 
-    def __init__(self):
+    def __init__(self, _disableautoanalysis):
+        '''Initialization function'''
+        self.disableautoanalysis = _disableautoanalysis
         self.expr_deque = []
         self.lock = threading.Lock()
         self.expr_count = 0
@@ -165,29 +161,30 @@ class Status(xmlrpc.XMLRPC):
         self.logger = logger
 
     def xmlrpc_current_folder(self):
+        '''Return current folder'''
         return self.logger.current_folder
 
     def xmlrpc_time_elapsed(self):
+        '''Return time_elapsed'''
         return tdelt2secs(self.logger.time_elapsed())
 
     def xmlrpc_prev_experiments(self):
+        '''Return previous folder list'''
         return map(str, self.logger.prev_exprs())
 
     def xmlrpc_experiments_found(self):
+        '''Return number of folders found'''
         return self.logger.expr_count
 
     def xmlrpc_state(self):
+        '''Return state'''
         msg, dt = self.logger.get_state()
         return (msg, tdelt2secs(datetime.datetime.now() - dt))
 
     def xmlrpc_hostname(self):
+        '''Return hostname'''
         return socket.gethostname()
 
-
-def extract_rig(folder):
-    """Given the name of a folder storing experiment data, return the name
-    of the PGM from which the date came."""
-    return os.path.basename(os.path.dirname(folder))
 
 
 def extract_prefix(folder):
@@ -197,436 +194,12 @@ def extract_prefix(folder):
     return os.path.dirname(os.path.dirname(folder))
 
 
-def get_planned_exp_objects(d, folder, logobj):
-    '''
-    Find pre-created Plan, Experiment and ExperimentAnalysisSettings objects.
-    If not found, create from system default templates.
-    '''
-    planObj = None
-    expObj = None
-    easObj = None
-
-    expName = d.get("experiment_name", '')
-
-    # Check if User selected Plan on instrument: explog contains guid or shortId
-    selectedPlanGUId = d.get("planned_run_guid", '')
-
-    planShortId = d.get("planned_run_short_id", '')
-    if (planShortId is None or len(planShortId) == 0):
-        planShortId = d.get("pending_run_short_id", '')
-
-    logobj.debug("...planShortId=%s; selectedPlanGUId=%s" % (planShortId, selectedPlanGUId))
-
-    # Find selected Plan
-    if selectedPlanGUId:
-        try:
-            planObj = models.PlannedExperiment.objects.get(planGUID=selectedPlanGUId)
-        except models.PlannedExperiment.DoesNotExist:
-            logobj.warn("No plan with GUId %s found in database " % selectedPlanGUId)
-        except models.PlannedExperiment.MultipleObjectsReturned:
-            logobj.warn("Multiple plan with GUId %s found in database " % selectedPlanGUId)
-    elif planShortId:
-        # Warning: this is NOT guaranteed to be unique in db!
-        try:
-            planObj = models.PlannedExperiment.objects.filter(planShortID=planShortId, planExecuted=True).order_by("-date")[0]
-        except IndexError:
-            logobj.warn("No plan with short id %s and planExecuted=True found in database " % planShortId)
-
-    if planObj:
-        try:
-            expObj = planObj.experiment
-            easObj = expObj.get_EAS()
-
-            # Make sure this plan is not already used by an existing experiment!
-            if expObj.status == 'run':
-                logobj.info('WARNING: Plan %s is already associated to an experiment, a copy will be created' % planObj.pk)
-                planObj.pk = None
-                planObj.save()
-
-                expObj.pk = None
-                expObj.unique = folder
-                expObj.plan = planObj
-                expObj.repResult = None
-                expObj.save()
-
-                easObj.pk = None
-                easObj.experiment = expObj
-                easObj.save()
-
-            sampleSetObj = planObj.sampleSet
-            if sampleSetObj:
-                logobj.debug("crawler going to mark planObj.name=%s; sampleSet.id=%d as run" %(planObj.planDisplayedName, sampleSetObj.id))
-
-                sampleSetObj.status = "run"
-                sampleSetObj.save()
-
-
-        except:
-            logobj.warn(traceback.format_exc())
-            logobj.warn("Error in trying to retrieve experiment and eas for planName=%s, pk=%s" % (planObj.planName, planObj.pk))
-    else:
-    #if user does not use a plan for the run, fetch the system default plan template, and clone it for this run
-        logobj.warn("expName: %s not yet in database and needs a sys default plan" % expName)
-        try:
-            chipversion = d.get('chipversion','')
-            if chipversion:
-                explogChipType = chipversion
-                if explogChipType.startswith('1.10'):
-                    explogChipType = 'P1.1.17'
-                elif explogChipType.startswith('1.20'):
-                    explogChipType = 'P1.2.18'
-            else:
-                explogChipType = d.get('chiptype','')
-
-            systemDefaultPlanTemplate = None
-
-            if explogChipType:
-                systemDefaultPlanTemplate = models.PlannedExperiment.get_latest_plan_or_template_by_chipType(explogChipType)
-
-            if not systemDefaultPlanTemplate:
-                logobj.debug("Chip-specific system default plan template not found in database for chip=%s; experiment=%s" % (explogChipType, expName))
-                systemDefaultPlanTemplate = models.PlannedExperiment.get_latest_plan_or_template_by_chipType()
-
-            logobj.debug("Use system default plan template=%s for chipType=%s in experiment=%s" % (systemDefaultPlanTemplate.planDisplayedName, explogChipType, expName))
-
-            # copy Plan
-            currentTime = datetime.datetime.now()
-
-            planObj = copy.copy(systemDefaultPlanTemplate)
-            planObj.pk = None
-            planObj.planGUID = None
-            planObj.planShortID = None
-            planObj.isReusable = False
-            planObj.isSystem = False
-            planObj.isSystemDefault = False
-            planObj.planName = "CopyOfSystemDefault_" + expName
-            planObj.planDisplayedName = planObj.planName
-            planObj.planStatus = 'run'
-            planObj.planExecuted = True
-            planObj.date = currentTime
-            planObj.save()
-
-            # copy Experiment
-            expObj = copy.copy(systemDefaultPlanTemplate.experiment)
-            expObj.pk = None
-            expObj.unique = folder
-            expObj.plan = planObj
-            expObj.chipType = explogChipType
-            expObj.date = currentTime
-            expObj.save()
-
-            # copy EAS
-            easObj = systemDefaultPlanTemplate.experiment.get_EAS()
-            easObj.pk = None
-            easObj.experiment = expObj
-            easObj.isEditable = True
-            easObj.date = currentTime
-            easObj.save()
-
-            logobj.debug("cloned systemDefaultPlanTemplate: planObj.pk=%s; easObj.pk=%s; expObj.pk=%s" % (planObj.pk, easObj.pk, expObj.pk))
-
-            #clone the qc thresholds as well
-            qcValues = systemDefaultPlanTemplate.plannedexperimentqc_set.all()
-
-            for qcValue in qcValues:
-                qcObj = copy.copy(qcValue)
-
-                qcObj.pk = None
-                qcObj.plannedExperiment = planObj
-                qcObj.save()
-
-            logobj.info("crawler (using template=%s) AFTER SAVING SYSTEM DEFAULT CLONE %s for experiment=%s;" % (systemDefaultPlanTemplate.planDisplayedName, planObj.planName, expName))
-
-        except:
-            logobj.warn(traceback.format_exc())
-            logobj.warn("Error in trying to clone system default plan template for experiment=%s" % (expName))
-
-    return planObj, expObj, easObj
-
-def exp_kwargs(d, folder, logobj):
-    """Converts the output of `parse_log` to the a dictionary of
-    keyword arguments needed to create an ``Experiment`` database object.
-    """
-    identical_fields = ("sample", "cycles", "flows", "project",)
-    simple_maps = (
-        ("experiment_name", "expName"),
-        ("chipbarcode", "chipBarcode"),
-        ("user_notes", "notes"),
-        ##("seqbarcode", "seqKitBarcode"),
-        ("autoanalyze", "autoAnalyze"),
-        ("prebeadfind", "usePreBeadfind"),
-        ("librarykeysequence", "libraryKey"),
-        ("barcodeid", "barcodeKitName"),
-        ("isReverseRun", "isReverseRun"),
-        ("library", "reference"),
-    )
-
-    chiptype = d.get('chiptype','')
-    chipversion = d.get('chipversion','')
-    if chipversion:
-        chiptype = chipversion
-    if chiptype.startswith('1.10'):
-        chiptype = 'P1.1.17'
-    elif chiptype.startswith('1.20'):
-        chiptype = 'P1.2.18'
-
-    full_maps = (
-        ("chipType", chiptype),
-        ("pgmName", d.get('devicename', extract_rig(folder))),
-        ("log", json.dumps(d, indent=4)),
-        ("expDir", folder),
-        ("unique", folder),
-        ("baselineRun", d.get("runtype") == "STD" or d.get("runtype") == "Standard"),
-        ("date", explog_time(d.get("start_time", ""), folder)),
-        ("storage_options", models.GlobalConfig.objects.all()[0].default_storage_options),
-        ("flowsInOrder", getFlowOrder(d.get("image_map", ""))),
-        ("reverse_primer", d.get('reverse_primer', 'Ion Kit')),
-    )
-
-    derive_attribute_list = ["sequencekitname", "seqKitBarcode", "sequencekitbarcode",
-                             "libraryKitName", "libraryKitBarcode"]
-
-    ret = {}
-    for f in identical_fields:
-        ret[f] = d.get(f, '')
-    for k1, k2 in simple_maps:
-        ret[k2] = d.get(k1, '')
-    for k, v in full_maps:
-        ret[k] = v
-
-    for attribute in derive_attribute_list:
-        ret[attribute] = ''
-
-    #N.B. this field is not used
-    ret['storageHost'] = 'localhost'
-
-    # If Flows keyword is defined in explog.txt...
-    if ret['flows'] != "":
-        # Cycles should be based on number of flows, not cycles published in log file
-        # (Use of Cycles is deprecated in any case! We should be able to enter a random number here)
-        ret['cycles'] = int(int(ret['flows']) / len(ret['flowsInOrder']))
-    else:
-        # ...if Flows is not defined in explog.txt:  (Very-old-dataset support)
-        ret['flows'] = len(ret['flowsInOrder']) * int(ret['cycles'])
-        logobj.warn("Flows keyword missing: Calculated Flows is %d" % int(ret['flows']))
-
-    if ret['barcodeKitName'].lower() == 'none':
-        ret['barcodeKitName'] = ''
-
-    if len(d.get('blocks', [])) > 0:
-        ret['rawdatastyle'] = 'tiled'
-        ret['autoAnalyze'] = False
-        for bs in d['blocks']:
-            # Hack alert.  Watch how explogparser.parse_log munges these strings when detecting which one is the thumbnail entry
-            # Only thumbnail will have 0,0 as first and second element of the string.
-            if '0' in bs.split(',')[0] and '0' in bs.split(',')[1]:
-                continue
-            if auto_analyze_block(bs, logobj):
-                ret['autoAnalyze'] = True
-                logobj.debug("Block Run. Detected at least one block to auto-run analysis")
-                break
-        if ret['autoAnalyze'] is False:
-            logobj.debug("Block Run. auto-run whole chip has not been specified")
-    else:
-        ret['rawdatastyle'] = 'single'
-
-    sequencingKitName = d.get("seqkitname", '')
-    #do not replace plan's seqKit info if explog has blank seqkitname
-    if sequencingKitName and sequencingKitName != "NOT_SCANNED":
-        ret['sequencekitname'] = sequencingKitName
-
-    #in rundb_experiment, there are 2 attributes for sequencingKitBarcode!!
-    sequencingKitBarcode = d.get("seqkitpart", '')
-    if sequencingKitBarcode and sequencingKitBarcode != "NOT_SCANNED":
-        ret['seqKitBarcode'] = sequencingKitBarcode
-        ret['sequencekitbarcode'] = sequencingKitBarcode
-
-    libraryKitBarcode = d.get("libbarcode", '')
-    if libraryKitBarcode and libraryKitBarcode != "NOT_SCANNED":
-        ret['libraryKitBarcode'] = libraryKitBarcode
-
-    libraryKitName = d.get('libkit', '')
-    if libraryKitName and libraryKitName != "NOT_SCANNED":
-        ret['libraryKitName'] = libraryKitName
-
-    ##note: if PGM is running the old version, there is no isReverseRun in explog.txt.
-    isReverseRun = d.get("isreverserun", '')
-    if isReverseRun == "Yes":
-        ret['isReverseRun'] = True
-    else:
-        ret['isReverseRun'] = False
-
-    #instrument could have blank runType or be absent all together in explog
-    runType = d.get('runtype', "")
-    if not runType:
-        runType = "GENS"
-    ret['runType'] = runType
-
-    # Limit input sizes to defined field widths in models.py
-    ret['notes'] = ret['notes'][:1024]
-    ret['expDir'] = ret['expDir'][:512]
-    ret['expName'] = ret['expName'][:128]
-    ret['pgmName'] = ret['pgmName'][:64]
-    ret['unique'] = ret['unique'][:512]
-    ret['storage_options'] = ret['storage_options'][:200]
-    ret['project'] = ret['project'][:64]
-    ret['sample'] = ret['sample'][:64]
-    ret['reference'] = ret['reference'][:64]
-    ret['chipBarcode'] = ret['chipBarcode'][:64]
-    ret['seqKitBarcode'] = ret['seqKitBarcode'][:64]
-    ret['chipType'] = ret['chipType'][:32]
-    ret['flowsInOrder'] = ret['flowsInOrder'][:512]
-    ret['libraryKey'] = ret['libraryKey'][:64]
-    ret['barcodeKitName'] = ret['barcodeKitName'][:128]
-    ret['reverse_primer'] = ret['reverse_primer'][:128]
-    ret['sequencekitname'] = ret['sequencekitname'][:512]
-    ret['sequencekitbarcode'] = ret['sequencekitbarcode'][:512]
-    ret['libraryKitName'] = ret['libraryKitName'][:512]
-    ret['libraryKitBarcode'] = ret['libraryKitBarcode'][:512]
-    ret['runType'] = ret['runType'][:512]
-
-    return ret
-
-
-def update_exp_objects_from_log(d, folder, planObj, expObj, easObj, logobj):
-    """ Update plan, experiment, sample and experimentAnalysisSettings
-        Returns the experiment object
-    """
-
-    if planObj:
-        logobj.info("Going to update db objects for plan=%s" % planObj.planName)
-
-    kwargs = exp_kwargs(d, folder, logobj)
-
-    # PairedEnd runs no longer supported
-    if kwargs['isReverseRun']:
-        logobj.warn("PAIRED-END is NO LONGER SUPPORTED. Skipping experiment %s" % expObj.expName)
-        return None
-
-    # get valid libraryKey (explog or entered during planning), if failed use default value
-    libraryKey = kwargs['libraryKey']
-    if libraryKey and models.LibraryKey.objects.filter(sequence=libraryKey, direction='Forward').exists():
-        pass
-    elif easObj.libraryKey and models.LibraryKey.objects.filter(sequence=easObj.libraryKey, direction='Forward').exists():
-        kwargs['libraryKey'] = easObj.libraryKey
-    else:
-        try:
-            defaultForwardLibraryKey = models.LibraryKey.objects.get(direction='Forward', isDefault=True)
-            kwargs['libraryKey'] = defaultForwardLibraryKey.sequence
-        except models.LibraryKey.DoesNotExist:
-            logobj.warn("No default forward library key in database for experiment %s" % expObj.expName)
-            return None
-        except models.LibraryKey.MultipleObjectsReturned:
-            logobj.warn("Multiple default forward library keys found in database for experiment %s" % expObj.expName)
-            return None
-
-    #20121104-PDD-TODO: change .info to .debug or remove the print line all together
-
-    # *** Update Experiment ***
-    expObj.status = 'run'
-    expObj.runMode = planObj.runMode
-    for key,value in kwargs.items():
-        if key == "sequencekitname":
-            if value:
-                setattr(expObj, key, value)
-            else:
-                logobj.debug("crawler.update_exp_objects_from_log() SKIPPED key=%s; value=%s" %(key, value))
-        else:
-            setattr(expObj, key, value)
-
-    expObj.save()
-    logobj.info("Updated experiment=%s, pk=%s, expDir=%s" % (expObj.expName, expObj.pk, expObj.expDir) )
-
-
-    # *** Update Plan ***
-    plan_keys = ['expName', 'runType', 'isReverseRun']
-    for key in plan_keys:
-        setattr(planObj, key, kwargs[key])
-
-    planObj.planStatus = 'run'
-    planObj.planExecuted = True # this should've been done by instrument already
-
-    # add project from instrument, if any. Note: this will not create a project if doesn't exist
-    projectName = kwargs['project']
-    if projectName and projectName not in planObj.projects.values_list('name', flat=True):
-        try:
-            planObj.projects.add(models.Project.objects.get(name=projectName))
-        except:
-            logobj.warn("Couldn't add project %s to %s plan: project does not exist" % (projectName, planObj.planName))
-
-    planObj.save()
-    logobj.info("Updated plan=%s, pk=%s" % (planObj.planName, planObj.pk))
-
-
-    # *** Update ExperimentAnalysisSettings ***
-    eas_keys = ['barcodeKitName', 'reference', 'libraryKey']
-
-    for key in eas_keys:
-        setattr(easObj, key, kwargs[key])
-
-    #do not replace plan's EAS value if explog does not have a value for it
-    eas_keys = ['libraryKitName', 'libraryKitBarcode']
-    for key in eas_keys:
-        if (key in kwargs) and kwargs[key]:
-            setattr(easObj, key, kwargs[key])
-
-    easObj.status = 'run'
-    easObj.save()
-    logobj.info("Updated EAS=%s" % easObj)
-
-    # Refresh default cmdline args - this is needed in case chip type or kits changed from their planned values
-    default_args = planObj.get_default_cmdline_args()
-    for key,value in default_args.items():
-        setattr(easObj, key, value)
-    easObj.save()
-
-    # *** Update samples associated with experiment***
-    sampleCount = expObj.samples.all().count()
-    sampleName = kwargs['sample']
-
-    #if this is a barcoded run, user can't change any sample names on the instrument, only sample status update is needed
-    if sampleName and not easObj.barcodeKitName:
-        need_new_sample = False
-        if sampleCount == 1:
-            sample = expObj.samples.all()[0]
-            # change existing sample name only if this sample has association to 1 experiment,
-            # otherwise need to dissociate the original sample and add a new one
-            if sample.name != sampleName:
-                sample_found = models.Sample.objects.filter(name = sampleName)
-                if sample_found:
-                   sample.experiments.remove(expObj)
-                   sample_found[0].experiments.add(expObj)
-                   logobj.info("Replaced sample=%s; sample.id=%s" %(sampleName, sample_found[0].pk))
-                elif sample.experiments.count() == 1:
-                   sample.name = sampleName
-                   sample.displayedName = sampleName
-                   sample.save()
-                   logobj.info("Updated sample=%s; sample.id=%s" %(sampleName, sample.pk))
-                else:
-                    sample.experiments.remove(expObj)
-                    need_new_sample = True
-
-        if sampleCount == 0 or need_new_sample:
-            sample_kwargs = {
-                            'name' : sampleName,
-                            'displayedName' : sampleName,
-                            'date' : expObj.date,
-                            }
-            try:
-                sample, created = models.Sample.objects.get_or_create(name=sampleName, defaults=sample_kwargs)
-                sample.experiments.add(expObj)
-                sample.save()
-                logobj.info("Added sample=%s; sample.id=%s" %(sampleName, sample.pk))
-            except:
-                logobj.debug("Failed to add sample=%s to experiment=%s" %(sampleName, expObj.expName))
-                logobj.debug(traceback.format_exc())
-
-    # update status for all samples
-    for sample in expObj.samples.all():
-        sample.status = expObj.status
-        sample.save()
-
-    return expObj
+def tdelt2secs(td):
+    """Convert a ``datetime.timedelta`` object into a floating point
+    number of seconds."""
+    day_seconds = float(td.days * 24 * 3600)
+    ms_seconds = float(td.microseconds) / 1000000.0
+    return  day_seconds + float(td.seconds) + ms_seconds
 
 
 def construct_crawl_directories(logger):
@@ -640,7 +213,7 @@ def construct_crawl_directories(logger):
         '''
         for item in explist:
             if name == item[0]:
-                if item[1] in [RUN_STATUS_COMPLETE,RUN_STATUS_ABORT,RUN_STATUS_MISSING,RUN_STATUS_SYS_CRIT]:
+                if item[1] in [RUN_STATUS_COMPLETE, RUN_STATUS_ABORT, RUN_STATUS_MISSING, RUN_STATUS_SYS_CRIT]:
                     return True
         return False
 
@@ -669,6 +242,7 @@ def construct_crawl_directories(logger):
 
 
 def get_filecount(exp):
+    '''Return number of acq files'''
     if 'tiled' in exp.rawdatastyle:
         #N.B. Hack - we check ftp status of thumbnail data only
         expDir = os.path.join(exp.expDir, 'thumbnail')
@@ -689,6 +263,7 @@ def sleep_delay(start, current, delay):
 
 
 def get_name_from_json(exp, key, thumbnail_analysis):
+    '''Return directory name'''
     data = exp.log
     name = data.get(key, False)
     twig = ''
@@ -702,32 +277,16 @@ def get_name_from_json(exp, key, thumbnail_analysis):
 
 
 def generate_http_post(exp, logger, thumbnail_analysis=False):
-    try:
-        GC = models.GlobalConfig.objects.all().order_by('pk')[0]
-        base_recalibrate = GC.base_recalibrate
-        mark_duplicates = GC.mark_duplicates
-        realign = GC.realign
-    except models.GlobalConfig.DoesNotExist:
-        base_recalibrate = False
-        mark_duplicates = False
-        realign = False
-
-    #instead of relying solely on globalConfig, user can now set isDuplicateReads for the experiment
-    eas = exp.get_EAS()
-    if (eas):
-        ##logger.errors.info("crawler.generate_http_post() exp.name=%s; id=%s; isDuplicateReads=%s" %(exp.expName, str(exp.pk), str(eas.isDuplicateReads)))
-        mark_duplicates = eas.isDuplicateReads
-
+    '''Send POST to start analysis process'''
     report_name = get_name_from_json(exp, 'autoanalysisname', thumbnail_analysis)
 
+    blockArgs = 'fromRaw'
+    if exp.isProton and not thumbnail_analysis:
+        blockArgs = 'fromWells' # default pipeline setting for fullchip on-instrument analysis
+
     params = urllib.urlencode({'report_name': report_name,
-                               'tf_config': '',
-                               'path': exp.expDir,
-                               'submit': ['Start Analysis'],
                                'do_thumbnail': "%r" % thumbnail_analysis,
-                               'do_base_recal': base_recalibrate,
-                               'realign': realign,
-                               'mark_duplicates': mark_duplicates
+                               'blockArgs': blockArgs
     })
 
     status_msg = "Generated POST"
@@ -748,19 +307,35 @@ def generate_http_post(exp, logger, thumbnail_analysis=False):
         error_code = f.getcode()
         if error_code is not 200:
             logger.errors.error(" !! Failed to start analysis. URL failed with error code %d for %s" % (error_code, f.geturl()))
+            logger.errors.error(f.read())
             status_msg = "Failure to generate POST"
 
     return status_msg
 
 
-def check_for_autoanalyze(exp):
-    if 'tiled' in exp.rawdatastyle:
-        return True
-    else:
-        return False
+def generate_updateruninfo_post(_folder, logger):
+    '''Generates a POST event to update the database objects with explog data'''
+    params = urllib.urlencode(
+        {'datapath':_folder}
+    )
+    try:
+        status_msg = "Generated POST"
+        connection_url = 'http://127.0.0.1/rundb/updateruninfo/'
+        fhandle = urllib.urlopen(connection_url, params)
+    except IOError:
+        logger.errors.warn('could not make connection %s' % connection_url)
+        status_msg = "Failure to generate POST"
+    if fhandle:
+        error_code = fhandle.getcode()
+        if error_code is not 200:
+            logger.errors.error(" !! Failed to update run info. URL failed with error code %d for %s" % (error_code, fhandle.geturl()))
+            logger.errors.error("%s" % "".join(fhandle.readlines()))
+            status_msg = "Failure to generate POST"
+    return status_msg
 
 
 def usedPostBeadfind(exp):
+    '''Return whether to use postbeadfind files in analysis'''
     def convert_to_bool(value):
         '''We must convert the string to a python bool value'''
         v = value.lower()
@@ -833,23 +408,8 @@ def check_for_critical(exp, filelookup):
     return False
 
 
-def get_flow_per_cycle(exp):
-    data = exp.log
-    im = 'image_map'
-    if im in data:
-        # If there are no space characters in the string, its the 'new' format
-        if data[im].strip().find(' ') == -1:
-            # when Image Map is "Image Map: tacgtacgtctgagcatcgatcgatgtacagc"
-            flows = len(data[im])
-        else:
-            # when Image Map is "Image Map: 4 0 r4 1 r3 2 r2 3 r1" or "4 0 T 1 A 2 C 3 G"
-            flows = int(data[im].split(' ')[0])
-        return flows
-    else:
-        return 4  # default to 4 if we have no other information
-
-
 def get_last_file(exp):
+    '''Returns name of latest acq file'''
     last = exp.flows - 1
     pre = '0000'
     final = pre + str(last)
@@ -868,9 +428,9 @@ def check_for_completion(exp):
     if usedPostBeadfind(exp):
         file_list.append('beadfind_post_0003.dat')
 
-    if check_for_file(exp.expDir, 'explog_final.txt'):
+    if check_for_file(exp.expDir, LOG_FINAL_BASENAME):
         #check for critical errors
-        if check_for_critical(exp, 'explog_final.txt'):
+        if check_for_critical(exp, LOG_FINAL_BASENAME):
             return True  # run is complete; true
 
         if 'tiled' in exp.rawdatastyle:
@@ -891,47 +451,8 @@ def check_for_completion(exp):
         return False
 
 
-def analyze_early_block(blockstatus, logger):
-    '''blockstatus is the string from explog.txt starting with keyword BlockStatus.
-    Evaluates the AnalyzeEarly flag.
-    Returns boolean True when argument is 1'''
-    try:
-        arg = blockstatus.split(',')[5].strip()
-        flag = int(arg.split(':')[1]) == 1
-    except:
-        logger.errors.error(traceback.format_exc())
-        flag = False
-    return flag
-
-
-def auto_analyze_block(blockstatus, logobj):
-    '''blockstatus is the string from explog.txt starting with keyword BlockStatus.
-    Evaluates the AutoAnalyze flag.
-    Returns boolean True when argument is 1'''
-    try:
-        arg = blockstatus.split(',')[4].strip()
-        flag = int(arg.split(':')[1]) == 1
-    except:
-        logobj.error(traceback.format_exc())
-        flag = False
-    return flag
-
-
-def get_block_subdir(blockdata, logger):
-    '''blockstatus is the string from explog.txt starting with keyword BlockStatus.
-    Evaluates the X and Y arguments.
-    Returns string containing rawdata subdirectory'''
-    try:
-        blockx = blockdata.split(',')[0].strip()
-        blocky = blockdata.split(',')[1].strip()
-        subdir = "%s_%s" % (blockx, blocky)
-    except:
-        logger.errors.error(traceback.format_exc())
-        subdir = ''
-    return subdir
-
-
 def ready_to_process(exp):
+    '''Returns if composite is ready to start analyzing'''
     # Rules
     # analyzeearly flag true
     # acq_0000.dat file exists for every analysis job
@@ -954,7 +475,7 @@ def ready_to_process(exp):
 
 
 def ready_to_process_thumbnail(exp):
-
+    '''Returns if thumbnail is ready to start analyzing'''
     if 'tiled' in exp.rawdatastyle:
         if os.path.exists(os.path.join(exp.expDir, 'thumbnail')):
             return True
@@ -963,7 +484,7 @@ def ready_to_process_thumbnail(exp):
 
 
 def autorun_thumbnail(exp, logger):
-
+    '''Returns whether thumbnail autorun should be executed'''
     if 'tiled' in exp.rawdatastyle:
         #support for old format
         for bs in exp.log['blocks']:
@@ -983,125 +504,158 @@ def autorun_thumbnail(exp, logger):
     return False
 
 
+def reports_exist(exp):
+    '''Determine whether an auto-analysis report has been created'''
+    composite = False
+    thumbnail = False
+    reports = exp.sorted_results()
+    if reports:
+        # thumbnail report will have thumb=1 in meta data
+        for report in reports:
+            val = report.metaData.get('thumb', 0)
+            if val == 1:
+                thumbnail = True
+            if val == 0:
+                composite = True
+
+    return composite, thumbnail
+
+
 def crawl(folders, logger):
     """Crawl over ``folders``, reporting information to the ``CrawlLog``
     ``logger``."""
+
+    def get_expobj(_folder):
+        '''Returns Experiment object associated with given folder'''
+        exp_set = models.Experiment.objects.filter(unique=_folder)
+        if exp_set:
+            # Experiment object exists in database
+            exp = exp_set[0]
+            logger.errors.info("Experiment in database: %s" % (_folder))
+        else:
+            exp = None
+        return exp
+
+    def update_expobj_ftpcompleted(_expobj, folder):
+        '''Update Experiment object with completed ftp status'''
+        # Store final explog in database
+        exptxt = load_log(folder, LOG_FINAL_BASENAME)
+        if exptxt is not None:
+            _expobj.log = json.dumps(parse_log(exptxt), indent=4)
+        else:
+            # explog_final exists, but is not readable yet.
+            return
+
+        # Set FTP transfer status to complete
+        if _expobj.ftpStatus == RUN_STATUS_ABORT or _expobj.ftpStatus == RUN_STATUS_SYS_CRIT:
+            logger.errors.info("FTP status: Aborted")
+        else:
+            _expobj.ftpStatus = RUN_STATUS_COMPLETE
+            logger.errors.info("FTP status: Complete")
+
+        # Save experiment object
+        _expobj.save()
+
+        # Measure and record disk space usage of this dataset
+        # This is celery task which will execute in separate worker thread
+        try:
+            tasks.setRunDiskspace.delay(_expobj.pk)
+        except:
+            logger.errors.error(traceback.format_exc())
+            raise
+
+    def update_expobj_ftptransfer(_expobj):
+        '''Update Experiment object with in-transfer ftp status'''
+        if _expobj.ftpStatus != RUN_STATUS_MISSING:
+            _expobj.ftpStatus = get_filecount(_expobj)
+            _expobj.save()
+            logger.errors.info("FTP status: Transferring")
+        return
+
+    def handle_composite_report(folder, composite_exists, exp):
+        '''Start composite report analysis'''
+        if composite_exists:
+            logger.errors.debug("composite report already exists")
+            return
+
+        # Check if auto-run for whole chip has been requested
+        if exp.autoAnalyze:
+            logger.errors.debug("  auto-run whole chip analysis has been requested")
+            if ready_to_process(exp) or check_for_completion(exp):
+                logger.errors.info("  Start a whole chip auto-run analysis job")
+                generate_http_post(exp, logger)
+            else:
+                logger.errors.info("  Do not start a whole chip auto-run job yet")
+        else:
+            logger.errors.debug("  auto-run whole chip analysis has not been requested")
+
+    def handle_thumbnail_report(folder, thumbnail_exists, exp):
+        '''Start thumbnail report analysis'''
+        if not 'tiled' in exp.rawdatastyle:
+            logger.errors.debug("This is not a block dataset; no thumbnail to process")
+            return
+
+        if thumbnail_exists:
+            logger.errors.debug("thumbnail report already exists")
+            return
+
+        # Check if auto-run for thumbnail has been requested
+        if autorun_thumbnail(exp, logger):
+            logger.errors.debug("auto-run thumbnail analysis has been requested")
+            if ready_to_process_thumbnail(exp) or check_for_completion(exp):
+                logger.errors.info("  Start a thumbnail auto-run analysis job")
+                generate_http_post(exp, logger, DO_THUMBNAIL)
+            else:
+                logger.errors.info("  Do not start a thumbnail auto-run job yet")
+        else:
+            logger.errors.debug("auto-run thumbnail analysis has not been requested")
+        return
+
+    def explog_exists(folder):
+        return os.path.isfile(os.path.join(folder, LOG_BASENAME))
+    
+    #-----------------------------------------------------------
+    #Main
+    #-----------------------------------------------------------
     if folders:
         logger.errors.info("checking %d directories" % len(folders))
 
-    for f in folders:
+    for folder in folders:
         try:
-            text = load_log(f, LOG_BASENAME)
-            logger.errors.debug("checking directory %s" % f)
-            #------------------------------------
-            # Check for a valid explog.txt file
-            #------------------------------------
-            if text is not None:
+            logger.errors.info("checking directory %s" % folder)
+            logger.current_folder = folder
 
-                logger.current_folder = f
-                # Catch any errors parsing this log file and continue to the next experiment.
-                try:
-                        d = parse_log(text)
-                except:
-                	logger.errors.info("Error parsing explog, skipping %s" % f)
-                	logger.errors.exception(traceback.format_exc())
-                	continue
+            exp = get_expobj(folder)
 
-                exp = None
-                exp_set = models.Experiment.objects.filter(unique=f)
-                if exp_set:
-                    # Experiment already in database
-                    exp = exp_set[0]
-                    if exp.ftpStatus == RUN_STATUS_COMPLETE:
-                        continue
+            if exp is None:
+                if explog_exists(folder):
+                    logger.errors.info("Updating the database records: %s" % (folder))
+                    generate_updateruninfo_post(folder, logger)
                 else:
-                    # Need to create experiment for this folder
-                    try:
-                        planObj, expObj, easObj = get_planned_exp_objects(d, f, logger.errors)
-                        exp = update_exp_objects_from_log(d, f, planObj, expObj, easObj, logger.errors)
-                    except:
-                        logger.errors.info("Error updating experiment objects, skipping %s" % f)
-                        logger.errors.exception(traceback.format_exc())
-                        continue
-
-                if exp is not None:
-
-                    logger.errors.info("%s" % f)
-
-                    #--------------------------------
-                    # Update FTP Transfer Status
-                    #--------------------------------
-                    if check_for_completion(exp):
-                        exptxt = load_log(f, LOG_FINAL_BASENAME)
-                        if exptxt is not None:
-                            exp.log = json.dumps(parse_log(exptxt), indent=4)
-                        else:
-                            # explog_final exists, but is not readable yet.
-                            continue
-
-                        # FTP transfer is complete
-                        if exp.ftpStatus == RUN_STATUS_ABORT or exp.ftpStatus == RUN_STATUS_SYS_CRIT:
-                            logger.errors.info("FTP status: Aborted")
-                        else:
-                            exp.ftpStatus = RUN_STATUS_COMPLETE
-                        exp.save()
-
-                        # Measure and record disk space usage of this dataset
-                        # This is celery task which will execute in separate worker thread
-                        try:
-                            tasks.setRunDiskspace.delay(exp.pk)
-                        except:
-                            logger.errors.exception(traceback.format_exc())
-
-                    else:
-                        if exp.ftpStatus != RUN_STATUS_MISSING:
-                            exp.ftpStatus = get_filecount(exp)
-                            exp.save()
-                            logger.errors.info("FTP status: Transferring")
-
-                    #--------------------------------
-                    # Handle auto-run analysis
-                    #--------------------------------
-                    composite_exists, thumbnail_exists = reports_exist(exp)
-                    logger.errors.debug("Reports Exist? %s %s" % (composite_exists, thumbnail_exists))
-                    if not composite_exists:
-                        logger.errors.debug("No auto-run analysis has been started")
-                        # Check if auto-run for whole chip has been requested
-                        if exp.autoAnalyze:
-                            logger.errors.debug("  auto-run whole chip analysis has been requested")
-                            #if check_analyze_early(exp) or check_for_completion(exp):
-                            if ready_to_process(exp) or check_for_completion(exp):
-                                logger.errors.info("  Start a whole chip auto-run analysis job")
-                                generate_http_post(exp, logger)
-                            else:
-                                logger.errors.info("  Do not start a whole chip auto-run job yet")
-                        else:
-                            logger.errors.debug("  auto-run whole chip analysis has not been requested")
-                    else:
-                        logger.errors.debug("composite report already exists")
-
-                    if not thumbnail_exists:
-                        # Check if auto-run for thumbnail has been requested
-                        # But only if its a block dataset
-                        if 'tiled' in exp.rawdatastyle:
-                            if autorun_thumbnail(exp, logger):
-                                logger.errors.debug("auto-run thumbnail analysis has been requested")
-                                if ready_to_process_thumbnail(exp) or check_for_completion(exp):
-                                    logger.errors.info("  Start a thumbnail auto-run analysis job")
-                                    generate_http_post(exp, logger, DO_THUMBNAIL)
-                                else:
-                                    logger.errors.info("  Do not start a thumbnail auto-run job yet")
-                            else:
-                                logger.errors.debug("auto-run thumbnail analysis has not been requested")
-                        else:
-                            logger.errors.debug("This is not a block dataset; no thumbnail to process")
-                    else:
-                        logger.errors.debug("thumbnail report already exists")
-                else:
-                    logger.errors.debug("exp is empty")
+                    logger.errors.debug("Missing %s" % os.path.join(folder, LOG_BASENAME))
             else:
-                # No explog.txt exists; probably an engineering test run
-                logger.errors.debug("no %s was found in %s" % (LOG_BASENAME, f))
+                #--------------------------------
+                # Update FTP Transfer Status
+                #--------------------------------
+                if check_for_completion(exp):
+                    update_expobj_ftpcompleted(exp, folder)
+                else:
+                    update_expobj_ftptransfer(exp)
+
+                #--------------------------------
+                # Handle auto-run analysis
+                # Conditions for starting auto-analysis:
+                #     #. ftpStatus is not one of the complete states
+                #     #. no report(s) exist.
+                # i.e. - if a user deletes all reports after ftp transfer is complete, do not start auto-analysis.
+                #--------------------------------
+                if not logger.disableautoanalysis:
+                    composite_exists, thumbnail_exists = reports_exist(exp)
+                    handle_composite_report(folder, composite_exists, exp)
+                    handle_thumbnail_report(folder, thumbnail_exists, exp)
+                else:
+                    logger.errors.info("auto-analysis start has been disabled")
+
         except:
             logger.errors.exception(traceback.format_exc())
 
@@ -1130,23 +684,6 @@ def loop(logger, end_event, delay):
     sys.exit(0)
 
 
-def reports_exist(exp):
-    '''Determine whether an auto-analysis report has been created'''
-    composite = False
-    thumbnail = False
-    reports = exp.sorted_results()
-    if reports:
-        # thumbnail report will have thumb=1 in meta data
-        for report in reports:
-            val = report.metaData.get('thumb', 0)
-            if val == 1:
-                thumbnail = True
-            if val == 0:
-                composite = True
-
-    return composite, thumbnail
-
-
 def checkThread(thread, log, reactor):
     '''Checks thread for aliveness.
     If a valid reactor object is passed, the reactor will be stopped
@@ -1159,9 +696,13 @@ def checkThread(thread, log, reactor):
             reactor.stop()
 
 
-def main(argv):
-    logger = CrawlLog()
+def main(args):
+    '''Main function'''
+    logger = CrawlLog(args.disableautoanalysis)
     logger.errors.info("Crawler Initializing")
+        
+    if logger.disableautoanalysis:
+        logger.errors.info("Auto-Analysis has been disabled")
 
     exit_event = threading.Event()
     loopfunc = lambda: loop(logger, exit_event, settings.CRAWLER_PERIOD)
@@ -1180,5 +721,14 @@ def main(argv):
     reactor.listenTCP(settings.CRAWLER_PORT, server.Site(r))
     reactor.run()
 
+
 if __name__ == '__main__':
-    sys.exit(main(sys.argv))
+    '''Command line'''
+    parser = argparse.ArgumentParser(description="ionCrawler daemon")
+    parser.add_argument('--disableautoanalysis',
+                        action="store_true",
+                        default=False,
+                        help='Disable launching analysis when new experiment data is detected')
+
+    args = parser.parse_args()
+    sys.exit(main(args))

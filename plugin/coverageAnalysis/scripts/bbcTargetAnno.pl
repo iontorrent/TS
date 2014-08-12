@@ -91,7 +91,7 @@ if( !$bedout )
 {
   # replace default bed track line assumed field titles (by position)
   $headerLine = "";
-  my @titles = ("contig_id","contig_srt","contig_end","region_id","gene_id","gc");
+  my @titles = ("contig_id","contig_srt","contig_end","region_id","gene_id","gc_count");
   for( my $i = 0; $i < scalar(@titles); ++$i )
   {
     if( defined($titles[$i]) ) { $headerLine .= "$titles[$i]\t"; }

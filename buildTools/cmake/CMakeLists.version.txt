@@ -2,9 +2,27 @@
 # Verison info
 
 set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
-#set (ION_TS_EXTERNAL "${CMAKE_BINARY_DIR}/external/")
 
-set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
+# Use the closest ION_UPDATE_SERVER we can find.
+message(STATUS "Searching for an ION_UPDATE_SERVER...")
+foreach ( SERVER updates.iontorrent.com ionupdates.com )
+    # See if we can look up the server in question.
+    execute_process( COMMAND host -W 2 ${SERVER} 
+       RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
+
+    # If we can find it, great! We're done!
+    if ( NOT ${NOT_FOUND} )
+       set( ION_UPDATE_SERVER ${SERVER} )
+       break()
+    endif()
+endforeach()
+
+# If we find a server, let everyone know.
+if (ION_UPDATE_SERVER)
+    message(STATUS "Using ION_UPDATE_SERVER: ${ION_UPDATE_SERVER}")
+else()
+    message(WARNING "Could not find a valid ION_UPDATE_SERVER.")
+endif()
 
 #custom ExternalProject_add with timeout feature
 IF (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} STRLESS 2.8.2)
@@ -27,27 +45,22 @@ endif(LSB_RELEASE_COMMAND)
 if (${LSB_RELEASE_CODENAME} STREQUAL "lucid")
     set(cuda_proj_version "5.5.22-16488124")
     set(cuda_toolkit_tar_file "cuda-linux64-rel-5.5.22-16488124.tar.gz")
-    set(cuda_devdriver_file "devdriver_NVIDIA-Linux-x86_64-319.37.run")
+    set(cuda_devdriver_file "devdriver_NVIDIA-Linux-x86_64-331.20-no-compat32.run")
     set(CUDA_VERSION "5.5")
 elseif (${LSB_RELEASE_CODENAME} STREQUAL "oneiric")
     set(cuda_proj_version "5.5.22-16488124")
     set(cuda_toolkit_tar_file "cuda-linux64-rel-5.5.22-16488124.tar.gz")
-    set(cuda_devdriver_file "devdriver_NVIDIA-Linux-x86_64-319.37.run")
+    set(cuda_devdriver_file "devdriver_NVIDIA-Linux-x86_64-331.20-no-compat32.run")
     set(CUDA_VERSION "5.5")
-elseif (${LSB_RELEASE_CODENAME} STREQUAL "precise" OR
-        ${LSB_RELEASE_CODENAME} STREQUAL "raring" OR
-        ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
-        ${LSB_RELEASE_CODENAME} STREQUAL "wheezy" OR
-        ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
-        ${LSB_RELEASE_CODENAME} STREQUAL "sid")
+elseif (${LSB_RELEASE_CODENAME} STREQUAL "trusty")
     set(cuda_proj_version "5.5.22-16488124")
     set(cuda_toolkit_tar_file "cuda-linux64-rel-5.5.22-16488124.tar.gz")
-    set(cuda_devdriver_file "devdriver_NVIDIA-Linux-x86_64-319.37.run")
+    set(cuda_devdriver_file "devdriver_NVIDIA-Linux-x86_64-334.21-no-compat32.run")
     set(CUDA_VERSION "5.5")
 else()
     set(cuda_proj_version "5.5.22-16488124")
     set(cuda_toolkit_tar_file "cuda-linux64-rel-5.5.22-16488124.tar.gz")
-    set(cuda_devdriver_file "devdriver_NVIDIA-Linux-x86_64-319.37.run")
+    set(cuda_devdriver_file "devdriver_NVIDIA-Linux-x86_64-331.20-no-compat32.run")
     set(CUDA_VERSION "5.5")
 endif()
 
@@ -64,21 +77,58 @@ execute_process(COMMAND "hostname" "-f"
 execute_process(COMMAND "date" "-u" "+%Y%m%d%H%M" 
                 OUTPUT_VARIABLE BUILDDATE
                 OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND "svn" "info" "${PROJECT_SOURCE_DIR}"
-                COMMAND "grep" "^URL" 
-                COMMAND "sed" "s/^URL:.*svn\\///" 
-                OUTPUT_VARIABLE SVNPATH
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND "svn" "info" "${PROJECT_SOURCE_DIR}"
-                COMMAND "grep" "^Revision" 
-                COMMAND "sed" "s/^Revision: //" 
-                OUTPUT_VARIABLE SVNREV
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND "svn" "info" "${PROJECT_SOURCE_DIR}"
-                COMMAND "grep" "^URL" 
-                COMMAND "sed" "s/^URL: //" 
-                OUTPUT_VARIABLE SVNURL
-                OUTPUT_STRIP_TRAILING_WHITESPACE)
+if(EXISTS "${PROJECT_SOURCE_DIR}/../.svn" OR EXISTS "$(PROJECT_SOURCE_DIR}/.svn")
+    # Subversion 1.7 working copies have just one .svn directory - in the root of the working copy
+    find_package(Subversion)
+    IF(Subversion_FOUND)
+        Subversion_WC_INFO(${PROJECT_SOURCE_DIR} IonVersion)
+    ENDIF()
+else()
+    #message(STATUS "SVN repository not found, trying git ...")
+    execute_process(COMMAND "git" "rev-parse" "--show-toplevel"
+                    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+                    RESULT_VARIABLE res
+                    OUTPUT_VARIABLE IonVersion_WC_ROOT
+                    ERROR_QUIET
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(res EQUAL 0)
+        # git svn repo
+        if(EXISTS "${IonVersion_WC_ROOT}/.git/svn/")
+            execute_process(COMMAND "git" "svn" "info"
+                    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+                    OUTPUT_VARIABLE SUBVERSION_REPO_INFOS
+                    ERROR_VARIABLE svn_info_error)
+            if(NOT ${svn_info_error})
+                MESSAGE(WARNING, "Unable to get git-svn repository information. Building outside working copy?")
+            else()
+                STRING(REGEX REPLACE "^(.*\n)?URL: ([^\n]+).*"
+                    "\\2" IonVersion_WC_URL "${SUBVERSION_REPO_INFOS}")
+                STRING(REGEX REPLACE "^(.*\n)?Revision: ([^\n]+).*"
+                    "\\2" IonVersion_WC_REVISION "${SUBVERSION_REPO_INFOS}")
+            endif()
+        else()
+            # Pure GIT repo - Build script should tag releases,
+            # otherwise returns short sha1 hash
+            execute_process(COMMAND "git" "rev-parse" "--short" "HEAD"
+                    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+                    OUTPUT_VARIABLE IonVersion_WC_REVISION
+                    ERROR_VARIABLE git_info_error
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+
+            # Assumes remote is named "origin"
+            execute_process(COMMAND "git" "config" "--get" "remote.origin.url"
+                    WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}"
+                    OUTPUT_VARIABLE IonVersion_WC_URL
+                    ERROR_VARIABLE git_info_error
+                    OUTPUT_STRIP_TRAILING_WHITESPACE)
+        endif()
+    else()
+        # else not a working copy!
+        set(IonVersion_WC_URL ".")
+        set(IonVersion_WC_REVISION "SNAPSHOT")
+    endif()
+endif()
+
 execute_process(COMMAND "grep" "MAJOR" "${PROJECT_SOURCE_DIR}/version"
                 COMMAND "sed" "s/^MAJOR=//" 
                 OUTPUT_VARIABLE MAJOR
@@ -110,10 +160,10 @@ endif()
 set (ION_VERSION_MAJOR "${MAJOR}" CACHE INTERNAL "Version Major Number" FORCE)
 set (ION_VERSION_MINOR "${MINOR}" CACHE INTERNAL "Version Minor Number" FORCE)
 set (ION_VERSION_RELEASE "${RELEASE}" CACHE INTERNAL "Version Release Number" FORCE)
-set (ION_VERSION_SVNPATH "${SVNPATH}" CACHE INTERNAL "SVN Path Number" FORCE)
-set (ION_VERSION_SVNREV "${SVNREV}" CACHE INTERNAL "SVN Revision Number" FORCE)
-set (ION_VERSION_SVNURL "${SVNURL}" CACHE INTERNAL "SVN URL" FORCE)
+set (ION_VERSION_SVNURL "${IonVersion_WC_URL}" CACHE INTERNAL "SVN URL" FORCE)
+set (ION_VERSION_SVNREV "${IonVersion_WC_REVISION}" CACHE INTERNAL "SVN Revision Number" FORCE)
 set (ION_VERSION_BUILDHOST "${BUILDHOST}" CACHE INTERNAL "Host the build was done on" FORCE)
+string(REPLACE "${IonVersion_WC_ROOT}" "" ION_VERSION_SVN_PATH "${IonVersion_WC_URL}")
 # If we include this, it will force rebuilds when ever the date value changes -- eg every min
 #set (ION_VERSION_BUILDDATE "${BUILDDATE}" CACHE INTERNAL "The date of the build" FORCE)
 

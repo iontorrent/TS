@@ -6,7 +6,7 @@
 {% block page-plan-content %}
 <div class="row-fluid">
     <div class="span12">
-        <h4>Reference Library</h4>
+        <h4>Reference Library {% if not helper.getApplProduct.isTargetRegionBEDFileSupported %}(optional){% endif %}</h4>
         <select id="reference" name="reference" class="select-group" style="width: 700px;">
             <option value=""></option>
             {% for ref in step.getPrePopulatedFieldDict.references %}
@@ -20,19 +20,21 @@
                     {% endifequal %}
                 {% endifequal %}
             {% endfor %}
-            
+   
             {% if step.getPrePopulatedFieldDict.referenceMissing %}
-                <option SELECTED class="entryNotFound" value="{{step.getCurrentSavedFieldDict.reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">{{step.getCurrentSavedFieldDict.reference}}</option>
+                <option SELECTED class="entryNotFound" value="{{step.getCurrentSavedFieldDict.reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{step.getCurrentSavedFieldDict.reference}}</option>
             {% endif %}
+ 
         </select>
     </div>
 </div>
+{% if helper.getApplProduct.isTargetRegionBEDFileSupported %}
 <div class="row-fluid">
     <div class="span12">
         <h4>Target Regions File</h4>
         <select id="targetBedFile_hidden" name="targetBedFile_hidden" class="select-group" style="width: 700px;">
             {%comment%}
-                    {% for bedFile in step.getPrePopulatedFieldDict.targetBedFiles %}
+                {% for bedFile in step.getPrePopulatedFieldDict.targetBedFiles %}
                 {% ifequal bedFile.path step.getCurrentSavedFieldDict.targetBedFile %}
                     <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                 {% else %}
@@ -51,9 +53,15 @@
            {% for bedFile in step.getPrePopulatedFieldDict.targetBedFiles %}
                 <option  value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
             {%endfor%}
+                
+            {% if step.getPrePopulatedFieldDict.targetBedFileMissing %}
+                <option SELECTED class="entryNotFound" value="{{step.getCurrentSavedFieldDict.targetBedFile}}">(Not Found) {{step.getCurrentSavedFieldDict.targetBedFile}}</option>
+            {% endif %}
         </select>
     </div>
 </div>
+{% endif %}
+
 {% if step.getPrePopulatedFieldDict.showHotSpotBed %}
     <div class="row-fluid">
         <div class="span12">
@@ -79,6 +87,10 @@
                 {% for bedFile in step.getPrePopulatedFieldDict.hotSpotBedFiles %}
                     <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
                 {%endfor%}
+    
+                {% if step.getPrePopulatedFieldDict.hotSpotBedFileMissing %}
+                    <option SELECTED class="entryNotFound" value="{{step.getCurrentSavedFieldDict.hotSpotBedFile}}">(Not Found) {{step.getCurrentSavedFieldDict.hotSpotBedFile}}</option>
+                {% endif %}                
             </select>
         </div>
     </div>

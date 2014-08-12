@@ -1,11 +1,16 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-from iondb.rundb.models import Project, PlannedExperiment, Content
+from iondb.rundb.models import Project, PlannedExperiment, Content, Plugin, GlobalConfig
 from django.contrib.auth.models import User
+from django.shortcuts import get_object_or_404
 
 from traceback import format_exc
 
 import re
+import uuid
 
+from iondb.utils.validation import is_valid_chars, is_valid_length
+
+import collections
 import logging
 logger = logging.getLogger(__name__)
 
@@ -64,26 +69,6 @@ def dict_bed_hotspot():
     return data
 
 
-def is_valid_chars(value, validChars=r'^[a-zA-Z0-9-_\.\s]+$'):
-    ''' Determines if value is valid: letters, numbers, spaces, dashes, underscores, dots only '''
-    return bool(re.compile(validChars).match(value))
-
-
-def is_invalid_leading_chars(value, invalidChars=r'[\.\-\_]'):
-    ''' Determines if leading characters contain dashes, underscores or dots '''
-    if value:
-        return bool(re.compile(invalidChars).match(value.strip(), 0))
-    else:
-        True
-    
-
-def is_valid_length(value, maxLength = 0):
-    ''' Determines if value length is within the maximum allowed '''
-    if value:
-        return len(value.strip()) <= maxLength
-    return True
-
-
 def get_available_plan_count():
     ''' Returns the number of plans (excluding templates) that are ready to use '''
     
@@ -100,3 +85,158 @@ def getPlanDisplayedName(plan):
         planDisplayedName = plan.planDisplayedName.encode("ascii", "ignore")
         
     return planDisplayedName
+
+
+def getPlanBarcodeCount(plan):
+    count = 0
+                
+    experiment = plan.experiment
+    if experiment:
+        if plan.latest_eas and plan.latest_eas.barcodedSamples:
+            barcodedSamples = plan.latest_eas.barcodedSamples
+            
+            for key, value in barcodedSamples.iteritems():
+                if value.get("barcodes", ""):
+                    count += len(value.get("barcodes"))
+
+        #logger.debug("views_helper.getPlanBarcodeCount() plan.id=%d; count=%d" %(plan.id, count))                    
+        
+    return count
+    
+
+def get_IR_accounts_for_user(request):
+    '''
+    return the all the IR accounts for the user found in the request object. 
+    '''
+    
+    if request and request.user:
+        return get_IR_accounts_by_userName(request.user.username)
+    return {}
+
+
+def get_IR_accounts_by_userName(userName):
+    '''
+    return the all the IR accounts for the user. 
+    '''
+    
+    empty_value = {}
+    if userName:
+        #logger.debug("views_helper.get_IR_accounts_by_user() userName=%s" %(userName))
+        
+        iru_plugins = Plugin.objects.filter(name__iexact = "IonReporterUploader", selected = True, active = True)
+        if iru_plugins:
+            iru_plugin = iru_plugins[0]
+
+            if iru_plugin:
+                userConfigs = iru_plugin.config.get('userconfigs').get(userName, {})
+                return userConfigs
+            
+    return empty_value
+
+
+def get_default_or_first_IR_account(request):
+    '''
+    return the default IR account for the user found in the request object. 
+    If no default specified, just return the first IR account defined.
+    '''
+    
+    if request and request.user:
+        return get_default_or_first_IR_account_by_userName(request.user.username)
+    return {}
+
+
+def get_default_or_first_IR_account_by_userName(userName):
+    '''
+    return the default IR account for the user. 
+    If no default specified, just return the first IR account defined.
+    '''
+    
+    empty_value = {}    
+    if userName:
+        userConfigs = get_IR_accounts_by_userName(userName)
+
+        if userConfigs:
+            for userConfig in userConfigs:
+                isDefault = userConfig.get("default", False)
+                if isDefault:
+                    return userConfig
+            return userConfigs[0]
+            
+    return empty_value
+
+
+def get_internal_name_for_displayed_name(displayedName):
+    if displayedName:
+        return displayedName.strip().replace(' ', '_')
+    else:
+        return ""
+    
+
+def get_ir_set_id(id_prefix = "1"):
+    if id_prefix:
+        suffix = str(uuid.uuid4())
+        id = id_prefix.strip() + '__' + suffix
+        return id
+    else:
+        return ""
+
+
+def convert(data):
+    if isinstance(data, basestring):
+        return str(data)
+    elif isinstance(data, collections.Mapping):
+        return dict(map(convert, data.iteritems()))
+    elif isinstance(data, collections.Iterable):
+        return type(data)(map(convert, data))
+    else:
+        return data
+    
+    
+
+def isOCP_enabled():
+    return GlobalConfig.objects.all()[0].enable_compendia_OCP
+
+
+def is_operation_supported(plan_or_template_pk):
+    isSupported = isOCP_enabled()
+
+    if isSupported:
+        return isSupported
+    
+    planTemplate = get_object_or_404(PlannedExperiment, pk = plan_or_template_pk)
+    
+#    if (planTemplate.sampleGrouping and planTemplate.sampleGrouping.displayedName == "DNA_RNA"):
+#        return isSupported
+
+    if (planTemplate.categories and "Oncomine" in planTemplate.categories):
+          return False      
+
+    return True
+
+
+def is_operation_supported_by_obj(plan_or_template):
+    isSupported = isOCP_enabled()
+
+#    if (plan_or_template and plan_or_template.sampleGrouping and plan_or_template.sampleGrouping.displayedName == "DNA_RNA"):
+#        return isSupported
+
+    if isSupported:
+        return isSupported
+
+    if (plan_or_template.categories and "Oncomine" in plan_or_template.categories):
+          return False      
+    
+    return True
+
+
+def getChipDisplayedNamePrefix(chipDisplayedName):  
+    parts = chipDisplayedName.rsplit("v", 1)
+    return parts[0]
+
+
+def getChipDisplayedVersion(chipDisplayedName):
+    parts = chipDisplayedName.rsplit("v", 1)
+    return "v"+ parts[1]  if len(parts) > 1 else ""
+
+
+        

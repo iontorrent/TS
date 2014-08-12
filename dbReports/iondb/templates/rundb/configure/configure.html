@@ -8,6 +8,7 @@
   <li><a href="{% url "configure_services" %}">Services</a></li>
   <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
   <li class="active"><a href="{% url "configure_configure" %}">Configure</a></li>
+  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
   <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
@@ -110,6 +111,10 @@
         <div class="clearfix">
             <h1 class="pull-left" name="email">Email</h1>
             <a id="add_email" href="{% url "edit_email" %}" class="btn btn-primary pull-right">Add Email</a>
+        </div>
+        <div>
+            <label class="checkbox"><input id="enable_nightly" type="checkbox" {%if enable_nightly %}checked{% endif %}/>
+                Enable Nightly Email Notifications?</label>
         </div>
         <div id="email_table"></div>
         <div id="no_email_configured" class="centered_message" style="display:none">No Email Addresses Configured.</div>

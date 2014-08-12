@@ -1,61 +1,73 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "GpuMultiFlowFitControl.h"
+#include <pthread.h>
 
 
-GpuMultiFlowFitControl * GpuMultiFlowFitControl::_pInstance = NULL;
 unsigned int GpuMultiFlowFitControl::_maxBeads = 216*224;
 unsigned int GpuMultiFlowFitControl::_maxFrames = MAX_COMPRESSED_FRAMES_GPU;
+bool GpuMultiFlowFitControl::_gpuTraceXtalk = false;
 
-void GpuMultiFlowFitControl::clear()
-{
-  // delete gpu matrix configs here
-  map<std::string, GpuMultiFlowFitMatrixConfig*>::iterator it;
-  for (it=_matrixConfig.begin(); it!=_matrixConfig.end(); ++it)
-  {
-    delete (*it).second;
-  } 
-}
 
 GpuMultiFlowFitControl::GpuMultiFlowFitControl()
 {
    // create post key matrix config for gpu
    _maxSteps = 0;
    _maxParams = 0;
-
-   CreatePostKeyFitGpuMatrixConfig();
-   CreateFitInitialGpuMatrixConfig();
 }
 
-GpuMultiFlowFitControl * GpuMultiFlowFitControl::Instance()
+void GpuMultiFlowFitControl::SetFlowParams( int flow_key, int flow_block_size )
 {
-  if(_pInstance == NULL) _pInstance = new GpuMultiFlowFitControl();
-  return _pInstance;
+  // Update the active matrix config.
+  _activeFlowKey = flow_key;
+  _activeFlowMax = flow_block_size;
+  if ( ! GetMatrixConfig( "FitWellPostKey" ) )
+    CreatePostKeyFitGpuMatrixConfig( flow_key, flow_block_size );
+  if ( ! GetMatrixConfig( "FitWellAmplBuffering" ) )
+    CreateFitInitialGpuMatrixConfig( flow_key, flow_block_size );
 }
-
 
 GpuMultiFlowFitControl::~GpuMultiFlowFitControl()
 {
-  clear();
+  // delete gpu matrix configs here
+  map<MatrixIndex, GpuMultiFlowFitMatrixConfig*>::iterator it;
+
+  for( it = _allMatrixConfig.begin() ; it != _allMatrixConfig.end() ; ++it )
+  {
+    delete it->second;
+  }
 }
 
-void GpuMultiFlowFitControl::CreatePostKeyFitGpuMatrixConfig()
+void GpuMultiFlowFitControl::CreatePostKeyFitGpuMatrixConfig( int flow_key, int flow_block_size )
 {
-  GpuMultiFlowFitMatrixConfig* config = new GpuMultiFlowFitMatrixConfig(_fitParams.fit_well_post_key_descriptor, 
-                                                  _fitParams.Steps, _fitParams.NumSteps);
+  // Build the configuration.
+  GpuMultiFlowFitMatrixConfig* config = 
+    new GpuMultiFlowFitMatrixConfig( BkgFitStructures::fit_well_post_key_descriptor, 
+                                     BkgFitStructures::Steps, BkgFitStructures::NumSteps, 
+                                     flow_key, flow_block_size);
+
+  // Accumulate maximum values.
   DetermineMaxSteps(config->GetNumSteps());
   DetermineMaxParams(config->GetNumParamsToFit());
-  _matrixConfig.insert(pair<std::string, GpuMultiFlowFitMatrixConfig*>("FitWellPostKey", config));
+
+  // Find the proper map to put it in.
+  _allMatrixConfig[ MatrixIndex( flow_key, flow_block_size, "FitWellPostKey" ) ] = config;
 }
 
-void GpuMultiFlowFitControl::CreateFitInitialGpuMatrixConfig()
+void GpuMultiFlowFitControl::CreateFitInitialGpuMatrixConfig( int flow_key, int flow_block_size )
 {
-  GpuMultiFlowFitMatrixConfig* config = new GpuMultiFlowFitMatrixConfig(
-                                                  _fitParams.fit_well_ampl_buffering_descriptor, 
-                                                  _fitParams.Steps, _fitParams.NumSteps);
+  // Build the configuration.
+  GpuMultiFlowFitMatrixConfig* config = 
+    new GpuMultiFlowFitMatrixConfig( BkgFitStructures::fit_well_ampl_buffering_descriptor, 
+                                     BkgFitStructures::Steps, BkgFitStructures::NumSteps, 
+                                     flow_key, flow_block_size);
+
+  // Accumulate maximum values.
   DetermineMaxSteps(config->GetNumSteps());
   DetermineMaxParams(config->GetNumParamsToFit());
-  _matrixConfig.insert(pair<std::string, GpuMultiFlowFitMatrixConfig*>("FitWellAmplBuffering", config));
+
+  // Find the proper map to put it in.
+  _allMatrixConfig[ MatrixIndex( flow_key, flow_block_size, "FitWellAmplBuffering" ) ] = config;
 }
 
 void GpuMultiFlowFitControl::DetermineMaxSteps(int steps)

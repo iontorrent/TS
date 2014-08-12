@@ -1,5 +1,0 @@
-genome_shortname	hs_mgh4
-genome_name	Iafrate amplicons, version 4
-genome_version	hs_mgh4
-index_version	b-0.1
-genome_length	2796

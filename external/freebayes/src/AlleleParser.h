@@ -1,330 +1,230 @@
-#ifndef _ALLELE_PARSER_H
-#define _ALLELE_PARSER_H
+#ifndef ALLELEPARSER_H
+#define ALLELEPARSER_H
 
-#include <iostream>
-#include <fstream>
 #include <string>
 #include <vector>
 #include <map>
 #include <deque>
-#include <utility>
-#include <algorithm>
-#include <time.h>
-#include <assert.h>
-#include <ctype.h>
-#include <cmath>
-#include "split.h"
-#include "join.h"
-#include "api/BamReader.h"
-#include "BedReader.h"
-#include "Utility.h"
-#include "Allele.h"
-#include "Sample.h"
-#include "Fasta.h"
-#include "Parameters.h"
-#include "TryCatch.h"
-#include "api/BamMultiReader.h"
-#include "Genotype.h"
-#include "CNV.h"
-#include "Result.h"
-#include "LeftAlign.h"
-//#include "../vcflib/Variant.h"
-#include "Version.h"
 #include <Variant.h>
-#include <smithwaterman/SmithWatermanGotoh.h>
-
-// the size of the window of the reference which is always cached in memory
-#define CACHED_REFERENCE_WINDOW 300
-
-// the window of haplotype basis alleles which we ensure we keep
-// increasing this reduces disk access when using haplotype basis alleles, but increases memory usage
-#define CACHED_BASIS_HAPLOTYPE_WINDOW 1000
+#include "ExtendParameters.h"
+#include "ReferenceReader.h"
+#include "BAMWalkerEngine.h"
+#include "SampleManager.h"
+#include "HotspotReader.h"
+#include "InputStructures.h"
 
 using namespace std;
-using namespace BamTools;
 
-// a structure holding information about our parameters
+class OrderedVCFWriter;
 
-// structure to encapsulate registered reads and alleles
-class RegisteredAlignment {
-    friend ostream &operator<<(ostream &out, RegisteredAlignment &a);
+class AlleleDetails {
 public:
-    //BamAlignment alignment;
-    long unsigned int start;
-    long unsigned int end;
-    int refid;
-    string name;
-    vector<Allele> alleles;
-    int mismatches;
-    int snpCount;
-    int indelCount;
-    int alleleTypes;
+  AlleleDetails() : type(ALLELE_UNKNOWN), chr(0), position(0), ref_length(0),
+      length(0), minimized_prefix(0),
+      repeat_boundary(0), hp_repeat_len (0) , initialized(false), filtered(false), is_hotspot(false),
+      hotspot_params(NULL), coverage(0), coverage_fwd(0), coverage_rev(0), samples(1) {}
 
-    RegisteredAlignment(BamAlignment& alignment)
-        //: alignment(alignment)
-        : start(alignment.Position)
-        , end(alignment.GetEndPosition())
-        , refid(alignment.RefID)
-        , name(alignment.Name)
-        , mismatches(0)
-        , snpCount(0)
-        , indelCount(0)
-        , alleleTypes(0)
-    { }
-
-    void addAllele(Allele allele, bool mergeComplex = true, int maxComplexGap = 0);
-    bool fitHaplotype(int pos, int haplotypeLength, Allele*& aptr);
-
-};
-
-// functor to filter alleles outside of our analysis window
-class AlleleFilter {
-
-public:
-    AlleleFilter(long unsigned int s, long unsigned int e) : start(s), end(e) {}
-
-    // true of the allele is outside of our window
-    bool operator()(Allele& a) { 
-        return !(((long int)start) >= a.position && ((long int)end) < a.position + a.length);
+  void add_observation(const Allele& observation, int sample_index, bool is_reverse_strand, int _chr, int num_samples) {
+    if (not initialized) {
+      type = observation.type;
+      alt_sequence.append(observation.alt_sequence, observation.alt_length);
+      position = observation.position;
+      chr = _chr;
+      ref_length = observation.ref_length;
+      initialized = true;
     }
-
-    bool operator()(Allele*& a) { 
-        return !(((long int)start) >= a->position && ((long int)end) < a->position + a->length);
+    coverage++;
+    if ((int)samples.size() != num_samples)
+      samples.resize(num_samples);
+    samples[sample_index].coverage++;
+    if (is_reverse_strand) {
+      coverage_rev++;
+      samples[sample_index].coverage_rev++;
+    } else {
+      coverage_fwd++;
+      samples[sample_index].coverage_fwd++;
     }
+  }
 
-private:
-    long unsigned int start, end;
-
-};
-
-class AllelePtrCmp {
-
-public:
-    bool operator()(Allele* &a, Allele* &b) {
-        return a->type < b->type;
+  void add_reference_observation(int sample_index, bool is_reverse_strand, int chr_idx_) {
+    coverage++;
+    //if ((int)samples.size() <= sample_index)
+    //  samples.resize(sample_index+1);
+    samples[sample_index].coverage++;
+    if (is_reverse_strand) {
+      coverage_rev++;
+      samples[sample_index].coverage_rev++;
+    } else {
+      coverage_fwd++;
+      samples[sample_index].coverage_fwd++;
     }
+  }
 
+  void initialize_reference(long int _position, int num_samples) {
+    type = ALLELE_REFERENCE;
+    position = _position;
+    ref_length = 1;
+    length = 0;
+    initialized = true;
+    coverage = 0;
+    coverage_fwd = 0;
+    coverage_rev = 0;
+    samples.clear();
+    samples.resize(num_samples);
+  }
+
+
+  void add_hotspot(const HotspotAllele& observation, int num_samples) {
+    is_hotspot = true;
+    hotspot_params = &observation;
+    if (not initialized) {
+      chr = observation.chr;
+      position = observation.pos;
+      ref_length = observation.ref_length;
+      alt_sequence = observation.alt;
+      type = observation.type;
+      length = observation.length;
+      initialized = true;
+    }
+    if ((int)samples.size() != num_samples)
+      samples.resize(num_samples);
+  }
+
+  const char *type_str() {
+    if (type == ALLELE_DELETION)    return "del";
+    if (type == ALLELE_INSERTION)   return "ins";
+    if (type == ALLELE_COMPLEX)     return "complex";
+    if (type == ALLELE_SNP)         return "snp";
+    if (type == ALLELE_MNP)         return "mnp";
+    if (type == ALLELE_REFERENCE)   return "ref";
+    return "???";
+  }
+
+  struct AlleleCoverage {
+    AlleleCoverage() : coverage(0), coverage_fwd(0), coverage_rev(0) {}
+    long int coverage;
+    long int coverage_fwd;
+    long int coverage_rev;
+  };
+
+  AlleleType              type;                 //! type of the allele
+  string                  alt_sequence;         //! allele sequence
+  int                     chr;                  //! chromosome
+  long int                position;             //! position 0-based against reference
+  unsigned int            ref_length;           //! allele length relative to the reference
+  int                     length;               //! allele length reported in LEN tag
+  int                     minimized_prefix;
+  long int                repeat_boundary;      //! end of homopolymer or tandem repeat for indels
+  long int                hp_repeat_len;        //! length of HP for filtering
+  bool                    initialized;          //! is allele type info populated?
+  bool                    filtered;             //! if true, do not report this allele as candidate
+  bool                    is_hotspot;           //! is this allele present in hotspot file?
+  const HotspotAllele *   hotspot_params;       //! if not NULL, points to hotspot-specific parameters struct
+  long int                coverage;             //! total allele coverage (across samples)
+  long int                coverage_fwd;         //! forward strand allele coverage (across samples)
+  long int                coverage_rev;         //! reverse strand allele coverage (across samples)
+  vector<AlleleCoverage>  samples;              //! per-sample coverages
 };
 
-class AllelicPrimitive {
+
+class AllelePositionCompare {
 public:
-    
-    string ref;
-    string alt;
-    AllelicPrimitive(string& r, string& a)
-	: ref(r)
-	, alt(a) { }
+  bool operator()(const Allele& a, const Allele& b) {
+    if (a.position < b.position)
+      return true;
+    if (a.position > b.position)
+      return false;
+/*
+    if (alternateLength < other.alternateLength)
+      return true;
+    if (alternateLength > other.alternateLength)
+      return false;
+    if (referenceLength < other.referenceLength)
+      return true;
+    if (referenceLength > other.referenceLength)
+      return false;
+
+    int strdelta = strncmp(alternateSequence,other.alternateSequence,min(alternateLength,other.alternateLength));
+    return strdelta < 0;
+*/
+
+    int strdelta = strncmp(a.alt_sequence,b.alt_sequence,min(a.alt_length,b.alt_length));
+    if (strdelta < 0)
+      return true;
+    if (strdelta > 0)
+      return false;
+    if (a.alt_length < b.alt_length)
+      return true;
+    if (a.alt_length > b.alt_length)
+      return false;
+    return a.ref_length < b.ref_length;
+  }
 };
 
-bool operator<(const AllelicPrimitive& a, const AllelicPrimitive& b);
+
+
 
 class AlleleParser {
-
 public:
 
-    Parameters parameters; // holds operational parameters passed at program invocation
-    
-    //AlleleParser(int argc, char** argv);
-    //AlleleParser();
-     AlleleParser(Parameters  parameters);
-    ~AlleleParser(void); 
+   AlleleParser(const ExtendParameters& parameters, const ReferenceReader& ref_reader,
+       const SampleManager& sample_manager, OrderedVCFWriter& vcf_writer, HotspotReader& hotspot_reader);
+  ~AlleleParser();
 
-    vector<string> sampleList; // list of sample names, indexed by sample id
-    vector<string> sampleListFromBam; // sample names drawn from BAM file
-    vector<string> sampleListFromVCF; // sample names drawn from input VCF
-    map<string, string> samplePopulation; // population subdivisions of samples
-    map<string, vector<string> > populationSamples; // inversion of samplePopulation
-    map<string, string> readGroupToSampleNames; // maps read groups to samples
-    map<string, string> readGroupToTechnology; // maps read groups to technologies
-    vector<string> sequencingTechnologies;  // a list of the present technologies
+  void BasicFilters(Alignment& ra);
+  void RegisterAlignment(Alignment& ra);
+  void GenerateCandidates(deque<VariantCandidate>& variant_candidates,
+      list<PositionInProgress>::iterator& position_ticket, int& haplotype_length);
 
-    CNVMap sampleCNV;
-
-    // reference
-    FastaReference reference;
-    vector<string> referenceSequenceNames;
-    map<int, string> referenceIDToName;
-    
-    // target regions
-    vector<BedTarget> targets;
-    // returns true if we are within a target
-    // useful for controlling output when we are reading from stdin
-    bool inTarget(void);
-
-    // bamreader
-    BamMultiReader bamMultiReader;
-
-    // bed reader
-    BedReader bedReader;
-
-    // VCF
-    vcf::VariantCallFile variantCallFile;
-    vcf::VariantCallFile variantCallInputFile;   // input variant alleles, to target analysis
-    vcf::VariantCallFile haplotypeVariantInputFile;  // input alleles which will be used to construct haplotype alleles
-
-    // input haplotype alleles
-    // 
-    // as calling progresses, a window of haplotype basis alleles from the flanking sequence
-    // map from starting position to length->alle
-    map<long int, vector<AllelicPrimitive> > haplotypeBasisAlleles;  // this is in the current reference sequence
-    bool usingHaplotypeBasisAlleles;
-    long int rightmostHaplotypeBasisAllelePosition;
-    void updateHaplotypeBasisAlleles(long int pos, int referenceLength);
-    bool allowedAllele(long int pos, string& ref, string& alt);
-
-    Allele makeAllele(RegisteredAlignment& ra,
-		      AlleleType type,
-		      long int pos,
-		      int length,
-		      int basesLeft,
-		      int basesRight,
-		      string& readSequence,
-		      string& sampleName,
-		      BamAlignment& alignment,
-		      string& sequencingTech,
-		      long double qual,
-		      string& qualstr);
-
-
-
-    vector<Allele*> registeredAlleles;
-    map<long unsigned int, deque<RegisteredAlignment> > registeredAlignments;
-    map<long int, vector<Allele> > inputVariantAlleles; // all variants present in the input VCF, as 'genotype' alleles
-    //  position         sample     genotype  likelihood
-    map<long int, map<string, map<string, long double> > > inputGenotypeLikelihoods; // drawn from input VCF
-    map<long int, map<Allele, int> > inputAlleleCounts; // drawn from input VCF
-    Sample* nullSample;
-    vector<vcf::Variant> inputVariantsWithinHaploBases;
-    
-    void addCurrentGenotypeLikelihoods(map<int, vector<Genotype> >& genotypesByPloidy,
-            vector<vector<SampleDataLikelihood> >& sampleDataLikelihoods);
-
-    void getInputAlleleCounts(vector<Allele>& genotypeAlleles, map<string, int>& inputAFs);
-
-    // reference names indexed by id
-    vector<RefData> referenceSequences;
-    // ^^ vector of objects containing:
-    //RefName;          //!< Name of reference sequence
-    //RefLength;        //!< Length of reference sequence
-    //RefHasAlignments; //!< True if BAM file contains alignments mapped to reference sequence
-
-    string bamHeader;
-    vector<string> bamHeaderLines;
- 
-    void openBams(void);
-    void openTraceFile(void);
-    void openFailedFile(void);
-    void openOutputFile(void);
-    void getSampleNames(void);
-    void getPopulations(void);
-    void getSequencingTechnologies(void);
-    void loadSampleCNVMap(void);
-    int currentSamplePloidy(string const& sample);
-    vector<int> currentPloidies(Samples& samples);
-    void loadBamReferenceSequenceNames(void);
-    void loadFastaReference(void);
-    void loadReferenceSequence(BedTarget*, int, int);
-    void loadReferenceSequence(BamAlignment& alignment);
-    void preserveReferenceSequenceWindow(int bp);
-    void extendReferenceSequence(int);
-    void extendReferenceSequence(BamAlignment& alignment);
-    void eraseReferenceSequence(int leftErasure);
-    string referenceSubstr(long int position, unsigned int length);
-    void loadTargets(void);
-    bool getFirstAlignment(void);
-    bool getFirstVariant(void);
-    void loadTargetsFromBams(void);
-    void initializeOutputFiles(void);
-    RegisteredAlignment& registerAlignment(BamAlignment& alignment, RegisteredAlignment& ra, string& sampleName, string& sequencingTech);
-    void clearRegisteredAlignments(void);
-    void updateAlignmentQueue(void);
-    void updateInputVariants(bool);
-    void updateInputVariant(void);
-    void updateHaplotypeBasisAlleles(void);
-    void removeNonOverlappingAlleles(vector<Allele*>& alleles, int haplotypeLength = 1, bool getAllAllelesInHaplotype = false);
-    void removeFilteredAlleles(vector<Allele*>& alleles);
-    void updateRegisteredAlleles(void);
-    void updatePriorAlleles(void);
-    vector<BedTarget>* targetsInCurrentRefSeq(void);
-    bool toNextRefID(void);
-    bool loadTarget(BedTarget*);
-    bool toFirstTargetPosition(void);
-    bool toNextPosition(bool &, bool);
-    bool dummyProcessNextTarget(void);
-    bool toNextTarget(void);
-    void setPosition(long unsigned int);
-    int currentSequencePosition(const BamAlignment& alignment);
-    int currentSequencePosition();
-    bool getNextAlleles(Samples& allelesBySample, int allowedAlleleTypes);
-    // builds up haplotype (longer, e.g. ref+snp+ref) alleles to match the longest allele in genotypeAlleles
-    // updates vector<Allele>& alleles with the new alleles
-    void buildHaplotypeAlleles(vector<Allele>& alleles, Samples& allelesBySample, map<string, vector<Allele*> >& alleleGroups, int allowedAlleleTypes);
-    void getAlleles(Samples& allelesBySample, int allowedAlleleTypes, int haplotypeLength = 1, bool getAllAllelesInHaplotype = false);
-    Allele* referenceAllele(int mapQ, int baseQ);
-    Allele* alternateAllele(int mapQ, int baseQ);
-    int homopolymerRunLeft(string altbase);
-    int homopolymerRunRight(string altbase);
-    map<string, int> repeatCounts(long int position, const string& sequence, int maxsize);
-    map<long int, map<string, int> > cachedRepeatCounts; // cached version of previous
-    bool isRepeatUnit(const string& seq, const string& unit);
-    void setupVCFOutput(void);
-    void setupVCFInput(void);
-    string vcfHeader(void);
-    bool hasInputVariantAllelesAtCurrentPosition(void);
-    bool mergeVariants(string contigName_first_variant, long int position_first_variant, string ref_first_variant, vector<string> alt_first_variant,
-			string contigName_second_variant, long int position_second_variant, string ref_second_variant, vector<string> alt_second_variant,
-			long int & merged_start_position, string & merged_ref_allele, vector<string> & merged_alt_allele );
-    
-    // gets the genotype alleles we should evaluate among the allele groups and
-    // sample groups at the current position, according to our filters
-    vector<Allele> genotypeAlleles(map<string, vector<Allele*> >& alleleGroups,
-            Samples& samples,
-            bool useOnlyInputAlleles);
-
-    // pointer to current position in targets
-    int fastaReferenceSequenceCount; // number of reference sequences
-    bool hasTarget;
-    BedTarget* currentTarget;
-    bool isFirstTarget;
-    long int currentPosition;  // 0-based current position
-    int lastHaplotypeLength;
-    char currentReferenceBase;
-    string currentSequence;
-    char currentReferenceBaseChar();
-    string currentReferenceBaseString();
-    string::iterator currentReferenceBaseIterator();
-
-    // output files
-    ofstream logFile, outputFile, traceFile, failedFile;
-    ostream* output;
-
-    // utility
-    bool isCpG(string& altbase);
-
-    string currentSequenceName;
+  bool GetNextHotspotLocation(int& chr, long& position);
 
 private:
+  void SetupHotspotsVCF(const string& hotspots_file);
 
-    bool justSwitchedTargets;  // to trigger clearing of queues, maps and such holding Allele*'s on jump
+  void MakeAllele(deque<Allele>& alleles, AlleleType type, long int pos, int length, const char *alt_sequence);
 
-    Allele* currentReferenceAllele;
-    Allele* currentAlternateAllele;
+  void PileUpAlleles(int allowed_allele_types, int haplotype_length, bool scan_haplotype,
+      list<PositionInProgress>::iterator& position_ticket, int hotspot_window);
+  void InferAlleleTypeAndLength(AlleleDetails& allele);
+  long ComputeRepeatBoundary(const string& seq, int chr, long position, int max_size, long &hp_repeat_len);
 
-    //BedTarget currentSequenceBounds;
-    long int currentSequenceStart;
+  void GenerateCandidateVariant(deque<VariantCandidate>& variant_candidates,
+      list<PositionInProgress>::iterator& position_ticket, int& haplotype_length);
+  void FillInHotSpotVariant(deque<VariantCandidate>& variant_candidates, vector<HotspotAllele>& hotspot);
 
-    bool hasMoreAlignments;
-    bool hasMoreVariants;;
 
-    bool oneSampleAnalysis; // if we are analyzing just one sample, and there are no specified read groups
 
-    int basesBeforeCurrentTarget; // number of bases in sequence we're storing before the current target
-    int basesAfterCurrentTarget;  // ........................................  after ...................
+  // operation parameters
+  bool                        only_use_input_alleles_;
+  bool                        process_input_positions_only_;
+  bool                        use_duplicate_reads_;      // -E --use-duplicate-reads
+  int                         use_best_n_alleles_;         // -n --use-best-n-alleles
+  int                         max_complex_gap_;
+  unsigned int                min_mapping_qv_;                    // -m --min-mapping-quality
+  float                       read_max_mismatch_fraction_;  // -z --read-max-mismatch-fraction
+  int                         read_snp_limit_;            // -$ --read-snp-limit
+  long double                 min_alt_fraction_;  // -F --min-alternate-fraction
+  long double                 min_indel_alt_fraction_; // Added by SU to reduce Indel Candidates for Somatic
+  int                         min_alt_count_;             // -C --min-alternate-count
+  int                         min_alt_total_;             // -G --min-alternate-total
+  int                         min_coverage_;             // -! --min-coverage
+  int                         allowed_allele_types_;
 
-    int currentRefID;
-    BamAlignment currentAlignment;
-    vcf::Variant* currentVariant;
-    vcf::Variant* previousVariant;
+  // data structures
+  const ReferenceReader *     ref_reader_;
+  const SampleManager *       sample_manager_;
+  OrderedVCFWriter *          vcf_writer_;              //! Only used as Variant factory
+  int                         num_samples_;
+
+  HotspotReader *             hotspot_reader_;
+  deque<HotspotAllele>        hotspot_alleles_;
+
+  typedef map<Allele,AlleleDetails,AllelePositionCompare>  pileup;
+  pileup                      allele_pileup_;
+  AlleleDetails               ref_pileup_;
+  vector<long int>           coverage_by_sample_;
+  int                         hp_max_lenght_override_value; //! if not zero then it overrides the maxHPLenght parameter in filtering
+  float                       strand_bias_override_value;   //! if below zero then it overrides the strand_bias parameter in filtering
 
 };
 

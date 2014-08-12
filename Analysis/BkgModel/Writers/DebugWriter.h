@@ -28,12 +28,13 @@ class debug_collection
   ~debug_collection();
   void DebugFileClose();
   void DebugFileOpen(std::string& dirName, Region *region);
-  void DebugBeadIteration (bead_params &eval_params, reg_params &eval_rp, int iter, float residual,RegionTracker *my_regions);
-  void DebugIterations(BeadTracker &my_beads, RegionTracker *my_regions);
+  void DebugBeadIteration (BeadParams &eval_params, reg_params &eval_rp, int iter, float residual,RegionTracker *my_regions);
+  void DebugIterations(BeadTracker &my_beads, RegionTracker *my_regions, int flow_block_size);
 
-  void DumpRegionTrace (SignalProcessingMasterFitter &bkg);
+  void DumpRegionTrace (SignalProcessingMasterFitter &bkg, int flow_block_size, int flow_block_start);
   // used for convenience in dumping region trace
-  void    MultiFlowComputeTotalSignalTrace (SignalProcessingMasterFitter &bkg, float *fval,struct bead_params *p,struct reg_params *reg_p,float *sbg=NULL);
+  void MultiFlowComputeTotalSignalTrace (SignalProcessingMasterFitter &bkg, float *fval,struct BeadParams *p,struct reg_params *reg_p,float *sbg /*=NULL*/,
+                                         int flow_block_size, int flow_block_start);
 };
 
 #endif // DEBUGWRITER_H

@@ -8,7 +8,7 @@
 
 void ApplyClonalFilter(Mask& mask, const char* results_folder,
 		       std::vector<RegionalizedData *>& sliced_chip,
-		       bool doClonalFilter, int flow);
+           const PolyclonalFilterOpts & opts);
 
 
 #endif // CLONALFILTER_H

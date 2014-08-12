@@ -554,8 +554,7 @@ tmap_bwt_gen_hash(tmap_bwt_t *bwt, int32_t hash_width, uint32_t check_hash)
   int32_t i;
 
   tmap_progress_print("constructing the occurrence hash for the BWT string");
-
-  if((int32_t)bwt->seq_len < hash_width) {
+  if(bwt->seq_len < (tmap_bwt_int_t) hash_width) {
       tmap_error("Hash width was greater than the sequence length, defaulting to the sequence length", Warn, OutOfRange);
       hash_width = bwt->seq_len;
   }

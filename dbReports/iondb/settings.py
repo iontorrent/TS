@@ -138,12 +138,13 @@ MIDDLEWARE_CLASSES = (
     #'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'iondb.rundb.login.middleware.BasicAuthMiddleware',
-    'django.contrib.auth.middleware.RemoteUserMiddleware',
     'iondb.rundb.middleware.LocalhostAuthMiddleware',
+    'django.contrib.auth.middleware.RemoteUserMiddleware',
     'iondb.bin.startup_housekeeping.StartupHousekeeping'
 )
 
 ROOT_URLCONF = 'iondb.urls'
+WSGI_APPLICATION = 'iondb.wsgi.application'
 
 TEMPLATE_DIRS = ((TEST_INSTALL and path.join(LOCALPATH, "templates")) or
                  "/opt/ion/iondb/templates",
@@ -179,8 +180,9 @@ INSTALLED_APPS = (
     'south',
 )
 
+
 # This is not to be the full path to the module, just project.model_name
-AUTH_PROFILE_MODULE = 'rundb.UserProfile'
+#AUTH_PROFILE_MODULE = 'rundb.UserProfile' ## deprecated in 1.5
 
 # Allow internal or apache based authentication
 AUTHENTICATION_BACKENDS = (
@@ -188,11 +190,16 @@ AUTHENTICATION_BACKENDS = (
         'django.contrib.auth.backends.ModelBackend',
 )
 
+IONAUTH_ALLOW_REST_GET = False
+
 LOGIN_URL="/login/"
 LOGIN_REDIRECT_URL="/data/"
 # Whether to expire the session when the user closes his or her browser.
 # See "Browser-length sessions vs. persistent sessions", https://docs.djangoproject.com/en/dev/topics/http/sessions/#browser-length-sessions-vs-persistent-sessions
 SESSION_EXPIRE_AT_BROWSER_CLOSE=True
+
+# Plans use objects not compatible with django 1.6 default json serializer
+SESSION_SERIALIZER="django.contrib.sessions.serializers.PickleSerializer"
 
 CELERY_IMPORTS = (
     "iondb.rundb.tasks",
@@ -203,6 +210,9 @@ CELERY_IMPORTS = (
     "iondb.rundb.session_cleanup.tasks",
     "iondb.rundb.data.data_management",
     "iondb.rundb.data.data_import",
+    "iondb.rundb.tsvm",
+    "iondb.rundb.data.data_export",
+    "iondb.rundb.configure.cluster_info",
 )
 
 # Allow tasks the generous run-time of six hours before they're killed.
@@ -235,6 +245,9 @@ LOGGING = {
         'short': {
             'format': '[%(asctime)s] [%(levelname)s] %(message)s'
         },
+        'uniqueid': {
+            'format': '[%(asctime)s] [%(levelname)s] [%(logid)s] %(message)s'
+        },
     },
     'handlers': {
         'default': {
@@ -246,7 +259,7 @@ LOGGING = {
         'data_management': {
             'class': 'logging.handlers.WatchedFileHandler',
             'filename': '/var/log/ion/data_management.log',
-            'formatter': 'short',
+            'formatter': 'uniqueid',
         },
     },
     'filters': {
@@ -349,6 +362,17 @@ EVENTAPI_CONSUMERS =  {}
 #     ],
 #}
 
+# The AWS settings enable and configure Amazon S3 upload
+# Override them in local_settings.py
+AWS_ACCESS_KEY = None
+AWS_SECRET_KEY  = None
+AWS_BUCKET_NAME = None
+
+SUPPORT_AUTH_URL   = "https://support.iontorrent.com/authenticate"
+SUPPORT_UPLOAD_URL = "https://support.iontorrent.com/upload"
+
+REFERENCE_LIST_URL = "http://ionupdates.com/reference_downloads/references_list.json"
+
 ABSOLUTE_URL_OVERRIDES = {
     'auth.user': lambda u: urlresolvers.reverse('configure_account'),
 }
@@ -371,13 +395,26 @@ CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache',
         'LOCATION': '127.0.0.1:11211'
+    },
+    'file': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': '/var/spool/ion',
     }
 }
 
 ALLOWED_HOSTS = ['*']
 
+DEBUG_APPS = None
+DEBUG_MIDDLE = None
+
 # import from the local settings file
 try:
     from local_settings import *
+    #add debug apps if they are defined in local_settings.py
+    if DEBUG_APPS:
+        INSTALLED_APPS += DEBUG_APPS
+    if DEBUG_MIDDLE:
+        MIDDLEWARE_CLASSES += DEBUG_MIDDLE
+
 except ImportError:
     pass

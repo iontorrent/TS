@@ -36,6 +36,7 @@
 
 #include <Variant.h>
 #include "MiscUtil.h"
+#include "RandSchrange.h"
 // ugly, too many headers
 #include "ExtendParameters.h"
 
@@ -55,6 +56,7 @@ public:
   void SetCount(int i_strand, int i_hyp, int count);
   int GetDepth(int i_strand, int i_alt);
   float OldStrandBias(int i_alt, float tune_bias);
+  float StrandBiasPval(int i_alt, float tune_bias);
   float GetXBias(int i_alt, float tune_bias);
   int GetAlleleCount(int strand_key, int i_hyp);
   int TotalCount(int strand_key);
@@ -88,7 +90,8 @@ class VariantOutputInfo {
 
 float ComputeXBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float var_zero);
 float ComputeTunedXBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float proportion_zero);
-float ComputeStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth);
+float BootstrapStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float tune_fish);
 float ComputeTransformStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float tune_fish);
+inline float ComputeStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth);
 
 #endif //VARIANTASSIST_H

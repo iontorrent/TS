@@ -4,6 +4,7 @@
 #include "BkgModelHdf5.h"
 #include "MaskSample.h"
 #include "GpuMultiFlowFitControl.h"
+#include "FlowSequence.h"
 
 
 int BkgFitterTracker::findRegion(int row, int col)
@@ -11,15 +12,15 @@ int BkgFitterTracker::findRegion(int row, int col)
 	int reg = -1;
 	for(int i=0; i<numFitters; ++i)
 	{
-		Region *rp = sliced_chip[i]->get_region();
+		const Region *rp = sliced_chip[i]->get_region();
 		int c = rp->col;
 		int r = rp->row;
 		int w = rp->w;
 		int h = rp->h;
-        if (col>=c && col<c+w && row>=r && row<r+h)
+    if (col>=c && col<c+w && row>=r && row<r+h)
 		{
-		reg = i;
-		break;
+		  reg = i;
+		  break;
 		}
 	}
 	return (reg);
@@ -27,7 +28,7 @@ int BkgFitterTracker::findRegion(int row, int col)
 
 
 
-void BkgFitterTracker::SetRegionProcessOrder (CommandLineOpts &inception_state)
+void BkgFitterTracker::SetRegionProcessOrder (const CommandLineOpts &inception_state)
 {
   analysis_compute_plan.region_order.resize (numFitters);
   int numBeads;
@@ -53,8 +54,8 @@ void BkgFitterTracker::SetRegionProcessOrder (CommandLineOpts &inception_state)
   // bestRegion is used for beads_bestRegion output to hdf5 file
   if (nonZeroRegions>0)
   {
-      int r = inception_state.bkg_control.bkgModelHdf5Debug_region_r;
-      int c = inception_state.bkg_control.bkgModelHdf5Debug_region_c;
+      int r = inception_state.bkg_control.pest_control.bkgModelHdf5Debug_region_r;
+      int c = inception_state.bkg_control.pest_control.bkgModelHdf5Debug_region_c;
       if (r >= 0 && c >= 0)
       {
       int reg =  findRegion(r,c);
@@ -75,13 +76,17 @@ void BkgFitterTracker::SetRegionProcessOrder (CommandLineOpts &inception_state)
     bestRegion = beadRegion(0,0);
     bestRegion_region = NULL;
   }
-  printf("BkgFitterTracker::SetRegionProcessOrder... bestRegion=(%d,%d)\n",bestRegion.first,bestRegion.second);
+  printf("BkgFitterTracker::SetRegionProcessOrder... bestRegion=(%d,%d)\n",
+    bestRegion.first,bestRegion.second);
+
+  // Now that we have a best region, we can init h5.
+  InitBeads_BestRegion( inception_state );
 }
 
 
 
 
-void BkgFitterTracker::UnSpinGpuThreads ()
+void BkgFitterTracker::UnSpinGPUThreads ()
 {
   if (analysis_queue.GetGpuQueue())
   {
@@ -118,22 +123,36 @@ void BkgFitterTracker::UnSpinMultiFlowFitGpuThreads ()
 */
 
 
-BkgFitterTracker::BkgFitterTracker (int numRegions)
+BkgFitterTracker::BkgFitterTracker (int numRegions) :
+  numFitters( numRegions )
 {
-  numFitters = numRegions;
   //signal_proc_fitters = new SignalProcessingMasterFitter * [numRegions];
   signal_proc_fitters.resize(numRegions);
   sliced_chip.resize(numRegions);
+  sliced_chip_extras.resize(numRegions);
   bkinfo = NULL;
   all_emptytrace_track = NULL;
   bestRegion_region = NULL;
 }
 
-void BkgFitterTracker::AllocateRegionData(std::size_t numRegions)   
+void BkgFitterTracker::AllocateSlicedChipScratchSpace( int global_flow_max )
+{
+  size_t numRegions = sliced_chip.size();
+  sliced_chip_extras.resize(numRegions);
+  for(size_t i=0; i<numRegions; ++i) {
+    sliced_chip_extras[i].allocate( global_flow_max );
+  }
+}
+
+void BkgFitterTracker::AllocateRegionData(
+    std::size_t numRegions, 
+    const CommandLineOpts * inception_state 
+  )
 {
   sliced_chip.resize(numRegions);
-  for(size_t i=0; i<numRegions; ++i)
-    sliced_chip[i] = new RegionalizedData;
+  for(size_t i=0; i<numRegions; ++i) {
+    sliced_chip[i] = new RegionalizedData( inception_state );
+  }
 }
 
 void BkgFitterTracker::DeleteFitters()
@@ -143,11 +162,14 @@ void BkgFitterTracker::DeleteFitters()
 
   signal_proc_fitters.clear();
 
-  for (int r = 0; r < numFitters; r++)
+  for (int r = 0; r < numFitters; r++) {
     delete sliced_chip[r];
+    sliced_chip_extras[r].free();
+  }
 
   sliced_chip.clear();
-
+  sliced_chip_extras.clear();
+  
   delete all_emptytrace_track;
   all_emptytrace_track = NULL;
 
@@ -161,25 +183,26 @@ BkgFitterTracker::~BkgFitterTracker()
   numFitters = 0;
 }
 
-void BkgFitterTracker::PlanComputation (BkgModelControlOpts &bkg_control)
+void BkgFitterTracker::PlanComputation (BkgModelControlOpts &bkg_control /*, int flow_max,
+                                        master_fit_type_table *table*/)
 {
   // how are we dividing the computation amongst resources available as directed by command line constraints
 
-  PlanMyComputation (analysis_compute_plan,bkg_control);
+  PlanMyComputation (analysis_compute_plan,bkg_control/*, flow_max, table*/);
 
   AllocateProcessorQueue (analysis_queue,analysis_compute_plan,numFitters);
 }
 
-void BkgFitterTracker::SetUpTraceTracking(SlicedPrequel &my_prequel_setup, CommandLineOpts &inception_state, ImageSpecClass &my_image_spec, ComplexMask &from_beadfind_mask)
+void BkgFitterTracker::SetUpTraceTracking(const SlicedPrequel &my_prequel_setup, const CommandLineOpts &inception_state, const ImageSpecClass &my_image_spec, const ComplexMask &from_beadfind_mask, int flow_max)
 {
   // because it is hypothetically possible that we track empties over a different region mesh than regular beads
   // this is set up beforehand, while deferring the beads to the region mesh used in signal processing
   all_emptytrace_track = new EmptyTraceTracker(my_prequel_setup.region_list, my_prequel_setup.region_timing, my_prequel_setup.smooth_t0_est, inception_state);
-  all_emptytrace_track->Allocate(from_beadfind_mask.my_mask, my_image_spec);
+  all_emptytrace_track->Allocate(from_beadfind_mask.my_mask, my_image_spec, flow_max);
   washout_flow.resize(from_beadfind_mask.my_mask->H() * from_beadfind_mask.my_mask->W(), -1);
 }
 
-void TrivialDebugGaussExp(string &outFile, std::vector<Region> &regions, std::vector<RegionTiming> &region_timing)
+static void TrivialDebugGaussExp(const string &outFile, const std::vector<Region> &regions, const std::vector<RegionTiming> &region_timing)
 {
     char my_trivial_file[1024];
     sprintf(my_trivial_file, "%s/gauss_exp_sigma_tmid.txt",outFile.c_str());
@@ -201,70 +224,94 @@ void BkgFitterTracker::InitCacheMath()
 }
 
 
-void BkgFitterTracker::InitBeads_BestRegion(CommandLineOpts &inception_state)
+void BkgFitterTracker::InitBeads_BestRegion(const CommandLineOpts &inception_state)
 {
-    if (inception_state.bkg_control.bkg_debug_files)
+    if (inception_state.bkg_control.pest_control.bkg_debug_files)
     {
         int nBeads_live = bestRegion.second;
-        all_params_hdf.Init2(inception_state.bkg_control.bkgModelHdf5Debug,nBeads_live,bestRegion_region);
+        all_params_hdf.Init2(inception_state.bkg_control.pest_control.bkgModelHdf5Debug,nBeads_live,bestRegion_region);
     }
 }
 
 
-void BkgFitterTracker::InitBeads_xyflow(CommandLineOpts &inception_state)
+void BkgFitterTracker::InitBeads_xyflow(const CommandLineOpts &inception_state)
 {
-    if (inception_state.bkg_control.bkg_debug_files && inception_state.bkg_control.bkgModel_xyflow_output)
+    if (inception_state.bkg_control.pest_control.bkg_debug_files && 
+        inception_state.bkg_control.pest_control.bkgModel_xyflow_output)
     {
         bool readOk = false;
         int numFlows = inception_state.flow_context.GetNumFlows();
-        switch(inception_state.bkg_control.bkgModel_xyflow_fname_in_type)
+        switch(inception_state.bkg_control.pest_control.bkgModel_xyflow_fname_in_type)
         {
         case 1:
-            readOk = inception_state.bkg_control.read_file_sse(xyf_hash,numFlows);
+            readOk = inception_state.bkg_control.pest_control.read_file_sse(xyf_hash,numFlows);
             break;
         case 2:
-            readOk = inception_state.bkg_control.read_file_rcflow(xyf_hash,numFlows);
+            readOk = inception_state.bkg_control.pest_control.read_file_rcflow(xyf_hash,numFlows);
             break;
         case 3:
-            readOk = inception_state.bkg_control.read_file_xyflow(xyf_hash,numFlows);
+            readOk = inception_state.bkg_control.pest_control.read_file_xyflow(xyf_hash,numFlows);
             break;
         default:
             break;
         }
         if (! readOk) {
-            std::cerr << "InitBeads_xyflow read error... " << inception_state.bkg_control.bkgModel_xyflow_fname_in << std::endl << std::flush;
+            std::cerr << "InitBeads_xyflow read error... " << inception_state.bkg_control.pest_control.bkgModel_xyflow_fname_in << std::endl << std::flush;
             exit(1);
         }
         // init xyflow
-        all_params_hdf.InitBeads_xyflow(inception_state.bkg_control.bkgModelHdf5Debug,xyf_hash);
+        all_params_hdf.InitBeads_xyflow(inception_state.bkg_control.pest_control.bkgModelHdf5Debug,xyf_hash);
     }
 }
 
 
-void BkgFitterTracker::ThreadedInitialization (GlobalDefaultsForBkgModel &global_defaults, RawWells &rawWells, CommandLineOpts &inception_state, ComplexMask &a_complex_mask, char *results_folder,
-    ImageSpecClass &my_image_spec, std::vector<float> &smooth_t0_est, 
-					       std::vector<Region> &regions,
-					       std::vector<RegionTiming> &region_timing,SeqListClass &my_keys,
-					       bool restart)
+int BkgFitterTracker::getMaxFrames(
+    const ImageSpecClass &my_image_spec, 
+    const std::vector<RegionTiming> &region_timing
+  )
 {
-  int totalRegions = regions.size();
-  // a debugging file if needed
   int max_frames = 0;
-  for (size_t i = 0; i <  sliced_chip.size(); i++) {
+  for (size_t i = 0; i < sliced_chip.size(); i++) {
     TimeCompression time_c;
     int t0_frame = (int)(region_timing[i].t0_frame + VFC_T0_OFFSET + .5);
     time_c.choose_time = global_defaults.signal_process_control.choose_time;
-    time_c.SetUpStandardTime(my_image_spec.uncompFrames, t0_frame,
-                             global_defaults.data_control.time_start_detail, global_defaults.data_control.time_stop_detail, global_defaults.data_control.time_left_avg);
+    time_c.SetUpTime(my_image_spec.uncompFrames, t0_frame,
+                   global_defaults.data_control.time_start_detail,
+                   global_defaults.data_control.time_stop_detail,
+                   global_defaults.data_control.time_left_avg);
     int nframes = time_c.npts();
     max_frames = max(max_frames, nframes);
   }
-  if (inception_state.bkg_control.bkg_debug_files) {
-	global_defaults.signal_process_control.set_max_frames(max_frames); 
-    all_params_hdf.Init ( inception_state.sys_context.results_folder,
-                        inception_state.loc_context,  
-                        my_image_spec, inception_state.flow_context.GetNumFlows(),
-                          inception_state.bkg_control.bkgModelHdf5Debug, max_frames );
+  return max_frames;
+}
+
+
+void BkgFitterTracker::ThreadedInitialization (
+    RawWells &rawWells, 
+    const CommandLineOpts &inception_state, 
+    const ComplexMask &a_complex_mask, 
+    const char *results_folder,
+    const ImageSpecClass &my_image_spec, 
+    const std::vector<float> &smooth_t0_est, 
+    std::vector<Region> &regions,
+		const std::vector<RegionTiming> &region_timing,
+    const SeqListClass &my_keys,
+    bool restart,
+    int num_flow_blocks )
+{
+  int totalRegions = regions.size();
+  // a debugging file if needed
+  int max_frames = getMaxFrames(my_image_spec, region_timing);
+
+  global_defaults.signal_process_control.set_max_frames(max_frames);
+  if (inception_state.bkg_control.pest_control.bkg_debug_files) { 
+    all_params_hdf.Init(  inception_state.sys_context.results_folder,
+                          inception_state.loc_context,  
+                          my_image_spec, inception_state.flow_context.GetNumFlows(),
+                          inception_state.bkg_control.pest_control.bkgModelHdf5Debug, max_frames,
+                          inception_state.bkg_control.signal_chunks.flow_block_sequence.MaxFlowsInAnyFlowBlock(), 
+                          num_flow_blocks
+                       );
   }
   
   // designate a set of reads that will be processed regardless of whether they pass filters
@@ -274,7 +321,7 @@ void BkgFitterTracker::ThreadedInitialization (GlobalDefaultsForBkgModel &global
 
   InitCacheMath();
     
-  if (inception_state.bkg_control.bkg_debug_files)
+  if (inception_state.bkg_control.pest_control.bkg_debug_files)
     TrivialDebugGaussExp(inception_state.sys_context.analysisLocation, regions,region_timing);
 
   ImageInitBkgWorkInfo *linfo = new ImageInitBkgWorkInfo[numFitters];
@@ -286,6 +333,7 @@ void BkgFitterTracker::ThreadedInitialization (GlobalDefaultsForBkgModel &global
     // data holders and fitters
     linfo[r].signal_proc_fitters = &signal_proc_fitters[0];
     linfo[r].sliced_chip = &sliced_chip[0];
+    linfo[r].sliced_chip_extras = &sliced_chip_extras[0];
     linfo[r].emptyTraceTracker = all_emptytrace_track;
 
     // context same for all regions 
@@ -322,7 +370,7 @@ void BkgFitterTracker::ThreadedInitialization (GlobalDefaultsForBkgModel &global
     linfo[r].results_folder = results_folder;
     linfo[r].rawWells = &rawWells;
 
-    if (inception_state.bkg_control.bkgModelHdf5Debug)
+    if (inception_state.bkg_control.pest_control.bkgModelHdf5Debug)
     {
       linfo[r].ptrs = &all_params_hdf.ptrs;
     }
@@ -346,12 +394,16 @@ void BkgFitterTracker::ThreadedInitialization (GlobalDefaultsForBkgModel &global
 
   // set up for flow-by-flow fitting
   bkinfo = new BkgModelWorkInfo[numFitters];
+  for (int r = 0; r < numFitters; r++)
+    bkinfo[r].polyclonal_filter_opts = inception_state.bkg_control.polyclonal_filter;
 
 }
 
 
 // call the fitters for each region
-void BkgFitterTracker::ExecuteFitForFlow (int flow, ImageTracker &my_img_set, bool last)
+void BkgFitterTracker::ExecuteFitForFlow (int flow, ImageTracker &my_img_set, bool last, 
+  int flow_key, master_fit_type_table *table,
+  const CommandLineOpts * inception_state )
 {
 
   int flow_buffer_for_flow = my_img_set.FlowBufferFromFlow(flow);
@@ -363,7 +415,10 @@ void BkgFitterTracker::ExecuteFitForFlow (int flow, ImageTracker &my_img_set, bo
     bkinfo[r].flow = flow;
     bkinfo[r].sdat = NULL;
     bkinfo[r].img = NULL;
+    bkinfo[r].flow_key = flow_key;
+    bkinfo[r].table = table;
     bkinfo[r].doingSdat = my_img_set.doingSdat;
+    bkinfo[r].inception_state = inception_state;
     if (bkinfo[r].doingSdat)
     {
       bkinfo[r].sdat = & (my_img_set.sdat[flow_buffer_for_flow]);
@@ -382,13 +437,13 @@ void BkgFitterTracker::ExecuteFitForFlow (int flow, ImageTracker &my_img_set, bo
   WaitForRegionsToFinishProcessing (analysis_queue,analysis_compute_plan);
 }
 
-void BkgFitterTracker::SpinUp()
+void BkgFitterTracker::SpinUpGPUThreads()
 {
-  SpinUpGPUThreads (analysis_queue,analysis_compute_plan);
+  analysis_queue.SpinUpGPUThreads( analysis_compute_plan );
 }
 
 
-void BkgFitterTracker::DumpBkgModelBeadParams (char *results_folder,  int flow, bool debug_bead_only)
+void BkgFitterTracker::DumpBkgModelBeadParams (char *results_folder,  int flow, bool debug_bead_only, int flow_max) const
 {
   FILE *bkg_mod_bead_dbg = NULL;
   char *bkg_mod_bead_dbg_fname = (char *) malloc (512);
@@ -396,16 +451,16 @@ void BkgFitterTracker::DumpBkgModelBeadParams (char *results_folder,  int flow, 
   fopen_s (&bkg_mod_bead_dbg, bkg_mod_bead_dbg_fname, "wt");
   free (bkg_mod_bead_dbg_fname);
 
-  DumpBeadTitle (bkg_mod_bead_dbg);
+  BeadParams::DumpBeadTitle (bkg_mod_bead_dbg, flow_max);
 
   for (int r = 0; r < numFitters; r++)
   {
-    signal_proc_fitters[r]->DumpExemplarBead (bkg_mod_bead_dbg,debug_bead_only);
+    signal_proc_fitters[r]->DumpExemplarBead (bkg_mod_bead_dbg,debug_bead_only, flow_max);
   }
   fclose (bkg_mod_bead_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelBeadOffset (char *results_folder, int flow, bool debug_bead_only)
+void BkgFitterTracker::DumpBkgModelBeadOffset (char *results_folder, int flow, bool debug_bead_only) const
 {
   FILE *bkg_mod_bead_dbg = NULL;
   char *bkg_mod_bead_dbg_fname = (char *) malloc (512);
@@ -423,19 +478,19 @@ void BkgFitterTracker::DumpBkgModelBeadOffset (char *results_folder, int flow, b
 }
 
 
-void BkgFitterTracker::DumpBkgModelBeadInfo (char *results_folder,  int flow, bool last_flow, bool debug_bead_only)
+void BkgFitterTracker::DumpBkgModelBeadInfo (char *results_folder,  int flow, bool last_flow, 
+    bool debug_bead_only, FlowBlockSequence::const_iterator flow_block) const
 {
   // get some regional data for the entire chip as debug
-  // only do this every 20 flows as this is the block
   // should be triggered by bkgmodel
-  if (CheckFlowForWrite (flow,last_flow))
+  if ( last_flow || flow + 1 == flow_block->end() )
   {
-    DumpBkgModelBeadParams (results_folder, flow, debug_bead_only);
-    DumpBkgModelBeadOffset (results_folder,  flow, debug_bead_only);
+    DumpBkgModelBeadParams (results_folder, flow, debug_bead_only, flow_block->size() );
+    DumpBkgModelBeadOffset (results_folder, flow, debug_bead_only);
   }
 }
 
-void BkgFitterTracker::DumpBkgModelEmphasisTiming (char *results_folder, int flow)
+void BkgFitterTracker::DumpBkgModelEmphasisTiming (char *results_folder, int flow) const
 {
   // dump the dark matter, which is a fitted compensation term
   FILE *bkg_mod_time_dbg = NULL;
@@ -452,7 +507,7 @@ void BkgFitterTracker::DumpBkgModelEmphasisTiming (char *results_folder, int flo
 }
 
 
-void BkgFitterTracker::DumpBkgModelInitVals (char *results_folder, int flow)
+void BkgFitterTracker::DumpBkgModelInitVals (char *results_folder, int flow) const
 {
   // dump the dark matter, which is a fitted compensation term
   FILE *bkg_mod_init_dbg = NULL;
@@ -469,7 +524,7 @@ void BkgFitterTracker::DumpBkgModelInitVals (char *results_folder, int flow)
   fclose (bkg_mod_init_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelDarkMatter (char *results_folder, int flow)
+void BkgFitterTracker::DumpBkgModelDarkMatter (char *results_folder, int flow) const
 {
   // dump the dark matter, which is a fitted compensation term
   FILE *bkg_mod_dark_dbg = NULL;
@@ -488,7 +543,7 @@ void BkgFitterTracker::DumpBkgModelDarkMatter (char *results_folder, int flow)
   fclose (bkg_mod_dark_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelEmptyTrace (char *results_folder, int flow)
+void BkgFitterTracker::DumpBkgModelEmptyTrace (char *results_folder, int flow, int flow_max) const
 {
   // dump the dark matter, which is a fitted compensation term
   FILE *bkg_mod_mt_dbg = NULL;
@@ -499,12 +554,12 @@ void BkgFitterTracker::DumpBkgModelEmptyTrace (char *results_folder, int flow)
 
   for (int r = 0; r < numFitters; r++)
   {
-    sliced_chip[r]->DumpEmptyTrace (bkg_mod_mt_dbg);
+    sliced_chip[r]->DumpEmptyTrace (bkg_mod_mt_dbg, flow_max);
   }
   fclose (bkg_mod_mt_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelRegionParameters (char *results_folder,int flow)
+void BkgFitterTracker::DumpBkgModelRegionParameters (char *results_folder,int flow, int flow_max) const
 {
   FILE *bkg_mod_reg_dbg = NULL;
   char *bkg_mod_reg_dbg_fname = (char *) malloc (512);
@@ -514,7 +569,7 @@ void BkgFitterTracker::DumpBkgModelRegionParameters (char *results_folder,int fl
 
   struct reg_params rp;
 
-  DumpRegionParamsTitle (bkg_mod_reg_dbg);
+  rp.DumpRegionParamsTitle (bkg_mod_reg_dbg, flow_max);
 
   for (int r = 0; r < numFitters; r++)
   {
@@ -524,44 +579,48 @@ void BkgFitterTracker::DumpBkgModelRegionParameters (char *results_folder,int fl
     // especially as we use a very similar dumping line a lot in different places.
     // note: t0, rdr, and pdr evolve over time.  It would be nice to also capture how they changed throughout the analysis
     // this only captures the final value of each.
-    DumpRegionParamsLine (bkg_mod_reg_dbg, signal_proc_fitters[r]->GetRegion()->row,signal_proc_fitters[r]->GetRegion()->col, rp);
+    rp.DumpRegionParamsLine (bkg_mod_reg_dbg, signal_proc_fitters[r]->GetRegion()->row,signal_proc_fitters[r]->GetRegion()->col, flow_max);
 
   }
   fclose (bkg_mod_reg_dbg);
 }
 
-void BkgFitterTracker::DumpBkgModelRegionInfo (char *results_folder, int flow, bool last_flow)
+void BkgFitterTracker::DumpBkgModelRegionInfo (char *results_folder, int flow, bool last_flow, 
+    FlowBlockSequence::const_iterator flow_block) const
 {
   // get some regional data for the entire chip as debug
-  // only do this every 20 flows as this is the block
   // should be triggered by bkgmodel
-  if (CheckFlowForWrite (flow,last_flow))
+  if ( last_flow || flow + 1 == flow_block->end() )
   {
-    DumpBkgModelRegionParameters (results_folder, flow);
+    DumpBkgModelRegionParameters (results_folder, flow, flow_block->size() );
     DumpBkgModelDarkMatter (results_folder,  flow);
     DumpBkgModelEmphasisTiming (results_folder, flow);
-    DumpBkgModelEmptyTrace (results_folder,flow);
+    DumpBkgModelEmptyTrace (results_folder, flow, flow_block->size() );
     DumpBkgModelInitVals (results_folder, flow);
   }
 }
 
-
-void BkgFitterTracker::DetermineMaxLiveBeadsAndFramesAcrossAllRegionsForGpu()
+void BkgFitterTracker::DetermineAndSetGPUAllocationAndKernelParams( 
+    BkgModelControlOpts &bkg_control, 
+    int global_max_flow_key,
+    int global_max_flow_max
+  )
 {
   int maxBeads = 0;
-  int maxFrames = 0;
+  int maxFrames = global_defaults.signal_process_control.get_max_frames();
+  if (maxFrames)
+      GpuMultiFlowFitControl::SetMaxFrames(maxFrames);
+
   for (int i=0; i<numFitters; ++i) {
-    maxBeads = maxBeads < sliced_chip[i]->GetNumLiveBeads() ? 
-                    sliced_chip[i]->GetNumLiveBeads() : maxBeads;
-    maxFrames = maxFrames < sliced_chip[i]->GetNumFrames() ? 
-                    sliced_chip[i]->GetNumFrames() : maxFrames;
+    maxBeads = maxBeads < sliced_chip[i]->GetNumLiveBeads() ?
+        sliced_chip[i]->GetNumLiveBeads() : maxBeads;
   }
-  
   if (maxBeads)
     GpuMultiFlowFitControl::SetMaxBeads(maxBeads);
- 
-  // it is always 0 right now since frames are actually set after the first flow is read in
-  //if (maxFrames)
-  //  GpuMultiFlowFitControl::SetMaxFrames(maxFrames);
-}
 
+  GpuMultiFlowFitControl::SetChemicalXtalkCorrectionForPGM(bkg_control.enable_trace_xtalk_correction);
+
+  cout << "CUDA: worst case per region beads: "<< maxBeads << " frames: " << maxFrames << endl;
+  configureKernelExecution(bkg_control.gpuControl, global_max_flow_key, global_max_flow_max);
+
+}

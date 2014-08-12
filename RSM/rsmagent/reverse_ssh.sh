@@ -141,7 +141,7 @@ remote_password="$7"
 # Create the 'preamble' that contains a known static portion of the 
 # connect command string used for searching process list output.
 
-preamble="ssh -f -q -N"
+preamble="ssh -q -N"
 
 # Determine if a similar command is already running (e.g. different port).
 

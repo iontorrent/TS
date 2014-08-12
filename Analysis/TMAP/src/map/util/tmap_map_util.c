@@ -426,7 +426,7 @@ tmap_map_sam_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sam_t *sam, 
       switch(sam->algo_id) {
         case TMAP_MAP_ALGO_MAP1:
           return tmap_sam_convert_mapped(seq, sam_flowspace_tags, bidirectional, seq_eq, refseq, 
-                                         sam->strand, sam->seqid, sam->pos, aln_num,
+                                         sam->strand, sam->seqid, sam->pos, sam->target_len,  aln_num,
                                          end_num, mate_unmapped, sam->proper_pair, sam->num_stds,
                                          mate_strand, mate_seqid, mate_pos, mate_tlen,
                                          sam->mapq, sam->cigar, sam->n_cigar,
@@ -435,7 +435,7 @@ tmap_map_sam_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sam_t *sam, 
         case TMAP_MAP_ALGO_MAP2:
           if(0 < sam->aux.map2_aux->XI) {
               return tmap_sam_convert_mapped(seq, sam_flowspace_tags, bidirectional, seq_eq, refseq, 
-                                             sam->strand, sam->seqid, sam->pos, aln_num,
+                                             sam->strand, sam->seqid, sam->pos, sam->target_len, aln_num,
                                              end_num, mate_unmapped, sam->proper_pair, sam->num_stds,
                                              mate_strand, mate_seqid, mate_pos, mate_tlen,
                                              sam->mapq, sam->cigar, sam->n_cigar,
@@ -448,7 +448,7 @@ tmap_map_sam_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sam_t *sam, 
           }
           else {
               return tmap_sam_convert_mapped(seq, sam_flowspace_tags, bidirectional, seq_eq, refseq, 
-                                             sam->strand, sam->seqid, sam->pos, aln_num,
+                                             sam->strand, sam->seqid, sam->pos, sam->target_len, aln_num,
                                              end_num, mate_unmapped, sam->proper_pair, sam->num_stds,
                                              mate_strand, mate_seqid, mate_pos, mate_tlen,
                                              sam->mapq, sam->cigar, sam->n_cigar,
@@ -461,7 +461,7 @@ tmap_map_sam_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sam_t *sam, 
           break;
         case TMAP_MAP_ALGO_MAP3:
           return tmap_sam_convert_mapped(seq, sam_flowspace_tags, bidirectional, seq_eq, refseq, 
-                                         sam->strand, sam->seqid, sam->pos, aln_num,
+                                         sam->strand, sam->seqid, sam->pos, sam->target_len, aln_num,
                                          end_num, mate_unmapped, sam->proper_pair, sam->num_stds,
                                          mate_strand, mate_seqid, mate_pos, mate_tlen,
                                          sam->mapq, sam->cigar, sam->n_cigar,
@@ -472,7 +472,7 @@ tmap_map_sam_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sam_t *sam, 
           break;
         case TMAP_MAP_ALGO_MAP4:
           return tmap_sam_convert_mapped(seq, sam_flowspace_tags, bidirectional, seq_eq, refseq, 
-                                         sam->strand, sam->seqid, sam->pos, aln_num,
+                                         sam->strand, sam->seqid, sam->pos, sam->target_len, aln_num,
                                          end_num, mate_unmapped, sam->proper_pair, sam->num_stds,
                                          mate_strand, mate_seqid, mate_pos, mate_tlen,
                                          sam->mapq, sam->cigar, sam->n_cigar,
@@ -482,7 +482,7 @@ tmap_map_sam_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sam_t *sam, 
           break;
         case TMAP_MAP_ALGO_MAPVSW:
           return tmap_sam_convert_mapped(seq, sam_flowspace_tags, bidirectional, seq_eq, refseq, 
-                                         sam->strand, sam->seqid, sam->pos, aln_num,
+                                         sam->strand, sam->seqid, sam->pos, sam->target_len, aln_num,
                                          end_num, mate_unmapped, sam->proper_pair, sam->num_stds,
                                          mate_strand, mate_seqid, mate_pos, mate_tlen,
                                          sam->mapq, sam->cigar, sam->n_cigar,
@@ -2428,12 +2428,30 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
       // whileas the alignments are different. We are not addressing all of them, but the
       // cases where the resulting alignment starts or ends with deletion shall be avoided.
       if( (s->score != tmp_sam.score && 1 < tmp_sam.result.n_best) 
-		|| (path_len > 0 && (TMAP_SW_FROM_D == path[0].ctype || TMAP_SW_FROM_D == path[path_len-1].ctype))) {
+		|| (path_len > 0 && (TMAP_SW_FROM_D == path[0].ctype || TMAP_SW_FROM_D == path[path_len-1].ctype))) 
+      {
           /*
           fprintf(stderr, "s->score=%d tmp_sam.score=%d\n", s->score, tmp_sam.score);
           fprintf(stderr, "tmp_sam.result.n_best=%d\n", tmp_sam.result.n_best);
           */
 
+	  // TS-9081 (DVK): catch the state of the input parameters
+#ifdef CHECK_SWCORE_PARAMS
+	  // qlen and query 
+	  int32_t saved_query_len = qlen;
+	  uint8_t* saved_query = alloca (qlen+1);
+	  memcpy (saved_query, query, qlen); saved_query [qlen] = 0;
+	  // tlen and target
+	  int32_t saved_target_len = tlen;
+	  unit8_t* saved_target = alloca (tlen+1);
+	  memcpy (saved_target, target, tlen); saved_target [tlen] = 0;
+	  // SW parameters
+	  tmap_sw_param_t saved_params;
+	  memcpy (&saved_params, (0 < conv)? &par_iupac : &par, sizeof (tmap_sw_param_t));
+	  saved_params.matrix = alloca (saved_params.row * saved_params.row * sizeof (int32_t));
+	  memcpy (saved_params.matrix, (0 < conv)? par_iupac.matrix : par.matrix, saved_params.row * saved_params.row * sizeof (int32_t));
+#endif
+	  
           // explicitly fit the query into the target
           if(0 < conv) { // NB: there were IUPAC bases
               s->score = tmap_sw_fitting_core(target, tlen, query, qlen, &par_iupac, path, &path_len, 0);
@@ -2441,6 +2459,33 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
           else {
               s->score = tmap_sw_fitting_core(target, tlen, query, qlen, &par, path, &path_len, 0);
           }
+
+#ifdef CHECK_SWCORE_PARAMS
+	  tmap_sw_param_t* pp = (0 < conv)? &par_iupac : &par);
+	  if (qlen != saved_query_len ||
+	      tlen != saved_target_len ||
+	      memcmp (saved_query_len, query, qlen) ||
+	      memcmp (saved_target_len, target, tlen) ||
+	      pp->gap_open != saved_params.gap_open ||
+	      pp->gap_ext != saved_params.gap_ext ||
+	      pp->gap_end != saved_params.gap_end ||
+	      pp->row != saved_params.row ||
+	      pp->band_width != saved_params.gap_width ||
+	      memcmp (pp->matrix, saved_params.matrix, saved_params.row * saved_params.row * sizeof (int32_t)))
+	  {
+	    fprintf (stderr, "\nUpper stack data changed during the function call:\n");
+	    fprintf (stderr, "Read: %s (%ld bp)\n", qry_name, qry_seq->l);
+	    fprintf (stderr, "Full Query (%4ld bp): %s\n", qry_seq->l, qry_seq->s); 
+	    fprintf (stderr, "Query      (%4d bp): %s\n", qlen, query);
+	    fprintf (stderr, "Subject    (%4d bp): ", tlen);
+	    for (iii = 0; iii != tlen; ++iii)
+		fputc ("ACGTN" [(target [iii] < 4) ? target [iii] : 4], stderr);
+	    fputc ('\n', stderr);
+	    fprintf (stderr, "score is %d; tmp_sam.score is %d\n", s->score, tmp_sam.score);
+	    tmap_bug ();
+	  }
+
+#endif
 
           int32_t leading, trailing;
           while(1) {
@@ -2458,22 +2503,58 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
               }
               // do we need to continue?
               if(0 == leading && 0 == trailing) break; // no need
+
+          
+	      { // TS-9081 (DVK): reporting the erratic (presumably impossible) tail-deletion condition
+
+		unsigned iii;
+	        const char* qry_name= tmap_seq_get_name (seq)->s;
+                tmap_string_t* qry_seq = tmap_seq_get_bases (seq);
+		
+		fprintf (stderr, "\nLead/trail delete on read: %s (%ld bp), leading = %d, trailing = %d\n", qry_name, qry_seq->l, leading, trailing);
+		fprintf (stderr, "Full Query (%4ld bp): %s\n", qry_seq->l, qry_seq->s); 
+		fprintf (stderr, "Query      (%4d bp): %s\n", qlen, query);
+		// target in alignment
+		fprintf (stderr, "Subject    (%4d bp): ", tlen);
+		for (iii = 0; iii != tlen; ++iii)
+		    fputc ("ACGTN" [(target [iii] < 4) ? target [iii] : 4], stderr);
+		fputc ('\n', stderr);
+		fprintf (stderr, "score is %d; tmp_sam.score is %d\n", s->score, tmp_sam.score);
+		fprintf (stderr, "Alignment path (%d positions):\n", path_len);
+		for (iii = 0; iii != path_len; ++iii) 
+		  fprintf (stderr, "%3d", path [iii].i);
+		fputc ('\n', stderr);
+		for (iii = 0; iii != path_len; ++iii) 
+		  fprintf (stderr, "%3c", "MIDSN" [(path [iii].ctype < 4) ? path [iii].ctype : 4]);
+		fputc ('\n', stderr);
+		for (iii = 0; iii != path_len; ++iii) 
+		  fprintf (stderr, "%3d", path [iii].j);
+		fputc ('\n', stderr);
+		fprintf (stderr, "Reference Id: %d, strand: %d, position: %d", sams->sams[end].seqid, sams->sams[end].strand, sams->sams[end].pos);
+		
+		fprintf (stderr, "n_best: %d\n", tmp_sam.result.n_best);
+		fprintf (stderr, "Converted IUPAC bases in reference: %d\n", conv);
+
+		tmap_sw_param_t *pp = (0 == conv)? &par : &par_iupac;
+		fprintf (stderr, "SW parameters:\n");
+		fprintf (stderr, "    band width = %d\n", pp->band_width); /*!< for Smith-Waterman banding */
+		fprintf (stderr, "    gap open = %d\n",  pp->gap_open); /*!< gap open penalty (positive) */
+	        fprintf (stderr, "    gap_ext = %d\n", pp->gap_ext); /*!< gap extension penalty (positive) */
+	        fprintf (stderr, "    gap_end = %d\n", pp->gap_end); /*!< gap end penalty (positive */
+	        fprintf (stderr, "    alphabet size = %d\n", pp->row);
+		unsigned rr, cc;
+		for (rr = 0; rr != pp->row; ++rr)
+		{
+		  fprintf (stderr, "    %3d ", rr);
+		  for (cc = 0; cc != pp->row; ++cc)
+		  {
+		      fprintf (stderr, "%5d", pp->matrix [pp->row*rr + cc]);
+		  }
+		  fprintf (stderr, "\n");
+		}
+	      }
+	  
               tmap_bug(); // NB: this should not happen with tmap_sw_fitting_core
-              /*
-              // Skip over the leading deletion
-              s->pos += leading; 
-              target += leading;
-              tlen -= (leading + trailing);
-              // Redo the alignment
-              if(0 < conv) { // NB: there were IUPAC bases
-                  s->score = tmap_sw_global_banded_core(target, tlen, query, qlen, &par_iupac,
-                                                        tmp_sam.result.score_fwd, path, &path_len, 0); 
-              }
-              else {
-                  s->score = tmap_sw_global_banded_core(target, tlen, query, qlen, &par,
-                                                        tmp_sam.result.score_fwd, path, &path_len, 0); 
-              }
-              */
           }
           // TODO: should we skip otherwise? No, since VSW can differfrom GSW
       }

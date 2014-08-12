@@ -50,8 +50,9 @@ class Migration(SchemaMigration):
                     currentTime = datetime.datetime.now()
                     
                     #clone the system template for DH10B Control 400
-                    newSysTemplate = copy.copy(sysTemplate)
-                    newSysTemplate.pk = None                      
+                    newSysTemplate = orm.PlannedExperiment.objects.get(planGUID=sysTemplate.planGUID)
+                    newSysTemplate.pk = None
+                    newSysTemplate.id = None
                     
                     newSysTemplate.planDisplayedName = "Ion PGM E_coli DH10B Control 400"
                     newSysTemplate.planName = "Ion_PGM_E_coli_DH10B_Control_400"
@@ -78,7 +79,7 @@ class Migration(SchemaMigration):
 
 
                     # copy Experiment
-                    expObj = copy.copy(sysTemplate.experiment)
+                    expObj = sysTemplate.experiment
                     expObj.pk = None
                     expObj.expName = newSysTemplate.planGUID
                     expObj.unique = newSysTemplate.planGUID
@@ -101,11 +102,7 @@ class Migration(SchemaMigration):
                         print "*** 0157.. after saving new sysTemplate.experiment.eas.id=%d " % (easObj.id)  
 
                     #clone the qc thresholds as well
-                    qcValues = sysTemplate.plannedexperimentqc_set.all()
-
-                    for qcValue in qcValues:
-                        qcObj = copy.copy(qcValue)
-
+                    for qcObj in sysTemplate.plannedexperimentqc_set.all():
                         qcObj.pk = None
                         qcObj.plannedExperiment = newSysTemplate
                         qcObj.save()
@@ -139,7 +136,7 @@ class Migration(SchemaMigration):
                 currentTime = datetime.datetime.now()
                     
                 #re-create Ion AmpliSeq Cancer Panel Beta Lib Chem
-                newSysTemplate = copy.copy(sysTemplate)
+                newSysTemplate = sysTemplate
                 newSysTemplate.pk = None                      
                     
                 newSysTemplate.planDisplayedName = "Ion AmpliSeq Cancer Panel Beta Lib Chem"
@@ -166,7 +163,7 @@ class Migration(SchemaMigration):
                 print "*** 0157.. after reverting the deletion of sysTemplate.id=%d; name=%s " % (newSysTemplate.id, newSysTemplate.planDisplayedName)  
 
                 # copy Experiment
-                expObj = copy.copy(sysTemplate.experiment)
+                expObj = sysTemplate.experiment
                 expObj.pk = None
                 expObj.expName = newSysTemplate.planGUID
                 expObj.unique = newSysTemplate.planGUID
@@ -189,11 +186,7 @@ class Migration(SchemaMigration):
                     print "*** 0157.. after reverting the deletion of sysTemplate.experiment.eas.id=%d " % (easObj.id)  
 
                 #clone the qc thresholds as well
-                qcValues = sysTemplate.plannedexperimentqc_set.all()
-
-                for qcValue in qcValues:
-                    qcObj = copy.copy(qcValue)
-
+                for qcObj in sysTemplate.plannedexperimentqc_set.all():
                     qcObj.pk = None
                     qcObj.plannedExperiment = newSysTemplate
                     qcObj.save()

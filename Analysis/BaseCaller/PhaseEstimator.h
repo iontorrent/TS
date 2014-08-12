@@ -7,12 +7,11 @@
 #ifndef PHASEESTIMATOR_H
 #define PHASEESTIMATOR_H
 
-#include <unistd.h>
-#include <math.h>
+#include <pthread.h>
+#include <stddef.h>
 #include <vector>
 #include <string>
 #include <deque>
-#include <cassert>
 
 #include "json/json.h"
 #include "RawWells.h"
