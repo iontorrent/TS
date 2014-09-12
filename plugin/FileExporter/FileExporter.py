@@ -15,7 +15,7 @@ import requests
 import tarfile
 
 class FileExporter(IonPlugin):
-	version = "4.2-r%s" % filter(str.isdigit,"$Revision$")
+	version = "4.2-r%s" % filter(str.isdigit,"87667")
 	runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
 	runlevels = [ RunLevel.DEFAULT ]
 	features = [ Feature.EXPORT ]

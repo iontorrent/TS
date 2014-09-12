@@ -38,6 +38,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
   num_barcodes_ = 0;
   no_barcode_read_group_ = 0;
   barcode_max_flows_ = 0;
+  barcode_max_hp_ = 0;
   barcode_min_start_flow_ = -1;
 
   num_prints_ = 0;
@@ -123,6 +124,7 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
       // Increment bases for this flow
       while (curBase < key_barcode_adapter_length and barcode_.back().full_barcode[curBase] == flow_order_[flow]) {
         barcode_.back().flow_seq[flow]++;
+        barcode_max_hp_ = max(barcode_max_hp_, barcode_.back().flow_seq[flow]);
         curBase++;
       }
 
@@ -286,7 +288,7 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
     	bias.at(flow-barcode_min_start_flow_) = basecaller_read.normalized_measurements.at(flow) - barcode_[bc].predicted_signal.at(flow);
     	// Thresholding of measurements to a range of [0,2]
     	double acting_measurement = basecaller_read.normalized_measurements.at(flow);
-    	acting_measurement = max(min(acting_measurement, 2.0),0.0);
+    	acting_measurement = max(min(acting_measurement, (double)barcode_max_hp_),0.0);
     	// Compute distance
     	double residual = barcode_[bc].predicted_signal[flow] - acting_measurement;
     	if (flow == barcode_[bc].num_flows-1)

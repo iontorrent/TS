@@ -1,4 +1,4 @@
-Third-party tools incorporated into AssemblerPlus plugin:
+Third-party tools incorporated into AssemblerSPAdes plugin:
 
 1. QUAST 2.3
 http://sourceforge.net/projects/quast/files/

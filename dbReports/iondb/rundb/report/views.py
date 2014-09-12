@@ -442,8 +442,8 @@ def find_output_file_groups(report, datasets, barcodes):
         for barcode in barcodes:
             if report.eas.reference:
                 barcode['basecaller_bam_link'] = "%s/basecaller_results/%s.basecaller.bam" % (web_link, barcode['file_prefix'])
-                barcode['bam_link'] = "%s%s/%s_%s_%s.bam" % (web_link, download_dir, barcode['file_prefix'].rstrip('_rawlib'), report.experiment.expName, report.resultsName)
-                barcode['bai_link'] = "%s%s/%s_%s_%s.bam.bai" % (web_link, download_dir, barcode['file_prefix'].rstrip('_rawlib'), report.experiment.expName, report.resultsName)
+                barcode['bam_link'] = "%s%s/%s_%s_%s.bam" % (web_link, download_dir, re.sub('_rawlib$', '', barcode['file_prefix']), report.experiment.expName, report.resultsName)
+                barcode['bai_link'] = "%s%s/%s_%s_%s.bam.bai" % (web_link, download_dir, re.sub('_rawlib$', '', barcode['file_prefix']), report.experiment.expName, report.resultsName)
             else:
                 barcode['basecaller_bam_link'] = "%s/basecaller_results/%s.basecaller.bam" % (web_link, barcode['file_prefix'])
                 barcode['bam_link'] = None

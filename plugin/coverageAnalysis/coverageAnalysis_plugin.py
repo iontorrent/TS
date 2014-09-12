@@ -69,8 +69,9 @@ def addAutorunParams(plan=None):
   config['nonduplicates'] = 'Yes'
   config['barcodebeds'] = 'No'
   config['barcodetargetregions'] = ''
-  # set defaults for derived settings expected in an error report for thrown and caught exceptions, e.g. via renderOptions()
+  # set defaults for derived settings in case of early error set up, e.g. via renderOptions()
   pluginParams['is_ampliseq'] = False
+  pluginParams['have_targets'] = False
   # extract things from the plan if provided - for coverageAnalysis auto-run w/o a plan leads to early exit
   if plan: 
     runtype = plan['runType']
@@ -91,7 +92,7 @@ def addAutorunParams(plan=None):
       barcodeLibrary()
       trgstr = ''
       for bc,data in barcodeLibraries.items():
-          trgstr += bc+'='+data.bedfile+';'
+          trgstr += bc+'='+data['bedfile']+';'
       config['barcodetargetregions'] = trgstr
     elif runtype == 'TARS':
       config['librarytype'] = 'targetseq'
@@ -102,6 +103,8 @@ def addAutorunParams(plan=None):
     else:
       config['librarytype_id'] = "[%s]"%runtype
       raise Exception("CATCH:Do not know how to analyze coverage for unsupported plan runType: '%s'"%runtype)
+    if runtype[0:4] == "AMPS":
+      config['nonduplicates'] = 'No'
     bedfile = plan['bedfile']
     if bedfile != "":
       config['targetregions'] = bedfile
@@ -192,7 +195,7 @@ def run_plugin(skiprun=False,barcode=""):
   bedfile = pluginParams['bedfile']
 
   sample = pluginParams['sample_names']
-  if barcode: sample = sample.get('barcode','')
+  if barcode: sample = sample.get(barcode,'')
   if sample == '': sample = 'None'
 
   # account for reference and library type overrides, e.g. for AmpliSeq-DNA/RNA
@@ -383,9 +386,8 @@ def run_meta_plugin():
     if renderOpts['samp_track']: bcline += "\t"+bcdata['sample_target']
     if renderOpts['bas_stats']: bcline += "\t"+bcdata['mean_depth']+"\t"+bcdata['uniformity']
     if renderOpts['mixed_stats']:
-      rfile = barcodeLibraries[bcname].get('reference','')
-      if rfile:
-        rfile += '.fai'
+      if bcname in barcodeLibraries and 'reference' in barcodeLibraries[bcname]:
+        rfile = barcodeLibraries[bcname]['reference'] + '.fai'
         if not rfile in refs: refs.append(rfile)
     bctable.append(bcline)
     reportfile = os.path.join(bcrep['output_dir'],bcrep['output_prefix']+fileext)
@@ -407,7 +409,11 @@ def run_meta_plugin():
   if len(reportFiles) > 0:
     # collect references
     if renderOpts['mixed_stats']:
-      reference = ",".join(refs)
+      if len(refs) > 0:
+        reference = ",".join(refs)
+      else:
+        reference = "-"
+        printlog("WARNING: No references were matched to specified barcodes.\n- Barcode matrix targets may not be correctly ordered.");
     else:
       reference = pluginParams['reference']+'.fai'
     bcmatrix = pluginParams['prefix']+".bcmatrix.xls"
@@ -499,7 +505,7 @@ def renderOptions():
     "filter_options" : ', '.join(filter_options),
     "samp_track" : (config['sampleid'] == 'Yes'),
     "mixed_stats" : (config['librarytype'] == "ampliseq-dna-rna"),
-    "trg_stats" : (config['targetregions'] != ""),
+    "trg_stats" : pluginParams['have_targets'],
     "bas_stats" : (config['librarytype'] != 'ampliseq-rna')
   }
   
@@ -742,7 +748,6 @@ def barcodeLibrary(barcode=""):
     def_genome = pluginParams['genome_id']
     def_genomeURL = pluginParams['genome_url']
     def_reference = pluginParams['reference']
-    target_files = pluginParams['target_files']
     # grab plan settings for each barcode
     bcsamps = pluginParams['jsonParams']['plan']['barcodedSamples']
     if isinstance(bcsamps,basestring):
@@ -901,12 +906,15 @@ def runForBarcodes():
     printerr("Reading barcode list file '%s'" % bcfileName)
     raise
   # grab barcoded-target information and ensure plan is checked for multi-references
-  runtype = pluginParams['config']['librarytype']
-  if runtype == 'ampliseq-dna-rna': barcodeLibrary()
   have_targets = pluginParams['have_targets']
   default_target = pluginParams['config']['targetregions']
   check_targets = (have_targets and not default_target)
+  runtype = pluginParams['config']['librarytype']
+  if runtype == 'ampliseq-dna-rna':
+    barcodeLibrary()
+    if barcode_no_target_as_whole_genome: check_targets = false
   target_files = pluginParams['target_files']
+  # pre-check specified barcodes file presence
   numGoodBams = 0
   numNoTargets = 0
   maxBarcodeLen = 0
@@ -919,7 +927,8 @@ def runForBarcodes():
     if not os.path.exists(bcbam):
       bcbam = ": BAM file not found"
     elif check_targets and not bedfile:
-      if runtype == 'ampliseq-dna-rna':
+      # in this case distinguish selected 'None' vs. not used
+      if runtype == 'ampliseq-dna-rna' and barcode in target_files:
         numNoTargets += 1
         bcbam = ":\nERROR: Targets file is not specified but required for run type 'Ion AmpliSeq DNA/RNA'."
       else:

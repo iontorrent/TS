@@ -202,7 +202,7 @@ while( <BEDFILE> )
   $targEnd = $end;
   # reset cursor to start of last section looked at (for adjacent/overlapping targets)
   seek(BBCFILE,$lastHead,0);
-  bciSeekForward($chrIdx,$targSrt);
+  next unless( bciSeekForward($chrIdx,$targSrt) );
   # read from current BBC cursor to end of current target region
   $pos = 0;
   while( $pos <= $targEnd )
@@ -310,7 +310,7 @@ sub loadBCI
 # Move the open BCC file cursor to the position for reading the specified chromosome index (0-based)
 # and read position (1-based) <= specified coordinate. Here it is assumed read locations will be
 # given in order so no reset of the file cursor is only allowed to be forwards.
-# Returns 1 if the cursor was advanced.
+# Returns 0 if the contig read for unanticipated input or there are no reads at all for the current contig/read block.
 sub bciSeekForward
 {
   if( !$bciIndexSize )
@@ -319,7 +319,7 @@ sub bciSeekForward
     return 0;
   }
   my ($chromIdx,$srt) = @_;
-  return if( $chromIdx < $bciLastChr || $chromIdx >= $bciNumChroms );
+  return 0 if( $chromIdx < $bciLastChr || $chromIdx >= $bciNumChroms );
   my $chrBlockSrt = $bciBlockOffsets[$chromIdx];
   my $blockIdx = $chrBlockSrt+int(($srt-1)/$bciBlockSize);
   if( $srt < 1 || $blockIdx >= $bciIndexSize )
@@ -330,6 +330,8 @@ sub bciSeekForward
   $bciLastChr = $chromIdx;
   my $blockSrt = $bciIndex[$blockIdx];
   printf STDERR "Block start = $blockSrt at index $blockIdx, file at %d\n", tell(BBCFILE) if( $detailLog );
+  # skip non-represented contigs - ok since BBCFILE starts with contig names - 0 seek not allowed
+  return 0 unless( $blockSrt );
   seek(BBCFILE,$blockSrt,0) if( $blockSrt > tell(BBCFILE) );
   return 1;
 }

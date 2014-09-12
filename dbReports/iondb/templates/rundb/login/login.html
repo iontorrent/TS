@@ -1,21 +1,22 @@
 {% load url from future %}
 {% if user.is_authenticated %}
-<a id="begin_button" class="btn btn-primary pull-right" href="{% url 'data' %}">Begin</a>
-<ul class="nav nav-pills utility-menu pull-right">
-    <li><span>Welcome {{ user.get_full_name|default:user.username }}!</span></li>
-</ul>
-<div class="utility-menu pull-right" style="clear: both;">
+<p style="text-align: right;">
+    Welcome {{ user.get_full_name|default:user.username }}!
+    <a id="begin_button" class="btn btn-primary" href="{% url 'data' %}">Begin</a>
+</p>
+<p style="margin-top: 20px; color: #d3d3d3;">
         Not {{ user.get_full_name|default:user.username }}?
-        <a id="signout" href="{% url 'logout' %}">Login as another user</a></div>
+        <a id="signout" href="{% url 'logout' %}">Login as another user</a>
+</p>
 
 {% else %}
-<form id='login-form' class="form-inline pull-right" action="{% url 'login_ajax' %}" method="POST">
+<form id="login-form" class="form" action="{% url 'login_ajax' %}" method="POST">
     {% csrf_token %}
-    <input type="text" id="id_username" name="username" placeholder="Member Name" class="span3" tabindex="1">
+    <input type="text" id="id_username" name="username" placeholder="User name" class="span3" tabindex="1">
     <input type="password" id="id_password" name="password" placeholder="Password" class="span3" tabindex="2">
-    <button type="submit" class="btn btn-primary" tabindex="4">Login</button>
-    <label for="id_remember_me" class="checkbox">Remember Me<input id="id_remember_me" type="checkbox" name="remember_me" class="checkbox" checked="checked" tabindex="3"></label> 
-    <div class="help-block"><b>OR</b> <a href="{% url 'signup' %}">Register</a> for a new account</div>
+    <button type="submit" class="btn btn-primary pull-right" tabindex="4">Sign In</button>
+    <label for="id_remember_me" class="checkbox">Remember Me<input id="id_remember_me" type="checkbox" name="remember_me" class="checkbox" checked="checked" tabindex="3"></label>
+    <div class="help-block" style="margin-top: 100px;"><a href="{% url 'signup' %}" class="btn btn-small">Register</a> for a new account</div>
     <input type="hidden" id="next" name="next"
         value="{% filter force_escape %}{% firstof next request.GET.next request.META.REDIRECT_URL request.META.HTTP_REFERER %}{% endfilter %}">
     {% if form.errors %}

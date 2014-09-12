@@ -6,9 +6,19 @@
 #=============================================================================
 function nfs_mount_test()
 {
-    mountname=$(echo $1|sed 's_/$__')   #strip trailing slash
     # is it a mountpoint
-    if ! /usr/bin/timelimit -q -t 10 -T 1 mountpoint -q $mountname; then
+    isremote=false
+    mountname=$(echo $1|sed 's_/$__')   #strip trailing slash
+    while [[ "$mountname" != "/" ]] && [[ "$1" != "/" ]]; do
+        # is it a mountpoint
+        if ! /usr/bin/timelimit -q -t 10 -T 1 mountpoint -q $mountname; then
+            mountname=$(dirname $mountname)
+        else
+            isremote=true
+            break
+    	fi
+	done
+	if ! $isremote; then
         echo "$mountname is not a mountpoint">&2
         return 1
     fi

@@ -262,14 +262,14 @@ if [ $CONF_HEAD_NODE == 1 -o $CONF_COMPUTE_NODE == 1 ]; then
     # Root partition space check
     free_root=$(df -Pk |grep `mount|grep "on / type"|awk '{print $1}'`|awk '{print $4}')
     log "root partition free space:$free_root kb"
-    free_threshold=10485760
+    free_threshold=1048576
     if [[ $free_root -lt $free_threshold ]]; then
 
         log "Not enough disk space to install software (/ has $free_root kb free)"
         user_msg "=================================================================="
         user_msg "Not enough disk space to install software"
         user_msg "/ partition has $free_root kb free and needs $free_threshold kb"
-        user_msg "Ion Software install has been cancelled."
+        user_msg "Torrent Server configuration has been cancelled."
         user_msg "=================================================================="
         exit 0
     fi
@@ -316,6 +316,7 @@ if [ $CONF_HEAD_NODE == 1 -o $CONF_COMPUTE_NODE == 1 ]; then
         dpkg-reconfigure tzdata
     fi
 
+    date
     echo "=================================================================="
     echo "TSconfig configure process completed successfully"
     echo "=================================================================="

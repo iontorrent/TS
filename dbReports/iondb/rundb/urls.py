@@ -120,7 +120,6 @@ urlpatterns = patterns(
     (r'^getCSV.csv$', 'views.getCSV'),
     (r'^getPDF/(?P<pkR>.*)/$', 'views.PDFGen'),
     (r'^getOldPDF/(?P<pkR>.*)/$', 'views.PDFGenOld'),
-    #(r'^blank/$', 'views.blank', {'tab': False}),
     (r'^tfcsv/$', 'views.tf_csv'),
     (r'^getPDF/(?P<pkR>.*)/$', 'views.PDFGen'),
 

@@ -32,51 +32,34 @@
     <script type="text/javascript" src="{% static "resources/bootstrap/js/bootstrap.min.js"%}"></script>
     <script type="text/javascript" src="{% static "resources/scripts/tb.min.js"%}"></script>
     <style>
-        .nav-pills > li > span {
-            margin-bottom: 4px;
-            margin-top: 4px;
-            padding-bottom: 6px;
-            padding-top: 6px;
-            border-radius: 5px 5px 5px 5px;
-            margin-bottom: 2px;
-            margin-top: 2px;
-            padding-bottom: 8px;
-            padding-top: 8px;
-            line-height: 14px;
-            margin-right: 2px;
-            padding-left: 12px;
-            padding-right: 12px;
-            font-style: bold;
-            font-size: 12px;
-            font-weight: bold;
-            text-decoration: none;
-            color: #333333;
+        body {
+            background: white;
         }
-        .nav-pills > li > span:hover {
-            background-color: #FFFFFF;
-            text-decoration: none;
-            outline: 0 none;
+        #logo {
+            margin-top: 23px;
         }
-        .nav > li > span {
-            display: block;
-        }
-        .login {
-            background: transparent;
-        }
-        .login-form {
-            background-color: transparent;
+        #login-pane {
+            padding-top: 100px;
         }
         .jumbo-brand-block {
-            position: absolute;
-            top: 140px;
-            left: 0px;
-            width: 100%;
             height: 589px;
+            width: 100%;
             background-color: black;
-            z-index: -1;
-            background-image: url('/site_media/img/login_jumbo_block.jpg');
+            background-image: url('/site_media/img/hero-background.jpg');
             background-repeat: no-repeat;
             background-position: center top;
+        }
+        #squares {
+            padding-top: 20px;
+            text-align: center;
+        }
+        #footer {
+            padding-top: 100px;
+            color: #A9A9A9;
+        }
+        #login_html {
+            margin-top: 20px;
+            color: #fff;
         }
     </style>
 </head>
@@ -87,7 +70,6 @@
                 <style type="text/css">
                     .login-form {
                         display:none;
-                        backround-color: white;
                         min-height: 100px;
                     }
                     .splash-workflow{
@@ -105,28 +87,34 @@
                     </div>
                 </div>
             </noscript>
-            <div class="row login-form">
-                <div class="span4 logo"><img src="{% static "img/iontorrent_logo.png"%}" border="0"></div>
-                <div class="span8" id="login_html">
-{% comment %}{% include 'rundb/login/login.html' %}{% endcomment %}
+            <div class="row">
+                <div class="span12">
+                    <img id="logo" class="pull-left" src="{% static "img/iontorrent_logo.png"%}" alt="Ion Torrent: Sequencing for all"/>
+                    <img id="workflowBar" class="pull-right" src="{% static "img/workflow-header-bar-thing.png" %}" alt="Informatics workflow"/>
                 </div>
-            </div><!-- row -->
-            <div style="height: 589px;"></div>
-            <div class="jumbo-brand-block"></div>
-        </div><!-- container -->
-        
-        <div class="main-push"></div>
-    </div>
-    
-    
-    <div class="footer">
-        <div class="container">
-            <div class="span2">
-                <img src="{% static "resources/img/ion-logo2.png"%}" border="0">
             </div>
-            <div class="span8 pull-left">
-                <p>FOR RESEARCH USE ONLY. NOT INTENDED FOR ANY ANIMAL OR HUMAN THERAPEUTIC OR DIAGNOSTIC USE.</p>
-                <p><span class="copyright">&copy; 2013 Life Technologies Corporation. All Rights Reserved.</span> <a href="#">Technical Support</a> | <a href="#">Terms &amp; Conditions</a></p>
+        </div>
+        <div class="jumbo-brand-block">
+            <div class="container">
+                <div class="row">
+                    <div id="login-pane" class="span4">
+                        <img style="marign: 100px 0;" src="{% static "img/torrent-browser-wordmark.png" %}" alt="Torrent Browser"/>
+                        <div id="login_html" class="clearfix">
+                            {% include "rundb/login/login.html" %}
+                        </div>
+                    </div>
+                    <div id="squares" class="span8">
+                        <img src="{% static "img/four-info-rectangles.png" %}" alt="Plan Monitor Review Export"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="footer" class="container">
+            <div class="row">
+                <div class="span12">
+                    <p>FOR RESEARCH USE ONLY. NOT INTENDED FOR ANY ANIMAL OR HUMAN THERAPEUTIC OR DIAGNOSTIC USE.</p>
+                    <p class="copyright">&copy; Copyright 2014 Thermo Fisher Scientific Inc. All Rights Reserved.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -157,11 +145,7 @@ $(document).ready(function(){
         });
         
     };
-    $.get('/login/ajax/?next={{ request.GET.next|default:"/data/"|urlencode}}', function(data){
-        $('#login_html').append(data.form);
-        TB.utilities.form.focus();
-        $('#login-form').submit(submitHandler);
-    });
+    $('#login-form').submit(submitHandler);
 });
 </script>
 </body>

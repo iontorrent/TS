@@ -27,7 +27,7 @@ fi
 #==============================================================================
 # Verify this user has an ssh-key file
 #==============================================================================
-if ! ssh-add -L >/dev/null; then
+if [[ ! -e ~/.ssh/id_rsa ]]; then
     echo
     echo "$USER does not have an ssh-key generated yet."
     echo "A key is required in order to continue."
@@ -51,6 +51,7 @@ source $TSCONFIG_SRC_DIR/grp_functions
 SCRIPT=$(basename $0)
 HEADNODE=$(hostname)
 for node in `get_sge_nodes`; do
+    if [[ $node == $HEADNODE ]]; then echo "$node is the headnode"; continue; fi
     node=${node%.*}
     echo "$node"
     read -p "Add this node? [Y|n] " answer
@@ -59,7 +60,7 @@ for node in `get_sge_nodes`; do
             # Adds record to the Crunchers database table
             add_node $node            
             # Adds secure key to node
-            ssh-copy-id $USER@$node
+            ssh-copy-id -i ~/.ssh/id_rsa $USER@$node
             # Adds passwordless commands capability
             scp $TSCONFIG_SRC_DIR/tools/prep_node_sudo.sh $USER@$node:/tmp
             ssh -t $USER@$node "/tmp/prep_node_sudo.sh && rm /tmp/prep_node_sudo.sh"

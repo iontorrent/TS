@@ -1060,7 +1060,7 @@
       "flowCount": 1100,
       "uid": "SEQ0018",
       "instrumentType": "pgm",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion PGM Hi-Q Sequencing Kit",
       "categories" : "flowOverridable"
     }
@@ -1076,7 +1076,7 @@
       "flowCount": 500,
       "uid": "TEMPLT0009",
       "instrumentType": "pgm",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion PGM Template OT2 200 Kit for Hi-Q"
     }
   },
@@ -1110,7 +1110,37 @@
       "description": "Ion AmpliSeq Exome RDY - IC Kit 4x2"
     }
   },
-  
+  {
+    "pk": 20067,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "ProtonI200Kit-v3_2x520",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 520,
+      "uid": "SEQ0019",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion PI Sequencing 200 v3 - 2X520"
+    }
+  },
+  {
+    "pk": 20068,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion AmpliSeq Library Kit Plus",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0019",
+      "instrumentType": "proton",
+      "isActive": true,
+      "description": "Ion AmpliSeq Library Kit Plus"
+    }
+  },
+              
             
   {
     "pk": 20001,
@@ -2504,6 +2534,107 @@
       ]
     }
   },
+ {     
+    "pk": 20142,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4485416_2x520",
+      "kit": [
+        "SEQ0019"
+      ]
+    }
+  },
+  {     
+    "pk": 20143,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4488159_2x520",
+      "kit": [
+        "SEQ0019"
+      ]
+    }
+  },
+  {     
+    "pk": 20144,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4488314_2x520",
+      "kit": [
+        "SEQ0019"
+      ]
+    }
+  },  
+  {     
+    "pk": 20145,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4488315_2x520",
+      "kit": [
+        "SEQ0019"
+      ]
+    }
+  },  
+  {     
+    "pk": 20146,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4488316_2x520",
+      "kit": [
+        "SEQ0019"
+      ]
+    }
+  },
+  {     
+    "pk": 20147,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4488317_2x520",
+      "kit": [
+        "SEQ0019"
+      ]
+    }
+  },
+  {     
+    "pk": 20148,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "4488990",
+      "kit": [
+        "LIB0019"
+      ]
+    }
+  },
+  {     
+    "pk": 20149,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26325",
+      "kit": [
+        "LIB0019"
+      ]
+    }
+  },
+  {     
+    "pk": 20150,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26326",
+      "kit": [
+        "LIB0019"
+      ]
+    }
+  },
+  {     
+    "pk": 20151,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26327",
+      "kit": [
+        "LIB0019"
+      ]
+    }
+  },
+    
               
   {
     "pk": 20001,

@@ -103,6 +103,7 @@ protected:
   string                    barcode_mask_filename_;
   int                       barcode_min_start_flow_;     // Minimum start flow over all barcodes
   int                       barcode_max_flows_;          // The maximum number of barcode flows over all barcodes
+  int                       barcode_max_hp_;             // The largest homopolymer in the barcodes
   double                    barcode_filter_;             // Barcode frequency cutoff filter
   int                       barcode_filter_minreads_;    // Minimum number of reads per barcode group
   double                    barcode_error_filter_;       // Filter barcodes basedon the average number of errors

@@ -41,6 +41,7 @@ class MyPlan:
             self.planObj.expName = ""
             self.planObj.planName = ""
             self.planObj.planExecuted = False   
+            self.planObj.categories = selectedTemplate.categories
             self.planObj.latestEAS = None 
                       
             if userName:

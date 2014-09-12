@@ -16,7 +16,7 @@
 #along with this program; if not, write to the Free Software
 #Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-VERSION="4.2-r88266" # major.minor.bug
+VERSION="4.2.1.1" # major.minor.bug
 
 # set the ram
 #$ -l mem_free=${PLUGINCONFIG__RAM},s_vmem=${PLUGINCONFIG__RAM}
@@ -52,7 +52,7 @@ ASSEMBLER_PATH="${DIRNAME}/bin/";
 run "rm -rf ${TSP_FILEPATH_PLUGIN_DIR}/*.html ${TSP_FILEPATH_PLUGIN_DIR}/info*.json"
 
 # ===================================================
-# Run AssemblerPlus Plugin
+# Run AssemblerSPAdes Plugin
 # ===================================================
 #barcoded run
 if [ -f ${TSP_FILEPATH_BARCODE_TXT} ]; then

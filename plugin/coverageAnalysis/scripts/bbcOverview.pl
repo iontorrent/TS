@@ -89,6 +89,7 @@ loadBedRegions() if( $haveBed );
 my @binid;
 if( $haveBed )
 {
+  $numbins = $targetSize if( $targetSize < $numbins );
   $binsize = $targetSize / $numbins;
   print STDERR "targetSize = $targetSize, numbins = $numbins -> binsize = $binsize\n" if( $logopt );
   my $lastChrom = "";
@@ -104,7 +105,7 @@ if( $haveBed )
     {
       $binid[$binnum++] = $lastChrom . '--' . $chrid;
     }
-    while( $binnum <= $ibin )
+    while( $binnum < $ibin )
     {
       $binid[$binnum++] = $chrid;
     }
@@ -119,6 +120,7 @@ if( $haveBed )
 }
 else
 {
+  $numbins = $genomeSize if( $genomeSize < $numbins );
   $binsize = $genomeSize / $numbins;
   my $chrid = $chromName[0];
   my $chrsz = $numChroms > 1 ? $chromMaps{$chromName[1]} : $genomeSize;

@@ -315,6 +315,13 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS):
                         text = f.read()
                         if 'Basecaller=0' in text:
                             composite_return_code-=1
+                        else:
+                            with open(os.path.join(subdir,"sigproc_results","analysis_return_code.txt"), 'r') as g:
+                                return_code_text = g.read()
+                                if return_code_text=="3" and subdir in ['block_X0_Y0','block_X14168_Y0','block_X0_Y9324','block_X14168_Y9324']:
+                                    printtime("INFO: suppress non-critical error in %s" % subdir)
+                                    composite_return_code-=1
+                                    
 
             composite_return_code_file = os.path.join(BASECALLER_RESULTS,"composite_return_code.txt")
             if not os.path.exists(composite_return_code_file):

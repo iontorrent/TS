@@ -330,6 +330,13 @@ class SavePlanStepData(AbstractStepData):
                                 reference_step_helper.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = sampleTargetRegionBedFile
                                 #logger.debug("save_plan_step_data DIFF SETTING reference step helper targetRegions=%s" %(sampleTargetRegionBedFile))
 
+                    #cascade the reference and BED file info to sample if none specified at the sample level
+                    if runType != "AMPS_DNA_RNA":
+                        if not sampleReference:
+                            sampleReference = planReference
+                            sampleHotSpotRegionBedFile = planHotSptRegionBedFile
+                            sampleTargetRegionBedFile = planTargetRegionBedFile
+                            
                     #if reference info is not settable in the sample config table, use the up-to-date reference selection from the reference chevron
                     self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][KitsFieldNames.BARCODES].append(id_str)
                     self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][SavePlanFieldNames.BARCODE_SAMPLE_INFO][id_str] = \
@@ -338,11 +345,11 @@ class SavePlanStepData(AbstractStepData):
                             SavePlanFieldNames.DESCRIPTION : row.get(SavePlanFieldNames.SAMPLE_DESCRIPTION,''),
 
                             SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE : sample_nucleotideType,
-
-                            SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE : row.get(SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE, ""),
-                            SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE : row.get(SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE, ""),
-                            SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE : row.get(SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE, ""), 
-                                                       
+                            
+                            SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE : sampleReference,
+                            SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE : sampleTargetRegionBedFile, 
+                            SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE : sampleHotSpotRegionBedFile,
+                                                                                   
                             SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE : row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE, ""),
                         }
 
@@ -434,6 +441,9 @@ class SavePlanStepData(AbstractStepData):
                         self.savedObjects['samplesTableList'][i]['barcodeId'] = barcodes[i].id_str
                     
                     self.savedFields['samplesTable'] = json.dumps(self.savedObjects['samplesTableList'])
+
+                #if barcode kit selection changes, re-validate
+                self.validateStep()
                 
         elif updated_step.getStepName() == StepNames.REFERENCE:
             self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER] = updated_step

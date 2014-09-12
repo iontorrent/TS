@@ -79,10 +79,15 @@
           });
         });
         orderSelectorList(selectorID,firstItem);
+        // ensure reference with no targets get 'none' selection
+        if( $('#'+selectorID+' option').size() == 0 ) {
+          $('#'+selectorID).append("<option value=''>None</option>");
+        }
         selectLst[lstID] = $('#'+selectorID+' option');
       } else {
         $('#'+selectorID).append(selectLst[lstID]);
-        $('#'+selectorID+' option')[0].selected = true;
+        if( $('#'+selectorID+' option').size() > 0 )
+          $('#'+selectorID+' option')[0].selected = true;
       }
     }
 
@@ -98,7 +103,8 @@
         $('#'+selectorID).append("<option value=''>"+firstItem+"</option>");
       }
       $('#'+selectorID).append(lst);
-      $('#'+selectorID+' option')[0].selected = true;
+      if( $('#'+selectorID+' option').size() > 0 )
+        $('#'+selectorID+' option')[0].selected = true;
     }
 
     function setOptionDefaults(libType,refID) {
@@ -138,29 +144,34 @@
         if( fields.length == 1 && fields[0] == "" ) {
           return true;  // blank lines ok
         } else if( fields.length != 2 || fields[1] == "" ) {
-          txt = "Error at line "+n+": Invalid number of fields. Must be '<barcode> <targets>'.";
+          txt = "Error at line "+(n+1)+": Invalid number of fields. Must be '<barcode> <targets>'.";
           return false;
         }
         var barcodename = fields[0];
         var trgname = fields[1];
         if( $('#barcodeids option[value='+barcodename+']').length == 0 ) {
-          txt = "Error at line "+n+": Barcode ID "+barcodename+" is unavailable to this run analysis.";
+          txt = "Error at line "+(n+1)+": Barcode ID "+barcodename+" is unavailable to this run analysis.";
           return false;
         }
-        var refID = barcodename in planBcAssign ? planBcAssign[barcodename].ref : referenceID;
-        populateTargetsList(refID,'barcodetargets')
+        // allow explicit 'None' just to support plan for erroneously assigned references w/o targets
         var trgbed = 'None';
-        var inList = false;
-        $('#barcodetargets option').each(function() {
-          if( this.text == trgname ) {
-            inList = true;
-            trgbed = this.value;
+        if( trgname == 'None' ) {
+          trgbed = '';
+        } else {
+          var refID = barcodename in planBcAssign ? planBcAssign[barcodename].ref : referenceID;
+          populateTargetsList(refID,'barcodetargets')
+          var inList = false;
+          $('#barcodetargets option').each(function() {
+            if( this.text == trgname ) {
+              inList = true;
+              trgbed = this.value;
+              return false;
+            }
+          });
+          if( !inList ) {
+            txt = "Error at line "+(n+1)+": Target Regions "+trgname+" is unavailable to reference "+refID+".";
             return false;
           }
-        });
-        if( !inList ) {
-          txt = "Error at line "+(n+1)+": Target Regions "+trgname+" is unavailable to reference"+refID+".";
-          return false;
         }
         // collect the actual file path to the bed file
         txt += barcodename+'='+trgbed+';';
@@ -227,39 +238,42 @@
     $('.bcbed-shy').hide();
     
     var reportUrl = '/rundb/api/v1/results/'+TB_result+'/?format=json&noplugin=True';
-    var experimentUrl;
+    var easUrl;
     var analysisUrl;
     $.ajaxSetup({async: false});
     $.get( reportUrl, function(data) {
      analysisUrl = data.reportLink;
+     easUrl = data.eas;
      experimentUrl = data.experiment;
      referenceID = data.reference;
     });
     $('#referenceid').html(referenceID);
 
-    // attempt to get Plan details for default selection values
+    // attempt to get Plan details for default selection values - should be in EAS!
     var planLibType = "";
-    var planBedFile = "";
     if( experimentUrl != undefined && experimentUrl != null && experimentUrl != "" ) {
       var planUrl;
       $.get( experimentUrl+"?format=json", function(data) { planUrl = data.plan; } );
       if( planUrl != undefined && planUrl != null && planUrl != "" ) {
-        $.get( planUrl+"?format=json", function(data) {
-          planLibType = data.runType;
-          planBedFile = data.bedfile;
-          $.each( data.barcodedSamples, function(samplename,sampledata) {
-            $.each( sampledata.barcodeSampleInfo, function(barcodename,barcodedata) {
-              var nuc = barcodedata.nucleotideType ? barcodedata.nucleotideType : 'DNA';
-              var ref = barcodedata.reference ? barcodedata.reference : referenceID;
-              var trg = barcodedata.targetRegionBedFile ? barcodedata.targetRegionBedFile : 'None';
-              planBcAssign[barcodename] = { 'nuc':nuc, 'ref':ref, 'trg':trg };
-            });
-          });
-        });
+        $.get( planUrl+"?format=json", function(data) { planLibType = data.runType; });
       }
     }
+    // get majority of current report settings from EAS
+    var planBedFile = "";
+    if( easUrl != undefined && easUrl != null && easUrl != "" ) {
+      $.get( easUrl+"?format=json", function(data) {
+        planBedFile = data.targetRegionBedFile;
+        $.each( data.barcodedSamples, function(samplename,sampledata) {
+          $.each( sampledata.barcodeSampleInfo, function(barcodename,barcodedata) {
+            var nuc = barcodedata.nucleotideType ? barcodedata.nucleotideType : 'DNA';
+            var ref = barcodedata.reference ? barcodedata.reference : referenceID;
+            var trg = barcodedata.targetRegionBedFile ? barcodedata.targetRegionBedFile : 'None';
+            planBcAssign[barcodename] = { 'nuc':nuc, 'ref':ref, 'trg':trg };
+          });
+        });
+      });
+    }
     populateTargetsList(referenceID,'targetregions','None');
-    populateTargetsList(referenceID,'barcodetargets');
 
     // set up for barcode-specific targets UI
     var populateBarcodeTargets = 0;
@@ -295,6 +309,8 @@
         $('#multibed').hide();
       }
     } else {
+      // populate targets for reference w/o the 'None' option
+      populateTargetsList(referenceID,'barcodetargets');
       // get all available barcodes
       var barcodeUrl = analysisUrl + 'barcodeList.txt';
       $.get( barcodeUrl, function(mem) {
@@ -339,13 +355,16 @@
         $("#librarytype").html('<option value="ampliseq-dna-rna">Ion AmpliSeq DNA/RNA</option>');
       }
     }
-    if( planBedFile != "" && planLibType != "AMPS_DNA_RNA") {
+    if( planBedFile !== "" ) {
       $("#targetregions").val(planBedFile);
-      if( populateBarcodeTargets > 0 ) {
+      if( populateBarcodeTargets > 0 && planLibType != "AMPS_DNA_RNA" ) {
         $("#barcodetargets").val(planBedFile);
       }
     }
     setOptionDefaults(pluginLibType,referenceID);
+    // Hide waiting and display Submit
+    $("#still_loading").hide();
+    $("#postbutton").show();
 
     $('#postbutton').click(function() {
       var libn = document.coverageAnalysis.librarytype.selectedIndex;
@@ -506,7 +525,8 @@
    </table>
    <br/>
    <div align="center" id="json_result">
-    <input id="postbutton" type="submit" value="Submit">
+    <span id="still_loading" style="color:#A06090"><h2><i>Loading default settings and options...</i></h2></span>
+    <input id="postbutton" type="submit" value="Submit" style="display:none">
    </div>
    <input type="hidden" id="librarytype_id" name="librarytype_id"/>
    <input type="hidden" id="targetregions_id" name="targetregions_id"/>

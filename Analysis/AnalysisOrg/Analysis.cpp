@@ -86,7 +86,7 @@ void DumpStartingStateOfProgram (int argc, char *argv[], TrackProgress &my_progr
   fprintf (stdout, "\n");
   fprintf (stdout, "Hostname = %s\n", myHostName);
   fprintf (stdout, "Start Time = %s", ctime (&my_progress.analysis_start_time));
-  fprintf (stdout, "Version = %s-%s (%s) (%s)\n",
+  fprintf (stdout, "Version = %s.%s (%s) (%s)\n",
            IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(),
            IonVersion::GetSvnRev().c_str(), IonVersion::GetBuildNum().c_str());
   fprintf (stdout, "Command line = ");

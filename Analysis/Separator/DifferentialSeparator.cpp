@@ -3252,6 +3252,9 @@ void DifferentialSeparator::AssignAndCountWells(DifSepOpt &opts, std::vector<Key
   //  double bfThreshold = bfEmptyQuantiles.GetQuantile (.75) + (3 * IQR (bfEmptyQuantiles));
   //  cout << "Bf threshold is: " << bfThreshold << " for: " << bfQuantiles.GetMedian() << " +/- " <<  IQR (bfQuantiles) << endl;
   for (size_t bIx = 0; bIx < wells.size(); bIx++) {
+    if ((bfMask[bIx] & MaskExclude) != 0) {
+      continue;
+    }
     if (opts.doRemoveLowSignalFilter && (wells[bIx].keyIndex == 0 && (wells[bIx].peakSig < minLibPeak))) {
       wells[bIx].keyIndex = -1;
       wells[bIx].flag = WellLowSignal;
@@ -3524,7 +3527,6 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       GainCorrectImage(opts.doGainCorrect, img);
     }
   }
-  
   // Caclulate t0 with the same file
   t0.resize(numWells);
   std::fill(t0.begin(), t0.end(), 0.0f);
@@ -3628,6 +3630,7 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   bf_metric.Cleanup();
   img.Close();
   totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf_metric.");
+
   // Setup our job queue
   int qSize = (mask.W() / opts.t0MeshStep + 1) * (mask.H() / opts.t0MeshStep + 1);
   if (opts.nCores <= 0) {  opts.nCores = numCores(); }
@@ -3645,9 +3648,9 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
                             opts.referenceStep, opts.referenceStep);
   traceStore.SetMinRefProbes (opts.percentReference * opts.referenceStep * opts.referenceStep);
   vector<float> traceSdMin(numWells);
-  LoadKeyDats (jQueue, traceStore, mBfMetric, opts, traceSdMin, zeroFlows);
   totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Loading Dats.");
-
+  LoadKeyDats (jQueue, traceStore, mBfMetric, opts, traceSdMin, zeroFlows);
+  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Loading Dats.");
   // Open our h5 file if necessary
   string h5SummaryRoot;
   if (opts.outputDebug > 1) {
@@ -3689,7 +3692,6 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   for (size_t i = 0; i < loadMinFlows; i++) {
     traceStore.PrepareReference (i, mFilteredWells);
   }
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Loading Dats.");
 
   // Currently time is just linear
   mTime.set_size (traceStore.GetNumFrames());
@@ -3851,7 +3853,6 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   filtStats.ReportStats(stdout);
 
   HandleDebug(wells, opts, h5SummaryRoot, saver, mask, traceStore, modelMesh);
-
   // --- Some reporting for the log.
   OutputStats(opts, bfMask);
   totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Total Time.");

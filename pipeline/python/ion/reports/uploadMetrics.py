@@ -459,7 +459,7 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
         return_message += 'ERROR: generating ionstats_basecaller failed - file %s is missing\n' % ionstats_basecaller_json_path
 
     ionstats_alignment = None
-    if ionparams['referenceName'] != 'none':
+    if ionparams['referenceName']:
         if os.path.exists(ionstats_alignment_json_path):
             try:
                 afile = open(ionstats_alignment_json_path, 'r')
@@ -474,7 +474,7 @@ def writeDbFromFiles(tfPath, procPath, beadPath, ionstats_alignment_json_path, i
 
     genomeinfodict = {}
     try:
-        if ionparams['referenceName'] != 'none' and ionstats_alignment != None:
+        if ionparams['referenceName']:
             genomeinfofilepath = '/results/referenceLibrary/%s/%s/%s.info.txt' % (ionparams['tmap_version'], ionparams['referenceName'], ionparams['referenceName'])
             with open(genomeinfofilepath) as genomeinfofile:
                 for line in genomeinfofile:

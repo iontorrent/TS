@@ -11,6 +11,7 @@ import json
 import subprocess
 import xmlrpclib
 import math
+import re
 
 from ion.utils import blockprocessing
 from ion.utils import explogparser
@@ -459,7 +460,7 @@ if __name__=="__main__":
         for extension,base_dir in link_task_list:
             for prefix in prefix_list:
                 try:
-                    filename = "%s/%s%s_%s.%s" % (download_links, prefix.rstrip('rawlib'), env['expName'], env['resultsName'], extension)
+                    filename = "%s/%s%s_%s.%s" % (download_links, re.sub('rawlib$','',prefix), env['expName'], env['resultsName'], extension)
                     src = os.path.join(base_dir, prefix+'.'+extension)
                     if os.path.exists(src):
                         os.symlink(os.path.relpath(src,os.path.dirname(filename)),filename)

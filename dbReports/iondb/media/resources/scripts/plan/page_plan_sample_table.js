@@ -88,6 +88,12 @@ prepareEasyDualNucleotideTypeSupport = function() {
         row1.children().find('select[name=targetRegionBedFile]').attr("disabled",  true);
         row1.children().find('select[name=hotSpotRegionBedFile]').attr("disabled",  true);
         
+        //applicable regardless if isSameSampleForDual
+        if (isCreate  == "True") {
+        	console.log("at page_plan_sample_table.prepareEasyDualNucleotideTypeSupport - isCreate!!!");
+        	row1.children().find('select[name=reference]').val(""); 
+        }
+        
         var isPlanBySample = $('input[id=isPlanBySample]').val();
         
     	if (isSameSampleForDual) {
@@ -109,9 +115,7 @@ prepareEasyDualNucleotideTypeSupport = function() {
     		
     		value = row0.children().find('input[name=sampleDescription]').val();
     		row1.children().find('input[name=sampleDescription]').val(value);
-    		
-        	row1.children().find('select[name=reference]').val(""); 
-        	
+
         	value = row0.children().find('select[name=ircancerType]').val();
         	row1.children().find('select[name=ircancerType]').val(value);
         	
@@ -123,11 +127,30 @@ prepareEasyDualNucleotideTypeSupport = function() {
         	
         	value = row0.children().find(".irRelationshipType");
 
-        	//console.log("page_plan_sample_table.prepareEasyDualNucleotideTypeSupport() - value=", value);
+        	//console.log("page_plan_sample_table.prepareEasyDualNucleotideTypeSupport() - relationshipType.value=", value);
         	row1.children().find(".irRelationshipType").val(value);
         	
         	value = row0.children().find('select[name=irRelationRole]').val();
-        	row1.children().find('select[name=irRelationRole]').val(value);
+        	
+        	if (value) {
+
+                //the 2nd row may not have the selected value in the drop down yet
+                var isExist = false;
+                row1.children().find('select[name=irRelationRole]').each(function(){
+                    if (this.value == value) {
+                        isExist = true;
+                    }
+                });
+                console.log("first row selected relation=", value, "; isExist=", isExist);
+                
+                if (isExist == false) {
+                    var options = row0.children().find('select[name=irRelationRole] option').clone();
+    
+                    row1.children().find('select[name=irRelationRole]').empty();
+                    row1.children().find('select[name=irRelationRole]').append(options);    
+                }
+                row1.children().find('select[name=irRelationRole]').val(value);   
+            }
         	
         	value = row0.children().find('select[name=irGender]').val();
         	row1.children().find('select[name=irGender]').val(value);
@@ -617,6 +640,8 @@ $(document).ready(function(){
 	        	row1.children().find('select[name=irRelationRole]').val("");   
 	        	//if the 1st row only has 1 value, it will be auto-select and change won't be triggered
 	        	relationValue = currentRow.children().find('select[name=irRelationRole]').val();
+	        	//console.log("irWorkflow.change - relationValue=", relationValue);
+	        	
 	        	if (relationValue) {
 
 		        	//the 2nd row may not have the selected value in the drop down
@@ -718,6 +743,8 @@ $(document).ready(function(){
         //var isSameSampleForDual = $(this).is(":checked");
         
         prepareEasyDualNucleotideTypeSupport();
+
+        upateSamplesTable();
     });
     
     

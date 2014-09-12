@@ -815,7 +815,7 @@ class ResultsResource(BaseMetadataResource):
         if not major:
             plugin_out_path = os.path.join(results.get_report_dir(), gc.plugin_output_folder)
             try:
-                plugin_out_listing = ( d for d in os.listdir(plugin_out_path) if os.path.isdir(os.path.join(plugin_out_path,d)) )
+                plugin_out_listing = ( d for d in os.listdir(plugin_out_path) if os.path.isdir(os.path.join(plugin_out_path,d)) and (d.find("_out") > 0))
             except (OSError, IOError):
                 logger.info("Error listing %s", plugin_out_path)
                 plugin_out_listing = []

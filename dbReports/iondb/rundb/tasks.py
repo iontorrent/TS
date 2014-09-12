@@ -1304,7 +1304,7 @@ def disk_check_status():
     return stdout
 
 
-@periodic_task(run_every=timedelta(days=1), queue="periodic")
+@periodic_task(run_every=timedelta(hours=4), queue="periodic")
 def update_news_posts():
     from iondb.rundb import models
     if not models.GlobalConfig.get().check_news_posts:

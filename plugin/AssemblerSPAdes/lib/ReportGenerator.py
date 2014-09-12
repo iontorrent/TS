@@ -269,19 +269,19 @@ def _assemblyStats(sample, assembler):
                                     _assemblyMetricsTable("Scaffold")
 
 def generateReport(samples, assembler):
-    css_path = "/pluginMedia/AssemblerPlus/css/"
+    css_path = "/pluginMedia/AssemblerSPAdes/css/"
     css = ["kendo.common.min.css", "kendo.default.min.css", "kendo.ir.css",
            "ir.css", "app.css", "bootstrap.css", "bootstrap-custom.css",
            "bootstrap-select.css"]
     less = ["app.less"]
 
-    js_path = "/pluginMedia/AssemblerPlus/js/"
+    js_path = "/pluginMedia/AssemblerSPAdes/js/"
     js = ["less-1.4.1.min.js", "jquery-1.8.2.min.js",
           "bootstrap-select.min.js", "bootstrap.min.js"]
 
     with h.html5() as root:
         with h.head():
-            h.title("AssemblerPlus Plugin")
+            h.title("AssemblerSPAdes Plugin")
             h.meta(name="viewport",
                    content="width=device-width, initial-scale=1.0")
             for css_fn in css:

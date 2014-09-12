@@ -49,20 +49,23 @@ class StepHelperDbSaver():
         ionreporter_step_data = step_helper.steps[StepNames.IONREPORTER]
         
         isFavorite = False
-        categories = ''
-        if not step_helper.isPlan():
-            isFavorite = save_template_step_data.savedFields['setAsFavorite']
-            categories =  application_step_data.savedFields.get('categories', "")
 
-            #if user has changed the application or target technique during template copying, reset categories value
-            applicationGroupName = application_step_data.savedFields.get("applicationGroupName", "")
-            if applicationGroupName != "DNA + RNA":
-                #logger.debug("step_helper_db_saver.__get_universal_params() applicationGroupName=%s; replacing categories=%s" %(applicationGroupName, categories))
-                if categories:
-                    categories.replace("Onconet", "");
-                    categories.replace("Oncomine", "");  
-                else:
-                    categories = ""              
+        ##categories =  application_step_data.savedFields.get(ApplicationFieldNames.CATEGORIES, "")
+        categories =  application_step_data.savedFields.get('categories', "")
+        
+        #if user has changed the application or target technique during template copying, reset categories value
+        ##applicationGroupName = application_step_data.savedFields.get(ApplicationFieldNames.APPLICATION_GROUP_NAME, "")
+        applicationGroupName = application_step_data.savedFields.get("applicationGroupName", "")
+        if applicationGroupName != "DNA + RNA":
+            if categories:
+                categories.replace("Onconet", "");
+                categories.replace("Oncomine", "");  
+                            
+        if not step_helper.isPlan():
+            ##isFavorite = save_template_step_data.savedFields[SaveTemplateStepDataFieldNames.SET_AS_FAVORITE]
+            isFavorite = save_template_step_data.savedFields['setAsFavorite']
+
+        logger.debug("step_helper_db_saver.__get_universal_params() applicationGroupName=%s; categories=%s" %(applicationGroupName, categories))
 
         #logger.debug("step_helper_db_saver.__get_universal_params() application_step_data.savedFields=%s" %(application_step_data.savedFields))
         

@@ -11,7 +11,7 @@ from django.utils.datastructures import SortedDict
 
 class ERCC_Analysis(IonPlugin):
 	"""ERCC_Analysis Plugin for use with ERCC RNA Spike-In Control Mixes"""
-	version = "4.2-r%s" % filter(str.isdigit,"$Revision$")
+	version = "4.2-r%s" % filter(str.isdigit,"87667")
 	envDict = dict(os.environ)
 	# print 'Environment:\n\t' + '\n\t'.join([ '{}: {}'.format(x,y) for x,y in envDict.items() ])
 	

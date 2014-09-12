@@ -11,6 +11,7 @@ import unicodedata
 from optparse import OptionParser
 from django.conf import settings
 from django.template.loader import render_to_string
+from ion.utils import compress # provided by ion-pipeline
 
 # critical environment variables:
 DIRNAME                     = '' # home directory for the plugin files
@@ -836,26 +837,41 @@ def plugin_main():
                 traceback.print_exc()
                 all_barcodes_successful = False
                 barcode_data[barcode_idx]['status'] = 'error'
+
+# Replaced with python zip library because of failures due to too-long argument lists.
+#
+#        #Zip all vcf.gz and vcf.gz.tbi files
+#        zip_vcf_command =  'echo "'
+#        zip_vcf_command +=  '  '.join(('%s/%s/TSVC_variants_%s.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) 
+#                                      for barcode in barcode_data if barcode['status'] == 'completed')
+#        zip_vcf_command +=  '  '
+#        zip_vcf_command +=  '  '.join(('%s/%s/TSVC_variants_%s.vcf.gz.tbi' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) 
+#                                      for barcode in barcode_data if barcode['status'] == 'completed')
+#        zip_vcf_command += '" | xargs  zip  --junk-paths  %s/%s.vcf.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
+#        run_command(zip_vcf_command, 'Store per-barcode vcf files in a single zip file')
         
-        #Zip all vcf.gz and vcf.gz.tbi files
-        zip_vcf_command =   'zip  --junk-paths'
-        zip_vcf_command +=  '  %s/%s.vcf.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
-        zip_vcf_command +=  '  '
-        zip_vcf_command +=  '  '.join(('%s/%s/TSVC_variants_%s.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) 
-                                      for barcode in barcode_data if barcode['status'] == 'completed')
-        zip_vcf_command +=  '  '
-        zip_vcf_command +=  '  '.join(('%s/%s/TSVC_variants_%s.vcf.gz.tbi' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) 
-                                      for barcode in barcode_data if barcode['status'] == 'completed')
-        run_command(zip_vcf_command, 'Store per-barcode vcf files in a single zip file')
-        
-        #Zip all variants_*.xls files.
-        zip_xls_command =   'zip  --junk-paths'
-        zip_xls_command +=  '  %s/%s.xls.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
-        zip_xls_command +=  '  '
-        zip_xls_command +=  '  '.join(('%s/%s/alleles_%s.xls' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) 
-                                      for barcode in barcode_data if barcode['status'] == 'completed')
-        run_command(zip_xls_command, 'Store per-barcode xls files in a single zip file')
-        
+#        
+#        #Zip all variants_*.xls files.
+#        zip_xls_command =  'echo "'
+#        zip_xls_command +=  '  '.join(('%s/%s/alleles_%s.xls' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) 
+#                                      for barcode in barcode_data if barcode['status'] == 'completed')
+#        zip_xls_command +=  '" | xargs  zip  --junk-paths  %s/%s.xls.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
+#        run_command(zip_xls_command, 'Store per-barcode xls files in a single zip file')
+        printtime(' ')
+        printtime('Task    : ' + 'Store per-barcode vcf files in a single zip file')
+        zipfilename = '%s/%s.vcf.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
+        for myfile in [('%s/%s/TSVC_variants_%s.vcf.gz' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) for barcode in barcode_data if barcode['status'] == 'completed']:
+            compress.make_zip(zipfilename, myfile, arcname=os.path.basename(myfile), use_sys_zip = False)
+        for myfile in [('%s/%s/TSVC_variants_%s.vcf.gz.tbi' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) for barcode in barcode_data if barcode['status'] == 'completed']:
+            compress.make_zip(zipfilename, myfile, arcname=os.path.basename(myfile), use_sys_zip = False)
+        printtime(' ')
+        printtime(' ')
+        printtime('Task    : ' + 'Store per-barcode xls files in a single zip file')
+        zipfilename = '%s/%s.xls.zip' % (TSP_FILEPATH_PLUGIN_DIR,vc_options['run_name'])
+        for myfile in [('%s/%s/alleles_%s.xls' % (TSP_FILEPATH_PLUGIN_DIR,barcode['name'],barcode['name'])) for barcode in barcode_data if barcode['status'] == 'completed']:
+            compress.make_zip(zipfilename, myfile, arcname=os.path.basename(myfile), use_sys_zip = False)
+        printtime(' ')
+            
         
         generate_barcode_links_page(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_RESULTS), barcode_data, vc_options)
         generate_barcode_links_block(os.path.join(TSP_FILEPATH_PLUGIN_DIR,HTML_BLOCK), barcode_data, vc_options)

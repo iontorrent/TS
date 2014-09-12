@@ -365,6 +365,8 @@ class TSconfig (object):
             try:
                 models.GlobalConfig.objects.update(ts_update_status=status)
             except:
+                from django.db import connection
+                connection.close()  # Force a new connection on next transaction
                 self.logger.error("Unable to update database with progress")
 
     def add_pkgprogress(self, progress=1):

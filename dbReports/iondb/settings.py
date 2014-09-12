@@ -20,7 +20,7 @@ TEMPLATE_DEBUG = DEBUG
 
 # This is the URL for the AmpliSeq website
 AMPLISEQ_URL = "https://ampliseq.com/"
-NEWS_FEED = "http://ionupdates.com/news/ion_news_feed.xml"
+NEWS_FEED = "http://updates.iontorrent.com/news/ion_news_feed.xml"
 
 # Set ADMINS in local_settings
 ADMINS = ()

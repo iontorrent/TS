@@ -186,59 +186,61 @@ while( <BEDFILE> )
   $targEnd = $end;
   # reset cursor to start of last section looked at (for adjacent/overlapping targets)
   seek(BBCFILE,$lastHead,0);
-  bciSeekForward($chrIdx,$targSrt);
-  # read from current BBC cursor to end of current target region
   my ($pos,$nfwd,$nrev,$fcov5p,$lcov3p,$tcov) = (0,0,0,0,0,0);
-  while( $pos <= $targEnd )
+  if( bciSeekForward($chrIdx,$targSrt) )
   {
-    # record the start of the next BBC region in case there adjacent/overlapping targets
-    $lastHead = tell(BBCFILE);
-    last if( read( BBCFILE, my $buffer, $headbytes) != $headbytes );
-    ($pos,$cd) = unpack "L2", $buffer;
-    last if( $pos == 0 ); # start of next contig
-    last if( $pos > $targEnd );
-    $wdsiz = ($cd & 6) >> 1;
-    next if( $wdsiz == 0 );  # ignore 0 read regions (for now)
-    $rdlen = $cd >> 3;
-    printf STDERR "Read BBC region $pos:$rdlen.$wdsiz.%d\n",($cd&1) if( $detailLog );
-    if( $pos+$rdlen < $targSrt )
+    # read from current BBC cursor to end of current target region
+    while( $pos <= $targEnd )
     {
-      # ignore regions ending before target start
-      last unless( seek( BBCFILE, $rdlen << $wdsiz, 1 ) );
-      next;
-    }
-    # skips read to align for regions overlapping target start
-    if( $pos < $targSrt )
-    {
-      my $skip = $targSrt - $pos;
-      last unless( seek( BBCFILE, $skip << $wdsiz, 1 ) );
-      $rdlen -= $skip;
-      $pos = $targSrt;
-    }
-    # debatable if reading whole block into memory would be useful here - reading is buffered anyway
-    if( $wdsiz == 3 ) {$upcstr = "L2";}
-    elsif( $wdsiz == 2 ) {$upcstr = "S2";}
-    else {$upcstr = "C2";}
-    $wdsiz = 1 << $wdsiz;
-    # note: whether the read is actually denoted as on-target is ignorred here - BED definition overrides
-    while( $rdlen )
-    {
-      read( BBCFILE, my $buffer, $wdsiz );
-      if( $pos >= $targSrt )
+      # record the start of the next BBC region in case there adjacent/overlapping targets
+      $lastHead = tell(BBCFILE);
+      last if( read( BBCFILE, my $buffer, $headbytes) != $headbytes );
+      ($pos,$cd) = unpack "L2", $buffer;
+      last if( $pos == 0 ); # start of next contig
+      last if( $pos > $targEnd );
+      $wdsiz = ($cd & 6) >> 1;
+      next if( $wdsiz == 0 );  # ignore 0 read regions (for now)
+      $rdlen = $cd >> 3;
+      printf STDERR "Read BBC region $pos:$rdlen.$wdsiz.%d\n",($cd&1) if( $detailLog );
+      if( $pos+$rdlen < $targSrt )
       {
-        # record coverage where base coverage is non-zero over target
-        ($fcov,$rcov) = unpack $upcstr, $buffer;
-        if( $fcov+$rcov )
-        {
-          $nfwd += $fcov; # forward base reads
-          $nrev += $rcov; # reverse base reads
-          $fcov5p = $pos if( !$fcov5p ); # position in target of first base covered
-          $lcov3p = $pos; # position in target of last base covered
-          ++$tcov; # total base reads on target (not including deletions)
-        }
+        # ignore regions ending before target start
+        last unless( seek( BBCFILE, $rdlen << $wdsiz, 1 ) );
+        next;
       }
-      --$rdlen;
-      last if( ++$pos > $targEnd );
+      # skips read to align for regions overlapping target start
+      if( $pos < $targSrt )
+      {
+        my $skip = $targSrt - $pos;
+        last unless( seek( BBCFILE, $skip << $wdsiz, 1 ) );
+        $rdlen -= $skip;
+          $pos = $targSrt;
+      }
+      # debatable if reading whole block into memory would be useful here - reading is buffered anyway
+      if( $wdsiz == 3 ) {$upcstr = "L2";}
+      elsif( $wdsiz == 2 ) {$upcstr = "S2";}
+      else {$upcstr = "C2";}
+      $wdsiz = 1 << $wdsiz;
+      # note: whether the read is actually denoted as on-target is ignorred here - BED definition overrides
+      while( $rdlen )
+      {
+        read( BBCFILE, my $buffer, $wdsiz );
+        if( $pos >= $targSrt )
+        {
+          # record coverage where base coverage is non-zero over target
+          ($fcov,$rcov) = unpack $upcstr, $buffer;
+          if( $fcov+$rcov )
+          {
+            $nfwd += $fcov; # forward base reads
+            $nrev += $rcov; # reverse base reads
+            $fcov5p = $pos if( !$fcov5p ); # position in target of first base covered
+            $lcov3p = $pos; # position in target of last base covered
+            ++$tcov; # total base reads on target (not including deletions)
+          }
+        }
+        --$rdlen;
+        last if( ++$pos > $targEnd );
+      }
     }
   }
   # output original BED file fields with appended coverage data
@@ -310,8 +312,9 @@ sub loadBCI
 
 # Move the open BCC file cursor to the position for reading the specified chromosome index (0-based)
 # and read position (1-based) <= specified coordinate. Here it is assumed read locations will be
-# given in order so no reset of the file cursor is only allowed to be forwards.
-# Returns 1 if the cursor was advanced.
+# given in order so reset of the file cursor is only allowed to be forwards.
+# Code exists with error message if reading not initiated or contig/position is out of range.
+# Returns 0 if the contig read for unanticipated input or there are no reads at all for the current contig/read block.
 sub bciSeekForward
 {
   if( !$bciIndexSize )
@@ -331,11 +334,11 @@ sub bciSeekForward
   $bciLastChr = $chromIdx;
   my $blockSrt = $bciIndex[$blockIdx];
   printf STDERR "Block start = $blockSrt at index $blockIdx, file at %d\n", tell(BBCFILE) if( $detailLog );
-  if( $blockSrt > tell(BBCFILE) )
-  {
-    seek(BBCFILE,$blockSrt,0);
-    return 1;
-  }
-  return 0;
+  # skip non-represented contigs - ok since BBCFILE starts with contig names - 0 seek not allowed
+  print STDERR "Block start = 0 for $chromIdx,$srt\n" unless( $blockSrt );
+  return 0 unless( $blockSrt );
+  my $fpos = tell(BBCFILE);
+  seek(BBCFILE,$blockSrt,0) if( $blockSrt > $fpos );
+  return 1;
 }
 

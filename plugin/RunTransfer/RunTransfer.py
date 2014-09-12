@@ -11,7 +11,7 @@ import subprocess
 from ion.plugin import *
 
 class RunTransfer(IonPlugin):
-    version = "4.2-r%s" % filter(str.isdigit,"$Revision$")
+    version = "4.2-r%s" % filter(str.isdigit,"87667")
     DEBUG = False
     author = "bernard.puc@thermofisher.com"
 

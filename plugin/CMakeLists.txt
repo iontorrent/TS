@@ -28,6 +28,7 @@ configure_file (
 
 set(PLUGINS
 AssemblerSPAdes
+ampliSeqRNA
 RunRecognitION
 coverageAnalysis
 sampleID

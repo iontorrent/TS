@@ -63,9 +63,11 @@
             {% else %}
                 <option value=""></option>
                 {% for chipType in step.getPrePopulatedFieldDict.chipTypes %}
-                    {% if chipType.name == step.getCurrentSavedFieldDict.chipType or chipType.name == helper.getStepDict.Application.savedObjects.applProduct.defaultChipType %}
+                    {% if chipType.name == step.getCurrentSavedFieldDict.chipType %}
                         <option SELECTED 
-                    {% else %}
+                    {% elif not helper.isTemplate and chipType.name == helper.getStepDict.Application.savedObjects.applProduct.defaultChipType %}
+                        <option SELECTED 
+                    {% else %}                    
                         <option 
                     {% endif %}
                     value="{{chipType.name}}">Ion {{chipType.getChipDisplayedNamePrefix}}&trade; Chip {{chipType.getChipDisplayedVersion}}</option>
@@ -174,7 +176,7 @@
 
     <div class="span6">                                     
         <label id="barcodeKitLabel">Barcode Set {% if helper.getApplProduct.isBarcodeKitSelectionRequired %}(required){% else %}(optional){% endif %}:</label>
-        <select id="barcodeId" name="barcodeId" {% if helper.isPlanBySample %}disabled="disabled"{% endif %}>
+        <select id="barcodeId" name="barcodeId" {% if helper.isPlanBySample and step.getCurrentSavedFieldDict.barcodeId %}disabled="disabled"{% endif %}>
             <option value=""></option>
             {% for kit in step.getPrePopulatedFieldDict.barcodes %}
                 {% ifequal kit.name step.getCurrentSavedFieldDict.barcodeId %}
@@ -201,7 +203,7 @@
         </select>
     </div>
     <div class="span6">
-        <p class="form-label" rel="tooltip" title="Filter out PCR duplicates"><i class="icon-info-sign"></i> Mark as Duplicates Reads 
+        <p class="form-label" rel="tooltip" title="PCR duplicates will be flagged in the BAM file"><i class="icon-info-sign"></i> Mark as Duplicates Reads 
             <input type="checkbox" id="isDuplicateReads" name="isDuplicateReads" 
                 {% if step.getCurrentSavedFieldDict.isDuplicateReads %}checked="checked"{% endif %} style="vertical-align:top;">
             

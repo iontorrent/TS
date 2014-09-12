@@ -272,7 +272,7 @@ def upload_to_support(support_upload_pk):
     upload.save()
 
     url = settings.SUPPORT_UPLOAD_URL
-    auth_header = {'Authorization': 'Bearer ' + upload.account.access_token}
+    auth_header = make_auth_header(upload.account)
     info = get_ts_info()
     form_data = {
         'contact_email': upload.contact_email,

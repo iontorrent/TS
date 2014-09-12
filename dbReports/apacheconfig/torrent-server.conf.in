@@ -58,7 +58,6 @@ WSGIScriptAlias /admin @ION_INSTALL_PREFIX@/iondb/wsgi.py
     #    Allow from 192.168.0.0/24
     #    Allow from 172.18.0.0/16
     #</Limit>
-    Allow from localhost
     Allow from 127.0.0.0/8
     Allow from ::1
     Satisfy Any
@@ -145,7 +144,8 @@ AliasMatch ^/private/plugins([^/]*)/(.*) /var/www/plugins$1/$2
     Require valid-user
 
     Order allow,deny
-    Allow from localhost
+    Allow from 127.0.0.0/8
+    Allow from ::1
     Satisfy any
 </Location>
 # Force download for content in /auth/.*/download_links/

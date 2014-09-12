@@ -172,8 +172,10 @@ class StepHelperDbLoader():
        
         samplesTable = self._getSamplesTable_from_plan(planned_experiment, step_helper, irInfo)
         if samplesTable:
-            samplesTable = sorted(samplesTable, key=lambda item: item['nucleotideType'])
-            samplesTable = sorted(samplesTable, key=lambda item: item['sampleName'])
+            if planned_experiment.runType == "AMPS_DNA_RNA":
+                samplesTable = sorted(samplesTable, key=lambda item: item['nucleotideType'])
+            else:
+                samplesTable = sorted(samplesTable, key=lambda item: item['sampleName'])
 
             save_plan_step_data.savedFields['samplesTable'] = json.dumps(samplesTable)
         
@@ -583,6 +585,7 @@ class StepHelperDbLoader():
                     barcodeSet = item.dnabarcode.name
                     break
         barcoding_step.savedFields['barcodeSet'] = step_helper.steps[StepNames.KITS].savedFields['barcodeId'] = barcodeSet
+        
         if barcodeSet:
             barcoding_step.prepopulatedFields['planned_dnabarcodes'] = list(dnaBarcode.objects.filter(name=barcodeSet).order_by('id_str'))
 
@@ -628,6 +631,49 @@ class StepHelperDbLoader():
         if samplesTable:
             barcoding_step.savedObjects['samplesTableList'] = samplesTable
             barcoding_step.savedFields['samplesTable'] = json.dumps(samplesTable)
+
+
+
+    def _updatePlanBySampleSpecificStepHelper_barcodeKit(self, step_helper, planned_experiment, sampleset_id):
+        """
+            Hack: For plan by sample set, make sure the barcode kit is pre-set before processing at barcode_by_sample_step_data
+            TODO: Revisit db_loader for plan by sample set!
+        """
+        logger.debug("ENTER step_helper_db_loader._updatePlanBySampleSpecificStepHelper_barcodeKit() planned_experiment.id=%d; sampleset_id=%s" %(planned_experiment.id, sampleset_id))
+  
+        barcoding_step = step_helper.steps[StepNames.BARCODE_BY_SAMPLE]
+        save_plan_step = step_helper.steps[StepNames.SAVE_PLAN_BY_SAMPLE]
+                        
+        planDisplayedName = getPlanDisplayedName(planned_experiment)
+        
+        existing_plan = step_helper.isEdit() or step_helper.isCopy()
+        
+        if sampleset_id:
+            sampleset = SampleSet.objects.get(pk=sampleset_id)
+        else:
+            sampleset = planned_experiment.sampleSet
+
+        save_plan_step.savedObjects[SavePlanBySampleFieldNames.SAMPLESET] = sampleset
+        
+        sorted_sampleSetItems = list(sampleset.samples.all().order_by("sample__displayedName"))
+
+        # Pick barcode set to use:
+        #   1. Edit/Copy - get from plan
+        #   2. Create - get from sampleSetItems or, if none, the barcode set selected in the plan template
+        barcodeSet = planned_experiment.get_barcodeId()
+        if not existing_plan:
+            for item in sorted_sampleSetItems:
+                if item.dnabarcode:
+                    barcodeSet = item.dnabarcode.name
+                    break
+                
+        logger.debug("step_helper_db_loader._updatePlanBySampleSpecificStepHelper_barcodeKit() planned_experiment.id=%d; barcodeSet=%s" %(planned_experiment.id, barcodeSet))
+
+        ##TODO-uncomment-after-4.2.x-patch-to-use-constants barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SET] = step_helper.steps[StepNames.KITS].savedFields[KitsFieldNames.BARCODE_ID] = barcodeSet
+        barcoding_step.savedFields["barcodeSet"] = step_helper.steps[StepNames.KITS].savedFields["barcodeId"] = barcodeSet
+        
+        #crucial step
+        barcoding_step.updateSavedFieldsForSamples()
 
 
     def _getIRinfo(self, planned_experiment):
@@ -821,12 +867,13 @@ class StepHelperDbLoader():
         '''
             Get a step helper from a template planned experiment.
         '''
-        logger.debug("ENTER step_helper_db_loader.getStepHelperForTemplatePlannedExperiment() step_helper_type=%s; pe_id=%s" %(step_helper_type, str(pe_id)))
+        #logger.debug("ENTER step_helper_db_loader.getStepHelperForTemplatePlannedExperiment() step_helper_type=%s; pe_id=%s" %(step_helper_type, str(pe_id)))
 
         planned_experiment = PlannedExperiment.objects.get(pk=pe_id)
         if not planned_experiment.isReusable:
             raise ValueError("You must pass in a template id, not a plan id.")
         
+                    
         runType = planned_experiment.runType
         if runType:
             runTypeObjs = RunType.objects.filter(runType = runType)
@@ -841,8 +888,14 @@ class StepHelperDbLoader():
         planDisplayedName = getPlanDisplayedName(planned_experiment)
         
         step_helper.parentName = planDisplayedName
+
+        #retrieve and set barcode kit info before the rest of the logic is executed
+        if step_helper.isPlan() and step_helper.isPlanBySample():
+            self._updatePlanBySampleSpecificStepHelper_barcodeKit(step_helper, planned_experiment, sampleset_id)
+
         
         self.updateUniversalStepHelper(step_helper, planned_experiment)
+
         if step_helper.isPlan() and step_helper.isPlanBySample():
             self.updatePlanBySampleSpecificStepHelper(step_helper, planned_experiment, sampleset_id)
         elif step_helper.isPlan():

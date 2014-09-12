@@ -487,6 +487,10 @@ def exp_kwargs(d, folder, logobj):
     if ret['barcodeKitName'].lower() == 'none':
         ret['barcodeKitName'] = ''
 
+    #defensive code to intercept incorrect data coming from explog
+    if ret['reference'].lower() == 'none':
+        ret['reference'] = ''
+
     if len(d.get('blocks', [])) > 0:
         ret['rawdatastyle'] = 'tiled'
         ret['autoAnalyze'] = False

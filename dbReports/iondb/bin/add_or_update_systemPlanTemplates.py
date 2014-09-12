@@ -306,10 +306,7 @@ def add_or_update_sys_template(planDisplayedName, application, applicationGroup 
             "runType" : application, "usePreBeadfind" : True, "usePostBeadfind" : True, "preAnalysis" : True, 
             "chipBarcode" : "", "planPGM" : "",
             "templatingKitName" : templateKitName, "controlSequencekitname" : controlSeqKitName, "samplePrepKitName" : samplePrepKitName,
-            "metaData" : "", "date" : currentTime, "applicationGroup" : applicationGroup_obj, "sampleGrouping" : sampleGrouping_obj})
-
-            ##20140422-pending on OCP requirement finalization
-            ##"metaData" : "", "date" : currentTime, "applicationGroup" : applicationGroup_obj, "sampleGrouping" : sampleGrouping_obj, "categories" : categories})
+            "metaData" : "", "date" : currentTime, "applicationGroup" : applicationGroup_obj, "sampleGrouping" : sampleGrouping_obj, "categories" : categories})
     else:
         sysTemplate, isCreated = models.PlannedExperiment.objects.get_or_create(isSystemDefault = isSystemDefault, isSystem = True, 
             isReusable = True, isPlanGroup = False,
@@ -318,10 +315,7 @@ def add_or_update_sys_template(planDisplayedName, application, applicationGroup 
             "runType" : application, "usePreBeadfind" : True, "usePostBeadfind" : False, "preAnalysis" : True,
             "chipBarcode" : "", "planPGM" : "",
             "templatingKitName" : templateKitName, "controlSequencekitname" : controlSeqKitName, "samplePrepKitName" : samplePrepKitName, 
-            "metaData" : "", "date" : currentTime, "applicationGroup" : applicationGroup_obj, "sampleGrouping" : sampleGrouping_obj})
-
-            ##20140422-pending on OCP requirement finalization            
-            ##"metaData" : "", "date" : currentTime, "applicationGroup" : applicationGroup_obj, "sampleGrouping" : sampleGrouping_obj, "categories" : categories})
+            "metaData" : "", "date" : currentTime, "applicationGroup" : applicationGroup_obj, "sampleGrouping" : sampleGrouping_obj, "categories" : categories})
         
     if isCreated:
             print "...Created System template.id=%d; name=%s; isSystemDefault=%s" %(sysTemplate.id, sysTemplate.planDisplayedName, str(isSystemDefault))
@@ -569,9 +563,6 @@ def add_or_update_all_system_templates():
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "TARS_16S", "Metagenomics", "316v2", True, False, False, "Ion PGM Template OT2 400 Kit", None, None, "Self")
         finish_sys_template(sysTemplate, isCreated, "316v2", 850, "IonPGM400Kit", "IonPlusFragmentLibKit", "", True, False, False, "", "", "", {}, instrumentType)          
 
-
-        #add_or_update_sys_template(planDisplayedName, application, applicationGroup = "DNA", isPGM = True, isSystemDefault = False, isMuSeek = False, templateKitName = "", controlSeqKitName = None, samplePrepKitName = None, sampleGrouping = None):    
-        #finish_creating_sys_template(currentTime, sysTemplate, chipType = "", flowCount = 500, seqKitName = "", libKitName = "", barcodeKitName = "", isPGM = True, isSystemDefault = False, isMuSeek = False, targetRegionBedFile = "", hotSpotRegionBedFile = "", reference = "", plugins = {}):        
     
         #Oncomine
         #22
@@ -604,6 +595,41 @@ def add_or_update_all_system_templates():
         templateName = "Ion AmpliSeq Colon Lung v2 with RNA Lung Fusion Panel"        
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318v2", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Onconet")      
         finish_sys_template(sysTemplate, isCreated, "318v2", 500, DEFAULT_SEQ_KIT_NAME,  "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
+             
+        
+        #28
+        templateName = "Ion AmpliSeq Transcriptome Human Gene Expression Panel"        
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "RNA", "P1.1.17", False, False, False, "Ion PI Template OT2 200 Kit v3", "", None)      
+ 
+        #pre-select plugins 
+        plugins = {}
+        pluginUserInput = {}
+ 
+        selectedPlugins = models.Plugin.objects.filter(name__in = ["ampliSeqRNA"], selected = True, active = True)
+ 
+        for selectedPlugin in selectedPlugins:
+            pluginDict = {
+                          "id" : selectedPlugin.id,
+                          "name" : selectedPlugin.name,
+                          "version" : selectedPlugin.version,
+                          "userInput" : pluginUserInput,
+                          "features": []
+                          }
+             
+            plugins[selectedPlugin.name] = pluginDict 
+         
+        if len(selectedPlugins) < 1:       
+            ionCommunityPluginDict = {
+                          "id" : 9999,
+                          "name" : "ampliSeqRNA",
+                          "version" : "1.0",
+                          "userInput" : pluginUserInput,
+                          "features": []
+                          }        
+                                                     
+            plugins["ampliSeqRNA"] = ionCommunityPluginDict
+  
+        finish_sys_template(sysTemplate, isCreated, "P1.1.17", 500, DEFAULT_PROTON_SEQ_KIT_NAME,  "Ion AmpliSeq Library Kit Plus", "IonXpress", False, False, False, "/hg19_AmpliSeq_Transcriptome_ERCC_v1/unmerged/detail/hg19_AmpliSeq_Transcriptome_ERCC_v1.bed", "", "hg19_AmpliSeq_Transcriptome_ERCC_v1", plugins, instrumentType) 
 
         
     except:

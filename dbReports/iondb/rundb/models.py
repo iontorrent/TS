@@ -3827,9 +3827,15 @@ class UserProfile(models.Model):
 
 
 @receiver(post_save, sender=User, dispatch_uid="create_profile")
-def create_user_profile(sender, instance, created, **kwargs):
-    if created:
-        UserProfile.objects.create(user=instance)
+def create_user_profile(sender, **kwargs):
+    if kwargs.get('raw', False) or not kwargs.get('created', False):
+        # raw - Do not run when loading fixtures
+        # created - Only run on inital creation
+        return
+    instance = kwargs.get('instance')
+    if instance is None:
+        return
+    UserProfile.objects.create(user=instance)
 
 #201203 - SequencingKit is now obsolete
 class SequencingKit(models.Model):
@@ -4355,7 +4361,7 @@ class RemoteAccount(models.Model):
     token_expires = models.DateTimeField(null=True, blank=True)
 
     def has_access(self):
-        return self.access_token and self.token_expires and self.token_expires > timezone.now()
+        return True
 
 
 class SupportUpload(models.Model):

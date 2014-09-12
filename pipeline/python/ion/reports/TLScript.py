@@ -768,7 +768,7 @@ if __name__=="__main__":
 
 
                         if env['chipType'] == 'P1.1.17':
-                            if aq17 > 17000000000:
+                            if aq17 > 18000000000:
                                 keep_raw_data = True
 
                         if env['chipType'] == 'P1.0.19':
