@@ -6,7 +6,7 @@ if(LSB_RELEASE_COMMAND)
         OUTPUT_VARIABLE TMP_LSB_RELEASE_CODENAME
         OUTPUT_STRIP_TRAILING_WHITESPACE)
     string(TOLOWER ${TMP_LSB_RELEASE_CODENAME} LSB_RELEASE_CODENAME)
-    message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
+    message(STATUS "LSB release codename: "${LSB_RELEASE_CODENAME}"")
 endif(LSB_RELEASE_COMMAND) 
 
 # If defined while running cmake look for mkl
@@ -26,7 +26,7 @@ mark_as_advanced(ION_USE_MKL)
 option(ION_USE_SYSTEM_CUDA "Use CUDA system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_CUDA)
 
-if (${LSB_RELEASE_CODENAME} STREQUAL "sid")
+if ("${LSB_RELEASE_CODENAME}" STREQUAL "sid")
   option(ION_USE_CUDA "Compile CUDA code" ON)
 else()
   option(ION_USE_CUDA "Compile CUDA code" ON)
@@ -39,24 +39,24 @@ mark_as_advanced(ION_USE_SYSTEM_SAMTOOLS)
 option(ION_USE_SYSTEM_BAMTOOLS "Use bamtools system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
 
-if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "wheezy" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR 
-    ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "raring")
+if ("${LSB_RELEASE_CODENAME}" STREQUAL "sid" OR
+    "${LSB_RELEASE_CODENAME}" STREQUAL "jessie" OR
+    "${LSB_RELEASE_CODENAME}" STREQUAL "wheezy" OR
+    "${LSB_RELEASE_CODENAME}" STREQUAL "trusty" OR 
+    "${LSB_RELEASE_CODENAME}" STREQUAL "saucy" OR
+    "${LSB_RELEASE_CODENAME}" STREQUAL "raring")
   option(ION_USE_SYSTEM_FFTW "Use fftw system libraries" ON)
 else()
   option(ION_USE_SYSTEM_FFTW "Use fftw system libraries" OFF)
 endif()
 mark_as_advanced(ION_USE_SYSTEM_FFTW)
 
-if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "wheezy" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "raring")
+if ("${LSB_RELEASE_CODENAME}" STREQUAL "sid" OR
+    "${LSB_RELEASE_CODENAME}" STREQUAL "jessie" OR
+    "${LSB_RELEASE_CODENAME}" STREQUAL "wheezy" OR
+    "${LSB_RELEASE_CODENAME}" STREQUAL "trusty" OR
+    "${LSB_RELEASE_CODENAME}" STREQUAL "saucy" OR
+    "${LSB_RELEASE_CODENAME}" STREQUAL "raring")
   option(ION_USE_SYSTEM_HDF5 "Use hdf5 system libraries" ON)
 else()
   option(ION_USE_SYSTEM_HDF5 "Use hdf5 system libraries" OFF)

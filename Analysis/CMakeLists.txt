@@ -317,7 +317,7 @@ if(ION_USE_CUDA)
   endif()
 endif()
 
-if (${LSB_RELEASE_CODENAME} STREQUAL "lucid")
+if ("${LSB_RELEASE_CODENAME}" STREQUAL "lucid")
     set(LUCID_EXTRA_LIB lapack_atlas)
 endif()
 
