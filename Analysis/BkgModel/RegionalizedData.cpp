@@ -68,6 +68,7 @@ void RegionalizedData::NoData()
 {
   // I cannot believe I have to do this to make cppcheck happy
   // data branch
+  // outputCount=0;
   isBestRegion = false;
 
   region = NULL;
@@ -334,7 +335,7 @@ void RegionalizedData::UpdateTracesFromImage (SynchDat &chunk, FlowBufferInfo &m
 // t_offset_empty = 4.0
 void RegionalizedData::RezeroTraces (float t_start, float t_mid_nuc, float t_offset_beads, float t_offset_empty, int flow_buffer_index, int flow_block_size)
 {
-  emptytrace->RezeroReference (t_start, t_mid_nuc-t_offset_beads, flow_buffer_index);
+  emptytrace->RezeroReference (t_start, t_mid_nuc-t_offset_empty, flow_buffer_index);
   my_trace.RezeroBeads (t_start, t_mid_nuc - t_offset_beads, flow_buffer_index, flow_block_size);
 }
 
@@ -568,3 +569,16 @@ void RegionalizedData::SetUpEmphasisForStandardCompression(GlobalDefaultsForBkgM
        global_defaults.data_control.point_emphasis_by_compression;
 
 }
+
+
+bool RegionalizedData::isRegionCenter(int ibd)
+{
+    BeadParams *p= &my_beads.params_nn[ibd];
+    bool isCenter = (p->x == (region->w/2) && p->y==(region->h/2)) ? true: false;
+    //if (isCenter) cout << "outputCount=" << ++outputCount << " ibd=" << ibd << " x=" << p->x << " y=" << p->y << " isCenter=" << isCenter<< " w=" << region->w << " h=" << region->h<< endl << flush;
+    return (isCenter);
+}
+
+
+
+

@@ -6,7 +6,7 @@ from iondb.bin import djangoinit
 from iondb.rundb import models
 from datetime import timedelta, datetime
 from iondb.rundb.data.dmactions_types import FILESET_TYPES
-from iondb.rundb.data.dmactions import update_diskspace
+from iondb.rundb.data.dm_utils import update_diskspace
 import iondb.settings as settings
 
 THRESHOLD_DAYS = None

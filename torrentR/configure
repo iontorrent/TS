@@ -1,4 +1,4 @@
-
+#!/bin/bash
 if [ -z $TS_SOURCE_ROOT ]
 then
   echo "ERROR: TS_SOURCE_ROOT is missing"
@@ -54,6 +54,11 @@ then
   PHASE_INC=$TS_SOURCE_ROOT/Analysis/BaseCaller
 fi
 
+if [$RECALIBRATION_INC == ""]
+then
+  RECALIBRATION_INC=$TS_SOURCE_ROOT/Analysis/Recall
+fi
+
 if [$ANALYSIS_IMAGE == ""]
 then
   ANALYSIS_IMAGE=$TS_SOURCE_ROOT/Analysis/Image
@@ -97,13 +102,20 @@ fi
 
 if [$ARMADILLO_INC == ""]
 then
-    ARMADILLO_INC=$TS_BUILD_ROOT/armadillo-4.300.0+ion0-install/include
+    ARMADILLO_INC=$TS_BUILD_ROOT/armadillo-4.300.8+ion0-install/include
 fi
 
 if [$HDF5_INC == ""]
 then
-    HDF5_INC=$TS_BUILD_ROOT/hdf5-1.8.8-install/include
-    HDF5_LIB=$TS_BUILD_ROOT/hdf5-1.8.8-install/lib
+    # LUCID compatibility
+    CODENAME=`lsb_release -cs`
+    if [ $CODENAME == "lucid" ]; then
+        HDF5_INC=$TS_BUILD_ROOT/hdf5-1.8.8-install/include
+        HDF5_LIB=$TS_BUILD_ROOT/hdf5-1.8.8-install/lib/libhdf5.a
+    else
+        HDF5_INC=/usr/include
+        HDF5_LIB=-lhdf5
+    fi
 fi
 
 if [$BAMTOOLS_ROOT == ""]
@@ -119,11 +131,11 @@ then
 fi
 
 
-PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$BAMTOOLS_INC -I$ANALYSIS_INC -I$ANALYSIS_IMAGE -I$ANALYSIS_MASK -I$ANALYSIS_ORG_INC -I$BUILDTOOLS_INC -I$BKGMODEL_INC -I$BKGMODEL_FITTERS_INC -I$BKGMODEL_WRITERS_INC -I$BKGMODEL_BOOK_INC -I$BKGMODEL_MATH_INC -I$PHASE_INC -I$WELLS_INC -I$UTIL_INC -I${BUILD_INC} -I${ANALYSIS_REPLAY_INC} -I$ANALYSIS_SEPARATOR_INC -I$SYNCHDAT_INC -I$HDF5_INC -I$ARMADILLO_INC -I$JSON_INC -Wall -g"
+PKG_CPPFLAGS=`${R_HOME}/bin/Rscript -e "Rcpp:::CxxFlags()"`" -I$BAMTOOLS_INC -I$ANALYSIS_INC -I$ANALYSIS_IMAGE -I$ANALYSIS_MASK -I$ANALYSIS_ORG_INC -I$BUILDTOOLS_INC -I$BKGMODEL_INC -I$BKGMODEL_FITTERS_INC -I$BKGMODEL_WRITERS_INC -I$BKGMODEL_BOOK_INC -I$BKGMODEL_MATH_INC -I$PHASE_INC -I$RECALIBRATION_INC -I$WELLS_INC -I$UTIL_INC -I${BUILD_INC} -I${ANALYSIS_REPLAY_INC} -I$ANALYSIS_SEPARATOR_INC -I$SYNCHDAT_INC -I$HDF5_INC -I$ARMADILLO_INC -I$JSON_INC -Wall -g"
 
 CPPFLAGS=-O2
 
-PKG_LIBS=`${R_HOME}/bin/Rscript -e "Rcpp:::LdFlags()"`" $ANALYSIS_LIB/libion-analysis.a $ANALYSIS_LIB/libfile-io.a $HDF5_LIB/libhdf5.a $BAMTOOLS_LIB/libbamtools.a -llapack -lblas -L/usr/lib"
+PKG_LIBS=`${R_HOME}/bin/Rscript -e "Rcpp:::LdFlags()"`" $ANALYSIS_LIB/libion-analysis.a $ANALYSIS_LIB/libfile-io.a $HDF5_LIB $BAMTOOLS_LIB/libbamtools.a -llapack -lblas -L/usr/lib"
 
 sed -e "s|@PKG_LIBS@|${PKG_LIBS}|" \
     -e "s|@PKG_CPPFLAGS@|${PKG_CPPFLAGS}|" \

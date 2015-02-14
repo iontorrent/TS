@@ -6,12 +6,16 @@
 RegionTracker::RegionTracker()
 {
   restart = false;
+  tmidnuc_smoother.SetAccessFn( & reg_params::AccessTMidNuc );
   copy_drift_smoother.SetAccessFn( & reg_params::AccessCopyDrift );
   ratio_drift_smoother.SetAccessFn( & reg_params::AccessRatioDrift );
 }
 
 RegionTracker::RegionTracker( const CommandLineOpts * inception_state )
   : rp(), rp_high(), rp_low(),
+  tmidnuc_smoother( inception_state->bkg_control.regional_smoothing.alpha,
+                    inception_state->bkg_control.regional_smoothing.gamma,
+                    & reg_params::AccessTMidNuc ), 
   copy_drift_smoother( inception_state->bkg_control.regional_smoothing.alpha,
                        inception_state->bkg_control.regional_smoothing.gamma,
                        & reg_params::AccessCopyDrift ),

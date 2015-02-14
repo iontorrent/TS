@@ -41,6 +41,8 @@ public:
 
   void Initialize(OptArgs& opts, const ion::FlowOrder& flow_order);
 
+  bool InitializeModelFromFile(string calibration_file_name);
+
   void CalibrateRead(int x, int y, vector<char>& sequence, vector<float>& normalized_measurements,
       const vector<float>& prediction, const vector<float>& state_inphase) const;
 

@@ -14,7 +14,8 @@ void BeadfindControlOpts::DefaultBeadfindControl()
   bfLibFilterQuantile = 1;
   skipBeadfindSdRecover = 1;
   beadfindThumbnail = 0;
-  beadfindLagOneFilt = 0;
+  beadfindSmoothTrace = false;
+  filterNoisyCols = "none";
   beadMaskFile = NULL;
   maskFileCategorized = false;
   sprintf (bfFileBase, "beadfind_post_0003.dat");
@@ -26,7 +27,7 @@ void BeadfindControlOpts::DefaultBeadfindControl()
   numThreads = -1;
   minTfPeakMax = 40.0f;
   minLibPeakMax = 15.0f;
-  bfOutputDebug = 0;
+  bfOutputDebug = 1;
   bfMult = 1.0;
   sdAsBf = true;
   gainCorrection = true;
@@ -64,13 +65,13 @@ void BeadfindControlOpts::PrintHelp()
 	printf ("     --beadfind-minlivesnr   DOUBLE            beadfind min live lib SNR [4.0]\n");
 	printf ("     --beadfind-min-tf-snr   DOUBLE            beadfind min live tf SNR [-1]\n");
 	printf ("     --beadfind-tf-min-peak  FLOAT             beadfind min tf peakmMax [40.0]\n");
-	printf ("     --beadfind-lib-min-peak FLOAT             beadfind min lib peakmMax [15.0]\n");
+	printf ("     --beadfind-lib-min-peak FLOAT             beadfind min lib peakmMax [10.0]\n");
 	printf ("     --beadfind-lib-filt     DOUBLE            beadfind lib filter quantile [1.0]\n");
 	printf ("     --beadfind-tf-filt      DOUBLE            beadfind tf filter quantile [1.0]\n");
 	printf ("     --beadfind-skip-sd-recover          INT   beadfind skip beadfind sd recover [1]\n");
 	printf ("     --beadfind-thumbnail    INT               beadfind thumbnail [0]\n");
 	printf ("     --beadfind-sep-ref      BOOL              beadfind use seperated ref [false]\n");
-	printf ("     --beadfind-lagone-filt  INT               beadfind lagone filt [0]\n");
+	printf ("     --beadfind-smooth-trace BOOL              beadfind lagone filt [0]\n");
 	printf ("     --beadfind-diagnostics  INT               beadfind output debug [0]\n");
 	printf ("     --beadfind-washout      BOOL              beadfind washout [false]\n");
 	printf ("     --beadfind-gain-correction          BOOL  beadfind gain correction [true]\n");
@@ -118,14 +119,15 @@ void BeadfindControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 	bfMinLiveLibSnr = RetrieveParameterDouble(opts, json_params, '-', "beadfind-minlivesnr", 4.0);
 	bfMinLiveTfSnr = RetrieveParameterDouble(opts, json_params, '-', "beadfind-min-tf-snr", -1);
 	minTfPeakMax = RetrieveParameterFloat(opts, json_params, '-', "beadfind-tf-min-peak", 40.0);
-	minLibPeakMax = RetrieveParameterFloat(opts, json_params, '-', "beadfind-lib-min-peak", 15.0);
+	minLibPeakMax = RetrieveParameterFloat(opts, json_params, '-', "beadfind-lib-min-peak", 10.0);
 	bfLibFilterQuantile = RetrieveParameterDouble(opts, json_params, '-', "beadfind-lib-filt", 1.0);
 	bfTfFilterQuantile = RetrieveParameterDouble(opts, json_params, '-', "beadfind-tf-filt", 1.0);
 	skipBeadfindSdRecover = RetrieveParameterInt(opts, json_params, '-', "beadfind-skip-sd-recover", 1);
 	beadfindThumbnail = RetrieveParameterInt(opts, json_params, '-', "beadfind-thumbnail", 0);
+        filterNoisyCols = RetrieveParameterString(opts, json_params, '-', "beadfind-filt-noisy-col", "none");
 	beadfindUseSepRef = RetrieveParameterBool(opts, json_params, '-', "beadfind-sep-ref", false);
-	beadfindLagOneFilt = RetrieveParameterInt(opts, json_params, '-', "beadfind-lagone-filt", 0);
-	int defaultVal = 0;
+	beadfindSmoothTrace = RetrieveParameterBool(opts, json_params, '-', "beadfind-smooth-trace", false);
+	int defaultVal = 1;
 	if (isInternalServer())
 	{
 		defaultVal = 2;

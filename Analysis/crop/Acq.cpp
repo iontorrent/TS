@@ -497,6 +497,259 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh, bool ver
 	fclose(fp);
 	return true;
 }
+bool Acq::WriteThumbnailVFC(const char *acqName, int cropx, int cropy, int kernx, int kerny, int region_len_x, int region_len_y, int marginx, int marginy,int ow, int oh, bool verbose)
+{
+    // open up the acq file
+    const RawImage *raw = image->GetImage();
+    FILE *fp;
+    fp = fopen(acqName, "wb");
+    if (!fp) {
+        printf("Warning!  Could not open file: %s for writing?\n", acqName);
+        return false;
+    }
+
+    _file_hdr	fileHdr;
+    _expmt_hdr_v4	expHdr;
+
+//	uint32_t vfr_array[100];
+    uint32_t vfr_array_cnt = 0;
+    uint32_t vfr_total_cnt=0;
+//	uint32_t k;
+    uint32_t offset=0;
+//	uint8_t *buffer = (uint8_t *)malloc(4*w*h);
+//	uint8_t *bptr;
+
+#if 0
+#define ADD_FRAME(cnt,frms) \
+{ \
+    for(k=0;k<cnt;k++) \
+    { \
+        if ((vfr_total_cnt + frms) <= (uint32_t)uncompFrames) \
+        { \
+            vfr_array[vfr_array_cnt++] = frms; \
+            vfr_total_cnt += frms; \
+        } \
+    } \
+}
+
+    ADD_FRAME(1  ,1);   // first frame is always at the base acquisition time
+    ADD_FRAME(1  ,8);   // this accounts for the first second T=1
+    ADD_FRAME(1  ,4);   // this accounts for the first second T=1
+    ADD_FRAME(52 ,1);   // the next 3 seconds  T=5
+    ADD_FRAME(12 ,4);   // the next 3 seconds T=8
+    ADD_FRAME(8  ,8);   // the next 4 seconds T=8
+#endif
+
+    unsigned int sample_rate = image->GetImage()->timestamps[0];
+
+    vfr_array_cnt = raw->frames;
+    vfr_total_cnt = raw->uncompFrames;
+
+    memset(&fileHdr,0,sizeof(fileHdr));
+    memset(&expHdr,0,sizeof(expHdr));
+
+
+    // set up the file header
+    fileHdr.signature = 0xdeadbeef;
+    fileHdr.struct_version = 0x4;
+    fileHdr.header_size = sizeof(_expmt_hdr_v3);
+    unsigned long totalSize = vfr_array_cnt * (ow*oh*2 + sizeof(uint32_t)); // data + timestamp
+    // hdr.fileHdr.data_size = numFrames*w*h*2; // old bad format
+    fileHdr.data_size = totalSize; // new good format
+
+    ByteSwap4(fileHdr.signature);
+    ByteSwap4(fileHdr.struct_version);
+    ByteSwap4(fileHdr.header_size);
+    ByteSwap4(fileHdr.data_size);
+
+    // setup the data header
+    expHdr.first_frame_time = 0;
+    expHdr.rows = oh;
+    expHdr.cols = ow;
+    expHdr.frames_in_file = vfr_array_cnt;
+    expHdr.uncomp_frames_in_file = vfr_total_cnt;
+    expHdr.interlaceType = 5;
+    expHdr.x_region_size = x_region_size;
+    expHdr.y_region_size = y_region_size;
+    expHdr.sample_rate = sample_rate;
+//	expHdr.channel_offset[0] = raw->
+
+    ByteSwap4(expHdr.first_frame_time);
+    ByteSwap2(expHdr.rows);
+    ByteSwap2(expHdr.cols);
+    ByteSwap2(expHdr.frames_in_file);
+    ByteSwap2(expHdr.uncomp_frames_in_file);
+    ByteSwap2(expHdr.interlaceType);
+    ByteSwap2(expHdr.x_region_size);
+    ByteSwap2(expHdr.y_region_size);
+    ByteSwap4(expHdr.sample_rate);
+
+    // write file & data headers
+    fwrite(&fileHdr, sizeof(fileHdr), 1, fp);
+    offset += sizeof(fileHdr);
+    fwrite(&expHdr, sizeof(expHdr), 1, fp);
+    offset += sizeof(expHdr);
+
+    if (verbose)
+        printf("offset=%d %ld %ld\n",offset,sizeof(expHdr),sizeof(fileHdr));
+    // write each frame block (timestamp & frame data)
+    uint32_t frame;
+//	int offset;
+    int ix, iy;
+//	uint16_t *ptr;
+//	unsigned short val;
+    unsigned int rframe=0;
+    unsigned int frameCnt=0;
+    int16_t *frame_data,*sptr;
+
+    frame_data = (int16_t *)malloc(2*ow*oh);
+    int16_t *prev_data = NULL;
+    int16_t *results_data = (int16_t *)malloc(2*ow*oh);
+
+    for(frame=0;frame<vfr_array_cnt;frame++) {
+//		offset = ox+oy*w + rframe*frameStride;
+//		bptr = buffer;
+//		frameCnt = vfr_array[frame];
+//		if((rframe+frameCnt) > (unsigned int)uncompFrames)
+//		{
+//			rframe = numFrames-1;
+//			frameCnt=1;
+//		}
+//		printf("frame %d:  offset=%d\n",frame,offset);
+        uint32_t timestampOut = BYTE_SWAP_4(raw->timestamps[frame]); // write out the last time stamp...
+        fwrite(&timestampOut, sizeof(timestampOut), 1, fp);
+//		bptr = bwrt(&timestampOut, sizeof(timestampOut),bptr);
+        offset += sizeof(timestampOut);
+        if (verbose)
+        {
+            printf("\nframe: %d\t timestamp offset: %d %ld",frame,offset,sizeof(timestampOut));
+        }
+
+//		printf("ts=%d ",sample_rate*(rframe+frameCnt+1));
+        int16_t *ptr = frame_data;
+        uint16_t tmp[4];
+        uint64_t results_len=0;
+        uint32_t comp;
+
+        results_len=0;
+        comp=0;
+
+
+        // save the data for entire thumbnail into frame_data - combining all regions
+        for (int y=0;y<cropy;y++)
+        {
+            int region_origin_y =  y * region_len_y + marginy;
+            for (iy=0; iy<kerny;iy++)
+            {
+                for (int x=0;x<cropx;x++)
+                {
+                    int region_origin_x= x * region_len_x + marginx;
+                    sptr = &raw->image[frame*raw->frameStride+(iy+region_origin_y)*raw->cols+region_origin_x];
+                    for(ix=0;ix<kernx;ix++)
+                    {
+                        *ptr++ = *sptr++ & 0x3fff;
+                    }
+                }
+            }
+        }
+
+
+        if(prev_data) //previous timeframe
+        {
+            if(PrevFrameSubtract(ow,oh,frame_data,prev_data,results_data,&results_len,&comp) == 0)
+            {
+                if (verbose)
+                    printf("\npfc worked %ld!!",results_len);
+                comp = htonl(comp);
+            }
+            else
+            {
+                if (verbose)
+                    printf("\npfc didn't work frame=%d %x",frame,comp);
+            }
+        }
+
+        fwrite(&comp, sizeof(comp), 1, fp);
+        offset += sizeof(comp);
+        if (verbose)
+        {
+            printf("\nframe: %d\t comp offset: %d %ld",frame,offset,sizeof(comp));
+        }
+
+        if(!comp)
+        {
+            ptr = frame_data;
+            for (int y=0;y<cropy;y++)
+            {
+                for (int x=0;x<cropx;x++)
+                {
+                    for(iy=0;iy<kerny;iy++)
+                    {
+                        for(ix=0;ix<kernx;ix++)
+                        {
+                            tmp[0] = BYTE_SWAP_2(*ptr);
+                            fwrite(&tmp[0],2,1,fp);
+                            offset+=2;
+                            ptr++;
+                        }
+                    }
+                }
+            }
+//			offset += oh*ow*2;
+            if (verbose)
+            {
+                printf("\nframe: %d\t !comp tmp offset: %d %d",frame,offset,oh*ow*2);
+            }
+        }
+        else
+        {
+            // write out the compressed data
+            fwrite(results_data,1,results_len,fp);
+            offset += results_len;
+            if (verbose)
+            {
+                printf("\nframe: %d\t results compressed data offset: %d ",frame,offset);
+            }
+        }
+
+
+        if(prev_data)
+        {
+            int16_t *tmp_data = frame_data;
+            frame_data = prev_data;
+            prev_data = tmp_data;
+        }
+        else
+        {
+            prev_data = frame_data;
+            frame_data = (int16_t *)malloc(2*ow*oh);
+        }
+
+        if (verbose)
+        {
+        if(comp)
+            printf(".");
+        else
+            printf("-");
+        fflush(stdout);
+        }
+
+//					printf("\nval=%x %x %x %x   ptr=%x %x %x %x\n",val[0],val[1],val[2],val[3],ptr[0],ptr[1],ptr[2],ptr[3]);
+
+        rframe += frameCnt;
+    }
+
+    if (verbose)
+        printf("\n  Size=%d\n",offset);
+
+    free(frame_data);
+    free(results_data);
+    if(prev_data)
+        free(prev_data);
+    fclose(fp);
+    return true;
+}
+
 
 #if 0
 int Acq::PrevFrameSubtract(int elems, int16_t *framePtr, int16_t *prevFramePtr, int16_t *results, uint64_t *out_len, uint32_t ow, uint32_t oh)

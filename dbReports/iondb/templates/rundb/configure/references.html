@@ -92,8 +92,8 @@
         <div class="clearfix">
           <h1 style="float:left;">Reference Sequences</h1>
           <div class="pull-right">
-            <a href="{% url "references_genome_download" %}" class="btn">Get Ion References</a>
-            <a href="{% url "references_genome_add" %}" class="btn btn-primary" id="add_genome">Add Reference Sequence</a>
+            <a href="{% url "references_genome_download" %}" class="btn">Import References</a>
+            <a href="{% url "references_genome_add" %}" class="btn btn-primary" id="add_genome">Upload Custom Reference</a>
           </div>
         </div>
         <div id="referenceSequences"></div>
@@ -502,30 +502,7 @@ $(document).ready(function() {
     Now rebuilding #= data.references.length # references! Refresh the page to view their status.
   </div>
 </script>
-<script type="text/x-kendo-template" id="rebuildAlertTemplate">
-  <div class="alert alert-block" id="rebuild_alert">
-    <a data-dismiss="alert" class="close">&times;</a>
-    <h4 class="alert-heading">Warning!</h4>
-    <p>
-    Due to the upgrade of TMAP, the TMAP specific index files for your
-    references are stale, and need to be rebuilt by TMAP for each
-    reference before that reference can be used for alignments.  We ask
-    you to manually initiate this process because the index rebuild may
-    take a few hours for larger genomes during which time use of the
-    server is unadvisable.
-    </p>
-    <p>
-      We recommend you rebuild all indices at the end of the work day;
-      however, you will find controls to rebuild each index manually on that
-      index's page.
-    </p>
-    <p>
-      <button href="\#" class="btn btn-primary" id="rebuild_all">
-        Rebuild All Now
-      </button>
-    </p>
-  </div>
-</script>
+
 <script id="barcodesActionColumnTemplate" type="text/x-kendo-template">
 <div class="btn-group">
   # var _id = id;# 
@@ -689,20 +666,6 @@ $(document).ready(function(){
                 , sortable: true
             }
         ]
-        , dataBound: function(e) {
-        if ($('#obsoleteReferenceSequences').data("kendoGrid").dataSource.data().length > 0) {
-        var encodingTemplate = kendo.template($("#rebuildAlertTemplate").html());
-        $('#sys_messages').html(encodingTemplate({}));
-        $("#rebuild_all").click(function(e){
-          e.preventDefault();
-              $.get("/configure/references/genome/rebuild/all", function(data){
-                  $("#rebuild_alert").hide();
-            var rebuildingTemplate = kendo.template($("#rebuildingAlertTemplate").html());
-                  $("#sys_messages").append(rebuildingTemplate({data:data})).fadeIn('slow');
-              });
-          });
-      } 
-        }
     });
   var testFragments = $("#testFragments").kendoGrid({
         dataSource: {

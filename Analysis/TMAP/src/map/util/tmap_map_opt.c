@@ -149,6 +149,7 @@ static char *tmap_map_opt_input_types[] = {"INT", "FLOAT", "NUM", "FILE", "STRIN
  */
 // global options
 __tmap_map_opt_option_print_func_chars_init(fn_fasta, "not using")
+__tmap_map_opt_option_print_func_chars_init(bed_file, "not using")
 __tmap_map_opt_option_print_func_char_array_init(fn_reads, fn_reads_num, "stdin")
 __tmap_map_opt_option_print_func_reads_format_init(reads_format)
 __tmap_map_opt_option_print_func_chars_init(fn_sam, "stdout")
@@ -201,6 +202,16 @@ __tmap_map_opt_option_print_func_int_init(realign_cliptype)
 
 __tmap_map_opt_option_print_func_tf_init(report_stats)
 __tmap_map_opt_option_print_func_chars_init(realign_log, "")
+
+// end tandem repeat clip
+__tmap_map_opt_option_print_func_tf_init(do_repeat_clip)
+
+// context-dependent gaps
+__tmap_map_opt_option_print_func_int_init(do_hp_weight)
+// __tmap_map_opt_option_print_func_int_init(context_noclip)
+
+// alignment length filtering
+__tmap_map_opt_option_print_func_int_init(min_al_len)
 
 // flowspace
 __tmap_map_opt_option_print_func_int_init(fscore)
@@ -471,6 +482,12 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            "FASTA reference file name",
                            NULL,
                            tmap_map_opt_option_print_func_fn_fasta,
+                           TMAP_MAP_ALGO_GLOBAL);
+  tmap_map_opt_options_add(opt->options, "bed-file", required_argument, 0, 0,
+                           TMAP_MAP_OPT_TYPE_FILE,
+                           "bed file for AmpliSeq",
+                           NULL,
+                           tmap_map_opt_option_print_func_bed_file,
                            TMAP_MAP_ALGO_GLOBAL);
   tmap_map_opt_options_add(opt->options, "fn-reads", required_argument, 0, 'r', 
                            TMAP_MAP_OPT_TYPE_FILE,
@@ -754,21 +771,41 @@ tmap_map_opt_init_helper(tmap_map_opt_t *opt)
                            realignment_clip_type,
                            tmap_map_opt_option_print_func_realign_cliptype,
                            TMAP_MAP_ALGO_GLOBAL);
-    
+
   tmap_map_opt_options_add(opt->options, "stats", no_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_NONE,
                            "report processing statistics",
                            NULL,
                            tmap_map_opt_option_print_func_report_stats,
                            TMAP_MAP_ALGO_GLOBAL);
-			   
+
   tmap_map_opt_options_add(opt->options, "r-log", required_argument, 0, 0, 
                            TMAP_MAP_OPT_TYPE_FILE,
                            "the realignment log file name",
                            NULL,
                            tmap_map_opt_option_print_func_realign_log,
                            TMAP_MAP_ALGO_GLOBAL);
-  
+  // alignment end repeat clipping
+  tmap_map_opt_options_add(opt->options, "do-repeat-clip", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "clip tandem repeats from the alignment 3' ends",
+                           NULL,
+                           tmap_map_opt_option_print_func_do_repeat_clip,
+                           TMAP_MAP_ALGO_GLOBAL);
+  // context-dependent indel weights
+  tmap_map_opt_options_add(opt->options, "context", no_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_NONE,
+                           "realign with context-dependent gap scores",
+                           NULL,
+                           tmap_map_opt_option_print_func_do_hp_weight,
+                           TMAP_MAP_ALGO_GLOBAL);
+  // filtering by alignment length
+  tmap_map_opt_options_add(opt->options, "min-al-len", required_argument, 0, 0, 
+                           TMAP_MAP_OPT_TYPE_INT,
+                           "Filter out alignments shorter then given length",
+                           NULL,
+                           tmap_map_opt_option_print_func_min_al_len,
+                           TMAP_MAP_ALGO_GLOBAL);
   // flowspace options
   tmap_map_opt_options_add(opt->options, "pen-flow-error", required_argument, 0, 'X', 
                            TMAP_MAP_OPT_TYPE_INT,
@@ -1224,7 +1261,7 @@ tmap_map_opt_init(int32_t algo_id)
   opt->sample_reads = 1.0;
 #endif
   opt->vsw_type = 4;
-  
+
   opt->do_realign = 0;
   opt->realign_mat_score =  4;
   opt->realign_mis_score = -6;
@@ -1232,10 +1269,14 @@ tmap_map_opt_init(int32_t algo_id)
   opt->realign_gep_score = -2;
   opt->realign_bandwidth = 10;
   opt->realign_cliptype = 2;
-  
   opt->report_stats = 0;
-  
   opt->realign_log = NULL;
+  // tail repeat clipping
+  opt->do_repeat_clip = 0;
+  // context dependent gap scores
+  opt->do_hp_weight = 0;
+  // alignment length filtering
+  opt->min_al_len = 0;
 
   // flowspace options
   opt->fscore = TMAP_MAP_OPT_FSCORE;
@@ -1331,6 +1372,7 @@ tmap_map_opt_init(int32_t algo_id)
 
   opt->sub_opts = NULL;
   opt->num_sub_opts = 0;
+  opt->bed_file = NULL;
 
   return opt;
 }
@@ -1352,6 +1394,7 @@ tmap_map_opt_destroy(tmap_map_opt_t *opt)
   int32_t i;
 
   free(opt->fn_fasta);
+  free(opt->bed_file);
   for(i=0;i<opt->fn_reads_num;i++) {
       free(opt->fn_reads[i]); 
   }
@@ -1645,6 +1688,10 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
           free(opt->fn_fasta);
           opt->fn_fasta = tmap_strdup(optarg);
       }
+      else if((0 == c && 0 == strcmp("bed-file", options[option_index].name))) {
+          free(opt->bed_file);
+          opt->bed_file = tmap_strdup(optarg);
+      }
       else if(c == 'g' || (0 == c && 0 == strcmp("softclip-type", options[option_index].name))) {       
           opt->softclip_type = atoi(optarg);
       }
@@ -1750,8 +1797,18 @@ tmap_map_opt_parse(int argc, char *argv[], tmap_map_opt_t *opt)
           free(opt->realign_log);
           opt->realign_log = tmap_strdup(optarg);
       }
-      
-      
+      // tail-repeat clipping
+      else if (0 == c && 0 == strcmp ("do-repeat-clip", options [option_index].name)) {
+          opt->do_repeat_clip = 1;
+      }
+      // context-dependent gap scoring
+      else if (0 == c && 0 == strcmp ("context", options [option_index].name)) {
+          opt->do_hp_weight = 1;
+      }
+      // filtering by alignment length
+      else if (0 == c && 0 == strcmp ("min-al-len", options [option_index].name)) {
+          opt->do_repeat_clip = atoi (optarg);
+      }
       // Flowspace options
       else if(c == 'F' || (0 == c && 0 == strcmp("final-flowspace", options[option_index].name))) {       
           opt->aln_flowspace = 1;
@@ -2266,7 +2323,7 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   */
   tmap_error_cmd_check_int(opt->rand_read_name, 0, 1, "-u");
   tmap_error_cmd_check_int(opt->output_type, 0, 2, "-o");
-  tmap_error_cmd_check_int(opt->end_repair, 0, 2, "--end-repair");
+  tmap_error_cmd_check_int(opt->end_repair, 0, 100, "--end-repair");
   tmap_error_cmd_check_int(opt->max_adapter_bases_for_soft_clipping, 0, INT32_MAX, "max-adapter-bases-for-soft-clipping");
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   tmap_error_cmd_check_int(opt->sample_reads, 0, 1, "-x");
@@ -2302,7 +2359,7 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
   tmap_error_cmd_check_int(opt->read_rescue, 0, 1, "-L");
   tmap_error_cmd_check_int(opt->read_rescue_std_num+0.99, 0, INT32_MAX, "-l");
   tmap_error_cmd_check_int(opt->read_rescue_mapq_thr, 0, INT32_MAX, "-m");
-  
+
   // realignment
   tmap_error_cmd_check_int(opt->do_realign, 0, 1, "--do-realign");
   tmap_error_cmd_check_int(opt->realign_mat_score, -127, 128, "--r-mat");
@@ -2314,6 +2371,16 @@ tmap_map_opt_check(tmap_map_opt_t *opt)
 
   // stats report  
   tmap_error_cmd_check_int(opt->report_stats, 0, 1, "--stats");
+
+  // tail repeat clip
+  tmap_error_cmd_check_int (opt->do_repeat_clip, 0, 1, "--do-repeat-clip");
+
+  // context dependent gap scores
+  tmap_error_cmd_check_int (opt->do_hp_weight, 0, 1, "--context");
+
+  // alignment length filtering
+  tmap_error_cmd_check_int (opt->min_al_len, 0, INT32_MAX, "--min-al-len");
+
 
   // stage/algorithm options
   if(-1 != opt->min_seq_len) tmap_error_cmd_check_int(opt->min_seq_len, 1, INT32_MAX, "--min-seq-length");
@@ -2414,6 +2481,7 @@ tmap_map_opt_copy_global(tmap_map_opt_t *opt_dest, tmap_map_opt_t *opt_src)
 
     // global options
     opt_dest->fn_fasta = tmap_strdup(opt_src->fn_fasta);
+    opt_dest->bed_file = tmap_strdup(opt_src->bed_file);
     opt_dest->fn_reads_num = opt_src->fn_reads_num;
     opt_dest->fn_reads = tmap_malloc(sizeof(char*)*opt_dest->fn_reads_num, "opt_dest->fn_reads");
     for(i=0;i<opt_dest->fn_reads_num;i++) {

@@ -70,6 +70,10 @@ def remember_me_login(request, template_name='registration/login.html',
             return HttpResponseRedirect(redirect_to)
     else:
         redirect_to = request.GET.get(redirect_field_name, '')
+        # Don't make user click Begin if they have next url and are logged in
+        if redirect_to and request.user.is_authenticated():
+            return HttpResponseRedirect(redirect_to)
+
         form = authentication_form(request)
 
     request.session.set_test_cookie()

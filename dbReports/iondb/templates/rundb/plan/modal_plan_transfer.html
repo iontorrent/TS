@@ -1,0 +1,67 @@
+{% load static from staticfiles %}
+<div id="modal_plan_transfer" title="" class="modal hide">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>Confirm Transfer Planned Run</h3>
+        <h3>{{planName}}</h3>
+    </div>
+    <div class="modal-body">
+        <div id="start">
+            <p>Are you sure you want to move this Planned Run to Torrent Server <b>{{destination}}</b> ?</p>
+            <p>Transferred planned run will no longer be available on this Torrent Server.</p>
+        </div>
+        <div id="processing" style="display: none;">
+            <p>Planned run transfer in progress, please wait ...</p>
+        </div>
+        <div id="msg" class="alert alert-success hide"></div>
+        <div id="error-messages" class="alert alert-error hide"></div>
+    </div>
+    <div class="modal-footer">
+        <div id="start_footer">
+            <a href="#" class="btn" data-dismiss="modal">Cancel</a>
+            <a href="{{action}}" class="btn btn-primary" data-destination="{{destination}}">Transfer</a>
+        </div>
+        <div id="done_footer" style="display: none;">
+            <a href="#" class="btn" data-dismiss="modal">Close</a>
+        </div>
+    </div>
+
+<script type="text/javascript" src="{% static "jquery/js/jquery.activity-indicator-1.0.0.min.js"%}"></script>
+<script type="text/javascript">
+    $('#modal_plan_transfer').on('hidden', function() {
+        $('#modal_plan_transfer').trigger('modal_plan_transfer_done');
+        $('body #modal_plan_transfer').remove();
+    });
+    
+    $('#modal_plan_transfer .btn-primary').click(function(e) {
+        e.preventDefault();
+        var url = $(this).attr('href');
+        var params = {'destination': $(this).data('destination')};
+        $('#modal_plan_transfer #error-messages,#msg').hide().empty();
+        
+        $('#modal_plan_transfer #start,#start_footer').hide();
+        $('#modal_plan_transfer #processing').show();
+        $('#modal_plan_transfer').activity({
+            segments: 10,
+            width: 3,
+            space: 2,
+            length: 2.5,
+            color: '#252525',
+            speed: 1.5,
+            padding: '3'
+        });
+        $.post(url, params, function(data){
+            console.log("success:", data);
+            if (data.msg) $('#modal_plan_transfer #msg').empty().append(data.msg).show();
+            if (data.error) $('#modal_plan_transfer #error-messages').empty().append(data.error).show();
+        }).fail(function(data) {
+            console.log("fail:", data);
+            $('#modal_plan_transfer #error-messages').empty().append('<p>ERROR creating Planned Run</p><p>' + data.responseText + '</p>').show();
+        }).always(function(data){
+            $('#modal_plan_transfer').activity(false);
+            $('#modal_plan_transfer #processing').hide();
+            $("#modal_plan_transfer #done_footer").show();
+        });
+    });
+</script>
+</div>

@@ -9,16 +9,24 @@
 </tr>
 <tr>
 	<td><b>Library Key:</b></td>
-	<td id="selectedLibraryKey">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.templatekitname}}</td>
+	<td id="selectedLibraryKey">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryKey}}</td>
 </tr>             
 <tr>
     <td><b>Template Kit:</b></td>
-    <td id="selectedTemplatingKitName">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.templatekitname}}</td>
-</tr>                                                                       
+    <td id="selectedTemplatingKitName"></td>
+</tr>
+<tr>
+    <td><b>Templating Size:</b></td>
+    <td id="selectedTemplatingSize">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.templatingSize}}</td>
+</tr>                                                                           
 <tr>
     <td><b>Sequencing Kit:</b></td>
     <td id="selectedSequenceKit"></td>
-</tr>                                                                       
+</tr>
+<tr>
+    <td><b>Library Read Length:</b></td>
+    <td id="selectedLibraryReadLength">{% if helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryReadLength > 0 %}{{helper.getStepDict.Kits.getCurrentSavedFieldDict.libraryReadLength}}{%else%}--{%endif%}</td>
+</tr>                                                                        
 <tr>
     <td><b>Flows:</b></td>
     <td id="selectedFlows">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.flows}}</td>
@@ -33,7 +41,7 @@
 </tr>
 <tr>
 	<td><b>3' Adapter:</b></td>
-	<td id="selected3PrimeAdapter">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.templatekitname}}</td>
+	<td id="selected3PrimeAdapter">{{helper.getStepDict.Kits.getCurrentSavedFieldDict.forward3primeAdapter}}</td>
 </tr>         
 <tr>
     <td><b>Barcode:</b></td>

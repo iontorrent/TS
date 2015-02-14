@@ -7,10 +7,6 @@ import traceback
 
 import zipfile
 
-try:
-    compression = zipfile.ZIP_DEFLATED
-except:
-    compression = zipfile.ZIP_STORED
 
 def make_zip(zip_file, to_zip, arcname=None, use_sys_zip = True, compressed = True):
     """Try to make a zip of a file if it exists
@@ -19,13 +15,18 @@ def make_zip(zip_file, to_zip, arcname=None, use_sys_zip = True, compressed = Tr
     arcname is optional; renames the file in the archive,
     use_sys_zip flag will call 'zip' shell command to create archive"""
     # bug in python 2.6 with large zip files; use system zip until its fixed.
-    printtime("Start make_zip on %s" % to_zip)
+#    printtime("Start make_zip on %s" % to_zip)
+    
+    try:
+        compression = zipfile.ZIP_DEFLATED
+    except:
+        compression = zipfile.ZIP_STORED
 
     if not compressed:
         compression = zipfile.ZIP_STORED
-        printtime("not compressd")
+        printtime("not compressed")
     else:
-        printtime("compressd")
+        printtime("compressed")
 
 
     if os.path.exists(to_zip):
@@ -48,7 +49,7 @@ def make_zip(zip_file, to_zip, arcname=None, use_sys_zip = True, compressed = Tr
                     zf.write(to_zip, compress_type=compression)
                 else:
                     zf.write(to_zip, arcname, compress_type=compression)
-                print "Created ", zip_file, " of", to_zip
+#                print "Created ", zip_file, " of", to_zip
             except OSError:
                 print 'OSError with - :', to_zip
             except zipfile.LargeZipFile:
@@ -58,7 +59,7 @@ def make_zip(zip_file, to_zip, arcname=None, use_sys_zip = True, compressed = Tr
                 traceback.print_exc()
             finally:
                 zf.close()
-        printtime("End make_zip %s" % to_zip)
+#        printtime("End make_zip %s" % to_zip)
     else:
         printtime("File %s not found.  Zipfile %s not created/updated." % (str(to_zip),str(zip_file)))
 

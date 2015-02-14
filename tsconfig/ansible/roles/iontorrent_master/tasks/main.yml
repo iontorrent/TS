@@ -14,16 +14,44 @@
   script: samba.preseed
 
 - name: Install system packages for master node
-  apt: name={{item}} state=latest force=yes
+  apt: name={{item}} state=latest update_cache=yes force=yes
   with_items: ionmaster_syspkg_list
+  
+#-----------------------------------------------------------------------------
+# Copy configuration and init scripts celeryd and celerybeat daemons
+# (Currently provided via ion-dbreports package)
+#-----------------------------------------------------------------------------
+#- name: Install celeryd configuration file - /etc/default/celeryd
+#  copy: src=celeryd.conf dest=/etc/default/celeryd owner=root group=root mode=0644
+#  
+#- name: Install celeryd init script - /etc/init.d/celeryd
+#  copy: src=celeryd.init dest=/etc/init.d/celeryd owner=root group=root mode=0755
+#  
+#- name: Install celerybeat configuration file - /etc/default/celerybeat
+#  copy: src=celerybeat.conf dest=/etc/default/celerybeat owner=root group=root mode=0644
+#  
+#- name: Install celerybeat init script - /etc/init.d/celerybeat
+#  copy: src=celerybeat.init dest=/etc/init.d/celerybeat owner=root group=root mode=0755
 
+#-----------------------------------------------------------------------------
+# mod-gnutls conflicts and so we install the package, b/c it is a dependency and
+# then disable gnutls. Else, apache2 fails to restart and we bomb-out 
+#-----------------------------------------------------------------------------
+- name: Install libapache2-mod-gnutls
+  apt: name=libapache2-mod-gnutls state=present
+  
+- name: Disable conflicting apache modules - gnutls
+  shell: /usr/sbin/a2dismod gnutls
+  ignore_errors: yes
+  
 #-----------------------------------------------------------------------------
 # Install Ion Torrent Packages for a master node
 #-----------------------------------------------------------------------------
 - name: Install packages for head node
-  apt: name={{ item }} state=latest force=yes
+  apt: name={{ item }} state=latest update_cache=yes force=yes
   with_items: ionmaster_ionpkg_list
-    
+
+ 
 # optional install:
 # ion-pgmupdates -or- ion-protonupdates -or- both(?)
 # Check for existence of previous install of ion-protonupdates
@@ -37,33 +65,23 @@
 
 # Ensure Ion system daemons are running
 - name: Ion Daemons
-  service: name={{ item }} state=running
+  service: name={{ item }} state=restarted
   with_items:
+    - rabbitmq-server
+    - celeryd
+    - celerybeat
     - ionCrawler
     - ionJobServer
     - ionPlugin
-    - celeryd
-    - rabbitmq-server
 
 #-----------------------------------------------------------------------------
 # Site Specific Database Changes
 #-----------------------------------------------------------------------------
 # Add compute node hostnames to the Crunchers table
 - name: python script to add compute node to Cruncher Table
-  when: "'{{ item }}' != '{{ ansible_nodename }}'"
+  when: "'{{ item }}' != '{{ ansible_hostname }}'"
   script: 'add_cruncher.py {{ item }}'
   with_items:
     - "{{ groups.computes }}"
-    
-#-----------------------------------------------------------------------------
-# If there are compute nodes, we need to install apt-cacher-ng package and configure it
-#-----------------------------------------------------------------------------
-- name: Install apt-cacher-ng package
-  apt: name=apt-cacher-ng state=latest
-  when: "groups.computes|length > 0"
-- name: Configure apt-cacher-ng
-  lineinfile: dest=/etc/apt/apt.conf.d/01proxy create=true state=present
-                regexp='Acquire::http::Proxy.*'
-                line='Acquire::http::Proxy "http://localhost:3142";'
-  when: "groups.computes|length > 0"
+
 

@@ -20,6 +20,8 @@
 #include "tmap_map_opt.h"
 #include "tmap_map_util.h"
 
+#include "../../realign/realign_c_util.h"
+
 #define tmap_map_util_reverse_query(_query, _ql, _i) \
   for(_i=0;_i<(_ql>>1);_i++) { \
       uint8_t _tmp = _query[_i]; \
@@ -57,6 +59,55 @@ TMAP_SORT_INIT(tmap_map_sam_sort_coord_end, tmap_map_sam_t, __tmap_map_sam_sort_
 TMAP_SORT_INIT(tmap_map_sam_sort_coord_score, tmap_map_sam_t, __tmap_map_sam_sort_coord_score_lt)
 TMAP_SORT_INIT(tmap_map_sam_sort_score_coord, tmap_map_sam_t, __tmap_map_sam_sort_score_coord_lt)
   
+
+static int
+tmap_map_get_amplicon(tmap_refseq_t *refseq,
+                int32_t seqid,
+                uint32_t start,
+                uint32_t end,
+                uint32_t *ampl_start,
+                uint32_t *ampl_end,
+                uint32_t strand)
+{
+        uint32_t *srh;
+        int32_t i, j;
+        uint32_t key;
+        if (!refseq->bed_exist || refseq->bednum[seqid]==0) return 0;
+        if (strand == 0) { srh = refseq->bedstart[seqid]; key = start;}
+        else {srh = refseq->bedend[seqid]; key = end;}
+        // binary search
+        i = 0; j = refseq->bednum[seqid]-1;
+        while (i < j) {
+                uint32_t m = (i+j)/2;
+                if (srh[m] == key) { i = j = m; break;}
+                if (srh[m] < key) {
+                        i = m+1;
+                } else {
+                        j = m;
+                }
+        }
+        i--;
+        if (i < 0) i = 0;
+        j++;
+        if (j >=refseq->bednum[seqid]) j = refseq->bednum[seqid]-1;
+        uint32_t best = abs(srh[i]-key), bi= i;
+        for (i++; i <= j; i++) {
+                if (abs(srh[i]-key) < best) {
+                        best = abs(srh[i]-key);
+                        bi = i;
+                }
+        }
+        i = bi;
+        // check for overlap
+        if (refseq->bedstart[seqid][i] < end && start < refseq->bedend[seqid][i]) {
+                *ampl_start = refseq->bedstart[seqid][i];
+                *ampl_end = refseq->bedend[seqid][i];
+                return 1;
+        }
+        return 0;
+}
+
+
 static void
 tmap_map_util_set_softclip(tmap_map_opt_t *opt, tmap_seq_t *seq, int32_t *softclip_start, int32_t *softclip_end)
 {
@@ -497,7 +548,7 @@ tmap_map_sam_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sam_t *sam, 
 
 tmap_map_bam_t*
 tmap_map_sams_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sams_t *sams, int32_t end_num,
-                    tmap_map_sams_t *mates, int32_t sam_flowspace_tags, int32_t bidirectional, int32_t seq_eq) 
+                    tmap_map_sams_t *mates, int32_t sam_flowspace_tags, int32_t bidirectional, int32_t seq_eq, int32_t min_al_len) 
 {
   int32_t i;
   tmap_map_sam_t *mate = NULL;
@@ -513,10 +564,25 @@ tmap_map_sams_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sams_t *sam
           mate_unmapped = 1;
       }
   }
-  if(0 < sams->n) {
-      bams = tmap_map_bam_init(sams->n);
-      for(i=0;i<sams->n;i++) {
-          bams->bams[i] = tmap_map_sam_print(seq, refseq, &sams->sams[i], sam_flowspace_tags, bidirectional, seq_eq, sams->max, i, end_num, mate_unmapped, mate);
+  // print only alignments longer then min_al_len
+  int32_t map_cnt = 0;
+
+  for(i=0;i<sams->n;i++) 
+  {
+    unsigned q_len_cigar, r_len_cigar;
+    seq_lens_from_bin_cigar (sams->sams [i].cigar, sams->sams [i].n_cigar, &q_len_cigar, &r_len_cigar);
+    if (r_len_cigar >= min_al_len)
+        ++map_cnt;
+  }
+
+  if(map_cnt) {
+      bams = tmap_map_bam_init(map_cnt);
+      for(i=0;i<sams->n;i++) 
+      {
+         unsigned q_len_cigar, r_len_cigar;
+         seq_lens_from_bin_cigar (sams->sams [i].cigar, sams->sams [i].n_cigar, &q_len_cigar, &r_len_cigar);
+         if (r_len_cigar >= min_al_len)
+             bams->bams[i] = tmap_map_sam_print(seq, refseq, &sams->sams[i], sam_flowspace_tags, bidirectional, seq_eq, sams->max, i, end_num, mate_unmapped, mate);
       }
   }
   else {
@@ -861,7 +927,7 @@ tmap_map_util_mapq_score(int32_t seq_len, int32_t n_best, int32_t best_score, in
 }
 
 inline int32_t
-tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt)
+tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap_refseq_t *refseq)
 {
   int32_t i;
   int32_t n_best = 0, n_best_subo = 0;
@@ -933,6 +999,64 @@ tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt)
       else {
           sams->sams[i].mapq = 0;
       }
+  }
+
+  if (mapq == 0 && refseq->bed_exist) {
+    int j = -1;
+    int overlap_s = 0, sec = 0;
+    int sh_dis = 10000, sec_dis = 10000;
+    for (i=0; i <sams->n; i++) {
+      tmap_map_sam_t tmp_sam = sams->sams[i];
+      uint32_t start = tmp_sam.pos+1;
+      uint32_t end = start+tmp_sam.target_len-1;
+      uint32_t ampl_start, ampl_end;
+      if (tmp_sam.score != best_score) continue;
+      if (tmap_map_get_amplicon(refseq, tmp_sam.seqid, start, end, &ampl_start, &ampl_end, tmp_sam.strand)) {
+	/*
+	if (abs(ampl_start-start) < 15 && abs(ampl_end-end) < 15) {
+	    fprintf(stderr, "%d %d %d %d %d\n", ampl_start, start, ampl_end, end, tmp_sam.seqid);
+	    if (j < 0) j = i;
+	    else {
+		fprintf(stderr, "second one\n");
+		return 0; // more than one hits match to an amplicon well
+	    }
+	}
+	*/
+	// use overlap to determine which amplicon to pick
+	/*
+ 	int ll = start;
+	if (ll < ampl_start) ll = ampl_start;	
+	int rr = end;
+	if (rr > ampl_end) rr = ampl_end;
+	int ov = rr -ll;
+	if (ov > overlap_s) {
+	    sec = overlap_s;
+	    overlap_s = ov;
+	    j = i;
+	} else if (ov > sec) {
+	    sec = ov;
+	}
+	*/
+	// Use the distance to 5' end start
+	int dis;
+	if (tmp_sam.strand == 0) dis = abs(ampl_start-start);
+	else dis = abs(ampl_end-end);
+	if (dis < sh_dis) {
+	    sec_dis = sh_dis;
+	    sh_dis = dis;
+	    j = i;
+	} else if (dis < sec_dis) {
+	    sec_dis = dis;
+	}
+      } 
+    } // for
+    if (j >= 0 && /*overlap_s - sec > 5*/ sec_dis - sh_dis > 1) { 
+	sams->sams[j].mapq = 12; 
+	// make the j unique best hit
+	for (i = 0; i < sams->n; i++) {
+	    if (i != j && sams->sams[i].score == best_score)  sams->sams[i].score = best_score-2;
+	}
+    }
   }
   return 0;
 }
@@ -1859,6 +1983,132 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
 
   // check if we allow soft-clipping on the 5' end
   tmap_map_util_set_softclip(opt, seq, &softclip_start, &softclip_end);
+  if (opt->end_repair > 2) {
+    if (1 == softclip_end) return;
+    old_score = 0;
+    found = 0; 
+    int worst = 0;
+    int ind = 0, nMM = 0, nc = 0, nqb = 0, ntb = 0, nCC, target_red;
+    int tb, qb, inc;
+    int i_c;
+    int i, nn_cigar, total_scl;
+    if (0 != strand) { tb = qb = 0; inc = 1;}
+    else {tb = tlen-1; qb = qlen-1; inc = -1;}
+    for (i_c = 0; i_c < s->n_cigar; i_c++) {
+	cigar_i = (0 != strand) ? i_c : s->n_cigar-1-i_c;
+	op = TMAP_SW_CIGAR_OP(s->cigar[cigar_i]);
+    	op_len = TMAP_SW_CIGAR_LENGTH(s->cigar[cigar_i]);
+ 	if (op == BAM_CMATCH) {
+	    for(i=0;i<op_len;i++, qb+=inc, tb += inc, nqb++, ntb++) {
+		if(query[qb] == target_prev[tb]) old_score += opt->score_match;
+          	else old_score -= opt->pen_mm, found++;
+		if (old_score < worst) { worst = old_score; ind = i+1; nMM = found; target_red =ntb+1; nn_cigar = i_c; total_scl = nqb+1;}
+	    }
+	} else {
+	    if ((op == BAM_CDEL)) {
+		ntb += op_len;
+		tb += inc*op_len;
+            } else if (op == BAM_CINS) {    
+		nqb += op_len;
+		qb  += inc*op_len;
+	    } else break;
+	    old_score -= opt->pen_gapo+opt->pen_gape*op_len;
+	    found += op_len;
+	    if (old_score < worst) { worst = old_score; ind = 0; nMM = found; target_red =ntb; nn_cigar = i_c; total_scl = nqb;}
+	}
+    }
+    if (worst >= 0) return;
+    nCC = target_red+total_scl+1;
+    nCC /= 2;
+    int maxMM = 2;
+    if (nCC > 5) maxMM = (nCC-2)*opt->end_repair/100+2;
+    if (nCC < maxMM) maxMM = nCC;
+    if (nMM >= maxMM) {
+	s->score -= worst;
+	cigar_i = (0 != strand) ? nn_cigar : s->n_cigar-1-nn_cigar;
+	op_len = TMAP_SW_CIGAR_LENGTH(s->cigar[cigar_i]);
+	if (ind == op_len || ind == 0) { 
+	    if (nn_cigar == s->n_cigar-1) return; // all are removed, something not quite right. Give up
+	    TMAP_SW_CIGAR_STORE(s->cigar[cigar_i], BAM_CSOFT_CLIP, total_scl);
+	    s->n_cigar -= nn_cigar;
+	} else {
+	    TMAP_SW_CIGAR_STORE(s->cigar[cigar_i], BAM_CMATCH, op_len-ind);
+	    if (nn_cigar == 0) {
+		s->cigar = tmap_realloc(s->cigar, sizeof(uint32_t)*(1 + s->n_cigar), "s->cigar");
+		if (0 != strand) {
+                    for (i = s->n_cigar-1; i >= 0; i--) s->cigar[i+1] = s->cigar[i];
+                    TMAP_SW_CIGAR_STORE(s->cigar[0], BAM_CSOFT_CLIP, total_scl);
+                } else {
+                    TMAP_SW_CIGAR_STORE(s->cigar[s->n_cigar],  BAM_CSOFT_CLIP, total_scl);
+                }
+		s->n_cigar++;
+	    } else {
+		cigar_i -= inc; // move back one
+		TMAP_SW_CIGAR_STORE(s->cigar[cigar_i], BAM_CSOFT_CLIP, total_scl);
+		s->n_cigar -= nn_cigar-1;
+	    }
+	}
+	if (0 != strand && cigar_i > 0) {
+	    for (i = 0; i < s->n_cigar; i++) {
+		s->cigar[i] = s->cigar[i+cigar_i];
+	    }
+	}
+	if (0 != strand) s->pos += target_red;
+	s->target_len -= target_red; 
+    }
+
+    /*
+    cigar_i = (0 != strand) ? 0 : (s->n_cigar - 1);
+    op = TMAP_SW_CIGAR_OP(s->cigar[cigar_i]);
+    op_len = TMAP_SW_CIGAR_LENGTH(s->cigar[cigar_i]);
+    if(op != BAM_CMATCH) return; // right now just check terminal matches, will extend to other.
+    old_score = 0;
+    found = 0; // did we find mismatches?
+    int worst = 0;
+    cur_len = op_len;
+    int ind = 0, nMM = 0;
+    if(0 != strand) { // reverse
+      for(i=0;i<cur_len;i++) { // go through the match/mismatches
+          if(query[i] == target_prev[i]) old_score += opt->score_match;
+          else old_score -= opt->pen_mm, found++;
+	  if (old_score < worst) { worst = old_score; ind = i+1; nMM = found;}
+      }
+    }
+    else { // forward
+      for(i=0;i<cur_len;i++) { // go through the match/mismatches
+          if(query[qlen-i-1] == target_prev[tlen-i-1]) old_score += opt->score_match;
+          else old_score -= opt->pen_mm, found++;
+	  if (old_score < worst) { worst = old_score; ind = i+1; nMM = found;}
+      }
+    }
+    if (worst >= 0) return; // local alignment is ok
+    int maxMM = 2;
+    if (ind > 5) maxMM = (ind-2)*opt->end_repair/100+2;
+    if (ind < maxMM) maxMM = ind;
+    if (nMM >= maxMM) { // trim
+	s->score -= worst;
+	if (ind == op_len) { // remove the whole cigar
+	    if (s->n_cigar == 1) return;
+	    TMAP_SW_CIGAR_STORE(s->cigar[cigar_i], BAM_CSOFT_CLIP, op_len);
+	} else {
+	    TMAP_SW_CIGAR_STORE(s->cigar[cigar_i], BAM_CMATCH, op_len-ind);
+	    s->cigar = tmap_realloc(s->cigar, sizeof(uint32_t)*(1 + s->n_cigar), "s->cigar");
+	    if (0 != strand) {
+		int i;
+		for (i = s->n_cigar-1; i >= 0; i--) s->cigar[i+1] = s->cigar[i];
+		TMAP_SW_CIGAR_STORE(s->cigar[0], BAM_CSOFT_CLIP, ind);
+	    } else {
+		TMAP_SW_CIGAR_STORE(s->cigar[s->n_cigar],  BAM_CSOFT_CLIP, ind);
+	    }
+	    s->n_cigar++;
+	}
+	if (0 != strand) s->pos += ind;
+	s->target_len -= ind;
+	//fprintf(stderr, "ZZ tlen%d %d %d %d worst %d MM=%d %d\n", s->target_len, ind, s->score, s->pos, worst, maxMM, nMM);
+    }
+    */
+    return;
+  }
   // do not perform if so
   if(1 == softclip_start) return;
 
@@ -1961,11 +2211,16 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
   if(0 < conv) {
       par_iupac.matrix = matrix_iupac;
       for(i=0;i<80;i++) { 
-          if(0 < matrix_iupac_mask[i]) (par).matrix[i] = (opt)->score_match; 
-          else (par).matrix[i] = -cur_len * (opt)->pen_mm; 
+          if(0 < matrix_iupac_mask[i]) (par_iupac).matrix[i] = (opt)->score_match; 
+          else (par_iupac).matrix[i] = -cur_len * (opt)->pen_mm; 
       }
-      (par).row = 16; 
-      (par).band_width = (opt)->bw; 
+      (par_iupac).row = 16; 
+      (par_iupac).band_width = (opt)->bw; 
+	
+      (par_iupac).gap_open = 0;
+      (par_iupac).gap_ext = (opt)->pen_mm;
+      (par_iupac).gap_end = (opt)->pen_mm;
+
   }
   else {
       par.matrix = matrix;
@@ -1978,10 +2233,10 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
       }
       (par).row = 5; 
       (par).band_width = (opt)->bw; 
-  }
-  (par).gap_open = 0;
-  (par).gap_ext = (opt)->pen_mm;
-  (par).gap_end = (opt)->pen_mm;
+      (par).gap_open = 0;
+      (par).gap_ext = (opt)->pen_mm;
+      (par).gap_end = (opt)->pen_mm;
+   }
 
   // adjust query for the reverse strand
   if(1 == strand) { // reverse
@@ -2196,6 +2451,13 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
   free(target);
 }
 
+void 
+tmap_map_rmquerybases_cigar(tmap_map_sam_t *s, uint32_t left_rm_bases, uint32_t right_rm_bases)
+{
+
+
+}
+
 tmap_map_sams_t *
 tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
                  tmap_map_sams_t *sams, 
@@ -2233,6 +2495,32 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
   // sort by strand/chr/pos/score
   tmap_sort_introsort(tmap_map_sam_sort_coord, sams->n, sams->sams);
   tmap_map_util_set_softclip(opt, seq, &softclip_start, &softclip_end);
+  if (0 && softclip_end == 0 && refseq->bed_exist) { 
+    // ZZ: only disable 3' end softclip if the read aligned all the way close to the end of amplicon
+    end = 0;
+    while(end < sams->n) {
+      uint8_t strand, *query=NULL, *query_rc=NULL, *tmp_target=NULL;
+      int32_t qlen;
+      tmap_map_sam_t tmp_sam;
+      int32_t query_start, query_end;
+      int32_t conv = 0;
+
+      // do not band when generating the cigar
+      tmp_sam = sams->sams[end];
+
+      // get the strand/start/end positions
+      strand = tmp_sam.strand;
+      start_pos = tmp_sam.pos + 1;
+      end_pos = start_pos + tmp_sam.target_len - 1;
+      uint32_t ampl_start, ampl_end;
+      if (tmap_map_get_amplicon(refseq, tmp_sam.seqid, start_pos, end_pos, &ampl_start, &ampl_end, strand)) {
+	if (strand == 0 && abs(ampl_end-end_pos) < 15) break;
+	if (strand != 0 && abs(ampl_start-start_pos) < 15) break;
+      }
+      end++;
+    }
+    if (end >= sams->n) softclip_end = 1;
+  }
   
   // initialize opt
   vsw_opt = tmap_vsw_opt_init(opt->score_match, opt->pen_mm, opt->pen_gapo, opt->pen_gape, opt->score_thr);
@@ -2270,6 +2558,7 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
       strand = tmp_sam.strand;
       start_pos = tmp_sam.pos + 1;
       end_pos = start_pos + tmp_sam.target_len - 1;
+      uint32_t left_added_bases = 0, right_added_bases = 0; // ZZ to be removed
       
       /**
        * Step 1: find the start of the alignment
@@ -2303,6 +2592,7 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
       tmp_sam.score = tmap_vsw_process_rev(vsw, query_rc, qlen, target, tlen,
                                        &tmp_sam.result, &overflow, opt->score_thr, 
                                        (1 ==  softclip_end && 1 == softclip_start) ? 0 : 1); // NB: to guarantee correct soft-clipping if both ends are clipped
+
       if(1 == overflow) {
           tmap_bug();
       }
@@ -2316,7 +2606,146 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
           end++;
           continue;
       }
+	
+      // ZZ, figure out amplicon condition to add primers or similar
+      uint32_t ampl_start = 0, ampl_end = 0;
+      uint32_t start_pos_a = start_pos, end_pos_a = end_pos;
+      if (strand == 0) {
+	start_pos_a += tmp_sam.result.target_start;
+      } else {
+	end_pos_a = start_pos+ (tmp_sam.result.target_end-tmp_sam.result.target_start);
+      }
+      if (0 && softclip_end == 0 && tmap_map_get_amplicon(refseq, tmp_sam.seqid, start_pos_a, end_pos_a, &ampl_start, &ampl_end, strand)) {
+	uint32_t ds = abs(start_pos_a-ampl_start);
+	uint32_t de = abs(end_pos_a-ampl_end);
+	if (ds < 10 && de < 10 && (de > 2 || ds > 2)) {
+	//if ((strand == 0 && ds < 10 && start_pos_a >= ampl_start+2) || (strand != 0 && de < 10 &&  end_pos_a <= ampl_end-2)) {
+	//if ((strand == 0 && ds < 10) || (strand != 0 && de < 10)) {
+	      //int left = 1,  right = 1;
+	      //if (strand == 0) left = 0; else right = 0;
+	      //if (ds < 10 && de < 10 /*&& start_pos_a >= ampl_start+2 && end_pos_a <= ampl_end-2*/) left = right = 0;
+	      // target mem
+	      int pad = 20;
+	      tlen = ampl_end-ampl_start+1+pad*2;
+              if(target_mem < tlen) { // more memory?
+                  target_mem = tlen;
+                  tmap_roundup32(target_mem);
+                  target = tmap_realloc(target, sizeof(uint8_t)*target_mem, "target");
+              }
+	      query = (uint8_t*)tmap_seq_get_bases(seqs[strand])->s;
+              // Get the new target
+              // NB: IUPAC codes are turned into mismatches
+              s = &sams_tmp->sams[i];
+             (*s) = tmp_sam;
 
+              if(NULL == tmap_refseq_subseq2(refseq, s->seqid+1, ampl_start-pad, ampl_end+pad, target, 0, &conv)) {
+                  tmap_bug();
+              } 
+	      // finding the digestion sites.
+	      int x;
+	      for (x = tlen-pad; x < tlen; x++) {
+		if (target[x] == 0) break;
+	      }
+	      x--;
+	      ampl_end = x+(ampl_start-pad);
+
+	      for (x = pad-2; x >=0; x--) {
+		if (target[x] == 3) break;
+	      }
+	      x++;
+	      tmp_target = target;
+	      target += x;
+	      ampl_start = ampl_start-pad+x;
+	      tlen = ampl_end-ampl_start+1;
+              if(0 < conv && 0 == iupac_init) {
+                  par_iupac.matrix = matrix_iupac;
+                  __map_util_gen_ap_iupac(par_iupac, opt);
+                  iupac_init = 1;
+              }
+
+	      // path memory
+	      if(path_mem <= tlen + seq_len) { // lengthen the path
+	          path_mem = tlen + seq_len;
+	          tmap_roundup32(path_mem);
+	          path = tmap_realloc(path, sizeof(tmap_sw_path_t)*path_mem, "path");
+	      }
+
+              s->score = 20*opt->score_match+ tmap_sw_clipping_core2(target, tlen, query, seq_len,
+                                            (0 < conv) ? &par_iupac : &par,
+                                            0, 0, //whole amplicon must be aligned ZZ
+                                            1, 1, /*0, 0,*/ // whole global, may use a better algorithm ZZ
+                                            path, &path_len, 0);
+	      //fprintf(stderr, "ZZ= score=%d %d seqid%d %d %d %d %d %d %d strand=%d %d %d\n", s->score, tmp_sam.score, s->seqid+1, ampl_start, ampl_end, start_pos_a, end_pos_a, tmp_sam.result.target_start, tmp_sam.result.target_end, strand, start_pos, end_pos);
+	      //if (s->score > tmp_sam.score) {
+		int tail_clip =  seq_len-path[0].j;
+		int begin_clip = path[path_len-1].j-1;
+		if (TMAP_SW_FROM_D == path[path_len-1].ctype) begin_clip++;
+ 	      	s->cigar = tmap_sw_path2cigar(path, path_len, &s->n_cigar);
+		// need to add soft clip, possibly on both sides
+	      	if(0 == s->n_cigar) {
+	      		tmap_bug();
+      	      	}
+	      	s->pos = ampl_start-1;
+	      	s->target_len = tlen;
+		int f = (begin_clip >0) ? 1:0;
+		int e = (tail_clip > 0) ? 1:0;
+		if (f+e > 0) {
+			s->cigar = tmap_realloc(s->cigar, sizeof(uint32_t)*(f+e+s->n_cigar), "s->cigar");
+			if (f > 0) {
+			    int i;
+			    for (i = s->n_cigar-1; i>=0; i--) {
+				s->cigar[i+1] = s->cigar[i];
+			    }
+			    TMAP_SW_CIGAR_STORE(s->cigar[0], BAM_CSOFT_CLIP, begin_clip);
+			}
+			if (e > 0) TMAP_SW_CIGAR_STORE(s->cigar[s->n_cigar+f+e-1], BAM_CSOFT_CLIP, tail_clip);
+			s->n_cigar += e+f;
+		}
+		// check query length and cigar
+		int tttlen = 0;
+		for (j = 0; j < s->n_cigar; j++) {
+			switch(TMAP_SW_CIGAR_OP(s->cigar[j])) {
+                        case BAM_CMATCH:
+                        case BAM_CINS:
+			case BAM_CSOFT_CLIP:
+                        	tttlen += TMAP_SW_CIGAR_LENGTH(s->cigar[j]);
+				break;
+			}
+		}
+		if (tttlen != seq_len) {
+			fprintf(stderr, "%d seqlen=%d tttlen=%d\t tail_skip=%d  begin_clip=%d n_cigar=%d\n", path[path_len-1].ctype, seq_len, tttlen, tail_clip, begin_clip, s->n_cigar);
+		} 
+
+	     	// May need adjust start??
+	        target = tmp_target;
+	    	end++; i++;
+		start = end;
+      		// update aux data
+      		tmap_map_sam_malloc_aux(s);
+      		switch(s->algo_id) {
+        		case TMAP_MAP_ALGO_MAP1:
+          			(*s->aux.map1_aux) = (*tmp_sam.aux.map1_aux);
+          			break;
+        		case TMAP_MAP_ALGO_MAP2:
+          			(*s->aux.map2_aux) = (*tmp_sam.aux.map2_aux);
+          			break;
+        		case TMAP_MAP_ALGO_MAP3:
+          			(*s->aux.map3_aux) = (*tmp_sam.aux.map3_aux);
+          	
+        		case TMAP_MAP_ALGO_MAP4:
+          			(*s->aux.map4_aux) = (*tmp_sam.aux.map4_aux);
+          			break;
+        		case TMAP_MAP_ALGO_MAPVSW:
+          			(*s->aux.map_vsw_aux) = (*tmp_sam.aux.map_vsw_aux);
+          			break;
+        		default:
+          			tmap_bug();
+          			break;
+      		}
+		continue;
+	     //}
+	} 
+      }
       /*
       fprintf(stderr, "qlen=%d tlen=%d\n", qlen, tlen);
       fprintf(stderr, "tmp_sam.result.query_start=%d\n", tmp_sam.result.query_start);
@@ -2560,7 +2989,7 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
       }
 
       s->pos = s->pos + (path[path_len-1].i-1); // zero-based 
-      if(path[path_len-1].ctype == TMAP_SW_FROM_I) {
+      if(path[path_len-1].ctype == TMAP_SW_FROM_I) { // don't quite understand this ZZ
           s->pos++;
       }
       s->cigar = tmap_sw_path2cigar(path, path_len, &s->n_cigar);
@@ -2584,8 +3013,16 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
        * Try to detect large indels present as soft-clipped prefixes of the
        * alignment.
        */
+ 	uint32_t ampl_exist = 0;
       while(1) { // NB: so we can break out at any time
           if(0 < opt->pen_gapl && 0 < query_start) { // start of the alignment
+	      // ZZ:We may check amplicon here as well. May try this only when it is near start of an amplicon.
+	      // Here the reference mapping position is known by s->pos to s->pos+s->target_len
+	      // We can check the amplicon with these. 
+	      //   A. When bed file is not present, current logic holds.
+	      //   B.i. If bed file is given, when an amplicon is present, try use all the bases to the begin/end of amplicon, very small or no long gap penalty.
+	      //   B.ii.If bed file is given and the hit position is not in an amplicon, normal logic apply.
+
               int32_t del_score = 0;
               int32_t ins_score = 0;
               uint32_t op, op_len;
@@ -2603,6 +3040,23 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
               end_pos = s->pos;
               if(end_pos < start_pos) break; // exit the loop
               tlen = end_pos - start_pos + 1;
+	      int32_t long_gap = opt->pen_gapl;
+		//ZZ: check amplicon
+                if (tmap_map_get_amplicon(refseq, s->seqid, s->pos, s->pos+s->target_len, &ampl_start, &ampl_end, strand)) {
+                        ampl_exist = 1;
+			if (ampl_start >= s->pos) break;
+			if (start_pos > ampl_start) {
+			    start_pos = ampl_start;
+			    tlen = end_pos - start_pos + 1;
+			}
+			//Alternative, align only to the begin of the amplicon. 
+			/*
+			start_pos = ampl_start;
+			tlen = end_pos - start_pos + 1;
+			*/
+			long_gap = 0;
+                }
+
               // target mem
               target = tmp_target; // reset target in memory
               if(target_mem < tlen) { // more memory?
@@ -2672,7 +3126,7 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
                   }
                   if(path[path_len-1].ctype == TMAP_SW_FROM_I) pos_adj++; // TODO: is this correct?
               }
-              if(0 < new_score && 0 <= new_score - opt->pen_gapl) { 
+              if(0 < new_score && 0 <= new_score - long_gap) { 
                   int32_t n_cigar_op = (0 < op_len) ? 1 : 0; 
                   // get the cigar
                   cigar = tmap_sw_path2cigar(path, path_len, &n_cigar);
@@ -2709,7 +3163,7 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
                   // update the query end
                   query_start = path[path_len-1].j - 1; // query_start is one-based
                   if(query_start < 0) tmap_bug();
-                  s->score += new_score - opt->pen_gapl;
+                  s->score += new_score - long_gap;
                   s->pos -= pos_adj; // adjust the position further if there was a deletion
                   // merge adjacent cigar operations
                   tmap_map_util_merge_adjacent_cigar_operations(s);
@@ -2772,6 +3226,24 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
               }
               if(end_pos < start_pos) break; // exit the loop
               tlen = end_pos - start_pos + 1;
+	      int32_t long_gap = opt->pen_gapl;
+
+              //ZZ: check amplicon
+                if (ampl_exist || tmap_map_get_amplicon(refseq, s->seqid, s->pos, s->pos+s->target_len, &ampl_start, &ampl_end, strand)) {
+                        ampl_exist = 1;
+                        if (ampl_end <= s->pos+s->target_len + 1) break;
+                        if (end_pos < ampl_end) {
+                            end_pos = ampl_end;
+                            tlen = end_pos - start_pos + 1;
+                        }
+                        //Alternative, align only to the end of the amplicon.
+                        /*
+                        end_pos = ampl_end;
+                        tlen = end_pos - start_pos + 1;
+                        */
+                        long_gap = 0;
+                }
+
               // target mem
               target = tmp_target; // reset target in memory
               if(target_mem < tlen) { // more memory?
@@ -2833,7 +3305,7 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
                       new_score = del_score;
                   }
               }
-              if(0 < new_score && 0 <= new_score - opt->pen_gapl) { 
+              if(0 < new_score && 0 <= new_score - long_gap) { 
                   int32_t n_cigar_op = (0 < op_len) ? 1 : 0; 
                   // get the cigar
                   cigar = tmap_sw_path2cigar(path, path_len, &n_cigar);
@@ -2865,7 +3337,7 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
                   // update the query end
                   query_end += path[0].j; // query_end is zero-based
                   if(seq_len <= query_end) tmap_bug();
-                  s->score += new_score - opt->pen_gapl;
+                  s->score += new_score - long_gap;
                   // merge adjacent cigar operations
                   tmap_map_util_merge_adjacent_cigar_operations(s);
               }
@@ -2948,6 +3420,12 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
       // end repair
       if(0 != opt->end_repair) {
           tmap_map_util_end_repair(seq, query, qlen, target, tlen, strand, path, refseq, s, opt);
+      }
+      // TODO: ZZ: If the primer sequences are added, we remove the cigar that corresponds to the sequence, at the same time calculate the score
+      //           of this part of alignment, this will be substracted from the alignment score there.
+      // to be removed if the other path works.
+      if (left_added_bases + right_added_bases > 0) {
+	tmap_map_rmquerybases_cigar(s, left_added_bases, right_added_bases);
       }
 
       i++;

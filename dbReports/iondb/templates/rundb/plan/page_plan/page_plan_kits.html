@@ -9,7 +9,7 @@
         <input type="hidden" id="selectedTemplateKitType" name="selectedTemplateKitType" value="" />
         <input type="hidden" id="isBarcodeKitRequired" name="isBarcodeKitRequired" value="" />
 
-        <label>Sample Preparation Kit (optional):</label>
+        <label class="form-label">Sample Preparation Kit (optional)</label>
         <select id="samplePreparationKit" name="samplePreparationKit" style="width: 350px;" {% if not helper.getApplProduct.isSamplePrepKitSupported %} disabled="disabled" {% endif %}>
             <option value=""></option>
             {% for spk in step.getPrePopulatedFieldDict.samplePrepKits %}
@@ -22,7 +22,7 @@
         </select>
     </div>
     <div class="span6">
-        <label>Control Sequence (optional):</label>
+        <label class="form-label">Control Sequence (optional)</label>
         <select id="controlsequence" name="controlsequence">
             <option value=""></option>
             {% for kit in step.getPrePopulatedFieldDict.controlSeqKits %}
@@ -37,7 +37,7 @@
 </div>
 <div class="row-fluid">
     <div class="span6">
-        <label>Library Kit Type:  <a class="btn btn-mini extra-kit-inline">Details +</a></label>
+        <label class="form-label">Library Kit Type  <a class="btn btn-mini extra-kit-inline">Details +</a></label>
         <select id="libraryKitType" name="librarykitname" style="width: 350px;">
             <option value=""></option>
             {% for libKit in step.getPrePopulatedFieldDict.libKits %}
@@ -50,7 +50,7 @@
         </select>
     </div>
     <div class="span6">                                     
-        <label>Chip Type{%if step.prepopulatedFields.is_chipType_required%} (required){%endif%}:</label>
+        <label class="form-label">Chip Type{%if step.prepopulatedFields.is_chipType_required%} (required){%endif%}</label>
         <select id="chipType" name="chipType">
             {% if helper.isEditRun %}
                 <option SELECTED value="{{step.getCurrentSavedFieldDict.chipType}}">Ion 
@@ -175,7 +175,7 @@
     </div>
 
     <div class="span6">                                     
-        <label id="barcodeKitLabel">Barcode Set {% if helper.getApplProduct.isBarcodeKitSelectionRequired %}(required){% else %}(optional){% endif %}:</label>
+        <label class="form-label" id="barcodeKitLabel">Barcode Set {% if helper.getApplProduct.isBarcodeKitSelectionRequired %}(required){% else %}(optional){% endif %}</label>
         <select id="barcodeId" name="barcodeId" {% if helper.isPlanBySample and step.getCurrentSavedFieldDict.barcodeId %}disabled="disabled"{% endif %}>
             <option value=""></option>
             {% for kit in step.getPrePopulatedFieldDict.barcodes %}
@@ -188,9 +188,40 @@
         </select>
     </div>
 </div>
+
+<div class="templating_size_info row-fluid hide" style="display: block;">
+    <div class="span6">
+        <p style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">Templating Size:
+        <span class="option-group">
+            <small style="font-weight: normal; font-size: 100%;">
+                {% for size in step.getPrePopulatedFieldDict.templatingSizeChoices %}
+                    {% ifequal size step.getCurrentSavedFieldDict.templatingSize %}
+                         <input checked="checked" type="radio"  id="templatingSize" name="templatingSize" value="{{size}}" {% if helper.isEditRun %} readonly {% endif %} />{{size}}</input>
+                    {% else %}        
+                         <input type="radio"  id="templatingSize" name="templatingSize" value="{{size}}"  {% if helper.isEditRun %} readonly {% endif %} />{{size}}</input>
+                    {% endifequal %}
+                {% endfor %}     
+            </small>
+        </span>
+        </p>
+    </div>
+    <div class="span6">
+    </div>
+</div>        
+
+<div class="library_read_length_info row-fluid hide" style="display: block;">
+    <div class="span6">
+        <p style="font-weight: bold; font-size: 14px; margin-bottom: 12px;">Library Read Length:
+        <input value="{{step.getCurrentSavedFieldDict.libraryReadLength}}" style="width:50px; font-weight: normal; font-size: 14px;" name="libraryReadLength" id="libraryReadLength" {% if helper.isEditRun %} readonly {% endif %}>
+        </p>
+    </div>
+    <div class="span6">
+    </div>
+</div>
+
 <div class="row-fluid">
     <div class="span6">
-        <label>Sequencing Kit:</label>
+        <label class="form-label" >Sequencing Kit</label>
         <select id="sequenceKit" name="sequencekitname" style="width: 350px;">
             <option value=""></option>
             {% for kit in step.getPrePopulatedFieldDict.seqKits %}
@@ -208,10 +239,20 @@
                 {% if step.getCurrentSavedFieldDict.isDuplicateReads %}checked="checked"{% endif %} style="vertical-align:top;">
             
         </p>
-        <p class="form-label" rel="tooltip" title="Recalibrate signal measurements for homopolymers"><i class="icon-info-sign"></i> Enable Base Recalibration
-            <input type="checkbox" id="base_recalibrate" name="base_recalibrate" 
-                {% if step.getCurrentSavedFieldDict.base_recalibrate %}checked="checked"{% endif %} style="vertical-align:top;">               
-        </p>
+        <p class="form-label" rel="tooltip" title="Base Calibration allows for empirical alignments to influence flow signals to achieve better homopolymer calibration to improve overall accuracy">
+        <i class="icon-info-sign"></i> Base Calibration Mode</p>
+        <select id="base_recalibrate" name="base_recalibrate" style="width: 220px;">
+        <!--option value=""></option -->
+
+        {% for mode, displayedMode in step.getPrePopulatedFieldDict.base_recalibration_modes.items %}
+            {% ifequal mode step.getCurrentSavedFieldDict.base_recalibrate %}
+                <option SELECTED value="{{mode}}">{{displayedMode}}</option>
+            {% else %}
+                <option value="{{mode}}">{{displayedMode}}</option>
+            {% endifequal %}
+        {% endfor %}
+        </select>
+        
         <p class="form-label" rel="tooltip" title="Optional analysis step to adjust the alignment, primarily in the CIGAR string"><i class="icon-info-sign"></i> Enable Realignment
             <input type="checkbox" id="realign" name="realign" {% if step.getCurrentSavedFieldDict.realign %}checked="checked"{% endif %} style="vertical-align:top;">           
         </p>
@@ -219,12 +260,14 @@
 </div>
 <div class="row-fluid">
     <div class="span6">
-        <label for="flows" class="form-label">Flows</label>
-        <input value="{{step.getCurrentSavedFieldDict.flows}}" style="width:50px;" name="flows" id="flows" {% if helper.isEditRun %} readonly {% endif %}>
+        <p style="font-weight: bold; font-size: 14px; margin-bottom: 8px;">Flows:
+        <input value="{{step.getCurrentSavedFieldDict.flows}}" style="width:50px; font-weight: normal; font-size: 14px;" name="flows" id="flows" {% if helper.isEditRun %} readonly {% endif %}>
+        </p>
     </div>
     <div class="span6">
     </div>
 </div>
+
 <div class="row-fluid">
     {% for key, value in step.validationErrors.items %}
         <h4 style="color: red">{{value}}</h4>
@@ -234,7 +277,8 @@
 
 {% block prevnext-buttons %}
     <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_application" %}');$('#step_form').submit();return false;">&larr; Previous</a>
-    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_monitoring" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+    <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_plugins" %}');$('#step_form').submit();return false;">Next &rarr;</a>
+    
 {% endblock prevnext-buttons %}
 
 {% block summary-table %}
@@ -251,6 +295,20 @@
             $("select[name=barcodeId]").attr('disabled', false);
         });
 
+        $("#base_recalibrate").each( function (){
+            var i =0;
+            var sel = this;
+            for(i = 0; i < sel.length;i++){
+                if (sel.options[i].text == "Default Calibration") {
+                    sel.options[i].title = "A random sample of reads (up to 100,000 by default) is aligned and used to determine calibration parameters, which are then applied to the rest of the run";
+                }
+                else if (sel.options[i].text == "Enable Calibration Standard") {
+                    sel.options[i].title = "Select Enable Calibration Standard when the experiment does not include a reference BAM file.  Only choose this option if you have added Calibration Standards with the library for AmpMix preparation.";
+                }
+            }
+           } 
+        );
+        
         var seq_kits_to_flows_map = {};
 
         {%for kitinfoobj in step.getPrePopulatedFieldDict.seqKits %}
@@ -266,11 +324,44 @@
         
         var template_kits_to_flows_map = {};        
 
-        {%for templateKitInfoObj in step.getPrePopulatedFieldDict.templateKits %}
+        {% for templateKitInfoObj in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}        
             template_kits_to_flows_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.flowCount}}";
         {%endfor%}
-        
 
+        {% for templateKitInfoObj in step.getPrePopulatedFieldDict.allTemplateKits %}
+            template_kits_to_flows_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.flowCount}}";
+        {%endfor%}
+       
+        var template_kits_to_readLengths_map = {};        
+
+        {% for templateKitInfoObj in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}        
+            template_kits_to_readLengths_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.libraryReadLength}}";
+        {%endfor%}
+
+        {% for templateKitInfoObj in step.getPrePopulatedFieldDict.allTemplateKits %}
+            template_kits_to_readLengths_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.libraryReadLength}}";
+        {%endfor%}
+                 
+        var template_kits_to_templatingSize_map = {};        
+
+        {% for templateKitInfoObj in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}        
+            template_kits_to_templatingSize_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.templatingSize}}";
+        {%endfor%}
+
+        {% for templateKitInfoObj in step.getPrePopulatedFieldDict.allTemplateKits %}
+            template_kits_to_templatingSize_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.templatingSize}}";
+        {%endfor%}
+  
+        var template_kits_to_categories_map = {};        
+
+        {% for templateKitInfoObj in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}
+            template_kits_to_categories_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.categories}}";
+        {%endfor%}
+        
+        {%for templateKitInfoObj in step.getPrePopulatedFieldDict.allTemplateKits %}            
+            template_kits_to_categories_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.categories}}";
+        {%endfor%}
+        
         var lib_kits_to_categories_map = {};
 
         {%for kitinfoobj in step.getPrePopulatedFieldDict.libKits %}
@@ -351,7 +442,7 @@
     		//console.log("updateOneTouchTemplateKit() defaultOneTouchTemplateKitName=", defaultOneTouchTemplateKitName, "; defaultNonAvalancheTemplateKitName=", defaultNonAvalancheTemplateKitName);
 
         	$("select[name$='templatekitname']").val(defaultNonAvalancheTemplateKitName);
-        	$("#selectedTemplatingKitName").text($("select[name='templatekitname']").find("option:selected").val());		
+        	$("#selectedTemplatingKitName").text(templateKitNameToDesc[$("select[name='templatekitname']").find("option:selected").val()]);		
     	}
 
     	function updateAvalancheSeqKit() {
@@ -381,7 +472,7 @@
     	function updateNonAvalancheFlowCount() {
             if (!$("#flows").prop('readonly')){
             	$('input[name = "flows"]').val(seq_kits_to_flows_map[$("select[name$='sequencekitname']").val()]);
-            	$("#selectedFlows").text($('input[name = "flows"]').val());
+            	updateFlowsInSummaryPanel();
             }            
     	}
 
@@ -398,7 +489,7 @@
 	            if (currentSelect.attr('id') == templateType + '__templatingKit') {
 	                currentSelect.attr('style', 'width: 350px;');
 	                currentSelect.attr('name', 'templatekitname');
-	                $("#selectedTemplatingKitName").text(currentSelect.find("option:selected").val());
+	                $("#selectedTemplatingKitName").text(templateKitNameToDesc[currentSelect.find("option:selected").val()]);
 	            } else {
 	                currentSelect.attr('style', 'width: 350px; display: none;');
 	                currentSelect.attr('name', currentSelect.attr('id').replace('__templatingKit', '') + '__templatekitname');
@@ -427,6 +518,167 @@
     	}
 
 
+        function handleTemplateKitSelectionForTemplatingSize(selectedTemplateKitName) {
+            //console.log("at handleTemplateKitSelectionForLibraryReadLength() selectedTemplateKitName=", selectedTemplateKitName);
+            var defaultTemplatingSize = "";
+            var allowed_templatingSizes = "";
+            
+            if (selectedTemplateKitName) {
+                var categories = template_kits_to_categories_map[selectedTemplateKitName];
+                allowed_templatingSizes = template_kits_to_templatingSize_map[selectedTemplateKitName];
+
+                if (categories.toLowerCase().indexOf("multipletemplatingsize") >= 0) {                                        
+                    //console.log("at handleTemplateKitSelectionForTemplatingSize() categories=", categories, "; allowed_templatingSizes=", allowed_templatingSizes);
+
+                    if (allowed_templatingSizes) {
+                        allowed_size_array = allowed_templatingSizes.split(";");
+                        $('input[name = "templatingSize"]').attr('disabled', true);
+
+                        jQuery.each(allowed_size_array, function(index, item) {
+                            $('input[name = "templatingSize"][value="' + item + '"]').attr('disabled', false);
+                            
+                            if (index == 0) {
+                                $('input[name = "templatingSize"][value="' + item + '"]').prop('checked', true);
+                                defaultTemplatingSize = item;
+                            }
+                        });
+                        $('.templating_size_info').show(); 
+                     }
+                    else {
+                        $('.templating_size_info').hide();
+                    }
+                    updateTemplatingSizeInSummaryPanel(defaultTemplatingSize);
+                }
+                else {                                
+                    console.log("at handleTemplateKitSelectionForTemplatingSize() categories NOT FOUND!! going to check flowOverridable");
+
+                    $('input[name = "templatingSize"]').prop('checked', false);                    
+                    $('.templating_size_info').hide();
+                    updateTemplatingSizeInSummaryPanel("");
+
+                }
+            }             
+        }
+
+        function handleTemplateKitSelectionForLibraryReadLength(selectedTemplateKitName) {
+            //console.log("at handleTemplateKitSelectionForLibraryReadLength() selectedTemplateKitName=", selectedTemplateKitName);
+            var defaultLibraryReadLength = 0;
+            
+            if (selectedTemplateKitName) {
+                var categories = template_kits_to_categories_map[selectedTemplateKitName];
+                defaultLibraryReadLength = template_kits_to_readLengths_map[selectedTemplateKitName];
+
+                console.log("at handleTemplateKitSelectionForLibraryReadLength() selectedTemplateKitName=", selectedTemplateKitName, "; categories=", categories);
+                
+                if (categories.toLowerCase().indexOf("supportlibraryreadlength") >= 0) {
+                    $('input[name = "libraryReadLength"]').val(defaultLibraryReadLength);
+                    if (defaultLibraryReadLength > 0) {
+                        $('.library_read_length_info').show(); 
+                        setFlowCountByLibraryReadLength(defaultLibraryReadLength);
+                    }
+                    else {
+                        $('.library_read_length_info').hide();
+                    }
+                    updateLibraryReadLengthInSummaryPanel(defaultLibraryReadLength);
+                }
+                else {                                
+                    console.log("at handleTemplateKitSelectionForLibraryReadLength() categories NOT FOUND!! going to check flowOverridable");
+
+                    $('input[name = "libraryReadLength"]').val(defaultLibraryReadLength);
+                    $('.library_read_length_info').hide();
+
+                    updateLibraryReadLengthInSummaryPanel(defaultLibraryReadLength);
+
+                    var seq_categories = seq_kits_to_categories_map[$("select[name$='sequencekitname']").val()];
+                    var templateKitFlowCount = template_kits_to_flows_map[selectedTemplateKitName];
+                                
+                    //console.log("at handleTemplateKitSelectionForLibraryReadLength() categories NOT FOUND!! seq_categories=", seq_categories, "; templateKitFlowCount=", templateKitFlowCount);
+                    
+                    if (seq_categories.toLowerCase().indexOf("flowoverridable") >= 0 && templateKitFlowCount > 0) {                                                       
+                        $('input[name = "flows"]').val(templateKitFlowCount);
+                        updateFlowsInSummaryPanel();
+                    }
+                    else {                                                    
+                        console.log("at handleTemplateKitSelectionForLibraryReadLength() categories NOT FOUND!! going to use seq kit default");
+                        setFlowCountBySeqKitDefault();
+                    }                 
+                }
+            }
+            else {
+                setFlowCountByLibraryReadLength(defaultLibraryReadLength);
+                $('.library_read_length_info').hide();
+                                
+                updateLibraryReadLengthInSummaryPanel(defaultLibraryReadLength);
+            }                          
+        }
+        
+
+        function handleSeqKitSelectionForLibraryReadLength(selectedSeqKitName, selectedTemplateKitName) {
+            //console.log("at handleSeqKitSelectionForLibraryReadLength() selectedSeqKitName=", selectedSeqKitName, "; selectedTemplateKitName=", selectedTemplateKitName);
+            
+            var seqKitFlowCount = seq_kits_to_flows_map[selectedSeqKitName];
+            //console.log("at handleSeqKitSelectionForLibraryReadLength() selectedSeqKitName=", selectedSeqKitName, "; seqKitFlowCount=", seqKitFlowCount);
+            
+            if (selectedTemplateKitName) {
+                var categories = template_kits_to_categories_map[selectedTemplateKitName];               
+                if (categories.toLowerCase().indexOf("supportlibraryreadlength") >= 0) {
+                    setLibraryReadLengthByFlowCount(seqKitFlowCount);
+                }
+            }                
+        }
+
+        function setLibraryReadLengthByFlowCount(seqKitFlowCount) {
+            //console.log("at setLibraryReadLengthByFlowCount() seqKitFlowCount=", seqKitFlowCount);
+            $('input[name = "libraryReadLength"]').val(seqKitFlowCount / 2);
+            updateLibraryReadLengthInSummaryPanel($('input[name = "libraryReadLength"]').val());
+        }    
+        
+        
+        function setFlowCountByLibraryReadLength(libraryReadLength) {
+            //console.log("at setFlowCountByLibraryReadLength() libraryReadLength=", libraryReadLength);
+            selectedSeqKit = $("#sequenceKit option:selected").val();
+            if (selectedSeqKit) {
+                var categories = seq_kits_to_categories_map[selectedSeqKit];
+                //console.log("at setFlowCountByLibraryReadLength() categories=", categories);
+ 
+                if (categories.toLowerCase().indexOf("flowsderivablefromreadlength") >= 0) {
+                    if (libraryReadLength > 0) { 
+                        $('input[name = "flows"]').val(libraryReadLength * 2);
+                        updateFlowsInSummaryPanel();
+                    }
+                    else {
+                        setFlowCountBySeqKitDefault();
+                    }
+                }
+                else {
+                    setFlowCountBySeqKitDefault();
+                }
+            } 
+        }    
+        
+
+        function setFlowCountBySeqKitDefault() {
+            $('input[name = "flows"]').val(seq_kits_to_flows_map[$("select[name$='sequencekitname']").val()]);
+            updateFlowsInSummaryPanel();        
+        }
+
+        function updateTemplatingSizeInSummaryPanel(templatingSize) {
+            $("#selectedTemplatingSize").text(templatingSize);
+        }
+
+        function updateLibraryReadLengthInSummaryPanel(libraryReadLength) {
+            var value = libraryReadLength;
+            if (value <= 0) {
+                value = "--";
+            }
+            $("#selectedLibraryReadLength").text(value);
+        }
+        
+
+        function updateFlowsInSummaryPanel() {
+            $("#selectedFlows").text($('input[name = "flows"]').val());
+        }         
+        
         function handleTemplateKitSelectionForFlowOverride(selectedTemplateKitName) {
             selectedSeqKit = $("#sequenceKit option:selected").val();
             var seqKitFlowCount = seq_kits_to_flows_map[selectedSeqKit];
@@ -441,7 +693,7 @@
  
                         if (categories.toLowerCase().indexOf("flowoverridable") >= 0) {                                                       
                             $('input[name = "flows"]').val(templateKitFlowCount);
-                            $("#selectedFlows").text($('input[name = "flows"]').val());
+                             updateFlowsInSummaryPanel();
                         }
                     }
                 }               
@@ -481,8 +733,7 @@
             else {                        
                 $('input[name = "flows"]').val(seqKitFlowCount);
             } 
-            
-            $("#selectedFlows").text($('input[name = "flows"]').val());          
+            updateFlowsInSummaryPanel(); 
         }
         
 
@@ -547,13 +798,17 @@
                 var selectedSequenceKitName = $(this).val();
                 
                 var categories = seq_kits_to_categories_map[$(this).val()];
-                                
+
+                //note: tokens in categories are not mutually exclusive
                 if (categories.toLowerCase().indexOf("flowoverridable") >= 0) {
                     handleFlowOverridableSeqKitSelection($(this).val(), flowCount);
                 }
-                else {
-                    $('input[name = "flows"]').val(flowCount);
-                    $("#selectedFlows").text(flowCount);
+                
+                $('input[name = "flows"]').val(flowCount);
+                updateFlowsInSummaryPanel();
+                    
+                if (categories.toLowerCase().indexOf("readlengthderivablefromflows") >= 0) {
+                    handleSeqKitSelectionForLibraryReadLength(selectedSequenceKitName, $("select[name='templatekitname']").val());                      
                 }
 
                 $("#selectedSequenceKit").text(seqKitNameToDesc[$(this).val()]);
@@ -622,7 +877,7 @@
                 
                 updateNonAvalanche3PrimeAdapter();
                 updateNonAvalancheFlowCount();
-            	$("#selectedTemplatingKitName").text($("select[name='templatekitname']").find("option:selected").val());
+            	$("#selectedTemplatingKitName").text(templateKitNameToDesc[$("select[name='templatekitname']").find("option:selected").val()]);
             }
             else {             
             	$('input[name = "templatekitSubType"]').removeAttr('disabled'); 
@@ -644,9 +899,11 @@
                 if (currentSelect.attr('id') == templateType + '__templatingKit') {
                     currentSelect.attr('style', 'width: 350px;');
                     currentSelect.attr('name', 'templatekitname');
-                    $("#selectedTemplatingKitName").text(currentSelect.find("option:selected").val());
+                    $("#selectedTemplatingKitName").text(templateKitNameToDesc[currentSelect.find("option:selected").val()]);
 
                     handleTemplateKitSelectionForFlowOverride(currentSelect.find("option:selected").val());
+                    handleTemplateKitSelectionForTemplatingSize(currentSelect.find("option:selected").val());
+                    handleTemplateKitSelectionForLibraryReadLength(currentSelect.find("option:selected").val());
                 } else {
                     currentSelect.attr('style', 'width: 350px; display: none;');
                     currentSelect.attr('name', currentSelect.attr('id').replace('__templatingKit', '') + '__templatekitname');
@@ -684,11 +941,13 @@
         	}
 
         	handleTemplateKitSelectionForFlowOverride(selectedVal);
+        	handleTemplateKitSelectionForTemplatingSize(selectedVal)
+        	handleTemplateKitSelectionForLibraryReadLength(selectedVal);
         	
-            $("#selectedTemplatingKitName").text($(this).find("option:selected").val());
+            $("#selectedTemplatingKitName").text(templateKitNameToDesc[$(this).find("option:selected").val()]);
         });
-        
 
+        
         $('input[name = "templatekitSubType"]').change(function () {
         	var checkBox = $(this);
 
@@ -739,17 +998,38 @@
         });
 
                 
-        var flowsSpinner = $("#flows").spinner({min: 0, max: 10000});
+        var flowsSpinner = $("#flows").spinner({min: 1, max: 2000});
         flowsSpinner.spinner("value", '{{step.getCurrentSavedFieldDict.flows}}');
         $("#flows").on("spinchange", function(event, ui){
-            $("#selectedFlows").text(flowsSpinner.spinner("value"));
+            updateFlowsInSummaryPanel();
         });
         $("#flows").on("spinstop", function(event, ui) {
-            $("#selectedFlows").text(flowsSpinner.spinner("value"));
+            updateFlowsInSummaryPanel();
         });
         if ($("#flows").prop('readonly'))
             flowsSpinner.spinner("disable").prop('disabled',false);
     
+    
+        var readLengthSpinner = $("#libraryReadLength").spinner({min: 0, max: 1000});
+        readLengthSpinner.spinner("value", '{{step.getCurrentSavedFieldDict.libraryReadLength}}');
+        $("#libraryReadLength").on("spinchange", function(event, ui){
+            var value = readLengthSpinner.spinner("value");
+            updateLibraryReadLengthInSummaryPanel(value);
+            setFlowCountByLibraryReadLength(value);
+        });
+        
+        $("#libraryReadLength").on("spinstop", function(event, ui) {
+            var value = readLengthSpinner.spinner("value");
+            updateLibraryReadLengthInSummaryPanel(value);
+            setFlowCountByLibraryReadLength(value);           
+        });
+        if ($("#libraryReadLength").prop('readonly'))
+            readLengthSpinner.spinner("disable").prop('disabled',false);  
+
+        $('input[type=radio][name=templatingSize]').change(function() {
+            updateTemplatingSizeInSummaryPanel(this.value);
+        });
+        
         $("#controlsequence").change(function()  {
             $("#selectedControlSequence").text($(this).val());
         });     
@@ -773,6 +1053,22 @@
             }
         });
         
+        //hide libraryReadLength UI section by default if value is zero
+        if ($('input[name = "libraryReadLength"]').val() > 0) {
+            $(".library_read_length_info").show();
+        }
+        else {
+            $(".library_read_length_info").hide();
+        }
+
+        //hide templatingSize UI section by default if value is blank
+        if ($('input[name = "templatingSize"]:checked').val() == undefined) {
+            $(".templating_size_info").hide();
+        }
+        else {
+            $(".templating_size_info").show();
+        }
+
         $('#isDuplicateReads').change(function(){
             if($(this).is(':checked')) {
                 $('#selectedMarkAsPcrDuplicates').text('True');

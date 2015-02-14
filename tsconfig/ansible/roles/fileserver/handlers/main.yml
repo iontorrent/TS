@@ -13,6 +13,10 @@
   service: name=dhcp3-server state=restarted
   ignore_errors: yes
   
+- name: restart isc-dhcp
+  service: name=isc-dhcp-server state=restarted
+  ignore_errors: yes
+  
 - name: restart vsftpd
   service: name=vsftpd state=restarted
   

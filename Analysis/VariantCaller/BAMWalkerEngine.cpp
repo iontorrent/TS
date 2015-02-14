@@ -186,7 +186,9 @@ void BAMWalkerEngine::SaveAlignments(Alignment* removal_list)
 {
   if (not bam_writing_enabled_)
     return;
-
+  
+  if (!removal_list) removal_list = alignments_first_;
+    
   for (Alignment *current_read = removal_list; current_read; current_read = current_read->next) {
     if (not current_read->worth_saving)
       continue;
@@ -283,7 +285,7 @@ void BAMWalkerEngine::RequestReadProcessingTask(Alignment* & new_read)
 
 bool BAMWalkerEngine::GetNextAlignmentCore(Alignment* new_read)
 {
-  return has_more_alignments_ = bam_reader_.GetNextAlignmentCore(new_read->alignment);
+  return has_more_alignments_ = (bam_reader_.GetNextAlignmentCore(new_read->alignment) && new_read!=NULL && new_read->alignment.RefID>=0);
 }
 
 

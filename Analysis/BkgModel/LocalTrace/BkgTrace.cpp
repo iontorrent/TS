@@ -493,6 +493,105 @@ void TraceHelper::SpecialShiftTrace (float *trc, float *trc_out, int pts, float 
     }
 }
 
+// bi-directional shift trace
+// takes trc as a pointer to an input signal of length pts and shifts it in time by frame_offset, putting the result
+// in trc_out.  If frame_offset is positive, the signal is shifted left (towards lower indices in the array)
+// if the frame_offset is negative it is shifted right towards higher indices.
+// If frame_offset is not an integer, linear interpolation is used to construct the output values
+void TraceHelper::ShiftTraceBiDirect (float *trc, float *trc_out, int pts, float frame_offset)
+{
+
+  float shift = -frame_offset; //shift tract in opposite direction of to correctframe_offset
+
+  if(shift != 0){
+
+      int shiftwhole = (int)shift;  //Truncate to get number of whole frames to shift.
+
+      int nearFrame = -shiftwhole;   //determine the closer of the two frames to interpolate in-between
+      int farFrame = nearFrame + ((shift < 0)?(1):(-1));  //determine the frame further away. interpolate between near and far
+
+      float farFrac =  abs(shift-(float)shiftwhole);  //determine fraction of far frame
+      float nearFrac = 1.0f - farFrac;  //and fraction of near frame used for interpolation
+
+  //  cout << "nearFrame "<< nearFrame <<" nearFrac "<< nearFrac <<" farFrame " << farFrame <<" farFrac "<<farFrac <<endl;
+
+      int lastframe = pts-1;  // useful input frames range from 0 to frames-1
+
+      for(int i=0; i<pts; i++){
+
+        int nframe = nearFrame;
+        int fframe = farFrame;
+
+        if(nframe < 0 || fframe < 0) // if  near- or far-Frame below lower boundary both are set
+          nframe = fframe = 0;
+
+        if(nframe > lastframe || fframe > lastframe) //handle right boundary, use last frame for left and right when right is out of bounds
+          nframe = fframe = lastframe;
+
+        trc_out[i] =trc[nframe]*nearFrac + trc[fframe]*farFrac;
+
+        nearFrame++;
+        farFrame++;
+
+      }
+    }else{
+      for(int i=0; i<pts; i++){
+        trc_out[i] = trc[i];
+      }
+    }
+}
+
+void TraceHelper::ShiftTraceBiDirect_vec (void *trc_v8f_u, void *trc_out_v8f_u, int pts, float frame_offset)
+{
+
+  v8f_u * trc = (v8f_u*)trc_v8f_u;
+  v8f_u * trc_out = (v8f_u*)trc_out_v8f_u;
+
+
+  float shift = -frame_offset; //shift tract in opposite direction of to correctframe_offset
+
+  if(shift != 0){
+
+      int lastframe = pts-1;  // useful input frames range from 0 to frames-1
+
+      int shiftwhole = (int)shift;  //Truncate to get number of whole frames to shift.
+
+      int nearFrame = -shiftwhole;   //determine the closer of the two frames to interpolate in-between
+      int farFrame = nearFrame + ((shift < 0)?(1):(-1));  //determine the frame further away. interpolate between near and far
+
+      float far =  abs(shift-(float)shiftwhole);  //determine fraction of far frame
+      float near = 1.0f - far;  //and fraction of near frame used for interpolation
+      v8f_u farFrac;
+      v8f_u nearFrac;
+      farFrac.V = LD_VEC8F(far);
+      nearFrac.V = LD_VEC8F(near);
+
+  //  cout << "nearFrame "<< nearFrame <<" nearFrac "<< nearFrac <<" farFrame " << farFrame <<" farFrac "<<farFrac <<endl;
+
+      for(int i=0; i<pts; i++){
+
+        int nframe = nearFrame;
+        int fframe = farFrame;
+
+        if(nframe < 0 || fframe < 0) // if  near- or far-Frame below lower boundary both are set
+          nframe = fframe = 0;
+
+        if(nframe > lastframe || fframe > lastframe) //handle right boundary, use last frame for left and right when right is out of bounds
+          nframe = fframe = lastframe;
+
+        trc_out[i].V =trc[nframe].V*nearFrac.V + trc[fframe].V*farFrac.V;
+
+        nearFrame++;
+        farFrame++;
+
+      }
+    }else{
+      for(int i=0; i<pts; i++){
+        trc_out[i].V = trc[i].V;
+      }
+    }
+}
+
 void BkgTrace::FillBeadTraceFromBuffer (short *img,int iFlowBuffer, int flow_block_size)
 {
     //Populate the fg_buffers buffer with livebead only image data
@@ -781,6 +880,7 @@ void BkgTrace::LoadImgWRezeroOffset(const RawImage *raw, int16_t *out[VEC8_SIZE]
   v8f_u mult;
   v8f_u curCompFrmsV;
   v8f_u * uncompTrace = NULL;
+  v8f_u * tmpTrace = NULL;
   int interf,lastInterf=-1;
   int16_t lastVal[VEC8_SIZE];
   int f_coord[VEC8_SIZE];
@@ -791,17 +891,18 @@ void BkgTrace::LoadImgWRezeroOffset(const RawImage *raw, int16_t *out[VEC8_SIZE]
   if(t0Shift > (raw->uncompFrames-2))
           t0Shift = (raw->uncompFrames-2);
 
-  uncompTrace = new v8f_u[imgFrames];
+  uncompTrace = new v8f_u[raw->uncompFrames+2];
+  tmpTrace = uncompTrace + 2;
   //by using floor() instead of (int) here
   //we now can allow for negative t0Shifts
-  t0ShiftWhole=floor(t0Shift);
-  t0ShiftFrac = t0Shift - (float)t0ShiftWhole;
+  //t0ShiftWhole=floor(t0Shift);
+  //t0ShiftFrac = t0Shift - (float)t0ShiftWhole;
 
   // skip t0ShiftWhole input frames,
   // if T0Shift whole < 0 start at frame 0;
-  int StartAtFrame = (t0ShiftWhole < 0)?(0):(t0ShiftWhole);
+  //int StartAtFrame = (t0ShiftWhole < 0)?(0):(t0ShiftWhole);
 
-  my_frame = raw->interpolatedFrames[StartAtFrame]-1;
+  //my_frame = raw->interpolatedFrames[StartAtFrame]-1;
   compFrm = 0;
   tmpAdder.V=LD_VEC8F(0.0f);
   curFrms=0;
@@ -836,9 +937,9 @@ void BkgTrace::LoadImgWRezeroOffset(const RawImage *raw, int16_t *out[VEC8_SIZE]
     }
 
     // interpolate
-    multT=raw->interpolatedMult[f] - (t0ShiftFrac/raw->interpolatedDiv[f]);
+    multT=raw->interpolatedMult[f]; // - (t0ShiftFrac/raw->interpolatedDiv[f]);
     mult.V = LD_VEC8F(multT);
-    uncompTrace[f].V =  ( (prev.V)-(next.V) ) * (mult.V) + (next.V);
+    tmpTrace[f].V =  ( (prev.V)-(next.V) ) * (mult.V) + (next.V);
   }
 
 /*  if(DEBUGcnt == 0 && debugoutput < 32){
@@ -851,9 +952,12 @@ void BkgTrace::LoadImgWRezeroOffset(const RawImage *raw, int16_t *out[VEC8_SIZE]
   }
   }
   */
+
+  TraceHelper::ShiftTraceBiDirect_vec ((void*)tmpTrace, (void *)uncompTrace, imgFrames, t0Shift);
   RezeroUncompressedTraceV( (void*)uncompTrace, t_start, t_end);
 
   //recompress
+  my_frame = 0;
   while ((my_frame < raw->uncompFrames) && (compFrm < nfrms))
     {
       tmpAdder.V = tmpAdder.V +  uncompTrace[my_frame].V;
@@ -883,9 +987,9 @@ void BkgTrace::LoadImgWRezeroOffset(const RawImage *raw, int16_t *out[VEC8_SIZE]
 
     //reuse my_frame while not compensated for negative t0 shifts
     //T0ShiftWhole will be < 0 for negative t0
-    if(t0ShiftWhole < 0)
-      t0ShiftWhole++;
-    else
+    //if(t0ShiftWhole < 0)
+     // t0ShiftWhole++;
+    //else
       my_frame++;
 
   }
@@ -1159,7 +1263,8 @@ void BkgTrace::GenerateAllBeadTrace_vec (Region *region, BeadTracker &my_beads,
     	   		if ((my_beads.params_nn[nbdx].x == (x+k)) &&
     	   			(my_beads.params_nn[nbdx].y == y))
     	   		{
-                    localT0 += t0_map[nbdx];
+                    //localT0 += t0_map[nbdx]; //BUG!! t0_map is a 2D map containing all beads not only live beads.
+    	   		        localT0 += t0_map[y*region->w+(x+k)]; //BUG!! t0_map is a 2D map containing all beads not only live beads.
                     localT0Cnt += 1.0f;
     	   			storeIdx[k]=incr++;
     	   			nbdx++;

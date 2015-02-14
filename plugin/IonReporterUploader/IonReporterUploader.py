@@ -25,11 +25,11 @@ plugin_dir = ""
 
 
 class IonReporterUploader(IonPlugin):
-    version = "4.2-r88007"
+    version = "4.4.0.2"
     runtypes = [RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE]
     runlevels = [RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST]
     features = [Feature.EXPORT]
-    depends = ["variantCaller"]
+    #depends = ["variantCaller"]
 
     #JIRA [TS-7563]
     allow_autorun = False

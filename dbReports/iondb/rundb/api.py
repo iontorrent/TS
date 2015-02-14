@@ -1,9 +1,12 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 import os
 from django.db.models.aggregates import Count, Max
+from django.core.cache import cache
 from tastypie.api import Api
 import StringIO
 import csv
+import uuid
+import json
 from tastypie.utils.formatting import format_datetime
 from tastypie.resources import ModelResource as _ModelResource, Resource, ModelDeclarativeMetaclass
 from tastypie.constants import ALL, ALL_WITH_RELATIONS
@@ -47,9 +50,11 @@ from tastypie.utils import dict_strip_unicode_keys, trailing_slash
 from tastypie.utils.mime import build_content_type
 
 from iondb.rundb.views import barcodeData
+from iondb.rundb.barcodedata import BarcodeSampleInfo
 from iondb.rundb import forms
 import iondb.rundb.admin
 from iondb.rundb.plan import plan_validator
+from iondb.rundb.plan.plan_share import prepare_for_copy, transfer_plan, update_transferred_plan
 
 from ion.utils.TSversion import findVersions
 #from iondb.plugins import runner
@@ -72,18 +77,7 @@ from iondb.utils import toBoolean
 import urllib
 import re
 from subprocess import Popen, PIPE
-
-try:
-    import lxml
-    from lxml.etree import parse as parse_xml
-    from lxml.etree import Element, tostring
-except ImportError:
-    lxml = None
-try:
-    import yaml
-    from django.core.serializers import pyyaml
-except ImportError:
-    yaml = None
+import operator
 
 from django.conf import settings
 from django.http import HttpResponse, HttpResponseNotFound, HttpResponseRedirect, Http404
@@ -94,7 +88,7 @@ except ImportError:
     # Compat Django 1.4
     from django.conf.urls.defaults import url
 
-import tasks
+from iondb.rundb import tasks
 from iondb.rundb.data import dmactions_types
 
 from iondb.plugins.manager import pluginmanager
@@ -131,7 +125,7 @@ def JSONconvert(self, value):
 CharField.convert = JSONconvert
 
 class CustomSerializer(Serializer):
-    formats = ['json', 'jsonp', 'xml', 'yaml', 'html', 'plist', 'csv']
+    formats = settings.TASTYPIE_DEFAULT_FORMATS
     content_types = {
         'json': 'application/json',
         'jsonp': 'text/javascript',
@@ -141,6 +135,7 @@ class CustomSerializer(Serializer):
         'plist': 'application/x-plist',
         'csv': 'text/csv',
     }
+
     def format_datetime(self, data):
         """
         A hook to control how datetimes are formatted.
@@ -157,25 +152,34 @@ class CustomSerializer(Serializer):
             return format_datetime(data)
         data = data.replace(microsecond=int(round(data.microsecond / 1000)))
         return data.isoformat()
+
     def to_csv(self, data, options=None):
         options = options or {}
         data = self.to_simple(data, options)
         raw_data = StringIO.StringIO()
-        # Untested, so this might not work exactly right.
-        if data.has_key('objects'):
-            objects = data['objects']
-            for item in objects:
-                writer = csv.DictWriter(raw_data, item.keys(), extrasaction='ignore')
-                writer.writerow(item)
-        return raw_data
+        first = True
+        writer = None
+        for item in data.get('objects', {}):
+            if first:
+                writer = csv.DictWriter(raw_data, fieldnames=item.keys(), extrasaction='ignore')
+                #writer.writeheader() # python 2.7+
+                writer.writerow(dict(zip(writer.fieldnames, writer.fieldnames)))
+            writer.writerow(item)
+        raw_data.seek(0)
+        return raw_data.getvalue()
 
     def from_csv(self, content):
         raw_data = StringIO.StringIO(content)
-        data = []
-        # Untested, so this might not work exactly right.
-        for item in csv.DictReader(raw_data):
-            data.append(item)
+        with csv.Sniffer() as sniffer:
+            has_header = sniffer.has_header(raw_data.read(1024))
+        raw_data.seek(0)
+        with csv.DictReader(raw_data) as reader:
+            if has_header:
+                fieldnames = reader.next()
+            for item in reader:
+                data.append(item)
         return data
+
 
 class MyModelDeclarativeMetaclass(ModelDeclarativeMetaclass):
     def __new__(cls, name, bases, attrs):
@@ -388,29 +392,21 @@ class UserResource(ModelResource):
 
 class ProjectResource(ModelResource):
     resultsCount = fields.IntegerField(readonly=True)
-    results = fields.ToManyField('iondb.rundb.api.ResultsResource', attribute = 'results', related_name='results', null=True)
     creator = fields.ToOneField(UserResource, 'creator', full=False)
+
     def dehydrate(self, bundle):
         bundle.data['resultsCount'] = bundle.obj.results.count()
         return bundle
-#    def apply_sorting(self, objects, options=None):
-#        print objects
-#        if options and options.has_key('order_by'):
-#            if "resultsCount" in options['order_by']:
-#                return objects.order_by()
-#            if "-resultsCount" in options['order_by']:
-#                return objects.annotate(resultsCount=Count('results'))
-#        return super(ProjectResource, self).apply_sorting(objects, options)
 
 # TODO: The creator field should be immutable after record insertion.
 #    def hydrate_creator (self, bundle):
 #        bundle = super(ProjectResource,self).hydrate_creator(bundle)
 #        bundle.data['creator'] = bundle.request.user
 #        return bundle
+
     class Meta:
         queryset = models.Project.objects.all()
 
-#        results_allowed_methods = ['get']
         creator_allowed_methods = ['get']
         # allow ordering and filtering by all fields
         field_list = models.Project._meta.get_all_field_names()
@@ -421,7 +417,7 @@ class ProjectResource(ModelResource):
         authorization = DjangoAuthorization()
 
 class ProjectResultsResource(ModelResource):
-    projects = fields.ToManyField(ProjectResource, 'projects', full=True)
+    projects = fields.ToManyField(ProjectResource, 'projects', full=False)
 
     def apply_filters(self, request, applicable_filters):
         base_object_list = super(ProjectResultsResource, self).apply_filters(request, applicable_filters)
@@ -461,6 +457,8 @@ class ResultsResource(BaseMetadataResource):
                     self.wrap_view('dispatch_pluginresult_set'), name="api_dispatch_pluginresult_set"),
            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/barcode%s$" % (self._meta.resource_name, trailing_slash()),
                self.wrap_view('dispatch_barcode'), name="api_dispatch_barcode"),
+           url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/barcodesampleinfo%s$" % (self._meta.resource_name, trailing_slash()),
+               self.wrap_view('dispatch_barcodesampleinfo'), name="api_dispatch_barcodesampleinfo"),
            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/metadata%s$" % (self._meta.resource_name, trailing_slash()),
                 self.wrap_view('dispatch_metadata'), name="api_dispatch_metadata"),
            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/representative%s$" % (self._meta.resource_name, trailing_slash()),
@@ -578,7 +576,7 @@ class ResultsResource(BaseMetadataResource):
 
         #get the hostname try to get the name from global config first
         sge_master = str(socket.getfqdn())
-        gc = models.GlobalConfig.objects.all()[0]
+        gc = models.GlobalConfig.get()
         if gc.web_root:
             net_location = gc.web_root
         else:
@@ -645,7 +643,7 @@ class ResultsResource(BaseMetadataResource):
         report_type = RunType.FULLCHIP
         if result.experiment.rawdatastyle != 'single':
             report_type = RunType.THUMB if result.isThumbnail else RunType.COMPOSITE
-            
+
         if report_type == RunType.COMPOSITE:
             # get analyzed block directories for Proton analysis
             params['block_dirs'] = []
@@ -672,7 +670,7 @@ class ResultsResource(BaseMetadataResource):
                         plugins_dict, msg = remote.call_launchPluginsXMLRPC(result.pk, plugins_dict, net_location, user.username, runlevel, params)
             else:
                 plugins_dict, msg = remote.call_launchPluginsXMLRPC(result.pk, plugins_dict, net_location, user.username, runlevel, params)
-            
+
             if msg:
                 if 'ERROR' in msg:
                     logger.error('Unable to launch plugin: %s', plugin.name) # See ionPlugin.log for details
@@ -760,7 +758,7 @@ class ResultsResource(BaseMetadataResource):
             major = (major.lower() == "true")
             pluginresults = pluginresults.filter(plugin__majorBlock=major)
 
-        gc = models.GlobalConfig.objects.all()[0]
+        gc = models.GlobalConfig.get()
 
         # Iterate through DB results first, find matching directories
         pluginArray = []
@@ -915,9 +913,19 @@ class ResultsResource(BaseMetadataResource):
 
         return self.create_response(request, barcode)
 
+    def dispatch_barcodesampleinfo(self, request, **kwargs):
+        return self.dispatch('barcodesampleinfo', request, **kwargs)
+
+    def get_barcodesampleinfo(self, request, **kwargs):
+        result = self.get_object_list(request).get(pk=kwargs["pk"])
+        if result is None:
+            return HttpGone()
+        barcodeSampleInfo = BarcodeSampleInfo(kwargs["pk"],result=result)
+        logger.debug("BarcodeSampleInfo: %s", barcodeSampleInfo.to_json())
+        return self.create_response(request, barcodeSampleInfo.data())
+
     def dispatch_pluginresult_set(self, request, **kwargs):
         return self.dispatch('pluginresult_set', request, **kwargs)
-
 
     def get_pluginresult_set(self, request, **kwargs):
         # Helper to return full resource for pluginresults, 
@@ -1017,6 +1025,7 @@ class ResultsResource(BaseMetadataResource):
         projects_allowed_methods = ['get']
         pluginstore_allowed_methods = ['get','put']
         barcode_allowed_methods = ['get']
+        barcodesampleinfo_allowed_methods = ['get']
         metadata_allowed_methods = ['get','post']
 
 class ExperimentResource(BaseMetadataResource):
@@ -1117,8 +1126,8 @@ class SampleSetResource(ModelResource):
 
 
     class Meta:
-#        isSupported = models.GlobalConfig.objects.all()[0].enable_compendia_OCP
-#        
+#        isSupported = models.GlobalConfig.get().enable_compendia_OCP
+#
 #        if isSupported:
 #            queryset = models.SampleSet.objects.all().select_related(
 #                    'SampleGroupType_CV__displayedName'
@@ -1153,7 +1162,7 @@ class SampleSetItemResource(ModelResource):
     sampleSet = fields.ToOneField('iondb.rundb.api.SampleSetResource', 'sampleSet', full=False, null=True, blank=True)
     sample = fields.ToOneField('iondb.rundb.api.SampleResource', 'sample', full=False, null=True, blank=True)
     dnabarcode = fields.ToOneField('iondb.rundb.api.dnaBarcodeResource', "dnabarcode", full=False, null=True, blank=True)
-    
+
     class Meta:
         queryset = models.SampleSetItem.objects.all().select_related('sampleSet', 'sample', 'dnabarcode')
 
@@ -1200,7 +1209,7 @@ class SampleSetItemInfoResource(SampleSetItemResource):
         bundle.data['relationshipGroup'] = bundle.obj.relationshipGroup
         bundle.data['dnabarcode'] = bundle.obj.dnabarcode.id_str if bundle.obj.dnabarcode else ""
         bundle.data['dnabarcodeKit'] = bundle.obj.dnabarcode.name if bundle.obj.dnabarcode else ""
-        
+
         sampleAttribute_list = models.SampleAttribute.objects.filter(isActive = True).order_by('id')
 
         attribute_dict = {}
@@ -1257,8 +1266,8 @@ class SampleGroupType_CVResource(ModelResource):
     sampleAnnotation_set = fields.ToManyField('iondb.rundb.api.SampleAnnotation_CVResource', 'sampleAnnotation_set', full=False, null=True, blank=True)
 
     class Meta:
-#        isSupported = models.GlobalConfig.objects.all()[0].enable_compendia_OCP
-#        
+#        isSupported = models.GlobalConfig.get().enable_compendia_OCP
+#
 #        if isSupported:
 #            queryset = models.SampleGroupType_CV.objects.all()
 #        else:
@@ -1514,7 +1523,7 @@ class PluginResource(ModelResource):
         #this is meant for internal use only
         urls = [url(r"^(?P<resource_name>%s)/set/(?P<keys>\w[\w/-;]*)/type%s$" % (self._meta.resource_name,
                     trailing_slash()),self.wrap_view('get_type_set'), name="api_get_type_set"),
-                url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/extend/(?P<extend>\w[\w/-;]*)%s$" % (self._meta.resource_name,
+                url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w\./-]*)/extend/(?P<extend>\w[\w/-;]*)%s$" % (self._meta.resource_name,
                     trailing_slash()),self.wrap_view('dispatch_extend'), name="api_dispatch_extend"),
                 url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/type%s$" % (self._meta.resource_name,
                     trailing_slash()), self.wrap_view('dispatch_type'), name="api_dispatch_type"),
@@ -1790,7 +1799,6 @@ class PluginResultResource(ModelResource):
         status = remote.call_sgeStop(obj.jobid)
         #if status:
         obj.complete(state="Terminated")
-        obj.save()
         return HttpAccepted()
 
 
@@ -1807,7 +1815,6 @@ class PluginResultResource(ModelResource):
                 )
             elif value in ('Completed', 'Error'):
                 bundle.obj.complete(state=value)
-                bundle.obj.save()
                 # Ignore inodes/size, as they are computed by the model in complete
                 bundle.data.pop('inodes')
                 bundle.data.pop('size')
@@ -1937,7 +1944,7 @@ class PlannedExperimentValidation(Validation):
         err = plan_validator.validate_plan_name(value)
         if err:
             errors["planName"] = err
-        
+
         if not bundle.data.get('isReusable'):
             value = bundle.data.get("x_chipType",'')
             err = plan_validator.validate_chip_type(value)
@@ -1948,12 +1955,12 @@ class PlannedExperimentValidation(Validation):
             err = plan_validator.validate_plan_templating_kit_name(value)
             if err:
                 errors["templatingKitName"] = err
-                
+
             value = bundle.data.get("sampleTubeLabel")
             err = plan_validator.validate_sample_tube_label(value)
             if err:
-                errors["sampleTubeLabel"] = err   
-                 
+                errors["sampleTubeLabel"] = err
+
         # validate optional parameters
         for key, value in bundle.data.items():
             err = []
@@ -1961,19 +1968,19 @@ class PlannedExperimentValidation(Validation):
                 err = plan_validator.validate_sample_name(value)
             if key == "x_barcodedSamples" and value:
                 barcodedSamples = json.loads(value) if isinstance(value, basestring) else value
-                for sample in barcodedSamples:                   
+                for sample in barcodedSamples:
                     err.extend(plan_validator.validate_sample_name(sample))
             if key == "notes":
                 err = plan_validator.validate_notes(value)
             if key == "x_flows" and value!="0":
-                err = plan_validator.validate_flows(value)            
+                err = plan_validator.validate_flows(value)
             if key == "project" or key == "projects":
                 projectNames = value if isinstance(value, basestring) else ','.join(value)
 
-                errors, trimmed_projectNames = plan_validator.validate_projects(projectNames)
-                err.extend(errors)
+                project_errors, trimmed_projectNames = plan_validator.validate_projects(projectNames)
+                err.extend(project_errors)
             if key == "barcodeId":
-                err = plan_validator.validate_barcode_kit_name(value)             
+                err = plan_validator.validate_barcode_kit_name(value)
             if key == "sequencekitname":
                 err = plan_validator.validate_sequencing_kit_name(value)
             if key == "applicationGroupDisplayedName":
@@ -1981,10 +1988,23 @@ class PlannedExperimentValidation(Validation):
                 err = plan_validator.validate_application_group_for_runType(value, runType)
             if key == "sampleGroupingName":
                 err = plan_validator.validate_sample_grouping(value)
-                          
+            if key == "libraryReadLength":
+                err = plan_validator.validate_libraryReadLength(value)
+            if key == "templatingSize":
+                err = plan_validator.validate_templatingSize(value)
+            if key == "x_bedfile":
+                runType = bundle.data.get("runType")
+                reference = bundle.data.get("x_library")    
+
+                planStatus = bundle.data.get("planStatus")
+                if planStatus != "run":            
+                    err = plan_validator.validate_targetRegionBedFile_for_runType(value, runType, reference)
+            if key == "x_library":
+                    err = plan_validator.validate_reference_short_name(value)
+                
             if err:
                 errors[key] = err
- 
+
         if errors:
             planName = bundle.data.get("planName",'')
             logger.error("plan validation errors for plan=%s: Errors=%s" %(planName, errors))
@@ -2013,13 +2033,13 @@ class PlannedExperimentDbResource(ModelResource):
             projects_list = []
             for k in ["projects", "project"]:
                 value = bundle.data.get(k, [])
-    
+
                 if isinstance(value, basestring):
                     value = [value]
                 for p in value:
                     if p not in projects_list:
                         projects_list.append(p)
-    
+
             project_objs = []
             if projects_list:
                 user = getattr(bundle.request, 'user', None)
@@ -2033,7 +2053,7 @@ class PlannedExperimentDbResource(ModelResource):
                 project_objs = models.Project.bulk_get_or_create(projects_list, user)
         else:
             project_objs = bundle.obj.projects.all()
-        
+
         bundle.data['projects'] = project_objs
         bundle.data['project'] = None
 
@@ -2057,27 +2077,36 @@ class PlannedExperimentDbResource(ModelResource):
     def build_filters(self, filters=None):
         if filters is None:
             filters = {}
-        
+
         filter_platform = filters.get("platform") or filters.get("instrument")
         if 'platform' in filters:
             del filters['platform']
-        
+
         orm_filters = super(PlannedExperimentDbResource, self).build_filters(filters)
         if filter_platform:
             orm_filters.update({
                 "custom_platform": (Q(experiment__platform="") | Q(experiment__platform__iexact=filter_platform))
             })
-            
+
         return orm_filters
-        
+
 
     def apply_filters(self, request, filters):
         custom_query = filters.pop("custom_platform", None)
         base_object_list = super(PlannedExperimentDbResource, self).apply_filters(request, filters)
-        
+
         if custom_query is not None:
             base_object_list = base_object_list.filter(custom_query)
-        
+
+        name_or_id = request.GET.get('name_or_id')
+        if name_or_id is not None:
+            qset = (
+                Q(planName__icontains=name_or_id) |
+                Q(planDisplayedName__icontains=name_or_id) |
+                Q(planShortID__icontains=name_or_id)
+            )
+            base_object_list = base_object_list.filter(qset)
+
         return base_object_list
 
 
@@ -2091,6 +2120,8 @@ class PlannedExperimentDbResource(ModelResource):
             'plannedexperimentqc_set__qcType',
             'experiment__samples'
         ).all()
+
+        transfer_allowed_methods = ['get','post']
 
         #allow ordering and filtering by all fields
         field_list = models.PlannedExperiment._meta.get_all_field_names()
@@ -2124,7 +2155,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
     sequencekitname = fields.CharField(blank=True, null=True, default='')
     variantfrequency = fields.CharField(readonly = True, default='')
     isDuplicateReads = fields.BooleanField()
-    base_recalibrate = fields.BooleanField()
+    base_recalibration_mode = fields.CharField(blank=True, null=True, default='')
     realign = fields.BooleanField()
     flowsInOrder = fields.CharField(blank=True, null=True, default='')
 
@@ -2135,7 +2166,52 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
     sampleGroupingName = fields.CharField(readonly = True, blank=True, null=True)
 
     platform = fields.CharField(readonly = True, blank=True, null=True)
+
+    chefStatus = fields.CharField(blank=True, default='')
+    chefProgress = fields.FloatField(default=0.0, blank=True)
+    chefMessage = fields.CharField(blank=True, default='')
+    chefLogPath = fields.CharField(blank=True, null=True)
+
+    def prepend_urls(self):
+        return [
+            url(r"^(?P<resource_name>%s)/(?P<pk>\w[\w/-]*)/transfer%s$" % (self._meta.resource_name, trailing_slash()),
+                self.wrap_view('dispatch_transfer'), name="api_dispatch_transfer"),
+        ]
+
+    def dispatch_transfer(self, request, **kwargs):
+        return self.dispatch('transfer', request, **kwargs)
     
+    def get_transfer(self, request, **kwargs):
+        # runs on destination TS to update plan-related objects and return any errors
+        plan = self.get_object_list(request).get(pk=kwargs["pk"])
+        status = update_transferred_plan(plan, request)
+        
+        return self.create_response(request, status)
+    
+    def post_transfer(self, request, **kwargs):
+        # runs on origin TS to initiate plan transfer
+        destination = request.POST.get('destination')
+        if not destination:
+            return HttpBadRequest('Missing transfer destination')
+    
+        plan = self.get_object_list(request).get(pk=kwargs["pk"])
+        if plan is None:
+            return HttpGone()
+        
+        try:
+            # transfer plan to destination
+            bundle = self.build_bundle(obj=plan, request=request)
+            bundle = prepare_for_copy(self.full_dehydrate(bundle))
+            serialized = self.serialize(None, bundle, 'application/json')
+
+            status = transfer_plan(plan, serialized, destination, request.user.username)
+
+        except Exception as err:
+            return HttpBadRequest(err)
+
+        return self.create_response(request, status)
+
+
     def dehydrate(self, bundle):
         try:
             experiment = bundle.obj.experiment
@@ -2146,7 +2222,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['notes'] = experiment.notes
             bundle.data['sequencekitname'] = experiment.sequencekitname
             bundle.data['platform'] = experiment.platform
-                        
+
             latest_eas = bundle.obj.latestEAS
             if not latest_eas:
                 latest_eas = experiment.get_EAS()
@@ -2161,7 +2237,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['librarykitname'] = latest_eas.libraryKitName if latest_eas else ""
             bundle.data['regionfile'] = latest_eas.hotSpotRegionBedFile if latest_eas else ""
             bundle.data['isDuplicateReads'] = latest_eas.isDuplicateReads if latest_eas else False
-            bundle.data['base_recalibrate'] = latest_eas.base_recalibrate if latest_eas else False
+            bundle.data['base_recalibration_mode'] = latest_eas.base_recalibration_mode if latest_eas else "no_recal"
             bundle.data['realign'] = latest_eas.realign if latest_eas else False
 
             bundle.data['beadfindargs'] = latest_eas.beadfindargs if latest_eas else ""
@@ -2176,7 +2252,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             bundle.data['thumbnailbasecallerargs'] = latest_eas.thumbnailbasecallerargs if latest_eas else ""
             bundle.data['alignmentargs'] = latest_eas.alignmentargs if latest_eas else ""
             bundle.data['thumbnailalignmentargs'] = latest_eas.thumbnailalignmentargs if latest_eas else ""
-            
+
             if latest_eas and latest_eas.barcodeKitName:
                 bundle.data['sample'] = ""
                 bundle.data['sampleDisplayedName'] = ""
@@ -2211,10 +2287,10 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         applicationGroup = bundle.obj.applicationGroup
         bundle.data['applicationGroupDisplayedName'] = applicationGroup.description if applicationGroup else ""
-        
+
         sampleGrouping = bundle.obj.sampleGrouping
         bundle.data['sampleGroupingName'] = sampleGrouping.displayedName if sampleGrouping else ""
-        
+
         return bundle
 
 
@@ -2240,7 +2316,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                 for k,v in barcodedSamples_dict.items():
                     if isinstance(v['barcodes'],list):
                         for bc in v['barcodes']:
-                            if not isinstance(bc,str):
+                            if not isinstance(bc,basestring):
                                 logger.debug("api.PlannedExperiment.hydrate_barcodedSamples() - INVALID bc - NOT an str - bc=%s" %(bc))
                                 valid = False
                     else:
@@ -2343,15 +2419,18 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
 
     def hydrate_isDuplicateReads(self, bundle):
-        bundle.data['x_isDuplicateReads'] = toBoolean(bundle.data.get('isDuplicateReads', models.GlobalConfig.objects.all()[0].mark_duplicates), False)
+        bundle.data['x_isDuplicateReads'] = toBoolean(bundle.data.get('isDuplicateReads', models.GlobalConfig.get().mark_duplicates), False)
         return bundle
 
-    def hydrate_base_recalibrate(self, bundle):
-        bundle.data['x_base_recalibrate'] = toBoolean(bundle.data.get('base_recalibrate', models.GlobalConfig.objects.all()[0].base_recalibrate), False)
+    def hydrate_base_recalibration_mode(self, bundle):
+        bundle.data['x_base_recalibration_mode'] = bundle.data.get('base_recalibration_mode', models.GlobalConfig.get().base_recalibration_mode)
+        if not bundle.data['x_base_recalibration_mode']:
+            bundle.data['x_base_recalibration_mode'] = "no_recal"
+
         return bundle
 
     def hydrate_realign(self, bundle):
-        bundle.data['x_realign'] = toBoolean(bundle.data.get('realign', models.GlobalConfig.objects.all()[0].realign), False)
+        bundle.data['x_realign'] = toBoolean(bundle.data.get('realign', models.GlobalConfig.get().realign), False)
         return bundle
 
     def hydrate_sampleSet(self, bundle):
@@ -2368,7 +2447,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
     def hydrate_metaData(self, bundle):
         #logger.debug("api.PlannedExperimentResource.hydrate_metaData() metaData=%s" %(bundle.data.get('metaData', "")))        
-        
+
         plan_metaData = bundle.data.get('metaData', "")
         valid = True
         if plan_metaData:
@@ -2380,8 +2459,8 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                 logger.error(traceback.format_exc())
                 valid = False
                 raise ValidationError("Error: Invalid JSON value for field metaData=%s in plannedExperiment with planName=%s" %(plan_metaData, bundle.data.get("planName", "")))
-               
-        bundle.data['metaData'] = plan_metaData if valid else "" 
+
+        bundle.data['metaData'] = plan_metaData if valid else ""
         return bundle
 
 
@@ -2423,7 +2502,15 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                 bundle.data['sampleGrouping'] = sampleGroupings[0]
 
         self.hydrate_platform(bundle)
-        
+
+        #strip leading zeros of sampleTubeLabel
+        if (bundle.data.get('planStatus', "") != "run" or not bundle.data['planExecuted']):
+            sampleTubeLabel = bundle.data.get("sampleTubeLabel", "")
+            if sampleTubeLabel:
+                ##sampleTubeLabel = sampleTubeLabel.strip().lstrip("0")
+                sampleTubeLabel = sampleTubeLabel.strip()
+                bundle.data["sampleTubeLabel"] = sampleTubeLabel
+
         return bundle
 
 
@@ -2431,10 +2518,10 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         """
         Enable fields that are typically mandatory for plan creation to be optional during updates
         """
-        
+
         #logger.debug("PlannedExperimentValidation._prepare_for_min_update() bundle.obj=%s" %(str(bundle.obj))) 
         #logger.debug("PlannedExperimentValidation._prepare_for_min_update() kwarags=%s" %(kwargs)) 
-                        
+
         id = -1
         isNewPlan = True
         if bundle.obj and bundle.obj.pk:
@@ -2447,20 +2534,21 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
             else:
                 id = kwargs.get("pk", "")
                 if id:
-                    isNewPlan = False                               
-                
-        logger.debug("PlannedExperimentValidation._prepare_for_min_update() isNewPlan=%s" %(str(isNewPlan))) 
-                                    
+                    isNewPlan = False
+
+        logger.debug("PlannedExperimentValidation._prepare_for_min_update() isNewPlan=%s" %(str(isNewPlan)))
+
         if not isNewPlan:
             logger.debug("PlannedExperimentValidation._prepare_for_min_update() id=%s" %(str(id)))
 
             input_planName = bundle.data.get("planName",'')
             input_chipType = bundle.data.get("chipType",'')
             input_templatingKitName = bundle.data.get("templatingKitName", "")
-                        
+            input_flows = bundle.data.get('flows', "")
+
             logger.debug("PlannedExperimentResource._prepare_for_min_update().. input_planName=%s; input_chipType=%s; input_templatingKitName=%s" %(input_planName, input_chipType, input_templatingKitName))
-            
-            if not input_planName or not input_chipType or not input_templatingKitName:
+
+            if not input_planName or not input_chipType or not input_templatingKitName or not input_flows:
                 existingPlans = models.PlannedExperiment.objects.filter(id = id)
                 if existingPlans:
                     existingPlan = existingPlans[0]
@@ -2469,23 +2557,30 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
                         #logger.debug("PlannedExperimentResource._prepare_for_min_update().. SETTING bundle.data.planName=%s" %(bundle.data["planName"]))
 
                     if not input_chipType:
-                        bundle.data["chipType"] = existingPlan.experiment.chipType                        
+                        bundle.data["chipType"] = existingPlan.experiment.chipType
                         bundle.data["x_chipType"] = existingPlan.experiment.chipType
                         #logger.debug("PlannedExperimentResource._prepare_for_min_update().. SETTING bundle.data.x_chipType=%s" %(bundle.data["x_chipType"]))
 
                     if not input_templatingKitName:
                         bundle.data["templatingKitName"] = existingPlan.templatingKitName
                         #logger.debug("PlannedExperimentResource._prepare_for_min_update().. SETTING bundle.data.templatingKitName=%s" %(bundle.data["templatingKitName"]))
+
+                    if not input_flows:
+                        bundle.data["flows"] = existingPlan.experiment.flows
+                        bundle.data["x_flows"] = existingPlan.experiment.flows
+                        #logger.debug("PlannedExperimentResource._prepare_for_min_update().. SETTING bundle.data.x_flows=%s" %(bundle.data["x_flows"]))
+
                 else:
                     isNewPlan = True
-                    
+
         return isNewPlan
 
-        
+
     def obj_create( self, bundle, request = None, **kwargs ):
         """
         A ORM-specific implementation of ``obj_create``.
         """
+        #logger.debug("PDD at PlannedExperimentResource.obj_create()...bundle.data=%s" %(bundle.data))
 
         bundle.obj = self._meta.object_class()
 
@@ -2506,9 +2601,15 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         # Save FKs just in case.
         self.save_related(bundle)
 
-        bundle.obj.save()
-        bundle.obj.save_plannedExperiment_association(isNewPlan, **bundle.data)
-        bundle.obj.update_plan_qcValues(**bundle.data)
+        try:
+            with transaction.commit_on_success():
+                bundle.obj.save()
+                bundle.obj.save_plannedExperiment_association(isNewPlan, **bundle.data)
+                bundle.obj.update_plan_qcValues(**bundle.data)
+        except:
+            logger.error('Failed PlannedExperimentResource.obj_create()')
+            logger.error(traceback.format_exc())
+            return HttpBadRequest()
 
         # Now pick up the M2M bits.
         m2m_bundle = self.hydrate_m2m(bundle)
@@ -2521,12 +2622,12 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
         logger.debug("PDD ENTER PlannedExperimentResource.obj_update() kwargs=%s" %(kwargs))
 
         self._prepare_for_min_update(bundle, **kwargs)
-   
+
         return super(PlannedExperimentResource, self).obj_update(bundle, **kwargs)
 
 
 class AvailableIonChefPlannedExperimentResource(PlannedExperimentResource):
-    
+
     def build_filters(self, filters=None):
         if filters is None:
             filters = {}
@@ -2535,7 +2636,7 @@ class AvailableIonChefPlannedExperimentResource(PlannedExperimentResource):
         if not hasattr(self, 'kit_names'):
             self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")]
         orm_filters["templatingKitName__in"] = self.kit_names
-        
+
         return orm_filters
 
     class Meta:
@@ -2558,7 +2659,7 @@ class AvailableIonChefPlannedExperimentSummaryResource(ModelResource):
         if not hasattr(self, 'kit_names'):
             self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")]
         orm_filters["templatingKitName__in"] = self.kit_names
-        
+
         return orm_filters
 
     class Meta:
@@ -2585,7 +2686,7 @@ class IonChefPlanTemplateResource(PlannedExperimentResource):
         if not hasattr(self, 'kit_names'):
             self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")]
         orm_filters["templatingKitName__in"] = self.kit_names
-        
+
         return orm_filters
 
     class Meta:
@@ -2608,7 +2709,7 @@ class IonChefPlanTemplateSummaryResource(ModelResource):
         if not hasattr(self, 'kit_names'):
             self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "IonChefPrepKit")]
         orm_filters["templatingKitName__in"] = self.kit_names
-        
+
         return orm_filters
 
     class Meta:
@@ -2633,7 +2734,7 @@ class AvailableOneTouchPlannedExperimentResource(PlannedExperimentResource):
         if not hasattr(self, 'kit_names'):
             self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")]
         orm_filters["templatingKitName__in"] = self.kit_names
-        
+
         return orm_filters
 
     class Meta:
@@ -2656,7 +2757,7 @@ class OneTouchPlanTemplateResource(PlannedExperimentResource):
         if not hasattr(self, 'kit_names'):
             self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")]
         orm_filters["templatingKitName__in"] = self.kit_names
-        
+
         return orm_filters
 
     class Meta:
@@ -2679,7 +2780,7 @@ class AvailableOneTouchPlannedExperimentSummaryResource(ModelResource):
         if not hasattr(self, 'kit_names'):
             self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")]
         orm_filters["templatingKitName__in"] = self.kit_names
-        
+
         return orm_filters
 
     class Meta:
@@ -2706,7 +2807,7 @@ class OneTouchPlanTemplateSummaryResource(ModelResource):
         if not hasattr(self, 'kit_names'):
             self.kit_names = [kit.name for kit in models.KitInfo.objects.filter(kitType = "TemplatingKit")]
         orm_filters["templatingKitName__in"] = self.kit_names
-        
+
         return orm_filters
 
     class Meta:
@@ -2751,7 +2852,7 @@ class PlanTemplateSummaryResource(ModelResource):
         metadata_allowed_methods = ['get',]
 
 
-class PlanTemplateBasicInfoResource(ModelResource):    
+class PlanTemplateBasicInfoResource(ModelResource):
     barcodeKitName = fields.CharField(readonly = True, attribute="barcodeKitName", null=True, blank=True)
     templatePrepInstrumentType = fields.CharField(readonly = True, attribute="templatePrepInstrumentType", null=True, blank=True)
     sequencingInstrumentType = fields.CharField(readonly = True, attribute="sequencingInstrumentType", null=True, blank=True)
@@ -2762,11 +2863,11 @@ class PlanTemplateBasicInfoResource(ModelResource):
     #Hotspot Regions BED File: old name is regionfile
     targetRegionBedFile = fields.CharField(readonly = True, blank=True, null=True, default='')
     hotSpotRegionBedFile = fields.CharField(readonly = True, blank=True, null=True, default='')
-        
+
     irAccountName = fields.CharField(readonly = True, attribute="irAccountName", null=True, blank=True)
 
     applicationGroup = fields.ToOneField('iondb.rundb.api.ApplicationGroupResource', 'applicationGroup', null=True, blank=True, full=False)
-    
+
     applicationGroupDisplayedName = fields.CharField(readonly = True, attribute="applicationGroupDisplayedName", null=True, blank=True)
     sampleGroupName = fields.CharField(readonly = True, attribute="sampleGroupName", null=True, blank=True)
 
@@ -2775,10 +2876,10 @@ class PlanTemplateBasicInfoResource(ModelResource):
         eas = planTemplate.latestEAS
 
         bundle.data['barcodeKitName'] = eas.barcodeKitName if eas else ''
-        
-        bundle.data['templatePrepInstrumentType'] = "" 
+
+        bundle.data['templatePrepInstrumentType'] = ""
         templatingKitName = planTemplate.templatingKitName
-        
+
         if templatingKitName:
             kits = models.KitInfo.objects.filter(name = templatingKitName)
             if kits:
@@ -2788,9 +2889,9 @@ class PlanTemplateBasicInfoResource(ModelResource):
                 elif kit.kitType == "IonChefPrepKit":
                     bundle.data['templatePrepInstrumentType'] = "IonChef"
 
-        bundle.data['sequencingInstrumentType'] = ""       
+        bundle.data['sequencingInstrumentType'] = ""
         chipType = planTemplate.experiment.chipType if planTemplate.experiment else ''
-        
+
         if chipType:
             chips = models.Chip.objects.filter(name = chipType)
             if chips:
@@ -2798,18 +2899,18 @@ class PlanTemplateBasicInfoResource(ModelResource):
                 bundle.data['sequencingInstrumentType'] = chip.instrumentType.upper()
         else:
             bundle.data['sequencingInstrumentType'] = planTemplate.experiment.platform.upper()
-            
+
         notes = planTemplate.experiment.notes if planTemplate.experiment else ''
         bundle.data['notes'] = notes
-        
+
         bundle.data['irAccountName'] = ""
-            
+
         if eas:
             bundle.data['reference'] = eas.reference
             bundle.data['targetRegionBedFile'] = eas.targetRegionBedFile
             bundle.data['hotSpotRegionBedFile'] = eas.hotSpotRegionBedFile
-            
-            templateSelectedPlugins = eas.selectedPlugins                
+
+            templateSelectedPlugins = eas.selectedPlugins
             if "IonReporterUploader" in templateSelectedPlugins:
                 templateIRUConfig = templateSelectedPlugins.get("IonReporterUploader", {})
                 pluginDict = templateIRUConfig
@@ -2824,7 +2925,7 @@ class PlanTemplateBasicInfoResource(ModelResource):
         bundle.data['sampleGroupName'] = sampleGroup.displayedName if sampleGroup else ''
 
         return bundle
-    
+
     class Meta:
         queryset = models.PlannedExperiment.objects.filter(isReusable = True)
 
@@ -2863,13 +2964,18 @@ class TorrentSuite(ModelResource):
 
     def prepend_urls(self):
         urls = [url(r"^(?P<resource_name>%s)%s$" % (self._meta.resource_name, trailing_slash()),
-                    self.wrap_view('dispatch_update'), name="api_dispatch_update")
+                    self.wrap_view('dispatch_update'), name="api_dispatch_update"),
+                url(r"^(?P<resource_name>%s)/version%s$" % (self._meta.resource_name, trailing_slash()),
+                    self.wrap_view('dispatch_version'), name="api_dispatch_version")
         ]
 
         return urls
 
     def dispatch_update(self, request, **kwargs):
         return self.dispatch('update', request, **kwargs)
+
+    def dispatch_version(self, request, **kwargs):
+        return self.dispatch('version', request, **kwargs)
 
     def get_update(self, request, **kwargs):
 
@@ -2891,12 +2997,69 @@ class TorrentSuite(ModelResource):
 
         return self.create_response(request, updateStatus)
 
+    def get_version(self, request, **kwargs):
+        from ion import version
+        ret = {'meta_version':version}
+        return self.create_response(request, ret)
+
     class Meta:
 
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
         update_allowed_methods = ['get', 'put']
+        version_allowed_methods = ['get']
 
+    def get_schema(self, request, **kwargs):
+        schema = {
+            "allowed_detail_http_methods": [],
+            "allowed_list_http_methods": [
+                "get",
+                "put",
+            ],
+            "default_format": "application/json",
+            "default_limit": 0,
+            "fields": {
+                "locked": {
+                    "blank": True,
+                    "default": "No default provided.",
+                    "help_text": "Unicode string data. Ex: \"Hello World\"",
+                    "nullable": True,
+                    "readonly": True,
+                    "type": "boolean",
+                    "unique": False
+                },
+                "logs": {
+                    "blank": True,
+                    "default": "No default provided.",
+                    "help_text": "Unicode string data. Ex: \"Hello World\"",
+                    "nullable": True,
+                    "readonly": True,
+                    "type": "boolean",
+                    "unique": False
+                },
+                "meta_version": {
+                    "blank": True,
+                    "default": "No default provided.",
+                    "help_text": "Unicode string data. Ex: \"Hello World\"",
+                    "nullable": True,
+                    "readonly": True,
+                    "type": "string",
+                    "unique": False
+                },
+                "versions": {
+                    "blank": True,
+                    "default": "No default provided.",
+                    "help_text": "Unicode string data. Ex: \"Hello World\"",
+                    "nullable": True,
+                    "readonly": True,
+                    "type": "string",
+                    "unique": False
+                },
+            },
+            "filtering": {},
+            "ordering": []
+        }
+        return HttpResponse(json.dumps(schema), content_type="application/json")
 
 class PublisherResource(ModelResource):
 
@@ -3496,6 +3659,41 @@ class DataManagementHistoryResource(ModelResource):
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
 
+class ClusterInfoHistoryResource(ModelResource):
+    name = fields.CharField(readonly=True, attribute='content_object__name', null=True)
+
+    def dehydrate(self, bundle):
+        text = bundle.data['text'].split('<br>')
+        if len(text)>0:
+            bundle.data['state'] = text[0].split()[-1]
+            bundle.data['error'] = text[1][7:] if text[1].startswith('Error:') else ''
+            for line in text[2:]:
+                try:
+                    k,v = line.split(':')
+                    bundle.data[k.strip()] = v.strip()
+                except:
+                    pass
+        return bundle
+
+    def apply_filters(self, request, applicable_filters):
+        name = applicable_filters.pop('content_object__name__exact', None)
+        base_object_list = super(ClusterInfoHistoryResource, self).apply_filters(request, applicable_filters)
+
+        if name is not None:
+            nodes = models.Cruncher.objects.filter(name=name)
+            base_object_list = base_object_list.filter(object_pk__in=nodes)
+
+        return base_object_list.distinct()
+
+    class Meta:
+        queryset = models.EventLog.objects.for_model(models.Cruncher)
+
+        field_list = ['created', 'name']
+        ordering = field_list
+        filtering = field_dict(field_list)
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+
 class MonitorPlannedExperimentResource(ModelResource):
     class Meta:
         queryset = models.PlannedExperiment.objects.all()
@@ -3702,7 +3900,7 @@ class CompositeExperimentResource(ModelResource):
             bundle.data['sampleSetName'] = sampleSet.displayedName if sampleSet else ""
         else:
             bundle.data['sampleSetName'] = ""
-            
+
         return bundle
 
 
@@ -3712,14 +3910,19 @@ class CompositeExperimentResource(ModelResource):
         '''
         base_object_list = super(CompositeExperimentResource, self).apply_filters(request, applicable_filters)
 
-        name = request.GET.get('all_text', None)
-        if name is not None:
-            qset = (
-                Q(expName__icontains=name) |
-                Q(results_set__resultsName__icontains=name) |
-                Q(notes__icontains=name)
-            )
-            base_object_list = base_object_list.filter(qset)
+        all_text = request.GET.get('all_text', '')
+        qset = []
+        for name in all_text.split(" OR "):
+            name = name.strip()
+            if name:
+                qset.extend([
+                    Q(expName__icontains=name),
+                    Q(results_set__resultsName__icontains=name),
+                    Q(notes__icontains=name)
+                ])
+        if qset:
+            or_qset = reduce(operator.or_, qset)
+            base_object_list = base_object_list.filter(or_qset)
 
         samples = request.GET.get('samples__name', None)
         if samples is not None:
@@ -3835,8 +4038,13 @@ class ApplProductResource(ModelResource):
     appl = fields.ToOneField(RunTypeResource, 'applType', full=True)
     defaultSeqKit = fields.ToOneField(KitInfoResource, 'defaultSequencingKit', full=True, null=True)
     defaultLibKit = fields.ToOneField(KitInfoResource, 'defaultLibraryKit', full=True, null=True)
-    defaultPESeqKit = fields.ToOneField(KitInfoResource, 'defaultPairedEndSequencingKit', full=True, null=True)
-    defaultPELibKit = fields.ToOneField(KitInfoResource, 'defaultPairedEndLibraryKit', full=True, null=True)
+    defaultControlSeqKit = fields.ToOneField(KitInfoResource, 'defaultControlSeqKit', full=False, null=True)
+
+    defaultIonChefPrepKit = fields.ToOneField(KitInfoResource, 'defaultIonChefPrepKit', full=False, null=True)
+    defaultIonChefSequencingKit = fields.ToOneField(KitInfoResource, 'defaultIonChefSequencingKit', full=False, null=True)
+
+    defaultSamplePrepKit = fields.ToOneField(KitInfoResource, 'defaultSamplePrepKit', full=False, null=True)
+    defaultTemplateKit = fields.ToOneField(KitInfoResource, 'defaultTemplateKit', full=False, null=True)
 
     class Meta:
         queryset = models.ApplProduct.objects.all()
@@ -3922,7 +4130,7 @@ class ChipResource(ModelResource):
             }
         for key,value in args_dict.items():
             bundle.data[key] = value
-        
+
         return bundle
 
     class Meta:
@@ -4040,28 +4248,84 @@ class NetworkResource(ModelResource):
         authorization = DjangoAuthorization()
         update_allowed_methods = ['get']
 
+    def get_schema(self, request, **kwargs):
+        schema = {
+            "allowed_detail_http_methods": [],
+            "allowed_list_http_methods": [
+                "get",
+            ],
+            "default_format": "application/json",
+            "default_limit": 0,
+            "fields": {
+                "eth0": {
+                    "blank": True,
+                    "default": "No default provided.",
+                    "help_text": "Unicode string data. Ex: \"Hello World\"",
+                    "nullable": True,
+                    "readonly": True,
+                    "type": "boolean",
+                    "unique": False
+                },
+                "external_ip": {
+                    "blank": True,
+                    "default": "No default provided.",
+                    "help_text": "Unicode string data. Ex: \"Hello World\"",
+                    "nullable": True,
+                    "readonly": True,
+                    "type": "string",
+                    "unique": False
+                },
+                "internal_ip": {
+                    "blank": True,
+                    "default": "No default provided.",
+                    "help_text": "Unicode string data. Ex: \"Hello World\"",
+                    "nullable": True,
+                    "readonly": True,
+                    "type": "string",
+                    "unique": False
+                },
+                "route": {
+                    "blank": True,
+                    "default": "No default provided.",
+                    "help_text": "Unicode string data. Ex: \"Hello World\"",
+                    "nullable": True,
+                    "readonly": True,
+                    "type": "boolean",
+                    "unique": False
+                },
+            },
+            "filtering": {},
+            "ordering": []
+        }
+        return HttpResponse(json.dumps(schema), content_type="application/json")
+
 class AnalysisArgsResource(ModelResource):
 
     def prepend_urls(self):
         return [
             url(r"^(?P<resource_name>%s)/getargs%s$" % (self._meta.resource_name, trailing_slash()), self.wrap_view('get_args'), name="api_get_args"),
         ]
-    
+
     def get_args(self, request, **kwargs):
         # function for OIA to retrieve default args with or without Plan specified
-        try:
-            planGUID = request.GET.get('planGUID')
-            if planGUID:
+        planGUID = request.GET.get('planGUID', None)
+        plan = None
+        if planGUID:
+            try:
                 plan = models.PlannedExperiment.objects.filter(planGUID=planGUID)[0]
-            else:
-                # use system default template
-                chipType = request.GET.get('chipType','')
-                plan = models.PlannedExperiment.get_latest_plan_or_template_by_chipType(chipType)
+            except IndexError:
+                pass
 
+        if not plan:
+            chipType = request.GET.get('chipType', None)
+            plan = models.PlannedExperiment.get_latest_plan_or_template_by_chipType(chipType)
+
+        if plan:
+            # use system default template
             args = plan.get_default_cmdline_args(**request.GET.dict())
-        except:
+        else:
             args = {}
-    
+
         return self.create_response(request, args)
 
     class Meta:
@@ -4101,3 +4365,42 @@ class SupportUploadResource(ModelResource):
         filtering = field_dict(field_list)
         authentication = IonAuthentication()
         authorization = DjangoAuthorization()
+
+
+class PrepopulatedPlanningSessionResource(ModelResource):
+    """Allow setting session values of the panning wizard before redirecting to the wizard."""
+
+    def prepend_urls(self):
+        urls = [url(r"^(?P<resource_name>%s)%s$" % (self._meta.resource_name, trailing_slash()),
+                    self.wrap_view('dispatch_session'), name="api_dispatch_session")
+        ]
+
+        return urls
+
+    def dispatch_session(self, request, **kwargs):
+        return self.dispatch('session', request, **kwargs)
+
+    def post_session(self, request, **kwargs):
+        key_value = json.loads(request.body)
+
+        key_inserted_successfully = False
+        key_name = None
+        session_id = None
+        while not key_inserted_successfully:
+            session_id = str(uuid.uuid4())
+            key_name = "prepopulated-planning-session-" + session_id
+            key_inserted_successfully = cache.add(key_name, key_value, timeout=None)
+
+        session_status = {
+            "error_message": "",
+            "id": session_id,
+            "cache_key": key_name
+        }
+
+        return self.create_response(request, session_status)
+
+    class Meta:
+
+        authentication = IonAuthentication()
+        authorization = DjangoAuthorization()
+        session_allowed_methods = ['post']

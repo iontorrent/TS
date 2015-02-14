@@ -9,10 +9,10 @@ The ``tasks`` module contains Python functions which spawn Celery tasks
 in the background.
 
 Not all functions contained in ``tasks`` are actual Celery tasks, only those
-that have the  ``@task`` decorator.
+that have the  ``@app.task`` decorator.
 """
 
-from celery import task
+from iondb.celery import app
 from celery.utils.log import get_task_logger
 
 import simplejson
@@ -48,7 +48,7 @@ def numBarcodes(r):
         pass
     return nBarcodes 
 
-@task
+@app.task
 def createRSMExperimentMetrics(resultId):
     """ Creates a file named TSExperiment-UUID.txt that contains metrics from the Results of an experiment."""
     logger.debug("createRSMExperimentMetrics begins for resultId" + str(resultId))

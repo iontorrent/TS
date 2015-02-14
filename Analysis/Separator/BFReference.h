@@ -98,8 +98,6 @@ class BFReference {
 
   void CalcSignalReference(const std::string &datFile, const std::string &bgFile,
 			   Mask &mask, int traceFrame=18);
-  void CalcSignalReference2(const std::string &datFile, const std::string &bgFile,
-			   Mask &mask, int traceFrame=18);
   void FilterRegionOutliers(Image &bfImg, Mask &mask, float iqrThreshold, 
                             int rowStart, int rowEnd, int colStart, int colEnd);
 

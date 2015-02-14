@@ -373,6 +373,13 @@ tmap_sam_md(tmap_refseq_t *refseq, char *read_bases, // read bases are character
       
   target = tmap_refseq_subseq2(refseq, seqid+1, ref_start, ref_end, NULL, 0, NULL);
   if(NULL == target) {
+      fprintf (stderr, "ERROR: Can not retrieve reference for seqid-%d, ref_start=%d, ref_end=%d\nCigar len = %d, cigar = ", seqid, ref_start, ref_end, n_cigar);
+      int i;
+      for (i = 0; i < n_cigar; ++i)
+      {
+          fprintf (stderr, "%c%d", bam_cigar_opchr (cigar [i]), bam_cigar_oplen (cigar [i]));
+      }
+      fprintf (stderr, "\n");
       tmap_bug();
   }
 

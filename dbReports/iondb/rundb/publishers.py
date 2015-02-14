@@ -12,7 +12,7 @@ those that take ``request`` as their first argument and appear in a ``urls``
 module are in fact Django views.
 """
 
-
+from __future__ import absolute_import
 import datetime
 import subprocess
 import logging
@@ -38,10 +38,11 @@ from django.template import RequestContext, Context
 from django.conf import settings
 
 from iondb.rundb import models
-from celery.task import task
+from iondb.celery import app
 
 import json
-from ajax import render_to_json
+from iondb.rundb.ajax import render_to_json
+from celery.utils.log import get_task_logger
 
 
 logger = logging.getLogger(__name__)
@@ -268,15 +269,15 @@ def run_script(working_dir, script_path, upload_id, upload_dir, upload_path, met
     return result == 0
 
 
-@task
+@app.task
 def run_pub_scripts(pub, upload):
     """Spawn subshells in which the Publisher's editing scripts are run, with
     the upload's folder and the script's output folder as command line args.
     """
     try:
-        logger = run_pub_scripts.get_logger()
+        task_logger = get_task_logger(__name__)
         #TODO: Handle unique file upload instance particulars
-        logger.info("Editing upload for %s" % pub.name)
+        task_logger.info("Editing upload for %s" % pub.name)
         previous_status = upload.status
         upload_path = upload.file_path
         upload_dir = os.path.dirname(upload_path)
@@ -295,14 +296,14 @@ def run_pub_scripts(pub, upload):
             # The script may have updated the upload during execution, so we reload
             upload = models.ContentUpload.objects.get(pk=upload.pk)
             if success:
-                logger.info("Editing upload for %s finished %s" % (pub.name, script_path))
+                task_logger.info("Editing upload for %s finished %s" % (pub.name, script_path))
             else:
-                logger.error("Editing for %s died during %s." % (pub.name, script_path))
+                task_logger.error("Editing for %s died during %s." % (pub.name, script_path))
                 upload.status = "Error: %s" % stage_name
                 upload.save()
             # If either the script itself or we set the status to anything starting
             # with "Error" then we abort further processing here.
-            if upload.status.startswith("Error"):
+            if upload.status.startswith("Error") or upload.status.startswith("Waiting"):
                 return
         # At this point every script has finished running and we have not returned
         # early due to an error, alright!
@@ -310,7 +311,7 @@ def run_pub_scripts(pub, upload):
         upload.save()
     except Exception as error:
         tb = "\n".join("    "+s for s in traceback.format_exc().split("\n"))
-        logger.error("Exception in %s upload %d during %s\n%s" %
+        task_logger.error("Exception in %s upload %d during %s\n%s" %
             (pub.name, upload.id, stage_name, tb))
         upload.status = "Error: processing failed."
         upload.save()

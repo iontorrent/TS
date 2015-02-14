@@ -64,7 +64,7 @@ void TrackProgress::WriteProcessParameters (CommandLineOpts &inception_state)
   fprintf ( fpLog, "use exclusion mask = %s\n", inception_state.loc_context.exclusionMaskSet ? "true":"false" );
   fprintf ( fpLog, "Version = %s\n", IonVersion::GetVersion().c_str() );
   fprintf ( fpLog, "Build = %s\n", IonVersion::GetBuildNum().c_str() );
-  fprintf ( fpLog, "SvnRev = %s\n", IonVersion::GetSvnRev().c_str() );
+  fprintf ( fpLog, "GitHash = %s\n", IonVersion::GetGitHash().c_str() );
 
   fprintf ( fpLog, "Chip = %d,%d\n", inception_state.loc_context.chip_len_x,inception_state.loc_context.chip_len_y );
   fprintf ( fpLog, "Block = %d,%d,%d,%d\n", inception_state.loc_context.chip_offset_x, inception_state.loc_context.chip_offset_y, inception_state.loc_context.cols, inception_state.loc_context.rows );

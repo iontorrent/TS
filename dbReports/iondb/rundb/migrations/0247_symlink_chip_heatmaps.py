@@ -54,14 +54,16 @@ class Migration(DataMigration):
                     yield row
                 current += chunksize
 
-        results = DMFileStat.objects.select_related('result', "result__reportstorage", "result__experiment", "result__experiment__rig").filter(dmfileset__type='Output Files').exclude(action_state__in=['AG','DG','AD','DD', 'IG'])
+        results = DMFileStat.objects.select_related('result', "result__reportstorage", "result__experiment", "result__experiment__rig").filter(dmfileset__type='Output Files').exclude(action_state__in=['AG','DG','AD','DD'])
         chip_count = 0
         n=0
+        error_counts = {}
         last_time = time.time()
         print("Checking {0:d} results\n".format(results.count()))
         print("Checked  Linked")
         for n, d in enumerate(queryset_iterator(results)):
             at_least_one = False
+            at_least_one_error = set()
             now = time.time()
             if now - last_time >= 1:
                 print("\r{0:<8d} {1:<8d}".format(n, chip_count), end='')
@@ -83,12 +85,21 @@ class Migration(DataMigration):
                     if not os.path.exists(root_file_path):
                         sp_file_path = os.path.join(root_path, "sigproc_results", file_name)
                         if os.path.exists(sp_file_path):
-                            at_least_one = True
-                            os.symlink(sp_file_path, root_file_path)
+                            try:
+                                os.symlink(sp_file_path, root_file_path)
+                                at_least_one = True
+                            except OSError as err:
+                                if err.errno not in at_least_one_error:
+                                    at_least_one_error.add(err.errno)
+                                    error_counts[err.errno] = error_counts.get(err.errno, 0) + 1
                 if at_least_one:
                     chip_count += 1
         print('')
         print("{0} of {1} chip run were symlinked.".format(chip_count, n+1))
+        if error_counts:
+            print("! There were {0} OS errors during migration !".format(sum(error_counts.values())))
+        for errnumber, count in sorted(error_counts.items()):
+            print("{0:<8d} reports had an OS Error '{1}'".format(count, os.strerror(errnumber)))
 
 
     def backwards(self, orm):

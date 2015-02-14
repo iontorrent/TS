@@ -19,6 +19,9 @@ from django.db import models
 from django.conf import settings
 from django.core.serializers.json import DjangoJSONEncoder
 
+from json import encoder
+encoder.FLOAT_REPR = lambda x: format(x, '.15g')
+
 class JSONEncoder(DjangoJSONEncoder):
     """ Override datetime.datetime representation. Defer to Django for other encodings """
     def default(self, obj):

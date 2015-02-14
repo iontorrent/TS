@@ -255,6 +255,7 @@ class H5File {
   static void FillInGroupFromName(const std::string &path, std::string &groupName, std::string &dsName);
   /** Recurse into path creating new groups as necessary. */
   static hid_t GetOrCreateGroup(hid_t location, const std::string &groupPath, std::vector<hid_t> &freeList);
+  void WriteString ( const std::string &name, const char *value);
   void WriteStringVector(const std::string &name, const char **values, int numValues);
   void ReadStringVector(const std::string &name, std::vector<std::string> &strings);
   size_t mCurrentId;  ///< Current id for next dataset opened/created

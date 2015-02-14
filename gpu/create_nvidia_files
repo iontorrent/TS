@@ -1,6 +1,7 @@
 #!/bin/bash
 # Copyright (C) 2011 Ion Torrent Systems, Inc. All Rights Reserved
 
+/sbin/depmod
 /sbin/modprobe nvidia
 
 if [ "$?" -eq 0 ]; then

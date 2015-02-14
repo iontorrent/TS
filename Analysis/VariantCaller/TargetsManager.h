@@ -37,11 +37,13 @@ public:
     int         end;
     string      name;
     int         merged;
+    int         trim_left;
+    int         trim_right;
   };
 
 
   void LoadRawTargets(const ReferenceReader& ref_reader, const string& bed_filename, list<UnmergedTarget>& raw_targets);
-
+  void AddExtraTrim(UnmergedTarget& target, char *region_name, int num_fields);
   void TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hint) const;
 
   vector<UnmergedTarget>  unmerged;

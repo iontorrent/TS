@@ -126,13 +126,13 @@ def scan_all_plugins(pluginlist):
     return ret
 
 # Helper task to invoke PluginManager rescan, used to rescan after a delay
-@task(queue="plugins")
+@task(queue="plugins", ignore_result=True)
 def add_remove_plugins():
     from iondb.plugins.manager import pluginmanager
     pluginmanager.rescan()
 
 
-@task(queue="plugins")
+@task(ignore_result=True)
 def backfill_pluginresult_diskusage():
     '''Due to new fields (inodes), and errors with counting contents of symlinked files, this function
     updates every Result object's diskusage value.
@@ -162,18 +162,45 @@ def backfill_pluginresult_diskusage():
     )
     for obj in obj_list:
         try:
-            if not os.path.exists(obj.path):
+            if not os.path.exists(obj.default_path):
                 continue
             obj.size, obj.inodes = obj._calc_size
         except OSError:
-            log.exception("Failed to compute plugin size: '%s'", obj.path())
+            log.exception("Failed to compute plugin size: '%s'", obj.default_path)
             obj.size, obj.inodes = -1
         except:
             log.exception(traceback.format_exc())
-        log.debug("Scanning: %s at %s -- %d (%d)", str(obj), obj.path, obj.size, obj.inodes)
-        obj.save()
+        log.debug("Scanning: %s at %s -- %d (%d)", str(obj), obj.default_path, obj.size, obj.inodes)
+        obj.save(update_fields=["size", "inodes"])
 
 @task
+def calc_size(prid):
+    import traceback
+    from iondb.rundb.models import PluginResult
+    try:
+        obj = PluginResult.objects.get(pk=prid)
+    except (PluginResult.MultipleObjectsReturned, PluginResult.DoesNotExist):
+        return
+    try:
+        d = obj.default_path
+        if not d:
+            log.info("check_size: No path: %s at %s -- %d (%d)", str(obj), d, obj.size, obj.inodes)
+            return
+        if not os.path.exists(obj.default_path):
+            log.error("check_size: Path doesn't exist: %s at %s -- %d (%d)", str(obj), d, obj.size, obj.inodes)
+            return
+        obj.size, obj.inodes = obj._calc_size
+        log.debug("Scanning: %s at %s -- %d (%d)", str(obj), d, obj.size, obj.inodes)
+    except OSError:
+        log.exception("Failed to compute plugin size: %s at '%s'", str(obj), obj.default_path)
+        obj.size, obj.inodes = -1
+    except:
+        log.exception(traceback.format_exc())
+    finally:
+        obj.save(update_fields=["size", "inodes"])
+    return (obj.size, obj.inodes)
+
+@task(ignore_result=True)
 def cleanup_pluginresult_state():
     ''' Fix jobs stuck in running states '''
     import traceback

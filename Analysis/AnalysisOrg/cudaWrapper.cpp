@@ -57,7 +57,7 @@ void* BkgFitWorkerGpu(void *arg)
 bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, int use_all_gpus, 
   int &numBkgWorkers_gpu) {
 #ifdef ION_COMPILE_CUDA
-  const unsigned long long gpu_mem = 2.5 * 1024 * 1024 * 1024;
+  const unsigned long long gpu_mem = 0.4 * 1024 * 1024 * 1024;
 
   if (!use_gpu_acceleration)
     return false;
@@ -67,8 +67,8 @@ bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, in
   cudaError_t err = cudaGetDeviceCount( &num_gpus );
 
   if (err != cudaSuccess) {
-    printf("CUDA: No GPU device available. Defaulting to CPU only computation\n");
-    return false;
+      printf("CUDA: No GPU device available. Defaulting to CPU only computation (return code %d: %s) &\n", err , cudaGetErrorString(err));
+      return false;
   }
 
   if (valid_devices.size() == 0) {
@@ -126,7 +126,7 @@ bool configureGpu(bool use_gpu_acceleration, std::vector<int> &valid_devices, in
     cudaSetValidDevices( &valid_devices[0], int( valid_devices.size() ) );
   }
   else {
-    printf("CUDA: No GPU device available. Defaulting to CPU only computation\n");
+    printf("CUDA: No GPU device available. Defaulting to CPU only computation (return code %d: %s) &\n", err , cudaGetErrorString(err));
     return false;   
   }
 

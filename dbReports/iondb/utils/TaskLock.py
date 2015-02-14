@@ -10,8 +10,11 @@ class TaskLock:
 
     def __init__(self, lock_id, timeout=None):
         self.lock_id = lock_id
-        self.cache = get_cache('file')
-        #self.cache = cache
+        try:
+            self.cache = get_cache('file')
+        except:
+            self.cache = get_cache('default')
+
         if timeout:
             self.timeout = timeout
         else:
@@ -55,7 +58,7 @@ from django.core.cache import cache
 cache.delete(<lock id>)
 
 or direct on command line:
-python -c "from iondb.bin import djangoinit; from django.core.cache import cache; cache.delete(<lock id>)"
+python -c "from iondb.bin import djangoinit; from django.core.cache import get_cache; cache=get_cache('file'); cache.delete(<lock id>)"
 
 to delete everything from cache:
 python -c "from iondb.bin import djangoinit; from django.core.cache import cache; cache.clear()"

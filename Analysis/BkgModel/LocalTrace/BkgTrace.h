@@ -206,8 +206,10 @@ float BkgTrace::ComputeDcOffset(const T *fgPtr, TimeCompression &tc, float t_sta
 // scheme for handling time decompression and compression
 namespace TraceHelper{
   void ShiftTrace(float *trc,float *trc_out,int pts,float frame_offset);
-  void GetUncompressedTrace(float *tmp, Image *img, int absolute_x, int absolute_y, int img_frames);
   void SpecialShiftTrace (float *trc, float *trc_out, int pts, float frame_offset/*, int print=0*/);
+  void ShiftTraceBiDirect (float *trc, float *trc_out, int pts, float frame_offset);
+  void ShiftTraceBiDirect_vec (void *trc_v8f_u, void *trc_out_v8f_u, int pts, float frame_offset);
+  void GetUncompressedTrace(float *tmp, Image *img, int absolute_x, int absolute_y, int img_frames);
   float ComputeT0Avg(const Region *region, const Mask *bfmask, const std::vector<float>& sep_t0_est, int img_cols);
   void BuildT0Map (const Region *region, const std::vector<float>& sep_t0_est, float reg_t0_avg, int img_cols, std::vector<float>& output);
   void DumpBuffer(char *ss, float *buffer, int start, int len);

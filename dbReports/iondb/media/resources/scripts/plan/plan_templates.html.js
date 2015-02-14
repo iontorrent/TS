@@ -95,7 +95,7 @@ function commonKendoGrid(target, url, msg) {
             },            
             
             serverPaging : true,
-            pageSize : 10000,
+            pageSize : 10,
             serverSorting : false
         },
         sortable: {
@@ -106,8 +106,11 @@ function commonKendoGrid(target, url, msg) {
 //        scrollable: {
 //            virtual: true
 //        },
-        scrollable : true,
-        pageable : false,
+        scrollable : {
+            virtual : false
+        },
+        pageable : true,
+                
 		dataBinding : onDataBinding,
 		dataBound : onDataBound,
         columns : [{

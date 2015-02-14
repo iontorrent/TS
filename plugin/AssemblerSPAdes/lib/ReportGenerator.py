@@ -47,10 +47,10 @@ class Sample(object):
 
         params = self._info['params']
         self._assembly_settings['Fraction of Reads Used'] = \
-            params['fraction_of_reads']
-        self._assembly_settings['RAM'] = params['RAM']
+            params.get('fraction_of_reads') or '1.0'
+        self._assembly_settings['RAM'] = params.get('RAM') or '24G'
         self._assembly_settings['Barcode Minimum Read Cutoff'] = \
-            params['min_reads']
+            params.get('min_reads') or '500'
 
         locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
 

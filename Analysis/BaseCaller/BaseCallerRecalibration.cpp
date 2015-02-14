@@ -25,7 +25,7 @@ BaseCallerRecalibration::BaseCallerRecalibration():stratification_(NULL)
 {
   is_enabled_ = false;
   max_hp_calibrated_ = 0;
-  recal_model_hp_thres_ = MAX_HPXLEN + 1;
+  recal_model_hp_thres_ = 0;
 }
 
 
@@ -37,16 +37,23 @@ BaseCallerRecalibration::~BaseCallerRecalibration()
 
 void BaseCallerRecalibration::Initialize(OptArgs& opts, const ion::FlowOrder& flow_order)
 {
-  is_enabled_ = false;
-  flow_order_ = flow_order;
-
-  recal_model_hp_thres_ = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
-  printf("Recalibration HP threshold: %d\n", recal_model_hp_thres_);
-
+  flow_order_                  = flow_order;
+  recal_model_hp_thres_        = opts.GetFirstInt    ('-', "recal-model-hp-thres", 4);
+  bool diagonal_state_prog     = opts.GetFirstBoolean('-', "diagonal-state-prog", false);
   string calibration_file_name = opts.GetFirstString ('s', "calibration-file", "");
+
+  if (diagonal_state_prog)
+    calibration_file_name.clear();
+
+  InitializeModelFromFile(calibration_file_name);
+}
+
+bool BaseCallerRecalibration::InitializeModelFromFile(string calibration_file_name)
+{
+  is_enabled_ = false;
   if(calibration_file_name.empty()) {
     printf("Recalibration: disabled\n\n");
-    return;
+    return false;
   }
 
   ifstream calibration_file;
@@ -54,7 +61,7 @@ void BaseCallerRecalibration::Initialize(OptArgs& opts, const ion::FlowOrder& fl
   if (calibration_file.fail()) {
     printf("Recalibration: disabled (cannot open %s)\n\n", calibration_file_name.c_str());
     calibration_file.close();
-    return;
+    return false;
   }
 
   string comment_line;
@@ -108,9 +115,12 @@ void BaseCallerRecalibration::Initialize(OptArgs& opts, const ion::FlowOrder& fl
 
   calibration_file.close();
 
-  printf("Recalibration: enabled (using calibration file %s)\n\n", calibration_file_name.c_str());
+  printf("Recalibration: enabled (using calibration file %s)\n", calibration_file_name.c_str());
+  printf(" - using table calibration for HPs up to (not including) %d\n\n",recal_model_hp_thres_);
   is_enabled_ = true;
+  return is_enabled_;
 }
+
 
 void BaseCallerRecalibration::CalibrateRead(int x, int y, vector<char>& sequence, vector<float>& normalized_measurements,
     const vector<float>& prediction, const vector<float>& state_inphase) const

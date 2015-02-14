@@ -5,11 +5,12 @@
 #include <iostream>
 #include <set>
 #include "GridMesh.h"
+#include "MathOptim.h"
+#include "SampleStats.h"
 #include "FindSlopeChange.h"
 #include "T0Model.h"
 #include "PJobQueue.h"
 #include "Mask.h"
-#include "Traces.h"
 
 /** Some ideas about where we think t0 should be for a region. */
 class T0Prior {
@@ -128,6 +129,10 @@ public:
     }
   }
 
+  static float WeightDist(float dist) {
+    return ExpApprox(-1*dist/60.0);
+  }
+
   void CalcIndividualT0(std::vector<float> &t0, int useMeshNeighbors, int withinGrid = 0) {
     std::vector<double> dist(7);
     std::vector<float *> values;
@@ -147,7 +152,7 @@ public:
         double startX = 0;
         for (size_t i = 0; i < values.size(); i++) {
           if (*(values[i]) > 0) {
-            double w = Traces::WeightDist(dist[i]); //1/sqrt(dist[i] + 1);
+            double w = WeightDist(dist[i]); //1/sqrt(dist[i] + 1);
             distWeight += w;
             startX += w * (*(values[i]));
           }
@@ -330,7 +335,7 @@ public:
       double startX = 0;
       for (size_t i = 0; i < values.size(); i++) {
         if (*(values[i]) > 0) {
-          double w = Traces::WeightDist(dist[i]); //1/sqrt(dist[i] + 1);
+          double w = T0Calc::WeightDist(dist[i]); //1/sqrt(dist[i] + 1);
           distWeight += w;
           startX += w * (*(values[i]));
         }
@@ -612,7 +617,7 @@ public:
         double startX = 0;
         for (size_t i = 0; i < values.size(); ++i)
           {
-            double w = Traces::WeightDist(dist[i]);
+            double w = T0Calc::WeightDist(dist[i]);
             distWeight += w;
             startX += w * (*(values[i]));
           }

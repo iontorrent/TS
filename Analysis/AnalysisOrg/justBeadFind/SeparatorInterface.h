@@ -44,10 +44,16 @@ void DoDiffSeparatorFromCLO(DifferentialSeparator *diffSeparator, CommandLineOpt
 
 //@TODO: and extract the information that needs passing downstream to the background model
 void NNSmoothT0Estimate(Mask *mask,int imgRows,int imgCols,std::vector<float> &sep_t0_est,std::vector<float> &output_t0_est);
+void NNSmoothT0EstimateFast (Mask *mask,int imgRows,int imgCols,std::vector<float> &sep_t0_est,
+                             std::vector<float> &output_t0_est, int x_clip, int y_clip);
+
 
 void getTausFromSeparator(Mask *maskPtr, DifferentialSeparator *diffSeparator, std::vector<float> &tauB, std::vector<float> &tauE);
+void SetupForBkgModelTiming (DifferentialSeparator *diffSeparator, std::vector<float> &smooth_t0_est, 
+                             std::vector<RegionTiming> &region_timing, std::vector<Region>& region_list, 
+                             ImageSpecClass &my_image_spec, Mask *maskPtr, int numThreads, int x_clip, int y_clip);
 
-void SetupForBkgModelTiming (DifferentialSeparator *diffSeparator, std::vector<float> &smooth_t0_est, std::vector<RegionTiming>& region_timing, std::vector<Region>& region_list, ImageSpecClass &my_image_spec, Mask *maskPtr, bool doSmoothing, int numThreads);
+//void SetupForBkgModelTiming (DifferentialSeparator *diffSeparator, std::vector<float> &smooth_t0_est, std::vector<RegionTiming>& region_timing, std::vector<Region>& region_list, ImageSpecClass &my_image_spec, Mask *maskPtr, bool doSmoothing, int numThreads);
 
 void IsolatedBeadFind (SlicedPrequel &my_prequel_setup, ImageSpecClass &my_image_spec, Region &wholeChip, CommandLineOpts &inception_state, char *results_folder, string &analysisLocation, SeqListClass &my_keys, TrackProgress &my_progress);
 

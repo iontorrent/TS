@@ -18,7 +18,7 @@ def load(fname):
 
 if __name__ == '__main__':
     # do some testing
-    server = connect(PORT)
+    server = connect('localhost', PORT)
     tscript = load("testscript.py")
     name = server.startanalysis("test1",
                                 tscript,

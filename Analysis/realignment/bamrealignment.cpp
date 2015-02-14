@@ -282,8 +282,9 @@ int main (int argc, const char *argv[])
 	    error_clip_anchor_readcount++;
 	    break;
 	  default:
-            if (logf.is_open ())
-	      logf << alignment.Name << '\t' << alignment.IsReverseStrand() << '\t' << alignment.RefID << '\t' << setfill ('0') << setw (8) << orig_position << '\t' << "PERFECT" << '\n';
+		  //  On a good run this writes way too many reads to the log file - don't want to create a too large txt file
+          //  if (logf.is_open ())
+	      //logf << alignment.Name << '\t' << alignment.IsReverseStrand() << '\t' << alignment.RefID << '\t' << setfill ('0') << setw (8) << orig_position << '\t' << "PERFECT" << '\n';
 	    already_perfect_readcount++;
 	    break;
 	}

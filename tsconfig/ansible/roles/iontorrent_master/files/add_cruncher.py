@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 import sys
 from iondb.bin import djangoinit
 from iondb.rundb.models import Cruncher, Location

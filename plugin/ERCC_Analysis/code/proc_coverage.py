@@ -16,6 +16,10 @@ import ercc_seq_utils
 result_div = """
 <div class="transcript">
 
+<style>
+  .toggle_tag {cursor:pointer}
+</style>
+
 <h2><span class="toggle_tag">[+]</span>%(contig_id)s (%(length)d bp)</h2>
 <div class="transcript_table">
 <table>
@@ -28,7 +32,6 @@ result_div = """
 </table>
 </div>
 </div>
-<br/>
 """
 
 # ------------------------------

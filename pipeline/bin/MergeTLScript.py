@@ -69,20 +69,23 @@ if __name__=="__main__":
         traceback.print_exc()
 
 
-    is_thumbnail = False
-    is_single = False
     is_composite = False
 
-    if env['rawdatastyle'] == 'single':
-        is_single = True
+    if env['rawdatastyle'] == 'single' or "thumbnail" in env['pathToRaw']:
+        is_composite = False
     else:
-        if "thumbnail" in env['pathToRaw']:
-           is_thumbnail = True
-        else:
-           is_composite = True
+        is_composite = True
 
-    do_unfiltered_processing = is_thumbnail or is_single
-    reference_selected = env['referenceName'] and env['referenceName']!='none'
+    # Speedup Flags
+    do_unfiltered_processing = True and not is_composite
+    do_merge_all_barcodes    = True and not is_composite
+    do_ionstats_evaluate_hp  = True
+
+    reference_selected = False
+    for barcode_name,barcode_info in sorted(env['barcodeInfo'].iteritems()):
+        if barcode_info['referenceName']:
+            reference_selected = True
+            pass
 
     def set_result_status(status):
         try:
@@ -107,8 +110,10 @@ if __name__=="__main__":
         exclusionMaskFile = ''
         if chipType.startswith('P1.1'):
             exclusionMaskFile = 'exclusionMask_P1_1.txt'
-        elif chipType.startswith('P1.0'):
-            exclusionMaskFile = 'exclusionMask_P1_0.txt'
+        elif chipType.startswith('P1.0.20'):
+            exclusionMaskFile = 'exclusionMask_P1_0_20.txt'
+        elif chipType.startswith('P1.0.19'):
+            exclusionMaskFile = 'exclusionMask_P1_0_19.txt'
 
         sigproc.mergeSigProcResults(
             dirs,
@@ -311,7 +316,8 @@ if __name__=="__main__":
                     basecaller_meta_information,
                     basecaller_datasets,
                     graph_max_x,
-                    activate_barcode_filter)
+                    activate_barcode_filter,
+                    do_ionstats_evaluate_hp)
         except:
             traceback.print_exc()
 
@@ -362,16 +368,17 @@ if __name__=="__main__":
         set_result_status('TF Processing')
 
         try:
-            TFPipeline.processBlock(
-                os.path.join(env['BASECALLER_RESULTS'], 'rawtf.basecaller.bam'),
-                env['BASECALLER_RESULTS'],
-                env['tfKey'],
-                env['flowOrder'],
-                '.')
-            #add_status("TF Processing", 0)
-        except:
+            # TODO basecaller_results/datasets_tf.json might contain read_count : 0
+            if os.path.exists(os.path.join(env['BASECALLER_RESULTS'], 'rawtf.basecaller.bam')):
+
+                TFPipeline.processBlock(
+                    os.path.join(env['BASECALLER_RESULTS'], 'rawtf.basecaller.bam'),
+                    env['BASECALLER_RESULTS'],
+                    env['tfKey'],
+                    env['flowOrder'],
+                    '.')
+        except:    
             traceback.print_exc()
-            #add_status("TF Processing", 1)
 
 
         # Process unfiltered reads
@@ -426,7 +433,7 @@ if __name__=="__main__":
 
         # Legacy post-processing. Generate merged rawlib.bam on barcoded runs
 
-        if is_thumbnail or is_single:
+        if do_merge_all_barcodes:
 
             if env['barcodeId'] and reference_selected:
 

@@ -94,3 +94,16 @@ def findUpdates():
     meta_version = version
 
     return ret, meta_version
+
+def findOSversion():
+    """
+    find OS info
+    """
+    com = "cat /etc/lsb-release"
+    try:
+        a = subprocess.Popen(com, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout = a.stdout.read().splitlines()
+        ret = dict(line[8:].split('=') for line in stdout if line.startswith('DISTRIB_'))
+    except:
+        ret = {}
+    return ret

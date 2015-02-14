@@ -8,7 +8,7 @@ sys.path.append("/opt/ion/iondb")
 from iondb.bin import djangoinit
 from iondb.rundb import models
 from django.db.models import Q
-from iondb.rundb.data.dmactions import slugify
+from iondb.rundb.data.dm_utils import slugify
 from socket import gethostname
 SIG='Signal Processing Input'
 BASE='Basecalling Input'
@@ -118,11 +118,11 @@ def show_keepers():
 
         # Limit to objects marked keep
         sigprocstats = sigprocstats.filter(result__experiment__storage_options = 'KI')
-        print "All %s objects Local marked Keep count: %d" % (dmtype, sigprocstats.count())
+        print "All %s objects marked Keep count: %d" % (dmtype, sigprocstats.count())
 
         # Limit to objects with files on filesystem
         sigprocstats = sigprocstats.filter(action_state='L')
-        print "All %s objects Local count: %d" % (dmtype, sigprocstats.count())
+        print "All %s objects marked Keep and Local count: %d" % (dmtype, sigprocstats.count())
 
         _write_csv(sigprocstats, storename)
         _write_excel(sigprocstats, storename)

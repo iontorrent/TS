@@ -52,7 +52,7 @@ void DumpStartingStateOfNormWells (int argc, const char *argv[])
   fprintf (stdout, "Start Time = %s", ctime (&rawtime));
   fprintf (stdout, "Version = %s-%s (%s) (%s)\n",
            IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(),
-           IonVersion::GetSvnRev().c_str(), IonVersion::GetBuildNum().c_str());
+           IonVersion::GetGitHash().c_str(), IonVersion::GetBuildNum().c_str());
   fprintf (stdout, "Command line = ");
   for (int i = 0; i < argc; i++)
     fprintf (stdout, "%s ", argv[i]);

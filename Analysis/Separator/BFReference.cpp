@@ -5,7 +5,6 @@
 #include "BFReference.h"
 #include "Image.h"
 #include "IonErr.h"
-#include "Traces.h"
 #include "SynchDatSerialize.h"
 #include "ComparatorNoiseCorrector.h"
 #include "BkgTrace.h"
@@ -568,12 +567,6 @@ void BFReference::CalcShiftedReference(Image &bfImg, Mask &mask, std::vector<flo
     DebugTraces(mDebugFile, mask, bfImg);
   }
 
-  // // Basic image processing @todo - should we be doing comparator correction?
-  // bfImg.FilterForPinned(&mask, MaskEmpty, false);
-  // ImageTransformer::XTChannelCorrect(bfImg.raw, bfImg.results_folder);
-  // if (ImageTransformer::gain_correction != NULL) {
-  //   ImageTransformer::GainCorrectImage(bfImg.raw);
-  // }
   ClockTimer timer;
   // Filter for odd wells based on response to wash
   FilterForOutliers(bfImg, mask, mIqrOutlierMult, mRegionYSize, mRegionXSize);
@@ -1207,92 +1200,6 @@ void BFReference::CalcSignalShiftedReference(const std::string &datFile, const s
   
   img.Close();
   bgImg.Close();
-}
-
-
-void BFReference::CalcSignalReference2(const std::string &datFile, const std::string &bgFile,
-				      Mask &mask, int traceFrame) {
-  Image bfImg;
-  Image bfBkgImg;
-  bfImg.SetImgLoadImmediate (false);
-  bfBkgImg.SetImgLoadImmediate (false);
-  bool loaded = bfImg.LoadRaw(datFile.c_str());
-  bool bgLoaded = bfBkgImg.LoadRaw(bgFile.c_str());
-  if (!loaded) {
-    ION_ABORT("*Error* - No beadfind file found, did beadfind run? are files transferred?  (" + datFile + ")");
-  }
-  if (!bgLoaded) {
-    ION_ABORT("*Error* - No beadfind background file found, did beadfind run? are files transferred?  (" + bgFile + ")");
-  }
-  const RawImage *raw = bfImg.GetImage();
-  
-  assert(raw->cols == GetNumCol());
-  assert(raw->rows == GetNumRow());
-  assert(raw->cols == mask.W());
-  assert(raw->rows == mask.H());
-  int StartFrame = bfImg.GetFrame(-663); //5
-  int EndFrame = bfImg.GetFrame(350); //20
-  int NNinnerx = 1, NNinnery = 1, NNouterx = 12, NNoutery = 8;
-  cout << "DC start frame: " << StartFrame << " end frame: " << EndFrame << endl;
-  bfImg.FilterForPinned(&mask, MaskEmpty, false);
-  ImageTransformer::XTChannelCorrect(bfImg.raw,bfImg.results_folder);
-  // bfImg.XTChannelCorrect(&mask);
-  Traces trace;  
-  trace.Init(&bfImg, &mask, FRAMEZERO, FRAMELAST, FIRSTDCFRAME,LASTDCFRAME);
-  bfImg.SetMeanOfFramesToZero(StartFrame, EndFrame);
-  if (mDoRegionalBgSub) {
-     trace.SetMeshDist(0);
-  }
-  trace.CalcT0(true);
-  if (mDoRegionalBgSub) {
-    GridMesh<float> grid;
-    grid.Init(raw->rows, raw->cols, mRegionYSize, mRegionXSize);
-    int numBin = grid.GetNumBin();
-    int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-    for (int binIx = 0; binIx < numBin; binIx++) {
-      cout << "BG Subtract Region: " << binIx << endl;
-      grid.GetBinCoords(binIx, rowStart, rowEnd, colStart, colEnd);
-      Region reg;
-      reg.row = rowStart;
-      reg.h = rowEnd - rowStart;
-      reg.col = colStart;
-      reg.w = colEnd - colStart;
-      bfImg.SubtractLocalReferenceTraceInRegion( reg,&mask, MaskAll, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
-    }
-  }
-  else {
-    bfImg.SubtractLocalReferenceTrace(&mask, MaskEmpty, MaskEmpty, NNinnerx, NNinnery, NNouterx, NNoutery);
-  }
-  int length = GetNumRow() * GetNumCol();
-  mBfMetric.resize(length, std::numeric_limits<double>::signaling_NaN());
-  for (int wIx = 0; wIx < length; wIx++) {
-    if (mask[wIx] & MaskExclude || mask[wIx] & MaskPinned) 
-      continue;
-    int t0 = (int)trace.GetT0(wIx);
-    mBfMetric[wIx] = 0;
-    float zSum  = 0;
-    int count = 0;
-    for (int fIx = min(t0-20, 0); fIx < t0-10; fIx++) {
-      zSum += bfImg.At(wIx,fIx);
-      count ++;
-    }
-    for (int fIx = t0+3; fIx < t0+15; fIx++) {
-      mBfMetric[wIx] += (bfImg.At(wIx,fIx) - (zSum / count));
-    }
-  }
-  bfImg.Close();
-  for (int i = 0; i < length; i++) {
-    if (mask[i] & MaskExclude || mask[i] & MaskPinned) {
-      mWells[i] = Exclude;
-    }
-  }
-  //  cout << "Filling reference. " << endl;
-  FillInReference(mWells, mBfMetric, mGrid, mMinQuantile, mMaxQuantile);
-  for (int i = 0; i < length; i++) {
-    if (mWells[i] == Reference) {
-      mask[i] |= MaskReference;
-    }
-  }
 }
 
 void BFReference::CalcSignalReference(const std::string &datFile, const std::string &bgFile,

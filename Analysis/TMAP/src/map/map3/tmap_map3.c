@@ -43,7 +43,7 @@ tmap_map3_get_seed_length(uint64_t ref_len)
 }
 
 static inline int32_t 
-tmap_map3_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt)
+tmap_map3_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap_refseq_t *refseq)
 {
   int32_t i;
   int32_t n_best = 0;

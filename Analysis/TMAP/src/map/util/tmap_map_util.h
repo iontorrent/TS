@@ -275,11 +275,12 @@ tmap_map_sam_copy_and_nullify(tmap_map_sam_t *dest, tmap_map_sam_t *src);
   @param  sam_flowspace_tags  1 if SFF specific SAM tags are to be outputted, 0 otherwise
   @param  bidirectional  1 if a bidirectional SAM tag is to be added, 0 otherwise
   @param  seq_eq        1 if the SEQ field is to use '=' symbols, 0 otherwise
+  @param  min_al_len    skip alignments shorter then min_al_len; do not skip anythong if min_al_len is 0
   @return  the BAM records for this read
   */
 tmap_map_bam_t*
 tmap_map_sams_print(tmap_seq_t *seq, tmap_refseq_t *refseq, tmap_map_sams_t *sams, int32_t end_num, 
-                    tmap_map_sams_t *mates, int32_t sam_flowspace_tags, int32_t bidirectional, int32_t seq_eq);
+                    tmap_map_sams_t *mates, int32_t sam_flowspace_tags, int32_t bidirectional, int32_t seq_eq, int32_t min_al_len);
 
 /*!
   keep only the mappings with the given score 
@@ -349,7 +350,7 @@ tmap_map_util_mapq_score(int32_t seq_len, int32_t n_best, int32_t best_score, in
  @return          0 upon success, non-zero otherwise
  */
 int32_t
-tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt);
+tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap_refseq_t *refseq);
 
 /*!
   perform local alignment

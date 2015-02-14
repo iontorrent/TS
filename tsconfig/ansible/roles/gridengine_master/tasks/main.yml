@@ -1,7 +1,29 @@
 ---
 # files: roles/griengine_master/tasks/main.yml
 
-# gridengine preseed
+#==============================================================================
+# Firewall rules to allow network access for gridengine clients
+# TODO:Should this be in the gridengine_clients setup instead?
+#==============================================================================
+- name: Firewall rules to allow gridengine traffic
+  lineinfile: state=present line="COMMIT" insertafter=EOF dest=/etc/iptables.custom
+  tags: debug
+  
+- name: Firewall rules to allow gridengine traffic
+  lineinfile: state=present line="*filter" insertbefore=BOF dest=/etc/iptables.custom
+  tags: debug
+  
+- name: Firewall rules to allow gridengine traffic
+  lineinfile: state=present line="-A INPUT -p tcp -m state --state NEW -m tcp --dport 6444 -j ACCEPT" insertbefore="COMMIT" dest=/etc/iptables.custom
+  tags: debug
+  
+- name: Firewall rules to allow gridengine traffic
+  lineinfile: state=present line="-A INPUT -p tcp -m state --state NEW -m tcp --dport 6445 -j ACCEPT" insertbefore="COMMIT" dest=/etc/iptables.custom
+  tags: debug
+  
+#==============================================================================
+# gridengine configuration
+#==============================================================================
 - name: Preseed gridengine debconf values
   script: "files/gridengine.preseed {{ groups.headnode[0] }}"
   
@@ -14,6 +36,34 @@
     - gridengine-qmon
     - gridengine-exec
 
+- name: Create host_aliases file
+  lineinfile: create=yes state=present dest=/var/lib/gridengine/iontorrent/common/host_aliases
+                owner=sgeadmin group=sgeadmin mode=0664
+                line="{{groups.headnode[0]}} localhost"
+                regexp=".*localhost.*"
+                
+- name: Set ignore_fqdn to TRUE in bootstrap file
+  lineinfile: state=present dest=/var/lib/gridengine/iontorrent/common/bootstrap
+                line="ignore_fqdn             true"
+                regexp="^ignore_fqdn.*"
+                mode=0644
+
+- name: Install drmaa package - libdrmaa1.0
+  action: apt pkg=libdrmaa1.0 state=latest force=yes
+  when: ansible_distribution_release == "lucid"
+  
+- name: Install drmaa package - gridengine-drmaa-dev
+  action: apt pkg=gridengine-drmaa-dev state=latest force=yes
+  when: ansible_distribution_release == "trusty"
+  
+- name: Make sure gridengine-master is running by restarting it
+#  service: name=gridengine-master state=running
+  shell: bash -lc '/etc/init.d/gridengine-master restart && sleep 5'
+  
+# N.B.  This is non-intuitive that in our configuration, the gridengine master also is exec host.
+- name: Make sure gridengine-exec is running by restarting it
+  shell: bash -lc '/etc/init.d/gridengine-exec restart'
+
 # add submission host
 - name: add the frontend as submission host
   shell: bash -lc 'qconf -as {{groups.headnode[0]}}'
@@ -23,6 +73,7 @@
   shell: bash -lc 'qconf -ah {{item}}'
   with_items:
     - '{{groups.computes}}'
+    - '{{groups.headnode}}'
 
 # add user if user does not exist
 - name: upload user configuration file
@@ -91,7 +142,7 @@
     - '{{groups.headnode[0]}}'
     
 - name: add execution hosts
-  shell: bash -lc 'if ! qconf -sel | grep -q {{item}}; then qconf -Ae /tmp/host.{{item}}.conf;fi'
+  shell: bash -lc "if ! qconf -sel | egrep -q '(localhost|{{item}})'; then qconf -Ae /tmp/host.{{item}}.conf;fi"
   with_items:
     - '{{groups.computes}}'
     - '{{groups.headnode[0]}}'
@@ -131,17 +182,13 @@
   shell: bash -lc 'qconf -ssconf > /tmp/sconf.conf'
   
 - name: edit scheduler interval
-  replace: dest=/tmp/sconf.conf
-             regexp='schedule_interval.*'
-             replace='schedule_interval                 0:0:04'
+  lineinfile: dest=/tmp/sconf.conf state=present
+                regexp='schedule_interval.*'
+                line='schedule_interval                 0:0:04'
              
 - name: enable new schedule_interval
   shell: bash -lc 'qconf -Msconf /tmp/sconf.conf; rm /tmp/sconf.conf'
 
-# SGE: Set per-host maximum mem_free to be node physical mem
-# Must be manually set to be consumable resource
-- name: set maximum free memory for all hosts
-  shell: bash -lc 'qhost | awk 'NR>3{print "qconf -mattr exechost complex_values mem_free=" $5,$1}'|sh'
 
 # Copy gridengine scripts
 - name: Create /usr/share/ion-tsconfig/gridengine-scripts directory
@@ -167,3 +214,14 @@
 
 - name: enable the global settings
   shell: bash -lc 'qconf -Mconf /tmp/global ; rm -f /tmp/global'
+  
+# N.B. - The output of qhost is not immediately available for some reason.
+- name: Waiting for qhost command to return valid values
+  command: /bin/sleep 45
+  
+# SGE: Set per-host maximum mem_free to be node physical mem
+# Must be manually set to be consumable resource
+- name: set maximum free memory for all hosts
+  shell: bash -lc qhost | awk '{{ ansible_hostname }}/{print "qconf -mattr exechost complex_values mem_free=" $5,$1}'|sh
+  
+- debug: msg="Need to set free memory for all compute nodes"

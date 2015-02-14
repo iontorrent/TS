@@ -22,6 +22,9 @@ class DoubleExpSmoothing {
   // The function that we call to gain access to a reg_params parameter.
   float * (reg_params::*access_fn)();
 
+  // moving average
+  int flowCount;
+
   friend class boost::serialization::access;
   template<class Archive>
   void serialize(Archive& ar, const unsigned int version)
@@ -47,6 +50,7 @@ public:
     alpha = gamma = prevB = prevS = 0.f;
     access_fn = 0;
     prevBInitialized = false;
+    flowCount = 1;
   }
 
   // When we first create one of these, we should know some basic parameters.
@@ -56,6 +60,7 @@ public:
     gamma = _gamma;
     access_fn = _access_fn;
     prevBInitialized = false;
+    flowCount = 1;
   }
 
   // The first time we use one of these, we'll have to initialize it.
@@ -86,7 +91,18 @@ public:
 
     *(rp->*access_fn)() = prevS = newS;
     prevB = newB;
+    
   }
+
+  void CMA( reg_params *rp )
+  {
+    float y = *(rp->*access_fn)();
+    *(rp->*access_fn)() = (y + flowCount*prevS) / (flowCount+1);
+    prevS = *(rp->*access_fn)();
+    flowCount++;
+    std::cout << "FLow: " << flowCount << std::endl;
+  }
+
 };
 
 #endif // DOUBLEEXPSMOOTHING_H

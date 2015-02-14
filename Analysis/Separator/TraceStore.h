@@ -49,7 +49,7 @@ class KeyFit {
     bestKey = -1;
     sd = 0;
     onemerAvg = 0;
-    onemerProjAvg = 0;
+    bfMetric3 = 0;
     traceMean = 0;
     traceSd = 0;
     //projResid = 0;
@@ -79,7 +79,7 @@ class KeyFit {
   float mad;
   float sd;
   float onemerAvg;
-  float onemerProjAvg;
+  float bfMetric3;
   float traceMean;
   float traceSd;
   //  float projResid;
@@ -190,7 +190,6 @@ class TraceStore {
   virtual int GetReferenceTrace(size_t wellIx, size_t flowIx, 
                                 float * traceBegin) = 0;
   
-  virtual int PrepareReference(size_t flowIx) = 0;
   /* Setting the traces. */
   virtual int SetTrace(size_t wellIx, size_t flowIx, 
                         std::vector<float>::iterator traceBegin,  std::vector<float>::iterator traceEnd ) = 0;

@@ -17,6 +17,7 @@ from ion.plugin.remote import callPluginXMLRPC
 from iondb.rundb import models
 from django.forms.models import model_to_dict
 from iondb.rundb.json_field import JSONEncoder
+from iondb.rundb.barcodedata import BarcodeSampleInfo
 
 """
 This class is used by components which can access the database directly. Remote instances must use XMLRPC or REST API calls.
@@ -157,5 +158,19 @@ class PluginRunner():
         start_json_fname = os.path.join(start_json['runinfo']['results_dir'],'startplugin.json')
         with open(start_json_fname,"w") as fp:
             json.dump(output_start_json,fp,indent=2,cls=JSONEncoder)
+
+        # Also write new barcodes.json
+        try:
+            if self.result:
+                barcodeSampleInfo = BarcodeSampleInfo(self.result.id, self.result)
+            else:
+                barcodeSampleInfo = BarcodeSampleInfo(start_json['runinfo']['pk'])
+            barcode_json_fname = os.path.join(start_json['runinfo']['results_dir'], 'barcodes.json')
+            with open(barcode_json_fname, "w") as fp:
+                json.dump(barcodeSampleInfo.data(), fp, indent=2,cls=JSONEncoder)
+        except:
+            logger = logging.getLogger(__name__)
+            logger.exception("Failed to write barcodes.json")
+
         return start_json_fname
 

@@ -58,12 +58,10 @@ install(PROGRAMS  "${PROJECT_SOURCE_DIR}/bin/alignmentQC.py" DESTINATION bin)
 
 install(DIRECTORY web DESTINATION share/ion
     USE_SOURCE_PERMISSIONS
-    PATTERN ".svn" EXCLUDE
 )
 
 install(DIRECTORY python/ion DESTINATION ${PYTHON_SITE_PACKAGES}
     USE_SOURCE_PERMISSIONS
-    PATTERN ".svn" EXCLUDE
 )
 
 install(FILES "${PROJECT_SOURCE_DIR}/cluster_settings.py" DESTINATION /etc/torrentserver )

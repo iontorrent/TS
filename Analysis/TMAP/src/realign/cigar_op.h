@@ -1,4 +1,4 @@
-/* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
+/* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 #ifndef CIGAR_OP_H
 #define CIGAR_OP_H
 

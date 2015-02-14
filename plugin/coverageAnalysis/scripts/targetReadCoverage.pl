@@ -166,7 +166,7 @@ while(<BEDFILE>) {
   last;
 }
 unless( $bsrt ) {
-  print STDERR "Warning: targets file $bedfile had no effective targets.\n";
+  print STDERR "WARNING: targets file $bedfile had no effective targets.\n";
   exit 0;
 }
 # output header if not done so already
@@ -183,6 +183,7 @@ unless( -e "${bamfile}.bai" ) {
 }
 
 # Outer loop is to allow the last line read to be used as the next merged region and to group mutiple merged regions
+my $badviews = 0;
 $bsrt = 0;  # indicates last read if there was only one!
 while(1) {
   # For performance, the BAM file will be read for individual targets
@@ -193,7 +194,7 @@ while(1) {
     ($bchr,$bsrt,$bend,$bname,$bgene,$bgc) = split('\t',$_);
     next if( $bchr !~ /\S/ );
     if( $bchr =~ /^track / ) {
-      print STDERR "\nWARNING: Bed file has multiple tracks. Ignoring tracks after the first.\n";
+      print STDERR "WARNING: Bed file has multiple tracks. Ignoring tracks after the first.\n";
       last;
     }
     ++$bsrt;
@@ -222,11 +223,15 @@ while(1) {
   my (@targFwdReads,@targRevReads,@targFwdE2E,@targRevE2E,@targOvpReads);
   unless( $nobai ) {
     # process BAM reads covering these merged targets
-    open( MAPPINGS, "samtools view $samopt \"$bamfile\" \"$lastChr:$mrgSrt-$mrgEnd\" |" )
+    open( MAPPINGS, "samtools view $samopt \"$bamfile\" \"$lastChr:$mrgSrt-$mrgEnd\" 2>&1 |" )
       || die "Failed to pipe reads from $bamfile for regions in $bedfile\n";
     my $firstRegion = 0, $lastEnd = $targEnds[$nTrgs-1];
     while( <MAPPINGS> ) {
       next if(/^@/);
+      if(/^.bam_parse_region/) {
+        ++$badviews;
+        next;
+      }
       my ($rid,$flag,$chrid,$srt,$scr,$cig) = split('\t',$_);
       $srt += 0;
       last if( $srt > $lastEnd );  # skip remaining off-target reads in merge buffer
@@ -319,5 +324,6 @@ while(1) {
   $bsrt = 0;  # indicate no pending reads
 }
 close(BEDFILE);
+print STDERR "WARNING: $badviews target regions were not located by contig name. Targets file unsuitable.\n" if( $badviews );
 
 # ----------------END-------------------

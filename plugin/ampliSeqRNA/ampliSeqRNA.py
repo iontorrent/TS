@@ -8,7 +8,7 @@ from ion.plugin import *
 
 class ampliSeqRNA(IonPlugin):
   '''Whole Transciptome AmpliSeq-RNA Analysis. (Ion supprted)'''
-  version = "4.2.1.0"
+  version = "4.4.0.4"
   major_block = True
   runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
   runlevels = [ RunLevel.DEFAULT ]
@@ -25,5 +25,5 @@ class ampliSeqRNA(IonPlugin):
 
 
 if __name__ == "__main__":
-  PluginCLI(ampliSeqRNA())
+  PluginCLI()
 

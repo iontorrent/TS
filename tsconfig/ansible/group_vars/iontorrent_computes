@@ -3,6 +3,7 @@
 
 # APT package list
 ioncompute_syspkg_list:
+    - python-httplib2
 
 ioncompute_ionpkg_list:
     - ion-gpu
@@ -10,5 +11,4 @@ ioncompute_ionpkg_list:
     - ion-pipeline
     - samtools
     - ion-rsmts
-    - ion-samita
     - ion-torrentr

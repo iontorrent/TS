@@ -53,7 +53,7 @@ class LatentSlate{
   void LocalExecuteInference(ShortStack &total_theory, bool update_frequency, bool update_sigma, vector<float> &start_frequency);
   void FastStep(ShortStack &total_theory, bool update_frequency, bool update_sigma);
   void DetailedStep(ShortStack &total_theory, bool update_frequency, bool update_sigma);
-  void ScanStrandPosterior(ShortStack &total_theory, bool vs_ref);
+  void ScanStrandPosterior(ShortStack &total_theory, bool vs_ref, int max_detail_level = 0);
   void ResetToOrigin();
   void PropagateTuningParameters(EnsembleEvalTuningParameters &my_params, int num_hyp_no_null);
   LatentSlate(){
@@ -86,10 +86,10 @@ public:
 // starting to make inferences
   void RestoreFullInference();
   void SetAlternateFromMain();
-  void ExecuteExtremeInferences();
+  void ExecuteExtremeInferences(int max_detail_level = 0);
   void TriangulateRestart();
-  float ExecuteOneRestart(vector<float> &restart_hyp);
-  void ExecuteInference( );
+  float ExecuteOneRestart(vector<float> &restart_hyp, int max_detail_level = 0);
+  void ExecuteInference( int max_detail_level = 0);
   void InitForInference(PersistingThreadObjects &thread_objects, vector<const Alignment *>& read_stack, const InputStructures &global_context, int num_hyp_no_null);
   
   // change estimates for variance
@@ -112,12 +112,13 @@ public:
 
   // Raw alleles information
 
-  vcf::Variant * variant;                         //!< VCF record of this variant position
+  vcf::Variant *         variant;                 //!< VCF record of this variant position
   vector<AlleleIdentity> allele_identity_vector;  //!< Detailed information for each candidate allele
   LocalReferenceContext  seq_context;             //!< Reference context of this variant position
-  int multiallele_window_start;
-  int multiallele_window_end;
-  bool doRealignment;
+  int                    multiallele_window_start;
+  int                    multiallele_window_end;
+  vector<string>         info_fields;
+  bool                   doRealignment;
 
   // Allele evaluation information
 
@@ -129,6 +130,7 @@ public:
     diploid_choice.assign(2,0);
     diploid_choice[1]=1; // ref = 0, alt = 1
     variant = &candidate_variant;
+    info_fields.clear();
     multiallele_window_start = -1;
     multiallele_window_end = -1;
     doRealignment = false;
@@ -143,16 +145,16 @@ public:
   void StackUpOneVariant(const ExtendParameters &parameters, const PositionInProgress& bam_position);
 
   void SpliceAllelesIntoReads(PersistingThreadObjects &thread_objects, const InputStructures &global_context,
-      const ReferenceReader &ref_reader, int chr_idx);
+                           const ExtendParameters &parameters, const ReferenceReader &ref_reader, int chr_idx);
 
-  void ApproximateHardClassifierForReads(vector<int> &read_allele_id, vector<bool> &strand_id);
-  void ApproximateHardClassifierForReadsFromMultiAlleles(vector<int> &read_allele_id, vector<bool> &strand_id);
+  void ApproximateHardClassifierForReads(vector<int> &read_allele_id, vector<bool> &strand_id, vector<int> &dist_to_left, vector<int> &dist_to_right);
+  void ApproximateHardClassifierForReadsFromMultiAlleles(vector<int> &read_allele_id, vector<bool> &strand_id, vector<int> &dist_to_left, vector<int> &dist_to_right);
   void ScanSupportingEvidence(float &mean_ll_delta, int i_allele);
   int DetectBestMultiAllelePair();
   void ComputePosteriorGenotype(int _alt_allele_index,float local_min_allele_freq, int &genotype_call,
                                 float &gt_quality_score, float &reject_status_quality_score);
   void MultiAlleleGenotype(float local_min_allele_freq,
-                           vector<int> &genotype_component, float &gt_quality_score, float &reject_status_quality_score);
+                           vector<int> &genotype_component, float &gt_quality_score, float &reject_status_quality_score, int max_detail_level = 0);
 };
 
 

@@ -38,22 +38,6 @@ function get_enclosure_info()
 }
 #==============================================================================
 #==============================================================================
-function get_drive_info()
-{
-    adp=$1      # Adapter ID
-    enc=$2      # Enclosure ID
-    slot=$3     # Drive Slot ID
-    MegaCli64 -PDInfo -PhysDrv[$enc:$slot] -a$adp $MEGALOG| sed -e 's/[ \t]*//g'
-}
-#==============================================================================
-#==============================================================================
-function get_num_virt_drv()
-{
-    adp=$1
-    MegaCli64 -ldgetnum -a$adp $MEGALOG|grep "Number of Virtual Drives"|cut -f2 -d:|sed -e 's/ //'
-}
-#==============================================================================
-#==============================================================================
 function print_drv_info()
 {
     adp=$1      # Adapter ID
@@ -108,6 +92,22 @@ function print_drv_info()
     	echo \"Drive has flagged a S.M.A.R.T alert\":\"$smart\",
     	echo \"Drive Temperature\":\"$drive_temp\"
     fi
+}
+#==============================================================================
+# Get the IDs for each Logical Volume for the given enclosure id
+#==============================================================================
+function get_lv_drv_ids()
+{
+    enc_id=$1
+    adp=$2
+    MegaCli64 -LDPDInfo -a$adp|egrep '(Enclosure Device ID|Virtual Drive)'|grep Enclosure.*$enc_id -B1|awk '/^Virtual/{print $3}'
+}
+#==============================================================================
+#==============================================================================
+function get_virt_drv_ids()
+{
+    adp=$1
+    MegaCli64 -LDPDinfo -a$adp $MEGALOG|awk '/^Virtual Drive/{print $3}'
 }
 #==============================================================================
 #==============================================================================
@@ -180,27 +180,36 @@ do
 
         # Add a fake enclosure
         echo {
-        echo \"id\":\"no_enclosure\",
+        echo \"EnclId\":\"internal\",
+        echo \"id\":\"internal\",
+        
         #----------------------------------------------------------------------
-        # Add Logical Drives
+        # Add Logical Volumes for this enclosure
         #----------------------------------------------------------------------
-        virt_drv_num=$(get_num_virt_drv $adp)
-        echo \"num_logical_drives\":\"$virt_drv_num\",
         #----------------------------------------------------------------------
         # Open Logical Drive Array
         #----------------------------------------------------------------------
         echo \"logical_drives\":[
-        for (( drv=0; drv<${virt_drv_num}; drv++ )); do
-            if (( drv>0 )); then echo ,;fi
+        cnt=0
+        for lv_drv in $(get_virt_drv_ids $adp); do
+            if (( cnt>0 )); then echo ,;fi
             #------------------------------------------------------------------
             # Add Logical Drive
             #------------------------------------------------------------------
             echo {
-            print_virt_drv_info $adp $drv
-            echo -n }                               # Close drive
+            print_virt_drv_info $adp $lv_drv
+            echo -n }                           # Close LV drive
+	    ((cnt++))
         done
-        echo ],
+        echo ],                                 # Close LV Array
+
+		#----------------------------------------------------------------------
+		# Add Physical Drives: Examine each slot
+		#----------------------------------------------------------------------
         echo \"num_drives\": \"$num_dsks\",
+        #----------------------------------------------------------------------
+        # Open Drive Array
+        #----------------------------------------------------------------------
         echo \"drives\":[
             # Add a drive
             for (( drv=0; drv<${num_dsks}; drv++ )); do
@@ -213,9 +222,9 @@ do
         # End of fake enclosure
     else
 
-	    for (( enc=0; enc<${num_enc}; enc++ )); do
-        	if (( enc>0 )); then echo ,;fi
-        	enc_data=( $(get_enclosure_info $adp $enc) )
+	    for (( myenc=0; myenc<${num_enc}; myenc++ )); do
+        	if (( myenc>0 )); then echo ,;fi
+        	enc_data=( $(get_enclosure_info $adp $myenc) )
         	enc_service_tag=''
         	for item in ${enc_data[@]}; do
         	    if echo $item|grep -q "^DeviceID"; then
@@ -230,29 +239,30 @@ do
         	# Add an Enclosure
         	#----------------------------------------------------------------------
         	echo {
-        	#echo \"id\":\"$enc_id\",
+        	echo \"EnclId\":\"$enc_id\",
         	echo \"id\":\"$enc_service_tag\",
-		
+            
 			#----------------------------------------------------------------------
-			# Add Logical Drives
+            # Add Logical Volumes for this enclosure
 			#----------------------------------------------------------------------
-			virt_drv_num=$(get_num_virt_drv $adp)
-			echo \"num_logical_drives\":\"$virt_drv_num\",
-			#----------------------------------------------------------------------
+            #----------------------------------------------------------------------
 			# Open Logical Drive Array
 			#----------------------------------------------------------------------
 			echo \"logical_drives\":[
-			for (( drv=0; drv<${virt_drv_num}; drv++ )); do
-				if (( drv>0 )); then echo ,;fi
-				#------------------------------------------------------------------
+            cnt=0
+            for lv_drv in $(get_lv_drv_ids $enc_id $adp); do
+                if (( cnt>0 )); then echo ,;fi
+                #------------------------------------------------------------------
 				# Add Logical Drive
 				#------------------------------------------------------------------
-				echo {
-				print_virt_drv_info $adp $drv
-				echo -n }                               # Close drive
-			done
-			echo ],
-		
+                echo {
+                #print_lv_drv_info $lv_drv
+                print_virt_drv_info $adp $lv_drv
+                echo -n }                           # Close LV drive
+		((cnt++))
+            done
+            echo ],                                 # Close LV Array
+            
 			#----------------------------------------------------------------------
 			# Add Physical Drives: Examine each slot
 			#----------------------------------------------------------------------

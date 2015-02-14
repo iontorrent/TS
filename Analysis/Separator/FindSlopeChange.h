@@ -8,6 +8,7 @@
 
 #define FRAME_ZERO_WINDOW 20
 #define MIN_ALLOWED_FRAME 12
+#define FSC_RATIO_STABLE 5
 using namespace std;
 using namespace arma;
 
@@ -406,7 +407,7 @@ public:
         sumSq += ( diff * diff );
       }
       hingeSsq += sumSq;
-      double currentRatio = ( 5 + zeroSsq ) / ( 5 + ( hingeSsq + .01 ) ); /// @todo - better value than 5 to steady ratio?
+      double currentRatio = ( FSC_RATIO_STABLE + zeroSsq ) / ( FSC_RATIO_STABLE + ( hingeSsq + .01 ) ); /// @todo - better value than 5 to steady ratio?
       double hingeSlope = mHingeParam[1];
       double paramSlope = mParam[1];
       /* printf("%d:%d %d:%d (%.5f,%.5f) (%.5f,%.5f) %.5f %.5f %.5f\n",  */

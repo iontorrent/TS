@@ -85,8 +85,8 @@ if( $cbcfile eq "" || $cbcfile eq "-" )
 
 #--------- End command arg parsing ---------
 
-my $header = "chrom\tstart\tend\tfwd_reads\trev_reads";
-$header .= "\tfwd_ontrg\trev_ontrg" if( $targetcov );
+my $header = "chrom\tstart\tend\tfwd_basereads\trev_basereads";
+$header .= "\tfwd_trg_basereads\trev_trg_basereads" if( $targetcov );
 
 # open BBCFILE and read contig header string
 open( BBCFILE, "<:raw", $bbcfile ) || die "Failed to open BBC file $bbcfile\n";
@@ -180,10 +180,15 @@ while( $chromCount <= $numChroms )
     # process coverage for previous contig
     processContigReads() if( $chromCount );
     # check for expected chromosome start - some might be missing but contig number must be increasing
+    unless( $cd )
+    {
+      print STDERR "Error reading BBC file: Apparently no reads to targetted reference.\n";
+      exit 1;
+    }
     if( $cd-1 < $chromIndex )
     {
       print STDERR "Error reading BBC file: Contig $cd out of order vs count $chromCount.\n";
-      exit 0;
+      exit 1;
     }
     $chromIndex = $cd-1;
     $chrid = $chromName[$chromIndex];

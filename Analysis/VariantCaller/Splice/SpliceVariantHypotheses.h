@@ -24,7 +24,7 @@ class EnsembleEval;
 bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &my_ensemble,
                         const LocalReferenceContext &local_context, PersistingThreadObjects &thread_objects,
                         int &splice_start_flow, int &splice_end_flow, vector<string> &my_hypotheses,
-                        const InputStructures &global_context,
+                        bool & changed_alignment, const InputStructures &global_context,
                         const ReferenceReader &ref_reader, int chr_idx);
 
 
@@ -46,7 +46,7 @@ int GetSpliceFlows(const Alignment &current_read, const InputStructures &global_
                    vector<string> &my_hypotheses, int splice_start_idx, vector<int> splice_end_idx,
                    int &splice_start_flow);
 
-string SpliceDoRealignement (PersistingThreadObjects &thread_objects, const Alignment &current_read,
-		                     long variant_position, int DEBUG, const ReferenceReader &ref_reader, int chr_idx);
+string SpliceDoRealignement (PersistingThreadObjects &thread_objects, const Alignment &current_read, long variant_position,
+		                     bool &changed_alignment, int DEBUG, const ReferenceReader &ref_reader, int chr_idx);
 
 #endif // SPLICEVARIANTHYPOTHESES_H

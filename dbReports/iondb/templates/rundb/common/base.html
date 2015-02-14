@@ -41,6 +41,7 @@
 
     <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-layout.min.css"%}" />
     <link type="text/css" rel="stylesheet" href="{% static "resources/styles/tb-styles.min.css"%}" />
+    <link type="text/css" rel="stylesheet" href="{% static "css/yamm.css"%}" />
 
     <script type="text/javascript" src="{% static "resources/jquery/jquery-1.8.2.min.js"%}"></script>
     <script type="text/javascript" src="{% static "resources/jquery/jquery.cookie.js"%}"></script>
@@ -71,6 +72,15 @@
         .footer{display:none;}
         .alert{
             margin-top: 100px;
+        }
+        .nav .dropdown.open {
+            background: white;
+        }
+        .navbar {
+            font: inherit;
+            background: inherit;
+            box-shadow: inherit;
+            text-shadow: inherit;
         }
     </style>
     <div class="container">
@@ -119,6 +129,50 @@
         <div class="row-fluid">
             <div class="span12">
                 {% block nav %}
+                    <div class="">
+                    <ul class=" nav nav-tabs pull-left">
+                        <li id="plan-menu" class="dropdown {% block plan_menu %}{% endblock %}">
+                            <a href="/plan" class="dropdown-toggle nav-tab" data-toggle="dropdown">Plan</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url "samplesets" %}">Samples</a></li>
+                                <li><a href="{% url "plan_templates" %}">Templates</a></li>
+                                <li><a href="{% url "planned" %}">Planned Run List</a></li>
+                          </ul>
+                        </li>
+                        <li id="monitor-menu" class="dropdown {% block monitor_menu %}{% endblock %}">
+                            <a href="/monitor" class="dropdown-toggle nav-tab" data-toggle="dropdown">Monitor</a>
+                            <ul class="dropdown-menu">
+                                <li class=""><a href="{% url "monitor" %}">Runs in Progress</a></li>
+                                <li class=""><a href="{% url "monitor_chef" %}">Ion Chef</a></li>
+                          </ul>
+                        </li>
+                        <li id="data-menu" class="dropdown yamm-fullwidth {% block data_menu %}{% endblock %}">
+                            <a href="/data" class="dropdown-toggle nav-tab" data-toggle="dropdown">Data</a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url "data" %}">Completed Runs & Results</a></li>
+                                <li><a href="{% url "projects" %}">Projects</a></li>
+                                <li><a href="{% url "datamanagement" %}">Data Management</a></li>
+                          </ul>
+                        </li>
+                    </ul>
+                    <ul class="nav nav-tabs pull-right" id="configureNav">
+                        <li rel="tooltip" title="News and Announcements" data-placement="top" class="{% block news_menu %}{% endblock %}"><a href="{% url 'news' %}" class="nav-tab"><i class="icon-bullhorn icon-white"></i>{% if unread_news %} {{ unread_news }}{% endif %}</a></li>
+                        <li id="configure-menu" class="dropdown {% block configure_menu %}{% endblock %}">
+                            <a id="configure" class="dropdown-toggle nav-tab" data-toggle="dropdown" data-target="#" href="{% url "configure_about" %}">
+                            <div id="gear" class="gear-inactive"><b class="caret"></b></div>
+                            </a>
+                            <ul class="dropdown-menu">
+                                <li><a href="{% url "configure_about" %}">About</a></li>
+                                <li><a href="{% url "configure_references" %}">References</a></li>
+                                <li><a href="{% url "configure_services" %}">Services</a></li>
+                                <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+                                <li><a href="{% url "configure_configure" %}">Configure</a></li>
+                                <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
+                                <li><a href="{% url "configure_account" %}">Accounts</a></li>
+                            </ul>
+                        </li>
+                    </ul>
+                    </div>
                 {% endblock nav %}
             </div>
         </div>
@@ -145,7 +199,7 @@
         <div id="user_messages"></div>
         <script>
             $(function(){
-                //dynanmically add the #error-messages container
+                //dynamically add the #error-messages container
                 $('.main > .container-fluid:first > .content:first ').prepend('<div id="error-messages" class="alert alert-error"></div>').alert();
                 $('#error-messages').hide();
             });
@@ -173,11 +227,13 @@
 {% block post-raw %}
 {% endblock post-raw %}
 {% include 'rundb/common/modals.html' %}
+{% if user.is_authenticated %}
 <script>
   $(function(){
     inbox = new MessageBox({models: {{global_messages|safe}} });
     userinbox = new UserMessageBox({models: {{user_messages|safe}}, user: '{{user.username}}' });
   });
 </script>
+{% endif %}
 </body> 
 </html> 

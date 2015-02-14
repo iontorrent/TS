@@ -9,11 +9,16 @@
 import sys
 import argparse
 import traceback
+import pytz
+from datetime import timedelta, datetime
 from iondb.bin import djangoinit
-from iondb.rundb.models import DMFileStat, FileServer, ReportStorage
-from iondb.rundb.data import data_management as dm
-from iondb.rundb.data import dmactions_types
+import iondb.settings as settings
+from django.db.models import Q
 from django.core.cache import get_cache
+from iondb.rundb.models import DMFileStat, FileServer, ReportStorage, DMFileSet, EventLog
+from iondb.rundb.data import dmactions_types
+from iondb.rundb.data import dm_utils
+from django.core.exceptions import ObjectDoesNotExist
 
 
 def list_errors():
@@ -23,16 +28,28 @@ def list_errors():
         print "%d objects in Error" % (dms.count())
     except:
         print traceback.format_exc()
+    try:
+        for dm in dms:
+            print "%-40s %-10s %s" % (dm.dmfileset.type, dm.action_state, dm.result.resultsName)
+    except:
+        print traceback.format_exc()
+
     return
 
 
 def list_inprocess():
     '''List all records in DMFileStat table with action_state processing'''
     try:
-        dms = DMFileStat.objects.filter(action_state__in=['AG','DG','EG','SA','SE','SD'])
+        dms = DMFileStat.objects.filter(action_state__in=['AG', 'DG', 'EG'])
         print "%d objects in Processing" % (dms.count())
     except:
         print traceback.format_exc()
+    try:
+        for dm in dms:
+            print "%-40s %-10s %s" % (dm.dmfileset.type, dm.action_state, dm.result.resultsName)
+    except:
+        print traceback.format_exc()
+
     return
 
 
@@ -40,21 +57,21 @@ def list_locks():
     '''Shows Data Management jobs with cache locks'''
     try:
         #objects=["manage_manual_action", "Test.lock"]
-        objects=["manage_manual_action"]
+        objects = ["manual_action_lock_id"]
         file_servers = FileServer.objects.all().order_by('pk').values()
         report_storages = ReportStorage.objects.all().order_by('pk').values()
-        for partition in dm._partitions(file_servers, report_storages):
+        for partition in dm_utils._partitions(file_servers, report_storages):
             for types in dmactions_types.FILESET_TYPES:
-                foo = "%s_%s" %(hex(partition['devid']),dm.slugify(types))
-                objects.append(foo)
+                foo_str = "%s_%s" % (hex(partition['devid']), dm_utils.slugify(types))
+                objects.append(foo_str)
     except:
         print traceback.format_exc()
         return
-    
+
     print ("%-31s %14s" % (30 * '=', 14 * '='))
     print ("%-31s %s" % ('Name of lock', 'Name of Report'))
     print ("%-31s %14s" % (30 * '=', 14 * '='))
-    
+
     try:
         cache = get_cache('file')
         for lockid in sorted(list(set(objects))):
@@ -62,8 +79,94 @@ def list_locks():
             print ("%-31s %s" % (lockid, thislock))
     except:
         print traceback.format_exc()
-        
+
     return
+
+
+def _local_dm_category_list():
+    '''
+    Differs from dm_utils.dm_category_list in that it returns all categories, regardless
+    of age threshold settings.
+    '''
+    '''Returns list of fileset cateogries each with list of partition ids that can be acted upon'''
+    
+    # Get list of File Server objects
+    file_servers = FileServer.objects.all().order_by('pk').values()
+
+    # Get list of Report Storage objects
+    report_storages = ReportStorage.objects.all().order_by('pk').values()
+
+    # dict of fileset cateogries each with list of partition ids that can be acted upon.
+    category_list = {}
+    #-------------------------------------------------
+    # DELETE action only happens if threshold reached
+    #-------------------------------------------------
+    #dmfilesets = DMFileSet.objects.filter(version=settings.RELVERSION).filter(auto_action__in=['DEL', 'ARC']).values()
+    dmfilesets = DMFileSet.objects.filter(version=settings.RELVERSION).values()
+    for dmfileset in dmfilesets:
+
+        cat_name = dm_utils.slugify(dmfileset['type'])
+        category_list[cat_name] = {
+            'dmfileset':dmfileset,
+            'devlist':[],
+            'partitions':[],
+        }
+
+        for partition in dm_utils._partitions(file_servers, report_storages):
+            d_loc = {'logid':"%s" % (hex(partition['devid']))}
+            print("%7s %24s %6.2f%% thresh.= %.0f%% %s" % (
+                hex(partition['devid']),
+                dmfileset['type'],
+                partition['diskusage'],
+                dmfileset['auto_trigger_usage'],
+                partition['path'],))
+
+            category_list[cat_name]['devlist'].append(partition['devid'])
+            category_list[cat_name]['partitions'].append(partition)
+
+        # uniquify the deviceid list
+        category_list[cat_name]['devlist'] = list(set(category_list[cat_name]['devlist']))
+
+    return category_list
+
+
+def list_status():
+    category_list = _local_dm_category_list()
+    print ("%31s%12s%12s%12s%12s%12s%12s" % ('', 'Total', 'Active', 'Expired', 'On Path', 'Not Keep', 'Action'))
+    print ("%31s%12s%12s%12s%12s%12s%12s" % ('-' * 30, '-' * 12, '-' * 12, '-' * 12, '-' * 12, '-' * 12, '-' * 12))
+    for _, category in category_list.iteritems():
+        for deviceid in category['devlist']:
+            pathlist = [item['path'] for item in category['partitions'] if item['devid'] == deviceid]
+            dmfileset = category['dmfileset']
+            dmfilestats = DMFileStat.objects.filter(dmfileset__type=dmfileset['type']).order_by('created')
+            tot_obj = dmfilestats.count()
+            dmfilestats = dmfilestats.filter(action_state__in=['L', 'S', 'N', 'A'])
+            tot_act = dmfilestats.count()
+            threshdate = datetime.now(pytz.UTC) - timedelta(days=dmfileset['auto_trigger_age'])
+            dmfilestats = dmfilestats.filter(created__lt=threshdate)
+            tot_exp = dmfilestats.count()
+            # Select objects stored on the deviceid
+            query = Q()
+            for path in pathlist:
+                if dmfileset['type'] == dmactions_types.SIG:
+                    query |= Q(result__experiment__expDir__startswith=path)
+                # These categories have files in both directory paths.
+                elif dmfileset['type'] in [dmactions_types.INTR, dmactions_types.BASE]:
+                    query |= Q(result__experiment__expDir__startswith=path)
+                    query |= Q(result__reportstorage__dirPath__startswith=path)
+                else:
+                    query |= Q(result__reportstorage__dirPath__startswith=path)
+
+            dmfilestats = dmfilestats.filter(query)
+            tot_onpath = dmfilestats.count()
+
+            # Exclude objects marked 'Keep' upfront to optimize db access
+            if dmfileset['type'] == dmactions_types.SIG:
+                dmfilestats = dmfilestats.exclude(result__experiment__storage_options="KI")
+            else:
+                dmfilestats = dmfilestats.exclude(preserve_data=True)
+            tot_notpreserved = dmfilestats.count()
+            print ("%7s%24s%12d%12d%12d%12d%12d%12s" % (hex(deviceid), category['dmfileset']['type'], tot_obj, tot_act, tot_exp, tot_onpath, tot_notpreserved, category['dmfileset']['auto_action']))
 
 
 def clear_errors():
@@ -77,14 +180,21 @@ def clear_errors():
     return
 
 
-def clear_inprocess():
-    '''All records in DMFileStat table with action_state indicating "currently processing" reset to Local'''
+def clear_error(reportName, file_category, action_def):
+    '''
+    # First argument is the Report Name
+    # Second argument is the File Category
+    # Third argument is the desired action_state
+    '''
     try:
-        print "We will now clear the in-process objects..."
-        dms = DMFileStat.objects.filter(action_state__in=['AG','DG','EG','SA','SE','SD']).update(action_state="L")
-        print "Cleared %d objects" % (dms)
-    except:
-        print traceback.format_exc()
+        dm = DMFileStat.objects.get(result__resultsName = reportName,
+                                    dmfileset__type = file_category)
+        dm.setactionstate(action_def)
+        print "Clearing error on %s - Category '%s'" % (reportName, file_category)
+        print "Action State set to %s" % action_def
+    except ObjectDoesNotExist:
+        print "No report found"
+    
     return
 
 
@@ -98,6 +208,44 @@ def clear_locks():
     return
 
 
+def clear_lock(lock_id):
+    '''Clears specified lock'''
+    try:
+        cache = get_cache('file')
+        cache.delete(lock_id)
+    except:
+        print traceback.format_exc()
+    return
+
+
+def clear_inprocess():
+    '''All records in DMFileStat table with action_state indicating "currently processing" reset to Pending'''
+    dm_objs = DMFileStat.objects.filter(action_state__in=['AG','DG','EG'])
+    reset_state(dm_objs)
+    return
+
+def clear_process(process_id):
+    '''Same as clear_inprocess() for a single result'''
+    dm_objs = DMFileStat.objects.filter(result__resultsName = process_id, action_state__in=['AG','DG','EG'])
+    reset_state(dm_objs)
+    return
+
+def reset_state(dm_objs):
+    print "We will now clear the in-process objects..."
+    try:
+        dms = len(dm_objs) # evaluate qs
+        dm_objs.filter(action_state__in=['AG']).update(action_state="SA")
+        dm_objs.filter(action_state__in=['DG']).update(action_state="SD")
+        dm_objs.filter(action_state__in=['EG']).update(action_state="SE")
+        print "Cleared %d objects" % dms
+        for dm in dm_objs:
+            msg = "%s for %s.<br>User Comment: started by dm_ctrl" % (DMFileStat.objects.get(pk=dm.pk).get_action_state_display(), dm.dmfileset.type)
+            EventLog.objects.add_entry(dm.result, msg, username='dm_agent')
+    except:
+        print traceback.format_exc()
+    return
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='''
 Data Management Control Interface.
@@ -105,74 +253,169 @@ WARNING: Some actions will affect the running state.
 There are no checks to prevent ruining ongoing DM actions.
 ''')
     parser.add_argument('--list-all',
-                        dest='list_all',
-                        action = 'store_true',
+                        dest = 'list_all',
+                        action ='store_true',
                         default = False,
                         help = 'List all objects in error and in process')
+    # ========================================================================
+    # ... Error State
+    # ========================================================================
     parser.add_argument('--list-errors',
-                        dest='list_errors',
+                        dest = 'list_errors',
                         action = 'store_true',
                         default = False,
                         help = 'List objects in Error state')
     parser.add_argument('--clear-errors',
-                        dest='clear_errors',
+                        dest = 'clear_errors',
                         action = 'store_true',
                         default = False,
                         help = 'Set state to Local for all objects in Error state')
+    parser.add_argument('--clear-error',
+                        dest = 'clear_error',
+                        help = 'Reset Error state of single process')
+    parser.add_argument('--SIG',
+                        action ='store_true',
+                        default = False,
+                        help = 'Signal Processing Input files')
+    parser.add_argument('--BASE',
+                        action ='store_true',
+                        default = False,
+                        help = 'Basecalling Input files')
+    parser.add_argument('--OUT',
+                        action ='store_true',
+                        default = False,
+                        help = 'Output files')
+    parser.add_argument('--INTR',
+                        action ='store_true',
+                        default = False,
+                        help = 'Intermediate files')
+    parser.add_argument('--Local',
+                        action ='store_true',
+                        default = False,
+                        help = 'Set action state to Local')
+    parser.add_argument('--Archive',
+                        action ='store_true',
+                        default = False,
+                        help = 'Set action state to Archive')
+    
+    # ========================================================================
+    # ... Processing State
+    # ========================================================================
     parser.add_argument('--list-processing',
-                        dest='list_processing',
+                        dest = 'list_processing',
                         action = 'store_true',
                         default = False,
                         help = 'List objects in processing state')
     parser.add_argument('--clear-processing',
-                        dest='clear_processing',
+                        dest = 'clear_processing',
                         action = 'store_true',
                         default = False,
-                        help = 'Set state to Local for all objects in processing state')
+                        help = 'Set state to Pending for all objects in processing state')
+    parser.add_argument('--clear-process',
+                        help = 'Remove single process')
+    
+    # ========================================================================
+    # ... Locks
+    # ========================================================================
     parser.add_argument('--list-locks',
-                        dest='list_locks',
+                        dest = 'list_locks',
                         action = 'store_true',
                         default = False,
                         help = 'List all locks')
     parser.add_argument('--clear-locks',
-                        dest='clear_locks',
+                        dest = 'clear_locks',
                         action = 'store_true',
                         default = False,
                         help = 'Remove all locks')
+    parser.add_argument('--clear-lock',
+                        help = 'Remove single lock')
     
+    # ========================================================================
+    # ... Status
+    # ========================================================================
+    parser.add_argument('--list-status',
+                        dest = 'list_status',
+                        action = 'store_true',
+                        default = False,
+                        help = 'List status')
+
     args = parser.parse_args()
 
     # If no arguments given, print usage and exit
-    if len(sys.argv)==1:
+    if len(sys.argv) == 1:
         parser.print_usage()
         sys.exit(0)
         
+    # If more than one file category is given, exit
+    if len([arg for arg in [args.SIG, args.BASE, args.OUT, args.INTR] if arg]) > 1:
+        print "\nOnly specify one file category argument: --[SIG|BASE|OUT|INTR]\n"
+        parser.print_usage()
+        sys.exit(0)
+        
+    # If more than one action state is given, exit
+    if len([arg for arg in [args.Local, args.Archive] if arg]) > 1:
+        print "\nOnly specify one action state argument: --[Archive|Local]\n"
+        parser.print_usage()
+        sys.exit(0)
+        
+    # clear error needs two additional kvp
+    if args.clear_error:
+        if any([args.SIG, args.BASE, args.OUT, args.INTR]) and any([args.Local, args.Archive]):
+            pass
+        else:
+            print "\nNeed to specify a file category and action state\n"
+            parser.print_usage()
+            sys.exit(0)
+
     #=========================================================================
     # Functions which display information only
     #=========================================================================
     if args.list_all:
         args.list_errors = True
         args.list_processing = True
-        
+
     if args.list_errors:
         list_errors()
-    
+
     if args.list_processing:
         list_inprocess()
-        
+
     if args.list_locks:
         list_locks()
-    
+
+    if args.list_status:
+        list_status()
+
     #=========================================================================
     # Action functions which modify the system
     #=========================================================================
     if args.clear_errors:
         clear_errors()
-    
+        
+    if args.clear_error:
+        if args.SIG:
+            sel_dmtypes = dmactions_types.SIG
+        if args.BASE:
+            sel_dmtypes = dmactions_types.BASE
+        if args.OUT:
+            sel_dmtypes = dmactions_types.OUT
+        if args.INTR:
+            sel_dmtypes = dmactions_types.INTR
+        if args.Local:
+            action_state = "L"
+        if args.Archive:
+            action_state = "SA"
+            
+        clear_error(args.clear_error, sel_dmtypes, action_state)
+
     if args.clear_processing:
         clear_inprocess()
-        
+
     if args.clear_locks:
         clear_locks()
-    
-    
+
+    if args.clear_lock:
+        clear_lock(args.clear_lock)
+        
+    if args.clear_process:
+        clear_process(args.clear_process)

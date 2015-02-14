@@ -1,0 +1,604 @@
+
+<input type="hidden" id="isPlan" name="isPlan" value="{{helper.isPlan}}" />
+<input type="hidden" id="isCreate" name="isCreate" value="{{helper.isCreate}}" />
+<input type="hidden" id="isTargetRegionBEDFileSupported" name="isTargetRegionBEDFileSupported" value="{{helper.getApplProduct.isTargetRegionBEDFileSupported}}" />
+<input type="hidden" id="isHotspotRegionBEDFileSupported" name="isHotspotRegionBEDFileSupported" value="{{helper.getApplProduct.isHotspotRegionBEDFileSuppported}}" />
+<input type="hidden" id="isTargetRegionBEDFileBySampleSupported" name="isTargetRegionBEDFileBySampleSupported" value="{{helper.getApplProduct.isTargetRegionBEDFileBySampleSupported}}" />
+<input type="hidden" id="isHotSpotBEDFileBySampleSupported" name="isHotSpotBEDFileBySampleSupported" value="{{helper.getApplProduct.isHotSpotBEDFileBySampleSupported}}" />
+
+<div class="row-fluid">    
+    <div class="span12 summary-section">
+        <h3>
+            <a class="pull-right" href="#"><i class="showhide icon-minus"></i></a>                    
+         Default Reference & BED Files</h3>
+        <div id="default_reference_section" class="hideable_default_reference_section">        
+            <div class="span6">
+            <table id="default_reference_table" class="table table-striped table-condensed">
+                <tbody>
+                <tr>
+                <td>
+                <b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Reference Library {% if not helper.getApplProduct.isTargetRegionBEDFileSupported %}(optional){% endif %}:</b>
+                </td>
+                <td>
+                    <select id="default_reference" name="default_reference" class="input-medium default_reference" style="width: 300px;">
+                        <option value="">None</option>
+                        {% for ref in helper.getStepDict.Reference.getPrePopulatedFieldDict.references %}
+                            {% ifequal ref.short_name helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference %}
+                                <option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
+                            {% else %}
+                                {% ifequal ref.name helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference %}
+                                    <option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}}</option>
+                                {% else %}
+                                    <option value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
+                                {% endifequal %}
+                            {% endifequal %}
+                        {% endfor %}
+               
+                        {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.referenceMissing %}
+                            <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference}}</option>
+                        {% endif %}
+             
+                    </select>
+
+                </td>
+                </tr>
+            
+                <tr {% if not helper.getApplProduct.isTargetRegionBEDFileSupported %} style="display: none;"{%endif%}>
+                    <td>
+                    <b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Target Regions:</b>
+                    </td>
+                    <td>        
+                       <select id="default_targetBedFile" name="default_targetBedFile" class="input-medium default_targetBedFile" style="width: 300px;">
+                         <option value="">None</option>
+                        {% for bedFile in helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFiles %}
+                            {% ifequal bedFile.file helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile %}
+                                <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                            {% else %}
+                                <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile and not step.getDefaultSectionSavedFieldDict.default_reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
+                            {% endifequal %}
+                        {%endfor%}
+               
+                        {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFileMissing %}
+                            <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile}}</option>
+                        {% endif %}                        
+                        </select>    
+                    </td>
+                </tr>
+
+                <tr {% if not helper.getApplProduct.isHotspotRegionBEDFileSuppported %} style="display: none;"{%endif%}>
+                    <td>
+                    <b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Hotspot Regions:</b>
+                    </td>
+                    <td>
+                        <select id="default_hotSpotBedFile" name="default_hotSpotBedFile" class="input-medium default_hotSpotBedFile" style="width: 300px;">
+                         <option value="">None</option>
+                         {% for bedFile in helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFiles %}
+                            {% ifequal bedFile.file helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile %}
+                                <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                            {% else %}
+                                <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile and not step.getDefaultSectionSavedFieldDict.default_reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
+                            {% endifequal %}                                                                              
+                        {%endfor%}
+               
+                        {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFileMissing %}
+                            <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile}}</option>
+                        {% endif %}                                                         
+                        </select> 
+                    </td>
+                </tr>
+
+                <tr {% if not helper.isPlan %} style="display: none;"{%endif%}>
+                    <td colspan="2">
+                        <div>
+                            <label class="checkbox inline">
+                                <input type="checkbox" id="isSameRefInfoPerSample" name="isSameRefInfoPerSample" style="vertical-align:top" {% if helper.getStepDict.Reference.getCurrentSavedFieldDict.isSameRefInfoPerSample %}checked{%endif%}>
+                            </label>
+                            <b>Use same reference & BED files for all {%if step.getCurrentSavedFieldDict.barcodeSet %}barcodes{%else%}chips{%endif%}</b>                        
+                        </div>
+                    </td>
+                    <!-- td class="break-word; width: 300px;""></td>
+                    </tr -->               
+                </tr>
+                </tbody>
+            </table> 
+            </div> 
+               
+            <div class="span6">
+                <div id="mixedType_default_reference_section" class="hideable_mixedType_default_reference_section" {%if helper.isDualNucleotideTypeBySample %} style=""{%else%}style="display: none;"{%endif%} >                    
+                    <table id="mixedType_default_reference_table" class="table table-striped table-condensed">
+                        <tbody>
+                        <tr>                
+                        <td>
+                        <b>RNA Reference Library:</b>
+                        </td>
+                        <td>
+                            <select id="mixedTypeRNA_reference" name="mixedTypeRNA_reference" class="select-group"  style="width: 300px;">
+                                <option value="">None</option>
+                                {% for ref in helper.getStepDict.Reference.getPrePopulatedFieldDict.references %}
+                                    {% ifequal ref.short_name helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference %}
+                                        <option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
+                                    {% else %}
+                                        {% ifequal ref.name helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference %}
+                                            <option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}}</option>
+                                        {% else %}
+                                            <option value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
+                                        {% endifequal %}
+                                    {% endifequal %}
+                                {% endfor %}
+           
+                                {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.mixedTypeRNA_referenceMissing %}
+                                    <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference}}</option>
+                                {% endif %}
+                            </select>
+                        </td>                
+                        </tr>
+                        
+                        <tr>
+                        <td>
+                        <b>RNA Target Regions:</b>
+                        </td>
+                        <td>
+                            <select id="mixedTypeRNA_targetBedFile" name="mixedTypeRNA_targetBedFile" class="select-group"  style="width: 300px;">
+                                <option value="">None</option>
+
+                                {% for bedFile in helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFiles %}
+                                {% ifequal bedFile.path helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile %}
+                                    <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                                {% else %}
+                                    {% ifequal bedFile.file helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile %}
+                                        <option SELECTED value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                                    {% else %}
+                                        <option value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
+                                    {% endifequal %}
+                                {% endifequal %}
+                                {% endfor %}
+                    
+                                {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.mixedTypeRNA_targetBedFileMissing %}
+                                    <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile}}">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedRNA_targetBedFile}}</option>
+                                {% endif %}
+                               
+                               {%comment%}
+                               {% for bedFile in step.getPrePopulatedFieldDict.targetBedFiles %}
+                                    <option  value="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
+                                {%endfor%}
+                                    
+                                {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.mixedTypeRNA_targetBedFileMissing %}
+                                    <option SELECTED class="entryNotFound" value="{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedRNA_targetBedFile}}">(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedRNA_targetBedFile}}</option>
+                                {% endif %}
+                                {%endcomment%}
+                            </select> 
+                        </td>               
+                        </tr>
+                        </tbody>                    
+                    </table> 
+               </div>
+            </div>                   
+        </div>
+    </div>
+</div>
+
+
+<script type="text/javascript">    
+
+    /**
+     *   Click event handler to show/hide the default reference & BED files section
+     */
+    $(".showhide").click(function () {
+        $(this).toggleClass('icon-minus icon-plus');
+        
+        $(".hideable_default_reference_section").each(function (index, value) {
+            //console.log("index=", index, + "; value=", value);
+            $(this).toggle();
+        })
+    });
+    
+
+    function create_bedFileSelects($selects, isCreate, isInit) {
+        var selectedBarcodeKit = $('#barcodeSet').val();
+        
+        $.each($selects, function(i){        
+            var $select = $($selects[i]);
+            var $parent = $select.parent();
+            
+            //console.log("create_bedFileSelects() LOOP#1... $select=", $select);            
+            //console.log("create_bedFileSelects() LOOP#2... $parent=", $parent);
+                        
+            var name = $select.attr('name');
+            if ($parent.find("[name="+name+"]").length > 0) {
+                $parent.find("[name="+name+"]").remove();
+            }
+            var $new_select = $("<select>", {'name' : name, 'id' : $select.attr('name'), 'class' : 'select-group  input-medium  '+name, 'style' : 'width:300px;'});
+
+            $new_select.append($("<option value=''>None</option>"));
+
+            $new_select.on('change', function(){
+                if (isCreate == "True" || isInit == false || (isCreate == "False") ) {                
+                if (name == 'default_targetBedFile'){
+                    //$("#selectedTargetRegions").text($(this).val() != null ? $(this).val() : '');
+
+                    var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
+                    handle_default_targetBedFile_change(selectedBedFile, true);
+                }
+                else {
+                    //$("#selectedHotspotRegions").text($(this).val() != null ? $(this).val() : '');
+
+                    var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
+                    handle_default_hotSpotBedFile_change(selectedBedFile, true);                    
+                }
+                }
+            });
+            
+            var $options = $select.children().filter("[class="+$("#default_reference").val()+"]");
+            var $new_options = $options.clone();
+            $.each($new_options, function(j){
+                //console.log("create_bedFileSelects() j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));
+
+                if (name == 'default_targetBedFile') {
+                    if ($($new_options[j]).attr('value') == "{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile}}") {
+                        $($new_options[j]).attr('selected', true);
+                        
+                        console.log("create_bedFileSelects() TARGET SELECTED!!! j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));            
+                    }
+                } else {
+                    if ($($new_options[j]).attr('value') == "{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile|default_if_none:""}}") {
+                        $($new_options[j]).attr('selected', true);
+                        
+                        console.log("create_bedFileSelects() HOTSPOT SELECTED!!! j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));   
+                    }
+
+                }
+
+            });
+            $new_select.append($new_options);
+            $new_select.change();
+            $parent.append($new_select); 
+        });
+        updateSamplesTable();
+    }
+   
+
+    function create_mixedTypeRNA_bedFileSelects($selects, isCreate, isInit) {
+        $.each($selects, function(i){        
+            var $select = $($selects[i]);
+            var $parent = $select.parent();
+
+            //console.log("create_mixedTypeRNA_bedFileSelects() LOOP#1... $select=", $select);            
+            //console.log("create_mixedTypeRNA_bedFileSelects() LOOP#2... $parent=", $parent);
+                        
+            var name = $select.attr('name');
+            if ($parent.find("[name="+name+"]").length > 0) {
+                $parent.find("[name="+name+"]").remove();
+            }
+            var $new_select = $("<select>", {'name' : name, 'id' : $select.attr('name'), 'class' : 'select-group  input-medium  '+name, 'style' : 'width:300px;'});
+
+            $new_select.append($("<option value=''>None</option>"));
+
+            $new_select.on('change', function(){
+                if (isCreate == "True" || isInit == false) {
+                if (name == 'mixedTypeRNA_targetBedFile'){
+                    //$("#selectedMixedTypeRNATargetRegions").text($(this).val() != null ? $(this).val() : '');
+
+                    var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
+                    handle_mixedTypeRNA_targetBedFile_change(selectedBedFile, !isInit);
+
+                }
+                }
+            });
+            
+            //console.log("create_mixedTypeRNA_bedFileSelects() filter=", $("#mixedTypeRNA_reference").val());
+            
+            var $options = $select.children().filter("[class="+$("#mixedTypeRNA_reference").val()+"]");
+            var $new_options = $options.clone();
+            $.each($new_options, function(j){
+                //console.log("create_mixedTypeRNA_bedFileSelects() j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));
+                
+                if (name == 'mixedTypeRNA_targetBedFile') {
+                    if ($($new_options[j]).attr('value') == "{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile}}") {
+                        $($new_options[j]).attr('selected', true);
+                        
+                        //console.log("create_mixedTypeRNA_bedFileSelects() TARGET SELECTED!!! j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));
+                        
+                    }
+                } 
+            });
+            $new_select.append($new_options);
+            $new_select.change();
+            $parent.append($new_select); 
+        });
+    }
+        
+
+    /**
+     *  dropdown list selection change for genome reference
+     */    
+    function create_bedFileSelects2($selects, $selects_parents, isCreate, isInit) {  
+        var selectedBarcodeKit = $('#barcodeSet').val();
+              
+        $.each($selects, function(i){
+        
+            var $select = $($selects[i]);
+            var $parent = $($selects_parents[i]);
+            
+            //console.log("create_bedFileSelects2() LOOP#1... i=", i, "; $select=", $select);            
+            //console.log("create_bedFileSelects2() LOOP#2... i=", i, "; $parent=", $parent);
+            
+            var name = $select.attr('name');
+            if ($parent.find("[name="+name+"]").length > 0) {
+                $parent.find("[name="+name+"]").remove();
+            }
+            var $new_select = $("<select>", {'name' : name, 'id' : $select.attr('name'), 'class' : 'select-group  input-medium  '+name, 'style' : 'width:300px;'});
+
+            $new_select.append($("<option value=''>None</option>"));
+
+            $new_select.on('change', function(){
+                if (isCreate == "True" || isInit == false || (isCreate == "False" && selectedBarcodeKit == "") ) {
+                if (name == 'default_targetBedFile'){
+                    //$("#selectedTargetRegions").text($(this).val() != null ? $(this).val() : '');
+                    
+                    var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
+                    handle_default_targetBedFile_change(selectedBedFile, true);
+
+                }
+                else {
+                    //$("#selectedHotspotRegions").text($(this).val() != null ? $(this).val() : '');
+
+                    var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
+                    handle_default_hotSpotBedFile_change(selectedBedFile, true);                      
+                }
+                }
+            });
+            
+
+            //console.log("create_bedFileSelects2() filter=", $("#default_reference").val());
+            
+            var $options = $select.children().filter("[class="+$("#default_reference").val()+"]");
+            var $new_options = $options.clone();
+            
+            $.each($new_options, function(j){
+                //console.log("create_bedFileSelects2() j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));
+                
+                if (name == 'default_targetBedFile') {
+                    if ($($new_options[j]).attr('value') == "{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_targetBedFile}}") {
+                        $($new_options[j]).attr('selected', true);
+                        
+                        //console.log("create_bedFileSelects2() TARGET SELECTED!!! j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));
+                        
+                    }
+                } else {
+                    if ($($new_options[j]).attr('value') == "{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_hotSpotBedFile|default_if_none:""}}") {
+                        $($new_options[j]).attr('selected', true);
+                        
+                        //console.log("create_bedFileSelects2() HOTSPOT SELECTED!!! j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));
+                        
+                    }
+
+                }
+            });
+            
+            $new_select.append($new_options);
+            $new_select.change();
+            $parent.append($new_select);
+ 
+        });
+        updateSamplesTable();
+    }
+    
+
+    /**
+     *  dropdown list selection change for genome reference
+     */    
+    function create_mixedTypeRNA_bedFileSelects2($selects, $selects_parents, isCreate, isInit) {        
+        $.each($selects, function(i) {
+        
+            var $select = $($selects[i]);
+            var $parent = $($selects_parents[i]);
+            
+            //console.log("create_mixedTypeRNA_bedFileSelects2() LOOP#1... i=", i, "; $select=", $select);            
+            //console.log("create_mixedTypeRNA_bedFileSelects2() LOOP#2... i=", i, "; $parent=", $parent);
+            
+            var name = $select.attr('name');
+            if ($parent.find("[name="+name+"]").length > 0) {
+                $parent.find("[name="+name+"]").remove();
+            }
+            var $new_select = $("<select>", {'name' : name, 'id' : $select.attr('name'), 'class' : 'select-group  input-medium  '+name, 'style' : 'width:300px;'});
+
+            $new_select.append($("<option value=''>None</option>"));
+
+            $new_select.on('change', function(){
+                if (isCreate == "True" || isInit == false) {
+                if (name == 'mixedTypeRNA_targetBedFile'){
+                    //$("#selectedMixedTypeRNATargetRegions").text($(this).val() != null ? $(this).val() : '');
+
+                    var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
+                    handle_mixedTypeRNA_targetBedFile_change(selectedBedFile);
+
+                }
+                }
+            });
+                        
+            var $options = $select.children().filter("[class="+$("#mixedTypeRNA_reference").val()+"]");
+            var $new_options = $options.clone();
+            
+            $.each($new_options, function(j){
+                //console.log("create_mixedTypeRNA_bedFileSelects2() j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));
+                
+                if (name == 'mixedTypeRNA_targetBedFile') {
+                    if ($($new_options[j]).attr('value') == "{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile}}") {
+                        $($new_options[j]).attr('selected', true);
+                        
+                        //console.log("create_mixedTypeRNA_bedFileSelects2() TARGET SELECTED!!! j=", j, "; new_options[j]=", $($new_options[j]).attr('value'));
+                        
+                    }
+                }
+            });
+            
+            $new_select.append($new_options);
+            $new_select.change();
+            $parent.append($new_select);
+ 
+        });
+    }
+    
+
+    function handle_default_targetBedFile_change(selectedBedFile, isToUpdateSamplesTable) {
+        var isSameRefInfoPerSample = $("input[name=isSameRefInfoPerSample]").is(":checked");  
+                       
+        console.log("page_plan_reference_section.html - handle_default_targetBedFile_change() value=", selectedBedFile, "; isSameRefInfoPerSample=", isSameRefInfoPerSample, "; isToUpdateSamplesTable=", isToUpdateSamplesTable);
+                                
+        $("#selectedTargetRegions").text(selectedBedFile);
+
+        if (isSameRefInfoPerSample) {
+            var isPlan = $('input[id=isPlan]').val();
+            //console.log("page_plan_reference_section.html - handle_defalut_targetBedFile_change - isPlan=", isPlan, "; isToUpdateSamplesTable=", isToUpdateSamplesTable);
+            
+            if (isPlan == "True") {
+                //console.log("page_plan_reference_section.html - handle_default_targetBedFile_change INSIDE TRUE isPlan=", isPlan);
+            
+                updateSamplesForTargetRegion(selectedBedFile, isToUpdateSamplesTable);
+            }
+        }
+    }
+
+
+    function handle_mixedTypeRNA_targetBedFile_change(selectedBedFile) {                  
+        //console.log("page_plan_reference_section.html - handle_mixedTypeRNA_targetBedFile_change() value=", selectedBedFile);
+                                
+        //$("#selectedMixedTypeRNATargetRegions").text(selectedBedFile);
+
+        var isPlan = $('input[id=isPlan]').val();
+        //console.log("page_plan_reference_section.html - handle_mixedTypeRNA_targetBedFile_change - isPlan=", isPlan);
+        
+        if (isPlan == "True") {
+            updateMixedTypeRNASamplesForTargetRegion(selectedBedFile);
+            //sampleTable = ($('#chipsets');
+        }    
+    }
+        
+
+    function handle_default_hotSpotBedFile_change(selectedBedFile, isToUpdateSamplesTable) {
+        var isSameRefInfoPerSample = $("input[name=isSameRefInfoPerSample]").is(":checked");  
+                           
+        console.log("page_plan_reference_section.html - handle_default_hotSpotBedFile_change() value=", selectedBedFile, "; isSameRefInfoPerSample=", isSameRefInfoPerSample, "; isToUpdateSamplesTable=", isToUpdateSamplesTable);
+                                
+        $("#selectedHotspotRegions").text(selectedBedFile);
+
+        if (isSameRefInfoPerSample) {
+            var isPlan = $('input[id=isPlan]').val();
+            //console.log("page_plan_reference_section.html - handle_default_hotSpotBedFile_change - isPlan=", isPlan);
+            
+            if (isPlan == "True") {
+                updateSamplesForHotSpot(selectedBedFile, isToUpdateSamplesTable);
+            } 
+        }
+    }
+    
+    function updateFromCurrentReference(refName, $selects) {
+        $("#selectedReferenceLibrary").text(referenceShortToLongName[refName]);
+        // $('#targetBedFile option').attr('selected', false);
+        // $('#hotSpotBedFile option').attr('selected', false);
+        // $("#selectedTargetRegions").text('');
+        // $("#selectedHotspotRegions").text('');
+        // $("#targetBedFile option, #hotSpotBedFile option").filter('[value != ""]').hide().filter("[class ~= "+refName+"]").show();
+
+        create_bedFileSelects($selects);
+        
+    }
+
+    
+    
+    $(document).ready(function () {
+        var isCreate = $('input[id=isCreate]').val();
+
+        var isInit = true;
+        
+        //preserve the original complete BED file selection lists
+        var $selects = $("#default_targetBedFile, #default_hotSpotBedFile");
+        $selects.hide();
+        
+        var $mixedTypeRNA_selects = $("#mixedTypeRNA_targetBedFile");
+        $mixedTypeRNA_selects.hide();        
+        
+        /**
+         Checkbox for using the default reference and BED files for barcoded samples
+         */
+        $("input[name=isSameRefInfoPerSample]").click(function () {
+            var isSameRefInfoPerSample = $(this).is(":checked");
+            handle_isSampleRefInfoPerBarcodeSample(isSameRefInfoPerSample, false);
+        });
+        
+        
+        $("#default_reference").change(function()  {
+            var selectedReference = $(this).val();                                                
+            $("#selectedReferenceLibrary").text(referenceShortToLongName[selectedReference]);
+
+            $rows = $("#default_reference_table td:nth-child(2)");
+            
+            //console.log("**** page_plan_reference_section.html - #2 default_reference.change() $target.parent=", $rows[1]);
+            //console.log("**** page_plan_reference_section.html - #2 default_reference.change() $hotSpot.parent=", $rows[2]);
+            
+            var $selects_parents = [];
+            $selects_parents.push($rows[1]);
+            $selects_parents.push($rows[2]);
+            
+            //workaround to ensure parent won't be empty
+            create_bedFileSelects2($selects, $selects_parents, isCreate, false);
+                 
+            var isPlan = $('input[id=isPlan]').val();
+
+            //console.log("page_plan_reference_section.html - default_reference.change isPlan=", isPlan, "; selectedReference=", selectedReference);
+
+            var isSameRefInfoPerSample = $("input[name=isSameRefInfoPerSample]").is(":checked");                  
+            if (isSameRefInfoPerSample && isPlan == "True") {
+                //console.log("page_plan_reference_section.html - default_reference.change INSIDE TRUE isPlan=", isPlan, "; selectedReference=", selectedReference);
+
+                updateSamplesForReference(selectedReference, isInit);
+            }
+
+        });
+              
+        $("#mixedTypeRNA_reference").change(function()  {
+            var selectedReference = $(this).val();            
+
+            //console.log("page_plan_reference_section.html - mixedTypeRNA_reference.change() value=", selectedReference);
+                                    
+            //$("#selectedMixedTypeRNAReferenceLibrary").text(referenceShortToLongName[selectedReference]);
+
+            $rows = $("#mixedType_default_reference_table td:nth-child(2)");
+            
+            //console.log("**** page_plan_reference_section.html - #2 mixedTypeRNA_reference.change() $target.parent=", $rows[1]);
+            //console.log("**** page_plan_reference_section.html - #2 mixedTypeRNA_reference.change() $hotSpot.parent=", $rows[2]);
+            
+            var $selects_parents = [];
+            $selects_parents.push($rows[1]);
+            
+            //we don't support mixedTypeRNA_hotSpot yet
+            //$selects_parents.push($rows[2]);
+            
+            //workaround to ensure parent won't be empty
+            create_mixedTypeRNA_bedFileSelects2($mixedTypeRNA_selects, $selects_parents, isCreate, false);
+                 
+            var isPlan = $('input[id=isPlan]').val();
+            
+            if (isPlan == "True") {
+                //console.log("page_plan_reference_section.html - mixedTypeRNA_reference.change INSIDE TRUE isPlan=", isPlan, "; selectedReference=", selectedReference);
+
+                updateMixedTypeRNASamplesForReference(selectedReference, true);
+            }
+
+        });
+        
+        
+        // $("#targetBedFile option, #hotSpotBedFile option").filter('[value != ""]').hide().filter("[class ~= "+'{{step.getCurrentSavedFieldDict.reference}}'+"]").show();
+
+        create_bedFileSelects($selects, isCreate, isInit);
+        
+        create_mixedTypeRNA_bedFileSelects($mixedTypeRNA_selects, isCreate, true);
+
+        var isSameRefInfoPerSample = $("input[name=isSameRefInfoPerSample]").is(":checked");       
+        handle_isSampleRefInfoPerBarcodeSample(isSameRefInfoPerSample, true);
+        
+        isInit = false;
+        
+    });  //end of document.ready
+    
+</script> 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved */
+/* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 #ifndef REALIGN_WRAPPER_H
 #define REALIGN_WRAPPER_H
 
@@ -11,11 +11,14 @@
 extern "C"
 {
 #endif
-    
+
 struct RealignProxy;
 
 struct RealignProxy* realigner_create ();
 struct RealignProxy* realigner_create_spec (unsigned reserve_size, unsigned clipping_size);
+
+struct RealignProxy* context_aligner_create ();
+
 void realigner_destroy (struct RealignProxy* r);
 
 void realigner_set_verbose (struct RealignProxy* r, uint8_t verbose);
@@ -51,10 +54,10 @@ char* qry_mem (struct RealignProxy* r, unsigned len);
 char* ref_mem (struct RealignProxy* r, unsigned len);
 
 
-    
+
 #if defined (__cplusplus)  // closure of the 'extern "C"' scope
 }
-#endif    
-    
+#endif
+
 
 #endif // REALIGN_WRAPPER_H

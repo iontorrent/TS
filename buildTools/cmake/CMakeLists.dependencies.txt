@@ -1,5 +1,40 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
+set (ION_TS_EXTERNAL "${PROJECT_SOURCE_DIR}/../external/")
+#set (ION_TS_EXTERNAL "${CMAKE_BINARY_DIR}/external/")
+
+#set(ION_UPDATE_SERVER "updates.iontorrent.com") # internal developer can use just "updates"
+
+# Use the closest ION_UPDATE_SERVER we can find.
+message(STATUS "Searching for an ION_UPDATE_SERVER...")
+foreach ( SERVER updates updates.itw updates.iontorrent.com )
+    # See if we can look up the server in question.
+    execute_process( COMMAND host -W 2 ${SERVER}
+       RESULT_VARIABLE NOT_FOUND OUTPUT_QUIET ERROR_QUIET )
+
+    # If we can find it, great! We're done!
+    if ( NOT ${NOT_FOUND} )
+       set( ION_UPDATE_SERVER ${SERVER} )
+       break()
+    endif()
+endforeach()
+
+# If we find a server, let everyone know.
+if (ION_UPDATE_SERVER)
+    message(STATUS "Using ION_UPDATE_SERVER: ${ION_UPDATE_SERVER}")
+else()
+    message(WARNING "Could not find a valid ION_UPDATE_SERVER.")
+endif()
+
+#custom ExternalProject_add with timeout feature
+IF (${CMAKE_MAJOR_VERSION}.${CMAKE_MINOR_VERSION}.${CMAKE_PATCH_VERSION} STRLESS 2.8.2)
+  SET(CMAKE_MODULE_PATH
+    ${CMAKE_MODULE_PATH}
+    ${ION_TS_EXTERNAL}/CMake
+  )
+ENDIF ()
+include(ExternalProject)
+
 find_program(LSB_RELEASE_COMMAND lsb_release)
 if(LSB_RELEASE_COMMAND)
     execute_process(COMMAND ${LSB_RELEASE_COMMAND} -s -c
@@ -42,18 +77,6 @@ mark_as_advanced(ION_USE_SYSTEM_BAMTOOLS)
 if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "wheezy" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR 
-    ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "raring")
-  option(ION_USE_SYSTEM_FFTW "Use fftw system libraries" ON)
-else()
-  option(ION_USE_SYSTEM_FFTW "Use fftw system libraries" OFF)
-endif()
-mark_as_advanced(ION_USE_SYSTEM_FFTW)
-
-if (${LSB_RELEASE_CODENAME} STREQUAL "sid" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "jessie" OR
-    ${LSB_RELEASE_CODENAME} STREQUAL "wheezy" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "trusty" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "saucy" OR
     ${LSB_RELEASE_CODENAME} STREQUAL "raring")
@@ -72,11 +95,44 @@ mark_as_advanced(ION_USE_SYSTEM_ARMADILLO)
 option(ION_USE_SYSTEM_BOOST "Use boost system libraries" ON)
 mark_as_advanced(ION_USE_SYSTEM_BOOST)
 
-option(ION_USE_SYSTEM_LEVMAR "Use systems default levmar libraries" OFF)
-mark_as_advanced(ION_USE_SYSTEM_LEVMAR)
-
 option(ION_USE_SYSTEM_PICARD "Use picard system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_PICARD)
+
+if (${LSB_RELEASE_CODENAME} STREQUAL "lucid")
+    set(gpu_devdriver_version "340.32")
+    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-340.32-no-compat32.run")
+    set(cuda_proj_version "6.0.37-18176142")
+    set(cuda_toolkit_tar_file "cuda-linux64-rel-6.0.37-18176142.tar.gz")
+    set(cuda_toolkit_patch_file "cuda_toolkit-6.0.37.patch")
+    set(CUDA_VERSION "6.0")
+elseif (${LSB_RELEASE_CODENAME} STREQUAL "oneiric")
+    set(gpu_devdriver_version "340.32")
+    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-340.32-no-compat32.run")
+    set(cuda_proj_version "6.0.37-18176142")
+    set(cuda_toolkit_tar_file "cuda-linux64-rel-6.0.37-18176142.tar.gz")
+    set(cuda_toolkit_patch_file "cuda_toolkit-6.0.37.patch")
+    set(CUDA_VERSION "6.0")
+elseif (${LSB_RELEASE_CODENAME} STREQUAL "trusty")
+    set(gpu_devdriver_version "343.22")
+    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-343.22-no-compat32.run")
+    set(cuda_proj_version "6.5.14-18749181")
+    set(cuda_toolkit_tar_file "cuda-linux64-rel-6.5.14-18749181.tar.gz")
+    set(cuda_toolkit_patch_file "cuda_toolkit-6.5.14.patch")
+    set(CUDA_VERSION "6.5")
+else()
+    set(gpu_devdriver_version "340.32")
+    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-340.32-no-compat32.run")
+    set(cuda_proj_version "6.0.37-18176142")
+    set(cuda_toolkit_tar_file "cuda-linux64-rel-6.0.37-18176142.tar.gz")
+    set(cuda_toolkit_patch_file "cuda_toolkit-6.0.37.patch")
+    set(CUDA_VERSION "6.0")
+endif()
+
+set(cuda_toolkit "cuda_toolkit")
+set(cuda_toolkit_version "${cuda_toolkit}-${cuda_proj_version}")
+
+set(gpu_devdriver "gpu_devdriver")
+set(gpu_devdriver_version "${gpu_devdriver}-${gpu_devdriver_version}")
 
 
 ExternalProject_add(${cuda_toolkit}
@@ -88,14 +144,14 @@ ExternalProject_add(${cuda_toolkit}
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
     INSTALL_COMMAND ""
-    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/cuda_toolkit-5.5.22.patch" 
+    PATCH_COMMAND patch -p1 -t -N < "${PROJECT_SOURCE_DIR}/../external/${cuda_toolkit_patch_file}"
 )
 
 
-ExternalProject_add(${cuda_devdriver}
-    PREFIX ${PROJECT_BINARY_DIR}/../${cuda_devdriver_version}-prefix
-    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${cuda_devdriver_version}
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/${cuda_devdriver_file}.tar.gz" # cmake doesn't download .run files
+ExternalProject_add(${gpu_devdriver}
+    PREFIX ${PROJECT_BINARY_DIR}/../${gpu_devdriver_version}-prefix
+    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${gpu_devdriver_version}
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/${gpu_devdriver_file}.tar.gz" # cmake doesn't download .run files
 #    URL_MD5 ""
     TIMEOUT "3600"
     CONFIGURE_COMMAND ""
@@ -128,26 +184,6 @@ if(ION_USE_CUDA)
     message(STATUS "CUDA_INCLUDE_DIRS: ${CUDA_INCLUDE_DIRS}")
 endif()
 
-if (NOT ION_USE_SYSTEM_FFTW)
-  set(proj_name "fftw")
-  set(proj_version "3.3")
-  set(proj_name_version "${proj_name}-${proj_version}")
-  ExternalProject_add(${proj_name}
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/fftw-3.3.tar.gz"
-#    URL_MD5 "0728ab3ec0ebb06631ab3b80a5c3d130"
-    PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
-    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
-    BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
-    CONFIGURE_COMMAND ${PROJECT_BINARY_DIR}/../${proj_name_version}/configure
-    --enable-static --with-pic
-    --prefix=${PROJECT_BINARY_DIR}/../${proj_name_version}-install
-  )
-  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include")
-  set(ION_FFTW_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libfftw3.a")
-else()
-  set(ION_FFTW_LIBS libfftw3.a)
-endif()
-
 if(NOT ION_USE_SYSTEM_HDF5)
   set(proj_name "hdf5")
   set(proj_version "1.8.8")
@@ -166,10 +202,11 @@ if(NOT ION_USE_SYSTEM_HDF5)
   set(ION_HDF5_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libhdf5.a")
   set(ION_HDF5_HL_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libhdf5_hl.a")
 else()
+  add_custom_target(hdf5_proj)
   set(HDF5_USE_STATIC_LIBRARIES True)
   find_package(HDF5 REQUIRED)
-  set(ION_HDF5_LIBS ${HDF5_LIBRARIES})
-  message(STATUS "ION_HDF5_LIBS: ${HDF5_LIBRARIES}")
+  set(ION_HDF5_LIBS "hdf5 ${HDF5_LIBRARIES}")
+  message(STATUS "ION_HDF5_LIBS: ${ION_HDF5_LIBS}")
 endif()
 
 if(NOT ION_USE_SYSTEM_EIGEN)
@@ -178,11 +215,11 @@ endif()
 
 if(NOT ION_USE_SYSTEM_ARMADILLO)
   set(proj_name "armadillo")
-  set(proj_version "4.300.0+ion0")
+  set(proj_version "4.300.8+ion0")
   set(proj_name_version "${proj_name}-${proj_version}")
-  set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-4.300.0+ion0.patch")
+  set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-4.300.8+ion0.patch")
   ExternalProject_add(${proj_name}_proj
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/armadillo-4.300.0.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/armadillo-4.300.8.tar.gz"
     #URL_MD5 e8400bc7adb65fa0edc8c8ccb49b60eb
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
@@ -201,11 +238,39 @@ else()
 endif()
 
 
+# wget https://github.com/samtools/htslib/archive/1.1.tar.gz
+# md5sum : d0be108a121ace289fc960b854625f84
+# tar xvzf 1.1.tar.gz
+# tar cvzf htslib-1.1.tar.gz htslib-1.1
+# md5sum : 69b7700beaa8f41cacf7192ca86c69d2
+if(NOT ION_USE_SYSTEM_HTSLIB)
+  set(proj_name "htslib")
+  set(proj_version "1.1")
+  set(proj_name_version "${proj_name}-${proj_version}")
+  ExternalProject_add(${proj_name}_proj
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/htslib-1.1.tar.gz"
+    #URL_MD5 c5e4b55e8b5ed0814ac95f9ea5ca03ae
+    PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
+    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
+    #BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
+    BUILD_IN_SOURCE 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND make
+    INSTALL_COMMAND ""
+  )
+  set(ION_HTSLIB_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/libhts.a")
+  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/")
+else()
+  set(ION_HTSLIB_LIBS "hts")
+endif()
+
+
+# outdated - system libraries are preferred
 if(NOT ION_USE_SYSTEM_BOOST)
   set(proj_name "boost")
   set(proj_version "1.49.0")
   set(proj_name_version "${proj_name}-${proj_version}")
-  ExternalProject_add(${proj_name}
+  ExternalProject_add(${proj_name}_proj
     SVN_REPOSITORY "http://svn.boost.org/svn/boost/tags/release/Boost_1_49_0"
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
@@ -222,6 +287,7 @@ if(NOT ION_USE_SYSTEM_BOOST)
   include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include")
   set(ION_BOOST_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libboost_serialization.a")
 else()
+  add_custom_target(boost_proj)
   find_package(Boost REQUIRED)
   include_directories(${Boost_INCLUDE_DIRS})
   set(ION_BOOST_LIBS "boost_serialization.a")
@@ -299,27 +365,6 @@ else()
     include_directories("/usr/include/bamtools")
 endif()
 
-
-if(NOT ION_USE_SYSTEM_LEVMAR)
-  set(proj_name "levmar")
-  set(proj_version "2.6")
-  set(proj_name_version "${proj_name}-${proj_version}")
-  ExternalProject_add(${proj_name}
-    #URL            "http://www.ics.forth.gr/~lourakis/levmar/levmar-2.6.tgz"
-    URL             "http://${ION_UPDATE_SERVER}/updates/software/external/levmar-2.6.tgz"
-    PREFIX          ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
-    SOURCE_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}
-    BINARY_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
-    CMAKE_ARGS      -DLINSOLVERS_RETAIN_MEMORY=0 -DHAVE_LAPACK=0 -DNEED_F2C=0 -DBUILD_DEMO=0
-    INSTALL_COMMAND ""
-  )
-  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}")
-  set(ION_LEVMAR_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-build/liblevmar.a")
-else()
-  set(LEVMAR_USE_STATIC_LIBRARIES True)
-  find_package(LEVMAR REQUIRED)
-  set(ION_LEVMAR_LIBS ${LEVMAR_LIBRARIES})
-endif()
 
 
   set(proj_name "kmeans")

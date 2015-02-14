@@ -15,7 +15,7 @@ case "$1" in
         #Reserve 4Gb for native system
         usableRAMMb=$((availableRAMMb-4092))
         # Discover available cores
-        availableCores=$(lscpu|awk -F: '/CPU\(s\)/{print $2}'|sed 's/ //g')
+        availableCores=$(lscpu|awk -F: '/^CPU\(s\)/{print $2}'|sed 's/ //g')
         availableCores=$((availableCores-1))
         if [ $availableCores -le 0 ]; then availableCores=1; fi
         # Edit Vagrantfile

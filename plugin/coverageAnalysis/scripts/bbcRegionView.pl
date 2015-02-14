@@ -10,7 +10,10 @@ bins (200 by default). The totals for on-taret base reads are also output if pre
 my $USAGE = "Usage:\n\t$CMD [options] <BBC file> <chrom> [<start>] [<end>]";
 my $OPTIONS = "Options:
   -h ? --help Display Help information
-  -b <int> Number of bins to output. Default: 200.
+  -b <int> Number of bins to output. Default: 200. (Actual number may be less if smaller than contig size.)
+  -s <int> Start bins to skip for output. Default: 0.
+  -e <int> End bin to output. Default: 0. (Output to the last bin.)
+  -r Output Regions-only BED file. (0-base region start.)
   -l Write detail log messages to STDERR.
   -n Do Not output on-target read coverage counts (when present in the input BBC/CBC files).
   -c <int> Binning size used in coarse coverage file (if -C option used). Default: 1000.
@@ -21,6 +24,9 @@ my $cbcfile = "";
 my $cbcBinSize = 1000;
 my $logopt = 0;
 my $haveTargets = 1;
+my $srtBin = 0;
+my $endBin = 0;
+my $regionBed = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -29,6 +35,9 @@ while( scalar(@ARGV) > 0 )
   my $opt = shift;
   if($opt eq '-C') {$cbcfile = shift;}
   elsif($opt eq '-b') {$numOutBins = int(shift);}
+  elsif($opt eq '-s') {$srtBin = int(shift);}
+  elsif($opt eq '-e') {$endBin = int(shift);}
+  elsif($opt eq '-r') {$regionBed = 1;}
   elsif($opt eq '-l') {$logopt = 1;}
   elsif($opt eq '-c') {$cbcBinSize = int(shift);}
   elsif($opt eq '-n') {$haveTargets = 0;}
@@ -70,8 +79,14 @@ if( $targEnd < $targStart )
 }
 
 my $haveCbc = ($cbcfile ne "" && $cbcfile ne "-" );
+$srtBin = 0 if( $srtBin < 0 );
+$endBin = 0 if( $endBin < 0 );
 
 #--------- End command arg parsing ---------
+
+# table file fields line
+my $header = "chrom\tstart\tend\tfwd_basereads\trev_basereads";
+$header .= "\tfwd_trg_basereads\trev_trg_basereads" if( $haveTargets );
 
 my $intsize = 4;
 
@@ -137,6 +152,9 @@ if( $regionLength < $numOutBins )
   $numOutBins = $regionLength;
   $binsize = 1;
 }
+# adjust optional window range vs. actual number of bins output
+$endBin = $numOutBins if( $endBin < 1 || $endBin > $numOutBins );
+$srtBin = $endBin if( $srtBin > $endBin );
 
 # if pre-binned file not disabled, check if it should be used
 my $useCbc = ($haveCbc && $binsize >= 10 * $cbcBinSize);
@@ -169,13 +187,11 @@ if( $useCbc )
   }
 }
 
-my $header = "chrom\tstart\tend\tfwd_reads\trev_reads";
-$header .= "\tfwd_ontrg\trev_ontrg" if( $haveTargets );
-
 if( $useCbc )
 {
   # round region boundaries to accurately use sample bins
   # - this means each output bin is an integer number of sample bins
+  close( BBCFILE );
   if( $logopt )
   {
     print STDERR "Modifying selected region to closest coarse-sampled region.\n";
@@ -192,6 +208,21 @@ if( $useCbc )
   {
     printf STDERR "- Sampled region:  $targStart - $targEnd (%d), output binsize = $binsize\n", $targEnd-$targStart+1;
     printf STDERR "- Effective range: %d = ($numcbcs * $numOutBins) * $cbcBinSize\n", $binsize*$numOutBins;
+  }
+  # by-pass all the work if only the boundaries wanted as a BED file
+  if( $regionBed ) {
+    for( my $i = $srtBin; $i < $endBin && $lastRec < 1; ++$i )
+    {
+      my $srt = $targStart+$i*$binsize;
+      my $end = $srt + $binsize - 1;
+      if( $end > $targChromLen )
+      {
+        $end = $targChromLen;
+        $i = $endBin;
+      }
+      printf "$targChrom\t%.0f\t%.0f\n", $srt-1, $end if( $i >= $srtBin )
+    }
+    exit 0;
   }
   # read course bins and add to make new coverage bins - one big read is much faster
   my $intsPerSample = $haveTargets ? 4 : 2;
@@ -217,7 +248,7 @@ if( $useCbc )
   # output bins as tsv - note for small genomes the round-off may require extra empty bins - correct here
   my $a = 0, $lastRec = 0;
   print "$header\n";
-  for( my $i = 0; $i < $numOutBins && $lastRec < 1; ++$i )
+  for( my $i = 0; $i < $endBin && $lastRec < 1; ++$i )
   {
     my ($sumFwd,$sumRev,$sumFOT,$sumROT) = (0,0,0,0);
     for( my $j = 0; $j < $numcbcs; ++$j )
@@ -238,9 +269,12 @@ if( $useCbc )
       $end = $targChromLen;
       $lastRec = $i+1; # do not output any more bins - should only happen with small/awkward length references
     }
-    printf "$targChrom\t%.0f\t%.0f\t%.0f\t%.0f", $srt, $end, $sumFwd, $sumRev;
-    print "\t$sumFOT\t$sumROT" if( $haveTargets );
-    print "\n";
+    if( $i >= $srtBin )
+    {
+      printf "$targChrom\t%.0f\t%.0f\t%.0f\t%.0f", $srt, $end, $sumFwd, $sumRev;
+      print "\t$sumFOT\t$sumROT" if( $haveTargets );
+      print "\n";
+    }
   }
   print STDERR "Warning: Output $lastRec instead of $numOutBins due to bin resolution.\n" if( $lastRec >= 0 && $logopt );
   exit 0;
@@ -253,6 +287,25 @@ my @binFwdOnt = ((0) x $numOutBins);
 my @binRevOnt = ((0) x $numOutBins);
 
 print STDERR "Specified CBC file ignorred based on region size.\n" if( $haveCbc && $logopt );
+
+# by-pass all the work if only the boundaries wanted as a BED file
+if( $regionBed ) {
+  close( BBCFILE );
+  my ($srt,$bin,$lbn) = ($targStart,0,0);
+  for( my $pos = $targStart+1; $pos <= $targEnd; ++$pos )
+  {
+    $bin = int( ($pos-$targStart) / $binsize );
+    if( $bin != $lbn )
+    {
+      printf "$targChrom\t%.0f\t%.0f\n", $srt-1, $pos-1 if( $bin > $srtBin );
+      $lbn = $bin;
+      $srt = $pos;
+      last if( $bin >= $endBin );
+    }
+  }
+  printf "$targChrom\t%.0f\t%.0f\n", $srt-1, $targEnd if( $bin < $endBin );
+  exit 0;
+}
 
 # load read depth file (for off-target if target depth file unspecified
 my $upcstr = "";
@@ -325,23 +378,47 @@ if( $seekStart > 0 )
 }
 close( BBCFILE );
 
+  # by-pass all the work if only the boundaries wanted as a BED file
+  if( $regionBed ) {
+    for( my $i = $srtBin; $i < $endBin && $lastRec < 1; ++$i )
+    {
+      my $srt = $targStart+$i*$binsize;
+      my $end = $srt + $binsize - 1;
+      if( $end > $targChromLen )
+      {
+        $end = $targChromLen;
+        $i = $endBin;
+      }
+      printf "$targChrom\t%.0f\t%.0f\n", $srt-1, $end if( $i >= $srtBin )
+    }
+    exit 0;
+  }
+
 # output bins as tsv - region looked at using same math to avoid round-off errors
 print "$header\n";
 my ($srt,$bin,$lbn) = ($targStart,0,0);
 for( my $pos = $targStart+1; $pos <= $targEnd; ++$pos )
 {
   $bin = int( ($pos-$targStart) / $binsize );
-  if( $bin != $lbn ) {
-    printf "$targChrom\t%.0f\t%.0f\t%.0f\t%.0f", $srt, $pos-1, $binFwdOff[$lbn]+$binFwdOnt[$lbn], $binRevOff[$lbn]+$binRevOnt[$lbn];
-    printf "\t%.0f\t%.0f", $binFwdOnt[$lbn], $binRevOnt[$lbn] if( $haveTargets );
-    print "\n";
+  if( $bin != $lbn )
+  {
+    if( $bin > $srtBin )
+    {
+      printf "$targChrom\t%.0f\t%.0f\t%.0f\t%.0f", $srt, $pos-1, $binFwdOff[$lbn]+$binFwdOnt[$lbn], $binRevOff[$lbn]+$binRevOnt[$lbn];
+      printf "\t%.0f\t%.0f", $binFwdOnt[$lbn], $binRevOnt[$lbn] if( $haveTargets );
+      print "\n";
+    }
     $lbn = $bin;
     $srt = $pos;
+    last if( $bin >= $endBin );
   }
 }
-printf "$targChrom\t%.0f\t%.0f\t%.0f\t%.0f", $srt, $targEnd, $binFwdOff[$lbn]+$binFwdOnt[$lbn], $binRevOff[$lbn]+$binRevOnt[$lbn];
-printf "\t%.0f\t%.0f", $binFwdOnt[$lbn], $binRevOnt[$lbn] if( $haveTargets );
-print "\n";
+if( $bin < $endBin )
+{
+  printf "$targChrom\t%.0f\t%.0f\t%.0f\t%.0f", $srt, $targEnd, $binFwdOff[$lbn]+$binFwdOnt[$lbn], $binRevOff[$lbn]+$binRevOnt[$lbn];
+  printf "\t%.0f\t%.0f", $binFwdOnt[$lbn], $binRevOnt[$lbn] if( $haveTargets );
+  print "\n";
+}
 
 # ----------------END-------------------
 

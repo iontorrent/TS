@@ -224,7 +224,8 @@ if( $basecoverage )
   }
   push( @keylist, ( "Average base coverage depth", "Uniformity of base coverage", "$tagU base coverage at 1x",
     "$tagU base coverage at 20x", "$tagU base coverage at 100x", "$tagU base coverage at 500x", "$tagU bases with no strand bias" ) );
-  push( @keylist, '' ) if( $amplicons || $trgcoverage );
+  push( @keylist, "Percent end-to-end reads" ) if( $amplicons );
+  push( @keylist, '' ) if( $trgcoverage );
   my $txt = subTable( $statsfile, \@keylist );
   print OUTFILE "  <td><div class=\"statsdata\">$txt</div></td>\n";
 }

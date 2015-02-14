@@ -39,50 +39,54 @@ class ReportActionTest(TestCase):
     def _verifyMessage(self, status, _resultsName):
         verifyMessage(self, status, _resultsName)
 
-    def test_archive_report_default_comment(self):
-        _id = self.report.id
-        action = 'A'
-        proxy = mock()
-        when(xmlrpclib).ServerProxy(any(), allow_none=any()).thenReturn(proxy)
-        when(proxy).archive_report(contains(str(_id)), any()).thenReturn(False)
-        response = self.client.post('/report/action/%d/%s' %(_id, action))
-        self.assertEqual(200, response.status_code)
-        verify(proxy).archive_report(contains(str(_id)), contains(str("No Comment")))
-        self._verifyMessage(False, self.report.resultsName)
+#retired_test
+#    def test_archive_report_default_comment(self):
+#        _id = self.report.id
+#        action = 'A'
+#        proxy = mock()
+#        when(xmlrpclib).ServerProxy(any(), allow_none=any()).thenReturn(proxy)
+#        when(proxy).archive_report(contains(str(_id)), any()).thenReturn(False)
+#        response = self.client.post('/report/action/%d/%s' %(_id, action))
+#        self.assertEqual(200, response.status_code)
+#        verify(proxy).archive_report(contains(str(_id)), contains(str("No Comment")))
+#        self._verifyMessage(False, self.report.resultsName)
         
-    def test_archive_report_with_comment(self):
-        comment = 'foo'
-        _id = self.report.id
-        action = 'A'
-        proxy = mock()
-        when(xmlrpclib).ServerProxy(any(), allow_none=any()).thenReturn(proxy)
-        when(proxy).archive_report(contains(str(_id)), any()).thenReturn(False)
-        response = self.client.post('/report/action/%d/%s' %(_id, action), data = {'comment':comment})
-        self.assertEqual(200, response.status_code)
-        verify(proxy).archive_report(contains(str(_id)), contains(comment))
-        self._verifyMessage(False, self.report.resultsName)
+#retired_test
+#    def test_archive_report_with_comment(self):
+#        comment = 'foo'
+#        _id = self.report.id
+#        action = 'A'
+#        proxy = mock()
+#        when(xmlrpclib).ServerProxy(any(), allow_none=any()).thenReturn(proxy)
+#        when(proxy).archive_report(contains(str(_id)), any()).thenReturn(False)
+#        response = self.client.post('/report/action/%d/%s' %(_id, action), data = {'comment':comment})
+#        self.assertEqual(200, response.status_code)
+#        verify(proxy).archive_report(contains(str(_id)), contains(comment))
+#        self._verifyMessage(False, self.report.resultsName)
     
-    def test_export_report(self):
-        _id = self.report.id
-        action = 'E'
-        proxy = mock()
-        when(xmlrpclib).ServerProxy(any(), allow_none=any()).thenReturn(proxy)
-        when(proxy).export_report(contains(str(_id)), any()).thenReturn(False)
-        response = self.client.post('/report/action/%d/%s' %(_id, action))
-        self.assertEqual(200, response.status_code)
-        verify(proxy).export_report(contains(str(_id)), contains(str("No Comment")))
-        self._verifyMessage(False, self.report.resultsName)
+#retired_test
+#    def test_export_report(self):
+#        _id = self.report.id
+#        action = 'E'
+#        proxy = mock()
+#        when(xmlrpclib).ServerProxy(any(), allow_none=any()).thenReturn(proxy)
+#        when(proxy).export_report(contains(str(_id)), any()).thenReturn(False)
+#        response = self.client.post('/report/action/%d/%s' %(_id, action))
+#        self.assertEqual(200, response.status_code)
+#        verify(proxy).export_report(contains(str(_id)), contains(str("No Comment")))
+#        self._verifyMessage(False, self.report.resultsName)
 
-    def test_prune_report(self):
-        _id = self.report.id
-        action = 'P'
-        proxy = mock()
-        when(xmlrpclib).ServerProxy(any(), allow_none=any()).thenReturn(proxy)
-        when(proxy).prune_report(contains(str(_id)), any()).thenReturn(False)
-        response = self.client.post('/report/action/%d/%s' %(_id, action))
-        self.assertEqual(200, response.status_code)
-        verify(proxy).prune_report(contains(str(_id)), contains(str("No Comment")))
-        self._verifyMessage(False, self.report.resultsName)
+#retired_test
+#    def test_prune_report(self):
+#        _id = self.report.id
+#        action = 'P'
+#        proxy = mock()
+#        when(xmlrpclib).ServerProxy(any(), allow_none=any()).thenReturn(proxy)
+#        when(proxy).prune_report(contains(str(_id)), any()).thenReturn(False)
+#        response = self.client.post('/report/action/%d/%s' %(_id, action))
+#        self.assertEqual(200, response.status_code)
+#        verify(proxy).prune_report(contains(str(_id)), contains(str("No Comment")))
+#        self._verifyMessage(False, self.report.resultsName)
 
     def test_auto_exempt_404(self):
         _id = 0

@@ -532,7 +532,7 @@ def print_storage_report():
     now = datetime.datetime.fromtimestamp(epoch)
 
     # Get site name
-    sitename = models.GlobalConfig.objects.all().order_by('id')[0].site_name
+    sitename = models.GlobalConfig.get().site_name
 
     # print header
     print "Date %s" % now

@@ -6,7 +6,7 @@ function print_help()
     if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
         source /opt/ion/bin/ion-tsconfig.version.env
         echo
-        echo "ion-tsconfig version: "`IonVersionGetMajor`"."`IonVersionGetMinor`"."`IonVersionGetRelease`" ("`IonVersionGetSvnRev`")"
+        echo "ion-tsconfig version: "`IonVersionGetMajor`"."`IonVersionGetMinor`"."`IonVersionGetRelease`" ("`IonVersionGetGitHash`")"
     fi
     echo
     echo "Usage: TSconfig [options]"
@@ -128,21 +128,32 @@ function config_compute_node ()
 #--------------------------------------
 function config_ionSoftware()
 {
+    echo "Function: config_ionSoftware" 1>&2
+    startime=$(date +%s)
     # Install/Update system-level software packages
     preinst_system_packages
+    echo Elapsed: $(($(date +%s)-$startime)) 1>&2
     install_system_packages
+    echo Elapsed: $(($(date +%s)-$startime)) 1>&2
     if [ $SECURITY_UPDATE == 1 ]; then
         install_security_upgrades
+        echo Elapsed: $(($(date +%s)-$startime)) 1>&2
     else
         log "Skipping security upgrade"
     fi
     config_system_packages
+    echo Elapsed: $(($(date +%s)-$startime)) 1>&2
     # Install/Update Torrent Suite software packages
     preinst_ion_packages
+    echo Elapsed: $(($(date +%s)-$startime)) 1>&2
     install_ion_packages
+    echo Elapsed: $(($(date +%s)-$startime)) 1>&2
     config_ion_packages
+    echo Elapsed: $(($(date +%s)-$startime)) 1>&2
     update_conf_file
+    echo Elapsed: $(($(date +%s)-$startime)) 1>&2
     updated_mirror_check
+    echo Elapsed: $(($(date +%s)-$startime)) 1>&2
 }
 
 #-------------------------------------------------
@@ -582,7 +593,7 @@ function network_tests()
     echo "Simple Hostname: $(hostname)" 1>&2
     echo "Server Domain:   $(hostname -d)" 1>&2
 
-    "No network issues detected" 1>&2
+    echo "No network issues detected" 1>&2
     return 0
 }
 
@@ -865,7 +876,7 @@ function get_Netmask ()
 {
     port=$(outbound_net_port)
     [[ -z $port ]] && port="eth0"
-    ETH_DEV=${ETH_DEV-"$port"}   #default if not defined elsewhere
+    ETH_DEV=${ETH_DEV:-"$port"}   #default if not defined elsewhere
     IP=$(/sbin/ifconfig ${ETH_DEV} | awk '/inet / { print $2 } ' | sed -e s/addr://)
     MASK=$(/sbin/ifconfig ${ETH_DEV} | awk '/inet a/ { print $4 } ' | sed -e s/Mask://)
     if [ "$IP" = "" ]||[ "$MASK" = "" ]; then
@@ -1153,6 +1164,7 @@ function pkg_installation ()
 
 function install_security_upgrades ()
 {
+    echo "Function: install_security_upgrades" 1>&2
     user_msg "=================================================================="
     user_msg "\tInstalling security upgrades"
     user_msg "=================================================================="
@@ -1175,6 +1187,7 @@ function install_security_upgrades ()
 #
 function preinst_system_packages ()
 {
+    echo "Function: preinst_system_packages" 1>&2
 
     user_msg "=================================================================="
     user_msg "Updating previous configurations"
@@ -1274,15 +1287,22 @@ EOF
 
 function preinst_ion_packages ()
 {
+    echo "Function: preinst_ion_packages" 1>&2
     # As of TS 4.0, ion-pgmupdates1.1 package is to be removed
     if dpkg -l ion-pgmupdates1.1|tail -1|grep -q ^ii; then
         dpkg -r ion-pgmupdates1.1 1>&2
     fi
+    # TS-9993: this package has an old rabbitmq which is incompatible 4.4 and newer
+    if dpkg -l python-librabbitmq|tail -1|grep -q ^ii; then
+        dpkg --purge python-librabbitmq 1>&2
+    fi
+    
     return 0
 }
 
 function install_system_packages ()
 {
+    echo "Function: install_system_packages" 1>&2
     user_msg "=================================================================="
     user_msg "Installing system packages"
     user_msg "=================================================================="
@@ -1305,6 +1325,7 @@ function install_system_packages ()
 
 function install_ion_packages()
 {
+    echo "Function: install_ion_packages" 1>&2
     user_msg "=================================================================="
     user_msg "Installing Ion Torrent Suite packages"
     user_msg "=================================================================="
@@ -1319,7 +1340,7 @@ function install_ion_packages()
         #Load proton specific packages if this is Proton Torrent Server
         inst_files=
         if is_proton_ts; then
-            read_packagelist_file torrentsuite proton inst_files
+            read_packagelist_file torrentsuite pgm proton inst_files
             pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
         else
             #Default to PGM specific packages
@@ -1359,28 +1380,32 @@ function install_ion_packages()
 
 function config_ion_packages ()
 {
+    echo "Function: config_ion_packages" 1>&2
     #----------------------------------
     # Make sure Ion system daemons are running
     #----------------------------------
     if is_master; then
 
-        if ! service ionCrawler status > /dev/null; then
-            /etc/init.d/ionCrawler start || error ${LINENO} "In function config_ion_packages"
+        if ! service ionCrawler status 1>&2; then
+            /etc/init.d/ionCrawler start 1>&2 || error ${LINENO} "In function config_ion_packages"
         fi
-        if ! service ionJobServer status > /dev/null; then
-            /etc/init.d/ionJobServer start || error ${LINENO} "In function config_ion_packages"
+        if ! service ionJobServer status 1>&2; then
+            /etc/init.d/ionJobServer start 1>&2 || error ${LINENO} "In function config_ion_packages"
         fi
-        if ! service ionPlugin status > /dev/null; then
-            /etc/init.d/ionPlugin start || error ${LINENO} "In function config_ion_packages"
+        if ! service ionPlugin status 1>&2; then
+            /etc/init.d/ionPlugin start 1>&2 || error ${LINENO} "In function config_ion_packages"
         fi
-        if ! service rabbitmq-server status > /dev/null; then
-            service rabbitmq-server start || error ${LINENO} "In function config_ion_packages"
+        if ! service rabbitmq-server status 1>&2; then
+            service rabbitmq-server start 1>&2 || error ${LINENO} "In function config_ion_packages"
         fi
-        if ! service celeryd status > /dev/null; then
-            /etc/init.d/celeryd start || error ${LINENO} "In function config_ion_packages"
+        if ! service celeryd status 1>&2; then
+            /etc/init.d/celeryd start 1>&2 || error ${LINENO} "In function config_ion_packages"
         fi
-        if ! service tomcat6 status > /dev/null; then
-            /etc/init.d/tomcat6 start || error ${LINENO} "In function config_ion_packages"
+        #if ! service celerybeat status 1>&2; then  # does not support status argument
+            /etc/init.d/celerybeat restart 1>&2 || error ${LINENO} "In function config_ion_packages"
+        #fi
+        if ! service tomcat6 status 1>&2; then
+            /etc/init.d/tomcat6 start 1>&2 || error ${LINENO} "In function config_ion_packages"
         fi
     fi
 
@@ -1389,8 +1414,17 @@ function config_ion_packages ()
     if dpkg -l tmap|tail -1|grep -q ^ii; then
         echo "Removing deprecated package: tmap.  Package ion-analysis now provides tmap." 1>&2
         #apt-get --assume-yes --force-yes remove tmap 1>&2 || true
-        dpkg -P --ignore-depends=ion-dbreports tmap 1>&2 || true
+        dpkg --purge --ignore-depends=ion-dbreports tmap 1>&2 || true
         echo "removal done." 1>&2
+    fi
+    if dpkg -l python-django-celery|tail -1|grep -q ^ii; then
+        dpkg --purge --ignore-depends=ion-dbreports python-django-celery 1>&2
+    fi
+    if dpkg -l python-django-kombu|tail -1|grep -q ^ii; then
+        dpkg --purge python-django-kombu 1>&2
+    fi
+    if dpkg -l python-amqplib|tail -1|grep -q ^ii; then
+        dpkg --purge python-amqplib 1>&2
     fi
 
     return 0
@@ -1436,6 +1470,7 @@ function reconfig_ion_packages ()
 #--------------------------------------
 function config_system_packages ()
 {
+    echo "Function: config_system_packages" 1>&2
 
     if is_master; then
     #--------------------------------------
@@ -1852,7 +1887,7 @@ function config_postgres()
     user_msg "=================================================================="
 
     # Make sure server is running
-    PS_SCRIPT=$(find /etc/init.d -name "postgresql-*")
+    PS_SCRIPT=$(find /etc/init.d -name "postgresql*")
     if [ "$PS_SCRIPT" != "" ]; then
         if ! $PS_SCRIPT status 1>&2; then
             if ! $PS_SCRIPT start 1>&2; then
@@ -2427,6 +2462,18 @@ function config_compute_sge()
     user_msg "Configuring Sun Grid Engine"
     user_msg "=================================================================="
 
+    # ===================================================
+    # Fix fqdn setting in bootstrap
+    # ===================================================
+    if grep ignore_fqdn /var/lib/gridengine/iontorrent/common/bootstrap | grep -q false; then
+        sed -i 's/^ignore_fqdn.*/ignore_fqdn             true/' /var/lib/gridengine/iontorrent/common/bootstrap
+        
+        # Need to whack gridengine daemon
+        kill -9 $(pgrep sge_execd)
+        service gridengine-exec restart
+    fi
+    
+    # ===================================================
     # add execution host
     if ! qconf -sel | grep -q $currentNodeName; then
         hosttmpfile=`mktemp`
@@ -3172,6 +3219,7 @@ function get_hw_conf()
 #---
 function update_conf_file()
 {
+    echo "Function: update_conf_file" 1>&2
 	conflog="$TSCONFIG_DIR/$TSCONFIG_CONF"
 
     if [ -e $conflog ]; then
@@ -3507,6 +3555,7 @@ function is_proton_ts ()
 # which may offer speed advantage to sites outside US.
 function updated_mirror_check()
 {
+    echo "Function: updated_mirror_check" 1>&2
     SRCLIST="/etc/apt/sources.list"
     APT_ENTRY="deb ${TSCONFIG_ION_UPDATE_URL}/updates/software `lsb_release -cs`/"
 

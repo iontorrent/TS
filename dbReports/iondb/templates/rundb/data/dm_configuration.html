@@ -181,7 +181,86 @@ $(document).ready(function() {
             $.post('{% url "dm_configuration_log" %}', {log: log_entry});
         });
     });
-
+    
+    //Initialize routine
+    for (var i = 1; i <= 4; i++) {
+        var name = "#auto_action_select_"+i;
+        if ($(name).val() === 'ARC') {
+            $("#trigger_usage_"+i).hide();
+            $("#backup_dir_"+i).show();
+            $("#browse_"+i).show();
+        }else if ($(name).val() === 'OFF') {
+            $("#trigger_usage_"+i).show();
+            $("#backup_dir_"+i).show();
+            $("#browse_"+i).show();
+        }else{ //DEL
+            $("#trigger_usage_"+i).show();
+            $("#backup_dir_"+i).hide();
+            $("#browse_"+i).hide();
+        }
+    }
+    
+    //Change routine
+    $("#auto_action_select_1").change(function(){
+        if ($("#auto_action_select_1").val() === 'ARC') {
+            $("#trigger_usage_1").hide();
+            $("#backup_dir_1").show();
+            $("#browse_1").show();
+        }else if ($("#auto_action_select_1").val() === 'OFF') {
+            $("#trigger_usage_1").show();
+            $("#backup_dir_1").show();
+            $("#browse_1").show();
+        }else{
+            $("#trigger_usage_1").show();
+            $("#backup_dir_1").hide();
+            $("#browse_1").hide();
+        }
+    });  
+    $("#auto_action_select_2").change(function(){
+        if ($("#auto_action_select_2").val() === 'ARC') {
+            $("#trigger_usage_2").hide();
+            $("#backup_dir_2").show();
+            $("#browse_2").show();
+        }else if ($("#auto_action_select_2").val() === 'OFF') {
+            $("#trigger_usage_2").show();
+            $("#backup_dir_2").show();
+            $("#browse_2").show();
+        }else{
+            $("#trigger_usage_2").show();
+            $("#backup_dir_2").hide();
+            $("#browse_2").hide();
+        }
+    });  
+    $("#auto_action_select_3").change(function(){
+        if ($("#auto_action_select_3").val() === 'ARC') {
+            $("#trigger_usage_3").hide();
+            $("#backup_dir_3").show();
+            $("#browse_3").show();
+        }else if ($("#auto_action_select_3").val() === 'OFF') {
+            $("#trigger_usage_3").show();
+            $("#backup_dir_3").show();
+            $("#browse_3").show();
+        }else{
+            $("#trigger_usage_3").show();
+            $("#backup_dir_3").hide();
+            $("#browse_3").hide();
+        }
+    });  
+    $("#auto_action_select_4").change(function(){
+        if ($("#auto_action_select_4").val() === 'ARC') {
+            $("#trigger_usage_4").hide();
+            $("#backup_dir_4").show();
+            $("#browse_4").show();
+        }else if ($("#auto_action_select_4").val() === 'OFF') {
+            $("#trigger_usage_4").show();
+            $("#backup_dir_4").show();
+            $("#browse_4").show();
+        }else{
+            $("#trigger_usage_4").show();
+            $("#backup_dir_4").hide();
+            $("#browse_4").hide();
+        }
+    });
 });
 
 $('.validate').change(function(e){
@@ -228,6 +307,9 @@ $('.browse_backup_dirs').click(function(e){
         });
     });
 });
+
+
+
 </script>
 
 {% endblock content %}

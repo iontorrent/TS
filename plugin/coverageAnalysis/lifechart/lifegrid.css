@@ -11,7 +11,24 @@ body {
 .nwrap {
   white-space:nowrap;
   padding: 0px 5px 0px 2px;
-  vertical-align:middle;
+}
+
+.unselectable{
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+.unselectable .selectable {
+  -webkit-touch-callout: text;
+  -webkit-user-select: text;
+  -khtml-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
 
 .flyhelp {
@@ -207,16 +224,16 @@ body {
 } 
 
 .statsdata td.inleft {
-  width:70%;
   text-align:left;
-  padding-left:25px;
+  padding-right:7px;
+  padding-left:14px;
   cursor:help;
 }
 
 .statsdata td.inright {
-  width:30%;
   text-align:right;
-  padding-right:30px;
+  padding-left:7px;
+  padding-right:14px;
 }
 
 td.imageplot {
@@ -289,6 +306,10 @@ td.imageplot {
   background-color: silver !important;
 }
 
+.slick-row.odd {
+  background: #E2E4FF;
+}
+
 .slick-row[row$="1"], .slick-row[row$="3"], .slick-row[row$="5"], .slick-row[row$="7"], .slick-row[row$="9"] {
   background: #E2E4FF;
 }
@@ -337,6 +358,7 @@ td.imageplot {
   display: block;
   float: right;
   padding: 2px;
+  padding-right: 13px;
 }
 
 .slick-pager .slick-pager-settings * {
@@ -411,7 +433,7 @@ p.grid-footnote {
   padding: 0px 8px;
 }
 
-.ui-icon {
+.grid-header .ui-icon {
   margin: 4px;
   /* Opacity just does not work for IE - it blurs unless on a fixed color background ! */
   /* background-color:#D5E6FF;  - approximate fix for title bar */
@@ -424,6 +446,10 @@ p.grid-footnote {
   /* -ms-filter:"progid:DXImageTransform.Microsoft.Alpha(opacity=100)"; */
   /* filter: alpha(opacity = 100); */
   opacity: 1;
+}
+
+.ui-widget-content a {
+  color: #0088cc;
 }
 
 .help-box.ui-icon {
@@ -474,7 +500,10 @@ p.grid-footnote {
 }
 
 .grid-header input[type="button"] {
-  height: 18px;
+  height: 21px;
+  padding-left: 4px;
+  padding-right: 4px;
+  padding-bottom: 2px;
   border-radius: 10px/5px;
   -moz-border-radius: 10px;
   -webkit-border-radius: 10px;
@@ -508,4 +537,29 @@ p.grid-footnote {
   top: 3px;
 }
 
+/* Override the settings changes made by slick.headerbuttons.css that prevent ellipsis on column names
+ * Unfortunately this also makes the sort glyph move to the wrong side.
+.slick-column-name {
+  display: inline;
+  float: none;
+} */
 
+/* override corner resize handle */
+.ui-resizable-handle.ui-resizable-se {
+  /* background: url("images/icon_reset.gif") 0 0 no-repeat; */
+  width:13px;
+  height:13px;
+  background-position: -80px -224px;
+}
+
+/* override for icon offset for slick-grid grid-footer */
+.grid-footer ~ .ui-resizable-handle.ui-resizable-se {
+  margin-bottom: -6px;
+  margin-right: -1px;
+}
+
+/* override for icon offset for imageplot widget */
+.linkstable ~ .ui-resizable-handle.ui-resizable-se {
+  margin-bottom: 1px;
+  margin-right: -1px;
+}

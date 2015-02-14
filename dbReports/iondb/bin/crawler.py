@@ -46,7 +46,6 @@ from twisted.internet import task
 from twisted.web import xmlrpc, server
 
 from iondb.rundb import models
-from iondb.rundb.data import backfill_tasks as tasks
 from ion.utils.explogparser import load_log
 from ion.utils.explogparser import parse_log
 
@@ -84,6 +83,7 @@ class CrawlLog(object):
         self.current_folder = '(none)'
         self.state = '(none)'
         self.state_time = datetime.datetime.now()
+        self.exp_errors = {}
         # set up debug logging
         self.errors = logging.getLogger('crawler')
         self.errors.propagate = False
@@ -151,6 +151,16 @@ class CrawlLog(object):
         self.lock.release()
         return ret
 
+    def add_exp_error(self, unique, msg):
+        self.lock.acquire()
+        self.exp_errors[str(unique)] = (datetime.datetime.now(), msg)
+        self.lock.release()
+    
+    def get_exp_errors(self):
+        self.lock.acquire()
+        ret = self.exp_errors
+        self.lock.release()
+        return ret
 
 
 class Status(xmlrpc.XMLRPC):
@@ -185,7 +195,11 @@ class Status(xmlrpc.XMLRPC):
         '''Return hostname'''
         return socket.gethostname()
 
-
+    def xmlrpc_exp_errors(self):
+        '''Return list of errors: (date, exp folder, error msg)'''
+        exp_errors = self.logger.get_exp_errors()
+        ret = [(v[0],k,v[1]) for k,v in exp_errors.iteritems()]
+        return sorted(ret, key=lambda l:l[0], reverse=True)
 
 def extract_prefix(folder):
     """Given the name of a folder storing experiment data, return the
@@ -222,6 +236,8 @@ def construct_crawl_directories(logger):
     for fs in fserves:
         l = fs.location
         rigs = models.Rig.objects.filter(location=l)
+        if rigs.count() == 0:
+            logger.errors.info("No rigs at this location: %s" % l.name)
         for r in rigs:
             rig_folder = os.path.join(fs.filesPrefix, r.name)
             if os.path.exists(rig_folder):
@@ -299,15 +315,20 @@ def generate_http_post(exp, logger, thumbnail_analysis=False):
             connection_url = 'https://127.0.0.1/report/analyze/%s/0/' % (exp.pk)
             f = urllib.urlopen(connection_url, params)
         except IOError:
-            logger.errors.error(" !! Failed to start analysis.  could not connect to %s" % connection_url)
+            msg = " !! Failed to start analysis.  could not connect to %s" % connection_url
+            logger.errors.error(msg)
+            logger.add_exp_error(exp.unique, msg)
             status_msg = "Failure to generate POST"
             f = None
 
     if f:
         error_code = f.getcode()
         if error_code is not 200:
-            logger.errors.error(" !! Failed to start analysis. URL failed with error code %d for %s" % (error_code, f.geturl()))
-            logger.errors.error(f.read())
+            msg = " !! Failed to start analysis. URL failed with error code %d for %s" % (error_code, f.geturl())
+            msg2 = f.read()
+            logger.errors.error(msg)
+            logger.errors.error(msg2)
+            logger.add_exp_error(exp.unique, '%s\n Error: %s' % (msg,msg2))
             status_msg = "Failure to generate POST"
 
     return status_msg
@@ -328,8 +349,11 @@ def generate_updateruninfo_post(_folder, logger):
     if fhandle:
         error_code = fhandle.getcode()
         if error_code is not 200:
-            logger.errors.error(" !! Failed to update run info. URL failed with error code %d for %s" % (error_code, fhandle.geturl()))
-            logger.errors.error("%s" % "".join(fhandle.readlines()))
+            msg = " !! Failed to update run info. URL failed with error code %d for %s" % (error_code, fhandle.geturl())
+            msg2 = "%s" % "".join(fhandle.readlines())
+            logger.errors.error(msg)
+            logger.errors.error(msg2)
+            logger.add_exp_error(_folder, '%s\n Error: %s' % (msg,msg2))
             status_msg = "Failure to generate POST"
     return status_msg
 
@@ -555,14 +579,9 @@ def crawl(folders, logger):
 
         # Save experiment object
         _expobj.save()
+        
+        return
 
-        # Measure and record disk space usage of this dataset
-        # This is celery task which will execute in separate worker thread
-        try:
-            tasks.setRunDiskspace.delay(_expobj.pk)
-        except:
-            logger.errors.error(traceback.format_exc())
-            raise
 
     def update_expobj_ftptransfer(_expobj):
         '''Update Experiment object with in-transfer ftp status'''

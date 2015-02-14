@@ -93,15 +93,15 @@ N   = %d""" % (m, b, r, r2, p, err, N)
   return
 
 
-def generate_reports(coverage, dr, filtered_counts):
+def generate_reports(outdir, coverage, dr, filtered_counts):
 
-  dr_path = 'dose_response.png'
+  dr_path = outdir+'dose_response.png'
   try:
     plot_dose_response(*(list(dr) + [dr_path]))
   except ValueError:
     raise
 
-  dr_out = open('dose_response.dat', 'w')
+  dr_out = open(outdir+'dose_response.dat', 'w')
   dr_out.write("""m   = %.4f
 b   = %.2f
 r   = %.2f
@@ -110,11 +110,11 @@ p   = %.2f
 err = %.2f
 N   = %d""" % dr[2:])
   
-  coverage_out = open('coverage.dat', 'w')
+  coverage_out = open(outdir+'coverage.dat', 'w')
   coverage.save_full_coverage(coverage_out)
 
   starts = coverage.start_site_iter()
-  starts_out = open('starts.dat', 'w')  
+  starts_out = open(outdir+'starts.dat', 'w')  
   coverage.save_full_coverage(starts_out, starts)
   
 
@@ -149,7 +149,7 @@ N   = %d""" % dr[2:])
     template_vars['start_site_complexity'] = results[1]['start_site_complexity']
     template_vars['contig_cv'] = results[1]['contig_cv']
     results_divs += (result_div % template_vars)
-    plot_coverage(contig[1], starts[1], path = image_name)
+    plot_coverage(contig[1], starts[1], path = outdir+image_name)
 
   results_divs += '</div>'
   report_components['results_divs'] = results_divs

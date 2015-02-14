@@ -58,7 +58,7 @@ def clear_samplesetitem_session(request):
 
 def _get_sample_groupType_CV_list(request):
     sample_groupType_CV_list = None
-    isSupported = GlobalConfig.objects.all()[0].enable_compendia_OCP
+    isSupported = GlobalConfig.get().enable_compendia_OCP
     
     if (isSupported):
         sample_groupType_CV_list = SampleGroupType_CV.objects.all().order_by("displayedName")
@@ -70,7 +70,7 @@ def _get_sample_groupType_CV_list(request):
 
 def _get_sampleSet_list(request):
     sampleSet_list = None    
-    isSupported = GlobalConfig.objects.all()[0].enable_compendia_OCP
+    isSupported = GlobalConfig.get().enable_compendia_OCP
     
     if (isSupported):
         sampleSet_list = SampleSet.objects.all().order_by("-lastModifiedDate", "displayedName")
@@ -81,7 +81,7 @@ def _get_sampleSet_list(request):
 
 
 def _get_all_userTemplates(request):
-    isSupported = GlobalConfig.objects.all()[0].enable_compendia_OCP
+    isSupported = GlobalConfig.get().enable_compendia_OCP
     
     all_templates = None
     if isSupported:
@@ -96,7 +96,7 @@ def _get_all_userTemplates(request):
 
 
 def _get_all_systemTemplates(request):
-    isSupported = GlobalConfig.objects.all()[0].enable_compendia_OCP
+    isSupported = GlobalConfig.get().enable_compendia_OCP
     
     all_templates = None
     if isSupported:

@@ -4,6 +4,7 @@
     {{ block.super }}
     {% load static %}
     <script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>
 {% endblock extra_head %}
 
 {% block main-title %}{% endblock main-title %}
@@ -17,6 +18,17 @@
 
 </div>
 <div id="irerror" style="color:red;"></div>
+
+<div id="error" style="color:red;"></div>
+{% for key, validationErrors in step.validationErrors.items %}
+    <div class="row-fluid">
+        {% if key == "templateName" %}        
+            <h4 style="color: red;">{{validationErrors|linebreaks }}</h4>
+        {% endif %}
+    </div>
+{% endfor %}
+
+
 <div class="row-fluid">
     <div class="span7">
         <p class="form-label">
@@ -30,32 +42,49 @@
     </div>
 </div>
 
-<div class="row-fluid">
-    <div class="span12">
+{% include "rundb/plan/page_plan/page_plan_reference_section.html" %}
+
+<div id="noteerror" style="color:red;"></div>
+        
+<div class="row-fluid" style="margin-top: 20px">
+    <div class="span8 summary-section">
         <label for="note" class="form-label">Add a note</label>
-        <textarea id="note" name="note" style="width:70%;height:100px;">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
+        <textarea id="note" name="note" style="width:90%;height:100px;" placeholder="Optional">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
+        <br>
+        
+        {% for key, validationErrors in step.validationErrors.items %}
+            <div class="row-fluid">
+                {% if key == "note" %}        
+                    <h4 style="color: red;">{{validationErrors|linebreaks }}</h4>
+                {% endif %}
+            </div>
+        {% endfor %}
+        
+        <label for="LIMS_meta" class="form-label">Add LIMS Meta Data</label>
+        <textarea id="LIMS_meta" name="LIMS_meta" style="width:90%;height:100px;" placeholder="Optional">{{step.getCurrentSavedFieldDict.LIMS_meta|default_if_none:""}}</textarea>
         <br>
     </div>
-</div>
-<div id="noteerror" style="color:red;"></div>
-{% if step.validationErrors and "note" in step.validationErrors %}
-    <div class="row-fluid">
-    {% for error in step.validationErrors.note %}
-        <h4 style="color: red">{{error}}</h4>
-    {% endfor %}
+
+    <div class="span4 summary-section" style="margin-top: 25px">
+        <label for="qc" class="form-label">Monitoring Thresholds</label>
+        {% for key, value in step.getCurrentSavedFieldDict.items %}
+            {% if key in step.qcNames %}
+                <div class="span12">
+                    <h4>{{key}}:</h4>
+    
+                    <h3 style="font-size: 20px; float:left; margin-right:10px; margin-top:0px;">≤</h3>
+                    <input data-input-name="{{key}}" name="{{key}}" style="width:35px;" value="{{value}}">
+                </div>
+            {% endif %}
+        {% endfor %}
     </div>
-{% endif %}
+</div>
+
+
 <div class="row-fluid">
     <div id="errors" style="color:red;font-weight:bold;"></div>
 </div>
 
-<div class="row-fluid">  
-    {% for key, values in step.validationErrors.items %}
-        {% for value in values %}
-            <h4 style="color: red">{{value}}</h4>
-        {% endfor %}
-    {% endfor %}
-</div>
 {% endblock page-plan-content %}
 
 {% block prevnext-buttons %}

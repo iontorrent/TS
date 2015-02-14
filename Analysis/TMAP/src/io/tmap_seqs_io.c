@@ -216,7 +216,7 @@ tmap_seqs_io_to_bam_header(tmap_refseq_t *refseq,
       id = ptr;
       // create the new ID
       j++;
-      id = tmap_realloc(id, sizeof(char) * (1 + (int)log10(j) + 1 + strlen(PACKAGE_NAME)), "id"); 
+      id = tmap_realloc(id, sizeof(char) * (1 + (int)log10(j) + 1 + strlen(PACKAGE_NAME) + 1), "id"); 
       if(sprintf(id, "%s.%d", PACKAGE_NAME, j) < 0) tmap_bug();
       free(record_list);
       record_list = NULL;

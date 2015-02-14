@@ -1,10 +1,10 @@
-/* Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved */
+/* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 extern "C"
 {
 #include "realign_wrapper.h"
 }
 #include "realign_wrapper_imp.h"
-
+#include "realign_wrapper_context_imp.h"
 
 RealignProxy* realigner_create ()
 {
@@ -14,6 +14,11 @@ RealignProxy* realigner_create ()
 RealignProxy* realigner_create_spec (unsigned reserve_size, unsigned clipping_size)
 {
     return createRealigner (reserve_size, clipping_size);
+}
+
+RealignProxy* context_aligner_create ()
+{
+    return createContextAligner ();
 }
 
 void realigner_destroy (RealignProxy* r)
@@ -55,9 +60,9 @@ void realigner_set_clipping (RealignProxy* r, enum CLIPTYPE clipping)
 // alignment setup and run
 uint8_t realigner_compute_alignment (RealignProxy* r, 
                                      const char* q_seq,
-				     uint32_t q_len,
+                                     uint32_t q_len,
                                      const char* r_seq, 
-				     uint32_t r_len,
+                                     uint32_t r_len,
                                      int r_pos, 
                                      uint8_t forward, 
                                      const uint32_t* cigar, 
@@ -66,7 +71,7 @@ uint8_t realigner_compute_alignment (RealignProxy* r,
                                      unsigned* cigar_dest_sz, 
                                      int* new_r_pos,
                                      uint64_t* num_realign_already_perfect,
-				     uint64_t* num_realign_not_clipped,
+                                     uint64_t* num_realign_not_clipped,
                                      uint64_t* num_realign_sw_failures,
                                      uint64_t* num_realign_unclip_failures)
 {
@@ -74,9 +79,9 @@ uint8_t realigner_compute_alignment (RealignProxy* r,
     bool clip_failed = false;
     bool alignment_failed = false;
     bool unclip_failed = false;
-    
+
     bool result = r->compute_alignment (q_seq, q_len, r_seq, r_len, r_pos, (bool) forward, cigar, cigar_sz, *cigar_dest, *cigar_dest_sz, *new_r_pos, already_perfect, clip_failed, alignment_failed, unclip_failed);
-    
+
     if (num_realign_already_perfect && already_perfect) ++(*num_realign_already_perfect);
     if (num_realign_not_clipped && clip_failed) ++(*num_realign_not_clipped);
     if (num_realign_sw_failures && alignment_failed) ++(*num_realign_sw_failures);

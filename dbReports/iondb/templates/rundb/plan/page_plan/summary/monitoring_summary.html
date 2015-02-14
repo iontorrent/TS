@@ -1,7 +1,25 @@
 {%include "rundb/plan/page_plan/summary/kit_summary.html"%}
-{% for qcTypeName,qcValue in helper.getStepDict.Monitoring.getCurrentSavedFieldDict.items %}
-    <tr>
-    	<td><b>{{qcTypeName}}:</b></td>
-    	<td id="selected__{{forloop.counter0}}">{{qcValue}}</td>
-    </tr>
-{% endfor %}
+
+{% if 'Save_plan' in helper.getStepDict.keys %}
+    {% for key, value in helper.getStepDict.Save_plan.getCurrentSavedFieldDict.items %}
+        {% if key in helper.getStepDict.Save_plan.qcNames %}
+        <tr>
+            <td>
+                <b>{{key}}:</b>
+            </td>
+            <td data-summary-name="{{key}}">{{value}}</td>
+        </tr>
+        {% endif %}
+    {% endfor %}
+{% elif 'Save_plan_by_sample' in helper.getStepDict.keys %}
+    {% for key, value in helper.getStepDict.Save_plan_by_sample.getCurrentSavedFieldDict.items %}
+        {% if key in helper.getStepDict.Save_plan_by_sample.qcNames %}
+        <tr>
+            <td>
+                <b>{{key}}:</b>
+            </td>
+            <td data-summary-name="{{key}}">{{value}}</td>
+        </tr>
+        {% endif %}
+    {% endfor %}
+{% endif %}

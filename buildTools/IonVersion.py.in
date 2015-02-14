@@ -10,11 +10,11 @@ def IonVersionGetMinor():
 def IonVersionGetRelease():
     return "@ION_VERSION_RELEASE@"
 
-def IonVersionGetSvnRev():
-    return "@ION_VERSION_SVNREV@"
+def IonVersionGetGitHash():
+    return "@ION_VERSION_GITHASH@"
 
-def IonVersionGetSvnPath():
-    return "@ION_VERSION_SVNPATH@"
+def IonVersionGetGitPath():
+    return "@ION_VERSION_GITPATH@"
 
 def IonVersionGetBuildNum():
     return "@ION_VERSION_BUILDNUM@"
@@ -25,14 +25,14 @@ def IonVersionGetBuildTag():
 def IonVersionGetBuildHost():
     return "@ION_VERSION_BUILDHOST@"
     
-def IonVersionGetSvnUrl():
-    return "@ION_VERSION_SVNURL@"
+def IonVersionGetGitUrl():
+    return "@ION_VERSION_GITURL@"
 
 
 def IonVersionGetFullVersion():
     P = '''@CMAKE_PROJECT_NAME@ (@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@.@ION_VERSION_RELEASE@)
 Build: @ION_VERSION_BUILDTAG@ (@ION_VERSION_BUILDNUM@)
-Source: @ION_VERSION_SVNPATH@ (@ION_VERSION_SVNREV@)
+Source: @ION_VERSION_GITPATH@ (@ION_VERSION_GITHASH@)
 Copyright 2011 Ion Torrent Systems, Inc.'''
     return P
 

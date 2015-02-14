@@ -33,8 +33,10 @@ class RegionalizedData
 public:
   int fitters_applied;
   // the subregion that contains regionalized data
-  bool isBestRegion;
   Region *region;
+  bool isBestRegion;
+  bool isRegionCenter(int ibd);
+  //int outputCount;
 
     TimeCompression time_c; // region specific
 // local region emphasis vectors - may vary across chip by trace

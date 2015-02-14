@@ -52,7 +52,7 @@ typedef tmap_map_sams_t* (*tmap_map_driver_func_thread_map)(void **data, tmap_se
   @param  opt      the program options
   @return          0 upon success, non-zero otherwise
   */
-typedef int32_t (*tmap_map_driver_func_mapq)(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt);
+typedef int32_t (*tmap_map_driver_func_mapq)(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap_refseq_t *refseq);
 
 /*!
   This function will be invoked after a thread has process all of its sequences.
@@ -160,6 +160,7 @@ typedef struct {
     tmap_rand_t *rand;  /*!< the random number generator */
     // DVK - realigner
     struct RealignProxy *realigner; /*!< post-processing realigner engine */
+    struct RealignProxy *context; /*!< post-processing context-dependent realignment engine */
     int32_t do_pairing;  /*!< 1 if we are performing pairing paramter calculation, 0 otherwise */
     int32_t tid;  /*!< the zero-based thread id */
 } tmap_map_driver_thread_data_t;
@@ -192,6 +193,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             tmap_rand_t *rand,
                             // DVK - realign
                             struct RealignProxy *realigner, 
+                            struct RealignProxy *context, 
                             int32_t do_pairing,
                             int32_t tid);
 

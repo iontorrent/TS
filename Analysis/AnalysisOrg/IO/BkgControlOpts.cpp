@@ -28,8 +28,8 @@ void SignalProcessingBlockControl::PrintHelp()
 	printf ("     SignalProcessingBlockControl\n");
     printf ("     --numcputhreads         INT               number of CPU threads [0]\n");
     printf ("     --wells-compression     INT               set wells compression level [3]\n");
-    printf ("     --save-wells-freq       INT               set saveWellsFrequency []\n");
-    printf ("     --save-wells-flow       INT               set save_wells_flow (=saveWellsFrequency*20) [60]\n");
+    printf ("     --wells-save-freq       INT               set saveWellsFrequency []\n");
+    printf ("     --wells-save-flow       INT               set save_wells_flow (=saveWellsFrequency*20) [60]\n");
     printf ("     --sigproc-compute-flow  STRING            set flow block sequence []\n");
     printf ("     --restart-from          STRING            restart from []\n");
     printf ("     --restart-next          STRING            restart next []\n");
@@ -43,23 +43,23 @@ void SignalProcessingBlockControl::SetOpts(OptArgs &opts, Json::Value& json_para
 	wellsCompression = RetrieveParameterInt(opts, json_params, '-', "wells-compression", 3);
     ION_ASSERT(wellsCompression >= 0 && wellsCompression <= 10, "--wells-compression must be between (0,10) inclusive.");
 	fprintf(stdout, "wells compression: %d\n", wellsCompression);
-	int saveWellsFrequency = RetrieveParameterInt(opts, json_params, '-', "save-wells-freq", -1);
+	int saveWellsFrequency = RetrieveParameterInt(opts, json_params, '-', "wells-save-freq", -1);
 	if(saveWellsFrequency > 0)
 	{
 		save_wells_flow = 20 * saveWellsFrequency;
-        fprintf ( stdout, "Warning: --save-wells-freq is obsolete. Please use --save-wells-flow\n"
-                        "         instead, with a value 20 times the old save-wells-freq value.\n");
+        fprintf ( stdout, "Warning: --wells-save-freq is obsolete. Please use --wells-save-flow\n"
+                        "         instead, with a value 20 times the old wells-save-freq value.\n");
 	}
 	else
 	{
-		save_wells_flow = RetrieveParameterInt(opts, json_params, '-', "save-wells-flow", 60);
+		save_wells_flow = RetrieveParameterInt(opts, json_params, '-', "wells-save-flow", 60);
 	}
     fprintf ( stdout, "Saving wells every %d flows.\n", save_wells_flow );
 
 
     if ( save_wells_flow < 20 || save_wells_flow > 2000 )
     {
-	  fprintf ( stderr, "Option Error, must be between 20 and 2000: save-wells-flow %d\n", save_wells_flow );
+	  fprintf ( stderr, "Option Error, must be between 20 and 2000: wells-save-flow %d\n", save_wells_flow );
       exit ( EXIT_FAILURE );
     }
 	restart_from = RetrieveParameterString(opts, json_params, '-', "restart-from", "");

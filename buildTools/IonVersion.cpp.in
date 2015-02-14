@@ -6,8 +6,8 @@ using namespace std;
 string IonVersion::GetMajor()     {return "@ION_VERSION_MAJOR@";}
 string IonVersion::GetMinor()     {return "@ION_VERSION_MINOR@";}
 string IonVersion::GetRelease()   {return "@ION_VERSION_RELEASE@";}
-string IonVersion::GetSvnRev()    {return "@ION_VERSION_SVNREV@";}
-string IonVersion::GetSvnPath()   {return "@ION_VERSION_SVNPATH@";}
+string IonVersion::GetGitHash()   {return "@ION_VERSION_GITHASH@";}
+string IonVersion::GetGitPath()   {return "@ION_VERSION_GITPATH@";}
 string IonVersion::GetBuildNum()  {return "@ION_VERSION_BUILDNUM@";}
 string IonVersion::GetBuildTag()  {return "@ION_VERSION_BUILDTAG@";}
 string IonVersion::GetBuildHost() {return "@ION_VERSION_BUILDHOST@";}
@@ -27,9 +27,9 @@ string IonVersion::GetFullVersion(std::string module)
 	v += " (";
 	v += "@ION_VERSION_BUILDNUM@";
 	v += ")\nSource: ";
-	v += "@ION_VERSION_SVNPATH@";
+	v += "@ION_VERSION_GITPATH@";
 	v += " (";
-	v += "@ION_VERSION_SVNREV@";
+	v += "@ION_VERSION_GITHASH@";
 	v += ")\nCopyright 2011 Ion Torrent Systems, Inc.\n";
 	return v;
 }

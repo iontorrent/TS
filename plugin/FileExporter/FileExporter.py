@@ -15,7 +15,7 @@ import requests
 import tarfile
 
 class FileExporter(IonPlugin):
-	version = "4.2-r%s" % filter(str.isdigit,"87667")
+        version = "4.4.0.0"
 	runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
 	runlevels = [ RunLevel.DEFAULT ]
 	features = [ Feature.EXPORT ]
@@ -26,8 +26,9 @@ class FileExporter(IonPlugin):
 	barcodeNames = []
 	sampleNameLookup = {} # dictionary allowing us to get the sample name associated with a particular barcode name
 	isBarcodedRun = False
-	variantCallerPath = "variantCaller_out" # path to the most recently run variant caller plugin, TS 4.2 and newer enables multiple instances, so this path may change
+	variantCallerPath = "variantCaller_out" # path to the most recently run variant caller plugin, TS 4.4 and newer enables multiple instances, so this path may change
 	runName = 'unknown'
+	delim = '.'
 
 	# Method to locate files matching a certain pattern within a directory.
 	# Was used for VC file finding, but has been depreciated since those locations are predicted rather than found. (The VC plugin takes far longer to run, so its directory structure cannot be relied on at runtime.)
@@ -94,6 +95,38 @@ class FileExporter(IonPlugin):
 			linkOut, linkErr = linkCmd.communicate()
 			print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
 
+	# Method to rename and symlink the .xls files.
+	def xlsRename(self, bamFileList):
+		for fileName in bamFileList:
+			fileName = fileName.replace('./', '')
+			if self.isBarcodedRun:
+				barcodeName = self.getBarcodeNameFromFileName(fileName)
+
+				# build our new filename and move this file
+				finalName = self.renameString.replace('@BARINFO@', barcodeName)
+				finalName = finalName.replace('@SAMPLEID@', self.sampleNameLookup[barcodeName])
+				destNameAlleles = self.OUTPUT_DIR + '/' + finalName + self.delim + 'alleles' + '.xls'
+				destNameVariants = self.OUTPUT_DIR + '/' + finalName + self.delim + 'variants' + '.xls'
+				srcNameAlleles = '%s/plugin_out/%s/%s/alleles.xls' % (self.envDict['ANALYSIS_DIR'], self.variantCallerPath, barcodeName)
+				srcNameVariants = '%s/plugin_out/%s/%s/variants.xls' % (self.envDict['ANALYSIS_DIR'], self.variantCallerPath, barcodeName)
+			else:
+				destNameAlleles = self.OUTPUT_DIR + '/' + self.renameString + self.delim + 'alleles' + '.xls'
+				destNameVariants = self.OUTPUT_DIR + '/' + self.renameString + self.delim + 'variants' + '.xls'
+				srcNameAlleles = '%s/plugin_out/%s/alleles.xls' % (self.envDict['ANALYSIS_DIR'], self.variantCallerPath)
+				srcNameVariants = '%s/plugin_out/%s/variants.xls' % (self.envDict['ANALYSIS_DIR'], self.variantCallerPath)
+
+			# And link alleles file
+			print 'LINKING: %s --> %s'%(srcNameAlleles, destNameAlleles)
+			linkCmd = Popen(['ln', '-sf', srcNameAlleles, destNameAlleles], stdout=PIPE, env=self.envDict)
+			linkOut, linkErr = linkCmd.communicate()
+			print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
+
+			# And link variants file
+			print 'LINKING: %s --> %s'%(srcNameVariants, destNameVariants)
+			linkCmd = Popen(['ln', '-sf', srcNameVariants, destNameVariants], stdout=PIPE, env=self.envDict)
+			linkOut, linkErr = linkCmd.communicate()
+			print 'OUT: %s\nERR: %s'%(linkOut, linkErr)
+
 
 	def moveRenameFiles(self, suffix):
 		print 'DEBUG: barcoded run: %s' % self.isBarcodedRun
@@ -153,15 +186,16 @@ class FileExporter(IonPlugin):
 		sffCreate = False
 		fastqCreate = False
 		vcCreate = False
-		zipBAM = False
 		zipSFF = False
 		zipFASTQ = False
+		zipBAM = False
 		zipVCF = False
+		zipXLS = False
 		wantTar = True
 
 		# Parse pluginconfig json.
 		try:
-			delim = self.json_dat['pluginconfig']['delimiter_select']
+			self.delim = self.json_dat['pluginconfig']['delimiter_select']
 			selections = self.json_dat['pluginconfig']['select_dialog']
 			try:
 				temp = self.json_dat['pluginconfig']['sffCreate']
@@ -182,12 +216,6 @@ class FileExporter(IonPlugin):
 			except:
 				print 'Logged: no VC linking.'
 			try:
-				temp = self.json_dat['pluginconfig']['zipBAM']
-				if (temp == 'on'):
-					zipBAM = True
-			except:
-				print 'Logged: no ZIP BAM'
-			try:
 				temp = self.json_dat['pluginconfig']['zipSFF']
 				if (temp == 'on'):
 					zipSFF = True
@@ -200,11 +228,23 @@ class FileExporter(IonPlugin):
 			except:
 				print 'Logged: no ZIP FASTQ'
 			try:
+				temp = self.json_dat['pluginconfig']['zipBAM']
+				if (temp == 'on'):
+					zipBAM = True
+			except:
+				print 'Logged: no ZIP BAM'
+			try:
 				temp = self.json_dat['pluginconfig']['zipVCF']
 				if (temp == 'on'):
 					zipVCF = True
 			except:
 				print 'Logged: no ZIP VCF'
+			try:
+				temp = self.json_dat['pluginconfig']['zipXLS']
+				if (temp == 'on'):
+					zipXLS = True
+			except:
+				print 'Logged: no ZIP XLS'
 
 			try:
 				temp = self.json_dat['pluginconfig']['compressedType']
@@ -217,7 +257,7 @@ class FileExporter(IonPlugin):
 		except:
 			print 'Warning: plugin does not appear to be configured, will default to run name with fastq zipped'
 			#sys.exit(0)
-			delim = '.'
+			self.delim = '.'
 			selections = ['TSP_RUN_NAME']
 			fastqCreate = True
 			zipFASTQ = True
@@ -229,14 +269,17 @@ class FileExporter(IonPlugin):
 			print 'No run level detected.'
 
 		# DEBUG: Print barcoded sampleID data.
-		samples = json.loads(self.json_dat['plan']['barcodedSamples'])
-		print 'SAMPLEID DATA: %s'%samples
-		print 'TYPE: %s' % type(samples)
+		try:
+			samples = json.loads(self.json_dat['plan']['barcodedSamples'])
+			print 'SAMPLEID DATA: %s'%samples
+			print 'TYPE: %s' % type(samples)
+		except KeyError:
+			samples = []
+			print 'No SAMPLEID DATA in plan'
 		
-		htmlOut.write('<b>Create SFF?</b> %s<br/>\n'%sffCreate)
-		htmlOut.write('<b>Create FASTQ?</b> %s<br/>\n'%fastqCreate)
-		htmlOut.write('<b>Link Variants?</b> %s<br/>\n'%vcCreate)
-		htmlOut.write('<b>ZIP?</b> BAM: %s SFF: %s FASTQ: %s VCF: %s<br/>\n' % (zipBAM, zipSFF, zipFASTQ, zipVCF))
+		htmlOut.write('Create SFF? %s  Moved to compressed file? %s<br/>\n' % (sffCreate, zipSFF))
+		htmlOut.write('Create FASTQ? %s  Moved to compressed file? %s<br/>\n' % (fastqCreate, zipFASTQ))
+		htmlOut.write('Include variant caller files? %s  Move TVC files to compressed file: BAM/BAI: %s VCF: %s XLS: %s<br/>\n' % (vcCreate, zipBAM, zipVCF, zipXLS))
 
 		# Remove empty values.
 		if not isinstance(selections, unicode):
@@ -347,8 +390,8 @@ class FileExporter(IonPlugin):
 		# log basic info for debug purposes
 		print 'PLUGINCONFIG:'
 		print '----------------------------------------------'
-		print 'DELIMETER: "%s"'%delim
-		htmlOut.write('<b>DELIMITER:</b> "%s"<br/>\n<b>SELECTIONS:</b><br/>\n'%delim)
+		print 'DELIMETER: "%s"'%self.delim
+		htmlOut.write('<b>DELIMITER:</b> "%s"<br/>\n<b>SELECTIONS:</b><br/>\n'%self.delim)
 		print 'SELECTIONS:'
 		for sel in selections:
 			print '  %s'%sel
@@ -362,14 +405,10 @@ class FileExporter(IonPlugin):
 		for sel in selections:
 			if sel != '':
 				if firstSelectionDone:
-					self.renameString += delim
+					self.renameString += self.delim
 				self.renameString += sel
 				firstSelectionDone = True
 		print 'BASE RENAME STRING: %s' % self.renameString
-
-
-		# Perform bam symlink(s).
-		self.bamRename(bamPaths)
 
 
 		# Create fastq file(s) if requested.
@@ -405,9 +444,11 @@ class FileExporter(IonPlugin):
 			self.moveRenameFiles('sff')
 
 
-		# Link to variants if requested.
+		# Link to TVC files if requested.
 		if (vcCreate):
+			self.bamRename(bamPaths)
 			self.vcfRename(bamPaths)
+			self.xlsRename(bamPaths)
 
 
 		#htmlOut.write('<br/><b>Files created: </b><a href="/report/%s/getZip">Download link</a><br/>'%self.envDict['RUNINFO__PK'])
@@ -420,12 +461,12 @@ class FileExporter(IonPlugin):
 			webRoot = self.envDict['ANALYSIS_DIR'].replace('/results/analysis/', '')
 		print 'WebRoot: %s' % webRoot
 
-		# Create zip files.
-		if (zipBAM or zipSFF or zipFASTQ or zipVCF):
+		# Create compressed files (note that we create html links to them if we are not adding to the compressed file)
+		if (zipBAM or zipSFF or zipFASTQ or zipVCF or zipXLS):
 			print 'Starting write to compressed file'
 			zipSubdir = self.renameString
 			if self.isBarcodedRun:
-				removeThisPart = delim + '@BARINFO@'
+				removeThisPart = self.delim + '@BARINFO@'
 				zipSubdir = self.renameString.replace(removeThisPart, '')
 			if wantTar:
 				compressedFileName = zipSubdir + '.tar.bz2'
@@ -433,7 +474,7 @@ class FileExporter(IonPlugin):
 				tar.dereference = True
 				for fileName in os.listdir(self.envDict['ANALYSIS_DIR'] + '/plugin_out/downloads'):
 					zipme = False
-					if (zipBAM and fileName[-4:] == '.bam') or (zipBAM and fileName[-4:] == '.bai') or (zipSFF and fileName[-4:] == '.sff') or (zipFASTQ and fileName[-6:] == '.fastq') or (zipVCF and fileName[-4:] == '.vcf'):
+					if (zipBAM and fileName[-4:] == '.bam') or (zipBAM and fileName[-4:] == '.bai') or (zipSFF and fileName[-4:] == '.sff') or (zipFASTQ and fileName[-6:] == '.fastq') or (zipVCF and fileName[-4:] == '.vcf') or (zipXLS and fileName[-4:] == '.xls'):
 						zipme = True
 					if zipme:
 						print 'TAR: Adding file: %s' % fileName
@@ -449,7 +490,7 @@ class FileExporter(IonPlugin):
 				downloads = zipfile.ZipFile(compressedFileName, "w", zipfile.ZIP_DEFLATED, True) # note we are enabling zip64 extensions here
 				for fileName in os.listdir(self.envDict['ANALYSIS_DIR'] + '/plugin_out/downloads'):
 					zipme = False
-					if (zipBAM and fileName[-4:] == '.bam') or (zipBAM and fileName[-4:] == '.bai') or (zipSFF and fileName[-4:] == '.sff') or (zipFASTQ and fileName[-6:] == '.fastq') or (zipVCF and fileName[-4:] == '.vcf'):
+					if (zipBAM and fileName[-4:] == '.bam') or (zipBAM and fileName[-4:] == '.bai') or (zipSFF and fileName[-4:] == '.sff') or (zipFASTQ and fileName[-6:] == '.fastq') or (zipVCF and fileName[-4:] == '.vcf') or (zipXLS and fileName[-4:] == '.xls'):
 						zipme = True
 					if zipme:
 						print 'ZIP: Adding file: %s' % fileName

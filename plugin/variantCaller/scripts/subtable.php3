@@ -1,6 +1,18 @@
 <?php
 $dataFile = $_GET['dataFile'];
-$rows = $_GET['rows'];
+$keyrows = $_GET['keyrows'];
+
+$i = 0;
+$key = array();
+while( ($j = strpos( $keyrows, ",", $i )) !== false ) {
+  $r = substr( $keyrows, $i, $j-$i ) + 1;
+  $i = $j+1;
+  array_push($key, $r);
+}
+$skey = $key;
+sort($skey);
+var_dump($key);
+var_dump($skey);
 
 $dtfh = fopen($dataFile,"r");
 if( $dtfh == 0 || feof($dtfh) ) {
@@ -19,20 +31,20 @@ $line = fgets($dtfh);
 fwrite($tbfh,$line);
 
 $recNum = 0;
-$i = 0;
-while( ($j = strpos( $rows, ",", $i )) !== false ) {
-  $r = substr( $rows, $i, $j-$i ) + 1;
-  $i = $j+1;
-  while( !feof($dtfh) )
-  {
+foreach($skey as $val) {
+  while( !feof($dtfh) ) {
     $line = fgets($dtfh);
     ++$recNum;
-    if( $recNum == $r ) break;
+    if( $recNum == $val ) break;
   }
-  if( $recNum != $r ) break;
-  fwrite($tbfh,$line);
+  if( $recNum != $val) break;
+  $arr[$val] = $line;
 }
 fclose($dtfh);
+
+foreach($key as $val) {
+  fwrite($tbfh, $arr[$val]);
+}
 fclose($tbfh);
 header("Location: ".$tableFile);
 ?>

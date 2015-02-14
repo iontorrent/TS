@@ -286,7 +286,7 @@ class Run:
             self.exp_seqkitplanname = self.explogdict.get('seqkitplanname','')
 
             self.exp_chipversion = self.explogdict.get('chipversion','')
-            if not self.exp_chipversion or not self.exp_chipversion.startswith('P'):
+            if not self.exp_chipversion:
                 self.exp_chipversion = self.exp_chiptype
 
             logger.info("planned_run_guid: '%s'" % self.exp_planned_run_guid)
@@ -690,7 +690,7 @@ class App():
 
             [CurExp,CurFlow] = self.getCurrentRunInformation()
 
-            if SystemType == "raptor" and CurExp != "":
+            if runOIADuringExp == "no" and CurExp != "":
                 time.sleep(10)
                 continue
 
@@ -1036,6 +1036,7 @@ if __name__ == '__main__':
 
 
     try:
+        runOIADuringExp = "yes"
         f = open('/software/config/DataCollect.config')
         text = f.readlines()
         f.close()
@@ -1057,8 +1058,8 @@ if __name__ == '__main__':
                 TSUserName = value
             elif key == 'TSPasswd':
                 TSPasswd = value
-            elif key == 'SystemType':
-                SystemType = value
+            elif key == 'runOIADuringExp':
+                runOIADuringExp = value
             else:
                 continue
     except:

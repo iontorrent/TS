@@ -9,6 +9,7 @@ ionmaster_syspkg_list:
     - nxclient
     - nxnode
     - nxserver
+    - python-amqp
 
 ionmaster_ionpkg_list:
     - ion-dbreports
@@ -16,15 +17,14 @@ ionmaster_ionpkg_list:
     - ion-analysis
     - ion-pipeline
     - samtools
-    - ion-rsmts
-    - ion-samita
     - ion-torrentr
-    - ion-chefupdates
-    - ion-docs
+#    - ion-docs
     - ion-referencelibrary
     - ion-sampledata
     - ion-publishers
-    - ion-onetouchupdater
     - ion-plugins
-    - ion-usbmount
+    - ion-rsmts
+#    - ion-usbmount
     - ion-pgmupdates
+#    - ion-chefupdates
+    - ion-onetouchupdater

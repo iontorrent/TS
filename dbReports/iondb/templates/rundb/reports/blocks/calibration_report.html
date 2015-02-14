@@ -1,0 +1,34 @@
+{% load humanize %}
+<div id="CalibrationReport" data-title="Calibration Report" class="tab-pane">
+    <h1>{{ report.eas.get_base_recalibration_mode_for_display }}</h1>
+    {% if panel_recal %}
+    <div class="row-fluid">
+        <div class="span12" id="calibration_report">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Control Group</th>
+                        <th>Reads</th>
+                        <th>Total Bases</th>
+                        <th>Q20 Bases</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for row in panel_recal %}
+                    <tr>
+                        <td>{{row.barcode_name}}</td>
+                        <td>{{row.read_count|intcomma}}</td>
+                        <td>{{row.total_bases|intcomma}}</td>
+                        <td>{{row.Q20_bases|intcomma}}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+<p>Pre Base Calibration Arguments</p>
+<pre>{{ report.eas.prebasecallerargs }}</pre>
+<p>Calibration Arguments</p>
+<pre>{{ report.eas.calibrateargs }}</pre>
+</div>

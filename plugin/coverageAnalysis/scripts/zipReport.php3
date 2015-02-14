@@ -5,7 +5,7 @@ header('Content-Transfer-Encoding: binary');
 ob_clean();
 flush();
 
-$fp = popen('zip -9qr - * -i startplugin.json drmaa_stdout.txt \*.bcmatrix.xls \*.bc_summary.xls \*.pdf \*.chr.cov.xls \*.amplicon.cov.xls \*.target.cov.xls -x \*scraper\*', 'r');
+$fp = popen('zip -9qr - * -i startplugin.json drmaa_stdout.txt \*.bcmatrix.xls \*.bc_summary.xls \*.pdf \*.chr.cov.xls \*.contig.cov.xls \*.amplicon.cov.xls \*.target.cov.xls -x \*scraper\*', 'r');
 
 while (!feof($fp)) {
     echo fread($fp, 8192);

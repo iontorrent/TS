@@ -54,7 +54,7 @@ Run Report for {{report.resultsName|latexsafe}}
  \fcolorbox{gray}{white}{\parbox[t][62mm]{50mm}{\setlength{\parindent}{0mm}\small\centering%
  \begin{tabular}{P{20mm}P{20mm}}
  %column1									&   column2
- \bfseries\small {{dbr.total_Q0_bases|ion_readable}}		&   \bfseries\small {{report.libmetrics.aveKeyCounts|floatformat:"0"|default:"N/A"|slugify}} \\
+ \bfseries\small {{report.qualitymetrics.q0_bases|ion_readable}}		&   \bfseries\small {{report.libmetrics.aveKeyCounts|floatformat:"0"|default:"N/A"|slugify}} \\
  \footnotesize Total Bases					&	\footnotesize Key Signal
  \end{tabular}
  \rule{40mm}{0.5pt}\\
@@ -101,7 +101,7 @@ Run Report for {{report.resultsName|latexsafe}}
  \fcolorbox{gray}{white}{\parbox[t][62mm]{50mm}{\setlength{\parindent}{0mm}\small\centering%%
  \begin{tabular}{P{13.3mm}P{13.3mm}P{13.3mm}}
  %column1
- \bfseries {{quality|bracket:"Mean Read Length at Q0"|float2int}} bp  &  \bfseries {{read_stats.median_length|float2int}} bp  &  \bfseries  {{read_stats.mode_length|float2int}} bp \\
+ \bfseries {{read_stats.mean_length|float2int}} bp  &  \bfseries {{read_stats.median_length|float2int}} bp  &  \bfseries  {{read_stats.mode_length|float2int}} bp \\
  \footnotesize Mean   &   \footnotesize Median   &   \footnotesize Mode
  \end{tabular} 
  \rule{40mm}{0.5pt}\\
@@ -306,7 +306,7 @@ Run Report for {{report.resultsName|latexsafe}}
 			{% endspaceless %} \\
 	\bf Sample & {{experiment.samples.all|join:", "|latexsafe}} \\ 
 	\bf Reference & {{report.corollary|latexsafe}} \\ 
-	\bf PGM & {{experiment.pgmName|latexsafe}} \\ 
+	\bf Instrument & {{experiment.pgmName|latexsafe}} \\ 
 	\bf Flow Order & {{experiment.flowsInOrder}} \\ 
 	\bf Library Key & {{report.eas.libraryKey}} \\ 
 	\bf TF Key & {{report.eas.tfKey|default:"ATCG"}} \\ 
@@ -328,6 +328,27 @@ Run Report for {{report.resultsName|latexsafe}}
 \bigskip %add some vertical space
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%second row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\section*{Chef Summary}
+
+ \begin{tabular}{l|l}
+    {% if chef_info %}
+        {% for item, info in chef_info %}
+            \bf {{item|latexsafe}} & {{info}} \\        
+        {% endfor %}
+    {% else %}
+        \bf Ion Chef was not used for this run \\
+    {% endif %}     
+
+ \end{tabular}
+
+
+
+
+%%%%%%%%%%top row ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\bigskip %add some vertical space
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%second row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section*{Software Version}
 
  \begin{tabular}{l|l}
@@ -336,4 +357,5 @@ Run Report for {{report.resultsName|latexsafe}}
 	{% endfor %}
  \end{tabular}
  
+
 \end{document}

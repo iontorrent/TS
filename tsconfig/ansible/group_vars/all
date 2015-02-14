@@ -7,9 +7,12 @@ ion_repository_hostname: ionupdates.com
 
 ion_repository_directory: software
 
+# Setting this over-rides whats passed at command line
+#ansible_sudo_pass: ionadmin
+
 tsconfig_dir: /etc/torrentserver
 
-ionaptrepo_file: /etc/apt/sources.list
+ionaptrepo_file: /etc/apt/sources.list.d/iontorrent.list
 
 postgres_sysctl_file: /etc/sysctl.d/10-postgresql-shm.conf
 
@@ -49,7 +52,6 @@ common_syspkg_list:
     - zip
     - libz-dev
     - libxml2-dev
-    - python-pysam
     - python-simplejson
     - python-calabash
     - python-jsonpipe
@@ -64,5 +66,4 @@ common_syspkg_list:
     - tmpreaper
     - timelimit
     - dkms
-    - megaraid-sas-dkms
-    - libdrmaa1.0       # will be part of ion-dbreports dependency list
+#    - megaraid-sas-dkms

@@ -25,7 +25,7 @@ void IonstatsBasecallerHelp()
 {
   printf ("\n");
   printf ("ionstats %s-%s (%s) - Generate performance metrics and statistics for Ion sequences.\n",
-      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetSvnRev().c_str());
+      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
   printf ("\n");
   printf ("Usage:   ionstats basecaller [options]\n");
   printf ("\n");

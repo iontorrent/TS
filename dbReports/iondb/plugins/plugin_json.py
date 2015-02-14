@@ -6,7 +6,7 @@ import json
 from ion.utils.explogparser import getparameter, getparameter_minimal
 from ion.plugin.constants import RunLevel
 
-from iondb.rundb.models import Chip
+from iondb.rundb.models import Chip, Results
 
 def get_runinfo(ion_params, primary_key, report_dir, plugin, plugin_out_dir, net_location, url_root, username, runlevel, blockId):
 
@@ -185,6 +185,17 @@ def get_plan(ion_params):
     
     return d
 
+def get_datamanagement(pk, result=None):
+    if not result:
+        result = Results.objects.get(pk=pk)
+    # provide status of files: True means files are available
+    from iondb.rundb.data import dmactions_types as dmtypes
+    retval = {}
+    for dmtype in dmtypes.FILESET_TYPES:
+        retval[dmtype] = not(result.get_filestat(dmtype).isdisposed())
+    return retval
+
+
 def make_plugin_json(primary_key, report_dir, plugin, plugin_out_dir, net_location, url_root, username,
                     runlevel=RunLevel.DEFAULT, blockId='', block_dirs=["."], instance_config={}):
     try:
@@ -199,7 +210,8 @@ def make_plugin_json(primary_key, report_dir, plugin, plugin_out_dir, net_locati
         "pluginconfig":get_pluginconfig(plugin, instance_config),
         "globalconfig":get_globalconfig(),
         "plan":get_plan(ion_params),
-        "sampleinfo": ion_params.get("sampleInfo",{})
+        "sampleinfo": ion_params.get("sampleInfo",{}),
+        "datamanagement": get_datamanagement(primary_key),
     }
     # IonReporterUploader_V1_0 compatibility shim
     if plugin["name"] == "IonReporterUploader_V1_0" and plugin.get("userInput",""):

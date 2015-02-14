@@ -3,10 +3,8 @@
 
 from os import path
 import socket
-from bin import dj_config
+from iondb.bin import dj_config
 from django.core import urlresolvers
-import djcelery
-djcelery.setup_loader()
 
 HOSTNAME = socket.gethostname()
 TEST_INSTALL= False
@@ -36,25 +34,6 @@ DATABASES = {
         'PORT': ''
     }
 }
-
-# Django Celery config
-BROKER_URL = "amqp://ion:ionadmin@localhost:5672/ion"
-
-## Avoid indefinite hangs by forcing results to expire after 30 minutes
-CELERY_TASK_RESULT_EXPIRES = 1800
-
-# Disable celery's Broker Heartbeats.  We don't even need these since
-# RabbitMQ is running on localhost and will only 'disconnect' by failing completely.
-BROKER_HEARTBEAT=0
-
-# Do not mark a queued task as executed until after it completes or
-# raises an exception
-CELERY_ACKS_LATE = True
-
-# Each worker will only take one task at a time from the queue
-# rather than the default of grabbing several.  This is acceptable because
-# we have relatively few tasks and the amqp connection overhead is not high.
-CELERYD_PREFETCH_MULTIPLIER = 1
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
@@ -176,10 +155,8 @@ INSTALLED_APPS = (
     'django.contrib.messages',
     'iondb.rundb',
     'tastypie',
-    'djcelery',
     'south',
 )
-
 
 # This is not to be the full path to the module, just project.model_name
 #AUTH_PROFILE_MODULE = 'rundb.UserProfile' ## deprecated in 1.5
@@ -192,6 +169,9 @@ AUTHENTICATION_BACKENDS = (
 
 IONAUTH_ALLOW_REST_GET = False
 
+# Only allow json in API. Disable xml, csv, plist, html.
+TASTYPIE_DEFAULT_FORMATS=['json', 'jsonp']
+
 LOGIN_URL="/login/"
 LOGIN_REDIRECT_URL="/data/"
 # Whether to expire the session when the user closes his or her browser.
@@ -200,31 +180,6 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE=True
 
 # Plans use objects not compatible with django 1.6 default json serializer
 SESSION_SERIALIZER="django.contrib.sessions.serializers.PickleSerializer"
-
-CELERY_IMPORTS = (
-    "iondb.rundb.tasks",
-    "iondb.rundb.publishers",
-    "iondb.plugins.tasks",
-    "iondb.rundb.data.tasks",
-    "iondb.rundb.data.backfill_tasks",
-    "iondb.rundb.session_cleanup.tasks",
-    "iondb.rundb.data.data_management",
-    "iondb.rundb.data.data_import",
-    "iondb.rundb.tsvm",
-    "iondb.rundb.data.data_export",
-    "iondb.rundb.configure.cluster_info",
-)
-
-# Allow tasks the generous run-time of six hours before they're killed.
-CELERYD_TASK_TIME_LIMIT=21600
-
-# Restart celery each time to ensure imported plugin data is fresh
-CELERYD_MAX_TASKS_PER_CHILD = 1
-
-from iondb.rundb.session_cleanup.settings import nightly_schedule
-CELERYBEAT_SCHEDULE = {
-    'session_cleanup': nightly_schedule
-}
 
 if path.exists("/opt/ion/.computenode"):
     # This is the standard way to disable logging in Django.
@@ -327,7 +282,7 @@ SGE_CLUSTER_NAME = "p6444"
 SGE_QMASTER_PORT = 6444
 SGE_EXECD_PORT = 6445
 SGE_ENABLED = True
-DRMAA_LIBRARY_PATH = "/usr/lib/libdrmaa.so.1.0"
+DRMAA_LIBRARY_PATH = "/usr/lib/libdrmaa.so"
 
 TMAP_VERSION = dj_config.get_tmap_version()
 TMAP_DIR = '/results/referenceLibrary/%s/' % TMAP_VERSION
@@ -368,8 +323,8 @@ AWS_ACCESS_KEY = None
 AWS_SECRET_KEY  = None
 AWS_BUCKET_NAME = None
 
-SUPPORT_AUTH_URL   = "https://support.iontorrent.com/authenticate"
-SUPPORT_UPLOAD_URL = "https://support.iontorrent.com/upload"
+SUPPORT_AUTH_URL   = "https://support.iontorrent.com/asdf_authenticate"
+SUPPORT_UPLOAD_URL = "https://support.iontorrent.com/asdf_upload"
 
 REFERENCE_LIST_URL = "http://ionupdates.com/reference_downloads/references_list.json"
 
@@ -379,12 +334,12 @@ ABSOLUTE_URL_OVERRIDES = {
 
 try:
     # this file is generated and placed into /opt/ion/iondb/ion_dbreports_version.py by the CMake process and .deb pkg installation
-    import version #@UnresolvedImport
-    SVNREVISION = version.IonVersionGetSvnRev()
-    VERSION = 'v' + '.'.join([version.IonVersionGetMajor(), version.IonVersionGetMinor(), version.IonVersionGetRelease(), version.IonVersionGetSvnRev()])
+    import iondb.version as version #@UnresolvedImport
+    GITHASH = version.IonVersionGetGitHash()
+    VERSION = 'v' + '.'.join([version.IonVersionGetMajor(), version.IonVersionGetMinor(), version.IonVersionGetRelease(), version.IonVersionGetGitHash()])
     RELVERSION = '.'.join([version.IonVersionGetMajor(), version.IonVersionGetMinor()])
 except:
-    SVNREVISION=''
+    GITHASH=''
     VERSION=''
     RELVERSION=''
     pass
@@ -409,7 +364,7 @@ DEBUG_MIDDLE = None
 
 # import from the local settings file
 try:
-    from local_settings import *
+    from iondb.local_settings import *
     #add debug apps if they are defined in local_settings.py
     if DEBUG_APPS:
         INSTALLED_APPS += DEBUG_APPS

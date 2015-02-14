@@ -8,7 +8,7 @@
 bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &my_ensemble,
                         const LocalReferenceContext &local_context, PersistingThreadObjects &thread_objects,
                         int &splice_start_flow, int &splice_end_flow, vector<string> &my_hypotheses,
-                        const InputStructures &global_context,
+                        bool & changed_alignment, const InputStructures &global_context,
                         const ReferenceReader &ref_reader, int chr_idx)
 {
 
@@ -45,17 +45,20 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
   bool did_splicing = false;
   bool just_did_splicing = false;
   string pretty_alignment;
+  changed_alignment = false;
 
   // do realignment of a small region around variant if desired
-  if (my_ensemble.doRealignment) {
-    pretty_alignment = SpliceDoRealignement(thread_objects, current_read,
-    		                                local_context.position0, global_context.DEBUG, ref_reader, chr_idx);
+  if (my_ensemble.doRealignment) {  // XXX
+    pretty_alignment = SpliceDoRealignement(thread_objects, current_read, local_context.position0,
+                                            changed_alignment, global_context.DEBUG, ref_reader, chr_idx);
     if (pretty_alignment.empty() and global_context.DEBUG > 0)
       cerr << "Realignment returned an empty string in read " << current_read.alignment.Name << endl;
   }
 
-  if (pretty_alignment.empty())
+  if (pretty_alignment.empty()) {
     pretty_alignment = current_read.pretty_aln;
+    changed_alignment = false;
+  }
 
   // Now fill in 2) and 3)
 
@@ -370,8 +373,8 @@ int GetSpliceFlows(const Alignment &current_read, const InputStructures &global_
 // -------------------------------------------------------------------
 
 
-string SpliceDoRealignement (PersistingThreadObjects &thread_objects, const Alignment &current_read,
-		                     long variant_position, int DEBUG, const ReferenceReader &ref_reader, int chr_idx) {
+string SpliceDoRealignement (PersistingThreadObjects &thread_objects, const Alignment &current_read, long variant_position,
+		                     bool &changed_alignment, int DEBUG, const ReferenceReader &ref_reader, int chr_idx) {
 
   // We do not allow any clipping since we align a short substring
   thread_objects.realigner.SetClipping(0, true);
@@ -475,10 +478,9 @@ string SpliceDoRealignement (PersistingThreadObjects &thread_objects, const Alig
     return new_alignment;
   }
 
+  string old_alignment = current_read.pretty_aln.substr(pretty_left, pretty_right-pretty_left);
   thread_objects.realigner.SetSequences(current_read.alignment.QueryBases.substr(read_left, read_right-read_left),
-                         ref_reader.substr(chr_idx, ref_left, ref_right-ref_left),
-                         current_read.pretty_aln.substr(pretty_left, pretty_right-pretty_left), true);
-
+                         ref_reader.substr(chr_idx, ref_left, ref_right-ref_left), old_alignment, true);
 
   if (!thread_objects.realigner.computeSWalignment(new_cigar_data, new_md_data, start_position_shift)) {
     if (DEBUG > 1)
@@ -488,7 +490,13 @@ string SpliceDoRealignement (PersistingThreadObjects &thread_objects, const Alig
 
   // --- Fuse realigned partial sequence back into pretty_aln string
   new_alignment = current_read.pretty_aln;
-  new_alignment.replace(pretty_left, (pretty_right-pretty_left), thread_objects.realigner.pretty_aln());
+  if (old_alignment == thread_objects.realigner.pretty_aln()) {
+    changed_alignment = false;
+  }
+  else {
+    new_alignment.replace(pretty_left, (pretty_right-pretty_left), thread_objects.realigner.pretty_aln());
+    changed_alignment = true;
+  }
   return new_alignment;
 }
 

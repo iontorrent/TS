@@ -101,14 +101,20 @@ $(function () {
 
     $('#exportOK').click(function (e) {
         $('#dialog').modal('hide');
-        // use ID's and resort to original order for original input file order matching
-        var checkList = TVC.checked;
+    var getkey = {};
+        for (var i = 0; i < TVC.checked.length; ++i) {
+        getkey[TVC.checked[i]] = TVC.checked_data[i]['key'];
+        }
+    var checkList = TVC.checked.slice();
+    var keyrows = checkList.sort(function(a, b) {
+        return getkey[a] - getkey[b];
+    }) + ",";
         var rows = checkList.sort(function (a, b) {
             return a - b;
         }) + ",";
         var op = $("#radio input[type='radio']:checked").val();
         if (op == "table") {
-            window.open("subtable.php3?dataFile=" + dataFile + "&rows=" + rows);
+            window.open("subtable.php3?dataFile=" + dataFile + "&keyrows=" + keyrows);
         } else if (op == "taqman") {
             window.open("taqman.php3?dataFile=" + dataFile + "&rows=" + rows);
         } else if (op == "ce") {
@@ -225,7 +231,6 @@ $(function () {
     });
 
     $(document).on("change", ".inspectExpected", function () {
-        console.log("clicked");
         $(".inspectExpected").each(function () {
             var id = $(this).data("id");
             var expected = $(this).val();
@@ -320,6 +325,18 @@ $(function () {
         return tmpl;
     }
 
+    function setCheckAll() {
+        var check = true;
+        for(var row=0; row<TVC.data.length; row++) {
+            var id = TVC.data[row]['id'];
+            if($.inArray(id, TVC.checked) < 0) {
+                check = false;
+                break;
+           }
+        }
+        $('#checkall').attr('checked', check);
+    }
+
     $(document).on("click", ".checkBox", function () {
         var check = $(this).prop("checked");
         var id = parseInt($(this).attr("value"));
@@ -337,6 +354,31 @@ $(function () {
                     TVC.checked_data.splice(i, 1);
                     break;
                 }
+            }
+        }
+        setCheckAll();
+        TVC.pager_update();
+    });
+
+    $(document).on("click", "#checkall", function () {
+        var check = $(this).prop("checked");
+        if(check) {
+            for(var row=0; row<TVC.data.length; row++) {
+                var id = TVC.data[row]['id'];
+                if($.inArray(id, TVC.checked) < 0) {
+                    TVC.checked.push(id);
+                    TVC.checked_data.push(TVC.data[row]);
+                    TVC.grid.updateRow(row);
+               }
+            }
+        } else {
+            for(var row=0; row<TVC.data.length; row++) {
+                var id = TVC.data[row]['id'];
+                var i = $.inArray(id, TVC.checked);
+                if(i < 0) continue;
+                TVC.checked.splice(i, 1);
+                TVC.checked_data.splice(i, 1);
+                TVC.grid.updateRow(row);
             }
         }
         TVC.pager_update();
@@ -459,7 +501,7 @@ $(function () {
     TVC.all = [
         {
             id: "id", field: "id", width: 5, minWidth: 5, sortable: false,
-            name: "", toolTip: "Select the variant for export",
+            name: "<input id='checkall' type='checkbox'>", toolTip: "Select the variant for export",
             formatter: CheckBox
         },
         {
@@ -631,9 +673,9 @@ $(function () {
     };
 
     TVC.subload = function (offset) {
-        console.log("subload " + offset);
         TVC.empty_grid();
         TVC.loadtable(offset);
+        setCheckAll();
         TVC.grid.render();
         TVC.pager_update();
     };
@@ -657,7 +699,7 @@ $(function () {
     $(".slick-pager").append('<span class="pull-left slick-pager-status"><span>Selected </span><span id="num_checked_x">0</span>'
          + '<span> of </span>'
          + '<span id="total_variants_x">' + TVC.total_variants + '</span></span>');
-    
+
 
     var nav_buttons = '<span class="pull-right"><button class="btn" id="back"><i class="icon-arrow-left"> </i> Back</button>';
     nav_buttons    += '<button class="btn" id="next">Next <i class="icon-arrow-right"></i></button></span>';
@@ -736,11 +778,11 @@ $(function () {
         TVC.pos = 0;
         TVC.pager_toggle();
     });
-    
+
     TVC.filterSettings = {"Allele Call":["Heterozygous","Homozygous"]};
     $("#AL-selectAlleleCall").val(["Heterozygous","Homozygous"]);
     $("#AL-selectAlleleCall").change()
-    
+
     //for building the position string
     TVC.Position_Start = false;
     TVC.Position_Stop = false;
@@ -896,12 +938,11 @@ $(function () {
         TVC.checked_data = [];
         TVC.grid.invalidateAllRows();
 
-        //now do the page reload
-        TVC.subload(0);
-
         //go back to the first page
         TVC.pos = 0;
 
+        //now do the page reload
+        TVC.subload(0);
 
         //update the pager
         TVC.pager_toggle();
@@ -974,6 +1015,7 @@ $(function () {
                 //Just keep 1 page in memory at any time
                 TVC.data[n] = {
                     id: Number(pk),
+            key: TVC.pos + n,
                     chrom: chr,
                     position: (chr + ":" + fields[1]),
                     pos: fields[1],
@@ -1041,6 +1083,7 @@ $(function () {
         TVC.grid.setColumns(columns);
         $("#coltabs").find("li").removeClass("active");
         $(this).parent().addClass("active");
+        setCheckAll();
     });
 
     $("#coverage").click(function () {
@@ -1049,6 +1092,7 @@ $(function () {
         TVC.grid.setColumns(columns);
         $("#coltabs").find("li").removeClass("active");
         $(this).parent().addClass("active");
+        setCheckAll();
     });
 
     $("#quality").click(function () {
@@ -1057,6 +1101,7 @@ $(function () {
         TVC.grid.setColumns(columns);
         $("#coltabs").find("li").removeClass("active");
         $(this).parent().addClass("active");
+        setCheckAll();
     });
 
     $("#export").click(function () {

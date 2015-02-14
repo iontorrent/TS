@@ -455,6 +455,7 @@ function goToCreateWorkflowUrl() {
                         name: "authToken",
                         value: data["token"]
                     }));
+                    form.appendTo("body");
                     form.submit();
                 }
             } else {

@@ -6,6 +6,7 @@
 
 #include "TargetsManager.h"
 
+#include <stdlib.h>
 #include <algorithm>
 #include "BAMWalkerEngine.h"
 #include "ExtendParameters.h"
@@ -195,6 +196,7 @@ void TargetsManager::LoadRawTargets(const ReferenceReader& ref_reader, const str
            << " has inverted coordinates" << endl;
       exit(1);
     }
+    AddExtraTrim(target, line, num_fields);
   }
 
   fclose(bed_file);
@@ -206,11 +208,52 @@ void TargetsManager::LoadRawTargets(const ReferenceReader& ref_reader, const str
   }
 }
 
+void TargetsManager::AddExtraTrim(UnmergedTarget& target, char *line, int num_fields)
+{
+  // parse extra trimming out of the bed file
+  // would be nice to unify with validate_bed using BedFile.h
+  char keybuffer[4096];
+  target.trim_left = 0;
+  target.trim_right = 0;
 
+  int numfields = sscanf(line, "%*s\t%*d\t%*d\t%*s\t%*s\t%*s\t%*s\t%s", keybuffer);
+  if (numfields == 1) {
+    string keypairs = keybuffer; 
+    string left = "TRIM_LEFT=";
+    string right = "TRIM_RIGHT=";
+    long int trim_l = 0;
+    long int trim_r = 0;
+
+    // look for a trim_left field
+    size_t found = keypairs.find(left);
+    if (found != string::npos){
+      string r1 = keypairs;
+      r1.erase(0, found+left.size());
+      trim_l = strtol (r1.c_str(), NULL, 0);
+    }
+
+    // look for a trim_right field
+    found = keypairs.find(right);
+    if (found != string::npos){
+      string r1 = keypairs;
+      r1.erase(0, found+right.size());
+      trim_r = strtol (r1.c_str(), NULL, 0);
+    }
+    assert(trim_l>=0);
+    assert(trim_r>=0);
+    target.trim_left = trim_l;
+    target.trim_right = trim_r;
+  }
+  // cout << "trim assigned to amplicon starting " << target.begin << " with trimming " << target.trim_left << " and " << target.trim_right << endl;
+}
 
 
 void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hint) const
 {
+  // set these before any trimming
+  rai->align_start = rai->alignment.Position;
+  rai->align_end = rai->alignment.GetEndPosition(false, true);
+
   if (not trim_ampliseq_primers)
     return;
 
@@ -277,7 +320,6 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
   // Later, also adjust MD tag.
   // Even later, ensure the reads stay sorted, so no extra sorting is required outside of tvc
 
-
   vector<CigarOp>& old_cigar = rai->alignment.CigarData;
   vector<CigarOp> new_cigar;
   new_cigar.reserve(old_cigar.size() + 2);
@@ -286,7 +328,16 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
 
   // 3A: Cigar ops left of the target
 
-  while (old_op != old_cigar.end() and ref_pos <= unmerged[best_target_idx].begin) {
+  int begin = unmerged[best_target_idx].begin + unmerged[best_target_idx].trim_left;
+  if (begin > unmerged[best_target_idx].end)
+    begin = unmerged[best_target_idx].end;
+
+  int end = unmerged[best_target_idx].end - unmerged[best_target_idx].trim_right;
+  if (end <= begin)
+    end = begin;
+    
+
+  while (old_op != old_cigar.end() and ref_pos <= begin) {
     if (old_op->Type == 'H') {
       ++old_op;
       continue;
@@ -300,7 +351,7 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
       continue;
     }
 
-    unsigned int gap = unmerged[best_target_idx].begin - ref_pos;
+    unsigned int gap = begin - ref_pos;
     if (gap == 0)
       break;
 
@@ -338,13 +389,13 @@ void TargetsManager::TrimAmpliseqPrimers(Alignment *rai, int unmerged_target_hin
 
   rai->alignment.Position = ref_pos;
 
-  while (old_op != old_cigar.end() and ref_pos < unmerged[best_target_idx].end) {
+  while (old_op != old_cigar.end() and ref_pos < end) {
     if (old_op->Type == 'H') {
       ++old_op;
       continue;
     }
 
-    unsigned int gap = unmerged[best_target_idx].end - ref_pos;
+    unsigned int gap = end - ref_pos;
 
     if (old_op->Type == 'S' or old_op->Type == 'I') {
       new_cigar.push_back(*old_op);

@@ -56,6 +56,21 @@ class BkgDataPointers {
       m_beads_bestRegion_fittype = NULL;
       m_beads_bestRegion_gainSens = NULL;
       m_beads_bestRegion_timeframe = NULL;
+      m_beads_bestRegion_taub = NULL;
+
+      m_beads_regionCenter_location = NULL;
+      m_beads_regionCenter_predicted = NULL;
+      m_beads_regionCenter_corrected = NULL;
+      m_beads_regionCenter_amplitude = NULL;
+      m_beads_regionCenter_residual = NULL;
+      m_beads_regionCenter_kmult = NULL;
+      m_beads_regionCenter_dmult = NULL;
+      m_beads_regionCenter_SP = NULL;
+      m_beads_regionCenter_R = NULL;
+      m_beads_regionCenter_fittype = NULL;
+      m_beads_regionCenter_gainSens = NULL;
+      m_beads_regionCenter_timeframe = NULL;
+      m_beads_regionCenter_taub = NULL;
 
       m_beads_xyflow_predicted = NULL;
       m_beads_xyflow_corrected = NULL;
@@ -70,6 +85,8 @@ class BkgDataPointers {
       m_beads_xyflow_hplen = NULL;
       m_beads_xyflow_mm = NULL;
       m_beads_xyflow_timeframe = NULL;
+      m_beads_xyflow_taub = NULL;
+
       m_xyflow_hashtable = NULL;
 
       // key signals
@@ -136,6 +153,22 @@ public: // should be private eventually and use set/get to access them
   DataCube<float> *m_beads_bestRegion_R;
   DataCube<float> *m_beads_bestRegion_gainSens;
   DataCube<float> *m_beads_bestRegion_timeframe;
+  DataCube<float> *m_beads_bestRegion_taub;
+
+  // regionCenter beads
+  DataCube<int> *m_beads_regionCenter_location;
+  DataCube<int> *m_beads_regionCenter_fittype;
+  DataCube<float> *m_beads_regionCenter_corrected;
+  DataCube<float> *m_beads_regionCenter_predicted;
+  DataCube<float> *m_beads_regionCenter_amplitude;
+  DataCube<float> *m_beads_regionCenter_residual;
+  DataCube<float> *m_beads_regionCenter_kmult;
+  DataCube<float> *m_beads_regionCenter_dmult;
+  DataCube<float> *m_beads_regionCenter_SP;
+  DataCube<float> *m_beads_regionCenter_R;
+  DataCube<float> *m_beads_regionCenter_gainSens;
+  DataCube<float> *m_beads_regionCenter_timeframe;
+  DataCube<float> *m_beads_regionCenter_taub;
 
   // traceOutput for positions specified in sse/xyf/rcf files
   DataCube<float> *m_beads_xyflow_predicted;
@@ -151,6 +184,8 @@ public: // should be private eventually and use set/get to access them
   DataCube<int> *m_beads_xyflow_hplen;
   DataCube<int> *m_beads_xyflow_mm;
   DataCube<int> *m_beads_xyflow_fittype;
+  DataCube<float> *m_beads_xyflow_taub;
+
   HashTable_xyflow *m_xyflow_hashtable;
   int id_xy(int x, int y, HashTable_xyflow *xyf_hash) {return (xyf_hash->id_xy(x,y));};
   int id_rc(int r, int c, HashTable_xyflow *xyf_hash) {return (xyf_hash->id_rc(r,c));};

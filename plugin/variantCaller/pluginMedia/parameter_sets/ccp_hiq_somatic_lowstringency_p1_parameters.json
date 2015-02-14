@@ -1,0 +1,98 @@
+{
+    "torrent_variant_caller": {
+		"position_bias": "0.75", 
+		"position_bias_ref_fraction": "0.05", 
+		"hp_max_length": 8, 
+		"indel_as_hpindel": 1, 
+        "do_mnp_realignment": 1, 
+        "do_snp_realignment": 1, 
+		"position_bias_pval": "0.05", 
+        "use_position_bias": 1,
+		
+        "snp_min_allele_freq": "0.015", 
+        "snp_strand_bias": "0.95", 
+        "snp_strand_bias_pval": "0.01", 
+		"snp_min_variant_score": 10, 
+		"snp_min_cov_each_strand": 2, 
+		"snp_min_coverage": 6, 
+        
+		
+		"hotspot_min_coverage": 6, 
+        "hotspot_min_allele_freq": "0.01", 
+        "hotspot_strand_bias": "0.98", 
+        "hotspot_strand_bias_pval": "0.01", 
+        "hotspot_min_variant_score": 6, 
+        "hotspot_min_cov_each_strand": 2, 
+		
+		"indel_min_variant_score": 6, 
+        "indel_min_coverage": 15, 
+        "indel_strand_bias_pval": "1.0", 
+        "indel_strand_bias": "0.9", 
+		"indel_min_allele_freq": "0.05", 
+		"indel_min_cov_each_strand": 5, 
+        
+        "mnp_min_variant_score": 400, 
+        "mnp_strand_bias": "0.95", 
+        "mnp_strand_bias_pval": "1.0", 
+		"mnp_min_allele_freq": "0.02", 
+		"mnp_min_cov_each_strand": 0, 
+        "mnp_min_coverage": 6, 
+        
+        "filter_insertion_predictions": "0.2", 
+        "filter_unusual_predictions": "0.3", 
+		"filter_deletion_predictions": "0.2", 
+		"prediction_precision": "1.0", 
+		"heavy_tailed": 3, 
+        "outlier_probability": "0.005", 
+        "data_quality_stringency": "6.5", 
+        "downsample_to_coverage": 2000, 
+        "realignment_threshold": 1, 
+        "suppress_recalibration": 0
+    }, 
+    "meta": {
+        "ts_version": "4.4", 
+        "name": "Generic - Proton - Somatic - Low Stringency", 
+        "tooltip": "Parameter settings optimized for low frequency variants and minimum false negatives on Proton chips", 
+        "tvcargs": "tvc", 
+        "based_on": "ampliseqexome_somatic_lowstringency_p1_parameters.json", 
+        "configuration": "somatic_low_stringency_proton", 
+        "compatibility": {
+            "chip": [
+                "proton_p1"
+            ], 
+            "frequency": [
+                "somatic"
+            ], 
+            "stringency": [
+                "low"
+            ], 
+            "library": [
+                "wholegenome", 
+                "ampliseq", 
+                "targetseq"
+            ]
+        }
+    }, 
+    "long_indel_assembler": {
+        "min_indel_size": 4, 
+        "short_suffix_match": 5, 
+        "min_var_count": 5, 
+        "min_var_freq": "0.15", 
+        "output_mnv": 0, 
+        "max_hp_length": 8, 
+        "relative_strand_bias": "0.8", 
+        "kmer_len": 19
+    }, 
+    "freebayes": {
+        "gen_min_coverage": 6, 
+        "allow_mnps": 1, 
+        "allow_complex": 0, 
+        "min_mapping_qv": 4, 
+        "read_snp_limit": 10, 
+        "allow_indels": 1, 
+        "read_max_mismatch_fraction": "1.0", 
+        "gen_min_alt_allele_freq": "0.035", 
+        "allow_snps": 1, 
+        "gen_min_indel_alt_allele_freq": "0.1"
+    }
+}

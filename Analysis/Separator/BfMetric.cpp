@@ -205,7 +205,8 @@ void BfMetric::CalcBfSdMetricReduce(const short *__restrict image,
                                     int row_step,
                                     int col_step,
                                     int num_row_neighbors,
-                                    int num_col_neighbors) {
+                                    int num_col_neighbors,
+                                    int frame_window) {
     
   // Calculate the average trace in region around each well
   ChipReduction reduce_avg(m_num_rows, m_num_cols, m_num_frames,
@@ -338,9 +339,14 @@ void BfMetric::CalcBfSdMetricReduce(const short *__restrict image,
   while(bf_start != bf_end) {
     frame_counts[*max_frame_start]++;
     *trace_min_start = *max_frame_start;
-    *bf_start += *(well_nn_diff + (*max_frame_start) * frame_stride + well_index);
-    *bf_start += *(well_nn_diff + (std::max(*max_frame_start-1,0)) * frame_stride + well_index);
-    *bf_start += *(well_nn_diff + (std::min(*max_frame_start+1,m_num_frames-1)) * frame_stride + well_index);
+    // *bf_start += *(well_nn_diff + (*max_frame_start) * frame_stride + well_index);
+    // *bf_start += *(well_nn_diff + (std::max(*max_frame_start-1,0)) * frame_stride + well_index);
+    // *bf_start += *(well_nn_diff + (std::min(*max_frame_start+1,m_num_frames-1)) * frame_stride + well_index);
+    int f_start = max(0, *max_frame_start - frame_window);
+    int f_end = min(m_num_frames - 1, *max_frame_start + frame_window);
+    for (int f_ix = f_start; f_ix <= f_end; f_ix++) {
+      *bf_start += *(well_nn_diff + f_ix * frame_stride + well_index);
+    }
     trace_min_start++;
     well_index++;
     max_frame_start++;
@@ -348,6 +354,7 @@ void BfMetric::CalcBfSdMetricReduce(const short *__restrict image,
   }
 
   FREEZ(&well_nn_diff);
+  FREEZ(&well_nn_sq_diff);
   FREEZ(&max_sd_frame);
 }
 

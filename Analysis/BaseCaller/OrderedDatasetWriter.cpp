@@ -23,6 +23,7 @@ protected:
     string do_grouping() const { return "\03"; }
 };
 
+// ------------------------------------------------------------------
 
 OrderedDatasetWriter::OrderedDatasetWriter()
 {
@@ -45,7 +46,8 @@ OrderedDatasetWriter::~OrderedDatasetWriter()
 }
 
 
-void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& datasets, int num_regions, const ion::FlowOrder& flow_order, const string& key,
+void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& datasets, int num_regions,
+    const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
     const string& basecaller_name, const string& basecalller_version, const string& basecaller_command_line,
     const string& production_date, const string& platform_unit, bool save_filtered_reads, vector<string>& comments)
 {
@@ -84,6 +86,9 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
   // New filtering and trimming accounting (per read group)
 
   read_group_stats_.resize(num_read_groups_);
+  for (int rg=0; rg<num_read_groups_; rg++)
+	read_group_stats_[rg].SetBeadAdapters(bead_adapters);
+  combined_stats_.SetBeadAdapters(bead_adapters);
 
   bam_writer_.resize(num_datasets_, NULL);
   sam_header_.resize(num_datasets_);
@@ -162,14 +167,18 @@ void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& datase
       bam_writer_[ds]->Close();
       delete bam_writer_[ds];
     }
+    else {
+      if (!dataset_nickname.empty())
+    	printf("%s: No reads for %s\n", dataset_nickname.c_str(), bam_filename_[ds].c_str());
+    }
 
     datasets.dataset(ds)["read_count"] = num_reads_[ds];
     for (Json::Value::iterator rg = datasets.dataset(ds)["read_groups"].begin(); rg != datasets.dataset(ds)["read_groups"].end(); ++rg) {
       string read_group_name = (*rg).asString();
       Json::Value& read_group_json = datasets.read_groups()[read_group_name];
       int rg_index = datasets.read_group_name_to_id(read_group_name);
-      read_group_json["read_count"]  = (Json::UInt64)read_group_stats_[rg_index].num_reads_final_;
-      read_group_json["total_bases"] = (Json::UInt64)read_group_stats_[rg_index].num_bases_final_;
+      read_group_json["read_count"]  = (Json::UInt64)read_group_stats_.at(rg_index).num_reads_final_;
+      read_group_json["total_bases"] = (Json::UInt64)read_group_stats_.at(rg_index).num_bases_final_;
       read_group_json["Q20_bases"]   = (Json::UInt64)read_group_num_Q20_bases_[rg_index];
 
       // Log barcode statistics only for barcode read groups
@@ -177,7 +186,7 @@ void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& datase
         read_group_json["barcode_match_filtered"] = (Json::UInt64)read_group_barcode_filt_zero_err_[rg_index];
 
         for (unsigned int iflow=0; iflow < read_group_barcode_bias_[rg_index].size(); iflow++) {
-          Json::Value av_bias_json(read_group_barcode_bias_[rg_index].at(iflow) / max(read_group_stats_[rg_index].num_reads_final_,(int64_t)1));
+          Json::Value av_bias_json(read_group_barcode_bias_[rg_index].at(iflow) / max(read_group_stats_.at(rg_index).num_reads_final_,(int64_t)1));
     	  read_group_json["barcode_bias"][iflow] = av_bias_json;
         }
         for (unsigned int ibin=0; ibin < read_group_barcode_distance_hist_[rg_index].size(); ibin++)
@@ -189,7 +198,8 @@ void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& datase
   }
 
   for (int rg = 0; rg < num_read_groups_; ++rg)
-    combined_stats_.MergeFrom(read_group_stats_[rg]);
+    combined_stats_.MergeFrom(read_group_stats_.at(rg));
+  combined_stats_.ComputeAverages();
   if (!dataset_nickname.empty())
     combined_stats_.PrettyPrint(dataset_nickname);
 }
@@ -233,14 +243,14 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
 
     // Step 1: Read filtering and trimming accounting
 
-    read_group_stats_[entry->read_group_index].AddRead(entry->filter);
+    read_group_stats_.at(entry->read_group_index).AddRead(entry->filter);
 
     // Step 2: Should this read be saved?
 
     if (entry->filter.is_filtered and not save_filtered_reads_)
       continue;
 
-    int target_file_idx = read_group_dataset_[entry->read_group_index];
+    int target_file_idx = read_group_dataset_.at(entry->read_group_index);
     if (target_file_idx < 0) // Read group not assigned to a dataset?
       continue;
 
@@ -281,9 +291,15 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
       bam_writer_[target_file_idx] = new BamWriter();
       bam_writer_[target_file_idx]->SetCompressionMode(BamWriter::Compressed);
       //bam_writer_[ds]->SetCompressionMode(BamWriter::Uncompressed);
-      bam_writer_[target_file_idx]->Open(bam_filename_[target_file_idx], sam_header_[target_file_idx], empty_reference_vector);
+      if (not bam_writer_[target_file_idx]->Open(bam_filename_[target_file_idx], sam_header_[target_file_idx], empty_reference_vector)) {
+        cerr << "BaseCaller IO error: Failed to create bam file " << bam_filename_[target_file_idx] << endl;
+        exit(EXIT_FAILURE);
+      }
     }
-    bam_writer_[target_file_idx]->SaveAlignment(entry->bam);
+    if (not bam_writer_[target_file_idx]->SaveAlignment(entry->bam)){
+      cerr << "BaseCaller IO error: Failed to write to bam file " << bam_filename_[target_file_idx] << endl;
+      exit(EXIT_FAILURE);
+    }
   }
 }
 

@@ -11,9 +11,9 @@ def main():
     
     parser = OptionParser()
     parser.add_option('-t', '--hotspot-txt',    help='Text file with OCP hotspot definitions (default:ocp_hotspot.txt)', dest='hotspot_txt', default='merged_ocp3_hotspots.20140507.txt')
-    parser.add_option('-b', '--blacklist-bed',  help='Blacklist BED (default:ocp_blist.bed)', dest='blist_bed', default='blist.rev3.bed')
+    parser.add_option('-b', '--blacklist-bed',  help='Blacklist BED (default:ocp_blist.bed)', dest='blist_bed', default='blist.rev5.bed')
     parser.add_option('-o', '--output-bed',     help='Combined BED with hotspots + blacklist (default: ocp_hotspot_blist_generated.bed)', dest='out_bed', default='ocp_hotspot_blist_generated.bed')
-    parser.add_option('-z', '--targets-bed',    help='Target Regions BED file (optional)', dest='targets_bed', default='OCP3.20140506.designed.bed')
+    parser.add_option('-z', '--targets-bed',    help='Target Regions BED file (optional)', dest='targets_bed', default='OCP3.20140508.designed.bed')
     (options, args) = parser.parse_args()
 
 

@@ -107,7 +107,7 @@ class BkgParamH5
 
     // this is the interface to trigger a write
     void IncrementalWrite ( int flow, bool last_flow, FlowBlockSequence::const_iterator flow_block, 
-                            int flow_block_id ); 
+                            int flow_block_id );
 
     void Close();
     void CloseBeads();
@@ -122,10 +122,12 @@ class BkgParamH5
     void TryInitRegionParams ( H5File &h5_local_ref, const ImageSpecClass &my_image_spec );
 
     // all beads in the best region
-    void Init2 (int write_params_flag,int nBeads_live,const Region *);
+    void Init2 (int write_params_flag,int nBeads_live,const Region *,int nRegionCenters);
     void TryInitBeads_BestRegion ( H5File &h5_local_ref, int nBeads_live,Region *);
     void InitBeads_BestRegion (H5File &h5_local_ref, int nBeads_live, const Region *);
+    void InitBeads_RegionCenter (H5File &h5_local_ref, int nBeads_live);
     void IncrementalWriteBestRegion(int flow, bool lastflow);
+    void IncrementalWriteRegionCenter(int flow, bool lastflow);
 
   public: // should be private eventually
 
@@ -181,11 +183,32 @@ class BkgParamH5
     MatchedCube beads_bestRegion_R;
     MatchedCube beads_bestRegion_gainSens;
     MatchedCube beads_bestRegion_timeframe;
+    MatchedCube beads_bestRegion_taub;
+
+
+    //  beads in the regionCenter
+    MatchedCubeInt beads_regionCenter_location;
+    MatchedCubeInt beads_regionCenter_fittype;
+    MatchedCube beads_regionCenter_predicted;
+    MatchedCube beads_regionCenter_corrected;
+    MatchedCube beads_regionCenter_amplitude;
+    MatchedCube beads_regionCenter_residual;
+    MatchedCube beads_regionCenter_kmult;
+    MatchedCube beads_regionCenter_dmult;
+    MatchedCube beads_regionCenter_SP;
+    MatchedCube beads_regionCenter_R;
+    MatchedCube beads_regionCenter_gainSens;
+    MatchedCube beads_regionCenter_timeframe;
+    MatchedCube beads_regionCenter_taub;
 
 //  beads specified in the sse/xyflow/rcflow file
     void InitBeads_xyflow(int write_params_flag, HashTable_xyflow &xyf_hash);
     void saveBeads_xyflowPointers();
     void IncrementalWrite_xyflow(bool lastflow);
+    MatchedCubeInt beads_xyflow_fittype;
+    MatchedCubeInt beads_xyflow_location;
+    MatchedCubeInt beads_xyflow_hplen;
+    MatchedCubeInt beads_xyflow_mm;
     MatchedCube beads_xyflow_predicted;
     MatchedCube beads_xyflow_corrected;
     MatchedCube beads_xyflow_amplitude;
@@ -195,10 +218,7 @@ class BkgParamH5
     MatchedCube beads_xyflow_R;
     MatchedCube beads_xyflow_timeframe;
     MatchedCube beads_xyflow_residual;
-    MatchedCubeInt beads_xyflow_fittype;
-    MatchedCubeInt beads_xyflow_location;
-    MatchedCubeInt beads_xyflow_hplen;
-    MatchedCubeInt beads_xyflow_mm;
+    MatchedCube beads_xyflow_taub;
     // key traces corresponding to xyflow
     MatchedCube beads_xyflow_predicted_keys;
     MatchedCube beads_xyflow_corrected_keys;
@@ -213,6 +233,7 @@ class BkgParamH5
     void saveRegionPointers();
     void saveBeadPointers();
     void saveBestRegionPointers();
+    void saveRegionCenterPointers();
     std::string getBeadFilename() {return hgBeadDbgFile;}
     void ConstructOneFile ( H5File &h5_local_ref, std::string &hgLocalFile, std::string &local_results, char *my_name );
 

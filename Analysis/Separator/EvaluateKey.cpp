@@ -285,14 +285,12 @@ void EvaluateKey::ScoreKeySignals(KeySeq &key, float *__restrict key_signal_ptr,
     ok++;
     snr_start++;
     *mean_peak /= n_onemer;
-    //*trace_sd++ = *mean_peak;
     *mean_mad /= n_zeromer;
     mean_peak++;
     mean_mad++;
   }
 }
 
-// @todo cws - what are the best rules for calling keys?
 void PickBestKey(std::vector<Eigen::MatrixXf> &key_results, std::vector<KeySeq> &keys, int local_index, int global_index, KeyFit &fit) {
   fit.keyIndex = -1;
   for (size_t key_ix = 0; key_ix < keys.size(); key_ix++) {
@@ -590,6 +588,7 @@ void EvaluateKey::FindBestKey(int row_start, int row_end, int col_start, int col
   m_key_counts.resize(keys.size(), 0);
   std::fill(m_key_counts.begin(), m_key_counts.end(), 0);
   m_flow_key_avg.resize(keys.size() * m_num_flows * m_num_frames);
+  std::fill(m_flow_key_avg.begin(), m_flow_key_avg.end(), 0.0f);
   Eigen::Map<Eigen::VectorXf, Eigen::Aligned> dark_matter(m_avg_0mer, m_num_frames);
   for (int row_ix = row_start; row_ix < row_end; row_ix++) {
     for (int col_ix = col_start; col_ix < col_end; col_ix++) {

@@ -1,5 +1,5 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-from celery.task import task
+from iondb.celery import app
 from django.conf import settings
 from django.contrib.sessions.models import Session
 from django.core.cache import cache
@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@task(queue="periodic")
+@app.task(queue="periodic", ignore_result = True)
 def cleanup():
     engine = import_module(settings.SESSION_ENGINE)
     SessionStore = engine.SessionStore

@@ -47,7 +47,7 @@ class PluginApiKeyAuthentication(Authentication):
             return self._unauthorized()
 
         try:
-            lookup_kwargs = {id: prpk, apikey: api_key}
+            lookup_kwargs = {'id': prpk, 'apikey': api_key}
             pr = PluginResult.objects.get(**lookup_kwargs)
         except (PluginResult.DoesNotExist, PluginResult.MultipleObjectsReturned):
             return self._unauthorized()

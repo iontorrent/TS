@@ -16,6 +16,11 @@
 #include <queue>
 #include <exception>
 
+struct FlowGram {
+  size_t flow, x, y;
+  float val;
+};
+
 struct WellHeader {
   unsigned int numWells;
   unsigned short numFlows;
@@ -62,6 +67,9 @@ public:
   hid_t mDataset;      /**< H5 dataset handle */
   hid_t mDatatype;     /**< H5 data definition. */
   hid_t mDataspace;    /**< handles */
+  bool mSaveAsUShort;
+  float mLower;
+  float mUpper;
 };
 
 
@@ -92,35 +100,66 @@ class RawWellsWriter {
   int WriteWellsData(RWH5DataSet &dataSet, WellChunk &chunk, float *data);
 };
 
+/**
+ * Utility class to convert wells value between unsigned short and float.
+ */
+class WellsConverter {
+public:
+  /** Constructor */
+  WellsConverter() {
+    lowerBound = -5.0;
+    upperBound = 28.0;
+    maxUInt16 = 65535;
+    factor = (float)maxUInt16 / (upperBound - lowerBound);
+  }
+
+  WellsConverter(const float lower, const float upper, unsigned short maxVal = 65535) {
+    lowerBound = lower;
+    upperBound = upper;
+    maxUInt16 = maxVal;
+    factor = (float)maxUInt16 / (upperBound - lowerBound);
+  }
+
+  inline unsigned short FloatToUInt16(const float v) {
+    if(v <= lowerBound) {
+      return 0;
+    }
+
+    if(v >= upperBound) {
+      return maxUInt16;
+    }
+
+    float ret = (v - lowerBound) * factor;
+    return (unsigned short) ret;
+  }
+
+  inline float UInt16ToFloat(const unsigned short v) {
+    return ((float)v / factor + lowerBound);
+  }
+
+private:
+  float lowerBound;
+  float upperBound;
+  float factor;
+  unsigned short maxUInt16;
+};
+
 /** class for multithreading queue. */
 class ChunkFlowData {
 public:
-  ChunkFlowData() {
-    data = NULL;
-    dataSize = 0;
-    lastFlow = false;
-  }
+  ChunkFlowData();
+  ChunkFlowData(unsigned int colXrow, unsigned int flows, unsigned int bufSize);
+  ~ChunkFlowData();
+  void clearBuffer();
 
-  ChunkFlowData(unsigned int size) {
-    data = new float[size];
-    dataSize = size;
-    lastFlow = false;
-  }
-
-  ~ChunkFlowData() {
-    delete [] data;
-    data = NULL;
-  }
-
-  void clear() {
-    if(data) {
-      memset(data, 0, dataSize * sizeof(unsigned int));
-    }
-  }
-
-  WellChunk chunk;
-  float* data;
-  unsigned int dataSize;
+  WellChunk wellChunk;
+  WellChunk bufferChunk;
+  int32_t* indexes;
+  float* flowData;
+  float* dsBuffer;
+  unsigned int spaceSize;
+  unsigned int numFlows;
+  unsigned int bufferSize;
   bool lastFlow;
 };
 
@@ -128,88 +167,14 @@ public:
 class SemQueue
 {
 public:
-  SemQueue() {
-    pthread_mutex_init(&mMutex, NULL);
-    sem_init(&mSemout, 0, 0);
-    mMaxSize = 0;
-  }
-
-  SemQueue(unsigned int maxSize) {
-    pthread_mutex_init(&mMutex, NULL);
-    sem_init(&mSemin, 0, maxSize);
-    sem_init(&mSemout, 0, 0);
-    mMaxSize = maxSize;
-  }
-
-  ~SemQueue() {
-    pthread_mutex_destroy(&mMutex);
-    sem_destroy(&mSemin);
-    sem_destroy(&mSemout);
-  }
-
-  void init(unsigned int maxSize) {
-    sem_init(&mSemin, 0, maxSize);
-    mMaxSize = maxSize;
-  }
-
-  size_t size() {
-    size_t sz = 0;
-    pthread_mutex_lock(&mMutex);
-    sz = mQueue.size();
-    pthread_mutex_unlock(&mMutex);
-
-    return sz;
-  }
-
-  void clear() {
-    while(!mQueue.empty()) {
-      ChunkFlowData* item = mQueue.front();
-      mQueue.pop();
-
-      delete item;
-      item = NULL;
-    }
-  }
-
-  void enQueue(ChunkFlowData* item) {
-    sem_wait(&mSemin);
-
-    int qs;
-    pthread_mutex_lock(&mMutex);
-    qs = mQueue.size();
-    pthread_mutex_unlock(&mMutex);
-
-    while(qs >= mMaxSize) {
-      usleep(10);
-
-      pthread_mutex_lock(&mMutex);
-      qs = mQueue.size();
-      pthread_mutex_unlock(&mMutex);
-    }
-
-    pthread_mutex_lock(&mMutex);
-    mQueue.push(item);
-    pthread_mutex_unlock(&mMutex);
-
-    sem_post(&mSemout);
-  }
-
-  ChunkFlowData* deQueue() {
-    ChunkFlowData* item = NULL;
-
-    sem_wait(&mSemout);
-
-    pthread_mutex_lock(&mMutex);
-    if(!mQueue.empty()) {
-      item = mQueue.front();
-      mQueue.pop();
-    }
-    pthread_mutex_unlock(&mMutex);
-
-    sem_post(&mSemin);
-
-    return item;
-  }
+  SemQueue(); 
+  SemQueue(unsigned int maxSize);
+  ~SemQueue();
+  void init(unsigned int maxSize); 
+  size_t size(); 
+  void clear();
+  void enQueue(ChunkFlowData* item);
+  ChunkFlowData* deQueue();
 
 private:
   std::queue<ChunkFlowData*> mQueue;
@@ -294,6 +259,7 @@ public:
   RawWells(const char *experimentPath, const char *rawWellsName, int rows, int cols);
   RawWells(const char *experimentPath, const char *rawWellsName);
   RawWells(const char *wellsFilePath, int rows, int cols);
+  RawWells(const char *experimentPath, const char *rawWellsName, bool saveAsUShort, float lower, float upper);
 
   /* Destructor. */ 
   virtual ~RawWells();
@@ -322,8 +288,8 @@ public:
   void Close();
   void CloseWithoutCleanupHdf5();
 
-  RWH5DataSet* GetH5WellsPtr() { return &mWells; }
   size_t GetStepSize() { return mStepSize; }
+  std::string GetHdf5FilePath() { return mFilePath; }
 
   /* Accessors */
   size_t NumRows() const { return mRows; }
@@ -352,6 +318,7 @@ public:
   void Set(size_t row, size_t col, size_t flow, float val) { Set(ToIndex(col, row), flow, val); }
   void Set(size_t idx, size_t flow, float val);
   virtual void WriteFlowgram(size_t flow, size_t x, size_t y, float val);
+  void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies, float multiplier);
 
   void ResetCurrentWell() { mCurrentWell = 0; }
   void ResetCurrentRegionWell() { mCurrentRow = 0, mCurrentCol = -1, mCurrentRegionRow = 0, mCurrentRegionCol = 0; }
@@ -388,7 +355,6 @@ public:
   size_t GetNextRegionData();
 
   void WriteWells();
-  void WriteWells(SemQueue* packQueue, SemQueue* writeQueue, bool lastFlow);
   void ReadWells();
   void OpenForIncrementalRead();
   void WriteRanks();
@@ -399,6 +365,13 @@ public:
   void OpenExistingWellsForOneChunkWithoutReopenHdf5(int start_of_chunk, int chunk_depth);
 
   const SumTimer & GetWriteTimer() const { return writeTimer; }
+  bool GetSaveAsUShort() { return mSaveAsUShort; }
+  int GetSaveCopies() { return mSaveCopies; }
+  void SetSaveCopies(int saveCopies);
+  int GetSaveMultiplier() { return mSaveMultiplier; }
+  void SetSaveMultiplier(int saveMultiplier) { mSaveMultiplier = saveMultiplier; }
+  void WriteWellsCopies();
+  void WriteFlowMultiplier();
 
  private:
   bool InChunk(size_t row, size_t col);
@@ -448,14 +421,14 @@ public:
   /* For our window/region of interest. */
 protected:
   WellChunk mChunk;
+  std::vector<int32_t> mIndexes; ///< Conversion of well index on chip to index in mFlowData below.
+  std::vector<float> mFlowData; ///< Big chunk of data...
 
 private:
   /* Data structures containing actual data. */
   Info mInfo;         ///< Any key,value information associated with this hdf5 file.
   std::vector<uint32_t> mRankData;  ///< All zeros since we don't use it, when can we just drop?
-  std::vector<int32_t> mIndexes; ///< Conversion of well index on chip to index in mFlowData below.
   std::vector<int32_t> mWriteSubset; ///< Subset of wells to read/write into or from RAM.
-  std::vector<float> mFlowData; ///< Big chunk of data...
   std::vector<float> mZeros; ///< Small vector used for WellData->flowValues
   std::vector<float> mInputBuffer; // temporary for writes.
   size_t mStepSize;
@@ -477,6 +450,13 @@ private:
   size_t mCurrentRow;
   size_t mCurrentCol;
   bool mIsLegacy;
+  bool mSaveAsUShort;
+  float mLower;
+  float mUpper;
+  std::vector<float> mWellsCopies;
+  std::vector<float> mFlowMultiplier;
+  int mSaveCopies;
+  int mSaveMultiplier;
 
   // We keep around a write timer.
   SumTimer writeTimer;
@@ -492,10 +472,6 @@ class ChunkyWells : public RawWells {
   int endingFlow;
 
   // We'll have a buffer for flowgrams that are beyond the current chunk.
-  struct FlowGram {
-    size_t flow, x, y;
-    float val;
-  };
   std::vector< FlowGram > pendingFlowgrams;
 
 public:

@@ -74,6 +74,11 @@ typedef struct {
     uint32_t is_shm;  /*!< 1 if loaded from shared memory, 0 otherwise */
     /* not in the file */
     void *refseq_fp;
+   uint32_t bed_exist;
+   uint32_t beditem;
+   uint32_t *bednum;
+   uint32_t **bedstart;
+   uint32_t **bedend;
 } tmap_refseq_t;
 
 /*!
@@ -229,4 +234,7 @@ tmap_refseq_refinfo_main(int argc, char *argv[]);
   */
 int
 tmap_refseq_pac2fasta_main(int argc, char *argv[]);
+
+int
+tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile);
 #endif // TMAP_REFSEQ_H

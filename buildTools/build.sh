@@ -7,14 +7,18 @@
 # cmake build system
 
 MODULES=${MODULES-"
-        gpu
-	Analysis
-	dbReports
+    gpu
+    Analysis
+    torrentR
+    dbReports
     pipeline
-	torrentR
-	publishers
+    publishers
     tsconfig
+    RSM
+    tsvm
 "}
+
+BUILD_ROOT=`pwd`
 
 for M in $MODULES; do
 	if [ ! -d "$M" ]; then
@@ -41,7 +45,7 @@ for MODULE in $MODULES; do
         LOCALERR=0
         find build/$MODULE -name \*.deb | xargs rm -f
 		cd build/$MODULE
-		cmake $@ -G 'Unix Makefiles' ../../$MODULE
+		cmake $@ -G 'Unix Makefiles' $BUILD_ROOT/$MODULE
         if [ "$?" != 0 ]; then LOCALERR=1; fi
     		if [ "$MODULE" = "rndplugins" ]; then
 			make 
@@ -51,7 +55,14 @@ for MODULE in $MODULES; do
         if [ "$?" != 0 ]; then LOCALERR=1; fi
 		make test
         if [ "$?" != 0 ]; then LOCALERR=1; fi
-		fakeroot make package
+
+        # LUCID and TRUSTY compatibility
+        if [ `lsb_release -cs` == "lucid" ]; then
+            fakeroot make package
+        else
+            make package
+        fi
+
         if [ "$?" != 0 ]; then LOCALERR=1; fi
         find . -name _CPack_Packages | xargs rm -rf
 # do not delete; only used for official builds

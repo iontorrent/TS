@@ -212,12 +212,16 @@ TreephaserSSE::TreephaserSSE()
 {
   flow_order_.SetFlowOrder("TACG", 4);
   SetFlowOrder(flow_order_, 38);
+  my_cf_ = -1.0f;
+  my_ie_ = -1.0f;
 }
 
 // Constructor used in Basecaller
 TreephaserSSE::TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize)
 {
 	SetFlowOrder(flow_order, windowSize);
+        my_cf_ = -1.0f;
+        my_ie_ = -1.0f;
 }
 
 // ----------------------------------------------------------------

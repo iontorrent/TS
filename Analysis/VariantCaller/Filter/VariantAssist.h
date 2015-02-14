@@ -62,7 +62,25 @@ public:
   int TotalCount(int strand_key);
   int NumAltAlleles();
   void ResetCounter();
-  void DigestHardClassifiedReads(vector<bool> &strand_id, vector<int> &read_id);
+  void AssignStrandToHardClassifiedReads(vector<bool> &strand_id, vector<int> &read_id);
+  void AssignPositionFromEndToHardClassifiedReads(vector<int> &read_id, vector<int> &left, vector<int> &right);
+  float PositionBias(int i_alt);
+  float GetPositionBiasPval(int i_alt);
+  float GetPositionBias(int i_alt);
+
+ private:
+  struct position_bias {
+    float rho;
+    float pval;
+  };
+  vector<position_bias> my_position_bias;
+
+  // distance of allele from softclips in each read
+  vector<int> allele_index; // alleles = 0 (ref), 1,2,... alts
+  vector<int> to_left;
+  vector<int> to_right;
+
+  void ComputePositionBias(int i_allele);
 };
 
 
@@ -93,5 +111,21 @@ float ComputeTunedXBias(long int plus_var, long int plus_depth, long int neg_var
 float BootstrapStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float tune_fish);
 float ComputeTransformStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth, float tune_fish);
 inline float ComputeStrandBias(long int plus_var, long int plus_depth, long int neg_var, long int neg_depth);
+
+namespace VariantAssist {
+  // helper functions for ComputePositionBias
+  // todo: move to Stats.h
+  inline float median(std::vector<float>& values);
+  inline void randperm(vector<unsigned int> &v, RandSchrange& rand_generator);
+  inline float partial_sum(vector<float> &v, size_t n);
+  void tiedrank(vector<float> &vals);
+  float MannWhitneyURho(vector<float> &ref, vector<float> &var, bool debug);
+  inline int MannWhitneyU(vector<float> &ref, vector<float> &var, bool debug);
+
+  struct mycomparison
+  {
+    bool operator() (float* lhs, float* rhs) {return (*lhs) < (*rhs);}
+  };
+}
 
 #endif //VARIANTASSIST_H

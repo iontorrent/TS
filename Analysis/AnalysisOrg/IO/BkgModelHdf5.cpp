@@ -375,6 +375,8 @@ void BkgParamH5::InitBeads_BestRegion( H5File &h5_local_ref, int nBeads_live, co
 {
     char buff[80];
     //cout << "BkgParamH5::InitBeads_BestRegion... bestRegion=" << bestRegion.first << "," << bestRegion.second << endl << flush;
+    beads_bestRegion_timeframe.InitBasicCube (h5_local_ref,1,max_frames,1,"/bestRegion/timeframe", "Time Frame", "frameNumber");
+    beads_bestRegion_gainSens.InitBasicCube(h5_local_ref,nBeads_live,1,1,"/bestRegion/gainSens","gain*sens","");
     beads_bestRegion_location.InitBasicCube (h5_local_ref,nBeads_live,2,1,"/bestRegion/location", "y(row),x(col) for each bead", "row,col" );
     beads_bestRegion_predicted.InitBasicCube(h5_local_ref,nBeads_live,max_frames,datacube_numflows,"/bestRegion/predicted","predicted trace","");
     beads_bestRegion_corrected.InitBasicCube(h5_local_ref,nBeads_live,max_frames,datacube_numflows,"/bestRegion/corrected","background-adjusted trace","");
@@ -385,8 +387,7 @@ void BkgParamH5::InitBeads_BestRegion( H5File &h5_local_ref, int nBeads_live, co
     beads_bestRegion_SP.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/SP","SP","");
     beads_bestRegion_R.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/R","R","");
     beads_bestRegion_fittype.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/fittype","fittype","");
-    beads_bestRegion_gainSens.InitBasicCube(h5_local_ref,nBeads_live,1,1,"/bestRegion/gainSens","gain*sens","");
-    beads_bestRegion_timeframe.InitBasicCube (h5_local_ref,1,max_frames,1,"/bestRegion/timeframe", "Time Frame", "frameNumber");
+    beads_bestRegion_taub.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/taub","taub","");
     sprintf(buff,"%d",nBeads_live);
     h5_local_ref.CreateAttribute(beads_bestRegion_location.h5_set->getDataSetId(),"nBeads_live",buff);
     sprintf(buff,"%d",region->h);
@@ -398,6 +399,26 @@ void BkgParamH5::InitBeads_BestRegion( H5File &h5_local_ref, int nBeads_live, co
     sprintf(buff,"%d",region->col);
     h5_local_ref.CreateAttribute(beads_bestRegion_location.h5_set->getDataSetId(),"region_x(col)",buff);
 }
+
+
+void BkgParamH5::InitBeads_RegionCenter( H5File &h5_local_ref, int nRegions)
+{
+    //char buff[80];
+    beads_regionCenter_timeframe.InitBasicCube (h5_local_ref,1,max_frames,1,"/regionCenter/timeframe", "Time Frame", "frameNumber");
+    beads_regionCenter_gainSens.InitBasicCube(h5_local_ref,nRegions,1,1,"/regionCenter/gainSens","gain*sens","");
+    beads_regionCenter_location.InitBasicCube (h5_local_ref,nRegions,2,1,"/regionCenter/location", "y(row),x(col) for each bead", "row,col" );
+    beads_regionCenter_predicted.InitBasicCube(h5_local_ref,nRegions,max_frames,datacube_numflows,"/regionCenter/predicted","predicted trace","");
+    beads_regionCenter_corrected.InitBasicCube(h5_local_ref,nRegions,max_frames,datacube_numflows,"/regionCenter/corrected","background-adjusted trace","");
+    beads_regionCenter_amplitude.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/amplitude","amplititude","");
+    beads_regionCenter_residual.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/residual","residual error","");
+    beads_regionCenter_kmult.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/kmult","kMult","");
+    beads_regionCenter_dmult.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/dmult","dMult","");
+    beads_regionCenter_SP.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/SP","SP","");
+    beads_regionCenter_R.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/R","R","");
+    beads_regionCenter_fittype.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/fittype","fittype","");
+    beads_regionCenter_taub.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/taub","taub","");
+}
+
 
 
 
@@ -523,13 +544,15 @@ void BkgParamH5::Init ( const char *results_folder, const SpatialContext &loc_co
 }
 
 
-void BkgParamH5::Init2 (int write_params_flag, int nBeads_live, const Region *region)
+void BkgParamH5::Init2 (int write_params_flag, int nBeads_live, const Region *region, int nRegions)
 {
   if ( write_params_flag>1 )
   {
       ConstructOneFile ( h5TraceDbg, hgTraceDbgFile,local_results_directory, "trace.h5" );
       InitBeads_BestRegion ( h5TraceDbg,nBeads_live,region );
       saveBestRegionPointers();
+      InitBeads_RegionCenter ( h5TraceDbg,nRegions );
+      saveRegionCenterPointers();
   }
   else
   {
@@ -669,6 +692,7 @@ void BkgParamH5::IncrementalWriteBestRegion ( int flow, bool lastflow )
     IncrementalWriteParam ( beads_bestRegion_dmult.source, beads_bestRegion_dmult.h5_set, flow );
     IncrementalWriteParam ( beads_bestRegion_SP.source, beads_bestRegion_SP.h5_set, flow );
     IncrementalWriteParam ( beads_bestRegion_R.source, beads_bestRegion_R.h5_set, flow );
+    IncrementalWriteParam ( beads_bestRegion_taub.source, beads_bestRegion_taub.h5_set, flow );
 
     if ( lastflow ) // do only once at lastflow, for data independant of flow
     {
@@ -676,17 +700,40 @@ void BkgParamH5::IncrementalWriteBestRegion ( int flow, bool lastflow )
         beads_bestRegion_gainSens.SafeWrite();
         beads_bestRegion_timeframe.SafeWrite();
       /*
-      beads_bestRegion_corrected.SafeWrite();
-      beads_bestRegion_predicted.SafeWrite();
-      beads_bestRegion_amplitude.SafeWrite();
-      beads_bestRegion_residual.SafeWrite();
-      beads_bestRegion_fittype.SafeWrite();
-      beads_bestRegion_kmult.SafeWrite();
-      beads_bestRegion_dmult.SafeWrite();
-      beads_bestRegion_SP.SafeWrite();
-      beads_bestRegion_R.SafeWrite();
+      beads_bestRegion_corrected.SafeWrite(); // use IncrementalWriteParam() for each flow block
+      beads_bestRegion_predicted.SafeWrite(); // use IncrementalWriteParam() for each flow block
+      beads_bestRegion_amplitude.SafeWrite(); // use IncrementalWriteParam() for each flow block
+      beads_bestRegion_residual.SafeWrite(); // use IncrementalWriteParam() for each flow block
+      beads_bestRegion_fittype.SafeWrite(); // use IncrementalWriteParam() for each flow block
+      beads_bestRegion_kmult.SafeWrite(); // use IncrementalWriteParam() for each flow block
+      beads_bestRegion_dmult.SafeWrite(); // use IncrementalWriteParam() for each flow block
+      beads_bestRegion_taub.SafeWrite(); // use IncrementalWriteParam() for each flow block
+      beads_bestRegion_SP.SafeWrite(); // use IncrementalWriteParam() for each flow block
+      beads_bestRegion_R.SafeWrite(); // use IncrementalWriteParam() for each flow block
      */
      }
+}
+
+
+void BkgParamH5::IncrementalWriteRegionCenter ( int flow, bool lastflow )
+{
+    IncrementalWriteParam ( beads_regionCenter_predicted.source, beads_regionCenter_predicted.h5_set, flow );
+    IncrementalWriteParam ( beads_regionCenter_corrected.source, beads_regionCenter_corrected.h5_set, flow );
+    IncrementalWriteParam ( beads_regionCenter_amplitude.source, beads_regionCenter_amplitude.h5_set, flow );
+    IncrementalWriteParam ( beads_regionCenter_residual.source, beads_regionCenter_residual.h5_set, flow );
+    IncrementalWriteParam ( beads_regionCenter_fittype.source, beads_regionCenter_fittype.h5_set, flow );
+    IncrementalWriteParam ( beads_regionCenter_kmult.source, beads_regionCenter_kmult.h5_set, flow );
+    IncrementalWriteParam ( beads_regionCenter_dmult.source, beads_regionCenter_dmult.h5_set, flow );
+    IncrementalWriteParam ( beads_regionCenter_SP.source, beads_regionCenter_SP.h5_set, flow );
+    IncrementalWriteParam ( beads_regionCenter_R.source, beads_regionCenter_R.h5_set, flow );
+    IncrementalWriteParam ( beads_regionCenter_taub.source, beads_regionCenter_taub.h5_set, flow );
+
+    if ( lastflow ) // do only once at lastflow, for data independant of flow
+    {
+        beads_regionCenter_location.SafeWrite(); // this only has to done once for all flows
+        beads_regionCenter_gainSens.SafeWrite();
+        beads_regionCenter_timeframe.SafeWrite();
+    }
 }
 
 void BkgParamH5::IncrementalWriteRegions ( int flow, int iBlk )
@@ -732,6 +779,7 @@ void BkgParamH5::IncrementalWrite ( int flow, bool last_flow, FlowBlockSequence:
     IncrementalWriteBeads ( flow, flow_block_id );
     IncrementalWriteRegions ( flow, flow_block_id );
     IncrementalWriteBestRegion ( flow, last_flow );
+    IncrementalWriteRegionCenter ( flow, last_flow );
     IncrementalWrite_xyflow ( last_flow );
   }
 }
@@ -772,6 +820,7 @@ void BkgParamH5::CloseRegion()
   region_debug_bead_location.Close();
   time_compression.Close();
   emphasis_val.Close();
+
   beads_bestRegion_location.Close();
   beads_bestRegion_predicted.Close();
   beads_bestRegion_corrected.Close();
@@ -784,6 +833,21 @@ void BkgParamH5::CloseRegion()
   beads_bestRegion_fittype.Close();
   beads_bestRegion_gainSens.Close();
   beads_bestRegion_timeframe.Close();
+  beads_bestRegion_taub.Close();
+
+  beads_regionCenter_location.Close();
+  beads_regionCenter_predicted.Close();
+  beads_regionCenter_corrected.Close();
+  beads_regionCenter_amplitude.Close();
+  beads_regionCenter_residual.Close();
+  beads_regionCenter_kmult.Close();
+  beads_regionCenter_dmult.Close();
+  beads_regionCenter_SP.Close();
+  beads_regionCenter_R.Close();
+  beads_regionCenter_fittype.Close();
+  beads_regionCenter_gainSens.Close();
+  beads_regionCenter_timeframe.Close();
+  beads_regionCenter_taub.Close();
 }
 
 
@@ -802,6 +866,7 @@ void BkgParamH5::CloseTraceXYFlow()
   beads_xyflow_fittype.Close();
   beads_xyflow_timeframe.Close();
   beads_xyflow_residual.Close();
+  beads_xyflow_taub.Close();
   // keys
   beads_xyflow_predicted_keys.Close();
   beads_xyflow_corrected_keys.Close();
@@ -884,6 +949,25 @@ void BkgParamH5::saveBestRegionPointers()
   ptrs.m_beads_bestRegion_fittype = beads_bestRegion_fittype.Ptr();
   ptrs.m_beads_bestRegion_gainSens = beads_bestRegion_gainSens.Ptr();
   ptrs.m_beads_bestRegion_timeframe = beads_bestRegion_timeframe.Ptr();
+  ptrs.m_beads_bestRegion_taub = beads_bestRegion_taub.Ptr();
+}
+
+
+void BkgParamH5::saveRegionCenterPointers()
+{
+  ptrs.m_beads_regionCenter_location = beads_regionCenter_location.Ptr();
+  ptrs.m_beads_regionCenter_corrected = beads_regionCenter_corrected.Ptr();
+  ptrs.m_beads_regionCenter_predicted = beads_regionCenter_predicted.Ptr();
+  ptrs.m_beads_regionCenter_amplitude = beads_regionCenter_amplitude.Ptr();
+  ptrs.m_beads_regionCenter_residual = beads_regionCenter_residual.Ptr();
+  ptrs.m_beads_regionCenter_kmult = beads_regionCenter_kmult.Ptr();
+  ptrs.m_beads_regionCenter_dmult = beads_regionCenter_dmult.Ptr();
+  ptrs.m_beads_regionCenter_SP = beads_regionCenter_SP.Ptr();
+  ptrs.m_beads_regionCenter_R = beads_regionCenter_R.Ptr();
+  ptrs.m_beads_regionCenter_fittype = beads_regionCenter_fittype.Ptr();
+  ptrs.m_beads_regionCenter_gainSens = beads_regionCenter_gainSens.Ptr();
+  ptrs.m_beads_regionCenter_timeframe = beads_regionCenter_timeframe.Ptr();
+  ptrs.m_beads_regionCenter_taub = beads_regionCenter_taub.Ptr();
 }
 
 
@@ -908,6 +992,7 @@ void BkgParamH5::InitBeads_xyflow(int write_params_flag, HashTable_xyflow &xyf_h
         beads_xyflow_R.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/R","R","");
         beads_xyflow_fittype.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/fittype","fittype","");
         beads_xyflow_timeframe.InitBasicCube (h5TraceDbg,nBeads_xyf,max_frames,1,"/xyflow/timeframe", "Time Frame", "frameNumber");
+        beads_xyflow_taub.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/taub","taub","");
 
         ptrs.m_beads_xyflow_predicted = beads_xyflow_predicted.Ptr();
         ptrs.m_beads_xyflow_corrected = beads_xyflow_corrected.Ptr();
@@ -922,6 +1007,7 @@ void BkgParamH5::InitBeads_xyflow(int write_params_flag, HashTable_xyflow &xyf_h
         ptrs.m_beads_xyflow_fittype = beads_xyflow_fittype.Ptr();
         ptrs.m_beads_xyflow_timeframe = beads_xyflow_timeframe.Ptr();
         ptrs.m_beads_xyflow_residual = beads_xyflow_residual.Ptr();
+        ptrs.m_beads_xyflow_taub = beads_xyflow_taub.Ptr();
 
         ptrs.m_xyflow_hashtable = &xyf_hash;
 
@@ -954,10 +1040,11 @@ void BkgParamH5::IncrementalWrite_xyflow ( bool lastflow )
       beads_xyflow_fittype.SafeWrite();
       beads_xyflow_timeframe.SafeWrite();
       beads_xyflow_residual.SafeWrite();
-
+      beads_xyflow_taub.SafeWrite();
       beads_xyflow_location_keys.SafeWrite();
       beads_xyflow_corrected_keys.SafeWrite();
       beads_xyflow_predicted_keys.SafeWrite();
-
      }
 }
+
+

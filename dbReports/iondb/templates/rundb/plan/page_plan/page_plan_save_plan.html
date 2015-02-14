@@ -11,8 +11,9 @@
         type="text/css"/>
     <script type="text/javascript" src="/site_media/resources/scripts/plan/iru_validation.js"></script>
     <script type="text/javascript" src="/site_media/resources/scripts/plan/iru_get_user_input.js"></script>
-    <script type="text/javascript" src="/site_media/resources/scripts/plan/by_template.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/by_template.js"></script>   
     <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_sample_table.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>     
     <script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
     <script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
 
@@ -51,7 +52,9 @@
          
         <input type="hidden" id="isOCPEnabled" name="isOCPEnabled" value="{{helper.isOCPEnabled}}" />
         <input type="hidden" id="isOCPApplicationGroup" name="isOCPApplicationGroup" value="{{helper.isOCPApplicationGroup}}" />
-    
+
+        <input type="hidden" id="default_ref_section" name="default_ref_section" value={%if not helper.isPlanBySample%}"rundb/plan/page_plan/page_plan_reference_section.html"{%else%}""{%endif%}>
+        
         <label for="planName" class="form-label">Run Plan Name (required)</label>
         <input style="width: 700px;" id="planName" name="planName" value="{{step.getCurrentSavedFieldDict.planName|default_if_none:""}}"/>
         <div id="error" style="color:red;"></div>
@@ -91,16 +94,35 @@
     </div>
 </div>
 
+{% include "rundb/plan/page_plan/page_plan_reference_section.html" %}
 {% include "rundb/plan/page_plan/page_plan_sample_table.html" %}
 
+
 <div id="noteerror" style="color:red;"></div>
-<div class="row-fluid">
-    <div class="span12">
+<div class="row-fluid" style="margin-top: 20px">
+    <div class="span8 summary-section">
         <label for="note" class="form-label">Add a note</label>
-        <textarea id="note" name="note" style="width:70%;height:100px;">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
+        <textarea id="note" name="note" style="width:90%;height:100px;" placeholder="Optional">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
+        <br>
+        <label for="LIMS_meta" class="form-label">Add LIMS Meta Data</label>
+        <textarea id="LIMS_meta" name="LIMS_meta" style="width:90%;height:100px;" placeholder="Optional">{{step.getCurrentSavedFieldDict.LIMS_meta|default_if_none:""}}</textarea>
         <br>
     </div>
+    <div class="span4 summary-section" style="margin-top: 25px">
+        <label for="qc" class="form-label">Monitoring Thresholds</label>
+        {% for key, value in step.getCurrentSavedFieldDict.items %}
+            {% if key in step.qcNames %}
+                <div class="span12">
+                    <h4>{{key}}:</h4>
+    
+                    <h3 style="font-size: 20px; float:left; margin-right:10px; margin-top:0px;">≤</h3>
+                    <input data-input-name="{{key}}" name="{{key}}" style="width:35px;" value="{{value}}">
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
 </div>
+
 {% endblock page-plan-content %}
 
 {% block prevnext-buttons %}
@@ -177,6 +199,7 @@
     var BARCODES = {{step.prepopulatedFields.barcodeSets_barcodes|safe}};
 
     var REFERENCE_DATA = "{{helper.getStepDict.Reference.getPrePopulatedFieldDict.references}}";
+
     var TARGET_BED_DATA = "{{helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFiles}}";
     var HOTSPOT_BED_DATA = "{{helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFiles}}";
 
@@ -186,75 +209,36 @@
     var IS_EDIT_RUN = "{{helper.isEditRun}}";
     var SELECTED_PLAN_REFERENCE = "{{helper.getStepDict.Reference.getCurrentSavedFieldDict.reference}}";
     
-    function create_selects($selects) {
-        $.each($selects, function(i){
-            var $select = $($selects[i]);
-            var $parent = $select.parent();
-            var name = $select.attr('name').replace('_hidden', '');
-            if ($parent.find("[name="+name+"]").length > 0) {
-                $parent.find("[name="+name+"]").remove();
-            }
-            var $new_select = $("<select>", {'name' : name, 'id' : $select.attr('name').replace('_hidden', ''), 'class' : 'select-group', 'style' : 'width:700px;'});
-
-            $new_select.append($("<option></option>"));
-
-            $new_select.on('change', function(){
-                if (name == 'targetBedFile_hidden'){
-                    $("#selectedTargetRegions").text($(this).val() != null ? $(this).val() : '');
-                }
-                else {
-                    $("#selectedHotspotRegions").text($(this).val() != null ? $(this).val() : '');
-                }
-            });
-            var $options = $select.children().filter("[class="+$("#reference").val()+"]");
-            var $new_options = $options.clone();
-            $.each($new_options, function(j){
-                if (name == 'targetRegionBedFile') {
-                    if ($($new_options[j]).attr('value') == "{{step.getCurrentSavedFieldDict.targetBedFile}}") {
-                        $($new_options[j]).attr('selected', true);
-                    }
-                } else {
-                    if ($($new_options[j]).attr('value') == "{{helper.getStepDict.Reference.getCurrentSavedFieldDict.hotSpotBedFile|default_if_none:""}}") {
-                        $($new_options[j]).attr('selected', true);
-                    } 
-
-                }
-            });
-            $new_select.append($new_options);
-            $new_select.change();
-            $parent.append($new_select);
-        });
+    function create_selects($selects, reference) {
+        console.log($selects.length, reference);
+        //Moved to page_plan_sample_table.js
     }
 
     function updateFromCurrentReference(refName, $selects) {
         $("#selectedReferenceLibrary").text(referenceShortToLongName[refName]);
-
         create_selects($selects);
         
     }
 
     $(document).ready(function () {
-		//TODO-WIP       
-        $("select[name=reference]").change(function()  {
-            //$("#selectedReferenceLibrary").text(referenceShortToLongName[$(this).val()]);
 
-            console.log("reference changed! value=", $(this).val(), "; data-reference=", $(this).data-reference, "; shortName=", referenceShortToLongName[$(this).val()]);
-            
-            console.log("reference changed! this=", $(this), ";value=", $(this).val());
+        {% for qcType in step.getPrePopulatedFieldDict.qcTypes %}
 
-            var reference = $("select[name=reference] option:selected").data('reference');
-            console.log("reference changed! reference=", reference);
+        (function () {
+            var minThreshold = {{qcType.minThreshold}};
+            var maxThreshold = {{qcType.maxThreshold}};
+            var inputElement = $("input[data-input-name='{{qcType.qcName}}']");
 
-            var targetBed_onSameRow = $(this).closest("tr").find("td[name=targetRegionBedFile]");            
-            var hotspotBed_onSameRow = $(this).closest("tr").find("td[name=hotSpotRegionBedFile]");            
-            console.log("targetBed_onSameRow=", targetBed_onSameRow, "; hotspotBed_onSameRow=", hotspotBed_onSameRow);
-                                    
-            var bedFiles_onSameRow = $($(this).closest("tr").find("td[name=targetRegionBedFile]"), $(this).closest("tr").find("td[name=hotSpotRegionBedFile]"));
-            create_selects(bedFiles_onSameRow);           
+            inputElement.spinner({min: minThreshold, max: maxThreshold});
+            inputElement.on("spinchange spinstop", function(event, ui){
+                var summaryElement = $("td[data-summary-name='{{qcType.qcName}}']");
+                summaryElement.text(inputElement.spinner("value"));
+                summaryElement.text(inputElement.spinner("value"));
+            });
+        })();
 
-        });
-        
-        //create_selects($selects);
+        {% endfor %}
+
     });
     
 </script>

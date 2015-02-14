@@ -8,6 +8,9 @@ from django.db import models
 class Migration(DataMigration):
 
     def forwards(self, orm):
+        # Ensure ContentTypes from previous migrations are available
+        db.send_pending_create_signals()
+
         from django.core.management import call_command
         # Temporary work around for http://south.aeracode.org/ticket/1328
         #call_command("loaddata", "ionusers_group.json")

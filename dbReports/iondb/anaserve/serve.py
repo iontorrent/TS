@@ -94,12 +94,12 @@ __version__ = filter(str.isdigit, "$Revision$")
 # local settings
 try:
     sys.path.append(path.dirname(path.dirname(__file__)))
-    import settings
+    from django.conf import settings
 except ImportError:
     sys.path.pop()
     sys.path.append("../")
     try:
-        import settings
+        from django.conf import settings
     except ImportError:
         sys.path.pop()
 
@@ -886,37 +886,19 @@ class AnalysisServer(xmlrpc.XMLRPC):
     def xmlrpc_resultdiskspace(self, pk):
         '''Launches celery task which determines disk space usage and records it
            in the Results object for the given primary key reference'''
+        # Update the Data Management DMFileStat objects related to this Result object
         try:
-            from iondb.rundb.data import backfill_tasks as tasks
+            from iondb.rundb.data.tasks import update_dmfilestat_diskusage
+            update_dmfilestat_diskusage.delay(pk)
         except:
-            logger.error("Could not import iondb/rundb/data/tasks.py.  Could not determine disk space.")
-        else:
-            # Update results directory disk usage
-            try:
-                tasks.setResultDiskspace.delay(pk)
-            except:
-                logger.error("setResultDiskspace celery task launch failed")
-
-            # update raw data directory disk usage
-            try:
-                experiment_pk = iondb.rundb.models.Results.objects.filter(pk=pk).values_list('experiment', flat=True)
-                tasks.setRunDiskspace.delay(experiment_pk)
-            except:
-                logger.error("setRunDiskspace celery task launch failed")
-
-            # Update the Data Management DMFileStat objects related to this Result object
-            try:
-                from iondb.rundb.data.tasks import update_diskusage
-                update_diskusage.delay(pk)
-            except:
-                logger.warn("update_diskusage celery task failed to launch")
-        
-            # Generate serialized json file for future Data Management Import
-            try:
-                from iondb.rundb.data.tasks import save_serialized_json
-                save_serialized_json.delay(pk)
-            except:
-                logger.warn("save_serialized_json celery task failed")
+            logger.warn("update_diskusage celery task failed to launch")
+    
+        # Generate serialized json file for future Data Management Import
+        try:
+            from iondb.rundb.data.tasks import save_serialized_json
+            save_serialized_json.delay(pk)
+        except:
+            logger.warn("save_serialized_json celery task failed")
         
         return 0
 

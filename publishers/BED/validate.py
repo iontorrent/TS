@@ -14,9 +14,7 @@ import call_api as api
 from iondb.bin.djangoinit import *
 from iondb.rundb import models
 from iondb.rundb.plan import ampliseq
-from iondb.rundb.json_field import JSONEncoder
 from iondb.utils import files as file_utils
-
 
 
 def register(upload_id, base_path, file, meta):
@@ -96,18 +94,13 @@ def validate(upload_id, base_path, meta, bed_file, bed_type):
 
     return None
 
-'''
-def validate(upload_id, base_path, meta_file, bed_file):
-    print("Validating %s" % bed_file)
-    cmd = [ "./bed_validation.pl", str(upload_id), base_path, os.path.join(base_path, bed_file), meta_file ]
-    p = subprocess.Popen(cmd)
-    p.communicate()
-    if p.returncode != 0:
-        sys.exit(p.returncode)
-'''
+
+
 
 def plan_json(meta, upload_id, primary_path, secondary_path):
     run_type = meta['design']['plan'].get('runType', None)
+    plan_name = meta["design"]["design_name"].encode("ascii", "ignore")
+    
     run_type_model = models.RunType.objects.get(runType=run_type)
     app_group = run_type_model.applicationGroups.filter(isActive=True).order_by("id")[0]
     # "choice": "None" will be in the JSON from 3.6 schema imports
@@ -120,8 +113,14 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
             instrument_type = "proton"
         else:
             instrument_type = "pgm"
-    app = models.ApplProduct.objects.get(applType__runType=run_type, isActive = True, instrumentType=instrument_type)
-    plan_name = meta["design"]["design_name"].encode("ascii", "ignore")
+
+    print("plan_json processing plan_name=%s; run_type=%s; instrument_type=%s" %(plan_name, run_type, instrument_type))
+
+    #HACK
+    if instrument_type == "proton" and plan_name.endswith("_Hi-Q"):
+        app = models.ApplProduct.objects.get(applType__runType=run_type, isActive = True, productName__contains="_Hi-Q", instrumentType=instrument_type)
+    else:
+        app = models.ApplProduct.objects.get(applType__runType=run_type, isActive = True, isDefault = True, instrumentType=instrument_type)
     
     plugin_details = meta["design"]["plan"].get("selectedPlugins", {});
     if "variantCaller" in plugin_details and "userInput" in plugin_details["variantCaller"]:
@@ -135,7 +134,7 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
             if plugin_details["variantCaller"]["userInput"]["meta"]["configuration"] == "custom":
                 plugin_details["variantCaller"]["userInput"]["meta"]["configuration"] = ""
             if "ts_version" not in plugin_details["variantCaller"]["userInput"]["meta"]:
-                plugin_details["variantCaller"]["userInput"]["meta"]["ts_version"] = "4.0"
+                plugin_details["variantCaller"]["userInput"]["meta"]["ts_version"] = "4.4"
             if "name" not in plugin_details["variantCaller"]["userInput"]["meta"]:
                 plugin_details["variantCaller"]["userInput"]["meta"]["name"] = "Panel-optimized - " + meta["design"]["design_name"]
             if "repository_id" not in plugin_details["variantCaller"]["userInput"]["meta"]:
@@ -218,7 +217,6 @@ def plan_json(meta, upload_id, primary_path, secondary_path):
     return plan_stub
 
 
-
 def main():
     parse = argparse.ArgumentParser()
     parse.add_argument('upload_id', type=int)
@@ -233,31 +231,11 @@ def main():
         parse.print_help()
         sys.exit(1)
 
-    meta_file_handle = open(args.meta_file,'r')
-    meta = json.load(meta_file_handle, parse_float=Decimal)
-    meta_file_handle.close()
-    
-    print "Uploaded file:  " + os.path.basename(args.upload_file)
-    
-    is_zip = zipfile.is_zipfile(args.upload_file)
-    if is_zip:
-        files = file_utils.unzip_archive(args.path, args.upload_file)
-        print "Compressed:     Yes (zip)"
-    elif args.upload_file.endswith('.gz'):
-        print "Compressed:     Yes (gzip)"
-        files = [os.path.basename(args.upload_file[:-3])]
-        cmd =  'gzip -dc %s > %s ' % (args.upload_file, os.path.join(args.path,files[0]))
-        p = subprocess.Popen(cmd, stderr=subprocess.STDOUT, stdout=subprocess.PIPE, shell=True)
-        print p.communicate()[0]
-        if p.returncode != 0:
-            sys.exit(p.returncode)
-        
-        subprocess.call(cmd, shell=True)
-    else:
-        print "Compressed:     No"
-        files = [args.upload_file]
 
-    ''' Establish the upload type '''
+    with open(args.meta_file) as f:
+        meta = json.load(f, parse_float=Decimal)
+
+    files = meta.get('pre_process_files')
     
     target_regions_bed = None
     hotspots_bed = None
@@ -305,6 +283,7 @@ def main():
         plan_data = json.load(open(os.path.join(args.path, "plan.json")))
         version, design, meta = ampliseq.handle_versioned_plans(plan_data, meta)
         meta['design'] = design
+
         try:
             target_regions_bed = design['plan']['designed_bed']
             hotspots_bed = design['plan']['hotspot_bed']
@@ -312,10 +291,7 @@ def main():
                 meta['reference'] = design['genome'].lower()
             if 'design_name' in plan_data:
                 meta['description'] = design['design_name']
-            meta_file_handle = open(args.meta_file,'w')
-            json.dump(meta, meta_file_handle, cls=JSONEncoder)
-            meta_file_handle.close()
-            api.patch("contentupload", args.upload_id, meta=meta)
+            api.update_meta(meta, args)
         except KeyError as err:
             api.patch("contentupload", args.upload_id, status="Error: malformed AmpliSeq archive")
             print "ERROR: Malformed AmpliSeq archive: missing json key "+str(err)
@@ -380,11 +356,7 @@ def main():
             print("ERROR: Could not create plan from this zip: %s" % err)
             raise
 
-    
-    meta_file_handle = open(args.meta_file,'w')
-    json.dump(meta, meta_file_handle, cls=JSONEncoder)
-    meta_file_handle.close()
-    api.patch("contentupload", args.upload_id, meta=meta)
+    api.update_meta(meta, args)
 
 
 if __name__ == '__main__':

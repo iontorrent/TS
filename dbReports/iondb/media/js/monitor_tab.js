@@ -167,7 +167,7 @@ $(function(){
             this.router = this.options.router;
             this.router.on("route:full_view", this.view_full);
             this.router.on("route:table_view", this.view_table);
-            this.live_update = setTimeout(this.poll_update, 10000);
+            this.live_update = null;
         },
 
         render: function () {
@@ -230,7 +230,7 @@ $(function(){
         },
 
         countdown_update: function () {
-            this.live_update = setTimeout(this.poll_update, 10000);
+            this.live_update = setTimeout(this.poll_update, 120000);
         },
 
         poll_update: function () {

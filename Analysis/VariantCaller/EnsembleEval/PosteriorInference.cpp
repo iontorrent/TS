@@ -22,6 +22,16 @@ FreqMaster::FreqMaster(){
   germline_log_prior_normalization = 0.0f;
 }
 
+bool FreqMaster::Compare(vector <float> &original, int numreads, float threshold){
+  float delta = 0.0f;
+  for (unsigned int i_hyp=0; i_hyp<max_hyp_freq.size(); i_hyp++)
+    delta += abs((original[i_hyp]-max_hyp_freq[i_hyp]));
+  if (delta*numreads>threshold)
+    return(false);
+  else
+    return(true);
+}
+
 PosteriorInference::PosteriorInference() {
 
   params_ll = 0.0f;
@@ -228,10 +238,15 @@ void FibInterval(vector<unsigned int> &samples, int eval_start, int detail_level
   std::sort(samples.begin(), samples.end());
 }
 
-unsigned int ScanSpace::ResizeToMatch(ShortStack &total_theory){
+unsigned int ScanSpace::ResizeToMatch(ShortStack &total_theory, unsigned max_detail_level ){
     unsigned int detail_level = total_theory.my_hypotheses.size();
+    if(max_detail_level>0) detail_level = (detail_level < max_detail_level) ? (detail_level+1) : (max_detail_level+1);
+      float fdetail_level = (float) detail_level;
   log_posterior_by_frequency.resize(detail_level + 1);
   eval_at_frequency.resize(detail_level + 1);
+  for (unsigned int i_eval = 0; i_eval < eval_at_frequency.size(); i_eval++) {
+    eval_at_frequency[i_eval] = (float)i_eval / fdetail_level;
+    } 
   return(detail_level);
 }
 
@@ -282,17 +297,15 @@ void PosteriorInference::InterpolateFrequencyScan(ShortStack &total_theory, bool
   scan_done = true;
 }*/
 
-void ScanSpace::DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &base_clustering, bool update_frequency, int strand_key, bool scan_ref) {
+void ScanSpace::DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &base_clustering, bool update_frequency, int strand_key, bool scan_ref, int max_detail_level) {
 //cout << "ScanningFrequency" << endl;
 // posterior frequency inference given current data/likelihood pairing
-  unsigned int detail_level = ResizeToMatch(total_theory);
+  unsigned int detail_level = ResizeToMatch(total_theory, (unsigned) max_detail_level);  // now fills in frequency
   // local scan size 2
   vector<float> hyp_freq = base_clustering.max_hyp_freq;
   // should scan genotypes only for dual
-  float fdetail_level = (float) detail_level;
   for (unsigned int i_eval = 0; i_eval < eval_at_frequency.size(); i_eval++) {
-    eval_at_frequency[i_eval] = (float)i_eval / fdetail_level;
-
+  
     if (!scan_ref)
       UpdatePairedFrequency(hyp_freq,base_clustering, eval_at_frequency[i_eval]);
     else

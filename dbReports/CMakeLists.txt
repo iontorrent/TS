@@ -85,38 +85,55 @@ install(DIRECTORY iondb DESTINATION .
 	PATTERN "iondb/backup" EXCLUDE
 )
 install(DIRECTORY DESTINATION /var/spool/ion DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+install(DIRECTORY DESTINATION /var/log/ion DIRECTORY_PERMISSIONS OWNER_READ OWNER_WRITE OWNER_EXECUTE GROUP_READ GROUP_WRITE GROUP_EXECUTE WORLD_READ WORLD_EXECUTE)
+# Ion System Daemons
+
 install(PROGRAMS iondb/bin/ionCrawler DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionJobServer DESTINATION /etc/init.d)
 install(PROGRAMS iondb/bin/ionPlugin DESTINATION /etc/init.d)
-install(PROGRAMS iondb/bin/celeryd DESTINATION /etc/init.d)
+
+# celeryd and celerybeat init and config files: subject to relocation in future
+
+install(PROGRAMS celery/init.d/celeryd DESTINATION /etc/init.d)
+install(PROGRAMS celery/init.d/celerybeat DESTINATION /etc/init.d)
+configure_file (
+	"${PROJECT_SOURCE_DIR}/celery/config/celeryd.in"
+	"${PROJECT_BINARY_DIR}/celery/config/celeryd" @ONLY
+)
+install(FILES "${PROJECT_BINARY_DIR}/celery/config/celeryd" DESTINATION /etc/default)
+configure_file (
+	"${PROJECT_SOURCE_DIR}/celery/config/celerybeat.in"
+	"${PROJECT_BINARY_DIR}/celery/config/celerybeat" @ONLY
+)
+install(FILES "${PROJECT_BINARY_DIR}/celery/config/celerybeat" DESTINATION /etc/default)
 
 install(PROGRAMS manage.py DESTINATION ${ION_INSTALL_PREFIX})
-install(FILES celeryconfig.py DESTINATION ${ION_INSTALL_PREFIX})
+#install(FILES celeryconfig.py DESTINATION ${ION_INSTALL_PREFIX})
 
 configure_file (
-    "${PROJECT_SOURCE_DIR}/apacheconfig/torrent-server.conf.in"
-    "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server.conf" @ONLY
+    "${PROJECT_SOURCE_DIR}/apacheconfig/torrent-server-config.conf.in"
+    "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server-config.conf" @ONLY
 )
-install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server.conf" DESTINATION /etc/apache2/conf.d/)
+install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server-config.conf" DESTINATION /etc/apache2/conf-available)
 
 configure_file (
     "${PROJECT_SOURCE_DIR}/apacheconfig/h5bp-server.conf.in"
     "${PROJECT_BINARY_DIR}/apacheconfig/h5bp-server.conf" @ONLY
 )
-install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/h5bp-server.conf" DESTINATION /etc/apache2/conf.d/)
+install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/h5bp-server.conf" DESTINATION /etc/apache2/conf-available)
 
 configure_file (
-    "${PROJECT_SOURCE_DIR}/apacheconfig/torrent-server.in"
-    "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server" @ONLY
+    "${PROJECT_SOURCE_DIR}/apacheconfig/torrent-server.conf.in"
+    "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server.conf" @ONLY
 )
-install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server" DESTINATION /etc/apache2/sites-available)
+install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server.conf" DESTINATION /etc/apache2/sites-available)
 
 configure_file (
-    "${PROJECT_SOURCE_DIR}/apacheconfig/torrent-server-ssl.in"
-    "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server-ssl.example" @ONLY
+    "${PROJECT_SOURCE_DIR}/apacheconfig/torrent-server-ssl.conf.in"
+    "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server-ssl.conf" @ONLY
 )
-install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server-ssl.example" DESTINATION /etc/apache2/sites-available)
-install(FILES "${PROJECT_SOURCE_DIR}/apacheconfig/force-torrent-server-ssl" DESTINATION /etc/apache2/sites-available)
+install(FILES "${PROJECT_BINARY_DIR}/apacheconfig/torrent-server-ssl.conf" DESTINATION /etc/apache2/sites-available)
+install(FILES "${PROJECT_SOURCE_DIR}/apacheconfig/force-torrent-server-ssl.conf" DESTINATION /etc/apache2/sites-available)
 
 install(FILES "logrotate/ion-dbreports" DESTINATION /etc/logrotate.d/)
 
@@ -139,7 +156,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
-    ion-pipeline (>= 4.1.1),
+    ion-pipeline (>= 4.3.1),
     texlive-latex-base,
     texlive-latex-extra,
     latex-xcolor,
@@ -150,46 +167,35 @@ set(CPACK_DEBIAN_PACKAGE_DEPENDS "python,
     libapache2-mod-wsgi (>= 3.3),
     libapache2-mod-gnutls,
     ssl-cert,
-    python-celery (>= 3.0.12),
-    python-django (>= 1.6.2),
+    python-celery (>= 3.1.6),
+    python-django (>= 1.6.1),
     libjs-jquery (>= 1.7.2),
-    python-django-celery (>= 3.0.11),
-    python-django-south (>=0.8.4),
-	python-matplotlib,
-	python-scipy,
-	python-psycopg2 (>= 2.5),
-	python-twisted-core,
-	python-central,
-	python-twisted,
-	python-support,
-	python-lxml,
-	python-docutils,
+    python-django-south (>=1.0),
+    python-django-tastypie (>= 0.11.1),
+    python-matplotlib,
+    python-scipy,
+    python-psycopg2 (>= 2.5),
+    python-twisted-core,
+    python-twisted,
+    python-support,
+    python-lxml,
+    python-docutils,
     python-setuptools,
     python-httplib2 (>=0.7.2),
     python-dateutil,
     python-requests,
     python-argparse,
-    python-tastypie (>= 0.9.15),
-	python-drmaa,
+    python-drmaa,
     python-feedparser,
     python-boto (>=2.20.1),
+    python-oauthlib,
     memcached,
     python-memcache,
-    samtools (>= 0.1.18),
+    samtools (>= 0.1.19),
     python-dev,
-    rabbitmq-server (>= 3.0.2),
+    rabbitmq-server (>= 3.2.0),
     ion-analysis (>=3.5.15),
-	megacli,
-    libdrmaa1.0")
-
-# Incompatible with older tastypie, remove or upgrade before installing
-set(CPACK_DEBIAN_PACKAGE_BREAKS "python-tastypie (<= 0.9.10)")
-
-set(CMAKE_DEBIAN_PACKAGE_PREDEPENDS "python-django-celery (>= 3.0.11)")
-
-# If updating from a really old version of tastypie, make sure it is
-# removed/upgraded prior to this (or postinst fails)
-set(CPACK_DEBIAN_PACKAGE_CONFLICTS "python-django-tastypie")
+    megacli")
 
 set(CPACK_PACKAGE_DESCRIPTION "This package contains the Torrent Browser and related programs including the job server and run crawler.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA

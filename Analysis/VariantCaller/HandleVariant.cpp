@@ -5,16 +5,17 @@
 //! @brief    HP Indel detection
 
 #include "HandleVariant.h"
-
 #include "DecisionTreeData.h"
 
 
 
 void EnsembleEval::SpliceAllelesIntoReads(PersistingThreadObjects &thread_objects, const InputStructures &global_context,
-    const ReferenceReader &ref_reader, int chr_idx)
+                                          const ExtendParameters &parameters, const ReferenceReader &ref_reader, int chr_idx)
 {
-
-  int num_hyp_no_null = allele_identity_vector.size()+1; // num alleles +1 for ref
+  bool changed_alignment;
+  unsigned int  num_valid_reads = 0;
+  unsigned int  num_realigned = 0;
+  int  num_hyp_no_null = allele_identity_vector.size()+1; // num alleles +1 for ref
 
   // generate null+ref+nr.alt hypotheses per read in the case of do_multiallele_eval
   allele_eval.total_theory.my_hypotheses.resize(read_stack.size());
@@ -29,12 +30,48 @@ void EnsembleEval::SpliceAllelesIntoReads(PersistingThreadObjects &thread_object
                                 allele_eval.total_theory.my_hypotheses[i_read].splice_start_flow,
                                 allele_eval.total_theory.my_hypotheses[i_read].splice_end_flow,
                                 allele_eval.total_theory.my_hypotheses[i_read].instance_of_read_by_state,
+                                changed_alignment,
                                 global_context,
                                 ref_reader, chr_idx);
+
+    if (allele_eval.total_theory.my_hypotheses[i_read].success){
+      num_valid_reads++;
+      if (changed_alignment)
+        num_realigned++;
+    }
 
     // if we need to compare likelihoods across multiple possibilities
     if (num_hyp_no_null > 2)
       allele_eval.total_theory.my_hypotheses[i_read].use_correlated_likelihood = false;
+  }
+
+  // Check how many reads had their alignment modified
+  std::ostringstream my_info;
+  my_info.precision(4);
+  if (doRealignment and num_valid_reads>0){
+	float frac_realigned = (float)num_realigned / (float)num_valid_reads;
+	// And re-do splicing without realignment if we exceed the threshold
+	if (frac_realigned > parameters.my_controls.filter_variant.realignment_threshold){
+      my_info << "SKIPREALIGNx" << frac_realigned;
+      doRealignment = false;
+      for (unsigned int i_read = 0; i_read < allele_eval.total_theory.my_hypotheses.size(); i_read++) {
+          allele_eval.total_theory.my_hypotheses[i_read].success =
+              SpliceVariantHypotheses(*read_stack[i_read],
+                                      *this,
+                                      seq_context,
+                                      thread_objects,
+                                      allele_eval.total_theory.my_hypotheses[i_read].splice_start_flow,
+                                      allele_eval.total_theory.my_hypotheses[i_read].splice_end_flow,
+                                      allele_eval.total_theory.my_hypotheses[i_read].instance_of_read_by_state,
+                                      changed_alignment,
+                                      global_context,
+                                      ref_reader, chr_idx);
+      }
+	}
+	else {
+      my_info << "REALIGNEDx" << frac_realigned;
+	}
+    info_fields.push_back(my_info.str());
   }
 
 }
@@ -90,9 +127,12 @@ void GlueOutputVariant(EnsembleEval &my_ensemble, VariantCandidate &candidate_va
   // demonstrate this item
   vector<int> read_id;
   vector<bool> strand_id;
+  vector<int> dist_to_left;
+  vector<int> dist_to_right;
   // pretend we can classify reads across multiple alleles
-  my_ensemble.ApproximateHardClassifierForReads(read_id, strand_id);
-  my_decision.all_summary_stats.DigestHardClassifiedReads(strand_id, read_id);
+  my_ensemble.ApproximateHardClassifierForReads(read_id, strand_id, dist_to_left, dist_to_right);
+  my_decision.all_summary_stats.AssignStrandToHardClassifiedReads(strand_id, read_id);
+  my_decision.all_summary_stats.AssignPositionFromEndToHardClassifiedReads(read_id, dist_to_left, dist_to_right);
 
 
   float smallest_allele_freq = 1.0f;
@@ -125,7 +165,7 @@ void GlueOutputVariant(EnsembleEval &my_ensemble, VariantCandidate &candidate_va
   my_ensemble.MultiAlleleGenotype(local_min_allele_freq,
                                   my_decision.eval_genotype.genotype_component,
                                   my_decision.eval_genotype.evaluated_genotype_quality,
-                                  my_decision.eval_genotype.evaluated_variant_quality);
+                                  my_decision.eval_genotype.evaluated_variant_quality, parameters.my_eval_control.max_detail_level);
   my_decision.eval_genotype.genotype_already_set = true; // because we computed it here
   // and I must also set for each allele
   // so that the per-allele  filter works
@@ -198,7 +238,7 @@ void EnsembleProcessOneVariant(PersistingThreadObjects &thread_objects, VariantC
 
   if (my_ensemble.read_stack.empty()) {
     cerr << "Nonfatal: No reads found for " << candidate_variant.variant.sequenceName << "\t" << my_ensemble.multiallele_window_start << endl;
-    AutoFailTheCandidate(candidate_variant.variant, vc.parameters->my_controls.suppress_no_calls);
+    AutoFailTheCandidate(candidate_variant.variant, vc.parameters->my_controls.use_position_bias);
     return;
   }
 
@@ -208,7 +248,7 @@ void EnsembleProcessOneVariant(PersistingThreadObjects &thread_objects, VariantC
   // leave ensemble in ref vs alt state
 
   // glue in variants
-  my_ensemble.SpliceAllelesIntoReads(thread_objects, *vc.global_context, *vc.ref_reader, chr_idx);
+  my_ensemble.SpliceAllelesIntoReads(thread_objects, *vc.global_context, *vc.parameters, *vc.ref_reader, chr_idx);
 
   my_ensemble.allele_eval.my_params = vc.parameters->my_eval_control;
 
@@ -217,7 +257,7 @@ void EnsembleProcessOneVariant(PersistingThreadObjects &thread_objects, VariantC
   my_ensemble.allele_eval.InitForInference(thread_objects, my_ensemble.read_stack, *vc.global_context, num_hyp_no_null);
 
   // do inference
-  my_ensemble.allele_eval.ExecuteInference();
+  my_ensemble.allele_eval.ExecuteInference(vc.parameters->my_eval_control.max_detail_level);
 
   // now we're in the guaranteed state of best index
   int best_allele = my_ensemble.DetectBestMultiAllelePair();

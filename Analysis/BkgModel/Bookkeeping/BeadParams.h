@@ -119,7 +119,6 @@ struct BeadParams
   // these parameters are not fit in the main lev mar fitter, but are bead-specific parameters
   float pca_vals[NUM_DM_PCA]; // dark matter compensator coefficients
   float tau_adj;              // exp-tail-fitting adjustment to tau
-
   float phi; //-vm: tracks average rate of incorporation per flow
 
   // DO NOT CHANGE THE ORDER OF DATA FIELDS WITHIN  
@@ -133,6 +132,8 @@ struct BeadParams
   bead_state *my_state; // pointer to reduce the size of this structure
   int trace_ndx; // what trace do i correspond to
   int x,y;  // relative location within the region
+  float tauB_nuc[4];
+  float tauB[MAX_NUM_FLOWS_IN_BLOCK_GPU]; // save for output trace.h5
 
   // Here we have some access routines for particular parameters of interest.
   // This is the C++ way to access arbitrary members, defined at run-time. In C, we'd use offsets.
@@ -164,6 +165,8 @@ struct BeadParams
     ar & trace_ndx;
     ar & my_state;
     ar & x & y;
+    ar & tauB;
+    ar & tauB_nuc;
     // fprintf(stdout, "done\n");
   } 
   void LockKey(float *key, int keylen);

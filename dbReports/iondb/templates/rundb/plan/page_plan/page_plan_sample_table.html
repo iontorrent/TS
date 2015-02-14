@@ -1,6 +1,12 @@
 
+<input type="hidden" id="isPlan" name="isPlan" value="{{helper.isPlan}}" />
 <input type="hidden" id="isPlanBySample" name="isPlanBySample" value="{{helper.isPlanBySample}}" />
 <input type="hidden" id="isCreate" name="isCreate" value="{{helper.isCreate}}" />
+
+<input type="hidden" id="isTargetBEDFileSupported" name="isTargetBEDFileSupported" value="{{helper.getApplProduct.isTargetRegionBEDFileSupported}}" />
+<input type="hidden" id="isHotSpotBEDFileSupported" name="isHotSpotBEDFileSupported" value="{{helper.getApplProduct.isHotspotRegionBEDFileSuppported}}" />
+<input type="hidden" id="isTargetBEDFileBySampleSupported" name="isTargetBEDFileBySampleSupported" value="{{helper.getApplProduct.isTargetRegionBEDFileBySampleSupported}}" />
+<input type="hidden" id="isHotSpotBEDFileBySampleSupported" name="isHotSpotBEDFileBySampleSupported" value="{{helper.getApplProduct.isHotSpotBEDFileBySampleSupported}}" />
 
 <div class="row-fluid">
     <div class="span12">
@@ -33,6 +39,10 @@
                 <a title="Refresh IonReporter Information" class="refresh-uploader-information"><i class="icon-refresh"></i></a>
                 <img src="/site_media/img/loading.gif" width="35" height="35" id="loading" class="hide"/>
             {% endifnotequal %}
+                        
+            {% if helper.isReferenceBySample %}
+                <a title="Show/Hide Reference Columns" class="btn" id="showHideReferenceBySample"><i class="icon-eye-open"></i></a>
+            {% endif %}            
         </div>
     </div>
 </div>
@@ -76,7 +86,7 @@
             {% endifnotequal %}
             
             {% if helper.isReferenceBySample %}
-                <a title="Show/Hide Reference Columns" class="btn" id="showHideReferenceBySample"><i class="icon-adjust"></i></a>
+                <a title="Show/Hide Reference Columns" class="btn" id="showHideReferenceBySample_bc"><i class="icon-eye-open"></i></a>
             {% endif %}
             
         </div>
@@ -94,12 +104,12 @@
                         <th class="k-header input-xlarge">Sample Name (required)</th>
                         <th class="k-header input-medium">Sample ID</th>
                         <th class="k-header sampleAnnotation input-large">Sample Description</th>
-                        <th class="k-header hideable_sampleAnnotation nucleotideType input-small" {%if not helper.isDualNucleotideTypeBySample %} style="display: none;"{%endif%}>DNA/RNA</th>                         
+                        <th class="k-header hideable_sampleAnnotation_nt nucleotideType input-small" {%if not helper.isDualNucleotideTypeBySample %} style="display: none;"{%endif%}>DNA/RNA</th>                         
                         <th class="k-header nonbarcoded input-medium" {%if helper.isBarcoded%}style="display: none;"{%endif%}>Sample Tube Label</th>
 
-                        <th class="k-header hideable_referenceBySample input-large" {%if not helper.isReferenceBySample %} style="display: none;"{%endif%}>Reference</th>  
-                        <th class="k-header hideable_referenceBySample input-large" {%if not helper.isReferenceBySample %} style="display: none;"{%endif%}>Target Regions</th>
-                        <th class="k-header hideable_referenceBySample input-large" {%if not helper.isReferenceBySample %} style="display: none;"{%endif%}>Hotspot Regions</th>  
+                        <th class="k-header hideable_referenceBySample hideable_referenceBySample_ref input-large" {%if not helper.isReferenceBySample %} style="display: none;"{%endif%}>Reference</th>  
+                        <th class="k-header hideable_referenceBySample hideable_referenceBySample_targetRegion input-large" {%if not helper.isReferenceBySample or not helper.getApplProduct.isTargetRegionBEDFileSupported or not helper.getApplProduct.isTargetRegionBEDFileBySampleSupported %} style="display: none;"{%endif%}>Target Regions</th>
+                        <th class="k-header hideable_referenceBySample hideable_referenceBySample_hotSpot input-large" {%if not helper.isReferenceBySample or not helper.getApplProduct.isHotspotRegionBEDFileSuppported or not helper.getApplProduct.isHotSpotBEDFileBySampleSupported%} style="display: none;"{%endif%}>Hotspot Regions</th>  
                         <th class="k-header controlSeqTypeBySample input-medium" {%if not helper.isControlSeqTypeBySample %} style="display: none;"{%endif%}>Control Seq Type (optional)</th>  
                                        
                         <th class="k-header hideable_sampleAnnotation cancerType input-large" name="ircancerType_header" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None" %} style="display: none;"{%endif%}>Cancer Type</th> 
@@ -138,7 +148,7 @@
                         <td><input type="text" class="sampleAnnotation input-large" value="{{row.sampleDescription}}" name="sampleDescription"></td>
                         {% endif %}
 
-                        <td class="hideable_sampleAnnotation input-small" {%if not helper.isDualNucleotideTypeBySample %} style="display: none;"{%endif%}>
+                        <td class="hideable_sampleAnnotation_nt input-small" {%if not helper.isDualNucleotideTypeBySample %} style="display: none;"{%endif%}>
                             <select class="input-small nucleotideType" name="nucleotideType">
 
                             <option value="{{helper.getRunTypeObject.nucleotideType}}" data-counter="{{forloop.counter0}}" data-nucleotideType="{{helper.getRunTypeObject.nucleotideType}}">RunTypeObject - {{helper.getRunTypeObject.nucleotideType}}</option>
@@ -174,10 +184,11 @@
                             <input type="text" class="input-medium" value="{{row.tubeLabel}}" name="tubeLabel" {% ifequal helper.getStepDict.Application.getCurrentSavedFieldDict.planStatus "reserved" %} disabled="disabled" {% endifequal %} />
                         </td>
 
-                        <td class="hideable_referenceBySample input-large" {%if not helper.isReferenceBySample %} style="display: none;"{%endif%}>
-                            <select class="input-medium reference" name="reference">
+                        <!-- once the barcoded sample's reference is set, do not try to cascade plan's BED files to the barcoded sample -->
+                        <td class="hideable_referenceBySample hideable_referenceBySample_ref input-large" {%if not helper.isReferenceBySample %} style="display: none;"{%endif%}>
+                            <select class="input-large reference" name="reference">
                             
-                            <option value=""></option>
+                            <option value="">None</option>
 
                                 {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.referenceMissing and helper.isCreate %}
                                     <option class="entryNotFound" value="{{step.getCurrentSavedFieldDict.reference}}" style="color: -moz-linear-gradient(top, #d91a1a 0%, #d91a1a 50%, #ca1818 51%, #ca1818 100%);" {%if not row.reference %}SELECTED {% endif %}>(Not Found) {{helper.getStepDict.Reference.getCurrentSavedFieldDict.reference}}</option>
@@ -198,7 +209,7 @@
                                                 <option value="{{ref.short_name}}" data-counter="{{forloop.counter0}}" data-reference="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>                                            
                                             {% endif %}
                                         {% else %}
-                                                <option value="{{ref.short_name}}" data-counter="{{forloop.counter0}}" data-reference="{{ref.short_name}}" {%if ref.short_name == helper.getStepDict.Reference.getCurrentSavedFieldDict.reference and helper.isCreate %}SELECTED {%endif%}>{{ref.short_name}}({{ref.name}})</option>                                         
+                                                <option value="{{ref.short_name}}" data-counter="{{forloop.counter0}}" data-reference="{{ref.short_name}}" {%if ref.short_name == helper.getStepDict.Reference.getCurrentSavedFieldDict.reference and not row.reference and helper.isCreate %}SELECTED {%endif%}>{{ref.short_name}}({{ref.name}})</option>                                         
                                         {% endif %}
                                     {% endifequal %}
                                 {% endifequal %}
@@ -207,27 +218,27 @@
                             </select>
                         </td> 
                        
-                        <td class="hideable_referenceBySample input-large" {%if not helper.isReferenceBySample %} style="display: none;"{%endif%}>
-                            <select class="input-medium targetRegionBedFile" name="targetRegionBedFile">
-                             <option value=""></option>
+                        <td class="hideable_referenceBySample hideable_referenceBySample_targetRegion input-large" {%if not helper.isReferenceBySample or not helper.getApplProduct.isTargetRegionBEDFileSupported or not helper.getApplProduct.isTargetRegionBEDFileBySampleSupported %} style="display: none;"{%endif%}>
+                            <select class="input-large targetRegionBedFile" name="targetRegionBedFile">
+                             <option value="">None</option>
                             {% for bedFile in helper.getStepDict.Reference.getPrePopulatedFieldDict.targetBedFiles %}
                                 {% ifequal bedFile.file row.targetRegionBedFile %}
-                                    <option SELECTED value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-targetBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
+                                    <option SELECTED value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-targetBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
                                 {% else %}
-                                    <option value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-targetBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.targetBedFile and helper.isCreate %}SELECTED {%endif%}>{{bedFile.path}}</option>                                    
+                                    <option value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-targetBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.targetBedFile and not row.reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
                                 {% endifequal %}
                             {%endfor%}
                             </select>
                         </td>
 
-                        <td class="hideable_referenceBySample input-large" {%if not helper.isReferenceBySample %} style="display: none;"{%endif%}>
-                            <select class="input-medium hotSpotRegionBedFile" name="hotSpotRegionBedFile">
-                             <option value=""></option>
+                        <td class="hideable_referenceBySample hideable_referenceBySample_hotSpot input-large" {%if not helper.isReferenceBySample or not helper.getApplProduct.isHotspotRegionBEDFileSuppported or not helper.getApplProduct.isHotSpotBEDFileBySampleSupported %} style="display: none;"{%endif%}>
+                            <select class="input-large hotSpotRegionBedFile" name="hotSpotRegionBedFile">
+                             <option value="">None</option>
                              {% for bedFile in helper.getStepDict.Reference.getPrePopulatedFieldDict.hotSpotBedFiles %}
                                 {% ifequal bedFile.file row.hotSpotRegionBedFile %}
-                                    <option SELECTED value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-hotSpotBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.path}}</option>
+                                    <option SELECTED value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-hotSpotBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}">{{bedFile.get_file_name}}</option>
                                 {% else %}
-                                    <option value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-hotSpotBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.hotSpotBedFile and helper.isCreate %}SELECTED {%endif%}>{{bedFile.path}}</option> 
+                                    <option value="{{bedFile.file}}" data-counter="{{forloop.counter0}}" data-hotSpotBed="{{bedFile.file}}" class="{{bedFile.meta.reference}}" {%if bedFile.file == helper.getStepDict.Reference.getCurrentSavedFieldDict.hotSpotBedFile and not row.reference and helper.isCreate %}SELECTED {%endif%}>{{bedFile.get_file_name}}</option>
                                 {% endifequal %}                                                                              
                             {%endfor%}                           
                             </select>
@@ -262,7 +273,7 @@
                         </td> 
              
                         <td class="hideable_sampleAnnotation cellularityPct input-small" {%if not helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName  or helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName == "None" %} style="display: none;"{%endif%}>
-                            <input type="text" class="input-small integer ircellularityPct" value="{{row.ircellularityPct}}" name="ircellularityPct">
+                            <input type="text" class="input-small integer ircellularityPct" value="{{row.ircellularityPct| default_if_none:""}}" name="ircellularityPct">
                         </td>
                                                                         
                     </tr>

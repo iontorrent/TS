@@ -11,7 +11,8 @@ import subprocess
 from ion.plugin import *
 
 class RunTransfer(IonPlugin):
-    version = "4.2-r%s" % filter(str.isdigit,"87667")
+    '''Main class definition for this plugin'''
+    version = "4.4.0.0"
     DEBUG = False
     author = "bernard.puc@thermofisher.com"
 

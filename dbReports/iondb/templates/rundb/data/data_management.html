@@ -396,7 +396,6 @@ $(document).ready(function () {
 						$( "#modal_dm_actions" ).modal("show");
 						$('body #modal_dm_actions').on('modal_dm_actions_done', function () {
 							refreshKendoGrid(source);
-							refresh_grid_timer(source, true);
 							//also refresh active jobs table
 							refreshKendoGrid("#dmjobs_grid");
 						});
@@ -445,8 +444,8 @@ $(document).ready(function () {
 				else{
 					this.showColumn("userAck");
 				}
-				// periodically refresh data when states are in-process
-				refresh_grid_timer(source, in_process_state);
+				// refresh grid when states are in-process
+				refresh_grid_timeout(source, in_process_state);
 			}
 		});
 	{% endfor %}
@@ -484,7 +483,9 @@ $(document).ready(function () {
 		},
 		height: 'auto',
 		sortable: true,
-		pageable: true,
+		pageable: {
+    			pageSizes: [10, 20, 50, 100]
+			},
 		scrollable: false,
 		columns: [ {
 				field: "started_on",
@@ -534,6 +535,12 @@ $(document).ready(function () {
 				var url=$(this).attr('href');
 				$.post(url, function(data){	refreshKendoGrid("#dmjobs_grid"); });
 			});
+			
+			if (this._data.length > 0){
+				var now= new Date().getTime();
+				var latest= _.max($.map(this._data, function(item){if(item.started_on) return new Date(item.started_on).getTime()}));
+				refresh_grid_timeout("#dmjobs_grid", now-latest < 86400000);
+			}
 		}
 	});
 });

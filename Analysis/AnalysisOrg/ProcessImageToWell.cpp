@@ -25,13 +25,6 @@
 
 using namespace std;
 
-typedef struct writeFlowDataFuncArg
-{
-  RWH5DataSet* wells;
-  SemQueue* packQueuePtr;
-  SemQueue* writeQueuePtr;
-} writeFlowDataFuncArg;
-
 bool CheckForMinimumNumberOfFlows(CommandLineOpts &inception_state) {
 
   int startingFlow = inception_state.flow_context.startingFlow; 
@@ -47,36 +40,6 @@ bool CheckForMinimumNumberOfFlows(CommandLineOpts &inception_state) {
   } 
 
   return true;
-}
-
-void* WriteFlowDataFunc(void* arg0)
-{
-  fprintf ( stdout, "SaveWells: saving thread starts\n");
-
-  writeFlowDataFuncArg* arg = (writeFlowDataFuncArg*)arg0;
-  RawWellsWriter writer;
-
-  bool quit = false;
-  while(!quit) {
-    ChunkFlowData* chunkData = (arg->writeQueuePtr)->deQueue();
-    if(NULL == chunkData) {
-      continue;
-    }
-
-    quit = chunkData->lastFlow;
-
-    if(writer.WriteWellsData(*(arg->wells), chunkData->chunk, chunkData->data) < 0 ) {
-      ION_ABORT ( "ERROR - Unsuccessful write to HDF5 file: " +
-        ToStr ( chunkData->chunk.rowStart ) + "," + ToStr ( chunkData->chunk.colStart ) + "," +
-        ToStr ( chunkData->chunk.rowHeight ) + "," + ToStr ( chunkData->chunk.colWidth ) + " x " +
-        ToStr ( chunkData->chunk.flowStart ) + "," + ToStr ( chunkData->chunk.flowDepth ));
-    }
-
-    (arg->packQueuePtr)->enQueue(chunkData);
-  }
-
-  fprintf ( stdout, "SaveWells: saving thread exits\n");
-  return NULL;
 }
 
 void WriteWashoutFile(BkgFitterTracker &bgFitter, const std::string &dirName) {
@@ -137,6 +100,10 @@ static void DoThreadedSignalProcessing(
     inception_state.bkg_control.gpuControl.gpuMultiFlowFit = 0;
   }
 
+  bool convert = RetrieveParameterBool(opts, json_params, '-', "wells-save-as-ushort", false);
+  float lower = RetrieveParameterFloat(opts, json_params, '-', "wells-convert-low", -5.0);
+  float upper = RetrieveParameterFloat(opts, json_params, '-', "wells-convert-high", 28.0);
+
   // Make a BkgFitterTracker object, and then either load its state from above,
   // or build it fresh.
   BkgFitterTracker GlobalFitter ( my_prequel_setup.num_regions );
@@ -153,7 +120,7 @@ static void DoThreadedSignalProcessing(
 	
 	// >does not open wells file<
     fprintf(stdout, "Opening wells file %s ... ", wellsFile.c_str());
-    RawWells preWells ( inception_state.sys_context.wellsFilePath, inception_state.sys_context.wellsFileName );
+    RawWells preWells ( inception_state.sys_context.wellsFilePath, inception_state.sys_context.wellsFileName, convert, lower, upper );
     fprintf(stdout, "done\n");
     CreateWellsFileForWriting ( preWells,from_beadfind_mask.my_mask, inception_state, 
                               inception_state.flow_context.GetNumFlows(), 
@@ -226,9 +193,18 @@ static void DoThreadedSignalProcessing(
   GlobalFitter.InitBeads_xyflow(inception_state);
 
   // Get the GPU ready, if we're using it.
-  GlobalFitter.DetermineAndSetGPUAllocationAndKernelParams( inception_state.bkg_control, KEY_LEN,
+  if (GlobalFitter.IsGpuAccelerationUsed()) {
+    GlobalFitter.DetermineAndSetGPUAllocationAndKernelParams( inception_state.bkg_control, KEY_LEN,
                                               flow_block_sequence.MaxFlowsInAnyFlowBlock() );
+  }
+  
   GlobalFitter.SpinUpGPUThreads();
+
+  float washoutThreshold = RetrieveParameterFloat(opts, json_params, '-', "bkg-washout-threshold", WASHOUT_THRESHOLD);
+  GlobalFitter.setWashoutThreshold(washoutThreshold);
+
+  int washoutFlowDetection = RetrieveParameterInt(opts, json_params, '-', "bkg-washout-flow-detection", WASHOUT_FLOW_DETECTION);
+  GlobalFitter.setWashoutFlowDetection(washoutFlowDetection);
 
   MemUsage ( "AfterBgInitialization" );
   time_t init_end;
@@ -241,29 +217,36 @@ static void DoThreadedSignalProcessing(
   SemQueue packQueue;
   SemQueue writeQueue;
 
-  int saveQueueSize = RetrieveParameterInt(opts, json_params, '-', "save-queue-size", 0);
+  int saveQueueSize = RetrieveParameterInt(opts, json_params, '-', "wells-save-queue-size", 0);
   if(saveQueueSize > 0) {
-    rawWells.OpenForReadWrite();
-
     unsigned int queueSize = (unsigned int)saveQueueSize;
     packQueue.init(queueSize);
     writeQueue.init(queueSize);
     size_t stepSize = rawWells.GetStepSize();
     size_t flowDepth = inception_state.bkg_control.signal_chunks.save_wells_flow;
+    unsigned int spaceSize = my_image_spec.rows * my_image_spec.cols;
     unsigned int bufferSize = stepSize * stepSize * flowDepth;
     for(int item = 0; item < saveQueueSize; ++item) {
-      ChunkFlowData* chunkData = new ChunkFlowData(bufferSize);
+      ChunkFlowData* chunkData = new ChunkFlowData(spaceSize, flowDepth, bufferSize);
       packQueue.enQueue(chunkData);
     }
 
     writeFlowDataFuncArg writerArg;
-    writerArg.wells = rawWells.GetH5WellsPtr();
+    writerArg.filePath = rawWells.GetHdf5FilePath();
+    writerArg.numCols = my_image_spec.cols;
+    writerArg.stepSize = stepSize;
     writerArg.packQueuePtr = &packQueue;
     writerArg.writeQueuePtr = &writeQueue;
 
     pthread_create(&flowDataWriterThread, NULL, WriteFlowDataFunc, &writerArg);
   }
-      
+
+  bool saveCopies = RetrieveParameterBool(opts, json_params, '-', "wells-save-number-copies", false);
+  if(saveCopies)
+  {
+    rawWells.SetSaveCopies(0);
+  }
+
   // process all flows...
   // using actual flow values
   Timer flow_block_timer;
@@ -358,6 +341,11 @@ static void DoThreadedSignalProcessing(
     my_img_set.FinishFlow ( flow );
   }
 
+  if(saveCopies)
+  {
+    rawWells.WriteWellsCopies();
+  }
+
   if(saveQueueSize > 0) {
     pthread_join(flowDataWriterThread, NULL);
     packQueue.clear();
@@ -378,10 +366,10 @@ static void DoThreadedSignalProcessing(
 
     const ComplexMask *from_beadfind_mask_ptr = &from_beadfind_mask;
     BkgFitterTracker *GlobalFitter_ptr = &GlobalFitter;
-    string svn_rev = IonVersion::GetSvnRev();
+    string git_hash = IonVersion::GetGitHash();
     
     outArchive
-      << svn_rev
+      << git_hash
       << my_prequel_setup
       << from_beadfind_mask_ptr
       << GlobalFitter_ptr;    
@@ -522,8 +510,8 @@ void RealImagesToWells (
 
    // boost::archive::text_iarchive in_archive(ifs);
     boost::archive::binary_iarchive in_archive(ifs);
-    string saved_svn_rev;
-    in_archive >> saved_svn_rev
+    string saved_git_hash;
+    in_archive >> saved_git_hash
 	       >> my_prequel_setup
 	       >> complex_mask
 	       >> bkg_fitter_tracker;
@@ -536,9 +524,9 @@ void RealImagesToWells (
 	      filePath.c_str(), difftime ( finish_load_time, begin_load_time ));
 
     if ( inception_state.bkg_control.signal_chunks.restart_check ){
-      string svn_rev = IonVersion::GetSvnRev();
-      ION_ASSERT( (saved_svn_rev.compare(svn_rev) == 0),
-		  "This SVN rev " + svn_rev + " of Analysis does not match the SV rev " + saved_svn_rev + " where " + filePath + " was saved; disable this check by using --no-restart-check");
+      string git_hash = IonVersion::GetGitHash();
+      ION_ASSERT( (saved_git_hash.compare(git_hash) == 0),
+		  "This GIT hash " + git_hash + " of Analysis does not match the GIT hash " + saved_git_hash + " where " + filePath + " was saved; disable this check by using --no-restart-check");
     }
 
     // set file locations

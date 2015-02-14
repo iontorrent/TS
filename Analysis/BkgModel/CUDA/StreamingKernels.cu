@@ -2125,7 +2125,7 @@ PerFlowGaussNewtonFit_k(
   fg_buffers += bead_ndx;
 
 
-  if (pState->corrupt || !pState->clonal_read) return;
+  if (pState->corrupt || !pState->clonal_read || pState->pinned) return;
 
   float avg_err;
     
@@ -2310,7 +2310,6 @@ PerFlowGaussNewtonFit_k(
   if (high_err_cnt > WASHOUT_FLOW_DETECTION)
     pState->corrupt = true;
 
-
 }
 
 
@@ -2391,7 +2390,7 @@ PerFlowHybridFit_k(
   fg_buffers += bead_ndx;
 
 
-  if (pState->corrupt || !pState->clonal_read) return;
+  if (pState->corrupt || !pState->clonal_read || pState->pinned) return;
 
   float avg_err;
     
@@ -2745,7 +2744,7 @@ PerFlowLevMarFit_k(
   fg_buffers += bead_ndx;
 
 
-  if (pState->corrupt || !pState->clonal_read) return;
+  if (pState->corrupt || !pState->clonal_read || pState->pinned) return;
 
   float avg_err;
     
@@ -3041,7 +3040,7 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
   fg_buffers += bead_ndx;
 
 
-  if (pState->corrupt || !pState->clonal_read) return;
+  if (pState->corrupt || !pState->clonal_read || pState->pinned) return;
 
   float avg_err;
     
@@ -3600,6 +3599,7 @@ __global__ void XtalkAccumulationAndSignalCorrection_k(// Here FL stands for flo
 
 __global__
 void ExponentialTailFitting_k(
+  bead_state* pState,
   float* tauAdjust, // obtained from TaubAdjustForExponentialTailFitting()
   float* Ampl,
   float* pR,
@@ -3620,6 +3620,9 @@ void ExponentialTailFitting_k(
   if(bead_ndx >= num_beads) return;
 
   num_beads = ((num_beads+32-1)/32) * 32;
+
+  pState += bead_ndx;
+  if (pState->pinned || !pState->clonal_read || pState->corrupt) return;
 
   tauAdjust += bead_ndx;
   Ampl += bead_ndx;
@@ -3721,6 +3724,7 @@ void ExponentialTailFitting_k(
 // only performed in first 20 flows. It wll be called after presingleflowfit
 __global__ 
 void TaubAdjustForExponentialTailFitting_k(
+  bead_state* pState,
   float* fg_buffers,
   float* Ampl,
   float* pR,
@@ -3743,6 +3747,9 @@ void TaubAdjustForExponentialTailFitting_k(
   if(bead_ndx >= num_beads) return;
 
   num_beads = ((num_beads+32-1)/32) * 32;
+
+  pState += bead_ndx;
+  if (pState->pinned || !pState->clonal_read || pState->corrupt) return;
 
   tauAdjust += bead_ndx;
   Ampl += bead_ndx;
@@ -4446,6 +4453,7 @@ __global__ void BuildMatrixVec4_k(
 ****************************************************************************/
 
 __global__ void ProjectionSearch_k(
+  bead_state* pState,
   float* fg_buffers, // FLxFxN (already background corrected but no xtalk correction))
   float* emphasisVec, // FxLAST_POISSON_TABLE_COL
   float* nucRise, // ISIG_SUB_STEPS_MULTI_FLOW*F*FL 
@@ -4470,6 +4478,9 @@ __global__ void ProjectionSearch_k(
 #else
   fval += bead_ndx;
 #endif
+  
+  pState += bead_ndx;
+  if (pState->pinned || pState->corrupt) return;
 
   fg_buffers += bead_ndx;
   pBeadParamsBase += bead_ndx;
@@ -5258,6 +5269,7 @@ void StreamingKernels::TaubAdjustForExponentialTailFitting(
   dim3 block, 
   int smem, 
   cudaStream_t stream,
+  bead_state* pState,
   float* fg_buffers,
   float* Ampl,
   float* pR,
@@ -5280,6 +5292,7 @@ void StreamingKernels::TaubAdjustForExponentialTailFitting(
         block, 
         smem, 
         stream >>>(
+        pState,
         fg_buffers, // FLxFxN,
         Ampl, // FLxN
         pR, // N
@@ -5303,6 +5316,7 @@ void StreamingKernels::ExponentialTailFitting(
   dim3 block, 
   int smem, 
   cudaStream_t stream,
+  bead_state* pState,
   float* tauAdjust,
   float* Ampl,
   float* pR,
@@ -5323,6 +5337,7 @@ void StreamingKernels::ExponentialTailFitting(
       block, 
       smem, 
       stream >>> (
+      pState,
       tauAdjust,
       Ampl,
       pR,
@@ -5344,6 +5359,7 @@ void StreamingKernels::ProjectionSearch(
   dim3 block, 
   int smem, 
   cudaStream_t stream,
+  bead_state* pState,
   float* fg_buffers, // FLxFxN (already background and xtalk corrected if applicable))
   float* emphasisVec, // FxLAST_POISSON_TABLE_COL
   float* nucRise, // ISIG_SUB_STEPS_MULTI_FLOW*F*FL 
@@ -5361,6 +5377,7 @@ void StreamingKernels::ProjectionSearch(
       block, 
       smem, 
       stream>>>(
+      pState,
       fg_buffers,
       emphasisVec,
       nucRise,

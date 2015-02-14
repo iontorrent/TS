@@ -52,7 +52,9 @@ public:
     bool LoadRaw ( const char *rawFileName, int frames = 0, bool allocate = true, bool headerOnly = false );
     bool LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly, TikhonovSmoother *tikSmoother );
     bool LoadRaw_noWait ( const char *rawFileName, int frames=0, bool allocate=true, bool headerOnly=false );
+    bool LoadRaw_noWait_noSem(const char *rawFileName, int frames=0, bool allocate=true, bool headerOnly=false );
     int ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOnly );
+    int ActuallyLoadRaw_noSem ( const char *rawFileName, int frames,  bool headerOnly );
     /** Not perfect as sdat has a particular time compression per region but good workaround for some use cases. */
     void InitFromSdat(SynchDat *sdat);
     int GetRows() const {
@@ -233,7 +235,8 @@ public:
     }
     void SmoothMeTikhonov ( TikhonovSmoother *tikSmoother, bool dont_smooth_me_bro, const char *rawFileName );
 
-    void SetOffsetFromChipOrigin ( const char * );
+    static bool GetOffsetFromChipPath (const char * filepath, int &x_offset, int &y_offset);
+    void SetOffsetFromChipOrigin ( const char * filepath);
 
 
     bool doLocalRescaleRegionByEmptyWells()

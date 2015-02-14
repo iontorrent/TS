@@ -397,6 +397,7 @@ sub outputStats
   printf "$tagU base coverage at 100x:      %.2f%%\n",$cumd[100]*$scl;
   printf "$tagU base coverage at 500x:      %.2f%%\n",$cumd[500]*$scl;
   printf "$tagU bases with no strand bias:  %.2f%%\n",100*$noBiasReads/$targSize;
+  #printf "Percent end-to-end reads:         %.2f%%\n",100*$noBiasReads/$targSize;
   return (\@cumd,$abc);
 }
 

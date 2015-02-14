@@ -7,6 +7,7 @@
 #include "PairPixelXtalkCorrector.h"
 #include "AdvCompr.h"
 #include "FlowSequence.h"
+#include "FluidPotentialCorrector.h"
 #include <sys/fcntl.h>
 #include <sys/prctl.h>
 
@@ -42,6 +43,8 @@ void *FileLoadWorker ( void *arg )
   sprintf(name,"FileLdWkr%d",threadNum);
   prctl(PR_SET_NAME,name,0,0,0);
 
+  const double noiseThreshold = 0.;  // to be set by command line option
+  FluidPotentialCorrector fpCorr(noiseThreshold);
 
   while ( !done )
   {
@@ -107,6 +110,59 @@ void *FileLoadWorker ( void *arg )
     }
     T3=tmr.elapsed();
     tmr.restart();
+
+    // Fluid potential corrector
+    const bool correctFluidPotential = one_img_loader->inception_state->img_control.fluid_potential_correct;
+    const double noiseThreshold = (double) one_img_loader->inception_state->img_control.fluid_potential_threshold;
+    if (correctFluidPotential){
+        fpCorr.setThreshold(noiseThreshold);
+
+                // parse rowsum file name to load
+                const std::string datFileName = one_img_loader->name;
+                printf("dat file name %s\n", datFileName.c_str());
+                const size_t pos1 = datFileName.find_last_of('/');
+                const size_t pos2 = datFileName.find_last_of('.');
+                const std::string rowsumFileName = datFileName.substr(0, pos1) + "/../rowsum/" + datFileName.substr(pos1+1, pos2-pos1-1) + ".hwsum";
+                // printf("rowsum file name %s pos1 %u pos2 %u\n", rowsumFileName.c_str(), (uint32_t) pos1, (uint32_t) pos2);
+
+
+                // determine if the data file is thumbnail or block
+        const bool isThumbnail = one_img_loader->inception_state->bfd_control.beadfindThumbnail;
+        if(isThumbnail){
+                fpCorr.setIsThumbnail();
+        }
+
+        // set image
+        const unsigned int regionXSize = one_img_loader->inception_state->loc_context.regionXSize;
+        const unsigned int regionYSize = one_img_loader->inception_state->loc_context.regionYSize;
+        const char nucChar = one_img_loader->inception_state->flow_context.ReturnNucForNthFlow(one_img_loader->flow);
+        fpCorr.setImage(one_img_loader->img[one_img_loader->cur_buffer].raw, one_img_loader->mask,  regionYSize, regionXSize, nucChar);
+        //printf("nucChar is %c\n", nucChar);
+
+
+        // load sensing electrode data
+        if (isThumbnail){
+                const unsigned int numRows = one_img_loader->img[one_img_loader->cur_buffer].raw->rows;
+                fpCorr.loadSensingElectrodeDataThumbnail(rowsumFileName, numRows);
+
+        } else {
+                // determine startRow and endRow
+                one_img_loader->img[one_img_loader->cur_buffer].SetOffsetFromChipOrigin(one_img_loader->name);
+                const unsigned int startRow = one_img_loader->img[one_img_loader->cur_buffer].raw->chip_offset_y;
+                const unsigned int endRow = startRow + one_img_loader->img[one_img_loader->cur_buffer].raw->rows;
+       //         printf("offset x y = %d %d, start and end rows are %u,%u\n", one_img_loader->img[one_img_loader->cur_buffer].raw->chip_offset_x,one_img_loader->img[one_img_loader->cur_buffer].raw->chip_offset_y, startRow, endRow);
+                fpCorr.loadSensingElectrodeData(rowsumFileName, startRow, endRow);
+        }
+
+        // correct fluid potential
+         if (fpCorr.readRowSumIsSuccess()){
+                 fpCorr.doCorrection();
+         } else {
+                 printf("fluidPotentialCorrector skipped:  Cannot find rowsum file %s \n", rowsumFileName.c_str());
+         }
+
+    }
+
 
     // dump dc offset one_img_loaderrmation before we do any normalization
     DumpDcOffset ( one_img_loader );

@@ -79,6 +79,7 @@ v1_api.register(api.SampleResource())
 v1_api.register(api.ExperimentAnalysisSettingsResource())
 v1_api.register(api.CompositeDataManagementResource())
 v1_api.register(api.DataManagementHistoryResource())
+v1_api.register(api.ClusterInfoHistoryResource())
 
 v1_api.register(api.IonChefPrepKitInfoResource())
 v1_api.register(api.ActiveIonChefPrepKitInfoResource())
@@ -112,6 +113,8 @@ v1_api.register(api.AnalysisArgsResource())
 
 v1_api.register(api.FileMonitorResource())
 v1_api.register(api.SupportUploadResource())
+
+v1_api.register(api.PrepopulatedPlanningSessionResource())
 
 urlpatterns = patterns(
     'iondb.rundb',

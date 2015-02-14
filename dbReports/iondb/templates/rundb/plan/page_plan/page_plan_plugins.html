@@ -57,7 +57,7 @@
 {% endblock page-plan-content %}
 
 {% block prevnext-buttons %}
-    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_reference" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_kits" %}');$('#step_form').submit();return false;">&larr; Previous</a>    
     {%if helper.isPlanBySample%}
         <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_barcode" %}');$('#step_form').submit();return false;">Next &rarr;</a>
     {%else%}

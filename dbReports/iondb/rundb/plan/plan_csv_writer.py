@@ -8,7 +8,7 @@ from iondb.rundb.models import PlannedExperiment, RunType, ApplProduct, \
     PlannedExperimentQC
 
 from iondb.rundb.plan.views_helper import getPlanDisplayedName
-    
+
 from traceback import format_exc
 
 import logging
@@ -23,9 +23,11 @@ COLUMN_SAMPLE_ID = "Sample ID"
 COLUMN_SAMPLE_PREP_KIT = "Sample preparation kit name"
 COLUMN_LIBRARY_KIT = "Library kit name"
 COLUMN_TEMPLATING_KIT = "Templating kit name"
+COLUMN_TEMPLATING_SIZE = "Templating Size"
 COLUMN_CONTROL_SEQ_KIT = "Control sequence name"
 COLUMN_SEQ_KIT = "Sequence kit name"
 COLUMN_CHIP_TYPE = "Chip type"
+COLUMN_LIBRARY_READ_LENGTH = "Library Read Length"
 COLUMN_FLOW_COUNT = "Flows"
 COLUMN_SAMPLE_TUBE_LABEL = "Sample tube label"
 COLUMN_BEAD_LOAD_PCT = "Bead loading %"
@@ -39,38 +41,40 @@ COLUMN_PROJECTS = "Project names"
 COLUMN_EXPORT = "Export"
 
 COLUMN_NOTES = "Notes"
- 
+
+COLUMN_LIMS_DATA = "LIMS Meta Data"
+
 COLUMN_IR_V1_0_WORKFLOW = "IR_v1_0_workflow"
 COLUMN_IR_V1_X_WORKFLOW = "IR_v1_x_workflow"
 
 TOKEN_DELIMITER = ";"
 
 
-#20121105-PDD-TODO: switch to using the new PDD db schema
-#the APIs below is to make db schema refactoring easier       
-def _get_kit_description(kitType, kitName):
+
+def _get_kit_description(kitTypes, kitName):
     desc = ""
     
     if kitName:
         try:
-            kit = KitInfo.objects.get(kitType = kitType, name = kitName)
-            desc = kit.description
+            kits = KitInfo.objects.filter(kitType__in = kitTypes, name = kitName)
+            desc = kits[0].description
         except:
             logger.exception(format_exc())
     return desc
+
 
 def _get_sample_prep_kit_description(template):
     desc = ""
     if template:
         kitName = template.samplePrepKitName
-        desc = _get_kit_description("SamplePrepKit", kitName)
+        desc = _get_kit_description(["SamplePrepKit"], kitName)
     return desc
 
 def _get_lib_kit_description(template):
     desc = ""
     if template:
         kitName = template.get_librarykitname()
-        desc = _get_kit_description("LibraryKit", kitName)
+        desc = _get_kit_description(["LibraryKit"], kitName)
     return desc
 
 
@@ -78,21 +82,21 @@ def _get_template_kit_description(template):
     desc = ""
     if template:
         kitName = template.templatingKitName
-        desc = _get_kit_description("TemplatingKit", kitName)
+        desc = _get_kit_description(["TemplatingKit", "IonChefPrepKit"], kitName)
     return desc
 
 def _get_control_seq_kit_description(template):
     desc = ""
     if template:
         kitName = template.controlSequencekitname
-        desc = _get_kit_description("ControlSequenceKit", kitName)
+        desc = _get_kit_description(["ControlSequenceKit"], kitName)
     return desc
 
 def _get_seq_kit_description(template):
     desc = ""
     if template:
         kitName = template.get_sequencekitname()
-        desc = _get_kit_description("SequencingKit", kitName)
+        desc = _get_kit_description(["SequencingKit"], kitName)
     return desc
 
     
@@ -107,6 +111,18 @@ def _get_chip_type_description(template):
             except:
                 logger.exception(format_exc())
     return desc
+
+def _get_library_read_length(template):
+    if template:
+        readLength = template.libraryReadLength
+        return readLength if readLength > 0 else ""
+    return ""
+
+def _get_templating_size(template):
+    if template:
+        templatingSize = template.templatingSize
+        return templatingSize if templatingSize else ""
+    return ""
 
 def _get_flow_count(template):
     if template:
@@ -217,6 +233,16 @@ def _get_notes(template):
     return template.get_notes()
 
 
+def _get_LIMS_data(template):
+    return ""
+
+#    metaData = template.metaData
+#    if metaData:
+#        return metaData.get("LIMS", "")
+#    else:
+#        return ""
+
+
 def _has_ir(template):
     plugins = Plugin.objects.filter(name__icontains="IonReporter", selected=True, active=True)
     return plugins.count() > 0
@@ -308,9 +334,11 @@ def get_template_data_for_batch_planning(templateId):
         hdr2 = [ COLUMN_SAMPLE_PREP_KIT
                , COLUMN_LIBRARY_KIT
                , COLUMN_TEMPLATING_KIT
+               , COLUMN_TEMPLATING_SIZE
                , COLUMN_CONTROL_SEQ_KIT
                , COLUMN_SEQ_KIT
                , COLUMN_CHIP_TYPE
+               , COLUMN_LIBRARY_READ_LENGTH
                , COLUMN_FLOW_COUNT
                , COLUMN_SAMPLE_TUBE_LABEL
                , COLUMN_BEAD_LOAD_PCT
@@ -323,6 +351,7 @@ def get_template_data_for_batch_planning(templateId):
                , COLUMN_PROJECTS
                , COLUMN_EXPORT
                , COLUMN_NOTES
+               , COLUMN_LIMS_DATA
                ]
     
         body = [ getPlanDisplayedName(template)
@@ -332,9 +361,11 @@ def get_template_data_for_batch_planning(templateId):
         body2 = [_get_sample_prep_kit_description(template)
                , _get_lib_kit_description(template)
                , _get_template_kit_description(template)
+               , _get_templating_size(template)
                , _get_control_seq_kit_description(template)
                , _get_seq_kit_description(template)
                , _get_chip_type_description(template)
+               , _get_library_read_length(template)
                , _get_flow_count(template)
                , _get_sample_tube_label(template)
                , _get_bead_loading_qc(template)
@@ -347,6 +378,7 @@ def get_template_data_for_batch_planning(templateId):
                , _get_projects(template, ";")
                , _get_export(template, ";")
                , _get_notes(template)
+               , _get_LIMS_data(template)
                ]
 
  

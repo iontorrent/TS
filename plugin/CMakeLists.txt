@@ -29,7 +29,6 @@ configure_file (
 set(PLUGINS
 AssemblerSPAdes
 ampliSeqRNA
-RunRecognitION
 coverageAnalysis
 sampleID
 variantCaller
@@ -70,7 +69,7 @@ file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/scratch)
 
 include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "perl, python, ion-torrentr, ion-samita, ion-pipeline, ion-dbreports, ion-igv, python-pysam (>= 0.7)")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "perl, python, ion-torrentr, ion-pipeline, ion-dbreports, ion-igv")
 set(CPACK_PACKAGE_DESCRIPTION "Plugins for the Torrent Browser. These plugins, when present will be executed, post analysis pipeline run, to generate additional results.")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/preinst

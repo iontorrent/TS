@@ -161,7 +161,7 @@ $(document).ready(function() {
 <li><a href="{{bctable}}" title='Click to download a table file of the Barcode Summary Report presented above.'>Download Barcode Summary Report</a></li>
 {% endif %}
 {% if bcmatrix %}
-<li><a href="{{bcmatrix}}" title='Click to download a table file of reads assigned to individual {{bcmtype}}s for each barcode.'>Download barcode/{{bcmtype}} coverage matrix</a></li>
+<li><a href="{{bcmatrix}}" title='Click to download a table file of {{bcmfield}} individual {{bcmtype}}s for each barcode.'>Download barcode/{{bcmtype}} coverage matrix</a></li>
 {% endif %}
 
 {% if not autorefresh %}

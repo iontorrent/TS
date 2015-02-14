@@ -129,7 +129,7 @@ while(<>) {
         if( $kvp =~ /\s*(\S+?)=(\S+)/ ) {
           unless( defined($annoFields{$1}) ) {
             $annoFields{$1} = scalar(@annoOrder);
-            push(@annoOrder,$1);
+            push(@annoOrder,'"'.$1.'"');
           }
         }
         $exAnno .= $kvp.';';

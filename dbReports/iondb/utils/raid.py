@@ -2,6 +2,7 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
 import os
+import argparse
 import simplejson as json   # simplesjon has object_pairs_hook
 import subprocess
 try:
@@ -16,6 +17,7 @@ GOOD = 'good'
 
 
 def get_raid_status(raidinfojson):
+    '''Wrapper'''
     # Ignore the passed in values for now and use test json file
     #f = open("/tmp/raidinfo_juicebox.json", "r")
     #drive_status = get_raid_status_json(f.read())
@@ -28,10 +30,11 @@ def get_raid_status(raidinfojson):
         return None
 
 def load_raid_status_json(filename='/var/spool/ion/raidstatus.json'):
+    '''debug function'''
     contents = {}
     try:
-        with open(filename) as f:
-            contents = json.load(f)
+        with open(filename) as fhandle:
+            contents = json.load(fhandle)
             contents['date'] = datetime.strptime(contents['date'], "%Y-%m-%d %H:%M:%S.%f")
     except:
         pass
@@ -46,6 +49,7 @@ def get_raid_status_json(raidinfojson):
     #==========================================================================
     #==========================================================================
     def status_rules(key, value):
+        '''Determine status from key, value pair'''
         alert_map = {
             'Foreign State': 'None',
             'Port0 status': 'Active',
@@ -110,71 +114,50 @@ def get_raid_status_json(raidinfojson):
             enclosure_status = GOOD
 
             for drive in enclosure['drives']:
-                name = "NONE"
                 status = GOOD
                 info = []
-                firmware_state = ''
-                slot = ''
                 for key, value in drive.iteritems():
-                    #print ("%40s%40s" % (key,value))
-                    if key == "Inquiry Data":
-                        name = value
-                    if key == "Firmware state":
-                        firmware_state = value
-                    if key == "Slot":
-                        slot = value
                     param_status = status_rules(key, value)
                     info.append((key, value, param_status))
                     if status != ERROR and param_status and param_status != GOOD:
                         status = param_status
                 # build drives array
-                drive_status.append({
-                    'name': name,
-                    'status': status,
-                    'info': info,
-                    'firmware_state': firmware_state or "Empty",
-                    'slot': slot
-                })
+                drive_status.append(
+                    {
+                    'name':             drive.get('Inquiry Data', 'NONE'),
+                    'firmware_state':   drive.get('Firmware state', 'Empty'),
+                    'slot':             drive.get('Slot', ''),
+                    'status':           status,
+                    'info':             info,
+                    }
+                )
                 if enclosure_status != ERROR and status != GOOD:
                     enclosure_status = status
 
-            for drive in enclosure.get('logical_drives',[]):
-                name = "NONE"
-                status = GOOD
-                info = []
-                slot = ''
-                for key, value in drive.iteritems():
-                    if 'lv_size' in key:
-                        lv_size = value
-                    if 'lv_status' in key:
-                        lv_status = value
-                    if 'lv_name' in key:
-                        lv_name = value
-                    param_status = status_rules(key, value)
-                    info.append((key, value, param_status))
-                    if status != ERROR and param_status and param_status != GOOD:
-                        status = param_status
-                # build drives array
-                logical_drive_status.append({
-                    'name': lv_name,
-                    'status': lv_status,
-                    'size': lv_size,
-                })
-
+            for drive in enclosure.get('logical_drives', []):
+                logical_drive_status.append(
+                    {
+                    'name':     drive.get('lv_name', 'unknown'),
+                    'status':   drive.get('lv_status', 'unknown'),
+                    'size':     drive.get('lv_size', 0),
+                    }
+                )
 
             # status array for an adapter/enclosure pair
-            d = {
-                "adapter_id": adapter['id'],
-                "enclosure_id": enclosure['id'],
-                "status": enclosure_status,
-                "drives": drive_status,
-                "logical_drives": logical_drive_status
-            }
-            if adapter['id'].startswith("PERC H710"):
-                # show primary storage on top
-                raid_status.insert(0, d)
+            status_summary = \
+                {
+                "adapter_id":       adapter['id'],
+                "enclosure_id":     enclosure['id'],
+                "status":           enclosure_status,
+                "drives":           drive_status,
+                "logical_drives":   logical_drive_status
+                }
+            
+            # list primary storage first, so it shows up in display first
+            if filter(adapter.get('id').startswith, ["PERC H710", "PERC 6/i"]):
+                raid_status.insert(0, status_summary)
             else:
-                raid_status.append(d)
+                raid_status.append(status_summary)
 
     # Dump drive_status to disk file: /var/spool/ion/raidstatus.json
     try:
@@ -182,8 +165,8 @@ def get_raid_status_json(raidinfojson):
             'date': "%s" % datetime.now(),
             'raid_status': raid_status,
         }
-        with open(os.path.join('/', 'var', 'spool', 'ion', 'raidstatus.json'), 'w') as f:
-            json.dump(blob, f, indent=4)
+        with open(os.path.join('/', 'var', 'spool', 'ion', 'raidstatus.json'), 'w') as fhandle:
+            json.dump(blob, fhandle, indent=4)
     except:
         pass
 
@@ -191,25 +174,41 @@ def get_raid_status_json(raidinfojson):
 
 
 def get_raid_stats_json():
-    raidCMD = ["/usr/bin/ion_raidinfo_json"]
-    q = subprocess.Popen(raidCMD, shell=True, stdout=subprocess.PIPE)
-    stdout, stderr = q.communicate()
-    if q.returncode == 0:
+    '''Execute shell command to query the RAID subsystem'''
+    raid_cmd = ["/usr/bin/ion_raidinfo_json"]
+    retval = subprocess.Popen(raid_cmd, shell=True, stdout=subprocess.PIPE)
+    stdout, _ = retval.communicate()
+    if retval.returncode == 0:
         raid_stats = stdout
     else:
         raid_stats = None
-        print('There was an error executing %s' % raidCMD[0])
+        print('There was an error executing %s' % raid_cmd[0])
     return raid_stats
 
 
 if __name__ == '__main__':
-    f = open("/tmp/raidinfo_juicebox.json", "r")
-    foo = get_raid_status_json(f.read())
-    print len(foo)
-    for fight in foo:
-        for key, value in fight.iteritems():
-            if key == "info":
-                for item in value:
-                    print item
+    parser = argparse.ArgumentParser(description='''Parse raid info from ion_raidinfo_json script''')
+    parser.add_argument(dest = 'filename',
+                        help = 'specify input file')
+    args = parser.parse_args()
+    
+    f = open(args.filename, "r")
+    result = get_raid_status_json(f.read())
+    print "Number of Enclosures: %d" % len(result)
+    needful_keys = [
+        'adapter_id',
+        'enclosure_id',
+        'status',
+        'logical_drives',
+        'drives',
+        'missing_test'
+    ]
+    for fight in result:
+        for thiskey in needful_keys:
+            found = fight.get(thiskey, "* * * MISSING * * *")
+            if isinstance(found, list):
+                for i, item in enumerate(found):
+                    print "%s [%d]: %s" % (thiskey, i, item)
             else:
-                print ("%40s%40s" % (key, value))
+                print "%s: %s" % (thiskey, found)
+

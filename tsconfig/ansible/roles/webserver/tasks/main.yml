@@ -6,6 +6,7 @@
   with_items:
     - apache2-mpm-prefork
     - apache2
+    - apache2-utils
     - libapache2-mod-wsgi
     - libapache2-mod-php5
   notify: restart apache
@@ -44,5 +45,10 @@
 - name: Run logrotate once per hour
   copy: src=/etc/cron.daily/logrotate dest=/etc/cron.hourly/logrotate force=no
   
+- name: Disable conflicting apache modules - gnutls
+  shell: /usr/sbin/a2dismod gnutls
+  ignore_errors: yes
+  
 - name: Enable required apache modules
   shell: /usr/sbin/a2enmod wsgi headers ssl setenvif deflate filter expires rewrite include
+  notify: restart apache

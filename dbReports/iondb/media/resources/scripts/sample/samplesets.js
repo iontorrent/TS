@@ -380,7 +380,7 @@ $(document).ready(function() {
                     }
                 }
             },
-            pageSize: 10,
+            pageSize: 50,
 			serverPaging : true,
 			serverSorting : false,
         },
@@ -388,7 +388,11 @@ $(document).ready(function() {
         	mode: "multiple",
         	allowUnsort: true
         },
-        pageable: {pageSizes:[5,10,20,50]},
+        scrollable : {
+            virtual : true
+        },         
+        //pageable: {pageSizes:[5,10,20,50]},
+        pageable: true,
 		detailTemplate : kendo.template($("#template").html()),
 		detailInit : detailInit,
 		dataBinding : onDataBinding,

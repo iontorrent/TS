@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <cstdlib>
 #include <SystemMagicDefines.h>
+#include "BaseCallerUtils.h"
 
 #include "OptArgs.h"
 #include "json/json.h"
@@ -75,10 +76,10 @@ public:
   const vector<vector<vector<float> > > * getBs(int x, int y) const;
 
   // Read command line arguments and then call InitializeModel
-  void Initialize(OptArgs& opts);
+  void Initialize(OptArgs& opts, vector<string> &bam_comments, const string & run_id, const ion::ChipSubset & chip_subset);
 
   // Model text file and hp threshold supplied as input variables
-  void InitializeModel(string model_file_name, int model_threshold);
+  bool InitializeModel(string model_file_name, int model_threshold);
 
   void getAB(MultiAB &multi_ab, int x, int y) const;
 
@@ -93,6 +94,8 @@ public:
                                              int yMin, int yMax, int ySpan, int max_hp_calibrated);
 
   void FillIndexes(int offsetRegion, int nucInd, int refHP, int flowStart, int flowEnd, float paramA, float paramB);
+
+  void SaveModelFileToBamComments(string model_file_name, vector<string> &comments, const string &run_id, int block_col_offset, int block_row_offset);
 
 
 //protected:

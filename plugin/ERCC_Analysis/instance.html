@@ -1,137 +1,241 @@
-<!DOCTYPE html>
+<?xml version="1.0" encoding="iso-8859-1"?>
+<!DOCTYPE HTML>
 <html>
 <head>
+ <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
 
-  <script type="text/javascript" src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
+ <style type="text/css">
+  #formwrap {
+   line-height: 2em;
+   background: #eef;
+   margin: 10px;
+   padding: 10px;
+   height: 500px;
+  }
+  body {
+   font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
+   font-size: 14px;
+  }
+  .center { margin-left:auto; margin-right:auto; }
+  .help {cursor:help; border-bottom: 1px dotted #A9A9A9}
+ </style>
 
-  <style type='text/css'>
-        #formwrap {
-                line-height: 2em;
-                background: #eef;
-                margin: 10px;
-                padding: 10px;
-                height: 340px;
-                text-align: center;
-        }
+ <script>
+  $(function() {
 
-        #status, #progress {
-                margin: 10px;
-                background: #eef;
-                padding: 10px;
-                height: 120px;
-                overflow: auto;
-        }
+    $.fn.serializeObject = function() {
+     var o = {};
+     var a = this.serializeArray();
+     $.each( a, function() {
+       if( o[this.name] != null ) {
+         if( !o[this.name].push ) {
+           o[this.name] = [o[this.name]];
+         }
+         o[this.name].push(this.value || '');
+       } else {
+         o[this.name] = this.value || '';
+       }
+      });
+      return o;
+    };
 
-        body {
-                font-family: "Lucida Grande", "Lucida Sans Unicode", Verdana, Arial, Helvetica, sans-serif;
-                font-size: 14px;
-        }
+    $('#barcodeOI').change(function() {
+      addremove($(this).val());
+    });
 
-  </style>
-
-  <script type='text/javascript'>
-    //grab the global parameter value for input_text via the RESTful API
-    pluginGET = "";
-    $(document).ready(function(){
-     $.ajax({
-      url:"/rundb/api/v1/plugin/" + TB_plugin.pk + "?format=json",
-      dataType:"json",
-      type: "GET",
-      async: false,
-      success:function(data){
-       //get the plugin data
-       pluginGET = data;
-       
-       //delete the resource_uri
-       delete pluginGET.resource_uri;
-    
-       $.each(pluginGET.config, function(key,val){
-        if(key == "minrsquared"){
-          document.getElementById("minrsquared").value = val;
-          $("#default_rsquared").text("The current default minimum R-squared is "+val+".");
-        } 
-        if(key == "mincounts"){
-          document.getElementById("mincounts").value = val;
-          $("#default_mincounts").text("The current default minimum counts per transcript is "+val+".");
-        } 
-        if(key == "ercc_pool"){
-          document.getElementById("erccpool").value = val;
-          $("#default_erccpool").text("The current default ERCC Pool is Pool"+val+".");
-        }
-        if(key == "barcode"){
-          document.getElementById("barcode").value = val;
-		  if (val){
-            $("#default_barcode").text("The current default Barcode is "+val+".");
-		  }
-		}
-		});
+    function addremove(bcid) {
+      var bclist = $('#barcode').val();
+      if( bcid === '' || bcid == 'All' ) {
+        $('#barcode').val('All');
+        return
       }
-     });
-    });
-    $(function() {
-        $.fn.serializeObject = function()
-        {
-            var o = {};
-            var a = this.serializeArray();
-            $.each(a,
-            function() {
-                if (o[this.name] != null) {
-                    if (!o[this.name].push) {
-                        o[this.name] = [o[this.name]];
-                    }
-                    o[this.name].push(this.value || '');
-                } else {
-                    o[this.name] = this.value || '';
-                }
-            });
-            return o;
-        };
-        $('#postbutton').click(function() {
-            obj =  $('#ERCCform').serializeObject();
-            pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
-            pluginAPIJSON = JSON.stringify(pluginAPIJSON);
-            pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
-            msg_to_user = '<div style="text-align: center;">';
-            msg_to_user += '<p>Running the Plugin...this may take a while, hit "Refresh Plugin Status" to check for completion. </p>'
-            msg_to_user += '<img src="/site_media/jquery/colorbox/images/loading.gif"';
-            msg_to_user += 'alt="Running Plugin" style="float:center"></img>'
-            msg_to_user += '</div>'
-            $.ajax({
-                type: 'POST',
-                url: pluginURL,
-                contentType: "application/json; charset=utf-8",
-                success: function(data) {
-                    $("#status").html(msg_to_user);
-                    setTimeout("parent.$.fn.colorbox.close()" ,6000); },
-                data: pluginAPIJSON,
-                dataType: "json"
-            });
+      if( bclist == 'All' || bclist == '' ) {
+        $('#barcode').val(bcid);
+        return
+      }
+      bclist += ','+bcid;
+      $('#barcode').val(bclist);
+      cleanBclist();
+    }
+
+    function cleanBclist() {
+      // trim, sort and remove duplicates
+      var bclist = $('#barcode').val();
+      var bcary = bclist.split(',');
+      var bcary2 = [];
+      for( var i = 0; i < bcary.length; ++i ) {
+        bcary[i] = bcary[i].trim();
+      }
+      bcary = bcary.sort();
+      for( var i = 0; i < bcary.length; ++i ) {
+        var bcid = bcary[i];
+        if( bcary2.length > 0 && bcid == bcary2[bcary2.length-1] ) continue;
+        bcary2.push(bcid);
+      }
+      bcary = bcary2;
+      // output cleaned list but warn for elements removed as non-valid barcode IDs
+      bclist = '';
+      badlist = '';
+      for( var i = 0; i < bcary.length; ++i ) {
+        var bcid = bcary[i];
+        if( bcid === '' || bcid === 'All' ) continue;
+        var ok = false;
+        $('#barcodeOI option').each(function(){
+          if( this.value == bcid ) {
+            ok = true;
+            return false;
+          }
         });
+        if( ok ) {
+          if( bclist !== '' ) bclist += ',';
+          bclist += bcid;
+        } else {
+          if( badlist !== '' ) badlist += ', ';
+          badlist += bcid;
+        }
+      }
+      if( badlist !== '' ) {
+        if( badlist.indexOf(',') >= 0 ) {
+          alert("Warning: The following invalid barcodes were removed from those specified:\n"+badlist);
+        } else {
+          alert("Warning: The invalid barcode '"+badlist+"' was removed from those specified.");
+        }
+      }
+      if( bclist === '' ) {
+        $('#barcode').val('All');
+      } else {
+        $('#barcode').val(bclist);
+      }
+      return (badlist !== '');
+    }
+
+    var reportUrl = '/rundb/api/v1/results/'+TB_result+'/?format=json&noplugin=True';
+    var pluginUrl = '/rundb/api/v1/plugin/'+TB_plugin.pk+'/?format=json';
+    var analysisUrl;
+    $.ajaxSetup({async: false});
+    $.get( reportUrl, function(data) {
+      analysisUrl = data.reportLink;
     });
-  </script>
+    // get config.html defaults from API - not sure this is still valid with new plan?
+    $.get( reportUrl, function(data) {
+      $.each( data.config, function(key,val) {
+        try { $("#"+key).val(val); }
+        catch(e) {}
+      });
+    });
 
+    // get plan libtype for forward ony reads default
+    var reportUrl = '/rundb/api/v1/results/'+TB_result+'/?format=json&noplugin=True';
+    var easUrl;
+    var analysisUrl;
+    $.ajaxSetup({async: false});
+    $.get( reportUrl, function(data) {
+     analysisUrl = data.reportLink;
+     easUrl = data.eas;
+     experimentUrl = data.experiment;
+     referenceID = data.reference;
+    });
+    var planLibType = "";
+    if( experimentUrl != undefined && experimentUrl != null && experimentUrl != "" ) {
+      var planUrl;
+      $.get( experimentUrl+"?format=json", function(data) { planUrl = data.plan; } );
+      if( planUrl != undefined && planUrl != null && planUrl != "" ) {
+        $.get( planUrl+"?format=json", function(data) { planLibType = data.runType; });
+      }
+    }
+    $('#fwdonlyreads').attr('checked',(planLibType=='RNA'));
+
+    // get all available barcodes
+    var numBarcodes = 0;
+    var barcodeUrl = analysisUrl + 'barcodeList.txt';
+    $.get( barcodeUrl, function(mem) {
+      var lines = mem.split("\n");
+      $.each(lines, function(n,row) {
+        var fields = $.trim(row).split(',');
+        if( fields[0].substr(0,7) == "barcode" ) {
+          $('#barcodeOI').append("<option value='" + fields[1] + "'>" +  fields[1] + "</option>");
+          ++numBarcodes;
+        }
+      });
+      if( populateBarcodeTargets < 1 ) {
+        $('#barcodesOfInterest').hide();
+      }
+    }).error(function() {
+      $('#barcodesOfInterest').hide();
+    });
+
+    $('#postbutton').click(function() {
+      if( cleanBclist() ) return false;
+      obj = $('#ERCC_Analysis').serializeObject();
+      pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
+      pluginAPIJSON = JSON.stringify(pluginAPIJSON);
+      pluginURL = "/rundb/api/v1/results/" + TB_result + "/plugin/";
+      $.ajax({
+        type: 'POST',
+        url: pluginURL,
+        async: false,
+        contentType: "application/json; charset=utf-8",
+        success: function(data) {
+          $("#json_result").html('<div style="text-align: center;"><img src="/site_media/jquery/colorbox/images/loading.gif" alt="Running Plugin" style="float:center"></img><p>Running the Plugin... Check ERCC_Analysis.html in the Plugin Summary</p></div>');
+          setTimeout("parent.$.fn.colorbox.close()",2000);
+        },
+        data: pluginAPIJSON,
+        dataType: "json"
+      });
+    });
+  });
+ </script>
 </head>
-        <body>
-        <div id="formwrap">
-            <form id="ERCCform" align="center">
-                Minimum acceptable R-squared value :
-                <input type="text" id="minrsquared" name="minrsquared" value="" />
-                <p id="default_rsquared"></p>
-                Minimum acceptable counts per ERCC transcript :
-                <input type="text" id="mincounts" name="mincounts" value="" />
-                <p id="default_mincounts"></p>
-				ERCC Pool used (1 or 2):
-				<input type="text" id="erccpool" name="erccpool" value="1" />
-				<p id="default_erccpool"></p>
-				Barcode of interest:
-				<input type="text" id="barcode" name="barcode" value="" />
-				<p id="default_barcode"></p>
-				<p>Enter the barcodes EXACTLY as they appears at the top of this report, under "Barcode name" (you may want to copy and paste), comma-delimited with no space. Leave blank if all barcodes need to be analyzed or no barcodes are used.</p>
-				<p>To change the default values, go to the Config tab of the Torrent Suite.</p>
-            </form>
-            <input id="postbutton" type="submit" value="Submit">    
-        </div>
-        <div id="status"> </div>
-    </body>
 
+<body>
+ <form id="ERCC_Analysis" name="ERCC_Analysis">
+  <div style="text-align:center">
+   <h1>Torrent ERCC Analysis Plugin</h1>
+  </div>
+   <table class="center" cellpadding="5px">
+    <tr>
+     <td><span class="help"
+       title="Check to analyze only reads mapped to to the forward strand of the reference. This is the assumed default for the Ion Torrent RNA-Seq application.">
+       Use only forward strand reads:</span></td>
+     <td><input type="checkbox" id="fwdonlyreads" name="fwdonlyreads" value="Yes" checked="checked"/></td> </tr>
+    <tr>
+     <td><span class="help" title="The minimum linear regression R-squared value threshold is used to flag if the relative ERCC reads for a (barcoded) report are insufficiently correlated with expectation.">Passing R-squared value:</span></td>
+     <td><input type="text" id="minrsquared" name="minrsquared" value="0.9" size="6"/></td>
+    </tr><tr>
+     <td><span class="help" title="The minimum number of reads that must be aligned to a specfic ERCC transcript for it to be included in the dose/response curve and R-squared calculation.">Minimum transcript counts:</span></td>
+      <td><input type="text" id="mincounts" name="mincounts" value="10" size="6"/></td>
+    </tr><tr>
+     <td><span class="help" title="Specify the correct ERCC pool (kit) used in the experiment. This determines the relative ERCC transcript representation that would be expected and used for correlation analysis of the ERCC transcript reads.">ERCC pool used:</span></td>
+     <td><select id="erccpool" name="erccpool" style="font-size:13px" value="1">
+      <option value="1">Pool 1</option>
+      <option value="2">Pool 2</option>
+     </select></td></tr> 
+    <tr id="barcodesOfInterest">
+     <td><span class="help"
+      title="Optional: Specifiy a single barcode, or comma-separated list of barcodes, on which to run the ERCC analysis.">Barcodes of interest:</span></td>
+     <td>
+        <div>Add a specific barcode:
+        <select id="barcodeOI" style="font-size:13px">
+          <option value="">All</option>
+        </select></div>
+        <div><textarea id="barcode" name="barcode" rows=1 cols=40 style="font-size:13px;border:5px single #C0C0C0">All</textarea></div>
+     </td>
+    </tr>
+   </table>
+   <br/>
+   <div align="center" id="json_result">
+    <input id="postbutton" type="submit" value="Submit">
+   </div>
+   <input type="hidden" id="launch_mode" name="launch_mode" value="Manual"/>
+   <br/>
+   <div align="left">
+    <h3>Description and Usage Notes</h3>
+    <p>
+This plugin analyzses the relative abundance of ERCC transcript reads compared to that expected.<br/>
+It assumes that the RNA-Seq or AmpliSeq-RNA library run was spiked with ERCC DNA sequences.<br/>
+For more information click <a target="_blank" href="/pluginMedia/ERCC_Analysis_dev/4479068A.pdf" title='Download the ERCC_Analysis Plugin User Bulletin (PDF).'>here</a>.</p>
+   </div>
+ </form>
+</body>
 </html>
+

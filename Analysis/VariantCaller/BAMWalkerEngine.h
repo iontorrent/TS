@@ -78,6 +78,8 @@ struct Alignment {
     left_sc = 0;
     right_sc = 0;
     start_sc = 0;
+    align_end = 0;
+    align_end = 0;
     start_flow = 0;
     flow_index.clear();
     worth_saving = false;
@@ -118,6 +120,8 @@ struct Alignment {
   int                   left_sc;            //! Number of soft clipped bases at the start of the alignment
   int                   right_sc;           //! Number of soft clipped bases at the end of the alignment
   int                   start_sc;           //! Number of soft clipped bases at the read beginning
+  int                   align_start;        //! genomic 0-based end position of soft clipped untrimmed read
+  int                   align_end;          //! genomic 0-based end position of soft clipped untrimmed read
   int                   start_flow;         //! Flow corresponding to the first base in read_bases
   vector<int>           flow_index;         //! Main incorporating flow for each base in read_bases
 

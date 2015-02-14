@@ -7,7 +7,7 @@ normalizeRead <- function(
 		startFlow=0,
         endFlow=0
 ) {
-    basecaller <- match.arg(basecaller)
+    method <- match.arg(method)
 	
 	if(!is.matrix(signal))
 		signal <- matrix(signal,nrow=1)

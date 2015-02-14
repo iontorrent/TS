@@ -3,6 +3,7 @@
     {{ block.super }}
     {% load static %}
     <script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
+    <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>    
 {%endblock%}
 {% block page-plan-content %}
 <div id="step3" class="tab-pane active">
@@ -10,7 +11,7 @@
 	<input type="hidden" name="warning_messages_count" value="-1"/>
 	<input type="hidden" name="error_messages" id="error_messages"/>
 	<input type="hidden" name="warning_messages" id="warning_messages"/>
-							
+    							
 	{%if helper.isTemplateBySample%}
 		<legend>Save Template before Plan Creation</legend>	
 		<p>Enter a template name.</p>
@@ -29,14 +30,51 @@
     {% endfor %}
 </div>
 
-<div id="noteerror" style="color:red;font-weight:bold;"></div>
+
 <div class="row-fluid">
-    <div class="span12">
-        <label for="note" class="form-label">Add a note</label>
-        <textarea id="note" name="note" style="width:70%;height:100px;">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
-        <br>
+    <div class="span7">
+        <p class="form-label">
+            Set as Favorite
+            {% if step.getCurrentSavedFieldDict.setAsFavorite %}
+                <input type="checkbox" id="setAsFavorite" name="setAsFavorite" checked="checked"/>
+            {% else %}
+                <input type="checkbox" id="setAsFavorite" name="setAsFavorite"/>
+            {% endif %}
+        </p>
     </div>
 </div>
+
+
+{%if helper.isTemplateBySample%}
+    {% include "rundb/plan/page_plan/page_plan_reference_section.html" %}    
+{%endif%}
+
+
+<div id="noteerror" style="color:red;"></div>
+<div class="row-fluid" style="margin-top: 20px">
+    <div class="span8 summary-section">
+        <label for="note" class="form-label">Add a note</label>
+        <textarea id="note" name="note" style="width:90%;height:100px;" placeholder="Optional">{{step.getCurrentSavedFieldDict.note|default_if_none:""}}</textarea>
+        <br>
+        <label for="LIMS_meta" class="form-label">Add LIMS Meta Data</label>
+        <textarea id="LIMS_meta" name="LIMS_meta" style="width:90%;height:100px;" placeholder="Optional">{{step.getCurrentSavedFieldDict.LIMS_meta|default_if_none:""}}</textarea>
+        <br>
+    </div>
+    <div class="span4 summary-section" style="margin-top: 25px">
+        <label for="qc" class="form-label">Monitoring Thresholds</label>
+        {% for key, value in step.getCurrentSavedFieldDict.items %}
+            {% if key in step.qcNames %}
+                <div class="span12">
+                    <h4>{{key}}:</h4>
+    
+                    <h3 style="font-size: 20px; float:left; margin-right:10px; margin-top:0px;">≤</h3>
+                    <input data-input-name="{{key}}" name="{{key}}" style="width:35px;" value="{{value}}">
+                </div>
+            {% endif %}
+        {% endfor %}
+    </div>
+</div>
+
 
 {%endblock%}
 {% block prevnext-buttons %}
@@ -73,7 +111,24 @@
             if(!is_valid_length($(this).val(), 1024)) {
                 $("#noteerror").html('Error, Notes length should be 1024 characters maximum');   
             } 
-        });		
+        });
+
+        {% for qcType in step.getPrePopulatedFieldDict.qcTypes %}
+
+        (function () {
+            var minThreshold = {{qcType.minThreshold}};
+            var maxThreshold = {{qcType.maxThreshold}};
+            var inputElement = $("input[data-input-name='{{qcType.qcName}}']");
+
+            inputElement.spinner({min: minThreshold, max: maxThreshold});
+            inputElement.on("spinchange spinstop", function(event, ui){
+                var summaryElement = $("td[data-summary-name='{{qcType.qcName}}']");
+                summaryElement.text(inputElement.spinner("value"));
+            });
+        })();
+
+        {% endfor %}
+
 	});
 </script>
 {%endblock%}

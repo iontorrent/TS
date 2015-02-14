@@ -1,13 +1,15 @@
 ---
 # file: roles/fileserver/tasks/main.yml
 
+#============================================================================ 
 # iptables configuration
+#============================================================================ 
 - name: iptables
   template: src=iptables.template dest=/etc/iptables.rules
   notify: load iptables
   
 - name: customized iptables
-  command: /usr/bin/touch /etc/iptables.custom owner=root mode=0644
+  file: name=/etc/iptables.custom owner=root mode=0644 state=touch
   notify: load custom iptables
   
 - name: modify /etc/network/interfaces to enable firewall rules
@@ -22,7 +24,9 @@
                 regexp='pre-up iptables-restore.*iptables.custom'
                 line='pre-up iptables-restore --noflush < /etc/iptables.custom'
    
+#============================================================================ 
 # network interfaces configuration
+#============================================================================ 
 - name: copy network_interfaces script file
   copy: src=network_interfaces.sh dest=/tmp/network_interfaces.sh mode=0775
   
@@ -34,7 +38,9 @@
 - debug: msg="{{item}}"
   with_items: output.stdout_lines
   
+#============================================================================ 
 # ftp configuration
+#============================================================================ 
 - name: install vsftpd package
   apt: name=vsftpd state=latest
   
@@ -48,23 +54,48 @@
   
 - debug: msg="{{item}}"
   with_items: output.stdout_lines
-  
+
+#============================================================================  
 # dhcp configuration
-- name: install dhcp3-server package
+#============================================================================ 
+- name: install dhcp3-server package for lucid
   apt: name=dhcp3-server state=latest
+  when: ansible_distribution_release == "lucid"
   
-- name: copy dhcp configuration script file
-  copy: src=config_dhcp.sh dest=/tmp/config_dhcp.sh mode=0775
+- name: install dhcp3-server package for trusty
+  apt: name=isc-dhcp-server state=latest
+  when: ansible_distribution_release == "trusty"
+
+- name: copy dhcp configuration script file (lucid)
+  template: src=config_dhcp.template dest=/tmp/config_dhcp.sh mode=0775
+  with_items:
+    'send host-name "<hostname>";'
+  when: ansible_distribution_release == "lucid"
   
+- name: copy dhcp configuration script file (trusty)
+  template: src=config_dhcp.template dest=/tmp/config_dhcp.sh mode=0775
+  with_items:
+    'send host-name = gethostname();'
+  when: ansible_distribution_release == "trusty"
+    
 - name: configure dhcp
   command: /tmp/config_dhcp.sh
   register: output
   notify: restart dhcp
+  when: ansible_distribution_release == "lucid"
+  
+- name: configure dhcp
+  command: /tmp/config_dhcp.sh
+  register: output
+  notify: restart isc-dhcp
+  when: ansible_distribution_release == "trusty"
   
 - debug: msg="{{item}}"
   with_items: output.stdout_lines
   
+#============================================================================ 
 # ntp configuration
+#============================================================================ 
 - name: install ntp server package
   apt: name=ntp state=latest
   
@@ -74,7 +105,12 @@
                 line="restrict 192.168.0.0 mask 255.255.0.0 nomodify notrap"
   notify: restart ntp
   
+#============================================================================ 
 # exportfs configuration of /results
+#============================================================================
+- name: Restart nfs daemon
+  service: name=nfs-kernel-server state=restarted
+  
 - name: Status of /results
   command: /usr/bin/test -d /results
   register: result
@@ -83,11 +119,13 @@
   lineinfile: dest=/etc/exports
                 state=present
                 regexp='/results.*{{ansible_default_ipv4.network}}.*'
-                line='/results {{ansible_default_ipv4.network}}/{{CIDR}}(rw,async,subtree_check)'
+                line='/results {{ansible_default_ipv4.network}}/{{CIDR}}(rw,async,subtree_check,no_root_squash)'
   when: result|success
   notify: restart exportfs
 
+#============================================================================ 
 # exportfs configuration of /rawdata
+#============================================================================ 
 - name: Status of /rawdata
   command: /usr/bin/test -d /rawdata
   register: rawdata
@@ -96,7 +134,7 @@
   lineinfile: dest=/etc/exports
                 state=present
                 regexp='/rawdata.*{{ansible_default_ipv4.network}}.*'
-                line='/rawdata {{ansible_default_ipv4.network}}/{{CIDR}}(rw,async,subtree_check)'
+                line='/rawdata {{ansible_default_ipv4.network}}/{{CIDR}}(rw,async,subtree_check,no_root_squash)'
   when: rawdata|success
   notify: restart exportfs
 

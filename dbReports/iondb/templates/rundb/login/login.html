@@ -2,7 +2,7 @@
 {% if user.is_authenticated %}
 <p style="text-align: right;">
     Welcome {{ user.get_full_name|default:user.username }}!
-    <a id="begin_button" class="btn btn-primary" href="{% url 'data' %}">Begin</a>
+    <a id="begin_button" class="btn btn-primary" href="{% if next %}{{next|escape}}{% elif request.GET.next %}{{request.GET.next|escape}}{% else %}{% url 'data' %}{% endif %}">Begin</a>
 </p>
 <p style="margin-top: 20px; color: #d3d3d3;">
         Not {{ user.get_full_name|default:user.username }}?
@@ -14,7 +14,9 @@
     {% csrf_token %}
     <input type="text" id="id_username" name="username" placeholder="User name" class="span3" tabindex="1">
     <input type="password" id="id_password" name="password" placeholder="Password" class="span3" tabindex="2">
-    <button type="submit" class="btn btn-primary pull-right" tabindex="4">Sign In</button>
+    <div>
+        <button type="submit" class="btn btn-primary" tabindex="4">Sign In</button>
+    </div>
     <label for="id_remember_me" class="checkbox">Remember Me<input id="id_remember_me" type="checkbox" name="remember_me" class="checkbox" checked="checked" tabindex="3"></label>
     <div class="help-block" style="margin-top: 100px;"><a href="{% url 'signup' %}" class="btn btn-small">Register</a> for a new account</div>
     <input type="hidden" id="next" name="next"

@@ -273,7 +273,7 @@ def main():
         qual = fields[5]
         info = {}
         for item in fields[7].split(';'):
-            subitem = item.split('=')
+            subitem = item.split('=',1)
             if len(subitem) == 1:
                 subitem.append('')
             if len(subitem) == 2:

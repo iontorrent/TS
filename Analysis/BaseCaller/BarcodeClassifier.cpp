@@ -12,87 +12,162 @@
 
 #include "Utils.h"
 
-void ValidateAndCanonicalizePath(string &path);   // Borrowed from BaseCaller.cpp
+//void ValidateAndCanonicalizePath(string &path);   // Borrowed from BaseCaller.cpp
 
 void BarcodeClassifier::PrintHelp()
 {
   printf ("Barcode classification options:\n");
-  printf ("  -b,--barcodes                    FILE/off   detect barcodes listed in provided file [off]\n");
+
+  //printf ("  -b,--barcodes                    FILE/off   detect barcodes listed in provided file [off]\n");
   printf ("     --barcode-mode                INT        selects barcode classification algorithm [2] Range: {1,2,3}\n" );
   printf ("     --barcode-cutoff              FLOAT      minimum score to call a barcode [1.0] Range: [x>0]\n" );
   printf ("     --barcode-separation          FLOAT      minimum difference between best and second best scores [2.5] Range: [x>0]\n" );
   printf ("     --barcode-filter              FLOAT      barcode freq. threshold, if >0 writes output-dir/barcodeFilter.txt [0.0 = off] Range: [0<=x<1]\n" );
   printf ("     --barcode-filter-minreads     INT        barcode reads threshold, if >0 writes output-dir/barcodeFilter.txt [0 = off] Range: {x>=0}\n" );
   printf ("     --barcode-error-filter        FLOAT      filter barcodes based on average number of errors [1.0] Range: [0<=x<2]\n" );
-  printf ("     --barcode-filter-postpone     INT        switch to disable / turn down barcode filters in basecaller Range: {0,1,2}\n" );
+  printf ("     --barcode-filter-postpone     INT        switch to disable{2} / reduce barcode filters{1} in basecaller. Range: {0,1,2}\n" );
+  printf ("     --barcode-filter-named        BOOL       If true, include barcodes with a specified sample name in filtering [false]\n");
+  printf ("     --barcode-ignore-flows        INT,INT    Specify a (open ended) interval of flows to ignore for barcode classification.\n");
+  printf ("     --barcode-compute-dmin        BOOL       If true, computes minimum Hamming distance of barcode set [false]\n");
+  printf ("     --barcode-auto-config         BOOL       If true, automatically selects barcode cutoff and separation parameters. [false]\n");
+  printf ("     --barcode-check-limits        BOOL       If true, performs a basic sanity check on input options. [true]\n");
   printf ("\n");
 }
 
+// ------------------------------------------------------------------------
 
+BarcodeClassifier::~BarcodeClassifier()
+{
+}
 
-BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
-    const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, const string& output_directory, int chip_size_x, int chip_size_y)
+// ------------------------------------------------------------------------
+
+BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, const ion::FlowOrder& flow_order,
+                const vector<KeySequence>& keys, const string& output_directory, int chip_size_x, int chip_size_y)
   : barcode_mask_(chip_size_x, chip_size_y)
 {
-  flow_order_ = flow_order;
-  num_barcodes_ = 0;
-  no_barcode_read_group_ = 0;
+  flow_order_        = flow_order;
+  num_barcodes_      = 0;
   barcode_max_flows_ = 0;
-  barcode_max_hp_ = 0;
+  barcode_max_hp_    = 0;
+  hamming_dmin_      = -1;
   barcode_min_start_flow_ = -1;
+  no_barcode_read_group_  = -1;
 
-  num_prints_ = 0;
+  dataset_in_use_     = datasets.DatasetInUse();
+  is_control_dataset_ = datasets.IsControlDataset();
 
-  // Retrieve command line options
+
+  // --- Prepare directory structure and output files
+
+  // Header for all subsequent warning / info messages - printed only if there are barcode sin the dataset
+  if (dataset_in_use_)
+    cout << "Barcode classification settings (" << (is_control_dataset_ ? "IonControl" : "Template")   << "):" << endl;
+
+  string barcode_id  = datasets.barcode_config().get("barcode_id","noID").asString();
+  // Only write barcode mask for template barcodes - not for control barcodes
+  if (is_control_dataset_ or (not dataset_in_use_)) {
+    barcode_mask_filename_   = "disabled";
+    barcode_filter_filename_ = "disabled";
+  } else {
+	barcode_filter_filename_ = output_directory+"/barcodeFilter.txt";
+    barcode_mask_filename_ = output_directory + "/barcodeMask.bin";
+    barcode_mask_.Init(chip_size_x, chip_size_y, MaskAll);
+    if (0 != barcode_mask_.WriteRaw (barcode_mask_filename_.c_str()))
+      fprintf (stderr, "BarcodeClassifier WARNING: Cannot create mask file file: %s\n", barcode_mask_filename_.c_str());
+  }
+
+
+  // --- Retrieve command line options
 
   barcode_filter_                 = opts.GetFirstDouble ('-', "barcode-filter", 0.01);
   barcode_filter_weight_          = opts.GetFirstDouble ('-', "barcode-filter-weight", 0.1);
   barcode_filter_minreads_        = opts.GetFirstInt    ('-', "barcode-filter-minreads", 20);
   barcode_error_filter_           = opts.GetFirstDouble ('-', "barcode-error-filter", 0.0);
   barcode_filter_postpone_        = opts.GetFirstInt    ('-', "barcode-filter-postpone", 0);
+  barcode_filter_named_           = opts.GetFirstBoolean('-', "barcode-filter-named", false);
+  check_limits_                   = opts.GetFirstBoolean('-', "barcode-check-limits", true);
+  score_auto_config_              = opts.GetFirstBoolean('-', "barcode-auto-config", false);
+  bool compute_dmin               = opts.GetFirstBoolean('-', "barcode-compute-dmin", false);
 
-  //CheckParameterLowerUpperBound(string identifier ,T &parameter, T lower_limit, int use_lower, T upper_limit, int use_upper, T default_val)
+  // Check parameters that have absolute limits
+  // CheckParameterLowerUpperBound(string identifier ,T &parameter, T lower_limit, int use_lower, T upper_limit, int use_upper, T default_val)
   CheckParameterLowerUpperBound("barcode-filter",          barcode_filter_,          0.0, 1, 1.0, 2, 0.01);
   CheckParameterLowerUpperBound("barcode-filter-weight",   barcode_filter_weight_,   0.0, 1, 1.0, 1, 0.1 );
   CheckParameterLowerUpperBound("barcode-filter-minreads", barcode_filter_minreads_, 0,   1, 0,   0, 20  );
   CheckParameterLowerUpperBound("barcode-error-filter",    barcode_error_filter_,    0.0, 1, 2.0, 2, 0.0 );
   CheckParameterLowerUpperBound("barcode-filter-postpone", barcode_filter_postpone_, 0,   1, 2,   1, 0   );
+  if (barcode_filter_postpone_ != 1) { barcode_filter_weight_ = 1.0; }
 
-
+  opts.GetOption(classifier_ignore_flows_, "0,0", '-', "barcode-ignore-flows");
+  barcode_ignore_flows_           = (classifier_ignore_flows_.size() == 2) and (classifier_ignore_flows_[0]>=0)
+		                            and (classifier_ignore_flows_[0]<classifier_ignore_flows_[1]);
   windowSize_                     = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
   barcode_bam_tag_		          = opts.GetFirstBoolean('-', "barcode-bam-tag", false);
   skip_droop_                     = opts.GetFirstBoolean('-', "skipDroop", true);
 
-  // We always write this file
-  barcode_filter_filename_ = output_directory+"/barcodeFilter.txt";
-  if (barcode_filter_postpone_ != 1)
-    barcode_filter_weight_ = 1.0;
 
-  //
-  // Step 1. First phase of initialization: parse barcode list file
-  //
+  // --- First phase of initialization: parse barcode list file
 
-  string file_id  = datasets.barcode_config().get("barcode_id","").asString();
-  //score_mode_     = datasets.barcode_config().get("score_mode",1).asInt();
-  //score_cutoff_   = datasets.barcode_config().get("score_cutoff",2.0).asDouble();
+  LoadBarcodesFromDataset(datasets, keys);
 
-  score_mode_                     = opts.GetFirstInt    ('-', "barcode-mode", 2);
-  score_cutoff_                   = opts.GetFirstDouble ('-', "barcode-cutoff", 1.0);
-  score_separation_               = opts.GetFirstDouble ('-', "barcode-separation", 2.5);
+  // For now only option to get the properties of the barcode set
+  if (compute_dmin or score_auto_config_)
+    ComputeHammingDistance();
 
-  CheckParameterLowerUpperBound("barcode-mode",       score_mode_,       1,   1, 3,   1, 2  );
-  CheckParameterLowerUpperBound("barcode-cutoff",     score_cutoff_,     0.0, 1, 0.0, 0, 1.0);
-  CheckParameterLowerUpperBound("barcode-separation", score_separation_, 0.0, 1, 0.0, 0, 2.5);
+  int    bc_mode       = 2;
+  double bc_cutoff     = 1.0;
+  double bc_separation = 2.5;
 
+  // Set options with limits that potentially depend on barcode set Hamming distance
+  SetClassifiactionParams(opts.GetFirstInt    ('-', "barcode-mode", 2),
+                          opts.GetFirstDouble ('-', "barcode-cutoff", 1.0),
+                          opts.GetFirstDouble ('-', "barcode-separation", 2.5));
+
+
+  // --- Pretty print barcode processing settings
+
+  //printf("Barcode classification settings:\n"); // is at top
+  // Only print classification settings if we're using the classifier.
+  if (dataset_in_use_) {
+    printf("   Barcode mask file        : %s\n", barcode_mask_filename_.c_str());
+    printf("   Barcode set name         : %s\n", barcode_id.c_str());
+    printf("   Number of barcodes       : %d\n", num_barcodes_);
+    printf("   Scoring mode             : %d\n", score_mode_);
+    printf("   Scoring threshold        : %1.1lf\n", score_cutoff_);
+    printf("   Separation threshold     : %1.2lf\n", score_separation_);
+    printf("   Barcode filter threshold : %1.6f (0.0 = disabled)\n", barcode_filter_);
+    printf("   Barcode error filter     : %1.3f\n", barcode_error_filter_);
+    printf("   Barcode filter minreads  : %d (0 = disabled)\n", barcode_filter_minreads_);
+    printf("   Barcode filter filename  : %s\n", barcode_filter_filename_.c_str());
+    printf("   Generation of XB bam-tag : %s (number of base errors during barcode classification)\n", (barcode_bam_tag_ ? "on" : "off"));
+    if (barcode_ignore_flows_)
+      printf("   Ignoring flows %d to %d for barcode classification.\n",classifier_ignore_flows_[0],classifier_ignore_flows_[1]);
+    printf("\n");
+  }
+}
+
+
+// ------------------------------------------------------------------------
+// Extract barcode information from datasets
+
+void BarcodeClassifier::LoadBarcodesFromDataset(BarcodeDatasets& datasets, const vector<KeySequence>& keys)
+{
+  string barcode_id  = datasets.barcode_config().get("barcode_id","noID").asString();
   barcode_.reserve(datasets.num_read_groups());
 
+  // --- Loop loading individual barcode informations
   for (int rg_idx = 0; rg_idx < datasets.num_read_groups(); ++rg_idx) {
-
     Json::Value& read_group = datasets.read_group(rg_idx);
 
     // Group for non-barcoded reads
     if (!read_group.isMember("barcode_sequence")) {
-      no_barcode_read_group_ = rg_idx;
+      if (no_barcode_read_group_ >= 0) {
+    	cerr << "BarcodeClassifier WARNING: Dataset " << barcode_id << " has more than one non-barcoded read group." << endl;
+    	cout << "WARNING: Dataset " << barcode_id << " has more than one non-barcoded read group." << endl;
+      }
+      else
+        no_barcode_read_group_ = rg_idx;
       continue;
     }
 
@@ -107,13 +182,10 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
 	// All barcodes share the same key in front of them
     barcode_.back().full_barcode = keys[0].bases();
     int key_length = barcode_.back().full_barcode.length();
-
     barcode_.back().full_barcode += read_group["barcode_sequence"].asString();
     int key_barcode_length = barcode_.back().full_barcode.length();
-
     barcode_.back().full_barcode += read_group.get("barcode_adapter","").asString();
     int key_barcode_adapter_length = barcode_.back().full_barcode.length();
-
 
     int flow = 0;
     int curBase = 0;
@@ -146,7 +218,6 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
       // First unique adapter incorporation flow past last barcode HP.
       if (end_length != -1 and curBase > end_length and barcode_.back().adapter_start_flow == -1)
         barcode_.back().adapter_start_flow = flow;
-
       flow++;
     }
 
@@ -156,49 +227,114 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets,
       barcode_.back().adapter_start_flow = flow;
     barcode_.back().num_flows = flow;
     barcode_.back().last_homopolymer = barcode_.back().flow_seq[flow-1];
-  }
+  } // --- End Loop loading individual barcode informations
+
+  // Only print classification settings if we're using the classifier.
+  if (dataset_in_use_ and no_barcode_read_group_ < 0)
+    cout << "   INFO: Dataset " << barcode_id << " does not have a non-barcoded read group." << endl;
 
   // And loop through barcodes again to determine maximum amount of flows after start flow has been determined
+  int barcode_flows, barcode_min_flows = -1;
   for (unsigned int bc=0; bc<barcode_.size(); bc++) {
-    barcode_max_flows_ = max(barcode_max_flows_, ((barcode_.at(bc).adapter_start_flow - barcode_min_start_flow_)));
+    barcode_flows = barcode_.at(bc).adapter_start_flow - barcode_min_start_flow_;
+    barcode_max_flows_ = max( barcode_max_flows_, barcode_flows);
+    if (barcode_min_flows < 0 or barcode_flows < barcode_min_flows)
+      barcode_min_flows = barcode_flows;
   }
+  if (dataset_in_use_ and barcode_min_flows >= 0 and barcode_min_flows != barcode_max_flows_)
+    cout << "   WARNING: Barcode set is not flow space synchronized. Barcodes range from "
+         << barcode_min_flows << " to " << barcode_max_flows_ << " flows." << endl;
 
-  // Prepare directory structure and output files
-
-  barcode_mask_filename_ = output_directory + "/barcodeMask.bin";
-  barcode_mask_.Init(chip_size_x, chip_size_y, MaskAll);
-  if (0 != barcode_mask_.WriteRaw (barcode_mask_filename_.c_str()))
-    fprintf (stderr, "BarcodeClassifier: Cannot create mask file file: %s\n", barcode_mask_filename_.c_str());
-  else
-    ValidateAndCanonicalizePath(barcode_mask_filename_);
-
-  // Export barcode_max_flows_
+  // Export barcode_max_flows_ to datasets structure
   datasets.SetBCmaxFlows(barcode_max_flows_);
-
-  // Pretty print barcode processing settings
-
-  printf("Barcode settings:\n");
-  printf("   Barcode mask file        : %s\n", barcode_mask_filename_.c_str());
-
-  printf("   Barcode set name         : %s\n", file_id.c_str());
-  printf("   Number of barcodes       : %d\n", num_barcodes_);
-  printf("   Scoring mode             : %d\n", score_mode_);
-  printf("   Scoring threshold        : %1.1lf\n", score_cutoff_);
-  printf("   Separation threshold     : %1.2lf\n", score_separation_);
-  printf("   Barcode filter threshold : %1.6f (0.0 = disabled)\n", barcode_filter_);
-  printf("   Barcode error filter     : %1.3f\n", barcode_error_filter_);
-  printf("   Barcode filter minreads  : %d (0 = disabled)\n", barcode_filter_minreads_);
-  printf("   Barcode filter filename  : %s\n", barcode_filter_filename_.c_str());
-  printf("   Generation of XB bam-tag : %s (number of base errors during barcode classification)\n", (barcode_bam_tag_ ? "on" : "off"));
-  printf("\n");
-
-}
+};
 
 
-BarcodeClassifier::~BarcodeClassifier()
+// ------------------------------------------------------------------------
+
+void BarcodeClassifier::SetClassifiactionParams(int mode, double cutoff, double separation)
 {
-}
+  score_mode_                     = mode;
+  score_cutoff_                   = cutoff;
+  score_separation_               = separation;
 
+  CheckParameterLowerUpperBound("barcode-mode",          score_mode_,      1,1, 3,1, 2);
+
+  // Do we have minimum distance information available?
+  if (hamming_dmin_ > 0) {
+    if (dataset_in_use_ and score_auto_config_)
+      cout << "   Auto-config of barcode scoring parameters enabled." << endl;
+
+    // Possible settings vary by score mode
+    if (score_mode_ == 1){
+      double max_cutoff = (double)((hamming_dmin_-1) / 2);
+      if (score_auto_config_)
+        score_cutoff_ = max_cutoff;
+      else
+        CheckParameterLowerUpperBound("barcode-cutoff",    score_cutoff_,    0.0,1, max_cutoff,1, max_cutoff);
+    }
+    else {
+      // Thought: Make cutoff barcode length dependent?
+      CheckParameterLowerUpperBound("barcode-cutoff",    score_cutoff_,    0.5,1, 0.0,0, 1.0);
+
+      double def_separation = (double)(hamming_dmin_) * 0.5;
+      if (score_auto_config_)
+        score_separation_ = def_separation;
+      else {
+        double min_separation = (double)(hamming_dmin_) * 0.25;
+        double max_separation = (double)(hamming_dmin_) * 0.75;
+
+        CheckParameterLowerUpperBound("barcode-separation",score_separation_,min_separation,1, max_separation, 1, def_separation);
+      }
+
+    }
+  }
+  else if (dataset_in_use_) {
+    // No distance information available - simple sanity checks
+    cout << "   No Hamming distance information available." << endl;
+    if (score_auto_config_) {
+      cout << "   WARNING: Auto-config of barcode scoring parameters not possible." << endl;
+      cerr << " BarcodeClassifier WARNING: Auto-config of barcode scoring parameters not possible: No Hamming distance available." << endl;
+    }
+    CheckParameterLowerUpperBound("barcode-cutoff",     score_cutoff_,     0.0,1, 0.0,0, 1.0);
+    CheckParameterLowerUpperBound("barcode-separation", score_separation_, 0.0,1, 0.0,0, 2.5);
+  }
+};
+
+
+// ------------------------------------------------------------------------
+
+void BarcodeClassifier::ComputeHammingDistance()
+{
+  if (not dataset_in_use_)
+    return;
+
+  int max_compare_flows = 0;
+  hamming_dmin_ = -1;
+
+  for (int bc_a = 0; bc_a < num_barcodes_-1; ++bc_a) {
+    for (int bc_b = bc_a+1; bc_b < num_barcodes_; ++bc_b) {
+
+      max_compare_flows = min(barcode_[bc_a].adapter_start_flow, barcode_[bc_b].adapter_start_flow);
+      int my_distance = 0;
+
+      for (int flow = barcode_min_start_flow_; flow < max_compare_flows; ++flow) {
+        if (barcode_ignore_flows_ and  (flow >= classifier_ignore_flows_[0]) and (flow < classifier_ignore_flows_[1]))
+          continue;
+        my_distance += abs(barcode_[bc_a].flow_seq[flow] - barcode_[bc_b].flow_seq[flow]);
+      }
+
+      if (hamming_dmin_ < 0 or my_distance < hamming_dmin_)
+        hamming_dmin_ = my_distance;
+
+    }
+  }
+  cout << "   Computed minimum Hamming distance of barcode set as d_min = " << hamming_dmin_ << endl;
+
+};
+
+
+// --------------------------------------------------------------------------
 
 void BarcodeClassifier::BuildPredictedSignals(float cf, float ie, float dr)
 {
@@ -223,39 +359,28 @@ void BarcodeClassifier::BuildPredictedSignals(float cf, float ie, float dr)
 }
 
 
-/*
- * flowSpaceTrim - finds the closest barcode in flowspace to the sequence passed in,
- * and then trims to exactly the expected flows so it can be error tolerant in base space
- */
-void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &processed_read, const BasecallerRead& basecaller_read,
-    const vector<int>& base_to_flow)
+// ------------------------------------------------------------------------
+
+int  BarcodeClassifier::BaseSpaceClassification(const ProcessedRead &processed_read, const vector<int>& base_to_flow, int& best_errors)
 {
-
-  int best_barcode = -1;
-  int best_errors = 1 + (int)score_cutoff_; // allows match with this many errors minimum when in bc_score_mode 1
-  processed_read.barcode_filt_zero_error = -1;
-  processed_read.barcode_distance = 0.0;
-  processed_read.barcode_bias.assign(barcode_max_flows_,0);
-
-  float best_distance = score_cutoff_ + score_separation_;
-  float second_best_distance = 1e20;
-  vector<float> best_bias(barcode_max_flows_,0);
-
-  // looks at flow-space absolute error counts, not ratios
-  if (score_mode_ == 1) {
+    int best_barcode = -1;
+	best_errors = 1 + (int)score_cutoff_; // allows match with this many errors minimum when in bc_score_mode 1
 
     for (int bc = 0; bc < num_barcodes_; ++bc) {
 
       int num_errors = 0;
 	  int flow = 0;
 	  int base = 0;
+	  bool evaluate_me = true;
       for (; flow < barcode_[bc].adapter_start_flow; ++flow) {
         int hp_length = 0;
         while (base < processed_read.filter.n_bases and base_to_flow[base] == flow) {
           base++;
           hp_length++;
         }
-        if (flow >= barcode_min_start_flow_) {
+        if (barcode_ignore_flows_)
+          evaluate_me = flow < classifier_ignore_flows_[0] or flow >= classifier_ignore_flows_[1];
+        if (flow >= barcode_min_start_flow_ and evaluate_me) {
           if (flow < barcode_[bc].num_flows-1)
             num_errors += abs(barcode_[bc].flow_seq[flow] - hp_length);
           else
@@ -266,15 +391,21 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
       if (num_errors < best_errors) {
         best_errors = num_errors;
         best_barcode = bc;
-        best_distance = 0.0;
       }
     }
-  } // ----------
+    return best_barcode;
+};
 
-  // Minimize distance to barcode predicted signal
-  else if (score_mode_ == 2 or score_mode_ == 3) {
-    // Minimize L2 distance for score_mode_ == 2
-    // Minimize L1 distance for score_mode_ == 3
+// ------------------------------------------------------------------------
+
+int  BarcodeClassifier::SignalSpaceClassification(const BasecallerRead& basecaller_read, float& best_distance, int& best_errors,
+                                                  vector<float>& best_bias, int& filtered_zero_errors)
+{
+    int best_barcode     = -1;
+    best_errors          =  0;
+    filtered_zero_errors = -1;
+    best_distance        = score_cutoff_ + score_separation_;
+    float second_best_distance = 1e20;
 
     for (int bc = 0; bc < num_barcodes_; ++bc) {
 
@@ -284,24 +415,26 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
 
       for (int flow = barcode_min_start_flow_; flow < barcode_[bc].adapter_start_flow; ++flow) {
 
+        if (barcode_ignore_flows_ and  (flow >= classifier_ignore_flows_[0]) and (flow < classifier_ignore_flows_[1]))
+          continue;
+
     	// Compute Bias
     	bias.at(flow-barcode_min_start_flow_) = basecaller_read.normalized_measurements.at(flow) - barcode_[bc].predicted_signal.at(flow);
     	// Thresholding of measurements to a range of [0,2]
     	double acting_measurement = basecaller_read.normalized_measurements.at(flow);
     	acting_measurement = max(min(acting_measurement, (double)barcode_max_hp_),0.0);
     	// Compute distance
-    	double residual = barcode_[bc].predicted_signal[flow] - acting_measurement;
+    	double residual = barcode_[bc].predicted_signal.at(flow) - acting_measurement;
     	if (flow == barcode_[bc].num_flows-1)
           residual = max(residual, 0.0);
-        if (score_mode_ == 2)
-          distance += residual * residual;
-        else
-          distance += fabs(residual);
+
+    	(score_mode_ == 2) ? (distance += residual * residual) : (distance += fabs(residual));
+
         // Compute hard decision errors - approximation from predicted values
         if (flow < barcode_[bc].num_flows-1)
-          num_errors += round(fabs(barcode_[bc].predicted_signal[flow] - basecaller_read.prediction[flow]));
+          num_errors += round(fabs(barcode_[bc].predicted_signal.at(flow) - basecaller_read.prediction[flow]));
         else
-          num_errors += round(max(barcode_[bc].predicted_signal[flow] - basecaller_read.prediction[flow], (float)0.0));
+          num_errors += round(max(barcode_[bc].predicted_signal.at(flow) - basecaller_read.prediction[flow], (float)0.0));
       }
 
       if (distance < best_distance) {
@@ -316,11 +449,55 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
     }
 
     if (second_best_distance - best_distance  < score_separation_) {
-      if (best_errors == 0) {
-        processed_read.barcode_filt_zero_error = best_barcode;
-      }
+      if (best_errors == 0)
+        filtered_zero_errors = best_barcode;
       best_barcode = -1;
     }
+    return best_barcode;
+};
+
+
+// ------------------------------------------------------------------------
+
+bool BarcodeClassifier::MatchesBarcodeSignal(const BasecallerRead& basecaller_read)
+{
+  if ((not dataset_in_use_) or (num_barcodes_ == 0))
+    return false;
+
+  int   best_barcode         = -1;
+  int   best_errors          =  0;
+  int   filtered_zero_errors = -1;
+  float best_distance        = 0.0;
+  vector<float> best_bias;
+
+  best_barcode = SignalSpaceClassification(basecaller_read, best_distance, best_errors, best_bias, filtered_zero_errors);
+
+  return (best_barcode >= 0);
+};
+
+// ------------------------------------------------------------------------
+
+/*
+ * flowSpaceTrim - finds the closest barcode in flowspace to the sequence passed in,
+ * and then trims to exactly the expected flows so it can be error tolerant in base space
+ */
+void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &processed_read, const BasecallerRead& basecaller_read,
+    const vector<int>& base_to_flow)
+{
+  if (not dataset_in_use_)
+    return;
+
+  int   best_barcode  = -1;
+  // looks at flow-space absolute error counts, not ratios
+  if (score_mode_ == 1) {
+    best_barcode = BaseSpaceClassification(processed_read, base_to_flow, processed_read.barcode_n_errors);
+  }
+  // Minimize distance to barcode predicted signal
+  else if (score_mode_ == 2 or score_mode_ == 3) {
+    // Minimize L2 distance for score_mode_ == 2
+    // Minimize L1 distance for score_mode_ == 3
+	best_barcode = SignalSpaceClassification(basecaller_read, processed_read.barcode_distance, processed_read.barcode_n_errors,
+                                             processed_read.barcode_bias, processed_read.barcode_filt_zero_error);
   }
 
   // -------- Classification done, now accounting ----------
@@ -329,7 +506,8 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
     int x, y;
     barcode_mask_.IndexToRowCol (read_index, y, x);
     barcode_mask_.SetBarcodeId(x, y, 0);
-    processed_read.read_group_index = no_barcode_read_group_;
+    if (no_barcode_read_group_ >= 0)
+      processed_read.read_group_index = no_barcode_read_group_;
     return;
   }
 
@@ -340,11 +518,8 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
   barcode_mask_.SetBarcodeId(x, y, (uint16_t)bce.mask_index);
   processed_read.read_group_index = bce.read_group_index;
 
-  processed_read.barcode_n_errors = best_errors;
   if(barcode_bam_tag_)
 	processed_read.bam.AddTag("XB","i", processed_read.barcode_n_errors);
-  processed_read.barcode_bias = best_bias;
-  processed_read.barcode_distance = best_distance;
 
   processed_read.filter.n_bases_prefix = 0;
   while (processed_read.filter.n_bases_prefix < processed_read.filter.n_bases and base_to_flow[processed_read.filter.n_bases_prefix] < bce.num_flows-1)
@@ -357,10 +532,16 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
   }
 }
 
-
+// ------------------------------------------------------------------------
 
 void BarcodeClassifier::Close(BarcodeDatasets& datasets)
 {
+  // Nothing to do if dataset is not in use
+  // Do not filter control dataset and do not generate output files
+  if  (is_control_dataset_ or (not dataset_in_use_))
+    return;
+
+
   if (0 != barcode_mask_.WriteRaw (barcode_mask_filename_.c_str()))
     fprintf (stderr, "BarcodeClassifier: Cannot write mask file file: %s\n", barcode_mask_filename_.c_str());
 
@@ -374,6 +555,8 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
   datasets.barcode_filters()["classifier_mode"]   = (Json::Int64)score_mode_;
   datasets.barcode_filters()["classifier_cutoff"] = score_cutoff_;
   datasets.barcode_filters()["classifier_separation"] = score_separation_;
+  if (hamming_dmin_ >=0)
+    datasets.barcode_filters()["hamming_distance"] = hamming_dmin_;
 
   // Generate Filter Thresholds for barcode filtering (minreads filter only active if filtering done in basecaller)
   int read_threshold = 0;
@@ -406,14 +589,19 @@ void BarcodeClassifier::Close(BarcodeDatasets& datasets)
 
   for (Json::Value::iterator rg = datasets.read_groups().begin(); rg != datasets.read_groups().end(); ++rg) {
     if ((*rg).isMember("read_count") and (*rg).isMember("barcode_sequence")) {
+
       int read_count = (*rg)["read_count"].asInt();
+      bool i_am_filtered = false;
+      bool filter_this_bc = barcode_filter_named_ or (*rg)["sample"].asString() == "none";
 
       // Initial filtering based on number of reads in read group
-      bool i_am_filtered = (read_count > read_threshold) ? false : true;
+      if (filter_this_bc) {
+        i_am_filtered = (read_count > read_threshold) ? false : true;
+      }
 
       // Further filtering based on average number of errors
-      if((not barcode_filter_postpone_) and (not i_am_filtered)
-          and (barcode_error_filter_ > 0) and (*rg).isMember("barcode_errors_hist")) {
+      if((barcode_error_filter_ > 0) and (*rg).isMember("barcode_errors_hist")
+         and filter_this_bc and (not i_am_filtered) and (not barcode_filter_postpone_)) {
         double one_error  = (*rg)["barcode_errors_hist"][1].asDouble();
         double two_errors = (*rg)["barcode_errors_hist"][2].asDouble();
         i_am_filtered = ((one_error + 2.0*two_errors) / (double)read_count) > barcode_error_filter_;

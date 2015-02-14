@@ -7,10 +7,6 @@
 #include <stdlib.h>
 #include <float.h>
 
-// some of the code uses <complex.h>, and in <complex.h> 'I' is defined and this 
-// interferes w/ lapackpp.  I undef it here in case anyone above has included <complex.h>
-#undef I
-
 using namespace arma;
 
 // base class for fitting algorithms

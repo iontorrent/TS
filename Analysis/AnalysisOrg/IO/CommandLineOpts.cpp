@@ -235,7 +235,7 @@ ValidateOpts::ValidateOpts()
 	m_opts["mixed-first-flow"] = VT_INT;
 	m_opts["mixed-last-flow"] = VT_INT;
 	m_opts["max-iterations"] = VT_INT;
-	m_opts["mixed-model-optio"] = VT_INT;
+	m_opts["mixed-model-option"] = VT_INT;
 	m_opts["mixed-stringency"] = VT_DOUBLE;
 	m_opts["sigproc-regional-smoothing-alpha"] = VT_FLOAT;
 	m_opts["sigproc-regional-smoothing-gamma"] = VT_FLOAT;
@@ -261,8 +261,8 @@ ValidateOpts::ValidateOpts()
 
 	// SignalProcessingBlockControl
 	m_opts["wells-compression"] = VT_INT;
-	m_opts["save-wells-freq"] = VT_INT;
-	m_opts["save-wells-flow"] = VT_INT;
+	m_opts["wells-save-freq"] = VT_INT;
+	m_opts["wells-save-flow"] = VT_INT;
 	m_opts["restart-from"] = VT_STRING;
 	m_opts["restart-next"] = VT_STRING;
 	m_opts["restart-check"] = VT_BOOL;
@@ -296,6 +296,7 @@ ValidateOpts::ValidateOpts()
 	m_opts["beadfind-sdasbf"] = VT_BOOL;
 	m_opts["beadfind-bfmult"] = VT_FLOAT;
 	m_opts["beadfind-minlive"] = VT_DOUBLE;
+        m_opts["beadfind-filt-noisy-col"] = VT_STRING;
 	m_opts["beadfind-minlivesnr"] = VT_DOUBLE;
 	m_opts["beadfind-min-tf-snr"] = VT_DOUBLE;
 	m_opts["beadfind-tf-min-peak"] = VT_FLOAT;
@@ -305,7 +306,7 @@ ValidateOpts::ValidateOpts()
 	m_opts["beadfind-skip-sd-recover"] = VT_INT;
 	m_opts["beadfind-thumbnail"] = VT_INT;
 	m_opts["beadfind-sep-ref"] = VT_BOOL;
-	m_opts["beadfind-lagone-filt"] = VT_INT;
+	m_opts["beadfind-smooth-trace"] = VT_BOOL;
 	m_opts["beadfind-diagnostics"] = VT_INT;
 	m_opts["beadfind-gain-correction"] = VT_BOOL;
 	m_opts["beadfind-blob-filter"] = VT_BOOL;	
@@ -348,6 +349,9 @@ ValidateOpts::ValidateOpts()
 	m_opts["frames"] = VT_INT;
 	m_opts["col-doubles-xtalk-correct"] = VT_BOOL;
 	m_opts["pair-xtalk-coeff"] = VT_FLOAT;
+    m_opts["fluid-potential-correct"] = VT_BOOL;
+    m_opts["fluid-potential-threshold"] = VT_FLOAT;
+
 
 	// ModuleControlOpts
 	m_opts["bfonly"] = VT_BOOL;
@@ -425,7 +429,14 @@ ValidateOpts::ValidateOpts()
 		
 	// ProcessImageToWell
 	m_opts["region-list"] = VT_VECTOR_INT;
-	m_opts["save-queue-size"] = VT_VECTOR_INT;
+	m_opts["wells-save-queue-size"] = VT_VECTOR_INT;
+    m_opts["wells-save-as-ushort"] = VT_BOOL;
+    m_opts["wells-convert-low"] = VT_FLOAT;
+    m_opts["wells-convert-high"] = VT_FLOAT;
+    m_opts["wells-save-number-copies"] = VT_BOOL;
+    m_opts["wells-save-flow-multiplier"] = VT_BOOL;
+    m_opts["bkg-washout-threshold"] = VT_FLOAT;
+    m_opts["bkg-washout-flow-detection"] = VT_INT;
 }
 
 void ValidateOpts::Validate(const int argc, char *argv[])

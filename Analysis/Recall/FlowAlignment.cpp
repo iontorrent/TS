@@ -676,7 +676,7 @@ mat calculateModelStats(const std::vector<double> & predictions, const std::vect
         int samples_used = 0;
 
         for(int ind = 0; ind < numRows; ++ind){
-            if(measurements[ind] - predictions[ind] > 2 || predictions[ind] - measurements[ind] > 2) continue;
+            //if(measurements[ind] - predictions[ind] > 2 || predictions[ind] - measurements[ind] > 2) continue;
             pV.at(samples_used) = predictions[ind];
             mV.at(samples_used) = measurements[ind];
             bV.at(samples_used) = measurements[ind]- predictions[ind];
@@ -690,8 +690,8 @@ mat calculateModelStats(const std::vector<double> & predictions, const std::vect
         double meanP = mean(pV);
         double meanM = mean(mV);
         double meanB = mean(bV);
-	double stdP = stddev(pV);
-	double stdM = stddev(mV);		
+        double stdP = stddev(pV);
+        double stdM = stddev(mV);
         double stdB = stddev(bV);
         double gain = meanM/meanP;
         mat cor_ = cor(pV, mV);
@@ -700,8 +700,8 @@ mat calculateModelStats(const std::vector<double> & predictions, const std::vect
         results[0] = meanP;
         results[1] = meanM;
         results[2] = meanB;
-	results[3] = stdP;
-	results[4] = stdM;
+        results[3] = stdP;
+        results[4] = stdM;
         results[5] = stdB;
         results[6] = gain;
         results[7] = cor_(0,0);

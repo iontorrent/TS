@@ -1116,7 +1116,7 @@ void usage() {
   cout << "SeqBoost - perform flow signal recalibration in an SFF/BAM with flow QV table (with gentler flow signal adjustment)." << endl;
   fprintf (stdout, "Version = %s-%s (%s) (%s)\n",
       IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(),
-      IonVersion::GetSvnRev().c_str(), IonVersion::GetBuildNum().c_str());
+      IonVersion::GetGitHash().c_str(), IonVersion::GetBuildNum().c_str());
   cout << "Usage: " << endl
        << "  SeqBoost -t flowQVTable.txt rawlib.sff/rawlib.basecaler.bam " << endl << endl
        << "Options:" << endl
@@ -1155,7 +1155,7 @@ int main(int argc, const char *argv[]) {
 
   fprintf (stdout, "SeqBoost Version = %s-%s (%s) (%s)\n",
       IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(),
-      IonVersion::GetSvnRev().c_str(), IonVersion::GetBuildNum().c_str());
+      IonVersion::GetGitHash().c_str(), IonVersion::GetBuildNum().c_str());
 
   string inputFile = inputFiles[0];
   parseFlowQVTable(flowQVFile, rb);

@@ -7,47 +7,89 @@ case "$1" in
     configure)
     
     # Perl module installation
-    # tarballs are copied to /tmp/perlModIn - Is this the way to do this?
+    # tarballs are copied to /usr/share/ion-tsconfig/perl
 
     # To add a Perl module, do 3 steps: add the *.tar.gz file itself
     # to external/perl directory, add *.tar.gz file name to
     # tsconfig/debian/postinst.in (this file), and add *.tar.gz file
     # name to tsconfig/CMakeLists.txt
     
-    # Keep this order to staisfy prerequesites:
-    # IPC-System-Simple-1.21.tar.gz autodie-2.10.tar.gz
-    staging="/tmp/perlModIn"
+    staging="/usr/share/ion-tsconfig/perl"
     cd $staging
-    #moduleList=( common-sense-3.4.tar.gz Carp-Assert-0.20.tar.gz IO-All-0.44.tar.gz IPC-System-Simple-1.21.tar.gz JSON-2.53.tar.gz JSON-XS-2.32.tar.gz List-MoreUtils-0.33.tar.gz Log-Log4perl-1.35.tar.gz Perl6-Slurp-0.050000.tar.gz Readonly-1.03.tar.gz Regexp-Common-2011121001.tar.gz Statistics-Descriptive-3.0300.tar.gz Statistics-LineFit-0.07.tar.gz autodie-2.10.tar.gz )
+    
+    # Find the perl module installation record file.  This file is created once a perl module is installed.
+    # If it is not defined, continue with empty variable.
+    PERLPOD=$(find /usr/local/lib/perl -type f -name perllocal.pod 2>/dev/null)||true
+
     moduleList=( IO-All-0.44.tar.gz JSON-2.53.tar.gz  JSON-XS-2.32.tar.gz List-MoreUtils-0.33.tar.gz Readonly-1.03.tar.gz Statistics-Descriptive-3.0300.tar.gz Statistics-LineFit-0.07.tar.gz )
     for module in ${moduleList[@]}; do
-        instLog=/tmp/${module%.tar.gz}_install.log
-        echo "Installing ${module%.tar.gz}.  See $instLog"
-        tar zxf $module
-        cd ${module%.tar.gz}
-        perl Makefile.PL > $instLog 2>&1
-        make >> $instLog 2>&1
-        make install >> $instLog 2>&1
-        cd $staging
-        rm -rf $module ${module%.tar.gz}
+        # Determine if module is not installed yet and install if its not
+        # NOTE: This only checks the perllocal.pod file - it does not verify the modules files exist in the filesystem.
+        # If the files were somehow removed, but the perllocal.pod file not updated, the module would not get installed.
+        module_name=$(echo ${module%-*} |sed s/-/::/)
+        echo "$module_name"
+        if [[ -z $PERLPOD ]]; then
+            # File does not exist, continue with this module installation
+            install_me=true
+        else
+            if ! grep "$module_name" $PERLPOD -A20 | tail -21 | egrep -q '(installed|VERSION)'; then
+                install_me=true
+            else
+                install_me=false
+            fi
+        fi
+        
+        if $install_me; then
+            instLog=/tmp/${module%.tar.gz}_install.log
+            echo "Installing ${module%.tar.gz}.  See $instLog"
+            tar zxf $module
+            cd ${module%.tar.gz}
+            perl Makefile.PL > $instLog 2>&1
+            make >> $instLog 2>&1
+            make install >> $instLog 2>&1
+            cd $staging
+            rm -rf ${module%.tar.gz}
+        fi
     done
     ldconfig 
 
         
-        OLD_INSTALL_PREFIX="/etc/torrentserver"
-        if [ ! -d $OLD_INSTALL_PREFIX ]; then
-            mkdir $OLD_INSTALL_PREFIX
-        fi
+    OLD_INSTALL_PREFIX="/etc/torrentserver"
+    if [ ! -d $OLD_INSTALL_PREFIX ]; then
+        mkdir $OLD_INSTALL_PREFIX
+    fi
 
-		mkdir -p /var/log/ion
-        chmod a+w /var/log/ion
-        
-        # remove the previous entry
-        sed -i '/.*TSchkconfig.*/d' /etc/rc.local
-        sed -i '/clear/d' /etc/rc.local
-        # make sure clear is AFTER TSchkconfig
-        sed -i 's:^exit 0.*:/usr/sbin/TSchkconfig\n&:' /etc/rc.local
-        sed -i 's:^exit 0.*:clear\n&:' /etc/rc.local
+    mkdir -p /var/log/ion
+    chmod a+w /var/log/ion
+    
+    # remove the previous entry
+    sed -i '/.*TSchkconfig.*/d' /etc/rc.local
+    sed -i '/clear/d' /etc/rc.local
+    # make sure clear is AFTER TSchkconfig
+    sed -i 's:^exit 0.*:/usr/sbin/TSchkconfig\n&:' /etc/rc.local
+    sed -i 's:^exit 0.*:clear\n&:' /etc/rc.local
+    
+    # Add hostname to ansible hosts definition file
+    sed -i "s/LOCALHEADNODE.*/$HOSTNAME ansible_connection=local/g" /usr/share/ion-tsconfig/ansible/torrentsuite_hosts
+    
+    # Enable Ansible logging
+    sed -i "s:.*log_path.*:log_path = /var/log/ion/ansible.log:" /etc/ansible/ansible.cfg
+    
+    # Disable strict host key checking
+    sed -i "s:.*host_key_checking.*:host_key_checking = False:" /etc/ansible/ansible.cfg
+    
+    # Set the default remote user
+    sed -i "s:.*remote_user.*:remote_user = ionadmin:" /etc/ansible/ansible.cfg
+    
+    # Set the private key file
+    sed -i "s:.*private_key_file.*:private_key_file = /home/ionadmin/.ssh/ansible_rsa_key:" /etc/ansible/ansible.cfg
+    
+    # Set the default host file
+    sed -i "s:.*hostfile.*:hostfile = /usr/share/ion-tsconfig/ansible/torrentsuite_hosts:" /etc/ansible/ansible.cfg
+    
+    # Set the default roles path
+    sed -i "s:.*roles_path.*:roles_path = /usr/share/ion-tsconfig/ansible/roles:" /etc/ansible/ansible.cfg
+    
     ;;
 esac
 

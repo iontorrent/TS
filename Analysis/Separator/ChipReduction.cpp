@@ -26,8 +26,8 @@ void ChipReduction::Init(int chip_height, int chip_width, int num_frames,
   m_num_frames = num_frames;
   m_y_step = y_step;
   m_x_step = x_step;
-  m_y_clip = y_clip / m_y_step;
-  m_x_clip = x_clip / m_x_step;
+  m_y_clip = ceil((float)y_clip / m_y_step);
+  m_x_clip = ceil((float)x_clip / m_x_step);
   m_min_good_reduced_wells = min_good_wells;
   m_block_height = ceil((float)m_chip_height / m_y_step);
   m_block_width = ceil((float) m_chip_width / m_x_step);
@@ -38,8 +38,7 @@ void ChipReduction::Init(int chip_height, int chip_width, int num_frames,
   m_well_cont_block_smooth = (float *)memalign(VEC8F_SIZE_B, sizeof(float) * total_size);
   m_good_wells = (int *)memalign(VEC8F_SIZE_B, sizeof(int) * total_size);
   m_bad_wells = (char *)memalign(VEC8F_SIZE_B, sizeof(char) * total_size);
-  memset(m_block_avg, 0, sizeof(float) * total_size);
-  memset(m_good_wells, 0, sizeof(int) * total_size);
+  Reset();
 }
 
 void ChipReduction::Zero() {

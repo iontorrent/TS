@@ -14,6 +14,7 @@
 
 <table>
   <tr><td>Library type:</td>          <td>{{options.library_type}}</td></tr>
+  <tr><td>Reference genome:</td>             <td>{{options.genome_name}}</td></tr>
   {% if options.has_targets %}
     <tr><td>Targeted regions:</td>    <td>{{options.targets_name}}</td></tr>
   {% else %}
@@ -25,6 +26,7 @@
     <tr><td>Hotspot regions:</td>     <td>None</td></tr>
   {% endif %}
   <tr><td>Configuration:</td>         <td>{{options.config_line1}}</td></tr>
+  <tr><td>Output Directory:</td>         <td>{{options.plugin_name}}_out.{{options.pluginresult}}</td></tr>
 </table>
 
 <div class="k-widget k-grid">

@@ -1,6 +1,6 @@
 // html for chart container and filters bar - note these are invisible and moved into position later
 document.write('\
-<div id="DOC-chart" style="border:2px solid #666;display:none">\
+<div id="DOC-chart" class="unselectable" style="border:2px solid #666;display:none">\
   <div id="DOC-titlebar" class="grid-header" style="min-height:24px;border:0">\
     <span id="DOC-collapsePlot" style="float:left" class="ui-icon ui-icon-triangle-1-n" title="Collapse view"></span>\
     <span class="table-title">Depth of Coverage Chart</span>\
@@ -66,7 +66,7 @@ $(function () {
   var useExCan = (fixIE && !useFlash);
 
   // minimum sizes for chart widget
-  var def_minWidth = 620;
+  var def_minWidth = 625;
   var def_minHeight = 200; // includes title bar and control panel, if open
 
   // configure widget size and file used from placement div attributes
@@ -76,6 +76,9 @@ $(function () {
     $('#DepthOfCoverageChart').hide();
     return;
   }
+
+  var startCollapsed = $("#DepthOfCoverageChart").attr("collapse");
+  startCollapsed = (startCollapsed != undefined);
 
   var tmp = $('#DepthOfCoverageChart').width();
   if( tmp < def_minWidth ) tmp = def_minWidth;
@@ -802,7 +805,7 @@ $(function () {
     }
     $('#DOC-tooltip').css({
       position: 'absolute', left: posx, top: posy, maxWidth: 280,
-      background: bgColor, padding: (sticky ? 3 : 4)+'px',
+      background: bgColor, padding: '3px '+(sticky ? '7px' : '4px'),
       border: (sticky ? 2 : 1)+'px solid #444',
       opacity: sticky ? 1: 0.7
     }).appendTo("body").fadeIn(sticky ? 10 : 100);
@@ -857,14 +860,14 @@ $(function () {
     } else if( plotParams.readAxis == 3 ) {
       depth = (100*(binOff+bin)/plotStats.meanX).toFixed(1);
     } else if( label == LegendLabels.cumCover ) {
-      depth = binOff + bin * binSize;
+      depth = commify(binOff + bin * binSize);
     } else {
       depth = binOff + bin * binSize;
-      if( binSize > 1 ) depth += (binSize == 2 ? "," : "-")+(depth+binSize-1);
+      if( binSize > 1 ) depth = commify(depth) + (binSize == 2 ? "," : "-") + commify(depth+binSize-1);
     }
-    var xtitle = "depth"; //fieldIds[0].toLowerCase();
+    var xtitle = "depth";
     if( binSize > 1 && label == LegendLabels.covCount ) xtitle += "s";
-    var msg = label+" at "+xtitle+" "+depth+ "."+br;
+    var msg = label+" at "+xtitle+" "+depth+br;
 
     // get counts and percentage values from the y value actually plotted.
     var y = item.datapoint[1];
@@ -917,4 +920,15 @@ $(function () {
   // autoload - after everything is defined
   unzoomToFile(coverageFile);
   cursorCoords.appendTo(placeholder);
+
+  // collapse view after EVRYTHING has been drawn in open chart (to avoid flot issues)
+  if( startCollapsed ) {
+    $("#DOC-collapsePlot").attr("class","ui-icon ui-icon-triangle-1-s");
+    $("#DOC-collapsePlot").attr("title","Expand view");
+    $('#DOC-controlpanel').hide();
+    $('.DOC-shy').hide();
+    $('#DOC-chart').resizable('destroy');
+    $('#DOC-noncanvas').hide();
+  }
+
 });

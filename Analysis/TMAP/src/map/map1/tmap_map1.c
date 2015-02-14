@@ -115,7 +115,7 @@ tmap_map1_sam_mapq(int32_t num_best_sa, int32_t num_all_sa, int32_t max_mm, int3
 }
 
 static int32_t
-tmap_map1_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt)
+tmap_map1_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap_refseq_t *refseq)
 {
   int32_t i;
   int32_t num_best_sa, num_best;

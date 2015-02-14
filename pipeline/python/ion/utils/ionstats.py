@@ -11,7 +11,7 @@ from ion.utils.blockprocessing import printtime
 
 ''' Invoke ionstats basecaller to generate alignment-independent metrics for unmapped BAM files'''
 
-def generate_ionstats_basecaller(unmapped_bam_filenames, ionstats_basecaller_filename, ionstats_alignment_h5_filename, basecaller_json, histogram_length):
+def generate_ionstats_basecaller(unmapped_bam_filenames, ionstats_basecaller_filename, histogram_length):
 
     try:
         com = "ionstats basecaller"
@@ -44,12 +44,13 @@ def generate_ionstats_alignment(bam_filenames, ionstats_alignment_filename, ions
             block_row_offset = basecaller_json["BaseCaller"]['block_row_offset']
             block_col_size   = basecaller_json["BaseCaller"]['block_col_size']
             block_row_size   = basecaller_json["BaseCaller"]['block_row_size']
+            subregion_col_size, subregion_row_size = generate_ionstats_subregion_dims(block_col_size, block_row_size)
 
             com += " --evaluate-hp true"
             com += " --output-h5 %s" % ionstats_alignment_h5_filename
             com += " --chip-origin %s,%s" % (block_col_offset, block_row_offset)
             com += " --chip-dim %s,%s" % (block_col_size, block_row_size)
-            com += " --subregion-dim %s,%s" % ( min(92,block_col_size-1), min(74,block_row_size-1) )
+            com += " --subregion-dim %s,%s" % (subregion_col_size, subregion_row_size)
 
         printtime("DEBUG: Calling '%s'" % com)
         subprocess.call(com,shell=True)
@@ -78,23 +79,62 @@ def generate_ionstats_tf(tf_bam_filename, tfref_fasta_filename, ionstats_tf_file
 def reduce_stats (input_filename_list, output_filename):
 
     try:
-        com = "ionstats reduce"
-        com += " -o %s" % (output_filename)
-        com += " " + " ".join(input_filename_list)
-        printtime("DEBUG: Calling '%s'" % com)
-        subprocess.call(com,shell=True)
+        #need to copy, cannot index an iterator
+        copy_input_filename_list = list(input_filename_list)
+        length=len(copy_input_filename_list)
+
+        # process file list in smaller intervalls
+        size = 100
+        i=0
+        while (i<length):
+            if i+size<length:
+                input_files = copy_input_filename_list[i:i+size]
+                output_file = output_filename+"."+str(i+size)
+            else:
+                input_files = copy_input_filename_list[i:length]
+                output_file = output_filename
+            # add results from earlier iterations
+            if i>0:
+                input_files=input_files+[output_filename+"."+str(i)]
+            i=i+size
+
+            com = "ionstats reduce"
+            com += " -o %s" % (output_file)
+            com += " " + " ".join(input_files)
+            printtime("DEBUG: Calling '%s'" % com)
+            subprocess.call(com,shell=True)
     except:
         printtime('Failed ionstats reduce')
         traceback.print_exc()
 
 
 def reduce_stats_h5 (input_filename_list, output_filename):
+
     try:
-        com = "ionstats reduce-h5"
-        com += " -o %s" % (output_filename)
-        com += " " + " ".join(input_filename_list)
-        printtime("DEBUG: Calling '%s'" % com)
-        subprocess.call(com,shell=True)
+        #need to copy, cannot index an iterator
+        copy_input_filename_list = list(input_filename_list)
+        length=len(copy_input_filename_list)
+
+        # process file list in smaller intervalls
+        size = 100
+        i=0
+        while (i<length):
+            if i+size<length:
+                input_files = copy_input_filename_list[i:i+size]
+                output_file = output_filename+"."+str(i+size)
+            else:
+                input_files = copy_input_filename_list[i:length]
+                output_file = output_filename
+            # add results from earlier iterations
+            if i>0:
+                input_files=input_files+[output_filename+"."+str(i)]
+            i=i+size
+
+            com = "ionstats reduce-h5"
+            com += " -o %s" % (output_file)
+            com += " " + " ".join(input_files)
+            printtime("DEBUG: Calling '%s'" % com)
+            subprocess.call(com,shell=True)
     except:
         printtime('Failed ionstats reduce-h5')
         traceback.print_exc()
@@ -176,6 +216,42 @@ def generate_legacy_basecaller_files (ionstats_basecaller_filename, legacy_filen
         
 
 
+''' Allow for specification of subregion sizes that depend on the chip/block dimensions '''
+
+def generate_ionstats_subregion_dims(block_col_size, block_row_size):
+
+    try:
+        subregion_col_size = 92
+        subregion_row_size = 74
+        if (block_col_size == 1200 and block_row_size == 800): # Proton thumbnail
+            subregion_col_size = 50
+            subregion_row_size = 50
+        elif ((block_col_size == 15456 and block_row_size == 10656) or (block_col_size == 1288 and block_row_size == 1332)): # P1
+            subregion_col_size = 184
+            subregion_row_size = 148
+        elif ((block_col_size ==  7680 and block_row_size ==  5312) or (block_col_size ==  640 and block_row_size ==  664)): # P0
+            subregion_col_size = 80
+            subregion_row_size = 83
+        elif (block_col_size == 3392 and block_row_size == 3792): # 318
+            subregion_col_size = 53
+            subregion_row_size = 48
+        elif (block_col_size == 3392 and block_row_size == 2120): # 316v2
+            subregion_col_size = 53
+            subregion_row_size = 53
+        elif (block_col_size == 2736 and block_row_size == 2640): # 316
+            subregion_col_size = 48
+            subregion_row_size = 48
+        elif (block_col_size == 1280 and block_row_size == 1152): # 314
+            subregion_col_size = 40
+            subregion_row_size = 48
+        return(subregion_col_size, subregion_row_size)
+    except:
+        printtime('Failed to generate subregion dims from input %s,%s' % (block_col_size, block_row_size))
+        traceback.print_exc()
+
+
+
+
 ''' Use ionstats_tf.json file to generate legacy files: TFStats.json '''
 
 def generate_legacy_tf_files (ionstats_tf_filename, tfstats_json_filename):
@@ -201,6 +277,7 @@ def generate_legacy_tf_files (ionstats_tf_filename, tfstats_json_filename):
                 'Q17 Mean' : tf_data['AQ17']['mean_read_length'],
                 '50Q10' : sum(tf_data['AQ10']['read_length_histogram'][50:]),
                 '50Q17' : sum(tf_data['AQ17']['read_length_histogram'][50:]),
+                '100Q17' : sum(tf_data['AQ17']['read_length_histogram'][100:]),
             }
 
             

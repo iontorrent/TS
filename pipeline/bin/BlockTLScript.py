@@ -66,7 +66,14 @@ if __name__=="__main__":
     except:
         traceback.print_exc()
 
-    reference_selected = env['referenceName'] and env['referenceName']!='none'
+    # Speedup Flags
+    do_ionstats_evaluate_hp  = True
+
+    reference_selected = False
+    for barcode_name,barcode_info in sorted(env['barcodeInfo'].iteritems()):
+        if barcode_info['referenceName']:
+            reference_selected = True
+            pass
 
     if os.path.exists(primary_key_file):
         isProtonBlock = False
@@ -253,17 +260,22 @@ if __name__=="__main__":
         # Flow Space Recalibration and re-basecalling          #
         ########################################################
         additional_basecallerArgs = ""
-        if env['doBaseRecal'] and reference_selected:
+        if env['doBaseRecal'] != "no_recal" and reference_selected:
             printtime("DEBUG: Flow Space Recalibration is enabled with Reference: %s" % env['referenceName'])
             set_result_status('Flow Space Recalibration')
             try:
 
                 # Default options to produce smaller basecaller results
                 prebasecallerArgs = env['prebasecallerArgs']
-                if not "--calibration-training=" in prebasecallerArgs:
-                    prebasecallerArgs = prebasecallerArgs + " --calibration-training=2000000"
-                if not "--flow-signals-type" in prebasecallerArgs:
-                    prebasecallerArgs = prebasecallerArgs + " --flow-signals-type scaled-residual"
+
+                if env['doBaseRecal'] == "panel_recal":
+                    prebasecallerArgs = prebasecallerArgs + " --calibration-training=0"
+                    prebasecallerArgs = prebasecallerArgs + " --calibration-panel /opt/ion/config/datasets_calibration.json"
+                else:
+                    if not "--calibration-training=" in prebasecallerArgs:
+                        prebasecallerArgs = prebasecallerArgs + " --calibration-training=100000"
+                    if not "--flow-signals-type" in prebasecallerArgs:
+                        prebasecallerArgs = prebasecallerArgs + " --flow-signals-type scaled-residual"
 
                 basecaller.basecalling(
                     env['SIGPROC_RESULTS'],
@@ -283,6 +295,8 @@ if __name__=="__main__":
                     env['chipType'])
 
                 basecaller_recalibration_datasets = blockprocessing.get_datasets_basecaller(os.path.join(env['BASECALLER_RESULTS'],'recalibration'))
+                if env['doBaseRecal'] == "panel_recal":
+                    basecaller_recalibration_datasets = basecaller_recalibration_datasets['IonControl']
 
                 # file containing dimension info (offsets, rows, cols) and flow info for stratification
                 try:
@@ -304,9 +318,10 @@ if __name__=="__main__":
                     if not basecaller_recalibration_datasets['read_groups'][read_group].get('read_count',0) > 0:
                         continue
 
-                    barcode_name = basecaller_recalibration_datasets['read_groups'][read_group].get('barcode_name','no_barcode')
-                    if not env['barcodeInfo'][barcode_name]['calibrate']:
-                        continue
+                    if env['doBaseRecal'] == "standard_recal":
+                        barcode_name = basecaller_recalibration_datasets['read_groups'][read_group].get('barcode_name','no_barcode')
+                        if not env['barcodeInfo'][barcode_name]['calibrate']:
+                            continue
 
                     referenceName = basecaller_recalibration_datasets['read_groups'][read_group]['reference']
 
@@ -347,7 +362,13 @@ if __name__=="__main__":
 
                 hptable = os.path.join(env['BASECALLER_RESULTS'], "recalibration", "hpTable.txt")
                 printtime("hptable: %s" % hptable)
-                additional_basecallerArgs = " --calibration-file " + hptable + " --phase-estimation-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "BaseCaller.json") + " --model-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "hpModel.txt")
+
+                additional_basecallerArgs  = " --calibration-file " + hptable
+                additional_basecallerArgs += " --phase-estimation-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "BaseCaller.json")
+                additional_basecallerArgs += " --model-file " + os.path.join(env['BASECALLER_RESULTS'], "recalibration", "hpModel.txt")
+                if env['doBaseRecal'] == "panel_recal":
+                    additional_basecallerArgs += " --calibration-panel /opt/ion/config/datasets_calibration.json"
+
                 add_status("Recalibration", 0)
             except:
                 traceback.print_exc()
@@ -464,7 +485,8 @@ if __name__=="__main__":
                     basecaller_meta_information,
                     basecaller_datasets,
                     graph_max_x,
-                    activate_barcode_filter)
+                    activate_barcode_filter,
+                    do_ionstats_evaluate_hp)
 
                 ionstats_plots.old_read_length_histogram(
                     #os.path.join('ionstats_alignment.json'),

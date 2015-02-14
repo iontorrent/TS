@@ -62,12 +62,20 @@ set (GLOBAL_SOURCES              config.h
 				 src/sw/lib/AffineSWOptimizationHash.cpp src/sw/lib/AffineSWOptimizationHash.h 
 				 src/sw/lib/AffineSWOptimizationWrapper.cpp src/sw/lib/AffineSWOptimizationWrapper.h 
 				 src/sw/tmap_vsw_bm.c
+				 src/realign/cigar_op.h
+				 src/realign/realign_cliptype.h
 				 src/realign/Realign.cpp src/realign/Realign.h
 				 src/realign/realign_proxy.cpp src/realign/realign_proxy.h
 				 src/realign/realign_wrapper.cpp src/realign/realign_wrapper.h
 				 src/realign/realign_wrapper_imp.cpp src/realign/realign_wrapper_imp.h
 				 src/realign/realign_c_util.c src/realign/realign_c_util.h
-				 src/realign/realign_util.cpp src/realign/realign_util.h)
+				 src/realign/realign_util.cpp src/realign/realign_util.h
+				 src/realign/align_batch.cpp src/realign/align_batch.h
+				 src/realign/align_common.h
+				 src/realign/sequtil.cpp src/realign/sequtil.h
+				 src/realign/contalign.cpp src/realign/contalign.h
+				 src/realign/cigar_utils.cpp src/realign/cigar_utils.h
+				 src/realign/realign_wrapper_context_imp.cpp src/realign/realign_wrapper_context_imp.h )
 
 set (SAMTOOLS ${ION_TS_EXTERNAL}/samtools_tmap_e783ea9/samtools)
 

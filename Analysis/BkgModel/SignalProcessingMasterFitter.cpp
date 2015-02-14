@@ -405,7 +405,7 @@ SignalProcessingMasterFitter::SignalProcessingMasterFitter (
     EmptyTraceTracker *_emptyTraceTracker, float sigma_guess,float t_mid_nuc_guess,
     float t0_frame_guess, bool nokey, SequenceItem* _seqList,int _numSeqListItems, bool restart,
     int16_t *_washout_flow, const CommandLineOpts *inception_state )
-  : global_defaults ( _global_defaults )
+  : global_defaults ( _global_defaults ), washout_threshold(WASHOUT_THRESHOLD), washout_flow_detection(WASHOUT_FLOW_DETECTION)
 {
   NothingInit();
 
@@ -750,6 +750,7 @@ void SignalProcessingMasterFitter::RegionalFittingForInitialFlowBlock( int flow_
     ApproximateDarkMatter (post_key_fit.lm_state , global_defaults.signal_process_control.regional_sampling, flow_block_size, flow_block_start );
 
   // Set things up for double exponential smoothing.
+  region_data->my_regions.tmidnuc_smoother.Initialize( & region_data->my_regions.rp );
   region_data->my_regions.copy_drift_smoother.Initialize( & region_data->my_regions.rp );
   region_data->my_regions.ratio_drift_smoother.Initialize( & region_data->my_regions.rp );
 }
@@ -855,6 +856,7 @@ void SignalProcessingMasterFitter::RegionalFittingForLaterFlowBlock( int flow_ke
   FitTimeVaryingRegion ( elapsed_time,fit_timer, flow_key, flow_block_size, table, flow_block_start );
 
   // Here is where we can do double exponential smoothing.
+  region_data->my_regions.tmidnuc_smoother.Smooth( & region_data->my_regions.rp );
   region_data->my_regions.copy_drift_smoother.Smooth( & region_data->my_regions.rp );
   region_data->my_regions.ratio_drift_smoother.Smooth( & region_data->my_regions.rp );
 

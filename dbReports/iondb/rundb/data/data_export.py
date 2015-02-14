@@ -207,11 +207,15 @@ def is_authenticated(account_pk):
             'version': info.get('version', 'Version Missing'),
             'serial_number': info.get('serialnumber', 'Serial Missing')
         }
-        response = requests.get(url, params=params, headers=auth_header)
-        if response.ok:
-            return True
+        try:
+            response = requests.get(url, params=params, headers=auth_header, verify=False)
+        except requests.exceptions.RequestException as err:
+            logger.error("Request Exception: {0}".format(err))
         else:
-            logger.error("Authentication failure at {0}: {1}".format(url, response))
+            if response.ok:
+                return True
+            else:
+                logger.error("Authentication failure at {0}: {1}".format(url, response))
     return False
 
 

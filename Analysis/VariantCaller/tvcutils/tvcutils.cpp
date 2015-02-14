@@ -16,7 +16,7 @@ void TVCUtilsHelp()
 {
   printf ("\n");
   printf ("tvcutils %s-%s (%s) - Miscellaneous tools used by Torrent Variant Caller plugin and workflow.\n",
-      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetSvnRev().c_str());
+      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
   printf ("\n");
   printf ("Usage:   tvcutils <command> [options]\n");
   printf ("\n");

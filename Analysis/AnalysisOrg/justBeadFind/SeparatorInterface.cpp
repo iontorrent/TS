@@ -1,12 +1,14 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "SeparatorInterface.h"
-
-
+#include "ChipReduction.h"
+#include "NNAvg.h"
+#include "SampleStats.h"
 void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOpts &inception_state, Mask *maskPtr, string &analysisLocation, SequenceItem *seqList, int numSeqListItems)
 {
   DifSepOpt opts;
   opts.doGainCorrect = inception_state.img_control.gain_correct_images;
   opts.doubleTapFlows = inception_state.bfd_control.doubleTapFlows;
+  opts.filterNoisyCols = inception_state.bfd_control.filterNoisyCols;
   opts.predictFlowStart = inception_state.bfd_control.predictFlowStart;
   opts.predictFlowEnd = inception_state.bfd_control.predictFlowEnd;
   opts.bfType = inception_state.bfd_control.bfType;
@@ -65,10 +67,7 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   diffSeparator->SetKeys (seqList, numSeqListItems, 
                           inception_state.bfd_control.bfMinLiveLibSnr, inception_state.bfd_control.bfMinLiveTfSnr, 
                           inception_state.bfd_control.minLibPeakMax, inception_state.bfd_control.minTfPeakMax);
-  if (inception_state.bfd_control.beadfindLagOneFilt > 0)
-  {
-    opts.filterLagOneSD = true;
-  }
+  opts.smoothTrace = inception_state.bfd_control.beadfindSmoothTrace;
   if (inception_state.bfd_control.beadfindThumbnail == 1)
   {
     opts.t0MeshStep = 100; // inception_state.loc_context.regionXSize;
@@ -83,7 +82,9 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
 }
 
 
-void SetupForBkgModelTiming (DifferentialSeparator *diffSeparator, std::vector<float> &smooth_t0_est, std::vector<RegionTiming> &region_timing, std::vector<Region>& region_list, ImageSpecClass &my_image_spec, Mask *maskPtr, bool doSmoothing, int numThreads)
+void SetupForBkgModelTiming (DifferentialSeparator *diffSeparator, std::vector<float> &smooth_t0_est, 
+                             std::vector<RegionTiming> &region_timing, std::vector<Region>& region_list, 
+                             ImageSpecClass &my_image_spec, Mask *maskPtr, bool doSmooth, int numThreads, int x_clip, int y_clip)
 {
   // compute timing information
   AvgKeyIncorporation *keyIncorporation = NULL;
@@ -92,10 +93,9 @@ void SetupForBkgModelTiming (DifferentialSeparator *diffSeparator, std::vector<f
   std::vector<float> sep_t0_est;
   sep_t0_est = diffSeparator->GetT0();
   smooth_t0_est = sep_t0_est;
-  if (doSmoothing)
-  {
+  if (doSmooth) {
     printf ("smoothing t0 estimate from separator.......");
-    NNSmoothT0Estimate (maskPtr,my_image_spec.rows,my_image_spec.cols,sep_t0_est,smooth_t0_est);
+    NNSmoothT0EstimateFast (maskPtr,my_image_spec.rows,my_image_spec.cols, sep_t0_est, smooth_t0_est, x_clip, y_clip);
     printf ("done.\n");
   }
   // do some incorporation signal modeling
@@ -169,6 +169,29 @@ void NNSmoothT0Estimate (Mask *mask,int imgRows,int imgCols,std::vector<float> &
   }
 }
 
+void NNSmoothT0EstimateFast (Mask *mask,int imgRows,int imgCols,std::vector<float> &sep_t0_est,
+                             std::vector<float> &output_t0_est, int x_clip, int y_clip)
+{
+  NNAvg smoother(imgRows, imgCols, 1);
+  std::vector<char> bad_wells(sep_t0_est.size());
+  std::vector<char>::iterator bw = bad_wells.begin(); 
+  for(std::vector<float>::iterator i = sep_t0_est.begin(); i != sep_t0_est.end(); ++i, ++bw) {
+    *i > 0 ? *bw = 0 : *bw = 1;
+  }
+  smoother.CalcCumulativeSum(&sep_t0_est[0], &bad_wells[0]);
+  smoother.CalcNNAvg(y_clip, x_clip, SEPARATOR_T0_ESTIMATE_SMOOTH_DIST+1, SEPARATOR_T0_ESTIMATE_SMOOTH_DIST+1, -1.0f);
+  std::vector<float>::iterator out_start = output_t0_est.begin();
+  SampleStats<double> sample;
+  for (int r=0;r < imgRows;r++) {
+    for (int c=0;c < imgCols;c++) {
+      *out_start = smoother.GetNNAvg(r, c, 0);
+      sample.AddValue(*out_start);
+      out_start++;
+    }
+  }
+  fprintf(stdout, "Mean smoothed t0 is: %.8f\n", sample.GetMean());
+}
+
 void IsolatedBeadFind (
   SlicedPrequel &my_prequel_setup,
   ImageSpecClass &my_image_spec,
@@ -202,8 +225,16 @@ void IsolatedBeadFind (
     DoDiffSeparatorFromCLO ( diffSeparator, inception_state, maskPtr, analysisLocation, my_keys.seqList,my_keys.numSeqListItems );
     // now actually set up the mask I want
     maskPtr->Copy ( diffSeparator->GetMask() );
-    
-    SetupForBkgModelTiming ( diffSeparator, my_prequel_setup.smooth_t0_est, my_prequel_setup.region_timing, my_prequel_setup.region_list, my_image_spec, maskPtr, inception_state.bfd_control.beadfindThumbnail == 0, inception_state.bfd_control.numThreads);
+    int x_clip = my_image_spec.cols;
+    int y_clip = my_image_spec.rows;
+    if (inception_state.bfd_control.beadfindThumbnail == 1) {
+      x_clip = 100;
+      y_clip = 100;
+    }
+    SetupForBkgModelTiming ( diffSeparator, my_prequel_setup.smooth_t0_est, my_prequel_setup.region_timing, 
+                             my_prequel_setup.region_list, my_image_spec, maskPtr,
+                             inception_state.bfd_control.beadfindThumbnail != 1,
+                             inception_state.bfd_control.numThreads, x_clip, y_clip);
     // Get the average of tauB and tauE for wells
     // Add getTausFromSeparator here
 

@@ -404,7 +404,7 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
         "barcode_details" : detailsLink,
         "sample" : sample,
         "mapped_reads": resultData['Number of mapped reads'],
-        "on_target": resultData['Percent reads on target'],
+        "on_target": resultData['Percent assigned reads'],
         "detected_target": ("%.2f"%pcDetected)+"%",
         "ercc_target": resultData['Percent ERCC tracking reads'] if renderOpts['ercc_track'] else "NA"
       })
@@ -725,8 +725,11 @@ def loadPluginParams():
     addAutorunParams()
 
   # code to handle single or per-barcode target files
+  runtype = config['librarytype']
+  pluginParams['is_ampliseq'] = (runtype[:4] == 'AMPS' or runtype == 'TARS_16S')
   pluginParams['target_files'] = targetFiles()
   pluginParams['have_targets'] = (config['targetregions'] or pluginParams['target_files'])
+  pluginParams['allow_no_target'] = (runtype == 'GENS' or runtype == 'WGNM' or runtype == 'RNA')
 
   # plugin configuration becomes basis of results.json file
   global pluginResult, pluginReport
@@ -798,12 +801,14 @@ def runForBarcodes():
     printerr("Reading barcode list file '%s'" % bcfileName)
     raise
   # grab barcoded-target information
+  # NOTE: barcode-specific targets/references currently not allowed for this plugin
+  disallow_no_target = not pluginParams['allow_no_target']
   have_targets = pluginParams['have_targets']
   default_target = pluginParams['config']['targetregions']
-  check_targets = (have_targets and not default_target)
   target_files = pluginParams['target_files']
   # iterate over listed barcodes to pre-test barcode files
   numGoodBams = 0
+  numInvalidBarcodes = 0
   maxBarcodeLen = 0
   minFileSize = pluginParams['cmdOptions'].minbamsize
   (bcBamPath,bcBamRoot) = os.path.split(pluginParams['bamroot'])
@@ -823,19 +828,33 @@ def runForBarcodes():
   for barcode in barcodes:
     bcbam = os.path.join( bcBamPath, "%s_%s"%(barcode,bcBamRoot) )
     if not os.path.exists(bcbam):
-      bcbam = ": BAM file not found"
-    elif check_targets and barcode not in target_files:
-      bcbam = ": No assigned or default target regions for barcode."
-    elif os.stat(bcbam).st_size < minBamSize:
-      if minBamSize == minFileSize:
-        bcbam = ": BAM file too small"
-      else:
-        bcbam = ": BAM file too small relative to largest"
-        numBamSmall += 1
-    else:
-      if( len(barcode) > maxBarcodeLen ):
-        maxBarcodeLen = len(barcode)
-      numGoodBams += 1
+      bcBamFile.append(": BAM file not found")
+      continue
+    if os.stat(bcbam).st_size < minFileSize:
+      bcBamFile.append(": BAM file too small")
+      continue
+    bedfile = target_files.get(barcode,'')
+    if not bedfile:
+      # Special cases where ONLY explicitly specified barcodes override the default
+      if barcode in target_files:
+        if default_target:
+          bcBamFile.append(": Default target regions overriden by barcode-specific 'None'.")
+          continue
+        if disallow_no_target:
+          bcBamFile.append(": No specific or default target regions for barcode.")
+          continue
+      elif not default_target and disallow_no_target:
+        bcBamFile.append(": No default target regions for barcode.")
+        continue
+      bedfile = default_target
+    ckbb = checkBamBed(bcbam,bedfile)
+    if ckbb:
+      bcBamFile.append(":\nERROR: "+ckbb)
+      ++numInvalidBarcodes;
+      continue
+    if( len(barcode) > maxBarcodeLen ):
+      maxBarcodeLen = len(barcode)
+    numGoodBams += 1
     bcBamFile.append(bcbam)
 
   ensureFilePrefix(maxBarcodeLen+1)
@@ -845,6 +864,7 @@ def runForBarcodes():
   printlog("Processing %d barcodes...\n" % numGoodBams)
   pluginReport['num_barcodes_processed'] = numGoodBams
   pluginReport['num_barcodes_failed'] = 0
+  pluginReport['num_barcodes_invalid'] = numInvalidBarcodes
   pluginReport['num_barcodes_filtered'] = numBamSmall
   pluginReport['barcode_filter'] = 100*barcode_filter
 
@@ -922,6 +942,15 @@ def runNonBarcoded():
   if pluginParams['cmdOptions'].scraper:
     createScraperLinksFolder( pluginParams['output_dir'], pluginParams['output_prefix'] )
 
+def checkBamBed(bamfile,bedfile):
+  '''Return error message if the provided BED file is not suitable for BAM file or other issues with BAM file.'''
+  if not bedfile: return ""
+  runcmd = Popen( [os.path.join(pluginParams['plugin_dir'],'scripts','checkBamBed.pl'), bamfile, bedfile], stdout=PIPE, shell=False )
+  errMsg = runcmd.communicate()[0]
+  if runcmd.poll():
+    raise Exception("Failed running checkBamBed.pl. Refer to Plugin Log.")
+  return errMsg.strip()
+
 def createScraperLinksFolder(outdir,rootname):
   '''Make links to all files matching <outdir>/<rootname>.* to <outdir>/scraper/link.*'''
   # rootname is a file path relative to outdir and should not contain globbing characters
@@ -965,6 +994,9 @@ def plugin_main():
     if pluginParams['barcoded']:
       runForBarcodes()
       if pluginReport['num_barcodes_processed'] == 0:
+        if pluginReport['num_barcodes_invalid'] > 0:
+          printlog("ERROR: All barcodes had invalid target regions specified.")
+          return 1;
         printlog("WARNING: No barcode alignment files were found for this barcoded run.")
       elif pluginReport['num_barcodes_processed'] == pluginReport['num_barcodes_failed']:
         printlog("ERROR: Analysis failed for all barcode alignments.")

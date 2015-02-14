@@ -9,7 +9,6 @@ if ionpath not in sys.path:
     sys.path.append(ionpath)
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "iondb.settings")
-os.environ["CELERY_LOADER"] = "django"
 
 ## Preload Django.
 # -- avoids delay for lazy loading at each thread restart

@@ -16,6 +16,7 @@
 
 using namespace std;
 
+
 int IonstatsBasecaller(int argc, const char *argv[]);
 int IonstatsBasecallerReduce(const string& output_json_filename, const vector<string>& input_jsons);
 int IonstatsAlignment(int argc, const char *argv[]);
@@ -101,7 +102,7 @@ public:
   ReadAlignmentErrors() : have_data_(false), len_(0), first_(0), last_(0) {}
   ~ReadAlignmentErrors() {}
 
-  void Initialize() {have_data_=false; len_=0; first_=0; last_=0; ins_.resize(0); del_.resize(0); del_len_.resize(0); sub_.resize(0); err_.resize(0); err_len_.resize(0);}
+  void Initialize() {have_data_=false; len_=0; first_=0; last_=0; ins_.resize(0); del_.resize(0); del_len_.resize(0); sub_.resize(0); no_call_.resize(0); err_.resize(0); err_len_.resize(0); inc_.resize(0);}
 
   void SetHaveData (bool b=true) { have_data_= b; }
   void SetLen      (const uint16_t i) { len_= i; }
@@ -118,6 +119,7 @@ public:
     }
   }
   void AddSub      (const uint16_t i) { sub_.push_back(i); }
+  void AddNoCall   (const uint16_t i) { no_call_.push_back(i); }
 
   uint64_t AlignedLen(void) const {
     if(len_ > 0)
@@ -182,6 +184,16 @@ public:
     for(unsigned int i=0; i < err_.size(); ++i)
       cout << err_[i] << " (" << err_len_[i] << "), ";
     cout << "\n";
+    cout << "  NoCalls:  ";
+    for(it=no_call_.begin(); it != no_call_.end(); ++it)
+      cout << *it << ", ";
+    cout << "\n";
+    if(inc_.size() > 0) {
+      cout << "         Incorporations:  ";
+      for(unsigned int i=0; i < inc_.size(); ++i)
+        cout << inc_[i] << ", ";
+      cout << "\n";
+    }
   }
 
   void ShiftPositions (int shift) {
@@ -196,9 +208,16 @@ public:
       *it += shift;
     for(it=sub_.begin(); it != sub_.end(); ++it)
       *it += shift;
+    for(it=no_call_.begin(); it != no_call_.end(); ++it)
+      *it += shift;
     for(it=err_.begin(); it != err_.end(); ++it)
       *it += shift;
+    for(it=inc_.begin(); it != inc_.end(); ++it)
+      *it += shift;
   }
+
+  bool IsAligned(uint16_t position) { return( position >= first_ && position <= last_ ); }
+  bool HasError(uint16_t position) { return(binary_search(err_.begin(),err_.end(),position)); }
 
   bool have_data() { return have_data_; }
   uint16_t len()     { return len_; }
@@ -208,8 +227,10 @@ public:
   const vector<uint16_t> & del()     { return del_; }
   const vector<uint16_t> & del_len() { return del_len_; }
   const vector<uint16_t> & sub()     { return sub_; }
+  const vector<uint16_t> & no_call() { return no_call_; }
   const vector<uint16_t> & err()     { return err_; }
   const vector<uint16_t> & err_len() { return err_len_; }
+        vector<uint16_t> & inc()     { return inc_; }
 
 private:
   bool              have_data_; // used to indicate whether or not there were data to fill this object
@@ -220,8 +241,10 @@ private:
   vector<uint16_t>  del_;       // vector of positions where there are deletions
   vector<uint16_t>  del_len_;   // vector of deletion lengths
   vector<uint16_t>  sub_;       // vector of positions where there are substitutions
+  vector<uint16_t>  no_call_;   // vector of positions where there are no_calls
   vector<uint16_t>  err_;       // vector of positions where there are errors of any kind
   vector<uint16_t>  err_len_;   // vector of error lengths
+  vector<uint16_t>  inc_;       // vector of positions where there are incorporations (only really relevant/useful for flowspace)
 
 };
 

@@ -39,6 +39,23 @@
       return o;
     };
 
+    function populateLibType(selectorID) {
+      if( selectorID == '' ) return;
+      $('#'+selectorID).empty();
+      var runtypeUrl = '/rundb/api/v1/runtype/?format=json';
+      $.get( runtypeUrl, function(data) {
+        $.each( data.objects, function(intIndex,result) {
+          var runType = result.runType;
+          var selName = result.description.trim();
+          // debar unsuported applications here, e.g. runType != "GENS"
+          if( selName != "" ) {
+            $('#'+selectorID).append("<option value='"+runType+"'>"+selName+"</option>");
+          }
+        });
+      });
+      orderSelectorList(selectorID);
+    }
+
     var refBedType = '/unmerged/detail/';
 
     function targetNameFromURL(bedURL) {
@@ -62,8 +79,9 @@
     var planBcAssign = {};
     var referenceID = "Unknown";
 
+    // Returns true if the list was created or changed. Returns false if no change was necessary.
     function populateTargetsList(refID,selectorID,firstItem) {
-      if( selectorID == '' || selectRefs[selectorID] == refID ) return;
+      if( selectorID == '' || selectRefs[selectorID] == refID ) return false;
       selectRefs[selectorID] = refID;
       $('#'+selectorID).empty();
       var lstID = selectorID+"@"+refID;
@@ -89,6 +107,7 @@
         if( $('#'+selectorID+' option').size() > 0 )
           $('#'+selectorID+' option')[0].selected = true;
       }
+      return true;
     }
 
     function orderSelectorList(selectorID,firstItem) {
@@ -107,28 +126,20 @@
         $('#'+selectorID+' option')[0].selected = true;
     }
 
-    function setOptionDefaults(libType,refID) {
+    function setOptionDefaults(libType) {
       $("#librarytype").val(libType);
-      if( libType.substr(0,8) == "ampliseq" ) {
-        $("#tpadding").hide();
-        $("#sampid").show();
-        $("#nondups").hide();
-        if( libType == "ampliseq-rna" ) {
-          $("#uniquereads").hide();
-        } else {
-          $("#uniquereads").show();
-        }
-      } else if( libType == "targetseq" ) {
-        $("#sampid").hide();
-        $("#tpadding").show();
-        $("#uniquereads").show();
-        $("#nondups").show();
-      } else {
-        $("#sampid").hide();
-        $("#tpadding").show();
-        $("#uniquereads").show();
-        $("#nondups").show();
+      var showchecks = 'NYYY';
+      if( libType == "AMPS_RNA" ) {
+        showchecks = 'YNNN';
+      } else if( libType.substr(0,4) == "AMPS" ) {
+        showchecks = 'YNYN';
+      } else if( libType == "TARS_16S" || libType == "RNA" ) {
+        showchecks = 'NNNN';
       }
+      $("#sampid").toggle(showchecks[0]=='Y');
+      $("#tpadding").toggle(showchecks[1]=='Y');
+      $("#uniquereads").toggle(showchecks[2]=='Y');
+      $("#nondups").toggle(showchecks[3]=='Y');
     }
 
     // Check (user) NPVs are correctly formated and available and
@@ -197,13 +208,19 @@
     });
 
     $('#barcodeids').change(function() {
-      var barcodename = this.value;
-      if( barcodename in planBcAssign ) {
-        bcdat = planBcAssign[barcodename];
-        populateTargetsList(bcdat.ref,'barcodetargets');
-        $("#barcodetargets").val(bcdat.trg);
-      }
+      updateTargetAfterBarcodeChange(this.value);
     });
+
+    function updateTargetAfterBarcodeChange(barcode) {
+      if( barcode in planBcAssign ) {
+        bcdat = planBcAssign[barcode];
+        // update default selecion only if list updated => reference changed
+        if( populateTargetsList(bcdat.ref,'barcodetargets') ) {
+          // set to default target if no specifc value given
+          $("#barcodetargets").val( bcdat.trg ? bcdat.trg : $("#targetregions").val() );
+        }
+      }
+    }
 
     $('#addbcbutton').click(function() {
       var bcID = $('#barcodeids option:selected').val();
@@ -223,12 +240,7 @@
       var numOptions = $('#barcodeids option').size();
       if( bcIndex >= numOptions ) bcIndex = 0;
       $('#barcodeids option')[bcIndex].selected = true;
-      barcodename = $('#barcodeids option:selected').val();
-      if( barcodename in planBcAssign ) {
-        bcdat = planBcAssign[barcodename];
-        populateTargetsList(bcdat.ref,'barcodetargets');
-        $("#barcodetargets").val(bcdat.trg);
-      }
+      updateTargetAfterBarcodeChange( $('#barcodeids option:selected').val() );
     });
 
     // uncheck barcoded targets & sampleID options (allows values to be set consisently for checked state)
@@ -242,10 +254,15 @@
     var analysisUrl;
     $.ajaxSetup({async: false});
     $.get( reportUrl, function(data) {
-     analysisUrl = data.reportLink;
-     easUrl = data.eas;
-     experimentUrl = data.experiment;
-     referenceID = data.reference;
+      analysisUrl = data.reportLink;
+      easUrl = data.eas;
+      experimentUrl = data.experiment;
+      referenceID = data.reference;
+      // set up any config.html plan settings
+      $.each( data.config, function(key,val) {
+        try { $("#"+key).val(val); $("#"+key).attr('checked',(val=='Yes')); }
+        catch(e) {}
+      });
     });
     $('#referenceid').html(referenceID);
 
@@ -259,118 +276,129 @@
       }
     }
     // get majority of current report settings from EAS
+    var def_nuc = (planLibType == 'AMPS_RNA' || planLibType == 'RNA') ? 'RNA' : 'DNA'; 
+    var def_trg = 'None';//(planLibType == 'AMPS_DNA_RNA') ? 'None' : ''; 
     var planBedFile = "";
+    var barcodedTargets = 0;
+    var def_barcode = null;
     if( easUrl != undefined && easUrl != null && easUrl != "" ) {
       $.get( easUrl+"?format=json", function(data) {
         planBedFile = data.targetRegionBedFile;
         $.each( data.barcodedSamples, function(samplename,sampledata) {
           $.each( sampledata.barcodeSampleInfo, function(barcodename,barcodedata) {
-            var nuc = barcodedata.nucleotideType ? barcodedata.nucleotideType : 'DNA';
+            var nuc = barcodedata.nucleotideType ? barcodedata.nucleotideType : def_nuc;
             var ref = barcodedata.reference ? barcodedata.reference : referenceID;
-            var trg = barcodedata.targetRegionBedFile ? barcodedata.targetRegionBedFile : 'None';
+            var trg = '';
+            if( barcodedata.targetRegionBedFile !== undefined ) {
+               trg = barcodedata.targetRegionBedFile ? barcodedata.targetRegionBedFile : def_trg;
+            }
             planBcAssign[barcodename] = { 'nuc':nuc, 'ref':ref, 'trg':trg };
+            if( ++barcodedTargets == 1 ) def_barcode = barcodename;
           });
         });
+        // set up plan.html plan settings
+        try {
+          $.each( data.selectedPlugins.coverageAnalysis_dev.userInput, function(key,val) {
+            if( key != 'launch_mode' ) {
+              try { $("#"+key).val(val); $("#"+key).attr('checked',(val=='Yes')); }
+              catch(e) {}
+            }
+          });
+        }
+        catch(e) {}
       });
     }
+    // fill in for un-named samples
+    var numBarcodes = 0;
+    var barcodeUrl = analysisUrl + 'barcodeList.txt';
+    $.get( barcodeUrl, function(mem) {
+      var lines = mem.split("\n");
+      $.each(lines, function(n,row) {
+        var fields = $.trim(row).split(',');
+        if( fields[0].substr(0,7) == "barcode" ) {
+          ++numBarcodes;
+          if( barcodedTargets > 0 ) {
+            if( !(fields[1] in planBcAssign) ) {
+              planBcAssign[fields[1]] = { 'nuc':def_nuc, 'ref':referenceID, 'trg':'' };
+            }
+          } else {
+            $('#barcodeids').append("<option value='" + fields[1] + "'>" +  fields[1] + "</option>");
+          }
+        }
+      });
+    }).error(function() {
+      $('#multibed').hide();
+    });
+
     populateTargetsList(referenceID,'targetregions','None');
 
-    // set up for barcode-specific targets UI
-    var populateBarcodeTargets = 0;
-    if( planLibType == "AMPS_DNA_RNA" ) {
-      // only pre-defined barcodes may be used for this run and only target may change
+    var deadTarget = 0;
+    if( barcodedTargets > 0 ) {
+      // create barcode ids from planBcAssign[]
       $.each( planBcAssign, function(barcodename,barcodedata) {
-        // since reference and nuctype always taken from plan, only targets may be overwritten
         $('#barcodeids').append("<option value='"+barcodename+"'>"+barcodename+": ("+barcodedata.nuc+") "+ barcodedata.ref+"</option>");
-        ++populateBarcodeTargets;
       });
-      if( populateBarcodeTargets ) {
-        orderSelectorList('barcodeids');
-        var boxtxt = "";
-        var bcdat;
-        $('#barcodeids option').each(function(i) {
-          bc = $(this).val();
-          boxtxt += bc+'\t'+targetNameFromURL(planBcAssign[bc].trg)+'\n';
-          if( i == 0 ) bcdat = planBcAssign[bc];
-        });
-        // Work around for current issue in Plan that allows barcoded references w/o targets
-        if( bcdat.trg === 'None' ) {
-          populateTargetsList(bcdat.ref,'barcodetargets','None');
-        } else {
-          populateTargetsList(bcdat.ref,'barcodetargets');
+      orderSelectorList('barcodeids');
+      var boxtxt = "";
+      var bcdat = def_barcode ? planBcAssign[def_barcode] : null;
+      $('#barcodeids option').each(function(i) {
+        var bc = $(this).val();
+        var trg = planBcAssign[bc].trg;
+        if( trg != '' && trg != planBedFile ) {
+          if( planBedFile != '' || trg != 'None' ) {
+            boxtxt += bc+'\t'+targetNameFromURL(trg)+'\n';
+          }
         }
-        $("#barcodetargets").val(bcdat.trg);
-        $("#bctextarea").val(boxtxt);
+        if( bcdat === null ) bcdat = planBcAssign[bc];
+      });
+      // For 4.4 always allow a 'None' selection for barcode-specific targets
+      populateTargetsList(bcdat.ref,'barcodetargets','None');
+      // set the default for barcoded targets to the first specified
+      if( def_barcode ) $("#barcodeids").val(def_barcode);
+      if( $("#barcodetargets option[value='"+bcdat.trg+"']").length == 0 ) ++deadTarget;
+      $("#barcodetargets").val(bcdat.trg);
+      $("#bctextarea").val(boxtxt);
+      $('.custom_fusions').show();
+      if( boxtxt != '' ) {
         $('#barcodebeds').attr("checked",true);
-        $("#barcodebeds").attr("readonly",true);
         $('.bcbed-shy').show();
-        $('.custom_fusions').show();
-      } else {
-        $('#multibed').hide();
       }
     } else {
       // populate targets for reference w/o the 'None' option
       populateTargetsList(referenceID,'barcodetargets');
-      // get all available barcodes
-      var barcodeUrl = analysisUrl + 'barcodeList.txt';
-      $.get( barcodeUrl, function(mem) {
-        var lines = mem.split("\n");
-        $.each(lines, function(n,row) {
-          var fields = $.trim(row).split(',');
-          if( fields[0].substr(0,7) == "barcode" ) {
-            $('#barcodeids').append("<option value='" + fields[1] + "'>" +  fields[1] + "</option>");
-            ++populateBarcodeTargets;
-          }
-        });
-        if( populateBarcodeTargets < 2 ) {
-          $('#multibed').hide();
-        } else {
-          orderSelectorList('barcodeids')
-        }
-      }).error(function() {
+      if( numBarcodes < 2 ) {
         $('#multibed').hide();
-      });
+      } else {
+        orderSelectorList('barcodeids');
+      }
     }
-    if( populateBarcodeTargets > 0 && populateBarcodeTargets <= 20 ) {
-      $('#bctextarea').attr("rows",populateBarcodeTargets+1);
+    // smarter default sizing of text box
+    var nbc = barcodedTargets > 0 ? barcodedTargets : numBarcodes;
+    if( nbc > 0 && nbc <= 20 ) {
+      $('#bctextarea').attr("rows",(nbc < 4 ? 4 : nbc+1));
     }
 
+    // populate Library Type selector
+    populateLibType("librarytype");
+
     // populate Plan default selections
-    var pluginLibType = "ampliseq";
-    if( planLibType != "" ) {
-      pluginLibType = planBedFile == "" ? "wholegenome" : "ampliseq";
-      if( planLibType == "WGNM" ) {
-        pluginLibType = "wholegenome";
-      } else if( planLibType == "AMPS" ) {
-        pluginLibType = "ampliseq";
-      } else if( planLibType == "TARS" ) {
-        pluginLibType = "targetseq";
-      } else if( planLibType == "AMPS_RNA" ) {
-        pluginLibType = "ampliseq-rna";
-      } else if( planLibType == "AMPS_EXOME" ) {
-        pluginLibType = "ampliseq-exome";
-      } else if( planLibType == "AMPS_DNA_RNA" ) {
-        // no other alignment options allowed if plan is DNA/RNA
-        pluginLibType = "ampliseq-dna-rna";
-        $("#librarytype").html('<option value="ampliseq-dna-rna">Ion AmpliSeq DNA/RNA</option>');
-      }
-    }
+    var pluginLibType = planLibType != "" ? planLibType : (planBedFile == "" ? "WGNM" : "AMPS");
     if( planBedFile !== "" ) {
+      if( $("#barcodetargets option[value='"+planBedFile+"']").length == 0 ) ++deadTarget;
       $("#targetregions").val(planBedFile);
-      if( populateBarcodeTargets > 0 && planLibType != "AMPS_DNA_RNA" ) {
-        $("#barcodetargets").val(planBedFile);
-      }
     }
-    setOptionDefaults(pluginLibType,referenceID);
+    setOptionDefaults(pluginLibType);
+
     // Hide waiting and display Submit
     $("#still_loading").hide();
     $("#postbutton").show();
 
+    if( deadTarget ) alert("Warning: Original target regions in Plan no longer exist.");
+
     $('#postbutton').click(function() {
-      var libn = document.coverageAnalysis.librarytype.selectedIndex;
-      var libType = document.getElementById('librarytype')[libn].value;
-      var libName = document.getElementById('librarytype')[libn].text;
-      var tarn = document.coverageAnalysis.targetregions.selectedIndex;
+      var libType = $('#librarytype option:selected').val();
+      var libName = $('#librarytype option:selected').text();
+      var tarn = $('#targetregions')[0].selectedIndex;
       var useBcTargets = $('#barcodebeds').attr("checked");
       var bcTargetList = "";
       if( useBcTargets ) {
@@ -384,25 +412,35 @@
           return false;
         }
       }
-      if( libType == "wholegenome" ) {
+      if( libType == "WGNM" || libType == "RNA" ) {
         if( tarn > 0 || bcTargetList != "" ) {
           var msg = "Selecting targeted regions is typically not appropriate for Library Type: " + libName;
-          msg += ". (Coverage will be considered in these just regions.)";
+          msg += ". (Coverage analysis will be limited to these targets regions.)";
           msg += "\n\nDo you wish to continue?";
           if( !confirm(msg) ) return false;
         }
-      } else {
+      } else if( libType != "GENS" ) {
         if( tarn == 0 && bcTargetList == "" ) {
           alert("Targeted Regions selection is required for Library Type: " + libName);
           return false;
         }
       }
-      // check for appropriate padding values
-      if( libType.substr(0,8) == "ampliseq" ) {
-        document.coverageAnalysis.padtargets.value = 0;
+      // force invisible options to be unchecked
+      if( libType == "WGNM" ) {
+        $('#sampleid').attr("checked",false);
+      } else if( libType.substr(0,4) == "AMPS" ) {
+        $("#nonduplicates").attr("checked",false);
+        $("#padtargets").val(0);
+      } else if( libType == "TARS_16S" || libType == "RNA" ) {
+        $('#sampleid').attr("checked",false);
+        $("#nonduplicates").attr("checked",false);
+        $("#uniquemaps").attr("checked",false);
+        $("#padtargets").val(0);
+      } else if( libType.substr(0,4) == "TARS" ) {
+        $('#sampleid').attr("checked",false);
       }
       var regex = /^[0-9]+$/;
-      var padval = document.coverageAnalysis.padtargets.value;
+      var padval = $("#padtargets").val();
       if( tarn == 0 && padval > 0 && bcTargetList == "" ) {
         var msg = "Target padding is ignored if no specific Targeted Regions value is selected.";
         msg += "\n\nDo you wish to continue?";
@@ -413,15 +451,6 @@
         alert("Target padding value must be a non-negative integer (>=0).");
         return false;
       }
-      // force invisible options to be unchecked
-      if( libType == "wholegenome" ) {
-        $('#sampleid').attr("checked",false);
-      } else if( libType.substr(0,8) == "ampliseq" ) {
-        $("#nonduplicates").attr("checked",false);
-        $("#padtargets").attr("value","0");
-      } else if( libType == "targetseq" ) {
-        $('#sampleid').attr("checked",false);
-      }
       // safety code: targets are required for AmpliSeq runs
       var useSampleIDs = $('#sampleid').attr("checked");
       if( useSampleIDs && tarn == 0 && bcTargetList == "" ) {
@@ -431,9 +460,10 @@
         if( !confirm(msg) ) return false;
       }
       // pass user selections to variables exported (via name attribute)
-      document.coverageAnalysis.librarytype_id.value = document.getElementById('librarytype')[libn].text;
-      document.coverageAnalysis.targetregions_id.value = document.getElementById('targetregions')[tarn].text;
-      document.coverageAnalysis.barcodetargetregions.value = bcTargetList;
+      $('#librarytype_id').val(libName);
+      $('#targetregions_id').val( $('#targetregions option:selected').text() );
+      $('#barcodetargetregions').val(bcTargetList);
+
       obj = $('#coverageAnalysis').serializeObject();
       pluginAPIJSON = { "plugin" : [TB_plugin.fields.name], "pluginconfig" : obj };
       pluginAPIJSON = JSON.stringify(pluginAPIJSON);
@@ -467,14 +497,8 @@
      <td><div id="referenceid"></div></td> </tr>
     <tr>
      <td><span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span></td>
-     <td><select id="librarytype" name="librarytype">
-      <option value="wholegenome">Whole Genome</option>
-      <option value="targetseq">Ion TargetSeq</option>
-      <option value="ampliseq" selected="selected">Ion AmpliSeq</option>
-      <option value="ampliseq-exome">Ion AmpliSeq Exome</option>
-      <option value="ampliseq-rna">Ion AmpliSeq RNA</option>
-     </select></td> </tr>
-    <tr>
+     <td><select id="librarytype" name="librarytype"></select></td> </tr>
+    <tr id="targetselect">
      <td><span class="help"
        title="Select the target regions (ROI) matching your reference and enriched fragment library. See Description and Usage Notes below.">
        Targeted Regions:</span></td>
@@ -485,17 +509,16 @@
        Barcode-specific Targets:</span></td>
      <td><input type="checkbox" id="barcodebeds" name="barcodebeds" checked="checked" value="Yes" style="float:left"/>
        <div class="bcbed-shy" style="margin-left:25px">
-         Use the text box below to specify barcode to target regions mappings.<br/>
-         Hint: Use the 'Add' button with barcode and target selectors for initial set up.<br/>
-         Copy the text generated and then use copy/paste for quick entry next time.<br/></div>
+         Use the text box below to assign specific target regions to individual barcodes.</div>
+       <div style="font-size:3px">&nbsp;</div>
        <div class="bcbed-shy">
-         <input id="addbcbutton" type="button" value="Add" style="font-size:13px">
+         <input id="addbcbutton" type="button" title="Add the currently selected target regions for the currently selected barcode to the list of barcode-specific targets." value="Add" style="font-size:13px">
          <select id="barcodeids" style="font-size:13px"></select>
          <span class="custom_fusions" style="display:none"><br/></span>
          <select id="barcodetargets" style="font-size:13px"></select>
        </div>
        <div class="bcbed-shy">
-         <textarea id="bctextarea" rows=20 cols="60" style="font-size:13px;border:5px double #C0C0C0"></textarea>
+         <textarea id="bctextarea" rows=20 cols="61" style="font-size:13px;border:5px double #C0C0C0"></textarea>
        </div>
        <div class="bcbed-shy" style="font-style:italic;max-width:540px">
          Un-assigned barcodes will use the Targeted Regions selected when the Submit button is clicked.
@@ -554,7 +577,7 @@ The SampleID Tracking option is recommended if your AmpliSeq panel was 'spiked' 
 This will inform the analysis to produce an extra statistic for reads mapped to these targets so that
 the true level of 'off-target' reads is accurately represented.</p>
     <p>
-The Target Padding value is only available for the Ion TargetSeq and the Whole Genome Library Type.
+The Target Padding value is only available for the library types reporting with respect to targetted base coverage.
 This specifies a number of bases to expand each individual target by at both 3' and 5' ends and is 
 applied to the selected target regions before coverage analysis is performed. A setting more than 0 is
 not recommended for standard coverage analysis but a value of 100 or 150 may be useful for determining
@@ -562,7 +585,7 @@ the degree of near-target base reads.</p>
     <p>
 The 'Uniquely Mapped Reads' and 'Non-duplicate Reads' options are used to specify coverage analysis on a filtered
 subset of reads. Non-uniquely mapped reads are those that could have equally well aligned to multiple locations
-in the whole genome and are typically mapped randomly to one of these locations. Hence, such reads are typically
+in the whole genome and are typically mapped randomly to one of these locations. Such reads are typically
 no use for unambiguously locating variants and may result in a lower estimation of coverage for enriched libraries.
 For whole genome libraries these reads may still be an accurate estimation of coverage over repeated regions.
 Non-duplicate reads are those not marked as duplicates in the aligned reads (BAM) file and therefore the option

@@ -2,17 +2,57 @@
 # file: roles/common/tasks/main.yml
 
 #-----------------------------------------------------------------------------
-# Install Ion APT Repository location
+# On each compute node, we need to replicate the Ion Repository configured
+# on the head node.
 #-----------------------------------------------------------------------------
-- name: Ion Torrent APT repository added
-  lineinfile: dest={{ionaptrepo_file}}
-                state=present
-                regexp="deb.*{{ ion_repository_hostname }}.*"
-                line="deb http://{{ ion_repository_hostname }}/updates/software {{ansible_distribution_release}}{{ ion_build_flag }}"
-                
-- name: apt cache update
-  apt: update_cache=yes
+- name: Replicating head node /etc/apt/source.list.d/iontorrent.list
+  copy: src=/etc/apt/sources.list.d/iontorrent.list dest=/etc/apt/sources.list.d/iontorrent.list mode=0644
+  when: "'{{ansible_hostname}}' != '{{groups.headnode[0]}}'"
+  tags: debug
   
+#-----------------------------------------------------------------------------
+# If there are compute nodes, we need to install apt-cacher-ng package and configure it
+# Only on the headnode
+#-----------------------------------------------------------------------------
+- name: Install apt-cacher-ng package on headnode
+  apt: name=apt-cacher-ng state=latest
+  when: "groups.computes|length > 0 and '{{ansible_hostname}}' == '{{groups.headnode[0]}}'"
+  
+- name: Configure apt-cacher-ng server on headnode
+  lineinfile: dest=/etc/apt/apt.conf.d/01proxy create=true state=present
+                regexp='Acquire::http::Proxy.*'
+                line='Acquire::http::Proxy "http://localhost:3142";'
+                mode=0644
+  when: "groups.computes|length > 0 and '{{ansible_hostname}}' == '{{groups.headnode[0]}}'"
+  notify: apt-get update
+  
+- name: Allow apt-cacher-ng traffic through firewall
+  lineinfile: state=present line="COMMIT" insertafter=EOF dest=/etc/iptables.custom
+  when: "groups.computes|length > 0 and '{{ansible_hostname}}' == '{{groups.headnode[0]}}'"
+  
+- name: Allow apt-cacher-ng traffic through firewall
+  lineinfile: state=present line="*filter" insertbefore=BOF dest=/etc/iptables.custom
+  when: "groups.computes|length > 0 and '{{ansible_hostname}}' == '{{groups.headnode[0]}}'"
+  
+- name: Allow apt-cacher-ng traffic through firewall
+  lineinfile: dest=/etc/iptables.custom create=true state=present
+                 line="-A INPUT -p tcp -m state --state NEW -m tcp --dport 3142 -j ACCEPT"
+                 insertbefore="COMMIT"
+  when: "groups.computes|length > 0 and '{{ansible_hostname}}' == '{{groups.headnode[0]}}'"
+
+#-----------------------------------------------------------------------------
+# Enable apt-cacher-ng on the compute nodes
+#-----------------------------------------------------------------------------
+- name: Configure apt-cacher-ng on compute nodes
+  lineinfile: dest=/etc/apt/apt.conf.d/01proxy
+                create=yes
+                state=present
+                line='Acquire::http::Proxy "http://{{ groups.headnode[0] }}:3142";'
+                regexp='Acquire::http::Proxy.*'
+                mode=0644
+  when: "'{{ansible_hostname}}' != '{{groups.headnode[0]}}'"
+  notify: apt-get update
+
 #-----------------------------------------------------------------------------
 # Install system packages common to all servers
 #-----------------------------------------------------------------------------
@@ -20,7 +60,7 @@
   script: tmpreaper.preseed
   
 - name: Install system packages
-  apt: name={{item}} state=installed force=yes
+  apt: name={{item}} state=installed force=yes update_cache=yes cache_valid_time=300
   with_items: common_syspkg_list
 
 
@@ -89,6 +129,7 @@
                 regexp='# Torrent Server maximum log file limit'
                 line='# Torrent Server maximum log file limit'
                 insertbefore=BOF
+                mode=0644
                 
 - name: Set logfile size limit
   lineinfile: dest=/etc/logrotate.conf
@@ -96,6 +137,7 @@
                 regexp='^size.*'
                 line='size 100M'
                 insertafter='# Torrent Server maximum log file limit'
+                mode=0644
 
 # Remove motd regarding available OS upgrade: do not want TS customers to do this.
 - name: Remove message regarding available OS upgrade
@@ -131,27 +173,26 @@
     #root             hard    nofile          8192
 
 - name: Set soft limit
-  lineinfile: dest={{ security_limits_file }} state=present
+  lineinfile: dest={{ security_limits_file }} state=present backrefs=yes
                 regexp='(\*.*soft.*nofile).*'
                 line='\1          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
 
 - name: Set hard limit
-  lineinfile: dest={{ security_limits_file }} state=present
+  lineinfile: dest={{ security_limits_file }} state=present backrefs=yes
                 regexp='(\*.*hard.*nofile).*'
                 line='\1          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
 
 - name: Set soft limit
-  lineinfile: dest={{ security_limits_file }} state=present
+  lineinfile: dest={{ security_limits_file }} state=present backrefs=yes
                 regexp='(^root.*soft.*nofile).*'
                 line='\1          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
-    
+
 - name: Set hard limit
-  lineinfile: dest={{ security_limits_file }} state=present
+  lineinfile: dest={{ security_limits_file }} state=present backrefs=yes
                 regexp='(^root.*hard.*nofile).*'
                 line='\1          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
-                
 

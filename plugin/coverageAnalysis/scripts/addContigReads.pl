@@ -4,26 +4,32 @@
 #--------- Begin command arg parsing ---------
 
 (my $CMD = $0) =~ s{^(.*/)+}{};
-my $DESCR = "Add an extra column to the input file or total chromosome/contig reads. Output to STDOUT.
-Assumes the input file is TSV with the first field representing the chromosome/contig names.";
-my $USAGE = "Usage:\n\t$CMD [options] <contig cov file> <BAM file>";
+my $DESCR = "Create a file of forward, reverse and total contig read counts for a given file.
+Or add an extra column to the input file or total chromosome/contig reads. Output to STDOUT.";
+my $USAGE = "Usage:\n\t$CMD [options] <BAM file>";
 my $OPTIONS = "Options:
   -h ? --help Display Help information.
+  -a Add forward and reverse read count fields (in addition to total).
   -d Ignore (PCR) Duplicate reads.
   -u Include only Uniquely mapped reads (MAPQ > 1).
-  -m <int> Many contigs threshold for switching counting algorithms. Default: 50.";
+  -M <int>  Many contigs threshold for switching counting algorithms. Default: 50.
+  -C <file> Contig coverage TSV file to add total contig reads to as last field.";
 
+my $add_fwd_rev = 0;
 my $nondupreads = 0;
 my $uniquereads = 0;
 my $manyContigs = 50;
+my $tsvfile = "";
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 ) {
   last if($ARGV[0] !~ /^-/);
   my $opt = shift;
-  if($opt eq '-d') {$nondupreads = 1;}
+  if($opt eq '-a') {$add_fwd_rev = 1;}
+  elsif($opt eq '-d') {$nondupreads = 1;}
   elsif($opt eq '-u') {$uniquereads = 1;}
-  elsif($opt eq '-m') {$manyContigs = int(shift);}
+  elsif($opt eq '-M') {$manyContigs = int(shift);}
+  elsif($opt eq '-C') {$tsvfile = shift;}
   elsif($opt eq '-h' || $opt eq "?" || $opt eq '--help') {$help = 1;}
   else {
     print STDERR "$CMD: Invalid option argument: $opt\n";
@@ -37,75 +43,98 @@ if( $help ) {
   print STDERR "$OPTIONS\n";
   exit 1;
 }
-elsif( scalar @ARGV != 2 ) {
+elsif( scalar @ARGV != 1 ) {
   print STDERR "$CMD: Invalid number of arguments.";
   print STDERR "$USAGE\n";
   exit 1;
 }
 
-my $tsvfile = shift(@ARGV);
+$tsvfile = '' if( $tsvfile eq '-' );
 my $bamfile = shift(@ARGV);
 
 #--------- End command arg parsing ---------
 
 my $samopt= ($nondupreads ? "-F 0x704" : "-F 0x304").($uniquereads ? " -q 1" : "");
 
-# make quick test to see if this is a valid bam file
+# read total reads and contig info using idxstats
+my (@chrids,@chrszs,@chrrds,@chrFwd,@chrRev);
+my %chridx;
 my $numContigs = 0;
-open( BAMTEST, "samtools view -H \"$bamfile\" |" ) || die "Cannot open BAM file '$bamfile'.";
+open( BAMTEST, "samtools idxstats '$bamfile' |" ) || die "Cannot open BAM file '$bamfile'.";
 while(<BAMTEST>) {
-  ++$numContigs if(/^\@SQ/);
+  my @fields = split('\t',$_);
+  next if( $fields[0] eq '*' );
+  $chrids[$numContigs] = $fields[0];
+  $chrszs[$numContigs] = $fields[1];
+  $chrrds[$numContigs] = $fields[2];
+  $chridx{$fields[0]} = $numContigs;
+  ++$numContigs;
 }
 close(BAMTEST);
-#print STDERR "Found $numContigs contigs\n";
+
 unless( $numContigs ) {
   print STDERR "Error: BAM file unaligned or badly formatted.\n";
   exit 1;
 }
 
-# if 'many' contigs it is more efficient to parse once for contig counts than using many samtools view calls
-my %chrids;
-my $chrid;
-unless( $numContigs < $manyContigs ) {
-  open( BAM, "samtools view $samopt \"$bamfile\" |" ) || die "Cannot open BAM file '$bamfile'.";
-  while(<BAM>) {
-    $chrid = (split('\t',$_))[2];
-    ++$chrids{$chrid};
+# unless idxstats is sufficient, get the contigs read stats from the bamfile
+if( $nondupreads || $uniquereads || $add_fwd_rev ) {
+  # for 'many' contigs it is more efficient to parse once for contig counts than using many samtools view calls
+  if( $numContigs < $manyContigs ) {
+    my $samopt_f = ($nondupreads ? "-F 0x714" : "-F 0x314").($uniquereads ? " -q 1" : "");
+    my $samopt_r = $samopt." -f 16";
+    for( my $chrIdx = 0; $chrIdx < $numContigs; ++$chrIdx ) {
+      $chrFwd[$chrIdx] = `samtools view -c $samopt_f "$bamfile" "$chrids[$chrIdx]"`;
+      $chrRev[$chrIdx] = `samtools view -c $samopt_r "$bamfile" "$chrids[$chrIdx]"`;
+    }
+  } else {
+    my $lastChr = ''; # to avoid excessive hash lookups
+    my $chrIdx = 0;
+    open( BAM, "samtools view $samopt '$bamfile' |" ) || die "Cannot open BAM file '$bamfile'.";
+    while(<BAM>) {
+      my ($rdid,$flg,$chr) = split('\t',$_);
+      if( $chr ne $lastChr ) {
+        $chrIdx = $chridx{$chr};
+        $lastChr = $chr;
+      }
+      if( $flg & 16 ) { ++$chrRev[$chrIdx] } else { ++$chrFwd[$chrIdx] }
+    }
+  }
+  # overwrite idxstats read counts with filtered read counts
+  for( my $chrIdx = 0; $chrIdx < $numContigs; ++$chrIdx ) {
+    $chrrds[$chrIdx] = $chrFwd[$chrIdx] + $chrRev[$chrIdx];
   }
 }
 
-my $nlines = 0;
-my $line;
-open( TSVFILE, "$tsvfile" ) || die "Cannot open input TSV file $tsvfile.\n";
-
-# some code duplication to avoid using inner condition
-if( $numContigs < $manyContigs ) {
+if( $tsvfile ) {
+  my $nlines = 0;
+  my ($line,$chr);
+  open( TSVFILE, "$tsvfile" ) || die "Cannot open input TSV file $tsvfile.\n";
   while(<TSVFILE>) {
     chomp;
     next unless(/\S/);
     if( ++$nlines == 1 ) {
-      print "$_\tseq_reads\n";
-      next;
-    }
-    $line = $_;
-    $chrid = (split('\t',$_))[0];
-    next if( $chrid !~ /\S/ );
-    my $nreads = `samtools view -c $samopt $bamfile "$chrid"`;
-    printf "$line\t%d\n",$nreads;
-  }
-} else {
-  while(<TSVFILE>) {
-    chomp;
-    next unless(/\S/);
-    if( ++$nlines == 1 ) {
-      print "$_\tseq_reads\n";
+      printf "$_\t%stotal_reads\n", $add_fwd_rev ? "fwd_reads\trev_reads\t" : "";
       next;
     }
     $line = $_;
     s/\t.*$//;
-    printf "$line\t%d\n",$chrids{$_};
+    $chrIdx = $chridx{$_};
+    if( $add_fwd_rev ) {
+      printf "$line\t%d\t%d\t%d\n",$chrFwd[$chrIdx],$chrRev[$chrIdx],$chrrds[$chrIdx];
+    } else {
+      printf "$line\t%d\n",$chrrds[$chrIdx];
+    }
+  }
+  close(TSVFILE);
+} else {
+  printf "contig\tstart\tend\t%stotal_reads\n", $add_fwd_rev ? "fwd_reads\trev_reads\t" : "";
+  for( my $chrIdx = 0; $chrIdx < $numContigs; ++$chrIdx ) {
+    if( $add_fwd_rev ) {
+      printf "%s\t1\t%d\t%d\t%d\t%d\n",$chrids[$chrIdx],$chrszs[$chrIdx],$chrFwd[$chrIdx],$chrRev[$chrIdx],$chrrds[$chrIdx];
+    } else {
+      printf "%s\t1\t%d\t%d\n",$chrids[$chrIdx],$chrszs[$chrIdx],$chrrds[$chrIdx];
+    }
+  }
 }
-
-}
-close(TSVFILE);
 

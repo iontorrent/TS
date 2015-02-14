@@ -1,29 +1,7 @@
 {% extends "rundb/common/base.html" %}
 {% load url from future %}
-{% block nav %}
-<ul class="nav nav-tabs pull-left">
-    <li class="active"><a href="{% url "planRuns" %}">Plan</a></li>
-    <li><a href="{% url "monitor" %}">Monitor</a></li>
-    <li><a href="{% url "data" %}">Data</a></li>
-</ul>
-<ul class="nav nav-tabs pull-right" id="configureNav">
-    <li rel="tooltip" title="News and Announcements" data-placement="top"><a href="{% url 'news' %}"><i class="icon-bullhorn icon-white"></i>{% if unread_news %} {{ unread_news }}{% endif %}</a></li>
-    <li class="dropdown">
-        <a id="configure" class="dropdown-toggle" data-toggle="dropdown" data-target="#" href="{% url "configure_about" %}">
-        <div id="gear" class="gear-inactive"><b class="caret"></b></div>
-        </a>
-        <ul class="dropdown-menu">
-            <li><a href="{% url "configure_about" %}">About</a></li>
-            <li><a href="{% url "configure_references" %}">References</a></li>
-            <li><a href="{% url "configure_services" %}">Services</a></li>
-            <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-            <li><a href="{% url "configure_configure" %}">Configure</a></li>
-            <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-            <li><a href="{% url "configure_account" %}">Accounts</a></li>
-        </ul>
-</li>
-</ul>
-{% endblock nav %}
+
+{% block plan_menu %}active{% endblock %}
 {% block sub-nav %}
 
 <li><a href="{% url "planRuns" %}">Plan Runs</a></li>

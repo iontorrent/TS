@@ -1,4 +1,4 @@
-# Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 
 """
 Models
@@ -39,6 +39,7 @@ import random
 import string
 import logging
 from iondb.rundb import tasks
+from iondb.plugins import tasks as plugintasks
 from iondb.rundb.data import dmactions_types
 from iondb.rundb.separatedValuesField import SeparatedValuesField
 try:
@@ -56,14 +57,17 @@ from django.utils.encoding import force_unicode
 from django.utils.functional import cached_property
 from django.utils import timezone
 from django.core import urlresolvers
+from django.core.cache import cache
 from django.db.models.signals import post_save, pre_delete, post_delete, m2m_changed
 from django.dispatch import receiver
 from distutils.version import LooseVersion
-from celery.task.control import revoke
+from iondb.celery import app as celery
 
 import json
 
 import copy
+
+from iondb.utils.utils import convert
 
 # Auto generate tastypie API key for users
 from tastypie.models import create_api_key
@@ -176,11 +180,32 @@ class KitInfo(models.Model):
     ALLOWED_CATEGORIES = (
         ('', 'Any'),
         ('flowOverridable', 'Flows can be overridden'),
-        ('bcShowSubset;bcRequired', 'Mandatory barcode kit selection'),          
+        ('bcShowSubset;bcRequired;', 'Mandatory barcode kit selection'),
+        ("flowOverridable;readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Hi-Q sequencing kit categories"),
+        ("multipleTemplatingSize;supportLibraryReadLength", "Hi-Q templating kit categories"),
+        ("readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Non-Hi-Q sequencing kit categories"),   
     )    
-    categories = models.CharField(max_length=64, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
+    categories = models.CharField(max_length=256, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
+    libraryReadLength = models.PositiveIntegerField(default = 0)
 
-
+    #the first value, if present, is used as the default value
+    ALLOWED_TEMPLATING_SIZE = (
+        ("", 'Unspecified'),
+        ("200", "200"),
+        ("400", "400"),
+        ("200;400", "200 or 400")                 
+    )    
+    templatingSize = models.CharField(max_length=64, choices=ALLOWED_TEMPLATING_SIZE, default='', blank=True, null=True)
+    
+    ALLOWED_SAMPLE_PREP_INSTRUMENT_TYPES = (
+        ('', 'Unspecified'),
+        ('OT', 'OneTouch'),
+        ('IC', 'IonChef'),
+        ("OT_IC", "Both OneTouch and IonChef")
+    )
+    #compatible sample prep instrument type
+    samplePrep_instrumentType = models.CharField(max_length=64, choices=ALLOWED_SAMPLE_PREP_INSTRUMENT_TYPES, default='', blank=True)
+    
     uid = models.CharField(max_length=10, unique=True, blank=False)
 
     objects = KitInfoManager()
@@ -283,10 +308,10 @@ class ApplProduct(models.Model):
     isActive = models.BooleanField(default = True)
     #if isVisible is false, it will not be shown as a choice in UI
     isVisible = models.BooleanField(default = False)
-    defaultSequencingKit = models.ForeignKey(KitInfo, related_name='seqKit_applProduct_set', null=True)
-    defaultLibraryKit = models.ForeignKey(KitInfo, related_name='libKit_applProduct_set', null=True)
-    defaultPairedEndSequencingKit = models.ForeignKey(KitInfo, related_name='peSeqKit_applProduct_set', null=True)
-    defaultPairedEndLibraryKit = models.ForeignKey(KitInfo, related_name='peLibKit_applProduct_set', null=True)
+    defaultSequencingKit = models.ForeignKey(KitInfo, related_name='seqKit_applProduct_set', blank=True, null=True)
+    defaultLibraryKit = models.ForeignKey(KitInfo, related_name='libKit_applProduct_set', blank=True, null=True)
+    defaultPairedEndSequencingKit = models.ForeignKey(KitInfo, related_name='peSeqKit_applProduct_set', blank=True, null=True)
+    defaultPairedEndLibraryKit = models.ForeignKey(KitInfo, related_name='peLibKit_applProduct_set', blank=True, null=True)
     defaultGenomeRefName = models.CharField(max_length = 1024, blank=True, null=True)
     #this is analogous to bedFile in PlannedExperiment
     defaultTargetRegionBedFileName = models.CharField(max_length = 1024, blank=True, null=True)
@@ -299,27 +324,31 @@ class ApplProduct(models.Model):
     isDefaultPairedEnd = models.BooleanField(default = False)
 
     defaultFlowCount = models.PositiveIntegerField(default = 0)
-    defaultPairedEndAdapterKit = models.ForeignKey(KitInfo, related_name='peAdapterKit_applProduct_set', null=True)
-    defaultTemplateKit = models.ForeignKey(KitInfo, related_name='templateKit_applProduct_set', null=True)
-    defaultControlSeqKit = models.ForeignKey(KitInfo, related_name='controlSeqKit_applProduct_set', null=True)
+    defaultPairedEndAdapterKit = models.ForeignKey(KitInfo, related_name='peAdapterKit_applProduct_set', blank=True, null=True)
+    defaultTemplateKit = models.ForeignKey(KitInfo, related_name='templateKit_applProduct_set', blank=True, null=True)
+    defaultControlSeqKit = models.ForeignKey(KitInfo, related_name='controlSeqKit_applProduct_set', blank=True, null=True)
 
     #sample preparation kit
-    defaultSamplePrepKit = models.ForeignKey(KitInfo, related_name='samplePrepKit_applProduct_set', null=True)
+    defaultSamplePrepKit = models.ForeignKey(KitInfo, related_name='samplePrepKit_applProduct_set', blank=True, null=True)
 
     isHotspotRegionBEDFileSuppported = models.BooleanField(default = True)
 
     isDefaultBarcoded = models.BooleanField(default = False)
     defaultBarcodeKitName = models.CharField(max_length=128, blank=True, null=True)
-    defaultIonChefPrepKit = models.ForeignKey(KitInfo, related_name='ionChefPrepKit_applProduct_set', null=True)
-    defaultIonChefSequencingKit = models.ForeignKey(KitInfo, related_name='ionChefSeqKit_applProduct_set', null=True)
+    defaultIonChefPrepKit = models.ForeignKey(KitInfo, related_name='ionChefPrepKit_applProduct_set', blank=True, null=True)
+    defaultIonChefSequencingKit = models.ForeignKey(KitInfo, related_name='ionChefSeqKit_applProduct_set', blank=True, null=True)
 
-    defaultAvalancheTemplateKit = models.ForeignKey(KitInfo, related_name='avalancheTemplateKit_applProduct_set', null=True)
-    defaultAvalancheSequencingKit = models.ForeignKey(KitInfo, related_name='avalancheSeqKit_applProduct_set', null=True)
+    defaultAvalancheTemplateKit = models.ForeignKey(KitInfo, related_name='avalancheTemplateKit_applProduct_set', blank=True, null=True)
+    defaultAvalancheSequencingKit = models.ForeignKey(KitInfo, related_name='avalancheSeqKit_applProduct_set', blank=True, null=True)
 
     isTargetTechniqueSelectionSupported = models.BooleanField(default = True)
     isTargetRegionBEDFileSupported = models.BooleanField(default = True)
+    isTargetRegionBEDFileSelectionRequiredForRefSelection = models.BooleanField(default = False)
+    
     isControlSeqTypeBySampleSupported = models.BooleanField(default = False)
     isReferenceBySampleSupported = models.BooleanField(default = False)
+    isTargetRegionBEDFileBySampleSupported = models.BooleanField(default = False)
+    isHotSpotBEDFileBySampleSupported = models.BooleanField(default = False)
     isDualNucleotideTypeBySampleSupported = models.BooleanField(default = False)
 
     isBarcodeKitSelectionRequired = models.BooleanField(default = False)
@@ -391,11 +420,15 @@ class PlannedExperimentManager(models.Manager):
         extra_kwargs['x_sequencekitname'] = kwargs.pop('x_sequencekitname', "")
         extra_kwargs['x_variantfrequency'] = kwargs.pop('x_variantfrequency', "")
         extra_kwargs['x_isDuplicateReads'] = kwargs.pop('x_isDuplicateReads', False)
-        extra_kwargs['x_base_recalibrate'] = kwargs.pop('x_base_recalibrate', False)
+        extra_kwargs['x_base_recalibration_mode'] = kwargs.pop('x_base_recalibration_mode', "no_recal")
         extra_kwargs['x_realign'] = kwargs.pop('x_realign', False)
         extra_kwargs['x_isSaveBySample'] = kwargs.pop('x_isSaveBySample', False)
         extra_kwargs['x_numberOfChips'] = kwargs.pop('x_numberOfChips', 1),
         extra_kwargs['x_platform'] = kwargs.pop('x_platform', "")
+
+        extra_kwargs['x_mixedTypeRNA_bedfile'] = kwargs.pop("x_mixedTypeRNA_bedfile", "")
+        extra_kwargs['x_mixedTypeRNA_library'] = kwargs.pop("x_mixedTypeRNA_library", "")
+        extra_kwargs['x_mixedTypeRNA_regionfile'] = kwargs.pop("x_mixedTypeRNA_regionfile", "")
 
         logger.info("EXIT PlannedExpeirmentManager.extract_extra_kwargs... extra_kwargs=%s" %(extra_kwargs))
 
@@ -472,27 +505,20 @@ class PlannedExperiment(models.Model):
     #"blank" status   : for backward compatibility, blank status + planExecuted = True is same as "executed"
     #while "blank" status + planExecuted = False is same as "planned" status. [TODO: replace blank status]
 
+    # "transferred" : for plan share feature, plan has been copied to another server and cannot be changed on this TS
+
     ALLOWED_PLAN_STATUS = (
         ('', 'Undefined'),
         ('pending', 'Pending'),
         ('voided', 'Voided'),
         ('reserved', 'Reserved'),
         ('planned', 'Planned'),
+        ('transferred', 'Transferred'),
         ('run', 'Run')
     )
 
     #planStatus
     planStatus = models.CharField(max_length=512, blank=True, choices=ALLOWED_PLAN_STATUS, default='')
-
-    # Ion Chef status tracking.
-    # The Chef moves through several processes each of which has a status label
-    # optionally a deterministic progress percentage
-    # optionally a longer message explaining the status, such as an error message
-    chefStatus = models.CharField(max_length=256, blank=True, default='')
-    chefProgress = models.FloatField(default=0.0, blank=True)
-    chefMessage = models.TextField(blank=True, default='')
-    chefLastUpdate = models.DateTimeField(null=True, blank=True)
-    chefLogPath = models.CharField(max_length=512, blank=True, null=True)
 
     #who ran this
     username = models.CharField(max_length=128, blank=True, null=True)
@@ -629,6 +655,15 @@ class PlannedExperiment(models.Model):
         ('Oncomine', 'Oncomine'),          
     )    
     categories = models.CharField(max_length=64, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
+    libraryReadLength = models.PositiveIntegerField(default = 0)
+
+    ALLOWED_TEMPLATING_SIZE = (
+        ("", 'Unspecified'),
+        ("200", "200"),
+        ("400", "400"),          
+    )    
+    templatingSize = models.CharField(max_length=64, choices=ALLOWED_TEMPLATING_SIZE, default='', blank=True, null=True)
+
     
     objects = PlannedExperimentManager()
 
@@ -783,6 +818,33 @@ class PlannedExperiment(models.Model):
         else:
             return ""
 
+    def get_LIMS_meta(self):
+        if self.metaData:
+            data = self.metaData.get("LIMS", "")
+            #convert unicode to str
+            return convert(data)
+        else:
+            return ""
+
+    def get_mixedType_rna_bedfile(self):
+        if self.latest_eas:
+            return self.latest_eas.mixedTypeRNA_targetRegionBedFile
+        else:
+            return ""
+
+    def get_mixedType_rna_library(self):
+        if self.latest_eas:
+            return self.latest_eas.mixedTypeRNA_reference
+        else:
+            return ""
+
+    
+    def get_mixedType_rna_regionfile(self):
+        if self.latest_eas:
+            return self.latest_eas.mixedTypeRNA_hotSpotRegionBedFile
+        else:
+            return ""    
+        
     def get_regionfile(self):
         if self.latest_eas:
             return self.latest_eas.hotSpotRegionBedFile
@@ -867,18 +929,65 @@ class PlannedExperiment(models.Model):
             return self.latest_eas.isDuplicateReads
         else:
             return False
-    
-    def do_base_recalibrate(self):
+
+    def get_base_recalibration_mode(self):
         if self.latest_eas:
-            return self.latest_eas.base_recalibrate
+            return self.latest_eas.base_recalibration_mode
         else:
-            return False
-    
+            return "no_recal"
+            
     def do_realign(self):
         if self.latest_eas:
             return self.latest_eas.realign
         else:
             return False
+
+
+    def is_same_refInfo_as_defaults_per_sample(self):
+        """
+        Returns True if all the barcoded samples have the same reference and BED files as the plan's defaults
+        """
+        if not self.get_barcodeId():
+            return True
+        
+        barcodedSamples = self.get_barcodedSamples()
+        ##logger.debug("plannedExperiment.is_same_refInfo_as_defaults_per_sample() barcodedSamples=%s" %(barcodedSamples))
+
+        planReference = self.get_library()
+        planHotSpotRegionBedFile = self.get_regionfile()
+        planTargetRegionBedFile = self.get_bedfile()
+        
+        mixedRNA_planReference = self.get_mixedType_rna_library()
+        mixedRNA_planHotSpotRegionBedFile = self.get_mixedType_rna_regionfile()
+        mixedRNA_planTargetRegionBedFile = self.get_mixedType_rna_bedfile()
+
+        for sample, value in barcodedSamples.items():                
+            if 'barcodeSampleInfo' in value:
+
+                for barcode, sampleInfo in value['barcodeSampleInfo'].items():
+                    sampleReference = sampleInfo.get("reference", "")
+                    sampleHotSpotRegionBedFile = sampleInfo.get("hotSpotRegionBedFile", "")
+                    sampleTargetRegionBedFile = sampleInfo.get("targetRegionBedFile", "")
+
+                    if self.runType == "AMPS_DNA_RNA":
+                        sampleNucleotideType = sampleInfo.get("nucleotideType", "")
+                        
+                        if sampleNucleotideType == "DNA":
+                            if planReference != sampleReference or planHotSpotRegionBedFile != sampleHotSpotRegionBedFile or planTargetRegionBedFile != sampleTargetRegionBedFile:
+                                #logger.debug("plannedExperiment.is_same_refInfo_as_defaults_per_sample() - AMPS_DNA_RNA - DNA SAMPLE - DIFFERENT!!! return FALSE planReference=%s; sampleReference=%s" %(planReference, sampleReference))                            
+                                return False
+                        elif sampleNucleotideType == "RNA":
+                            if mixedRNA_planReference != sampleReference or mixedRNA_planHotSpotRegionBedFile != sampleHotSpotRegionBedFile or mixedRNA_planTargetRegionBedFile != sampleTargetRegionBedFile:
+                                #logger.debug("plannedExperiment.is_same_refInfo_as_defaults_per_sample() - AMPS_DNA_RNA - RNA SAMPLE - DIFFERENT!!! return FALSE mixedRNA_planReference=%s; sampleReference=%s" %(mixedRNA_planReference, sampleReference))                            
+                                return False                            
+                    else:
+                        if planReference != sampleReference or planHotSpotRegionBedFile != sampleHotSpotRegionBedFile or planTargetRegionBedFile != sampleTargetRegionBedFile:
+                            #logger.debug("plannedExperiment.is_same_refInfo_as_defaults_per_sample() DIFFERENT!!! return FALSE planReference=%s; sampleReference=%s" %(planReference, sampleReference))                            
+                            return False
+        
+        return True
+
+        
 
     def save(self, *args, **kwargs):
 
@@ -1027,9 +1136,13 @@ class PlannedExperiment(models.Model):
             'targetRegionBedFile' : kwargs.get('x_bedfile', ""),
             'threePrimeAdapter' : kwargs.get('x_forward3primeadapter' ""),
             'isDuplicateReads' : kwargs.get('x_isDuplicateReads', False),
-            'base_recalibrate' : kwargs.get('x_base_recalibrate', False),
-            'realign' : kwargs.get('x_realign', False)
+            'base_recalibration_mode' : kwargs.get('x_base_recalibration_mode', "no_recal"),
+            'realign' : kwargs.get('x_realign', False),
+            "mixedTypeRNA_reference" : kwargs.get('x_mixedTypeRNA_library', ""),
+            "mixedTypeRNA_targetRegionBedFile" : kwargs.get('x_mixedTypeRNA_bedfile', ""),
+            "mixedTypeRNA_hotSpotRegionBedFile" : kwargs.get('x_mixedTypeRNA_regionfile', ""),
         }
+        
         # add default cmdline args
         args = self.get_default_cmdline_args(libraryKitName=eas_kwargs['libraryKitName'])
         eas_kwargs.update(args)
@@ -1271,6 +1384,7 @@ class Experiment(models.Model):
         ('voided', 'Voided'),
         ('reserved', 'Reserved'),
         ('planned', 'Planned'),
+        ('transferred', 'Transferred'),
         ('run', 'Run')
     )
 
@@ -1283,6 +1397,43 @@ class Experiment(models.Model):
     )
     
     platform = models.CharField(max_length=128, choices=ALLOWED_PLATFORM_TYPES, blank=True, default='')
+
+    # Ion Chef status tracking.
+    # The Chef moves through several processes each of which has a status label
+    # optionally a deterministic progress percentage
+    # optionally a longer message explaining the status, such as an error message
+    chefStatus = models.CharField(max_length=256, blank=True, default='')
+    chefProgress = models.FloatField(default=0.0, blank=True)
+    chefMessage = models.TextField(blank=True, default='')
+    chefLastUpdate = models.DateTimeField(null=True, blank=True)
+    chefLogPath = models.CharField(max_length=512, blank=True, null=True)
+
+    chefReagentID = models.CharField(max_length=64, blank=True, default='')
+    chefLotNumber = models.CharField(max_length=64, blank=True, default='')
+    chefManufactureDate = models.CharField(max_length=64, blank=True, default='')
+    chefTipRackBarcode = models.CharField(max_length=64, blank=True, default='')
+
+    chefInstrumentName = models.CharField(max_length=200, blank=True, default='')
+
+    chefKitType = models.CharField(max_length=64, blank=True, default='')
+    chefChipType1 = models.CharField(max_length=64, blank=True, default='')
+    chefChipType2 = models.CharField(max_length=64, blank=True, default='')
+    chefChipExpiration1 = models.CharField(max_length=64, blank=True, default='')
+    chefChipExpiration2 = models.CharField(max_length=64, blank=True, default='')
+    
+    chefReagentsPart = models.CharField(max_length=64, blank=True, default='')
+    chefReagentsLot = models.CharField(max_length=64, blank=True, default='')
+    chefReagentsExpiration = models.CharField(max_length=64, blank=True, default='')    
+
+    chefSolutionsPart = models.CharField(max_length=64, blank=True, default='')
+    chefSolutionsLot = models.CharField(max_length=64, blank=True, default='')
+    chefSolutionsExpiration = models.CharField(max_length=64, blank=True, default='')
+
+    chefSamplePos = models.CharField(max_length=64, blank=True, default='')
+    chefPackageVer = models.CharField(max_length=64, blank=True, default='')
+
+    chefExtraInfo_1 = models.CharField(max_length=128, blank=True, default='')
+    chefExtraInfo_2 = models.CharField(max_length=128, blank=True, default='')
 
     def __unicode__(self): return self.expName
 
@@ -1412,7 +1563,7 @@ class Experiment(models.Model):
                 default_eas_kwargs = {
                               'date' : timezone.now(),
                               'experiment' : self,
-                              'libraryKey' : GlobalConfig.objects.all()[0].default_library_key,
+                              'libraryKey' : GlobalConfig.get().default_library_key,
                               'isEditable' : True,
                               'isOneTimeOverride' : False,
                               'status' : 'run',
@@ -1559,7 +1710,7 @@ class Experiment(models.Model):
 
         # If this is the initial save, ie, the creation of the object, set the storage_options to globalconfig default
         if self.pk is None:
-            self.storage_options = GlobalConfig.objects.all()[0].default_storage_options
+            self.storage_options = GlobalConfig.get().default_storage_options
 
         super(Experiment, self).save()
 
@@ -1630,6 +1781,15 @@ class ExperimentAnalysisSettings(models.Model):
 
     reference = models.CharField(max_length=512, blank=True, null=True)
 
+    #For plans (e.g., OCP) that have both DNA and RNA samples on the same chip, 
+    #the plan defaults for RNA sample's reference & BED files will be persisted in mixedTypeRNA_*
+    #For RNA-only plans, the reference & BED file plan defaults will continue to be persisted in
+    #reference, targetRegionBedFile and hotSpotRegionBedFile
+    mixedTypeRNA_reference = models.CharField(max_length=512, blank=True, null=True)
+    
+    mixedTypeRNA_targetRegionBedFile = models.CharField(max_length=1024,blank=True,null=True)
+    mixedTypeRNA_hotSpotRegionBedFile = models.CharField(max_length=1024,blank=True,null=True)
+
     barcodedSamples = json_field.JSONField(blank=True, null=True)
     selectedPlugins = json_field.JSONField(blank=True, null=True)
 
@@ -1643,7 +1803,15 @@ class ExperimentAnalysisSettings(models.Model):
     experiment = models.ForeignKey(Experiment, related_name='eas_set', blank=True, null=True)
 
     isDuplicateReads = models.BooleanField(default=False)
-    base_recalibrate = models.BooleanField(default=True)
+
+    ALLOWED_RECALIBRATION_MODES = (
+         ('standard_recal', 'Default Calibration'),
+         ('no_recal', 'No Calibration'),         
+         ('panel_recal', 'Enable Calibration Standard')
+     )
+
+    base_recalibration_mode = models.CharField(max_length = 64, blank = False, null = False, choices = ALLOWED_RECALIBRATION_MODES, default = 'standard_recal')
+        
     realign = models.BooleanField(default=False)
 
     # Beadfind args
@@ -1664,6 +1832,45 @@ class ExperimentAnalysisSettings(models.Model):
     # Alignment args
     alignmentargs = models.CharField(max_length=5000, blank=True, verbose_name="Alignment args")
     thumbnailalignmentargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Alignment args")
+
+
+    def get_base_recalibration_mode_choices(self):
+        choices = (("standard_recal", "Default Calibration"), 
+                   ('panel_recal', 'Enable Calibration Standard'),
+                   ("no_recal", "No Calibration"))
+        return choices
+
+        
+    def get_base_recalibration_mode_for_display(self):
+        if self.base_recalibration_mode == "no_recal":
+            return "No Calibration"
+        elif self.base_recalibration_mode == "standard_recal":
+            return "Default Calibration"
+        elif self.base_recalibration_mode == "panel_recal":
+            return "Enable Calibration Standard"
+        else:
+            return "Unsupported calibration mode"
+
+    def get_barcoded_samples_reference_names(self):
+        """
+        Returns a sorted, unique list of references the barcoded samples are using
+        """
+        ref_list = []
+        if self.barcodedSamples:
+            for sample, value in self.barcodedSamples.items():                
+                if 'barcodeSampleInfo' in value:
+                    for barcode, sampleInfo in value['barcodeSampleInfo'].items():
+                        sampleReference = sampleInfo.get("reference", "")
+                        if sampleReference and sampleReference.lower() != "none":
+                            ref_list.append(sampleReference)
+
+            unique_ref_list = list(set(ref_list))
+            unique_ref_list.sort()
+            #logger.debug("models.get_barcoded_samples_reference_names() unique_ref_list=%s" %(unique_ref_list))
+            return unique_ref_list
+        else:
+            return ref_list
+    
 
     def __unicode__(self):
         return "%s/%d" % (self.experiment, self.pk)
@@ -1999,7 +2206,8 @@ class Results(models.Model, Lookup):
             # Create data management file tracking objects
             try:
                 dmfilesets = DMFileSet.objects.filter(version=iondb.settings.RELVERSION)
-                #dmfilesets = DMFileSet.objects.all()
+                if not dmfilesets:
+                    raise Exception("No DMFileSet objects for version: '%s'" % iondb.settings.RELVERSION)
             except:
                 logger.exception(traceback.format_exc())
             else:
@@ -2028,7 +2236,7 @@ class Results(models.Model, Lookup):
                         pass
 
     def get_filestat(self, typeStr):
-        return self.dmfilestat_set.filter(dmfileset__type=typeStr)[0]
+        return self.dmfilestat_set.filter(dmfileset__type=typeStr).first()
 
     @cached_property
     def isProton(self):
@@ -2478,8 +2686,7 @@ def on_result_delete(sender, instance, **kwargs):
             experiment.resultDate = results[0].timeStamp
         if experiment.repResult is None or experiment.repResult.pk==instance.pk:
             experiment.pinnedRepResult = False
-            if results:
-                experiment.repResult = results[0]
+            experiment.repResult = results[0] if results else None
         experiment.save()
 
 
@@ -2589,6 +2796,7 @@ class Rig(models.Model):
     host_address = models.CharField(blank=True,max_length=1024)
     type = models.CharField(blank=True,max_length=1024)
 
+    updateCommand = json_field.JSONField(blank=True)
 
     def __unicode__(self): return self.name
 
@@ -2620,11 +2828,6 @@ class ReportStorage(models.Model):
                 other.default = False
                 super(ReportStorage, other).save(*args, **kwargs)
 
-class RunScript(models.Model):
-    name = models.CharField(max_length=200)
-    script = models.TextField(blank=True)
-    def __unicode__(self):
-        return self.name
 
 class Cruncher(models.Model):
     STATES = (
@@ -3055,7 +3258,15 @@ class GlobalConfig(models.Model):
     enable_version_lock = models.BooleanField("Enable TS Version Lock", default=False)
     ts_update_status = models.CharField(max_length=256,blank=True)
     # Controls analysis pipeline alternate processing path
-    base_recalibrate = models.BooleanField(default=True)
+
+    ALLOWED_RECALIBRATION_MODES = (
+         ('standard_recal', 'Default Calibration'),
+         ('no_recal', 'No Calibration'),         
+         ('panel_recal', 'Special')
+     )
+
+    base_recalibration_mode = models.CharField(max_length = 64, blank = False, null = False, choices = ALLOWED_RECALIBRATION_MODES, default = 'standard_recal')
+     
     mark_duplicates = models.BooleanField(default=False)
     realign = models.BooleanField(default=False)
     check_news_posts = models.BooleanField("check for news posts", default=True)
@@ -3083,7 +3294,8 @@ class GlobalConfig(models.Model):
         Since there is *always* supposed to be one of these in the DB,
         this call to get will properly raises a DoesNotExist error.
         """
-        return cls.objects.order_by('pk')[:1].get()
+        o = cls.objects.order_by('pk')[:1].get()
+        return o
 
 
 @receiver(post_save, sender=GlobalConfig, dispatch_uid="save_globalconfig")
@@ -3331,6 +3543,9 @@ class PluginResult(models.Model):
         ('Cancelled', 'User Cancelled'), # User killed SGE job
         ('Archived', 'Archived'), # Soft Deletion
     )
+    
+    RUNNING_STATES = ['Pending', 'Queued', 'Started']
+    
     # Completed, Error, Cancelled, Archived are terminal states
     # Pending, Queued, Started are transitional states for a normal SGE launch
     # Declined and Unknown are no longer used.
@@ -3352,10 +3567,14 @@ class PluginResult(models.Model):
 
     owner = models.ForeignKey(User)
 
+    @cached_property
+    def default_path(self):
+        return self.path(create=False, fallback=True)
+
     _gc = None
     def path(self, create=False, fallback=True):
         if not self._gc:
-            self._gc = GlobalConfig.objects.all().order_by('pk')[0]
+            self._gc = GlobalConfig.get()
 
         base_path = os.path.join(self.result.get_report_dir(),
                                  self._gc.plugin_output_folder, # Default:'plugin_out'
@@ -3385,7 +3604,7 @@ class PluginResult(models.Model):
 
     @cached_property
     def _calc_size(self):
-        d = self.path()
+        d = self.default_path
         if not d or not os.path.exists(d):
             return (0,0)
 
@@ -3444,11 +3663,9 @@ class PluginResult(models.Model):
         self.endtime = timezone.now()
         self.state = state
         self.apikey = None
-        try:
-            self.size, self.inodes = self._calc_size
-        except OSError:
-            logger.exception("Failed to compute plugin size: '%s'", self.path())
-            self.size = self.inodes = -1
+        self.save(update_fields=['endtime', 'state', 'apikey'])
+        # Compute size as background task
+        plugintasks.calc_size.delay(self.id)
 
     def duration(self):
         if not self.starttime:
@@ -3470,7 +3687,7 @@ class PluginResult(models.Model):
 def on_pluginresult_delete(sender, instance, **kwargs):
     """Delete all of the files for a pluginresult record """
     try:
-        directory = instance.path()
+        directory = instance.default_path
     except:
         #if we can't find the result to delete
         return
@@ -3538,7 +3755,7 @@ class ReferenceGenome(models.Model):
         #delete the genome from the filesystem as well as the database
         from celery.result import AsyncResult
         if self.celery_task_id:
-            revoke(self.celery_task_id, terminate=True)
+            celery.control.revoke(self.celery_task_id, terminate=True)
             children = AsyncResult(self.celery_task_id).children
             if children:
                 for result in children:
@@ -3705,10 +3922,11 @@ class Publisher(models.Model):
 
     def get_editing_scripts(self):
         pub_files = os.listdir(self.path)
-        stages = ( ("pre_process", "Pre-processing"),
-                   ("validate", "Validating"),
-                   ("post_process", "Post-processing"),
-                   ("register", "Registering"),
+        stages = (
+            ("pre_process",     "Pre-processing"),
+            ("validate",        "Validating"),
+            ("post_process",    "Post-processing"),
+            ("register",        "Registering"),
         )
         pub_scripts = []
         for stage, name in stages:
@@ -3753,6 +3971,9 @@ class Content(models.Model):
     meta = json_field.JSONField(blank=True)
 
     def __unicode__(self): return self.path
+
+    def get_file_name(self):
+        return os.path.basename(self.path)
 
 
 @receiver(pre_delete, sender=Content, dispatch_uid="delete_content")
@@ -4212,7 +4433,7 @@ class FileMonitor(models.Model):
 
     def delete(self):
         # delete the files from the filesystem as well as the database
-        revoke(self.celery_task_id, terminate=True)
+        celery.control.revoke(self.celery_task_id, terminate=True)
         try:
             if os.path.exists(self.local_dir):
                 shutil.rmtree(self.local_dir)
@@ -4293,8 +4514,9 @@ class AnalysisArgs(models.Model):
         }
         return args
 
+
     @classmethod
-    def best_match(cls, chipType, sequenceKitName='', templateKitName='', libraryKitName='', samplePrepKitName=''):
+    def best_match(cls, chipType, sequenceKitName='', templateKitName='', libraryKitName='', samplePrepKitName='', analysisArgs_objs = None):
         ''' Find args that best match given chip type and kits.
             If chipType not found returns None.
             If none of the kits matched returns chip default.
@@ -4304,8 +4526,13 @@ class AnalysisArgs(models.Model):
         if Chip.objects.filter(name=chipType).count() == 0:
             chipType = chipType[:3]
 
-        args = AnalysisArgs.objects.filter(chipType=chipType).order_by('-pk')
+        if analysisArgs_objs:
+            args = analysisArgs_objs
+        else:
+            args = AnalysisArgs.objects.filter(chipType=chipType).order_by('-pk')
+            
         args_count = args.count()
+
         if args_count == 0:
             best_match = None
         elif args_count == 1:
@@ -4316,15 +4543,25 @@ class AnalysisArgs(models.Model):
                 'templateKitName': templateKitName,
                 'libraryKitName': libraryKitName,
                 'samplePrepKitName': samplePrepKitName
-            }
+            }            
             match = [0]*args_count
             match_no_blanks = [0]*args_count
+            unmatch_criteria =[0]*args_count
+            
             for i, arg in enumerate(args):
                 for key, value in kits.items():
-                    if getattr(arg, key) == value:
+                    if getattr(arg, key) == value:                                                   
                         match[i] += 1
                         if value:
                             match_no_blanks[i] += 1
+                    else:
+                        if getattr(arg, key):
+                            #if analysisArgs has criteria specified                            
+                            unmatch_criteria[i] += 1
+
+                if unmatch_criteria[i] > 0:
+                    match_no_blanks[i] = -1
+                    match[i] = -1   
 
             if max(match_no_blanks) > 0:
                 best_match = args[match.index(max(match))]
@@ -4399,3 +4636,54 @@ class SupportUpload(models.Model):
         revoke(self.celery_task_id, terminate=True)
         super(SupportUpload, self).delete()
         return True
+
+
+class SharedServer(models.Model):
+    name = models.CharField(max_length=128, unique=True)
+    address = models.CharField(max_length=128)
+    username = models.CharField(max_length=64)
+    password = models.CharField(max_length=64)
+    active = models.BooleanField(default=True)
+    comments = models.TextField(blank=True)
+
+    def setup_session(self):
+        import requests
+        
+        try:
+            s = requests.Session()
+            # convenient variables for communication
+            s.api_url = 'http://%s/rundb/api/v1/' % self.address
+            s.address = self.address
+            s.server = self.name
+            # call the account api, this also sets up a session cookie
+            # TODO api_key authentication
+            r = s.get(s.api_url + 'account/', auth = (self.username, self.password))
+            # throw exception if unsuccessful
+            r.raise_for_status()
+        except requests.exceptions.ConnectionError, requests.exceptions.TooManyRedirects:
+            raise Exception('Connection Error: Torrent Server %s (%s) is unreachable' % (s.server,s.address))
+        except requests.exceptions.HTTPError as e:
+            raise Exception('HTTP Error: Unable to connect to Torrent Server %s (%s): %s' % (s.server,s.address,e))
+        except Exception as e:
+            raise Exception('Error: Unable to access Torrent Server %s (%s): %s' % (s.server,s.address,e))
+        
+        try:
+            # get software version
+            r = s.get(s.api_url + 'torrentsuite/version')
+            version = r.json()['meta_version']
+        except:
+            msg = 'Error getting software version for Torrent Server %s (%s). ' % (s.server,s.address)
+            raise Exception(msg+ 'Only TSS 4.4 and above are supported for Plan Transfer')
+        
+        return s, version
+        
+    def clean(self):
+        # if active server make sure we can set up communication
+        if self.active:
+            try:
+                self.setup_session()
+            except Exception as e:
+                raise ValidationError(str(e))
+
+    def __unicode__(self):
+        return self.name

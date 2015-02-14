@@ -456,21 +456,6 @@
           "rig"
         ],
         [
-          "add_runscript",
-          "rundb",
-          "runscript"
-        ],
-        [
-          "change_runscript",
-          "rundb",
-          "runscript"
-        ],
-        [
-          "delete_runscript",
-          "rundb",
-          "runscript"
-        ],
-        [
           "add_runtype",
           "rundb",
           "runtype"

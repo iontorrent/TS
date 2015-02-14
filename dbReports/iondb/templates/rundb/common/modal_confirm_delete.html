@@ -26,29 +26,20 @@
             var that = this;
             e.preventDefault();
             $('#modal_confirm_delete #modal-error-messages').hide().empty();
-            var error = false;
+            
+            var arr = []
             for (var i = 0; i < ids.length; i++) {
-
                 var url = actions[i], type = $('#modal_confirm_delete').attr('method');
-
                 console.log('transmitting :', type, url);
                 var jqxhr = $.ajax(url, {
                     type : type,
                     contentType : 'application/json',
                     dataType : 'json',
                     processData : false
-                }).done(function(data) {
-                    console.log("success:", url);
-                }).fail(function(data) {
-                    error = true;
-                    $('#modal_confirm_delete #modal-error-messages').empty().show();
-                    $('#modal_confirm_delete #modal-error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-                    console.log("error:", data);
-
-                }).always(function(data) {/*console.log("complete:", data);*/
                 });
+                arr.push(jqxhr);
             }
-            if (!error) {
+            $.when.apply($, arr).done(function(data) {
                 if ($('#modal_confirm_delete').data('customevents')) {
                     jQuery.each($('#modal_confirm_delete').data('customevents'), function(i, elem) {
                         $('#modal_confirm_delete').trigger(elem, {})
@@ -58,7 +49,10 @@
                     values : e.values
                 });
                 $('#modal_confirm_delete').modal("hide");
-            }
+            }).fail(function(data) {
+                console.log("error:", data);
+                $('#modal_confirm_delete #modal-error-messages').empty().append('<p class="error">Error: '+data.status+' '+data.statusText+'</p>').show();
+            });
         });
     } else {
         $('#modal_confirm_delete .btn-danger').click(function(e) {
@@ -85,7 +79,7 @@
                 });
                 $('#modal_confirm_delete').modal("hide");
             }).fail(function(data) {
-                $('#modal_confirm_delete #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+                $('#modal_confirm_delete #modal-error-messages').empty().append('<p class="error">Error: '+data.status+' '+data.statusText+'</p>').show();
                 console.log("error:", data);
 
             }).always(function(data) {/*console.log("complete:", data);*/

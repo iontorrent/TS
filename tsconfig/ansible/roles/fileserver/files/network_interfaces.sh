@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 # Determines which port is connected to an outbound network
 function outbound_net_port()
 {

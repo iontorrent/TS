@@ -41,6 +41,7 @@ set(ENV{JSON_INC}="${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.0-
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/AnalysisOrg )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BaseCaller )
+include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Recall )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Image )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/Mask )
 include_directories( ${PROJECT_SOURCE_DIR}/../Analysis/BkgModel )

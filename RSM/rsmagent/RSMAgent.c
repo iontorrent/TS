@@ -146,7 +146,6 @@ UpdateItem updateItem[] = {
 unsigned int numUpdateItems = sizeof(updateItem) / sizeof(UpdateItem);
 webProxy_t proxyInfo;
 static pthread_t locationThreadId = 0;
-static pthread_t signalThreadId = 0;
 static int locationThreadExited = 0;
 
 int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem);
@@ -168,7 +167,6 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId, AeFileStat **ppFile, AeChar **
 static void OnFileUploadEnd(AeInt32 iDeviceId, AeBool bOK, AePointer pUserData);
 static void SendLocationInfo(AeDRMDataItem *dataItem);
 void *locationThreadTask(void *args __attribute__((unused)));
-void *signalThreadTask(void *args __attribute__((unused)));
 
 void trimTrailingWhitespace(char *inputBuf)
 {
@@ -436,30 +434,31 @@ void GetSoftwareVersion(char *softwareComponent, char *subcat, AeDRMDataItem *it
 
 void sigint_handler(int sig __attribute__((unused)))
 {
-	printf("Got interrupt request, will process after timeout expires.\n");
+	printf("Got interrupt request (signal %d), will process after timeout expires.\n", sig);
 	running = 0;
 }
 
 void setUpSignalHandling()
 {
-	// block all signals
-	sigset_t allsignals;
-	int rc = sigfillset(&allsignals);
-	if (rc)
-		fprintf(stderr, "%s: sigfillset: %s\n", __FUNCTION__, strerror(rc));
+	int rc;
+	struct sigaction act;
 
-	rc = sigprocmask(SIG_BLOCK, &allsignals, NULL);
+	rc = sigemptyset(&act.sa_mask);
 	if (rc)
-		fprintf(stderr, "%s: sigfillset: %s\n", __FUNCTION__, strerror(rc));
+		fprintf(stderr, "%s: sigemptyset: %s\n", __FUNCTION__, strerror(errno));
 
-	// create thread to respond to signals.
-	rc = pthread_create(&signalThreadId, NULL, signalThreadTask, NULL);
-	if (rc)
-		fprintf(stderr, "%s: pthread_create: %s\n", __FUNCTION__, strerror(rc));
+	act.sa_handler = sigint_handler;
+	act.sa_flags = SA_RESTART;
 
-	rc = pthread_detach(signalThreadId);
+	rc = sigaction(SIGINT, &act, NULL);
 	if (rc)
-		fprintf(stderr, "%s: pthread_detach: %s\n", __FUNCTION__, strerror(rc));
+		fprintf(stderr, "%s: sigaction: %s\n", __FUNCTION__, strerror(errno));
+	//rc = sigaction(SIGQUIT, &act, NULL);
+	//if (rc)
+	//	fprintf(stderr, "%s: sigaction: %s\n", __FUNCTION__, strerror(errno));
+	rc = sigaction(SIGTERM, &act, NULL);
+	if (rc)
+		fprintf(stderr, "%s: sigaction: %s\n", __FUNCTION__, strerror(errno));
 }
 
 int main(int argc, char *argv[])
@@ -1575,35 +1574,3 @@ void *locationThreadTask(void *args __attribute__((unused)))
 	return NULL;
 }
 
-void *signalThreadTask(void *args __attribute__((unused)))
-{
-	sigset_t allsignals;
-	int rc = sigfillset(&allsignals);
-	if (rc)
-		fprintf(stderr, "%s: sigfillset: %s\n", __FUNCTION__, strerror(rc));
-
-	while (running) {
-		int signalReceived;
-		rc = sigwait(&allsignals, &signalReceived);
-		if (rc)
-			fprintf(stderr, "%s: sigfillset: %s\n", __FUNCTION__, strerror(rc));
-
-		switch (signalReceived) {
-		case SIGINT:
-		case SIGQUIT:
-		case SIGILL:
-		case SIGTRAP:
-		case SIGABRT:
-		case SIGFPE:
-		case SIGSEGV:
-		case SIGTERM:
-		case SIGSTKFLT:
-			printf("Got interrupt request, will process after timeout expires.\n");
-			running = 0;
-			break;
-		default:
-			break;
-		}
-	}
-	return NULL;
-}

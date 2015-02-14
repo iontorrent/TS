@@ -133,6 +133,8 @@ function get_user_input_info_from_ui(accountId, accountName) {
 $(document).ready(function(){
 
 	$("form").submit(function(e){
+	    updateSamplesTable();
+	    
 		var $div = $("#error");
 		$div.html('');
         

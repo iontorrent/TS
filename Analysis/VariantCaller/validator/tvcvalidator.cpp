@@ -1012,7 +1012,7 @@ void VariantValidatorHelp()
 int main(int argc, const char* argv[])
 {
   printf ("tvcvalidator %s-%s (%s) - Prototype tvc validation tool\n\n",
-      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetSvnRev().c_str());
+      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
 
   if (argc == 1) {
     VariantValidatorHelp();

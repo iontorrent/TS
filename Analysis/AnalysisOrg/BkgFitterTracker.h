@@ -108,6 +108,28 @@ public:
   
   int getMaxFrames(const ImageSpecClass &my_image_spec, const std::vector<RegionTiming> &region_timing);
 
+  void setWashoutThreshold(float threshold)
+  {
+	  for(size_t n = 0; n < signal_proc_fitters.size(); ++n)
+	  {
+          if(signal_proc_fitters[n])
+		  {
+              signal_proc_fitters[n]->setWashoutThreshold(threshold);
+		  }
+	  }
+  }
+
+  void setWashoutFlowDetection(int detection)
+  {
+	  for(size_t n = 0; n < signal_proc_fitters.size(); ++n)
+	  {
+          if(signal_proc_fitters[n])
+		  {
+              signal_proc_fitters[n]->setWashoutFlowDetection(detection);
+		  }
+	  }
+  }
+
  private:
 
   BkgFitterTracker(){

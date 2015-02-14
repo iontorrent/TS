@@ -27,7 +27,7 @@
 						<td>{{out.name}}</td>
 						<td>
 						{% if out.basecaller_bam.exists %}
-			              <a class="btn" rel="tooltip" title="Unaligned reads in the BAM format" href="{{out.basecaller_bam.link}}">BAM</a>
+			              <a class="btn" rel="tooltip" title="Trimmed Reads in Unaligned BAM" href="{{out.basecaller_bam.link}}">BAM</a>
 						{% else %}
 			              <a class="btn disabled" rel="tooltip" title="For full-chip Proton runs the unmapped BAM is only produced if there is no genomic reference. When there is a reference the mapped BAM contains all the information that would have been present in the unmapped BAM. Producing only one BAM enables faster report generation and reduces storage burden.">BAM</a>
 						{% endif %}

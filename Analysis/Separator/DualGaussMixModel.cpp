@@ -792,8 +792,9 @@ void DualGaussMixModel::ConvergeModelFaster(float *data, int count, MixModel &mo
   }
   //  UpdateResponsibility(cluster, data, model);
   UpdateResponsibilityVec(cluster, data, p1, p2, count, model);
-  free(p1);
-  free(p2);
+  FREEZ(&p1);
+  FREEZ(&p2);
+  FREEZ(&cluster);
 }
 
 

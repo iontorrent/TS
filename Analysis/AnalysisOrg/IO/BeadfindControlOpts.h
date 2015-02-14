@@ -19,7 +19,8 @@ class BeadfindControlOpts{
     double bfLibFilterQuantile;
     int skipBeadfindSdRecover;
     int beadfindThumbnail; // Is this a thumbnail chip where we need to skip smoothing across regions?
-    int beadfindLagOneFilt;
+    bool beadfindSmoothTrace;
+    std::string filterNoisyCols;
     char *beadMaskFile;
     bool maskFileCategorized;
     char bfFileBase[MAX_PATH_LENGTH];

@@ -7,6 +7,12 @@
 		<li>
 			<a data-toggle="tab" href="#TestFragments">Test Fragments</a>
 		</li>
+        <li>
+            <a data-toggle="tab" href="#ChefSummary">Chef Summary</a>
+        </li>
+        <li>
+			<a data-toggle="tab" href="#CalibrationReport">Calibration Report</a>
+		</li>
 		<li>
 			<a data-toggle="tab" href="#AnalysisDetails">Analysis Details</a>
 		</li>
@@ -20,8 +26,8 @@
 	</ul>				
 	<div id="ReportDetailsTabContent" class="tab-content">
 		<div id="PluginOutput" data-title="Plugin Output" class="tab-pane active in">
-			
-			<a id="pluginDialogButton" class="btn btn-tertiary">Select plugins to run</a>
+
+			<a class="btn pluginDialogButton">Select plugins to run</a>
 
 			<div class="pull-right">
 				<div class="btn-group">
@@ -72,7 +78,7 @@ function precisionUnits(num, div) {
 								# if (data.State.match("^(Completed|Error)")) { #
 										<span rel='tooltip' title="Size (bytes): #=data.Size#, Inode Count: #=data.inodes#">#= precisionUnits(data.Size, 1024) #B</span>
 								# } else if (data.jobid && data.State.match("^(Queued|Started)") ) { #
-										<button class="pluginCancel" title="Terminate SGE Job #= data.jobid #" data-id="#=data.id#" data-jobid="#=data.jobid#"><i class="icon-remove"></i></button>
+										<button class="pluginCancel btn btn-small btn-primary" title="Terminate SGE Job #= data.jobid #" data-id="#=data.id#" data-jobid="#=data.jobid#"><i class="icon-white icon-remove"></i> Stop</button>
 								# } #
 								<span> #= data.State # </span>
 										#= plugin_dropdown_template(data) #
@@ -151,8 +157,10 @@ function precisionUnits(num, div) {
 			</div>
 		</div>
 		
-	  {% include "rundb/reports/blocks/testfragments.html" %}  
-		
+	  {% include "rundb/reports/blocks/testfragments.html" %}
+
+	  {% include "rundb/reports/blocks/calibration_report.html" %}
+
 		<div id="AnalysisDetails" data-title="Analysis Details" class="tab-pane">
 			<table class="table table-striped">
 				<tr><td>Run Name</td><td>{{experiment.expName}}</td></tr>
@@ -213,7 +221,18 @@ function precisionUnits(num, div) {
 				{% endfor %}
 			</table>
 		</div>
-		
+
+        <div id="ChefSummary" data-title="Chef Summary" class="tab-pane">
+            <table class="table table-striped">
+                {% if chef_info %}
+                    {% for item, info in chef_info %}
+                        <tr><td>{{item}}</td><td>{{info}}</td></tr>
+                    {% endfor %}
+                {% else %}
+                    <h2>Ion Chef was not used for this run</h2>
+                {% endif %}                
+            </table>
+        </div>		
 	</div>
 </section>
 

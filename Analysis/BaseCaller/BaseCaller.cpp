@@ -7,6 +7,7 @@
 //! @ingroup  BaseCaller
 //! @brief    BaseCaller main source
 
+
 #include <stdio.h>
 #include <time.h>
 #include <math.h>
@@ -46,73 +47,15 @@
 #include "BaseCallerRecalibration.h"
 #include "RecalibrationModel.h"
 
+#include "BaseCallerParameters.h"
+
 using namespace std;
-
-const float abFactor = 75.0;
-const float abLowerBound = -1.633333;
-const float abUpperBound = 1.633333;
-
-
-//! @brief    Information needed by BaseCaller worker threads
-//! @ingroup  BaseCaller
-
-struct BaseCallerContext {
-
-    // General run parameters
-    string                    run_id;                 //!< Run ID string, prepended to each read name
-    string                    keynormalizer;          //!< Name of selected key normalization algorithm
-    string                    dephaser;               //!< Name of selected dephasing algorithm
-    string                    filename_wells;         //!< Filename of the input wells file
-    int                       chip_size_y;            //!< Chip height in wells
-    int                       chip_size_x;            //!< Chip width in wells
-    int                       region_size_y;          //!< Wells hdf5 dataset chunk height
-    int                       region_size_x;          //!< Wells hdf5 dataset chunk width
-    ion::FlowOrder            flow_order;             //!< Flow order object, also stores number of flows
-    vector<KeySequence>       keys;                   //!< Info about key sequences in use by library and TFs
-    string                    flow_signals_type;      //!< The flow signal type: "default" - Normalized and phased, "wells" - Raw values (unnormalized and not dephased), "key-normalized" - Key normalized and not dephased, "adaptive-normalized" - Adaptive normalized and not dephased, and "unclipped" - Normalized and phased but unclipped.
-    string                    output_directory;       //!< Root directory for all output files
-    int                       block_row_offset;       //!< Offset added to read names
-    int                       block_col_offset;       //!< Offset added to read names
-    int                       extra_trim_left;        //!< Number of additional insert bases past key and barcode to be trimmed
-    bool                      process_tfs;            //!< If set to false, TF-related BAM will not be generated
-    int                       windowSize;             //!< Normalization window size
-    bool                      save_hpmodel;
-    bool                      diagonal_state_prog;    //!< Switch to enable a diagonal state progression
-    bool                      only_process_unfiltered_set;
-    bool                      skip_droop;             //!< Switch to include / exclude droop in cpp basecaller
-    bool                      skip_recal_during_norm; //!< Switch to exclude recalibration from the normalization stage
-
-    // Important outside entities accessed by BaseCaller
-    Mask                      *mask;                  //!< Beadfind and filtering outcomes for wells
-    BaseCallerFilters         *filters;               //!< Filter configuration and stats
-    PhaseEstimator            estimator;              //!< Phasing estimation results
-    PerBaseQual               quality_generator;      //!< Base phred quality value generator
-    vector<int>               class_map;              //!< What to do with each well
-    BaseCallerMetricSaver     *metric_saver;          //!< Saves requested metrics to an hdf5
-    BarcodeClassifier         *barcodes;              //!< Barcode detection and trimming
-    BaseCallerRecalibration   recalibration;          //!< Base call and signal adjustment algorithm
-    RecalibrationModel        recalModel;             //!< Model estimation of simulated predictions and observed measurements
-    PolyclonalFilterOpts      polyclonal_filter;      //!< User options for polyclonal filtering
-
-    // Threaded processing
-    pthread_mutex_t           mutex;                  //!< Shared read/write mutex for BaseCaller worker threads
-    int                       next_region;            //!< Number of next region that needs processing by a worker
-    int                       next_begin_x;           //!< Starting X coordinate of next region
-    int                       next_begin_y;           //!< Starting Y coordinate of next region
-
-    // Basecalling results saved here
-    OrderedDatasetWriter      lib_writer;                 //!< Writer object for library BAMs
-    OrderedDatasetWriter      tf_writer;                  //!< Writer object for test fragment BAMs
-    set<unsigned int>         unfiltered_set;             //!< Indicates which wells are to be saved to unfiltered BAMs
-    OrderedDatasetWriter      unfiltered_writer;          //!< Writer object for unfiltered BAMs for a random subset of library reads
-    OrderedDatasetWriter      unfiltered_trimmed_writer;  //!< Writer object for unfiltered trimmed BAMs for a random subset of library reads
-};
 
 
 void * BasecallerWorker(void *input);
 
 
-
+// ----------------------------------------------------------------
 //! @brief    Print BaseCaller version with figlet.
 //! @ingroup  BaseCaller
 
@@ -124,6 +67,7 @@ void BaseCallerSalute()
         fprintf (stdout, "BaseCaller %s\n", IonVersion::GetVersion().c_str()); // figlet did not execute
 }
 
+// ----------------------------------------------------------------
 //! @brief    Print BaseCaller startup info, also write it to json structure.
 //! @ingroup  BaseCaller
 
@@ -137,7 +81,7 @@ void DumpStartingStateOfProgram (int argc, const char *argv[], time_t analysis_s
     printf ("Start Time = %s", ctime (&analysis_start_time));
     printf ("Version = %s-%s (%s) (%s)\n",
             IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(),
-            IonVersion::GetSvnRev().c_str(), IonVersion::GetBuildNum().c_str());
+            IonVersion::GetGitHash().c_str(), IonVersion::GetBuildNum().c_str());
     printf ("Command line = ");
     for (int i = 0; i < argc; i++) {
         if (i)
@@ -151,105 +95,12 @@ void DumpStartingStateOfProgram (int argc, const char *argv[], time_t analysis_s
     json["host_name"] = my_host_name;
     json["start_time"] = get_time_iso_string(analysis_start_time);
     json["version"] = IonVersion::GetVersion() + "-" + IonVersion::GetRelease().c_str();
-    json["svn_revision"] = IonVersion::GetSvnRev();
+    json["git_hash"] = IonVersion::GetGitHash();
     json["build_number"] = IonVersion::GetBuildNum();
     json["command_line"] = command_line;
 }
 
-
-//! @brief    Print BaseCaller usage.
-//! @ingroup  BaseCaller
-
-void PrintHelp()
-{
-    printf ("\n");
-    printf ("Usage: BaseCaller [options] --input-dir=DIR\n");
-    printf ("\n");
-    printf ("General options:\n");
-    printf ("  -h,--help                             print this help message and exit\n");
-    printf ("  -v,--version                          print version and exit\n");
-    printf ("  -i,--input-dir             DIRECTORY  input files directory [required option]\n");
-    printf ("     --wells                 FILE       input wells file [input-dir/1.wells]\n");
-    printf ("     --mask                  FILE       input mask file [input-dir/analysis.bfmask.bin]\n");
-    printf ("  -o,--output-dir            DIRECTORY  results directory [current dir]\n");
-    printf ("     --lib-key               STRING     library key sequence [TCAG]\n");
-    printf ("     --tf-key                STRING     test fragment key sequence [ATCG]\n");
-    printf ("     --flow-order            STRING     flow order [retrieved from wells file]\n");
-    printf ("     --run-id                STRING     read name prefix [hashed input dir name]\n");
-    printf ("  -n,--num-threads           INT        number of worker threads [2*numcores]\n");
-    printf ("  -f,--flowlimit             INT        basecall only first n flows [all flows]\n");
-    printf ("  -r,--rows                  INT-INT    basecall only a range of rows [all rows]\n");
-    printf ("  -c,--cols                  INT-INT    basecall only a range of columns [all columns]\n");
-    printf ("     --region-size           INTxINT    wells processing chunk size [50x50]\n");
-    printf ("     --num-unfiltered        INT        number of subsampled unfiltered reads [100000]\n");
-    printf ("     --keynormalizer         STRING     key normalization algorithm [keynorm-old]\n");
-    printf ("     --dephaser              STRING     dephasing algorithm [treephaser-sse]\n");
-    printf ("     --window-size           INT        normalization window size (%d-%d) [%d]\n", kMinWindowSize_, kMaxWindowSize_, DPTreephaser::kWindowSizeDefault_);
-    printf ("     --flow-signals-type     STRING     select content of FZ tag [none]\n");
-    printf ("                                          \"none\" - FZ not generated\n");
-    printf ("                                          \"wells\" - Raw values (unnormalized and not dephased)\n");
-    printf ("                                          \"key-normalized\" - Key normalized and not dephased\n");
-    printf ("                                          \"adaptive-normalized\" - Adaptive normalized and not dephased\n");
-    printf ("                                          \"residual\" - Measurement-prediction residual\n");
-    printf ("                                          \"scaled-residual\" - Scaled measurement-prediction residual\n");
-    printf ("     --block-row-offset      INT        Offset added to read coordinates [0]\n");
-    printf ("     --block-col-offset      INT        Offset added to read coordinates [0]\n");
-    printf ("     --extra-trim-left       INT        Number of additional bases after key and barcode to remove from each read [0]\n");
-    printf ("     --calibration-training  INT        Generate training set of INT reads. No TFs, no unfiltered sets. 0=off [0]\n");
-    printf ("     --calibration-file      FILE       Enable recalibration using tables from provided file [off]\n");
-    printf ("     --model-file            FILE       Enable recalibration using model from provided file [off]\n");
-    printf ("     --phase-estimation-file FILE       Enable reusing phase estimation from provided file [off]\n");
-    printf ("     --save-hpmodel          BOOL       Enable to save hpModel values to bam [off]\n");
-    printf ("     --downsample-fraction   FLOAT      Only save a fraction of generated reads. 1.0 saves all reads. [1.0]\n");
-    printf ("     --only-process-unfiltered-set   on/off   Only save reads that would also go to unfiltered BAMs. [off]\n");
-    printf ("\n");
-
-    BaseCallerFilters::PrintHelp();
-    PhaseEstimator::PrintHelp();
-    PerBaseQual::PrintHelp();
-    BarcodeClassifier::PrintHelp();
-    BaseCallerMetricSaver::PrintHelp();
-
-    exit (EXIT_SUCCESS);
-}
-
-//! @brief    Verify path exists and if it does, canonicalize it
-//! @ingroup  BaseCaller
-
-void ValidateAndCanonicalizePath(string &path)
-{
-    char *real_path = realpath (path.c_str(), NULL);
-    if (real_path == NULL) {
-        perror(path.c_str());
-        exit(EXIT_FAILURE);
-    }
-    path = real_path;
-    free(real_path);
-}
-
-//! @brief    Verify path exists and if it does, canonicalize it. If it doesn't, try fallback location
-//! @ingroup  BaseCaller
-
-void ValidateAndCanonicalizePath(string &path, const string& backup_path)
-{
-    char *real_path = realpath (path.c_str(), NULL);
-    if (real_path != NULL) {
-        path = real_path;
-        free(real_path);
-        return;
-    }
-    perror(path.c_str());
-    printf("%s: inaccessible, trying alternative location\n", path.c_str());
-    real_path = realpath (backup_path.c_str(), NULL);
-    if (real_path != NULL) {
-        path = real_path;
-        free(real_path);
-        return;
-    }
-    perror(backup_path.c_str());
-    exit(EXIT_FAILURE);
-}
-
+// ----------------------------------------------------------------
 //! @brief    Shortcut: Print message with time elapsed from start
 //! @ingroup  BaseCaller
 
@@ -262,6 +113,7 @@ void ReportState(time_t analysis_start_time, char *my_state)
             ctime (&analysis_current_time));
 }
 
+// ----------------------------------------------------------------
 //! @brief    Shortcut: save json value to a file.
 //! @ingroup  BaseCaller
 
@@ -274,6 +126,7 @@ void SaveJson(const Json::Value & json, const string& filename_json)
         ION_WARN("Unable to write JSON file " + filename_json);
 }
 
+// ----------------------------------------------------------------
 void SaveBaseCallerProgress(int percent_complete, const string& output_directory)
 {
     string filename_json = output_directory+"/progress_basecaller.json";
@@ -282,81 +135,76 @@ void SaveBaseCallerProgress(int percent_complete, const string& output_directory
     SaveJson(progress_json, filename_json);
 }
 
-void SaveModelFileToBamComments(vector<string> &comments, OptArgs &opts, string &run_id, int block_col_offset, int block_row_offset) {
-    //@TODO: doesn't anyone believe in function calls anymore?
-    string model_file_name = opts.GetFirstString ('-', "model-file", "");
-    if (!model_file_name.empty())
-    {
-        ifstream model_file;
-        model_file.open(model_file_name.c_str());
-        if (!model_file.fail())
-        {
-            Json::Value hpJson(Json::objectValue);
 
-            char buf[1000];
-            string id = run_id;
+// --------------------------------------------------------------------------
+// Function sets the read class for each well and sub-samples if desired
 
-            sprintf(buf, ".block_X%d_Y%d", block_col_offset, block_row_offset);
-            id += buf;
-            hpJson["MagicCode"] = "6d5b9d29ede5f176a4711d415d769108"; // md5hash "This uniquely identifies json comments for recalibration."
-            hpJson["MasterKey"] = id;
-            hpJson["MasterCol"] = block_col_offset;
-            hpJson["MasterRow"] = block_row_offset;
+void ClassifyAndSampleWells(BaseCallerContext & bc, const BCwellSampling & SamplingOpts)
+{
+    ReservoirSample<unsigned int> downsampled_subset(SamplingOpts.downsample_size, 2);
+    ReservoirSample<unsigned int> unfiltered_subset(SamplingOpts.num_unfiltered, 1);
+    bool eval_all_libWells = SamplingOpts.downsample_size == 0 or SamplingOpts.have_calib_panel;
+    bc.class_map.assign((unsigned int)(bc.chip_subset.GetChipSizeX()*bc.chip_subset.GetChipSizeY()), -1);
 
-            string comment_line;
-            getline(model_file, comment_line); //skip the comment time
-
-            int flowStart, flowEnd, flowSpan, xMin, xMax, xSpan, yMin, yMax, ySpan, max_hp_calibrated;
-            model_file >> flowStart >> flowEnd >> flowSpan >> xMin >> xMax >> xSpan >> yMin >> yMax >> ySpan >> max_hp_calibrated;
-            hpJson[id]["flowStart"] = flowStart;
-            hpJson[id]["flowEnd"] = flowEnd;
-            hpJson[id]["flowSpan"] = flowSpan;
-            hpJson[id]["xMin"] = xMin;
-            hpJson[id]["xMax"] = xMax;
-            hpJson[id]["xSpan"] = xSpan;
-            hpJson[id]["yMin"] = yMin;
-            hpJson[id]["yMax"] = yMax;
-            hpJson[id]["ySpan"] = ySpan;
-            hpJson[id]["max_hp_calibrated"] = max_hp_calibrated;
-
-            char flowBase;
-            int refHP;
-            float paramA, paramB;
-            int item = 0;
-            while (model_file.good())
-            {
-                model_file >> flowBase >> flowStart >> flowEnd >> xMin >> xMax >> yMin >> yMax >> refHP >> paramA >> paramB;
-                hpJson[id]["modelParameters"][item]["flowBase"] = flowBase;
-                hpJson[id]["modelParameters"][item]["flowStart"] = flowStart;
-                hpJson[id]["modelParameters"][item]["flowEnd"] = flowEnd;
-                hpJson[id]["modelParameters"][item]["xMin"] = xMin;
-                hpJson[id]["modelParameters"][item]["xMax"] = xMax;
-                hpJson[id]["modelParameters"][item]["yMin"] = yMin;
-                hpJson[id]["modelParameters"][item]["yMax"] = yMax;
-                hpJson[id]["modelParameters"][item]["refHP"] = refHP;
-                hpJson[id]["modelParameters"][item]["paramA"] = paramA;
-                hpJson[id]["modelParameters"][item]["paramB"] = paramB;
-                ++item;
-            }
-
-            model_file.close();
-            Json::FastWriter writer;
-            string str = writer.write(hpJson);
-            // trim unwanted newline added by writer
-            int last_char = str.size()-1;
-            if (last_char>=0) {
-                if (str[last_char]=='\n'){
-                    str.erase(last_char,1);
-                }
-            }
-            comments.push_back(str);
+    // First iteration over wells to sample them and/or assign read class
+    for (int y = bc.chip_subset.GetBeginY(); y < bc.chip_subset.GetEndY(); ++y) {
+      for (int x = bc.chip_subset.GetBeginX(); x < bc.chip_subset.GetEndX(); ++x) {
+    	if (bc.mask->Match(x, y, MaskLib)) {
+          // Unfiltered set contains a selection of randomly selected library beads
+          if (SamplingOpts.num_unfiltered>0)
+            unfiltered_subset.Add(x + y * bc.chip_subset.GetChipSizeX());
+          // For calibration set we exclude already filtered reads
+          if (SamplingOpts.downsample_size>0 and (not bc.mask->Match(x, y, SamplingOpts.MaskNotWanted)))
+            downsampled_subset.Add(x + y * bc.chip_subset.GetChipSizeX());
+          if (eval_all_libWells)
+            bc.class_map[x + y * bc.chip_subset.GetChipSizeX()] = 0;
         }
+        if (bc.mask->Match(x, y, MaskTF) and bc.process_tfs) {
+          if (SamplingOpts.downsample_size>0)
+            downsampled_subset.Add(x + y * bc.chip_subset.GetChipSizeX());
+          else
+            bc.class_map[x + y * bc.chip_subset.GetChipSizeX()] = 1;
+        }
+      }
     }
-}
+    downsampled_subset.Finished();
+    unfiltered_subset.Finished();
+
+    // Another pass over the read class map to set our sampled subsets
+    if (SamplingOpts.num_unfiltered > 0)
+      bc.unfiltered_set.insert(unfiltered_subset.GetData().begin(), unfiltered_subset.GetData().end());
+    if (SamplingOpts.downsample_size > 0) {
+      for (size_t idx=0; idx<downsampled_subset.GetCount(); idx++) {
+    	// Mark random calibration sample to be used in addition to calibration panel reads
+        if (SamplingOpts.have_calib_panel)
+          bc.class_map.at(downsampled_subset.GetVal(idx)) = 2;
+        else if (bc.mask->Match(downsampled_subset.GetVal(idx), MaskTF))
+          bc.class_map.at(downsampled_subset.GetVal(idx)) = 1;
+        else
+          bc.class_map.at(downsampled_subset.GetVal(idx)) = 0;
+      }
+    }
+    // Print Summary:
+    unsigned int sum_tf_wells    = 0;
+    unsigned int sum_lib_wells   = 0;
+    unsigned int sum_calib_wells = 0;
+    for (unsigned int idx=0; idx<bc.class_map.size(); idx++) {
+      if (bc.class_map.at(idx) == 0) sum_lib_wells++;
+      if (bc.class_map.at(idx) == 1) sum_tf_wells++;
+      if (bc.class_map.at(idx) == 2) sum_calib_wells++;
+    }
+    cout << "Bead classification summary:" << endl;
+    cout << " - Total num. wells   : " << bc.class_map.size() << endl;
+    cout << " - Num. Library wells : " << sum_lib_wells       << endl;
+    cout << " - Num. Test fragments: " << sum_tf_wells        << endl;
+    cout << " - Num. calib. wells  : " << sum_calib_wells     << endl;
+};
 
 
-//! @brief    Main function for BaseCaller executable
+// --------------------------------------------------------------------------
+//! @brief    Main function for BaseCaller executable Mark: XXX
 //! @ingroup  BaseCaller
+
 
 int main (int argc, const char *argv[])
 {
@@ -369,395 +217,182 @@ int main (int argc, const char *argv[])
     DumpStartingStateOfProgram (argc,argv,analysis_start_time, basecaller_json["BaseCaller"]);
 
     /*---   Parse command line options  ---*/
-
-    OptArgs opts;
+    BaseCallerParameters bc_params;
+    OptArgs opts, null_opts;
     opts.ParseCmdLine(argc, argv);
 
     if (opts.GetFirstBoolean('h', "help", false) or argc == 1)
-        PrintHelp();
-
+    	bc_params.PrintHelp();
     if (opts.GetFirstBoolean('v', "version", false)) {
         fprintf (stdout, "%s", IonVersion::GetFullVersion ("BaseCaller").c_str());
         exit (EXIT_SUCCESS);
     }
 
-
-    // Establish datasets
-
-
-    // Command line processing *** Directories and file locations
-
-    string input_directory        = opts.GetFirstString ('i', "input-dir", ".");
-    string output_directory       = opts.GetFirstString ('o', "output-dir", ".");
-
-    //bool write_barcode_bam_tag    = opts.GetFirstBoolean('-', "barcode-bam-tag", false);
-
-    string unfiltered_untrimmed_directory   = output_directory + "/unfiltered.untrimmed";
-    string unfiltered_trimmed_directory   = output_directory + "/unfiltered.trimmed";
-
-    CreateResultsFolder ((char*)output_directory.c_str());
-    CreateResultsFolder ((char*)unfiltered_untrimmed_directory.c_str());
-    CreateResultsFolder ((char*)unfiltered_trimmed_directory.c_str());
-
-    ValidateAndCanonicalizePath(input_directory);
-    ValidateAndCanonicalizePath(output_directory);
-    ValidateAndCanonicalizePath(unfiltered_untrimmed_directory);
-    ValidateAndCanonicalizePath(unfiltered_trimmed_directory);
-
-    string filename_wells         = opts.GetFirstString ('-', "wells", input_directory + "/1.wells");
-    string filename_mask          = opts.GetFirstString ('-', "mask", input_directory + "/analysis.bfmask.bin");
-
-    ValidateAndCanonicalizePath(filename_wells);
-    ValidateAndCanonicalizePath(filename_mask, input_directory + "/bfmask.bin");
-
-    string filename_filter_mask   = output_directory + "/bfmask.bin";
-    string filename_json          = output_directory + "/BaseCaller.json";
-
-    printf("\n");
-    printf("Input files summary:\n");
-    printf("     --input-dir %s\n", input_directory.c_str());
-    printf("         --wells %s\n", filename_wells.c_str());
-    printf("          --mask %s\n", filename_mask.c_str());
-    printf("\n");
-    printf("Output directories summary:\n");
-    printf("    --output-dir %s\n", output_directory.c_str());
-    printf("        unf.untr %s\n", unfiltered_untrimmed_directory.c_str());
-    printf("          unf.tr %s\n", unfiltered_trimmed_directory.c_str());
-    printf("\n");
-
-
-    // Command line processing *** Various options that need cleanup
-
-    BaseCallerContext bc;
-    bc.output_directory = output_directory;
-
-    char default_run_id[6]; // Create a run identifier from full output directory string
-    ion_run_to_readname (default_run_id, (char*)output_directory.c_str(), output_directory.length());
-
-    bc.run_id                     = opts.GetFirstString ('-', "run-id", default_run_id);
-    bc.dephaser                   = opts.GetFirstString ('-', "dephaser", "treephaser-sse");
-    bc.keynormalizer              = opts.GetFirstString ('-', "keynormalizer", "keynorm-old");
-    int num_threads               = opts.GetFirstInt    ('n', "num-threads", max(2*numCores(), 4));
-    int num_unfiltered            = opts.GetFirstInt    ('-', "num-unfiltered", 100000);
-    bc.flow_signals_type          = opts.GetFirstString ('-', "flow-signals-type", "none");
-    bc.block_row_offset           = opts.GetFirstInt    ('-', "block-row-offset", 0);
-    bc.block_col_offset           = opts.GetFirstInt    ('-', "block-col-offset", 0);
-    bc.extra_trim_left            = opts.GetFirstInt    ('-', "extra-trim-left", 0);
-    int calibration_training      = opts.GetFirstInt    ('-', "calibration-training", 0);
-    string phase_file_name        = opts.GetFirstString ('s', "phase-estimation-file", "");
-    bc.windowSize                 = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
-    bc.save_hpmodel               = opts.GetFirstBoolean('-', "save-hpmodel", true);
-    bc.only_process_unfiltered_set = opts.GetFirstBoolean('-', "only-process-unfiltered-set", false);
-    float downsample_fraction     = opts.GetFirstDouble ('-', "downsample-fraction", 1.0);
-    bc.diagonal_state_prog        = opts.GetFirstBoolean('-', "diagonal-state-prog", false);
-    bc.skip_droop                 = opts.GetFirstBoolean('-', "skipDroop", true); // To be in line with 'calibrate'
-    bc.skip_recal_during_norm     = opts.GetFirstBoolean('-', "skip-recal-during-normalization", false);
-
-    // Check input parameters for consistency and set defaults.
-    if (bc.diagonal_state_prog) {
-      // Disable recalibration since flow alignment might go crazy
-      if (calibration_training >0) {
-        cout << " ======================================================================================" << endl;
-        cout << " ===== Recalibration Training disabled for selected settings --- Aborting!" << endl;
-        cout << " ======================================================================================" << endl;
-        exit(0);
-      }
-      if (bc.save_hpmodel)
-        bc.save_hpmodel = false;
-      if (bc.dephaser != "treephaser-swan") {
-        cout << " ======================================================================================" << endl;
-    	cout << " ===== Diagonal State Progression Selected : Using dephaser=treephaser-swan " << endl;
-    	cout << " ======================================================================================" << endl;
-    	bc.dephaser == "treephaser-swan";
-      }
-    }
-    // --- ---
-
-    bc.process_tfs = true;
-    int subsample_library = -1;
-
-    if (calibration_training > 0) {
-        printf (" ======================================================================================\n");
-        printf (" ===== BaseCaller will only generate training set (up to %d reads) for Recalibration !\n", calibration_training);
-        printf (" ======================================================================================\n\n");
-        bc.process_tfs = false;
-        subsample_library = calibration_training;
-        num_unfiltered = 0;
-        bc.flow_signals_type = "scaled-residual";
-    }
-
-    // Dataset setup
-
-    BarcodeDatasets datasets(opts, bc.run_id);
-    datasets.GenerateFilenames("basecaller_bam",".basecaller.bam");
-
-    printf("Datasets summary (Library):\n");
-    printf("   datasets.json %s/datasets_basecaller.json\n", output_directory.c_str());
-    for (int ds = 0; ds < datasets.num_datasets(); ++ds) {
-        printf("            %3d: %s   Contains read groups: ", ds+1, datasets.dataset(ds)["basecaller_bam"].asCString());
-        for (int bc = 0; bc < (int)datasets.dataset(ds)["read_groups"].size(); ++bc)
-            printf("%s ", datasets.dataset(ds)["read_groups"][bc].asCString());
-        printf("\n");
-    }
-    printf("\n");
-
-    BarcodeDatasets datasets_tf(bc.run_id);
-    if (bc.process_tfs) {
-        datasets_tf.dataset(0)["file_prefix"] = "rawtf";
-        datasets_tf.dataset(0)["dataset_name"] = "Test Fragments";
-        datasets_tf.read_group(0)["description"] = "Test Fragments";
-        datasets_tf.GenerateFilenames("basecaller_bam",".basecaller.bam");
-
-        printf("Datasets summary (TF):\n");
-        printf("   datasets.json %s/datasets_tf.json\n", output_directory.c_str());
-        for (int ds = 0; ds < datasets_tf.num_datasets(); ++ds) {
-            printf("            %3d: %s   Contains read groups: ", ds+1, datasets_tf.dataset(ds)["basecaller_bam"].asCString());
-            for (int bc = 0; bc < (int)datasets_tf.dataset(ds)["read_groups"].size(); ++bc)
-                printf("%s ", datasets_tf.dataset(ds)["read_groups"][bc].asCString());
-            printf("\n");
-        }
-    } else
-        printf("TF basecalling disabled\n");
-    printf("\n");
-
-    BarcodeDatasets datasets_unfiltered_untrimmed(datasets);
-    BarcodeDatasets datasets_unfiltered_trimmed(datasets);
+    // Command line processing *** Main directories and file locations first
+    bc_params.InitializeFilesFromOptArgs(opts);
+    bc_params.InitContextVarsFromOptArgs(opts);
 
     // Command line processing *** Options that have default values retrieved from wells or mask files
-
-    RawWells wells ("", filename_wells.c_str());
+    RawWells wells ("", bc_params.GetFiles().filename_wells.c_str());
     if (!wells.OpenMetaData()) {
-        fprintf (stderr, "Failed to retrieve metadata from %s\n", filename_wells.c_str());
+        fprintf (stderr, "Failed to retrieve metadata from %s\n", bc_params.GetFiles().filename_wells.c_str());
         exit (EXIT_FAILURE);
     }
     Mask mask (1, 1);
-    if (mask.SetMask (filename_mask.c_str()))
+    if (mask.SetMask (bc_params.GetFiles().filename_mask.c_str()))
         exit (EXIT_FAILURE);
 
     string chip_type = "unknown";
     if (wells.KeyExists("ChipType"))
         wells.GetValue("ChipType", chip_type);
 
-    bc.region_size_x = 50; //! @todo Get default chip size from wells reader
-    bc.region_size_y = 50;
-    string arg_region_size        = opts.GetFirstString ('-', "region-size", "");
-    if (!arg_region_size.empty()) {
-        if (2 != sscanf (arg_region_size.c_str(), "%dx%d", &bc.region_size_x, &bc.region_size_y)) {
-            fprintf (stderr, "Option Error: region-size %s\n", arg_region_size.c_str());
-            exit (EXIT_FAILURE);
-        }
-    }
-
-    bc.flow_order.SetFlowOrder(     opts.GetFirstString ('-', "flow-order", wells.FlowOrder()),
-                                    opts.GetFirstInt    ('f', "flowlimit", wells.NumFlows()));
-    if (bc.flow_order.num_flows() > (int)wells.NumFlows())
-        bc.flow_order.SetNumFlows(wells.NumFlows());
-    assert (bc.flow_order.is_ok());
-
-    string lib_key                = opts.GetFirstString ('-', "lib-key", "TCAG"); //! @todo Get default key from wells
-    string tf_key                 = opts.GetFirstString ('-', "tf-key", "ATCG");
-    lib_key                       = opts.GetFirstString ('-', "librarykey", lib_key);   // Backward compatible opts
-    tf_key                        = opts.GetFirstString ('-', "tfkey", tf_key);
-    bc.keys.resize(2);
-    bc.keys[0].Set(bc.flow_order, lib_key, "lib");
-    bc.keys[1].Set(bc.flow_order, tf_key, "tf");
-
-    bc.chip_size_y = mask.H();
-    bc.chip_size_x = mask.W();
-    unsigned int subset_begin_x = 0;
-    unsigned int subset_begin_y = 0;
-    unsigned int subset_end_x = bc.chip_size_x;
-    unsigned int subset_end_y = bc.chip_size_y;
-    string arg_subset_rows        = opts.GetFirstString ('r', "rows", "");
-    string arg_subset_cols        = opts.GetFirstString ('c', "cols", "");
-    if (!arg_subset_rows.empty()) {
-        if (2 != sscanf (arg_subset_rows.c_str(), "%u-%u", &subset_begin_y, &subset_end_y)) {
-            fprintf (stderr, "Option Error: rows %s\n", arg_subset_rows.c_str());
-            exit (EXIT_FAILURE);
-        }
-    }
-    if (!arg_subset_cols.empty()) {
-        if (2 != sscanf (arg_subset_cols.c_str(), "%u-%u", &subset_begin_x, &subset_end_x)) {
-            fprintf (stderr, "Option Error: rows %s\n", arg_subset_cols.c_str());
-            exit (EXIT_FAILURE);
-        }
-    }
-    subset_end_x = min(subset_end_x, (unsigned int)bc.chip_size_x);
-    subset_end_y = min(subset_end_y, (unsigned int)bc.chip_size_y);
-    if (!arg_subset_rows.empty() or !arg_subset_cols.empty())
-        printf("Processing chip subregion %u-%u x %u-%u\n", subset_begin_x, subset_end_x, subset_begin_y, subset_end_y);
-
-
-
-
-    bc.class_map.assign(bc.chip_size_x*bc.chip_size_y, -1);
-    for (unsigned int y = subset_begin_y; y < subset_end_y; ++y) {
-        for (unsigned int x = subset_begin_x; x < subset_end_x; ++x) {
-            if (mask.Match(x, y, MaskLib))
-                bc.class_map[x + y * bc.chip_size_x] = 0;
-            if (mask.Match(x, y, MaskTF) and bc.process_tfs)
-                bc.class_map[x + y * bc.chip_size_x] = 1;
-        }
-    }
-
-    // If we are in library subsampling mode, remove excess reads from bc.class_map
-    if (subsample_library > 0) {
-        vector<int> new_class_map(bc.chip_size_x*bc.chip_size_y, -1);
-        MaskSample<unsigned int> random_lib(mask, MaskLib, (MaskType)(MaskFilteredBadResidual|MaskFilteredBadPPF|MaskFilteredBadKey), subsample_library);
-        vector<unsigned int> & values = random_lib.Sample();
-        for (int idx = 0; idx < (int)values.size(); ++idx)
-            new_class_map[values[idx]] = bc.class_map[values[idx]];
-        bc.class_map.swap(new_class_map);
-    }
-
-    // If downsample-fraction is provided, subsample even more
-    if (downsample_fraction < 1.0) {
-      for (int pos = 0; pos < bc.chip_size_x*bc.chip_size_y; ++pos) {
-        if (rand() > downsample_fraction*RAND_MAX)
-          bc.class_map[pos] = -1;
-      }
-    }
-
+    // Command line processing *** Various general option and opts to classify and sample wells
+    BaseCallerContext bc;
     bc.mask = &mask;
-    bc.filename_wells = filename_wells;
+    bc.SetKeyAndFlowOrder(opts, wells.FlowOrder(), wells.NumFlows());
+    bc.chip_subset.InitializeChipSubsetFromOptArgs(opts, mask.W(), mask.H());
 
-    BaseCallerFilters filters(opts, bc.flow_order, bc.keys, mask);
+    // Sampling options may reset command line arguments & change context
+    bc_params.InitializeSamplingFromOptArgs(opts, bc.chip_subset.NumWells());
+    bc_params.SetBaseCallerContextVars(bc);
+    ClassifyAndSampleWells(bc, bc_params.GetSamplingOpts());
+
+
+    // *** Setup for different datasets
+    BarcodeDatasets datasets_calibration(bc.run_id, bc_params.GetFiles().calibration_panel_file);
+    datasets_calibration.SetIonControl(bc.run_id);
+    datasets_calibration.GenerateFilenames("IonControl","basecaller_bam",".basecaller.bam",bc_params.GetFiles().output_directory);
+
+    BarcodeDatasets datasets(bc.run_id, bc_params.GetFiles().lib_datasets_file);
+    // Check if any of the template barcodes is equal to a control barcode
+    datasets.RemoveControlBarcodes(datasets_calibration.json());
+    datasets.GenerateFilenames("Library","basecaller_bam",".basecaller.bam",bc_params.GetFiles().output_directory);
+
+    BarcodeDatasets datasets_tf(bc.run_id);
+    datasets_tf.SetTF(bc.process_tfs);
+    datasets_tf.GenerateFilenames("TF","basecaller_bam",".basecaller.bam",bc_params.GetFiles().output_directory);
+
+    BarcodeDatasets datasets_unfiltered_untrimmed(datasets);
+    BarcodeDatasets datasets_unfiltered_trimmed(datasets);
+
+
+    // *** Initialize remaining modules of BaseCallerContext
+    vector<string> bam_comments;
+    BaseCallerFilters filters(opts, bam_comments, bc.flow_order, bc.keys, mask);
     bc.filters = &filters;
-    bc.estimator.InitializeFromOptArgs(opts);
 
-    // Turning recalibration off for alternative state progression by not initializing anything.
-    if (!bc.diagonal_state_prog) {
-      bc.recalibration.Initialize(opts, bc.flow_order);
-      bc.recalModel.Initialize(opts);
-    }
-
-    int num_regions_x = (bc.chip_size_x +  bc.region_size_x - 1) / bc.region_size_x;
-    int num_regions_y = (bc.chip_size_y +  bc.region_size_y - 1) / bc.region_size_y;
-
-    BarcodeClassifier barcodes(opts, datasets, bc.flow_order, bc.keys, output_directory, bc.chip_size_x, bc.chip_size_y); // XXX
-    bc.barcodes = &barcodes;
-
-    // initialize the per base quality score generator
-    bc.quality_generator.Init(opts, chip_type, input_directory, output_directory,bc.recalibration.is_enabled());
-
-    BaseCallerMetricSaver metric_saver(opts, bc.chip_size_x, bc.chip_size_y, bc.flow_order.num_flows(),
-                                       bc.region_size_x, bc.region_size_y, output_directory);
+    BaseCallerMetricSaver metric_saver(opts, bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY(), bc.flow_order.num_flows(),
+                                bc.chip_subset.GetRegionSizeX(), bc.chip_subset.GetRegionSizeY(), bc_params.GetFiles().output_directory);
     bc.metric_saver = &metric_saver;
+
+    // Calibration modules
+    bc.recalibration.Initialize(opts, bc.flow_order);
+    bc.recalModel.Initialize(opts, bam_comments, bc.run_id, bc.chip_subset);
+    // initialize the per base quality score generator - dependent on calibration
+    bc.quality_generator.Init(opts, chip_type, bc_params.GetFiles().input_directory, bc_params.GetFiles().output_directory, bc.recalibration.is_enabled());
+
+    // Phase estimator
+    bc.estimator.InitializeFromOptArgs(opts, bc.chip_subset);
+    // Barcode classification
+    BarcodeClassifier barcodes(opts, datasets, bc.flow_order, bc.keys, bc_params.GetFiles().output_directory,
+    		                   bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY());
+    bc.barcodes = &barcodes;
+    // Make sure calibration barcodes are initialized with default parameters
+    BarcodeClassifier calibration_barcodes(null_opts, datasets_calibration, bc.flow_order, bc.keys,
+                          bc_params.GetFiles().output_directory, bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY());
+    bc.calibration_barcodes = &calibration_barcodes;
 
     // Command line parsing officially over. Detect unknown options.
     opts.CheckNoLeftovers();
 
-
     // Save some run info into our handy json file
-
-    basecaller_json["BaseCaller"]["run_id"] = bc.run_id;
-    basecaller_json["BaseCaller"]["flow_order"] = bc.flow_order.str();
-    basecaller_json["BaseCaller"]["num_flows"] = bc.flow_order.num_flows();
-    basecaller_json["BaseCaller"]["lib_key"] =  bc.keys[0].bases();
-    basecaller_json["BaseCaller"]["tf_key"] =  bc.keys[1].bases();
-    basecaller_json["BaseCaller"]["chip_type"] = chip_type;
-    basecaller_json["BaseCaller"]["input_dir"] = input_directory;
-    basecaller_json["BaseCaller"]["output_dir"] = output_directory;
-    basecaller_json["BaseCaller"]["filename_wells"] = filename_wells;
-    basecaller_json["BaseCaller"]["filename_mask"] = filename_mask;
-    basecaller_json["BaseCaller"]["num_threads"] = num_threads;
-    basecaller_json["BaseCaller"]["dephaser"] = bc.dephaser;
-    basecaller_json["BaseCaller"]["keynormalizer"] = bc.keynormalizer;
-    basecaller_json["BaseCaller"]["block_row_offset"] = bc.block_row_offset;
-    basecaller_json["BaseCaller"]["block_col_offset"] = bc.block_col_offset;
-    basecaller_json["BaseCaller"]["block_row_size"] = bc.chip_size_y;
-    basecaller_json["BaseCaller"]["block_col_size"] = bc.chip_size_x;
-    SaveJson(basecaller_json, filename_json);
-
-    SaveBaseCallerProgress(0, output_directory);
-
-
-
-
+    bc_params.SaveParamsToJson(basecaller_json, bc, chip_type);
+    SaveBaseCallerProgress(0, bc_params.GetFiles().output_directory);
 
     MemUsage("RawWellsBasecalling");
 
-    // Find distribution of clonal reads for use in read filtering:
-    filters.TrainClonalFilter(output_directory, wells, num_unfiltered, mask, bc.polyclonal_filter);
 
+    //
+    // Step 0. Filter training and phase estimation
+    //
+
+    // Find distribution of clonal reads for use in read filtering:
+    filters.TrainClonalFilter(bc_params.GetFiles().output_directory, wells, mask, bc.polyclonal_filter);
     MemUsage("ClonalPopulation");
     ReportState(analysis_start_time,"Polyclonal Filter Training Complete");
 
-    // Library CF/IE/DR parameter estimation
+    // Library phasing parameter estimation
     MemUsage("BeforePhaseEstimation");
-    bool isLoaded = false;
-    if (!phase_file_name.empty()) {
-        cout << "\nLoad phase estimation from " << phase_file_name << endl;
-        isLoaded = bc.estimator.LoadPhaseEstimationTrainSubset(phase_file_name, &mask, bc.region_size_x, bc.region_size_y);
+    if (not bc.estimator.HaveEstimates()) {
+      wells.OpenForIncrementalRead();
+      bc.estimator.DoPhaseEstimation(&wells, &mask, bc.flow_order, bc.keys, (bc_params.NumThreads() == 1));
+      wells.Close();
     }
-    if (!isLoaded) {
-        wells.OpenForIncrementalRead();
-        bc.estimator.DoPhaseEstimation(&wells, &mask, bc.flow_order, bc.keys, bc.region_size_x, bc.region_size_y, num_threads == 1);
-        wells.Close();
-    }
-
     bc.estimator.ExportResultsToJson(basecaller_json["Phasing"]);
     bc.estimator.ExportTrainSubsetToJson(basecaller_json["TrainSubset"]);
 
-    SaveJson(basecaller_json, filename_json);
-    SaveBaseCallerProgress(10, output_directory);  // Phase estimation assumed to be 10% of the work
+    SaveJson(basecaller_json, bc_params.GetFiles().filename_json);
+    SaveBaseCallerProgress(10, bc_params.GetFiles().output_directory);  // Phase estimation assumed to be 10% of the work
 
+    // Initialize Barcode Classifier(s) - dependent on phase estimates
     bc.barcodes->BuildPredictedSignals(bc.estimator.GetAverageCF(), bc.estimator.GetAverageIE(), bc.estimator.GetAverageDR());
+    bc.calibration_barcodes->BuildPredictedSignals(bc.estimator.GetAverageCF(), bc.estimator.GetAverageIE(), bc.estimator.GetAverageDR());
 
     MemUsage("AfterPhaseEstimation");
-
     ReportState(analysis_start_time,"Phase Parameter Estimation Complete");
-
     MemUsage("BeforeBasecalling");
 
 
     //
-    // Step 1. Open wells and output BAM files
+    // Step 1. Open wells and output BAM files & initialize writers
     //
-    vector<string> comments;
-    if (bc.save_hpmodel)
-    {
-        SaveModelFileToBamComments(comments, opts, bc.run_id, bc.block_col_offset, bc.block_row_offset);
-    }
-    bc.filters->WriteAdaptersToBamComments(comments);
 
-    bc.lib_writer.Open(output_directory, datasets, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
-                       "BaseCaller",
-                       basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
+    // Library data set writer - always
+    bc.lib_writer.Open(bc_params.GetFiles().output_directory, datasets, bc.chip_subset.NumRegions(), bc.flow_order,
+                       bc.keys[0].bases(), bc.filters->GetLibBeadAdapters(), "BaseCaller",
+                       basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString(),
                        basecaller_json["BaseCaller"]["command_line"].asString(),
                        basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-                       false, comments);
+                       false, bam_comments);
 
-    if (bc.process_tfs) {
-        bc.tf_writer.Open(output_directory, datasets_tf, num_regions_x*num_regions_y, bc.flow_order, bc.keys[1].bases(),
-                          "BaseCaller",
-                          basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
+    // Calibration reads data set writer - if applicable
+    if (bc.have_calibration_panel) {
+        bc.calib_writer.Open(bc_params.GetFiles().output_directory, datasets_calibration, bc.chip_subset.NumRegions(), bc.flow_order,
+                          bc.keys[0].bases(), bc.filters->GetLibBeadAdapters(), "BaseCaller",
+                          basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString(),
                           basecaller_json["BaseCaller"]["command_line"].asString(),
                           basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-                          false, comments);
+                          false, bam_comments);
     }
 
-    //! @todo Random subset should also respect options -r and -c
-    if (num_unfiltered > 0) {
-        MaskSample<unsigned int> random_lib(mask, MaskLib, num_unfiltered);
-        bc.unfiltered_set.insert(random_lib.Sample().begin(), random_lib.Sample().end());
+    // Test fragments data set writer - if applicable
+    if (bc.process_tfs) {
+        bc.tf_writer.Open(bc_params.GetFiles().output_directory, datasets_tf, bc.chip_subset.NumRegions(), bc.flow_order,
+                          bc.keys[1].bases(), bc.filters->GetTFBeadAdapters(), "BaseCaller",
+                          basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString(),
+                          basecaller_json["BaseCaller"]["command_line"].asString(),
+                          basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
+                          false, bam_comments);
     }
+
+    // Unfiltered / unfiltered untrimmed data set writers - if applicable
     if (!bc.unfiltered_set.empty()) {
 
-        bc.unfiltered_writer.Open(unfiltered_untrimmed_directory, datasets_unfiltered_untrimmed, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
-                                  "BaseCaller",
-                                  basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
+        bc.unfiltered_writer.Open(bc_params.GetFiles().unfiltered_untrimmed_directory, datasets_unfiltered_untrimmed, bc.chip_subset.NumRegions(),
+                                  bc.flow_order, bc.keys[0].bases(), bc.filters->GetLibBeadAdapters(), "BaseCaller",
+                                  basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString(),
                                   basecaller_json["BaseCaller"]["command_line"].asString(),
                                   basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-                                  true, comments);
+                                  true, bam_comments);
 
-        bc.unfiltered_trimmed_writer.Open(unfiltered_trimmed_directory, datasets_unfiltered_trimmed, num_regions_x*num_regions_y, bc.flow_order, bc.keys[0].bases(),
-                                          "BaseCaller",
-                                          basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["svn_revision"].asString(),
+        bc.unfiltered_trimmed_writer.Open(bc_params.GetFiles().unfiltered_trimmed_directory, datasets_unfiltered_trimmed, bc.chip_subset.NumRegions(),
+                                          bc.flow_order, bc.keys[0].bases(), bc.filters->GetLibBeadAdapters(), "BaseCaller",
+                                          basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString(),
                                           basecaller_json["BaseCaller"]["command_line"].asString(),
                                           basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-                                          true, comments);
+                                          true, bam_comments);
     }
+
 
     //
     // Step 3. Open miscellaneous results files
@@ -767,23 +402,19 @@ int main (int argc, const char *argv[])
     // Step 4. Execute threaded basecalling
     //
 
-    bc.next_region = 0;
-    bc.next_begin_x = 0;
-    bc.next_begin_y = 0;
-
     time_t basecall_start_time;
     time(&basecall_start_time);
 
     pthread_mutex_init(&bc.mutex, NULL);
 
-    pthread_t worker_id[num_threads];
-    for (int worker = 0; worker < num_threads; worker++)
+    pthread_t worker_id[bc_params.NumThreads()];
+    for (int worker = 0; worker < bc_params.NumThreads(); worker++)
         if (pthread_create(&worker_id[worker], NULL, BasecallerWorker, &bc)) {
             printf("*Error* - problem starting thread\n");
             exit (EXIT_FAILURE);
         }
 
-    for (int worker = 0; worker < num_threads; worker++)
+    for (int worker = 0; worker < bc_params.NumThreads(); worker++)
         pthread_join(worker_id[worker], NULL);
 
     pthread_mutex_destroy(&bc.mutex);
@@ -797,10 +428,12 @@ int main (int argc, const char *argv[])
     //
 
     printf("\n\nBASECALLING: called %d of %u wells in %1.0lf seconds with %d threads\n\n",
-           filters.NumWellsCalled(), (subset_end_y-subset_begin_y)*(subset_end_x-subset_begin_x),
-           difftime(basecall_end_time,basecall_start_time), num_threads);
+           filters.NumWellsCalled(), bc.chip_subset.NumWells(),
+           difftime(basecall_end_time,basecall_start_time), bc_params.NumThreads());
 
     bc.lib_writer.Close(datasets, "Library");
+    if (bc.have_calibration_panel)
+    	bc.calib_writer.Close(datasets_calibration, "IonControl");
     if (bc.process_tfs)
         bc.tf_writer.Close(datasets_tf, "Test Fragments");
 
@@ -808,56 +441,34 @@ int main (int argc, const char *argv[])
 
     if (!bc.unfiltered_set.empty()) {
 
-        ofstream filter_status;
-
-        string filter_status_filename = unfiltered_untrimmed_directory + string("/filterStatus.txt");
-        filter_status.open(filter_status_filename.c_str());
-        filter_status << "col" << "\t" << "row" << "\t" << "highRes" << "\t" << "valid" << endl;
-        for (set<unsigned int>::iterator I = bc.unfiltered_set.begin(); I != bc.unfiltered_set.end(); I++) {
-            int x = (*I) % bc.chip_size_x;
-            int y = (*I) / bc.chip_size_x;
-            filter_status << x << "\t" << y;
-            filter_status << "\t" << (int) mask.Match(x, y, MaskFilteredBadResidual); // Must happen after filters transferred to mask
-            filter_status << "\t" << (int) mask.Match(x, y, MaskKeypass);
-            filter_status << endl;
-        }
-        filter_status.close();
-
-        filter_status_filename = unfiltered_trimmed_directory + string("/filterStatus.txt");
-        filter_status.open(filter_status_filename.c_str());
-        filter_status << "col" << "\t" << "row" << "\t" << "highRes" << "\t" << "valid" << endl;
-        for (set<unsigned int>::iterator I = bc.unfiltered_set.begin(); I != bc.unfiltered_set.end(); I++) {
-            int x = (*I) % bc.chip_size_x;
-            int y = (*I) / bc.chip_size_x;
-            filter_status << x << "\t" << y;
-            filter_status << "\t" << (int) mask.Match(x, y, MaskFilteredBadResidual); // Must happen after filters transferred to mask
-            filter_status << "\t" << (int) mask.Match(x, y, MaskKeypass);
-            filter_status << endl;
-        }
-        filter_status.close();
+        // Must happen after filters transferred to mask
+        bc.WriteUnfilteredFilterStatus(bc_params.GetFiles());
 
         bc.unfiltered_writer.Close(datasets_unfiltered_untrimmed);
         bc.unfiltered_trimmed_writer.Close(datasets_unfiltered_trimmed);
 
-        datasets_unfiltered_untrimmed.SaveJson(unfiltered_untrimmed_directory+"/datasets_basecaller.json");
-        datasets_unfiltered_trimmed.SaveJson(unfiltered_trimmed_directory+"/datasets_basecaller.json");
+        datasets_unfiltered_untrimmed.SaveJson(bc_params.GetFiles().unfiltered_untrimmed_directory+"/datasets_basecaller.json");
+        datasets_unfiltered_trimmed.SaveJson(bc_params.GetFiles().unfiltered_trimmed_directory+"/datasets_basecaller.json");
     }
 
     metric_saver.Close();
-
     barcodes.Close(datasets);
-
-    datasets.SaveJson(output_directory+"/datasets_basecaller.json");
-
+    calibration_barcodes.Close(datasets_calibration);
+    if (bc.have_calibration_panel) {
+      datasets.json()["IonControl"]["datasets"] = datasets_calibration.json()["datasets"];
+      datasets.json()["IonControl"]["read_groups"] = datasets_calibration.read_groups();
+    }
+    datasets.SaveJson(bc_params.GetFiles().output_directory+"/datasets_basecaller.json");
     if (bc.process_tfs)
-        datasets_tf.SaveJson(output_directory+"/datasets_tf.json");
+        datasets_tf.SaveJson(bc_params.GetFiles().output_directory+"/datasets_tf.json");
 
     // Generate BaseCaller.json
 
-    bc.filters->WriteToBaseCallerJson(basecaller_json);
     bc.lib_writer.SaveFilteringStats(basecaller_json, "lib", true);
+    if (bc.have_calibration_panel)
+      bc.calib_writer.SaveFilteringStats(basecaller_json, "control", false);
     if (bc.process_tfs)
-        bc.tf_writer.SaveFilteringStats(basecaller_json, "tf", false);
+      bc.tf_writer.SaveFilteringStats(basecaller_json, "tf", false);
 
     time_t analysis_end_time;
     time(&analysis_end_time);
@@ -870,10 +481,10 @@ int main (int argc, const char *argv[])
     for (int qv = 0; qv < 50; ++qv)
         basecaller_json["Filtering"]["qv_histogram"][qv] = (Json::UInt64)bc.lib_writer.qv_histogram()[qv];
 
-    SaveJson(basecaller_json, filename_json);
-    SaveBaseCallerProgress(100, output_directory);
+    SaveJson(basecaller_json, bc_params.GetFiles().filename_json);
+    SaveBaseCallerProgress(100, bc_params.GetFiles().output_directory);
 
-    mask.WriteRaw (filename_filter_mask.c_str());
+    mask.WriteRaw (bc_params.GetFiles().filename_filter_mask.c_str());
     mask.validateMask();
 
     MemUsage("AfterBasecalling");
@@ -882,8 +493,8 @@ int main (int argc, const char *argv[])
     return EXIT_SUCCESS;
 }
 
-
-//! @brief      Main code for BaseCaller worker thread
+// ----------------------------------------------------------------
+//! @brief      Main code for BaseCaller worker thread Mark: XXX
 //! @ingroup    BaseCaller
 //! @param[in]  input  Pointer to BaseCallerContext.
 
@@ -929,30 +540,20 @@ void * BasecallerWorker(void *input)
 
         pthread_mutex_lock(&bc.mutex);
 
-        if (bc.next_begin_y >= bc.chip_size_y) {
-            wells.Close();
-            pthread_mutex_unlock(&bc.mutex);
-            return NULL;
-        }
-
-        int current_region = bc.next_region++;
-        int begin_x = bc.next_begin_x;
-        int begin_y = bc.next_begin_y;
-        int end_x = min(begin_x + bc.region_size_x, bc.chip_size_x);
-        int end_y = min(begin_y + bc.region_size_y, bc.chip_size_y);
-        bc.next_begin_x += bc.region_size_x;
-        if (bc.next_begin_x >= bc.chip_size_x) {
-            bc.next_begin_x = 0;
-            bc.next_begin_y += bc.region_size_y;
+        int current_region, begin_x, begin_y, end_x, end_y;
+        if (not bc.chip_subset.GetCurrentRegionAndIncrement(current_region, begin_x, end_x, begin_y, end_y)) {
+           wells.Close();
+           pthread_mutex_unlock(&bc.mutex);
+           return NULL;
         }
 
         int num_usable_wells = 0;
         for (int y = begin_y; y < end_y; ++y)
             for (int x = begin_x; x < end_x; ++x)
-                if (bc.class_map[x + y * bc.chip_size_x] >= 0)
+                if (bc.class_map[x + y * bc.chip_subset.GetChipSizeX()] >= 0)
                     num_usable_wells++;
 
-        if      (begin_x == 0)            printf("\n% 5d/% 5d: ", begin_y, bc.chip_size_y);
+        if      (begin_x == 0)            printf("\n% 5d/% 5d: ", begin_y, bc.chip_subset.GetChipSizeY());
         if      (num_usable_wells ==   0) printf("  ");
         else if (num_usable_wells <  750) printf(". ");
         else if (num_usable_wells < 1500) printf("o ");
@@ -961,20 +562,23 @@ void * BasecallerWorker(void *input)
         fflush(NULL);
 
         if (begin_x == 0)
-            SaveBaseCallerProgress(10 + (80*begin_y)/bc.chip_size_y, bc.output_directory);
+            SaveBaseCallerProgress(10 + (80*begin_y)/bc.chip_subset.GetChipSizeY(), bc.output_directory);
 
         pthread_mutex_unlock(&bc.mutex);
 
         // Process the data
-        deque<ProcessedRead> lib_reads;
-        deque<ProcessedRead> tf_reads;
-        deque<ProcessedRead> unfiltered_reads;
-        deque<ProcessedRead> unfiltered_trimmed_reads;
+        deque<ProcessedRead> lib_reads;                // Collection of template library reads
+        deque<ProcessedRead> tf_reads;                 // Collection of test fragment reads
+        deque<ProcessedRead> calib_reads;              // Collection of calibration library reads
+        deque<ProcessedRead> unfiltered_reads;         // Random subset of lib_reads
+        deque<ProcessedRead> unfiltered_trimmed_reads; // Random subset of lib_reads
 
         if (num_usable_wells == 0) { // There is nothing in this region. Don't even bother reading it
-            bc.lib_writer.WriteRegion(current_region,lib_reads);
+            bc.lib_writer.WriteRegion(current_region, lib_reads);
+            if (bc.have_calibration_panel)
+                bc.calib_writer.WriteRegion(current_region, calib_reads);
             if (bc.process_tfs)
-                bc.tf_writer.WriteRegion(current_region,tf_reads);
+                bc.tf_writer.WriteRegion(current_region, tf_reads);
             if (!bc.unfiltered_set.empty()) {
                 bc.unfiltered_writer.WriteRegion(current_region,unfiltered_reads);
                 bc.unfiltered_trimmed_writer.WriteRegion(current_region,unfiltered_trimmed_reads);
@@ -992,11 +596,16 @@ void * BasecallerWorker(void *input)
                 // Step 2. Retrieve additional information needed to process this read
                 //
 
-                unsigned int read_index = x + y * bc.chip_size_x;
+                unsigned int read_index = x + y * bc.chip_subset.GetChipSizeX();
                 int read_class = bc.class_map[read_index];
                 if (read_class < 0)
                     continue;
-                bool is_random_unfiltered = bc.unfiltered_set.count(read_index) > 0;
+                bool is_random_calibration_read = false;
+                if (read_class == 2){
+                  is_random_calibration_read = true;
+                  read_class = 0; // Calibration reads are library beads;
+                }
+                bool is_random_unfiltered  = bc.unfiltered_set.count(read_index) > 0;
 
                 if (not is_random_unfiltered and bc.only_process_unfiltered_set)
                   continue;
@@ -1004,16 +613,10 @@ void * BasecallerWorker(void *input)
                 bc.filters->SetValid(read_index); // Presume valid until some filter proves otherwise
 
                 if (read_class == 0)
-                    lib_reads.push_back(ProcessedRead());
+                    lib_reads.push_back(ProcessedRead(bc.barcodes->NoBarcodeReadGroup()));
                 else
-                    tf_reads.push_back(ProcessedRead());
-
+                    tf_reads.push_back(ProcessedRead(0));
                 ProcessedRead& processed_read = (read_class==0) ? lib_reads.back() : tf_reads.back();
-
-                if (read_class == 0)
-                    processed_read.read_group_index = bc.barcodes->no_barcode_read_group_;
-                else
-                    processed_read.read_group_index = 0;
 
                 // Respect filter decisions from Background Model
                 if (bc.mask->Match(read_index, MaskFilteredBadResidual))
@@ -1067,12 +670,20 @@ void * BasecallerWorker(void *input)
                 if (!is_random_unfiltered and !bc.filters->IsValid(read_index))// No reason to waste more time
                     continue;
 
+                // Check if this read is either from the calibration panel or from the random calibration set
+                if(bc.calibration_training and bc.have_calibration_panel) {
+                  if (!is_random_calibration_read and !bc.calibration_barcodes->MatchesBarcodeSignal(read)) {
+                	bc.filters->SetFiltered(read_index, read_class, processed_read.filter); // Set as filtered
+                    continue;  // And move on along
+                  }
+                }
+
                 // Equal recalibration opportunity for everybody! (except TFs!)
                 const vector<vector<vector<float> > > * aPtr = 0;
                 const vector<vector<vector<float> > > * bPtr = 0;
-                if (bc.recalModel.is_enabled() && read_class == 0) { //do not recalibrate TF read
-                  aPtr = bc.recalModel.getAs(x+bc.block_col_offset, y+bc.block_row_offset);
-                  bPtr = bc.recalModel.getBs(x+bc.block_col_offset, y+bc.block_row_offset);
+                if (bc.recalModel.is_enabled() && read_class == 0) { //do not recalibrate TF read bc.chip_subset.GetChipSizeX()
+                  aPtr = bc.recalModel.getAs(x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset());
+                  bPtr = bc.recalModel.getBs(x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset());
                   treephaser_sse.SetAsBs(aPtr, bPtr);  // Set recalibration model for this read
                   treephaser.SetAsBs(aPtr, bPtr);
                 } else {
@@ -1113,7 +724,7 @@ void * BasecallerWorker(void *input)
                 bool calibrate_read = (bc.recalibration.is_enabled() && read_class == 0); //do not recalibrate TF read
                 if (calibrate_read) {
                 	// Change base sequence for low hps
-                    bc.recalibration.CalibrateRead(x+bc.block_col_offset,y+bc.block_row_offset,read.sequence, read.normalized_measurements, read.prediction, read.state_inphase);
+                    bc.recalibration.CalibrateRead(x+bc.chip_subset.GetColOffset(),y+bc.chip_subset.GetRowOffset(),read.sequence, read.normalized_measurements, read.prediction, read.state_inphase);
                     if (bc.dephaser == "treephaser-sse")
                       treephaser_sse.ComputeQVmetrics(read);
                     else
@@ -1147,7 +758,7 @@ void * BasecallerWorker(void *input)
                 // Misc data management: Populate some trivial read properties
 
                 char read_name[256];
-                sprintf(read_name, "%s:%05d:%05d", bc.run_id.c_str(), bc.block_row_offset + y, bc.block_col_offset + x);
+                sprintf(read_name, "%s:%05d:%05d", bc.run_id.c_str(), bc.chip_subset.GetRowOffset() + y, bc.chip_subset.GetColOffset() + x);
                 processed_read.bam.Name = read_name;
                 processed_read.bam.SetIsMapped(false);
 
@@ -1195,8 +806,14 @@ void * BasecallerWorker(void *input)
 
                 processed_read.barcode_n_errors = 0;
                 if (read_class == 0)
-                {
-                    bc.barcodes->ClassifyAndTrimBarcode(read_index, processed_read, read, base_to_flow);
+                {   // Library beads - first separate out calibration barcodes
+                	processed_read.read_group_index = -1;
+                	if (bc.have_calibration_panel){
+                	  bc.calibration_barcodes->ClassifyAndTrimBarcode(read_index, processed_read, read, base_to_flow);
+                	  processed_read.is_control_barcode = (processed_read.read_group_index >= 0);
+                	}
+                    if (processed_read.read_group_index < 0)
+                      bc.barcodes->ClassifyAndTrimBarcode(read_index, processed_read, read, base_to_flow);
                 }
 
                 //
@@ -1297,6 +914,7 @@ void * BasecallerWorker(void *input)
                 // Step 5. Pass basecalled reads to appropriate writers
                 //
 
+                // Create BAM entries
                 if (processed_read.filter.n_bases > 0) {
                     processed_read.bam.QueryBases.reserve(processed_read.filter.n_bases);
                     processed_read.bam.Qualities.reserve(processed_read.filter.n_bases);
@@ -1308,9 +926,8 @@ void * BasecallerWorker(void *input)
                 } else
                     processed_read.bam.AddTag("ZF","i", 0);
 
-
-
-                if (is_random_unfiltered) { // Lib, random
+                // Randomly selected library beads - excluding calibration reads
+                if (is_random_unfiltered and (not processed_read.is_control_barcode)) {
                     unfiltered_trimmed_reads.push_back(processed_read);
                     unfiltered_reads.push_back(processed_read);
 
@@ -1344,11 +961,20 @@ void * BasecallerWorker(void *input)
                             processed_read.filter.n_bases_after_polyclonal >= 0)
                         processed_read.filter.n_bases = -1;
                 }
+
+                // Move read from lib_reads stack to calib_reads if necessary
+                // This invalidates the processed_read reference and needs to be at the very end
+                if (processed_read.is_control_barcode) {
+                  calib_reads.push_back(processed_read);
+                  lib_reads.pop_back();
+                }
             }
 
-        bc.lib_writer.WriteRegion(current_region,lib_reads);
+        bc.lib_writer.WriteRegion(current_region, lib_reads);
+        if (bc.have_calibration_panel)
+            bc.calib_writer.WriteRegion(current_region, calib_reads);
         if (bc.process_tfs)
-            bc.tf_writer.WriteRegion(current_region,tf_reads);
+            bc.tf_writer.WriteRegion(current_region, tf_reads);
         if (!bc.unfiltered_set.empty()) {
             bc.unfiltered_writer.WriteRegion(current_region,unfiltered_reads);
             bc.unfiltered_trimmed_writer.WriteRegion(current_region,unfiltered_trimmed_reads);

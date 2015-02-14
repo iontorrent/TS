@@ -56,16 +56,14 @@ configure_file (
 message(STATUS "BUILD with CUDA ${CUDA_VERSION}")
 
 include(../buildTools/cmake/CMakeLists.dependencies.txt)
-install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_devdriver_version}/${cuda_devdriver_file}
+install(PROGRAMS ${PROJECT_BINARY_DIR}/../${gpu_devdriver_version}/${gpu_devdriver_file}
         DESTINATION .)
 
 install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib
-        DESTINATION /usr/local/cuda
-        PATTERN .svn EXCLUDE)
+        DESTINATION /usr/local/cuda)
 
 install(DIRECTORY ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/lib64
-        DESTINATION /usr/local/cuda
-        PATTERN .svn EXCLUDE)
+        DESTINATION /usr/local/cuda)
 
 install(PROGRAMS ${PROJECT_BINARY_DIR}/../${cuda_toolkit_version}/bin/nvcc
         DESTINATION /usr/local/cuda/bin)

@@ -122,7 +122,8 @@
       "uid": "SEQ0001",
       "instrumentType": "pgm",
       "isActive": false,
-      "description": "(100bp) Ion Sequencing Kit"
+      "description": "(100bp) Ion Sequencing Kit",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },
   {
@@ -137,7 +138,7 @@
       "uid": "SEQ0002",
       "instrumentType": "pgm",
       "isActive": false,
-      "description": "(200bp) Ion Sequencing 200 Kit"
+      "description": "(200bp) Ion Sequencing 200 Kit"    
     }
   },
   {
@@ -151,8 +152,9 @@
       "flowCount": 500,
       "uid": "SEQ0003",
       "instrumentType": "pgm",
-      "isActive": true,
-      "description": "(200bp) Ion PGM 200 Sequencing Kit"
+      "isActive": false,
+      "description": "(200bp) Ion PGM 200 Sequencing Kit",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },
   {
@@ -303,7 +305,7 @@
       "instrumentType": "",
       "isActive": true,
       "description": "Ion Total RNA Seq Kit",
-      "categories" : "bcShowSubset;bcRequired"
+      "categories" : "bcShowSubset;bcRequired;"
     }
   },
   {
@@ -319,7 +321,7 @@
       "instrumentType": "",
       "isActive": true,
       "description": "Ion Total RNA Seq Kit v2",
-      "categories" : "bcShowSubset;bcRequired"
+      "categories" : "bcShowSubset;bcRequired;"
     }
   },
   {
@@ -394,7 +396,8 @@
       "flowCount": 0,
       "uid": "TEMPLT0001",
       "instrumentType": "",
-      "isActive": true,
+      "samplePrep_instrumentType" : "OT",
+      "isActive": false,
       "description": "Ion OneTouch 200 Template Kit v2 DL"
     }
   },
@@ -410,7 +413,8 @@
       "uid": "SEQ0006",
       "instrumentType": "pgm",
       "isActive": true,
-      "description": "Ion PGM Install Kit"
+      "description": "Ion PGM Install Kit",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },
   {
@@ -606,7 +610,8 @@
       "uid": "SEQ0009",
       "instrumentType": "pgm",
       "isActive": true,
-      "description": "Ion PGM Sequencing 200 Kit v2"
+      "description": "Ion PGM Sequencing 200 Kit v2",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },
   {
@@ -620,6 +625,7 @@
       "flowCount": 500,
       "uid": "TEMPLT0003",
       "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT",
       "isActive": true,
       "description": "Ion PGM Template OT2 200 Kit"
     }
@@ -636,7 +642,8 @@
       "uid": "SEQ0010",
       "instrumentType": "pgm",
       "isActive": true,
-      "description": "Ion PGM Sequencing 400 Kit"
+      "description": "Ion PGM Sequencing 400 Kit",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },
   {
@@ -680,6 +687,7 @@
       "flowCount": 0,
       "uid": "TEMPLT0005",
       "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT",
       "isActive": false,
       "description": "Ion PI Template OT2 200 Kit"
     }
@@ -740,6 +748,7 @@
       "flowCount": 0,
       "uid": "ICPREP0001",
       "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "IC",
       "isActive": true,
       "description": "ION PGM IC 200 KIT"
     }
@@ -755,6 +764,7 @@
       "flowCount": 0,
       "uid": "TEMPLT0006",
       "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT",
       "isActive": true,
       "description": "Ion PI Template OT2 200 Kit v2"
     }
@@ -771,7 +781,8 @@
       "uid": "SEQ0012",
       "instrumentType": "proton",
       "isActive": true,
-      "description": "Ion PI Sequencing 200 Kit v2"
+      "description": "Ion PI Sequencing 200 Kit v2",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },
   {
@@ -801,7 +812,8 @@
       "uid": "SEQ0013",
       "instrumentType": "proton",
       "isActive": true,
-      "description": "Ion PI Sequencing 200 Kit v2 with XT"
+      "description": "Ion PI Sequencing 200 Kit v2 with XT",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },
   {
@@ -815,6 +827,7 @@
       "flowCount": 0,
       "uid": "TEMPLT0007",
       "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT",
       "isActive": true,
       "description": "Ion PI Template OT2 200 Kit v2 with XT"
     }
@@ -846,7 +859,8 @@
       "uid": "SEQ0014",
       "instrumentType": "proton",
       "isActive": true,
-      "description": "Ion PI Sequencing 200 Kit v3"
+      "description": "Ion PI Sequencing 200 Kit v3",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },
   {
@@ -860,6 +874,7 @@
       "flowCount": 0,
       "uid": "TEMPLT0008",
       "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT",      
       "isActive": true,
       "description": "Ion PI Template OT2 200 Kit v3"
     }
@@ -951,8 +966,10 @@
       "flowCount": 500,
       "uid": "SEQ0016",
       "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "IC",      
       "isActive": true,
-      "description": "Ion PGM IC 200 Sequencing Kit"
+      "description": "Ion PGM IC 200 Sequencing Kit",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },  
  {
@@ -966,6 +983,7 @@
       "flowCount": 0,
       "uid": "ICPREP0002",
       "instrumentType": "proton",
+      "samplePrep_instrumentType" : "IC",      
       "isActive": true,
       "description": "Ion PI IC 200 Kit"
     }
@@ -981,8 +999,10 @@
       "flowCount": 520,
       "uid": "SEQ0017",
       "instrumentType": "proton",
+      "samplePrep_instrumentType" : "IC",      
       "isActive": true,
-      "description": "Ion PI IC 200 Seq Kit"
+      "description": "Ion PI IC 200 Seq Kit",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },  
   {
@@ -1060,9 +1080,10 @@
       "flowCount": 1100,
       "uid": "SEQ0018",
       "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT_IC",
       "isActive": true,
       "description": "Ion PGM Hi-Q Sequencing Kit",
-      "categories" : "flowOverridable"
+      "categories" : "flowOverridable;readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },
   {
@@ -1076,6 +1097,7 @@
       "flowCount": 500,
       "uid": "TEMPLT0009",
       "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT",
       "isActive": true,
       "description": "Ion PGM Template OT2 200 Kit for Hi-Q"
     }
@@ -1122,7 +1144,8 @@
       "uid": "SEQ0019",
       "instrumentType": "proton",
       "isActive": true,
-      "description": "Ion PI Sequencing 200 v3 - 2X520"
+      "description": "Ion PI Sequencing 200 v3 - 2X520",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
     }
   },
   {
@@ -1140,8 +1163,111 @@
       "description": "Ion AmpliSeq Library Kit Plus"
     }
   },
-              
-            
+  {
+    "pk": 20069,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "IonChefPrepKit",
+      "name": "Ion PGM Hi-Q Chef Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "libraryReadLength" : 200,
+      "templatingSize" : "200;400",      
+      "uid": "ICPREP0003",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": true,
+      "description": "Ion PGM Hi-Q Chef Kit",
+      "categories" : "multipleTemplatingSize;supportLibraryReadLength"
+    }
+  },
+  {
+    "pk": 20070,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "IonChefPrepKit",
+      "name": "Ion PROTON IC v2 Universal",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "libraryReadLength" : 200,
+      "templatingSize" : "200",      
+      "uid": "ICPREP0004",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "IC",
+      "isActive": false,
+      "description": "Ion PI Hi-Q Chef Kit",
+      "categories" : "multipleTemplatingSize;supportLibraryReadLength"
+    }
+  },
+  {
+    "pk": 20071,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonProtonIHiQ",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 520,
+      "uid": "SEQ0020",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT_IC",
+      "isActive": true,
+      "description": "Ion PI Hi-Q Sequencing 200 Kit",
+      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+    }
+  },
+  {
+    "pk": 20072,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PI Hi-Q OT2 200 Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,    
+      "uid": "TEMPLT0010",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion PI Hi-Q OT2 200 Kit"
+    }
+  },  
+  {
+    "pk": 20073,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SamplePrepKit",
+      "name": "Ion AmpliSeq CCP",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,    
+      "uid": "SPREP0010",
+      "instrumentType": "",
+      "samplePrep_instrumentType" : "",
+      "isActive": true,
+      "description": "Ion AmpliSeq CCP"
+    }
+  },
+  {
+    "pk": 20074,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "NoBF",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "CUSTOM0001",
+      "instrumentType": "proton",
+      "samplePrep_instrumentType" : "",
+      "isActive": false,
+      "description": "No BeadFind Template"
+    }
+  },
+  
+                        
   {
     "pk": 20001,
     "model": "rundb.kitpart",
@@ -2408,7 +2534,7 @@
     "pk": 20129,
     "model": "rundb.kitpart",
     "fields": {
-      "barcode": "4488651",
+      "barcode": "4488651_shared",
       "kit": [
         "SEQ0017"
       ]
@@ -2634,8 +2760,148 @@
       ]
     }
   },
-    
-              
+  {     
+    "pk": 20152,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A25957",
+      "kit": [
+        "ICPREP0003"
+      ]
+    }
+  },        
+  {     
+    "pk": 20153,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A27198",
+      "kit": [
+        "ICPREP0004"
+      ]
+    }
+  },
+  {     
+    "pk": 20154,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26433",
+      "kit": [
+        "SEQ0020"
+      ]
+    }
+  },      
+  {     
+    "pk": 20155,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26430",
+      "kit": [
+        "SEQ0020"
+      ]
+    }
+  },
+  {     
+    "pk": 20156,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26431",
+      "kit": [
+        "SEQ0020"
+      ]
+    }
+  },
+  {     
+    "pk": 20157,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26432",
+      "kit": [
+        "SEQ0020"
+      ]
+    }
+  },
+  {     
+    "pk": 20158,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26434",
+      "kit": [
+        "TEMPLT0010"
+      ]
+    }
+  },
+  {     
+    "pk": 20159,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26367",
+      "kit": [
+        "TEMPLT0010"
+      ]
+    }
+  },
+  {     
+    "pk": 20160,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26429",
+      "kit": [
+        "TEMPLT0010"
+      ]
+    }
+  },
+  {     
+    "pk": 20161,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A26428",
+      "kit": [
+        "TEMPLT0010"
+      ]
+    }
+  },
+
+  {     
+    "pk": 20162,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A25955",
+      "kit": [
+        "ICPREP0003"
+      ]
+    }
+  },
+  {     
+    "pk": 20163,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A25956",
+      "kit": [
+        "ICPREP0003"
+      ]
+    }
+  },
+  {     
+    "pk": 20164,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "999999SPREP0010",
+      "kit": [
+        "SPREP0010"
+      ]
+    }
+  },   
+  {     
+    "pk": 20165,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "999999CUSTOM0001",
+      "kit": [
+        "CUSTOM0001"
+      ]
+    }
+  },
+      
   {
     "pk": 20001,
     "model": "rundb.applproduct",
@@ -2679,8 +2945,11 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,
       "isControlSeqTypeBySampleSupported" : false,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,   
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
         "AVTEMP0001"      
@@ -2737,8 +3006,11 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,      
       "isControlSeqTypeBySampleSupported" : false,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,       
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
         "AVTEMP0001"      
@@ -2795,8 +3067,11 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,       
       "isControlSeqTypeBySampleSupported" : false,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,       
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
         "AVTEMP0001"      
@@ -2855,8 +3130,11 @@
       ],
       "isTargetTechniqueSelectionSupported" : false,
       "isTargetRegionBEDFileSupported" : false,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,      
       "isControlSeqTypeBySampleSupported" : true,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : false,
+      "isHotSpotBEDFileBySampleSupported" : false,       
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
         "AVTEMP0001"      
@@ -2915,8 +3193,11 @@
       ],
       "isTargetTechniqueSelectionSupported" : false,
       "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,       
       "isControlSeqTypeBySampleSupported" : false,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,       
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
         "AVTEMP0001"      
@@ -2973,8 +3254,11 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,   
       "isControlSeqTypeBySampleSupported" : false,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,       
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
         "AVTEMP0001"      
@@ -3029,8 +3313,11 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,      
       "isControlSeqTypeBySampleSupported" : false,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,      
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
@@ -3085,8 +3372,11 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,      
       "isControlSeqTypeBySampleSupported" : false,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,       
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : [
         "AVTEMP0001"      
@@ -3139,8 +3429,11 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,     
       "isControlSeqTypeBySampleSupported" : false,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,       
       "isDualNucleotideTypeBySampleSupported" : false,
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
@@ -3191,8 +3484,11 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,      
       "isControlSeqTypeBySampleSupported" : false,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,       
       "isDualNucleotideTypeBySampleSupported" : false,      
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
@@ -3245,8 +3541,11 @@
       ],
       "isTargetTechniqueSelectionSupported" : true,
       "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,      
       "isControlSeqTypeBySampleSupported" : false,
       "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : true,       
       "isDualNucleotideTypeBySampleSupported" : true,
       "defaultAvalancheTemplateKit" : [
         "AVTEMP0001"      
@@ -3303,8 +3602,11 @@
       "defaultIonChefSequencingKit" : null,
       "isTargetTechniqueSelectionSupported" : false,
       "isTargetRegionBEDFileSupported" : false,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : false,      
       "isControlSeqTypeBySampleSupported" : true,
-      "isReferenceBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : false,
+      "isHotSpotBEDFileBySampleSupported" : false,       
       "isDualNucleotideTypeBySampleSupported" : false,      
       "defaultAvalancheTemplateKit" : null,
       "defaultAvalancheSequencingKit" : null,
@@ -3313,7 +3615,118 @@
       "isSamplePrepKitSupported" : false,      
       "instrumentType": "proton"
     }
-  },  
+  },
+
+  {
+    "pk": 20013,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": null,
+      "defaultTemplateKit": [
+        "ICPREP0004"
+      ],
+      "defaultPairedEndLibraryKit": null,
+      "defaultLibraryKit": [
+        "LIB0008"
+      ],
+      "productCode": "AMPS_2",
+      "defaultChipType": "P1.1.17",
+      "isPairedEndSupported": false,
+      "isDefault": false,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "AMPS"
+      ],
+      "productName": "AMPS_proton_Hi-Q",
+      "defaultFlowCount": 520,
+      "defaultPairedEndSequencingKit": null,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0020"
+      ],
+      "defaultSamplePrepKit": [
+        "SPREP0010"      
+      ],
+      "defaultControlSeqKit": null,
+      "isVisible": false,
+      "isDefaultPairedEnd": false,
+      "defaultIonChefPrepKit" : null,
+      "defaultIonChefSequencingKit" : null,
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,     
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,       
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultAvalancheTemplateKit" : null,
+      "defaultAvalancheSequencingKit" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : true,      
+      "instrumentType": "proton"
+    }
+  },
+  {
+    "pk": 20014,
+    "model": "rundb.applproduct",
+    "fields": {
+      "defaultHotSpotRegionBedFileName": "",
+      "defaultPairedEndAdapterKit": null,
+      "defaultTemplateKit": [
+        "ICPREP0004"
+      ],
+      "defaultPairedEndLibraryKit": null,
+      "defaultLibraryKit": [
+        "LIB0008"
+      ],
+      "productCode": "AMPS_EXOME_1",
+      "defaultChipType": "P1.1.17",
+      "isPairedEndSupported": false,
+      "isDefault": false,
+      "description": "",
+      "isHotspotRegionBEDFileSuppported": true,
+      "applType": [
+        "AMPS_EXOME"
+      ],
+      "productName": "AMPS_EXOME_proton_Hi-Q",
+      "defaultFlowCount": 520,
+      "defaultPairedEndSequencingKit": null,
+      "isActive": true,
+      "defaultTargetRegionBedFileName": "",
+      "defaultGenomeRefName": "hg19",
+      "defaultSequencingKit": [
+        "SEQ0020"
+      ],
+      "defaultSamplePrepKit": [
+        "SPREP0009"
+      ],
+      "defaultControlSeqKit": null,
+      "isVisible": false,
+      "isDefaultPairedEnd": false,
+      "defaultIonChefPrepKit" : null,
+      "defaultIonChefSequencingKit" : null,
+      "isTargetTechniqueSelectionSupported" : true,
+      "isTargetRegionBEDFileSupported" : true,
+      "isTargetRegionBEDFileSelectionRequiredForRefSelection" : true,      
+      "isControlSeqTypeBySampleSupported" : false,
+      "isReferenceBySampleSupported" : true,
+      "isTargetRegionBEDFileBySampleSupported" : true,
+      "isHotSpotBEDFileBySampleSupported" : false,      
+      "isDualNucleotideTypeBySampleSupported" : false,
+      "defaultAvalancheTemplateKit" : null,
+      "defaultAvalancheSequencingKit" : null,
+      "isBarcodeKitSelectionRequired" : false,
+      "barcodeKitSelectableType" : "all",
+      "isSamplePrepKitSupported" : true,      
+      "instrumentType": "proton"
+    }
+  },
           
   {
     "pk": 1,
@@ -3352,17 +3765,6 @@
     "pk": 4,
     "model": "rundb.chip",
     "fields": {
-      "name": "900",
-      "slots": 1,
-      "description": "PI",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  }, 
-  {
-    "pk": 5,
-    "model": "rundb.chip",
-    "fields": {
       "name": "314v2",
       "slots": 1,
       "description": "314v2",
@@ -3371,7 +3773,7 @@
     }
   },    
   {
-    "pk": 6,
+    "pk": 5,
     "model": "rundb.chip",
     "fields": {
       "name": "316v2",
@@ -3382,7 +3784,7 @@
     }
   },  
   {
-    "pk": 7,
+    "pk": 6,
     "model": "rundb.chip",
     "fields": {
       "name": "318v2",
@@ -3393,18 +3795,18 @@
     }
   },
   {
-    "pk": 8,
+    "pk": 11,
     "model": "rundb.chip",
     "fields": {
-      "name": "900v2",
+      "name": "900",
       "slots": 1,
-      "description": "PIv2",
+      "description": "PI",
       "isActive": false,
       "instrumentType": "proton"
     }
-  },     
+  },
   {
-    "pk": 9,
+    "pk": 12,
     "model": "rundb.chip",
     "fields": {
       "name": "P1.0.19",
@@ -3415,18 +3817,18 @@
     }
   },
   {
-    "pk": 10,
+    "pk": 13,
     "model": "rundb.chip",
     "fields": {
-      "name": "P1.1.16",
+      "name": "P1.0.20",
       "slots": 1,
-      "description": "PI",
+      "description": "P0",
       "isActive": false,
       "instrumentType": "proton"
     }
   },
   {
-    "pk": 11,
+    "pk": 14,
     "model": "rundb.chip",
     "fields": {
       "name": "P1.1.17",
@@ -3437,7 +3839,7 @@
     }
   },
   {
-    "pk": 12,
+    "pk": 15,
     "model": "rundb.chip",
     "fields": {
       "name": "P1.2.18",
@@ -3448,29 +3850,7 @@
     }
   },
   {
-    "pk": 13,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "P2.0.01",
-      "slots": 1,
-      "description": "P0",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  }, 
-  {
-    "pk": 14,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "P2.1.01",
-      "slots": 1,
-      "description": "PI",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  },
-  {
-    "pk": 15,
+    "pk": 16,
     "model": "rundb.chip",
     "fields": {
       "name": "P2.2.1",
@@ -3480,62 +3860,7 @@
       "instrumentType": "proton"
     }
   },
-  {
-    "pk": 16,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "900AMPS_EXOME",
-      "slots": 1,
-      "description": "PIv2",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  }, 
-  {
-    "pk": 17,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "900TARS",
-      "slots": 1,
-      "description": "PIv3 target seq with PSP2",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  }, 
-  {
-    "pk": 18,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "P1.1.17AMPS_EXOME",
-      "slots": 1,
-      "description": "PIv2",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  }, 
-  {
-    "pk": 19,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "P1.1.17TARS",
-      "slots": 1,
-      "description": "PIv3 target seq with PSP2",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  }, 
-  {
-    "pk": 20,
-    "model": "rundb.chip",
-    "fields": {
-      "name": "P1.0.20",
-      "slots": 1,
-      "description": "P0",
-      "isActive": false,
-      "instrumentType": "proton"
-    }
-  },
-  
+    
   {
     "pk": 1,
     "model": "rundb.analysisargs",
@@ -3544,12 +3869,12 @@
       "chipType": "314",
       "sequenceKitName": "",
       "chip_default": true,
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
-      "alignmentargs"           : "stage1 map4"
+      "beadfindargs"               : "justBeadFind",
+      "analysisargs"               : "Analysis --from-beadfind --use-alternative-etbR-equation",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "alignmentargs"              : "stage1 map4"
     }
   },
   {
@@ -3559,463 +3884,258 @@
       "name": "default_316",
       "chipType": "316",
       "chip_default": true,
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
-      "alignmentargs"           : "stage1 map4"
+      "beadfindargs"               : "justBeadFind",
+      "analysisargs"               : "Analysis --from-beadfind --use-alternative-etbR-equation",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "alignmentargs"              : "stage1 map4"
     }
   },  
   {
     "pk": 3,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "default_318",
-      "chipType": "318",
+      "name": "default_316v2",
+      "chipType": "316v2",
       "chip_default": true,
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
-      "alignmentargs"           : "stage1 map4"
+      "beadfindargs"               : "justBeadFind",
+      "analysisargs"               : "Analysis --from-beadfind --use-alternative-etbR-equation",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "alignmentargs"              : "stage1 map4"
     }
-  },  
+  },
   {
     "pk": 4,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "default_900",
-      "chipType": "900",
+      "name": "default_318",
+      "chipType": "318",
       "chip_default": true,
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
-    }
-  }, 
-  {
-    "pk": 5,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name": "default_314v2",
-      "chipType": "314v2",
-      "chip_default": true,
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
-      "alignmentargs"           : "stage1 map4"
-    }
-  },    
-  {
-    "pk": 6,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name": "default_316v2",
-      "chipType": "316v2",
-      "chip_default": true,
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
-      "alignmentargs"           : "stage1 map4"
-    }
-  },
-  {
-    "pk": 7,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name": "default_318v2",
-      "chipType": "318v2",
-      "chip_default": true,
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20"
-    }
-  },
-  {
-    "pk": 8,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name": "default_900v2",
-      "chipType": "900v2",
-      "chip_default": true,
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "beadfindargs"               : "justBeadFind",
+      "analysisargs"               : "Analysis --from-beadfind --use-alternative-etbR-equation",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "alignmentargs"              : "stage1 map4"
     }
   },
   {
     "pk": 9,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "default_P1.0.19",
-      "chipType": "P1.0.19",
+      "name": "default_900",
+      "chipType": "900",
       "chip_default": true,
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=80,112 --total-timeout 600 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=80,112 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=50,50 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=50,50 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "beadfindargs"               : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
+      "analysisargs"               : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --max-phasing-levels 2",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
+      "alignmentargs"              : "stage1 map4",
+      "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
+      "thumbnailalignmentargs"     : "stage1 map4"
     }
   },
   {
     "pk": 10,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "default_P1.1.16",
-      "chipType": "P1.1.16",
+      "name": "default_P1.0.19",
+      "chipType": "P1.0.19",
       "chip_default": true,
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "beadfindargs"               : "justBeadFind --beadfind-minlivesnr 3 --region-size=80,112 --total-timeout 600 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
+      "analysisargs"               : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=80,112 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
+      "alignmentargs"              : "stage1 map4",
+      "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=50,50 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
+      "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=50,50 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
+      "thumbnailalignmentargs"     : "stage1 map4"
     }
   },
   {
     "pk": 11,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "default_P1.1.17",
-      "chipType": "P1.1.17",
+      "name": "default_P1.0.20",
+      "chipType": "P1.0.20",
       "chip_default": true,
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "beadfindargs"               : "justBeadFind --beadfind-minlivesnr 3 --region-size=80,112 --total-timeout 600 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
+      "analysisargs"               : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=80,112 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
+      "alignmentargs"              : "stage1 map4",
+      "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=50,50 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
+      "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=50,50 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
+      "thumbnailalignmentargs"     : "stage1 map4"
     }
   },
   {
     "pk": 12,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "default_P1.2.18",
-      "chipType": "P1.2.18",
+      "name": "default_P1.1.17",
+      "chipType": "P1.1.17",
       "chip_default": true,
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600 --beadfind-diagnostics 2",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel false --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 0 --total-timeout 600 --bkg-debug-files --gopt /opt/ion/config/gopt_p1.2.18.param.json --bkg-well-xtalk-name /opt/ion/config/xtalk.p1.2.well.settings.20140102.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1 --barcode-bam-tag",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1 --beadfind-diagnostics 2 ",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel false --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 0 --beadfind-thumbnail 1 --bkg-debug-files --bkg-well-xtalk-name /opt/ion/config/xtalk.p1.2.well.settings.20140102.json",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "beadfindargs"               : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
+      "analysisargs"               : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --max-phasing-levels 2",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
+      "alignmentargs"              : "stage1 map4",
+      "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --barcode-bam-tag --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
+      "thumbnailalignmentargs"     : "stage1 map4"
     }
   },
   {
     "pk": 13,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "default_P2.0.16",
-      "chipType": "P2.0.16",
+      "name": "default_P1.2.18",
+      "chipType": "P1.2.18",
       "chip_default": true,
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "beadfindargs"               : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600 --beadfind-diagnostics 2",
+      "analysisargs"               : "Analysis --from-beadfind --clonal-filter-bkgmodel false --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 0 --total-timeout 600 --bkg-debug-files --gopt /opt/ion/config/gopt_p1.2.18.param.json --bkg-well-xtalk-name /opt/ion/config/xtalk.p1.2.well.settings.20140102.json",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 1000",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1 --barcode-bam-tag",
+      "alignmentargs"              : "stage1 map4",
+      "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1 --beadfind-diagnostics 2 ",
+      "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel false --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 0 --beadfind-thumbnail 1 --bkg-debug-files --bkg-well-xtalk-name /opt/ion/config/xtalk.p1.2.well.settings.20140102.json",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --barcode-bam-tag --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000",
+      "thumbnailalignmentargs"     : "stage1 map4"
     }
-  }, 
+  },
   {
     "pk": 14,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "default_P2.1.16",
-      "chipType": "P2.1.16",
+      "name": "default_P2.2.1",
+      "chipType": "P2.2.1",
       "chip_default": true,
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "beadfindargs"               : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
+      "analysisargs"               : "Analysis --from-beadfind --clonal-filter-bkgmodel false --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --bkg-well-xtalk-name /opt/ion/config/xtalk.p2.2.1.settings.20140120.json",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 1000",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1 --barcode-bam-tag",
+      "alignmentargs"              : "stage1 map4",
+      "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1 --beadfind-diagnostics 2",
+      "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel false --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 0 --beadfind-thumbnail 1 --bkg-debug-files --bkg-well-xtalk-name /opt/ion/config/xtalk.p2.2.1.settings.20140120.json",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --barcode-bam-tag --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000",
+      "thumbnailalignmentargs"     : "stage1 map4"
     }
   },
   {
     "pk": 15,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "default_P2.2.1",
-      "chipType": "P2.2.1",
-      "chip_default": true,
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel false --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --bkg-well-xtalk-name /opt/ion/config/xtalk.p2.2.1.settings.20140120.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1 --barcode-bam-tag",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1 --beadfind-diagnostics 2",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel false --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 0 --beadfind-thumbnail 1 --bkg-debug-files --bkg-well-xtalk-name /opt/ion/config/xtalk.p2.2.1.settings.20140120.json",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --barcode-bam-tag --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "name"                       : "314_Hi-Q",
+      "chipType"                   : "314",
+      "chip_default"               : false,
+      "sequenceKitName"            : "IonPGMHiQ",
+      "beadfindargs"               : "justBeadFind",
+      "analysisargs"               : "Analysis --from-beadfind --use-alternative-etbR-equation --gopt /opt/ion/config/gopt_314v2_Hi-Q.param.json",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "calibrateargs"              : "calibrate --skipDroop --kit-info HiQ314",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.314.B5.h5",
+      "alignmentargs"              : "stage1 map4"
     }
   },
   {
     "pk": 16,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "AmpliseqExome_V2",
-      "chipType": "P1.1.17",
-      "sequenceKitName": "ProtonI200Kit-v2XT",
-      "samplePrepKitName": "Ion AmpliSeq Exome Kit",
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "name"                       : "316_Hi-Q",
+      "chipType"                   : "316",
+      "chip_default"               : false,
+      "sequenceKitName"            : "IonPGMHiQ",
+      "beadfindargs"               : "justBeadFind",
+      "analysisargs"               : "Analysis --from-beadfind --use-alternative-etbR-equation --gopt /opt/ion/config/gopt_316v2_Hi-Q.param.json",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "calibrateargs"              : "calibrate --skipDroop --kit-info HiQ316",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.316.B5.h5",
+      "alignmentargs"              : "stage1 map4"
     }
-  },
+  },  
   {
     "pk": 17,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "TargetSeq_V2",
-      "chipType": "P1.1.17",
-      "sequenceKitName": "ProtonI200Kit-v2",
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "name"                       : "316v2_Hi-Q",
+      "chipType"                   : "316v2",
+      "chip_default"               : false,
+      "sequenceKitName"            : "IonPGMHiQ",
+      "beadfindargs"               : "justBeadFind",
+      "analysisargs"               : "Analysis --from-beadfind --use-alternative-etbR-equation --gopt /opt/ion/config/gopt_316v2_Hi-Q.param.json",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "calibrateargs"              : "calibrate --skipDroop --kit-info HiQ316",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.316v2.B5.h5",
+      "alignmentargs"              : "stage1 map4"
     }
   },
   {
     "pk": 18,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "AmpliseqExome_V3",
-      "chipType": "P1.1.17",
-      "sequenceKitName": "ProtonI200Kit-v3",
-      "samplePrepKitName": "Ion AmpliSeq Exome Kit",
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
-    }
-  },
-  {
-    "pk": 19,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name": "TargetSeq_V3",
-      "chipType": "P1.1.17",
-      "sequenceKitName": "ProtonI200Kit-v3",
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual --max-phasing-levels 2",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
-    }
-  },
- {
-    "pk": 20,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name"                    : "316v2_Hi-Q",
-      "chipType"                : "316v2",
-      "chip_default"            : false,
-      "sequenceKitName"         : "IonPGMHiQ",
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation --gopt /opt/ion/config/gopt_316v2_Hi-Q.param.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop --kit-info HiQ316",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.316v2.B5.h5",
-      "alignmentargs"           : "stage1 map4"
-    }
-  },
- {
-    "pk": 21,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name"                    : "314v2_Hi-Q",
-      "chipType"                : "314v2",
-      "chip_default"            : false,
-      "sequenceKitName"         : "IonPGMHiQ",
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation --gopt /opt/ion/config/gopt_314v2_Hi-Q.param.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop --kit-info HiQ314",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.314v2.B5.h5",
-      "alignmentargs"           : "stage1 map4"
-    }
-  },
- {
-    "pk": 22,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name"                    : "318v2_Hi-Q",
-      "chipType"                : "318v2",
-      "chip_default"            : false,
-      "sequenceKitName"         : "IonPGMHiQ",
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation --gopt /opt/ion/config/gopt_318v2_Hi-Q.param.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop --kit-info HiQ318",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.318v2.B5.h5"
-    }
-  },
- {
-    "pk": 23,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name"                    : "314_Hi-Q",
-      "chipType"                : "314",
-      "chip_default"            : false,
-      "sequenceKitName"         : "IonPGMHiQ",
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation --gopt /opt/ion/config/gopt_314v2_Hi-Q.param.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop --kit-info HiQ314",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.314.B5.h5",
-      "alignmentargs"           : "stage1 map4"
-    }
-  },
- {
-    "pk": 24,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name"                    : "316_Hi-Q",
-      "chipType"                : "316",
-      "chip_default"            : false,
-      "sequenceKitName"         : "IonPGMHiQ",
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation --gopt /opt/ion/config/gopt_316v2_Hi-Q.param.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop --kit-info HiQ316",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.316.B5.h5",
-      "alignmentargs"           : "stage1 map4"
-    }
-  },  
- {
-    "pk": 25,
-    "model": "rundb.analysisargs",
-    "fields": {
-      "name"                    : "318_Hi-Q",
-      "chipType"                : "318",
-      "chip_default"            : false,
-      "sequenceKitName"         : "IonPGMHiQ",
-      "beadfindargs"            : "justBeadFind",
-      "analysisargs"            : "Analysis --from-beadfind --use-alternative-etbR-equation --gopt /opt/ion/config/gopt_318v2_Hi-Q.param.json",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop --kit-info HiQ318",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.318.B5.h5"
+      "name"                       : "318_Hi-Q",
+      "chipType"                   : "318",
+      "chip_default"               : false,
+      "sequenceKitName"            : "IonPGMHiQ",
+      "beadfindargs"               : "justBeadFind",
+      "analysisargs"               : "Analysis --from-beadfind --use-alternative-etbR-equation --gopt /opt/ion/config/gopt_318v2_Hi-Q.param.json",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "calibrateargs"              : "calibrate --skipDroop --kit-info HiQ318",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.318.B5.h5",
+      "alignmentargs"              : "stage1 map4"
     }
   },    
   {
-    "pk": 26,
+    "pk": 21,
     "model": "rundb.analysisargs",
     "fields": {
-      "name": "default_P1.0.20",
-      "chipType": "P1.0.20",
-      "chip_default": true,
-      "beadfindargs"            : "justBeadFind --beadfind-minlivesnr 3 --region-size=80,112 --total-timeout 600 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
-      "analysisargs"            : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=80,112 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
-      "prebasecallerargs"       : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --calibration-training=100000 --flow-signals-type scaled-residual",
-      "calibrateargs"           : "calibrate --skipDroop",
-      "basecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 1000 --barcode-filter-postpone 1",
-      "alignmentargs"           : "stage1 map4",
-      "thumbnailbeadfindargs"   : "justBeadFind --beadfind-minlivesnr 3 --region-size=50,50 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
-      "thumbnailanalysisargs"   : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=50,50 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
-      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000 --calibration-training=100000 --flow-signals-type scaled-residual",
+      "name": "PIv4_HiQ_AmpliSeqExome",
+      "chipType": "P1.1.17",
+      "sequenceKitName": "IonProtonIHiQ",
+      "samplePrepKitName": "Ion AmpliSeq Exome Kit",      
+      "beadfindargs"               : "justBeadFind --beadfind-minlivesnr 3 --region-size=216,224 --total-timeout 600",
+      "analysisargs"               : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=216,224 --bkg-bfmask-update false --gpuWorkLoad 1 --total-timeout 600 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --max-phasing-levels 2",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
+      "alignmentargs"              : "-J 25 --end-repair 15 --do-repeat-clip --context stage1 map4",
+      "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
+      "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
+      "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
-      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0  --num-unfiltered 100000",
-      "thumbnailalignmentargs"  : "stage1 map4"
+      "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
+      "thumbnailalignmentargs"     : "-J 25 --end-repair 15 --do-repeat-clip --context stage1 map4"
     }
   },
+  
+    
   {
     "pk": 1,
     "model": "rundb.samplegrouptype_cv",
@@ -4093,7 +4213,20 @@
       "isActive": true,
       "uid": "SAMPLEGROUP_CV_0006"
     }
-  },    
+  }, 
+  {
+    "pk": 7,
+    "model": "rundb.samplegrouptype_cv",
+    "fields": {
+      "displayedName": "SINGLE_RNA_FUSION",
+      "description": "",
+      "isIRCompatible": true,
+      "iRAnnotationType": "RelationshipType",
+      "iRValue": "SINGLE_RNA_FUSION",
+      "isActive": true,
+      "uid": "SAMPLEGROUP_CV_0007"
+    }
+  },     
   {
     "pk": 1,
     "model": "rundb.sampleannotation_cv",

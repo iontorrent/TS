@@ -36,10 +36,18 @@
     var referenceID;
     var experimentUrl;
     var analysisUrl;
+    var easUrl;
     $.get( reportUrl, function(data) {
       analysisUrl = data.reportLink;
       experimentUrl = data.experiment;
       referenceID = data.reference;
+      easUrl = data.eas;
+      $.each( data.config, function(key,val) {
+        if( key != 'launch_mode' ) {
+          try { $("#"+key).val(val); $("#"+key).attr('checked',(val=='Yes')); }
+          catch(e) {}
+        }
+      });
     });
     // attempt to get Plan details for autosetting of GUIs
     // - although there is only one run type currently, the code is left in for future expansion, etc.
@@ -49,13 +57,26 @@
       var planUrl;
       $.get( experimentUrl+"?format=json", function(data) { planUrl = data.plan; } );
       if( planUrl != undefined && planUrl != null && planUrl != "" ) {
-        $.get( planUrl+"?format=json", function(data) {
-          planLibType = data.runType;
-          planBedFile = data.bedfile;
-        });
+        $.get( planUrl+"?format=json", function(data) { planLibType = data.runType; });
       }
     }
+    // set up plan.html plan settings (ignoring barcode-specific stuff)
+    try {
+      $.get( easUrl+"?format=json", function(data) {
+        planBedFile = data.targetRegionBedFile;
+        $.each( data.selectedPlugins.ampliSeqRNA.userInput, function(key,val) {
+          if( key != 'launch_mode' ) {
+            try { $("#"+key).val(val); $("#"+key).attr('checked',(val=='Yes')); }
+            catch(e) {}
+          }
+        });
+      });
+    }
+    catch(e) {}
+
     document.getElementById('referenceid').innerHTML = referenceID;
+
+    // following code is to support barcode-specific target selection, if later required
     var populateBarcodeTargets = 0;
     var hideMappedBedOption = false; // (referenceID != "hg19");
     if( hideMappedBedOption ) {
@@ -136,7 +157,7 @@
     // make the Plan auto-selections
     if( planLibType != "" && planLibType != "AMPS_RNA" ) {
       alert("Warning: The current Plan runType ('"+planLibType+"') is not supported by this plugin.\n\n"+
-       "Library Type 'Ion AmpliSeq RNA' will be employed.");
+       "Library Type 'AmpliSeq RNA' will be employed.");
     }
     planLibType = "AMPS_RNA";
     var pluginLibType = "ampliseq-rna";
@@ -302,7 +323,7 @@
     <tr>
      <td><span class="help" title="Select the library (enrichment) type sequenced.">Library Type:</span></td>
      <td><select id="librarytype" name="librarytype">
-      <option value="ampliseq-rna">Ion AmpliSeq RNA</option>
+      <option value="ampliseq-rna">AmpliSeq RNA</option>
      </select></td> </tr>
     <tr>
      <td><span class="help"

@@ -30,7 +30,7 @@ from django.contrib.auth.decorators import login_required
 from django.views.decorators.cache import never_cache
 
 # local
-import models
+from iondb.rundb import models
 from iondb.anaserve import  client as anaclient
 
 _http_re = re.compile(r'^HTTP/1\.\d\s+(\d{3}) [a-zA-Z0-9_ ]+$')

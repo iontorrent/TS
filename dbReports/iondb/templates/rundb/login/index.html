@@ -41,6 +41,10 @@
         #login-pane {
             padding-top: 100px;
         }
+        #login-pane > #site-name {
+            margin-top: 0;
+            color: white;
+        }
         .jumbo-brand-block {
             height: 589px;
             width: 100%;
@@ -98,6 +102,9 @@
             <div class="container">
                 <div class="row">
                     <div id="login-pane" class="span4">
+                        {% if base_site_name.strip != "" %}
+                            <h1 id="site-name">{{ base_site_name }}</h1>
+                        {% endif %}
                         <img style="marign: 100px 0;" src="{% static "img/torrent-browser-wordmark.png" %}" alt="Torrent Browser"/>
                         <div id="login_html" class="clearfix">
                             {% include "rundb/login/login.html" %}

@@ -21,7 +21,7 @@ class RegionTracker{
     NucStep cache_step;
     Halo missing_mass;
 
-    DoubleExpSmoothing copy_drift_smoother, ratio_drift_smoother;
+    DoubleExpSmoothing tmidnuc_smoother, copy_drift_smoother, ratio_drift_smoother;
 
     RegionTracker();    // for serializing, only.
     RegionTracker( const class CommandLineOpts * inception_state );
@@ -48,8 +48,9 @@ class RegionTracker{
 	   & rp
 	   & rp_high
 	   & rp_low
-     & copy_drift_smoother
-     & ratio_drift_smoother
+           & tmidnuc_smoother
+           & copy_drift_smoother
+           & ratio_drift_smoother
 	  // cache_step  // re-initted every time
 	  & missing_mass;
 	// fprintf(stdout, "done RegionTracker\n");
@@ -62,8 +63,9 @@ class RegionTracker{
 	   & rp
 	   & rp_high
 	   & rp_low
-     & copy_drift_smoother
-     & ratio_drift_smoother
+           & tmidnuc_smoother
+           & copy_drift_smoother
+           & ratio_drift_smoother
 	  // cache_step  // rebuilt every time by AllocScratch()
 	  // AllocScratch() called in AllocFitBuffers()
 	  // by the RegionalizedData object that owns this RegionTracker

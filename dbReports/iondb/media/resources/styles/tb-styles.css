@@ -419,7 +419,7 @@ a.btn-danger:hover {
   background-color: transparent;
 }
 
-.header .nav-tabs > li > a {
+.header .nav-tabs > li > .nav-tab {
   font-weight: bold;
   color: #FFFFFF;
   text-align: center;
@@ -436,7 +436,7 @@ a.btn-danger:hover {
   border-radius: 4px 4px 0 0;
 }
 
-.header .nav-tabs > li > a #gear {
+.header .nav-tabs > li > .nav-tab #gear {
   width: 20px;
   height: 20px;
   padding-left: 30px;
@@ -444,7 +444,7 @@ a.btn-danger:hover {
   background: url("../img/gear-inactive.png") no-repeat center top transparent;
 }
 
-.header .nav-tabs > li > a #gear .caret {
+.header .nav-tabs > li > .nav-tab #gear .caret {
   border-top-color: #FFF;
   border-bottom-color: #FFF;
 }
@@ -817,16 +817,16 @@ body .modal-1000 {
 
 .table-dense tr > td,
 .table-dense tr > th {
-  padding: 2px 4px;
+  padding: 4px 4px;
   overflow: hidden;
   font-size: 0.85em;
-  line-height: 1;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .table-dense table#main_table tr > td:last-child {
-  padding: 2px 2px 2px 0;
+  padding: 4px 2px 4px 0;
 }
 
 .tight-text {

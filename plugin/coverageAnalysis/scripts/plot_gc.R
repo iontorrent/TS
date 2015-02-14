@@ -37,11 +37,12 @@ if( grepl("a",option) ) {
   legoff = 0.89
 } else {
   yprop <- rcov$depth
+  if( is.null(yprop) ) yprop <- rcov$ave_basereads
   if( is.null(yprop) ) yprop <- rcov$total_reads
   legoff = 0.86
 }
 if( is.null(yprop) ) {
-  write(sprintf("ERROR: Cannot locate fields 'depth' or 'total_reads' in data file %s\n",nFileIn),stderr())
+  write(sprintf("ERROR: Cannot locate fields 'depth', 'ave_basereads' or 'total_reads' in data file %s\n",nFileIn),stderr())
   q(status=1)
 }
 

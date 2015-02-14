@@ -11,7 +11,7 @@ our $opt = {
   "autoFix"           => undef,
   "perLine"           => undef,
   "upperCaseOnly"     => undef,
-  "limit"             => 4294967295,
+  "limit"             => 137438953472,
   "onlyN"             => undef,
   "noIUPAC"           => undef,
   "help"              => undef,
@@ -58,7 +58,7 @@ usage: $0
   Optional args:
     -a,--auto-fix                      : Attemp to fix errors, otherwise default to die at the first error
     -p,--per-line length               : Require specific length per line, default to first non-header line of each sequence
-    -l,--limit maximum                 : maximal total reference length in base pairs, default to 4294967295
+    -l,--limit maximum                 : maximal total reference length in base pairs, default to 128G
     -u,--upper-case-only               : Require converting lower case base symbols to upper case
     -d,--dos                           : Allow DOS style line end;
     -m,--mac                           : Allow MAC Classic line end;
@@ -129,7 +129,7 @@ for(split/[\r\n]+/, $temp)
    }
   $seq .= $_;
   if ($seq && $name) # empty sequences are ignored
-   {split /\s+/, $name;
+   {@_ = split /\s+/, $name;
    if (++$count{$_[0]}>1)
     {error("Sequence named '$_[0]' is duplicated !\n",12);
     my $count = $count{$_[0]};

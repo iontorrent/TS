@@ -8,8 +8,8 @@ struct IonVersion {
 	static std::string GetMajor();
 	static std::string GetMinor();
 	static std::string GetRelease();
-	static std::string GetSvnRev();
-	static std::string GetSvnPath();
+	static std::string GetGitHash();
+	static std::string GetGitPath();
 	static std::string GetBuildNum();
 	static std::string GetBuildTag();
 	static std::string GetBuildHost();

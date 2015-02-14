@@ -210,7 +210,7 @@ typedef struct __tmap_map_opt_t {
     double sample_reads;  /*!< sample the reads at this fraction (-x,--sample-reads) */
 #endif
     int32_t vsw_type; /*!< the vectorized smith waterman algorithm (-H,--vsw-type) */
-    
+
     // DVK: realignment control
     int32_t do_realign; /*!< perform realignment after mapping */
     int32_t realign_mat_score; /*!< realignment match score */
@@ -218,8 +218,17 @@ typedef struct __tmap_map_opt_t {
     int32_t realign_gip_score; /*!< realignment gap opening score */
     int32_t realign_gep_score; /*!< realignment gap extension score */
     int32_t realign_bandwidth; /*!< realignment DP matrix band width */
-    int32_t realign_cliptype; /*!< realignment clipping type: 0: none, 1: semiglobal, 2: smiglobal+soft clip bead end, 3: semiglobal + soft clip key end, 4: local alignment */
-    
+    int32_t realign_cliptype; /*!< realignment clipping type: 0: none, 1: semiglobal, 2: semiglobal+soft clip bead end, 3: semiglobal + soft clip key end, 4: local alignment */
+
+    int32_t do_hp_weight; /*!< perform realignment with context-specific gap scores */
+    // int32_t context_noclip; /*!< perform realignment with context-specific gap scores */
+
+    // DVK: tandem repeat end-clipping
+    int32_t do_repeat_clip; /*!< clip tandem repeats at the alignment ends */
+
+    // DVK: alignment length filtering
+    int32_t min_al_len; /*!< minimal alignment length to report, -1 to disable */
+
     // stats output control
     int32_t report_stats;
     char* realign_log;
@@ -316,6 +325,7 @@ typedef struct __tmap_map_opt_t {
     // sub-options
    struct __tmap_map_opt_t **sub_opts; /*!< sub-options, for multi-stage and multi-mapping */
    int32_t num_sub_opts; /*!< the number of sub-options */
+   char *bed_file;
 } tmap_map_opt_t;
 
 /*!

@@ -23,7 +23,7 @@ get_Netmask
 if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
     source /opt/ion/bin/ion-tsconfig.version.env
 fi
-log "version "`IonVersionGetMajor`"."`IonVersionGetMinor`"."`IonVersionGetRelease`" ("`IonVersionGetSvnRev`")"
+log "version "`IonVersionGetMajor`"."`IonVersionGetMinor`"."`IonVersionGetRelease`" ("`IonVersionGetGitHash`")"
 
 #------------------------------------------#
 #---	check for hostname change		---#

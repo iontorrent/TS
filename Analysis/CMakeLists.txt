@@ -14,9 +14,6 @@ check_c_compiler_flag( -malign-double HAS_ALIGN_DOUBLE )
 option(ION_DO_BACKGROUND "Build with background model" ON)
 mark_as_advanced(ION_DO_BACKGROUND)
 
-option(ION_BUILD_STRAND_BIAS "Build samita and Strand_Bias_Extractor" OFF)
-mark_as_advanced(ION_BUILD_STRAND_BIAS)
-
 if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(ION_DO_BACKGROUND OFF CACHE BOOL "Build with background model")
 endif()
@@ -120,6 +117,8 @@ add_library(ion-analysis
 #    Image/ParallelDFT.cpp
     Image/PairPixelXtalkCorrector.cpp
     Image/ImageNNAvg.cpp
+    Image/FluidPotentialCorrector.cpp
+    Image/RowSumData.cpp
 
     Mask/PinnedInFlow.cpp
     Mask/Mask.cpp
@@ -130,10 +129,7 @@ add_library(ion-analysis
     Separator/DifferentialSeparator.cpp
     Separator/NNAvg.cpp
     Separator/ChipReduction.cpp
-#    Separator/KeyClassifier.cpp
-#    Separator/KClass.cpp
     Separator/BFReference.cpp
-    Separator/Traces.cpp
     Separator/EvaluateKey.cpp
     Separator/ZeromerMatDiff.cpp
     Separator/BfMetric.cpp
@@ -308,7 +304,7 @@ add_library(ion-analysis
     ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
     ${CUDA_TEMP_FILES}
 )
-add_dependencies(ion-analysis IONVERSION samtools bamtools fftw armadillo_proj hdf5_proj boost kmeans_proj)
+add_dependencies(ion-analysis IONVERSION samtools bamtools armadillo_proj hdf5_proj kmeans_proj)
 if(ION_USE_CUDA)
   if(NOT ION_USE_SYSTEM_CUDA)
     add_dependencies(ion-analysis ${cuda_toolkit})
@@ -328,7 +324,7 @@ else()
     set(EXTRA_LIBS blas lapack)
 endif()
 
-target_link_libraries(ion-analysis ${ION_FFTW_LIBS} ${ION_HDF5_LIBS} ${ION_KMEANS_LIBS} ${ION_BOOST_LIBS} ${ION_ARMADILLO_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} file-io z)
+target_link_libraries(ion-analysis ${ION_HDF5_LIBS} ${ION_KMEANS_LIBS} ${ION_BOOST_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} file-io z)
 
 set_target_properties(ion-analysis PROPERTIES
     VERSION   "${ION_VERSION_MAJOR}.${ION_VERSION_MINOR}.${ION_VERSION_RELEASE}.${ION_VERSION_BUILDNUM}"
@@ -378,6 +374,11 @@ add_executable(MergeDats crop/MergeDats.cpp crop/MergeAcq.cpp ${PROJECT_BINARY_D
 add_dependencies(MergeDats IONVERSION)
 target_link_libraries(MergeDats ion-analysis pthread dl)
 install(TARGETS MergeDats DESTINATION bin)
+
+add_executable(Thumbnail crop/Thumbnail.cpp crop/MergeAcq.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(Thumbnail IONVERSION)
+target_link_libraries(Thumbnail ion-analysis pthread dl)
+install(TARGETS Thumbnail DESTINATION bin)
 
 # If doing pca spline trial
 add_executable(PcaSplineExample Image/PcaSplineExample.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
@@ -439,6 +440,7 @@ install(TARGETS justBeadFind DESTINATION bin)
 add_executable(BeadfindStats Separator/BeadfindStats.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(BeadfindStats IONVERSION)
 target_link_libraries(BeadfindStats ion-analysis pthread dl)
+install(TARGETS BeadfindStats DESTINATION bin)
 
 add_executable(CompareBf Separator/CompareBf.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 add_dependencies(CompareBf IONVERSION)
@@ -447,6 +449,7 @@ target_link_libraries(CompareBf ion-analysis pthread dl)
 ## Standalone BaseCaller
 add_executable(BaseCaller 
     BaseCaller/BaseCaller.cpp
+    BaseCaller/BaseCallerParameters.cpp
     BaseCaller/BaseCallerFilters.cpp
     BaseCaller/PerBaseQual.cpp
     BaseCaller/PhaseEstimator.cpp
@@ -464,9 +467,11 @@ install(TARGETS BaseCaller DESTINATION bin)
 
 
 ## Standalone Variant Caller, named tvc
-set(ION_VCFLIB_DIR ${ION_TS_EXTERNAL}/vcflib)
-set(ION_FREEBAYES_DIR ${ION_TS_EXTERNAL}/freebayes/src)
-include_directories(${ION_VCFLIB_DIR} ${ION_FREEBAYES_DIR})
+set(ION_VCFLIB_DIR    ${ION_TS_EXTERNAL}/vcflib)
+set(ION_FREEBAYES_DIR ${ION_TS_EXTERNAL}/freebayes)
+
+include_directories(${ION_VCFLIB_DIR})
+include_directories(${ION_FREEBAYES_DIR}/src)
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/FlowDistEval")
 include_directories("${PROJECT_SOURCE_DIR}/VariantCaller/EnsembleEval")
@@ -523,7 +528,7 @@ add_executable(tvc
   ${ION_VCFLIB_DIR}/smithwaterman/Repeats.cpp
   ${ION_VCFLIB_DIR}/smithwaterman/IndelAllele.cpp
   ${ION_VCFLIB_DIR}/smithwaterman/SmithWatermanGotoh.cpp
-  ${ION_FREEBAYES_DIR}/AlleleParser.cpp
+  ${ION_FREEBAYES_DIR}/src/AlleleParser.cpp
 
   BaseCaller/PIDloop.cpp
   BaseCaller/DPTreephaser.cpp
@@ -534,8 +539,8 @@ add_executable(tvc
   ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
   ${PROJECT_BINARY_DIR}/IonVersion.cpp
 )
-target_link_libraries(tvc ${ION_BAMTOOLS_LIBS} ${ION_ARMADILLO_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} z file-io pthread)
-add_dependencies(tvc levmar IONVERSION bamtools armadillo_proj )
+target_link_libraries(tvc ${ION_BAMTOOLS_LIBS} ${EXTRA_LIBS} ${LUCID_EXTRA_LIB} z file-io pthread)
+add_dependencies(tvc IONVERSION bamtools armadillo_proj htslib_proj)
 install(TARGETS tvc DESTINATION bin)
 
 
@@ -559,35 +564,12 @@ add_executable(tvcutils
   VariantCaller/tvcutils/prepare_hotspots.cpp
   VariantCaller/tvcutils/validate_bed.cpp
   Util/OptArgs.cpp
+  Util/Utils.cpp
   ${ION_TS_EXTERNAL}/jsoncpp-src-amalgated0.6.0-rc1/jsoncpp.cpp
   ${PROJECT_BINARY_DIR}/IonVersion.cpp
-  Util/Utils.cpp
-  Image/ChipIdDecoder.cpp
 )
-#target_link_libraries(tvcutils ion-analysis)
 add_dependencies(tvcutils IONVERSION)
 install(TARGETS tvcutils DESTINATION bin)
-
-
-# Use local source to build tabix and bgzip. In the future just fetch latest tabix package
-add_executable(tabix
-  ${ION_VCFLIB_DIR}/tabixpp/main.c
-  ${ION_VCFLIB_DIR}/tabixpp/bgzf.c
-  ${ION_VCFLIB_DIR}/tabixpp/kstring.c
-  ${ION_VCFLIB_DIR}/tabixpp/knetfile.c
-  ${ION_VCFLIB_DIR}/tabixpp/index.c
-  ${ION_VCFLIB_DIR}/tabixpp/bedidx.c)
-target_link_libraries(tabix z)
-install(TARGETS tabix DESTINATION bin)
-
-add_executable(bgzip
-  ${ION_VCFLIB_DIR}/tabixpp/bgzip.c
-  ${ION_VCFLIB_DIR}/tabixpp/bgzf.c
-  ${ION_VCFLIB_DIR}/tabixpp/knetfile.c)
-target_link_libraries(bgzip z)
-install(TARGETS bgzip DESTINATION bin)
-
-
 
 
 add_executable(ionstats 
@@ -614,7 +596,6 @@ add_executable(bamrealignment
     Util/Utils.cpp
     Util/OptArgs.cpp
     ${PROJECT_BINARY_DIR}/IonVersion.cpp
-    Image/ChipIdDecoder.cpp
     )
 target_link_libraries(bamrealignment ${ION_BAMTOOLS_LIBS} z pthread)
 add_dependencies(bamrealignment bamtools)
@@ -632,24 +613,6 @@ add_executable(PairedEndErrorCorrection
 add_dependencies(PairedEndErrorCorrection IONVERSION)
 target_link_libraries(PairedEndErrorCorrection ion-analysis file-io pthread ${ION_BAMTOOLS_LIBS} dl)
 install(TARGETS PairedEndErrorCorrection DESTINATION bin)
-
-IF( ION_BUILD_STRAND_BIAS )
-add_custom_command( 
- TARGET PairedEndErrorCorrection POST_BUILD
- #COMMAND mkdir -p ${CMAKE_BUILD_TOOL} ${PROJECT_SOURCE_DIR}/../external/samita/build 
- COMMAND ${CMAKE_COMMAND} ${PROJECT_SOURCE_DIR}/../external/samita 
- COMMAND ${CMAKE_BUILD_TOOL} ${PROJECT_SOURCE_DIR}/../external/samita/ 
- COMMAND "make"
- WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}/../external/samita/ 
- )
- 
- include_directories (${ION_TS_EXTERNAL}/samita ${ION_TS_EXTERNAL}/common/c++/lifetech)
- link_directories ( ${ION_TS_EXTERNAL}/samita/ ${Boost_LIBRARY_DIRS} )
- add_executable (strandBiasExtractor strandBiasExtractor/semaphore.cpp  strandBiasExtractor/strandBiasExtractor.cpp)
- add_dependencies(strandBiasExtractor IONVERSION samita )
- target_link_libraries (strandBiasExtractor samita++.a boost_regex boost_iostreams boost_thread boost_filesystem boost_system ${ION_SAMTOOLS_LIBS} ${ION_HDF5_HL_LIBS} ${ION_HDF5_LIBS} log4cxx pthread )
- install(TARGETS strandBiasExtractor DESTINATION bin)
-ENDIF(ION_BUILD_STRAND_BIAS )
 
 # add_executable(WellsTimer WellsTimer.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 # add_dependencies(WellsTimer IONVERSION)
@@ -765,6 +728,11 @@ add_executable(RawWellsEquivalent Wells/RawWellsEquivalent.cpp ${PROJECT_BINARY_
 add_dependencies(RawWellsEquivalent IONVERSION)
 target_link_libraries(RawWellsEquivalent ion-analysis pthread dl)
 install(TARGETS RawWellsEquivalent DESTINATION bin)
+
+add_executable(RawWellsConverter Wells/RawWellsConverter.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
+add_dependencies(RawWellsConverter IONVERSION)
+target_link_libraries(RawWellsConverter ion-analysis pthread dl)
+install(TARGETS RawWellsConverter DESTINATION bin)
 
 # add_executable(DiffSeparator Separator/DiffSeparator.cpp ${PROJECT_BINARY_DIR}/IonVersion.cpp)
 # add_dependencies(DiffSeparator IONVERSION)
@@ -960,7 +928,8 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_316v2.bin" DESTINATION
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_318.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_324.bin" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_P1_1.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
-install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_P1_0.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_P1_0_19.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
+install(FILES "${PROJECT_SOURCE_DIR}/config/exclusionMask_P1_0_20.txt" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_314" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_316" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/excludeMask_318" DESTINATION ${ION_INSTALL_PREFIX}/config)
@@ -1068,12 +1037,18 @@ install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.p1.2.well.settings.20140102.js
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.p2.2.1.settings.20140120.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 install(FILES "${PROJECT_SOURCE_DIR}/config/xtalk.p2.2.1.null.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
 
+# Recalibration Panel
+install(FILES "${PROJECT_SOURCE_DIR}/config/datasets_calibration.json" DESTINATION ${ION_INSTALL_PREFIX}/config)
+
 install(FILES "${PROJECT_SOURCE_DIR}/Analysis.1" DESTINATION share/man/man1)
 
 if(NOT ION_USE_SYSTEM_ARMADILLO)
-   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-4.300.0+ion0-install/lib/libarmadillo.so.4" DESTINATION lib)
-   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-4.300.0+ion0-install/lib/libarmadillo.so.4.300.0" DESTINATION lib)
+   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-4.300.8+ion0-install/lib/libarmadillo.so.4" DESTINATION lib)
+   install(FILES "${PROJECT_BINARY_DIR}/../armadillo-4.300.8+ion0-install/lib/libarmadillo.so.4.300.8" DESTINATION lib)
 endif()
+
+install(PROGRAMS "${PROJECT_BINARY_DIR}/../htslib-1.1/tabix" DESTINATION bin)
+install(PROGRAMS "${PROJECT_BINARY_DIR}/../htslib-1.1/bgzip" DESTINATION bin)
 
 add_test("trimfastq.pl" "perl" "-cw" "${PROJECT_SOURCE_DIR}/trimfastq.pl")
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/trimfastq.pl" DESTINATION bin)

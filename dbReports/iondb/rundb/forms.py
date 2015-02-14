@@ -146,8 +146,9 @@ class RunParamsForm(forms.Form):
     # unused?
     align_full = forms.BooleanField(required=False, initial=False)
 
-    do_thumbnail = forms.BooleanField(required=False, initial=True, label="Thumbnail only")
-    do_base_recal = forms.BooleanField(required=False, label="Enable Base Recalibration")
+    do_thumbnail = forms.BooleanField(required=False, initial=False, label="Thumbnail only")
+    do_base_recal = forms.CharField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}), label="Base Recalibration Mode")
+    
     realign = forms.BooleanField(required=False)
     mark_duplicates = forms.BooleanField(required=False, initial=False)
 
@@ -205,6 +206,7 @@ class RunParamsForm(forms.Form):
                   raise forms.ValidationError(("Project name has invalid characters. The valid values are letters, numbers, underscore and period."))
         return ','.join(names)
 
+           
 
 from iondb.rundb.plan.views_helper import dict_bed_hotspot
 
@@ -216,10 +218,11 @@ class AnalysisSettingsForm(forms.ModelForm):
     plugins = forms.ModelMultipleChoiceField(required=False, widget=Plugins_SelectMultiple(),
     queryset=models.Plugin.objects.filter(selected=True, active=True).order_by('name', '-version'))
     pluginsUserInput = forms.CharField(required=False, widget=forms.HiddenInput())
-    barcodeKitName = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+    barcodeKitName = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class': 'input-xlarge', 'readonly':'true'}) )
+     
     threePrimeAdapter = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
     barcodedReferences = forms.CharField(required=False, widget=forms.HiddenInput())
-
+        
     def __init__(self, *args, **kwargs):
         super(AnalysisSettingsForm, self).__init__(*args, **kwargs)
         # initialize choices when form instance created

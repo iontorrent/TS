@@ -5,98 +5,16 @@
             "output_mnv": 0, 
             "min_indel_size": 4, 
             "min_var_count": 5, 
-            "min_var_freq": 0.14999999999999999, 
+            "min_var_freq": 0.15, 
             "kmer_len": 19, 
             "max_hp_length": 8, 
-            "relative_strand_bias": 0.80000000000000004
+            "relative_strand_bias": 0.8
         }, 
         "meta": {
-            "repository_id": "$Rev: 83596 $", 
-            "ts_version": "4.2", 
-            "name": "Generic - PGM - Germ Line - High Stringency", 
-            "based_on": "ampliseq_germline_highstringency_pgm_parameters.json", 
-            "tooltip": "Optimized for allele frequencies >10% and high specificity", 
-            "tvc_parameters_version": "generic ampliseq germline highstringency pgm $Date: 2014-02-19 16:57:20 -0800 (Wed, 19 Feb 2014) $ $Rev: 83596 $", 
-            "configuration": "germline_high_stringency", 
-            "compatibility": {
-                "chip": [
-                    "pgm"
-                ], 
-                "frequency": [
-                    "germline"
-                ], 
-                "stringency": [
-                    "high"
-                ], 
-                "library": [
-                    "wholegenome", 
-                    "ampliseq", 
-                    "targetseq"
-                ]
-            }
-        }, 
-        "torrent_variant_caller": {
-            "snp_min_allele_freq": 0.14999999999999999, 
-            "snp_strand_bias": 0.94999999999999996, 
-            "hotspot_min_coverage": 20, 
-            "hotspot_min_cov_each_strand": 3, 
-            "snp_strand_bias_pval": 1.0, 
-            "hotspot_min_allele_freq": 0.14999999999999999, 
-            "snp_min_variant_score": 10.0, 
-            "hotspot_strand_bias": 0.94999999999999996, 
-            "hp_max_length": 8, 
-            "filter_insertion_predictions": 0.20000000000000001, 
-            "indel_min_variant_score": 10.0, 
-            "indel_min_coverage": 20, 
-            "heavy_tailed": 3, 
-            "outlier_probability": 0.01, 
-            "indel_strand_bias_pval": 1.0, 
-            "data_quality_stringency": 8.5, 
-            "snp_min_cov_each_strand": 3, 
-            "hotspot_strand_bias_pval": 1.0, 
-            "hotspot_min_variant_score": 10.0, 
-            "indel_strand_bias": 0.84999999999999998, 
-            "downsample_to_coverage": 400, 
-            "filter_unusual_predictions": 0.25, 
-            "indel_min_allele_freq": 0.14999999999999999, 
-            "do_snp_realignment": 0, 
-            "prediction_precision": 1.0, 
-            "indel_min_cov_each_strand": 3, 
-            "filter_deletion_predictions": 0.20000000000000001, 
-            "suppress_recalibration": 0, 
-            "snp_min_coverage": 20
-        }, 
-        "freebayes": {
-            "gen_min_coverage": 6, 
-            "allow_mnps": 1, 
-            "allow_complex": 0, 
-            "read_snp_limit": 10, 
-            "read_max_mismatch_fraction": 1.0, 
-            "allow_indels": 1, 
-            "min_mapping_qv": 4, 
-            "gen_min_alt_allele_freq": 0.14999999999999999, 
-            "allow_snps": 1, 
-            "gen_min_indel_alt_allele_freq": 0.14999999999999999
-        }
-    }, 
-    {
-        "long_indel_assembler": {
-            "short_suffix_match": 5, 
-            "output_mnv": 0, 
-            "min_indel_size": 4, 
-            "min_var_count": 5, 
-            "min_var_freq": 0.14999999999999999, 
-            "kmer_len": 19, 
-            "max_hp_length": 8, 
-            "relative_strand_bias": 0.80000000000000004
-        }, 
-        "meta": {
-            "repository_id": "$Rev: 83596 $", 
-            "ts_version": "4.2", 
+            "ts_version": "4.4", 
             "name": "Generic - PGM - Germ Line - Low Stringency", 
-            "based_on": "ampliseq_germline_lowstringency_pgm_parameters.json", 
             "tooltip": "Optimized for allele frequencies >10% and high sensitivity", 
-            "tvc_parameters_version": "generic ampliseq germline lowstringency pgm $Date: 2014-02-19 16:57:20 -0800 (Wed, 19 Feb 2014) $ $Rev: 83596 $", 
+            "based_on": "ampliseq_germline_lowstringency_pgm_parameters.json", 
             "configuration": "germline_low_stringency", 
             "compatibility": {
                 "chip": [
@@ -116,35 +34,48 @@
             }
         }, 
         "torrent_variant_caller": {
-            "snp_min_allele_freq": 0.10000000000000001, 
-            "snp_strand_bias": 0.94999999999999996, 
+            "snp_min_allele_freq": 0.1, 
+            "snp_strand_bias": 0.95, 
             "hotspot_min_coverage": 6, 
-            "hotspot_min_cov_each_strand": 3, 
             "snp_strand_bias_pval": 1.0, 
-            "hotspot_min_allele_freq": 0.10000000000000001, 
+            "position_bias": 0.75, 
+            "hotspot_min_allele_freq": 0.1, 
             "snp_min_variant_score": 10.0, 
-            "hotspot_strand_bias": 0.94999999999999996, 
-            "hp_max_length": 8, 
-            "filter_insertion_predictions": 0.20000000000000001, 
+            "mnp_min_variant_score": 10.0, 
+            "hotspot_strand_bias": 0.98, 
+            "hp_max_length": 10, 
+            "filter_insertion_predictions": 0.4, 
             "indel_min_variant_score": 10.0, 
             "indel_min_coverage": 15, 
             "heavy_tailed": 3, 
             "outlier_probability": 0.01, 
+            "position_bias_ref_fraction": 0.05, 
             "indel_strand_bias_pval": 1.0, 
             "data_quality_stringency": 6.5, 
             "snp_min_cov_each_strand": 0, 
+            "indel_as_hpindel": 0, 
+            "mnp_strand_bias": 0.95, 
+            "mnp_strand_bias_pval": 1.0, 
             "hotspot_strand_bias_pval": 1.0, 
-            "hotspot_min_variant_score": 10.0, 
-            "indel_strand_bias": 0.84999999999999998, 
-            "downsample_to_coverage": 400, 
-            "filter_unusual_predictions": 0.29999999999999999, 
-            "indel_min_allele_freq": 0.10000000000000001, 
-            "do_snp_realignment": 0, 
+            "hotspot_min_variant_score": 5.0, 
+            "hotspot_min_cov_each_strand": 3, 
+            "do_mnp_realignment": 1, 
+            "indel_strand_bias": 0.85, 
+            "downsample_to_coverage": 4000, 
+            "filter_unusual_predictions": 0.7, 
+            "indel_min_allele_freq": 0.1, 
+            "mnp_min_allele_freq": 0.1, 
+            "mnp_min_coverage": 6, 
+            "do_snp_realignment": 1, 
+            "mnp_min_cov_each_strand": 0, 
+            "position_bias_pval": 0.05, 
             "prediction_precision": 1.0, 
             "indel_min_cov_each_strand": 5, 
-            "filter_deletion_predictions": 0.20000000000000001, 
+            "filter_deletion_predictions": 0.2, 
+            "realignment_threshold": 1, 
             "suppress_recalibration": 0, 
-            "snp_min_coverage": 6
+            "snp_min_coverage": 6, 
+            "use_position_bias": 0
         }, 
         "freebayes": {
             "gen_min_coverage": 6, 
@@ -154,9 +85,9 @@
             "read_max_mismatch_fraction": 1.0, 
             "allow_indels": 1, 
             "min_mapping_qv": 4, 
-            "gen_min_alt_allele_freq": 0.14999999999999999, 
+            "gen_min_alt_allele_freq": 0.15, 
             "allow_snps": 1, 
-            "gen_min_indel_alt_allele_freq": 0.14999999999999999
+            "gen_min_indel_alt_allele_freq": 0.15
         }
     }, 
     {
@@ -165,98 +96,16 @@
             "output_mnv": 0, 
             "min_indel_size": 4, 
             "min_var_count": 5, 
-            "min_var_freq": 0.14999999999999999, 
+            "min_var_freq": 0.15, 
             "kmer_len": 19, 
             "max_hp_length": 8, 
-            "relative_strand_bias": 0.80000000000000004
+            "relative_strand_bias": 0.8
         }, 
         "meta": {
-            "repository_id": "$Rev: 83596 $", 
-            "ts_version": "4.2", 
-            "name": "Generic - PGM - Somatic - High Stringency", 
-            "based_on": "ccp_somatic_highstringency_pgm_parameters.json", 
-            "tooltip": "Optimized for allele frequencies >2% and high specificity", 
-            "tvc_parameters_version": "generic ampliseq somatic highstringency pgm $Date: 2014-02-19 16:57:20 -0800 (Wed, 19 Feb 2014) $ $Rev: 83596 $", 
-            "configuration": "somatic_high_stringency", 
-            "compatibility": {
-                "chip": [
-                    "pgm"
-                ], 
-                "frequency": [
-                    "somatic"
-                ], 
-                "stringency": [
-                    "high"
-                ], 
-                "library": [
-                    "wholegenome", 
-                    "ampliseq", 
-                    "targetseq"
-                ]
-            }
-        }, 
-        "torrent_variant_caller": {
-            "snp_min_allele_freq": 0.02, 
-            "snp_strand_bias": 0.90000000000000002, 
-            "hotspot_min_coverage": 20, 
-            "hotspot_min_cov_each_strand": 2, 
-            "snp_strand_bias_pval": 1.0, 
-            "hotspot_min_allele_freq": 0.02, 
-            "snp_min_variant_score": 10.0, 
-            "hotspot_strand_bias": 0.94999999999999996, 
-            "hp_max_length": 8, 
-            "filter_insertion_predictions": 0.20000000000000001, 
-            "indel_min_variant_score": 10.0, 
-            "indel_min_coverage": 20, 
-            "heavy_tailed": 3, 
-            "outlier_probability": 0.0050000000000000001, 
-            "indel_strand_bias_pval": 1.0, 
-            "data_quality_stringency": 8.5, 
-            "snp_min_cov_each_strand": 3, 
-            "hotspot_strand_bias_pval": 1.0, 
-            "hotspot_min_variant_score": 6.0, 
-            "indel_strand_bias": 0.84999999999999998, 
-            "downsample_to_coverage": 2000, 
-            "filter_unusual_predictions": 0.25, 
-            "indel_min_allele_freq": 0.050000000000000003, 
-            "do_snp_realignment": 1, 
-            "prediction_precision": 1.0, 
-            "indel_min_cov_each_strand": 3, 
-            "filter_deletion_predictions": 0.20000000000000001, 
-            "suppress_recalibration": 0, 
-            "snp_min_coverage": 20
-        }, 
-        "freebayes": {
-            "gen_min_coverage": 20, 
-            "allow_mnps": 1, 
-            "allow_complex": 0, 
-            "read_snp_limit": 10, 
-            "read_max_mismatch_fraction": 1.0, 
-            "allow_indels": 1, 
-            "min_mapping_qv": 4, 
-            "gen_min_alt_allele_freq": 0.035000000000000003, 
-            "allow_snps": 1, 
-            "gen_min_indel_alt_allele_freq": 0.10000000000000001
-        }
-    }, 
-    {
-        "long_indel_assembler": {
-            "short_suffix_match": 5, 
-            "output_mnv": 0, 
-            "min_indel_size": 4, 
-            "min_var_count": 5, 
-            "min_var_freq": 0.14999999999999999, 
-            "kmer_len": 19, 
-            "max_hp_length": 8, 
-            "relative_strand_bias": 0.80000000000000004
-        }, 
-        "meta": {
-            "repository_id": "$Rev: 83596 $", 
-            "ts_version": "4.2", 
+            "ts_version": "4.4", 
             "name": "Generic - PGM - Somatic - Low Stringency", 
-            "based_on": "ccp_somatic_lowstringency_pgm_parameters.json", 
             "tooltip": "Optimized for allele frequencies >2% and high sensitivity", 
-            "tvc_parameters_version": "generic and ccp ampliseq somatic pgm $Date: 2014-02-19 16:57:20 -0800 (Wed, 19 Feb 2014) $ $Rev: 83596 $", 
+            "based_on": "ampliseq_somatic_lowstringency_pgm_parameters.json", 
             "configuration": "somatic_low_stringency", 
             "compatibility": {
                 "chip": [
@@ -277,34 +126,47 @@
         }, 
         "torrent_variant_caller": {
             "snp_min_allele_freq": 0.02, 
-            "snp_strand_bias": 0.94999999999999996, 
+            "snp_strand_bias": 0.95, 
             "hotspot_min_coverage": 6, 
-            "hotspot_min_cov_each_strand": 2, 
-            "snp_strand_bias_pval": 1.0, 
+            "snp_strand_bias_pval": 0.01, 
+            "position_bias": 0.75, 
             "hotspot_min_allele_freq": 0.01, 
             "snp_min_variant_score": 6, 
-            "hotspot_strand_bias": 0.94999999999999996, 
+            "mnp_min_variant_score": 400, 
+            "hotspot_strand_bias": 0.95, 
             "hp_max_length": 8, 
-            "filter_insertion_predictions": 0.20000000000000001, 
+            "filter_insertion_predictions": 0.2, 
             "indel_min_variant_score": 6, 
             "indel_min_coverage": 15, 
             "heavy_tailed": 3, 
-            "outlier_probability": 0.0050000000000000001, 
+            "outlier_probability": 0.005, 
+            "position_bias_ref_fraction": 0.05, 
             "indel_strand_bias_pval": 1.0, 
             "data_quality_stringency": 6.5, 
             "snp_min_cov_each_strand": 0, 
+            "indel_as_hpindel": 0, 
+            "mnp_strand_bias": 0.95, 
+            "mnp_strand_bias_pval": 1.0, 
             "hotspot_strand_bias_pval": 1.0, 
             "hotspot_min_variant_score": 6, 
-            "indel_strand_bias": 0.90000000000000002, 
+            "hotspot_min_cov_each_strand": 2, 
+            "do_mnp_realignment": 1, 
+            "indel_strand_bias": 0.9, 
             "downsample_to_coverage": 2000, 
-            "filter_unusual_predictions": 0.29999999999999999, 
-            "indel_min_allele_freq": 0.050000000000000003, 
+            "filter_unusual_predictions": 0.3, 
+            "indel_min_allele_freq": 0.1, 
+            "mnp_min_allele_freq": 0.02, 
+            "mnp_min_coverage": 6, 
             "do_snp_realignment": 1, 
+            "mnp_min_cov_each_strand": 0, 
+            "position_bias_pval": 0.05, 
             "prediction_precision": 1.0, 
             "indel_min_cov_each_strand": 2, 
-            "filter_deletion_predictions": 0.20000000000000001, 
+            "filter_deletion_predictions": 0.2, 
+            "realignment_threshold": 1, 
             "suppress_recalibration": 0, 
-            "snp_min_coverage": 6
+            "snp_min_coverage": 6, 
+            "use_position_bias": 0
         }, 
         "freebayes": {
             "gen_min_coverage": 6, 
@@ -314,9 +176,9 @@
             "read_max_mismatch_fraction": 1.0, 
             "allow_indels": 1, 
             "min_mapping_qv": 4, 
-            "gen_min_alt_allele_freq": 0.029999999999999999, 
+            "gen_min_alt_allele_freq": 0.03, 
             "allow_snps": 1, 
-            "gen_min_indel_alt_allele_freq": 0.10000000000000001
+            "gen_min_indel_alt_allele_freq": 0.1
         }
     }, 
     {
@@ -325,94 +187,16 @@
             "output_mnv": 0, 
             "min_indel_size": 4, 
             "min_var_count": 5, 
-            "min_var_freq": 0.14999999999999999, 
+            "min_var_freq": 0.15, 
             "kmer_len": 19, 
             "max_hp_length": 8, 
-            "relative_strand_bias": 0.80000000000000004
+            "relative_strand_bias": 0.8
         }, 
         "meta": {
-            "repository_id": "$Rev: 83596 $", 
-            "ts_version": "4.2", 
-            "name": "Generic - Proton - Germ Line - High Stringency", 
-            "based_on": "ampliseqexome_germline_highstringency_p1_parameters.json", 
-            "tooltip": "Parameter settings optimized for high frequency variants and minimum false positives on AmpliSeq libraries and Proton chips", 
-            "tvc_parameters_version": "generic ampliseq exome germline highstringency p1 $Date: 2014-02-19 16:57:20 -0800 (Wed, 19 Feb 2014) $ $Rev: 83596 $", 
-            "configuration": "germline_high_stringency_proton", 
-            "compatibility": {
-                "chip": [
-                    "proton_p1"
-                ], 
-                "frequency": [
-                    "germline"
-                ], 
-                "stringency": [
-                    "high"
-                ], 
-                "library": [
-                    "wholegenome", 
-                    "ampliseq"
-                ]
-            }
-        }, 
-        "torrent_variant_caller": {
-            "snp_min_allele_freq": 0.10000000000000001, 
-            "snp_strand_bias": 0.98999999999999999, 
-            "hotspot_min_coverage": 5, 
-            "hotspot_min_cov_each_strand": 0, 
-            "hotspot_min_allele_freq": 0.10000000000000001, 
-            "snp_min_variant_score": 15.0, 
-            "hotspot_strand_bias": 0.98999999999999999, 
-            "hp_max_length": 25, 
-            "filter_insertion_predictions": 0.25, 
-            "indel_min_variant_score": 20.0, 
-            "indel_min_coverage": 5, 
-            "heavy_tailed": 3, 
-            "outlier_probability": 0.01, 
-            "data_quality_stringency": 20.0, 
-            "snp_min_cov_each_strand": 0, 
-            "hotspot_min_variant_score": 15.0, 
-            "indel_strand_bias": 0.94999999999999996, 
-            "downsample_to_coverage": 400, 
-            "filter_unusual_predictions": 0.25, 
-            "indel_min_allele_freq": 0.10000000000000001, 
-            "do_snp_realignment": 1, 
-            "prediction_precision": 1.0, 
-            "indel_min_cov_each_strand": 1, 
-            "filter_deletion_predictions": 0.25, 
-            "suppress_recalibration": 0, 
-            "snp_min_coverage": 5
-        }, 
-        "freebayes": {
-            "gen_min_coverage": 6, 
-            "allow_mnps": 0, 
-            "allow_complex": 0, 
-            "read_snp_limit": 10, 
-            "read_max_mismatch_fraction": 1.0, 
-            "allow_indels": 1, 
-            "min_mapping_qv": 4, 
-            "gen_min_alt_allele_freq": 0.14999999999999999, 
-            "allow_snps": 1, 
-            "gen_min_indel_alt_allele_freq": 0.14999999999999999
-        }
-    }, 
-    {
-        "long_indel_assembler": {
-            "short_suffix_match": 5, 
-            "output_mnv": 0, 
-            "min_indel_size": 4, 
-            "min_var_count": 5, 
-            "min_var_freq": 0.14999999999999999, 
-            "kmer_len": 19, 
-            "max_hp_length": 8, 
-            "relative_strand_bias": 0.80000000000000004
-        }, 
-        "meta": {
-            "repository_id": "$Rev: 83596 $", 
-            "ts_version": "4.2", 
+            "ts_version": "4.4", 
             "name": "Generic - Proton - Germ Line - Low Stringency", 
-            "based_on": "ampliseqexome_germline_lowstringency_p1_parameters.json", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on AmpliSeq libraries and Proton chips", 
-            "tvc_parameters_version": "4.2 ampliseqexome germline lowstringency p1 $Date: 2014-02-19 16:57:20 -0800 (Wed, 19 Feb 2014) $ $Rev: 83596 $", 
+            "based_on": "ampliseqexome_germline_lowstringency_p1_parameters.json", 
             "configuration": "germline_low_stringency_proton", 
             "compatibility": {
                 "chip": [
@@ -431,41 +215,49 @@
             }
         }, 
         "torrent_variant_caller": {
-            "snp_min_allele_freq": 0.10000000000000001, 
-            "snp_strand_bias": 0.97999999999999998, 
+            "snp_min_allele_freq": 0.1, 
+            "snp_strand_bias": 0.98, 
             "hotspot_min_coverage": 6, 
+            "sse_prob_threshold": 1.0, 
             "snp_strand_bias_pval": 0.01, 
-            "hotspot_min_allele_freq": 0.10000000000000001, 
+            "position_bias": 0.75, 
+            "hotspot_min_allele_freq": 0.1, 
             "snp_min_variant_score": 15.0, 
             "mnp_min_variant_score": 60.0, 
-            "hotspot_strand_bias": 0.94999999999999996, 
+            "hotspot_strand_bias": 0.95, 
             "hp_max_length": 8, 
-            "filter_insertion_predictions": 0.20000000000000001, 
+            "filter_insertion_predictions": 0.2, 
             "indel_min_variant_score": 20.0, 
             "indel_min_coverage": 10, 
             "heavy_tailed": 3, 
             "outlier_probability": 0.01, 
+            "position_bias_ref_fraction": 0.05, 
             "indel_strand_bias_pval": 1.0, 
             "data_quality_stringency": 5.0, 
             "snp_min_cov_each_strand": 0, 
-            "mnp_strand_bias": 0.97999999999999998, 
+            "indel_as_hpindel": 1, 
+            "mnp_strand_bias": 0.98, 
             "mnp_strand_bias_pval": 0.01, 
             "hotspot_strand_bias_pval": 1.0, 
             "hotspot_min_variant_score": 10.0, 
             "hotspot_min_cov_each_strand": 3, 
-            "indel_strand_bias": 0.90000000000000002, 
+            "do_mnp_realignment": 0, 
+            "indel_strand_bias": 0.9, 
             "downsample_to_coverage": 400, 
             "filter_unusual_predictions": 0.25, 
-            "indel_min_allele_freq": 0.14999999999999999, 
-            "mnp_min_allele_freq": 0.10000000000000001, 
+            "indel_min_allele_freq": 0.25, 
+            "mnp_min_allele_freq": 0.1, 
             "mnp_min_coverage": 5, 
-            "do_snp_realignment": 1, 
+            "do_snp_realignment": 0, 
             "mnp_min_cov_each_strand": 0, 
+            "position_bias_pval": 0.05, 
             "prediction_precision": 1.0, 
             "indel_min_cov_each_strand": 5, 
-            "filter_deletion_predictions": 0.20000000000000001, 
+            "filter_deletion_predictions": 0.2, 
+            "realignment_threshold": 0, 
             "suppress_recalibration": 0, 
-            "snp_min_coverage": 5
+            "snp_min_coverage": 5, 
+            "use_position_bias": 1
         }, 
         "freebayes": {
             "gen_min_coverage": 5, 
@@ -475,9 +267,9 @@
             "read_max_mismatch_fraction": 1.0, 
             "allow_indels": 1, 
             "min_mapping_qv": 4, 
-            "gen_min_alt_allele_freq": 0.10000000000000001, 
+            "gen_min_alt_allele_freq": 0.1, 
             "allow_snps": 1, 
-            "gen_min_indel_alt_allele_freq": 0.14999999999999999
+            "gen_min_indel_alt_allele_freq": 0.15
         }
     }, 
     {
@@ -486,98 +278,16 @@
             "output_mnv": 0, 
             "min_indel_size": 4, 
             "min_var_count": 5, 
-            "min_var_freq": 0.14999999999999999, 
+            "min_var_freq": 0.15, 
             "kmer_len": 19, 
             "max_hp_length": 8, 
-            "relative_strand_bias": 0.80000000000000004
+            "relative_strand_bias": 0.8
         }, 
         "meta": {
-            "repository_id": "$Rev: 83596 $", 
-            "ts_version": "4.2", 
-            "name": "Generic - Proton - Somatic - High Stringency", 
-            "based_on": "ampliseqexome_somatic_highstringency_p1_parameters.json", 
-            "tooltip": "Parameter settings optimized for low frequency variants and minimum false positives on Proton chips", 
-            "tvc_parameters_version": "generic ampliseq somatic highstringency p1 $Date: 2014-02-19 16:57:20 -0800 (Wed, 19 Feb 2014) $ $Rev: 83596 $", 
-            "configuration": "somatic_high_stringency_proton", 
-            "compatibility": {
-                "chip": [
-                    "proton_p1"
-                ], 
-                "frequency": [
-                    "somatic"
-                ], 
-                "stringency": [
-                    "high"
-                ], 
-                "library": [
-                    "wholegenome", 
-                    "ampliseq", 
-                    "targetseq"
-                ]
-            }
-        }, 
-        "torrent_variant_caller": {
-            "snp_min_allele_freq": 0.02, 
-            "snp_strand_bias": 0.90000000000000002, 
-            "hotspot_min_coverage": 20, 
-            "hotspot_min_cov_each_strand": 2, 
-            "snp_strand_bias_pval": 1.0, 
-            "hotspot_min_allele_freq": 0.02, 
-            "snp_min_variant_score": 10.0, 
-            "hotspot_strand_bias": 0.94999999999999996, 
-            "hp_max_length": 8, 
-            "filter_insertion_predictions": 0.20000000000000001, 
-            "indel_min_variant_score": 10.0, 
-            "indel_min_coverage": 20, 
-            "heavy_tailed": 3, 
-            "outlier_probability": 0.0050000000000000001, 
-            "indel_strand_bias_pval": 1.0, 
-            "data_quality_stringency": 8.5, 
-            "snp_min_cov_each_strand": 3, 
-            "hotspot_strand_bias_pval": 1.0, 
-            "hotspot_min_variant_score": 6.0, 
-            "indel_strand_bias": 0.84999999999999998, 
-            "downsample_to_coverage": 2000, 
-            "filter_unusual_predictions": 0.25, 
-            "indel_min_allele_freq": 0.050000000000000003, 
-            "do_snp_realignment": 1, 
-            "prediction_precision": 1.0, 
-            "indel_min_cov_each_strand": 3, 
-            "filter_deletion_predictions": 0.20000000000000001, 
-            "suppress_recalibration": 0, 
-            "snp_min_coverage": 20
-        }, 
-        "freebayes": {
-            "gen_min_coverage": 20, 
-            "allow_mnps": 1, 
-            "allow_complex": 0, 
-            "read_snp_limit": 10, 
-            "read_max_mismatch_fraction": 1.0, 
-            "allow_indels": 1, 
-            "min_mapping_qv": 4, 
-            "gen_min_alt_allele_freq": 0.035000000000000003, 
-            "allow_snps": 1, 
-            "gen_min_indel_alt_allele_freq": 0.10000000000000001
-        }
-    }, 
-    {
-        "long_indel_assembler": {
-            "short_suffix_match": 5, 
-            "output_mnv": 0, 
-            "min_indel_size": 4, 
-            "min_var_count": 5, 
-            "min_var_freq": 0.14999999999999999, 
-            "kmer_len": 19, 
-            "max_hp_length": 8, 
-            "relative_strand_bias": 0.80000000000000004
-        }, 
-        "meta": {
-            "repository_id": "$Rev: 83596 $", 
-            "ts_version": "4.2", 
+            "ts_version": "4.4", 
             "name": "Generic - Proton - Somatic - Low Stringency", 
-            "based_on": "ampliseqexome_somatic_lowstringency_p1_parameters.json", 
             "tooltip": "Parameter settings optimized for low frequency variants and minimum false negatives on Proton chips", 
-            "tvc_parameters_version": "generic ampliseq somatic lowstringency p1 $Date: 2014-02-19 16:57:20 -0800 (Wed, 19 Feb 2014) $ $Rev: 83596 $", 
+            "based_on": "ampliseqexome_somatic_lowstringency_p1_parameters.json", 
             "configuration": "somatic_low_stringency_proton", 
             "compatibility": {
                 "chip": [
@@ -598,34 +308,47 @@
         }, 
         "torrent_variant_caller": {
             "snp_min_allele_freq": 0.02, 
-            "snp_strand_bias": 0.94999999999999996, 
+            "snp_strand_bias": 0.95, 
             "hotspot_min_coverage": 6, 
-            "hotspot_min_cov_each_strand": 2, 
             "snp_strand_bias_pval": 1.0, 
+            "position_bias": 0.75, 
             "hotspot_min_allele_freq": 0.01, 
             "snp_min_variant_score": 6, 
-            "hotspot_strand_bias": 0.94999999999999996, 
+            "mnp_min_variant_score": 400, 
+            "hotspot_strand_bias": 0.95, 
             "hp_max_length": 8, 
-            "filter_insertion_predictions": 0.20000000000000001, 
+            "filter_insertion_predictions": 0.2, 
             "indel_min_variant_score": 6, 
             "indel_min_coverage": 15, 
             "heavy_tailed": 3, 
-            "outlier_probability": 0.0050000000000000001, 
+            "outlier_probability": 0.005, 
+            "position_bias_ref_fraction": 0.05, 
             "indel_strand_bias_pval": 1.0, 
             "data_quality_stringency": 6.5, 
             "snp_min_cov_each_strand": 0, 
+            "indel_as_hpindel": 0, 
+            "mnp_strand_bias": 0.95, 
+            "mnp_strand_bias_pval": 1.0, 
             "hotspot_strand_bias_pval": 1.0, 
             "hotspot_min_variant_score": 6, 
-            "indel_strand_bias": 0.90000000000000002, 
+            "hotspot_min_cov_each_strand": 2, 
+            "do_mnp_realignment": 1, 
+            "indel_strand_bias": 0.9, 
             "downsample_to_coverage": 2000, 
-            "filter_unusual_predictions": 0.29999999999999999, 
-            "indel_min_allele_freq": 0.050000000000000003, 
+            "filter_unusual_predictions": 0.3, 
+            "indel_min_allele_freq": 0.05, 
+            "mnp_min_allele_freq": 0.02, 
+            "mnp_min_coverage": 6, 
             "do_snp_realignment": 1, 
+            "mnp_min_cov_each_strand": 0, 
+            "position_bias_pval": 0.05, 
             "prediction_precision": 1.0, 
             "indel_min_cov_each_strand": 2, 
-            "filter_deletion_predictions": 0.20000000000000001, 
+            "filter_deletion_predictions": 0.2, 
+            "realignment_threshold": 1, 
             "suppress_recalibration": 0, 
-            "snp_min_coverage": 6
+            "snp_min_coverage": 6, 
+            "use_position_bias": 0
         }, 
         "freebayes": {
             "gen_min_coverage": 6, 
@@ -635,9 +358,9 @@
             "read_max_mismatch_fraction": 1.0, 
             "allow_indels": 1, 
             "min_mapping_qv": 4, 
-            "gen_min_alt_allele_freq": 0.035000000000000003, 
+            "gen_min_alt_allele_freq": 0.035, 
             "allow_snps": 1, 
-            "gen_min_indel_alt_allele_freq": 0.10000000000000001
+            "gen_min_indel_alt_allele_freq": 0.1
         }
     }, 
     {
@@ -646,93 +369,16 @@
             "output_mnv": 0, 
             "min_indel_size": 4, 
             "min_var_count": 5, 
-            "min_var_freq": 0.14999999999999999, 
+            "min_var_freq": 0.15, 
             "kmer_len": 19, 
             "max_hp_length": 8, 
-            "relative_strand_bias": 0.80000000000000004
+            "relative_strand_bias": 0.8
         }, 
         "meta": {
-            "repository_id": "$Rev: 83596 $", 
-            "ts_version": "4.2", 
-            "name": "TargetSeq - Proton - Germ Line - High Stringency", 
-            "based_on": "targetseq_germline_highstringency_p1_parameters.json", 
-            "tooltip": "Parameter settings optimized for high frequency variants amd minimum false positives on TargetSeq libraries and Proton chips", 
-            "tvc_parameters_version": "generic targetseq germline high stringency p1 $Date: 2014-02-19 16:57:20 -0800 (Wed, 19 Feb 2014) $ $Rev: 83596 $", 
-            "configuration": "germline_high_stringency_targetseq", 
-            "compatibility": {
-                "chip": [
-                    "proton_p1"
-                ], 
-                "frequency": [
-                    "germline"
-                ], 
-                "stringency": [
-                    "high"
-                ], 
-                "library": [
-                    "targetseq"
-                ]
-            }
-        }, 
-        "torrent_variant_caller": {
-            "snp_min_allele_freq": 0.10000000000000001, 
-            "snp_strand_bias": 0.94999999999999996, 
-            "hotspot_min_coverage": 20, 
-            "hotspot_min_cov_each_strand": 3, 
-            "hotspot_min_allele_freq": 0.14999999999999999, 
-            "snp_min_variant_score": 10.0, 
-            "hotspot_strand_bias": 0.94999999999999996, 
-            "hp_max_length": 8, 
-            "filter_insertion_predictions": 0.20000000000000001, 
-            "indel_min_variant_score": 20.0, 
-            "indel_min_coverage": 20, 
-            "heavy_tailed": 3, 
-            "outlier_probability": 0.01, 
-            "data_quality_stringency": 8.5, 
-            "snp_min_cov_each_strand": 1, 
-            "hotspot_min_variant_score": 10.0, 
-            "indel_strand_bias": 0.84999999999999998, 
-            "downsample_to_coverage": 400, 
-            "filter_unusual_predictions": 0.25, 
-            "indel_min_allele_freq": 0.14999999999999999, 
-            "do_snp_realignment": 1, 
-            "prediction_precision": 1.0, 
-            "indel_min_cov_each_strand": 5, 
-            "filter_deletion_predictions": 0.20000000000000001, 
-            "suppress_recalibration": 0, 
-            "snp_min_coverage": 10
-        }, 
-        "freebayes": {
-            "gen_min_coverage": 6, 
-            "allow_mnps": 1, 
-            "allow_complex": 0, 
-            "read_snp_limit": 10, 
-            "read_max_mismatch_fraction": 1.0, 
-            "allow_indels": 1, 
-            "min_mapping_qv": 4, 
-            "gen_min_alt_allele_freq": 0.14999999999999999, 
-            "allow_snps": 1, 
-            "gen_min_indel_alt_allele_freq": 0.14999999999999999
-        }
-    }, 
-    {
-        "long_indel_assembler": {
-            "short_suffix_match": 5, 
-            "output_mnv": 0, 
-            "min_indel_size": 4, 
-            "min_var_count": 5, 
-            "min_var_freq": 0.14999999999999999, 
-            "kmer_len": 19, 
-            "max_hp_length": 8, 
-            "relative_strand_bias": 0.80000000000000004
-        }, 
-        "meta": {
-            "repository_id": "$Rev: 83596 $", 
-            "ts_version": "4.2", 
+            "ts_version": "4.4", 
             "name": "TargetSeq - Proton - Germ Line - Low Stringency", 
-            "based_on": "targetseq_germline_lowstringency_p1_parameters.json", 
             "tooltip": "Parameter settings optimized for high frequency variants and minimum false negatives on TargetSeq libraries and Proton chips", 
-            "tvc_parameters_version": "generic targetseq germline low stringency p1 $Date: 2014-02-19 16:57:20 -0800 (Wed, 19 Feb 2014) $ $Rev: 83596 $", 
+            "based_on": "targetseq_germline_lowstringency_p1_parameters.json", 
             "configuration": "germline_low_stringency_targetseq", 
             "compatibility": {
                 "chip": [
@@ -750,35 +396,48 @@
             }
         }, 
         "torrent_variant_caller": {
-            "snp_min_allele_freq": 0.10000000000000001, 
-            "snp_strand_bias": 0.94999999999999996, 
+            "snp_min_allele_freq": 0.1, 
+            "snp_strand_bias": 0.95, 
             "hotspot_min_coverage": 6, 
-            "hotspot_min_cov_each_strand": 3, 
             "snp_strand_bias_pval": 1.0, 
-            "hotspot_min_allele_freq": 0.10000000000000001, 
+            "position_bias": 0.75, 
+            "hotspot_min_allele_freq": 0.1, 
             "snp_min_variant_score": 10.0, 
-            "hotspot_strand_bias": 0.94999999999999996, 
+            "mnp_min_variant_score": 10.0, 
+            "hotspot_strand_bias": 0.95, 
             "hp_max_length": 8, 
-            "filter_insertion_predictions": 0.20000000000000001, 
+            "filter_insertion_predictions": 0.2, 
             "indel_min_variant_score": 20.0, 
             "indel_min_coverage": 15, 
             "heavy_tailed": 3, 
             "outlier_probability": 0.01, 
+            "position_bias_ref_fraction": 0.05, 
             "indel_strand_bias_pval": 1.0, 
             "data_quality_stringency": 5.0, 
             "snp_min_cov_each_strand": 0, 
+            "indel_as_hpindel": 0, 
+            "mnp_strand_bias": 0.95, 
+            "mnp_strand_bias_pval": 1.0, 
             "hotspot_strand_bias_pval": 1.0, 
             "hotspot_min_variant_score": 10.0, 
-            "indel_strand_bias": 0.90000000000000002, 
+            "hotspot_min_cov_each_strand": 3, 
+            "do_mnp_realignment": 1, 
+            "indel_strand_bias": 0.9, 
             "downsample_to_coverage": 400, 
-            "filter_unusual_predictions": 0.40000000000000002, 
-            "indel_min_allele_freq": 0.14999999999999999, 
+            "filter_unusual_predictions": 0.4, 
+            "indel_min_allele_freq": 0.15, 
+            "mnp_min_allele_freq": 0.1, 
+            "mnp_min_coverage": 6, 
             "do_snp_realignment": 1, 
+            "mnp_min_cov_each_strand": 0, 
+            "position_bias_pval": 0.05, 
             "prediction_precision": 1.0, 
             "indel_min_cov_each_strand": 5, 
-            "filter_deletion_predictions": 0.20000000000000001, 
+            "filter_deletion_predictions": 0.2, 
+            "realignment_threshold": 1, 
             "suppress_recalibration": 0, 
-            "snp_min_coverage": 6
+            "snp_min_coverage": 6, 
+            "use_position_bias": 0
         }, 
         "freebayes": {
             "gen_min_coverage": 6, 
@@ -788,9 +447,9 @@
             "read_max_mismatch_fraction": 1.0, 
             "allow_indels": 1, 
             "min_mapping_qv": 4, 
-            "gen_min_alt_allele_freq": 0.14999999999999999, 
+            "gen_min_alt_allele_freq": 0.15, 
             "allow_snps": 1, 
-            "gen_min_indel_alt_allele_freq": 0.14999999999999999
+            "gen_min_indel_alt_allele_freq": 0.15
         }
     }
 ]

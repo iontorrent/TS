@@ -1127,7 +1127,8 @@ void TraceClassifier::copy_ShiftTrace_To_WorkTrace(int ax, int ay, int iWell)
 
     if (t0_map!=NULL)
     {
-        TraceHelper::SpecialShiftTrace (tmp,tmp_shifted,imgFrames,t0_map[iWell]);
+        //TraceHelper::SpecialShiftTrace (tmp,tmp_shifted,imgFrames,t0_map[iWell]);
+        TraceHelper::ShiftTraceBiDirect(tmp,tmp_shifted,imgFrames,t0_map[iWell]);
         //cout << "done SpecialShiftTrace..." << endl << flush;
         copyToWorkTrace (tmp_shifted);
         //cout << "done copyToWorkTrace..." << endl << flush;

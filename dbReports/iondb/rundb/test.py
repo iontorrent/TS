@@ -10,6 +10,12 @@ from django.test import Client
 from django.test import LiveServerTestCase
 from django.core.urlresolvers import reverse
 
+from selenium.webdriver.remote.remote_connection import LOGGER
+
+import logging
+logger = logging.getLogger(__name__)
+
+
 from selenium.common.exceptions import NoSuchElementException
 
 from iondb.rundb.tests.selenium.webdriver import CustomWebDriver
@@ -25,6 +31,8 @@ class SeleniumTestCase(LiveServerTestCase):
 
     @classmethod
     def setUpClass(cls):
+        LOGGER.setLevel(logging.WARNING)
+        
         # Instantiating the WebDriver will load your browser
         cls.wd = CustomWebDriver()
         cls.server_url = settings.TEST_SERVER_URL
@@ -43,38 +51,41 @@ class SeleniumTestCase(LiveServerTestCase):
             cls.wd.wait_for_ajax()
         except NoSuchElementException:
             pass
-        
+
 
     def delete_planned_experiment(self, pk):
+        logger.info(">>>> Going to delete_planned_experiment... pk=%s" %(str(pk)))
+        
+        self.latest_pe_api_url = '/rundb/api/v1/plannedexperiment/{0}/'.format(pk)
+        
         host = settings.TEST_SERVER_URL
-        ##host = 'ts-sandbox.itw'
-        url = '/rundb/api/v1/plannedexperiment/{0}/'.format(pk)
-        username = 'ionadmin'
-        password = 'ionadmin'
-        message = ''
-        # base64 encode the username and password
-        auth = base64.encodestring('%s:%s' % (username, password)).replace('\n', '')
- 
-        webservice = httplib.HTTP(host)
-        # write your headers
-        webservice.putrequest("DELETE", url)
-        webservice.putheader("Host", host)
-        webservice.putheader("User-Agent", "Python http auth")
-        webservice.putheader("Content-type", "application/json")
-        # write the Authorization header like: 'Basic base64encode(username + ':' + password)
-        webservice.putheader("Authorization", "Basic %s" % auth)
- 
-        webservice.endheaders()
-        webservice.send(message)
-        # get the response
-        statuscode, statusmessage, header = webservice.getreply()
-        self.assertEqual(str(statuscode), str(204))
+        url = host + self.latest_pe_api_url
+        request = urllib2.Request(url)
+        
+        base64String = base64.encodestring("%s:%s" %("ionadmin", "ionadmin")).replace("\n", "")
+        request.add_header("Authorization", "Basic %s" %(base64String))
+        request.get_method = lambda : 'DELETE'
+        response = urllib2.urlopen(request)
 
+        #logger.info(">>>> delete_planned_experiment... DELETE response=%s" %(response))
+        
+#        json = simplejson.loads(response.read())
+#        return json['objects'][0]
+
+        
 
     def get_latest_planned_experiment(self):
         try:
             self.latest_pe_api_url = '/rundb/api/v1/plannedexperiment/?format=json&order_by=-id'
-            response = urllib2.urlopen('{0}{1}'.format(self.server_url, self.latest_pe_api_url))
+
+            host = settings.TEST_SERVER_URL
+            url = host + self.latest_pe_api_url
+            request = urllib2.Request(url)
+
+            base64String = base64.encodestring("%s:%s" %("ionadmin", "ionadmin")).replace("\n", "")
+            request.add_header("Authorization", "Basic %s" %(base64String))
+            
+            response = urllib2.urlopen(request)
             json = simplejson.loads(response.read())
             return json['objects'][0]
         except Exception, e:

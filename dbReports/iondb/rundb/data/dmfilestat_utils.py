@@ -1,11 +1,17 @@
 #!/usr/bin/env python
 # Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 import os
+import errno
 
 from django.db.models import Sum
 
 from iondb.rundb.models import DMFileStat, FileServer, Chip
 from iondb.rundb.data import dmactions_types
+from iondb.rundb.data import dm_utils
+from celery.utils.log import get_task_logger
+
+logger = get_task_logger('data_management')
+logid = {'logid':"%s" % ('tasks')}
 
 def calculate_diskspace_by_path(dmfilestats, fs_path):
     '''
@@ -78,10 +84,60 @@ def get_usefull_stats():
 
     return stats
 
+
 def get_keepers_diskspace(fs_path):
     ''' Returns how much space on fs_path is taken up by data marked Keep '''
     dmfilestats = DMFileStat.objects.filter(action_state__in=['L','S','N','A'])
     keepers = dmfilestats.filter(preserve_data=True) | dmfilestats.filter(dmfileset__type=dmactions_types.SIG, result__experiment__storage_options="KI")
     keepers_diskspace = calculate_diskspace_by_path(keepers, fs_path)
     return keepers_diskspace
+
+
+def update_diskspace(dmfilestat, cached = None):
+    '''Update diskspace field in dmfilestat object'''
+    try:
+        # search both results directory and raw data directory
+        search_dirs = [dmfilestat.result.get_report_dir(), dmfilestat.result.experiment.expDir]
+
+        if not cached:
+            cached = dm_utils.get_walk_filelist(search_dirs, list_dir=dmfilestat.result.get_report_dir())
+
+        total_size = 0
+
+        #Create a list of files eligible to process
+        is_thumbnail = dmfilestat.result.isThumbnail
+        for start_dir in search_dirs:
+            to_process = []
+            if os.path.isdir(start_dir):
+                to_process, _ = dm_utils._file_selector(start_dir,
+                                                     dmfilestat.dmfileset.include,
+                                                     dmfilestat.dmfileset.exclude,
+                                                     [],
+                                                     is_thumbnail,
+                                                     add_linked_sigproc=True,
+                                                     cached = cached)
+
+                #process files in list
+                for path in to_process[1:]:
+                    try:
+                        #logger.debug("%d %s %s" % (j, 'diskspace', path), extra = logid)
+                        if not os.path.islink(path):
+                            total_size += os.lstat(path)[6]
+
+                    except Exception as inst:
+                        if inst.errno == errno.ENOENT:
+                            pass
+                        else:
+                            errmsg = "update_diskspace %s" % (inst)
+                            logger.error(errmsg, extra = logid)
+
+        diskspace = float(total_size)/(1024*1024)
+    except:
+        diskspace = None
+        raise
+    finally:
+        dmfilestat.diskspace = diskspace
+        dmfilestat.save()
+    return diskspace
+
     

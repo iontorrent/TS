@@ -3,10 +3,10 @@ from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import SampleGroupType_CV, Plugin
 import logging
 from iondb.rundb.plan.page_plan.step_names import StepNames
-from iondb.rundb.plan.page_plan.export_step_data import ExportFieldNames
 logger = logging.getLogger(__name__)
 
 class IonReporterFieldNames():
+    UPLOADERS = 'uploaders'
     SAMPLE_GROUPING = 'sampleGrouping'
     SAMPLE_GROUPINGS = 'sampleGroupings'
     IR_OPTIONS = 'irOptions'
@@ -17,17 +17,18 @@ class IonReporterFieldNames():
     IR_VERSION_40 = '4.0'
     IR_PLUGIN = 'IR_PLUGIN'
     IR_WORKFLOW = 'irworkflow'
+    IR_VERSION = "irVersion"
     APPLICATION_TYPE = 'applicationType'
 
 
 class IonreporterStepData(AbstractStepData):
 
-    def __init__(self):
-        super(IonreporterStepData, self).__init__()
+    def __init__(self, sh_type):
+        super(IonreporterStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_ionreporter.html'
 
-        self.savedFields['irworkflow'] = None
-        self.savedFields['irVersion'] = None
+        self.savedFields[IonReporterFieldNames.IR_WORKFLOW] = None
+        self.savedFields[IonReporterFieldNames.IR_VERSION] = None
 
         self.savedFields[IonReporterFieldNames.SAMPLE_GROUPING] = None
         self.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING] = None
@@ -44,14 +45,16 @@ class IonreporterStepData(AbstractStepData):
         except Exception, e:
             self.prepopulatedFields[IonReporterFieldNames.IR_PLUGIN] = None
 
+        self.sh_type = sh_type
+        
     def getStepName(self):
         return StepNames.IONREPORTER
     
     def updateSavedObjectsFromSavedFields(self):
         if self.savedFields[IonReporterFieldNames.SAMPLE_GROUPING]:
             self.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING] = SampleGroupType_CV.objects.get(pk=self.savedFields[IonReporterFieldNames.SAMPLE_GROUPING])
-        if self.savedFields['irworkflow'] and self.savedFields['irworkflow'] == 'Upload Only':
-            self.savedFields['irworkflow'] = ''
+        if self.savedFields[IonReporterFieldNames.IR_WORKFLOW] and self.savedFields[IonReporterFieldNames.IR_WORKFLOW] == 'Upload Only':
+            self.savedFields[IonReporterFieldNames.IR_WORKFLOW] = ''
     
     def updateFromStep(self, updated_step):
         pass

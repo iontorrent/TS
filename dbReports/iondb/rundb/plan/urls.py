@@ -41,18 +41,13 @@ urlpatterns = patterns(
     url(r'^page_plan_save_template_by_sample/$', 'views.page_plan_save_template_by_sample', name="page_plan_save_template_by_sample"),
     url(r'^page_plan_save_plan/$', 'views.page_plan_save_plan', name="page_plan_save_plan"),
     url(r'^page_plan_save/$', 'views.page_plan_save', name="page_plan_save"),
-    url(r'^template/add/(\d+)/$', 'views.add_plan_template', name='add_plan_template'),
-    url(r'^addplan/(\d+)/$', 'views.add_plan_no_template', name='add_plan_no_template'),
-    url(r'^template/(\d+)/edit/$', 'views.edit_plan_template', name='edit_plan_template'),
-    url(r'^template/(\d+)/copy/$', 'views.copy_plan_template', name='copy_plan_template'),
     url(r'^template/(?P<pks>[\d,]+)/delete/$', 'views.delete_plan_template', name='delete_plan_template'),
-    url(r'^createplanrunfromtemplate/(\d+)/$', 'views.create_plan_from_template', name='create_plan_from_template'),
 
     url(r'^reviewplan/(?P<pk>\d+)/$', PlanDetailView.as_view(), name='review_plan'),
     url(r'^reviewplan/(?P<pk>\d+)/(?P<report_pk>\d+)/$', PlanDetailView.as_view(), name='review_plan'),
 
-    url(r'^planned/(\d+)/edit/$', 'views.edit_plan_run', name='edit_plan_run'),
-    url(r'^planned/(\d+)/copy/$', 'views.copy_plan_run', name='copy_plan_run'),
+    url(r'^transfer/(?P<pk>\d+)/(?P<destination>.*)/$', 'views.plan_transfer', name='plan_transfer'),
+
     url(r'^save/(\d+)/$', 'views.save_plan_or_template', name='save_plan_or_template'),
 
     url(r'^template/presets/$', 'views.get_application_product_presets', name="get_application_product_presets"),

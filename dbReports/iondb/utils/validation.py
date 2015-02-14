@@ -4,7 +4,8 @@ import re
 class Rules():
     REQUIRED = 'required' # input required
     INT = 'int'           # integer
-    UINT = 'uint'         # integer >= 0
+    UINT = 'uint'         # integer > 0
+    UINT_N_ZERO = "uint_n_zero"  # integer >= 0
     ALPHANUM = 'alphanum' # letters and numbers
     NAME = 'name'         # letters, numbers, space, and .-_
     SLUG = 'slug'         # letters, numbers, underscores or hyphens
@@ -21,6 +22,7 @@ class Rules():
             cls.REQUIRED: ' is required',
             cls.INT     : ' must be an integer',
             cls.UINT    : ' must be a positive integer',
+            cls.UINT_N_ZERO : ' must be a positive integer',
             cls.ALPHANUM: ' should contain only numbers and letters (without special characters)',
             cls.NAME    : ' should contain only letters, numbers, spaces, and the following: . - _ ',
             cls.SLUG    : ' should contain only letters, numbers, underscores or hyphens',
@@ -60,6 +62,11 @@ class Rules():
                 return int(value) > 0
             except ValueError:
                 pass
+        elif rule == cls.UINT_N_ZERO:
+            try:
+                return int(value) >= 0
+            except ValueError:
+                pass            
         elif rule == cls.ALPHANUM:
             return bool(re.match('^$|[\w]+$', value) )
         elif rule == cls.NAME:
@@ -117,6 +124,10 @@ def invalid_not_found_error(displayedName, input):
 def is_valid_uint(value):
     # must be non-negative integer
     return Rules.validate(Rules.UINT, value)
+
+def is_valid_uint_n_zero(value):
+    # must be non-negative integer, zero included
+    return Rules.validate(Rules.UINT_N_ZERO, value)
 
 def invalid_uint(displayedName):
     return displayedName + Rules.get_error(Rules.UINT)

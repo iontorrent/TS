@@ -132,7 +132,8 @@ void ProgramState::AddBfdControl(Json::Value &json, BeadfindControlOpts &bfd_con
   json["bfLibFilterQuantile"] = bfd_control.bfLibFilterQuantile;
   json["skipBeadfindSdRecover"] = bfd_control.skipBeadfindSdRecover;
   json["beadfindThumbnail"] = bfd_control.beadfindThumbnail;
-  json["beadfindLagOneFilt"] = bfd_control.beadfindLagOneFilt;
+  json["filterNoisyCols"] = bfd_control.filterNoisyCols;
+  json["beadfindSmoothTrace"] = bfd_control.beadfindSmoothTrace;
   json["beadMaskFile"] = (bfd_control.beadMaskFile) ? bfd_control.beadMaskFile : "";
   json["maskFileCategorized"] = bfd_control.maskFileCategorized;
   json["bfFileBase"] = bfd_control.bfFileBase;

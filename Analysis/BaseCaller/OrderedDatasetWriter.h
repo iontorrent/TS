@@ -12,6 +12,7 @@
 #include <deque>
 #include <pthread.h>
 #include <sys/types.h>
+#include <stdlib.h>
 
 #include "api/SamHeader.h"
 #include "api/BamAlignment.h"
@@ -55,11 +56,11 @@ struct ReadFilteringHistory {
   int     n_bases_after_adapter_trim;
   int     n_bases_filtered;                     //!< Final 3' trim position or zero if filtered
 
-  // Information about adapter classification XXX
-  //int     num_adapters;  // This does not really belong here. Find a better place.
-  //int     adapter_type;
-  //double  adpter_score;
-  //double  adapter_separation;
+  // Information about (3') adapter classification
+  int       adapter_type;
+  double    adapter_score;
+  double    adapter_separation;
+  bool      adapter_decision;
 };
 
 
@@ -67,8 +68,10 @@ class ReadFilteringStats {
 public:
   ReadFilteringStats();
 
+  void SetBeadAdapters(const vector<string> & trim_adapters);
   void AddRead(const ReadFilteringHistory& read_filtering_history);
   void MergeFrom(const ReadFilteringStats& other);
+  void ComputeAverages();
 
   void PrettyPrint (const string& table_header);
 
@@ -101,10 +104,14 @@ public:
   int64_t     num_reads_removed_quality_trim_;
   int64_t     num_reads_final_;
 
-  // Accounting for adapter trimming XXX
-  //vector<uint64_t>    adapter_class_num_reads_;           //!< Number of reads per library adapter
-  //vector<double>      adapter_class_av_score_;            //!< Average classification score for library reads
-  //vector<double>      adapter_class_av_separation_;       //!< Average separation between adapter types
+  // Accounting for adapter trimming
+  vector<string>      bead_adapters_;                     //!< Adapter sequences
+  vector<uint64_t>    adapter_class_num_reads_;           //!< Number of reads per library adapter
+  vector<double>      adapter_class_cum_score_;           //!< Cumulative classification score for library reads
+  vector<double>      adapter_class_av_score_;            //!< Average classification score for library reads
+  vector<uint64_t>    adapter_class_num_decisions_;       //!< Number of reads where we decided between different adapters
+  vector<double>      adapter_class_cum_separation_;      //!< Cumulative separation between adapter types
+  vector<double>      adapter_class_av_separation_;       //!< Cumulative separation between adapter types
 };
 
 
@@ -112,11 +119,12 @@ public:
 //! @ingroup  BaseCaller
 
 struct ProcessedRead {
-  ProcessedRead() {
-    read_group_index        = 0;
-    barcode_n_errors        = 0;
+  ProcessedRead(int default_read_group) {
+    read_group_index        =  default_read_group;       // Needs to be a valid index at startup
+    barcode_n_errors        =  0;
 	barcode_filt_zero_error = -1;
 	barcode_distance        = 0.0;
+	is_control_barcode      = false;
   }
 
   // Variables storing barcode classification results
@@ -125,6 +133,7 @@ struct ProcessedRead {
   int                   barcode_filt_zero_error;  //!< Inidcator whether a hard decision match was filtered in signal space.
   float                 barcode_distance;         //!< Distance to barcode in signal space.
   vector<float>         barcode_bias;             //!< A bias vector for the barcode found.
+  bool                  is_control_barcode;       //!< Identified the read as having a control barcode
 
   //
 
@@ -149,11 +158,10 @@ public:
   //! @param  num_flows       Number of flows.
   //! @param  flow_order      Flow order object, also stores number of flows
   //! @param  key             Key sequence.
-  void Open(const string& base_directory, BarcodeDatasets& datasets, int num_regions, const ion::FlowOrder& flow_order, const string& key,
+  void Open(const string& base_directory, BarcodeDatasets& datasets, int num_regions,
+      const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
       const string& basecaller_name, const string& basecalller_version, const string& basecaller_command_line,
-      const string& production_date, const string& platform_unit,
-      bool save_filtered_reads,
-	    vector<string>& comments);
+      const string& production_date, const string& platform_unit, bool save_filtered_reads, vector<string>& comments);
 
   //! @brief  Drop off a region-worth of reads for writing. Write opportunistically.
   //! @param  region          Index of the region being dropped off.

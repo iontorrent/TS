@@ -8,7 +8,6 @@
 #include <malloc.h>
 #include "TraceStoreCol.h"
 
-// @todo cws add info on ignoring bad wells (e.g. pinned etc. to avoid bad data in taue fitting)
 class ZeromerMatDiff {
  public:
 
@@ -91,13 +90,6 @@ class ZeromerMatDiff {
                                     size_t n_wells, size_t n_flows, 
                                     size_t n_flow_wells, size_t n_frames, 
                                     double &ssq);
-
-  static void ZeromerSumSqError(const int *zero_flows, size_t n_zero_flows, 
-
-                                float *signal_data, 
-                                size_t n_wells, size_t n_flows, 
-                                size_t n_flow_wells, size_t n_frames, 
-                                double &ssq);
 
   static void ZeromerMadError(const int *zero_flows, size_t n_zero_flows, 
                               float *signal_data, 

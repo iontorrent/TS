@@ -1,4 +1,4 @@
-/* Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved */
+/* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 #ifndef REALIGN_UTIL_H
 #define REALIGN_UTIL_H
 

@@ -6,16 +6,11 @@
 #include <map>
 #include "TraceSaver.h"
 #include "ZeromerDiff.h"
-#include "SampleKeyReporter.h"
-#include "IncorpReporter.h"
 #include "KeySummaryReporter.h"
 #include "AvgKeyReporter.h"
 #include "RegionAvgKeyReporter.h"
 #include "DualGaussMixModel.h"
-#include "LoadTracesJob.h"
-#include "FillCriticalFramesJob.h"
 #include "AvgKeyIncorporation.h"
-#include "Traces.h"
 #include "Image.h"
 #include "OptArgs.h"
 #include "PJobQueue.h"
@@ -31,7 +26,6 @@
 #include "H5File.h"
 #include "H5Arma.h"
 #include "T0Calc.h"
-#include "SynchDatSerialize.h"
 #include "Stats.h"
 #include "ComparatorNoiseCorrector.h"
 #include "BkgTrace.h"
@@ -53,7 +47,10 @@
 #define PCA_COMP_GRID_SIZE 100
 #define RESCUE_SNR_THRESH 2
 #define RESCUE_PEAK_THRESH 20
-
+#define WELL_DEV_FRAME_START_OFFSET 4
+#define WELL_DEV_FRAME_END_OFFSET 4
+#define REF_SAMPLE_SIZE 1000
+#define RELIABLE_PEAK_HEIGHT 40
 using namespace std;
 
 #define MAD_STAT 0
@@ -66,10 +63,15 @@ using namespace std;
 #define SIG_STAT 7
 #define NUM_KEY_STATS 8
 
+
+/** 
+ * Utility class for keeping track of some well statistics.
+ */
 class WellSetKeyStats {
 
 public:
 
+  /** Identifier and size of pool to keep as sample. */
   WellSetKeyStats(const std::string &name, int n) {
     SetName(name);
     Init(n);
@@ -163,6 +165,7 @@ public:
             m_quantiles[BUFFER_STAT].GetQuantile(.95));
     
   }
+
   std::string m_stat_name;
   std::vector<SampleQuantiles<float> > m_quantiles;
 };
@@ -243,9 +246,7 @@ void CountReference(const string &s, vector<char> &filter) {
   cout << s << endl;
   cout << "Filtered well counts: " << endl;
   for (size_t i = 0; i < counts.size(); i++) {
-    //    if (counts[i] > 0) {
-      cout << DifferentialSeparator::NameForFilter((enum DifferentialSeparator::FilterType)i) << ":\t" << counts[i] << endl;
-      //    }
+    cout << DifferentialSeparator::NameForFilter((enum DifferentialSeparator::FilterType)i) << ":\t" << counts[i] << endl;
   }
 }
 
@@ -266,6 +267,10 @@ void ZeroFlows(std::vector<KeySeq> &keys, DifSepOpt &opts, Col<int> &zeroFlows, 
   ION_ASSERT(zeroFlows.n_rows > 0, "Must have 1 all zeros flow in key");
 }
 
+/** 
+ * Job class for multithreading the evaluation of different
+ * keys. Basically just popluate a struct and then call Run() 
+*/
 class EvalKeyJob : public PJob {
 
 public:
@@ -312,7 +317,9 @@ public:
   }
 
   virtual void Run() {
+    ClockTimer keyTimer;
     int numWells = mMask->W() * mMask->H();
+
     EvaluateKey evaluator;
     evaluator.m_doing_darkmatter = true;
     evaluator.m_peak_signal_frames = true;
@@ -370,11 +377,11 @@ public:
     evaluator.SetUpMatrices(*mTraceStore, mMask->W(), 0, 
                             mRowStart, mRowEnd,
                             mColStart, mColEnd,
-                            0, mKeys->at(0).usableKeyFlows,
+                            0, usable_flows,
                             0, mTraceStore->GetNumFrames());
     evaluator.FindBestKey(mRowStart, mRowEnd,
                           mColStart, mColEnd,
-                          0, mKeys->at(0).usableKeyFlows,
+                          0, mTraceStore->GetNumFrames(),
                           0, mMask->W(), &(*mFTime)[0],
                           *mKeys, mean_taue.taue, mean_taue.ref_shift,
                           &(*mFilteredWells)[0],
@@ -401,7 +408,10 @@ public:
   struct FitTauEParams *mDefaultParam;
 };
 
-
+/** 
+ * Job class for multithreading reading dat files from disk, processing them and 
+ * loading them into data structure.
+ */
 class LoadDatJob : public PJob {
 public:
   LoadDatJob() {
@@ -445,6 +455,7 @@ public:
       img = &imgLoad;
     }
     CncProcessImage(*img, opts->isThumbnail, opts->doComparatorCorrect, cncMask, opts->clusterMeshStep, opts->aggressive_cnc);
+    img->SetMeanOfFramesToZero (1,3);
     RawImage *raw = img->raw;
     // datTimer.PrintMicroSecondsUpdate(stdout, "Dat Timer: Image Processing complete");
     
@@ -554,144 +565,8 @@ public:
         }
       }
     }
-    // 5. Cleanup
-
-    //    traceStore->SplineLossyCompress("explicit:2,4,6,8,11,14,17", 4, flowIx, &filteredWells->at(0), traceSdMin);
-    // Loop through and load each region with appropriate data
-    // GridMesh<int> pcaMesh;
-    // pcaMesh.Init (mask->H(), mask->W(), PCA_COMP_GRID_SIZE, PCA_COMP_GRID_SIZE);
-    // // datTimer.PrintMicroSecondsUpdate(stdout, "Dat Timer: Doing lossy smoothing.");
-    // for (size_t binIx = 0; binIx < pcaMesh.GetNumBin(); binIx++) {
-    //   // Get the region
-    //   int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-    //   pcaMesh.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
-    //   traceStore->PcaLossyCompress(rowStart, rowEnd, colStart, colEnd, flowIx,
-    //                                traceSdMin, &filteredWells->at(0),
-    //                                2, 2, 6);
-    //   //      traceStore->SplineLossyCompress("explicit:2,4,6,8,11,14,17", 4, traceSdMin);
-    // }
     img->Close();
-    //    datTimer.PrintMicroSecondsUpdate(stdout, "Dat Timer: Load Complete");
-
   }
-
-  // static void LoadDat(const std::string &fileName, DifSepOpt *opts, TraceStoreCol *traceStore, 
-  //                     std::vector<float> *t0, Mask *mask, Mask *cncMask, int flowIx, std::vector<char> *filteredWells, float *traceSdMin) {
-  //   ClockTimer datTimer;
-  //   Image img;
-  //   OpenAndProcessImage(fileName.c_str(), (char *)opts->resultsDir.c_str(), opts->ignoreChecksumErrors, 
-  //                       opts->doGainCorrect, mask, img);
-  //   CncProcessImage(img, opts->isThumbnail, opts->doComparatorCorrect, cncMask, opts->clusterMeshStep, opts->aggressive_cnc);
-  //   RawImage *raw = img.raw;
-  //   datTimer.PrintMicroSecondsUpdate(stdout, "Dat Timer: Image Processing complete");
-    
-  //   // 3. Get an average t0 for wells that we couldn't get a good local number
-  //   double t0_global_sum = 0;
-  //   int t0_global_count = 0;
-  //   float *__restrict t0_global_start = &(*t0)[0];
-  //   float *__restrict t0_global_end = t0_global_start + t0->size();
-  //   while(t0_global_start != t0_global_end) {
-  //     if (*t0_global_start > 0) {
-  //       t0_global_sum += *t0_global_start;
-  //       t0_global_count++;
-  //     }
-  //     t0_global_start++;
-  //   }
-  //   int meanT0 = 0;
-  //   if (t0_global_count > 0) {
-  //     meanT0 = (int)(t0_global_sum / t0_global_count + .5);
-  //   }
-
-  //   // Loop through and load each region with appropriate data
-  //   GridMesh<int> t0Mesh;
-  //   t0Mesh.Init (mask->H(), mask->W(), opts->clusterMeshStep, opts->clusterMeshStep);
-
-  //   for (size_t binIx = 0; binIx < t0Mesh.GetNumBin(); binIx++) {
-  //     // Get the region
-  //     int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-  //     t0Mesh.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
-  //     int width = colEnd - colStart;
-  //     int dc_offset[width];
-
-  //     // Calculate our region t0 starting frame
-  //     double t0_est = 0;
-  //     int t0_count = 0;
-  //     for (int rowIx = rowStart; rowIx < rowEnd; rowIx++) {
-  //       float *__restrict t0_start = &(*t0)[0] + rowIx * raw->cols + colStart;
-  //       float *__restrict t0_end = t0_start + width;
-  //       while(t0_start != t0_end) {
-  //         if(*t0_start > 0) {
-  //           t0_est += *t0_start;
-  //           t0_count++;
-  //         }
-  //         t0_start++;
-  //       }
-  //     }
-  //     t0_est = t0_count > 0 ? t0_est / t0_count : meanT0;
-  //     int t0_uncomp_frame = (int) t0_est + .5;
-  //     int t0_frame = 0;
-  //     for (t0_frame = 0; t0_frame < raw->frames; t0_frame++) {
-  //       if (t0_uncomp_frame <= raw->compToUncompFrames[t0_frame]) {
-  //         break;
-  //       }
-  //     }
-  //     t0_frame = min(t0_frame, raw->frames - T0_RIGHT_OFFSET);
-
-  //     // copy data starting at t0 frame, each column is contiguous so copy in column stripes
-  //     for (int rowIx = rowStart; rowIx < rowEnd; rowIx++) {
-  //       memset(dc_offset, 0, sizeof(int) * width);
-  //       int dc_count = 0;
-  //       int start_frame = t0_frame;
-  //       int end_frame = t0_frame + T0_LEFT_OFFSET;
-  //       // determine dc offset with first few frames
-  //       for (int frameIx = start_frame; frameIx < end_frame; frameIx++) {
-  //         int store_frame = frameIx - start_frame;
-  //         const int16_t *__restrict img_start = raw->image + rowIx * raw->cols + colStart + raw->frameStride * frameIx;
-  //         const int16_t *__restrict img_end = img_start + width;
-  //         int *__restrict dc_ptr = &dc_offset[0];
-  //         dc_count++;
-  //         while (img_start != img_end) {
-  //           *dc_ptr++ += *img_start++;
-  //         }
-  //       }
-  //       int *__restrict dc_start = &dc_offset[0];
-  //       int *__restrict dc_end = dc_start + width;
-  //       while (dc_start != dc_end) {
-  //         *dc_start = (int)( *dc_start / (float)dc_count+.5);
-  //         dc_start++;
-  //       }
-
-  //       // Load the frames subtracting off the dc offset
-  //       end_frame = t0_frame + T0_RIGHT_OFFSET;
-  //       for (int frameIx = start_frame; frameIx < end_frame; frameIx++) {
-  //         int store_frame = frameIx - start_frame;
-  //         const int16_t *__restrict img_start = raw->image + rowIx * raw->cols + colStart + raw->frameStride * frameIx;
-  //         const int16_t *__restrict img_end = img_start + width;
-  //         int16_t *__restrict out_start = traceStore->GetMemPtr() + store_frame * traceStore->mFlowFrameStride + 
-  //           traceStore->mFrameStride * flowIx + rowIx * raw->cols + colStart;
-  //         int *__restrict dc_ptr = &dc_offset[0];
-  //         while (img_start != img_end) {
-  //           *out_start++ = *img_start++ - *dc_ptr++;
-  //         }
-  //       }
-  //     }
-  //   }
-  //   // Loop through and load each region with appropriate data
-  //   // GridMesh<int> pcaMesh;
-  //   // pcaMesh.Init (mask->H(), mask->W(), PCA_COMP_GRID_SIZE, PCA_COMP_GRID_SIZE);
-  //   // // datTimer.PrintMicroSecondsUpdate(stdout, "Dat Timer: Doing lossy smoothing.");
-  //   // for (size_t binIx = 0; binIx < pcaMesh.GetNumBin(); binIx++) {
-  //   //   // Get the region
-  //   //   int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-  //   //   pcaMesh.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
-  //   //   traceStore->PcaLossyCompress(rowStart, rowEnd, colStart, colEnd, flowIx,
-  //   //                                traceSdMin, &filteredWells->at(0),
-  //   //                                2, 2, 6);
-  //   // }
-  //   datTimer.PrintMicroSecondsUpdate(stdout, "Dat Timer: Load Complete");
-  //   // 5. Cleanup
-  //   img.Close();
-  // }
 
   virtual void Run() {
     LoadDat(mFileName, mOpts, mTraceStore, mT0, mMask, mCNCMask, mFlowIx, &mImageCache, mFilteredWells, mTraceSdMin);
@@ -708,6 +583,202 @@ public:
   std::vector<float> *mT0;
   DifSepOpt *mOpts;
 };
+
+void DifferentialSeparator::CalculatePixelNoise(RawImage *raw, Mask &mask, 
+                                                int row_step, int col_step, 
+                                                std::vector<float> &pixel_sd) {
+  std::vector<char> filtered_avg(mask.H() * mask.W());
+  std::fill(filtered_avg.begin(), filtered_avg.end(), 0);
+  int fsize = sizeof(float);
+  int vsize = VEC8F_SIZE_B;
+  size_t n_well = raw->rows * raw->cols;
+  size_t n_frame = raw->frames;
+  float *__restrict sum_stats = (float *__restrict) memalign(vsize, fsize * 2 * n_well);
+  assert(sum_stats);
+  float *__restrict image_nn_sub = (float *__restrict) memalign(vsize, fsize * n_frame * n_well);
+  assert(image_nn_sub);
+  float *__restrict trace_min =  (float *__restrict) memalign(vsize, fsize * n_well);
+  assert(trace_min);
+  int *__restrict trace_min_frame = (int *__restrict) memalign(vsize, sizeof(int) * n_well);
+  assert(trace_min_frame);
+  memset(trace_min_frame, 0, sizeof(int) * n_well);
+
+  ImageNNAvg avg_nn;
+  avg_nn.Init(raw->rows, raw->cols, n_frame);
+  avg_nn.CalcCumulativeSum(raw->image, &mask, &mFilteredWells[0]);
+
+  float *__restrict nn_start = image_nn_sub;
+  int16_t *__restrict image_start = raw->image;
+  int16_t *__restrict image_end = image_start + (raw->rows * raw->cols * n_frame);
+  while(image_start != image_end) {
+    *nn_start++ = *image_start++;
+  }
+
+  avg_nn.CalcNNAvgAndMinFrame(row_step, col_step, 
+                              5, 5,
+                              trace_min, trace_min_frame,
+                              raw->image, false);
+  const float *__restrict nn_avg = avg_nn.GetNNAvgImagePtr();
+  memset(sum_stats, 0, sizeof(float) * n_well * 2);
+  for (size_t fIx = 0; fIx < n_frame; fIx++) {
+    const float * __restrict frame_nn_start = nn_avg + fIx * n_well;
+    const float * __restrict frame_nn_end = frame_nn_start + n_well;
+    float * __restrict image_start = image_nn_sub + fIx * n_well;
+    while (frame_nn_start != frame_nn_end) {
+      *image_start -= *frame_nn_start;
+      image_start++;
+      frame_nn_start++;
+    }
+  }
+
+  float *__restrict m2 = (float *__restrict) memalign(vsize, fsize * n_well);
+  float *__restrict mean = (float *__restrict) memalign(vsize, fsize * n_well);
+  memset(m2, 0, sizeof(float) * n_well);
+  memset(mean, 0, sizeof(float) * n_well);
+  for (size_t f_ix = 0; f_ix < n_frame; f_ix++) {
+    float *__restrict mean_start = mean;
+    float *__restrict m2_start = m2;
+    float *__restrict diff_start = image_nn_sub + f_ix * n_well;
+    float *__restrict diff_end = diff_start + n_well;
+    float delta;
+    int n = f_ix + 1;
+    while (diff_start != diff_end) {
+      delta = (*diff_start) - *mean_start;
+      *mean_start += delta / n;
+      *m2_start += delta * (*diff_start - *mean_start);
+      diff_start++;
+      mean_start++;
+      m2_start++;
+    }
+  }
+  pixel_sd.resize(n_well);
+  std::fill(pixel_sd.begin(), pixel_sd.end(), 0.0f);
+  for (size_t w_ix = 0; w_ix < n_well; w_ix++) {
+    pixel_sd[w_ix] = sqrt(m2[w_ix]/n_frame);
+  }
+  free(sum_stats);
+  free(image_nn_sub);
+  free(trace_min);
+  free(trace_min_frame);
+  free(mean);
+  free(m2);
+}
+
+void DifferentialSeparator::FilterNoisyColumns(int row_step, int col_step,
+                                               Mask &mask, DifSepOpt &opts,
+                                               std::vector<char> &filtered_wells) {
+  char buffer[MAX_PATH_LENGTH];
+  char *prerun_prefix = "prerun_000";
+  size_t n_well = mask.H() * mask.W();
+  //  vector<float> mWellNoise(n_well, 0.0f);
+  mWellNoise.resize(n_well);
+  std::fill(mWellNoise.begin(), mWellNoise.end(), 0.0f);
+  vector<float> current_error(n_well, 0.0f);
+  int n_prerun = 4;
+  for (int pre_ix = 0; pre_ix < n_prerun; pre_ix++) {
+    snprintf(buffer, sizeof(buffer), "%s/%s%d.dat", opts.resultsDir.c_str(), prerun_prefix, pre_ix);
+    Image img;
+    OpenAndProcessImage(buffer, (char *)opts.resultsDir.c_str(), opts.ignoreChecksumErrors,
+                        opts.doGainCorrect, &mask, true, img);
+    CalculatePixelNoise(img.raw, mask, row_step, col_step, current_error);
+    for (size_t w_ix = 0; w_ix < n_well; w_ix++) {
+      mWellNoise[w_ix] += current_error[w_ix];
+    }
+  }
+
+  size_t n_comp = mask.W();
+  // usually just one region per chip but for thumbnail top and bottom are separate
+  if (opts.isThumbnail) { n_comp = n_comp * 2; } 
+  SampleQuantiles<float> m_quantiles(n_comp);  
+  for (size_t w_ix = 0; w_ix < n_well; w_ix++) {
+    mWellNoise[w_ix] /= n_prerun;
+  }
+  mColNoise.resize(n_comp);
+  std::fill(mColNoise.begin(), mColNoise.end(), 0.0f);
+  std::vector<int> col_count(n_comp, 0);
+  int comp_offset = 0;
+  int half_rows = mask.H() / 2;
+  // Bottom half in case thumbnail
+  for (int col_ix = 0; col_ix < mask.W(); col_ix++) {
+    for (int row_ix = 0; row_ix < half_rows; row_ix++) {
+      int well_ix = row_ix * mask.W() + col_ix;
+      if ((mask[well_ix] & MaskPinned) == 0) {
+        mColNoise[col_ix + comp_offset] += mWellNoise[well_ix];
+        col_count[col_ix + comp_offset]++;
+      }
+    }
+  }
+  // Top half in case thumbnail
+  if (opts.isThumbnail) { comp_offset = mask.W(); }
+  for (int col_ix = 0; col_ix < mask.W(); col_ix++) {
+    for (int row_ix = half_rows; row_ix < mask.H(); row_ix++) {
+      int well_ix = row_ix * mask.W() + col_ix;
+      if ((mask[well_ix] & MaskPinned) == 0) {
+        mColNoise[col_ix + comp_offset] += mWellNoise[well_ix];
+        col_count[col_ix + comp_offset]++;
+      }
+    }
+  }
+  
+  for (size_t comp_ix = 0; comp_ix < n_comp; comp_ix++) {
+    if (col_count[comp_ix] > 0) {
+      mColNoise[comp_ix] = mColNoise[comp_ix] / col_count[comp_ix];
+      m_quantiles.AddValue(mColNoise[comp_ix]);
+    }
+    else {
+      mColNoise[comp_ix] = -1.0f;
+    }
+  }
+  
+  float threshold = 0;
+  if (opts.filterNoisyCols == "strict") {
+    threshold = m_quantiles.GetMedian() + (m_quantiles.GetMedian() - m_quantiles.GetQuantile(.01));
+  }
+  else if (opts.filterNoisyCols == "medium") {
+    threshold = m_quantiles.GetQuantile(.75f) + 1.5 * DifferentialSeparator::IQR(m_quantiles);
+  }
+  else if (opts.filterNoisyCols == "loose") {
+    threshold = m_quantiles.GetQuantile(.75f) + 3.0 * DifferentialSeparator::IQR(m_quantiles);
+  }
+  else {
+    ION_ABORT("Don't recognize filterNoisyCols option '" + opts.filterNoisyCols + "'");
+  }
+  int filt_count = 0;
+  comp_offset = 0;
+  //  Again doing the top and bottom separately here 
+  for (int col_ix = 0; col_ix < mask.W(); col_ix++) {
+    if (mColNoise[col_ix + comp_offset] >= threshold) {
+      filt_count++;
+      for (int row_ix = 0; row_ix < half_rows; row_ix++) {
+        int well_ix = row_ix * mask.W() + col_ix;
+        filtered_wells[well_ix] = NoisyColumn;
+      }
+    } 
+  }
+  if (opts.isThumbnail) { comp_offset = mask.W(); }
+  for (int col_ix = 0; col_ix < mask.W(); col_ix++) {
+    if (mColNoise[col_ix + comp_offset] >= threshold) {
+      if (opts.isThumbnail) { filt_count++; }
+      for (int row_ix = half_rows; row_ix < mask.H(); row_ix++) {
+        int well_ix = row_ix * mask.W() + col_ix;
+        filtered_wells[well_ix] = NoisyColumn;
+      }
+    } 
+  }
+  
+  fprintf(stdout, "column_threshold '%s' of %.3f filtered %d of %d (%.2f%%) %6.1f %6.1f %6.1f %6.1f %6.1f\n", 
+          opts.filterNoisyCols.c_str(),
+          threshold,
+          filt_count,
+          (int) n_comp,
+          100.0f * filt_count / n_comp,
+          m_quantiles.GetQuantile(.05),
+          m_quantiles.GetQuantile(.25),
+          m_quantiles.GetQuantile(.5),
+          m_quantiles.GetQuantile(.75),
+          m_quantiles.GetQuantile(.95));
+
+}
 
 void DifferentialSeparator::FilterPixelSd(struct RawImage *raw, float min_val, vector<char> &well_filters) {
   float *mean = (float *)memalign(32, raw->frameStride * sizeof(float));
@@ -774,7 +845,7 @@ void DifferentialSeparator::FilterPixelSd(struct RawImage *raw, float min_val, v
     int index = 0;
     while (filter_start != filter_end) {
       float val = *chip_sd_start;
-      wells[index++].traceSd = val;
+      mWells[index++].traceSd = val;
       if (val < sd_threshold) {
         *filter_start = DifferentialSeparator::LowTraceSd;
       }
@@ -790,21 +861,10 @@ void DifferentialSeparator::FilterPixelSd(struct RawImage *raw, float min_val, v
   free(chip_good_sd);
 }
 
-float DifferentialSeparator::LowerQuantile (SampleQuantiles<float> &s)
-{
-  if (s.GetNumSeen() == 0)
-    {
-      return 0;
-    }
-  return (s.GetQuantile (.5) - s.GetQuantile (.25));
-}
-
-float DifferentialSeparator::IQR (SampleQuantiles<float> &s)
-{
-  if (s.GetNumSeen() == 0)
-    {
-      return 0;
-    }
+float DifferentialSeparator::IQR (SampleQuantiles<float> &s) {
+  if (s.GetNumSeen() == 0) {
+    return 0;
+  }
   return (s.GetQuantile (.75) - s.GetQuantile (.25));
 }
 
@@ -826,7 +886,7 @@ void DifferentialSeparator::ClusterRegion (int rowStart, int rowEnd,
   cluster.reserve (numWells);
   for (int rowIx = rowStart; rowIx < rowEnd; rowIx++) {
     for (int colIx = colStart; colIx < colEnd; colIx++) {
-      size_t idx = rowIx * mask.W() + colIx;
+      size_t idx = rowIx * mMask.W() + colIx;
       if (wells[idx].ok == 1 && mFilteredWells[idx] == GoodWell && isfinite(bfMetric[idx])) {
         metric.push_back(bfMetric[idx]);
         if (wells[idx].goodLive) {
@@ -864,10 +924,8 @@ void DifferentialSeparator::MakeStadardKeys (vector<KeySeq> &keys)
   lKey.zeroFlows[1] = 3;
   lKey.zeroFlows[2] = 4;
   lKey.zeroFlows[3] = 6;
-  //  lKey.zeroFlows << 1 << 3  << 4 << 6;
   lKey.minPeak = 15;
   lKey.onemerFlows.resize(3);
-  //  lKey.onemerFlows << 0 << 2 << 5;
   lKey.onemerFlows[0] = 0;
   lKey.onemerFlows[1] = 2;
   lKey.onemerFlows[2] = 5;
@@ -875,8 +933,6 @@ void DifferentialSeparator::MakeStadardKeys (vector<KeySeq> &keys)
   lKey.good_enough_peak = 15;
   lKey.good_enough_snr = 2.5;
   lKey.usableKeyFlows = 7;
-  // lKey.zeroFlows.set_size(1);
-  // lKey.zeroFlows << 3;
   keys.push_back (lKey);
   tKey.name = "tf";
   tKey.flows = tfKey;
@@ -889,137 +945,114 @@ void DifferentialSeparator::MakeStadardKeys (vector<KeySeq> &keys)
   tKey.minPeak = 20;
   tKey.good_enough_snr = 4.0;
   tKey.good_enough_peak = 40;
-  // tKey.zeroFlows.set_size (4);
-  // tKey.zeroFlows << 0 << 2 << 3 << 5;
-  //  tKey.onemerFlows.set_size(3);
   tKey.onemerFlows.resize(3);
-  //  lKey.onemerFlows << 0 << 2 << 5;
   tKey.onemerFlows[0] = 1;
   tKey.onemerFlows[1] = 4;
   tKey.onemerFlows[2] = 6;
-  //  tKey.onemerFlows << 1 << 4 << 6;
   tKey.usableKeyFlows = 7;
-  // tKey.zeroFlows.set_size(1);
-  // tKey.zeroFlows << 3;
   keys.push_back (tKey);
 }
 
-void DifferentialSeparator::LoadInitialMask (Mask *preMask, const std::string &maskFile, const std::string &imgFile, Mask &mask, int ignoreChecksumErrors)
-{
-  if (preMask != NULL)
-    {
+void DifferentialSeparator::LoadInitialMask (Mask *preMask, const std::string &maskFile, 
+                                             const std::string &imgFile, Mask &mask, int ignoreChecksumErrors) {
+  if (preMask != NULL) {
       mask.Init (preMask);
-    }
-  else if (!maskFile.empty())
-    {
+  }
+  else if (!maskFile.empty()) {
       mask.SetMask (maskFile.c_str());
+  }
+  else {
+    // @todo cws - If we open beadfind file here, don't open it again...
+    Image bfImg;
+    bfImg.SetImgLoadImmediate (false);
+    bfImg.SetIgnoreChecksumErrors (ignoreChecksumErrors);
+    bool loaded = bfImg.LoadRaw (imgFile.c_str());
+    if (!loaded) {
+      ION_ABORT ("Couldn't load file: " + imgFile);
     }
-  else
-    {
-      // @todo cws - If we open beadfind file here, don't open it again...
-      Image bfImg;
-      bfImg.SetImgLoadImmediate (false);
-      bfImg.SetIgnoreChecksumErrors (ignoreChecksumErrors);
-      bool loaded = bfImg.LoadRaw (imgFile.c_str());
-      if (!loaded)
-	{
-	  ION_ABORT ("Couldn't load file: " + imgFile);
-	}
-      const RawImage *raw = bfImg.GetImage();
-      int cols = raw->cols;
-      int rows = raw->rows;
-      mask.Init (cols,rows,MaskEmpty);
-    }
+    const RawImage *raw = bfImg.GetImage();
+    int cols = raw->cols;
+    int rows = raw->rows;
+    mask.Init (cols,rows,MaskEmpty);
+  }
 }
 
-void DifferentialSeparator::PrintKey (const KeySeq &k, int kIx)
-{
+void DifferentialSeparator::PrintKey (const KeySeq &k, int kIx) {
   cout << "Key: " << kIx << "\t" << k.name << "\t" << k.usableKeyFlows << "\t" << k.minSnr << endl;
-  for (size_t i = 0; i < k.flows.size(); i++)
-    {
-      cout << k.flows[i] << ' ';
-    }
+  for (size_t i = 0; i < k.flows.size(); i++) {
+    cout << k.flows[i] << ' ';
+  }
   cout << endl;
-  for (size_t i = 0; i < k.zeroFlows.size(); i++)
-    {
-      cout << k.zeroFlows.at (i) << ' ';
-    }
+  for (size_t i = 0; i < k.zeroFlows.size(); i++) {
+    cout << k.zeroFlows.at (i) << ' ';
+  }
   cout << endl;
 }
 
 void DifferentialSeparator::SetKeys (SequenceItem *seqList, int numSeqListItems, 
                                      float minLibSnr, float minTfSnr,
-                                     float minLibPeak, float minTfPeak)
-{
-  keys.clear();
-  for (int i = numSeqListItems - 1; i >= 0; i--)
-    {
-      KeySeq k;
-      k.name = seqList[i].seq;
-      k.flows.resize (seqList[i].numKeyFlows);
-      k.usableKeyFlows = seqList[i].usableKeyFlows;
-      int zero_count = 0;
-      int onemer_count = 0;
-      for (int flowIx = 0; flowIx < seqList[i].usableKeyFlows; flowIx++)
-	{
-	  if (seqList[i].Ionogram[flowIx] == 0)
-	    {
-	      zero_count++;
-	    }
-          if (seqList[i].Ionogram[flowIx] == 1)
-            {
-              onemer_count++;
-            }
-	}
+                                     float minLibPeak, float minTfPeak) {
+  mKeys.clear();
+  for (int i = numSeqListItems - 1; i >= 0; i--) {
+    KeySeq k;
+    k.name = seqList[i].seq;
+    k.flows.resize (seqList[i].numKeyFlows);
+    k.usableKeyFlows = seqList[i].usableKeyFlows;
+    int zero_count = 0;
+    int onemer_count = 0;
+    for (int flowIx = 0; flowIx < seqList[i].usableKeyFlows; flowIx++) {
+      if (seqList[i].Ionogram[flowIx] == 0) {
+        zero_count++;
+      }
+      if (seqList[i].Ionogram[flowIx] == 1) {
+        onemer_count++;
+      }
+    }
 
-      k.zeroFlows.resize (zero_count);
-      k.onemerFlows.resize (onemer_count);
-      zero_count = 0;
-      onemer_count = 0;
-      for (int flowIx = 0; flowIx < seqList[i].numKeyFlows; flowIx++)
-	{
-	  k.flows[flowIx] = seqList[i].Ionogram[flowIx];
-	  if (seqList[i].Ionogram[flowIx] == 0 && flowIx < seqList[i].usableKeyFlows)	    {
-	      k.zeroFlows.at (zero_count++) = flowIx;
-	    }
-	  if (seqList[i].Ionogram[flowIx] == 1 && flowIx < seqList[i].usableKeyFlows)
-	    {
-	      k.onemerFlows.at (onemer_count++) = flowIx;
-	    }
-	}
-      // @todo cws - put this all in a centralized place rather than hard coding here..
-      if (i == 1) {//  @todo - this is hacky to assume the key order
-	k.minSnr = minLibSnr;
-        k.minPeak = minLibPeak;
-        k.good_enough_snr = minLibSnr;
-        k.good_enough_peak = MIN_LIB_PEAK;
+    k.zeroFlows.resize (zero_count);
+    k.onemerFlows.resize (onemer_count);
+    zero_count = 0;
+    onemer_count = 0;
+    for (int flowIx = 0; flowIx < seqList[i].numKeyFlows; flowIx++){
+      k.flows[flowIx] = seqList[i].Ionogram[flowIx];
+      if (seqList[i].Ionogram[flowIx] == 0 && flowIx < seqList[i].usableKeyFlows) {
+        k.zeroFlows.at (zero_count++) = flowIx;
       }
-      else {
-	k.minSnr = minTfSnr;
-        k.minPeak = minTfPeak;;
-        k.good_enough_snr = minTfSnr;
-        k.good_enough_peak = minTfPeak;
+      if (seqList[i].Ionogram[flowIx] == 1 && flowIx < seqList[i].usableKeyFlows) {
+        k.onemerFlows.at (onemer_count++) = flowIx;
       }
-      keys.push_back (k);
     }
-  for (size_t i = 0; i < keys.size(); i++)
-    {
-      PrintKey (keys[i], i);
+    // @todo cws - put this all in a centralized place rather than hard coding here..
+    if (i == 1) {//  @todo - this is hacky to assume the key order
+      k.minSnr = minLibSnr;
+      k.minPeak = minLibPeak;
+      k.good_enough_snr = minLibSnr * .5;
+      k.good_enough_peak = minLibPeak * 2;
     }
+    else {
+      k.minSnr = minTfSnr;
+      k.minPeak = minTfPeak;;
+      k.good_enough_snr = minTfSnr * .5;
+      k.good_enough_peak = minTfPeak * 2;
+    }
+    mKeys.push_back (k);
+  }
+  for (size_t i = 0; i < mKeys.size(); i++) {
+    PrintKey (mKeys[i], i);
+  }
 }
 
 void DifferentialSeparator::DoJustBeadfind (DifSepOpt &opts, vector<float> &bfMetric)
 {
   struct timeval st;
   GridMesh<MixModel> modelMesh;
-  opts.bfMeshStep = min (min (mask.H(), mask.W()), opts.bfMeshStep);
+  opts.bfMeshStep = min (min (mMask.H(), mMask.W()), opts.bfMeshStep);
   cout << "bfMeshStep is: " << opts.bfMeshStep << endl;
-  modelMesh.Init (mask.H(), mask.W(), opts.clusterMeshStep, opts.clusterMeshStep);
+  modelMesh.Init (mMask.H(), mMask.W(), opts.clusterMeshStep, opts.clusterMeshStep);
   gettimeofday (&st, NULL);
-  size_t numWells = mask.H() * mask.W();
+  size_t numWells = mMask.H() * mMask.W();
   SampleStats<double> bfSnr;
   // For each region do seeded/masked clustering and get mean and s
-  // @todo - parallelize
   vector<KeyFit> wells;
   string modelFile = opts.outData + ".mix-model.txt";
   string bfStats = opts.outData + ".bf-stats.txt";
@@ -1059,26 +1092,22 @@ void DifferentialSeparator::DoJustBeadfind (DifSepOpt &opts, vector<float> &bfMe
   std::vector<std::vector<float> *> values;
   vector<MixModel *> bfModels;
   int notGood = 0;
-  bfMask.Init (&mask);
+  mBfMask.Init (&mMask);
   bfStatsOut << "row\tcol\twell\ttype\tbfstatistic\townership\tmu1\tvar1\tmu2\tvar2" << endl;
-  for (size_t wIx = 0; wIx < numWells; wIx++)
-    {
-      bfMask[wIx] = mask[wIx];
-      if (bfMask[wIx] & MaskExclude || bfMask[wIx] & MaskPinned)
-	{
+  for (size_t wIx = 0; wIx < numWells; wIx++) {
+      mBfMask[wIx] = mMask[wIx];
+      if (mBfMask[wIx] & MaskExclude || mBfMask[wIx] & MaskPinned) {
 	  continue;
-	}
+      }
       size_t row, col;
       double weight = 0;
       MixModel m;
       int good = 0;
-      row = wIx / mask.W();
-      col = wIx % mask.W();
+      row = wIx / mMask.W();
+      col = wIx % mMask.W();
       modelMesh.GetClosestNeighbors (row, col, opts.bfNeighbors, dist, bfModels);
-      for (size_t i = 0; i < bfModels.size(); i++)
-	{
-	  if ( (size_t) bfModels[i]->count > opts.minBfGoodWells)
-	    {
+      for (size_t i = 0; i < bfModels.size(); i++) {
+	  if ( (size_t) bfModels[i]->count > opts.minBfGoodWells)  {
 	      good++;
 	      float w = 1.0/ (log (dist[i] + 2.00));
 	      weight += w;
@@ -1092,7 +1121,7 @@ void DifferentialSeparator::DoJustBeadfind (DifSepOpt &opts, vector<float> &bfMe
 	}
       if (good == 0) {
         notGood++;
-        bfMask[wIx] = MaskIgnore;
+        mBfMask[wIx] = MaskIgnore;
       }
       else {
 	  m.mu1 = m.mu1 / weight;
@@ -1106,34 +1135,30 @@ void DifferentialSeparator::DoJustBeadfind (DifSepOpt &opts, vector<float> &bfMe
 	  double p2Ownership = 0;
 	  int bCluster = DualGaussMixModel::PredictCluster (m, bfMetric[wIx], opts.bfThreshold, p2Ownership);
 	  if (bCluster == 2) {
-	      bfMask[wIx] = MaskBead;
+            mBfMask[wIx] = MaskBead;
           }
 	  else if (bCluster == 1) {
-            bfMask[wIx] = (MaskEmpty | MaskReference);
+            mBfMask[wIx] = (MaskEmpty | MaskReference);
           }
 	  bfStatsOut << row << "\t" << col << "\t" << wIx << "\t" << bCluster << "\t" << bfMetric[wIx] << "\t"
 		     << p2Ownership << "\t" << m.mu1 << "\t" << m.var1 << "\t" << m.mu2 << "\t" << m.var2 << endl;
-	}
-    }
+      }
+  }
   bfStatsOut.close();
   string outMask = opts.outData + ".mask.bin";
-  bfMask.WriteRaw (outMask.c_str());
+  mBfMask.WriteRaw (outMask.c_str());
   int beadCount = 0, emptyCount = 0, pinnedCount = 0;
-  for (size_t bIx = 0; bIx < numWells; bIx++)
-    {
-      if (bfMask[bIx] & MaskBead)
-	{
-	  beadCount++;
-	}
-      if (bfMask[bIx] & MaskPinned)
-	{
-	  pinnedCount++;
-	}
-      if (bfMask[bIx] & MaskEmpty)
-	{
-	  emptyCount++;
-	}
-    }
+  for (size_t bIx = 0; bIx < numWells; bIx++)  {
+      if (mBfMask[bIx] & MaskBead) {
+        beadCount++;
+      }
+      if (mBfMask[bIx] & MaskPinned) {
+        pinnedCount++;
+      }
+      if (mBfMask[bIx] & MaskEmpty) {
+        emptyCount++;
+      }
+  }
   cout << "Empties:\t" << emptyCount << endl;
   cout << "Pinned :\t" << pinnedCount << endl;
   cout << "Beads  :\t" << beadCount << endl;
@@ -1228,77 +1253,6 @@ void DifferentialSeparator::CalcDensityStats (const std::string &prefix, Mask &m
     }
 }
 
-void DifferentialSeparator::DumpDiffStats (Traces &traces, std::ofstream &o)
-{
-  o << "x\ty\tsd\t\tsmean\tssd\n";
-  size_t nRow = traces.GetNumRow();
-  size_t nCol = traces.GetNumCol();
-  vector<float> t;
-  for (size_t rowIx = 0; rowIx < nRow; rowIx++)
-    {
-      for (size_t colIx = 0; colIx < nCol; colIx++)
-	{
-	  o << colIx << "\t" << rowIx;
-	  traces.GetTraces (traces.RowColToIndex (rowIx, colIx), t);
-	  SampleStats<float> summary;
-	  SampleStats<float> step;
-	  for (size_t i = 0; i < t.size(); i++)
-	    {
-	      if (i != 0)
-		{
-		  step.AddValue (fabs (t[i] - t[i-1]));
-		}
-	      summary.AddValue (t[i]);
-	    }
-	  o << "\t" << summary.GetSD();
-	  o << "\t" << step.GetMean();
-	  o << "\t" << step.GetSD();
-	  o << endl;
-	}
-    }
-}
-
-void DifferentialSeparator::PinHighLagOneSd (Traces &traces, float iqrMult)
-{
-  size_t nRow = traces.GetNumRow();
-  size_t nCol = traces.GetNumCol();
-  vector<float> t;
-  SampleQuantiles<float> quants (10000);
-  vector<float> stepSd (nRow * nCol);
-  for (size_t rowIx = 0; rowIx < nRow; rowIx++)
-    {
-      for (size_t colIx = 0; colIx < nCol; colIx++)
-	{
-	  size_t wellIx = traces.RowColToIndex (rowIx, colIx);
-	  traces.GetTraces (wellIx, t);
-	  SampleStats<float> step;
-	  for (size_t i = 0; i < t.size(); i++)
-	    {
-	      if (i != 0)
-		{
-		  step.AddValue (fabs (t[i] - t[i-1]));
-		}
-	    }
-	  stepSd[wellIx] = step.GetSD();
-	  quants.AddValue (stepSd[wellIx]);
-	}
-    }
-  float threshold = quants.GetQuantile (.75) + iqrMult * (quants.GetQuantile (.75) - quants.GetQuantile (.25));
-  size_t pCount = 0;
-  for (size_t rowIx = 0; rowIx < nRow; rowIx++)
-    {
-      for (size_t colIx = 0; colIx < nCol; colIx++)
-	{
-	  size_t wellIx = traces.RowColToIndex (rowIx, colIx);
-	  if (stepSd[wellIx] >= threshold && ! (mask[wellIx] & MaskExclude))
-	    {
-	      mask[wellIx] = MaskPinned;
-	      pCount++;
-	    }
-	}
-    }
-  cout << "LagOne Pinned: " << pCount << " wells. step sd threshold is: " << threshold << " (" << quants.GetQuantile(.5) << "+/-" << (quants.GetQuantile(.75) - quants.GetQuantile(.25)) << ")" << endl;
-}
 
 
 //void DifferentialSeparator::CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, const std::string &file) {
@@ -1367,7 +1321,7 @@ void DifferentialSeparator::CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec,
   t0.SetBadWells(&mFilteredWells[0]);
   short *data = raw->image;
   int frames = raw->frames;
-  t0.SetMask(&mask);
+  t0.SetMask(&mMask);
   t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStep, opts.t0MeshStep, opts.nCores);
   int *timestamps = raw->timestamps;
   t0.SetTimeStamps(timestamps, frames);
@@ -1397,7 +1351,7 @@ void DifferentialSeparator::CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec,
       }
     }
   }
-  if (opts.outputDebug > 0) {
+  if (opts.outputDebug > 1) {
     string refFile = opts.outData + ".reference_bf_t0.txt";
     ofstream out(refFile.c_str());
     t0.WriteResults(out);
@@ -1440,7 +1394,7 @@ void DifferentialSeparator::CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec
   t0.SetBadWells(&mFilteredWells[0]);
   short *data = raw->image;
   int frames = raw->frames;
-  t0.SetMask(&mask);
+  t0.SetMask(&mMask);
   t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStep, opts.t0MeshStep, opts.nCores);
   int *timestamps = raw->timestamps;
   t0.SetTimeStamps(timestamps, frames);
@@ -1464,7 +1418,7 @@ void DifferentialSeparator::CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec
       }
     }
   }
-  if (opts.outputDebug > 0) {
+  if (opts.outputDebug > 1) {
     string refFile = opts.outData + ".reference_bf_t0." + file + ".txt";
     ofstream out(refFile.c_str());
     t0.WriteResults(out);
@@ -1507,7 +1461,7 @@ void DifferentialSeparator::CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec
   t0.SetBadWells(&mFilteredWells[0]);
   short *data = raw->image;
   int frames = raw->frames;
-  t0.SetMask(&mask);
+  t0.SetMask(&mMask);
   t0.Init(raw->rows, raw->cols, frames, opts.t0MeshStep, opts.t0MeshStep, opts.nCores);
   int *timestamps = raw->timestamps;
   t0.SetTimeStamps(timestamps, frames);
@@ -1554,7 +1508,7 @@ void DifferentialSeparator::WellDeviation(TraceStoreCol &store,
                                           vector<float> &mad) {
 
   GridMesh<float> mesh;
-  mesh.Init(mask.H(), mask.W(), rowStep, colStep);
+  mesh.Init(mMask.H(), mMask.W(), rowStep, colStep);
   vector<float> mean(filter.size());
   vector<float> m2(filter.size());
   vector<float> summary(filter.size());
@@ -1653,12 +1607,8 @@ void DifferentialSeparator::WellDeviationRegion(TraceStoreCol &store,
   // Loop over all the wells doing normalization per flow and calcule the mean and variance
   memset(region_sum,0,sizeof(float) *loc_num_frames);
   memset(summary, 0, sizeof(float) * loc_num_wells);
-  int frame_mad_start = min(frame_start +4, frame_end);
-  int frame_mad_end = max(frame_start, max_value_frame - 4);
-  // int frame_mad_start = max(0, max_value_frame - 5);
-  // int frame_mad_end = min(max_value_frame + 5, frame_end);
-  // int frame_mad_start = frame_start;
-  // int frame_mad_end = frame_end;
+  int frame_mad_start = min(frame_start + WELL_DEV_FRAME_START_OFFSET, frame_end);
+  int frame_mad_end = max(frame_start, max_value_frame - WELL_DEV_FRAME_END_OFFSET);
   for (int frame_ix = frame_mad_start; frame_ix < frame_mad_end; frame_ix++) {
     // rezero for each frame
     memset(mean, 0, sizeof(float) * loc_num_wells);
@@ -1709,7 +1659,7 @@ void DifferentialSeparator::WellDeviationRegion(TraceStoreCol &store,
       m2_start++;
     }
   }
-  // Copy back to our vector of resuilts
+  // Copy back to our vector of results
   for (int frame_ix = frame_start; frame_ix < frame_end; frame_ix++) {
     region_sum[frame_ix] /= loc_num_wells;
     region_sum[frame_ix] = sqrt(region_sum[frame_ix]);
@@ -1849,7 +1799,7 @@ void DifferentialSeparator::CreateSignalRef(int flow0, int flow1, TraceStore &st
 }
 
 
-void DifferentialSeparator::PickCombinedRank(vector<float> &bfMetric, vector<vector<float> > &mads,
+void DifferentialSeparator::PickCombinedRank(vector<vector<float> > &mads,
                                              vector<char> &filter, vector<char> &refWells,
                                              int numWells,
                                              int rowStart, int rowEnd, int colStart, int colEnd) {
@@ -1862,26 +1812,26 @@ void DifferentialSeparator::PickCombinedRank(vector<float> &bfMetric, vector<vec
     for (int col = colStart; col < colEnd; col++) {
       combinedRanks[count].first = 0.0f;
       combinedRanks[count].second = count;
-      mapping[count] = mask.ToIndex(row, col);
+      mapping[count] = mMask.ToIndex(row, col);
       count++;
     }
   }
-  /// Sort the bf metric
-  for (size_t i = 0; i < combinedRanks.size(); i++) {
-    rankValues[i].second = i;
-    if (filter[mapping[i]] == GoodWell) {
-      rankValues[i].first = bfMetric[mapping[i]];
-    }
-    else {
-      rankValues[i].first = size;
-    }
-  }
-  sort(rankValues.begin(), rankValues.end());
-  // store the ranked values in the combined ranks.
-  for (size_t i = 0; i < combinedRanks.size(); i++) {
-    combinedRanks[rankValues[i].second].first += i;
-  }
-  // Do individual flows
+  // /// Sort the bf metric
+  // for (size_t i = 0; i < combinedRanks.size(); i++) {
+  //   rankValues[i].second = i;
+  //   if (filter[mapping[i]] == GoodWell) {
+  //     rankValues[i].first = bfMetric[mapping[i]];
+  //   }
+  //   else {
+  //     rankValues[i].first = size;
+  //   }
+  // }
+  // sort(rankValues.begin(), rankValues.end());
+  // // store the ranked values in the combined ranks.
+  // for (size_t i = 0; i < combinedRanks.size(); i++) {
+  //   combinedRanks[rankValues[i].second].first += i;
+  // }
+  // Do individual metrics
   for (size_t keyIx = 0; keyIx < mads.size(); keyIx++) {
     for (size_t i = 0; i < combinedRanks.size(); i++) {
       rankValues[i].second = i;
@@ -1905,21 +1855,23 @@ void DifferentialSeparator::PickCombinedRank(vector<float> &bfMetric, vector<vec
       found++;
     }
   }
+
 }
 
-void DifferentialSeparator::PickCombinedRank(vector<float> &bfMetric, vector<vector<float> > &mads,
+void DifferentialSeparator::PickCombinedRank(vector<vector<float> > &mads,
                                              int rowStep, int colStep,
                                              float minPercent, int numWells,
                                              vector<char> &filter, vector<char> &refWells) {
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before picking reference.");
   refWells.resize(filter.size());
   std::fill(refWells.begin(), refWells.end(), 0);
   GridMesh<float> mesh;
-  mesh.Init(mask.H(), mask.W(), rowStep, colStep);
+  mesh.Init(mMask.H(), mMask.W(), rowStep, colStep);
   int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
   for (size_t binIx = 0; binIx < mesh.GetNumBin(); binIx++) {
     mesh.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
     int goodWells = 0;
-    int num_cols = mask.W();
+    int num_cols = mMask.W();
     float totalWells = (colEnd - colStart) * (rowEnd - rowStart);
     for (int row_ix = rowStart; row_ix < rowEnd; row_ix++) {
       for (int col_ix = colStart; col_ix < colEnd; col_ix++) {
@@ -1932,11 +1884,12 @@ void DifferentialSeparator::PickCombinedRank(vector<float> &bfMetric, vector<vec
     float percent = goodWells / totalWells;
     // Only pick reference wells for regions that aren't crazy
     if (goodWells >= MIN_REGION_REF_WELLS && percent >= MIN_REGION_REF_PERCENT) {
-      PickCombinedRank(bfMetric, mads, filter, refWells,
+      PickCombinedRank(mads, filter, refWells,
                        numWells,
                        rowStart, rowEnd, colStart, colEnd);
     }
   }
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After picking reference.");
 }
 
 bool DifferentialSeparator::Find0merAnd1merFlows(KeySeq &key, TraceStore &store,
@@ -2020,7 +1973,7 @@ bool DifferentialSeparator::FindKey0merAnd1merFlows(KeySeq &key,
 }
 
 
-void DifferentialSeparator::PickReference(TraceStoreCol &store,
+void DifferentialSeparator::RankReference(TraceStoreCol &store,
                                           vector<float> &bfMetric, 
                                           int rowStep, int colStep,
                                           int useKeySignal,
@@ -2031,64 +1984,63 @@ void DifferentialSeparator::PickReference(TraceStoreCol &store,
                                           int minWells,
                                           vector<char> &filter,
                                           vector<char> &refWells) {
+
   int count = 0; 
-  vector<vector<float> > mads;
   if (useKeySignal == 1) {
-    mads.resize(keys.size());
-    for (size_t i = 0; i < keys.size(); i++) {
+    mEmptyMetrics.resize(mKeys.size());
+    for (size_t i = 0; i < mKeys.size(); i++) {
       int flow1 = -1, flow0 = -1;
-      mads[i].resize(mask.H() * mask.W(), std::numeric_limits<float>::max());
-      bool found = Find0merAnd1merFlows(keys[i], store, flow1, flow0);
-      cout << "for key: " << keys[i].name << " using differential flows: " << flow1 << " 1mer and " << flow0 << " 0mer." << endl;
-      std::fill(mads[i].begin(), mads[i].end(), 0);
+      mEmptyMetrics[i].resize(mask.H() * mask.W(), std::numeric_limits<float>::max());
+      bool found = Find0merAnd1merFlows(mKeys[i], store, flow1, flow0);
+      cout << "for key: " << mKeys[i].name << " using differential flows: " << flow1 << " 1mer and " << flow0 << " 0mer." << endl;
+      std::fill(mEmptyMetrics[i].begin(), mEmptyMetrics[i].end(), 0);
       if (found) {
         CreateSignalRef(flow0, flow1, store, rowStep, colStep, iqrMult, numBasis,
-                        mask, minWells, filter, mads[i]);
+                        mask, minWells, filter, mEmptyMetrics[i]);
         //CountReference("After signal ref", mFilteredWells);
       }
     }
   }
   else if (useKeySignal == 2) {
-    mads.resize(1);
-    mads[0].resize(mask.H() * mask.W());
-    std::fill(mads[0].begin(), mads[0].end(), 0);
+    mEmptyMetrics.resize(1);
+    mEmptyMetrics[0].resize(mask.H() * mask.W());
+    std::fill(mEmptyMetrics[0].begin(), mEmptyMetrics[0].end(), 0);
     int flow0 = -1, flow1 = -1;
-    bool found = FindCommon0merAnd1merFlows(keys, store, flow0, flow1);
+    bool found = FindCommon0merAnd1merFlows(mKeys, store, flow0, flow1);
     if (found) {
       CreateSignalRef(flow0, flow1, store, rowStep, colStep, iqrMult, numBasis,
-                      mask, minWells, filter, mads[0]);
+                      mask, minWells, filter, mEmptyMetrics[0]);
     }
   }
   else if (useKeySignal == 3) {
     vector<int> flow0vec, flow1vec;
-    bool found = FindKey0merAnd1merFlows(keys[0], store, flow0vec, flow1vec);
-    mads.resize(flow0vec.size());
+    bool found = FindKey0merAnd1merFlows(mKeys[0], store, flow0vec, flow1vec);
+    mEmptyMetrics.resize(flow0vec.size());
     for (size_t i = 0; i < flow0vec.size() && found; i++) {
       cout << "Adding signal ref: " << i << ": " << flow0vec[i] << "," << flow1vec[i] << endl;
-      mads[i].resize(mask.H() * mask.W());
-      std::fill(mads[i].begin(), mads[i].end(), 0);
+      mEmptyMetrics[i].resize(mask.H() * mask.W());
+      std::fill(mEmptyMetrics[i].begin(), mEmptyMetrics[i].end(), 0);
       CreateSignalRef(flow0vec[i], flow1vec[i], store, rowStep, colStep, iqrMult, numBasis,
-                      mask, minWells, filter, mads[i]);
+                      mask, minWells, filter, mEmptyMetrics[i]);
     }
   }
   else if (useKeySignal == 4) {
-    mads.resize(2);
-    mads[0].resize(mask.H() * mask.W());
-    mads[1].resize(mask.H() * mask.W());
-    std::fill(mads[0].begin(), mads[0].end(), 0.0f);
-    std::fill(mads[1].begin(), mads[1].end(), 0.0f);
-    store.WellProj(store, keys, filter, mads[0]);
-    WellDeviation(store, rowStep, colStep, filter, mads[1]);
-    for (size_t well_ix = 0; well_ix < wells.size(); well_ix++) {
-      wells[well_ix].bfMetric2 = mads[0][well_ix];
+    mEmptyMetrics.resize(2);
+    mEmptyMetrics[0].resize(mask.H() * mask.W());
+    mEmptyMetrics[1].resize(mask.H() * mask.W());
+    std::fill(mEmptyMetrics[0].begin(), mEmptyMetrics[0].end(), 0.0f);
+    std::fill(mEmptyMetrics[1].begin(), mEmptyMetrics[1].end(), 0.0f);
+    store.WellProj(store, mKeys, filter, mEmptyMetrics[0]);
+    WellDeviation(store, rowStep, colStep, filter, mEmptyMetrics[1]);
+    for (size_t well_ix = 0; well_ix < mWells.size(); well_ix++) {
+      mWells[well_ix].bfMetric2 = mEmptyMetrics[0][well_ix];
+      mWells[well_ix].bfMetric3 = mEmptyMetrics[1][well_ix];
     }
   }
   else {
     cout << "Not using key signal reference." << endl;
   }
-  
-  cout << "Picking reference with: " << mads.size() << " vectors useSignalReference " << useKeySignal << endl;
-  PickCombinedRank(bfMetric, mads, rowStep, colStep, minPercent, minWells, filter, refWells);
+  cout << "Picking reference with: " << mEmptyMetrics.size() << " vectors useSignalReference " << useKeySignal << endl;
   //  CountReference("After signal combined ranke", mFilteredWells);
 }
 
@@ -2112,206 +2064,14 @@ void DifferentialSeparator::CalculateFrames(SynchDat &sdat, int &minFrame, int &
   }
 }
 
-
-
-void DifferentialSeparator::FilterRegionBlobs(Mask &mask,
-                                              int rowStart, int rowEnd, int colStart, int colEnd, int chipWidth,
-                                        Col<float> &my_metric, vector<char> &filteredWells, int smoothWindow,
-                                        int filtWindow, float filtThreshold) {
-  Col<double> sum_metric((rowEnd - rowStart + 1) * (colEnd - colStart + 1));
-  Col<float> smooth_metric((rowEnd-rowStart) * (colEnd-colStart));
-  sum_metric.zeros();
-  Col<int> sum_filt_wells(sum_metric.n_rows);
-  size_t patch_width = colEnd - colStart + 1;
-  for (int row = rowStart; row < rowEnd; row++) {
-    for (int col = colStart; col < colEnd; col++) {
-      int orow = row-rowStart;
-      int ocol = col-colStart;
-      sum_metric[(orow+1) * patch_width + (ocol+1)] = my_metric[row*chipWidth+col] 
-        + sum_metric[(orow) * patch_width + (ocol+1)] 
-        + sum_metric[(orow+1) * patch_width + (ocol)] 
-        - sum_metric[(orow) * patch_width + (ocol)];
-    }
-  }
-  // cout << "Orig:" << endl;
-  // for (int r = 0; r < 10; r++) {
-  //   for (int c = 0; c < 10; c++) {
-  //     printf("%.2f\t", my_metric[r*chipWidth+c]);
-  //   }
-  //   printf("\n");
-  // }
-  // cout << "Sum:" << endl;
-  // for (int r = 0; r < 10; r++) {
-  //   for (int c = 0; c < 10; c++) {
-  //     printf("%.2f\t", sum_metric[r*patch_width+c]);
-  //   }
-  //   printf("\n");
-  // }
-
-  int smooth_width = patch_width - 1; 
-  for (int row = rowStart; row < rowEnd; row++) {
-    for (int col = colStart; col < colEnd; col++) {
-      int orow = row - rowStart;
-      int ocol = col - colStart;
-      int srow = max(0,orow-smoothWindow);
-      int scol = max(0,ocol-smoothWindow);
-      int erow = min(rowEnd-rowStart-1,orow+smoothWindow);
-      int ecol = min(colEnd-colStart-1,ocol+smoothWindow); 
-      int count = 0; 
-      for (int r = srow; r < erow; r++) {
-        for (int c = scol; c < ecol; c++) {
-          if (my_metric[(r + rowStart) * chipWidth + c + colStart] > 0) {
-            count++;
-          }
-        }
-      }
-      //      int count = (erow - srow) * (ecol - scol);
-      float val = 0;
-      if (count > 0) {
-        val = (1.0f * sum_metric[(erow+1) * patch_width + (ecol+1)] 
-                   + sum_metric[(srow+1) * patch_width + (scol+1)]
-                   - sum_metric[(erow+1) * patch_width + (scol+1)]
-                   - sum_metric[(srow+1) * patch_width + (ecol+1)])/count; 
-      }
-      smooth_metric[orow*smooth_width+ocol] = val;
-    }
-  }
-  // cout << "Smooth" << endl;
-  // for (int r = 0; r < 10; r++) {
-  //   for (int c = 0; c < 10; c++) {
-  //     printf("%.2f\t", smooth_metric[r*smooth_width+c]);
-  //   }
-  //   printf("\n");
-  // }
-  int good = 0;
-  for (size_t i = 0; i < smooth_metric.n_rows; i++) {
-    if (smooth_metric[i] > 0) {
-      good++;
-    }
-  }
-  if (good < 1000) {
-    return;
-  }
-  Col<float> smooth_metric_sorted(good);
-  int sm_index = 0; 
-  for (size_t i = 0; i < smooth_metric_sorted.n_rows; i++) {
-    if (smooth_metric[i] > 0) {
-      smooth_metric_sorted[sm_index++] = smooth_metric[i];
-    }
-  }
-  float min_thresh = std::numeric_limits<float>::max() * -1.0f;
-  float max_thresh = std::numeric_limits<float>::max();
-  if (smooth_metric_sorted.n_rows > MIN_SAMPLE_TAUE_STATS) {
-    std::sort(smooth_metric_sorted.begin(), smooth_metric_sorted.end());
-    float q75 = ionStats::quantile_sorted(smooth_metric_sorted.memptr(), smooth_metric_sorted.n_rows, .75);
-    float q25 = ionStats::quantile_sorted(smooth_metric_sorted.memptr(), smooth_metric_sorted.n_rows, .25);
-    float iqr = q75 - q25;
-    min_thresh = max(q25 - 3 * iqr, (float)MIN_SD); // for bubbles have minimum threshold
-    max_thresh = q75 + 3 * iqr;
-  }
-  sum_metric.zeros();
-  int bad_count = 0;
-  for (int row = rowStart; row < rowEnd; row++) {
-    for (int col = colStart; col < colEnd; col++) {
-      int orow = row-rowStart;
-      int ocol = col-colStart;
-      float val = smooth_metric[orow * smooth_width + ocol];
-      float f = (val > max_thresh || val < min_thresh) ? 1 : 0;
-      bool isExclude = (mask[row * chipWidth + col] & MaskExclude);
-      if (isExclude) {
-        f = 0;
-      }
-      if (!isExclude && (val > max_thresh || val < min_thresh)) {
-        bad_count++;
-      }
-      sum_metric[(orow+1) * patch_width + (ocol+1)] = f
-        + sum_metric[(orow) * patch_width + (ocol+1)] 
-        + sum_metric[(orow+1) * patch_width + (ocol)] 
-        - sum_metric[(orow) * patch_width + (ocol)];
-    }
-  }
-  int filt_count = 0;
-  for (int row = rowStart; row < rowEnd; row++) {
-    for (int col = colStart; col < colEnd; col++) {
-      int orow = row - rowStart; // offset row
-      int ocol = col - colStart; 
-      int srow = max(0,orow-filtWindow); // start row of our square
-      int scol = max(0,ocol-filtWindow);
-      int erow = min(rowEnd-rowStart-1,orow+filtWindow); // end row of our square
-      int ecol = min(colEnd-colStart-1,ocol+filtWindow); 
-      // How many valid wells are there?
-      int count = 0;
-      for (int r = srow; r < erow; r++) {
-        for (int c = scol; c < ecol; c++) {
-          if (my_metric[(r + rowStart) * chipWidth + c + colStart] > 0) {
-            count++;
-          }
-        }
-      }
-      //      assert(count > 0);
-      //      float ratioBad = (1.0f * sum_metric[(erow+1) * patch_width + (ecol+1)] - sum_metric[(srow+1) * patch_width + (scol+1)])/count; 
-      float ratioBad = 0; 
-      if (count > 0) {
-        ratioBad = (1.0f * sum_metric[(erow+1) * patch_width + (ecol+1)] 
-                   + sum_metric[(srow+1) * patch_width + (scol+1)]
-                   - sum_metric[(erow+1) * patch_width + (scol+1)]
-                   - sum_metric[(srow+1) * patch_width + (ecol+1)])/count; 
-      }
-      if (ratioBad > filtThreshold) {
-        int rs = max(orow-filtWindow,0);
-        int re = min(orow+filtWindow, rowEnd-rowStart);
-        int cs = max(ocol-filtWindow, 0);
-        int ce = min(ocol+filtWindow, colEnd-colStart);
-        for(int r = rs; r < re; r++) {
-          for (int c = cs; c < ce; c++) {
-            if(filteredWells[(r+rowStart)*chipWidth+(c+colStart)] != RegionTraceSd) {
-              filt_count++;
-            } 
-            filteredWells[(r+rowStart)*chipWidth+(c+colStart)] = RegionTraceSd;
-          }
-        }
-      }
-    }
-  }
-  //  cout << "Region: (" << rowStart << "," << colEnd << ") had " << filt_count << " blob filtered wells. " << bad_count << endl;  
-}
-                                        
-void DifferentialSeparator::FilterBlobs(Mask &mask, int step,
-                                        Col<float> &metric, vector<char> &filteredWells, int smoothWindow,
-                                        int filtWindow, float filtThreshold) {
-  GridMesh<double> mesh;
-  mesh.Init(mask.H(), mask.W(), step, step);
-  Col<float> my_metric = metric;
-  for (size_t i = 0; i < my_metric.n_rows; i++) {
-    if (filteredWells[i] != GoodWell || (mask[i] & MaskExclude) || (mask[i] &MaskPinned)) {
-      my_metric[i] = 0;
-    }
-  }
-  for (size_t binIx = 0; binIx < mesh.GetNumBin(); binIx++)  {
-      int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-      mesh.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
-      // int goodCount = 0;
-      // for (int r = rowStart; r < rowEnd; r++) {
-      //   for (int c = colStart; c < colEnd; c++) {
-      //     if (!(mask[r * mask.W() + c] & MaskExclude)) {
-      //       goodCount++;
-      //     }
-      //   }
-      // }
-      FilterRegionBlobs(mask, rowStart, rowEnd, colStart, colEnd, mask.W(),
-                        my_metric, filteredWells, smoothWindow, filtWindow, filtThreshold);
-  }
-}
-
-
 void DifferentialSeparator::LoadKeyDats(PJobQueue &jQueue, TraceStoreCol &traceStore, 
-                                        vector<float> &bfMetric, DifSepOpt &opts, std::vector<float> &traceSd,
-                                        Col<int> &zeroFlows) {
+                                        vector<float> &bfMetric, DifSepOpt &opts, std::vector<float> &traceSd) {
+                               
 
   string resultsRoot = opts.resultsDir + "/acq_";
   string resultsSuffix = "dat";
-  size_t numWells = mask.H() * mask.W();
-  if (keys.empty()) {  DifferentialSeparator::MakeStadardKeys (keys); }
+  size_t numWells = mMask.H() * mMask.W();
+  if (mKeys.empty()) {  DifferentialSeparator::MakeStadardKeys (mKeys); }
   cout.flush();
   vector<int> rowStarts;
   vector<int> colStarts;
@@ -2327,11 +2087,10 @@ void DifferentialSeparator::LoadKeyDats(PJobQueue &jQueue, TraceStoreCol &traceS
   vector<float> t;
   Col<float> traceBuffer;
   traceStore.SetMeshDist (opts.useMeshNeighbors);
-  size_t loadMinFlows = max (9, opts.maxKeyFlowLength+2);
-  loadMinFlows = max(loadMinFlows, (size_t)(zeroFlows[zeroFlows.n_rows-1] + 1));
+  size_t loadMinFlows = traceStore.GetNumFlows();
   traceStore.SetSize(T0_RIGHT_OFFSET);
-  traceStore.SetT0(t0);
-  Mask cncMask(&mask);
+  traceStore.SetT0(mT0);
+  Mask cncMask(&mMask);
   Mat<float> traceSdMin(numWells, loadMinFlows);
   traceSdMin.zeros();
   // Ready in the sdata data
@@ -2346,7 +2105,7 @@ void DifferentialSeparator::LoadKeyDats(PJobQueue &jQueue, TraceStoreCol &traceS
     p = resultsRoot.c_str();
     s = resultsSuffix.c_str();
     snprintf (buff, sizeof (buff), "%s%.4d.%s", p, (int) i, s);
-    loadJobs[i].Init(buff, i, &traceStore, traceSdMin.colptr(i), &mask, &cncMask, &mFilteredWells, &t0, &opts);
+    loadJobs[i].Init(buff, i, &traceStore, traceSdMin.colptr(i), &mMask, &cncMask, &mFilteredWells, &mT0, &opts);
     //  loadJobs[i].Run();
     jQueue.AddJob(loadJobs[i]);
   }
@@ -2398,10 +2157,6 @@ void DifferentialSeparator::LoadKeyDats(PJobQueue &jQueue, TraceStoreCol &traceS
     fprintf(stdout, "Not enough wells for compression statisticss.\n");
   }
     //  CountReference("After beadfind reference", mFilteredWells);
-  Col<float> metric = traceSdMin.col(zeroFlows[0]);
-  if (opts.blobFilter) {
-    FilterBlobs(mask, opts.blobFilterStep, metric, mFilteredWells, 3, 5, .5);
-  }
   size_t sdCount = 0;
   size_t blobCount = 0;
   for(size_t i = 0; i < mFilteredWells.size(); i++) {
@@ -2413,221 +2168,165 @@ void DifferentialSeparator::LoadKeyDats(PJobQueue &jQueue, TraceStoreCol &traceS
     }
   }
   cout << "Filtered: " << sdCount << " wells based on sd, " << blobCount << " in blobs" << endl;
-  //  CountReference("Before picking reference", mFilteredWells);
-  //  SmoothWells(traceStore, loadMinFlows, 3, 3.0);
-  // PickReference(traceStore, reference, opts.referenceStep, opts.referenceStep, opts.useSignalReference,
-  //               opts.iqrMult, 7, opts.percentReference, mask, ceil(opts.referenceStep*opts.referenceStep * opts.percentReference),
-  //               mFilteredWells, mRefWells);
-  // loadTimer.PrintMicroSecondsUpdate(stdout, "Load Timer: Reference Picked");  
-  // int filtered = 0, refChosen = 0, possible = 0;
-  // for (size_t i = 0; i < mFilteredWells.size(); i++) {
-  //   if (mask[i] == MaskIgnore) {
-  //     mFilteredWells[i] = LowTraceSd;
-  //   }
-  //   if (!(mask[i] & MaskPinned || mask[i] & MaskExclude)) {
-  //     possible++;
-  //     if (mFilteredWells[i] != GoodWell) {
-  //       filtered++;
-  //     }
-  //     if (mRefWells[i] == 1) {
-  //       refChosen++;
-  //     }
-  //   }
-  // }
-  // //  cout << filtered << " wells filtered of: " << possible << " (" <<  (float)filtered/possible << ") " << refChosen << " reference wells." << endl;
-  // // for (size_t i = 0; i < t0.size(); i++) {
-  // //   t0[i] = max(-1.0f,t0[i] - 4.0f);
-  // // }
-  // // traceStore.SetT0(t0);
-
-
-  
-  // for (size_t i = 0; i < mRefWells.size(); i++) {
-  //   traceStore.SetReference(i, mRefWells[i] == 1);
-  // }
-  // for (size_t i = 0; i < loadMinFlows; i++) {
-  //   traceStore.PrepareReference (i, mFilteredWells);
-  // }
   loadTimer.PrintMicroSecondsUpdate(stdout, "Load Timer: Reference Prepared");  
 }
 
-void DifferentialSeparator::CalcNumFrames(int tx, std::vector<int> &stamps, int &before_last, int &after_last, int maxStep) {
-  before_last = 0;
-  for (size_t i = (size_t)tx; i > 1; i--) {
-    if (stamps[i] - stamps[i-1] <= maxStep) {
-      before_last++;
-    }
-    else {
-      break;
-    }
-  }
-  after_last = 0;
-  for (size_t i = (size_t)tx; i < stamps.size() - 1; i++) {
-    if (stamps[i+1] - stamps[i] <= maxStep) {
-      after_last++;
-    }
-    else {
-      break;
-    }
-  }
-}
+
+// void DifferentialSeparator::OutputWellInfo (TraceStore &store,
+// 					    ZeromerModelBulk<float> &bg,
+// 					    const vector<KeyFit> &wells,
+// 					    int outlierType,
+// 					    int wellIdx,
+// 					    std::ostream &traceOut,
+// 					    std::ostream &refOut,
+// 					    std::ostream &bgOut)
+// {
+//   char d = '\t';
+//   const KeyFit &w = wells[wellIdx];
+//   vector<float> f (store.GetNumFrames());
+//   Col<float> ref (store.GetNumFrames());
+//   Col<float> p (store.GetNumFrames());
+//   for (size_t flow = 0; flow < 8 && store.HaveFlow (flow); flow++)
+//     {
+//       traceOut << w.wellIdx << d << outlierType << d << flow << d << (int) w.keyIndex << d << w.snr << d << w.bfMetric << d << w.peakSig << d << w.mad;
+//       refOut   << w.wellIdx << d << outlierType << d << flow << d << (int) w.keyIndex << d << w.snr << d << w.bfMetric << d << w.peakSig << d << w.mad;
+//       bgOut    << w.wellIdx << d << outlierType << d << flow << d << (int) w.keyIndex << d << w.snr << d << w.bfMetric << d << w.peakSig << d << w.mad;
+//       store.GetTrace (w.wellIdx, flow, f.begin());
+//       for (size_t fIx = 0; fIx < f.size(); fIx++)
+// 	{
+// 	  traceOut << d << f[fIx];
+// 	}
+//       traceOut << endl;
+
+//       store.GetReferenceTrace (w.wellIdx, flow, ref.begin());
+//       for (size_t fIx = 0; fIx < ref.n_rows; fIx++)
+// 	{
+// 	  refOut << d << ref.at (fIx);
+// 	}
+//       refOut << endl;
+
+//       bg.ZeromerPrediction (w.wellIdx, flow, store, ref ,p);
+//       for (size_t fIx = 0; fIx < p.n_rows; fIx++)
+// 	{
+// 	  bgOut << d << p.at (fIx);
+// 	}
+//       bgOut << endl;
+//     }
+
+// }
+
+// void DifferentialSeparator::OutputOutliers (TraceStore &store,
+// 					    ZeromerModelBulk<float> &bg,
+// 					    const vector<KeyFit> &wells,
+// 					    int outlierType,
+// 					    const vector<int> &outputIdx,
+// 					    std::ostream &traceOut,
+// 					    std::ostream &refOut,
+// 					    std::ostream &bgOut
+// 					    )
+// {
+//   for (size_t i = 0; i < outputIdx.size(); i++)
+//     {
+//       if (store.HaveWell (outputIdx[i]))
+// 	{
+// 	  OutputWellInfo (store, bg, wells, outlierType, outputIdx[i], traceOut, refOut, bgOut);
+// 	}
+//     }
+// }
 
 
-void DifferentialSeparator::OutputWellInfo (TraceStore &store,
-					    ZeromerModelBulk<float> &bg,
-					    const vector<KeyFit> &wells,
-					    int outlierType,
-					    int wellIdx,
-					    std::ostream &traceOut,
-					    std::ostream &refOut,
-					    std::ostream &bgOut)
-{
-  char d = '\t';
-  const KeyFit &w = wells[wellIdx];
-  vector<float> f (store.GetNumFrames());
-  Col<float> ref (store.GetNumFrames());
-  Col<float> p (store.GetNumFrames());
-  for (size_t flow = 0; flow < 8 && store.HaveFlow (flow); flow++)
-    {
-      traceOut << w.wellIdx << d << outlierType << d << flow << d << (int) w.keyIndex << d << w.snr << d << w.bfMetric << d << w.peakSig << d << w.mad;
-      refOut   << w.wellIdx << d << outlierType << d << flow << d << (int) w.keyIndex << d << w.snr << d << w.bfMetric << d << w.peakSig << d << w.mad;
-      bgOut    << w.wellIdx << d << outlierType << d << flow << d << (int) w.keyIndex << d << w.snr << d << w.bfMetric << d << w.peakSig << d << w.mad;
-      store.GetTrace (w.wellIdx, flow, f.begin());
-      for (size_t fIx = 0; fIx < f.size(); fIx++)
-	{
-	  traceOut << d << f[fIx];
-	}
-      traceOut << endl;
+// void DifferentialSeparator::OutputOutliers (DifSepOpt &opts, TraceStore &store,
+// 					    ZeromerModelBulk<float> &bg,
+// 					    const vector<KeyFit> &wells,
+// 					    double sdNoKeyHighT, double sdKeyLowT,
+// 					    double madHighT, double bfNoKeyHighT, double bfKeyLowT,
+// 					    double lowKeySignalT)
+// {
+//   int nSample = 50;
+//   ReservoirSample<int> sdNoKeyHigh (nSample);
+//   ReservoirSample<int> sdKeyLow (nSample);
+//   ReservoirSample<int> madHigh (nSample);
+//   ReservoirSample<int> bfNoKeyHigh (nSample);
+//   ReservoirSample<int> bfKeyLow (nSample);
+//   ReservoirSample<int> libOk (nSample);
+//   ReservoirSample<int> tfOk (nSample);
+//   ReservoirSample<int> emptyOk (nSample);
+//   ReservoirSample<int> lowKeySignal (nSample);
+//   ReservoirSample<int> wellLowSignal (nSample);
+//   string traceOutFile = opts.outData + ".outlier-trace.txt";
+//   string refOutFile = opts.outData + ".outlier-ref.txt";
+//   string bgOutFile = opts.outData + ".outlier-bg.txt";
+//   ofstream traceOut;
+//   ofstream refOut;
+//   ofstream bgOut;
+//   traceOut.open (traceOutFile.c_str());
+//   refOut.open (refOutFile.c_str());
+//   bgOut.open (bgOutFile.c_str());
 
-      store.GetReferenceTrace (w.wellIdx, flow, ref.begin());
-      for (size_t fIx = 0; fIx < ref.n_rows; fIx++)
-	{
-	  refOut << d << ref.at (fIx);
-	}
-      refOut << endl;
+//   for (size_t i = 0; i < wells.size(); i++)
+//     {
+//       if (wells[i].flag == WellEmpty)
+// 	{
+// 	  emptyOk.Add (wells[i].wellIdx);
+// 	}
+//       if (wells[i].flag == WellLib)
+// 	{
+// 	  libOk.Add (wells[i].wellIdx);
+// 	}
+//       if (wells[i].flag == WellTF)
+// 	{
+// 	  tfOk.Add (wells[i].wellIdx);
+// 	}
+//       if (wells[i].flag == WellEmpty && wells[i].sd >= sdNoKeyHighT)
+// 	{
+// 	  sdNoKeyHigh.Add (wells[i].wellIdx);
+// 	}
+//       if ( (wells[i].flag == WellLib || wells[i].flag == WellTF) && wells[i].sd <= sdKeyLowT)
+// 	{
+// 	  sdKeyLow.Add (wells[i].wellIdx);
+// 	}
+//       if (wells[i].mad >= madHighT)
+// 	{
+// 	  madHigh.Add (wells[i].wellIdx);
+// 	}
+//       if (wells[i].flag == WellEmpty && wells[i].bfMetric >= bfNoKeyHighT)
+// 	{
+// 	  bfNoKeyHigh.Add (wells[i].wellIdx);
+// 	}
+//       if ( (wells[i].flag == WellLib || wells[i].flag == WellTF) && wells[i].bfMetric <= bfKeyLowT)
+// 	{
+// 	  bfKeyLow.Add (wells[i].wellIdx);
+// 	}
+//       if ( (wells[i].flag == WellLib || wells[i].flag == WellTF) && wells[i].peakSig <= lowKeySignalT)
+// 	{
+// 	  lowKeySignal.Add (wells[i].wellIdx);
+// 	}
+//       if (wells[i].flag == WellLowSignal)
+// 	{
+// 	}
+//     }
 
-      bg.ZeromerPrediction (w.wellIdx, flow, store, ref ,p);
-      for (size_t fIx = 0; fIx < p.n_rows; fIx++)
-	{
-	  bgOut << d << p.at (fIx);
-	}
-      bgOut << endl;
-    }
-
-}
-
-void DifferentialSeparator::OutputOutliers (TraceStore &store,
-					    ZeromerModelBulk<float> &bg,
-					    const vector<KeyFit> &wells,
-					    int outlierType,
-					    const vector<int> &outputIdx,
-					    std::ostream &traceOut,
-					    std::ostream &refOut,
-					    std::ostream &bgOut
-					    )
-{
-  for (size_t i = 0; i < outputIdx.size(); i++)
-    {
-      if (store.HaveWell (outputIdx[i]))
-	{
-	  OutputWellInfo (store, bg, wells, outlierType, outputIdx[i], traceOut, refOut, bgOut);
-	}
-    }
-}
-
-
-void DifferentialSeparator::OutputOutliers (DifSepOpt &opts, TraceStore &store,
-					    ZeromerModelBulk<float> &bg,
-					    const vector<KeyFit> &wells,
-					    double sdNoKeyHighT, double sdKeyLowT,
-					    double madHighT, double bfNoKeyHighT, double bfKeyLowT,
-					    double lowKeySignalT)
-{
-  int nSample = 50;
-  ReservoirSample<int> sdNoKeyHigh (nSample);
-  ReservoirSample<int> sdKeyLow (nSample);
-  ReservoirSample<int> madHigh (nSample);
-  ReservoirSample<int> bfNoKeyHigh (nSample);
-  ReservoirSample<int> bfKeyLow (nSample);
-  ReservoirSample<int> libOk (nSample);
-  ReservoirSample<int> tfOk (nSample);
-  ReservoirSample<int> emptyOk (nSample);
-  ReservoirSample<int> lowKeySignal (nSample);
-  ReservoirSample<int> wellLowSignal (nSample);
-  string traceOutFile = opts.outData + ".outlier-trace.txt";
-  string refOutFile = opts.outData + ".outlier-ref.txt";
-  string bgOutFile = opts.outData + ".outlier-bg.txt";
-  ofstream traceOut;
-  ofstream refOut;
-  ofstream bgOut;
-  traceOut.open (traceOutFile.c_str());
-  refOut.open (refOutFile.c_str());
-  bgOut.open (bgOutFile.c_str());
-
-  for (size_t i = 0; i < wells.size(); i++)
-    {
-      if (wells[i].flag == WellEmpty)
-	{
-	  emptyOk.Add (wells[i].wellIdx);
-	}
-      if (wells[i].flag == WellLib)
-	{
-	  libOk.Add (wells[i].wellIdx);
-	}
-      if (wells[i].flag == WellTF)
-	{
-	  tfOk.Add (wells[i].wellIdx);
-	}
-      if (wells[i].flag == WellEmpty && wells[i].sd >= sdNoKeyHighT)
-	{
-	  sdNoKeyHigh.Add (wells[i].wellIdx);
-	}
-      if ( (wells[i].flag == WellLib || wells[i].flag == WellTF) && wells[i].sd <= sdKeyLowT)
-	{
-	  sdKeyLow.Add (wells[i].wellIdx);
-	}
-      if (wells[i].mad >= madHighT)
-	{
-	  madHigh.Add (wells[i].wellIdx);
-	}
-      if (wells[i].flag == WellEmpty && wells[i].bfMetric >= bfNoKeyHighT)
-	{
-	  bfNoKeyHigh.Add (wells[i].wellIdx);
-	}
-      if ( (wells[i].flag == WellLib || wells[i].flag == WellTF) && wells[i].bfMetric <= bfKeyLowT)
-	{
-	  bfKeyLow.Add (wells[i].wellIdx);
-	}
-      if ( (wells[i].flag == WellLib || wells[i].flag == WellTF) && wells[i].peakSig <= lowKeySignalT)
-	{
-	  lowKeySignal.Add (wells[i].wellIdx);
-	}
-      if (wells[i].flag == WellLowSignal)
-	{
-	}
-    }
-
-  sdNoKeyHigh.Finished();
-  sdKeyLow.Finished();
-  madHigh.Finished();
-  bfNoKeyHigh.Finished();
-  bfKeyLow.Finished();
-  libOk.Finished();
-  tfOk.Finished();
-  emptyOk.Finished();
-  lowKeySignal.Finished();
-  wellLowSignal.Finished();
-  OutputOutliers (store, bg, wells, SdNoKeyHigh, sdNoKeyHigh.GetData(), traceOut, refOut, bgOut);
-  OutputOutliers (store, bg, wells, SdKeyLow, sdKeyLow.GetData(), traceOut, refOut, bgOut);
-  OutputOutliers (store, bg, wells, MadHigh, madHigh.GetData(), traceOut, refOut, bgOut);
-  OutputOutliers (store, bg, wells, BfNoKeyHigh, bfNoKeyHigh.GetData(), traceOut, refOut, bgOut);
-  OutputOutliers (store, bg, wells, BfKeyLow, bfKeyLow.GetData(), traceOut, refOut, bgOut);
-  OutputOutliers (store, bg, wells, LibKey, libOk.GetData(), traceOut, refOut, bgOut);
-  OutputOutliers (store, bg, wells, EmptyWell, emptyOk.GetData(), traceOut, refOut, bgOut);
-  OutputOutliers (store, bg, wells, TFKey, tfOk.GetData(), traceOut, refOut, bgOut);
-  OutputOutliers (store, bg, wells, LowKeySignal, lowKeySignal.GetData(), traceOut, refOut, bgOut);
-  OutputOutliers (store, bg, wells, KeyLowSignalFilt, wellLowSignal.GetData(), traceOut, refOut, bgOut);
-}
+//   sdNoKeyHigh.Finished();
+//   sdKeyLow.Finished();
+//   madHigh.Finished();
+//   bfNoKeyHigh.Finished();
+//   bfKeyLow.Finished();
+//   libOk.Finished();
+//   tfOk.Finished();
+//   emptyOk.Finished();
+//   lowKeySignal.Finished();
+//   wellLowSignal.Finished();
+//   OutputOutliers (store, bg, wells, SdNoKeyHigh, sdNoKeyHigh.GetData(), traceOut, refOut, bgOut);
+//   OutputOutliers (store, bg, wells, SdKeyLow, sdKeyLow.GetData(), traceOut, refOut, bgOut);
+//   OutputOutliers (store, bg, wells, MadHigh, madHigh.GetData(), traceOut, refOut, bgOut);
+//   OutputOutliers (store, bg, wells, BfNoKeyHigh, bfNoKeyHigh.GetData(), traceOut, refOut, bgOut);
+//   OutputOutliers (store, bg, wells, BfKeyLow, bfKeyLow.GetData(), traceOut, refOut, bgOut);
+//   OutputOutliers (store, bg, wells, LibKey, libOk.GetData(), traceOut, refOut, bgOut);
+//   OutputOutliers (store, bg, wells, EmptyWell, emptyOk.GetData(), traceOut, refOut, bgOut);
+//   OutputOutliers (store, bg, wells, TFKey, tfOk.GetData(), traceOut, refOut, bgOut);
+//   OutputOutliers (store, bg, wells, LowKeySignal, lowKeySignal.GetData(), traceOut, refOut, bgOut);
+//   OutputOutliers (store, bg, wells, KeyLowSignalFilt, wellLowSignal.GetData(), traceOut, refOut, bgOut);
+// }
 
 /*
  * For each region calculate:
@@ -2751,6 +2450,7 @@ void DifferentialSeparator::FitKeys(DifSepOpt &opts, GridMesh<struct FitTauEPara
                                     TraceStoreCol &traceStore, std::vector<KeySeq> &keys, 
                                     std::vector<float> &ftime, TraceSaver &saver,
                                     Mask &mask, std::vector<KeyFit> &wells) {
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Starting Calling Keys.");
   int numWells = mask.W() * mask.H();
   EvaluateKey evaluator;
   evaluator.m_doing_darkmatter = true;
@@ -2851,11 +2551,11 @@ void DifferentialSeparator::FitKeys(DifSepOpt &opts, GridMesh<struct FitTauEPara
     evaluator.SetUpMatrices(traceStore, mask.W(), 0, 
                             rowStart, rowEnd,
                             colStart, colEnd,
-                            0, keys[0].usableKeyFlows,
+                            0, usable_flows,
                             0, traceStore.GetNumFrames());
     evaluator.FindBestKey(rowStart, rowEnd,
                           colStart, colEnd,
-                          0, keys[0].usableKeyFlows,
+                          0, usable_flows,
                           0, mask.W(), &ftime[0],
                           keys, mean_taue.taue, mean_taue.ref_shift,
                           &mFilteredWells[0],
@@ -2868,7 +2568,7 @@ void DifferentialSeparator::FitKeys(DifSepOpt &opts, GridMesh<struct FitTauEPara
   }
   avgReport.Finish();
   keySumReport.Finish();
-
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Finished Calling Keys.");
 }
 
 void DifferentialSeparator::FitKeys(PJobQueue &jQueue, DifSepOpt &opts, GridMesh<struct FitTauEParams> &emptyEstimates, 
@@ -2950,15 +2650,20 @@ void DifferentialSeparator::FitKeys(PJobQueue &jQueue, DifSepOpt &opts, GridMesh
 
 
 void DifferentialSeparator::FitTauE(DifSepOpt &opts, TraceStoreCol &traceStore, GridMesh<struct FitTauEParams> &emptyEstimates,
-                                    std::vector<char> &filteredWells, std::vector<float> &ftime, std::vector<int> &allZeroFlows) {
-  emptyEstimates.Init (mask.H(), mask.W(), opts.tauEEstimateStep, opts.tauEEstimateStep);
+                                    std::vector<char> &filteredWells, std::vector<float> &ftime, std::vector<int> &allZeroFlows, float *taub_est) {
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Zeromers.");
+  emptyEstimates.Init (mMask.H(), mMask.W(), opts.tauEEstimateStep, opts.tauEEstimateStep);
   ZeromerMatDiff z_diff;
+  ZeromerMatDiff z_diff_big;
   int converged = 0;
   int no_wells = 0;
+  int zero_flows[1] = {0};
+  if (taub_est != NULL) {  memset(taub_est, 0, sizeof(float) * filteredWells.size()); }
   for (size_t binIx = 0; binIx < emptyEstimates.GetNumBin(); binIx++) {
     int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
     emptyEstimates.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
-    z_diff.SetUpMatricesClean(traceStore, &filteredWells[0], &ftime[0], 2, 3, mask.W(), mask.W() * mask.H(),
+    z_diff.SetUpMatricesClean(traceStore, &filteredWells[0], &ftime[0], 2, 3, 
+                              mMask.W(), mMask.W() * mMask.H(),
                               rowStart, rowEnd, colStart, colEnd,
                               &allZeroFlows[0], allZeroFlows.size(),
                               0, traceStore.GetNumFrames());
@@ -2988,7 +2693,6 @@ void DifferentialSeparator::FitTauE(DifSepOpt &opts, TraceStoreCol &traceStore, 
       taue_fitter.SetParamMin(taue_param_min);
       taue_fitter.SetInitialParam(taue_param);
       taue_fitter.Fit(true, 100, z_diff.m_trace_data);
-      //      taue_fitter.Fit(false, 100, z_diff.m_trace_data);
       taue_param.ref_shift = taue_fitter.m_params.ref_shift;
       taue_param.taue = taue_fitter.m_params.taue;
  
@@ -3000,16 +2704,42 @@ void DifferentialSeparator::FitTauE(DifSepOpt &opts, TraceStoreCol &traceStore, 
         converged++;
       }
     }
-    //    fprintf(stdout, "Block %d taue %.2f shift %.2f %f\n", (int)binIx, param.taue, param.ref_shift, param.converged);
+    if (taub_est != NULL) {
+      z_diff_big.SetUpMatrices(traceStore, &filteredWells[0], &ftime[0], 1, 1, 
+                               mMask.W(), mMask.W() * mMask.H(),
+                               rowStart, rowEnd, colStart, colEnd,
+                               allZeroFlows[0], allZeroFlows[0] + 1,
+                               0, traceStore.GetNumFrames());
+      z_diff_big.FitTauB(zero_flows, 1,
+                         z_diff_big.m_trace_data, z_diff_big.m_ref_data,
+                         z_diff_big.m_num_wells, z_diff_big.m_num_flows, z_diff_big.m_num_well_flows,
+                         z_diff_big.m_total_size / z_diff_big.m_num_well_flows,
+                         param.taue, z_diff_big.m_taub);
+      int chip_col = mMask.W();
+      float *__restrict local_taub = z_diff_big.m_taub;
+      for (int row_ix = rowStart; row_ix < rowEnd; row_ix++) {
+        for (int col_ix = colStart; col_ix < colEnd; col_ix++) {
+          int well_ix = row_ix * chip_col + col_ix;
+          float value = *local_taub++;
+          if (value > 0) {
+            taub_est[well_ix] = value;
+          }
+          else {
+            filteredWells[well_ix] = LowTraceSd;
+          }
+        }
+      }
+    }
   }
   fprintf(stdout, "FitTauE() - %d %d %d\n", converged, no_wells, (int)emptyEstimates.GetNumBin());
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After well Zeromers.");
 }
 
 void DifferentialSeparator::DoRegionClustering(DifSepOpt &opts, Mask &mask, vector<float> &bfMetric, float madThreshold,
                                                std::vector<KeyFit> &wells, GridMesh<MixModel> &modelMesh) {
   int numWells = mask.H() * mask.W();
   ofstream modelOut;
-  if (opts.outputDebug > 0) {
+  if (opts.outputDebug > 1) {
     string modelFile = opts.outData + ".mix-model.txt";
     modelOut.open(modelFile.c_str());
     modelOut << "bin\tbinRow\tbinCol\trowStart\trowEnd\tcolStart\tcolEnd\tcount\tmix\tmu1\tvar1\tmu2\tvar2\tthreshold\trefMean" << endl;
@@ -3030,7 +2760,7 @@ void DifferentialSeparator::DoRegionClustering(DifSepOpt &opts, Mask &mask, vect
 
   // Anchor clusters based off of set of good live beads and the empty wells.
   for (int i = 0; i < numWells; i++) {
-    if (wells[i].snr >= opts.minTauESnr && wells[i].peakSig > 50) {
+    if (wells[i].snr >= opts.minTauESnr && wells[i].peakSig > RELIABLE_PEAK_HEIGHT) {
       wells[i].goodLive = true;
     }
   }
@@ -3079,7 +2809,7 @@ void DifferentialSeparator::DoRegionClustering(DifSepOpt &opts, Mask &mask, vect
       }
       int binRow, binCol;
       modelMesh.IndexToXY (binIx, binRow, binCol);
-      if (opts.outputDebug > 0) {
+      if (opts.outputDebug > 1) {
 	modelOut << binIx << "\t" << binRow << "\t" << binCol << "\t"
 		 << rowStart << "\t" << rowEnd << "\t" << colStart << "\t" << colEnd << "\t"
 		 << model.count << "\t" << model.mix << "\t"
@@ -3094,57 +2824,85 @@ void DifferentialSeparator::DoRegionClustering(DifSepOpt &opts, Mask &mask, vect
   }
 }
 
+
 void DifferentialSeparator::ClusterIndividualWells(DifSepOpt &opts, Mask &bfMask, Mask &mask, TraceStoreCol &traceStore,
-                                                   GridMesh<MixModel> &modelMesh, std::vector<KeyFit> &wells, std::vector<char> &clusters) {
+                                                   GridMesh<MixModel> &modelMesh, std::vector<KeyFit> &wells, 
+                                                   std::vector<float> &confidence, std::vector<char> &clusters) {
   bfMask.Init (&mask);
   int notGood = 0;
   vector<MixModel *> bfModels;
-  std::vector<double> dist(7);
-  std::vector<std::vector<float> *> values(7);
+  std::vector<double> dist;
+  bool cluster_diagnostics = opts.outputDebug > 0;
+  if (cluster_diagnostics) {
+    confidence.resize(mask.H() * mask.W());
+    std::fill(confidence.begin(), confidence.end(), -1.0f);
+  }
+
+  // For speed create a fine grain mesh where we have pre averaged the smoothing
+  GridMesh<MixModel> fine_mesh;
+  fine_mesh.Init(mask.H(), mask.W(), opts.clusterFineMeshStep, opts.clusterFineMeshStep);
+  for (size_t binIx = 0; binIx < fine_mesh.GetNumBin(); binIx++) {
+    int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
+    fine_mesh.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
+    int row_center = (rowStart + rowEnd) / 2;
+    int col_center = (colStart + colEnd) / 2;
+    int good = 0;
+    modelMesh.GetClosestNeighbors (row_center, col_center, opts.bfNeighbors, dist, bfModels);
+    MixModel &m = fine_mesh.GetItem(binIx);
+    m.mu1 = m.mu2 = m.var1 = m.var2 = m.mix = 0.0f;
+    m.count = 0;
+    m.thresholdSet = false;
+    float weight = 0.0f;
+    for (size_t i = 0; i < bfModels.size(); i++) {
+      if ( (size_t) bfModels[i]->count > opts.minBfGoodWells) {
+        good++;
+        float w = 1.0/ (log (dist[i] + 2.5));
+        weight += w;
+        m.mu1 += w * bfModels[i]->mu1;
+        m.mu2 += w * bfModels[i]->mu2;
+        m.var1 += w * bfModels[i]->var1;
+        m.var2 += w * bfModels[i]->var2;
+        m.mix += w * bfModels[i]->mix;
+        m.count += w * bfModels[i]->count;
+      }
+    }
+    if (weight > 0) {
+      m.mu1 = m.mu1 / weight;
+      m.mu2 = m.mu2 / weight;
+      m.var1 = m.var1 / weight;
+      m.var2 = m.var2 / weight;
+      m.mix = m.mix / weight;
+      m.count = m.count / weight;
+      m.var1sq2p = 1 / sqrt(2 * DualGaussMixModel::GPI * m.var1);
+      m.var2sq2p = 1 / sqrt(2 * DualGaussMixModel::GPI * m.var2);
+    }
+    DualGaussMixModel::SetThreshold(m);
+  }
+
+  // Just look up the well's location in pre calculated fine grain mesh and use that for estimation
+  size_t row = 0, col = 0;
   for (size_t bIx = 0; bIx < wells.size(); bIx++) {
     bfMask[bIx] = mask[bIx];
     if (bfMask[bIx] & MaskExclude || bfMask[bIx] & MaskPinned || mFilteredWells[bIx] != GoodWell) {
       continue;
     }
-    if (wells[bIx].keyIndex < 0) {
-      size_t row, col;
-      double weight = 0;
-      MixModel m;
-      int good = 0;
+    if (cluster_diagnostics || wells[bIx].keyIndex < 0) {
       traceStore.WellRowCol (wells[bIx].wellIdx, row, col);
-      modelMesh.GetClosestNeighbors (row, col, opts.bfNeighbors, dist, bfModels);
-      for (size_t i = 0; i < bfModels.size(); i++) {
-        if ( (size_t) bfModels[i]->count > opts.minBfGoodWells) {
-          good++;
-          float w = 1.0/ (log (dist[i] + 2.5));
-          weight += w;
-          m.mu1 += w * bfModels[i]->mu1;
-          m.mu2 += w * bfModels[i]->mu2;
-          m.var1 += w * bfModels[i]->var1;
-          m.var2 += w * bfModels[i]->var2;
-          m.mix += w * bfModels[i]->mix;
-          m.count += w * bfModels[i]->count;
+      MixModel &m = fine_mesh.GetItemByRowCol(row, col);
+      double ownership = 0;
+      int bCluster = 0;
+      if (m.var1 > 0.0f) {
+        bCluster = DualGaussMixModel::PredictCluster (m, wells[bIx].bfMetric, opts.bfThreshold, ownership);
+        if (cluster_diagnostics) {
+          float conf = 0;
+          DualGaussMixModel::CalculateResponsibility(m, wells[bIx].bfMetric, conf);
+          confidence[bIx] = std::max(1.0f - conf, conf);
         }
       }
-      if (good == 0) {
-        clusters[bIx] = 0;
-        //        notGood++;
-        //        bfMask[bIx] = MaskIgnore;
-        //        wells[bIx].flag = WellBfBad;
-      }
       else {
-        m.mu1 = m.mu1 / weight;
-        m.mu2 = m.mu2 / weight;
-        m.var1 = m.var1 / weight;
-        m.var2 = m.var2 / weight;
-        m.mix = m.mix / weight;
-        m.count = m.count / weight;
-        m.var1sq2p = 1 / sqrt (2 * DualGaussMixModel::GPI * m.var1);
-        m.var2sq2p = 1 / sqrt (2 * DualGaussMixModel::GPI * m.var2);
-        double ownership = 0;
-        int bCluster = DualGaussMixModel::PredictCluster (m, wells[bIx].bfMetric, opts.bfThreshold, ownership);
-        clusters[bIx] = bCluster;
+        bCluster = 0;
       }
+      clusters[bIx] = bCluster;
     }
   }
 }
@@ -3159,6 +2917,7 @@ void DifferentialSeparator::AssignAndCountWells(DifSepOpt &opts, std::vector<Key
   int poorLibPeakSignal = 0;
   int poorTfPeakSignal = 0;
   int emptyWithSignal = 0;
+  int noisyColumn = 0;
   int tooRefVar = 0;
   int tooRefBuffer = 0;
   int filtWells = 0;
@@ -3171,9 +2930,16 @@ void DifferentialSeparator::AssignAndCountWells(DifSepOpt &opts, std::vector<Key
       if (bfMask[bIx] & MaskExclude || bfMask[bIx] & MaskPinned || bfMask[bIx] & MaskIgnore) {
 	continue;
       }
+      if (mFilteredWells[bIx] == NoisyColumn) {
+        bfMask[bIx] = MaskIgnore;
+        wells[bIx].keyIndex = -1;
+        wells[bIx].flag = WellNoisyColumn;
+        noisyColumn++;
+        continue;
+      }
       // if (wells[bIx].keyIndex < 0 && (filteredWells[bIx] == LowTraceSd || filteredWells[bIx] == PinnedExcluded) ) {
       //   filtWells++;
-      //   bfMask[bIx] = MaskIgnore;
+      //   mBfMask[bIx] = MaskIgnore;
       //   continue;
       // }
       if (wells[bIx].keyIndex < 0 && filteredWells[bIx] != GoodWell) {
@@ -3252,7 +3018,14 @@ void DifferentialSeparator::AssignAndCountWells(DifSepOpt &opts, std::vector<Key
   //  double bfThreshold = bfEmptyQuantiles.GetQuantile (.75) + (3 * IQR (bfEmptyQuantiles));
   //  cout << "Bf threshold is: " << bfThreshold << " for: " << bfQuantiles.GetMedian() << " +/- " <<  IQR (bfQuantiles) << endl;
   for (size_t bIx = 0; bIx < wells.size(); bIx++) {
-    if ((bfMask[bIx] & MaskExclude) != 0) {
+    if (bfMask[bIx] & MaskExclude) {
+      continue;
+    }
+    if (mFilteredWells[bIx] == NoisyColumn) {
+      bfMask[bIx] = MaskIgnore;
+      wells[bIx].keyIndex = -1;
+      wells[bIx].flag = WellNoisyColumn;
+      noisyColumn++;
       continue;
     }
     if (opts.doRemoveLowSignalFilter && (wells[bIx].keyIndex == 0 && (wells[bIx].peakSig < minLibPeak))) {
@@ -3312,9 +3085,9 @@ void DifferentialSeparator::AssignAndCountWells(DifSepOpt &opts, std::vector<Key
       bfMask[bIx] &= ~MaskReference;
     }
   }
-  //totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Post Filtering.");  
+  //mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Post Filtering.");  
 
-  cout << "Lib snr: " << keys[0].minSnr << endl;
+  cout << "Lib snr: " << mKeys[0].minSnr << endl;
   if (libSnrQuantiles.GetNumSeen() > 100) {
     cout << "Lib SNR: " << endl;
     for (size_t i = 0; i < 10; i++) {
@@ -3342,6 +3115,7 @@ void DifferentialSeparator::AssignAndCountWells(DifSepOpt &opts, std::vector<Key
   //  cout << "Marked: " << poorSignal << " wells as ignore based on poor signal." << endl;
   cout << "Marked: " << poorLibPeakSignal << " lib wells as ignore based on poor peak signal. ( " << minLibPeak << " )" << endl;
   cout << "Marked: " << poorTfPeakSignal << " tf wells as ignore based on poor peak signal. ( " << minTfPeak << " )" << endl;
+  cout << "Noisy Column: " << noisyColumn << " wells from noisy columns" << endl;
   //  cout << "Marked: " << emptyWithSignal << " empty wells as ignore based on too much peak signal. (" << peakSigEmptyThreshold << " )" << endl;
   //  cout << "Marked: " << sdRefCalled << " wells as empty based on signal sd." << endl;
   //  cout << "Marked: " << badSignal << " wells ignore based on mean 1mer signal." << endl;
@@ -3351,16 +3125,157 @@ void DifferentialSeparator::AssignAndCountWells(DifSepOpt &opts, std::vector<Key
 
 }
 
+void DifferentialSeparator::ReduceMetric(std::vector<float> &metric, int col_ix, 
+                                         ChipReduction &reduce, const char *filtered_wells,
+                                         arma::Mat<float> &M) {
+  reduce.Reset();
+  reduce.Reduce(&metric[0], filtered_wells);
+  for (size_t i = 0; i < M.n_rows; i++) { M(i,col_ix) = reduce.GetBlockAvg(i, 0); }
+  std::fill(metric.begin(), metric.end(), 0.0f);
+}
+
+
+void DifferentialSeparator::SpatialSummary(const std::string &h5_file_name, const std::string &h5path, 
+                                           DifSepOpt &opts, Mask &mask, int x_step, int y_step) {
+  int x_clip = mask.W();
+  int y_clip = mask.H();
+  string json_header = "{";
+  json_header += " \"row_step\" : " + ToStr(y_step);
+  json_header += ", \"col_step\" : " + ToStr(x_step);
+  json_header += ", \"headers\" : [\"row_start\",\"row_end\",\"col_start\",\"col_end\"";
+  int chip_offset_x = 0, chip_offset_y = 0;
+  string first_dat = opts.resultsDir + "/acq_0000.dat";
+  Image::GetOffsetFromChipPath(first_dat.c_str(), chip_offset_x, chip_offset_y);
+  int n_wells = mask.W() * mask.H();
+  if (opts.isThumbnail) { x_clip = y_clip = BF_THUMBNAIL_SIZE; }
+  ChipReduction reduce(mask.H(), mask.W(), 1,
+                       y_step, x_step, y_clip, x_clip, (int)(.2 * y_step * x_step));
+  reduce.SetAvgReduce(true);
+  vector<float> metric(n_wells, 0.0f);
+  vector<char> bad_wells(n_wells, 0);
+  arma::Mat<float> M(reduce.GetNumSmoothBlocks(), 24);
+  M.zeros();
+  // Fill in the row and colum areads
+  int row_start, row_end, col_start, col_end;
+  for (size_t i = 0; i < M.n_rows; i++) {
+    reduce.GetBlockDims(i, row_start, row_end, col_start,col_end);
+    M(i,0) = row_start + chip_offset_y;
+    M(i,1) = row_end + chip_offset_y;
+    M(i,2) = col_start + chip_offset_x;
+    M(i,3) = col_end + chip_offset_x;
+  }
+  int col = 4;
+  float cv = 10000.0f; // crazy value limit
+  float nan = std::numeric_limits<float>::quiet_NaN();
+
+  json_header += ",\"t0\"";   // t0 4
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = mT0[w_ix] > 0 ? mT0[w_ix] : nan; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+
+  json_header += ",\"snr\"";   // snr 5
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = isfinite(mWells[w_ix].snr) && fabs(mWells[w_ix].snr) < cv ? mWells[w_ix].snr : nan; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+
+  json_header += ",\"mad\"";   // mad 6
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = mWells[w_ix].mad > 0 && mWells[w_ix].mad < cv ? mWells[w_ix].mad : nan; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+
+  json_header += ",\"sd\"";    // sd 7
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = mWells[w_ix].sd > 0 && mWells[w_ix].sd < cv ? mWells[w_ix].sd : nan; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+
+  json_header += ",\"bf_metric\"";   // bf_metric 8
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mask[w_ix] & MaskPinned) == 0 ? mWells[w_ix].bufferMetric : nan; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+
+  json_header += ",\"tau_e\""; // tauE 9
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = mWells[w_ix].tauE; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+
+  json_header += ",\"tau_b\""; // tauB 10
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = mWells[w_ix].tauB; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+
+  json_header += ",\"peak_sig\""; // peakSig 11
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = mWells[w_ix].peakSig < cv ? mWells[w_ix].peakSig : nan; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+
+  json_header += ",\"trace_sd\""; // traceSd 12
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = mWells[w_ix].traceSd > 0 ? mWells[w_ix].traceSd : nan; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+
+  json_header += ",\"bead\""; // mask bead 13
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mBfMask[w_ix] & MaskBead) ? 1 : 0; }
+  ReduceMetric(metric, col++, reduce, &bad_wells[0], M);
+
+  json_header += ",\"empty\"";   // mask empty 14
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mBfMask[w_ix] & MaskEmpty) ? 1 : 0; }
+  ReduceMetric(metric, col++, reduce, &bad_wells[0], M);
+
+  json_header += ",\"ignore\""; // mask ignore 15
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mBfMask[w_ix] & MaskIgnore) ? 1 : 0; }
+  ReduceMetric(metric, col++, reduce, &bad_wells[0], M);
+
+  json_header += ",\"pinned\""; // mask pinned 16
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mBfMask[w_ix] & MaskPinned) ? 1 : 0; }
+  ReduceMetric(metric, col++, reduce, &bad_wells[0], M);
+
+  json_header += ",\"reference\""; // mask reference 17
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mBfMask[w_ix] & MaskReference) ? 1 : 0; }
+  ReduceMetric(metric, col++, reduce, &bad_wells[0], M);
+
+  json_header += ",\"tf\""; // mask tf 18
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mBfMask[w_ix] & MaskTF) ? 1 : 0; }
+  ReduceMetric(metric, col++, reduce, &bad_wells[0], M);
+
+  json_header += ",\"lib\""; // mask lib 19
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mBfMask[w_ix] & MaskLib) ? 1 : 0; }
+  ReduceMetric(metric, col++, reduce, &bad_wells[0], M);
+
+  json_header += ",\"dud\""; // mask dud 20
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mBfMask[w_ix] & MaskDud) ? 1 : 0; }
+  ReduceMetric(metric, col++, reduce, &bad_wells[0], M);
+
+  json_header += ",\"soft_filt\""; // mask pinned 21
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mFilteredWells[w_ix] > 0 && (mBfMask[w_ix] & MaskPinned) == 0) ? 1 : 0; }
+  ReduceMetric(metric, col++, reduce, &bad_wells[0], M);
+
+  json_header += ",\"buff_clust_conf\""; // beadfind cluster buffer confidence 22
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mBfMask[w_ix] & MaskPinned) == 0 ? mBfConfidence[0][w_ix] : nan; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+
+  json_header += ",\"sig_clust_conf\""; // beadfind clustering signal confidence 23
+  for (int w_ix = 0; w_ix < n_wells; w_ix++) { metric[w_ix] = (mBfMask[w_ix] & MaskPinned) == 0 ? mBfConfidence[1][w_ix] : nan; }
+  ReduceMetric(metric, col++, reduce, &mFilteredWells[0], M);
+  
+  json_header += "] }";
+  
+  
+  // Write out the results
+  H5File h5file(h5_file_name);
+  h5file.Open(true);
+  h5file.WriteString(h5path + "_header", json_header.c_str());
+  H5Arma::WriteMatrix (h5file, h5path + "_table", M);
+  h5file.Close();
+}
+
+
 void DifferentialSeparator::HandleDebug(std::vector<KeyFit> &wells, DifSepOpt &opts, const std::string &h5SummaryRoot, TraceSaver &saver, Mask &mask, TraceStoreCol &traceStore,   GridMesh<MixModel> &modelMesh) {
 
-  if (opts.outputDebug > 0) {
+  if (opts.outputDebug > 1) {
     size_t numWells = mask.H() *mask.W();
     // OutputOutliers (opts, traceStore, zModelBulk, wells,
     //     	    sdQuantiles.GetQuantile (.9), sdQuantiles.GetQuantile (.9), madQuantiles.GetQuantile (.9),
     //     	    bfQuantiles.GetQuantile (.9), bfQuantiles.GetQuantile (.9), peakSigKeyQuantiles.GetQuantile (.1));
 
     // Write out debugging matrix
-    arma::Mat<float> wellMatrix (numWells, 21);
+    int n_cols = 25;
+    bool do_noise = false;
+    if (opts.filterNoisyCols != "none") {
+      //      n_cols++;
+      do_noise = true;
+    }
+    arma::Mat<float> wellMatrix (numWells, n_cols);
     std::fill (wellMatrix.begin(), wellMatrix.end(), 0.0f);
     for (size_t i = 0; i < numWells; i++) {
       // if (mask[i] & MaskExclude || !zModelBulk.HaveModel (i)) {
@@ -3370,7 +3285,7 @@ void DifferentialSeparator::HandleDebug(std::vector<KeyFit> &wells, DifSepOpt &o
       KeyFit &kf = wells[i];
       //      const KeyBulkFit *kbf = zModelBulk.GetKeyBulkFit (i);
       wellMatrix.at (i, currentCol++) = (int) kf.keyIndex;                               // 0
-      wellMatrix.at (i, currentCol++) = t0[kf.wellIdx];                                  // 1
+      wellMatrix.at (i, currentCol++) = mT0[kf.wellIdx];                                  // 1
       wellMatrix.at (i, currentCol++) = kf.snr;                                          // 2
       wellMatrix.at (i, currentCol++) = kf.mad;                                          // 3 
       wellMatrix.at (i, currentCol++) = kf.sd;                                           // 4
@@ -3390,6 +3305,15 @@ void DifferentialSeparator::HandleDebug(std::vector<KeyFit> &wells, DifSepOpt &o
       wellMatrix.at (i, currentCol++) = mBfSdFrame[i];                                   // 18
       wellMatrix.at (i, currentCol++) = mBfSSQ[i];                                       // 19
       wellMatrix.at (i, currentCol++) = mAcqSSQ[i];                                      // 20
+      wellMatrix.at (i, currentCol++) = kf.bfMetric3;                             // 21
+      wellMatrix.at (i, currentCol++) = mBfConfidence[0][i];                             // 22
+      wellMatrix.at (i, currentCol++) = mBfConfidence[1][i];                             // 23
+      if (do_noise) {
+        wellMatrix.at (i, currentCol++) = mWellNoise[i];                                 // 24
+      }
+      else {
+        wellMatrix.at (i, currentCol++) = mEmptyMetrics.back().at(i);                             // 24
+      }
     }
 
     string h5Summary = "/separator/summary";
@@ -3437,7 +3361,7 @@ void DifferentialSeparator::HandleDebug(std::vector<KeyFit> &wells, DifSepOpt &o
             << 0 << "\t"
             << 0 << "\t"
             << 0 << "\t"
-            << kf.onemerAvg << "\t" << kf.onemerProjAvg << "\t" << kf.bfMetric2 << "\t"
+            << kf.onemerAvg << "\t" << kf.bfMetric3 << "\t" << kf.bfMetric2 << "\t"
             << kf.peakSig << "\t" << kf.flag << "\t" << kf.bufferMetric;
           o << endl;
       }
@@ -3448,7 +3372,7 @@ void DifferentialSeparator::HandleDebug(std::vector<KeyFit> &wells, DifSepOpt &o
 
 void DifferentialSeparator::OutputStats(DifSepOpt &opts, Mask &bfMask) {
   int beadCount = 0, emptyCount = 0, ignoreCount = 0, libCount = 0, tfCount = 0, dudCount = 0, pinnedCount = 0, referenceCount = 0, excludedCount = 0, excludeCount = 0;
-  for (size_t bIx = 0; bIx < wells.size(); bIx++) {
+  for (size_t bIx = 0; bIx < mWells.size(); bIx++) {
     if (bfMask[bIx] & MaskExclude) { excludeCount++; }
     if (bfMask[bIx] & MaskBead) { beadCount++; }
     if (bfMask[bIx] & MaskPinned) { pinnedCount++; }
@@ -3471,22 +3395,14 @@ void DifferentialSeparator::OutputStats(DifSepOpt &opts, Mask &bfMask) {
   cout << "Live   :\t" << libCount + tfCount << endl;
   cout << "TFBead :\t" << tfCount << endl;
   cout << "Library:\t" << libCount << endl;
-  if (opts.outputDebug) {
+  if (opts.outputDebug > 1) {
     string outMask = opts.outData + ".mask.bin";
     bfMask.WriteRaw (outMask.c_str());
   }
 }
 
-int DifferentialSeparator::Run(DifSepOpt opts) {
-  ClockTimer totalTimer;
-  // Create the keys if not specified.
-  if (keys.empty())  { MakeStadardKeys (keys); }
-  for (size_t kIx = 0; kIx < keys.size(); kIx++) { opts.maxKeyFlowLength = max ( (unsigned int) opts.maxKeyFlowLength, keys[kIx].usableKeyFlows); }
-
-  // Setup t0 and our reference buffering estimate
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before t0/gain .");
-  //  CalculateGainAndT0(opts, t0, mFilteredWells, mask, reference);
-  string bfFile = opts.resultsDir + "/" + opts.bfDat;
+void SetBeadfindType(DifSepOpt &opts, std::string &bfFile) {
+  bfFile = opts.resultsDir + "/" + opts.bfDat;
   cout << "bfDat " << opts.bfDat << endl;
   cout << "bfType " << opts.bfType << endl;
   if (opts.bfType == "positive") {
@@ -3502,16 +3418,11 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   else {
     ION_ABORT("don't recogize bfType" + ToStr(opts.bfType));
   }
-  //  string bfImgFile;
-  //  string bfImgFile2;
-  //string bfBkgImgFile;
+}
+
+void DifferentialSeparator::DoBeadfindFlowAndT0(DifSepOpt &opts, Mask &mask, const std::string &bfFile) {
+  ClockTimer mTotalTimer;
   std::vector<float> t02;
-  // DetermineBfFile (opts.resultsDir, opts.signalBased, opts.bfType,
-  //                  opts.bfDat, opts.bfBgDat, bfImgFile, bfImgFile2, bfBkgImgFile); 
-  LoadInitialMask(opts.mask, opts.maskFile, bfFile, mask, opts.ignoreChecksumErrors);
-  //  string bfFile = opts.resultsDir + "/beadfind_pre_0003.dat";
-  //  string bfFile2 = opts.resultsDir + "/beadfind_pre_0001.dat";
-  
   Image img;
   size_t numWells = mask.H() * mask.W();
   mFilteredWells.resize(numWells, 0);
@@ -3519,22 +3430,25 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     ImageNNAvg imageNN;
     ImageTransformer::gain_correction = NULL;
     OpenAndProcessImage(bfFile.c_str(), (char *)opts.resultsDir.c_str(), opts.ignoreChecksumErrors, 
-                        false, &mask, opts.gainMult == -1, img);
+                        false, &mask, false, img);
     imageNN.SetGainMinMult(opts.gainMult);
     if (opts.doGainCorrect) {
+      mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: before bf gain.");
       if (opts.isThumbnail) { CalcImageGain(&img, &mask, &mFilteredWells[0], BF_THUMBNAIL_SIZE, BF_THUMBNAIL_SIZE, &imageNN); }
       else { CalcImageGain(&img, &mask, &mFilteredWells[0], mask.H(), mask.W(), &imageNN); }
+      mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf gain.");
       GainCorrectImage(opts.doGainCorrect, img);
     }
   }
+  
   // Caclulate t0 with the same file
-  t0.resize(numWells);
-  std::fill(t0.begin(), t0.end(), 0.0f);
+  mT0.resize(numWells);
+  std::fill(mT0.begin(), mT0.end(), 0.0f);
   t02.resize(numWells);
   std::fill(t02.begin(), t02.end(), 0.0f);
   char incorporationFlowBuff[MAX_PATH_LENGTH];
   int mask_bad = MaskIgnore | MaskPinned | MaskExclude;
-  snprintf(incorporationFlowBuff, sizeof(incorporationFlowBuff), "acq_%.4d.dat", (int)keys[0].flows.size()-1);
+  snprintf(incorporationFlowBuff, sizeof(incorporationFlowBuff), "acq_%.4d.dat", (int)mKeys[0].flows.size()-1);
 
   //  CountReference("Starting", mFilteredWells);
   for (size_t i = 0; i < numWells; i++) {
@@ -3543,42 +3457,43 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
     }
   }
   const RawImage *raw = img.GetImage();
-  wells.resize (t0.size());
+  mWells.resize (mT0.size());
   //  CountReference("Initial From Mask", mFilteredWells);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: before bf t0.");
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: before bf t0.");
   std::vector<float> bf_ssq;
   int bf_t0_range_start = 0;
   int bf_t0_range_end = 15;
   if (!opts.skipBuffer) {
     if(opts.gainMult == 1) {
-      CalcBfT0(opts, t0, bf_ssq, img);
+      CalcBfT0(opts, mT0, bf_ssq, img);
     }
     else {
-      CalcAcqT0(opts, t0, bf_ssq, img, true);
+      CalcAcqT0(opts, mT0, bf_ssq, img, true);
       bf_t0_range_start = 0;
       bf_t0_range_end = 30;
     }
   }
   //  CountReference("After BF t0", mFilteredWells);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf t0.");
   std::vector<float> acq_ssq;
   CalcAcqT0(opts, t02,  acq_ssq, incorporationFlowBuff);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after acq t0.");
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after acq t0.");
   //  CountReference("After Acq t0", mFilteredWells);
 
   //  CalcBfT0(opts, t02, "beadfind_pre_0001.dat");
-  for (size_t i = 0; i < t0.size(); i++) {
-    wells[i].bfT0 = t0[i];
-    wells[i].acqT0 = t02[i];
-    float ot = t0[i];
-    if (t0[i] > 0 && t02[i] > 0) {
-      t0[i] = (.3 * t0[i] + .7 * t02[i]);
+  for (size_t i = 0; i < mT0.size(); i++) {
+    mWells[i].bfT0 = mT0[i];
+    mWells[i].acqT0 = t02[i];
+    float ot = mT0[i];
+    if (mT0[i] > 0 && t02[i] > 0) {
+      mT0[i] = (.3 * mT0[i] + .7 * t02[i]);
     }
     else {
-      t0[i] = max(t0[i], t02[i]);
+      mT0[i] = max(mT0[i], t02[i]);
     }
-    t0[i] = max(-1.0f,t0[i] - T0_LEFT_OFFSET);
+    mT0[i] = max(-1.0f,mT0[i] - T0_LEFT_OFFSET);
     if (ot > 0) {
-      t02[i] = raw->interpolatedFrames[max((int)(t0[i]+.5)-1,0)];
+      t02[i] = raw->interpolatedFrames[max((int)(mT0[i]+.5)-1,0)];
     }
   }
   for (size_t i = 0; i < numWells; i++) {
@@ -3586,11 +3501,22 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       mFilteredWells[i] = DifferentialSeparator::PinnedExcluded;
     }
   }
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after t0/gain.");
+  mRefWells.resize(mFilteredWells.size());
+  // This is for t0 regions
+  mRegionIncorpReporter.Init(opts.outData, mask.H(), mask.W(),
+			     opts.regionXSize, opts.regionYSize,
+			     mKeys, mT0);
+  mRegionIncorpReporter.SetMinKeyThreshold(1, 0);
+  mRegionIncorpReporter.SetMinKeyThreshold(0, 0);
+  mRegionIncorpReporter.Finish(); // this is for t0 regions
+
+  //  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after t0/gain.");
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: before bf metric.");
   BfMetric bf_metric;
   bf_metric.Init(raw->rows, raw->cols, raw->frames);
   bf_metric.SetGainMinMult(opts.gainMult);
   string bf_metric_file = "";
+  int bf_frame_window = 1; // opts.gainMult == 1 ? 1 : 0;
   if (!opts.skipBuffer) {
     if (opts.outputDebug > 2) {
       bf_metric_file = opts.outData + "_beadfind.h5";
@@ -3599,17 +3525,17 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
       bf_metric.CalcBfSdMetricReduce(raw->image, &mask, &mFilteredWells[0],
                                      &t02[0], bf_metric_file, bf_t0_range_start, bf_t0_range_end,
                                      BF_THUMBNAIL_SIZE, BF_THUMBNAIL_SIZE, 
-                             BF_NN_AVG_WINDOW, BF_NN_AVG_WINDOW);
+                                     BF_NN_AVG_WINDOW, BF_NN_AVG_WINDOW, bf_frame_window);
     }
     else {
       bf_metric.CalcBfSdMetricReduce(raw->image, &mask, &mFilteredWells[0],
                                      &t02[0], bf_metric_file, bf_t0_range_start, bf_t0_range_end,
                                      mask.H(), mask.W(),
-                                     BF_NN_AVG_WINDOW, BF_NN_AVG_WINDOW);    
+                                     BF_NN_AVG_WINDOW, BF_NN_AVG_WINDOW, bf_frame_window);    
     }
   }
   // unset pinned from beadfind as looks wrong for positive beadfind...
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf metric.");
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf metric.");
   //  size_t numWells = mask.H() * mask.W();
 
 
@@ -3629,168 +3555,79 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
   }
   bf_metric.Cleanup();
   img.Close();
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: after bf_metric.");
+}
 
-  // Setup our job queue
-  int qSize = (mask.W() / opts.t0MeshStep + 1) * (mask.H() / opts.t0MeshStep + 1);
-  if (opts.nCores <= 0) {  opts.nCores = numCores(); }
-  PJobQueue jQueue (opts.nCores, qSize);
-
-  // Figure out which flows can be used for fitting taue
-  Col<int> zeroFlows;
-  vector<int> flowsAllZero;
-  ZeroFlows(keys, opts, zeroFlows, flowsAllZero);
-
-  // --- Load up the key flows into our trace store
-  int maxFlow = max(zeroFlows.n_rows > 0 ? zeroFlows[zeroFlows.n_rows -1] + 1 : 0, opts.maxKeyFlowLength+2);
-  TraceStoreCol traceStore (mask, T0_RIGHT_OFFSET, opts.flowOrder.c_str(), 
-                            maxFlow, maxFlow,
-                            opts.referenceStep, opts.referenceStep);
-  traceStore.SetMinRefProbes (opts.percentReference * opts.referenceStep * opts.referenceStep);
-  vector<float> traceSdMin(numWells);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Loading Dats.");
-  LoadKeyDats (jQueue, traceStore, mBfMetric, opts, traceSdMin, zeroFlows);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Loading Dats.");
-  // Open our h5 file if necessary
-  string h5SummaryRoot;
-  if (opts.outputDebug > 1) {
-    h5SummaryRoot = opts.outData + ".h5";
-    H5File h5file(h5SummaryRoot);
-    h5file.Open(true);
-    h5file.Close();
-  }
-
-  // Calculate our best beadfind metric here...
-
-
-  // Pick which wells to use for initial reference
-  PickReference(traceStore, mBfMetric, opts.referenceStep, opts.referenceStep, opts.useSignalReference,
-                opts.iqrMult, 7, opts.percentReference, mask, ceil(opts.referenceStep*opts.referenceStep * opts.percentReference),
-                mFilteredWells, mRefWells);
-  //loadTimer.PrintMicroSecondsUpdate(stdout, "Load Timer: Reference Picked");  
-  int filtered = 0, refChosen = 0, possible = 0;
-  for (size_t i = 0; i < mFilteredWells.size(); i++) {
-    if (mask[i] == MaskIgnore) {
-      mFilteredWells[i] = LowTraceSd;
-    }
-    if (!(mask[i] & MaskPinned || mask[i] & MaskExclude)) {
-      possible++;
-      if (mFilteredWells[i] != GoodWell) {
-        filtered++;
-      }
-      if (mRefWells[i] == 1) {
-        refChosen++;
+void SmoothTraces(DifSepOpt &opts, TraceStoreCol &traceStore, Mask &mask, float *traceMad, char *filtWells) {
+  ClockTimer timer;
+  if (opts.smoothTrace) {
+    printf("Smoothing traces.\n");
+    timer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before smoothing traces.");
+    for (size_t flow_ix = 0; flow_ix < traceStore.GetNumFlows(); flow_ix++) {
+      GridMesh<int> pcaMesh;
+      pcaMesh.Init (mask.H(), mask.W(), PCA_COMP_GRID_SIZE, PCA_COMP_GRID_SIZE);
+      for (size_t binIx = 0; binIx < pcaMesh.GetNumBin(); binIx++) {
+        int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
+        pcaMesh.GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
+        traceStore.PcaLossyCompress(rowStart, rowEnd, colStart, colEnd, flow_ix,
+                                    traceMad, filtWells,
+                                    2, 2, 6);
       }
     }
+    timer.PrintMicroSecondsUpdate(stdout, "Total Timer: After smoothing traces.");
   }
-  // Set the reference well sin the trace store and 
-  for (size_t i = 0; i < mRefWells.size(); i++) {
-    traceStore.SetReference(i, mRefWells[i] == 1);
-  }
-  size_t loadMinFlows = max (9, opts.maxKeyFlowLength+2);
-  traceStore.mRefReduction.resize(loadMinFlows);
-  for (size_t i = 0; i < loadMinFlows; i++) {
-    traceStore.PrepareReference (i, mFilteredWells);
-  }
+}
 
-  // Currently time is just linear
-  mTime.set_size (traceStore.GetNumFrames());
-  for (size_t i = 0; i < mTime.n_rows; i++)  { mTime[i] = i; }
-  std::vector<float> ftime(traceStore.GetNumFrames());
-  std::copy(mTime.begin(), mTime.end(), ftime.begin());
+void DifferentialSeparator::ClusterWells(DifSepOpt &opts, TraceStoreCol &traceStore, Mask &mask, Mask &bfMask, 
+                                         float madThreshold, GridMesh<MixModel> &modelMesh) {
+  size_t numWells = mask.H() * mask.W();
 
-  // Do inital fit of tauE
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Zeromers.");
-  GridMesh<struct FitTauEParams> emptyEstimates;
-  FitTauE(opts,traceStore, emptyEstimates, mFilteredWells, ftime, flowsAllZero);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After well Zeromers.");
-  
-  // Fit the keys
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Starting Calling Keys.");
-  TraceSaver saver;
-  FitKeys(jQueue, opts, emptyEstimates, traceStore, keys, ftime, saver, mask, wells);
-  //  FitKeys(opts, emptyEstimates, traceStore, keys, ftime, saver, mask, wells);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Finished Calling Keys.");
-
-  // This is for t0 regions
-  mRegionIncorpReporter.Init(opts.outData, mask.H(), mask.W(),
-			     opts.regionXSize, opts.regionYSize,
-			     keys, t0);
-  mRegionIncorpReporter.SetMinKeyThreshold(1, 0);
-  mRegionIncorpReporter.SetMinKeyThreshold(0, 0);
-  mRegionIncorpReporter.Finish(); // this is for t0 regions
-
-  for (size_t i = 0; i < numWells; i++) {
-    wells[i].isRef = traceStore.IsReference(i);
-    wells[i].bufferMetric = wells[i].bfMetric = mBfMetric[i];
-  }
-  WellSetKeyStats libStats("Library", 1000), refStats("SepRef Wells", 1000), 
-    tfStats("TF", 1000), filtStats("Soft Filters",1000), allStats("All Stats", 1000),
-    maskRefStats("MaskRef", 1000), maskEmptyStats("MaskEmpty", 1000);
-
-  for (size_t i = 0; i < numWells; i++) {
-    if (wells[i].keyIndex == 0) { libStats.AddWell(wells[i]); }
-    if (wells[i].keyIndex == 1) { tfStats.AddWell(wells[i]); }
-    if (wells[i].isRef == 1) { refStats.AddWell(wells[i]); }
-    if (mFilteredWells[i] != 0) {filtStats.AddWell(wells[i]);}
-    if (isfinite(wells[i].mad) && wells[i].mad >= 0) { allStats.AddWell(wells[i]); }
-  }
-  /// --- Check to make sure we got some live wells, do we really need this anymore?
-  int gotKeyCount = 0;
-  OutputFitSummary(opts, wells, emptyEstimates, gotKeyCount);
-  int notExcludePinnedWells = 0;
-  for (size_t i = 0; i < numWells; i++) {
-    if (! (mask[i] & MaskExclude || mask[i] & MaskPinned)) {
-      notExcludePinnedWells++;
-    }
-  }
-
-  int minOkCount = max (10.0, opts.minRatioLiveWell * notExcludePinnedWells);
-  if (gotKeyCount <= minOkCount) { ION_ABORT_CODE ("Only got: " + ToStr (gotKeyCount) + " key passing wells. Couldn't find enough (" + ToStr (minOkCount) + ") wells with key signal.", DIFFSEP_ERROR); }
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Fitting Filters.");
-  double minTfPeak = opts.minTfPeakMax;
-  double minLibPeak = MIN_LIB_PEAK; //oopts.minLibPeakMax;
-  minLibPeak = max(minLibPeak, libStats.m_quantiles[KEY_PEAK_STAT].GetQuantile(.25) - (3 * IQR (libStats.m_quantiles[KEY_PEAK_STAT])));
-  //  cout << "Min Tf peak is: " << minTfPeak << " lib peak is: " << minLibPeak << endl;
-  double madThreshold = allStats.m_quantiles[MAD_STAT].GetQuantile(.75) + (3 * IQR (allStats.m_quantiles[MAD_STAT]));
-  //  madThreshold = max(madThreshold, 10.0);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After fitting filters.");
-
-  // Cluster at the region level
-  GridMesh<MixModel> modelMesh;
   GridMesh<MixModel> sdModelMesh;
-  std::vector<char> buffCluster(wells.size(), -1);
-  std::vector<char> sdCluster(wells.size(), -1);
-  if (!opts.skipBuffer) {
-    totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Regional Clustering.");
-    DoRegionClustering(opts, mask, mBfMetric, madThreshold, wells, modelMesh);
-    totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Regional Clustering.");
-    ClusterIndividualWells(opts, bfMask, mask, traceStore, modelMesh, wells, buffCluster);
+  std::vector<char> buffCluster(mWells.size(), -1);
+  std::vector<char> sdCluster(mWells.size(), -1);
+  // If we didn't run a beadfind flow then use the tauB estimate. 
+  if (opts.skipBuffer || opts.gainMult == -1) {
+    cout << "Using taub estimate as buffering." << endl;
+    mBfMetric.resize(numWells);
+    //    std::copy(mEmptyMetrics.back().begin(), mEmptyMetrics.back().end(), mBfMetric.begin());
+    for (size_t i = 0; i < numWells; i++) {
+      mBfMetric[i] = mWells[i].tauB;
+      mWells[i].bfMetric = mWells[i].tauB;
+    }
   }
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Regional Buffering Clustering.");
+  DoRegionClustering(opts, mask, mBfMetric, madThreshold, mWells, modelMesh);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Regional Buffering Clustering.");
+  mBfConfidence.resize(2); // for debugging diagnostics
+  ClusterIndividualWells(opts, bfMask, mask, traceStore, modelMesh, mWells, mBfConfidence[0], buffCluster);
+
   cout << "Using signal for clustering" << endl;
   for (size_t i = 0; i < numWells; i++) {
-    // wells[i].bfMetric = wells[i].onemerAvg;
-    // reference.SetBfMetricVal(i, wells[i].bfMetric);
-    mBfMetric[i] = wells[i].sd;
-    wells[i].bfMetric = wells[i].sd;
+    // wells[i].bfMetric = mWells[i].onemerAvg;
+    // reference.SetBfMetricVal(i, mWells[i].bfMetric);
+    if (opts.skipBuffer) {
+      mBfMetric[i] = mWells[i].peakSig;
+      mWells[i].bfMetric = mWells[i].peakSig;
+    }
+    else {
+      mBfMetric[i] = mWells[i].sd;
+      mWells[i].bfMetric = mWells[i].sd;
+    }
   }
   // Cluster the individual wells
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Regional Clustering.");
-  DoRegionClustering(opts, mask, mBfMetric, madThreshold, wells, sdModelMesh);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Regional Clustering.");
-  ClusterIndividualWells(opts, bfMask, mask, traceStore, sdModelMesh, wells, sdCluster);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Regional Signal Clustering.");
+  DoRegionClustering(opts, mask, mBfMetric, madThreshold, mWells, sdModelMesh);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Regional Signal Clustering.");
+  ClusterIndividualWells(opts, bfMask, mask, traceStore, sdModelMesh, mWells, mBfConfidence[1], sdCluster);
   //  copy(sdCluster.begin(), sdCluster.end(), buffCluster.begin());
-  if (opts.skipBuffer) {
-    modelMesh = sdModelMesh;
-    buffCluster = sdCluster;
-  }
   if (opts.sdAsBf) {
     buffCluster.swap(sdCluster);
   }
-  int num_clipped_live_wells = 0, ref_wells = 0, diff=0, rescued_lib = 0;
+  int num_clipped_live_wells = 0, ref_wells = 0, diff=0, rescued_lib = 0, same=0;
   for (size_t bIx = 0; bIx < numWells; bIx++) {
-    if (sdCluster[bIx] != buffCluster[bIx])
+    if (sdCluster[bIx] != buffCluster[bIx] && buffCluster[bIx] >= 0) 
       diff++;
+    else if (buffCluster[bIx] >= 0) 
+      same++;
     if (bfMask[bIx] & MaskExclude || bfMask[bIx] & MaskPinned) { // || mFilteredWells[bIx] != GoodWell) {
       continue;
     }
@@ -3798,64 +3635,219 @@ int DifferentialSeparator::Run(DifSepOpt opts) {
         bfMask[bIx] = MaskIgnore;
     }
     if (buffCluster[bIx] == 2) {
-      wells[bIx].flag = WellBead;
+      mWells[bIx].flag = WellBead;
       bfMask[bIx] = MaskBead;
-      if (sdCluster[bIx] == 2 && wells[bIx].keyIndex == -1 && wells[bIx].snr > RESCUE_SNR_THRESH && wells[bIx].peakSig > RESCUE_PEAK_THRESH) {
+      if (sdCluster[bIx] == 2 && mWells[bIx].keyIndex == -1 && mWells[bIx].snr > RESCUE_SNR_THRESH && mWells[bIx].peakSig > RESCUE_PEAK_THRESH) {
         rescued_lib++;
-        wells[bIx].keyIndex = 0;
+        mWells[bIx].keyIndex = 0;
       }
     }
-
     if (buffCluster[bIx] == 1) {
-      wells[bIx].flag = WellEmpty;
+      mWells[bIx].flag = WellEmpty;
       bfMask[bIx] = MaskEmpty;
     }
     if (buffCluster[bIx] == 1 && sdCluster[bIx] == 1) {
       ref_wells++;
-      if (wells[bIx].keyIndex >= 0) {
-        wells[bIx].keyIndex = -1;
-        bfMask[bIx] = MaskIgnore;
-        num_clipped_live_wells++;
-      }
-      else {
+      if (mWells[bIx].keyIndex < 0) {
         bfMask[bIx] = MaskReference | MaskEmpty;
       }
     }
   }
-  fprintf(stdout, "Clipped %d live wells with both low signal and low buffering, rescued %d lib %d reference (%d %.2f diff).\n", num_clipped_live_wells, rescued_lib, ref_wells, diff, 1.0*diff/numWells);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Well Cluster Assignments.");
-  SampleQuantiles<float> sepRefSdQuantiles (10000);
-  SampleQuantiles<float> sepRefBfQuantiles (10000);
-  for (size_t bIx = 0; bIx < wells.size(); bIx++)  {
-    if (wells[bIx].isRef) {
-      sepRefBfQuantiles.AddValue(wells[bIx].bufferMetric);
-      sepRefSdQuantiles.AddValue(wells[bIx].sd);
-    }
+  fprintf(stdout, "Clipped %d live wells with both low signal and low buffering, rescued %d lib %d reference (%d %.2f diff).\n", num_clipped_live_wells, rescued_lib, ref_wells, diff, 1.0*diff/(same+diff));
+}
+
+void DifferentialSeparator::SetUp(DifSepOpt &opts, std::string &bfFile, arma::Col<int> &zeroFlows, 
+                                  vector<int> &flowsAllZero,   string &h5SummaryRoot) {
+ // Create the mKeys if not specified.
+  if (mKeys.empty())  { MakeStadardKeys (mKeys); }
+  for (size_t kIx = 0; kIx < mKeys.size(); kIx++) { opts.maxKeyFlowLength = max ( (unsigned int) opts.maxKeyFlowLength, mKeys[kIx].usableKeyFlows); }
+  // Setup our job queue
+  int qSize = (mMask.W() / opts.t0MeshStep + 1) * (mMask.H() / opts.t0MeshStep + 1);
+  if (opts.nCores <= 0) {  opts.nCores = numCores(); }
+  mQueue.Init (opts.nCores, qSize);
+
+  // Figure out which flows can be used for fitting taue
+  ZeroFlows(mKeys, opts, zeroFlows, flowsAllZero);
+  SetBeadfindType(opts, bfFile);
+  LoadInitialMask(opts.mask, opts.maskFile, bfFile, mMask, opts.ignoreChecksumErrors);
+  mNumWells = mMask.H() * mMask.W();  
+  // Open our h5 file if necessary
+
+  if (opts.outputDebug > 1) {
+    h5SummaryRoot = opts.outData + ".h5";
+    H5File h5file(h5SummaryRoot);
+    h5file.Open(true);
+    h5file.Close();
   }
 
-  //  float sepRefSdThresh = sepRefSdQuantiles.GetQuantile(.75) + 1.5 * IQR(sepRefSdQuantiles);
+}
+
+void DifferentialSeparator::ClusterToSelectReference(DifSepOpt &opts, TraceStoreCol &traceStore,
+                                                     GridMesh<MixModel> &modelMesh,
+                                                       GridMesh<struct FitTauEParams> &emptyEstimates) {
+  for (size_t i = 0; i < mNumWells; i++) {
+    mWells[i].isRef = traceStore.IsReference(i);
+    mWells[i].bufferMetric = mWells[i].bfMetric = mBfMetric[i];
+  }
+
+  WellSetKeyStats libStats("Library", REF_SAMPLE_SIZE), refStats("SepRef Wells", REF_SAMPLE_SIZE), 
+    tfStats("TF", REF_SAMPLE_SIZE), filtStats("Soft Filters",REF_SAMPLE_SIZE), 
+    allStats("All Stats", REF_SAMPLE_SIZE), maskRefStats("MaskRef", REF_SAMPLE_SIZE), 
+    maskEmptyStats("MaskEmpty", REF_SAMPLE_SIZE), softFiltStats("SoftFilt", REF_SAMPLE_SIZE);
+
+  for (size_t i = 0; i < mNumWells; i++) {
+    if (mWells[i].keyIndex == 0) { libStats.AddWell(mWells[i]); }
+    if (mWells[i].keyIndex == 1) { tfStats.AddWell(mWells[i]); }
+    if (mWells[i].isRef == 1) { refStats.AddWell(mWells[i]); }
+    if (mFilteredWells[i] != 0) {filtStats.AddWell(mWells[i]);}
+    if (isfinite(mWells[i].mad) && mWells[i].mad >= 0) { allStats.AddWell(mWells[i]); }
+    if (isfinite(mWells[i].mad) && mWells[i].mad >= 0 && mFilteredWells[i] == 0) { softFiltStats.AddWell(mWells[i]); }
+  }
+  // --- Check to make sure we got some live wells, do we really need this anymore?
+  int gotKeyCount = 0;
+  OutputFitSummary(opts, mWells, emptyEstimates, gotKeyCount);
+  int notExcludePinnedWells = 0;
+  for (size_t i = 0; i < mNumWells; i++) {
+    if (! (mMask[i] & MaskExclude || mMask[i] & MaskPinned)) { notExcludePinnedWells++; }
+  }
+
+  int minOkCount = max (10.0, opts.minRatioLiveWell * notExcludePinnedWells);
+  if (gotKeyCount <= minOkCount) { 
+    ION_ABORT_CODE ("Only got: " + ToStr (gotKeyCount) + " key passing wells. Couldn't find enough (" + 
+                    ToStr (minOkCount) + ") wells with key signal.", DIFFSEP_ERROR); }
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Fitting Filters.");
+  double minTfPeak = opts.minTfPeakMax;
+  if (tfStats.NumSeen() > 5 * MIN_SAMPLE_TAUE_STATS) {
+    minTfPeak = max(minTfPeak, 
+                    tfStats.m_quantiles[KEY_PEAK_STAT].GetQuantile(.25) - (3 * IQR (tfStats.m_quantiles[KEY_PEAK_STAT])));
+  }
+  double minLibPeak = opts.minLibPeakMax;
+  if (libStats.NumSeen() > 5 * MIN_SAMPLE_TAUE_STATS) {
+    minLibPeak = max(minLibPeak, 
+                     libStats.m_quantiles[KEY_PEAK_STAT].GetQuantile(.25) - (3 * IQR (libStats.m_quantiles[KEY_PEAK_STAT])));
+  }
+  cout << "Min Tf peak is: " << minTfPeak << " lib peak is: " << minLibPeak << endl;
+  double madThreshold = softFiltStats.m_quantiles[MAD_STAT].GetQuantile(.75) + (3 * IQR (softFiltStats.m_quantiles[MAD_STAT]));
+  //  madThreshold = max(madThreshold, 8.0);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After fitting filters.");
+
+  ClusterWells(opts, traceStore, mMask, mBfMask, madThreshold, modelMesh);
   double sepRefSdThresh = refStats.m_quantiles[KEY_SD_STAT].GetQuantile(.75) + (3.0* IQR (refStats.m_quantiles[KEY_SD_STAT]));
-  //  cout << "Sep SD Thresh: " << sepRefSdThresh << endl;
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Post Filtering.");
-  AssignAndCountWells(opts, wells, bfMask, mFilteredWells, minLibPeak, minTfPeak, sepRefSdThresh, madThreshold);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Post Filtering.");
-  // Accumulate some statistics about how the fitting went
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Post Filtering.");
+  AssignAndCountWells(opts, mWells, mBfMask, mFilteredWells, minLibPeak, minTfPeak, sepRefSdThresh, madThreshold);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Post Filtering.");
 
-  for (size_t i = 0; i < numWells; i++) {
-    if (bfMask[i] & MaskReference) {maskRefStats.AddWell(wells[i]);}
-    if (bfMask[i] & MaskEmpty) {maskEmptyStats.AddWell(wells[i]);}
+  for (size_t i = 0; i < mNumWells; i++) {
+    if (mBfMask[i] & MaskReference) {maskRefStats.AddWell(mWells[i]);}
+    if (mBfMask[i] & MaskEmpty) {maskEmptyStats.AddWell(mWells[i]);}
   }
+  //  CountReference("Filtered wells", mFilteredWells);
   if (libStats.NumSeen() > 10) { libStats.ReportStats(stdout);}
   if (tfStats.NumSeen() > 50) { tfStats.ReportStats(stdout);}
   maskRefStats.ReportStats(stdout);
   maskEmptyStats.ReportStats(stdout);
   refStats.ReportStats(stdout);
   filtStats.ReportStats(stdout);
+}
 
-  HandleDebug(wells, opts, h5SummaryRoot, saver, mask, traceStore, modelMesh);
-  // --- Some reporting for the log.
-  OutputStats(opts, bfMask);
-  totalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Total Time.");
+void DifferentialSeparator::SetupTraceStore(DifSepOpt &opts, TraceStoreCol &traceStore, std::vector<float> &ftime) {
+  // --- Load up the key flows into our trace store
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before Loading Dats.");
+  traceStore.Init (mMask, T0_RIGHT_OFFSET, opts.flowOrder.c_str(), 
+                            opts.maxKeyFlowLength+2, opts.maxKeyFlowLength+2,
+                            opts.referenceStep, opts.referenceStep);
+  traceStore.SetMinRefProbes (opts.percentReference * opts.referenceStep * opts.referenceStep);
+  vector<float> traceSdMin(mNumWells);
+  LoadKeyDats (mQueue, traceStore, mBfMetric, opts, traceSdMin);
+  // Currently time is just linear
+  mTime.set_size (traceStore.GetNumFrames());
+  for (size_t i = 0; i < mTime.n_rows; i++)  { mTime[i] = i; }
+  ftime.resize(traceStore.GetNumFrames());
+  std::copy(mTime.begin(), mTime.end(), ftime.begin());
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After Loading Dats.");
+}
+
+int DifferentialSeparator::Run(DifSepOpt opts) {
+  Col<int> zeroFlows;
+  vector<int> flowsAllZero;
+  string bfFile;
+  TraceSaver saver;
+  std::vector<float> ftime;
+  GridMesh<struct FitTauEParams> emptyEstimates;
+  GridMesh<MixModel> modelMesh;
+  TraceStoreCol traceStore;
+  string h5SummaryRoot;
+  // Some intialization based on keys and flow order
+  SetUp(opts, bfFile, zeroFlows, flowsAllZero, h5SummaryRoot);
+  // Calculate initial t0 and beadfind metric
+  DoBeadfindFlowAndT0(opts, mMask, bfFile);
+  // Load up traces into our store
+  SetupTraceStore(opts, traceStore, ftime);
+  int row_step = mMask.H(), col_step = mMask.W();
+  cout << "Chip Width,Height: " << col_step << "," << row_step << endl;
+  if (opts.isThumbnail) { row_step = col_step = BF_THUMBNAIL_SIZE; }
+  //  CountReference("Before noisy Columns", mFilteredWells);
+  if (opts.filterNoisyCols != "none") {
+    FilterNoisyColumns(row_step, col_step, mMask, opts, mFilteredWells);
+  }
+  //  CountReference("After noisy Columns", mFilteredWells);
+  // Pick which wells to use for initial reference for backgound
+  int minWells = ceil(opts.referenceStep*opts.referenceStep * opts.percentReference);
+  RankReference(traceStore, mBfMetric, opts.referenceStep, opts.referenceStep, opts.useSignalReference,
+                opts.iqrMult, 7, opts.percentReference, mMask, minWells,
+                mFilteredWells, mRefWells);
+  if (!opts.skipBuffer) {
+    mEmptyMetrics.push_back(mBfMetric);
+  }
+  PickCombinedRank(mEmptyMetrics, opts.referenceStep, opts.referenceStep, opts.percentReference, 
+                   minWells, mFilteredWells, mRefWells);
+  
+  // Set the reference well sin the trace store and 
+  for (size_t i = 0; i < mRefWells.size(); i++) { traceStore.SetReference(i, mRefWells[i] == 1); }
+  size_t loadMinFlows = max (9, opts.maxKeyFlowLength+2);
+  traceStore.mRefReduction.resize(loadMinFlows);
+  for (size_t i = 0; i < loadMinFlows; i++) { traceStore.PrepareReference (i, mFilteredWells); }
+
+  if (opts.skipBuffer) {
+    cout << "Fitting taub for use as buffering estimate." << endl;
+    // Do inital fit of tauE
+    int metric_size = mEmptyMetrics.size();
+    mEmptyMetrics.resize(metric_size + 1);
+    mEmptyMetrics[metric_size].resize(mFilteredWells.size());
+    float *taub_est = &mEmptyMetrics[metric_size][0];
+    FitTauE(opts,traceStore, emptyEstimates, mFilteredWells, 
+            ftime, flowsAllZero, taub_est);
+    
+    PickCombinedRank(mEmptyMetrics, opts.referenceStep, opts.referenceStep, 
+                     opts.percentReference, minWells, mFilteredWells, mRefWells);
+  }
+  // Smooth or not according to the options
+  SmoothTraces(opts, traceStore, mMask, &mTraceMad[0], &mFilteredWells.at(0));
+
+  // Set the reference well sin the trace store and 
+  for (size_t i = 0; i < mRefWells.size(); i++) { traceStore.SetReference(i, mRefWells[i] == 1); }
+  traceStore.mRefReduction.resize(loadMinFlows);
+  for (size_t i = 0; i < loadMinFlows; i++) { traceStore.PrepareReference (i, mFilteredWells); }
+
+  FitTauE(opts,traceStore, emptyEstimates, mFilteredWells, 
+          ftime, flowsAllZero, NULL);
+
+  // Fit the keys
+  FitKeys(mQueue, opts, emptyEstimates, traceStore, mKeys, ftime, saver, mMask, mWells);
+
+  // Use our dual gaussian mixture clustering to split wells into empty/live
+  ClusterToSelectReference(opts, traceStore, modelMesh, emptyEstimates);
+
+  // --- Some reporting for the log.  
+  if (opts.outputDebug > 0) {
+    mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Before spatial summary.");
+    SpatialSummary(opts.analysisDir + "/separator.spatial.h5", "/spatial", opts, mMask, 16, 16);
+    mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: After spatial summary.");
+  }
+  HandleDebug(mWells, opts, h5SummaryRoot, saver, mMask, traceStore, modelMesh);
+  OutputStats(opts, mBfMask);
+  //  CountReference("At end", mFilteredWells);
+  mTotalTimer.PrintMicroSecondsUpdate(stdout, "Total Timer: Total Time.");
   return 0;
 }
 

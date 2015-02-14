@@ -9,10 +9,11 @@
   lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
                 regexp='^date'
                 line='date:{{ ansible_date_time.date }} {{ ansible_date_time.time }}'
+                mode=0644
 - name: Edit hostname
   lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
                 regexp='^hostname'
-                line='hostname:{{ ansible_nodename }}'
+                line='hostname:{{ ansible_hostname }}'
 - name: Edit ipaddress
   lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
                 regexp='^ipaddress'
@@ -37,7 +38,7 @@
   lineinfile: dest={{ tsconfig_dir }}/tsconf.conf
                 regexp='^mode'
                 line='mode:master'
-  when: ansible_nodename == '{{ groups.headnode[0] }}'
+  when: ansible_hostname == '{{ groups.headnode[0] }}'
 # Any better way to do a conditional?
 # This is the default value
 - name: Edit configuration

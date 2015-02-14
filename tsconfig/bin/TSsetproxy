@@ -42,6 +42,7 @@ version=`echo '$Revision$'|awk '{print $2}'`
 DEMO=0
 interactive=1
 REMOVE=0
+RESTART_APACHE=true
 environment="/etc/environment"
 aptproxyfile="/etc/apt/apt.conf.d/99proxy"
 
@@ -74,6 +75,7 @@ while [ $# != 0 ]; do
 
         '--demo')
         DEMO=1
+        RESTART_APACHE=false
         ;;
 
         '--address')
@@ -166,6 +168,14 @@ if [ $REMOVE -eq 1 ]; then
             echo "wget configuration has been modified."
         fi
     fi
+
+    #=============================================================
+    # Restart apache2 in order to trigger new proxy setting
+    #=============================================================
+    if [ $RESTART_APACHE ]; then
+        service apache2 restart
+    fi
+
     log "$0 completed successfully"
     exit 0
 fi
@@ -275,7 +285,7 @@ else
     fi
 
     if ! grep -q ^no_proxy $environment; then
-        echo "no_proxy=localhost,127.0.0.1/8" >> $environment
+        echo "no_proxy=localhost,127.0.0.1,127.0.1.1,127.0.0.1/8" >> $environment
     fi
 
     # = write to $environment file and reload it
@@ -286,14 +296,6 @@ else
     #=============================================================
     # Edit apt configuration
     #=============================================================
-# Released with TS3.6.0:
-#    # Edit apt.conf
-#    if [ -e /etc/apt/apt.conf ]; then
-#        sed -i '/Acquire::http::Proxy/d' /etc/apt/apt.conf
-#    fi
-#    echo "Acquire::http::Proxy \"$proxy_addr:$proxy_port\";" >> /etc/apt/apt.conf
-#
-# editing apt.conf is not the way to do this correctly.  drop a file in apt.conf.d instead
     echo "Acquire::http::Proxy \"$proxy_addr:$proxy_port\";" > $aptproxyfile
     echo "apt has been configured for proxy use"
 
@@ -309,6 +311,13 @@ else
         # Second, enable if it is commented by removing the comment character
         sed -i 's/^#\(http_proxy.*\)/\1/' /etc/wgetrc
         echo "wget has been configured for proxy use"
+    fi
+
+    #=============================================================
+    # Restart apache2 in order to trigger new proxy setting
+    #=============================================================
+    if [ $RESTART_APACHE ]; then
+        service apache2 restart
     fi
 fi
 log "$0 completed successfully"

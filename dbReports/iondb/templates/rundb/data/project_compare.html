@@ -13,6 +13,10 @@
     #table_holder {
         overflow-x: auto;
     }
+    img.chip-image, img.read-image {
+        max-height: 112px;
+        max-width: 112px;
+    }
 </style>
 <script>
 $(function(){
@@ -86,7 +90,7 @@ $(function(){
                         <th>
                             <a href="{% url "report" result.pk %}">
                                 <p class="name">{{result.resultsName}}</p>
-                                <img onerror="this.style.display='none';" src="{{result.reportLink}}Bead_density_70.png" />
+                                <img class="chip-image" onerror="this.style.display='none';" src="{{result.reportLink}}Bead_density_70.png" alt="Chip Loading Heatmap"/>
                             </a>
                         </th>
                     {% endfor %}
@@ -109,6 +113,14 @@ $(function(){
                     <th>Chip</th>
                     {% for result in results %}
                         <td>{{result.experiment.chipType}}</td>
+                    {% endfor %}
+                </tr>
+                <tr>
+                    <th>Read Len.</th>
+                    {% for result in results %}
+                        <td>
+                            <img class="read-image" src="{{result.reportLink}}basecaller_results/readLenHisto.png" alt="Read Length Histogram" onerror="this.style.display='none';"/>
+                        </td>
                     {% endfor %}
                 </tr>
                 <tr>

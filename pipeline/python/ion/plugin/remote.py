@@ -77,7 +77,7 @@ def call_pluginStatus(jobid, conn=None):
     ret = ""
     log = logging.getLogger(__name__)
     try:
-        ret = conn.pluginStatus()
+        ret = conn.pluginStatus(jobid)
     except (socket.error, xmlrpclib.Fault, xmlrpclib.ProtocolError, xmlrpclib.ResponseError) as f:
         log.exception("XMLRPC Error")
         ret = str(f)

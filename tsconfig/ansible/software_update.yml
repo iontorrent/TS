@@ -1,0 +1,10 @@
+---
+# file: software_update.yml
+- hosts: iontorrent_master:iontorrent_computes
+  tasks:
+    - name: apt-get dist-upgrade.  yeah, we do that...
+      shell: bash -lc 'apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy dist-upgrade'
+      register: foobar
+      
+    - debug: msg={{item}}
+      with_items: foobar.stdout_lines

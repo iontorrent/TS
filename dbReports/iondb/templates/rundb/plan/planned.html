@@ -3,19 +3,6 @@
 {% load static from staticfiles %}
 {% block extra_head %}
 
-{% if created_plan_pks %}
-    <script>
-        //Third party(hub) planning support
-        //Send a message to the parent iframe if hide_nav is set.
-        if(typeof(sessionStorage) != 'undefined'){
-            if(sessionStorage.getItem('hide_nav')){
-                window.parent.postMessage('{{ created_plan_pks|join:"," }}', '*');
-            }
-        }
-    </script>
-{% endif %}
-
-
 <link type="text/css" rel="stylesheet" media="all" href="{% static "resources/styles/wizard.css"%}" />
 <script type="text/javascript" src="{% static "resources/scripts/wizard.min.js"%}"></script>
 
@@ -70,11 +57,25 @@
 			<label for="dateRange" class=" hide">Date</label>
 			<input type="text" id="dateRange" placeholder="Date" style="width:180px;"/>
 		</div>
-		<div class="input-append search-field">
-			<label for="searchText" class=" hide">Search Names</label>
-			<input id="search_text" type="text" placeholder="Search names" style="width: 150px;" />
-			<button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+		<div class="input-append search-field" style="width: 230px;">
+			<label for="searchText" class=" hide">Search Names</label>                			         
+			<input id="search_text" type="text" placeholder="Search names or code" style="width: 150px;" />
+
+            <div class="btn-group" style="width: 50px;" >
+                <label for="searchSubject" id="search_subject" class=" hide">planName</label> 
+                
+                <a id="search_subject_nav" class="btn dropdown-toggle" title="Search by plan name or code" data-toggle="dropdown" href="\\#"><i class="icon-search" border="0"></i><span class="caret"></span></a>
+
+                <ul id="plan_search_dropdown_menu" class="dropdown-menu pull-right search_subject_selection">
+                    <li><a href="#" class="search_chipBarcode"><span class="search_chipBarcode_selected icon-white"></span>Chip Barcode</a></li>
+                    <li><a href="#" class="search_planName"><span class="search_planName_selected icon-check"></span>Plan name or code</a></li>
+                    <li><a href="#" class="search_sampleTubeLabel"><span class="search_sampleTubeLabel_selected icon-white"></span>Sample Tube Label</a></li>
+                </ul>
+                
+                <button id="search_text_go" class="btn search_trigger" type="button" style="margin: 0 0 0 -1px">Go</button>
+            </div>
 		</div>
+            
 		<div class="search-field" style="width: 40px;">
 			<button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 15px">Clear</button>
 		</div>
@@ -177,6 +178,20 @@
 		<li>
 			<a href="#= '{% url "delete_plan_template" 999999 %}'.replace('999999',_id)#" class="delete-plan">Delete</a>
 		</li>
+		{% if planshare %}
+		# if (data.planStatus == 'reserved') { #
+		<li><a href="\\#" rel="tooltip" title="planned Run is Reserved and cannot be transferred">Transfer</a></li>
+		# } else { #
+		<li class="dropdown-submenu pull-left">
+			<a href="\\#">Transfer</a>
+			<ul class="dropdown-menu" style="left:auto; right:100%;">
+				{% for ts in planshare %}
+				<li><a href="#= '{% url "plan_transfer" 999999 ts.name %}'.replace('999999',_id)#" class="transfer_plan">{{ts.name}}</a></li>
+				{% endfor %}
+			</ul>
+		</li>
+		# } #
+		{% endif %}
 	</ul>
 </div>	
 </script>

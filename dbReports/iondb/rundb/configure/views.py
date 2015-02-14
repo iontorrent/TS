@@ -35,7 +35,7 @@ from iondb.rundb import tasks, publishers
 from iondb.anaserve import client
 from iondb.plugins.manager import pluginmanager
 from django.contrib.auth.models import User
-from iondb.rundb.models import dnaBarcode, Plugin, GlobalConfig,\
+from iondb.rundb.models import dnaBarcode, Plugin, PluginResult, GlobalConfig,\
     EmailAddress, Publisher, Location, Experiment, Results, Template, UserProfile, \
     FileMonitor, EventLog, ContentType, Cruncher
 from iondb.rundb.data import rawDataStorageReport, reportLogStorage
@@ -48,21 +48,32 @@ from ion.utils import makeCSA
 from django.core import urlresolvers
 from iondb.utils.raid import get_raid_status, get_raid_status_json, load_raid_status_json
 from iondb.servelocation import serve_wsgi_location
+from ion.plugin.remote import call_pluginStatus
 logger = logging.getLogger(__name__)
 
+from json import encoder
+encoder.FLOAT_REPR = lambda x: format(x, '.15g')
 
 @login_required
 def configure(request):
+    '''Wrapper'''
     return configure_about(request)
 
 
 @login_required
 def configure_about(request):
+    '''
+    Populate about page values
+    CLI to get TS version:
+    python -c "from ion.utils import TSversion; _, version = TSversion.findVersions(); print version"
+    '''
     reload(ion.utils.TSversion)
     versions, meta = ion.utils.TSversion.findVersions()
-    ctxd = {"versions": versions, "meta": meta}
+    osversion = ion.utils.TSversion.findOSversion()
+    ctxd = {"versions": versions, "meta": meta, "osversion": osversion}
     ctx = RequestContext(request, ctxd)
-    return render_to_response("rundb/configure/about.html", context_instance=ctx)
+    return render_to_response("rundb/configure/about.html", context_instance = ctx)
+
 
 @login_required
 def configure_ionreporter(request):
@@ -76,11 +87,11 @@ def configure_ionreporter(request):
 def timeout_raid_info():
     async_result = tasks.get_raid_stats.delay()
     try:
-        raidinfo = async_result.get(timeout=20)
+        raidinfo = async_result.get(timeout=30)
         if async_result.failed():
             raidinfo = None
     except celery.exceptions.TimeoutError as err:
-        logger.warning("RAID status check timed out, taking longer than 20 seconds.")
+        logger.warning("RAID status check timed out, taking longer than 30 seconds.")
         raidinfo = None
     return raidinfo
 
@@ -89,13 +100,13 @@ def timeout_raid_info_json():
     async_result = tasks.get_raid_stats_json.delay()
     err_msg = None
     try:
-        raidinfo = async_result.get(timeout=20)
+        raidinfo = async_result.get(timeout=30)
         if async_result.failed():
             err_msg = "RAID status check failed."
             logger.error(err_msg)
             raidinfo = None
     except celery.exceptions.TimeoutError as err:
-        err_msg = "RAID status check timed out, taking longer than 20 seconds."
+        err_msg = "RAID status check timed out, taking longer than 30 seconds."
         logger.warning(err_msg)
         raidinfo = None
     return raidinfo, err_msg
@@ -104,30 +115,35 @@ def sort_drive_array_for_display(raidstatus):
     # sorts array to be displayed matching physical arrangement in enclosure
     slots=12
     for d in raidstatus:
-        adapter_id = d.get('adapter_id','')
-        drives = d.get('drives',[])
-        if not adapter_id or len(drives) < slots:
-            continue
+        try:
+            adapter_id = d.get('adapter_id','')
+            drives = d.get('drives',[])
+            if not adapter_id or len(drives) < slots:
+                continue
 
-        if adapter_id.startswith("PERC H710"):
-            d['cols'] = 4
-        elif adapter_id.startswith("PERC H810"):
-            ncols = 4
-            temp = [drives[i:i+(slots/ncols)] for i in range(0, slots, slots/ncols)]
-            d['drives'] = sum( map(list, zip(*temp)), [])
-            d['cols'] = ncols
+            if adapter_id.startswith("PERC H710"):
+                d['cols'] = 4
+            elif adapter_id.startswith("PERC H810"):
+                ncols = 4
+                temp = [drives[i:i+(slots/ncols)] for i in range(0, slots, slots/ncols)]
+                d['drives'] = sum( map(list, zip(*temp)), [])
+                d['cols'] = ncols
+        except:
+            pass
 
 @login_required
 def configure_services(request):
 
-    jobs = current_jobs(request)
+    servers = get_servers()
+    jobs = current_jobs() + current_plugin_jobs()
     crawler = _crawler_status(request)
     processes = process_set()
 
     # RAID Info
     raidinfo, raid_err_msg = timeout_raid_info_json()
     raid_status_updated = datetime.datetime.now()
-    
+
+    raid_status = None
     if raidinfo:
         raid_status = get_raid_status(raidinfo)
     elif raid_err_msg:
@@ -135,18 +151,19 @@ def configure_services(request):
         contents = load_raid_status_json()
         raid_status = contents.get('raid_status')
         raid_status_updated = contents.get('date')
-    
+
     if raid_status:
         sort_drive_array_for_display(raid_status)
 
     ctxd = {
         "processes": processes,
+        "servers": servers,
         "jobs": jobs,
         "crawler": crawler,
         "raid_status": raid_status,
         "raid_status_updated": raid_status_updated,
         "raid_err_msg": raid_err_msg,
-        'crunchers': Cruncher.objects.all(),
+        'crunchers': Cruncher.objects.all().order_by('name'),
         }
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/configure/services.html", context_instance=ctx)
@@ -340,7 +357,7 @@ def configure_plugins_plugin_usage(request, pk):
 def configure_configure(request):
     ctx = RequestContext(request, {})
     emails = EmailAddress.objects.all().order_by('pk')
-    enable_nightly = GlobalConfig.objects.all().order_by('pk')[0].enable_nightly_email
+    enable_nightly = GlobalConfig.get().enable_nightly_email
     ctx.update({"email": emails, "enable_nightly": enable_nightly})
     config_contacts(request, ctx)
     config_site_name(request, ctx)
@@ -349,7 +366,7 @@ def configure_configure(request):
 
 @login_required
 def config_publishers(request, ctx):
-    globalconfig = GlobalConfig.objects.all().order_by('pk')[0]
+    globalconfig = GlobalConfig.get()
     # Rescan Publishers
     publishers.purge_publishers()
     publishers.search_for_publishers(globalconfig)
@@ -369,27 +386,20 @@ def _crawler_status(request):
     cstat = xmlrpclib.ServerProxy(url)
     try:
         raw_elapsed = cstat.time_elapsed()
-        elapsed = seconds2htime(raw_elapsed)
-        nfound = cstat.experiments_found()
-        raw_exprs = cstat.prev_experiments()
-        exprs = []
-        for r in raw_exprs:
-            try:
-                exp = Experiment.objects.get(expName=r)
-            except (Experiment.DoesNotExist,
-                    Experiment.MultipleObjectsReturned):
-                exp = r
-            exprs.append(exp)
-        folder = cstat.current_folder()
-        state = cstat.state()
-        hostname = cstat.hostname()
-        result = [folder, elapsed, exprs, nfound, state, hostname]
-        keys = ["folder", "elapsed", "exprs", "nfound", "state", "hostname"]
-        result_pairs = zip(keys, result)
+        exp_errors = cstat.exp_errors()
+        for err in exp_errors:
+            err[0] = datetime.datetime.strptime(str(err[0]), "%Y%m%dT%H:%M:%S").replace(tzinfo=timezone.utc)
+
+        ret = {
+            'elapsed': seconds2htime(raw_elapsed),
+            'hostname': cstat.hostname(),
+            'state': cstat.state(),
+            'errors': exp_errors
+        }
     except socket.error:
-        result_pairs = ()
-    ctx = RequestContext(request, {"result_dict": dict(result_pairs)})
-    return ctx
+        ret = {}
+
+    return ret
 
 
 def seconds2htime(s):
@@ -408,39 +418,77 @@ def seconds2htime(s):
     s = int(s)
     return {"days": days, "hours": hours, "minutes": minutes, "seconds": s}
 
-
-@login_required
-def current_jobs(request):
-    """
-    Display status information about any job servers listed in
-    ``settings.JOB_SERVERS`` (or the local job server if appropriate),
-    as well as information about any jobs (reports) in progress.
-    """
+def get_servers():
     jservers = [(socket.gethostname(), socket.gethostbyname(socket.gethostname()))]
     servers = []
-    jobs = []
     for server_name, ip in jservers:
-        short_name = "%s (%s)" % (server_name, ip)
         try:
             conn = client.connect(ip, settings.JOBSERVER_PORT)
-            running = conn.running()
+            nrunning = conn.n_running()
             uptime = seconds2htime(conn.uptime())
-            nrunning = len(running)
             servers.append((server_name, ip, True, nrunning, uptime,))
-            server_up = True
         except (socket.error, xmlrpclib.Fault):
             servers.append((server_name, ip, False, 0, 0,))
-            server_up = False
-        if server_up:
-            runs = dict((r[2], r) for r in running)
-            results = Results.objects.select_related('experiment').filter(pk__in=runs.keys()).order_by('pk')
-            for result in results:
-                name, pid, pk, atype, stat = runs[result.pk]
-                jobs.append((short_name, name, pid, atype, stat,
-                             result, result.experiment))
-    ctxd = {"jobs": jobs, "servers": servers}
-    return ctxd
+    return servers
 
+def current_jobs():
+    """
+    Get list of running jobs from job server
+    """
+    jobs = []
+    try:
+        host = "127.0.0.1"
+        conn = client.connect(host, settings.JOBSERVER_PORT)
+        running = conn.running()
+        runs = dict((r[2], r) for r in running)
+        
+        results = Results.objects.filter(pk__in=runs.keys()).order_by('pk')
+        for result in results:
+            name, pid, pk, atype, stat = runs[result.pk]
+            jobs.append({
+                'name': name,
+                'resultsName': result.resultsName,
+                'pid': pid,
+                'type': 'analysis',
+                'status': stat,
+                'pk': result.pk,
+                'report_exist': result.report_exist(),
+                'report_url': reverse('report', args=(pk,)),
+                'term_url': reverse('control_job', args=(pk,'term'))
+            })
+    except (socket.error, xmlrpclib.Fault):
+        pass
+
+    return jobs
+
+def current_plugin_jobs():
+    """
+    Get list of active pluginresults from database then connect to ionPlugin and get drmaa status per jobid.
+    """
+    jobs = []
+    running = PluginResult.objects.filter(state__in=PluginResult.RUNNING_STATES).order_by('pk')
+    if running:
+        # get job status from drmaa
+        jobids = running.values_list('jobid', flat=True)
+        try:
+            job_status = call_pluginStatus(list(jobids))
+            for i, pr in enumerate(list(running)):
+                if job_status[i] != 'DRMAA BUG':
+                    jobs.append({
+                        'name': pr.plugin.name,
+                        'resultsName': pr.result.resultsName,
+                        'pid': pr.jobid,
+                        'type': 'plugin',
+                        'status': job_status[i],
+                        'pk': pr.pk,
+                        'report_exist': True,
+                        'report_url': reverse('report', args=(pr.result.pk,)),
+                        'term_url': "/rundb/api/v1/pluginresult/%d/control/" % pr.pk
+                    })
+        except:
+            pass
+            
+    return jobs
 
 def process_set():
     def process_status(process):
@@ -458,7 +506,7 @@ def process_set():
     for name, proc in proc_set.items():
         stdout, stderr = proc.communicate()
         proc_set[name] = proc.returncode == 0
-        logger.info("%s out = '%s' err = %s''" % (name, stdout, stderr))
+        logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
     # tomcat specific status code so that we don't need root privilege
 
     def complicated_status(filename, parse):
@@ -741,6 +789,7 @@ def configure_system_stats_data(request):
     # If this is change, mirror that change in
     # rundb/configure/configure_system_stats_loading.html
     networkCMD = ["/usr/bin/ion_netinfo"]
+    logger.info("Calling netinfo script")
     p = subprocess.Popen(networkCMD, shell=True, stdout=subprocess.PIPE)
     stdout, stderr = p.communicate()
     if p.returncode == 0:
@@ -749,6 +798,7 @@ def configure_system_stats_data(request):
         stats_network = []
 
     statsCMD = ["/usr/bin/ion_sysinfo"]
+    logger.info("Calling ion_sysinfo script")
     q = subprocess.Popen(statsCMD, shell=True, stdout=subprocess.PIPE)
     stdout, stderr = q.communicate()
     if q.returncode == 0:
@@ -756,12 +806,15 @@ def configure_system_stats_data(request):
     else:
         stats = []
 
+    logger.info("Calling (celery) disk_check_status")
     disk_check_status = tasks.disk_check_status.delay().get(timeout=5)
 
     # MegaCli64 needs root privilege to access RAID controller - we use a celery task
     # to do the work since they execute with root privilege
+    logger.info("Calling timeout_raid_info")
     raid_stats = timeout_raid_info()
 
+    logger.info("Calling storage_report")
     stats_dm = rawDataStorageReport.storage_report()
 
     # Create filename for the report
@@ -774,16 +827,10 @@ def configure_system_stats_data(request):
                    "raid_stats": raid_stats,
                    "reportFilePath": reportFileName,
                    "disk_check_status": disk_check_status,
-                   "use_precontent": True,
-                   "use_content2": True,
-                   "use_content3": True, })
+                   })
 
     # Generate a file from the report
-    try:
-        os.unlink(reportFileName)
-    except:
-        logger.exception("Error! Could not delete '%s'", reportFileName)
-
+    logger.info("Writing %s" % reportFileName)
     outfile = open(reportFileName, 'w')
     for line in stats_network:
         outfile.write(line)
@@ -794,6 +841,7 @@ def configure_system_stats_data(request):
     for line in raid_stats:
         outfile.write(line)
     outfile.close()
+    
     # Set permissions so anyone can read/overwrite/destroy
     try:
         os.chmod(reportFileName,
@@ -803,11 +851,15 @@ def configure_system_stats_data(request):
 
     return render_to_response("rundb/configure/configure_system_stats.html", context_instance=ctx)
 
+
 def raid_info(request, index=0):
     # display RAID info for a drives array from saved file /var/spool/ion/raidstatus.json
     # index is the adapter/enclosure row clicked on services page
     contents = load_raid_status_json()
-    array_status = contents['raid_status'][int(index)]['drives']
+    try:
+        array_status = contents['raid_status'][int(index)]['drives']
+    except:
+        array_status = []
     return render_to_response("rundb/configure/modal_raid_info.html", {"array_status": array_status})
 
 def config_contacts(request, context):
@@ -1157,17 +1209,22 @@ def configure_ampliseq_download(request):
     if 'ampliseq_username' in request.session:
         username = request.session['ampliseq_username']
         password = request.session['ampliseq_password']
-        for ids in request.POST.getlist("solutions"):
+        solutions = request.POST.getlist("solutions")
+        fixed_solutions = request.POST.getlist("fixed_solutions")
+        for ids in solutions:
             design_id, solution_id = ids.split(",")
             meta = '{"choice":"%s"}' % request.POST.get(solution_id + "_instrument_choice", "None")
             start_ampliseq_solution_download(design_id, solution_id, meta, (username, password))
-        for ids in request.POST.getlist("fixed_solutions"):
+        for ids in fixed_solutions:
             design_id, reference = ids.split(",")
             meta = '{"reference":"%s", "choice": "%s"}' % (reference.lower(), request.POST.get(design_id + "_instrument_choice", "None"))
             start_ampliseq_fixed_solution_download(design_id, meta, (username, password))
 
     if request.method == "POST":
-        return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq_download"))
+        if solutions or fixed_solutions:
+            return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq_download"))
+        else:
+            return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq"))
 
     downloads = FileMonitor.objects.filter(tags__contains="ampliseq_template").order_by('-created')
     ctx = {
@@ -1233,9 +1290,26 @@ def cache_status(request):
     )
     return render_to_response("rundb/configure/cache_status.html", ctx)
 
+
 def cluster_info_refresh(request):
     try:
-        result = tasks.get_cluster_status.delay().get(timeout=60)
+        t = tasks.check_cluster_status()
+        t.get(timeout = 120)
     except:
         return HttpResponseServerError(traceback.format_exc())
     return HttpResponse()
+
+
+def cluster_info_log(request, pk):
+    nodes = Cruncher.objects.all()
+    ct = ContentType.objects.get_for_model(Cruncher)
+    title = "Cluster Info log for %s" % nodes.get(pk=pk).name
+    
+    ctx = RequestContext(request, {"title": title, "pk": pk, "cttype": ct.id})
+    return render_to_response("rundb/common/modal_event_log.html", context_instance=ctx)
+
+
+def cluster_info_history(request):
+    nodes = Cruncher.objects.all().values_list('name',flat=True)
+    ctx = RequestContext(request, {'nodes':nodes})
+    return render_to_response("rundb/configure/clusterinfo_history.html", context_instance=ctx)

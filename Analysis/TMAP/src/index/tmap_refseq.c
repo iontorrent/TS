@@ -144,6 +144,7 @@ tmap_refseq_anno_clone(tmap_anno_t *dest, tmap_anno_t *src, int32_t reverse)
   dest->amb_positions_start = tmap_malloc(sizeof(uint32_t) * dest->num_amb, "dest->amb_positions_start");
   dest->amb_positions_end = tmap_malloc(sizeof(uint32_t) * dest->num_amb, "dest->amb_positions_end");
   dest->amb_bases = tmap_malloc(sizeof(uint8_t) * dest->num_amb, "dest->amb_bases");
+  // ZZ: the copy below does not make sense, for reverse, shall not only reverse the order, ...
   if(0 == reverse) {
       for(i=0;i<dest->num_amb;i++) {
           dest->amb_positions_start[i] = src->amb_positions_start[dest->num_amb-i-1];
@@ -190,6 +191,7 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
   refseq->num_annos = 0;
   refseq->len = 0;
   refseq->is_shm = 0;
+  refseq->bed_exist = 0;
   memset(buffer, 0, TMAP_REFSEQ_BUFFER_SIZE);
   buffer_length = 0;
 
@@ -400,7 +402,7 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
           anno_rev = &refseq->annos[i+num_annos]; // destination
 
           // clone the annotations
-          tmap_refseq_anno_clone(anno_rev, anno_fwd, 1);
+          tmap_refseq_anno_clone(anno_rev, anno_fwd, 1); // ZZ: this part does not make sense, but since this is not used later, not cause problem yet.
           anno_rev->offset = refseq->annos[i+num_annos-1].offset + refseq->annos[i+num_annos-1].len;
 
           // fill the buffer
@@ -551,6 +553,7 @@ tmap_refseq_read(const char *fn_fasta)
   // allocate some memory 
   refseq = tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
   refseq->is_shm = 0;
+  refseq->bed_exist = 0;
 
   // read annotation file
   fn_anno = tmap_get_file_name(fn_fasta, TMAP_ANNO_FILE);
@@ -648,6 +651,7 @@ tmap_refseq_shm_read_num_bytes(const char *fn_fasta)
   // allocate some memory 
   refseq = tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
   refseq->is_shm = 0;
+  refseq->bed_exist = 0;
 
   // read the annotation file
   fn_anno = tmap_get_file_name(fn_fasta, TMAP_ANNO_FILE);
@@ -715,7 +719,7 @@ tmap_refseq_shm_unpack(uint8_t *buf)
   if(NULL == buf) return NULL;
 
   refseq = tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
-
+  refseq->bed_exist = 0;
   // fixed length data
   memcpy(&refseq->version_id, buf, sizeof(uint64_t)) ; buf += sizeof(uint64_t);
   if(refseq->version_id != TMAP_VERSION_ID) {
@@ -779,7 +783,6 @@ tmap_refseq_destroy(tmap_refseq_t *refseq)
           free(refseq->annos[i].name);
       }
       free(refseq->annos);
-      free(refseq);
   }
   else {
       tmap_string_destroy(refseq->package_version);
@@ -795,9 +798,20 @@ tmap_refseq_destroy(tmap_refseq_t *refseq)
     	  tmap_file_fclose((tmap_file_t *)refseq->refseq_fp);
       else
           free(refseq->seq);
-
-      free(refseq);
   }
+  if (1 == refseq->bed_exist) {
+	int i;
+	for (i = 0; i < refseq->beditem; i++) {
+	    if (refseq->bednum[i]> 0) {
+		free(refseq->bedstart[i]);
+		free(refseq->bedend[i]);
+	    }
+	}
+	free(refseq->bednum);
+	free(refseq->bedstart);
+	free(refseq->bedend);
+  }
+  free(refseq);
 }
 
 // zero-based
@@ -1032,6 +1046,7 @@ tmap_refseq_refinfo_main(int argc, char *argv[])
   // allocate some memory 
   refseq = tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
   refseq->is_shm = 0;
+  refseq->bed_exist = 0;
 
   // read the annotation file
   fn_anno = tmap_get_file_name(fn_fasta, TMAP_ANNO_FILE);
@@ -1119,4 +1134,90 @@ tmap_refseq_pac2fasta_main(int argc, char *argv[])
   tmap_file_fclose(tmap_file_stdout);
 
   return 0;
+}
+
+static int32_t
+tmap_refseq_get_id(tmap_refseq_t *refseq, char *chr)
+{
+    int i;
+    for (i = 0; i < refseq->num_annos; i++) {
+	if (strcmp(refseq->annos[i].name->s, chr) == 0) return i;
+    }
+    return -1;
+}
+
+// ZZ:The bed file need to be sorted by start positions.
+int
+tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
+{
+    if (bedfile == NULL) {
+	refseq->bed_exist = 0;
+	return 1;
+    }
+    if (refseq->num_annos == 0) {
+	refseq->bed_exist = 0;
+	tmap_error("Refseq does not have any contigs, cannot read bed file", Warn, OutOfRange);	
+	return 0;
+    }
+    refseq->bed_exist = 1;
+    FILE *fp = fopen(bedfile, "r");
+    if (fp == NULL) return 0;
+    char line[10000], last_chr[100];
+    int32_t seq_id = -1;
+    uint32_t num = 0, *b = NULL, *e = NULL, memsize = 0;
+    uint32_t n_anno = refseq->num_annos;
+    refseq->bednum =  tmap_malloc(sizeof(uint32_t) * n_anno, "refseq->bednum"); 
+    refseq->bedstart = tmap_malloc(sizeof(uint32_t *) * n_anno, "refseq->bedstart");
+    refseq->bedend =  tmap_malloc(sizeof(uint32_t *) * n_anno, "refseq->bedend");
+    memset(refseq->bednum, 0, sizeof(uint32_t)*n_anno);
+    memset(refseq->bedstart, 0, sizeof(uint32_t *)*n_anno);
+    memset(refseq->bedend,0, sizeof(uint32_t *)*n_anno);
+    refseq->beditem = n_anno;
+    last_chr[0] = 0;
+    while (fgets(line, sizeof line, fp)) {
+	if (line[0] == '#') continue;
+	if (strncmp("track", line, 5)==0) continue;
+	char chr[100];
+	uint32_t beg, end;
+	sscanf(line, "%s %u %u", chr, &beg, &end);
+	if (strcmp(last_chr, chr) != 0) {
+	    memsize = 1000;
+	    if (num > 0) {
+		refseq->bednum[seq_id] = num;
+		num = 0;
+		refseq->bedstart[seq_id] = b;
+		refseq->bedend[seq_id] = e;
+	    }
+	    int32_t next_id = tmap_refseq_get_id(refseq, chr);
+	    if (next_id < 0 || next_id <= seq_id) {
+		fprintf(stderr, "ZZ warning %s %d\t%d\n", chr, seq_id, next_id);
+		tmap_error("Bed file is not sorted by chromosome order", Warn,  OutOfRange);
+		return 0;
+	    }
+	    seq_id = next_id;
+	    strcpy(last_chr, chr);
+	    b = tmap_malloc(sizeof(uint32_t) *memsize, "tmpb");
+	    e = tmap_malloc(sizeof(uint32_t) *memsize, "tmpe");
+	} else {
+	    if (num >= memsize) {
+		memsize *= 3;
+		b = tmap_realloc(b, sizeof(uint32_t) *memsize, "realloc_b");
+		e = tmap_realloc(e, sizeof(uint32_t) *memsize, "realloc_e");
+	    }
+	    if (b[num-1] > beg) {
+		tmap_error("Bed file is not sorted by begin", Warn, OutOfRange);
+		return 0;
+	    } else if (e[num-1] >= end) { 
+		    // ZZ:current ampl is contained in the previous one 
+		    continue;
+	    } else if (b[num-1] == beg) {
+		// ZZ:current one containing the previous one with the same begin, and larger ending, use the current to replace the previous
+		num--;
+	    }
+	} 
+	b[num] = beg;
+	e[num] = end;
+	num++;
+    }
+    return 1;
 }

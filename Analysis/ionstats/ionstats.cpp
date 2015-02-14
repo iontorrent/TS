@@ -16,7 +16,7 @@ void IonstatsHelp()
 {
   printf ("\n");
   printf ("ionstats %s-%s (%s) - Generate performance metrics and statistics for Ion sequences.\n",
-      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetSvnRev().c_str());
+      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
   printf ("\n");
   printf ("Usage:   ionstats <command> [options]\n");
   printf ("\n");
@@ -33,7 +33,7 @@ void IonstatsReduceHelp()
 {
   printf ("\n");
   printf ("ionstats %s-%s (%s) - Generate performance metrics and statistics for Ion sequences.\n",
-      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetSvnRev().c_str());
+      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
   printf ("\n");
   printf ("Usage:   ionstats reduce [options] <in1.json> [...]\n");
   printf ("\n");
@@ -47,7 +47,7 @@ void IonstatsReduceH5Help()
 {
   printf ("\n");
   printf ("ionstats %s-%s (%s) - Generate performance metrics and statistics for Ion sequences.\n",
-      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetSvnRev().c_str());
+      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
   printf ("\n");
   printf ("Usage:   ionstats reduce-h5 [options] <in1.h5> [...]\n");
   printf ("\n");

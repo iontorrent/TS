@@ -22,13 +22,11 @@ from django.conf import settings
 from django.core import urlresolvers
 
 from iondb.rundb.ajax import render_to_json
-from iondb.anaserve import client
 from iondb.rundb.forms import EditReferenceGenome
 from iondb.rundb.models import ReferenceGenome, ContentUpload, FileMonitor
 from iondb.rundb import tasks
 from iondb.rundb.tasks import build_tmap_index
 from iondb.rundb.configure.util import plupload_file_upload
-from iondb.utils import files as file_utils
 
 logger = logging.getLogger(__name__)
 
@@ -503,11 +501,22 @@ def get_references():
     response, content = h.request(settings.REFERENCE_LIST_URL)
     if response['status'] == '200':
         references = json.loads(content)
+        id_hashes = [r['meta']['identity_hash'] for r in references if r['meta']['identity_hash']]
+        installed = dict((r.identity_hash, r) for r in ReferenceGenome.objects.filter(identity_hash__in=id_hashes))
         for ref in references:
-            ref["meta"] = base64.b64encode(json.dumps(ref["meta"]))
+            ref["meta_encoded"] = base64.b64encode(json.dumps(ref["meta"]))
+            ref["notes"] = ref["meta"].get("notes", '')
+            ref["installed"] = installed.get(ref['meta']['identity_hash'], None)
         return references
     else:
         return None
+
+
+def new_reference_download(url, reference_args):
+    reference = ReferenceGenome(**reference_args)
+    reference.save()
+    return start_reference_download(url, reference)
+
 
 @login_required
 def download_genome(request):
@@ -517,9 +526,7 @@ def download_genome(request):
         logger.debug("downloading {0} with meta {1}".format(url, reference_meta))
         if url is not None:
             reference_args = json.loads(base64.b64decode(reference_meta))
-            reference = ReferenceGenome(**reference_args)
-            reference.save()
-            start_reference_download(url, reference)
+            new_reference_download(url, reference_args)
         return HttpResponseRedirect(urlresolvers.reverse("references_genome_download"))
 
     references = get_references() or []
@@ -531,7 +538,25 @@ def download_genome(request):
     return render_to_response("rundb/configure/reference_download.html", ctx,
         context_instance=RequestContext(request))
 
-def start_reference_download(url, reference):
+
+@login_required
+def references_custom_download(request):
+    if request.method == "POST":
+        url = request.POST.get("reference_url", None)
+        reference_args = {
+            "enabled": False,
+            "short_name": request.POST.get("short_name"),
+            "name": request.POST.get("name"),
+            "version": request.POST.get("version"),
+            "notes": request.POST.get("notes"),
+            "source": url,
+            "index_version": ""
+        }
+        new_reference_download(url, reference_args)
+    return HttpResponseRedirect(urlresolvers.reverse("references_genome_download"))
+
+
+def start_reference_download(url, reference, callback=None):
     monitor = FileMonitor(url=url, tags="reference")
     monitor.save()
     reference.file_monitor = monitor
@@ -539,7 +564,10 @@ def start_reference_download(url, reference):
     try:
         download_args = (url, monitor.id, settings.TEMP_PATH)
         install_callback = tasks.install_reference.subtask((reference.id,))
-        t = tasks.download_something.apply_async(download_args, link=install_callback)
+        if callback:
+            install_callback.link(callback)
+        async_result = tasks.download_something.apply_async(download_args, link=install_callback)
+        return async_result
     except Exception as err:
         monitor.status = "System Error: " + str(err)
         monitor.save()

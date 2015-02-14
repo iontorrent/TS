@@ -7,6 +7,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.cache import cache
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.shortcuts import render_to_response, get_object_or_404, redirect, render
 from django.template import RequestContext
 from django.template.loader import render_to_string
@@ -43,7 +44,7 @@ from iondb.rundb.data import dmactions
 from iondb.rundb.data.data_management import update_files_in_use
 from iondb.rundb.data import exceptions as DMExceptions
 from iondb.rundb.data.data_import import find_data_to_import, data_import
-from iondb.utils.files import disk_attributes
+from iondb.utils.files import disk_attributes, is_mounted
 
 from django.http import HttpResponse, HttpResponseServerError, HttpResponseNotFound
 from datetime import datetime
@@ -118,7 +119,7 @@ def get_serialized_exps(request, pageSize):
 
 
 def data_context(request):
-    pageSize = GlobalConfig.objects.all()[0].records_to_display
+    pageSize = GlobalConfig.get().records_to_display
     context = {
         'search': get_search_parameters(),
         'inital_query': get_serialized_exps(request, pageSize),
@@ -138,18 +139,27 @@ def data(request):
 
 @login_required
 def data_fast(request):
-    pageSize = GlobalConfig.objects.all()[0].records_to_display
+    page = request.GET.get('page', 1)
+    page_size = GlobalConfig.get().records_to_display
     show_status = False
-    q = Experiment.objects.select_related("repResult", "repResult__qualitymetrics", "repResult__eas").exclude(repResult=None).order_by('-repResult__timeStamp')[:pageSize]
-    for exp in q:
-        if exp.ftpStatus != "Complete":
+    q = Experiment.objects.select_related("repResult", "repResult__qualitymetrics", "repResult__eas").exclude(repResult=None).order_by('-repResult__timeStamp')
+    paginator = Paginator(q, page_size)
+    try:
+        exps = paginator.page(page)
+    except PageNotAnInteger:
+        exps = paginator.page(1)
+    except EmptyPage:
+        exps = paginator.page(paginator.num_pages)
+
+    for exp in exps.object_list:
+        if exp.ftpStatus != "Complete" or exp.ftpStatus == '':
             show_status = True
             exp.in_progress = exp.ftpStatus.isdigit()
             if exp.in_progress:
                 exp.progress_percent = 100 * float(exp.ftpStatus) / float(exp.flows)
 
     context = {
-        "experiments": q,
+        "experiments": exps,
         "show_status": show_status
     }
     return render(request, "rundb/data/fast.html", context)
@@ -625,7 +635,7 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     barcodeId = common['barcodeId']
     if override_samples:
         sample = json_data.get('sample','')
-        barcodeSamples = json_data.get('barcodedSamples',{})
+        barcodeSamples = json.dumps(json_data.get('barcodedSamples',{}), cls=DjangoJSONEncoder)
     else:
         sample = common['sample']
         barcodeSamples = common['barcodedSamples']
@@ -698,13 +708,21 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     eas_json = json.loads(eas_json)
     eas_json = eas_json[0]["fields"]
     
+    barcodedSamples_reference_names = eas.get_barcoded_samples_reference_names()
+    #logger.debug("data.views._combine_results_sendto_project() barcodedSamples_reference_names=%s" %(barcodedSamples_reference_names))
+    
+    #use barcodedSamples' selected reference if NO plan default reference is specified
+    reference = result.reference
+    if not result.reference and barcodedSamples_reference_names:
+        reference = barcodedSamples_reference_names[0]
+        
     params = {
         'resultsName': result.resultsName,
         'parentIDs': ids_to_merge,
         'parentNames': names,
         'parentLinks': links,
         'parentBAMs': bams,
-        'referenceName': result.reference,
+        'referenceName': reference,
         'tmap_version': settings.TMAP_VERSION,
         'mark_duplicates': mark_duplicates,
         'plan': plan,
@@ -713,11 +731,13 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         'flowOrder': floworder,
         'project': projectName,
         'barcodeId': barcodeId,
-        'barcodeSamples': json.dumps(barcodeSamples),
+        'barcodeSamples': json.dumps(eas.barcodedSamples,cls=DjangoJSONEncoder) if barcodeId else "{}",
+        "barcodeSamples_referenceNames" : barcodedSamples_reference_names,
         'sample': sample,
         'override_samples': override_samples,
         'experimentAnalysisSettings': eas_json,
-        'warnings': warnings
+        'warnings': warnings,
+        'runid': result.runid
     }
 
     from distutils.sysconfig import get_python_lib
@@ -919,22 +939,13 @@ def experiment_edit(request, pk):
     return render_to_response("rundb/data/modal_experiment_edit.html", context_instance=template.RequestContext(request, ctxd))
     
 
-def is_mounted(path):
-    try:
-        path = os.path.abspath(path)
-        while path != os.path.sep:
-            if os.path.ismount(path):
-                return path
-            path = os.path.dirname(path)
-    except:
-        pass
-    return ''
+
 
 @login_required
 def datamanagement(request):
 
     fs_stats = disk_usage_stats()
-    gc = GlobalConfig.objects.all().order_by('pk')[0]
+    gc = GlobalConfig.get()
 
     if os.path.exists("/opt/ion/.ion-internal-server"):
         # split Data Management tables per fileserver
@@ -955,16 +966,16 @@ def datamanagement(request):
         if dmfileset.backup_directory in ['None',None,'']:
             dmfileset.mounted = False
         else:
-            dmfileset.mounted = bool( is_mounted(dmfileset.backup_directory) )
+            dmfileset.mounted = bool( is_mounted(dmfileset.backup_directory) ) and os.path.exists(dmfileset.backup_directory)
 
     # mounted paths for Disk Usage section
     archive_stats = {}
     backup_dirs = get_dir_choices()[1:]
     for bdir,name in backup_dirs:
-        mounted = is_mounted(bdir)
-        if mounted and mounted not in archive_stats and mounted not in fs_stats:
+        mounted = is_mounted(bdir)  # This will return mountpoint path
+        if mounted and bdir not in archive_stats and bdir not in fs_stats:
             try:
-                total, availSpace, freeSpace, bsize = disk_attributes(mounted)
+                total, availSpace, freeSpace, bsize = disk_attributes(bdir)
                 total_gb = float(total*bsize)/(1024*1024*1024)
                 avail_gb = float(availSpace*bsize)/(1024*1024*1024)
                 #free_gb = float(freeSpace*bsize)/(1024*1024*1024)
@@ -974,7 +985,7 @@ def datamanagement(request):
                 total_gb = ""
                 avail_gb = ""
 
-            archive_stats[mounted] = {
+            archive_stats[bdir] = {
                 'percentfull': percentfull,
                 'disksize': total_gb,
                 'diskfree': avail_gb,
@@ -1131,7 +1142,10 @@ def dm_action_selected(request, results_pks, action):
 @login_required
 @staff_member_required
 def dm_configuration(request):
-    config = GlobalConfig.objects.all()[0]
+    def isdiff(value1,value2):
+        return str(value1) != str(value2)
+    
+    config = GlobalConfig.get()
     dm_contact, created = User.objects.get_or_create(username='dm_contact')
 
     if request.method == 'GET':
@@ -1152,20 +1166,44 @@ def dm_configuration(request):
         dm_filesets = DMFileSet.objects.all()
         log = 'SAVED Data Management Configuration<br>'
         data = json.loads(request.body)
+        changed = False
+        html = lambda s:'<span style="color:#3A87AD;">%s</span>' % s
         try:
             for key, value in data.items():
                 if key == 'filesets':
                     for category, params in value.items():
-                        dm_filesets.filter(type=category).update(**params)
-                        log += '<b>%s:</b> %s<br>' % (category, json.dumps(params).translate(None, "{}\"\'") )
+                        #log += '<b>%s:</b> %s<br>' % (category, json.dumps(params).translate(None, "{}\"\'") )
+                        dmfileset = dm_filesets.filter(type=category)
+                        current_params = dmfileset.values(*params.keys())[0]
+                        changed_params = [key for key,value in params.items() if isdiff(value,current_params.get(key))]
+                        if len(changed_params) > 0:
+                            dmfileset.update(**params)
+                            changed = True
+                        log += '<b>%s:</b> ' % category
+                        for key,value in params.items():
+                            log_txt = ' %s: %s,' % (key,value)
+                            if key in changed_params:
+                                log_txt = html(log_txt)
+                            log += log_txt
+                        log = log[:-1] + '<br>'
                 elif key == 'email':
-                    dm_contact.email = value
-                    dm_contact.save()
-                    log += '<b>Email:</b> %s<br>' % value
+                    log_txt = '<b>Email:</b> %s' % value
+                    if isdiff(value,dm_contact.email):
+                        changed = True
+                        dm_contact.email = value
+                        dm_contact.save()
+                        log_txt = html(log_txt)
+                    log += log_txt + '<br>'
                 elif key == 'auto_archive_ack':
-                    GlobalConfig.objects.all().update(auto_archive_ack = True if value=='True' else False)
-                    log += '<b>Auto Acknowledge Delete:</b> %s<br>' % value
-            _add_dm_configuration_log(request, log)
+                    log_txt = '<b>Auto Acknowledge Delete:</b> %s' % value
+                    if isdiff(value,config.auto_archive_ack):
+                        changed = True
+                        config.auto_archive_ack = True if value=='True' else False
+                        config.save()
+                        log_txt = html(log_txt)
+                    log += log_txt + '<br>'
+            if changed:        
+                _add_dm_configuration_log(request, log)
         except Exception as e:
             logger.exception("dm_configuration: error: %s" % str(e))
             return HttpResponseServerError("Error: %s" % str(e))
@@ -1426,7 +1464,7 @@ def dmactions_jobs(request):
         d = {
             'pk': dmfilestat.pk,
             'state': dmfilestat.get_action_state_display(),
-            'diskspace': "%.1f" % dmfilestat.diskspace,
+            'diskspace': "%.1f" % (dmfilestat.diskspace or 0),
             'result_pk': dmfilestat.result.pk,
             'resultsName': dmfilestat.result.resultsName,
             'category': dmfilestat.dmfileset.type,

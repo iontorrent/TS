@@ -22,6 +22,7 @@ case "$1" in
         ionJobServer
         ionPlugin
         celeryd
+        celerybeat
         )
     for DAEMON in ${DAEMONS[@]}; do
         update-rc.d -f ${DAEMON} remove || true

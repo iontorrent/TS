@@ -15,6 +15,7 @@ my $OPTIONS = "Options:
   -h ? --help Display Help information
   -a Indicates target regions are Amplicons rather than generic targets. Overrides -b option and changes wording of output.
   -b Indicates target region coverage is measured by average Base coverage depth and that targets may be merged.
+  -c Use 'Contig' as target title rather than 'Amplicon' or 'Target'.
   -f Output Full statistics. This adds a few more statistics to the output, e.g. those output by previous version of TCA.
   -l Show extra log information to STDERR.
   -r RNA AmpliSeq option: Coverage statistics output at log10 depths. Forces '-a' option.
@@ -38,6 +39,7 @@ my $thresBias = 70;
 my $thresReads = 10;
 my $basedepths = 0;
 my $fullycov = 98;
+my $contigs = 0;
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 )
@@ -47,6 +49,7 @@ while( scalar(@ARGV) > 0 )
   if($opt eq '-D') {$docfile = shift;}
   elsif($opt eq '-a') {$ampout = 1;}
   elsif($opt eq '-b') {$basedepths = 1;}
+  elsif($opt eq '-c') {$contigs = 1;}
   elsif($opt eq '-f') {$fullstats = 1;}
   elsif($opt eq '-l') {$logopt = 1;}
   elsif($opt eq '-r') {$rnaopt = 1;$ampout = 1;}
@@ -145,6 +148,7 @@ close(TRDFILE);
 
 # create output stats
 my $targType = $ampout ? 'Amplicon' : 'Target';
+$targType = "Contig" if( $contigs );
 my $targetCumd = outputStats( $targType, \@targetDist, $targetMaxDepth, $numTargets, $sumBaseDepth );
 
 my $numNoBias = $numTargets - $numBias;
@@ -208,9 +212,11 @@ sub outputStats
     # Cumulative base coverage used integer depths => use more accurate sum & average
     $abc = $sumDepth / $numTargs;
     $sig = sigfig($abc);
-    printf "Number of unmerged %ss:       %.0f\n",$tagL,$numTargs;
-    #printf "Total on $tagL mean base reads:  %.0f\n",$sumDepth;
-    printf "Percent assigned $tagL reads:    %.2f%%\n",$pc_mappedReads if( $pc_mappedReads >= 0 );
+    unless( $tagL eq 'contigs' ) {
+      printf "Number of unmerged %ss:       %.0f\n",$tagL,$numTargs if( $tagL ne 'contigs' );
+      #printf "Total on $tagL mean base reads:  %.0f\n",$sumDepth;
+      printf "Percent assigned $tagL reads:    %.2f%%\n",$pc_mappedReads if( $pc_mappedReads >= 0 );
+    }
     printf "Average base coverage depth per target: %.${sig}f\n",$abc;
     my $lambda = 0.2*$abc;
     my $p2m = int($lambda);

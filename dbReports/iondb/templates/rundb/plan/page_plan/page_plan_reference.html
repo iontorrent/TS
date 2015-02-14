@@ -8,7 +8,7 @@
     <div class="span12">
         <h4>Reference Library {% if not helper.getApplProduct.isTargetRegionBEDFileSupported %}(optional){% endif %}</h4>
         <select id="reference" name="reference" class="select-group" style="width: 700px;">
-            <option value=""></option>
+            <option value="">None</option>
             {% for ref in step.getPrePopulatedFieldDict.references %}
                 {% ifequal ref.short_name step.getCurrentSavedFieldDict.reference %}
                     <option SELECTED value="{{ref.short_name}}">{{ref.short_name}}({{ref.name}})</option>
@@ -96,10 +96,16 @@
     </div>
 {% endif %}
 
+<div class="row-fluid">
+    {% for key, value in step.validationErrors.items %}
+        <h4 style="color: red">{{value}}</h4>
+    {% endfor %}
+</div>
+
 {% endblock page-plan-content %}
 
 {% block prevnext-buttons %}
-    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_monitoring" %}');$('#step_form').submit();return false;">&larr; Previous</a>
+    <a class="btn btn-100" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_kits" %}');$('#step_form').submit();return false;">&larr; Previous</a>
     <a class="btn btn-primary btn-100 pull-right" href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_plugins" %}');$('#step_form').submit();return false;">Next &rarr;</a>
 {% endblock prevnext-buttons %}
 
@@ -121,7 +127,7 @@
             }
             var $new_select = $("<select>", {'name' : name, 'id' : $select.attr('name').replace('_hidden', ''), 'class' : 'select-group', 'style' : 'width:700px;'});
 
-            $new_select.append($("<option></option>"));
+            $new_select.append($("<option value=''>None</option>"));
 
             $new_select.on('change', function(){
                 if (name == 'targetBedFile'){$("#selectedTargetRegions").text($(this).val() != null ? $(this).val() : '');}

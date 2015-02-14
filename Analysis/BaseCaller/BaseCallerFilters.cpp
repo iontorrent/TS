@@ -65,29 +65,29 @@ int EncodeFilteringDetails(int n_base, int n_prefix)
 ReadFilteringHistory::ReadFilteringHistory()
 {
   is_filtered = false;
-  is_called = false;
-  n_bases = -1;
+  is_called   = false;
+  n_bases     = -1;
 
-  n_bases_key = 0;
+  n_bases_key    = 0;
   n_bases_prefix = 0;
 
-  n_bases_after_bkgmodel_high_ppf = -1;
+  n_bases_after_bkgmodel_high_ppf   = -1;
   n_bases_after_bkgmodel_polyclonal = -1;
-  n_bases_after_bkgmodel_bad_key = -1;
-  n_bases_after_polyclonal = -1;
-  n_bases_after_high_ppf = -1;
-  n_bases_after_too_short = -1;
-  n_bases_after_bad_key = -1;
-  n_bases_after_high_residual = -1;
-  n_bases_after_beverly_trim = -1;
-  n_bases_after_quality_trim = -1;
-  n_bases_after_adapter_trim = -1;
-  n_bases_filtered = -1;
+  n_bases_after_bkgmodel_bad_key    = -1;
+  n_bases_after_polyclonal          = -1;
+  n_bases_after_high_ppf            = -1;
+  n_bases_after_too_short           = -1;
+  n_bases_after_bad_key             = -1;
+  n_bases_after_high_residual       = -1;
+  n_bases_after_beverly_trim        = -1;
+  n_bases_after_quality_trim        = -1;
+  n_bases_after_adapter_trim        = -1;
+  n_bases_filtered                  = -1;
 
-  //num_adapters = 0;  // This does not really belong here. Find a better place. XXX
-  //adapter_type = -1;
-  //adpter_score = -1;
-  //adapter_separation = -1;
+  adapter_type       = -1;
+  adapter_score      = 0.0;
+  adapter_separation = 0.0;
+  adapter_decision   = false;
 }
 
 // ----------------------------------------------------------------------------
@@ -139,6 +139,20 @@ ReadFilteringStats::ReadFilteringStats()
   num_reads_removed_quality_trim_ = 0;
   num_reads_final_ = 0;
 }
+
+// ----------------------------------------------------------------------------
+
+void ReadFilteringStats::SetBeadAdapters(const vector<string> & trim_adapters){
+	bead_adapters_ = trim_adapters;
+
+    adapter_class_num_reads_.assign(bead_adapters_.size()+1, 0);
+    adapter_class_num_decisions_.assign(bead_adapters_.size(), 0);
+    adapter_class_cum_score_.assign(bead_adapters_.size(), 0.0);
+	adapter_class_cum_separation_.assign(bead_adapters_.size(), 0.0);
+	adapter_class_av_score_.assign(bead_adapters_.size(), 0.0);
+    adapter_class_av_separation_.assign(bead_adapters_.size(), 0.0);
+
+};
 
 // ----------------------------------------------------------------------------
 
@@ -230,7 +244,22 @@ void ReadFilteringStats::AddRead(const ReadFilteringHistory& read_filtering_hist
 
   num_bases_final_ += max(0, read_filtering_history.n_bases_filtered - read_filtering_history.n_bases_prefix);
 
+  // Step 3: Bead Adapter accounting
+
+  if(not read_filtering_history.is_filtered and read_filtering_history.adapter_type >= 0) {
+    adapter_class_num_reads_.at(read_filtering_history.adapter_type)++;
+
+    if (read_filtering_history.adapter_type < (int)adapter_class_cum_score_.size()) {
+      adapter_class_cum_score_.at(read_filtering_history.adapter_type) += read_filtering_history.adapter_score;
+      if (read_filtering_history.adapter_decision) {
+        adapter_class_num_decisions_.at(read_filtering_history.adapter_type)++;
+        adapter_class_cum_separation_.at(read_filtering_history.adapter_type) += read_filtering_history.adapter_separation;
+      }
+    }
+  }
+
 }
+
 
 // ----------------------------------------------------------------------------
 
@@ -260,7 +289,28 @@ void ReadFilteringStats::MergeFrom(const ReadFilteringStats& other)
   num_reads_removed_adapter_trim_         += other.num_reads_removed_adapter_trim_;
   num_reads_removed_quality_trim_         += other.num_reads_removed_quality_trim_;
   num_reads_final_                        += other.num_reads_final_;
+
+  for (unsigned int iadptr=0; iadptr<adapter_class_cum_score_.size(); iadptr++){
+    adapter_class_num_reads_.at(iadptr)      += other.adapter_class_num_reads_.at(iadptr);
+    adapter_class_cum_score_.at(iadptr)      += other.adapter_class_cum_score_.at(iadptr);
+    adapter_class_num_decisions_.at(iadptr)  += other.adapter_class_num_decisions_.at(iadptr);
+    adapter_class_cum_separation_.at(iadptr) += other.adapter_class_cum_separation_.at(iadptr);
+  }
+  adapter_class_num_reads_.at(adapter_class_cum_score_.size()) +=
+        other.adapter_class_num_reads_.at(adapter_class_cum_score_.size());
 }
+
+// ----------------------------------------------------------------------------
+
+void ReadFilteringStats::ComputeAverages(){
+
+  for (unsigned int iadptr=0; iadptr<adapter_class_cum_score_.size(); iadptr++){
+    if (adapter_class_num_reads_.at(iadptr) > 0)
+      adapter_class_av_score_.at(iadptr)      = adapter_class_cum_score_.at(iadptr) / adapter_class_num_reads_.at(iadptr);
+    if (adapter_class_num_decisions_.at(iadptr) > 0)
+      adapter_class_av_separation_.at(iadptr) = adapter_class_cum_separation_.at(iadptr) / adapter_class_num_decisions_.at(iadptr);
+  }
+};
 
 // ----------------------------------------------------------------------------
 
@@ -325,6 +375,31 @@ void ReadFilteringStats::PrettyPrint (const string& table_header)
   table << setw(23) << num_reads_final_ << setw(23) << num_bases_final_ << endl;
   table << endl;
 
+  // Printing bead adapter summary
+  int fill_length = 1;
+  for (unsigned int iadptr=0; iadptr<bead_adapters_.size(); iadptr++)
+    fill_length = max(fill_length, (int)bead_adapters_.at(iadptr).length());
+  fill_length = max(fill_length+3, 23);
+  string dashes_line(fill_length-3, '-');
+
+  table << setw(25) << "Bead Adapters";
+  table << setw(23) << "Num Reads" << setw(fill_length) << "Adapter Sequence" << endl;
+
+  table << setw(25) << " ";
+  table << setw(23) << "--------------------" << setw(fill_length) << dashes_line << endl;
+
+  for (unsigned int iadptr=0; iadptr<adapter_class_cum_score_.size(); iadptr++){
+    table << setw(22) << "Adapter" << setw(3) << iadptr;
+    table << setw(23) << adapter_class_num_reads_.at(iadptr) << setw(fill_length) << bead_adapters_.at(iadptr) << endl;
+  }
+
+  table << setw(25) << "No Adapter Match";
+  table << setw(23) << adapter_class_num_reads_.at(bead_adapters_.size()) << setw(fill_length) << " " << endl;
+
+  table << setw(25) << " ";
+  table << setw(23) << "--------------------" << setw(fill_length) << dashes_line << endl;
+  cout << endl;
+
   cout << table.str();
 }
 
@@ -355,7 +430,7 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
   json["BeadSummary"][class_name]["highRes"]     = (Json::Int64)(num_reads_removed_residual_ + num_reads_removed_beverly_);
   json["BeadSummary"][class_name]["valid"]       = (Json::Int64)num_reads_final_;
 
-  // Generate values that go to the library report
+  // Generate values specific to library reads
   if (library_report) {
 
     // BaseDetails
@@ -380,7 +455,26 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
                   num_reads_removed_quality_trim_ +
                   num_reads_removed_beverly_);
     json["Filtering"]["LibraryReport"]["final_library_reads"]   = (Json::Int64)num_reads_final_;
+
+    // (3') Bead Adapters
+
+    stringstream adapter_stream;
+    for (unsigned int adapter_idx=0; adapter_idx<bead_adapters_.size(); adapter_idx++) {
+      adapter_stream.str(std::string());
+      adapter_stream << "Adapter_" << adapter_idx;
+      json["Filtering"]["BeadAdapters"][adapter_stream.str()]["adapter_sequence"] = bead_adapters_.at(adapter_idx);
+      json["Filtering"]["BeadAdapters"][adapter_stream.str()]["read_count"] = (Json::UInt64)(adapter_class_num_reads_.at(adapter_idx));
+      json["Filtering"]["BeadAdapters"][adapter_stream.str()]["num_decisions"] = (Json::UInt64)(adapter_class_num_decisions_.at(adapter_idx));
+
+      Json::Value av_score(adapter_class_av_score_.at(adapter_idx));
+      json["Filtering"]["BeadAdapters"][adapter_stream.str()]["average_metric"] = av_score;
+
+      Json::Value av_sep(adapter_class_av_separation_.at(adapter_idx));
+      json["Filtering"]["BeadAdapters"][adapter_stream.str()]["average_separation"] = av_sep;
+    }
+    json["Filtering"]["BeadAdapters"]["no_match"]["read_count"] = (Json::UInt64)(adapter_class_num_reads_.at(bead_adapters_.size()));
   }
+
 }
 
 
@@ -389,33 +483,34 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
 void BaseCallerFilters::PrintHelp()
 {
   printf ("Filtering and trimming options:\n");
-  printf ("  -d,--disable-all-filters   on/off     disable all filtering and trimming, overrides other args [off]\n");
-  printf ("  -k,--keypass-filter        on/off     apply keypass filter [on]\n");
-  printf ("     --clonal-filter-solve   on/off     apply polyclonal filter [off]\n");
-  printf ("     --clonal-filter-tf      on/off     apply polyclonal filter to TFs [off]\n");
-  printf ("     --min-read-length       INT        apply minimum read length filter [8]\n");
-  printf ("     --cr-filter             on/off     apply cafie residual filter [off]\n");
-  printf ("     --cr-filter-tf          on/off     apply cafie residual filter to TFs [off]\n");
-  printf ("     --cr-filter-max-value   FLOAT      cafie residual filter threshold [0.8]\n");
-  printf ("     --beverly-filter        filter_ratio,trim_ratio,min_length / off\n");
+  printf ("  -d,--disable-all-filters    on/off     disable all filtering and trimming, overrides other args [off]\n");
+  printf ("  -k,--keypass-filter         on/off     apply keypass filter [on]\n");
+  printf ("     --clonal-filter-solve    on/off     apply polyclonal filter [off]\n");
+  printf ("     --clonal-filter-tf       on/off     apply polyclonal filter to TFs [off]\n");
+  printf ("     --clonal-filter-maxreads INT        maximum number of library reads used for polyclonal filter training [100000]\n");
+  printf ("     --min-read-length        INT        apply minimum read length filter [8]\n");
+  printf ("     --cr-filter              on/off     apply cafie residual filter [off]\n");
+  printf ("     --cr-filter-tf           on/off     apply cafie residual filter to TFs [off]\n");
+  printf ("     --cr-filter-max-value    FLOAT      cafie residual filter threshold [0.8]\n");
+  printf ("     --beverly-filter         filter_ratio,trim_ratio,min_length / off\n");
   printf ("                                        apply Beverly filter/trimmer [off]\n");
-  printf ("     --trim-adapter          STRING     reverse complement of adapter sequence [ATCACCGACTGCCCATAGAGAGGCTGAGAC]\n");
-  printf ("     --trim-adapter-tf       STRING/off adapter sequence for test fragments [off]\n");
-  printf ("     --trim-adapter-cutoff   FLOAT      cutoff for adapter trimming, 0=off [16]\n");
+  printf ("     --trim-adapter           STRING     reverse complement of adapter sequence [ATCACCGACTGCCCATAGAGAGGCTGAGAC]\n");
+  printf ("     --trim-adapter-tf        STRING/off adapter sequence for test fragments [off]\n");
+  printf ("     --trim-adapter-cutoff    FLOAT      cutoff for adapter trimming, 0=off [16]\n");
   printf ("     --trim-adapter-min-match INT       minimum adapter bases in the read required for trimming  [6]\n");
-  printf ("     --trim-adapter-mode     INT        0=use simplified metric, 1=use standard metric [1]\n");
-  printf ("     --trim-qual-window-size INT        window size for quality trimming [30]\n");
-  printf ("     --trim-qual-cutoff      FLOAT      cutoff for quality trimming, 100=off [15]\n");
-  printf ("     --trim-min-read-len     INT        reads trimmed shorter than this are omitted from output [8]\n");
-  printf ("     --avalanche_start_pos   INT        Avalanche filter start base position\n");
-  printf ("     --avalanche_qual_hi     INT        Avalanche filter quality cutoff before the start position [15]\n");
-  printf ("     --avalanche_qual_lo     INT        Avalanche filter quality cutoff after the start position [5]\n");
+  printf ("     --trim-adapter-mode      INT        0=use simplified metric, 1=use standard metric [1]\n");
+  printf ("     --trim-qual-window-size  INT        window size for quality trimming [30]\n");
+  printf ("     --trim-qual-cutoff       FLOAT      cutoff for quality trimming, 100=off [15]\n");
+  printf ("     --trim-min-read-len      INT        reads trimmed shorter than this are omitted from output [8]\n");
+  printf ("     --avalanche_start_pos    INT        Avalanche filter start base position\n");
+  printf ("     --avalanche_qual_hi      INT        Avalanche filter quality cutoff before the start position [15]\n");
+  printf ("     --avalanche_qual_lo      INT        Avalanche filter quality cutoff after the start position [5]\n");
   printf ("\n");
 }
 
 // ----------------------------------------------------------------------------
 
-BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
+BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comments,
     const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, const Mask& mask)
 {
   flow_order_ = flow_order;
@@ -427,9 +522,10 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
   // Retrieve command line options
 
   filter_keypass_enabled_      = opts.GetFirstBoolean('k', "keypass-filter", true);
-  filter_min_read_length_      = opts.GetFirstInt    ('-', "min-read-length", 8);
+  filter_min_read_length_      = opts.GetFirstInt    ('-', "min-read-length", 25);
   filter_clonal_enabled_tfs_   = opts.GetFirstBoolean('-', "clonal-filter-tf", false);
   filter_clonal_enabled_       = opts.GetFirstBoolean('-', "clonal-filter-solve", false);
+  filter_clonal_maxreads_      = opts.GetFirstInt    ('-', "clonal-filter-maxreads", 100000);
   filter_residual_enabled_     = opts.GetFirstBoolean('-', "cr-filter", false);
   filter_residual_enabled_tfs_ = opts.GetFirstBoolean('-', "cr-filter-tf", false);
 
@@ -449,6 +545,7 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
   trim_qual_window_size_       = opts.GetFirstInt          ('-', "trim-qual-window-size", 30);
   trim_qual_cutoff_            = opts.GetFirstDouble       ('-', "trim-qual-cutoff", 15.0);
   trim_min_read_len_           = opts.GetFirstInt          ('-', "trim-min-read-len", filter_min_read_length_);
+  extra_trim_right_            = opts.GetFirstInt          ('-', "extra-trim-right", 0);
 
   // Turn adapter trimming off if 'off' is specified in options string
   if (trim_adapter_.size() > 0 and trim_adapter_.at(0) == "off")
@@ -458,11 +555,8 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
   // Validate adapter strings so that they contains only ACGT characters.
   ValidateBaseStringVector(trim_adapter_);
   ValidateBaseStringVector(trim_adapter_tf_);
-  // Initialize accounting
-  adapter_class_num_reads_.assign(trim_adapter_.size()+1, 0);
-  adapter_class_num_decisions_.assign(trim_adapter_.size(), 0);
-  adapter_class_av_score_.assign(trim_adapter_.size(), 0.0);
-  adapter_class_av_separation_.assign(trim_adapter_.size(), 0.0);
+  if (trim_adapter_.size() > 0)
+    WriteAdaptersToBamComments(bam_comments);
 
   //string filter_beverly_args      = opts.GetFirstString ('-', "beverly-filter", "0.03,0.03,8");
   string filter_beverly_args      = opts.GetFirstString ('-', "beverly-filter", "off");
@@ -578,7 +672,7 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts,
 
 // ----------------------------------------------------------------------------
 
-void BaseCallerFilters::TrainClonalFilter(const string& output_directory, RawWells& wells, int num_unfiltered, Mask& mask, const PolyclonalFilterOpts & opts)
+void BaseCallerFilters::TrainClonalFilter(const string& output_directory, RawWells& wells, Mask& mask, const PolyclonalFilterOpts & opts)
 {
   if (!filter_clonal_enabled_ and !filter_clonal_enabled_tfs_)
     return;
@@ -587,7 +681,7 @@ void BaseCallerFilters::TrainClonalFilter(const string& output_directory, RawWel
   vector<int> key_ionogram(keys_[0].flows(), keys_[0].flows()+keys_[0].flows_length());
   filter_counts counts;
   int nlib = mask.GetCount(static_cast<MaskType> (MaskLib));
-  counts._nsamp = min(nlib, num_unfiltered); // In the future, a parameter separate from num_unfiltered
+  counts._nsamp = min(nlib, filter_clonal_maxreads_);
   make_filter(clonal_population_, counts, mask, wells, key_ionogram, opts);
   cout << counts << endl;
   wells.Close();
@@ -657,6 +751,16 @@ bool BaseCallerFilters::IsPolyclonal(int read_index) const
 
 // ----------------------------------------------------------------------------
 
+void BaseCallerFilters::SetFiltered(int read_index, int read_class, ReadFilteringHistory& filter_history)
+{
+  if (filter_history.is_filtered)
+    return;
+
+  filter_mask_[read_index] = kFilterShortRead;
+  filter_history.n_bases_filtered = 0;
+  filter_history.n_bases_after_too_short = 0;
+  filter_history.is_filtered = true;
+}
 
 void BaseCallerFilters::SetBkgmodelHighPPF(int read_index, ReadFilteringHistory& filter_history)
 {
@@ -1139,19 +1243,16 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
   if (fabs(best_metric - second_best_metric) < trim_adapter_separation_)
     best_start_flow = -1;
   if (best_start_flow == -1) {   // No suitable match
-    adapter_class_num_reads_.at(trim_adapter_.size())++;
+    processed_read.filter.adapter_type = trim_adapter_.size();
     return;
   }
 
   // --- Save trimming results
-
-  if (read_class == 0) {
-    adapter_class_num_reads_.at(best_adapter)++;
-    adapter_class_av_score_.at(best_adapter) += best_metric;
-    if (second_best_metric != ((trim_adapter_mode_ == 2) ? -0.1 : -1e10)) {
-      adapter_class_num_decisions_.at(best_adapter)++;
-      adapter_class_av_separation_.at(best_adapter) += (best_metric - second_best_metric);
-    }
+  processed_read.filter.adapter_type  = best_adapter;
+  processed_read.filter.adapter_score = best_metric;
+  if (second_best_metric != ((trim_adapter_mode_ == 2) ? -0.1 : -1e10)) {
+    processed_read.filter.adapter_decision   = true;
+    processed_read.filter.adapter_separation = (best_metric - second_best_metric);
   }
 
   processed_read.bam.AddTag("ZA", "i", max(best_start_base - processed_read.filter.n_bases_prefix, 0));
@@ -1193,7 +1294,7 @@ void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilterin
   if (filter_history.is_filtered) // Already filtered out?
     return;
 
-  if(trim_qual_cutoff_ >= 100.0)   // 100.0 or more means disabled
+  if(trim_qual_cutoff_ >= 100.0 or trim_qual_cutoff_ == 0.0)   // 100.0 or more means disabled
     return;
 
   if (read_class != 0)  // Hardcoded: Don't trim TFs
@@ -1201,24 +1302,23 @@ void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilterin
 
   int window_start = 0;
   int window_end = 0;
-  int window_sum = 0;
-  int minimum_sum = trim_qual_window_size_ * trim_qual_cutoff_;
+  int minimum_sum, window_sum = 0;
 
   // Step 1: Accumulate over the initial window
   while (window_end < trim_qual_window_size_ and window_end < filter_history.n_bases)
     window_sum += quality[window_end++];
+  minimum_sum = window_end * trim_qual_cutoff_;
 
   // Step 2: Keep sliding as long as average q-score exceeds the threshold
-  //uint16_t clip_qual_right = 0;
   int clip_qual_right = window_sum >= minimum_sum ? (window_end + window_start) / 2 : 0;
   while (window_sum >= minimum_sum and window_end < filter_history.n_bases) {
     window_sum += quality[window_end++];
     window_sum -= quality[window_start++];
     clip_qual_right++;
-    //clip_qual_right = (window_end + window_start) / 2;
   }
 
-
+  if (window_end == filter_history.n_bases)
+    clip_qual_right = filter_history.n_bases - extra_trim_right_;
   if (clip_qual_right >= filter_history.n_bases_filtered)
     return;
 
@@ -1461,6 +1561,7 @@ void BaseCallerFilters::WriteAdaptersToBamComments(vector<string> &comments) {
 
   Json::Value json(Json::objectValue);
   stringstream adapter_stream;
+  json["BeadAdapters"]["num_adapters"] = (unsigned int)trim_adapter_.size();
   for (unsigned int adapter_idx=0; adapter_idx<trim_adapter_.size(); adapter_idx++) {
     adapter_stream.str(std::string());
     adapter_stream << "Adapter_" << adapter_idx;
@@ -1476,52 +1577,4 @@ void BaseCallerFilters::WriteAdaptersToBamComments(vector<string> &comments) {
   comments.push_back(str);
 }
 
-// ----------------------------------------------------------------------------------
 
-void BaseCallerFilters::WriteToBaseCallerJson(Json::Value &json) {
-
-  // Store adapter classification results in basecaller json object
-  stringstream adapter_stream;
-
-  for (unsigned int adapter_idx=0; adapter_idx<trim_adapter_.size(); adapter_idx++) {
-    adapter_stream.str(std::string());
-    adapter_stream << "Adapter_" << adapter_idx;
-    json["Filtering"]["BeadAdapters"][adapter_stream.str()]["adapter_sequence"] = trim_adapter_.at(adapter_idx);
-    json["Filtering"]["BeadAdapters"][adapter_stream.str()]["read_count"] = (Json::UInt64)(adapter_class_num_reads_.at(adapter_idx));
-    json["Filtering"]["BeadAdapters"][adapter_stream.str()]["num_decisions"] = (Json::UInt64)(adapter_class_num_decisions_.at(adapter_idx));
-
-    Json::Value av_score(adapter_class_av_score_.at(adapter_idx) / max(adapter_class_num_reads_.at(adapter_idx),(uint64_t)1));
-    json["Filtering"]["BeadAdapters"][adapter_stream.str()]["average_metric"] = av_score;
-
-    Json::Value av_sep(adapter_class_av_separation_.at(adapter_idx) / max(adapter_class_num_reads_.at(adapter_idx),(uint64_t)1));
-    json["Filtering"]["BeadAdapters"][adapter_stream.str()]["average_separation"] = av_sep;
-  }
-
-  json["Filtering"]["BeadAdapters"]["no_match"]["read_count"] = (Json::UInt64)(adapter_class_num_reads_.at(trim_adapter_.size()));
-
-  // Pretty print a little summary to stdout
-
-  adapter_stream.str(std::string());
-  adapter_stream.imbue(locale(adapter_stream.getloc(), new ThousandsSeparator));
-  adapter_stream << endl;
-
-  adapter_stream << setw(25) << "Bead Adapters";
-  adapter_stream << setw(23) << "Num Reads" << setw(53) << "Adapter Sequence" << endl;
-
-  adapter_stream << setw(25) << " ";
-  adapter_stream << setw(23) << "--------------------" << setw(53) << "--------------------------------------------------" << endl;
-
-  for (unsigned int adapter_idx=0; adapter_idx<trim_adapter_.size(); adapter_idx++) {
-    adapter_stream << setw(25) << "Adapter " << adapter_idx;
-    adapter_stream << setw(23) << adapter_class_num_reads_.at(adapter_idx) << setw(53) << trim_adapter_.at(adapter_idx) << endl;
-  }
-
-  adapter_stream << setw(25) << "No Match";
-  adapter_stream << setw(23) << adapter_class_num_reads_.at(trim_adapter_.size()) << setw(53) << " " << endl;
-
-  adapter_stream << setw(25) << " ";
-  adapter_stream << setw(23) << "--------------------" << setw(53) << "--------------------------------------------------" << endl << endl;
-
-  cout << adapter_stream.str();
-
-}

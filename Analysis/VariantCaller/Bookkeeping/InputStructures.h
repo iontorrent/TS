@@ -64,10 +64,16 @@ struct VariantSpecificParams {
   VariantSpecificParams() :
       min_allele_freq_override(false), min_allele_freq(0),
       strand_bias_override(false), strand_bias(0),
+      strand_bias_pval_override(false), strand_bias_pval(0),
+
       min_coverage_override(false), min_coverage(0),
       min_coverage_each_strand_override(false), min_coverage_each_strand(0),
       min_variant_score_override(false), min_variant_score(0),
       data_quality_stringency_override(false), data_quality_stringency(0),
+
+      position_bias_override(false), position_bias(0),
+      position_bias_pval_override(false), position_bias_pval(0),
+
       hp_max_length_override(false), hp_max_length(0),
       filter_unusual_predictions_override(false), filter_unusual_predictions(0),
       filter_insertion_predictions_override(false), filter_insertion_predictions(0),
@@ -79,6 +85,8 @@ struct VariantSpecificParams {
   float min_allele_freq;
   bool  strand_bias_override;
   float strand_bias;
+  bool  strand_bias_pval_override;
+  float strand_bias_pval;
   bool  min_coverage_override;
   int   min_coverage;
   bool  min_coverage_each_strand_override;
@@ -87,6 +95,12 @@ struct VariantSpecificParams {
   float min_variant_score;
   bool  data_quality_stringency_override;
   float data_quality_stringency;
+
+  bool  position_bias_override;
+  float position_bias;
+  bool position_bias_pval_override;
+  float position_bias_pval;
+
   bool  hp_max_length_override;
   int   hp_max_length;
   bool  filter_unusual_predictions_override;

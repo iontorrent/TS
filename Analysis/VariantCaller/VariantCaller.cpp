@@ -44,7 +44,7 @@ int main(int argc, char* argv[])
 {
 
   printf("tvc %s-%s (%s) - Torrent Variant Caller\n\n",
-         IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetSvnRev().c_str());
+         IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
 
   // stolen from "Analysis" to silence error messages from Armadillo library
   ofstream null_ostream("/dev/null"); // must stay live for entire scope, or crash when writing
@@ -133,6 +133,7 @@ int main(int argc, char* argv[])
   bam_walker.Close();
   metrics_manager.FinalizeAndSave(parameters.outputDir + "/tvc_metrics.json");
 
+  cerr << endl;
   cout << endl;
   cout << "[tvc] Normal termination. Processing time: " << (time(NULL)-start_time) << " seconds." << endl;
 
@@ -171,12 +172,15 @@ void * VariantCallerWorker(void *input)
         pthread_mutex_lock(&vc.bam_walker_mutex);
         vc.bam_walker->RequestReadRemovalTask(removal_list);
         pthread_mutex_unlock(&vc.bam_walker_mutex);
-
-        vc.bam_walker->SaveAlignments(removal_list);
-
-        pthread_mutex_lock(&vc.bam_walker_mutex);
-        vc.bam_walker->FinishReadRemovalTask(removal_list);
-        pthread_mutex_unlock(&vc.bam_walker_mutex);
+	//In rare case, the Eligible check pass, but another thread got to remove reads, then when this thread get the lock, it find there
+	//is no reads to remove. The unexpected behavior of SaveAlignment() is that when NULL is passed in, it save all the reads and remove 
+	// ZM tags. To prevent that, we need to check for empty.
+        if (removal_list) {
+	    vc.bam_walker->SaveAlignments(removal_list); 
+            pthread_mutex_lock(&vc.bam_walker_mutex);
+            vc.bam_walker->FinishReadRemovalTask(removal_list);
+            pthread_mutex_unlock(&vc.bam_walker_mutex);
+	}
         pthread_mutex_unlock(&vc.read_removal_mutex);
 
         pthread_cond_broadcast(&vc.memory_contention_cond);
@@ -339,6 +343,8 @@ void * VariantCallerWorker(void *input)
 
 
   }
+
+  if (pthread_mutex_trylock(&vc.read_removal_mutex) == 0)  vc.bam_walker->SaveAlignments(NULL);
 
   return NULL;
 }

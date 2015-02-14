@@ -2,36 +2,53 @@
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from django.conf import settings
 from iondb.rundb.models import ReferenceGenome
-import logging
+from iondb.utils import validation
+
 from iondb.rundb.plan.views_helper import dict_bed_hotspot
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNames
+from iondb.rundb.plan.page_plan.step_helper_types import StepHelperType
+
+import logging
 logger = logging.getLogger(__name__)
 
 class ReferenceFieldNames():
 
-    REFERENCE = 'reference'
-    REFERENCES = 'references'
     BED_FILES = 'bedFiles'
-    TARGET_BED_FILES = 'targetBedFiles'
-    HOT_SPOT_FILES = 'hotspotFiles'
-    HOT_SPOT_BED_FILE = 'hotSpotBedFile'
-    HOT_SPOT_BED_FILES = 'hotSpotBedFiles'
-    SHOW_HOT_SPOT_BED = 'showHotSpotBed'
-    REFERENCE_MISSING = 'referenceMissing'
-    TARGED_BED_FILE_MISSING = 'targetBedFileMissing'
-    HOT_SPOT_BED_FILE_MISSING = 'hotSpotBedFileMissing'
-    TARGET_BED_FILE = 'targetBedFile'
-    REFERENCE_SHORT_NAMES = 'referenceShortNames'
     BED_FILE_FULL_PATHS = 'bedFileFullPaths'
-    BED_FILE_PATHS = 'bedFilePaths'
+    BED_FILE_PATHS = 'bedFilePaths'    
+    HOT_SPOT_BED_FILE = 'default_hotSpotBedFile'    
+    HOT_SPOT_BED_FILES = 'hotSpotBedFiles'
+    HOT_SPOT_BED_FILE_MISSING = 'hotSpotBedFileMissing'    
+    HOT_SPOT_FILES = 'hotspotFiles'  
+    HOT_SPOT_FULL_PATHS = 'hotspotFullPaths'
+    HOT_SPOT_PATHS = 'hotspotPaths' 
+         
+    MIXED_TYPE_RNA_HOT_SPOT_BED_FILE = "mixedTypeRNA_hotSpotBedFile"
+    MIXED_TYPE_RNA_REFERENCE = "mixedTypeRNA_reference"
+    MIXED_TYPE_RNA_REFERENCE_MISSING = "mixedTypeRNA_referenceMissing"
+    MIXED_TYPE_RNA_TARGET_BED_FILE = "mixedTypeRNA_targetBedFile"      
+    MIXED_TYPE_RNA_TARGET_BED_FILE_MISSING = "mixedTypeRNA_targetBedFileMissing"
 
+    REFERENCE = 'default_reference'    
+    REFERENCES = 'references' 
+    REFERENCE_MISSING = 'referenceMissing'       
+    REFERENCE_SHORT_NAMES = 'referenceShortNames'   
+    REQUIRE_TARGET_BED_FILE = "requireTargetBedFile"
 
+    SAME_REF_INFO_PER_SAMPLE = "isSameRefInfoPerSample"
+   
+    SHOW_HOT_SPOT_BED = 'showHotSpotBed'        
+    TARGET_BED_FILE = 'default_targetBedFile'    
+    TARGET_BED_FILES = 'targetBedFiles'
+    TARGET_BED_FILE_MISSING = 'targetBedFileMissing'
+
+    PLAN_STATUS = "planStatus"
 
 class ReferenceStepData(AbstractStepData):
 
-    def __init__(self):
-        super(ReferenceStepData, self).__init__()
+    def __init__(self, sh_type):
+        super(ReferenceStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_reference.html'
         self._dependsOn = [StepNames.APPLICATION]
         references = list(ReferenceGenome.objects.all().filter(index_version=settings.TMAP_VERSION))
@@ -41,50 +58,130 @@ class ReferenceStepData(AbstractStepData):
         self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILES] = self.file_dict[ReferenceFieldNames.HOT_SPOT_FILES]
         self.prepopulatedFields[ReferenceFieldNames.SHOW_HOT_SPOT_BED] = False
         self.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = False
-        self.prepopulatedFields[ReferenceFieldNames.TARGED_BED_FILE_MISSING] = False
+        self.prepopulatedFields[ReferenceFieldNames.TARGET_BED_FILE_MISSING] = False
         self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = False
         self.savedFields[ReferenceFieldNames.REFERENCE] = ""
         self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = ""
         self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = ""
-        
+        self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE] = False
+                
         self.prepopulatedFields[ReferenceFieldNames.REFERENCE_SHORT_NAMES] = [ref.short_name for ref in references]
 
+        self.savedFields[ReferenceFieldNames.MIXED_TYPE_RNA_REFERENCE] = ""
+        self.savedFields[ReferenceFieldNames.MIXED_TYPE_RNA_TARGET_BED_FILE] = ""
+        self.savedFields[ReferenceFieldNames.MIXED_TYPE_RNA_HOT_SPOT_BED_FILE] = ""        
+        self.savedFields[ReferenceFieldNames.SAME_REF_INFO_PER_SAMPLE] = True
+        
+        self.prepopulatedFields[ReferenceFieldNames.PLAN_STATUS] = ""
+        
+        self.sh_type = sh_type
 
     def getStepName(self):
         return StepNames.REFERENCE
 
     def updateSavedObjectsFromSavedFields(self):
         pass
+
+
+    def validate(self):
+        pass
     
-    def updateFromStep(self, updated_step):
+  
+    def hasErrors(self):
+        """
+        Now that reference step is a section of another step. It is crucial not to advertise having errors or
+        user will be re-directed to reference's resourcePath for error correction.
+        Let the parent step take care of the error broadcasting.
+        """
+        return False
+    
+        
+    #If the plan used to have a missing ref, check if the new ref is missing. If not, clear the missing flag.
+    def validateField(self, field_name, new_field_value):
+#         if field_name == ReferenceFieldNames.REFERENCE:
+#             if new_field_value in [ref.short_name for ref in self.prepopulatedFields[ReferenceFieldNames.REFERENCES]]:
+#                 self.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = False
+# 
+#         if field_name == ReferenceFieldNames.TARGET_BED_FILE:
+#             reference = self.savedFields[ReferenceFieldNames.REFERENCE]
+#             
+#             if self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE]:
+#                 if reference:
+#                     if validation.has_value(new_field_value):
+#                         self.validationErrors.pop(field_name, None)
+#                     else:
+#                         self.validationErrors[field_name] = validation.required_error("Target Regions BED File")
+#                 else:
+#                     self.validationErrors.pop(field_name, None)
+
+        pass
+
+
+    def validateField_in_section(self, field_name, new_field_value):
+        """
+        field validation for a step that acts as a section to another step
+        """
+        #logger.debug("at validateField_in_section field_name=%s; new_field_value=%s" %(field_name, new_field_value))
+        
+        if field_name == ReferenceFieldNames.REFERENCE:
+            if new_field_value in [ref.short_name for ref in self.prepopulatedFields[ReferenceFieldNames.REFERENCES]]:
+                self.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = False
+
+        #if the plan has been sequenced, do not enforce the target bed file to be selected
+        
+        if self.prepopulatedFields[ReferenceFieldNames.PLAN_STATUS] != "run":
+            if field_name == ReferenceFieldNames.TARGET_BED_FILE:
+                reference = self.savedFields[ReferenceFieldNames.REFERENCE]
+    
+                #logger.debug("at validateField_in_section reference=%s; REQUIRE_TARGET_BED_FILE=%s; targetBed=%s" %(reference, str(self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE]), new_field_value))               
+                if self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE]:
+                    if reference:
+                        if validation.has_value(new_field_value):
+                            self.validationErrors.pop(field_name, None)
+                        else:
+                            self.validationErrors[field_name] = validation.required_error("Target Regions BED File")
+                    else:
+                        self.validationErrors.pop(field_name, None)
+
+        
+    def updateFromStep(self, updated_step):        
         if updated_step.getStepName() == StepNames.APPLICATION and updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
             applProduct = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]
-            logger.debug("Updating reference for applproduct %s" % applProduct.productCode)
             
-            if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultGenomeRefName:
-                self.savedFields[ReferenceFieldNames.REFERENCE] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultGenomeRefName
-                self.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = True
-                if self.savedFields[ReferenceFieldNames.REFERENCE] in [ref.short_name for ref in self.prepopulatedFields[ReferenceFieldNames.REFERENCES]]:
-                    self.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = False
+            logger.debug("Updating reference for applproduct %s; planStatus=%s" %(applProduct.productCode, self.prepopulatedFields[ReferenceFieldNames.PLAN_STATUS]))
+                        
+            if self.sh_type in [StepHelperType.CREATE_NEW_TEMPLATE, StepHelperType.CREATE_NEW_TEMPLATE_BY_SAMPLE, StepHelperType.CREATE_NEW_PLAN, StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE]:
+                if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultGenomeRefName:
+                    self.savedFields[ReferenceFieldNames.REFERENCE] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultGenomeRefName
+                    self.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = True
 
-            
-            if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultTargetRegionBedFileName:
-                self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultTargetRegionBedFileName
-                self.prepopulatedFields[ReferenceFieldNames.TARGED_BED_FILE_MISSING] = True
-                if self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_FULL_PATHS] or\
-                   self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_PATHS]:
-                    self.prepopulatedFields[ReferenceFieldNames.TARGED_BED_FILE_MISSING] = False
-           
-            if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultHotSpotRegionBedFileName:
-                self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultHotSpotRegionBedFileName
-                self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = True
-                if self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_FULL_PATHS] or\
-                   self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_PATHS]:
-                    self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = False
+                    if self.savedFields[ReferenceFieldNames.REFERENCE] in [ref.short_name for ref in self.prepopulatedFields[ReferenceFieldNames.REFERENCES]]:
+                        self.prepopulatedFields[ReferenceFieldNames.REFERENCE_MISSING] = False
+              
+                if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultTargetRegionBedFileName:
+                    self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultTargetRegionBedFileName
+                    self.prepopulatedFields[ReferenceFieldNames.TARGET_BED_FILE_MISSING] = True
+
+                    if self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_FULL_PATHS] or\
+                       self.savedFields[ReferenceFieldNames.TARGET_BED_FILE] in self.file_dict[ReferenceFieldNames.BED_FILE_PATHS]:
+                        self.prepopulatedFields[ReferenceFieldNames.TARGET_BED_FILE_MISSING] = False
+
+                if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultHotSpotRegionBedFileName:
+                    self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].defaultHotSpotRegionBedFileName
+                    self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = True
+
+                    if self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] in self.file_dict[ReferenceFieldNames.HOT_SPOT_FULL_PATHS] or\
+                       self.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] in self.file_dict[ReferenceFieldNames.HOT_SPOT_PATHS]:
+                        self.prepopulatedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE_MISSING] = False
          
             if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].isHotspotRegionBEDFileSuppported:
                 self.prepopulatedFields[ReferenceFieldNames.SHOW_HOT_SPOT_BED] = True
             else:
                 self.prepopulatedFields[ReferenceFieldNames.SHOW_HOT_SPOT_BED] = False
                         
+            if updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT].isTargetRegionBEDFileSelectionRequiredForRefSelection:
+                self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE] = True
+            else:
+                self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE] = False
+
         #logger.debug("EXIT reference_step_data.updateFromStep() self.savedFields=%s" %(self.savedFields))

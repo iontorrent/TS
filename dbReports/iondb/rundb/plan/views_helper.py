@@ -180,21 +180,10 @@ def get_ir_set_id(id_prefix = "1"):
     else:
         return ""
 
-
-def convert(data):
-    if isinstance(data, basestring):
-        return str(data)
-    elif isinstance(data, collections.Mapping):
-        return dict(map(convert, data.iteritems()))
-    elif isinstance(data, collections.Iterable):
-        return type(data)(map(convert, data))
-    else:
-        return data
-    
     
 
 def isOCP_enabled():
-    return GlobalConfig.objects.all()[0].enable_compendia_OCP
+    return GlobalConfig.get().enable_compendia_OCP
 
 
 def is_operation_supported(plan_or_template_pk):

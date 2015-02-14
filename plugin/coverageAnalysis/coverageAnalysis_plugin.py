@@ -28,8 +28,11 @@ from django import template
 register = template.Library()
 
 @register.filter 
-def toMega(value):
-  return float(value) / 1000000
+def lt(a,b):
+  return float(a) < float(b);
+@register.filter 
+def gt(a,b):
+  return float(a) > float(b);
 
 template.builtins.append(register) 
 
@@ -42,8 +45,8 @@ barcodeReport = {}
 help_dictionary = {}
 barcodeLibraries = {}
 
-# option to allow missing DNA/RNA targets to be analyzed as whole genome
-barcode_no_target_as_whole_genome = False
+# Specifies whether to assume default reference or disallow barcode-specific no referecne
+barcode_no_reference_as_default = True
 
 # max plugin out file ext length for addressing max filename length (w/ barcode), e.g. ".amplicon.cov.xls"
 max_fileext_len = 17
@@ -58,15 +61,16 @@ def addAutorunParams(plan=None):
   # Note: this function may be redundant in later TSS versions, where pluginconfig already consolidates input from all sources
   config = pluginParams['config']
   # defaults for auto-run to match config settings from GUI
-  config['librarytype'] = 'wholegenome'
+  config['librarytype'] = 'WGNM'
   config['librarytype_id'] = 'Whole Genome'
   config['targetregions'] = ''
+  # allow these values to be retained if pre-set by plan plugin configure
   config['targetregions_id'] = 'None'
-  config['sampleid'] = 'No'
   config['trimreads'] = 'No'
-  config['padtargets'] = '0'
-  config['uniquemaps'] = 'No'
-  config['nonduplicates'] = 'Yes'
+  if not 'sampleid' in config: config['sampleid'] = 'No'
+  if not 'padtargets' in config: config['padtargets'] = '0'
+  if not 'uniquemaps' in config: config['uniquemaps'] = 'No'
+  if not 'nonduplicates' in config: config['nonduplicates'] = 'Yes'
   config['barcodebeds'] = 'No'
   config['barcodetargetregions'] = ''
   # set defaults for derived settings in case of early error set up, e.g. via renderOptions()
@@ -74,53 +78,72 @@ def addAutorunParams(plan=None):
   pluginParams['have_targets'] = False
   # extract things from the plan if provided - for coverageAnalysis auto-run w/o a plan leads to early exit
   if plan: 
-    runtype = plan['runType']
+    # examine plan library type and ensure non-appropriate options for the library type are set to default values
+    config['librarytype'] = runtype = plan['runType']
     if runtype == 'AMPS':
-      config['librarytype'] = 'ampliseq'
-      config['librarytype_id'] = 'Ion AmpliSeq'
+      config['librarytype_id'] = 'AmpliSeq DNA'
     elif runtype == 'AMPS_EXOME':
-      config['librarytype'] = 'ampliseq-exome'
-      config['librarytype_id'] = 'Ion AmpliSeq Exome'
+      config['librarytype_id'] = 'AmpliSeq Exome'
     elif runtype == 'AMPS_RNA':
-      config['librarytype'] = 'ampliseq-rna'
-      config['librarytype_id'] = 'Ion AmpliSeq RNA'
+      config['librarytype_id'] = 'AmpliSeq RNA'
     elif runtype == 'AMPS_DNA_RNA':
-      config['librarytype'] = 'ampliseq-dna-rna'
-      config['librarytype_id'] = 'Ion AmpliSeq DNA/RNA'
-      # extract barcode-specific targets from plan
-      config['barcodebeds'] = 'Yes'
-      barcodeLibrary()
-      trgstr = ''
-      for bc,data in barcodeLibraries.items():
-          trgstr += bc+'='+data['bedfile']+';'
-      config['barcodetargetregions'] = trgstr
+      config['librarytype_id'] = 'AmpliSeq DNA+RNA'
     elif runtype == 'TARS':
-      config['librarytype'] = 'targetseq'
-      config['librarytype_id'] = 'Ion TargetSeq'
+      config['librarytype_id'] = 'TargetSeq'
+    elif runtype == 'TARS_16S':
+      config['librarytype_id'] = '16S Targeted Sequencing'
+      config['sampleid'] = 'No'
+      config['uniquemaps'] = 'No'
+    elif runtype == 'RNA':
+      config['librarytype_id'] = 'RNA-Seq'
+      config['sampleid'] = 'No'
+      config['uniquemaps'] = 'No'
     elif runtype == 'WGNM':
-      config['librarytype'] = 'wholegenome'
       config['librarytype_id'] = 'Whole Genome'
+    elif runtype == 'GENS':
+      config['librarytype_id'] = 'Generic Sequencing'
     else:
       config['librarytype_id'] = "[%s]"%runtype
       raise Exception("CATCH:Do not know how to analyze coverage for unsupported plan runType: '%s'"%runtype)
-    if runtype[0:4] == "AMPS":
+    if runtype[:4] == 'AMPS' or runtype == 'TARS_16S' or runtype == 'RNA':
       config['nonduplicates'] = 'No'
+      config['padtargets'] = '0'
+    else:
+      config['sampleid'] = 'No'
+    # check for required targets file
     bedfile = plan['bedfile']
-    if bedfile != "":
-      config['targetregions'] = bedfile
-      config['targetregions_id'] = fileName(bedfile)
-    elif runtype != 'WGNM':
-      printlog('\nWARNING: %s analysis requires the plan to specify a targets file. Defaulting to Whole Genome analysis.\n'%config['librarytype_id'])
-      config['librarytype'] = 'wholegenome'
-      config['librarytype_id'] = 'Whole Genome'
+    if bedfile == 'None': bedfile = ''
+    config['targetregions'] = bedfile
+    bedname = config['targetregions_id'] = fileName(bedfile)
+    # catch no default reference Plan set up
+    genome = pluginParams['genome_id']
+    if genome == 'None': genome = ''
+    if not genome:
+      raise Exception("CATCH: Cannot run plugin with no default reference.")
+    # check for bacode-specific targets and detect barcode-specific mode
+    trgstr = ''
+    for bc,data in barcodeLibraries.items():
+      setbed = data['bedfile']
+      # AMPS_DNA_RNA is an exception - must have barcode-specific targets
+      if runtype == 'AMPS_DNA_RNA' or setbed != bedfile:
+        trgstr += bc+'='+setbed+';'
+    if trgstr:
+      config['barcodebeds'] = 'Yes'
+      config['barcodetargetregions'] = trgstr
+    elif not bedfile:
+      config['padtargets'] = '0'
+      config['sampleid'] = 'No'
+      if runtype != 'WGNM' and runtype != 'RNA' and runtype != 'GENS':
+        printlog('\nWARNING: %s analysis requires the plan to specify a targets file. Defaulting to Whole Genome analysis.\n'%config['librarytype_id'])
+        config['librarytype'] = 'WGNM'
+        config['librarytype_id'] = 'Whole Genome'
   else:
     raise Exception("CATCH:Automated analysis requires a Plan to specify Run Type.")    
 
 
-def addPluginParams():
+def furbishPluginParams():
   '''Additional parameter set up for this plugin.'''
   config = pluginParams['config']
-  pluginParams['is_ampliseq'] = (config['librarytype'][:8] == 'ampliseq')
   # since HTML form posts do not add unchecked options add them in here
   if 'barcodebeds' not in config: config['barcodebeds'] = 'No'
   if 'sampleid' not in config: config['sampleid'] = 'No'
@@ -159,6 +182,7 @@ def printStartupMessage():
   printlog('  Reference Name:   %s' % pluginParams['genome_id'])
   printlog('  Library Type:     %s' % config['librarytype_id'])
   printlog('  Target Regions:   %s' % config['targetregions_id'])
+  printlog("  Barcoded Genomes: %s" % pluginParams['barcoderefs'])
   printlog('  Barcoded Targets: %s' % config['barcodebeds'])
   if config['barcodebeds'] == 'Yes':
     target_files = pluginParams['target_files']
@@ -199,15 +223,19 @@ def run_plugin(skiprun=False,barcode=""):
   if sample == '': sample = 'None'
 
   # account for reference and library type overrides, e.g. for AmpliSeq-DNA/RNA
+  allow_no_target = pluginParams['allow_no_target']
   libnuc_type = ''
-  if barcode and librarytype == 'ampliseq-dna-rna':
-    (librarytype,genome,reference,target) = barcodeLibrary(barcode)
-    libnuc_type = 'RNA' if librarytype == 'ampliseq-rna' else 'DNA'
-
-  # special case: AmpliSeq should fail without target but 'None' => make whole genome report
-  if bedfile == 'None':
-    librarytype = 'wholegenome'
-    bedfile = ''
+  if barcode and (config['barcodebeds'] == 'Yes' or pluginParams['barcoderefs'] == 'Yes'):
+    (libtype,genome,reference,target) = barcodeLibrary(barcode)
+    # barcode-specific reference MUST be defined
+    if not reference:
+      raise Exception("Barcode-specified reference expected but none provided.")
+    # mixed report types and nuc type overrides for AMPS_DNA_RNA
+    if librarytype == 'AMPS_DNA_RNA':
+      libnuc_type = 'RNA' if librarytype == 'AMPS_RNA' else 'DNA'
+      librarytype = libtype
+    elif librarytype == 'RNA' and target != '':
+      librarytype = 'AMPS_RNA'
 
   # link from source BAM since pipeline uses the name as output file stem
   linkbam = os.path.join(output_dir,output_prefix+".bam")
@@ -217,13 +245,16 @@ def run_plugin(skiprun=False,barcode=""):
 
   # Run-type flags used to customize the report
   samp_track = (config['sampleid'] == 'Yes')
-  rna_stats = (librarytype == 'ampliseq-rna')
   trg_stats = (bedfile != "")
-  amp_stats = trg_stats and pluginParams['is_ampliseq']
-  wgn_stats = not trg_stats
-  bas_stats = not rna_stats
+  amp_stats = (trg_stats and pluginParams['is_ampliseq'])
+  rna_stats = (librarytype == 'AMPS_RNA' or librarytype == 'RNA')
+  chr_stats = (librarytype == 'RNA' and not trg_stats)
+  wgn_stats = ((librarytype == 'WGNM' or librarytype == 'GENS') and not trg_stats)
+  bas_stats = ((wgn_stats or trg_stats) and not rna_stats)
   trg_type = 1 if amp_stats else 0
   if rna_stats: trg_type = 2
+  if chr_stats: trg_type = 3
+  if wgn_stats: trg_type = 4
 
   # Hard-coded path to sample ID target BED file
   sampleidBed = os.path.join(os.path.dirname(plugin_dir),'sampleID','targets','KIDDAME_sampleID_regions.bed') if samp_track else ''
@@ -233,16 +264,18 @@ def run_plugin(skiprun=False,barcode=""):
     printlog("Skipped analysis - generating report on in-situ data")
   else:
     # Pre-run modification of BED files is done here to avoid redundancy of repeating for target assigned barcodes
-    # The stand-alone command can perform the (required) annotation but does not handle padding
-    (mergeBed,annoBed) = modifyBedFiles(bedfile,reference)
-    # option for cmd-line detailed HTML report generation
-    rptopt = '-R coverageAnalysis.html' if pluginParams['cmdOptions'].cmdline else ''
-    ampopt = '-a' if amp_stats else ''
+    # Note: The stand-alone command can perform the (required) annotation but does not handle padding
+    (mergeBed,annoBed) = modifyBedFiles( ('contigs' if wgn_stats or chr_stats else bedfile), reference )
+    ampopt = '-t'
+    if amp_stats: ampopt = '-a'
+    if rna_stats: ampopt = '-r'
+    if chr_stats: ampopt = '-c -r'
+    if wgn_stats: ampopt = '-c -t'
     filtopts = '-u' if config['uniquemaps'] == 'Yes' else ''
     if config['nonduplicates'] == 'Yes': filtopts += ' -d'
-    if rna_stats: ampopt = '-r'
+    rptopt = '-R coverageAnalysis.html' if pluginParams['cmdOptions'].cmdline else ''
     printtime("Running coverage analysis pipeline...")
-    runcmd = '%s %s %s %s -c -D "%s" -A "%s" -B "%s" -C "%s" -L "%s" -N "%s" -p %s -S "%s" %s "%s" "%s"' % (
+    runcmd = '%s %s %s %s -D "%s" -A "%s" -B "%s" -C "%s" -L "%s" -N "%s" -P %s -S "%s" %s "%s" "%s"' % (
         os.path.join(plugin_dir,'run_coverage_analysis.sh'), pluginParams['logopt'], ampopt,
         filtopts, output_dir, annoBed, mergeBed, bedfile, genome, sample, config['padtargets'], sampleidBed, rptopt, reference, bamfile )
     if logopt: printlog('\n$ %s\n'%runcmd)
@@ -257,11 +290,11 @@ def run_plugin(skiprun=False,barcode=""):
   createlink( os.path.join(plugin_dir,'lifechart'), output_dir )
   createlink( os.path.join(plugin_dir,'scripts','igv.php3'), output_dir )
   createlink( os.path.join(plugin_dir,'scripts','zipReport.php3'), output_dir )
-  if annoBed: createlink( annoBed, output_dir )
+  if bedfile and annoBed: createlink( annoBed, output_dir )
    
   # Optional: Delete intermediate files after successful run. These should not be required to regenerate any of the
   # report if the skip-analysis option. Temporary file deletion is also disabled when the --keep_temp option is used.
-  #deleteTempFiles([ '*.bam', '*.bam.bai', '*.bed' ])
+  #deleteTempFiles([ '*.bam', '*.bam.bai', '*.tmp' ])
 
   # Create an annotated list of files as used to create the file links table.
   # - Could be handled in the HTML template directly but external code is re-used to match cmd-line reports.
@@ -271,9 +304,11 @@ def run_plugin(skiprun=False,barcode=""):
   resultData = parseToDict( os.path.join(output_dir,statsfile), ":" )
 
   # Collect other output data to pluginReport, which is anything else that is used to generate the report
-  trgtype = '.amplicon.cov' if amp_stats else '.target.cov'
+  trgtype = '.target.cov'
+  if amp_stats or librarytype == 'RNA': trgtype = '.amplicon.cov'
+  if chr_stats: trgtype = '.contig.cov'
   reportData = {
-    "library_type" : librarytype,
+    "library_type" : config['librarytype_id'],
     "libnuc_type" : libnuc_type,
     "run_name" : output_prefix,
     "barcode_name" : barcode,
@@ -281,10 +316,10 @@ def run_plugin(skiprun=False,barcode=""):
     "output_dir" : output_dir,
     "output_url" : output_url,
     "output_prefix" : output_prefix,
-    "num_stat_tables" : 1 if (rna_stats or wgn_stats) else 2,
     "amp_stats" : amp_stats,
     "rna_stats" : rna_stats,
     "trg_stats" : trg_stats,
+    "chr_stats" : chr_stats,
     "wgn_stats" : wgn_stats,
     "bas_stats" : bas_stats,
     "trg_type" : trg_type,
@@ -324,20 +359,32 @@ def modifyBedFiles(bedfile,reference):
   # files will be created or found in this results subdir
   bedDir = os.path.join(pluginParams['results_dir'],"local_beds")
   if not os.path.exists(bedDir): os.makedirs(bedDir)
-  # the pair of files returned are dependent on the Library Type and padded options
-  rootbed = fileName(bedfile)
-  mergbed = bedfile.replace('unmerged','merged',1)
-  annobed = bedfile if pluginParams['is_ampliseq'] else mergbed
-  # do not re-do GC annotation on same BED file - moderately expensive for large BEDs
-  gcbed = os.path.join(bedDir,"%s.gc.bed"%rootbed)
-  if os.path.exists(gcbed):
-    printlog("Adopting GC annotated targets %s"%os.path.basename(gcbed))
+  if bedfile == 'contigs':
+    # special option to create annotated BED files for whole contigs
+    rootbed = fileName(reference)
+    gcbed = os.path.join(bedDir,"%s.contigs.gc.bed"%rootbed)
+    if os.path.exists(gcbed):
+      printlog("Adopting GC annotated contigs %s"%os.path.basename(gcbed))
+    else:
+      printtime("Creating GC annotated contigs %s"%os.path.basename(gcbed))
+      if os.system( '%s -g "%s.fai" "%s" > "%s"' % (
+          os.path.join(pluginParams['plugin_dir'],'bed','gcAnnoBed.pl'), reference, reference, gcbed ) ):
+        raise Exception("Failed to annotate contig regions using gcAnnoBed.pl")
+    mergbed = annobed = gcbed
   else:
-    printtime("Creating GC annotated targets %s"%os.path.basename(gcbed))
-    if os.system( '%s -s -w -f 4,8 -t "%s" "%s" "%s" > "%s"' % (
-        os.path.join(pluginParams['plugin_dir'],'bed','gcAnnoBed.pl'), bedDir, annobed, reference, gcbed ) ):
-      raise Exception("Failed to annotate target regions using gcAnnoBed.pl")
-  annobed = gcbed
+    # the pair of files returned are dependent on the Library Type and padded options
+    rootbed = fileName(bedfile)
+    mergbed = bedfile.replace('unmerged','merged',1)
+    annobed = bedfile if pluginParams['is_ampliseq'] else mergbed
+    gcbed = os.path.join(bedDir,"%s.gc.bed"%rootbed)
+    if os.path.exists(gcbed):
+      printlog("Adopting GC annotated targets %s"%os.path.basename(gcbed))
+    else:
+      printtime("Creating GC annotated targets %s"%os.path.basename(gcbed))
+      if os.system( '%s -s -w -f 4,8 -t "%s" "%s" "%s" > "%s"' % (
+          os.path.join(pluginParams['plugin_dir'],'bed','gcAnnoBed.pl'), bedDir, annobed, reference, gcbed ) ):
+        raise Exception("Failed to annotate target regions using gcAnnoBed.pl")
+    annobed = gcbed
   # padding removes any merged detail fields to give only coordinates bed file
   try:
     padval = int(float(pluginParams['config']['padtargets']))
@@ -363,13 +410,17 @@ def run_meta_plugin():
   printtime("Collating barcodes summary data...")
   # get correct file/type for reads matrix
   renderOpts = renderOptions()
-  if renderOpts['trg_stats']:
+  if renderOpts['chr_stats']:
     fieldid = '9'
-    typestr = 'amplicon' if pluginParams['is_ampliseq'] else 'target'
+    typestr = 'contig'
+    fileext = '.contig.cov.xls'
+  elif renderOpts['trg_stats']:
+    fieldid = '9'
+    typestr = 'amplicon' if pluginParams['is_ampliseq'] or renderOpts['runType'] == "RNA" else 'target'
     fileext = '.'+typestr+'.cov.xls'
   else:
     fieldid = 'chrom'
-    typestr = 'contig'
+    typestr = 'chromosome'
     fileext = '.chr.cov.xls'
   bctable = []
   reportFiles = []
@@ -387,8 +438,9 @@ def run_meta_plugin():
     if renderOpts['bas_stats']: bcline += "\t"+bcdata['mean_depth']+"\t"+bcdata['uniformity']
     if renderOpts['mixed_stats']:
       if bcname in barcodeLibraries and 'reference' in barcodeLibraries[bcname]:
-        rfile = barcodeLibraries[bcname]['reference'] + '.fai'
-        if not rfile in refs: refs.append(rfile)
+        if barcodeLibraries[bcname]['reference']:
+          rfile = barcodeLibraries[bcname]['reference'] + '.fai'
+          if not rfile in refs: refs.append(rfile)
     bctable.append(bcline)
     reportfile = os.path.join(bcrep['output_dir'],bcrep['output_prefix']+fileext)
     if os.path.exists(reportfile):
@@ -423,7 +475,8 @@ def run_meta_plugin():
       runcmd.communicate()
       if runcmd.poll():
         raise Exception("Failed to create barcode x %s reads matrix."%typestr)
-      barcodeReport.update({ "bcmatrix":bcmatrix, "bcmtype":typestr })
+      fieldstr = "reads assigned to" if typestr == 'amplicon' or typestr == 'contig' else "mean base read depth for"
+      barcodeReport.update({ "bcmatrix":bcmatrix, "bcmtype":typestr, "bcmfield":fieldstr })
 
   plugin_dir = pluginParams['plugin_dir']
   output_dir = pluginParams['results_dir']
@@ -442,8 +495,10 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
     reportData = pluginReport['barcodes'][barcode]
     # check for error status
     errMsg = ""
+    errZero = False
     if 'Error' in resultData:
       errMsg = resultData['Error']
+      errZero = "no mapped" in errMsg or "no read" in errMsg
     sample = resultData['Sample Name']
     if sample == '': sample = 'None'
     # barcodes_json dictoonary is firmcoded in Kendo table template that we are using for main report styling
@@ -454,11 +509,11 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
         "barcode_name" : barcode,
         "barcode_details" : detailsLink,
         "sample" : sample,
-        "mapped_reads": "NA",
-        "on_target": "NA",
-        "sample_target": "NA",
-        "mean_depth": "NA",
-        "uniformity": "NA"
+        "mapped_reads": "0" if errZero else "NA",
+        "on_target": "0.00%" if errZero else "NA",
+        "sample_target": "0.00%" if errZero else "NA",
+        "mean_depth": "0.00" if errZero else "NA",
+        "uniformity": "100.00%" if errZero else "NA"
       })
     else:
       detailsLink = "<a target='_parent' href='%s' class='help'><span title='Click to view the detailed report for barcode %s'>%s</span><a>" % (
@@ -495,18 +550,20 @@ def renderOptions():
   if targets == 'None': targets = ""
   filter_options = []
   if pluginParams['is_ampliseq'] and config['sampleid'] == 'Yes': filter_options.append('Sample tracking')
-  if not config['librarytype'] == 'ampliseq-rna' and config['uniquemaps'] == 'Yes': filter_options.append('Uniquely mapped')
+  if not config['librarytype'] == 'AMPS_RNA' and config['uniquemaps'] == 'Yes': filter_options.append('Uniquely mapped')
   if not pluginParams['is_ampliseq'] and config['nonduplicates'] == 'Yes': filter_options.append('Non-duplicate')
-  # note that these general settings may have been overriden for AmpliSeq-DNA/RNA
+  trg_stats = pluginParams['have_targets']
   return {
+    "runType" : config['librarytype'],
     "library_type" : config['librarytype_id'],
     "target_regions" : targets,
     "target_padding" : config['padtargets'],
     "filter_options" : ', '.join(filter_options),
     "samp_track" : (config['sampleid'] == 'Yes'),
-    "mixed_stats" : (config['librarytype'] == "ampliseq-dna-rna"),
-    "trg_stats" : pluginParams['have_targets'],
-    "bas_stats" : (config['librarytype'] != 'ampliseq-rna')
+    "mixed_stats" : (config['librarytype'] == "AMPS_DNA_RNA"),
+    "chr_stats" : (config['librarytype'] == "RNA" and not trg_stats),
+    "trg_stats" : trg_stats,
+    "bas_stats" : (config['librarytype'] != 'AMPS_RNA' and config['librarytype'] != 'RNA' )
   }
   
 
@@ -611,28 +668,25 @@ def parseCmdArgs():
 
 def emptyResultsFolder():
   '''Purge everything in output folder except for specifically named files.'''
-  # Dangerous - replace with something safer if it becomes obvious (e.g. putting output in subfolder?)
   results_dir = pluginParams['results_dir']
   if results_dir == '/': return
   logopt = pluginParams['cmdOptions'].logopt
   if logopt or os.path.exists( os.path.join(results_dir,pluginParams['report_name']) ):
     printlog("Purging old results...")
-  for root,dirs,files in os.walk(results_dir,topdown=False):
-    for name in files:
-      # these are the exceptions - partial names and in the to level results
-      if root == results_dir:
-        start = os.path.basename(name)[:10]
-        if start == "drmaa_stdo" or start == "ion_plugin" or start == "startplugi":
-          continue
-      fname = os.path.join(root,name)
-      if logopt and root == results_dir:
-        printlog("Removing file %s"%fname)
-      os.unlink(fname)
-    for name in dirs:
-      fname = os.path.join(root,name)
-      if logopt:
+  for fname in os.listdir(results_dir):
+    # avoid specific files needed to launch run
+    if not os.path.isdir(fname):
+      start = os.path.basename(fname)[:10]
+      if start == "drmaa_stdo" or start == "ion_plugin" or start == "startplugi":
+        continue
+    if logopt:
+      if os.path.islink(fname):
+        printlog("Removing symlink %s"%fname)
+      elif os.path.isdir(fname):
         printlog("Removing directory %s"%fname)
-      os.rmdir(fname)
+      else:
+        printlog("Removing file %s"%fname)
+    os.system('rm -rf "%s"'%fname)
   if logopt: printlog("")
 
 def parseToDict(filein,sep=None):
@@ -730,8 +784,7 @@ def targetFiles():
         for m in bcmaps:
           kvp = m.split('=',1)
           if not kvp[0]: continue
-          if not kvp[1]:
-            kvp[1] = 'None' if barcode_no_target_as_whole_genome else ''
+          if kvp[1] == 'None': kvp[1] = ''
           trgfiles[kvp[0]] = kvp[1]
       else:
         for bc in bcbeds:
@@ -743,7 +796,6 @@ def targetFiles():
 def barcodeLibrary(barcode=""):
   '''Process the part of the plan that customizes barcodes to different references.'''
   global barcodeLibraries
-  defTrg = 'None' if barcode_no_target_as_whole_genome else ''
   if not barcodeLibraries:
     def_genome = pluginParams['genome_id']
     def_genomeURL = pluginParams['genome_url']
@@ -753,21 +805,26 @@ def barcodeLibrary(barcode=""):
     if isinstance(bcsamps,basestring):
       bcsamps = json.loads(bcsamps)
     for bcname in bcsamps:
+      if not 'barcodeSampleInfo' in bcsamps[bcname]: continue
       for (bc,data) in bcsamps[bcname]['barcodeSampleInfo'].items():
-          genome = data.get('reference',def_genome)
+          genome = data.get('reference','')
+          if barcode_no_reference_as_default and not genome:
+            genome = def_genome
+          trg = data.get('targetRegionBedFile','')
+          if trg == 'None': trg = ''
           barcodeLibraries[bc] = {
-            'library': 'ampliseq-rna' if data.get('nucleotideType','') == 'RNA' else 'ampliseq-dna',
-            'genome': def_genomeURL.replace(def_genome,genome),
-            'reference': def_reference.replace(def_genome,genome),
-            'bedfile': data.get('targetRegionBedFile',defTrg)
+            'library': 'AMPS_RNA' if data.get('nucleotideType','') == 'RNA' else 'AMPS',
+            'genome': def_genomeURL.replace(def_genome,genome) if genome else '',
+            'reference': def_reference.replace(def_genome,genome) if genome else '',
+            'bedfile': trg
           }
-  # allow call with no barcode (for initiation)
+  # allow call with no barcode to set up - for initialization
   if not barcode: return ('','','','')
   # GUI shouldn't allow barcodes to be specified that are not speciied in the Plan here, but just in case...
   if barcode in barcodeLibraries:
     bc = barcodeLibraries[barcode]
     return ( bc['library'], bc['genome'], bc['reference'], bc['bedfile'] )
-  return ( pluginParams['genome_id'], pluginParams['genome_url'], pluginParams['reference'], defTrg )
+  return ( pluginParams['genome_id'], pluginParams['genome_url'], pluginParams['reference'], '' )
 
 def loadPluginParams():
   '''Process default command args and json parameters file to extract TSS plugin environment.'''
@@ -817,23 +874,38 @@ def loadPluginParams():
       printlog("Warning: Skip analysis option ignorred as previous output appears to be missing.")
       pluginParams['cmdOptions'].skip_analysis = False
 
+  # set up for barcode-specific libraries (target and/or reference): targets may be overriden by GUI
+  pluginParams['barcoderefs'] = 'No'
+  barcodeLibrary()
+  defref = pluginParams['reference']
+  for bc,data in barcodeLibraries.items():
+    setref = data['reference']
+    if setref and setref != defref:
+      pluginParams['barcoderefs'] = 'Yes'
+      break;
+
   # set up plugin specific options depending on auto-run vs. plan vs. GUI
   config = pluginParams['config'] = jsonParams['pluginconfig'].copy() if 'pluginconfig' in jsonParams else {}
-  if 'launch_mode' in config:
-    pass
+  launchmode = config.get('launch_mode','')
+  if launchmode == 'Manual':
+    furbishPluginParams()
   elif 'plan' in jsonParams:
-    config['launch_mode'] = 'Autostart with plan configuration'
+    # assume that either plan.html or config.html has partially defined the config if launch_mode is defined
+    if launchmode:
+      furbishPluginParams()
+    else:
+      config['launch_mode'] = 'Autostart with plan configuration'
     addAutorunParams(jsonParams['plan'])
   else:
     config['launch_mode'] = 'Autostart with default configuration'
     addAutorunParams()
 
-  # add extra plugin customization
-  addPluginParams()
-
   # code to handle single or per-barcode target files
+  runtype = config['librarytype']
+  pluginParams['is_ampliseq'] = (runtype[:4] == 'AMPS' or runtype == 'TARS_16S')
   pluginParams['target_files'] = targetFiles()
   pluginParams['have_targets'] = (config['targetregions'] or pluginParams['target_files'])
+  pluginParams['allow_no_target'] = (runtype == 'GENS' or runtype == 'WGNM' or runtype == 'RNA')
 
   # plugin configuration becomes basis of results.json file
   global pluginResult, pluginReport
@@ -905,40 +977,55 @@ def runForBarcodes():
   except:
     printerr("Reading barcode list file '%s'" % bcfileName)
     raise
-  # grab barcoded-target information and ensure plan is checked for multi-references
+  # RULES: A barcode-specific target set to None ('') assumes the default target UNLESS require_specific_targets is set (for library type),
+  # in which case an error for the barcode is set. Otherwise if the barcode-specific target resolves to None then the barcode is skipped
+  # for library types requiring a target. For AMPS_DNA_RNA it is a reported error if the barcode has no targets.
+  runtype = pluginParams['config']['librarytype']
+  disallow_no_target = not pluginParams['allow_no_target']
   have_targets = pluginParams['have_targets']
   default_target = pluginParams['config']['targetregions']
-  check_targets = (have_targets and not default_target)
-  runtype = pluginParams['config']['librarytype']
-  if runtype == 'ampliseq-dna-rna':
-    barcodeLibrary()
-    if barcode_no_target_as_whole_genome: check_targets = false
   target_files = pluginParams['target_files']
-  # pre-check specified barcodes file presence
+  # Pre-check BAM and BED files and compatibility - barcodes are either skipped or produce summary table errors
   numGoodBams = 0
-  numNoTargets = 0
+  numInvalidBarcodes = 0
   maxBarcodeLen = 0
   minFileSize = pluginParams['cmdOptions'].minbamsize
   (bcBamPath,bcBamRoot) = os.path.split(pluginParams['bamroot'])
   bcBamFile = []
   for barcode in barcodes:
     bcbam = os.path.join( bcBamPath, "%s_%s"%(barcode,bcBamRoot) )
-    bedfile = target_files.get(barcode,'')
     if not os.path.exists(bcbam):
-      bcbam = ": BAM file not found"
-    elif check_targets and not bedfile:
-      # in this case distinguish selected 'None' vs. not used
-      if runtype == 'ampliseq-dna-rna' and barcode in target_files:
-        numNoTargets += 1
-        bcbam = ":\nERROR: Targets file is not specified but required for run type 'Ion AmpliSeq DNA/RNA'."
-      else:
-        bcbam = ": No assigned or default target regions for barcode."
-    elif os.stat(bcbam).st_size < minFileSize:
-      bcbam = ": BAM file too small"
-    else:
-      if( len(barcode) > maxBarcodeLen ):
-        maxBarcodeLen = len(barcode)
-      numGoodBams += 1
+      bcBamFile.append(": BAM file not found")
+      continue
+    if os.stat(bcbam).st_size < minFileSize:
+      bcBamFile.append(": BAM file too small")
+      continue
+    bedfile = target_files.get(barcode,'')
+    if not bedfile:
+      # Special cases where ONLY explicitly specified barcodes override the default
+      if barcode in target_files:
+        #if runtype == 'AMPS_DNA_RNA':
+        #  numInvalidBarcodes += 1
+        #  bcBamFile.append(":\nERROR: Targets file is not specified but required for this Library Type.")
+        #  continue
+        if default_target:
+          bcBamFile.append(": Default target regions overriden by barcode-specific 'None'.")
+          continue
+        if disallow_no_target:
+          bcBamFile.append(": No specific or default target regions for barcode.")
+          continue
+      elif not default_target and disallow_no_target:
+        bcBamFile.append(": No default target regions for barcode.")
+        continue
+      bedfile = default_target
+    ckbb = checkBamBed(bcbam,bedfile)
+    if ckbb:
+      bcBamFile.append(":\nERROR: "+ckbb)
+      numInvalidBarcodes += 1;
+      continue
+    if( len(barcode) > maxBarcodeLen ):
+      maxBarcodeLen = len(barcode)
+    numGoodBams += 1
     bcBamFile.append(bcbam)
 
   ensureFilePrefix(maxBarcodeLen+1)
@@ -946,7 +1033,7 @@ def runForBarcodes():
   printlog("Processing %d barcodes...\n" % numGoodBams)
   pluginReport['num_barcodes_processed'] = numGoodBams
   pluginReport['num_barcodes_failed'] = 0
-  pluginReport['num_barcodes_invalid'] = numNoTargets
+  pluginReport['num_barcodes_invalid'] = numInvalidBarcodes
 
   # create initial (empty) barcodes summary report
   updateBarcodeSummaryReport("",True)
@@ -968,7 +1055,7 @@ def runForBarcodes():
       # for error messages to appear in barcode table
       perr = bamfile.find('ERROR:')+6
       if perr >= 6:
-        pluginResult['barcodes'][barcode] = { "Sample Name" : sample, "Error" : bamfile[perr:] }
+        pluginResult['barcodes'][barcode] = { "Sample Name" : sample, "Error" : bamfile[perr:].strip() }
         pluginReport['barcodes'][barcode] = {}
         updateBarcodeSummaryReport(barcode,True)
     else:
@@ -978,7 +1065,8 @@ def runForBarcodes():
         if barcode in barcodeLibraries:
           printlog('Reference File: %s' % barcodeLibraries[barcode]['reference'])
         if have_targets:
-          target_file = target_files[barcode] if barcode in target_files else default_target
+          target_file = target_files.get(barcode,default_target)
+          if not target_file: target_file = default_target
           pluginParams['bedfile'] = target_file
           if not pluginParams['is_ampliseq']:
             target_file = target_file.replace('unmerged','merged',1)
@@ -1013,11 +1101,14 @@ def runForBarcodes():
 
 
 def runNonBarcoded():
+  '''Run the plugin script once for non-barcoded reports.'''
   global pluginResult, pluginReport
   ensureFilePrefix()
   try:
     pluginParams['bedfile'] = pluginParams['config']['targetregions'] if pluginParams['have_targets'] else ''
     createIncompleteReport()
+    ckbb = checkBamBed(pluginParams['bamfile'],pluginParams['bedfile'])
+    if ckbb: raise Exception(ckbb)
     (resultData,pluginReport) = run_plugin( pluginParams['cmdOptions'].skip_analysis )
     pluginResult.update(resultData)
     createDetailReport(pluginResult,pluginReport)
@@ -1028,6 +1119,15 @@ def runNonBarcoded():
     raise
   if pluginParams['cmdOptions'].scraper:
     createScraperLinksFolder( pluginParams['output_dir'], pluginParams['output_prefix'] )
+
+def checkBamBed(bamfile,bedfile):
+  '''Return error message if the provided BED file is not suitable for BAM file or other issues with BAM file.'''
+  if not bedfile: return ""
+  runcmd = Popen( [os.path.join(pluginParams['plugin_dir'],'scripts','checkBamBed.pl'), bamfile, bedfile], stdout=PIPE, shell=False )
+  errMsg = runcmd.communicate()[0]
+  if runcmd.poll():
+    raise Exception("Failed running checkBamBed.pl. Refer to Plugin Log.")
+  return errMsg.strip()
 
 def createScraperLinksFolder(outdir,rootname):
   '''Make links to all files matching <outdir>/<rootname>.* to <outdir>/scraper/link.*'''
@@ -1053,8 +1153,9 @@ def wrapup():
     runcmd = Popen( [os.path.join(pluginParams['plugin_dir'],'scripts','addMeanBarcodeStats.py'),
       jsonfile, "Amplicons reading end-to-end"], stdout=PIPE, shell=False )
     runcmd.communicate()
-    if runcmd.poll():
-      printlog("Warning: Failed to modify results.json using addMeanBarcodeStats.py.")
+    runcmd = Popen( [os.path.join(pluginParams['plugin_dir'],'scripts','addMeanBarcodeStats.py'),
+      jsonfile, "Percent end-to-end reads"], stdout=PIPE, shell=False )
+    runcmd.communicate()
 
 def plugin_main():
   '''Main entry point for script. Returns unix-like 0/1 for success/failure.'''
@@ -1078,6 +1179,9 @@ def plugin_main():
     if pluginParams['barcoded']:
       runForBarcodes()
       if pluginReport['num_barcodes_processed'] == 0:
+        if pluginReport['num_barcodes_invalid'] > 0:
+          printlog("ERROR: All barcodes had invalid target regions specified.")
+          return 1;
         printlog("WARNING: No barcode alignment files were found for this barcoded run.")
       elif pluginReport['num_barcodes_processed'] == pluginReport['num_barcodes_failed']:
         printlog("ERROR: Analysis failed for all barcode alignments.")

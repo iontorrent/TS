@@ -16,7 +16,7 @@
 #along with this program; if not, write to the Free Software
 #Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-VERSION="4.2.1.1" # major.minor.bug
+VERSION="4.4.0.1"
 
 # set the ram
 #$ -l mem_free=${PLUGINCONFIG__RAM},s_vmem=${PLUGINCONFIG__RAM}
@@ -47,6 +47,7 @@ set_output_paths ()
 # Set defaults
 set_output_paths;
 ASSEMBLER_PATH="${DIRNAME}/bin/";
+export HTML="$TSP_FILEPATH_PLUGIN_DIR/${PLUGINNAME}.html"
 
 # remove some files if they are there
 run "rm -rf ${TSP_FILEPATH_PLUGIN_DIR}/*.html ${TSP_FILEPATH_PLUGIN_DIR}/info*.json"
@@ -118,6 +119,14 @@ else
     echo "#########################";
     echo "";
     echo "";
+    
+    if [ ! -f ${BASECALLER_DIR}/${PLUGIN_OUT_BAM_NAME} ]; then
+    ERROR_MESSAGE="Required unaligned BAM file is missing. Plugin doesn't support assembly from aligned reads!"
+    echo $ERROR_MESSAGE >&2
+    echo "<html><body><h3><center>$PLUGIN_RUN_NAME</center></h3><br/><h3 style=\"text-align:center;color:red\">*** $ERROR_MESSAGE ***</h3><br/></body></html>" >> "$HTML"
+    exit 0
+    fi
+    
 
     #remove any link that may be there
     if [ -f ${TSP_FILEPATH_PLUGIN_DIR}/${PLUGIN_OUT_BAM_NAME} ]; then

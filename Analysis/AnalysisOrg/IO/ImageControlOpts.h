@@ -28,6 +28,9 @@ class ImageControlOpts{
   bool col_pair_pixel_xtalk_correct;
   float pair_xtalk_fraction;
   int readaheadDat;  // should this be img_control instead???
+  bool fluid_potential_correct;
+  float fluid_potential_threshold;
+
 
   // do diagnostics?
   bool outputPinnedWells;

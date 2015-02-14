@@ -7,7 +7,7 @@
     </div>
     <div class="modal-body">
         <div id="error-messages" class="alert alert-error" style="display:none;"></div>
-        <form class="form-horizontal" id="import_data_form" method="post" action='{% url "import_data" %}'>
+        <div class="form-horizontal">
             <div class="control-group">
                 <label class="control-label" for="backup_directory">Archive Directory</label>
                 <div class="controls">
@@ -19,7 +19,21 @@
                     <a href='{% url "browse_backup_dirs" "" %}' class="btn" id='browse_backup_dirs'>Browse</a>
                     <div class="help-block">Select archive directory.</div>
                 </div>
+                <div id="search_bar" class="well form-inline hide" style="margin-top:10px; margin-bottom: 0px; padding: 10px;">
+                    <input id="search_text" type="text" placeholder="Search names" style="width: 170px;" />
+                    <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -3px">Go</button>
+                    <label for="search_category">&nbsp;Filter: available</label>
+                    <select id="search_category" style="width: 170px;">
+                        <option value="any">Any</option>
+                        <option value="report">Report</option>
+                        <option value="basecall">Basecalling Input</option>
+                        <option value="sigproc">Signal Processing Input</option>
+                    </select>
+                    <button id="clear_filters" class="btn pull-right" type="button">Clear Filters</button>
+                </div>
             </div>
+        </div>
+        <form class="form-horizontal" id="import_data_form" method="post" action='{% url "import_data" %}'>
             <div id="import_data_table_div" class="control-group">
                 {% if results_list %}
                 <table id="import_data_table" class="data-table" cellpadding="5px">
@@ -29,15 +43,15 @@
                                 <span rel='tooltip' title="Result Name">Name</span>
                             </th>
                             <th>
-                                <input type='checkbox' class='select_all' value='report' checked>
+                                <input type='checkbox' class='select_all' value='report'>
                                 <span rel='tooltip' title="Report rendering and Output files (BAM)">Report</span>
                             </th>
                             <th>
-                                <input type='checkbox' class='select_all' value='basecall' checked>
+                                <input type='checkbox' class='select_all' value='basecall'>
                                 <span rel='tooltip' title="Required input files for basecalling (1.wells)">Basecalling Input</span>
                             </th>
                             <th>
-                                <input type='checkbox' class='select_all' value='sigproc' checked>
+                                <input type='checkbox' class='select_all' value='sigproc'>
                                 <span rel='tooltip' title="Required input files for signal processing (acq_*.dat)">Signal Processing Input</span>
                             </th>
                             <th>
@@ -55,13 +69,13 @@
                         <tr>
                             <td class="resultsName">{{r.name}}</td>
                             <td>
-                                <input type='checkbox' name='{{r.name}}' class='report' data-category='{{dm_types.0}}' {% if r.report %} value='{{r.report}}' checked {% else %} disabled {% endif %}>
+                                <input type='checkbox' name='{{r.name}}' class='report' data-category='{{dm_types.0}}' {% if r.report %} value='{{r.report}}' {% else %} disabled {% endif %}>
                             </td>
                             <td>
-                                <input type='checkbox' name='{{r.name}}' class='basecall' data-category='{{dm_types.1}}' {% if r.basecall %} value='{{r.basecall}}' checked {% else %} disabled {% endif %}>
+                                <input type='checkbox' name='{{r.name}}' class='basecall' data-category='{{dm_types.1}}' {% if r.basecall %} value='{{r.basecall}}' {% else %} disabled {% endif %}>
                             </td>
                             <td>
-                                <input type='checkbox' name='{{r.name}}' class='sigproc' data-category='{{dm_types.2}}' {% if r.sigproc %} value='{{r.sigproc}}' checked {% else %} disabled {% endif %}>
+                                <input type='checkbox' name='{{r.name}}' class='sigproc' data-category='{{dm_types.2}}' {% if r.sigproc %} value='{{r.sigproc}}' {% else %} disabled {% endif %}>
                             </td>
                             <td>
                                 <input type='checkbox' name='{{r.name}}' class='copy_data' data-category='copy_data'>
@@ -154,9 +168,12 @@
         $('#modal_import_data  #import_data_table_div').load(url + ' #import_data_table', function (data, status, xhr){
             if (status == "error") {
                 $('#modal_import_data #error-messages').empty().append('<p class="error">' + data + '</p>').show();
+                $('#modal_import_data #search_bar').hide();
             } else {
                 $('#modal_import_data #error-messages').hide();
                 $('#modal_import_data #submitButton').removeAttr('disabled');
+                $('#modal_import_data #search_bar').show();
+                $('#modal_import_data #clear_filters').click();
             }
             form.css('opacity',1);
             form.activity(false);
@@ -172,6 +189,30 @@
             }
         });
     });
+    
+    $('#modal_import_data #search_text').change(function(e){ filter(); });
+    $('#modal_import_data #search_category').change(function(e){ filter(); });
+    $('#modal_import_data #clear_filters').click(function(e){
+        $('#modal_import_data #search_text').val('');
+        $('#modal_import_data #search_category').val('any');
+        filter();
+    });
+    
+    function filter(){
+        var search_text = $.trim($('#modal_import_data #search_text').val()).toLowerCase();
+        var search_category = $('#modal_import_data #search_category').val();
+        
+        $('#import_data_table tbody tr').each(function(){
+            $row = $(this);
+            var filter_text = $row.text().toLowerCase().indexOf(search_text) < 0;
+            var filter_category = $row.find('.'+search_category).prop('disabled');
+            if(filter_text || filter_category){
+                $row.hide();
+            }else{
+                $row.show();
+            }
+        });
+    }
     
     // allow second modal popup window
     $.fn.modal.Constructor.prototype.enforceFocus = function () {};

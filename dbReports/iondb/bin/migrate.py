@@ -1082,26 +1082,7 @@ def fix_south_issues(log):
     # This legacy migration script is still used to get to initial 2.2 schema
     # We must fake inject existing db structures, or South will try to do it too
     ## Note initial non-fake attempt for initial installs.
-    log.write("Fixing common south issues with djcelery and tastypie\n")
-
-    try:
-        management.call_command('migrate', 'djcelery', verbosity=0, ignore_ghosts=True)
-    except DatabaseError, e:
-        if "already exists" in str(e):
-            management.call_command('migrate', 'djcelery', '0001_initial', fake=True)
-        else:
-            raise
-
-        # python-celery 2.5 adds migration 0002
-        # depends on if south was initialized before djcelery was, so faking to make sure
-        try:
-            management.call_command('migrate', 'djcelery', verbosity=0)
-        except DatabaseError, e:
-            if "already exists" in str(e):
-                log.write("WARN: djcelery needed 0002 migration\n")
-                management.call_command('migrate', 'djcelery', '0002', fake=True)
-            else:
-                raise
+    log.write("Fixing common south issues with and tastypie\n")
 
     # tastypie started using migrations in 0.9.11
     # So we may have the initial tables already

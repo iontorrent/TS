@@ -67,7 +67,7 @@ tmap_map2_thread_init(void **data,
 }
 
 static int32_t
-tmap_map2_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt)
+tmap_map2_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap_refseq_t *refseq)
 {
   int32_t i;
   int32_t best_score, best_score_subo, num_best;

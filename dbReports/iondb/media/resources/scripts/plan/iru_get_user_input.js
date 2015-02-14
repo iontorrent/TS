@@ -74,61 +74,36 @@ function create_iru_ui_elements(data) {
         $th.append($new_th);
     });
 
-    //we need to check if relationshipType came back from IR.
-    //if it didnt come back, we need to manually add a hidden input to each row
-    found_relationship_type = false;
+
     //loop through the rows and create an entry for each column
 
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
     var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();         
     var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
 
-    $.each($rows, function(i){
-        var $row = $(this);
-        
+    $.each($rows, function(i, row){
+        var $row = $(row);
         //console.log("at iru_get_user_input.create_iru_ui_elements() each i=", i, "; row=", $row);
         var isToDisable = false;
     	
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual) && i > 0) {
         	isToDisable = true;
-        }    
+        }
 
         //console.log("iru_get_user_input isSameSampleForDual=", isSameSampleForDual, "; isToDisable=", isToDisable);
         
-        $.each(columns, function(j){
+        $.each(columns, function(j, column){
             //columns are sorted so get them in order
-            var column = columns[j];
             var name = column["Name"];
-            var values = column["Values"];
-
-            //console.log("iru_get_user_input.js j=", j, "; name=", name);
-            
-//            if (name == "Workflow") {
-//            	console.log("iru_get_user_input.create_iru_ui_elements() j=", j, "; column=", column, "; name=", name, "; values=", values);
-//            }
-            
-            //get the latest td and append to it the current column
-            var td_count = $row.children().length;
-            var $last_td = $row.find("td:eq("+(td_count-1)+")");
+            var $elem, $new_td;
 
             if (name == "SetID") {           
-                var $elem = $("<input/>", {"type" : "text", "name" : "ir"+name, "style" : "width:100px; display: table-cell", "class" : "ir"+name});
+                $elem = $("<input/>", {"type" : "text", "name" : "ir"+name, "style" : "width:100px; display: table-cell", "class" : "ir"+name});
                 
                 if (isToDisable) {
                 	$elem = $("<input/>", {"type" : "text", "name" : "ir"+name,  "disabled" : "disabled", "style" : "width:100px; display: table-cell", "class" : "ir"+name});
                 }
-                
-            } else if (name == "RelationshipType") {
-                found_relationship_type = true;
-                var $elem = $("<input/>", {"type" : "hidden", "name" : "ir"+name, "class" : "ir"+name});
-
-                if (isToDisable) {
-                	$elem = $("<input/>", {"type" : "hidden", "name" : "ir"+name, "disabled" : "disabled", "class" : "ir"+name, });
-                }
-                $last_td.append($elem);
-
-                return;
-            } else if (name == "NucleotideType" || name == "CellularityPct" || name == "CancerType") {    
+            } else if (name == "RelationshipType" || name == "NucleotideType" || name == "CellularityPct" || name == "CancerType") {
             	//20140317-temp
             	//no-op for now
             	
@@ -144,27 +119,21 @@ function create_iru_ui_elements(data) {
                 // we need to rename "Relation" to RelationRole as explained 
                 //at the top of the script
                 if (name == "Relation") {name = "RelationRole";}
-                var $elem = $("<select></select>", {"style" : widthStyle, "name" : "ir"+name, "class" : widthClass +" ir"+name, }); 
+                $elem = $("<select></select>", {"style" : widthStyle, "name" : "ir"+name, "class" : widthClass +" ir"+name });
 
                 if (isToDisable) {
                 	$elem = $("<select></select>", {"style" : widthStyle, "name" : "ir"+name, "disabled" : "disabled", "class" : widthClass +" ir"+name});
                 }
             }
-            var $new_td = $("<td></td>");
+            $new_td = $("<td></td>");
             $new_td.append($elem);
             $row.append($new_td);
            
         });
-        //we need to check if relationshipType came back from IR.
-        //if it didnt come back, we need to manually add a hidden input to each row
-        if (!found_relationship_type) {
-            //get the latest td and append to it the current column
-            var td_count = $row.children().length;            
-            var $last_td = $row.find("td:eq("+(td_count-1)+")");
-            var $elem = $("<input/>", {"type" : "hidden", "name" : "irRelationshipType", "class" : "irRelationshipType"});
-
-            $last_td.append($elem);
-        }
+        // This implementation is identical to what get's created if IR returns this column, so
+        $row.find("td").last().append(
+             $("<input/>", {"type" : "hidden", "name" : "irRelationshipType", "class" : "irRelationshipType"})
+        );
 
     });
 

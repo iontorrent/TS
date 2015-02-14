@@ -63,11 +63,8 @@ void AlleleIdentity::SubCategorizeSNP(const LocalReferenceContext &reference_con
   if (altBase == refBaseLeft || altBase == refBaseRight) {
     // Flag possible misalignment for further investigation
     status.doRealignment = true;
-  }
-  if (DEBUG > 0) {
-    //cout << " is a snp. OverUndercall? " << status.isOverCallUnderCallSNP << endl;
-    if (status.doRealignment)
-      cout << "Possible SNP alignment error detected." << endl;
+    if (DEBUG > 0)
+      cout << "-Possible SNP alignment error detected-";
   }
 }
 
@@ -176,10 +173,8 @@ void AlleleIdentity::SubCategorizeMNP(const LocalReferenceContext &reference_con
     }
   }
 
-  if (DEBUG > 0) {
-    //cout << " is a mnp. OverUndercall? " << status.isOverCallUnderCallSNP << endl;
-    if (status.doRealignment)
-      cout << "Possible MNP alignment error detected." << endl;
+  if (DEBUG > 0 and status.doRealignment) {
+    cout << "-Possible MNP alignment error detected-";
   }
 }
 
@@ -371,7 +366,7 @@ bool AlleleIdentity::CharacterizeVariantStatus(const LocalReferenceContext &refe
     left_anchor++;
   }
   if (DEBUG > 0)
-    cout << "- Alternative Allele " << altAllele << " (anchor length " << left_anchor << ")";
+    cout << "- Alternative Allele " << altAllele << " (anchor length " << left_anchor << ") ";
 
 
   const string& ref_allele = reference_context.reference_allele;
@@ -396,6 +391,7 @@ bool AlleleIdentity::CharacterizeVariantStatus(const LocalReferenceContext &refe
   } else if ((int)altAllele.length() == 1) { // Categorize function only works with this setting
     status.isSNP = true;
     SubCategorizeSNP(reference_context);
+    if (DEBUG > 0) cout << " is a SNP." << endl;
 
   } else {
     status.isMNV = true;
@@ -456,7 +452,7 @@ bool AlleleIdentity::getVariantType(
 
   if (!is_ok) {
     status.isProblematicAllele = true;
-    filterReason += ",BADCANDIDATE";
+    filterReasons.push_back("BADCANDIDATE");
   }
 
   return(is_ok);
@@ -648,17 +644,16 @@ void AlleleIdentity::PredictSequenceMotifSSE(const LocalReferenceContext &refere
 
 void AlleleIdentity::DetectLongHPThresholdCases(const LocalReferenceContext &seq_context, int maxHPLength) {
   if (status.isIndel && ref_hp_length > maxHPLength) {
-    filterReason += "HPLEN";
+    filterReasons.push_back("HPLEN");
     status.isProblematicAllele = true;
   }
 }
-
 
 void AlleleIdentity::DetectNotAVariant(const LocalReferenceContext &seq_context) {
   if (altAllele.compare(seq_context.reference_allele) == 0) {
     //incorrect allele status is passed thru make it a no call
     status.isProblematicAllele = true;
-    filterReason += "NOTAVARIANT";
+    filterReasons.push_back("NOTAVARIANT");
   }
 }
 
@@ -666,8 +661,6 @@ void AlleleIdentity::DetectNotAVariant(const LocalReferenceContext &seq_context)
 void AlleleIdentity::DetectCasesToForceNoCall(const LocalReferenceContext &seq_context, const ClassifyFilters &filter_variant,
     const VariantSpecificParams& variant_specific_params)
 {
-
-  //filterReason = ""; moved up, Classifier might already throw a NoCall for a bad candidate
   DetectNotAVariant(seq_context);
   DetectLongHPThresholdCases(seq_context, variant_specific_params.hp_max_length_override ?
       variant_specific_params.hp_max_length : filter_variant.hp_max_length);
@@ -684,23 +677,35 @@ void EnsembleEval::SetupAllAlleles(const ExtendParameters &parameters,
   seq_context.DetectContext(*variant, global_context.DEBUG, ref_reader, chr_idx);
   allele_identity_vector.resize(variant->alt.size());
 
+  if (global_context.DEBUG > 0 and variant->alt.size()>0) {
+    cout << "Investigating variant candidate " << seq_context.reference_allele
+         << " -> " << variant->alt[0];
+    for (uint8_t i_allele = 1; i_allele < allele_identity_vector.size(); i_allele++)
+      cout << ',' << variant->alt[i_allele];
+    cout << endl;
+  }
+
   //now calculate the allele type (SNP/Indel/MNV/HPIndel etc.) and window for hypothesis calculation for each alt allele.
   for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
 
     // TODO: Hotspot should be an allele property but we only set all or none to Hotspots, depending on the vcf record
     allele_identity_vector[i_allele].status.isHotSpot = variant->isHotSpot;
-    allele_identity_vector[i_allele].filterReason.clear();
+    allele_identity_vector[i_allele].filterReasons.clear();
     allele_identity_vector[i_allele].DEBUG = global_context.DEBUG;
+
+    allele_identity_vector[i_allele].indelActAsHPIndel = parameters.my_controls.filter_variant.indel_as_hpindel;
 
     allele_identity_vector[i_allele].getVariantType(variant->alt[i_allele], seq_context,
         global_context.ErrorMotifs,  parameters.my_controls.filter_variant, ref_reader, chr_idx);
     allele_identity_vector[i_allele].CalculateWindowForVariant(seq_context, global_context.DEBUG, ref_reader, chr_idx);
   }
 
-
   //GetMultiAlleleVariantWindow();
   multiallele_window_start = -1;
   multiallele_window_end   = -1;
+
+
+  // Mark Ensemble for realignment if any of the possible variants should be realigned
   // TODO: Should we exclude already filtered alleles?
   for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
     //if (!allele_identity_vector[i_allele].status.isNoCallVariant) {
@@ -709,12 +714,12 @@ void EnsembleEval::SetupAllAlleles(const ExtendParameters &parameters,
     if (allele_identity_vector[i_allele].end_window > multiallele_window_end or multiallele_window_end == -1)
       multiallele_window_end = allele_identity_vector[i_allele].end_window;
 
-    // Mark Ensemble for realignment if any of the possible variants should be realigned
-    if (allele_identity_vector[i_allele].ActAsSNP() && parameters.my_controls.filter_variant.do_snp_realignment)
+    if (allele_identity_vector[i_allele].ActAsSNP() && parameters.my_controls.filter_variant.do_snp_realignment) {
       doRealignment = doRealignment or allele_identity_vector[i_allele].status.doRealignment;
-
-    if (allele_identity_vector[i_allele].ActAsMNP() && parameters.my_controls.filter_variant.do_mnp_realignment)
+    }
+    if (allele_identity_vector[i_allele].ActAsMNP() && parameters.my_controls.filter_variant.do_mnp_realignment) {
       doRealignment = doRealignment or allele_identity_vector[i_allele].status.doRealignment;
+    }
   }
   // Hack: pass allele windows back down the object
   for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
@@ -723,8 +728,8 @@ void EnsembleEval::SetupAllAlleles(const ExtendParameters &parameters,
   }
 
 
-
   if (global_context.DEBUG > 0) {
+	cout << "Realignment for this candidate is turned " << (doRealignment ? "on" : "off") << endl;
     cout << "Final window for multi-allele: " << ": (" << multiallele_window_start << ") ";
     for (int p_idx = multiallele_window_start; p_idx < multiallele_window_end; p_idx++)
       cout << ref_reader.base(chr_idx,p_idx);
@@ -736,8 +741,9 @@ void EnsembleEval::SetupAllAlleles(const ExtendParameters &parameters,
 
 void EnsembleEval::FilterAllAlleles(const ClassifyFilters &filter_variant, const vector<VariantSpecificParams>& variant_specific_params) {
   if (seq_context.context_detected) {
-    for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++)
+    for (uint8_t i_allele = 0; i_allele < allele_identity_vector.size(); i_allele++) {
       allele_identity_vector[i_allele].DetectCasesToForceNoCall(seq_context, filter_variant, variant_specific_params[i_allele]);
+    }
   }
 }
 

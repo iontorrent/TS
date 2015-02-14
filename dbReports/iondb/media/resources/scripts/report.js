@@ -381,6 +381,7 @@ $(document).ready(function () {
     // Data Management actions popup
     $('#dm_actions').click(function (e) {
         e.preventDefault();
+        $('body #modal_dm_actions').remove();
         $.get($(this).attr('href'), function (data) {
             $('body').append(data);
             $("#modal_dm_actions").modal("show");
@@ -490,7 +491,7 @@ $(document).ready(function () {
     });
 
     //the plugin launcher
-    $("#pluginDialogButton").click(function () {
+    $(".pluginDialogButton").click(function () {
         //open the dialog
         $("#modal-header").html('Select a plugin');
         $("#modal-body").html("<div id='pluginLoad'></div><div id='pluginList'></div>");
@@ -507,7 +508,7 @@ $(document).ready(function () {
                 var items = [];
                 if (data.objects.length === 0) {
                     $("#pluginLoad").html("");
-                    $("#pluginList").html("<p> There are no plugins what are enabled </p>");
+                    $("#pluginList").html('<p>No plugins enabled. Go to <a href="/configure/plugins/">Configure:Plugins</a> to install and enable plugins.</p>');
                     return false;
                 }
                 $("#pluginList").html('<table id="plugin_table" class="table table-striped"></table>');
@@ -777,6 +778,17 @@ $(document).ready(function () {
             scrollable: false,
             selectable: false,
             sortable: false,
+            pageable: true
+        });
+        $("#calibration_report").kendoGrid({
+            dataSource: {
+                pageSize: 10
+            },
+            height: 'auto',
+            groupable: false,
+            scrollable: false,
+            selectable: false,
+            sortable: true,
             pageable: true
         });
 

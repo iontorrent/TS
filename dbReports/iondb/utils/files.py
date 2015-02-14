@@ -163,8 +163,29 @@ def unzip_archive(root, data):
 
 
 def ismountpoint(directory):
-    # Call shell command to run mountpoint tool
+    '''shell command to run mountpoint tool'''
     cmd = ['/bin/mountpoint',directory]
     p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     stdout, stderr = p1.communicate()
     return p1.returncode
+
+
+def is_mounted(path):
+    '''Returns mountpoint directory, if its a mountpoint'''
+    try:
+        path = os.path.abspath(path)
+        while path != os.path.sep:
+            if ismountpoint(path) == 0:
+                return path
+            path = os.path.dirname(path)
+    except:
+        pass
+    return ''
+
+
+def get_inodes(partition):
+    #df -i partition|awk 'NR>1 {print $2, $3, $4}'
+    inodes_total = os.statvfs(partition).f_files
+    inodes_available = os.statvfs(partition).f_favail
+    inodes_used = inodes_total - inodes_available
+    return (inodes_total, inodes_used, inodes_available)

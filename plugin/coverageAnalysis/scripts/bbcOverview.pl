@@ -137,7 +137,7 @@ else
       $chrid = $chromName[$chrn];
       #$binid[$i] .= "-" . $chrid if( int($pos) > $chrsz );
       ++$chrn;
-	  $chrsz = ($chrn >= $numChroms) ? $genomeSize : $chromMaps{$chromName[$chrn]};
+      $chrsz = ($chrn >= $numChroms) ? $genomeSize : $chromMaps{$chromName[$chrn]};
     }
     $binid[$i] .= '--' . $chrid if( $binid[$i] ne $chrid );
   }

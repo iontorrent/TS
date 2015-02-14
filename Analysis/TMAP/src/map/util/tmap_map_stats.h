@@ -21,6 +21,20 @@ typedef struct {
     uint64_t num_realign_unclip_failures; /*!< the number of realigner un-clipping procedure failures*/ 
     uint64_t num_realign_changed; /*!< the number of alignments that were modified adjusted by realigner*/ 
     uint64_t num_realign_shifted; /*!< the number of alignments for which the position on the reference was altered by realigner*/ 
+    // tail repeat clipping stats
+    uint64_t num_seen_tailclipped;
+    uint64_t bases_seen_tailclipped;
+    uint64_t num_tailclipped;
+    uint64_t bases_tailclipped;
+    uint64_t num_fully_tailclipped;
+    uint64_t bases_fully_tailclipped;
+    // statistics for realignment with context-dependent gap cost
+    uint64_t num_hpcost_invocations;
+    uint64_t num_hpcost_skipped;
+    uint64_t num_hpcost_modified;
+    uint64_t num_hpcost_shifted;
+    // alignments filtered by length
+    uint64_t num_len_filtered_als;
 } tmap_map_stats_t;
 
 /*!
@@ -42,5 +56,12 @@ tmap_map_stats_destroy(tmap_map_stats_t *s);
  */
 void
 tmap_map_stats_add(tmap_map_stats_t *dest, tmap_map_stats_t *src);
+
+/*!
+  Zeroes all counters 
+  @param  s  the pointer to stats holding object
+ */
+void 
+tmap_map_stats_zero(tmap_map_stats_t *s);
 
 #endif // TMAP_MAP_STATS_H

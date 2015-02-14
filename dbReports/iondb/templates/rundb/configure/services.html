@@ -2,13 +2,13 @@
 {% load url from future %}
 {% load static from staticfiles %}
 {% block sub-nav %}
-  <li><a href="{% url "configure_about" %}">About</a></li>
-  <li><a href="{% url "configure_references" %}">References</a></li>
-  <li class="active"><a href="{% url "configure_services" %}">Services</a></li>
-  <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
-  <li><a href="{% url "configure_configure" %}">Configure</a></li>
-  <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
-  <li><a href="{% url "configure_account" %}">Accounts</a></li>
+    <li><a href="{% url "configure_about" %}">About</a></li>
+    <li><a href="{% url "configure_references" %}">References</a></li>
+    <li class="active"><a href="{% url "configure_services" %}">Services</a></li>
+    <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+    <li><a href="{% url "configure_configure" %}">Configure</a></li>
+    <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
+    <li><a href="{% url "configure_account" %}">Accounts</a></li>
 {% endblock sub-nav %}
 {% block content %}
 <link rel="stylesheet" href="{% static "jquery/js/apprise/apprise.css"%}" type="text/css"/>
@@ -20,308 +20,332 @@ function terminate_job(url,name){
     apprise("\nAre you sure you want to terminate " + name + "?\n", {'verify': true}, function (r) {
         if (r) {
             //Terminate the job
-			$.ajax({
-				type: "POST",
-				url: url
-			});
-		}
-	});
+            $.ajax({
+                type: "POST",
+                url: url
+            });
+        }
+    });
 }
 
 function showModal(elem, modal_id){
-	var url = $(elem).attr('href');
-	console.log('showModal', modal_id, url);
-	$( 'body #'+modal_id ).remove();
-	$.get(url, function(data) {
-	   $('body').append(data);
-	   $( "#"+modal_id ).modal("show");
-	});
+    var url = $(elem).attr('href');
+    console.log('showModal', modal_id, url);
+    $( 'body #'+modal_id ).remove();
+    $.get(url, function(data) {
+       $('body').append(data);
+       $( "#"+modal_id ).modal("show");
+    });
 }
 
 $(document).ready(function () {
 
-	$('.queueStat').live('click',function(e){
-		e.preventDefault();
-		showModal(this, 'modal_queuestat');
-		return false;
-	});
+    $('.queueStat').live('click',function(e){
+        e.preventDefault();
+        showModal(this, 'modal_queuestat');
+        return false;
+    });
 
-	$('.raid_details').click(function(e){
-		e.preventDefault();
-		e.stopPropagation();
-		showModal(this, 'modal_raid_info');
-	});
+    $('.raid_details').click(function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        showModal(this, 'modal_raid_info');
+    });
 
-	$('.raid_status').click(function(){
-		$(this).next('tr').toggle();
-		$(this).find('i').toggleClass('icon-minus').toggleClass('icon-plus');
-		return false;
-	});
+    $('.raid_status').click(function(){
+        $(this).next('tr').toggle();
+        $(this).find('i').toggleClass('icon-minus').toggleClass('icon-plus');
+        return false;
+    });
 
-	$('#refresh_cluster_info').click(function(e){
-		e.preventDefault();
-		var $div = $(this).next('div');
-		$div.removeClass('hidden');
-		$.get($(this).attr('href'), function(data){
-			$div.html('<h4>Success!</h4>');
-			setTimeout(function(){ window.location.reload(true); }, 1000);
-		}).fail(function(data){
-			$div.html('<h4>Failed, '+data.statusText+'</h4>');
-		});
-	});
+    $('#refresh_cluster_info').click(function(e){
+        e.preventDefault();
+        var $div = $(this).next('div');
+        $div.removeClass('hidden');
+        $.get($(this).attr('href'), function(data){
+            $div.html('<h4>Success!</h4>');
+            setTimeout(function(){ window.location.reload(true); }, 1000);
+        }).fail(function(data){
+            $div.html('<h4>Failed, '+data.statusText+'</h4>');
+        });
+    });
+    
+    $('.cluster_info_log').click(function(e){
+        var url = $(this).attr('href');
+        $('body #modal_event_log').remove();
+        $.get(url, function(data) {
+           $('body').append(data);
+           $("#modal_event_log").modal("show");
+        });
+        return false;
+    });
+    
+    $('.jobs').click(function(e){
+        $(this).addClass('active').siblings().removeClass('active');
+        $('#jobs_table').show().parent().find('#nojobs').remove();
+        var $rows = $('#jobs_table tbody tr');
+        $rows.show();
+        if (this.id != 'all'){
+            $rows.find('td:eq(2)').not(':contains('+this.id+')').parent().hide();
+            if ($rows.filter(':visible').length == 0){
+                $('#jobs_table').hide();
+                $('#jobs_table').parent().append('<p id="nojobs" class="centered_message">No active '+this.id+' jobs.</p>');
+            }
+        }
+    });
+    $('#analysis').click();
 });
 </script>
 
-	<div class="content clearfix">
-		<h1>Jobs Server</h1>
-		<table class="data-table">
-			<thead>
-				<tr>
-					<th>Hostname</th>
-					<th>IP</th>
-					<th>Status</th>
-					<th>Job Count</th>
-					<th>Uptime</th>
-				</tr>
-			</thead>
-			<tbody>
-			{% for name,ip,up,nrunning,uptime in jobs.servers %}{% spaceless %}
-				<tr class="{% cycle 'row1' 'row2' %}">
-					<td>{{ name }}</td>
-					<td>{{ ip }}</td>
-					<td>{% if up %}Running{% else %}Down{% endif %}</td>
-					<td>{% if up %}{{ nrunning }}{% else %}-{% endif %}</td>
-					<td>
-					{% if up %}
-					  {% if uptime.days %}
-						{{ uptime.days }} day{{ uptime.days|pluralize }},
-					  {% endif %}
-					  {% if uptime.hours %}
-						{{ uptime.hours }} hour{{ uptime.hours|pluralize }},
-					  {% endif %}
-					  {{ uptime.minutes }} minute{{ uptime.minutes|pluralize }},
-					  {{ uptime.seconds }} second{{ uptime.seconds|pluralize }}
-					{% else %}-{% endif %}
-					</td>
-				</tr>
-			{% endspaceless %}{% endfor %}
-			</tbody>
-		</table>
-		<table class="data-table">
-			<thead>
-				<tr>
-					<th>Service Name</th>
-					<th>Status</th>
-				</tr>
-			</thead>
-			<tbody>
-			{% for name, status in processes %}
-			  <tr class="{% cycle 'row1' 'row2' %}">
-				<td>{{name}}</td>
-				<td>
-				  {% if status %}
-					Running
-				  {% else %}
-					<b>Down</b>
-				  {% endif %}
-				</td>
-			  </tr>
-			{% endfor %}
-			</tbody>
-		</table>
-	</div>
-	<div class="content clearfix">
-		<h1>Active Jobs</h1>
-		<h4><a href="/configure/services/queueStat/" class="queueStat"> Queue Status </a></h4>
-		<br>
-		{% if not jobs.jobs %}
-			<p class="centered_message">No active jobs.</p>
-		{% else %}
-		<table class="data-table">
-			<thead>
-				<tr>
-					<th>Name</th>
-					<th>Job/PID</th>
-					<th>Type</th>
-					<th>Status Message</th>
-					<th>Report</th>
-					<th>&nbsp;<!--Terminate--></th>
-				</tr>
-			</thead>
-			<tbody>
-				{% for sname,name,pid,atype,msg,report,experiment in jobs.jobs %}
-				  {% spaceless %}
-					<tr class="{% cycle 'row1' 'row2' %}">
-					  <td>{{ name }}</td>
-					  <td><a href="/configure/services/sgejob/{{ pid }}/?result_pk={{ report.pk }}" >{{ pid }}</a></td>
-					  <td>{{ atype }}</td>
-					  <td>{{ msg }}</td>
-					  {#only provide links to the report if they exist#}
-					  {% if report.report_exist %}
-						<td>
-						  <a href="{% url "report" report.pk %}" target="_blank">{{ report.resultsName }}</a>
-						</td>
-						{% else %}
-						<td>{{ report.resultsName }}</td>
-					  {% endif %}
-
-					  <td class="termtd">
-						<a href="javascript:terminate_job('{% url "control_job" report.pk "term" %}', '{{ report.resultsName }}')">
-						  Terminate
-						</a>
-					  </td>
-					</tr>
-				  {% endspaceless %}{% endfor %}
-			</tbody>
-		</table>
-		{% endif %}
-		</div>
-
-	<div class="content clearfix">
-
-		<h1>ionCrawler Service Details</h1>
-		<p>
-			Status: {% if  crawler.result_dict %}Running. {% else %}Stopped.{% endif %}
-		</p>
-		<br />
-		{% if  crawler.result_dict %}
-		<table class="plan-table">
-			<tbody>
-				<tr class="row1">
-					{% with crawler.result_dict.elapsed as e %}
-					<td>Crawler Uptime</td>
-					<td>{% spaceless %}
-					{% if e.days %}{{ e.days }} day{{ e.days|pluralize }}, {% endif %}
-					{% if e.days or e.hours %}
-						{{ e.hours }} hour{{ e.hours|pluralize }},
-					{% endif %}
-					{{ e.minutes }} minute{{ e.minutes|pluralize }},
-					{{ e.seconds }} second{{ e.seconds|pluralize }}
-					{% endspaceless %}</td>
-					{% endwith %}
-				</tr>
-				<tr class="row2">
-					<td>Number of Runs Added</td>
-					<td>{{ crawler.result_dict.nfound }}</td>
-				</tr>
-				<tr class="row1">
-					<td>Recently Added Runs</td>
-					<td>
-						{% for exp in crawler.result_dict.exprs %}
-							<div>
-							{{ exp }}
-							</div>
-						{% endfor %}
-					</td>
-				</tr>
-				<tr class="row2">
-					<td>Currently Inspecting Folder</td>
-					<td>{{ crawler.result_dict.folder }}</td>
-				</tr>
-				<tr class="row1">
-					<td>State</td>
-					<td><b>{{ crawler.result_dict.state.0|capfirst }}</b> for the
-					last {{ crawler.result_dict.state.1|floatformat:2 }} seconds. </td>
-				</tr>
-				<tr class="row2">
-					<td>Running on Host</td>
-					<td>{{ crawler.result_dict.hostname }}</td>
-				</tr>
-			</tbody>
-		</table>
-		{% endif %}
-	</div>
-	<div class="content clearfix">
-		<h1>RAID Info <small>(last updated {{ raid_status_updated }})</small></h1>
-        {% if raid_err_msg %}<div class="text-error">Error: {{raid_err_msg}}</div><br>{% endif %}
-		{% if raid_status %}
-			<table class="table table-condensed table-hover">
-				{% for entry in raid_status %}
-				<tr class="{{entry.status}} raid_status">
-					<td>
-						{% if forloop.first %}<i class="icon-minus"></i>{% else %}<i class="icon-plus"></i>{% endif %}
-						<a>{{entry.adapter_id}} / {{entry.enclosure_id}}</a> ({{entry.status}})
-					</td>
-					<td>
-						<a href="/configure/raid_info/{{forloop.counter0}}/" class="raid_details">View Details</a>
-					</td>
-				</tr>
-				<tr {% if not forloop.first %}class="hide"{% endif %}>
-					<td colspan=2 style="border:none;">
-						{% include "rundb/configure/raid_info.html" with array_status=entry.drives cols=entry.cols|default:4 %}
-					</td>
-				</tr>
-				<!-- TEST CODE -->
-				{% for item in entry.logical_drives %}
-				<tr>
-					<td>Logical Volume: {{item.name}}</td>
-					<td>Size: {{item.size}}</td>
-					<td>Status: {{item.status}}</td>
-				</tr>
-				{% endfor %}
-				<!-- END TEST CODE -->
-				{% endfor %}
-			</table>
-		{% else %}
-			<p>No RAID information available.</p>
-		{% endif %}
-	</div>
-
-	{% if crunchers %}
-	<div class="content clearfix">
-		<h1>Cluster Info
-			<a title="Refresh Cluster Info" id="refresh_cluster_info" href="{% url 'cluster_info_refresh' %}"><i class="icon-refresh"></i></a>
-			<div class="hidden" style="display:inline-block;">
-				<h4>Refreshing cluster info, please wait <img src="{% static "resources/kendo/styles/Uniform/loading.gif"%}"></h4>
-			</div>
-		</h1>
-		<table class="table table-condensed">
-			{% for node in crunchers %}
-				<tr class="{{node.get_state_display}} raid_status">
-					<td>{{node.name}}</td>
-					<td>{{node.comments}}</td>
-					{% if node.state == 'E' %}
-						<td><span class="label label-important">Error</span></td>
-						<td>{{node.info.error|linebreaksbr}}</td>
-					{% elif node.state == 'W' %}
-						<td><span class="label label-warning">Error</span></td>
-						<td>{{node.info.error|linebreaksbr}}</td>
-					{% elif node.state == 'G'%}
-						<td colspan="2"><span class="label label-success">Good</span></td>
-					{% elif node.state == 'U'%}
-						<td colspan="2"><span class="label label-default">Unknown</span></td>
-					{% endif %}
-				</tr>
-				<tr class="hide">
-					<td></td>
-					<td colspan=2>
-						<table class="table table-condensed">
-							{% for test,status in node.info.connect_tests %}
-								<tr {%if status == 'failure' %}class="text-error"{%endif%}>
-									<td>{{test}}</td><td>{{status}}</td>
-								</tr>
-							{% endfor %}
-							{% for test,status in node.info.config_tests %}
-								<tr {%if status == 'failure' %}class="text-warning"{%endif%}>
-									<td>{{test}}</td><td>{{status}}</td>
-								</tr>
-							{% endfor %}
-							{% if node.info.error %}
-								<tr class="text-error">
-									<td>Error:</td>
-									<td>{{node.info.error|linebreaksbr}}{{node.info.version_test_errors|linebreaksbr}}</td>
-								</tr>
-							{%endif%}
-						</table>
-					</td>
-				</tr>
-			{% endfor %}
-		</table>
-	</div>
-	{% endif %}
-	
     <div class="content clearfix">
-		<h1>Data Management</h1>
-		Go to <a href="{% url "datamanagement" %}"> Data Management </a>
+        <h1>Services</h1>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Hostname</th>
+                    <th>IP</th>
+                    <th>Status</th>
+                    <th>Job Count</th>
+                    <th>Uptime</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for name,ip,up,nrunning,uptime in servers %}{% spaceless %}
+                <tr class="{% cycle 'row1' 'row2' %}">
+                    <td>{{ name }}</td>
+                    <td>{{ ip }}</td>
+                    <td>{% if up %}Running{% else %}Down{% endif %}</td>
+                    <td>{% if up %}{{ nrunning }}{% else %}-{% endif %}</td>
+                    <td>
+                    {% if up %}
+                        {% if uptime.days %}
+                            {{ uptime.days }} day{{ uptime.days|pluralize }},
+                        {% endif %}
+                        {% if uptime.hours %}
+                            {{ uptime.hours }} hour{{ uptime.hours|pluralize }},
+                        {% endif %}
+                        {{ uptime.minutes }} minute{{ uptime.minutes|pluralize }},
+                        {{ uptime.seconds }} second{{ uptime.seconds|pluralize }}
+                    {% else %}-{% endif %}
+                    </td>
+                </tr>
+            {% endspaceless %}{% endfor %}
+            </tbody>
+        </table>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Service Name</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for name, status in processes %}
+                <tr class="{% cycle 'row1' 'row2' %}">
+                    <td>{{name}}</td>
+                    <td>
+                        {% if status %}
+                            Running
+                        {% else %}
+                            <b>Down</b>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="content clearfix">
+        <h1>Active Jobs</h1>
+        <h4><a href="/configure/services/queueStat/" class="queueStat"> Queue Status </a></h4>
+        {% if not jobs %}
+            <p class="centered_message">No active jobs.</p>
+        {% else %}
+        <div class="view-toggle" style="margin: 20px 0 10px 0;">
+            <a id="all" class="jobs">All</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+            <a id="analysis" class="active jobs";>Analysis</a>&nbsp;&nbsp;|&nbsp;&nbsp;
+            <a id="plugin" class="jobs">Plugins</a>
+        </div>
+        <table id="jobs_table" class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Job/PID</th>
+                    <th>Type</th>
+                    <th>Status Message</th>
+                    <th>Report</th>
+                    <th>&nbsp;<!--Terminate--></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for j in jobs %}
+                  {% spaceless %}
+                    <tr class="{% cycle 'row1' 'row2' %}">
+                        <td>{{ j.name }}</td>
+                            {% ifequal j.type 'analysis' %}
+                                <td><a href="/configure/services/sgejob/{{ j.pid }}/?result_pk={{ j.pk }}" >{{ j.pid }}</a></td>
+                            {% else %}
+                                <td>{{ j.pid }}</td>
+                            {% endifequal %}
+                        <td>{{ j.type }}</td>
+                        <td>{{ j.status }}</td>
+                        {#only provide links to the report if they exist#}
+                        {% if j.report_exist %}
+                            <td>
+                                <a href="{{j.report_url}}" target="_blank">{{ j.resultsName }}</a>
+                            </td>
+                        {% else %}
+                            <td>{{ j.name }}</td>
+                        {% endif %}
+                        <td class="termtd">
+                            <a href="javascript:terminate_job('{{j.term_url}}', '{{ j.name }}')">Terminate</a>
+                        </td>
+                    </tr>
+                  {% endspaceless %}
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    <div class="content clearfix">
+        <h1>ionCrawler Service Details</h1>
+        {% if  crawler %}
+            <p>
+            {% with crawler.elapsed as e %}
+                Running on Host <b>{{crawler.hostname}}</b> for
+                    {% if e.days %}{{ e.days }} day{{ e.days|pluralize }}, {% endif %}
+                    {% if e.days or e.hours %}{{ e.hours }} hour{{ e.hours|pluralize }}, {% endif %}
+                    {{ e.minutes }} minute{{ e.minutes|pluralize }},
+                    {{ e.seconds }} second{{ e.seconds|pluralize }}.
+            {% endwith %}
+                &nbsp<b>{{ crawler.state.0|capfirst }}</b> for the last {{ crawler.state.1|floatformat:2 }} seconds.
+            </p>
+            <br />
+            {% if  crawler.errors %}
+            <div style="max-height: 500px; overflow: auto;">
+            <table id="crawler_table" class="data-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Folder</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for e in crawler.errors %}
+                    <tr>
+                        <td>{{ e.0 }}</td>
+                        <td>{{ e.1 }}</td>
+                        <td>{{ e.2|linebreaks }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% endif %}
+        {% else %}
+            <p>Crawler is <b>Stopped</b>.</p>
+        {% endif %}
+    </div>
+    <div class="content clearfix">
+        <h1>RAID Info <small>(last updated {{ raid_status_updated }})</small></h1>
+        {% if raid_err_msg %}<div class="text-error">Error: {{raid_err_msg}}</div><br>{% endif %}
+        {% if raid_status %}
+            <table class="table table-condensed table-hover">
+                {% for entry in raid_status %}
+                <tr class="{{entry.status}} raid_status">
+                    <td>
+                        {% if forloop.first %}<i class="icon-minus"></i>{% else %}<i class="icon-plus"></i>{% endif %}
+                        <a>{{entry.adapter_id}} / {{entry.enclosure_id}}</a> ({{entry.status}})
+                    </td>
+                    <td>
+                        <a href="/configure/raid_info/{{forloop.counter0}}/" class="raid_details">View Details</a>
+                    </td>
+                </tr>
+                <tr {% if not forloop.first %}class="hide"{% endif %}>
+                    <td colspan=2 style="border:none;">
+                        {% include "rundb/configure/raid_info.html" with array_status=entry.drives cols=entry.cols|default:4 %}
+                    </td>
+                </tr>
+                
+                {% for item in entry.logical_drives %}
+                <tr>
+                    <td colspan=2 style="border:none;">
+                        <table width=100%><tr>
+                        <td>Logical Volume: {{item.name}}</td>
+                        <td>Size: {{item.size}}</td>
+                        <td>Status: {{item.status}}</td>
+                        </tr></table>
+                    </td>
+                </tr>
+                {% endfor %}
+                
+                {% endfor %}
+            </table>
+        {% else %}
+            <p>No RAID information available.</p>
+        {% endif %}
+    </div>
+
+    {% if crunchers %}
+    <div class="content clearfix">
+        <h1>Cluster Info
+            <a title="Refresh Cluster Info" id="refresh_cluster_info" href="{% url 'cluster_info_refresh' %}"><i class="icon-refresh"></i></a>
+            <div class="hidden" style="display:inline-block;">
+                <h4>Refreshing cluster info, please wait <img src="{% static "resources/kendo/styles/Uniform/loading.gif"%}"></h4>
+            </div>
+            <a href= {% url "cluster_info_history" %} id="cluster_info_history">View History</a>
+        </h1>
+        <table class="table table-condensed table-hover">
+            {% for node in crunchers %}
+                <tr class="{{node.get_state_display}} raid_status">
+                    <td><i class="icon-plus"></i></td>
+                    <td>{{node.name}}</td>
+                    <td>{{node.comments}}</td>
+                    {% if node.state == 'E' %}
+                        <td><span class="label label-important">Error</span></td>
+                        <td>{{node.info.error|linebreaksbr}}</td>
+                    {% elif node.state == 'W' %}
+                        <td><span class="label label-warning">Error</span></td>
+                        <td>{{node.info.error|linebreaksbr}}</td>
+                    {% elif node.state == 'G'%}
+                        <td colspan="2"><span class="label label-success">Good</span></td>
+                    {% elif node.state == 'U'%}
+                        <td colspan="2"><span class="label label-default">Unknown</span></td>
+                    {% endif %}
+                    <td><a href= {% url "cluster_info_log" node.pk %} class="cluster_info_log" class="btn">View Log</a></td>
+                </tr>
+                <tr class="hide">
+                    <td></td>
+                    <td colspan=4>
+                        <table class="table table-condensed">
+                            {% for test,status in node.info.connect_tests %}
+                                <tr {%if status == 'failure' %}class="text-error"{%endif%}>
+                                    <td>{{test}}</td><td>{{status}}</td>
+                                </tr>
+                            {% endfor %}
+                            {% for test,status in node.info.config_tests %}
+                                <tr {%if status == 'failure' %}class="text-warning"{%endif%}>
+                                    <td>{{test}}</td><td>{{status}}</td>
+                                </tr>
+                            {% endfor %}
+                            {% if node.info.error %}
+                                <tr class="text-error">
+                                    <td>Error:</td>
+                                    <td>{{node.info.error|linebreaksbr}}{{node.info.version_test_errors|linebreaksbr}}</td>
+                                </tr>
+                            {%endif%}
+                        </table>
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% endif %}
+    
+    <div class="content clearfix">
+        <h1>Data Management</h1>
+        Go to <a href="{% url "datamanagement" %}"> Data Management </a>
     </div>
 {% endblock content %}

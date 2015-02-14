@@ -473,7 +473,7 @@ namespace Json {
       /// Maximum unsigned 64 bits int value that can be stored in a Json::Value.
       static const UInt64 maxUInt64;
 
-   private:
+   public: //private:
 #ifndef JSONCPP_DOC_EXCLUDE_IMPLEMENTATION
 # ifndef JSON_VALUE_USE_INTERNAL_MAP
       class CZString 

@@ -14,7 +14,7 @@ class PluginManagerTest(TestCase):
     def setUp(self):
         self.tempdir = tempfile.mkdtemp()
         self.assertEqual(1, len(GlobalConfig.objects.all().order_by('pk')))
-        self.gc = GlobalConfig.objects.all().order_by('pk')[0]
+        self.gc = GlobalConfig.get()
 
     def tearDown(self):
         shutil.rmtree(self.tempdir)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# Copyright (C) 2014 Life Technologies, Inc. All Rights Reserved
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 import os
 import sys
 import time

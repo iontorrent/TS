@@ -1,6 +1,6 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
-from iondb.rundb.models import Chip, RunType, KitInfo, ApplicationGroup, SampleGroupType_CV, dnaBarcode, ReferenceGenome
+from iondb.rundb.models import Chip, RunType, KitInfo, ApplicationGroup, SampleGroupType_CV, dnaBarcode, ReferenceGenome, ApplProduct
 from iondb.utils import validation
 
 import logging
@@ -16,8 +16,11 @@ MAX_LENGTH_SAMPLE_TUBE_LABEL = 512
 MAX_FLOWS = 2000
 MAX_QC_INT = 100
 PROJECT_NAME_LENGTH = 64
+MIN_LIBRARY_READ_LENGTH = 0
+MAX_LIBRARY_READ_LENGTH = 1000
 
 VALID_NUCLEOTIDE_TYPES = ["DNA", "RNA"]
+VALID_TEMPLATING_SIZES = ["200", "400"]
 
 def validate_plan_name(value, displayedName='Plan Name'):
     errors = []
@@ -56,7 +59,7 @@ def validate_sample_name(value, displayedName='Sample Name'):
     return errors
 
 
-def validate_barcoded_sample_info(sampleName, sampleId, nucleotideType, runTypeName, sampleReference, displayedName='Barcoded Sample'):
+def validate_barcoded_sample_info(applicationGroupName, runType, sampleName, sampleId, nucleotideType, runTypeName, sampleReference, sampleRnaReference, displayedName='Barcoded Sample'):
     errors = []
     if not validation.is_valid_chars(sampleName):
         errors.append(validation.invalid_chars_error(displayedName))
@@ -73,9 +76,21 @@ def validate_barcoded_sample_info(sampleName, sampleId, nucleotideType, runTypeN
 
     sample_nucleotideType = ""
     
-    nucleotideType_errors, sample_nucleotideType = validate_sample_nucleotideType(nucleotideType, runTypeName)
+    nucleotideType_errors, sample_nucleotideType = validate_sample_nucleotideType(nucleotideType, runTypeName, applicationGroupName)
+
     if (nucleotideType_errors):
         errors.extend(nucleotideType_errors)
+
+    if runType == "AMPS_DNA_RNA" and sample_nucleotideType.upper() == "RNA":
+        rna_ref_errors, rna_ref_short_name = validate_reference(sampleRnaReference, displayedName = "RNA Sample Reference")
+        logger.debug("plan_validator.validate_barcoded_sample_info() sampleRnaReference=%s; rna_ref_short_name=%s" %(sampleRnaReference, rna_ref_short_name))
+        
+        if (rna_ref_errors):
+            errors.extend(rna_ref_errors)
+
+    else:
+        rna_ref_errors = []
+        rna_ref_short_name = ""
 
     ref_errors, ref_short_name = validate_reference(sampleReference, displayedName = "Sample Reference")
     ##logger.debug("plan_validator.validate_barcoded_sample_info() sampleReference=%s; ref_short_name=%s" %(sampleReference, ref_short_name))
@@ -85,18 +100,17 @@ def validate_barcoded_sample_info(sampleName, sampleId, nucleotideType, runTypeN
 
     ##logger.debug("plan_validator.validate_barcoded_sample_info() errors=%s" %(errors))
     
-    return errors, ref_short_name, sample_nucleotideType
+    return errors, ref_short_name, rna_ref_short_name, sample_nucleotideType 
 
 
-def validate_sample_nucleotideType(nucleotideType, runType, displayedName='Sample Nucleotide Type'):
+def validate_sample_nucleotideType(nucleotideType, runType, applicationGroupName, displayedName='Sample Nucleotide Type'):
     """
     validate nucleotide type case-insensitively with leading/trailing blanks in the input ignored
-    """    
-    
+    """        
     errors = []
     input = ""
     valid_values = VALID_NUCLEOTIDE_TYPES
-    
+                    
     if nucleotideType:
         input = nucleotideType.strip().upper()
         
@@ -104,13 +118,25 @@ def validate_sample_nucleotideType(nucleotideType, runType, displayedName='Sampl
             runTypeObjs = RunType.objects.filter(runType = runType)
             if runTypeObjs:
                 runTypeObj = runTypeObjs[0]
-
+ 
                 if (runTypeObj.nucleotideType and runTypeObj.nucleotideType.upper() != "DNA_RNA"):
                     valid_values = [str(runTypeObj.nucleotideType.upper())]
                    
         if not validation.is_valid_keyword(input, valid_values):
             errors.append(validation.invalid_keyword_error(displayedName, valid_values))
-                
+    else:
+        if runType:
+            runTypeObjs = RunType.objects.filter(runType = runType)
+            if runTypeObjs:
+                runTypeObj = runTypeObjs[0]
+    
+                if (runTypeObj.nucleotideType and runTypeObj.nucleotideType.upper() != "DNA_RNA"):  
+                    return errors, runTypeObj.nucleotideType.upper()
+                else:
+                    #some runType can have more than one nucleotideType
+                    if applicationGroupName in ["DNA", "RNA"]:
+                        return errors, applicationGroupName
+              
     return errors, input
 
 
@@ -143,6 +169,17 @@ def validate_reference(referenceName, displayedName='Reference'):
                          errors.append(validation.invalid_not_found_error(displayedName, referenceName))
       
     return errors, ref_short_name
+
+
+def validate_reference_short_name(value, displayedName='Reference'):
+    errors = []
+    if validation.has_value(value):
+        value = value.strip()
+        reference = ReferenceGenome.objects.filter(short_name=value, enabled=True)
+        if not reference.exists():
+            errors.append(validation.invalid_not_found_error(displayedName, value))
+
+    return errors
 
 
 def validate_sample_id(value, displayedName='Sample Id'):
@@ -185,14 +222,56 @@ def validate_chip_type(value, displayedName='Chip Type'):
 
 def validate_flows(value, displayedName='Flows'):
     errors = []
-    if not validation.is_valid_uint(value):
-        errors.append(validation.invalid_uint(displayedName))
-    elif int(value) > MAX_FLOWS:
-        errors.append(displayedName + ' must be a positive integer within range [1, 2000)' )
+    if type(value) != int and value.isdigit():
+        value2 = int(value)
+    else:
+        value2 = value
+            
+    if type(value2) == int:
+        if not validation.is_valid_uint(value2):
+            errors.append(validation.invalid_uint(displayedName))
+        elif value2 > MAX_FLOWS:
+            errors.append(displayedName + ' must be a positive integer within range [1, 2000]' )
+    else:
+        errors.append(displayedName + ' must be a positive integer within range [1, 2000]' )
     
     return errors
 
+
+def validate_libraryReadLength(value, displayedName='Library Read Length'):
+    errors = []
+    if type(value) != int and value.isdigit():
+        value2 = int(value)
+    else:
+        value2 = value
+        
+    if type(value2) == int:
+        if not validation.is_valid_uint_n_zero(value2):
+            errors.append(validation.invalid_uint(displayedName))
+        elif MIN_LIBRARY_READ_LENGTH < value2 > MAX_LIBRARY_READ_LENGTH:
+            errors.append(displayedName + ' must be a positive integer within range [0, 1000]' )        
+    else:
+        errors.append(displayedName + ' must be a positive integer within range [0, 1000]' )        
     
+    return errors
+
+
+def validate_templatingSize(value, displayedName='Templating Size'):    
+    """
+    validate templating size case-insensitively with leading/trailing blanks in the input ignored
+    """        
+    errors = []
+    input = ""
+    valid_values = VALID_TEMPLATING_SIZES
+                    
+    if value:
+        input = value.strip().upper()
+                           
+        if not validation.is_valid_keyword(input, valid_values):
+            errors.append(validation.invalid_keyword_error(displayedName, valid_values))        
+    return errors
+
+
 def validate_QC(value, displayedName):
     errors = []
     if not validation.is_valid_uint(value):
@@ -328,6 +407,36 @@ def validate_barcode_sample_association(selectedBarcodes, selectedBarcodeKit):
     
     return errors
 
-        
-        
+
+
+def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleotideType = None, displayedName="Target Regions BED File"):
+    """
+    validate targetRegionBedFile based on the selected reference and the plan's runType
+    """            
+    errors = []
     
+    logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() value=%s; runType=%s; reference=%s; nucleotideType=%s" %(value, runType, reference, nucleotideType))
+    
+    if reference:
+        if runType:
+            runType = runType.strip()
+            applProducts = ApplProduct.objects.filter(applType__runType = runType)
+            if applProducts:
+                applProduct = applProducts[0]
+                if applProduct:
+                    isRequired = applProduct.isTargetRegionBEDFileSelectionRequiredForRefSelection
+                                 
+                    if isRequired and not validation.has_value(value):
+                        #skip for now
+                        if runType == "AMPS_DNA_RNA" and nucleotideType and nucleotideType.upper() == "RNA":                        
+                            logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() ALLOW MISSING targetRegionBed for runType=%s; nucleotideType=%s" %(runType, nucleotideType))
+                        else:    
+                            errors.append("%s is required for this application" %(displayedName))
+            else:
+                errors.append("%s Application %s not found" %(displayedName, runType))
+        else:
+            errors.append("%s Run type is missing" %(displayedName))  
+    
+    ##logger.debug("EXIT plan_validator.validate_targetRegionBedFile_for_runType() errors=%s" %(errors))
+                      
+    return errors

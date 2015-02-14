@@ -47,6 +47,9 @@
 				{% endfor %}
 			</select>
 		</div>
+		<div class="input-append search-field">
+			<button id="clear_filters" class="btn" type="button" style="margin-left:15px">Clear Filters</button>
+		</div>	
 	</div>
 	<div id="log_grid"></div>
 </div>
@@ -153,6 +156,11 @@ $(document).ready(function(){
         dataBound: function(e) {
         }
     });
+});
+
+$('#clear_filters').click(function(e){
+        $('.filter').val('');
+        filter(e);
 });
 </script>
 {% endblock content %}

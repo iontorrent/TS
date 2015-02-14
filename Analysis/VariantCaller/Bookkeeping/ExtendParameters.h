@@ -45,6 +45,7 @@ class EnsembleEvalTuningParameters {
     float soft_clip_bias_checker;
     float filter_deletion_bias;
     float filter_insertion_bias;
+    int   max_detail_level;
     
 
     EnsembleEvalTuningParameters() {
@@ -66,6 +67,7 @@ class EnsembleEvalTuningParameters {
       soft_clip_bias_checker = 0.1f;
       filter_deletion_bias = 10.0f;
       filter_insertion_bias = 10.0f;
+      max_detail_level = 0;
       
       //use_all_compare_for_test_flows = false;
     };
@@ -85,7 +87,7 @@ class BasicFilters {
 
     float strand_bias_threshold;
     float strand_bias_pval_threshold;
-//    float beta_bias_filter;
+
     float min_quality_score;
 
     int min_cov;
@@ -95,7 +97,7 @@ class BasicFilters {
       min_allele_freq = 0.2f;
       strand_bias_threshold = 0.8f;
       strand_bias_pval_threshold = 1.0f;
-  //    beta_bias_filter = 8.0f;
+
       min_cov = 3;
       min_cov_each_strand = 3;
       min_quality_score = 2.5f;
@@ -117,8 +119,12 @@ class ClassifyFilters {
     float sse_relative_safety_level; 
 
     // local realignment per variant type
-    bool do_snp_realignment;
-    bool do_mnp_realignment;
+    bool  do_snp_realignment;    //
+    bool  do_mnp_realignment;
+    float realignment_threshold; // Do not realign if fraction of reads changing alignment is above threshold
+
+    // treat non hp indels as hp indels
+    bool indel_as_hpindel;
 
     ClassifyFilters() {
       hp_max_length = 11;
@@ -129,6 +135,9 @@ class ClassifyFilters {
 
       do_snp_realignment = false;
       do_mnp_realignment = false;
+      realignment_threshold = 1.0;
+
+      indel_as_hpindel = false;
     };
     void SetOpts(OptArgs &opts, Json::Value & tvc_params);
     void CheckParameterLimits();
@@ -152,6 +161,12 @@ class ControlCallAndFilters {
     bool suppress_nocall_genotypes;
     bool heal_snps; // if a snp is the best allele, discard all others
     bool suppress_no_calls;
+
+    // position bias probably should not be variant specific
+    bool use_position_bias;
+    float position_bias_ref_fraction;
+    float position_bias;
+    float position_bias_pval;
 
     ClassifyFilters filter_variant;
 

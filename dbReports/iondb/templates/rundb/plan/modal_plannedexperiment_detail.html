@@ -74,6 +74,10 @@
 								<td><b>Template Kit:</b></td>
 								<td>{{ templatingKit.0.description }}</td>
 							</tr>
+                            <tr>
+                                <td><b>Templating Size:</b></td>
+                                <td>{% if plan.templatingSize %}{{ plan.templatingSize }}{%else%}--{%endif%}</td>
+                            </tr>							
 							<tr>
 								<td><b>Sequencing Kit:</b></td>
 								<td>{{ sequenceKit.0.description }}</td>
@@ -82,6 +86,10 @@
 								<td><b>Control Sequence:</b></td>
 								<td>{{ controlSequencekit.0.description }}</td>
 							</tr>
+                            <tr>
+                                <td><b>Library Read Length:</b></td>
+                                <td>{% if plan.libraryReadLength > 0 %}{{ plan.libraryReadLength }}{%else%}--{%endif%}</td>
+                            </tr>							
 							<tr>
 								<td><b>Flows:</b></td>
 								<td>{{ plan.experiment.flows }}</td>
@@ -98,10 +106,10 @@
 								<td><b>Mark as PCR Duplicates:</b></td>
 								<td>{{ eas.isDuplicateReads }}</td>
 							</tr>
-							<tr>
-								<td><b>Enable Base Recalibration:</b></td>
-								<td>{{ eas.base_recalibrate }}</td>
-							</tr>
+                            <tr>
+                                <td><b>Base Calibration Mode:</b></td>
+                                <td>{{ eas.get_base_recalibration_mode_for_display }}</td>
+                            </tr>							
 							<tr>
 								<td><b>Enable Realignment:</b></td>
 								<td>{{ eas.realign }}</td>
@@ -200,6 +208,18 @@
 						</table>
 					</div>
 				</div>
+				<div class="summary-section">
+                    <h3>
+                        <a class='pull-right' data-toggle="collapse" href="#LIMS_meta"><i class="openclose icon-minus"></i></a>LIMS Meta Data
+                    </h3>
+                    <div class="collapse in" id="LIMS_meta">
+                        <table>
+                            <tr>
+                                <td class="break-word">{{LIMS_meta}}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
 			</div>
 		</div>
 		{% if not plan.isReusable %}

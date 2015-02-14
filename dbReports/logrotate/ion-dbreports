@@ -12,18 +12,67 @@
 /var/log/ion/celery_w1.log {
     size 5M
     missingok
-    rotate 10
+    rotate 5
     compress
     nodelaycompress
     notifempty
     copytruncate
     create 664 ionadmin www-data
 }
-
 /var/log/ion/celery_plugins.log {
     size 5M
     missingok
-    rotate 10
+    rotate 5
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionian www-data
+}
+/var/log/ion/celery_dmmanage.log {
+    size 5M
+    missingok
+    rotate 5
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionian www-data
+}
+/var/log/ion/celery_diskutil.log {
+    size 5M
+    missingok
+    rotate 5
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionian www-data
+}
+/var/log/ion/celery_dmprocess.log {
+    size 5M
+    missingok
+    rotate 5
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionian www-data
+}
+/var/log/ion/celery_slowlane.log {
+    size 5M
+    missingok
+    rotate 5
+    compress
+    nodelaycompress
+    notifempty
+    copytruncate
+    create 664 ionian www-data
+}
+/var/log/ion/celery_transfer.log {
+    size 5M
+    missingok
+    rotate 5
     compress
     nodelaycompress
     notifempty
@@ -33,7 +82,7 @@
 /var/log/ion/celery_periodic.log {
     size 5M
     missingok
-    rotate 10
+    rotate 5
     compress
     nodelaycompress
     notifempty
@@ -43,7 +92,7 @@
 /var/log/ion/data_management.log {
     size 10M
     missingok
-    rotate 10
+    rotate 5
     compress
     nodelaycompress
     copytruncate
@@ -52,7 +101,7 @@
 /var/log/ion/celerybeat.log {
     size 5M
     missingok
-    rotate 10
+    rotate 5
     compress
     nodelaycompress
     notifempty

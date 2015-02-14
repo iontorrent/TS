@@ -10,7 +10,8 @@
 #define MIN_SAMPLE_WELL 100
 #define SMOOTH_REDUCE_STEP 10
 #define SMOOTH_REDUCE_REGION 100
-
+#define INTEGRATION_START 6
+#define INTEGRATION_END 12
 void TraceStoreCol::WellProj(TraceStoreCol &store,
                              std::vector<KeySeq> & key_vectors,
                              vector<char> &filter,
@@ -18,7 +19,7 @@ void TraceStoreCol::WellProj(TraceStoreCol &store,
   int useable_flows = 0;
   for (size_t i = 0; i < key_vectors.size(); i++) {
     useable_flows = std::max((int)key_vectors[i].usableKeyFlows, useable_flows);
-    //useable_flows = std::max((int)key_vectors[i].flows.size(), useable_flows);
+    //    useable_flows = std::max(store.GetNumFlows(), (size_t)useable_flows);
   }
   Eigen::VectorXf norm(store.mFrameStride * useable_flows);
   Eigen::VectorXf sum(store.mFrameStride * useable_flows);
@@ -66,6 +67,8 @@ void TraceStoreCol::WellProj(TraceStoreCol &store,
   // }
 
   norm = norm / count;
+  //  start_frame = INTEGRATION_START;
+  //  end_frame = INTEGRATION_END;
   start_frame = 5;
   end_frame = store.GetNumFrames() - 6;
   
@@ -137,7 +140,6 @@ void TraceStoreCol::WellProj(TraceStoreCol &store,
   }
   
 }
-
 
 /**
  * Create the basis splines for order requested at a particular value of x.

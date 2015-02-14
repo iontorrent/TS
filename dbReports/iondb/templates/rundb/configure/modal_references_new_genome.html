@@ -171,7 +171,7 @@ $(function(){
     });       
     uploader.bind('Init', function (up, params) {
         $("#upload-fasta, #pickfile").show();
-        $('#upload-help').html("<p>Please select a FASTA file to upload. FASTA files can be found at the \
+        $('#upload-help').html("<p>Please select a FASTA file to upload, with the .fasta extension. FASTA files can be found at the \
          <a href='http://www.ncbi.nlm.nih.gov/sites/genome' target='_blank'>NCBI web page</a>.</p> \
          <p>FASTA files which are zip compressed are also accepted.</p>");
     });  
@@ -226,7 +226,7 @@ $(function(){
         } else {
             //ERROR : Must select a file
             $('#upload-fasta').addClass('invalid alert alert-error');
-            $("#file_info").addClass('alert-error').html("You must select FASTA file to upload.").show();
+            $("#file_info").addClass('alert-error').html("You must select FASTA file to upload (with the .fasta extension only).").show();
         }
         
         return !form.find('.' + settings.invalid_class).add('.' + settings.error_class).exists()

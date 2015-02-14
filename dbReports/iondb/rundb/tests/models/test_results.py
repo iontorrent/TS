@@ -45,13 +45,14 @@ class ResultsTest(TestCase):
     def tearDown(self):
         shutil.rmtree(self.tempdir)
 
-    def test_save(self):
-        result = create_result(self)
-        return result
-
-    def test_unicode(self):
-        result = self.test_save()
-        self.assertEquals(unicode(result), result.resultsName)
+#retired_test
+#    def test_save(self):
+#        result = create_result(self)
+#        return result
+#
+#    def test_unicode(self):
+#        result = self.test_save()
+#        self.assertEquals(unicode(result), result.resultsName)
 
 #retired_test
 #    def test__findReportStorage_none(self):

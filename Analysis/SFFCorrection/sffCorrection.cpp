@@ -182,7 +182,7 @@ bool dump_region_info = false;
 /* M A I N *******************************************************************/
 int main(int argc, char *argv[]) {
     std::cout << "PROGRAM : PairedEnd ErrorCorrection BAM " << std::endl;
-	std::cout << "Version : " << IonVersion::GetVersion() << " (r" << IonVersion::GetSvnRev() << ")" << std::endl;
+	std::cout << "Version : " << IonVersion::GetVersion() << " (r" << IonVersion::GetGitHash() << ")" << std::endl;
 	std::cout << "Author  : Sowmi Utiramerur " << std::endl;
     process_options(argc, argv);
     if(has_strand_bias_info_fwd)

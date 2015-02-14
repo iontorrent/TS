@@ -35,7 +35,7 @@ class ExtendParameters;
 
 string getVCFHeader(const ExtendParameters *parameters, const vector<string>& sample_list);
 void clearInfoTags(vcf::Variant &var);
-void NullInfoFields(vcf::Variant &var);
+void NullInfoFields(vcf::Variant &var, bool use_position_bias);
 void SetUpFormatString(vcf::Variant &var);
 int CalculateWeightOfVariant(vcf::Variant &current_variant);
 void ClearVal(vcf::Variant &var, const char *clear_me);

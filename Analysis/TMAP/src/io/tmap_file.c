@@ -539,7 +539,7 @@ int32_t tmap_vlog (const char* format, va_list ap)
     n = vfprintf(log_file_pointer, format, ap);
     fflush (log_file_pointer);
   }
-  
+
 #ifdef HAVE_LIBPTHREAD
   pthread_mutex_unlock (&log_mutex);
 #endif

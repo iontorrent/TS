@@ -39,7 +39,7 @@ public:
     void SetHypFreq(const vector<float> & local_freq);
     void SetPriorStrength(const vector<float> & local_freq);
     void UpdateFrequencyAgainstOne(vector<float> &tmp_freq, float local_freq, int source_state);
-
+    bool Compare(vector <float> &original, int numreads, float threshold);
 };
 
 
@@ -63,8 +63,8 @@ public:
   float LogDefiniteIntegral(float alpha, float beta);
   float FindMaxFrequency();
   void UpdatePairedFrequency(vector <float > &tmp_freq, FreqMaster &base_clustering, float local_freq);
-  unsigned int ResizeToMatch(ShortStack &total_theory);
-  void  DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &base_clustering, bool update_frequency, int strand_key, bool scan_ref);
+  unsigned int ResizeToMatch(ShortStack &total_theory, unsigned max_detail_level = 0);
+  void  DoPosteriorFrequencyScan(ShortStack &total_theory, FreqMaster &base_clustering, bool update_frequency, int strand_key, bool scan_ref, int max_detail_level = 0);
 };
 
 class PosteriorInference{

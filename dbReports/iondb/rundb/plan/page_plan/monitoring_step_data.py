@@ -15,8 +15,8 @@ class MonitoringFieldNames():
 
 class MonitoringStepData(AbstractStepData):
 
-    def __init__(self):
-        super(MonitoringStepData, self).__init__()
+    def __init__(self, sh_type):
+        super(MonitoringStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_monitoring.html'
         self.savedFields = OrderedDict()
         all_qc_types = list(QCType.objects.all().order_by('qcName'))
@@ -24,6 +24,8 @@ class MonitoringStepData(AbstractStepData):
         for qc_type in all_qc_types:
             self.savedFields[qc_type.qcName] = qc_type.defaultThreshold
 
+        self.sh_type = sh_type
+        
     def validateField(self, field_name, new_field_value):
         '''
         All qc thresholds must be positive integers

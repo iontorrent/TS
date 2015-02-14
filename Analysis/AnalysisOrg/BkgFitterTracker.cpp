@@ -229,7 +229,8 @@ void BkgFitterTracker::InitBeads_BestRegion(const CommandLineOpts &inception_sta
     if (inception_state.bkg_control.pest_control.bkg_debug_files)
     {
         int nBeads_live = bestRegion.second;
-        all_params_hdf.Init2(inception_state.bkg_control.pest_control.bkgModelHdf5Debug,nBeads_live,bestRegion_region);
+        int nRegions = analysis_compute_plan.region_order.size();
+        all_params_hdf.Init2(inception_state.bkg_control.pest_control.bkgModelHdf5Debug,nBeads_live,bestRegion_region,nRegions);
     }
 }
 

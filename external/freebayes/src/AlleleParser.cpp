@@ -42,6 +42,7 @@ AlleleParser::AlleleParser(const ExtendParameters& parameters, const ReferenceRe
   if (parameters.allowComplex)
     allowed_allele_types_ |= ALLELE_COMPLEX;
 
+   black_list_strand = '.';
    hp_max_lenght_override_value = 0;
    strand_bias_override_value = 0.0;
 
@@ -541,8 +542,7 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
 
 
 
-  bool hotspot_indel_found = false;
-  char black_list_strand = '.';
+  black_list_strand = '.';
   hp_max_lenght_override_value = 0;
   strand_bias_override_value = 0.0;
   
@@ -564,10 +564,6 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
     
     HotspotAllele& allele = *a;
  
-    if (allele.type & (ALLELE_DELETION | ALLELE_INSERTION | ALLELE_MNP | ALLELE_COMPLEX))
-      hotspot_indel_found = true;
-
-
     if (not scan_haplotype) {
 
       int pos_offset = allele.pos - position_ticket->pos;
@@ -587,25 +583,6 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
     allele_pileup_[Allele(allele.type,allele.pos,allele.ref_length,allele.alt.size(),allele.alt.c_str())].add_hotspot(allele, num_samples_);
   }
   
-  //remove denovo alleles generated from the bad-strand
-  if (black_list_strand != '.') {
-    for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
-      AlleleDetails& allele = I->second;
-      if (not allele.is_hotspot) {
-          if(black_list_strand == 'F') { 
-          if( ((float)allele.coverage_fwd ) / ((float) allele.coverage) > .7)
-            allele.filtered = true;
-        } else if(black_list_strand == 'R') {
-          if( ((float)allele.coverage_rev ) / ((float) allele.coverage) > .7 )
-            allele.filtered = true;
-        } else if(black_list_strand == 'B') {
-          allele.filtered = true;
-        }
-      }
-    } 
-  }
-    
-
   if (only_use_input_alleles_) {
     for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
       AlleleDetails& allele = I->second;
@@ -634,11 +611,6 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
     }
 
     InferAlleleTypeAndLength(allele);
-
-    if (hotspot_indel_found and not allele.is_hotspot and (allele.type & (ALLELE_DELETION | ALLELE_INSERTION | ALLELE_MNP | ALLELE_COMPLEX))) {
-      allele.filtered = true;
-      continue;
-    }
 
     if (not allele.is_hotspot) {
 
@@ -1125,6 +1097,7 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
       candidate.variant_specific_params.push_back(allele.hotspot_params->params);
     else {
     candidate.variant_specific_params.push_back(VariantSpecificParams());
+    candidate.variant_specific_params.back().black_strand = black_list_strand;
     if(hp_max_lenght_override_value > 0) 
     {
        candidate.variant_specific_params.back().hp_max_length = hp_max_lenght_override_value;

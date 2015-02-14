@@ -55,7 +55,6 @@ void ZeromerMatDiff::PredictZeromersSignal(const float *time, int n_frames,
   zeromer_est.setZero();
   Eigen::Map<Eigen::VectorXf, Eigen::Aligned> taub_v(taub, n_flow_wells);
   Eigen::VectorXf cdelta(n_flow_wells);
-  
   cdelta.setZero();
   for (int f_ix = 1; f_ix < trace_data.cols(); f_ix++) {
     float dtime = time[f_ix] - time[f_ix -1];
@@ -100,34 +99,6 @@ void ZeromerMatDiff::ZeromerMadError(const int *zero_flows, size_t n_zero_flows,
   mad = mad_mean.GetMean();
 }
 
-void ZeromerMatDiff::ZeromerSumSqError(const int *zero_flows, size_t n_zero_flows, 
-
-                                       float *signal_data, 
-                                       size_t n_wells, size_t n_flows, 
-                                       size_t n_flow_wells, size_t n_frames, 
-                                       double &ssq) {
-  double ssq_sum = 0;
-  size_t bad_count = 0;
-  for (size_t z_ix = 0; z_ix < n_zero_flows; z_ix++) {
-    size_t flow_ix = zero_flows[z_ix];
-    for (size_t col_ix = 0; col_ix < n_frames; col_ix++) {
-      float *__restrict signal_start = signal_data + n_wells * flow_ix + n_flow_wells * col_ix;
-      float *__restrict signal_end = signal_start + n_wells;
-      while (signal_start != signal_end) {
-        double value = *signal_start * *signal_start;
-        // @todo cws - this is a pretty ad hoc and ugly adjustment, use filters instead
-        if (isfinite(value) && fabs(*signal_start) <= 100) {
-          ssq_sum += value;
-        }
-        else {
-          bad_count++;
-        }
-        signal_start++;
-      }
-    }
-  }
-  ssq = ssq_sum;
-}
 
 void ZeromerMatDiff::ZeromerSumSqErrorTrim(const int *zero_flows, size_t n_zero_flows, 
                                            const char *bad_wells,
@@ -282,6 +253,9 @@ void ZeromerMatDiff::FitTauBNuc(const int *zero_flows, size_t n_zero_flows,
     float *__restrict xy_ptr = vec_sum_xy.data();
     while (tau_b_start != tau_b_end) {
       float value = *xy_ptr++ / *xx_ptr++;
+      if (!isfinite(value)) {
+        value = 0;
+      }
       *tau_b_start++ += value;
       *tau_b_nuc_start++ += value;
     }
@@ -297,21 +271,13 @@ void ZeromerMatDiff::FitTauBNuc(const int *zero_flows, size_t n_zero_flows,
     // little awkward as we mult weight by number of observances but then divide out for average but more readable to keep calc
     float nuc_div = nuc_counts[nuc_ix];
     float nuc_weight = nuc_counts[nuc_ix] * nuc_weight_mult;
-    float nuc_mult = nuc_weight / nuc_div;
+    float nuc_mult = nuc_div > 0.0f ? nuc_weight / nuc_div : 0.0f;
     float total_weight = nuc_weight + combo_weight_mult;
     float combo_mult = combo_weight_mult/n_zero_flows;
-    // // if available use nuc specific estimate
-    // if (nuc_counts[nuc_ix] > 0) {
-    //   tau_b_sum_start = taub_nuc.col(nuc_ix).data(); 
-    //   divisor = nuc_counts[nuc_ix];
-    // }
-    // else { // use average
-    //   tau_b_sum_start = taub_sum.data();
-    //   divisor = n_zero_flows;
-    // }
     while (tau_b_start != tau_b_end) {
       // weighted average of nuc specific and overall for this well taub
-      *tau_b_start++ = ((*tau_b_sum_start * combo_mult) + (*tau_b_nuc_sum_start * nuc_mult)) / total_weight;
+      *tau_b_start = ((*tau_b_sum_start * combo_mult) + (*tau_b_nuc_sum_start * nuc_mult)) / total_weight;
+      tau_b_start++;
       tau_b_sum_start++;
       tau_b_nuc_sum_start++;
     }

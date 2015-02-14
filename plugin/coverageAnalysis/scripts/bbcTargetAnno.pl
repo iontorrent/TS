@@ -98,7 +98,7 @@ if( !$bedout )
     else { $headerLine .= sprintf("field%d\t", $i+1); }
   }
   # these are the added 6 base coverage fields
-  $headerLine .= "covered\tuncov_5p\tuncov_3p\tdepth\tfwd_reads\trev_reads";
+  $headerLine .= "covered\tuncov_5p\tuncov_3p\tave_basereads\tfwd_basereads\trev_basereads";
 }
 
 my $numBedWarnings = 0;
@@ -335,7 +335,6 @@ sub bciSeekForward
   my $blockSrt = $bciIndex[$blockIdx];
   printf STDERR "Block start = $blockSrt at index $blockIdx, file at %d\n", tell(BBCFILE) if( $detailLog );
   # skip non-represented contigs - ok since BBCFILE starts with contig names - 0 seek not allowed
-  print STDERR "Block start = 0 for $chromIdx,$srt\n" unless( $blockSrt );
   return 0 unless( $blockSrt );
   my $fpos = tell(BBCFILE);
   seek(BBCFILE,$blockSrt,0) if( $blockSrt > $fpos );

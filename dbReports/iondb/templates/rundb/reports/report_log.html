@@ -73,6 +73,26 @@ $(function() {
                 <li><a href="{{report_link}}/{{archive_files.report_pdf}}">View Backup Report PDF</a></li>
 			</ul>
 			{% endif %}
+			{% if archive_restore %}
+			<ul>
+				<li><a id="archive_restore" href="{% url "import_data" %}" data-postdata="{{archive_restore}}">Restore Report files from archived location</a></li>
+				<script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
+				<script type='text/javascript'>
+					$('#archive_restore').click(function(){
+						var url = $(this).attr('href');
+						var postData = $(this).data('postdata');
+						bootbox.confirm('Copy Report files back to local directory?', function(result){
+							if(result){
+								$.post(url, JSON.stringify(postData)).done(function(data){
+									console.log('success:', url, postData);
+								});
+							}
+						});
+						return false;
+					});
+				</script>
+			</ul>
+			{% endif %}
 		{% else %}
 			<h1>Status: {{report.status}}</h1>
 			<ul>

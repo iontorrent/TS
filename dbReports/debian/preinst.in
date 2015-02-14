@@ -15,7 +15,10 @@ case "$1" in
 		invoke-rc.d ionPlugin stop
 	fi
 	
-        invoke-rc.d apache2 stop
+    invoke-rc.d apache2 stop
+    if [ -d @ION_INSTALL_PREFIX@/iondb/ ]; then
+        find @ION_INSTALL_PREFIX@/iondb/ -name '*.pyc' -delete
+    fi
     
     # ionArchive is removed as of this version - make sure sysv links are gone
     update-rc.d -f ionArchive remove

@@ -67,6 +67,7 @@ void LatentSlate::FastExecuteInference(ShortStack &total_theory, bool update_fre
   cur_posterior.StartAtHardClassify(total_theory, update_frequency, start_frequency);
   FastStep(total_theory, false, false);
 
+  float epsilon_ll = 0.01f; // make sure LL steps move us quickly instead of just spinning wheels
   float old_ll = cur_posterior.ReturnJustLL(); // always try at least one step
   iter_done = 0;
   bool keep_optimizing = true;
@@ -79,21 +80,41 @@ void LatentSlate::FastExecuteInference(ShortStack &total_theory, bool update_fre
 
     FastStep(total_theory, update_frequency, update_sigma);
     ll_at_stage.push_back(cur_posterior.ReturnJustLL());
-    if (old_ll > cur_posterior.ReturnJustLL())
+    if ((old_ll+epsilon_ll) > cur_posterior.ReturnJustLL())
       keep_optimizing = false;
 
   }
+  // now we've iterated to frustration bias/variance
+  // but our responsibilities and allele frequency may not have converged to the latest values
+  keep_optimizing=true;
+  vector <float> old_hyp_freq;
+
+  int nreads = total_theory.my_hypotheses.size(); //
+  // always do a little cleanup on frequency even if hit max iterations
+  int post_max = max(2,max_iterations-iter_done)+iter_done;
+  while ((iter_done<post_max) & keep_optimizing){
+    iter_done++;
+    old_ll = cur_posterior.ReturnJustLL(); // do we improve?
+    old_hyp_freq = cur_posterior.clustering.max_hyp_freq;
+    cur_posterior.QuickUpdateStep(total_theory);  // updates max_ll as well
+    ll_at_stage.push_back(cur_posterior.ReturnJustLL());
+    if (cur_posterior.clustering.Compare(old_hyp_freq,nreads,0.5f))  // if total change less than 1/2 read worth
+       keep_optimizing=false;
+    if ((old_ll+epsilon_ll) > cur_posterior.ReturnJustLL())
+      keep_optimizing = false;
+  }
+
   // evaluate likelihood of current parameter set
   // currently only done for bias
   cur_posterior.params_ll = bias_generator.BiasLL();
 }
 
 
-void LatentSlate::ScanStrandPosterior(ShortStack &total_theory,bool vs_ref) {
+void LatentSlate::ScanStrandPosterior(ShortStack &total_theory,bool vs_ref, int max_detail_level) {
   // keep information on distribution by strand
   if (!cur_posterior.ref_vs_all.scan_done){
 
-    cur_posterior.ref_vs_all.DoPosteriorFrequencyScan(total_theory, cur_posterior.clustering, true, ALL_STRAND_KEY, vs_ref);
+    cur_posterior.ref_vs_all.DoPosteriorFrequencyScan(total_theory, cur_posterior.clustering, true, ALL_STRAND_KEY, vs_ref, max_detail_level);
     cur_posterior.gq_pair = cur_posterior.ref_vs_all; // pairwise analysis identical
   }
 
@@ -147,12 +168,12 @@ void HypothesisStack::InitForInference(PersistingThreadObjects &thread_objects, 
 }
 
 
-void HypothesisStack::ExecuteInference() {
-
+void HypothesisStack::ExecuteInference(int max_detail_level) {
   // now with unrestrained inference
-  ExecuteExtremeInferences();
+  ExecuteExtremeInferences(max_detail_level);
   // set up our filter
   cur_state.bias_checker.UpdateBiasChecker(total_theory);
+  if(max_detail_level>0) cur_state.ScanStrandPosterior(total_theory,true, max_detail_level);
 }
 
 void HypothesisStack::SetAlternateFromMain() {
@@ -164,7 +185,7 @@ void HypothesisStack::SetAlternateFromMain() {
 
 
 
-float HypothesisStack::ExecuteOneRestart(vector<float> &restart_hyp){
+float HypothesisStack::ExecuteOneRestart(vector<float> &restart_hyp, int max_detail_level){
   LatentSlate tmp_state;
 
   tmp_state = cur_state;
@@ -175,7 +196,7 @@ float HypothesisStack::ExecuteOneRestart(vector<float> &restart_hyp){
   tmp_state.ResetToOrigin(); // everyone back to starting places
 
   tmp_state.LocalExecuteInference(total_theory, true, true, restart_hyp); // start at reference
-  tmp_state.ScanStrandPosterior(total_theory,true);
+  if(max_detail_level<1) tmp_state.ScanStrandPosterior(total_theory,true);
   float restart_LL=tmp_state.cur_posterior.ReturnMaxLL();
 
   if (cur_state.cur_posterior.ReturnMaxLL() <restart_LL) {
@@ -214,9 +235,9 @@ void HypothesisStack::TriangulateRestart(){
 }
 
 // try altenatives to the main function to see if we have a better fit somewhere else
-void HypothesisStack::ExecuteExtremeInferences() {
+void HypothesisStack::ExecuteExtremeInferences(int max_detail_level) {
   for (unsigned int i_start=0; i_start<try_hyp_freq.size(); i_start++){
-    ll_record[i_start] = ExecuteOneRestart(try_hyp_freq[i_start]);
+    ll_record[i_start] = ExecuteOneRestart(try_hyp_freq[i_start], max_detail_level);
   }
   //TriangulateRestart();
   RestoreFullInference(); // put total_theory to be consistent with whoever won
@@ -419,7 +440,7 @@ void EnsembleEval::ScanSupportingEvidence(float &mean_ll_delta,  int i_allele) {
   mean_ll_delta = 10.0f * mean_ll_delta / log(10.0f); // phred-scaled
 }
 
-void EnsembleEval::ApproximateHardClassifierForReadsFromMultiAlleles(vector<int> &read_allele_id, vector<bool> &strand_id){
+void EnsembleEval::ApproximateHardClassifierForReadsFromMultiAlleles(vector<int> &read_allele_id, vector<bool> &strand_id, vector<int> &dist_to_left, vector<int> &dist_to_right){
   // in fact this is a lot easier
   read_allele_id.assign(read_stack.size(), -1);
   for (unsigned int i_read = 0; i_read < read_allele_id.size(); i_read++) {
@@ -432,22 +453,43 @@ void EnsembleEval::ApproximateHardClassifierForReadsFromMultiAlleles(vector<int>
   for (unsigned int i_read = 0; i_read < strand_id.size(); i_read++) {
     strand_id[i_read] = not read_stack[i_read]->is_reverse_strand;
   }
+
+  // for each variant, calculate its' position within the soft clipped read
+  // distance to left and distance to right
+  dist_to_left.assign(read_stack.size(), -1);
+  dist_to_right.assign(read_stack.size(), -1);
+
+  int position0 = variant->position -1; // variant->position 1-base: vcflib/Variant.h
+  for (unsigned int i_read = 0; i_read < strand_id.size(); i_read++) {
+    if (read_allele_id[i_read] > -1){
+      //fprintf(stdout, "position0 =%d, read_stack[i_read]->align_start = %d, read_stack[i_read]->align_end = %d, read_stack[i_read]->left_sc = %d, read_stack[i_read]->right_sc = %d\n", (int)position0, (int)read_stack[i_read]->align_start, (int)read_stack[i_read]->align_end, (int)read_stack[i_read]->left_sc, (int)read_stack[i_read]->right_sc);
+      //fprintf(stdout, "dist_to_left[%d] = =%d, dist_to_right[%d] = %d\n", (int)i_read, (int)(position0 - read_stack[i_read]->align_start), (int)i_read, (int)(read_stack[i_read]->align_end - position0));
+
+      dist_to_left[i_read] = position0 - read_stack[i_read]->align_start;
+      assert ( dist_to_left[i_read] >=0 );
+      dist_to_right[i_read] = read_stack[i_read]->align_end - position0;
+      assert ( dist_to_right[i_read] >=0 );
+    }
+  }
 }
 
-void EnsembleEval::ApproximateHardClassifierForReads(vector<int> &read_allele_id, vector<bool> &strand_id)
+void EnsembleEval::ApproximateHardClassifierForReads(vector<int> &read_allele_id, vector<bool> &strand_id, vector<int> &dist_to_left, vector<int> &dist_to_right)
 {
-  ApproximateHardClassifierForReadsFromMultiAlleles(read_allele_id, strand_id);
+  ApproximateHardClassifierForReadsFromMultiAlleles(read_allele_id, strand_id, dist_to_left, dist_to_right);
 }
 
 
 
 int EnsembleEval::DetectBestMultiAllelePair()
 {
-  vector<int> read_id;
-  vector<bool> strand_id;
+  vector<int> read_id;        // vector of allele ids per read, -1 = outlier, 0 = ref, >0 real allele
+  vector<bool> strand_id;     // vector of forward (true) or reverse (false) per read
+  vector<int> dist_to_left;   // vector of distances from allele position to left scoft clip per read
+  vector<int> dist_to_right;  // vector of distances from allele position to left scoft clip per read
+
   int best_alt_ndx = 0; // forced choice with ref
 
-  ApproximateHardClassifierForReads(read_id, strand_id);
+  ApproximateHardClassifierForReads(read_id, strand_id, dist_to_left, dist_to_right);
 
   //@TODO: just get the plane off the ground
   //@TODO: do the top pair by responsibility
@@ -497,7 +539,7 @@ void EnsembleEval::ComputePosteriorGenotype(int _alt_allele_index,float local_mi
      reject_status_quality_score);
 }
 
-void EnsembleEval::MultiAlleleGenotype(float local_min_allele_freq, vector<int> &genotype_component, float &gt_quality_score, float &reject_status_quality_score)
+void EnsembleEval::MultiAlleleGenotype(float local_min_allele_freq, vector<int> &genotype_component, float &gt_quality_score, float &reject_status_quality_score, int max_detail_level)
 {
   // detect best allele hard classify
  // DetectBestAlleleHardClassify(); //diploid choice set
@@ -509,7 +551,7 @@ void EnsembleEval::MultiAlleleGenotype(float local_min_allele_freq, vector<int> 
   // scan gq_pair
   allele_eval.cur_state.cur_posterior.gq_pair.DoPosteriorFrequencyScan(allele_eval.total_theory,
                                                                              allele_eval.cur_state.cur_posterior.clustering,
-                                                                             true, ALL_STRAND_KEY, false);
+                                                                             true, ALL_STRAND_KEY, false, max_detail_level);
 
   //call-germline
   int genotype_call;

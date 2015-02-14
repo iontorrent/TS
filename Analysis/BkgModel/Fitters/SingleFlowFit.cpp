@@ -153,7 +153,7 @@ void single_flow_optimizer::FitKrateOneFlow(int fnum, float *evect, BeadParams *
   cur_hits = oneFlowFitKrate->calc_trace.GetEvalCount();
   p->Ampl[fnum] = oneFlowFitKrate->ReturnNthParam (AMPLITUDE);
   p->kmult[fnum] = oneFlowFitKrate->ReturnNthParam (KMULT);
-
+  p->tauB[fnum] = oneFlowFitKrate->calc_trace.tauB; // save tauB for output to trace.h5
 
   // store output for later
   oneFlowFitKrate->SetWeightVector (emphasis_data.EmphasisVectorByHomopolymer[emphasis_data.numEv-1]);
@@ -179,6 +179,7 @@ void single_flow_optimizer::FitThisOneFlow (int fnum, float *evect, BeadParams *
   oneFlowFit->Fit (gauss_newton_fit, max_fit_iter, signal_corrected); // Not enough evidence to warrant krate fitting to this flow, do the simple thing.
   cur_hits = oneFlowFit->calc_trace.GetEvalCount();
   p->Ampl[fnum] = oneFlowFit->ReturnNthParam (AMPLITUDE);
+  p->tauB[fnum] = oneFlowFit->calc_trace.tauB;   // save tauB for output to trace.h5
 
   // re-calculate residual based on a the highest hp weighting vector (which is the most flat)
   oneFlowFit->SetWeightVector (emphasis_data.EmphasisVectorByHomopolymer[emphasis_data.numEv-1]);
@@ -203,6 +204,7 @@ void single_flow_optimizer::FitProjection (int fnum, float *evect, BeadParams *p
   ProjectionFit->ProjectionSearch (signal_corrected);
 
   p->Ampl[fnum] = ProjectionFit->paramA;
+  p->tauB[fnum] = ProjectionFit->calc_trace.tauB;   // save tauB for output to trace.h5
 
   // re-calculate residual based on a the highest hp weighting vector (which is the most flat)
   ProjectionFit->SetWeightVector (emphasis_data.EmphasisVectorByHomopolymer[emphasis_data.numEv-1]);
@@ -240,7 +242,7 @@ void single_flow_optimizer::FitAlt (int fnum, float *evect, BeadParams *p,  erro
   // fix direct accesses of variables at some point
   p->Ampl[fnum] = AltFit->paramA[AMPLITUDE];
   p->kmult[fnum] = AltFit->paramA[KMULT];
-
+  p->tauB[fnum] = AltFit->calc_trace.tauB;   // save tauB for output to trace.h5
 
   // re-calculate residual based on a the highest hp weighting vector (which is the most flat)
   AltFit->SetWeightVector (emphasis_data.EmphasisVectorByHomopolymer[emphasis_data.numEv-1]);

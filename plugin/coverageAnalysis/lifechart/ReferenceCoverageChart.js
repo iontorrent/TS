@@ -1,6 +1,6 @@
 // html for chart container and filters bar - note these are invisible and moved into position later
 document.write('\
-<div id="RC-chart" style="border:2px solid #666;display:none">\
+<div id="RC-chart" class="unselectable" style="border:2px solid #666;display:none">\
   <div id="RC-titlebar" class="grid-header" style="min-height:24px;border:0">\
     <span id="RC-collapsePlot" style="float:left" class="ui-icon ui-icon-triangle-1-n" title="Collapse View"></span>\
     <span class="table-title" style="float:none">Reference Coverage Chart</span>\
@@ -37,6 +37,7 @@ document.write('\
       <input type="checkbox" id="RC-showLegend" checked="checked"></td>\
     <td class="nwrap"><span class="flyhelp" id="RC-numPointsLabel">Bars/Points</span>:\
       <input type="text" class="numSearch" id="RC-numPoints" value=200 size=4>&nbsp;<span id="RC-numBars"></span></td>\
+    <td><input id="RC-export" type="button" value="Export"></td>\
   </tr></table>\
   <table><tr>\
     <td class="nwrap">Reference Region:</td>\
@@ -78,6 +79,16 @@ and other controls on the options panel. Depending on the total number of contig
 Zoom In button may also be available to view coverage over all contigs as a single stand.<br/>\
 Look for additional fly-over help on or near the controls provided.\
 </div>\
+<div id="RC-mask" class="grid-mask"></div>\
+<div id="RC-dialog" class="tools-dialog" style="width:450px;display:none">\
+  <div id="RC-dialog-title" class="title">Export Targets in View</div>\
+  <div id="RC-dialog-content" class="content">...</div>\
+  <div id="RC-dialog-buttons" class="buttons">\
+    <input type="button" value="OK" id="RC-exportOK">\
+    <input type="button" value="Cancel" onclick="$(\'#RC-dialog\').hide();$(\'#RC-mask\').hide();">\
+  </div>\
+</div>\
+<div id="RC-helptext" class="helpblock" style="display:none"></div>\
 <input type="hidden" id="RC-ViewRequest"/>\
 ');
 
@@ -92,7 +103,7 @@ $(function () {
   var useExCan = (fixIE && !useFlash);
 
   // minimum sizes for chart widget
-  var def_minWidth = 620;
+  var def_minWidth = 625;
   var def_minHeight = 200;
 
   // configure widget size and file used from placement div attributes
@@ -108,6 +119,7 @@ $(function () {
     $('#ReferenceCoverageChart').hide();
     return;
   }
+  var cbcsize = 1000; // coarse binning size
   var cbcFile = $("#ReferenceCoverageChart").attr("cbcfile");
   if( cbcFile == undefined ) cbcFile = '';
   var wgncovFile = $("#ReferenceCoverageChart").attr("wgncovfile");
@@ -124,6 +136,13 @@ $(function () {
 
   var startOutlierOffScale = $("#ReferenceCoverageChart").attr("outlieroffscale");
   startOutlierOffScale = (startOutlierOffScale != undefined);
+
+  var nooverlay = $("#ReferenceCoverageChart").attr("nooverlay");
+  nooverlay = (nooverlay != undefined);
+  if( nooverlay ) {
+    $('#RC-overlayLabel').hide();
+    $('#RC-overPlot').hide();
+  }
 
   var tmp = $('#ReferenceCoverageChart').width();
   if( tmp < def_minWidth ) tmp = def_minWidth;
@@ -181,6 +200,10 @@ $(function () {
         $('#RC-chart').resizable(resiz_def);
       });
     }
+    if( nooverlay ) {
+      $('#RC-overlayLabel').hide();
+      $('#RC-overPlot').hide();
+    }
     $("#RC-chart").css('height','auto');
   });
 
@@ -221,6 +244,7 @@ $(function () {
       if( overzoom ) return false;
       var chr = dataTable[binNum][DataField.contig_id];
       if( plotStats.binnedChroms ) {
+        plotStats.zmSrtBin = binNum;
         var i = chr.indexOf(' - ');
         if( i >= 0 ) {
           plotStats.zmSrtChrom = chr.substr(0,i);
@@ -323,6 +347,7 @@ $(function () {
     maxXaxisLabels : 25,
     multiChrom : false,
     binnedChroms : false,
+    zmSrtBin : 0,
     zmSrtChrom : "",
     zmEndChrom : "",
     zmOutChrom : false,
@@ -368,6 +393,8 @@ $(function () {
     pos_srt : 0,
     pos_end : 0,
     maxrows : 200,
+    srt_bin : 0,
+    end_bin : 0,
     clipleft : 0,
     clipright : 100,
     numrec : 0
@@ -393,22 +420,25 @@ $(function () {
     fwdOntReads : "Forward On-target",
     revOffReads : "Reverse Off-target",
     revOntReads : "Reverse On-target",
-    precentOntarg : "Percent On-Target",
+    percentOntarg : "Percent On-Target",
     fwdBias : "Fwd Strand Bias"
   }
 
   var ColorSet = {
     allReads : "rgb(128,160,192)",
-    fwdReads : "rgb(240,160,96)",
-    revReads : "rgb(64,200,96)",
+    fwdReads : "rgb(240,120,100)",
+    revReads : "rgb(100,240,120)",
     offReads : "rgb(128,160,192)",
     ontReads : "rgb(0,0,128)",
-    fwdOffReads : "rgb(255,160,96)",
-    fwdOntReads : "rgb(220,96,32)",
-    revOffReads : "rgb(96,200,160)",
-    revOntReads : "rgb(32,160,64)",
-    precentOntarg : "rgb(224,96,96)",
-    fwdBias : "rgb(200,96,160)"
+    fwdOffReads : "rgb(240,120,100)",
+    revOffReads : "rgb(100,240,120)",
+    fwdOntReads: "rgb(160,32,32)",
+    revOntReads : "rgb(32,160,32)",
+    percentOntarg : "rgb(180,143,32)",
+    fwdBias : "rgb(220,96,200)",
+    percentGC : "rgb(255,0,128)",
+    targLen : "rgb(32,96,255)",
+    gcBias : "rgb(190,190,190)"
   }
 
   function setUnzoomTitle(zoomin) {
@@ -456,6 +486,8 @@ $(function () {
       "although values greater than 200 are not recommended as this may make selection of individual bars difficult.\n"+
       "Note that the number of bars represented in the 'Zoom In' view, where coverage is visualized along the whole genome "+
       "with a proportional number of bins per chromosome, is fixed at 200 regardless of the current Bars/Points setting." );
+    $("#RC-export").attr( "title", "Click to open Export Reference Coverage in View dialog." );
+    $("#RC-dialog-title").html( "Export Reference Coverage in View" );
     $("#RC-filterChromLabel").attr( "title",
       "Use this selector to select a particular chromosome (or contig) of the reference to view or to go to an overview " +
       "across the whole reference by selecting the 'ALL' value. " +
@@ -513,6 +545,7 @@ $(function () {
     lastHoverBar.postZoom = true;
     // deal with range zooms across multiple and single contig views
     if( plotStats.multiChrom ) {
+      plotStats.zmSrtBin = binSrt; // for export
       plotStats.zmSrtChrom = dataTable[binSrt][DataField.contig_id];
       plotStats.zmEndChrom = dataTable[binEnd][DataField.contig_id];
       if( plotStats.binnedChroms ) {
@@ -532,6 +565,7 @@ $(function () {
       }
     }
     // escape multi-contig view since only one contig is now selected
+    plotStats.zmSrtBin = 0;
     plotStats.zmSrtChrom = "";
     plotStats.zmEndChrom = "";
     plotStats.multiChrom = false;
@@ -647,7 +681,7 @@ $(function () {
     if( item )
     {
       var tmp = item.series.label;
-      if( tmp == LegendLabels.fwdBias || tmp == LegendLabels.precentOntarg ) label = tmp;
+      if( tmp == LegendLabels.fwdBias || tmp == LegendLabels.percentOntarg ) label = tmp;
     }
     if( label != '' ) {
       bgColor = item.series.color;
@@ -675,6 +709,8 @@ $(function () {
     lastHoverBar.sticky = sticky;
     lastHoverBar.label = label;
     $('#RC-tooltip-body').html( sticky ? tooltipMessage(label,binNum) : tooltipHint(label,binNum));
+
+    var whiteText = (label === LegendLabels.fwdBias || label === LegendLabels.percentOntarg);
     var posx = pos.pageX+10;
     var posy = pos.pageY-10;
     var minTipWidth = 0;
@@ -691,7 +727,8 @@ $(function () {
     }
     $('#RC-tooltip').css({
       position: 'absolute', left: posx, top: posy, minWidth: minTipWidth,
-      background: bgColor, padding: (sticky ? 3 : 4)+'px',
+      background: bgColor, padding: '3px '+(sticky ? '7px' : '4px'),
+      color: whiteText ? "white" : "black",
       border: (sticky ? 2 : 1)+'px solid #444',
       opacity: sticky ? 1: 0.7
     }).appendTo("body").fadeIn(sticky ? 10 : 100);
@@ -732,12 +769,12 @@ $(function () {
       } else if( dataTable[bin][DataField.pos_start] == 1 && dataTable[bin][DataField.pos_end] == plotStats.chrLens[chr] ) {
         return chr;
       } else if( dataTable[bin][DataField.pos_start] == dataTable[bin][DataField.pos_end] ) {
-        return chr+":"+dataTable[bin][DataField.pos_start];
+        return chr+":"+commify(dataTable[bin][DataField.pos_start]);
       }
-      return chr+":"+dataTable[bin][DataField.pos_start]+"-"+dataTable[bin][DataField.pos_end];
+      return chr+":"+commify(dataTable[bin][DataField.pos_start])+"-"+commify(dataTable[bin][DataField.pos_end]);
     }
     var totalReads = dataTable[bin][DataField.fwd_reads] + dataTable[bin][DataField.rev_reads];
-    if( id === LegendLabels.precentOntarg ) {
+    if( id === LegendLabels.percentOntarg ) {
       var onTarget = dataTable[bin][DataField.fwd_ont]+dataTable[bin][DataField.rev_ont];
       return (totalReads > 0 ? sigfig(100 * onTarget / totalReads) : 0)+'%';
     } else if( id === LegendLabels.fwdBias ) {
@@ -753,21 +790,21 @@ $(function () {
     $('#RC-tooltip-zoomin').show();
     var br = "<br/>";
     var i = id.indexOf(' ');
-    var dirStr = id.substr(0,i);
+    var dirStr = id.substr(0,i+1);
     var dir = dirStr.charAt(0);
     var binChrom = dataTable[bin][DataField.pos_start] < 0;
     var regionLen = dataTable[bin][DataField.pos_end];
     if( !binChrom ) regionLen += 1-dataTable[bin][DataField.pos_start];
     var numReads = dataTable[bin][DataField.fwd_reads]+dataTable[bin][DataField.rev_reads];
-    var msg = "<span style='white-space:nowrap'>"+id+" in bin#"+(bin+1)+".</span>"+br;
+    var msg = "(Bin#"+(bin+1)+")"+br;
     if( binChrom ) {
       msg += "Contigs: "+dataTable[bin][DataField.contig_id]+br;
       msg += "Number of contigs: "+(-dataTable[bin][DataField.pos_start])+br;
-      msg += "Total contig length: "+regionLen+br;
+      msg += "Total contig length: "+commify(regionLen)+br;
     } else {
       msg += "Contig: "+dataTable[bin][DataField.contig_id]+br;
-      msg += "Region: "+dataTable[bin][DataField.pos_start]+"-"+dataTable[bin][DataField.pos_end]+br;
-      msg += "Region length: "+regionLen+br;
+      msg += "Region: "+commify(dataTable[bin][DataField.pos_start])+"-"+commify(dataTable[bin][DataField.pos_end])+br;
+      msg += "Region length: "+commify(regionLen)+br;
     }
     if( id == LegendLabels.fwdBias ) {
       var bias = numReads >  0 ? 100 * dataTable[bin][DataField.fwd_reads] / numReads : 50;
@@ -775,8 +812,8 @@ $(function () {
       msg += bias >= 50 ? "Forward" : "Reverse";
       bias = Math.abs(2*bias-100);
       return msg + " bias: "+sigfig(bias)+'%'+br;
-    } else if( id == LegendLabels.precentOntarg ) {
-      msg += "Total base reads: "+numReads+br;
+    } else if( id == LegendLabels.percentOntarg ) {
+      msg += "Total base reads: "+commify(numReads)+br;
       var onTarget = dataTable[bin][DataField.fwd_ont]+dataTable[bin][DataField.rev_ont];
       var pcOntarg = numReads >  0 ? 100 * onTarget / numReads : 0;
       if( numReads >  0 ) msg += "On-target reads: "+sigfig(pcOntarg)+'%'+br;
@@ -784,8 +821,8 @@ $(function () {
     }
     var dirReads = dir == 'T' ? numReads : dataTable[bin][dir == 'F' ? DataField.fwd_reads : DataField.rev_reads];
     var aveReads = dirReads / (regionLen);
-    msg += dirStr + " base reads: "+dirReads+br;
-    msg += "Average base read depth:  "+sigfig(aveReads)+br;
+    msg += dirStr + "base reads: "+commify(dirReads)+br;
+    msg += "Average "+(dir == 'T' ? "" : dirStr.toLowerCase())+"base read depth:  "+commify(sigfig(aveReads))+br;
     if( dir == 'T' ) {
       var bias = numReads >  0 ? 100 * dataTable[bin][DataField.fwd_reads] / numReads : 0;
       msg += "Percent forward reads: "+sigfig(bias)+'%'+br;
@@ -797,16 +834,16 @@ $(function () {
       var onTarget = dataTable[bin][DataField.fwd_ont]+dataTable[bin][DataField.rev_ont];
       var dirTarg = dir == 'T' ? onTarget : dataTable[bin][dir == 'F' ? DataField.fwd_ont : DataField.rev_ont];
       var pcOntarg = dirReads >  0 ? 100 * dirTarg / dirReads : 0;
-      msg += dirStr + " on-target base reads: "+dirTarg+br;
-      msg += dirStr + " off-target base reads: "+(dirReads-dirTarg)+br;
-      msg += dirStr + " on-target fraction: "+sigfig(pcOntarg)+'%'+br;
+      msg += dirStr + "on-target base reads: "+commify(dirTarg)+br;
+      msg += dirStr + "off-target base reads: "+commify(dirReads-dirTarg)+br;
+      msg += dirStr + "on-target fraction: "+sigfig(pcOntarg)+'%'+br;
     }
     return msg;
   }
 
   function sigfig(val) {
     var av = Math.abs(val);
-    if( av == 0 ) return "0";
+    if( av == parseInt(av) ) return val.toFixed(0);
     if( av >= 100 ) return val.toFixed(0);
     if( av >= 10 ) return val.toFixed(1);
     if( av >= 1 ) return val.toFixed(2);
@@ -865,7 +902,16 @@ $(function () {
     this.value = val;
     if( val != plotParams.numPoints ) {
       covFilter.maxrows = plotParams.numPoints = val;
-      zoomData();
+      // Selected bars are fixed for Zoom In mode so just update GUI
+      if( plotStats.zoomInMode ) {
+        if( plotParams.numPoints != plotStats.numPoints ) {
+          $('#RC-numBars').text('('+plotStats.numPoints+')');
+        } else {
+          $('#RC-numBars').text('');
+        }
+      } else {
+        zoomData();
+      }
     }
   });
     
@@ -881,11 +927,11 @@ $(function () {
     if( selChr > 0 ) {
       val = '';
     } else {
-      var j = val.indexOf(':');
+      var j = val.lastIndexOf(':');
       if( j >= 0 ) {
         chr = $.trim(val.substring(0,j));
         val = $.trim(val.substring(j+1));
-        if( $('#RC-selectChrom option[value='+chr+']').length == 0 ) chr = '';
+        if( $('#RC-selectChrom option[value="'+chr+'"]').length == 0 ) chr = '';
       } else {
         chr = '';
       }
@@ -979,6 +1025,7 @@ $(function () {
   function setContig(chr) {
     if( chr == '' ) return;
     if( chr == 'ALL' ) {
+      plotStats.zmSrtBin = 0;
       plotStats.zmSrtChrom = "";
       plotStats.zmEndChrom = "";
       covFilter.chrom = '';
@@ -1011,6 +1058,7 @@ $(function () {
       plotStats.zoomInMode = false;
     }
     if( plotStats.zoomInMode || this.value == "Zoom In" ) {
+      plotStats.zmSrtBin = 0;
       plotStats.zmSrtChrom = "";
       plotStats.zmEndChrom = "";
       plotStats.zmOutChrom = false;
@@ -1035,6 +1083,7 @@ $(function () {
     }
     // always zoom out to full view if in multiChrom view
     if( plotStats.multiChrom ) {
+      plotStats.zmSrtBin = 0;
       plotStats.zmSrtChrom = "";
       plotStats.zmEndChrom = "";
     }
@@ -1068,7 +1117,7 @@ $(function () {
 
   function linkIGV(region) {
     if( region == undefined || region == null || region == "" ) {
-      var i = plotStats.chrList.indexOf(':');
+      var i = plotStats.chrList.indexOf('\t');
       if( i > 0 ) { region = plotStats.chrList.substr(0,i); }
     }
     var locpath = window.location.pathname.substring(0,window.location.pathname.lastIndexOf('/'));
@@ -1104,7 +1153,7 @@ $(function () {
     selObj.empty();
     selObj.css('width','66px');
     if( plotStats.chrList == '' ) return;
-    var chrs = plotStats.chrList.split(':');
+    var chrs = plotStats.chrList.split('\t');
     plotStats.totalChroms = chrs.length - 1;
     $('#RC-numChroms').text( '('+plotStats.totalChroms+')' );
     if( plotStats.totalChroms > 1 ) {
@@ -1192,6 +1241,7 @@ $(function () {
     }
     // zoom to new contig range
     if( newcv >= dataTable.length ) {
+      plotStats.zmSrtBin = 0;
       plotStats.zmSrtChrom = "";
       plotStats.zmEndChrom = "";
       return;
@@ -1204,6 +1254,7 @@ $(function () {
       srtRange = endRange - newcv;
     }
     // need to reset these for correct level of zoom-out, etc.
+    plotStats.zmSrtBin = srtRange;
     plotStats.zmSrtChrom = dataTable[srtRange][DataField.contig_id];
     plotStats.zmEndChrom = dataTable[endRange-1][DataField.contig_id];
     // reduce data:- could later just set limits of loaded contigs for viewing
@@ -1244,7 +1295,7 @@ $(function () {
     // finish up last bin if round-off error in binMod
     if( binCnt > 1 ) {
       dataTable[binIndx][0] += ' - ' + dataTable[i-1][0];
-      dataTable[binIndx][1] = binCnt;
+      dataTable[binIndx][1] = -binCnt;
     }
     dataTable = dataTable.slice( 0, plotParams.numPoints );
     plotStats.endRange = dataTable.length;
@@ -1263,6 +1314,7 @@ $(function () {
       if( siz < 0 ) siz = 1;
     }
     // reset flags based on viewing single contig
+    plotStats.zmSrtBin = 0;
     plotStats.zmSrtChrom = "";
     plotStats.zmEndChrom = "";
     plotStats.zmOutChrom = false;
@@ -1311,7 +1363,7 @@ $(function () {
     var readChrList = (plotStats.chrList == '');
     var chrid = '';
     var noTargets = false;
-    var srcf = (covFilter.chrom == '' ? covFilter.inputfile : 'lifechart/region_coverage.php3');
+    var srcf = (covFilter.chrom === '' ? covFilter.inputfile : 'lifechart/region_coverage.php3');
     dataTable = [];
     $('#RC-message').text('Loading...');
     $.ajaxSetup( {dataType:"text",async:false} );
@@ -1334,7 +1386,7 @@ $(function () {
           dataTable.push( fields );
           if( readChrList && chrid != fields[0] ) {
             chrid = fields[0];
-            plotStats.chrList += chrid + ':';
+            plotStats.chrList += chrid + '\t';
             plotStats.chrLens[chrid] = parseInt(fields[2]);
           }
         }
@@ -1345,9 +1397,14 @@ $(function () {
   }
 
   function commify(val) {
-    // expects positive integers
     var jrs = val.toString();
-    return jrs.replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,");
+    var dps = "";
+    var i = jrs.indexOf('.');
+    if( i >= 0 ) {
+      dps = jrs.substring(i);
+      jrs = jrs.substring(0,i);
+    }
+    return jrs.replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,")+dps;
   }
 
   function updatePlotStats() {
@@ -1546,7 +1603,8 @@ $(function () {
       if( $('#RC-offScaleOutlier').attr('checked') ) {
         if( ymax > def_outlierFactor*pmax ) {
           ymax = 1.05 * pmax;
-        } else {
+        }
+        if( ymin < def_outlierFactor*pmin ) {
           ymin = 1.05 * pmin;
         }
       }
@@ -1602,8 +1660,8 @@ $(function () {
       var d3 = [];
       if( plotParams.overPlot == 1 ) {
         aLabel = "Reads On-Target";
-        pLabel = LegendLabels.precentOntarg;
-        pColor = ColorSet.precentOntarg;
+        pLabel = LegendLabels.percentOntarg;
+        pColor = ColorSet.percentOntarg;
         for( var i = 0; i < plotStats.numPoints; ++i ) {
           var totalReads = dataTable[i][f_reads] + dataTable[i][r_reads];
           if( totalReads <= 0 ) continue;
@@ -1639,6 +1697,119 @@ $(function () {
     hideTooltip();
     plotObj = $.plot(placeholder, plotData, options);
     canvas = plotObj.getCanvas();
+  }
+
+  $('#RC-export').click( function() {
+    // determine binning strategy for report
+    var i = plotStats.xTitle.indexOf('  (');
+    var contigs = plotStats.xTitle.substr(0,i);
+    var spans = plotStats.xTitle.substring(i+3,plotStats.xTitle.length-1);
+    var lead = contigs.indexOf(':') < 0 ? "Contig"+(plotStats.multiChrom ? "s" : "") : "Region";
+    var numbins = plotStats.maxX - plotStats.minX;
+    spans += " in "+commify(numbins)+" bins"
+    var bedDisable = "";
+    var wstr = "";
+    if( plotStats.multiChrom ) {
+      if( plotStats.zoomInMode ) {
+        wstr = plotStats.zoomInMode ? "Apportioned by relative contig lengths" : "Whole contig lengths";
+      } else if( plotStats.binnedChroms ) {
+        var nchr = plotStats.chromsInView / numbins;
+        var ichr = parseInt(nchr);
+        if( ichr != nchr ) ichr = ichr + " or " + (ichr+1);
+        wstr = "Multiple ("+ichr+") whole contig lengths";
+        bedDisable = 'style="display:none"'; //'disabled="disabled"';
+      } else {
+        wstr = "Whole contig lengths";
+      }
+    } else {
+      var binint = parseInt(plotStats.targetBinSize);
+      var binfrc = plotStats.targetBinSize - binint;
+      if( binfrc == 0 ) {
+        wstr = commify(binint)+" base"+(binint > 1 ? "s" : "");
+      } else if( plotStats.targetBinSize > 10*cbcsize ) {
+        // to account CBC file pre-binned kick-in test used in code
+        var numcbcs = plotStats.targetBinSize / cbcsize;
+        binint = parseInt(numcbcs);
+        if( numcbcs > binint ) ++binint;
+        binint *= cbcsize;
+        var sbins =  plotStats.targetsRepresented - binint * (numbins-1);
+        wstr = commify(binint)+" bases ("+commify(sbins)+" in last bin)";
+      } else {
+        var sbins = plotStats.targetsRepresented - binint * numbins;
+        var sstr = "more";
+        if( binfrc >= 0.5 ) {
+          sstr = "less";
+          ++binint;
+          sbins = numbins - sbins;
+        }
+        wstr = "~"+commify(binint)+" bases (1 "+sstr+" in "+commify(sbins)+" bins)";
+      }
+    }
+    // fill in dialog
+    var $content = $('#RC-dialog-content');
+    $content.html(lead+' in view: '+contigs+'<br/>Spanning: '+spans+'<br/>Bin width: '+wstr+'<br/><br/>' );
+    $content.append('<p>\
+      <input type="radio" name="TS-exportTool" id="RC-ext1" value="table" checked="checked"/>\
+        <label for="RC-ext1">Download as tsv table file.</label><br/>\
+      <input type="radio" name="TS-exportTool" id="RC-ext2" value="bed" '+bedDisable+'"+/>\
+        <label for="RC-ext2" '+bedDisable+'>Download as a 3-column bed file.</label></p>' );
+    $('#RC-exportOK').show();
+    // open dialog over masked out table
+    var pos = $('#RC-export').offset();
+    var x = pos.left+6+($('#RC-export').width()-$('#RC-dialog').width())/2;
+    var y = pos.top+$('#RC-export').height()+8;
+    $('#RC-dialog').css({ left:x, top:y });
+    pos = $('#RC-chart').offset();
+    var hgt = $('#RC-chart').height()+4; // extra for borders
+    var wid = $('#RC-chart').width()+4;
+    $('#RC-mask').css({ left:pos.left, top:pos.top, width:wid, height:hgt });
+    $('#RC-mask').show();
+    $('#RC-dialog').show();
+  });
+
+  $('#RC-exportOK').click(function(e) {
+    $('#RC-dialog').hide();
+    $('#RC-mask').hide();
+    // the following doesn't work when including DOC and RCC code and but not displaying (exiting immediately)
+    var op = $("input[@name='TS-exportTool']:checked").val();
+    if( op == "table" ) {
+      exportTSV(true);
+    } else if( op == "bed" ) {
+      exportTSV(false);
+    }
+  });
+
+  function exportTSV(toTable) {
+    // choose suitable output file name
+    var fname = "RCC_download";
+    if( chrcovFile ) {
+      fname = chrcovFile;
+    } else if( wgncovFile ) {
+      fname = wgncovFile;
+    }
+    var i = fname.lastIndexOf('/');
+    if( i >= 0 ) fname = fname.substr(i+1);
+    i = fname.indexOf('.');
+    if( i >= 0 ) fname = fname.substr(0,i);
+    fname += ".ref.cov.xls";
+    // HTML5 download facility not supported for IE9 or less.
+    // Browser detection disabled on TS and form/post not working at time of writing.
+    // Hence, solution is to just GET and PHP to (re)extract and process the data already at hand in this script.
+    if( covFilter.chrom === '' ) {
+      var i = covFilter.bbcfile.lastIndexOf('/');
+      var fpath = i < 0 ? "" : covFilter.bbcfile.substring(0,i+1);
+      var binsize  = plotStats.zoomInMode ? 1 : plotStats.chromsInView / plotStats.numPoints;
+      var numlines = plotStats.zoomInMode ? plotStats.numPoints : plotStats.chromsInView;
+      window.open( "lifechart/fileslice.php3"+ "?filename="+fpath+covFilter.inputfile+"&outfile="+fname+
+        "&startline="+(plotStats.zmSrtBin+1)+"&numlines="+numlines+"&binsize="+binsize+
+        "&bedcoords="+(toTable ? 0 : 1)+"&headlines="+(toTable ? 1 : -1)+"&numfields="+(toTable ? 7 : 3) );
+    } else {
+      window.open( "lifechart/region_coverage.php3"+
+        "?bbcfile="+covFilter.bbcfile+"&cbcfile="+covFilter.cbcfile+"&maxrows="+covFilter.maxrows+
+        "&chrom="+covFilter.chrom+"&pos_srt="+covFilter.pos_srt+"&pos_end="+covFilter.pos_end+
+        "&outfile="+fname+"&srt_bin="+plotStats.minX+"&end_bin="+plotStats.maxX+
+        "&options="+(toTable ? "" : "-r") );
+    }
   }
 
   // start up customization attributes

@@ -50,7 +50,7 @@ class PluginManager(object):
     def __init__(self, gc=None):
         if not gc:
             try:
-                gc = iondb.rundb.models.GlobalConfig.objects.all().order_by('pk')[0]
+                gc = iondb.rundb.models.GlobalConfig.get()
                 default_plugin_script = gc.default_plugin_script
             except:
                 default_plugin_script = "launch.sh"

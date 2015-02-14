@@ -11,6 +11,7 @@ import xmlrpclib
 import json
 import shutil
 import time
+import datetime
 from glob import glob
 
 import sys
@@ -58,6 +59,7 @@ def submit_job(script, args, sge_queue = 'all.q', hold_jid = None):
         printtime("FAILED submitting %s job" % script)
         sys.exit()
 
+
 def wait_on_jobs(jobIds, jobName, status = "Processing", max_running_jobs = 0):
     try:
       jobserver.updatestatus(primary_key_file, status, True)
@@ -80,7 +82,8 @@ def wait_on_jobs(jobIds, jobName, status = "Processing", max_running_jobs = 0):
                 
         time.sleep(20)
 
-def get_barcode_files(parent_folder, datasets_path, bcSetName):
+
+def get_parent_barcode_files(parent_folder, datasets_path, barcodeSet):
     # try to get barcode names from datasets json, fallback on globbing for older reports
     datasetsFile = os.path.join(parent_folder,datasets_path)
     barcode_bams = []
@@ -100,19 +103,20 @@ def get_barcode_files(parent_folder, datasets_path, bcSetName):
     
     if len(barcode_bams) == 0:
         printtime("DEBUG: no barcoded files found from %s" % datasetsFile)
-        barcode_bams = glob( os.path.join(parent_folder, bcSetName+'*_rawlib.bam') )
+        barcode_bams = glob( os.path.join(parent_folder, barcodeSet+'*_rawlib.bam') )
         barcode_bams.append( os.path.join(parent_folder, 'nomatch_rawlib.bam') )    
         barcode_bams.sort()
         
     printtime("DEBUG: found %i barcodes in %s" % (len(barcode_bams), parent_folder) )
     return barcode_bams
 
+
 def barcode_report_stats(barcode_names):
     CA_barcodes_json = []
     ionstats_file_list = []
     printtime("DEBUG: creating CA_barcode_summary.json")
 
-    for bcname in barcode_names:
+    for bcname in sorted(barcode_names):
         ionstats_file = bcname + '_rawlib.ionstats_alignment.json'
         barcode_json = {"barcode_name": bcname, "AQ7_num_bases":0, "full_num_reads":0, "AQ7_mean_read_length":0}
         try:
@@ -142,6 +146,133 @@ def barcode_report_stats(barcode_names):
     if not os.path.exists('ionstats_alignment.json'):
         ionstats.reduce_stats(ionstats_file_list,'ionstats_alignment.json')
 
+
+def generate_datasets_json(barcodeSet, found_barcode_names, barcodeSet_Info, sample, barcodeSamples, runID):
+    # Note this writes a file with some but not all of regular report's datasets_pipeline.json parameters
+    
+    datasets_json_path = "datasets_pipeline.json"
+    
+    datasets = {
+        "meta" : {
+            "format_name"       : "Dataset Map",
+            "format_version"    : "1.0",
+            "generated_by"      : "combineReports.py",
+            "creation_date"     : datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        },
+        "datasets" : [],
+        "read_groups" : {}
+    }
+
+    no_barcode_group = runID+".nomatch" if barcodeSet else runID
+
+    datasets["datasets"].append({
+        "dataset_name"      : sample + "/No_barcode_match" if barcodeSet else sample,
+        "file_prefix"       : "nomatch_rawlib" if barcodeSet else "rawlib",
+        "read_groups"       : [no_barcode_group,]
+    })
+    
+    datasets["read_groups"][no_barcode_group] = {
+        "index"             : 0,
+        "sample"            : sample,
+    }
+
+    if barcodeSet:
+        datasets["barcode_config"] = {"barcode_id": barcodeSet}
+        try:
+            for bcname in sorted(found_barcode_names):
+
+                if bcname == 'nomatch':
+                    continue
+
+                bcsample = [k for k,v in barcodeSamples.items() if bcname in v.get('barcodes',[])]
+                bcsample = bcsample[0] if len(bcsample) == 1 else 'none'
+
+                datasets["datasets"].append({
+                    "dataset_name"      : bcsample + "/" + bcname,
+                    "file_prefix"       : '%s_rawlib' % bcname,
+                    "read_groups"       : [runID+"."+bcname,]
+                })
+
+                datasets["read_groups"][runID+"."+bcname] = {
+                    "barcode_name"      : bcname,
+                    "barcode_sequence"  : barcodeSet_Info[bcname]['sequence'],
+                    "barcode_adapter"   : barcodeSet_Info[bcname]['adapter'],
+                    "index"             : barcodeSet_Info[bcname]['index'],
+                    "sample"            : bcsample,
+                }
+        except:
+            traceback.print_exc()
+
+    with open(datasets_json_path,"w") as f:
+        json.dump(datasets, f, indent=4)
+
+    os.symlink(datasets_json_path, "datasets_basecaller.json")
+
+
+def find_barcodes_to_process(parentBAMs, barcodeSet):
+    # get barcode files to process
+    barcode_files = {}
+    barcodeSet_Info = None
+    datasets_path = 'basecaller_results/datasets_basecaller.json'
+    barcodelist_path = 'barcodeList.txt'
+
+    if not barcodeSet:
+        return barcodeSet, barcode_files, barcodeSet_Info
+
+    for bamfile in parentBAMs:
+        parent_folder = os.path.dirname(bamfile)
+        if os.path.exists(os.path.join(parent_folder,barcodelist_path)):
+            bcList_file = os.path.join(parent_folder,barcodelist_path)
+            bcSetName_new = open(bcList_file, 'r').readline().split()[1]
+            # merge barcodes only if they are from the same barcode set
+            if barcodeSet != bcSetName_new:
+                barcodeSet = False
+                printtime("ERROR: unable to merge different barcode sets: %s and %s" % (barcodeSet, bcSetName_new))
+                break
+            
+            if not barcodeSet_Info:
+                barcodeSet_Info = {'nomatch': {'index':0} }
+                try:
+                    with open(bcList_file, 'r') as f:
+                        for line in f.readlines():
+                            if line.startswith('barcode'):
+                                splitline = line.split(',')
+                                name = splitline[1]
+                                barcodeSet_Info[name] = {
+                                    'index': splitline[0].split()[1],
+                                    'sequence': splitline[2],
+                                    'adapter': splitline[3]
+                                }
+                except:
+                    traceback.print_exc()
+                
+            # get barcode BAM files
+            barcode_bams = get_parent_barcode_files(parent_folder, datasets_path, barcodeSet)
+            
+            for bc_path in barcode_bams:
+                try:
+                    bcname = [name for name in barcodeSet_Info.keys() if os.path.basename(bc_path).startswith(name)][0]
+                except:
+                    bcname = 'unknown'
+                
+                if bcname not in barcode_files:
+                    barcode_files[bcname] = {
+                        'count': 0,
+                        'bcfiles_to_merge' : []
+                    }
+                barcode_files[bcname]['filename'] = bcname + '_rawlib.bam'
+                barcode_files[bcname]['count'] += 1
+                barcode_files[bcname]['bcfiles_to_merge'].append(bc_path)
+    
+    if barcodeSet:
+        try:
+            shutil.copy(bcList_file, barcodelist_path)
+        except:  
+            traceback.print_exc()
+
+    return barcodeSet, barcode_files, barcodeSet_Info
+
+
 if __name__ == '__main__':
   
     with open('ion_params_00.json', 'r') as f:
@@ -150,8 +281,10 @@ if __name__ == '__main__':
     parentBAMs = env['parentBAMs']
     mark_duplicates = env['mark_duplicates']
     override_samples = env.get('override_samples', False)
-    sample = env.get('sample') or 'None'
+    sample = env.get('sample') or 'none'
     barcodeSamples = json.loads(env.get('barcodeSamples','{}'))
+    barcodeSet = env['barcodeId']
+    runID = env.get('runid','ABCDE')
     
     from distutils.sysconfig import get_python_lib
     script = os.path.join(get_python_lib(), 'ion', 'reports', 'combineReports_jobs.py')
@@ -173,55 +306,10 @@ if __name__ == '__main__':
     write_version()
     
     #  *** Barcodes ***
-    do_barcodes = False
-    barcodelist_path = 'barcodeList.txt'
-    datasets_path = 'basecaller_results/datasets_basecaller.json'
-    bcSetName = ""
-    csvfilename = 'alignment_barcode_summary.csv'
+    barcodeSet, barcode_files, barcodeSet_Info = find_barcodes_to_process(parentBAMs, barcodeSet)
 
-    # get barcode files to process
-    barcode_files = {}
-    for bamfile in parentBAMs:
-        parent_folder = os.path.dirname(bamfile)
-        if os.path.exists(os.path.join(parent_folder,barcodelist_path)):
-            do_barcodes = True
-            bcList_file = os.path.join(parent_folder,barcodelist_path)
-            bcSetName_new = open(bcList_file, 'r').readline().split()[1]
-            
-            # merge barcodes only if they are from the same barcode set
-            if not bcSetName:
-                bcSetName = bcSetName_new
-                with open(bcList_file, 'r') as f:
-                    barcode_names = [line.split(',')[1] for line in f.readlines() if line.startswith('barcode')]
-                    barcode_names.append('nomatch')
-            elif bcSetName != bcSetName_new:
-                do_barcodes = False
-                printtime("ERROR: unable to merge different barcode sets: %s and %s" % (bcSetName, bcSetName_new))
-                break
-                
-            # get barcode BAM files
-            barcode_bams = get_barcode_files(parent_folder, datasets_path, bcSetName)
-            for bc_path in barcode_bams:
-                try:
-                    bcname = [name for name in barcode_names if os.path.basename(bc_path).startswith(name)][0]
-                except:
-                    bcname = 'unknown'
-                
-                if bcname not in barcode_files:
-                    barcode_files[bcname] = {
-                        'count': 0,
-                        'bcfiles_to_merge' : []
-                    }
-                barcode_files[bcname]['filename'] = bcname + '_rawlib.bam'
-                barcode_files[bcname]['count'] += 1
-                barcode_files[bcname]['bcfiles_to_merge'].append(bc_path)
-  
-    if do_barcodes:
-        try:
-            shutil.copy(bcList_file, barcodelist_path)
-        except:  
-            traceback.print_exc()
-        
+    if barcodeSet:
+
         bc_jobs = []    
         #zipname = '_'+ env['resultsName']+ '.barcode.bam.zip'
         #zip_args = ['--zip', zipname]
@@ -240,7 +328,7 @@ if __name__ == '__main__':
                 
                 if override_samples:
                     bcsample = [k for k,v in barcodeSamples.items() if bcname in v.get('barcodes',[])]
-                    bcsample = bcsample[0] if len(bcsample) == 1 else 'None'
+                    bcsample = bcsample[0] if len(bcsample) == 1 else 'none'
                     merge_args += ['--new-sample-name', bcsample]
                 
                 for bam in barcode_file_dict['bcfiles_to_merge']:
@@ -289,7 +377,7 @@ if __name__ == '__main__':
         merge_args.append('--mark-duplicates')
   
     if override_samples:
-        if do_barcodes:
+        if barcodeSet:
             bam_files_to_merge = [barcode_file_dict['filename'] for barcode_file_dict in barcode_files.values()]
         else:
             bam_files_to_merge = parentBAMs
@@ -326,8 +414,10 @@ if __name__ == '__main__':
         wait_on_jobs([jobId], 'BAM alignment stats', 'Merging BAM files')
   
     # Generate files needed to display Report
-    if do_barcodes:
-        barcode_report_stats(sorted(barcode_files.keys()))
+    if barcodeSet:
+        barcode_report_stats(barcode_files.keys())
+    generate_datasets_json(barcodeSet, barcode_files.keys(), barcodeSet_Info, sample, barcodeSamples, runID)
+
     jobId = submit_job(script, ['--merge-plots']) 
     printtime("DEBUG: Submitted %s job %s" % ('MergePlots', jobId))  
     wait_on_jobs([jobId], 'mergePlots', 'Generating Alignment plots')
@@ -342,7 +432,7 @@ if __name__ == '__main__':
         os.symlink(filename, os.path.join(download_links, newname+'.bam'))
         os.symlink(filename+'.bai', os.path.join(download_links, newname + '.bam.bai'))
         # barcodes:
-        if do_barcodes:
+        if barcodeSet:
             #os.symlink(os.path.join(mycwd, zipname), os.path.join(download_links, newname+'.barcode.bam.zip'))
             for bcname in barcode_files.keys():
                 filename = os.path.join(mycwd, bcname+'_rawlib.bam')
@@ -353,7 +443,7 @@ if __name__ == '__main__':
   
     if os.path.exists(bamfile):
         status = 'Completed' 
-    elif do_barcodes:      
+    elif barcodeSet:
         status = 'Completed' # for barcoded Proton data rawlib.bam may not get created
     else:
         status = 'Error'

@@ -31,7 +31,13 @@ from ion.utils.explogparser import load_log_path
 from ion.utils.explogparser import parse_log
 from iondb.bin.crawler import generate_updateruninfo_post
 
-logger = logging.getLogger(__name__)
+
+class fakelog(object):
+    def __init__(self):
+        self.errors = logging.getLogger(__name__)
+        self.errors.propagate = True
+
+logger = fakelog()
 
 TIMESTAMP_RE = models.Experiment.PRETTY_PRINT_RE
 
@@ -54,15 +60,15 @@ def get_name_from_json(exp, key, thumbnail_analysis):
 # Extracted from crawler.py and modified to launch fromWells analysis
 def generate_http_post(exp, data_path, thumbnail_analysis=False):
     try:
-        GC = models.GlobalConfig.objects.all().order_by('pk')[0]
-        base_recalibrate = GC.base_recalibrate
+        GC = models.GlobalConfig.get()
+        base_recalibration_mode = GC.base_recalibration_mode
         mark_duplicates = GC.mark_duplicates
         realign = GC.realign
     except models.GlobalConfig.DoesNotExist:
-        base_recalibrate = False
+        base_recalibration_mode = "no_recal"
         mark_duplicates = False
         realign = False
-
+    
     #instead of relying on globalConfig, user can now set isDuplicateReads for the experiment
     eas = exp.get_EAS()
     if (eas):
@@ -88,7 +94,7 @@ def generate_http_post(exp, data_path, thumbnail_analysis=False):
                             'blockArgs':'fromWells',
                             'previousReport':os.path.join(data_path),
                             'previousThumbReport':os.path.join(data_path),  # defined in case its a thumby, innocuous otherwise
-                            'do_base_recal':base_recalibrate,
+                            'do_base_recal':base_recalibration_mode,
                             'realign': realign,
                             'mark_duplicates': mark_duplicates,
                             })

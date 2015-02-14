@@ -1,6 +1,0 @@
-I created these files using HDFView to edit some old prototypes from Chengyong.
-
-There are ambiguities in the specification for which I had to guess.  Some of the data is
-completely bogus.   These files should not be considered to be official XSQ files.
-
-The 'bs','c11' and 'c1303' strings refer to base, 2-base and 4 base encoded data in the files.

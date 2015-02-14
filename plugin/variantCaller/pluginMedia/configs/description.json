@@ -140,6 +140,10 @@
                                        "Related VCF fields: VARB, REFB",
                                        "Allowed values: Decimal numbers >= 0",
                                        "Recommended value: 0.2 = 20% of variant change size"],
+
+        "indel_as_hpindel":["Apply HP indel filters to non HP indels rather than apply snp filters",
+			           "Allowed values: 0 = use snp filter, 1 = use indel filter",
+                                   "Recommended value: (Ampliseq) 1"],
         
         "hp_max_length":["Filter:  homopolymer length involved in an in/del",
                          "Related VCF field: HRUN",
@@ -156,12 +160,20 @@
                                 
         "do_snp_realignment":["Realign reads in the vicinity of SNP candidates.",
                               "Allowed values: 0 = do not realign, 1 = realign",
-                              "Recommended value: PGM: (germline) 0, (somatic) 1; Proton: (germline) 1, (somatic) 1"],
+                              "Recommended value: (Ampliseq) 1"],
+
+        "do_mnp_realignment":["Realign reads in the vicinity of MNP candidates.",
+                              "Allowed values: 0 = do not realign, 1 = realign",
+                              "Recommended value: (Ampliseq) 1"],
+
+        "realignment_threshold":["Maximum allowed fraction of reads where realignment causes an alignment change.", 
+                                  "Allowed values: 0 <= float numbers <= 1",
+				  "Recommended value: "],
                                 
         "suppress_recalibration": ["Recalibration values from pipeline used or not (experimental)",
                                    "No related fields, changes basecalling behavior",
                                    "Allowed values: 0 = allow recalibration, 1 = don't allow recalibration",
-                                   "Recommended value: (non-proton), 1, proton=0"]
+                                   "Recommended value: 0"]
 
     },
 

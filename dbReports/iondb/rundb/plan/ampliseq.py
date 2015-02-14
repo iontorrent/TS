@@ -8,7 +8,7 @@ from iondb.rundb.models import Plugin
 # the AmpliSeq output for the 3.6 TS in every way.
 # Note: this is unlikely for most releases as a change to the Variant Caller,
 # the Plan schema, or the BED publisher might necessitate changes here.
-CURRENT_VERSION = "4.2"
+CURRENT_VERSION = "4.4"
 
 
 def setup_vc_config_36(plan):
@@ -55,7 +55,15 @@ def config_choice_handler_4_0(data, meta, config_choices):
     data["configuration_choices"] = keys
     return data, meta
 
-# Current plan handler
+
+def plan_handler_4_4(data, meta):
+    """
+    current plan handler
+    """
+    config_choices = data["plan"]["4.4"]["configuration_choices"]
+    return config_choice_handler_4_0(data, meta, config_choices)
+
+
 def plan_handler_4_2(data, meta):
     config_choices = data["plan"]["4.2"]["configuration_choices"]
     return config_choice_handler_4_0(data, meta, config_choices)
@@ -68,7 +76,6 @@ def plan_handler_4_0(data, meta):
 
 def plan_handler_3_6(data, meta):
     plan = data["plan"]["3.6"]
-    meta["choice"] = "None"
 
     if "runType" in plan:
         if plan["runType"] == "AMPS_DNA":
@@ -87,6 +94,7 @@ def plan_handler_3_6(data, meta):
 
 
 version_plan_handlers = {
+    "4.4": plan_handler_4_4,                        
     "4.2": plan_handler_4_2,
     "4.0": plan_handler_4_0,
     "3.6": plan_handler_3_6,
@@ -117,4 +125,4 @@ def handle_versioned_plans(data, meta=None):
         if max_version in version_plan_handlers:
             data, meta = version_plan_handlers[max_version](data, meta)
             return max_version, data, meta
-    return None, None
+    return None, None, None

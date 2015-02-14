@@ -54,7 +54,12 @@ def bam_preproc(path_to_input_bam, path_to_output_file, threshold, min_length):
     input_bam = pysam.Samfile(path_to_input_bam, mode="rb",check_header=False,check_sq=False)
     #output_bam = pysam.Samfile(path_to_output_file, mode="wb",template=input_bam,check_header=False,check_sq=False)
     output_fastq = open(path_to_output_file, 'w')
-    for x in input_bam.fetch(until_eof=True):
+    for y in input_bam.fetch(until_eof=True):
+        x = y
+        if x.is_reverse:
+            xqual = x.qual
+            x.seq = reverse_complement(x.seq)
+            x.qual = xqual[::-1]       
         process_read(x,threshold,min_length)
         #output_bam.write(x)
         output_fastq.write("@%s\n%s\n+\n%s\n" % (x.qname,x.seq,x.qual))
@@ -62,8 +67,14 @@ def bam_preproc(path_to_input_bam, path_to_output_file, threshold, min_length):
     #output_bam.close()
     output_fastq.close()
 
+def reverse_complement(seq):
+    revcomp = {'A':'T','T':'A','C':'G','G':'C','N':'N','t':'a','c':'g','g':'c','n':'n','a': 't'}
+    return ''.join(revcomp[b] for b in seq[::-1])
+
 if __name__=='__main__':
     cwd = os.getcwd() # current working directory
+    # GDM: A path to the BAM being processed is all that should be necessary for this script
+    # Least change to script for this means passing 'N' for use barcodes.
     PATH_TO_BAM = sys.argv[1]
     print 'PATH_TO_BAM',PATH_TO_BAM
     PATH_TO_BAM.replace(" ","") #remove white space
@@ -71,12 +82,17 @@ if __name__=='__main__':
     print 'BARCODING_USED',BARCODING_USED
     RESULTS_DIR = sys.argv[3]
     print 'RESULTS_DIR',RESULTS_DIR
-    version_txt = open(RESULTS_DIR+'/../../version.txt', 'r')
-    for line in version_txt:
-        x = line.split("=")
-        if x[0] == "Torrent_Suite":
-            version = x[1]
-            break
+    # GDM: This is just verbage to log file and assumed RESULTS_DIR to be 2 levels below the analysis dir.
+    # I just added one deeper level testing so barcode results folders can be passed directly and made safer.
+    fname = RESULTS_DIR+'/../../version.txt'
+    if not os.path.isfile(fname):
+        fname = RESULTS_DIR+'/../../../version.txt'
+    with open(fname, 'r') as version_txt:
+        for line in version_txt:
+            x = line.split("=")
+            if x[0] == "Torrent_Suite":
+                version = x[1]
+                break
     try:
         version_nbr = float(version[0:3])
     except:
@@ -163,3 +179,4 @@ if __name__=='__main__':
         print 'writing filtered.fastq at',RESULTS_DIR
         bam_preproc(INPUT_BAM, RESULTS_DIR+'/filtered.fastq',15,20)
     os.chdir(cwd)
+

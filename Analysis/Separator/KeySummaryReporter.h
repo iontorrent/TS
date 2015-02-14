@@ -4,14 +4,14 @@
 
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <pthread.h>
-#include "KeyReporter.h"
 #include "SampleStats.h"
 #include "SampleQuantiles.h"
-#include "KeyClassifier.h"
 #include "GridMesh.h"
 #include "AvgKeyReporter.h"
 #include "IonErr.h"
+#include "EvaluateKey.h"
 
 template <class T>
 class KeyRegionSummary {
@@ -37,17 +37,12 @@ public:
     int flowFrameStride = evaluator.m_num_flows * evaluator.m_num_frames;
     int keyOffset = keyIx * flowFrameStride;
     mGlobalWeight += evaluator.m_key_counts[keyIx];
+    size_t n_flows = mGlobalTraces.size();
     for (size_t frameIx = 0; frameIx < evaluator.m_num_frames; frameIx++) {
-      for (size_t flowIx = 0; flowIx < evaluator.m_num_flows; flowIx++) {        
+      for (size_t flowIx = 0; flowIx < n_flows; flowIx++) {        
         mGlobalTraces[flowIx][frameIx] += (evaluator.m_flow_key_avg[keyOffset + flowIx * evaluator.m_num_frames + frameIx] * evaluator.m_key_counts[keyIx]);
       }
     }
-  }
-
-  void Report(const KeyFit &fit, 
-              const Mat<T> &wellFlows,
-              const Mat<T> &refFlows,
-              const Mat<T> &predicted) {
   }
 
   void Finish() {
@@ -55,8 +50,10 @@ public:
     for (size_t flowIx = 0; flowIx < mGlobalTraces.size(); flowIx++) {        
       mGlobalAvg[flowIx].resize(mGlobalTraces[flowIx].size());
       for (size_t frameIx = 0; frameIx < mGlobalTraces[flowIx].size(); frameIx++) {
-        mGlobalTraces[flowIx][frameIx] /= mGlobalWeight;
-        mGlobalAvg[flowIx][frameIx].AddValue(mGlobalTraces[flowIx][frameIx]);
+        if (mGlobalWeight > 0) {
+          mGlobalTraces[flowIx][frameIx] /= mGlobalWeight;
+          mGlobalAvg[flowIx][frameIx].AddValue(mGlobalTraces[flowIx][frameIx]);
+        }
       }
     }
   }
@@ -74,7 +71,7 @@ private:
 };
 
 template <class T>
-class KeySummaryReporter : public KeyReporter<T> {
+class KeySummaryReporter { //: public KeyReporter<T> {
   
 public:
 
@@ -115,21 +112,6 @@ public:
     pthread_mutex_unlock(&mLock);
   }
   
-  void Report(const KeyFit &fit, 
-	      const Mat<T> &wellFlows,
-	      const Mat<T> &refFlows,
-	      const Mat<T> &predicted) {
-    if (fit.keyIndex < 0 || fit.mad > 50 || refFlows.n_cols == 0) {
-      return;
-    }
-    if (fit.peakSig < mMinPeakSig[fit.keyIndex]) {
-      return;
-    }
-    pthread_mutex_lock(&mLock);
-    mKeyRegions[(int)fit.keyIndex].Report(fit, wellFlows, refFlows, predicted);
-    pthread_mutex_unlock(&mLock);
-  }
-
   void Finish() {
     for (size_t keyIx = 0; keyIx < mKeyRegions.size(); keyIx++) {
       mKeyRegions[keyIx].Finish();

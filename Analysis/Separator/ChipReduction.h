@@ -21,10 +21,19 @@ public:
             int y_step, int x_step,
             int y_clip, int x_clip, int min_good_wells);
 
-  void Zero();
+  void Reset() {
+    int total_size = TotalSize();
+    memset(m_block_avg, 0, sizeof(float) * total_size);
+    memset(m_block_smooth, 0, sizeof(float) * total_size);
+    memset(m_well_cont_block_smooth, 0, sizeof(float) * total_size);
+    memset(m_good_wells, 0, sizeof(int) * total_size);
+    memset(m_bad_wells, 0, sizeof(char) * total_size);
+  }
 
   void Cleanup();
+
   void SetAvgReduce(bool flag) { m_avg_reduce = flag; }
+
   template <typename T> 
   void ReduceFrame(const T *values, const char *bad_wells, int frame_ix) {
     // loop through and create averages for each region
@@ -41,7 +50,7 @@ public:
         float *__restrict block_avg = m_block_avg + frame_ix * m_block_frame_stride + reduce_offset;
         int *__restrict good_wells = m_good_wells + reduce_offset;
         while(val_start != val_end) {
-          if (*bad_start == 0) {
+          if (*bad_start == 0 && isfinite(*val_start)) {
             *block_avg += (float)(*val_start);
             if (frame_ix == 0) {
               (*good_wells)++;
@@ -112,8 +121,28 @@ public:
 
   const int *GetGoodWells() { return m_good_wells; }
   const char *GetBadWells() { return m_bad_wells; }
+
   inline float GetSmoothEst(int row, int col, int frame) {
-    return *(m_block_smooth + m_block_frame_stride * frame + (row / m_y_step) * m_block_width + (col / m_x_step));
+    return GetSmoothEst((row / m_y_step) * m_block_width + (col / m_x_step), frame);
+  }
+
+  inline float GetBlockAvg(int block_ix, int frame_ix) {
+    return *(m_block_avg + m_block_frame_stride * frame_ix + block_ix);
+  }
+
+  inline float GetSmoothEst(int block_ix, int frame_ix) {
+    return *(m_block_smooth + m_block_frame_stride * frame_ix + block_ix);
+  }
+
+  inline int GetNumSmoothBlocks() { return m_block_width * m_block_height; }
+
+  inline void GetBlockDims(int block_ix, int &row_start, int &row_end, int &col_start, int &col_end) {
+    int block_row = block_ix / m_block_width;
+    row_start = block_row * m_y_step;
+    row_end = std::min((block_row + 1) * m_y_step, m_chip_height);
+    int block_col = block_ix % m_block_width;
+    col_start = block_col * m_x_step;
+    col_end = std::min((block_col + 1) * m_x_step, m_chip_width);
   }
 
   inline int GetBlockWidth() { return m_block_width; }
@@ -121,6 +150,7 @@ public:
   NNAvg m_nn_avg;
 
 private:
+  void Zero();
   int m_avg_reduce;
   int m_min_good_reduced_wells;
   int m_x_clip, m_y_clip;

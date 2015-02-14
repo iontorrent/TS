@@ -141,6 +141,23 @@ function onDataBound(arg) {
             }).always(function(data) {/*console.log("complete:", data);*/
             });
         });
+	$(source + " .transfer_plan").click(function(e) {
+        e.preventDefault();
+        url = $(this).attr('href');
+        $('body #modal_plan_transfer').remove();
+        $.get(url, function(data) {
+            $('body').append(data);
+                $("#modal_plan_transfer").data('source', source);
+                $("#modal_plan_transfer").modal("show");
+                return false;
+            }).done(function(data) {
+                console.log("success:", url);
+            }).fail(function(data) {
+                $('#error-messages').empty().show();
+                $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+                console.log("error:", data);
+            });
+        });
 }
 
 $(document).ready(function() {
@@ -199,7 +216,13 @@ $(document).ready(function() {
                         },
                         sampleSetGroupType : {
                         	type : "string"
-                        }
+                        },
+                        sampleTubeLabel : {
+                            type : "string"
+                        },
+                        chipBarcode : {
+                            type : "string"
+                        },                        
                     }
                 }
             },
@@ -213,7 +236,7 @@ $(document).ready(function() {
                 dir : "asc"
             }],
             serverPaging : true,
-            pageSize : 10000
+            pageSize : 50
         },
         height : '446',
         groupable : false,
@@ -222,7 +245,7 @@ $(document).ready(function() {
         },
         selectable : false,
         sortable : true,
-        pageable : false,
+        pageable : true,
 
 		dataBinding : onDataBinding,
 		dataBound : onDataBound,
@@ -272,6 +295,14 @@ $(document).ready(function() {
             sortable : false,
             template : kendo.template($('#SampleColumnTemplate').html())
         }, {
+            field : "sampleTubeLabel",
+            title : "Sample Tube Label",
+            sortable : false,
+        }, {
+            field : "chipBarcode",
+            title : "Chip Barcode",
+            sortable : false,
+        }, {
             field : "date",
             title : "Last Modified",
             template : '#= kendo.toString(new Date(Date._parse(date)),"yyyy/MM/dd hh:mm tt") #'
@@ -291,13 +322,40 @@ $(document).ready(function() {
     switch_to_view(window.location.hash.replace('#',''));
     
     $('#dateRange').daterangepicker({dateFormat: 'yy-mm-dd'});
-    $('.search-field').change(function (e) { filter(e); });
-    $('#clear_filters').click(function () { window.location.reload(true); });
+    $('.search_trigger').click(function (e) { filter(e); });
+
+    $('#clear_filters').click(function () { console.log("going to reload!!"); window.location.reload(true); });
     
+    $(function () {  
+        $('#search_subject_nav').click(function(e) { 
+            $("#plan_search_dropdown_menu").show();
+        });
+    });
+
+    $(function () {  
+        $('.search_chipBarcode').click(function(e) { 
+            set_search_subject_chipBarcode(e);
+        });
+    });    
+    
+    $(function () {      
+        $('.search_planName').click(function(e) {
+            set_search_subject_planName(e);
+        });    
+    });    
+
+    $(function () {          
+        $('.search_sampleTubeLabel').click(function(e) { 
+            set_search_subject_sampleTubeLabel(e);
+        });
+    });        
+      
+        
     $('.delete_selected').click(function(e) {
         e.preventDefault();
         e.stopPropagation();
         $('#error-messages').hide().empty();
+        $('body #modal_confirm_delete').remove();
         var checked_ids = $("#grid input:checked").map(function() {
             return $(this).attr("id");
         }).get();
@@ -331,7 +389,7 @@ $(document).ready(function() {
         switch_to_view(this.id);
     });
     
-    $(document).bind('modal_confirm_delete_done modal_plan_wizard_done', function(e) {
+    $(document).bind('modal_confirm_delete_done modal_plan_wizard_done modal_plan_transfer_done', function(e) {
         console.log(e.target, e.relatedTarget);
         refreshKendoGrid('#grid');
     });
@@ -372,7 +430,52 @@ function switch_to_view(view){
     data.dataSource.read();
 }
 
-function filter(e){
+function set_search_subject_chipBarcode(e) {
+    e.preventDefault();
+    $('.search_chipBarcode_selected').removeClass("icon-white icon-check");         
+    $('.search_chipBarcode_selected').addClass("icon-check");  
+    $('.search_planName_selected').removeClass("icon-white icon-check"); 
+    $('.search_planName_selected').addClass("icon-white"); 
+    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check"); 
+    $('.search_sampleTubeLabel_selected').addClass("icon-white"); 
+    
+    $("label[for='searchSubject']").text("chipBarcode");  
+    $("#search_subject_nav").attr("title", "Search by chip barcode");  
+    $("#plan_search_dropdown_menu").toggle();        
+}
+    
+function set_search_subject_planName(e) {
+    e.preventDefault();        
+    $('.search_chipBarcode_selected').removeClass("icon-white icon-check");  
+    $('.search_chipBarcode_selected').addClass("icon-white");  
+    $('.search_planName_selected').removeClass("icon-white icon-check"); 
+    $('.search_planName_selected').addClass("icon-check"); 
+    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_sampleTubeLabel_selected').addClass("icon-white");
+                   
+    $("label[for='searchSubject']").text("planName");  
+    $("#search_subject_nav").attr("title", "Search by plan name or code"); 
+    $("#plan_search_dropdown_menu").toggle();                   
+} 
+
+function set_search_subject_sampleTubeLabel(e) {
+    console.log("ENTER set_search_subject_sampleTubLabel");
+    
+    e.preventDefault();   
+    $('.search_chipBarcode_selected').removeClass("icon-white icon-check"); 
+    $('.search_chipBarcode_selected').addClass("icon-white");       
+    $('.search_planName_selected').removeClass("icon-white icon-check"); 
+    $('.search_planName_selected').addClass("icon-white");     
+    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check")            
+    $('.search_sampleTubeLabel_selected').addClass("icon-check"); 
+
+    $("label[for='searchSubject']").text("sampleTubeLabel");  
+    $("#search_subject_nav").attr("title", "Search by sample tube label");
+    $("#plan_search_dropdown_menu").toggle();   
+} 
+    
+    
+function filter(e){  
     e.preventDefault();
     e.stopPropagation();
 
@@ -381,7 +484,11 @@ function filter(e){
         if (!/ - /.test(daterange)) { daterange = daterange + ' - ' + daterange; }
         daterange = daterange.replace(/ - /," 00:00,") + " 23:59";
     }
+
+    var subjectToSearch = $("label[for='searchSubject']").text();
+    console.log("filter - subjectToSearch=", subjectToSearch);
     
+    if (subjectToSearch == "planName") {
     $("#grid").data("kendoGrid").dataSource.filter([
         {
             field: "date",
@@ -389,9 +496,38 @@ function filter(e){
             value: daterange
         },
         {
-            field: "planDisplayedName",
+            field: "name_or_id",
+            operator: "",
+            value: $("#search_text").val()
+        }
+    ]);
+    }
+    else if (subjectToSearch == "chipBarcode") {
+    $("#grid").data("kendoGrid").dataSource.filter([
+        {
+            field: "date",
+            operator: "__range",
+            value: daterange
+        },
+        {
+            field: "chipBarcode",
             operator: "__icontains",
             value: $("#search_text").val()
         }
     ]);
+    }
+    else if (subjectToSearch == "sampleTubeLabel") {
+    $("#grid").data("kendoGrid").dataSource.filter([
+        {
+            field: "date",
+            operator: "__range",
+            value: daterange
+        },
+        {
+            field: "sampleTubeLabel",
+            operator: "__icontains",
+            value: $("#search_text").val()
+        }
+    ]);
+    }
 }

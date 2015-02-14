@@ -71,6 +71,8 @@ void RefineFit::FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step, int fl
   BeadParams *p = &bkg.region_data->my_beads.params_nn[ibd];
   float block_signal_corrected[bkg.region_data->my_scratch.bead_flow_t];
   float block_signal_predicted[bkg.region_data->my_scratch.bead_flow_t];
+  float washoutThreshold = bkg.getWashoutThreshold();
+  int washoutFlowDetection = bkg.getWashoutFlowDetection();
 
   SupplyMultiFlowSignal (block_signal_corrected, ibd, flow_block_size, flow_block_start);
 
@@ -90,8 +92,7 @@ void RefineFit::FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step, int fl
 	  fitType[fnum] = 
       my_single_fit.FitOneFlow (fnum,evect,p,&err_t, signal_corrected,signal_predicted, 
         NucID,cache_step.NucFineStep (fnum),cache_step.i_start_fine_step[fnum],
-        flow_block_start,
-        bkg.region_data->time_c,bkg.region_data->emphasis_data,bkg.region_data->my_regions);
+        flow_block_start,bkg.region_data->time_c,bkg.region_data->emphasis_data,bkg.region_data->my_regions);
   }
   //int reg = bkg.region_data->region->index;
   //printf("RefineFit::FitAmplitudePerBeadPerFlow... (r,b)=(%d,%d) predicted[10]=%f corrected[10]=%f\n",reg,ibd,block_signal_predicted[10],block_signal_corrected[10]);
@@ -100,7 +101,7 @@ void RefineFit::FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step, int fl
 // do things with my error vector for this bead
 
   // now detect corruption & store average error
-  p->DetectCorruption (err_t, WASHOUT_THRESHOLD, WASHOUT_FLOW_DETECTION, flow_block_size);
+  p->DetectCorruption (err_t, washoutThreshold, washoutFlowDetection, flow_block_size);
   // update error here to be passed to later block of flows
   // don't keep individual flow errors because we're surprisingly tight on memory
   p->UpdateCumulativeAvgError (err_t, flow_block_start + flow_block_size, flow_block_size); // current flow reached, 1-based
@@ -111,8 +112,7 @@ void RefineFit::FitAmplitudePerBeadPerFlow (int ibd, NucStep &cache_step, int fl
 
 // this HDF5 dump has gotten way out of hand
 // note we should >never< have both BeadParams and ibd
-void RefineFit::CrazyDumpToHDF5(BeadParams *p, int ibd, float * block_signal_predicted, float *block_signal_corrected, int *fitType, error_track &err_t, int flow_block_start 
-  )
+void RefineFit::CrazyDumpToHDF5(BeadParams *p, int ibd, float * block_signal_predicted, float *block_signal_corrected, int *fitType, error_track &err_t, int flow_block_start)
 {
   // if necessary, send the errors to HDF5
   bkg.global_state.SendErrorVectorToHDF5 (p,err_t, bkg.region_data->region,
@@ -122,10 +122,12 @@ void RefineFit::CrazyDumpToHDF5(BeadParams *p, int ibd, float * block_signal_pre
   bkg.global_state.SendPredictedToHDF5(ibd, block_signal_predicted, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
   bkg.global_state.SendCorrectedToHDF5(ibd, block_signal_corrected, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
 
+  bkg.global_state.SendXyflow_Location_Keys_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_Timeframe_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
   bkg.global_state.SendXyflow_R_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_SP_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_FitType_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, fitType, flow_block_start );
+  bkg.global_state.SendXyflow_Taub_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_Dmult_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_Kmult_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_HPlen_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
@@ -135,7 +137,6 @@ void RefineFit::CrazyDumpToHDF5(BeadParams *p, int ibd, float * block_signal_pre
   bkg.global_state.SendXyflow_Residual_ToHDF5(ibd, err_t, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_Predicted_ToHDF5(ibd, block_signal_predicted, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
   bkg.global_state.SendXyflow_Corrected_ToHDF5(ibd, block_signal_corrected, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
-  bkg.global_state.SendXyflow_Location_Keys_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_Predicted_Keys_ToHDF5(ibd, block_signal_predicted, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
   bkg.global_state.SendXyflow_Corrected_Keys_ToHDF5(ibd, block_signal_corrected, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
 
@@ -143,19 +144,37 @@ void RefineFit::CrazyDumpToHDF5(BeadParams *p, int ibd, float * block_signal_pre
   // send beads_bestRegion predicted to hdf5 if necessary
   if (bkg.region_data->isBestRegion)
   {
-  //printf("RefineFit::FitAmplitudePerBeadPerFlow... region %d is the bestRegion...sending bestRegion data to HDF5 for bead %d\n",bkg.region_data->region->index,ibd);
-  bkg.global_state.SendBestRegion_PredictedToHDF5(ibd, block_signal_predicted, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
-  bkg.global_state.SendBestRegion_CorrectedToHDF5(ibd, block_signal_corrected, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
-  bkg.global_state.SendBestRegion_AmplitudeToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
-  bkg.global_state.SendBestRegion_ResidualToHDF5(ibd, err_t, *bkg.region_data, bkg.region_data_extras, flow_block_start );
-  bkg.global_state.SendBestRegion_LocationToHDF5(ibd, *bkg.region_data );
-  bkg.global_state.SendBestRegion_GainSensToHDF5(ibd, *bkg.region_data );
-  bkg.global_state.SendBestRegion_FitType_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, fitType, flow_block_start );
-  bkg.global_state.SendBestRegion_KmultToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
-  bkg.global_state.SendBestRegion_DmultToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
-  bkg.global_state.SendBestRegion_SPToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
-  bkg.global_state.SendBestRegion_RToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
-  bkg.global_state.SendBestRegion_TimeframeToHDF5(*bkg.region_data, bkg.region_data_extras, max_frames);
+    //printf("RefineFit::FitAmplitudePerBeadPerFlow... region %d is the bestRegion...sending bestRegion data to HDF5 for bead %d\n",bkg.region_data->region->index,ibd);
+      bkg.global_state.SendBestRegion_TimeframeToHDF5(*bkg.region_data, bkg.region_data_extras, max_frames);
+      bkg.global_state.SendBestRegion_LocationToHDF5(ibd, *bkg.region_data );
+      bkg.global_state.SendBestRegion_GainSensToHDF5(ibd, *bkg.region_data );
+      bkg.global_state.SendBestRegion_PredictedToHDF5(ibd, block_signal_predicted, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
+      bkg.global_state.SendBestRegion_CorrectedToHDF5(ibd, block_signal_corrected, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
+      bkg.global_state.SendBestRegion_AmplitudeToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendBestRegion_ResidualToHDF5(ibd, err_t, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendBestRegion_FitType_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, fitType, flow_block_start );
+      bkg.global_state.SendBestRegion_KmultToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendBestRegion_DmultToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendBestRegion_TaubToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendBestRegion_SPToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendBestRegion_RToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+  }
+
+  if (bkg.region_data->isRegionCenter(ibd))
+  {
+      bkg.global_state.SendRegionCenter_TimeframeToHDF5(*bkg.region_data, bkg.region_data_extras, max_frames);
+      bkg.global_state.SendRegionCenter_LocationToHDF5(ibd, *bkg.region_data );
+      bkg.global_state.SendRegionCenter_GainSensToHDF5(ibd, *bkg.region_data );
+      bkg.global_state.SendRegionCenter_AmplitudeToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendRegionCenter_ResidualToHDF5(ibd, err_t, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendRegionCenter_FitType_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, fitType, flow_block_start );
+      bkg.global_state.SendRegionCenter_KmultToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendRegionCenter_DmultToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendRegionCenter_TaubToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendRegionCenter_SPToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendRegionCenter_RToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+      bkg.global_state.SendRegionCenter_PredictedToHDF5(ibd, block_signal_predicted, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
+      bkg.global_state.SendRegionCenter_CorrectedToHDF5(ibd, block_signal_corrected, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
   }
 }
 

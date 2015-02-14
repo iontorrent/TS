@@ -40,11 +40,11 @@ case "$1" in
 	fi
 
 	# Remove torrent-server vhost
-	/usr/sbin/a2dissite torrent-server
+	/usr/sbin/a2dissite torrent-server.conf
 	rm -f /etc/apache2/sites-enabled/torrent-server
 
-	/usr/sbin/a2ensite default
-	invoke-rc.d apache2 reload
+	/usr/sbin/a2ensite 000-default #
+	invoke-rc.d apache2 reload || true
 
     #----------------------------------
     # Remove files created during package install

@@ -9,7 +9,8 @@ from iondb.rundb.models import PlannedExperiment, Experiment, RunType, ApplProdu
 from iondb.rundb.plan.views_helper import dict_bed_hotspot, get_default_or_first_IR_account, get_internal_name_for_displayed_name, \
     get_ir_set_id, is_operation_supported_by_obj
 from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_sample_name, validate_flows, \
-    validate_QC, validate_projects, validate_sample_tube_label, validate_sample_id, validate_barcoded_sample_info
+    validate_QC, validate_projects, validate_sample_tube_label, validate_sample_id, validate_barcoded_sample_info, \
+    validate_libraryReadLength, validate_templatingSize, validate_targetRegionBedFile_for_runType
 
 from traceback import format_exc
 
@@ -17,12 +18,20 @@ import plan_csv_writer
 import iondb.rundb.plan.views
 
 import copy
+import json
 
 import logging
 logger = logging.getLogger(__name__)
 
 import simplejson
 
+KEY_SAMPLE_ID = "ID:"
+KEY_SAMPLE_TYPE = "TYPE:"
+KEY_SAMPLE_RNA_REF = "RNA REF:"
+KEY_SAMPLE_REF = "REF:"
+KEY_SAMPLE_TARGET = "TARGET:"
+KEY_SAMPLE_RNA_TARGET = "RNA TARGET:"
+KEY_SAMPLE_HOTSPOT = "HOTSPOT:"
 
 class MyPlan:
     def __init__(self, selectedTemplate, selectedExperiment, selectedEAS, userName):        
@@ -41,7 +50,9 @@ class MyPlan:
             self.planObj.expName = ""
             self.planObj.planName = ""
             self.planObj.planExecuted = False   
-            self.planObj.categories = selectedTemplate.categories
+            self.planObj.categories = selectedTemplate.categories                                 
+            self.planObj.metaData = selectedTemplate.metaData if selectedTemplate.metaData else {}
+            
             self.planObj.latestEAS = None 
                       
             if userName:
@@ -57,6 +68,10 @@ class MyPlan:
             self.easObj.pk = None
             self.easObj.experiment = None
             self.easObj.isEditable = True
+            self.easObj.reference = ""
+            self.easObj.targetRegionBedFile = ""
+            self.easObj.hotSpotRegionBedFile = ""
+            
             
         self.sampleList = []
         self.sampleIdList = []
@@ -156,6 +171,8 @@ def validate_csv_plan(csvPlanDict, request):
     else:        
         return failed, planDict, rawPlanDict, isToSkipRow
 
+    logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate sample_prep_kit..." %(selectedTemplate.id, selectedTemplate.planDisplayedName))            
+    
     errorMsg = _validate_sample_prep_kit(csvPlanDict.get(plan_csv_writer.COLUMN_SAMPLE_PREP_KIT), selectedTemplate, planObj)  
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_SAMPLE_PREP_KIT, errorMsg))
@@ -168,9 +185,15 @@ def validate_csv_plan(csvPlanDict, request):
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_TEMPLATING_KIT, errorMsg))
     
+    errorMsg = _validate_templatingSize(csvPlanDict.get(plan_csv_writer.COLUMN_TEMPLATING_SIZE), selectedTemplate, planObj)
+    if errorMsg:
+        failed.append((plan_csv_writer.COLUMN_TEMPLATING_SIZE, errorMsg))
+    
     errorMsg = _validate_control_seq_kit(csvPlanDict.get(plan_csv_writer.COLUMN_CONTROL_SEQ_KIT), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_CONTROL_SEQ_KIT, errorMsg))
+
+    logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate seq_kit..." %(selectedTemplate.id, selectedTemplate.planDisplayedName))            
     
     errorMsg = _validate_seq_kit(csvPlanDict.get(plan_csv_writer.COLUMN_SEQ_KIT), selectedTemplate, planObj)
     if errorMsg:
@@ -180,6 +203,10 @@ def validate_csv_plan(csvPlanDict, request):
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_CHIP_TYPE, errorMsg))
     
+    errorMsg = _validate_libraryReadLength(csvPlanDict.get(plan_csv_writer.COLUMN_LIBRARY_READ_LENGTH), selectedTemplate, planObj)
+    if errorMsg:
+        failed.append((plan_csv_writer.COLUMN_LIBRARY_READ_LENGTH, errorMsg))
+    
     errorMsg = _validate_flows(csvPlanDict.get(plan_csv_writer.COLUMN_FLOW_COUNT), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_FLOW_COUNT, errorMsg))
@@ -188,7 +215,9 @@ def validate_csv_plan(csvPlanDict, request):
     
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_SAMPLE_TUBE_LABEL, errorMsg))
-   
+
+    logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate qc thresholds..." %(selectedTemplate.id, selectedTemplate.planDisplayedName))            
+       
     errorMsg, beadLoadQCValue = _validate_qc_pct(csvPlanDict.get(plan_csv_writer.COLUMN_BEAD_LOAD_PCT), selectedTemplate, planObj, "Bead loading")
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_BEAD_LOAD_PCT, errorMsg))
@@ -206,12 +235,14 @@ def validate_csv_plan(csvPlanDict, request):
         failed.append((plan_csv_writer.COLUMN_USABLE_SEQ_PCT, errorMsg))
     
     rawPlanDict["Usable Sequence (%)"] = usableSeqQCValue
+
+    logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate reference..." %(selectedTemplate.id, selectedTemplate.planDisplayedName))                   
     
     errorMsg = _validate_ref(csvPlanDict.get(plan_csv_writer.COLUMN_REF), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_REF, errorMsg))
-    
-    errorMsg = _validate_target_bed(csvPlanDict.get(plan_csv_writer.COLUMN_TARGET_BED), selectedTemplate, planObj)
+
+    errorMsg = _validate_target_bed(csvPlanDict.get(plan_csv_writer.COLUMN_TARGET_BED), selectedTemplate, planObj, csvPlanDict.get(plan_csv_writer.COLUMN_REF))
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_TARGET_BED, errorMsg))
     
@@ -222,7 +253,9 @@ def validate_csv_plan(csvPlanDict, request):
     errorMsg,plugins = _validate_plugins(csvPlanDict.get(plan_csv_writer.COLUMN_PLUGINS), selectedTemplate, selectedEAS, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_PLUGINS, errorMsg))
-        
+
+    logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate projects..." %(selectedTemplate.id, selectedTemplate.planDisplayedName))                   
+            
     errorMsg, projects = _validate_projects(csvPlanDict.get(plan_csv_writer.COLUMN_PROJECTS), selectedTemplate, planObj)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_PROJECTS, errorMsg))
@@ -237,10 +270,16 @@ def validate_csv_plan(csvPlanDict, request):
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_NOTES, errorMsg))                        
 
+    errorMsg = _validate_LIMS_data(csvPlanDict.get(plan_csv_writer.COLUMN_LIMS_DATA), selectedTemplate, planObj)
+    if errorMsg:
+        failed.append((plan_csv_writer.COLUMN_LIMS_DATA, errorMsg))      
+        
     barcodedSampleJson = None
     sampleDisplayedName = None
     sampleId = None
-    
+
+    logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate barcodedSamples..." %(selectedTemplate.id, selectedTemplate.planDisplayedName))                   
+        
     barcodeKitName = selectedEAS.barcodeKitName
     if barcodeKitName:
         errorMsg, barcodedSampleJson = _validate_barcodedSamples(csvPlanDict, selectedTemplate, barcodeKitName, planObj)
@@ -272,6 +311,8 @@ def validate_csv_plan(csvPlanDict, request):
                 planObj.get_nucleotideTypeList().append("")
                 
 
+    logger.debug("plan_csv_validator.validate_csv_plan() selectedTemplate.pk=%d; selectedTemplate.planDisplayedName=%s; GOING TO validate IR..." %(selectedTemplate.id, selectedTemplate.planDisplayedName))                   
+    
     errorMsg, uploaders, has_ir_v1_0 = _validate_export(csvPlanDict.get(plan_csv_writer.COLUMN_EXPORT), selectedTemplate, selectedEAS, planObj, sampleDisplayedName, sampleId, barcodedSampleJson, request)
     if errorMsg:
         failed.append((plan_csv_writer.COLUMN_EXPORT, errorMsg))                        
@@ -474,7 +515,7 @@ def _validate_chip_type(input, selectedTemplate, planObj, selectedExperiment):
     errorMsg = None
     if input:
         try:
-            selectedChips = Chip.objects.filter(description__iexact = input.strip(), isActive = True)
+            selectedChips = Chip.objects.filter(description__iexact = input.strip(), isActive = True).order_by('-id')
 
             #if selected chipType is ambiguous, try to go with the template's. If that doesn't help, settle with the 1st one 
             if len(selectedChips) == 1:
@@ -492,15 +533,56 @@ def _validate_chip_type(input, selectedTemplate, planObj, selectedExperiment):
                             planObj.get_expObj().chipType = template_chipType_obj.name
                         else:
                             planObj.get_expObj().chipType = selectedChips[0].name
+                else:
+                    planObj.get_expObj().chipType = selectedChips[0].name
+                    
             else:            
-                planObj.get_expObj().chipType = selectedChips[0].name
+                errorMsg = input + " not found."
         except:
             logger.exception(format_exc())
             errorMsg = input + " not found."
     else:
-        planObj.get_expObj().chipType = ""
+        #error due to chip field is required
+        errorMsg = "Required column is empty."
         
     return errorMsg
+
+
+def _validate_templatingSize(input, selectedTemplate, planObj):
+    """
+    validate templating size value with leading/trailing blanks in the input ignored
+    """
+    errorMsg = None
+    if input:
+        value = input.strip()
+        errors = validate_templatingSize(value)
+        if errors:
+            errorMsg = '  '.join(errors)
+        else:
+            planObj.get_planObj().templatingSize = value
+    else:
+        planObj.get_planObj().templatingSize = ""
+
+    return errorMsg
+
+
+def _validate_libraryReadLength(input, selectedTemplate, planObj):
+    """
+    validate library read length value with leading/trailing blanks in the input ignored
+    """
+    errorMsg = None
+    if input:
+        value = input.strip()
+        errors = validate_libraryReadLength(value)
+        if errors:
+            errorMsg = '  '.join(errors)
+        else:
+            planObj.get_planObj().libraryReadLength = int(value)
+    else:
+        planObj.get_planObj().libraryReadLength = 0
+                
+    return errorMsg
+
 
 def _validate_flows(input, selectedTemplate, planObj):
     """
@@ -524,6 +606,7 @@ def _validate_sample_tube_label(input, selectedTemplate, planObj):
     """
     errorMsg = None
     if input:
+        ##value = input.strip().lstrip("0")
         value = input.strip()
         errors = validate_sample_tube_label(value)
         if errors:
@@ -576,32 +659,58 @@ def _validate_ref(input, selectedTemplate, planObj):
          
     return errorMsg
 
-                                            
-def _validate_target_bed(input, selectedTemplate, planObj):
+                   
+def _validate_target_bed(input, selectedTemplate, planObj, selectedReference, isKeywordFound = True, isMixedTypeRNA = False):
     """
     validate target region BED file case-insensitively with leading/trailing blanks in the input ignored
+    If value is blank, DO NOT use the template value to substitute
+    For non-barcoded plan, isKeywordFound is set to True
+    For barcodedPlan, if NO keyword is provided, use the template value to substitute
+    For barcodedPlan, if keyword is provided but it is blank, DO NOT use the template value to substitute
     """        
     errorMsg = None
-    if input:
-        bedFileDict = dict_bed_hotspot()
-        value = input.strip()
-        
-        isValidated = False
-        for bedFile in bedFileDict.get("bedFiles"):
-            if value == bedFile.file or value == bedFile.path:
-                isValidated = True                
-                planObj.get_easObj().targetRegionBedFile = bedFile.file
-#            elif value.lower() == bedFile.file.lower() or value.lower() == bedFile.path.lower():
-#                isValidated = True   
-#                planObj.get_easObj().targetRegionBedFile = bedFile.file
 
-        if not isValidated:
-            logger.exception(format_exc())
-            errorMsg = input + " not found."
-    else:
-        planObj.get_easObj().targetRegionBedFile = ""
+    if not selectedTemplate.get_barcodeId():
+        #if this is not a barcoded plan, delegate the full validation to the helper method
+        runType = selectedTemplate.runType
+        
+        #logger.debug("_validate_target_bed GOING TO call _validate_sample_target_bed() input=%s; runType=%s; isKeywordFound=%s" %(input, runType, str(isKeywordFound)))
+
+        targetBed_error, validated_targetBed = _validate_sample_target_bed(input, runType, selectedReference, selectedTemplate, planObj, None, isKeywordFound, isMixedTypeRNA)
+        if targetBed_error:
+            errorMsg = targetBed_error
+        else:
+            errorMsg = ""
+         
+        planObj.get_easObj().targetRegionBedFile = validated_targetBed
+        
+    else: 
+        if input:
+            #for barcoded plan with user input
+            bedFileDict = dict_bed_hotspot()
+            value = input.strip()
+             
+            isValidated = False
+            for bedFile in bedFileDict.get("bedFiles"):
+                if value == bedFile.file or value == bedFile.path:
+                    isValidated = True
+                    planObj.get_easObj().targetRegionBedFile = bedFile.file
+                        
+    #            elif value.lower() == bedFile.file.lower() or value.lower() == bedFile.path.lower():
+    #                isValidated = True   
+    #                planObj.get_easObj().targetRegionBedFile = bedFile.file
+     
+            if not isValidated:
+                logger.exception(format_exc())
+                errorMsg = input + " not found."
+        else:
+            planObj.get_easObj().targetRegionBedFile = ""
+
+    logger.debug("plan_csv_validator._validate_target_bed() targetBed=%s" %(planObj.get_easObj().targetRegionBedFile))
+    
         
     return errorMsg
+
     
 def _validate_hotspot_bed(input, selectedTemplate, planObj):
     """
@@ -626,7 +735,130 @@ def _validate_hotspot_bed(input, selectedTemplate, planObj):
             errorMsg = input + " not found."
     else:
         planObj.get_easObj().hotSpotRegionBedFile = ""
+
+    logger.debug("plan_csv_validator._validate_hotspot_bed() targetBed=%s" %(planObj.get_easObj().hotSpotRegionBedFile))
+            
     return errorMsg
+
+
+def _validate_sample_target_bed(input, runType, sampleReference, selectedTemplate, planObj, nucleotideType = None, isKeywordFound = True, isMixedTypeRNA = False):
+    """
+    validate target region BED file case-insensitively with leading/trailing blanks in the input ignored
+    If value is blank, DO NOT use the template value to substitute
+    For barcodedPlan, if NO keyword is provided, use the template value to substitute
+    For barcodedPlan, if keyword is provided but it is blank, DO NOT use the template value to substitute    
+    """        
+    errorMsg = None
+    bedFile = ""
+
+    logger.debug("_validate_sample_target_bed() isMixedTypeRNA=%s; sampleReference=%s; isKeywordFound=%s; " %(str(isMixedTypeRNA), sampleReference, str(isKeywordFound)))
+    
+    if input:
+        bedFileDict = dict_bed_hotspot()
+        value = input.strip()
+        
+        isValidated = False
+        for a_bedFile in bedFileDict.get("bedFiles"):
+            if value == a_bedFile.file or value == a_bedFile.path:
+                isValidated = True                
+                bedFile = a_bedFile.file
+
+        if not isValidated:
+            logger.exception(format_exc())
+            errorMsg = input + " not found."
+    else:
+        #user has not entered a sample target BED file...
+        # for some applications, target bed file can be mandatory if reference is selected
+        if isMixedTypeRNA:
+            planReference = planObj.get_easObj().mixedTypeRNA_reference
+        else:
+            planReference = planObj.get_easObj().reference
+#         
+#         selectedReference = sampleReference if sampleReference else planReference
+        #user might want de-novo sequencing for one of the barcodedSamples! cannot override sampleReference value
+        selectedReference = sampleReference
+
+        errors = []
+        bedFile = ""
+                 
+        if isMixedTypeRNA:
+            planTargetRegion = planObj.get_easObj().mixedTypeRNA_targetRegionBedFile
+        else:
+            planTargetRegion = planObj.get_easObj().targetRegionBedFile
+            
+        #validate to ensure mandatory targetBedFile rule, if present, is satisfied
+        bedFile = input if isKeywordFound else planTargetRegion
+        errors = validate_targetRegionBedFile_for_runType(bedFile, runType, selectedReference, nucleotideType)
+
+        logger.debug("_validate_sample_target_bed() isMixedTypeRNA=%s; isKeywordFound=%s; planReference=%s; selectedReference=%s; planTargetRegion=%s; bedFile=%s" %(str(isMixedTypeRNA), str(isKeywordFound), planReference, selectedReference, planTargetRegion, bedFile))
+ 
+        if errors:
+            errorMsg = '  '.join(errors)
+            bedFile = ""
+
+    logger.debug("EXIT _validate_sample_target_bed() input=%s; bedFile=%s" %(input, bedFile))
+        
+    return errorMsg, bedFile
+    
+
+def _validate_sample_hotspot_bed(input, selectedTemplate, planObj):
+    """
+    validate hotSpot BED file case-insensitively with leading/trailing blanks in the input ignored
+    """            
+    errorMsg = None
+    bedFile = ""
+    if input:
+        bedFileDict = dict_bed_hotspot()
+        value = input.strip()
+        
+        isValidated = False
+        for a_bedFile in bedFileDict.get("hotspotFiles"):
+            if value == a_bedFile.file or value == a_bedFile.path:
+                isValidated = True                
+                bedFile = a_bedFile.file
+
+        if not isValidated:
+            logger.exception(format_exc())
+            errorMsg = input + " not found."
+    else:
+        bedFile = ""
+    return errorMsg, bedFile
+
+
+def validate_ref_bed_compatibility(input_reference, input_hotSpotBedFile, input_targetRegionBedFile):
+    """
+    validate if the validated existing bed files are compatible with the validated existing reference
+    """
+    ##logger.debug("ENTER plan_csv_validator.validate_ref_bed_compatibility() input_reference=%s; input_hotSpotBedFile=%s; input_targetRegionBedFile=%s" %(input_reference, input_hotSpotBedFile, input_targetRegionBedFile))
+
+    errorMsg = None
+    if input_reference:
+        bedFileDict = dict_bed_hotspot()
+
+        if input_hotSpotBedFile:                    
+            isValidated = False
+            for bedFile in bedFileDict.get("hotspotFiles"):
+                if input_hotSpotBedFile == bedFile.file:
+                    if input_reference != bedFile.meta.get("reference", ""):
+                        logger.debug("plan_csv_validator.validate_ref_bed_compatibility() HOTSPOT reference=%s; meta_reference=%s" %(input_reference, bedFile.meta.get("reference", "")))
+                        errorMsg = "HotSpot BED file is incompatible with the reference. "
+                    else:
+                        isValidated = True
+        if input_targetRegionBedFile:
+            isValidated = False
+            for bedFile in bedFileDict.get("bedFiles"):
+                if input_targetRegionBedFile == bedFile.file:                    
+                    if input_reference != bedFile.meta.get("reference", ""):
+                        logger.debug("plan_csv_validator.validate_ref_bed_compatibility() TARGET REGION reference=%s; meta_reference=%s" %(input_reference, bedFile.meta.get("reference", "")))                        
+                        errorMsg += "Target Regions BED file is incompatible with the reference."
+                    else:
+                        isValidated = True
+    else:
+        if input_hotSpotBedFile or input_targetRegionBedFile:
+            errorMsg = "Reference missing for the BED files selected."
+
+    return errorMsg
+
 
 def _validate_plugins(input, selectedTemplate, selectedEAS, planObj):
     """
@@ -870,6 +1102,48 @@ def _validate_notes(input, selectedTemplate, planObj):
     return errorMsg
 
 
+def _validate_LIMS_data(input, selectedTemplate, planObj):
+    """
+    No validation but LIMS data with leading/trailing blanks in the input will be trimmed off
+    """    
+    errorMsg = None
+    if input:
+        data = input.strip()
+        try:
+            if planObj.get_planObj().metaData:
+                logger.debug("plan_csv_validator._validator_LIMS_data() B4 planObj.get_planObj().metaData=%s" %(planObj.get_planObj().metaData))
+            else:
+                planObj.get_planObj().metaData = {}    
+                
+            if len(planObj.get_planObj().metaData.get("LIMS", [])) == 0:
+                planObj.get_planObj().metaData["LIMS"] = []
+            
+            planObj.get_planObj().metaData["LIMS"].append(data)
+        
+            logger.debug("EXIT plan_csv_validator._validator_LIMS_data() AFTER planObj.get_planObj().metaData=%s" %(planObj.get_planObj().metaData))
+    
+        except:
+            logger.exception(format_exc())  
+            errorMsg = "Internal error during LIMS data processing"
+   
+        
+        
+                  
+        
+#         self.metaData["Status"] = status
+#         self.metaData["Date"] = "%s" % timezone.now()
+#         self.metaData["Info"] = info
+#         self.metaData["Comment"] = comment
+# 
+#         # Try to read the Log entry, if it does not exist, create it
+#         if len(self.metaData.get("Log",[])) == 0:
+#             self.metaData["Log"] = []
+#         self.metaData["Log"].append({"Status":self.metaData.get("Status"), "Date":self.metaData.get("Date"), "Info":self.metaData.get("Info"), "Comment":comment})
+
+
+    return errorMsg
+
+
 def _validate_sample(input, selectedTemplate, planObj):
     """
     validate sample name with leading/trailing blanks in the input ignored
@@ -1036,8 +1310,8 @@ def _validate_barcodedSamples(input, selectedTemplate, barcodeKitName, planObj):
     sampleId = ""
     sampleNucleotideType = ""
     
-    runType = selectedTemplate.runType         
-    ##applicationGroup = selectedTemplate.applicationGroup.name if selectedTemplate.applicationGroup else ""
+    runType = selectedTemplate.runType    
+    applicationGroupName = selectedTemplate.applicationGroup.name if selectedTemplate.applicationGroup else ""
     
     try:
         for barcode in barcodes:
@@ -1046,7 +1320,16 @@ def _validate_barcodedSamples(input, selectedTemplate, barcodeKitName, planObj):
             sampleId = ""
             sampleNucleotideType = ""
             sampleRnaReference = ""
-            
+            sampleRnaTargetBed = ""
+            sampleReference = ""
+            sampleTargetBed = ""
+            sampleHotSpotBed = ""
+            foundSampleRefKeyword = False
+            foundSampleRnaRefKeyword = False            
+            foundSampleTargetBedKeyword = False
+            foundSampleRnaTargetBedKeyword = False
+            foundSampleHotSpotBedKeyword = False
+                        
             barcodeName = barcode["id_str"]
             key = barcodeName + plan_csv_writer.COLUMN_BC_SAMPLE_KEY
 
@@ -1056,93 +1339,169 @@ def _validate_barcodedSamples(input, selectedTemplate, barcodeKitName, planObj):
                     sampleToken = sampleToken.strip()
                     
                     if sampleToken:
-                        if sampleToken.startswith("ID:"):
+                        if sampleToken.startswith(KEY_SAMPLE_ID):
                             sampleId = sampleToken[3:].strip()
-                        elif sampleToken.startswith("TYPE:"):
+                        elif sampleToken.startswith(KEY_SAMPLE_TYPE):
                             sampleNucleotideType = sampleToken[5:].strip().upper()
-                        elif sampleToken.startswith("RNA REF:"):
+                        elif sampleToken.startswith(KEY_SAMPLE_RNA_REF):
                             sampleRnaReference = sampleToken[8:].strip()
+                            foundSampleRnaRefKeyword = True  
+                        elif sampleToken.startswith(KEY_SAMPLE_REF):
+                            sampleReference = sampleToken[4:].strip()
+                            foundSampleRefKeyword = True
+                        elif sampleToken.startswith(KEY_SAMPLE_TARGET):
+                            sampleTargetBed = sampleToken[7:].strip()
+                            foundSampleTargetBedKeyword = True
+                        elif sampleToken.startswith(KEY_SAMPLE_RNA_TARGET):
+                            sampleRnaTargetBed = sampleToken[11:].strip()
+                            foundSampleRnaTargetBedKeyword = True                            
+                        elif sampleToken.startswith(KEY_SAMPLE_HOTSPOT):
+                            sampleHotSpotBed = sampleToken[8:].strip()   
+                            foundSampleHotSpotBedKeyword = True                                                     
                         else:
                             sampleName = sampleToken
+
+                ##logger.debug("validate_barcode_sample_info sampleName=%s" %(sampleName))
 
                 if (sampleId or sampleNucleotideType) and (not sampleName):
                     errorMsgDict[key] = '  '.join(["Sample name is required "])
                     
                 if sampleName:
-                    errors, rna_ref_short_name, sample_nucleotideType = validate_barcoded_sample_info(sampleName, sampleId, sampleNucleotideType, runType, sampleRnaReference)
+                    errors, ref_short_name, rna_ref_short_name, sample_nucleotideType = validate_barcoded_sample_info(applicationGroupName, runType, sampleName, sampleId, sampleNucleotideType, runType, sampleReference, sampleRnaReference)
 
+                    logger.debug("validate_barcode_sample_info applicationGroupName=%s; runType=%s; sampleReference=%s; ref_short_name=%s; rna_ref_short_name=%s; sampleTargetBed=%s; sampleHotSpotBed=%s; sample_nucleotideType=%s" %(applicationGroupName, runType, sampleReference, ref_short_name, rna_ref_short_name, sampleTargetBed, sampleHotSpotBed, sample_nucleotideType))
+
+                    #Logic:
+                    #If NO keyword is provided, use the template value to substitute
+                    #If keyword is provided but it is blank, DO NOT use the template value to substitute
+
+                    if runType == "AMPS_DNA_RNA" and sampleNucleotideType.upper() == "RNA":
+                        sample_targetBed_error = []
+                        validated_sample_targetBed = ""
+                        sample_hotSpotBed_error = []     
+                        validated_sample_hotSpotBed = ""                   
+                    else:
+                        #logger.debug("sampleName=%s; foundSampleRefKeyword=%s; sampleReference=%s; " %(sampleName, str(foundSampleRefKeyword), sampleReference))
+                                          
+                        sample_targetBed_error, validated_sample_targetBed = _validate_sample_target_bed(sampleTargetBed, runType, sampleReference, selectedTemplate, planObj, sampleNucleotideType, foundSampleTargetBedKeyword)
+                        sample_hotSpotBed_error, validated_sample_hotSpotBed = _validate_sample_hotspot_bed(sampleHotSpotBed, selectedTemplate, planObj)
+    
+                        ###logger.debug("validate_barcode_sample_info AFTER VALIDATION sample_targetBed_error=%s; validated_sample_targetBed=%s; sample_hotSpotBed_error=%s; validated_sample_hotSpotBed=%s" %(sample_targetBed_error, validated_sample_targetBed, sample_hotSpotBed_error, validated_sample_hotSpotBed))
+    
                     planObj.get_nucleotideTypeList().append(sample_nucleotideType if sample_nucleotideType else "")
-                                            
-                    if errors:
-                        ##logger.debug("plan_csv_validator.. ERRORS validate_barcode_sample_info. key=%s; errors=%s" %(key, errors))
+
+                    if errors or sample_targetBed_error or sample_hotSpotBed_error:
+                        if sample_targetBed_error:
+                            errors.append(" Target BED File: ")
+                            errors.append(sample_targetBed_error)
+                        if sample_hotSpotBed_error:
+                            errors.append(" HotSpot BED File: ")
+                            errors.append(sample_hotSpotBed_error)
+                            
+                        logger.debug("plan_csv_validator.. ERRORS validate_barcode_sample_info. key=%s; errors=%s" %(key, errors))
+                                                
                         errorMsgDict[key] = '  '.join(errors)
                         
                     else:
                         planObj.get_sampleList().append(sampleName)
                         planObj.get_sampleIdList().append(sampleId if sampleId else "")
 
-                        sampleReference = planObj.get_easObj().reference
-                        sampleHotSpotBedFile = planObj.get_easObj().hotSpotRegionBedFile
-                        sampleTargetRegionBedFile = planObj.get_easObj().targetRegionBedFile
+                        #Logic:
+                        #If NO keyword is provided, use the template value to substitute
+                        #If keyword is provided but it is blank, DO NOT use the template value to substitute
                         
-                        if runType == "AMPS_DNA_RNA" and sampleNucleotideType.upper() == "RNA":
-                            sampleReference = rna_ref_short_name
-                            sampleHotSpotBedFile = ""
-                            sampleTargetRegionBedFile = ""
-                            
-                        ##logger.debug("plan_csv_validator._validate_barcodedSamples() sampleNucleotideType=%s; sampleRnaReference=%s; rna_ref_short_name=%s; sampleReference=%s" %(sampleNucleotideType, sampleRnaReference, rna_ref_short_name, sampleReference))
+                        #if keyword is found, do not replace blank value with plan's value
+                        sampleReference = ref_short_name if ref_short_name or foundSampleRefKeyword else planObj.get_easObj().reference
+                        sampleHotSpotBedFile = validated_sample_hotSpotBed if validated_sample_hotSpotBed or foundSampleHotSpotBedKeyword else planObj.get_easObj().hotSpotRegionBedFile
+                        sampleTargetRegionBedFile = validated_sample_targetBed if validated_sample_targetBed or foundSampleTargetBedKeyword else planObj.get_easObj().targetRegionBedFile
 
-                        barcodedSampleData = barcodedSampleJson.get(sampleName, {})
+                        logger.debug("sampleName=%s; foundSampleRefKeyword=%s; ref_short_name=%s; sampleReference=%s; " %(sampleName, str(foundSampleRefKeyword), ref_short_name, sampleReference))
+                        logger.debug("sampleName=%s; foundSampleTargetBedKeyword=%s; validated_sample_targetBed=%s; foundSampleHotSpotBedKeyword=%s; validated_sample_hotSpotBed=%s" %(sampleName, foundSampleTargetBedKeyword, validated_sample_targetBed, foundSampleHotSpotBedKeyword, validated_sample_hotSpotBed))
 
-                        if barcodedSampleData:
-                            barcodeList = barcodedSampleData.get("barcodes", [])
-                            
-                            if barcodeList:
-                                barcodeList.append(barcodeName)
-                                barcodeDict = {
-                                               "barcodes" : barcodeList
-                                               }                                    
-                            else:
+                        #validate reference and bed files compatibility
+                        error_ref_bedFiles = validate_ref_bed_compatibility(sampleReference, sampleHotSpotBedFile, sampleTargetRegionBedFile)
+                        
+                        if error_ref_bedFiles:
+                            errorMsgDict[key] = '  '.join([error_ref_bedFiles])
+                        else:
+                            if runType in ["RNA", "AMPS_RNA"]:
+                                sampleHotSpotBedFile = ""
+                                
+                                if runType == "RNA":
+                                    sampleTargetRegionBedFile = ""
+                                                            
+                            if runType == "AMPS_DNA_RNA" and sampleNucleotideType.upper() == "RNA":
+                                sampleReference = rna_ref_short_name if rna_ref_short_name or foundSampleRnaRefKeyword else planObj.get_easObj().mixedTypeRNA_reference
+                                sampleHotSpotBedFile = ""
+
+                                sample_rna_targetBed_error, validated_rna_sample_targetBed = _validate_sample_target_bed(sampleRnaTargetBed, runType, sampleReference, selectedTemplate, planObj, sampleNucleotideType, foundSampleRnaTargetBedKeyword, True)
+                                if sample_rna_targetBed_error:
+                                    errorMsgDict[key] = '  '.join([sample_rna_targetBed_error])
+                                else:
+                                    sampleTargetRegionBedFile = validated_rna_sample_targetBed
+                                    
+                                    #validate reference and bed files compatibility
+                                    error_ref_bedFiles = validate_ref_bed_compatibility(sampleReference, sampleHotSpotBedFile, sampleTargetRegionBedFile)
+                        
+                                    if error_ref_bedFiles:
+                                        errorMsgDict[key] = '  '.join([error_ref_bedFiles])
+                                    
+                                logger.debug("plan_csv_validator._validate_barcodedSamples() RNA - sampleNucleotideType=%s; sampleReference=%s; sampleTargetRegionBedFile=%s" %(sampleNucleotideType, sampleReference, sampleTargetRegionBedFile))
+
+                                    
+                            logger.debug("plan_csv_validator._validate_barcodedSamples() sampleNucleotideType=%s; ref_short_name=%s; rna_ref_short_name=%s; sampleReference=%s" %(sampleNucleotideType, ref_short_name, rna_ref_short_name, sampleReference))
+    
+                            barcodedSampleData = barcodedSampleJson.get(sampleName, {})
+    
+                            if barcodedSampleData:
+                                barcodeList = barcodedSampleData.get("barcodes", [])
+                                
+                                if barcodeList:
+                                    barcodeList.append(barcodeName)
+                                    barcodeDict = {
+                                                   "barcodes" : barcodeList
+                                                   }                                    
+                                else:
+                                    barcodeDict = {
+                                                   "barcodes" : [barcodeName]
+                                                   }
+        
+                                barcodeSampleInfoDict = barcodedSampleData.get("barcodeSampleInfo", {})
+                                barcodeSampleInfoDict[barcodeName] = {
+                                                        'externalId'   : sampleId,
+                                                        'description'  : "",
+                                                        'nucleotideType' : sample_nucleotideType,
+                                                        'controlSequenceType' : '',
+                                                        'reference' : sampleReference,
+                                                        'hotSpotRegionBedFile' : sampleHotSpotBedFile,
+                                                        'targetRegionBedFile' : sampleTargetRegionBedFile
+        
+                                }
+                                barcodedSampleJson[sampleName.strip()] = {
+                                'barcodeSampleInfo' : barcodeSampleInfoDict,
+                                'barcodes'          : barcodeDict["barcodes"]
+                                }
+                                       
+                            else:              
                                 barcodeDict = {
                                                "barcodes" : [barcodeName]
                                                }
-    
-                            barcodeSampleInfoDict = barcodedSampleData.get("barcodeSampleInfo", {})
-                            barcodeSampleInfoDict[barcodeName] = {
-                                                    'externalId'   : sampleId,
-                                                    'description'  : "",
-                                                    'nucleotideType' : sampleNucleotideType.upper(),
-                                                    'controlSequenceType' : '',
-                                                    'reference' : sampleReference,
-                                                    'hotSpotRegionBedFile' : sampleHotSpotBedFile,
-                                                    'targetRegionBedFile' : sampleTargetRegionBedFile
-    
-                            }
-                            barcodedSampleJson[sampleName.strip()] = {
-                            'barcodeSampleInfo' : barcodeSampleInfoDict,
-                            'barcodes'          : barcodeDict["barcodes"]
-                            }
-                                   
-                        else:              
-                            barcodeDict = {
-                                           "barcodes" : [barcodeName]
-                                           }
-    
-                            barcodedSampleJson[sampleName.strip()] = {
-                            'barcodeSampleInfo' : { 
-                                    barcodeName: {
-                                                    'externalId'   : sampleId,
-                                                    'description'  : "",
-                                                    'nucleotideType' : sampleNucleotideType,
-                                                    'controlSequenceType' : '',
-                                                    'reference' : sampleReference,
-                                                    'hotSpotRegionBedFile' : sampleHotSpotBedFile,
-                                                    'targetRegionBedFile' : sampleTargetRegionBedFile
-    
-                                    }
-                                },
-                            'barcodes'          : barcodeDict["barcodes"]
-                            }
+        
+                                barcodedSampleJson[sampleName.strip()] = {
+                                'barcodeSampleInfo' : { 
+                                        barcodeName: {
+                                                        'externalId'   : sampleId,
+                                                        'description'  : "",
+                                                        'nucleotideType' : sample_nucleotideType,
+                                                        'controlSequenceType' : '',
+                                                        'reference' : sampleReference,
+                                                        'hotSpotRegionBedFile' : sampleHotSpotBedFile,
+                                                        'targetRegionBedFile' : sampleTargetRegionBedFile
+        
+                                        }
+                                    },
+                                'barcodes'          : barcodeDict["barcodes"]
+                                }
 
     except:
         logger.exception(format_exc())  

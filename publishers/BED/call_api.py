@@ -54,3 +54,11 @@ def delete(where, item_id):
     h = httplib2.Http()
     response, content = h.request(item_uri, method="DELETE", headers=headers)
     return response["status"] == "204", response, content
+
+
+def update_meta(meta, args):
+    print("Updating Meta")
+    meta_file_handle = open(args.meta_file, 'w')
+    json.dump(meta, meta_file_handle, cls=JSONEncoder, sort_keys=True, indent=4)
+    meta_file_handle.close()
+    patch("contentupload", args.upload_id, meta=meta)

@@ -8,15 +8,17 @@ The ``tasks`` module contains all the Python functions which spawn Celery
 tasks in the background.
 
 Not all functions contained in ``tasks`` are actual Celery tasks, only those
-that have the  ``@task`` decorator.
+that have the  ``@app.task`` decorator.
 """
 
-from __future__ import division
+from __future__ import division, absolute_import
 
-from celery import task
+from celery import task, group, chord
 from celery.task import periodic_task
 from celery.utils.log import get_task_logger
 from celery.schedules import crontab
+from celery.exceptions import SoftTimeLimitExceeded
+from iondb.celery import app
 import urllib2
 import os
 import signal
@@ -24,6 +26,7 @@ import string
 import random
 import subprocess
 import shutil
+import socket
 from django.conf import settings
 from django.utils import timezone
 import zipfile
@@ -289,23 +292,23 @@ def unzipPlugin(zipfile, logger=None):
     }
 
 
-@task
+@app.task
 def echo(message, wait=0.0):
     time.sleep(wait)
     logger.info("Logged: " + message)
     print(message)
 
-@task
+@app.task
 def delete_that_folder(directory, message):
     def delete_error(func, path, info):
         logger.error("Failed to delete %s: %s", path, message)
-    
+
     if os.path.exists(directory):
         logger.info("Deleting %s", directory)
         shutil.rmtree(directory, onerror=delete_error)
 
 #N.B. Run as celery task because celery runs with root permissions
-@task
+@app.task
 def removeDirContents(folder_path):
     for file_object in os.listdir(folder_path):
         file_object_path = os.path.join(folder_path, file_object)
@@ -356,13 +359,12 @@ def downloadChunks(url):
 
     return file, url
 
-@task
+@app.task
 def downloadGenome(url, genomeID):
     """download a genome, and update the genome model"""
     downloadChunks(url)
 
-
-import zeroinstallHelper
+from . import zeroinstallHelper
 
 # Helper for downloadPlugin task
 def downloadPluginZeroInstall(url, plugin, logger=None):
@@ -443,7 +445,7 @@ def downloadPluginArchive(url, plugin, logger=None):
 
     return True
 
-@task
+@app.task
 def downloadPlugin(url, plugin=None, zipFile=None):
     """download a plugin, extract and install it"""
     if not plugin:
@@ -509,7 +511,7 @@ def downloadPlugin(url, plugin=None, zipFile=None):
 
     return new_plugin
 
-@task
+@app.task
 def contact_info_flyaway():
     """This invokes an external on the path which performs 3 important steps:
         Pull contact information from the DB
@@ -526,7 +528,7 @@ def contact_info_flyaway():
     return stdout
 
 
-@task
+@app.task
 def static_ip(address, subnet, gateway):
     """Usage: TSstaticip [options]
          --ip      Define host IP address
@@ -549,7 +551,7 @@ def static_ip(address, subnet, gateway):
     return stdout
 
 
-@task
+@app.task
 def dhcp():
     """Usage: TSstaticip [options]
         --remove  Sets up dhcp, removing any static IP settings
@@ -564,7 +566,7 @@ def dhcp():
     return stdout
 
 
-@task
+@app.task
 def proxyconf(address, port, username, password):
     """Usage: TSsetproxy [options]
          --address     Proxy address (http://proxy.net)
@@ -587,7 +589,7 @@ def proxyconf(address, port, username, password):
     return stdout
 
 
-@task
+@app.task
 def ax_proxy():
     """Usage: TSsetproxy [options]
          --remove      Removes proxy setting
@@ -601,7 +603,7 @@ def ax_proxy():
     return stdout
 
 
-@task
+@app.task
 def dnsconf(dns):
     """Usage: TSdns [options]
          --dns      Define one or more comma delimited dns servers
@@ -615,7 +617,7 @@ def dnsconf(dns):
     return stdout
 
 
-@task
+@app.task
 def updateOneTouch():
     sys.path.append("/opt/ion/onetouch")
     from onetouch import findHosts
@@ -650,7 +652,7 @@ def make_reference_paths(reference):
     return os.path.join(reference.reference_path, reference.short_name + ".fasta")
 
 
-@task(queue="slowlane")
+@app.task(queue="slowlane")
 def unzip_reference(reference_id, reference_file=None):
     from iondb.rundb import models
     reference = models.ReferenceGenome.objects.get(pk=reference_id)
@@ -671,7 +673,7 @@ def unzip_reference(reference_id, reference_file=None):
     return destination
 
 
-@task(queue="slowlane")
+@app.task(queue="slowlane")
 def copy_reference(reference_id):
     from iondb.rundb import models
     reference = models.ReferenceGenome.objects.get(pk=reference_id)
@@ -684,7 +686,7 @@ def copy_reference(reference_id):
     return destination
 
 
-@task(queue="slowlane")
+@app.task(queue="slowlane")
 def build_tmap_index(reference_id):
     """ Provides a way to kick off the tmap index generation
         this should spawn a process that calls the build_genome_index.pl script
@@ -843,7 +845,7 @@ def scheduled_update_check():
         if packages:
             if not upgrade_message.all():
                 models.Message.info('There is an update available for your Torrent Server. <a class="btn btn-success" href="/admin/update">Update Now</a>', tags='new-upgrade', route='_StaffOnly')
-            download_now = models.GlobalConfig.objects.all()[0].enable_auto_pkg_dl
+            download_now = models.GlobalConfig.get().enable_auto_pkg_dl
             if download_now:
                 async = download_updates.delay()
                 logger.debug("Auto starting download of %d packages in task %s" % (len(packages), async.task_id))
@@ -854,7 +856,7 @@ def scheduled_update_check():
         models.GlobalConfig.objects.update(ts_update_status="Update failure")
         raise
 
-@task
+@app.task
 def check_updates():
     """Currently this is passed a TSConfig object; however, there might be a
     smoother design for this control flow.
@@ -863,7 +865,7 @@ def check_updates():
     try:
         import ion_tsconfig.TSconfig
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
-        enable_security_update = models.GlobalConfig.objects.get().enable_auto_security
+        enable_security_update = models.GlobalConfig.get().enable_auto_security
         tsconfig.set_securityinstall(enable_security_update)
         packages = tsconfig.TSpoll_pkgs()
     except Exception as err:
@@ -873,13 +875,13 @@ def check_updates():
 
     return packages
 
-@task
+@app.task
 def download_updates(auto_install=False):
     from iondb.rundb import models
     try:
         import ion_tsconfig.TSconfig
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
-        enable_security_update = models.GlobalConfig.objects.get().enable_auto_security
+        enable_security_update = models.GlobalConfig.get().enable_auto_security
         tsconfig.set_securityinstall(enable_security_update)
         downloaded = tsconfig.TSexec_download()
     except Exception as err:
@@ -899,11 +901,10 @@ def download_updates(auto_install=False):
 def _do_the_install():
     """This function is expected to be run from a daemonized process"""
     from iondb.rundb import models
-    from django.db.models import Q
     try:
         import ion_tsconfig.TSconfig
         tsconfig = ion_tsconfig.TSconfig.TSconfig()
-        enable_security_update = models.GlobalConfig.objects.get().enable_auto_security
+        enable_security_update = models.GlobalConfig.get().enable_auto_security
         tsconfig.set_securityinstall(enable_security_update)
 
         success = tsconfig.TSexec_update()
@@ -922,9 +923,10 @@ def _do_the_install():
         # This will start celeryd if it is not running for any reason after
         # attempting installation.
         call('service', 'celeryd', 'start')
+        call('service', 'celerybeat', 'start')
 
 
-@task
+@app.task
 def install_updates():
     logging.shutdown()
     try:
@@ -936,10 +938,13 @@ def install_updates():
         raise
 
 
-@task(queue="diskutil")
-def update_diskusage(fs):
-    import os
+
+# This can get stuck when NFS filesystems are misbehaving so need a timeout
+@app.task(queue = "diskutil", soft_time_limit = 60)
+def update_diskusage(fs_name):
     from iondb.utils.files import percent_full
+    from iondb.rundb import models
+    fs = models.FileServer.objects.get(name = fs_name)
     if os.path.exists(fs.filesPrefix):
         try:
             fs.percentfull=percent_full(fs.filesPrefix)
@@ -952,121 +957,125 @@ def update_diskusage(fs):
         logger.warning("directory does not exist on filesystem: %s" % fs.filesPrefix)
         fs.percentfull=0
         fs.save()
+    return fs_name
+
+
+@task(queue = 'diskutil')
+def post_update_diskusage(fs_name):
+    '''Handler for update_diskusage task output'''
+    from iondb.rundb import models
+    
+    inode_threshold = 0.90
+    critical_threshold = 99
+    warning_threshold = 95
+    friendly_threshold = 70
+    fs = models.FileServer.objects.get(name = fs_name)
+
+    #========================================================================
+    # TS-6669: Banner Message when disk usage gets critical
+    #========================================================================
+    crit_tag = "%s_disk_usage_critical" % (fs.name)
+    warn_tag = "%s_disk_usage_warning" % (fs.name)
+    golink = "<a href='%s' >  Visit Data Management</a>" % ('/data/datamanagement/')
+    if fs.percentfull > critical_threshold:
+        msg = "* * * CRITICAL! %s: Partition is getting very full - %0.2f%% * * *" % (fs.filesPrefix,fs.percentfull)
+        logger.debug(msg+"   %s" % golink)
+        message  = models.Message.objects.filter(tags__contains=crit_tag)
+        if not message:
+            models.Message.error(msg+"   %s" % golink,tags=crit_tag)
+            notify_diskfull(msg)
+    elif fs.percentfull > warning_threshold:
+        msg = "%s: Partition is getting full - %0.2f%%" % (fs.filesPrefix,fs.percentfull)
+        logger.debug(msg+"   %s" % golink)
+        message  = models.Message.objects.filter(tags__contains=warn_tag)
+        if not message:
+            models.Message.error(msg+"   %s" % golink,tags=warn_tag)
+            notify_diskfull(msg)
+    else:
+        # Remove any message objects
+        models.Message.objects.filter(tags__contains=crit_tag).delete()
+        models.Message.objects.filter(tags__contains=warn_tag).delete()
+        
+    #========================================================================
+    # Banner Message when Disk Management is not enabled
+    #========================================================================
+    try:
+        friendly_tag = "%s_dm_not_enabled" % (fs.name)
+        gc = models.GlobalConfig.get()
+        auto_action_enabled = gc.auto_archive_enable
+        if not auto_action_enabled and fs.percentfull > friendly_threshold:
+            msg = "Data Management Auto Actions are not enabled and %s is %0.2f%% full" % (fs.filesPrefix,fs.percentfull)
+            logger.debug(msg+"   %s" % golink)
+            message  = models.Message.objects.filter(tags__contains=friendly_tag)
+            if not message:
+                models.Message.error(msg+"   %s" % golink,tags=friendly_tag, route='_StaffOnly')
+                notify_diskfull(msg)
+        else:
+            models.Message.objects.filter(tags__contains=friendly_tag).delete()
+    except:
+        logger.error(traceback.format_exc())
+
+    #========================================================================
+    # Banner Message when inodes are running low
+    #========================================================================
+    try:
+        inode_tag = "%s_low_inodes" % (fs.name)
+        (itot, iuse, ifree) = file_utils.get_inodes(fs.filesPrefix)
+        if float(iuse)/float(itot) > inode_threshold:
+            msg = "Running out of inodes on %s. Used %d of %d. Contact IT or system support for further investigation." % (fs.filesPrefix, iuse, itot)
+            logger.debug(msg+"   %s" % golink)
+            message  = models.Message.objects.filter(tags__contains=inode_tag)
+            if not message:
+                models.Message.error(msg, tags=inode_tag, route='_StaffOnly')
+                notify_diskfull(msg)
+        else:
+            models.Message.objects.filter(tags__contains=inode_tag).delete()
+    except:
+        logger.error(traceback.format_exc())
 
 
 # Expires after 5 minutes; is scheduled every 10 minutes
 # To trigger celery task from command line:
 # python -c 'import iondb.bin.djangoinit, iondb.rundb.tasks as tasks; tasks.check_disk_space.apply_async()'
-@periodic_task(run_every=600, expires=300, queue="periodic")
+@periodic_task(run_every=600, expires=300, queue="periodic", ignore_result = True)
 def check_disk_space():
     """
-    For every FileServer object, get percentage of used disk space.
+    For every FileServer object, start a task to get percentage of used disk space.
     Checks root partition for sufficient space.
     """
     from iondb.rundb import models
     from iondb.utils import files
-    import socket
-    import traceback
-    from django.core import mail
-
-    def notify_diskfull(msg):
-        '''sends an email with message'''
-        #TODO make a utility function to send email
-        try:
-            recipient = models.User.objects.get(username='dm_contact').email
-            logger.warning("dm_contact is %s." % recipient)
-        except:
-            logger.warning("Could not retrieve dm_contact.  No email sent.")
-            return False
-
-        # Check for blank email
-        # TODO: check for valid email address
-        if recipient is None or recipient == "":
-            logger.warning("No dm_contact email configured.  No email sent.")
-            return False
-
-        #Needed to send email
-        settings.EMAIL_HOST = 'localhost'
-        settings.EMAIL_PORT = 25
-        settings.EMAIL_USE_TLS = False
-
-        try:
-            site_name = models.GlobalConfig.get().site_name
-        except:
-            site_name = "Torrent Server"
-
-        hname = socket.getfqdn()
-
-        subject_line = 'Torrent Server Data Management Disk Alert'
-        reply_to = 'donotreply@iontorrent.com'
-        message = 'From: %s (%s)\n' % (site_name, hname)
-        message += '\n'
-        message += msg
-        message += "\n"
-
-        # Send the email
-        try:
-            recipient = recipient.replace(',',' ').replace(';',' ').split()
-            logger.debug(recipient)
-            mail.send_mail(subject_line, message, reply_to, recipient)
-        except:
-            logger.warning(traceback.format_exc())
-            return False
-        else:
-            logger.info("Notification email sent for user acknowledgement")
-            return True
 
     try:
         fileservers = models.FileServer.objects.all()
     except:
         logger.error(traceback.print_exc())
-        return
+        fileservers = []
 
     for fs in fileservers:
-
-        # This can get stuck when NFS filesystems are misbehaving so need a timeout
-        #update_diskusage(fs)
-        async_result = update_diskusage.apply_async([fs], queue="diskutil")
-        raidinfo = async_result.get(timeout=60)
-        fail_tag = "Failed getting disk usage for %s" % (fs.filesPrefix)
-        if async_result.failed():
-            logger.debug("%s" %(fail_tag))
-            message = models.Message.objects.filter(tags__contains=fail_tag)
-            if not message:
-                models.Message.error("%s at %s" % (fail_tag, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),tags=fail_tag)
-            continue
+        if os.path.exists(fs.filesPrefix):
+            async_result = update_diskusage.apply_async([fs.name], link = post_update_diskusage.s())
         else:
-            models.Message.objects.filter(tags__contains=fail_tag).delete()
-
-        # TS-6669: Generate a Message Banner when disk usage gets critical
-        crit_tag = "%s_disk_usage_critical" % (fs.name)
-        warn_tag = "%s_disk_usage_warning" % (fs.name)
-        golink = "<a href='%s' >  Visit Data Management</a>" % ('/data/datamanagement/')
-        if fs.percentfull > 99:
-            msg = "* * * CRITICAL! %s: Partition is getting very full - %0.2f%% * * *" % (fs.filesPrefix,fs.percentfull)
-            logger.debug(msg+"   %s" % golink)
-            message  = models.Message.objects.filter(tags__contains=crit_tag)
-            if not message:
-                models.Message.error(msg+"   %s" % golink,tags=crit_tag)
-                notify_diskfull(msg)
-        elif fs.percentfull > 95:
-            msg = "%s: Partition is getting full - %0.2f%%" % (fs.filesPrefix,fs.percentfull)
-            logger.debug(msg+"   %s" % golink)
-            message  = models.Message.objects.filter(tags__contains=warn_tag)
-            if not message:
-                models.Message.error(msg+"   %s" % golink,tags=warn_tag)
-                notify_diskfull(msg)
-        else:
-            # Remove any message objects
-            models.Message.objects.filter(tags__contains=crit_tag).delete()
-            models.Message.objects.filter(tags__contains=warn_tag).delete()
-
+            # log the error
+            logger.warn("File Server does not exist.  Name: %s Path:%s" % (fs.name, fs.filesPrefix))
+        
+#        raidinfo = async_result.get(timeout=60)
+#        fail_tag = "Failed getting disk usage for %s" % (fs.filesPrefix)
+#        if async_result.failed():
+#            logger.debug("%s" %(fail_tag))
+#            message = models.Message.objects.filter(tags__contains=fail_tag)
+#            if not message:
+#                models.Message.error("%s at %s" % (fail_tag, datetime.now().strftime("%Y-%m-%d %H:%M:%S")),tags=fail_tag)
+#            continue
+#        else:
+#            models.Message.objects.filter(tags__contains=fail_tag).delete()
+            
     #========================================================================
-    # Check root partition
+    # Check root partition free space
     #========================================================================
     root_threshold = 1048576 # 1 GB in KB
-    warn_tag = "root_partition_space_warning"
     try:
+        warn_tag = "root_partition_space_warning"
         root_free_space = files.getSpaceKB('/')
         if root_free_space < root_threshold:
             msg = "Root Partition is getting full - less than 1GB available"
@@ -1079,6 +1088,55 @@ def check_disk_space():
             #logger.debug("Root partition is spacious enough with %0.2f" % (root_free_space))
     except:
         logger.error(traceback.format_exc())
+
+
+def notify_diskfull(msg):
+    '''sends an email with message'''
+    from django.core import mail
+    #TODO make a utility function to send email
+    try:
+        recipient = models.User.objects.get(username='dm_contact').email
+        logger.warning("dm_contact is %s." % recipient)
+    except:
+        logger.warning("Could not retrieve dm_contact.  No email sent.")
+        return False
+
+    # Check for blank email
+    # TODO: check for valid email address
+    if recipient is None or recipient == "":
+        logger.warning("No dm_contact email configured.  No email sent.")
+        return False
+
+    #Needed to send email
+    settings.EMAIL_HOST = 'localhost'
+    settings.EMAIL_PORT = 25
+    settings.EMAIL_USE_TLS = False
+
+    try:
+        site_name = models.GlobalConfig.get().site_name
+    except:
+        site_name = "Torrent Server"
+
+    hname = socket.getfqdn()
+
+    subject_line = 'Torrent Server Data Management Disk Alert'
+    reply_to = 'donotreply@iontorrent.com'
+    message = 'From: %s (%s)\n' % (site_name, hname)
+    message += '\n'
+    message += msg
+    message += "\n"
+
+    # Send the email
+    try:
+        recipient = recipient.replace(',',' ').replace(';',' ').split()
+        logger.debug(recipient)
+        mail.send_mail(subject_line, message, reply_to, recipient)
+    except:
+        logger.warning(traceback.format_exc())
+        return False
+    else:
+        logger.info("Notification email sent for user acknowledgement")
+        return True
 
 
 #TS-5495: Refactored from a ionadmin cron job
@@ -1104,19 +1162,7 @@ def runnightly():
     return
 
 
-@task
-def update_diskspace_fields(resultpk):
-    '''uses dmfileset objects to calculate disk space for each fileset'''
-    try:
-        dmfilestats = models.DMFileStat.objects.filter(result=resultpk)
-    except:
-        pass
-    else:
-        for dmfilestat in dmfilestats:
-            dmfilestat.update_diskusage()
-
-
-@task
+@app.task
 def download_something(url, download_monitor_pk=None, dir="/tmp/", name="", auth=None):
     from iondb.rundb import models
     logger.debug("Downloading " + url)
@@ -1216,7 +1262,7 @@ def download_something(url, download_monitor_pk=None, dir="/tmp/", name="", auth
     # write generic err-back to log failure in DownloadProgress
     # write wrapper function to set up the common case.
 
-@task
+@app.task
 def ampliseq_zip_upload(args, meta):
     from iondb.rundb import publishers
     from iondb.rundb import models
@@ -1227,10 +1273,9 @@ def ampliseq_zip_upload(args, meta):
     publishers.run_pub_scripts(pub, upload)
 
 
-@task
+@app.task
 def install_reference(args, reference_id):
     from iondb.rundb import models
-    from iondb.anaserve import client
     full_path, monitor_id = args
     monitor = models.FileMonitor.objects.get(id=monitor_id)
     reference = models.ReferenceGenome.objects.get(id=reference_id)
@@ -1250,7 +1295,7 @@ def install_reference(args, reference_id):
     reference.save()
 
 
-@task
+@app.task
 def get_raid_stats():
     raidCMD = ["/usr/bin/ion_raidinfo"]
     q = subprocess.Popen(raidCMD, shell=True, stdout=subprocess.PIPE)
@@ -1262,41 +1307,45 @@ def get_raid_stats():
     return raid_stats
 
 
-@task
+@app.task (queue = "w1", soft_time_limit = 60)
 def get_raid_stats_json():
-    raidCMD = ["/usr/bin/ion_raidinfo_json"]
-    q = subprocess.Popen(raidCMD, shell=True, stdout=subprocess.PIPE)
-    stdout, stderr = q.communicate()
-    if q.returncode == 0:
-        raid_stats = stdout
-    else:
-        raid_stats = None
+    '''Wrapper to bash script calling MEGAraid tool'''
+    raid_stats = None
+    try:
+        raidCMD = ["/usr/bin/ion_raidinfo_json"]
+        q = subprocess.Popen(raidCMD, shell=True, stdout=subprocess.PIPE)
+        stdout, stderr = q.communicate()
+        if q.returncode == 0:
+            raid_stats = stdout
+    except SoftTimeLimitExceeded:
+        logger.error("get_raid_stats_json timed out")
     return raid_stats
 
-@periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic")
-def check_raid_status():
-    # check RAID state and alert user with message banner of any problems
-    from iondb.rundb.models import Message
 
-    async_result = get_raid_stats_json.apply_async(queue="periodic")
-    raidinfo = async_result.get(timeout=600)
-    if async_result.failed():
-        logger.debug("Failed getting RAID info.")
-        return
-
+@task (queue = "w1", ignore_result = True)
+def post_check_raid_status(raidinfo):
+    '''Handler for output from get_raid_stats_json task'''
+    from iondb.rundb import models
     raid_status = raid_utils.get_raid_status(raidinfo)
     if len(raid_status) > 0:
-        message = Message.objects.filter(tags="raid_alert")
+        message = models.Message.objects.filter(tags="raid_alert")
         # show alert for primary internal storage RAID
         if raid_utils.ERROR in [r.get('status') for r in raid_status]:
             if not message:
                 msg = 'WARNING: RAID storage disk error.'
                 golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
-                Message.warn(msg+"   %s" % golink,tags="raid_alert")
+                models.Message.warn(msg+"   %s" % golink,tags="raid_alert")
         else:
             message.delete()
 
-@task
+
+@periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic", ignore_result = True)
+def check_raid_status():
+    '''check RAID state and alert user with message banner of any problems'''
+    get_raid_stats_json.apply_async(link = post_check_raid_status.s())
+
+
+@app.task
 def disk_check_status():
     status, stdout, stderr = call("tune2fs", "-l", "/dev/sda1")
     if status != 0:
@@ -1398,7 +1447,7 @@ def writeError(errorFileName, gpuFound, allRevsValid):
     with open(errorFileName, 'w') as f:
         f.write(json.dumps({'gpuFound': gpuFound, 'allRevsValid': allRevsValid}))
 
-@task
+@app.task
 def hide_apt_sources():
     filename = "/etc/apt/sources.list"
     hidden = filename+".hide"
@@ -1406,7 +1455,7 @@ def hide_apt_sources():
     return
 
 
-@task
+@app.task
 def restore_apt_sources():
     filename = "/etc/apt/sources.list"
     hidden = filename+".hide"
@@ -1414,7 +1463,7 @@ def restore_apt_sources():
     return
 
 
-@task
+@app.task
 def lock_ion_apt_sources(enable=False):
     """Set sources.list to point to Ion archive location for current version
     Change from:
@@ -1464,30 +1513,101 @@ def lock_ion_apt_sources(enable=False):
             logger.error("%s: %s" % (sys._getframe().f_code.co_name, stderr))
 
 
-@periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic")
+@app.task(queue = 'w1')
+def post_run_nodetests(result):
+    '''Handler for return value of set of tasks running test_node_and_update_db
+    result is an array of strings
+    '''
+    from iondb.rundb.models import Message
+    logger.info(result)
+    
+    if 'error' in  result:
+        cluster_status = 'error'
+    elif 'warning' in result:
+        cluster_status = 'warning'
+    else:
+        cluster_status = 'good'
+        
+    if cluster_status:
+        message = Message.objects.filter(tags="cluster_alert")
+        if 'error' in cluster_status or 'warning' in cluster_status:
+            if not message:
+                msg = 'WARNING: Cluster node failure.'
+                golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
+                Message.warn(msg+"   %s" % golink,tags="cluster_alert")
+        else:
+            message.delete()
+
+
+@task(queue = 'w1', soft_time_limit = 60)
+def test_node_and_update_db(node, head_versions):
+    '''run tests'''
+    from iondb.rundb.configure.cluster_info import connect_nodetest, config_nodetest
+    
+    logger.info("Testing node: %s" % node.name)
+    node_status = connect_nodetest(node.name)
+    if node_status['status'] == 'good':
+        logger.info("Node: %s passed connect test" % node.name)
+        node_status.update(config_nodetest(node.name, head_versions))
+        
+    try:
+        add_eventlog(node, node_status)
+    except:
+        # TODO
+        pass
+    
+    # update cruncher database entry
+    node.state = node_status['status'][0].upper()
+    node.info = node_status
+    node.save()
+    
+    return node_status['status']
+
+
+@periodic_task(run_every=timedelta(minutes=20), expires=600, queue="periodic", ignore_result = True)
 def check_cluster_status():
     # run tests for cluster nodes and alert user with message banner of any problems
-    from iondb.rundb.models import Message
-    from iondb.rundb.configure.cluster_info import run_nodetests
+    from ion.utils.TSversion import findVersions
+    from iondb.rundb.models import Cruncher
+    
+    nodes = Cruncher.objects.all().order_by('pk')
+    if not nodes:
+        pass
+    else:
+        # launch parallel celery tasks to test all nodes, and then call the final task to return a status
+        # Note that parallelism will be limited by the number of workers in a queue.
+        head_versions, _ = findVersions()
+        tasks = group(test_node_and_update_db.s(node, head_versions) for node in nodes)
+        c = chord(tasks)(post_run_nodetests.s())
+        return c
 
-    try:
-        status = run_nodetests()
-        if status:
-            message = Message.objects.filter(tags="cluster_alert")
-            if 'error' in status or 'warning' in status:
-                if not message:
-                    msg = 'WARNING: Cluster node failure.'
-                    golink = "<a href='%s' >  Visit Services Tab  </a>" % ('/configure/services/')
-                    Message.warn(msg+"   %s" % golink,tags="cluster_alert")
-            else:
-                message.delete()
-    except:
-        logger.exception('Failed getting cluster nodes test results')
 
-@task
-def get_cluster_status():
-    # run tests for cluster nodes and return status
-    from iondb.rundb.configure.cluster_info import run_nodetests
-    status = run_nodetests()
-    return status
+def add_eventlog(node, new_status):
+    '''
+    # add eventlog on following conditions:
+    #    node is new: no log entries exist
+    #    node state or error messages changed
+    #    any node test returns different status
+    
+    # NOTE: ClusterInfoHistoryResource parses log messages for History page, if changing format you must update api.py
+    '''
+    from iondb.rundb.models import EventLog
+    addlog = EventLog.objects.filter(object_pk=node.pk).count() == 0
+    
+    if str(node.state) != str(new_status['status'][0].upper()):
+        msg = "%s state changed from %s to %s<br>" % (node.name, node.get_state_display().title(), new_status['status'].title())
+        addlog = True
+    else:
+        msg = "%s state is %s<br>" % (node.name, new_status['status'].title())
+    
+    addlog = addlog or node.info.get('error','') != new_status.get('error','')
+    addlog = addlog or node.info.get('version_test_errors', '') != new_status.get('version_test_errors', '')
+    msg += "Error: %s %s<br>" % (new_status.get('error', ''), new_status.get('version_test_errors', ''))
 
+    old_test_results = dict(node.info.get('config_tests', []) + node.info.get('connect_tests', []))
+    for test_name, test_result in new_status.get('config_tests', []) + new_status.get('connect_tests', []):
+        msg += "%s: %s<br>" % (test_name, test_result)
+        addlog = addlog or old_test_results.get(test_name, '') != test_result
+    
+    if addlog:
+        EventLog.objects.add_entry(node, msg, username="system")

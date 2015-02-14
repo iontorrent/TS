@@ -5,10 +5,11 @@ $('#report_analyze_form').submit(function(e) {
 
 $('#submitButton').click(function(e){
     e.preventDefault();
-
+    
     get_barcodedReferences();
     formData = $("#report_analyze_form").serialize();
     formData += "&re-analysis=on"; // a way to distinguish user input from crawler post
+    
     URL = $("#report_analyze_form").attr('action');
     METHOD = $("#report_analyze_form").attr('method');
     
@@ -117,8 +118,15 @@ $("#id_do_thumbnail").click(function(){
     change_pipetype();
 });
 
+
 $("#id_do_base_recal").change(function(){
-    var checked = $(this).is(':checked');
+    var selected_recal_mode = $('select[name="do_base_recal"]').val()
+    console.log("at analyze.html.js id_do_base_recal.change selectedValue=", selected_recal_mode);
+    
+    var checked = true;
+    if (selected_recal_mode == "no_recal") {
+        checked = false;
+    }
     $('.recalib').each(function(){
         $(this).find('input, textarea').attr("readonly", !checked);
         $(this).css("opacity", checked? 1: 0.2);

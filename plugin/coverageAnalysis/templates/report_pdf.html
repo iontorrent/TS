@@ -24,6 +24,8 @@
 <script language="javascript" type="text/javascript" src="flot/jquery.flot.selection.min.js"></script>
 <script language="javascript" type="text/javascript" src="flot/jquery.flot.axislabels.js"></script>
 
+<script language="javascript" type="text/javascript" src="lifechart/FileLinksTable.js"></script>
+<script language="javascript" type="text/javascript" src="lifechart/PictureFrame.js"></script>
 <script language="javascript" type="text/javascript" src="lifechart/DepthOfCoverageChart.js"></script>
 <script language="javascript" type="text/javascript" src="lifechart/ReferenceCoverageChart.js"></script>
 <script language="javascript" type="text/javascript" src="lifechart/TargetCoverageChart.js"></script>
@@ -48,15 +50,15 @@
     cursor:help;
     border-bottom: 1px dotted #A9A9A9
   }
-  .repsnap {
-    width:774px;
-    height:280px
-  }
-  .page-break {
-    display: block;
-    clear: both;
-    page-break-after: always;
-  }
+   .repsnap {
+     width:774px;
+     height:280px
+   }
+   .page-break {
+     display: block;
+     clear: both;
+     page-break-after: always;
+   }
 </style>
 
 <title>Torrent Coverage Analysis Report</title>
@@ -72,7 +74,7 @@
 <h3>&nbsp;</center></h3>
 {% endif %}
 <h3><center>{{run_name}}<center></h3>
-<br/>
+
 <table class="center">
 <tr><td><h4>
   <b>Library type:</b> {{library_type}}<br/>
@@ -87,20 +89,24 @@
   <b>Read filters:</b> {{Read_Filters}}<br/>
 {% endif %}
 </h4></td></tr><tr><td>
-<br/>
+
 <table class="block-rounded"><tr>
-{% if rna_stats %}
+{% if rna_stats or chr_stats %}
   <td><a href="{{rep_overview_png}}" title="{{help_dict.Representation_Overview}}"><img  style="height:100px" src="{{rep_overview_png}}" alt="Representation Overview"/></a></td>
 {% else %}
   <td><a href="{{overview_png}}" title="{{help_dict.Coverage_Overview}}"><img  style="height:100px" src="{{overview_png}}" alt="Coverage Overview"/></a></td>
 {% endif %}
-  <td><div class="statsdata" style="width:{% if rna_stats %}340px{% else %}320px{% endif %}">
+  <td><div class="statsdata">
   <table>
     <tr><td class="inleft"><span title="{{help_dict.Number_of_mapped_reads}}">Number of mapped reads</span></td>
         <td class="inright">{{Number_of_mapped_reads|intcomma}}</td></tr>
-{% if not wgn_stats %}
+{% if trg_stats %}
     <tr><td class="inleft"><span title="{{help_dict.Percent_reads_on_target}}">Percent reads on target</span></td>
         <td class="inright">{{Percent_reads_on_target}}</td></tr>
+{% endif %}
+{% if chr_stats and Average_reads_per_contig %}
+    <tr><td class="inleft"><span title="{{help_dict.Average_reads_per_contig}}">Average reads per contig</span></td>
+        <td class="inright">{{Average_reads_per_contig|intcomma}}</td></tr>
 {% endif %}
 {% if samp_track %}
     <tr><td class="inleft"><span title="{{help_dict.Percent_sample_tracking_reads}}">Percent sample tracking reads</span></td>
@@ -119,23 +125,53 @@
 
 <br/>
 
-<div class="center block-rounded" style="width:{% if num_stat_tables == 2 %}{% if amp_stats %}730px{% else %}780px{% endif %}{% else %}380px{% endif %}">
-<table>
+<table class="center block-rounded">
  <tr>
 {% if amp_stats %}
-  <th><span title="{{help_dict.Amplicon_Read_Coverage}}">Amplicon Read Coverage</span></th>
+  <th><span style="cursor:help" title="{{help_dict.Amplicon_Read_Coverage}}">Amplicon Read Coverage</span></th>
+{% elif chr_stats or wgn_stats %}
+  <th><span style="cursor:help" title="{{help_dict.Contig_Coverage}}">{% if wgn_stats %}Chromosome{% else %}Contig{% endif %} Coverage</span></th>
 {% elif trg_stats %}
-  <th><span title="{{help_dict.Target_Coverage}}">Target Coverage</span></th>
+  <th><span style="cursor:help" title="{{help_dict.Target_Coverage}}">Target Coverage</span></th>
 {% endif %}
 {% if wgn_stats %}
-  <th><span title="{{help_dict.Genome_Base_Coverage}}">Genome Base Coverage</span></th>
+  <th><span style="cursor:help" title="{{help_dict.Genome_Base_Coverage}}">Genome Base Coverage</span></th>
 {% elif bas_stats %}
-  <th><span title="{{help_dict.Target_Base_Coverage}}">Target Base Coverage</span></th>
+  <th><span style="cursor:help" title="{{help_dict.Target_Base_Coverage}}">Target Base Coverage</span></th>
 {% endif %}
  </tr>
  <tr>
-{% if amp_stats %}
-  <td><div class="statsdata" style="width:360px"> <table>
+{% if chr_stats or wgn_stats %}
+  <td><div class="statsdata"> <table>
+  <tr><td class="inleft"><span title="{{help_dict.Number_of_contigs}}">Number of {% if wgn_stats %}chromosomes{% else %}contigs{% endif %}</span></td>
+      <td class="inright">{{Number_of_contigs|intcomma}}</td></tr>
+ {% if trg_stats %}
+  <tr><td class="inleft"><span title="{{help_dict.Percent_reads_on_target}}">Percent reads on target</span></td>
+      <td class="inright">{{Percent_reads_on_target}}</td></tr>
+ {% endif %}
+ {% if Average_reads_per_contig %}
+  <tr><td class="inleft"><span title="{{help_dict.Average_reads_per_contig}}">Average reads per {% if wgn_stats %}chromosome{% else %}contig{% endif %}</span></td>
+      <td class="inright">{{Average_reads_per_contig|intcomma}}</td></tr>
+ {% endif %}
+  <tr><td class="inleft"><span title="{{help_dict.Contigs_with_at_least_1_read}}">{% if wgn_stats %}Chromosomes{% else %}Contigs{% endif %} with at least 1 read</span></td>
+      <td class="inright">{{Contigs_with_at_least_1_read|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Contigs_with_at_least_10_reads}}">{% if wgn_stats %}Chromosomes{% else %}Contigs{% endif %} with at least 10 reads</span></td>
+      <td class="inright">{{Contigs_with_at_least_10_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Contigs_with_at_least_100_reads}}">{% if wgn_stats %}Chromosomes{% else %}Contigs{% endif %} with at least 100 reads</span></td>
+      <td class="inright">{{Contigs_with_at_least_100_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Contigs_with_at_least_1000_reads}}">{% if wgn_stats %}Chromosomes{% else %}Contigs{% endif %} with at least 1000 reads</span></td>
+      <td class="inright">{{Contigs_with_at_least_1000_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Contigs_with_at_least_10K_reads}}">{% if wgn_stats %}Chromosomes{% else %}Contigs{% endif %} with at least 10K reads</span></td>
+      <td class="inright">{{Contigs_with_at_least_10K_reads|intcomma}}</td></tr>
+  <tr><td class="inleft"><span title="{{help_dict.Contigs_with_at_least_100K_reads}}">{% if wgn_stats %}Chromosomes{% else %}Contigs{% endif %} with at least 100K reads</span></td>
+      <td class="inright">{{Contigs_with_at_least_100K_reads|intcomma}}</td></tr>
+ {% if Contigs_with_no_strand_bias %}
+  <tr><td class="inleft"><span title="{{help_dict.Contigs_with_no_strand_bias}}">{% if wgn_stats %}Chromosomes{% else %}Contigs{% endif %} with no strand bias</span></td>
+      <td class="inright">{{Contigs_with_no_strand_bias|intcomma}}</td></tr>
+ {% endif %}
+  </table></div></td>
+{% elif amp_stats or rna_stats %}
+  <td><div class="statsdata"> <table>
   <tr><td class="inleft"><span title="{{help_dict.Number_of_amplicons}}">Number of amplicons</span></td>
       <td class="inright">{{Number_of_amplicons|intcomma}}</td></tr>
  {% if rna_stats %}
@@ -177,7 +213,7 @@
  {% endif %}
   </table></div></td>
 {% elif trg_stats %}
-  <td><div class="statsdata" style="width:410px"> <table>
+  <td><div class="statsdata"> <table>
   <tr><td class="inleft"><span title="{{help_dict.Number_of_unmerged_targets}}">Number of unmerged targets</span></td>
       <td class="inright">{{Number_of_unmerged_targets|intcomma}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Percent_assigned_target_reads}}">Percent assigned target reads</span></td>
@@ -186,7 +222,7 @@
       <td class="inright">{{Average_base_coverage_depth_per_target|intcomma}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Uniformity_of_base_coverage_per_target}}">Uniformity of base coverage per target</span></td>
       <td class="inright">{{Uniformity_of_base_coverage_per_target}}</td></tr>
-  <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_0x}}">Targets with base coverage at 1x</span></td>
+  <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_1x}}">Targets with base coverage at 1x</span></td>
       <td class="inright">{{Targets_with_base_coverage_at_1x}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Targets_with_base_coverage_at_20x}}">Targets with base coverage at 20x</span></td>
       <td class="inright">{{Targets_with_base_coverage_at_20x}}</td></tr>
@@ -200,9 +236,8 @@
       <td class="inright">{{Targets_with_full_coverage}}</td></tr>
   </table></div></td>
 {% endif %}
-{% if bas_stats %}
- {% if wgn_stats %}
-  <td><div class="statsdata" style="width:380px"> <table>
+{% if wgn_stats %}
+  <td><div class="statsdata"> <table>
   <tr><td class="inleft"><span title="{{help_dict.Bases_in_reference_genome}}">Bases in reference genome</span></td>
       <td class="inright">{{Bases_in_reference_genome|intcomma}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Average_base_coverage_depth}}">Average base coverage depth</span></td>
@@ -219,8 +254,10 @@
       <td class="inright">{{Genome_base_coverage_at_500x}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Genome_bases_with_no_strand_bias}}">Genome bases with no strand bias</span></td>
       <td class="inright">{{Genome_bases_with_no_strand_bias}}</td></tr>
- {% else %}
-  <td><div class="statsdata" style="width:350px"> <table>
+  <tr><td class="inleft">&nbsp;</td><td class="inright">&nbsp;</td></tr>
+ </table></div></td>
+{% elif bas_stats %}
+  <td><div class="statsdata"> <table>
   <tr><td class="inleft"><span title="{{help_dict.Bases_in_target_regions}}">Bases in target regions</span></td>
       <td class="inright">{{Bases_in_target_regions|intcomma}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Percent_base_reads_on_target}}">Percent base reads on target</span></td>
@@ -239,19 +276,23 @@
       <td class="inright">{{Target_base_coverage_at_500x}}</td></tr>
   <tr><td class="inleft"><span title="{{help_dict.Target_bases_with_no_strand_bias}}">Target bases with no strand bias</span></td>
       <td class="inright">{{Target_bases_with_no_strand_bias}}</td></tr>
-  <tr><td class="inleft">&nbsp;</td><td class="inright">&nbsp;</td></tr>
- {% endif %}
+  {% if Percent_end_to_end_reads %}
+    <tr><td class="inleft"><span title="{{help_dict.Percent_end_to_end_reads}}">Percent end-to-end reads</span></td>
+        <td class="inright">{{Percent_end_to_end_reads}}</td></tr>
+  {% else %}
+    <tr><td class="inleft">&nbsp;</td><td class="inright">&nbsp;</td></tr>
+  {% endif %}
  </table></div></td>
 {% endif %}
  </tr>
 </table>
-</div></div>
+</div>
 <br/>
 {% if not rna_stats %}
-<div id='DepthOfCoverageChart' datafile='{{base_cov_tsv}}' class='center' style='width:800px;height:300px'></div> <br/>
+ <div id='DepthOfCoverageChart' datafile='{{base_cov_tsv}}' {% if Average_base_coverage_depth < 2 %}collapse{% endif %} class='center' style='width:800px;height:300px'></div> <br/>
 {% endif %}
-{% if trg_stats %}
-<div id='TargetCoverageChart' amplicons={{trg_type}} hidelegend datafile='{{output_dir}}/{{finecov_tsv}}' initfile='{{aux_ttc}}' class='center' style='width:800px;height:300px'></div> <br/>
+{% if trg_stats or chr_stats or wgn_stats %}
+<div id='TargetCoverageChart' amplicons={{trg_type}} datafile='{{output_dir}}/{{finecov_tsv}}' hidelegend initfile='{{aux_ttc}}' class='center' style='width:800px;height:300px'></div> <br/>
 {% endif %}
 {% if not rna_stats %}
 <div class="page-break"></div>

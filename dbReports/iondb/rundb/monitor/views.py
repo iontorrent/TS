@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 @login_required
 def monitor(request):
     """This is a the main entry point to the Monitor tab."""
-    pageSize = GlobalConfig.objects.all()[0].records_to_display
+    pageSize = GlobalConfig.get().records_to_display
     resource = MonitorResultResource()
     objects = resource.get_object_list(request)
     paginator = resource._meta.paginator_class(
@@ -102,7 +102,7 @@ def chef(request):
     page = get_int(querydict, "page", 1)
 
     days_ago = datetime.datetime.now() - datetime.timedelta(days=days)
-    query = models.PlannedExperiment.objects.exclude(chefLastUpdate=None).filter(chefLastUpdate__gte=days_ago).order_by('chefLastUpdate')
+    query = models.PlannedExperiment.objects.exclude(experiment__chefLastUpdate=None).exclude(planStatus = "run").filter(experiment__chefLastUpdate__gte=days_ago).order_by('experiment__chefLastUpdate')
     chef_pager = Paginator(query, size, 0)
     try:
         chef_page = chef_pager.page(page)

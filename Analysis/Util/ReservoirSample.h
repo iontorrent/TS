@@ -32,20 +32,15 @@ public:
   }
 
   /** Constructor for sample of size k, note seed is implicitly 1 */
-  ReservoirSample(size_t k) {
+  ReservoirSample(size_t k, int seed = 1) {
     mK = 0;
     mSeen = 0;
     mFinished = false;
-    Init(k);
-  }
-
-  /** Constructor for sample of size k, note seed is implicitly 1 */
-  void Init(size_t k) {
-    Init(k, 1);
+    Init(k, seed);
   }
 
   /** Constructor for sample of size k and ability to specify integrer seed. */
-  void Init(size_t k, int seed) {
+  void Init(size_t k, int seed = 1) {
     mK = k;
     mRand.SetSeed(seed);
     mRes.clear();

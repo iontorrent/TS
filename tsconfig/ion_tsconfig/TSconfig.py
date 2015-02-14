@@ -504,6 +504,8 @@ class TSconfig (object):
 
             # ion-protonupdates is installed if T620 is determined, OR ion-pgmupdates is installed by default
             if is_proton_ts():
+                self.ION_PKG_LIST_MASTER_ONLY += pkgObj[PACKAGE]['torrentsuite']['pgm']
+                logger.debug("Adding %s to master ion package list", ','.join(pkgObj[PACKAGE]['torrentsuite']['pgm']))
                 self.ION_PKG_LIST_MASTER_ONLY += pkgObj[PACKAGE]['torrentsuite']['proton']
                 logger.debug("Adding %s to master ion package list", ','.join(pkgObj[PACKAGE]['torrentsuite']['proton']))
             else:
@@ -518,9 +520,11 @@ class TSconfig (object):
                     try:
                         self.SEC_PKG_LIST = self.get_security_pkg_list()
                         logger.info("get_security_pkg_list succeeded")
-                    except:
-                        logger.error(traceback.format_exc())
-                        logger.warn("Waiting for get_security_pkg_list() to succeed")
+                    except subprocess.CalledProcessError as exc:
+                        if "Could not get lock /var/lib/apt/lists/lock" in exc.cmd:
+                            logger.info("Waiting for get_security_pkg_list to succeed")
+                        else:
+                            logger.error(traceback.format_exc())
                         time.sleep(sleepy)
                         retry -=1
             else:

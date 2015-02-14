@@ -74,7 +74,6 @@ function version_test()
         ion-gpu
         ion-torrentr
         ion-rsmts
-        ion-tsconfig
     )
     first=true
     for pkg in ${pkgs[@]}; do

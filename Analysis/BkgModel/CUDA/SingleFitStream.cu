@@ -498,6 +498,7 @@ void SimpleSingleFitStream::executeKernel()
       block,
       0,
       _stream,
+      _hdBeadState.getPtr(),
       _dFgBufferFloat.getPtr(),
       _hdEmphVector.getPtr(),
       _hdNucRise.getPtr(),
@@ -520,6 +521,7 @@ void SimpleSingleFitStream::executeKernel()
           block, 
           0, 
           _stream,
+          _hdBeadState.getPtr(),
           _dFgBufferFloat.getPtr(), // FLxFxN,
           _dAmpl.getPtr(), // FLxN
           _dR.getPtr(), // N
@@ -542,6 +544,7 @@ void SimpleSingleFitStream::executeKernel()
          block, 
          0, 
          _stream,
+         _hdBeadState.getPtr(),
          _dTau_Adj.getPtr(),
          _dAmpl.getPtr(),
          _dR.getPtr(),

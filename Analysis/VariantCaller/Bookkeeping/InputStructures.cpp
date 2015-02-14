@@ -39,17 +39,17 @@ void InputStructures::Initialize(ExtendParameters &parameters, const ReferenceRe
     cout << "Loaded." << endl;
   }
 
-  // Load homopolymer recalibration model
+  // Load homopolymer recalibration model from file if the option was specified
   // why is recal model using the command line directly? <-- Because the basecaller module is programmed that way.
   // initialize only if there's a model file
   if (parameters.recal_model_file_name.length()>0){
-    do_recal.recalModel.Initialize(parameters.opts);
+    do_recal.recalModel.InitializeModel(parameters.recal_model_file_name, parameters.recalModelHPThres);
     do_recal.use_recal_model_only = true;
-    do_recal.is_live = true;
+    do_recal.is_live = do_recal.recalModel.is_enabled();
   }
 
   // finally turn off recalibration if not wanted
-  // even although we have a nice set of recalibration read-in.
+  // even though we have a nice set of recalibration read-in.
   if (parameters.program_flow.suppress_recalibration) {
     printf("Recalibration model: suppressed\n");
     do_recal.recalModel.suppressEnabled();

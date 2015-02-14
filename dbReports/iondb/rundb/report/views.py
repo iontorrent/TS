@@ -226,9 +226,22 @@ def testfragments_read(report):
             num_reads = int(tf_data.get("Num",0))
             num_50AQ17 = int(tf_data.get("50Q17",0))
             conversion_50AQ17 = "N/A"
+            
+            #since 100Q17 is a new attribute in TFStats.json, old file will not have this attribute
+            is_100Q17_key_found = False
+            if "100Q17" in tf_data.keys():
+                num_100AQ17 = int(tf_data.get("100Q17",0))
+                is_100Q17_key_found = True
+            conversion_100AQ17 = "---"
+            
             if num_reads > 0:
                 conversion_50AQ17 = (100*num_50AQ17/num_reads)
+                if is_100Q17_key_found:
+                    conversion_100AQ17 = (100*num_100AQ17/num_reads)
+                    if conversion_100AQ17 < 1:
+                        conversion_100AQ17 = "---"
             testfragments[tf_name]["conversion_50AQ17"] = conversion_50AQ17
+            testfragments[tf_name]["conversion_100AQ17"] = conversion_100AQ17
             testfragments[tf_name]["histogram_filename"] = "new_Q17_%s.png" % tf_name
             testfragments[tf_name]["num_reads"] = num_reads
 
@@ -237,32 +250,31 @@ def testfragments_read(report):
 
     return testfragments
 
-def barcodes_read(report):
+def get_barcodes(datasets):
     """get the list of barcodes"""
-    barcodes = load_json(report,"basecaller_results","datasets_basecaller.json")
-    if not barcodes: return False
+    barcode_list = []
+    if not datasets:
+        return []
 
     try:
-        for dataset in barcodes.get("datasets",[]):
+        for dataset in datasets.get("datasets",[]):
             file_prefix = dataset["file_prefix"]
             for rg in dataset.get("read_groups",[]):
-                if rg in barcodes.get("read_groups",{}):
-                    barcodes["read_groups"][rg]["file_prefix"] = file_prefix
-    except KeyError:
-        return False
-
-    barcode_list = []
-    try:
-        read_groups = barcodes.get("read_groups",{})
-        for key,value in read_groups.iteritems():
+                if rg in datasets.get("read_groups",{}):
+                    datasets["read_groups"][rg]["file_prefix"] = file_prefix
+    
+        for key,value in datasets.get("read_groups",{}).iteritems():
+            if value.get('filtered', False):
+                continue
             try:
-                value["mean_read_length"] = str(int(float(value["total_bases"])/float(value["read_count"]))) + " bp"
+                value["mean_read_length"] = "%d bp" % round(float(value["total_bases"])/float(value["read_count"]))
             except:
                 value["mean_read_length"] = "N/A"
             barcode_list.append(value)
         return sorted(barcode_list, key = lambda x: x.get('index',0))
+
     except KeyError:
-        return False
+        return []
 
 def csv_barcodes_read(report):
     def convert_to_long_or_float(value):
@@ -310,27 +322,6 @@ def basecaller_read(report):
     except KeyError, IOError:
         #"Error parsing BaseCaller.json, the version of BaseCaller used for this report is too old."
         return None
-
-def dataset_basecaller_read(report):
-    """Read datasets_basecaller.json for read count data"""
-
-    datasets_basecaller = load_json(report,"basecaller_results","datasets_basecaller.json")
-    if not datasets_basecaller: return False
-
-    bcd = {}
-    # mappable output
-    try:
-        bcd["total_Q20_bases"] = 0
-        bcd["total_Q0_bases"] = 0
-        bcd["percent_Q20_bases"] = "N/A"
-        for rg_id, rg_values in datasets_basecaller["read_groups"].items():
-            bcd["total_Q20_bases"] += rg_values["Q20_bases"]
-            bcd["total_Q0_bases"] += rg_values["total_bases"]
-        if bcd["total_Q0_bases"]:
-            bcd["percent_Q20_bases"] = (100 * bcd["total_Q20_bases"] / bcd["total_Q0_bases"])
-    except KeyError as err:
-        logger.error("datasets_basecaller.json format error: %s" % str(err))
-    return bcd
 
 def report_plan(report):
     if report.experiment.plan:
@@ -411,7 +402,56 @@ def report_version_display(report):
             if isinstance(value, list):
                 value = ".".join(map(str, value))
             versions.append((label, value))
+
+    if report.experiment.chefPackageVer:
+        versions.append(("Ion_Chef", report.experiment.chefPackageVer))
+    
     return versions
+
+
+def report_chef_display(report):
+    """ 
+    Returns data to be displayed in Chef Summary tab
+    """
+    chef_info = []
+
+    if not report.experiment.chefInstrumentName:
+        return chef_info
+     
+    chef_infoList  = [
+        ("chefInstrumentName", "Chef Instrument Name"),
+        ("chefSamplePos", "Sample Position"),
+        ("chefTipRackBarcode", "Tip Rack Barcode"),
+        ("chefChipType1", "Chip Type 1"),
+        ("chefChipType2", "Chip Type 2"),           
+        ("chefChipExpiration1", "Chip Expiration 1"),
+        ("chefChipExpiration2", "Chip Expiration 2"),    
+        #("chefLotNumber", "Lot Number"),
+        #("chefManufactureDate", "Manufacturing Date"),            
+        ("chefKitType", "Templating Kit Type"),
+        #("chefReagentID", "Reagent Id"),        
+        ("chefReagentsExpiration", "Reagent Expiration"),          
+        ("chefReagentsLot", "Reagent Lot Number"),
+        ("chefReagentsPart", "Reagent Part Number"),
+        ("chefSolutionsLot", "Solution Lot Number"),
+        ("chefSolutionsPart", "Solution Part Number"), 
+        ("chefSolutionsExpiration", "Solution Expiration"),             
+        ("chefPackageVer", "Chef Version"),
+        ("chefLastUpdate", "Chef Software Last Update Date"),        
+    ]
+    
+    
+    for key, label in chef_infoList:
+        value = getattr(report.experiment, key)
+
+        if key in ["chefChipType1", 'chefChipType2']:
+            chips = models.Chip.objects.filter(name = value)
+            if chips:
+                value = chips[0].description
+                
+        chef_info.append((label, value))
+    
+    return chef_info
 
 
 def find_output_file_groups(report, datasets, barcodes):
@@ -440,14 +480,14 @@ def find_output_file_groups(report, datasets, barcodes):
     if datasets and "barcode_config" in datasets:
         # links for barcodes.html: mapped bam links if aligned to reference, unmapped otherwise
         for barcode in barcodes:
-            if report.eas.reference:
-                barcode['basecaller_bam_link'] = "%s/basecaller_results/%s.basecaller.bam" % (web_link, barcode['file_prefix'])
+            barcode['basecaller_bam_link'] = "%s/basecaller_results/%s.basecaller.bam" % (web_link, barcode['file_prefix'])
+            if report.eas.reference or report.eas.get_barcoded_samples_reference_names():
                 barcode['bam_link'] = "%s%s/%s_%s_%s.bam" % (web_link, download_dir, re.sub('_rawlib$', '', barcode['file_prefix']), report.experiment.expName, report.resultsName)
                 barcode['bai_link'] = "%s%s/%s_%s_%s.bam.bai" % (web_link, download_dir, re.sub('_rawlib$', '', barcode['file_prefix']), report.experiment.expName, report.resultsName)
             else:
-                barcode['basecaller_bam_link'] = "%s/basecaller_results/%s.basecaller.bam" % (web_link, barcode['file_prefix'])
                 barcode['bam_link'] = None
                 barcode['bai_link'] = "%s/basecaller_results/%s.basecaller.bam.bai" % (web_link, barcode['file_prefix'])
+
             barcode['vcf_link'] = None
             for key in ['basecaller_bam_link', 'bam_link', 'bai_link']:
                 if not (barcode[key] and os.path.exists(barcode[key].replace(web_link, report_path))):
@@ -461,6 +501,16 @@ def find_output_file_groups(report, datasets, barcodes):
             output_group[key] = {"link": output_group[key], "exists": os.path.isfile(file_path)}
 
     return output_file_groups
+
+
+def get_recalibration_panel(datasets):
+    panel_recal = []
+    if datasets and "IonControl" in datasets:
+        sorted_groups = sorted(datasets['IonControl']['read_groups'].values(), key=lambda d: d.get('barcode_name', None))
+        panel_recal = sorted_groups
+    return panel_recal
+
+
 
 def find_source_files(report, files, subfolders):
     source_files = {}
@@ -478,11 +528,11 @@ def ionstats_histogram_median(data):
     cumulative_reads = numpy.cumsum(data)
     half = cumulative_reads[-1] / 2.0
     median_index = numpy.searchsorted(cumulative_reads, half, 'right')
-    return median_index + 1
+    return median_index
 
 
 def ionstats_histogram_mode(data):
-    return numpy.argmax(data) + 1
+    return numpy.argmax(data)
 
 
 def ionstats_histogram_mean(full):
@@ -511,8 +561,7 @@ def ionstats_read_stats(report):
     return ionstats_compute_stats(full)
 
 
-@login_required
-def report_display(request, report_pk):
+def _report_context(request, report_pk):
     """Show the main report for an data analysis result.
     """
     # QUIRK
@@ -551,8 +600,8 @@ def report_display(request, report_pk):
         elif report.status == 'Completed' and report_version(report) < "3.0":
             error = "old_report"
     if error is not None:
-        return HttpResponseRedirect(url_with_querystring(reverse('report_log',
-                                            kwargs={'pk':report_pk}), error=error))
+        return error, None
+
 
     experiment = report.experiment
     otherReports = report.experiment.results_set.exclude(pk=report_pk).order_by("-timeStamp")
@@ -561,10 +610,6 @@ def report_display(request, report_pk):
     report_status = report_status_read(report)
 
     plan = report_plan(report)
-    try:
-        reference = models.ReferenceGenome.objects.filter(short_name = report.eas.reference).order_by("-index_version")[0]
-    except (IndexError, IOError):
-        reference = False
 
     #find the major blocks from the important plugins
     major_plugins = {}
@@ -591,14 +636,14 @@ def report_display(request, report_pk):
 
     #TODO: encapuslate all vars into their parent block to make it easy to build the API maybe put
     #all of this in the model?
-    basecaller = basecaller_read(report)
-    read_stats = ionstats_read_stats(report)
-    barcodes = barcodes_read(report)
+    basecaller = basecaller_read(report)        # basecaller_results/BaseCaller.json
+    read_stats = ionstats_read_stats(report)    # basecaller_results/ionstats_basecaller.json
     datasets = load_json(report, "basecaller_results", "datasets_basecaller.json")
-    testfragments = testfragments_read(report)
-
-    software_versions = report_version_display(report)
-
+    testfragments = testfragments_read(report)  # basecaller_results/TFStats.json
+    beadfind = load_ini(report,"sigproc_results","analysis.bfmask.stats")
+    software_versions = report_version_display(report)  # version.txt
+    chef_info = report_chef_display(report)     # chef info
+    
     # special case: combinedAlignments output doesn't have any basecaller results
     if report.resultsType and report.resultsType == 'CombinedAlignments':
         report.experiment.expName = "CombineAlignments"
@@ -629,8 +674,6 @@ def report_display(request, report_pk):
         except:
             logger.exception("Cannot read info from ion_params_00.json.")
 
-    beadfind = load_ini(report,"sigproc_results","analysis.bfmask.stats")
-    dbr = dataset_basecaller_read(report)
 
     try:
         qcTypes = dict(qc for qc in
@@ -669,7 +712,7 @@ def report_display(request, report_pk):
         usable_sequence = basecaller and int(round(100.0 *
             float(basecaller["total_reads"]) / float(beadfind["Library Beads"])))
         usable_sequence_threshold = qcTypes.get("Usable Sequence (%)", 0)
-        quality = load_ini(report,"basecaller_results","quality.summary")
+        #quality = load_ini(report,"basecaller_results","quality.summary")
 
         basecaller["p_polyclonal"] = percent(basecaller["polyclonal"], beadfind["Library Beads"])
         basecaller["p_low_quality"] = percent(basecaller["low_quality"], beadfind["Library Beads"])
@@ -701,25 +744,39 @@ def report_display(request, report_pk):
         del alignStats
         del alignment_ini
 
+
+    eas_reference = report.eas.reference
+    barcodedSamples_reference_names = ""
+    barcodedSamples_reference_name_count = 0
+    if not eas_reference:
+        barcodedSamples_reference_names = report.eas.get_barcoded_samples_reference_names()
+        if barcodedSamples_reference_names:
+            eas_reference = barcodedSamples_reference_names[0]
+            barcodedSamples_reference_name_count = len(barcodedSamples_reference_names)
+            
     #Alignment
     try:
-        if report.eas.reference and report.eas.reference != 'none':
-            if reference:
-                avg_coverage_depth_of_target = round( float(ionstats_alignment['aligned']['num_bases']) / reference.genome_length(),1  )
+        reference = models.ReferenceGenome.objects.filter(short_name = eas_reference).order_by("-index_version")[0]
+        genome_length = reference.genome_length()
+    except (IndexError, IOError):
+        reference = report.eas.reference if report.eas.reference != 'none' else ''
+        genome_length = None
+
+    if reference:
+        try:
+            if genome_length:
+                avg_coverage_depth_of_target = round( float(ionstats_alignment['aligned']['num_bases']) / genome_length, 1  )
                 avg_coverage_depth_of_target = str(avg_coverage_depth_of_target) + "X"
-            else:
-                avg_coverage_depth_of_target = "N/A"
+                for c in ['AQ17', 'AQ20', 'AQ47']:
+                    try:
+                        ionstats_alignment[c]['mean_coverage'] = round( float(ionstats_alignment[c]['num_bases']) / genome_length, 1  )
+                    except:
+                        pass
 
             if float(ionstats_alignment['aligned']['num_bases']) > 0:
                 raw_accuracy = round( (1 - float(sum(ionstats_alignment['error_by_position'])) / float(ionstats_alignment['aligned']['num_bases'])) * 100.0, 1)
             else:
                 raw_accuracy = 0.0
-
-            try:
-                for c in ['AQ17', 'AQ20', 'AQ47']:
-                    ionstats_alignment[c]['mean_coverage'] = round( float(ionstats_alignment[c]['num_bases']) / reference.genome_length(),1  )
-            except:
-                logger.exception("Failed to compute mean_coverage values")
 
             try:
                 for c in ['aligned']:
@@ -733,10 +790,8 @@ def report_display(request, report_pk):
                 #ionstats_alignment['unaligned']['p_num_reads'] = 100.0 * ionstats_alignment['unaligned']['num_reads']) / float(ionstats_alignment['full']['num_reads']
             except:
                 logger.exception("Failed to compute percent alignment values")
-        else:
-            reference = 'none'
-    except:
-        logger.warn("Failed to build Alignment report content for %s." % report.resultsName)
+        except:
+            logger.warn("Failed to build Alignment report content for %s." % report.resultsName)
 
     duplicate_metrics = {}
     if report.libmetrics and report.libmetrics.duplicate_reads is not None:
@@ -778,24 +833,53 @@ def report_display(request, report_pk):
             for block in pb:
                 blockdir = "block_"+block
                 proton_blocks.append( ProtonResultBlock(blockdir, getBlockStatus(report,blockdir) ) )
-    except:
+    except Exception as err:
         logger.exception("Failed to create proton block content for report [%s]." % report.get_report_dir())
 
+
+
+    # Barcodes and Output
+    barcodes = get_barcodes(datasets)
     output_file_groups = []
     try:
         output_file_groups = find_output_file_groups(report, datasets, barcodes)
+        # Convert the barcodes to JSON for use by Kendo UI Grid
+        barcodes_json = json.dumps(barcodes)
     except Exception as err:
         logger.exception("Could not generate output file links")
 
-    # Convert the barcodes back to JSON for use by Kendo UI Grid
-    _barcodes = []
-    if barcodes:
-        _barcodes += [bc for bc in barcodes if not bc.has_key('filtered')]
-        _barcodes += [bc for bc in barcodes if bc.has_key('filtered') and not bc['filtered']]
-    barcodes_json = json.dumps(_barcodes)
-
     # This is both awesome and playing with fire.  Should be made explicit soon
-    ctxd = locals()
+    # This is the list of keys returned by locals in ordinary GET request
+    # [
+    #    "ProtonResultBlock", "addressable_wells", "avg_coverage_depth_of_target", "barcodes", "barcodes_json",
+    #    "basecaller", "bead_loading", "bead_loading_threshold", "beadfind", "beadsummary", "c", "datasets",
+    #    "dmfilestat", "duplicate_metrics", "encoder", "error", "experiment", "genome_length", "globalconfig",
+    #    "has_major_plugins", "ionstats_alignment", "isInternalServer", "key_signal_threshold", "latex",
+    #    "major_plugins", "major_plugins_images", "noheader", "noplugins", "otherReports", "output_file_groups", "plan",
+    #    "pluginList", "qcTypes", "qs", "raw_accuracy", "read_stats", "reference", "report", "report_extra_tables",
+    #    "report_pk", "report_status", "request", "software_versions", "testfragments", "usable_sequence",
+    #    "usable_sequence_threshold"
+    # ]
+
+    # This is where we collect all local variables in the current scope for
+    # our template context.  This is bad.
+    context = locals()
+
+    # On this line and below, we'll start explicitly adding only that which
+    # we actually require for the report and it's different sections
+    context['panel_recal'] = get_recalibration_panel(datasets)
+
+    return None, context
+
+
+@login_required
+def report_display(request, report_pk):
+    latex = request.GET.get("latex", False)
+
+    error, ctxd = _report_context(request, report_pk)
+    if error is not None:
+        return HttpResponseRedirect(url_with_querystring(reverse('report_log',
+                                            kwargs={'pk':report_pk}), error=error))
     ctx = RequestContext(request, ctxd)
     if not latex:
         return render_to_response("rundb/reports/report.html", context_instance=ctx)
@@ -863,6 +947,16 @@ def report_log(request, pk):
         if filename.endswith("-full.pdf"):
             archive_files["report_pdf"] = filename
 
+    archive_restore = False
+    if dmfilestat.action_state == 'AD':
+        serialized_json_path = os.path.join(dmfilestat.archivepath, "serialized_%s.json" % report.resultsName)
+        if os.path.exists(serialized_json_path):
+            archive_restore = json.dumps([{
+                "name": report.resultsName,
+                "Output Files": serialized_json_path,
+                "copy_report": "on"
+            }])
+
     context = {
         "report": report,
         "report_link": report_link,
@@ -872,6 +966,7 @@ def report_log(request, pk):
         "error" : error,
         "file_links": file_links,
         "archive_files": archive_files,
+        "archive_restore": archive_restore,
     }
 
     return render_to_response("rundb/reports/report_log.html",
@@ -1013,7 +1108,7 @@ def makeParams(exp, result, blockArgs, doThumbnail, align_full,
     This includes any special instructions for flow control in the top level script."""
 
     # defaults from GlobalConfig
-    gc = models.GlobalConfig.objects.all().order_by('id')[0]
+    gc = models.GlobalConfig.get()
     site_name = gc.site_name
     barcode_args = gc.barcode_args
     #get the hostname try to get the name from global config first
@@ -1111,7 +1206,15 @@ def makeParams(exp, result, blockArgs, doThumbnail, align_full,
         for attributeValue in sample.sampleAttributeValues.all():
             sampleInfo[sample.name]['attributes'][attributeValue.sampleAttribute.displayedName] = attributeValue.value
 
+    
+    barcodedSamples_reference_names = eas.get_barcoded_samples_reference_names()
+    #logger.debug("report.views.makeParams() barcodedSamples_reference_names=%s" %(barcodedSamples_reference_names))
 
+    #use barcodedSamples' selected reference if NO plan default reference is specified
+    reference = eas.reference
+    if not eas.reference and barcodedSamples_reference_names:
+        reference = barcodedSamples_reference_names[0]
+        
     if doThumbnail:
         beadfindArgs = eas.thumbnailbeadfindargs
         analysisArgs = eas.thumbnailanalysisargs
@@ -1133,7 +1236,7 @@ def makeParams(exp, result, blockArgs, doThumbnail, align_full,
            'prebasecallerArgs' : prebasecallerArgs,
            'basecallerArgs' : basecallerArgs,
            'blockArgs':blockArgs,
-           'referenceName':eas.reference,
+           'referenceName':reference,
            'resultsName':result.resultsName,
            'expName': exp.expName,
            'libraryKey':eas.libraryKey,
@@ -1148,6 +1251,7 @@ def makeParams(exp, result, blockArgs, doThumbnail, align_full,
            'chiptype':exp.chipType,
            'barcodeId': barcodeId,
            'barcodeSamples': json.dumps(eas.barcodedSamples,cls=DjangoJSONEncoder) if barcodeId else "{}",
+           "barcodeSamples_referenceNames" : barcodedSamples_reference_names,           
            'net_location':net_location,
            'exp_json': json.dumps(exp_json,cls=DjangoJSONEncoder),
            'site_name': site_name,
@@ -1378,7 +1482,7 @@ def _createReport(exp, eas, resultsName, **kwargs):
     plugins_list = kwargs.get('plugins',[])
 
     mark_duplicates = kwargs['mark_duplicates'] if ('mark_duplicates' in kwargs) else eas.isDuplicateReads
-    doBaseRecal = kwargs['do_base_recal'] if ('do_base_recal' in kwargs) else eas.base_recalibrate
+    doBaseRecal = kwargs['do_base_recal'] if ('do_base_recal' in kwargs) else eas.base_recalibration_mode    
     realign= kwargs['realign'] if ('realign' in kwargs) else eas.realign
 
     #do a full alignment?
@@ -1460,7 +1564,7 @@ def _createReport(exp, eas, resultsName, **kwargs):
             selected_previous_pk = None
             try:
                 selected_previous_pk = int(previousReport.strip('/').split('_')[-1])
-            except:
+            except ValueError:
                 # TorrentSuiteCloud plugin 3.4.2 uses reportName for this value
                 previous_obj = models.Results.objects.filter(resultsName = os.path.basename(previousReport))
                 if previous_obj:
@@ -1476,27 +1580,30 @@ def _createReport(exp, eas, resultsName, **kwargs):
             dmactions_type = dmactions_types.SIG
             dmfilestat = result.get_filestat(dmactions_type)
 
-        if dmfilestat.action_state in ['DG','DD']:
-            raise Exception("Analysis cannot start because %s data has been deleted." % dmactions_type)
-        elif dmfilestat.action_state in ['AG','AD']:
-            # replace paths with archived locations
-            try:
-                datfiles = os.listdir(dmfilestat.archivepath)
-                logger.debug("Got a list of files in %s" % dmfilestat.archivepath)
-                if dmactions_type == dmactions_types.SIG:
-                    pathToData = dmfilestat.archivepath
-                    if doThumbnail:
-                        pathToData = os.path.join(pathToData,'thumbnail')
-                elif dmactions_type == dmactions_types.BASE:
-                    previousReport = dmfilestat.archivepath
-                    # on-instrument analysis Basecalling Input data is in onboard_results folder
-                    if exp.log.get('oninstranalysis','') == "yes" and not doThumbnail:
-                        archived_onboard_path = os.path.join(dmfilestat.archivepath, 'onboard_results')
-                        if os.path.exists(archived_onboard_path):
-                            previousReport = archived_onboard_path
-            except:
-                raise Exception("Analysis cannot start because %s data has been archived to %s.  Please mount that drive to make the data available."
-                        % (dmactions_type, dmfilestat.archivepath) )
+        if dmfilestat:
+            if dmfilestat.action_state in ['DG','DD']:
+                raise Exception("Analysis cannot start because %s data has been deleted." % dmactions_type)
+            elif dmfilestat.action_state in ['AG','AD']:
+                # replace paths with archived locations
+                try:
+                    datfiles = os.listdir(dmfilestat.archivepath)
+                    logger.debug("Got a list of files in %s" % dmfilestat.archivepath)
+                    if dmactions_type == dmactions_types.SIG:
+                        pathToData = dmfilestat.archivepath
+                        if doThumbnail:
+                            pathToData = os.path.join(pathToData,'thumbnail')
+                    elif dmactions_type == dmactions_types.BASE:
+                        previousReport = dmfilestat.archivepath
+                        # on-instrument analysis Basecalling Input data is in onboard_results folder
+                        if exp.log.get('oninstranalysis','') == "yes" and not doThumbnail:
+                            archived_onboard_path = os.path.join(dmfilestat.archivepath, 'onboard_results')
+                            if os.path.exists(archived_onboard_path):
+                                previousReport = archived_onboard_path
+                except:
+                    raise Exception("Analysis cannot start because %s data has been archived to %s.  Please mount that drive to make the data available."
+                            % (dmactions_type, dmfilestat.archivepath) )
+        else:
+            raise Exception("Analysis cannot start because DMFileStat objects refuse to instantiate.  Please know its not your fault!")
         
         # check data input folder exists
         if blockArgs == "fromWells" and previousReport:
@@ -1588,7 +1695,7 @@ def _report_started(request, pk):
 @login_required
 @csrf_exempt
 def analyze(request, exp_pk, report_pk):
-
+    
     allowed = ['GET', 'POST']
     if request.method not in allowed:
         return http.HttpResponseNotAllowed(allowed)
@@ -1717,7 +1824,7 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
                 if not os.path.exists(report_dir) or not os.path.exists(os.path.join(report_dir,'sigproc_results')):
                     warnings[r.pk] = "Warning: Basecalling Input data is missing"
 
-    globalConfig = models.GlobalConfig.objects.all()[0]
+    globalConfig = models.GlobalConfig.get()
     
     # when samples are defined during Planning, references per-barcode can be selected
     barcodesWithSamples = []
@@ -1730,6 +1837,9 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
                         'sample': sample,
                         'barcodeId': bcId,
                         'reference': info.get(bcId,{}).get('reference') if 'reference' in info.get(bcId,{}) else eas.reference,
+                        'hotSpotRegionBedFile': info.get(bcId,{}).get('hotSpotRegionBedFile') if 'hotSpotRegionBedFile' in info.get(bcId,{}) else eas.hotSpotRegionBedFile,
+                        'targetRegionBedFile': info.get(bcId,{}).get('targetRegionBedFile') if 'targetRegionBedFile' in info.get(bcId,{}) else eas.targetRegionBedFile,
+
                         'nucType': info.get(bcId,{}).get('nucleotideType')
                     })
             except:
@@ -1739,7 +1849,7 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
     if request.method == 'POST':
         rpf = forms.RunParamsForm(request.POST, request.FILES)
         eas_form = forms.AnalysisSettingsForm(request.POST)
-
+                       
         # validate the form
         if rpf.is_valid() and eas_form.is_valid():
             '''
@@ -1797,7 +1907,7 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
                     for barcode, info in sample.get('barcodeSampleInfo',{}).items():
                         info['reference'] = barcodedReferences[barcode]['reference'] if barcodedReferences[barcode]['reference'] != 'none' else ''
                         info['nucleotideType'] = barcodedReferences[barcode]['nucType']
-
+            
             eas_kwargs = {
                 'libraryKey': rpf.cleaned_data['libraryKey'] or globalConfig.default_library_key,
                 'tfKey': rpf.cleaned_data['tfKey'] or globalConfig.default_test_fragment_key,
@@ -1809,7 +1919,7 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
                 'threePrimeAdapter': eas_form.cleaned_data['threePrimeAdapter'],
                 'selectedPlugins': selectedPlugins,
                 'isDuplicateReads': rpf.cleaned_data['mark_duplicates'],
-                'base_recalibrate': rpf.cleaned_data['do_base_recal'],
+                'base_recalibration_mode': rpf.cleaned_data['do_base_recal'],                
                 'realign': rpf.cleaned_data['realign'],
                 'beadfindargs': beadfindArgs,
                 'thumbnailbeadfindargs': thumbnailBeadfindArgs,
@@ -1858,7 +1968,9 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
         rpf.fields['previousThumbReport'].widget.choices = previousThumbReports
         rpf.fields['project_names'].initial = get_project_names(exp)
 
-        rpf.fields['do_base_recal'].initial = eas.base_recalibrate
+        rpf.fields['do_base_recal'].widget.choices = eas.get_base_recalibration_mode_choices()
+        rpf.fields['do_base_recal'].initial = eas.base_recalibration_mode
+        
         rpf.fields['mark_duplicates'].initial = eas.isDuplicateReads
         rpf.fields['realign'].initial = eas.realign
 
@@ -1945,6 +2057,10 @@ def show_binary(full_path, max_read=100000):
     return HttpResponse(result, mimetype='text/plain')
 
 
+def show_pdf(full_path):
+    return HttpResponse(FileWrapper(open(full_path, 'rb')), mimetype='application/pdf')
+
+
 def html_text(full_path):
     return HttpResponse(FileWrapper(open(full_path, 'rb')), mimetype='text/html')
 
@@ -1981,6 +2097,7 @@ FILE_HANDLERS = [ (re.compile(r), h) for r, h in (
     (r'\.png$', show_png_image),
     (r'\.csv$', show_csv),
     (r'\.json$', indent_json),
+    (r'\.pdf$', show_pdf),
     (r'\.html$', html_text),
     (r'.', plain_text),
 )]

@@ -6,7 +6,6 @@
 #include <pthread.h>
 #include "SampleStats.h"
 #include "SampleQuantiles.h"
-#include "KeyClassifier.h"
 
 #define KEY_SAMPLE_SIZE 1000
 

@@ -1,0 +1,135 @@
+{
+    "read_groups": {
+        "IonHControl_0003": {
+            "sample": "IonControl", 
+            "index": 6, 
+            "barcode_name": "IonHControl_0003", 
+            "barcode_sequence": "TCCTTAACAACGTC", 
+            "description": "IonControlBarcodes", 
+            "reference": "hg19", 
+            "platform_unit": "Unspecified/IonHControl_0003", 
+            "barcode_adapter": "GGTGAT"
+        }, 
+        "IonHControl_0002": {
+            "sample": "IonControl", 
+            "index": 5, 
+            "barcode_name": "IonHControl_0002", 
+            "barcode_sequence": "TTGGAAGGAACTTC", 
+            "description": "IonControlBarcodes", 
+            "reference": "hg19", 
+            "platform_unit": "Unspecified/IonHControl_0002", 
+            "barcode_adapter": "GGTGAT"
+        }, 
+        "IonHControl_0001": {
+            "sample": "IonControl", 
+            "index": 4, 
+            "barcode_name": "IonHControl_0001", 
+            "barcode_sequence": "CCGGAGGAAGGTTC", 
+            "description": "IonControlBarcodes", 
+            "reference": "hg19", 
+            "platform_unit": "Unspecified/IonHControl_0001", 
+            "barcode_adapter": "GGTGAT"
+        }, 
+        "IonLControl_0004": {
+            "sample": "IonControl", 
+            "index": 3, 
+            "barcode_name": "IonLControl_0004", 
+            "barcode_sequence": "GAGCTTCTTC", 
+            "description": "IonControlBarcodes", 
+            "reference": "hg19", 
+            "platform_unit": "Unspecified/IonLControl_0004", 
+            "barcode_adapter": "GGTGAT"
+        }, 
+        "IonLControl_0003": {
+            "sample": "IonControl", 
+            "index": 2, 
+            "barcode_name": "IonLControl_0003", 
+            "barcode_sequence": "GAAGATCTTC", 
+            "description": "IonControlBarcodes", 
+            "reference": "hg19", 
+            "platform_unit": "Unspecified/IonLControl_0003", 
+            "barcode_adapter": "GGTGAT"
+        }, 
+        "IonLControl_0002": {
+            "sample": "IonControl", 
+            "index": 1, 
+            "barcode_name": "IonLControl_0002", 
+            "barcode_sequence": "GCAACACGAC", 
+            "description": "IonControlBarcodes", 
+            "reference": "hg19", 
+            "platform_unit": "Unspecified/IonLControl_0002", 
+            "barcode_adapter": "GGTGAT"
+        }, 
+        "IonLControl_0001": {
+            "sample": "IonControl", 
+            "index": 0, 
+            "barcode_name": "IonLControl_0001", 
+            "barcode_sequence": "GAAGCCGATC", 
+            "description": "IonControlBarcodes", 
+            "reference": "hg19", 
+            "platform_unit": "Unspecified/IonLControl_0001", 
+            "barcode_adapter": "GGTGAT"
+        } 
+    }, 
+    "meta": {
+        "creation_date": "2014-06-14T02:03:55", 
+        "format_version": "1.0", 
+        "format_name": "Dataset Map", 
+        "generated_by": "Manual"
+    }, 
+    "datasets": [
+        {
+            "read_groups": [
+                "IonHControl_0001"
+            ], 
+            "file_prefix": "IonHControl_0001_rawlib", 
+            "dataset_name": "IonControl/IonHControl_0001"
+        }, 
+        {
+            "read_groups": [
+                "IonHControl_0002"
+            ], 
+            "file_prefix": "IonHControl_0002_rawlib", 
+            "dataset_name": "IonControl/IonHControl_0002"
+        }, 
+        {
+            "read_groups": [
+                "IonHControl_0003"
+            ], 
+            "file_prefix": "IonHControl_0003_rawlib", 
+            "dataset_name": "IonControl/IonHControl_0003"
+        }, 
+        {
+            "read_groups": [
+                "IonLControl_0001"
+            ], 
+            "file_prefix": "IonLControl_0001_rawlib", 
+            "dataset_name": "IonControl/IonLControl_0001"
+        }, 
+        {
+            "read_groups": [
+                "IonLControl_0002"
+            ], 
+            "file_prefix": "IonLControl_0002_rawlib", 
+            "dataset_name": "IonControl/IonLControl_0002"
+        }, 
+        {
+            "read_groups": [
+                "IonLControl_0003"
+            ], 
+            "file_prefix": "IonLControl_0003_rawlib", 
+            "dataset_name": "IonControl/IonLControl_0003"
+        }, 
+        {
+            "read_groups": [
+                "IonLControl_0004"
+            ], 
+            "file_prefix": "IonLControl_0004_rawlib", 
+            "dataset_name": "IonControl/IonLControl_0004"
+        } 
+    ], 
+    "barcode_config": {
+        "barcode_id": "IonControl"
+    }, 
+    "sequencing_center": "None"
+}

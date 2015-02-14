@@ -10,9 +10,14 @@
 #include <string>
 #include <algorithm>
 #include <vector>
+#include <stdio.h>
+#include <stdlib.h>
+#include "OptArgs.h"
+
 
 namespace ion {
 
+// ------------------------------------------------------------------
 class FlowOrder {
 public:
   FlowOrder() : cycle_nucs_("TACG"), num_flows_(0) {}
@@ -116,6 +121,139 @@ private:
   int               num_flows_;
 };
 
+// =============================================================================
+// Facilitate handling of chip subsets
+
+class ChipSubset {
+public:
+  ChipSubset() {
+    chip_size_x_ = 0;       chip_size_y_ = 0;
+    region_size_x_ = 50;    region_size_y_ = 50;
+    num_regions_x_ = 0;     num_regions_y_ = 0;
+    num_regions_ = 0;
+    block_col_offset_ = 0;  block_row_offset_ = 0;
+    subset_begin_x_ = 0;    subset_begin_y_ = 0;
+    subset_end_x_ = 0;      subset_end_y_ = 0;
+    next_region_ = 0;
+    next_begin_x_ = 0;      next_begin_y_ = 0;
+    num_wells_  = 0;
+  }
+
+  // ------------------------------------------------------------------
+
+  bool InitializeChipSubsetFromOptArgs(OptArgs &opts, const unsigned int chipSize_x, const unsigned int chipSize_y){
+
+    subset_begin_x_ = 0;
+    subset_begin_y_ = 0;
+    subset_end_x_   = chip_size_x_ = chipSize_x;
+    subset_end_y_   = chip_size_y_ = chipSize_y;
+
+    block_row_offset_            = opts.GetFirstInt    ('-', "block-row-offset", 0);
+    block_col_offset_            = opts.GetFirstInt    ('-', "block-col-offset", 0);
+
+    //! @todo Get default chip size from wells reader
+    std::string arg_region_size        = opts.GetFirstString ('-', "region-size", "");
+    if (!arg_region_size.empty()) {
+      if (2 != sscanf (arg_region_size.c_str(), "%dx%d", &region_size_x_, &region_size_y_)) {
+        fprintf (stderr, "Option Error: region-size %s\n", arg_region_size.c_str());
+        exit (EXIT_FAILURE);
+      }
+    }
+    num_regions_x_ = (chip_size_x_ +  region_size_x_ - 1) / region_size_x_;
+    num_regions_y_ = (chip_size_y_ +  region_size_y_ - 1) / region_size_y_;
+    num_regions_ = num_regions_x_ * num_regions_y_;
+
+    std::string arg_subset_rows        = opts.GetFirstString ('r', "rows", "");
+    std::string arg_subset_cols        = opts.GetFirstString ('c', "cols", "");
+    if (!arg_subset_rows.empty()) {
+      if (2 != sscanf (arg_subset_rows.c_str(), "%u-%u", &subset_begin_y_, &subset_end_y_)) {
+        fprintf (stderr, "BaseCaller Option Error: subset rows %s\n", arg_subset_rows.c_str());
+        exit (EXIT_FAILURE);
+      }
+    }
+    if (!arg_subset_cols.empty()) {
+      if (2 != sscanf (arg_subset_cols.c_str(), "%u-%u", &subset_begin_x_, &subset_end_x_)) {
+        fprintf (stderr, "BaseCaller Option Error: subset cols %s\n", arg_subset_cols.c_str());
+        exit (EXIT_FAILURE);
+      }
+    }
+    subset_end_x_ = std::min(subset_end_x_, chip_size_x_);
+    subset_end_y_ = std::min(subset_end_y_, chip_size_y_);
+    num_wells_ = (subset_end_x_-subset_begin_x_) * (subset_end_y_-subset_begin_y_);
+    printf("Processing chip region x: %u-%u y: %u-%u with a total of %u wells.\n", subset_begin_x_, subset_end_x_, subset_begin_y_, subset_end_y_, num_wells_);
+    return true;
+  };
+
+  // ------------------------------------------------------------------
+
+  int GetChipSizeX()    const { return chip_size_x_; };
+  int GetChipSizeY()    const { return chip_size_y_; };
+  int GetBeginX()       const { return subset_begin_x_; };
+  int GetBeginY()       const { return subset_begin_y_; };
+  int GetEndX()         const { return subset_end_x_; };
+  int GetEndY()         const { return subset_end_y_; };
+  int GetRowOffset()    const { return block_row_offset_; };
+  int GetColOffset()    const { return block_col_offset_; };
+  int GetRegionSizeX()  const { return region_size_x_; };
+  int GetRegionSizeY()  const { return region_size_y_; };
+  int GetNumRegionsX()  const { return num_regions_x_; };
+  int GetNumRegionsY()  const { return num_regions_y_; };
+  int NumRegions()      const { return num_regions_; };
+  int NumWells()        const { return num_wells_; };
+
+  // ------------------------------------------------------------------
+
+  bool GetCurrentRegionAndIncrement(int & current_region, int & begin_x, int & end_x, int & begin_y, int & end_y)
+  {
+    if (next_begin_y_ >= chip_size_y_)
+      return false;
+
+	current_region = next_region_;
+    begin_x = next_begin_x_;
+    begin_y = next_begin_y_;
+    end_x   = std::min(begin_x + region_size_x_, chip_size_x_);
+    end_y   = std::min(begin_y + region_size_y_, chip_size_y_);
+
+    // Increment region
+    next_region_++;
+    next_begin_x_ += region_size_x_;
+    if (next_begin_x_ >= chip_size_x_) {
+      next_begin_x_ = 0;
+      next_begin_y_ += region_size_y_;
+    }
+    return true;
+  };
+
+  // ------------------------------------------------------------------
+private:
+    // Generic sizes
+    int      chip_size_y_;            //!< Chip height in wells
+    int      chip_size_x_;            //!< Chip width in wells
+    int      region_size_y_;          //!< Wells hdf5 dataset chunk height
+    int      region_size_x_;          //!< Wells hdf5 dataset chunk width
+
+    int      num_regions_x_;
+    int      num_regions_y_;
+    int      num_regions_;
+
+    // Block offset for Proton Chips
+    int      block_row_offset_;       //!< Offset added to read names
+    int      block_col_offset_;       //!< Offset added to read names
+
+    // Chip subset coordinates selected
+    int      subset_begin_x_;         //!< Starting X of chip subset selected
+    int      subset_begin_y_;         //!< Starting Y of chip subset selected
+    int      subset_end_x_;           //!< Ending X of chip subset selected
+    int      subset_end_y_;           //!< Ending X of chip subset selected
+
+    // Threading block management
+    int      next_region_;            //!< Number of next region that needs processing by a worker
+    int      next_begin_x_;           //!< Starting X coordinate of next region
+    int      next_begin_y_;           //!< Starting Y coordinate of next region
+
+    int num_wells_;                   //!< NUmber of weelas in the chip subblock selected
+};
+
 }
 
 /*
@@ -125,6 +263,8 @@ class ChipPartition {
 
 };
 */
+
+// =============================================================================
 
 #define MAX_KEY_FLOWS     64
 

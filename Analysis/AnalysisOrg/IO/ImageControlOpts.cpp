@@ -167,4 +167,7 @@ void ImageControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 	}
 	col_pair_pixel_xtalk_correct = RetrieveParameterBool(opts, json_params, '-', "col-doubles-xtalk-correct", false);
 	pair_xtalk_fraction = RetrieveParameterFloat(opts, json_params, '-', "pair-xtalk-coeff", 0.0f);
+    fluid_potential_correct = RetrieveParameterBool(opts, json_params, '-', "fluid-potential-correct", false);
+    fluid_potential_threshold = RetrieveParameterFloat(opts, json_params, '-', "fluid-potential-threshold", 1.0f);
+
 }

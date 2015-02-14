@@ -11,6 +11,7 @@
 <script type="text/javascript" src="/site_media/resources/scripts/plan/validation.js"></script>
 <script type="text/javascript" src="/site_media/resources/scripts/plan/by_sample.js"></script>
 <script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_sample_table.js"></script>
+<script type="text/javascript" src="/site_media/resources/scripts/plan/page_plan_reference_section.js"></script>
 <script type="text/javascript" src="/site_media/resources/scripts/plan/iru_get_user_input.js"></script>
 <script type="text/javascript" src="/site_media/js/jquery.blockUI.js"></script>
 <style>
@@ -44,6 +45,8 @@
         {% endfor %}
          </div>
     </div>
+
+    {% include "rundb/plan/page_plan/page_plan_reference_section.html" %}
     {% include "rundb/plan/page_plan/page_plan_sample_table.html" %}
 </div>
 {%endblock%}

@@ -62,6 +62,13 @@ function refresh_grid_timer(source, refresh){
 		grid.update_timer = setInterval(function(){ grid.dataSource.read(); }, 10000);
 }
 
+function refresh_grid_timeout(source, refresh){
+    if (refresh){
+        var grid = $(source).data('kendoGrid');
+        setTimeout(function(){ grid.dataSource.read(); }, 10000);
+    }
+}
+
 function showModal(elem, modal_id){
 	var url = $(elem).attr('href');
 	console.log('showModal', modal_id, url);

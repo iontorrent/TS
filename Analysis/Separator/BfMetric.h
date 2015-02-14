@@ -71,7 +71,8 @@ class BfMetric {
                             int row_step,
                             int col_step,
                             int num_row_neighbors,
-                            int num_col_neighbors);
+                            int num_col_neighbors,
+                            int frame_window);
 
   void NormalizeMetric(const char *bad_wells,
                        int row_step, int col_step,

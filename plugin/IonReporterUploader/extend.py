@@ -75,17 +75,21 @@ def getSelectedIRAccountFromBucket(bucket):
 def getProductionURLS(bucket):
         versions = {"urls": []}
 
-        IR42 = {"IRVersion" : "IR42", "server" : "40.dataloader.ionreporter.iontorrent.com",
+        IR44 = {"IRVersion" : "IR44", "server" : "40.dataloader.ionreporter.lifetechnologies.com",
                 "port" : "443", "protocol" : "https"
         }
-        IR40 = {"IRVersion" : "IR40", "server" : "40.dataloader.ionreporter.iontorrent.com",
+        IR42 = {"IRVersion" : "IR42", "server" : "40.dataloader.ionreporter.lifetechnologies.com",
+                "port" : "443", "protocol" : "https"
+        }
+        IR40 = {"IRVersion" : "IR40", "server" : "40.dataloader.ionreporter.lifetechnologies.com",
                 "port" : "443", "protocol" : "https"
         }
 
-        IR1X = {"IRVersion" : "IR1X", "server" : "dataloader.ionreporter.iontorrent.com",
+        IR1X = {"IRVersion" : "IR1X", "server" : "dataloader.ionreporter.lifetechnologies.com",
                 "port" : "443", "protocol" : "https"
         }
 
+        versions["urls"].append(IR44)
         versions["urls"].append(IR42)
         versions["urls"].append(IR40)
         versions["urls"].append(IR1X)
@@ -521,6 +525,107 @@ def getSampleTabulationRules_4_2(inputJson, workflowFullDetail):
     restrictionRulesList.append({"ruleNumber":"99", "validationType":"error",            # a tempporary rule that is going to go away.
 	                           "For": {"Name": "RelationshipType", "Value": "DNA_RNA"},
                                  "Valid": {"Name": "Relation", "Values": ["Self"]}})
+    restrictionRulesList.append({"ruleNumber":"98", "validationType":"error",            # a tempporary rule that is going to go away.
+	                           "For": {"Name": "RelationshipType", "Value": "SINGLE_RNA_FUSION"},
+                                 "Valid": {"Name": "Relation", "Values": ["Self"]}})
+
+    restrictionRulesList.append({"ruleNumber":"7", "validationType":"error",
+	                           "For": {"Name": "Relation", "Value": "Father"},
+                                 "Valid": {"Name": "Gender", "Values": ["Male", "Unknown"]}})
+    restrictionRulesList.append({"ruleNumber":"8", "validationType":"error",
+	                           "For": {"Name": "Relation", "Value": "Mother"},
+                                 "Valid": {"Name": "Gender", "Values": ["Female", "Unknown"]}})
+    restrictionRulesList.append({"ruleNumber":"9", "validationType":"error",
+	                           "For": {"Name": "ApplicationType", "Value": "METAGENOMICS"},
+                                 "Valid": {"Name": "Gender", "Values": ["Unknown"]}})
+    restrictionRulesList.append({"ruleNumber":"10", "validationType":"error",
+	                           "For": {"Name": "DNA_RNA_Workflow", "Value": "DNA_RNA"},
+                                 "Valid": {"Name": "NucleotideType", "Values": ["DNA","RNA"]}})
+    restrictionRulesList.append({"ruleNumber":"11", "validationType":"error",
+	                           "For": {"Name": "DNA_RNA_Workflow", "Value":"RNA"},
+                                 "Valid": {"Name": "NucleotideType", "Values": ["RNA"]}})
+    restrictionRulesList.append({"ruleNumber":"12", "validationType":"error",
+	                              "For": {"Name": "DNA_RNA_Workflow", "Value":"DNA"},
+                                 "Disabled": {"Name": "NucleotideType"}})
+    restrictionRulesList.append({"ruleNumber":"13", "validationType":"error",
+	                              "For": {"Name": "CELLULARITY_PCT_REQUIRED", "Value":"0"},
+                                 "Disabled": {"Name": "CellularityPct"}})
+    restrictionRulesList.append({"ruleNumber":"14", "validationType":"error",
+	                              "For": {"Name": "CANCER_TYPE_REQUIRED", "Value":"0"},
+                                 "Disabled": {"Name": "CancerType"}})
+    restrictionRulesList.append({"ruleNumber":"15", "validationType":"error",
+	                              "For": {"Name": "CELLULARITY_PCT_REQUIRED", "Value":"1"},
+                                 "NonEmpty": {"Name": "CellularityPct"}})
+    restrictionRulesList.append({"ruleNumber":"16", "validationType":"error",
+	                              "For": {"Name": "CANCER_TYPE_REQUIRED", "Value":"1"},
+                                 "NonEmpty": {"Name": "CancerType"}})
+    sampleRelationshipDict["restrictionRules"] = restrictionRulesList
+    #return sampleRelationshipDict
+    return {"status": "true", "error": "none", "sampleRelationshipsTableInfo": sampleRelationshipDict}
+
+
+def getSampleTabulationRules_4_4(inputJson, workflowFullDetail):
+    sampleRelationshipDict = {}
+    sampleRelationshipDict["column-map"] = workflowFullDetail
+    sampleRelationshipDict["columns"] = []
+    cancerTypesListResult = getIRCancerTypesList(inputJson)
+    if (cancerTypesListResult["status"] != "true"):
+        return cancerTypesListResult
+    cancerTypesList = cancerTypesListResult["cancerTypes"]
+
+    workflowDict = {"Name": "Workflow", "FullName": "Workflow", "Order": "1", "key":"Workflow", "Type": "list", "ValueType": "String"}
+#    relationshipTypeDict = {"Name": "RelationshipType", "Order": "3", "key":"Relation", "Type": "list", "ValueType": "String",
+#                            "Values": ["Self", "Tumor_Normal", "Sample_Control", "Trio"]}
+    relationDict = {"Name": "Relation", "FullName": "Relation Role", "Order": "2", "key":"RelationRole", "Type": "list", "ValueType": "String",
+                    "Values": ["Sample", "Control", "Tumor", "Normal", "Father", "Mother", "Proband", "Self"]}
+    genderDict =   {"Name": "Gender", "FullName": "Gender","Order": "3", "key":"Gender", "Type": "list", "ValueType": "String",
+                    "Values": ["Male", "Female", "Unknown"]}
+    nucleoDict =   {"Name": "NucleotideType", "FullName": "Nucleotide Type", "Order": "4","key":"NucleotideType",  "Type": "list", "ValueType": "String",
+                    "Values": ["DNA", "RNA"]}
+    cellPctDict =  {"Name": "CellularityPct", "FullName": "Cellularity Percentage", "Order": "5","key":"cellularityPct",  "Type": "input", 
+	            "ValueType": "Integer", "Integer.Low":"0", "Integer.High":"100",
+                    "ValueDefault":"0"}
+    cancerDict =   {"Name": "CancerType", "FullName": "Cancer Type", "Order": "6", "key":"cancerType", "Type": "list", "ValueType": "String",
+                    "Values": cancerTypesList}
+    setIDDict =    {"Name": "SetID", "FullName": "IR Analysis Set ID", "Order": "7", "key":"setid", "Type": "input", "ValueType": "Integer"}
+
+
+    workflowDictValues = []
+    for entry in workflowFullDetail :
+        workflowName = entry["Workflow"]
+        workflowDictValues.append(workflowName)
+    workflowDict["Values"] = workflowDictValues
+
+    sampleRelationshipDict["columns"].append(workflowDict)
+    #sampleRelationshipDict["columns"].append(relationshipTypeDict)
+    sampleRelationshipDict["columns"].append(relationDict)
+    sampleRelationshipDict["columns"].append(genderDict)
+    sampleRelationshipDict["columns"].append(nucleoDict)
+    sampleRelationshipDict["columns"].append(cellPctDict)
+    sampleRelationshipDict["columns"].append(cancerDict)
+    sampleRelationshipDict["columns"].append(setIDDict)
+
+    restrictionRulesList = []
+    #restrictionRulesList.append({"ruleNumber":"1", "validationType":"error","For":{"Name": "RelationShipType", "Value":"Self"}, "Disabled":{"Name":"SetID"}})
+    #restrictionRulesList.append({"ruleNumber":"2", "validationType":"error","For": {"Name": "RelationShipType", "Value": "Self"}, "Disabled": {"Name": "Relation"}})
+    restrictionRulesList.append({"ruleNumber":"3", "validationType":"error",
+	                           "For": {"Name": "RelationshipType", "Value": "Self"},
+                                 "Valid": {"Name": "Relation", "Values": ["Self"]}})
+    restrictionRulesList.append({"ruleNumber":"4", "validationType":"error",
+	                           "For": {"Name": "RelationshipType", "Value": "Tumor_Normal"},
+                                 "Valid": {"Name": "Relation", "Values": ["Tumor", "Normal"]}})
+    restrictionRulesList.append({"ruleNumber":"5", "validationType":"error",
+	                           "For": {"Name": "RelationshipType", "Value": "Sample_Control"},
+                                 "Valid": {"Name": "Relation", "Values": ["Sample", "Control"]}})
+    restrictionRulesList.append({"ruleNumber":"6", "validationType":"error",
+	                           "For": {"Name": "RelationshipType", "Value": "Trio"},
+                                 "Valid": {"Name": "Relation", "Values": ["Father", "Mother", "Proband"]}})
+    restrictionRulesList.append({"ruleNumber":"99", "validationType":"error",            # a tempporary rule that is going to go away.
+	                           "For": {"Name": "RelationshipType", "Value": "DNA_RNA"},
+                                 "Valid": {"Name": "Relation", "Values": ["Self"]}})
+    restrictionRulesList.append({"ruleNumber":"98", "validationType":"error",            # a tempporary rule that is going to go away.
+	                           "For": {"Name": "RelationshipType", "Value": "SINGLE_RNA_FUSION"},
+                                 "Valid": {"Name": "Relation", "Values": ["Self"]}})
 
     restrictionRulesList.append({"ruleNumber":"7", "validationType":"error",
 	                           "For": {"Name": "Relation", "Value": "Father"},
@@ -558,6 +663,7 @@ def getSampleTabulationRules_4_2(inputJson, workflowFullDetail):
 
 
 
+
 def getUserInput(inputJson):
     irAccountJson = inputJson["irAccount"]
     server = irAccountJson["server"]
@@ -578,7 +684,9 @@ def getUserInput(inputJson):
     # add Upload Only option
     workflowFullDetail.insert(0,{'ApplicationType':'UploadOnly', 'Workflow':'Upload Only', 'RelationshipType': 'Self'})
 
-    if version == "42":
+    if version == "44":
+        return getSampleTabulationRules_4_4(inputJson, workflowFullDetail)
+    elif version == "42":
         return getSampleTabulationRules_4_2(inputJson, workflowFullDetail)
     elif version == "40":
         return getSampleTabulationRules_4_0(inputJson, workflowFullDetail)   # TBD Jose, this need to go away when IR fixes the version list
@@ -926,6 +1034,8 @@ def validateUserInput(inputJson):
         return validateUserInput_4_0(inputJson)
     if version == "42":
         return validateUserInput_4_2(inputJson)
+    if version == "44":
+        return validateUserInput_4_4(inputJson)
 
 
 def validateUserInput_4_0(inputJson):
@@ -1029,7 +1139,7 @@ def validateUserInput_4_0(inputJson):
         # some known key translations on the uip, before uip can be used for validations
         if  "setid" in uip :
             uip["SetID"]= uip["setid"]
-        if  "RelationshpType" not in uip :
+        if  "RelationshipType" not in uip :
             if  "Relation" in uip :
                 uip["RelationshipType"]= uip["Relation"]
             if  "RelationRole" in uip :
@@ -1298,7 +1408,6 @@ def validateAllRulesOnRecord_4_0(rules, uip, setidHash, rowErrors, rowWarnings):
             inputValidationErrorHandle(row, "error", msg, rowErrors, rowWarnings)
 
 
-
 def validateUserInput_4_2(inputJson):
     userInput = inputJson["userInput"]
     irAccountJson = inputJson["irAccount"]
@@ -1400,7 +1509,7 @@ def validateUserInput_4_2(inputJson):
         # some known key translations on the uip, before uip can be used for validations
         if  "setid" in uip :
             uip["SetID"] = uip["setid"]
-        if  "RelationshpType" not in uip :
+        if  "RelationshipType" not in uip :
             if  "Relation" in uip :
                 uip["RelationshipType"] = uip["Relation"]
             if  "RelationRole" in uip :
@@ -1412,6 +1521,12 @@ def validateUserInput_4_2(inputJson):
                 #uip["ApplicationType"] = currentlyAvaliableWorkflows[uip["Workflow"]]["ApplicationType"]
                 #uip["DNA_RNA_Workflow"] = currentlyAvaliableWorkflows[uip["Workflow"]]["DNA_RNA_Workflow"]
                 #uip["OCP_Workflow"] = currentlyAvaliableWorkflows[uip["Workflow"]]["OCP_Workflow"]
+
+                # another temporary check which is not required if all the parameters of workflow  were  properly handed off from TS 
+                if "RelationshipType" not in uip :
+                    msg="INTERNAL ERROR:  For selected workflow "+ uip["Workflow"] + ", an internal key  RelationshipType is missing for row " + rowStr
+                    inputValidationErrorHandle(rowStr, "error", msg, rowErrors, rowWarnings)
+                    continue
 
                 #bring in all the workflow parameter so far available, into the uip hash.
                 for k in  currentlyAvaliableWorkflows[uip["Workflow"]] : 
@@ -1780,6 +1895,493 @@ def validateAllRulesOnRecord_4_2(rules, uip, setidHash, rowErrors, rowWarnings):
 
 
 
+def validateUserInput_4_4(inputJson):
+    userInput = inputJson["userInput"]
+    irAccountJson = inputJson["irAccount"]
+
+    protocol = irAccountJson["protocol"]
+    server = irAccountJson["server"]
+    port = irAccountJson["port"]
+    token = irAccountJson["token"]
+    version = irAccountJson["version"]
+    version = version.split("IR")[1]
+    grwsPath = "grws_1_2"
+    #if version == "40" :
+    #   grwsPath="grws"
+    unSupportedIRVersionsForThisFunction = ['10', '12', '14', '16', '18', '20']
+    if version in unSupportedIRVersionsForThisFunction:
+        return {"status": "true",
+                "error": "UserInput Validation Query not supported for this version of IR " + version,
+                "validationResults": []}
+
+    # re-arrange the rules and workflow information in a frequently usable tree structure.
+    getUserInputCallResult = getUserInput(inputJson)
+    if getUserInputCallResult.get("status") == "false":
+        return {"status": "false", "error": getUserInputCallResult.get("error")}
+    currentRules = getUserInputCallResult.get("sampleRelationshipsTableInfo")
+    userInputInfo = userInput["userInputInfo"]
+    validationResults = []
+    # create a hash currentlyAvailableWorkflows with workflow name as key and value as a hash of all props of workflows from column-map
+    currentlyAvaliableWorkflows={}
+    for cmap in currentRules["column-map"]:
+       currentlyAvaliableWorkflows[cmap["Workflow"]]=cmap
+    # create a hash orderedColumns with column order number as key and value as a hash of all properties of each column from columns
+    orderedColumns={}
+    for col in currentRules["columns"]:
+       orderedColumns[col["Order"]] = col
+
+    """ some debugging prints for the dev phase
+    print "Current Rules"
+    print currentRules
+    print ""
+    print "ordered Columns"
+    print orderedColumns
+    print ""
+    print ""
+    print "Order 1"
+    if getElementWithKeyValueLD("Order","8", currentRules["columns"]) != None:
+        print getElementWithKeyValueLD("Order","8", currentRules["columns"])
+    print ""
+    print ""
+    print "Name Gender"
+    print getElementWithKeyValueDD("Name","Gender", orderedColumns)
+    print ""
+    print ""
+    """ 
+
+
+    ###################################### This is a mock logic. This is not the real validation code. This is for test only 
+    ###################################### This can be enabled or disabled using the control variable just below.
+    mockLogic = 0
+    if mockLogic == 1:
+        #for 4.0, for now, return validation results based on a mock logic .
+        row = 1
+        for uip in userInputInfo:
+            if "row" in uip:
+                resultRow={"row": uip["row"]}
+            else:
+               resultRow={"row":str(row)}
+            if uip["Gender"] == "Unknown" :
+                resultRow["errorMessage"]="For the time being... ERROR:  Gender cannot be Unknown"
+            if uip["setid"].find("0_") != -1  :
+                resultRow["warningMessage"]="For the time being... WARNING:  setid is still zero .. did you forget to set it correctly?"
+            validationResults.append(resultRow)
+            row = row + 1
+        return {"status": "true", "error": "none", "validationResults": validationResults}
+    ######################################
+    ######################################
+
+
+
+    setidHash={}
+    rowErrors={}
+    rowWarnings={}
+    uniqueSamples={}
+    analysisCost={}
+    analysisCost["workflowCosts"]=[]
+
+
+    row = 1
+    for uip in userInputInfo:
+        # make a row number if not provided, else use whats provided as rownumber.
+        if "row" not in uip:
+           uip["row"]=str(row)
+        rowStr = uip["row"]
+        # register such a row in the error bucket  and warning buckets.. basically create two holder arrays in those buckets
+        if  rowStr not in rowErrors:
+           rowErrors[rowStr]=[]
+        if  rowStr not in rowWarnings:
+           rowWarnings[rowStr]=[]
+
+        # some known key translations on the uip, before uip can be used for validations
+        if  "setid" in uip :
+            uip["SetID"] = uip["setid"]
+        if  "RelationshipType" not in uip :
+            if  "Relation" in uip :
+                uip["RelationshipType"] = uip["Relation"]
+            if  "RelationRole" in uip :
+                uip["Relation"] = uip["RelationRole"]
+        if uip["Workflow"] == "Upload Only":
+            uip["Workflow"] = ""
+        if uip["Workflow"] !="":
+            if uip["Workflow"] in currentlyAvaliableWorkflows:
+                #uip["ApplicationType"] = currentlyAvaliableWorkflows[uip["Workflow"]]["ApplicationType"]
+                #uip["DNA_RNA_Workflow"] = currentlyAvaliableWorkflows[uip["Workflow"]]["DNA_RNA_Workflow"]
+                #uip["OCP_Workflow"] = currentlyAvaliableWorkflows[uip["Workflow"]]["OCP_Workflow"]
+
+                # another temporary check which is not required if all the parameters of workflow  were  properly handed off from TS 
+                if "RelationshipType" not in uip :
+                    msg="INTERNAL ERROR:  For selected workflow "+ uip["Workflow"] + ", an internal key  RelationshipType is missing for row " + rowStr
+                    inputValidationErrorHandle(rowStr, "error", msg, rowErrors, rowWarnings)
+                    continue
+
+                #bring in all the workflow parameter so far available, into the uip hash.
+                for k in  currentlyAvaliableWorkflows[uip["Workflow"]] : 
+                    uip[k] = currentlyAvaliableWorkflows[uip["Workflow"]][k]
+            else:
+                uip["ApplicationType"] = "unknown"
+                msg="selected workflow "+ uip["Workflow"] + " is not available for this IR user account at this time"
+                inputValidationErrorHandle(rowStr, "error", msg, rowErrors, rowWarnings)
+                continue
+        if  "nucleotideType" in uip :
+            uip["NucleotideType"] = uip["nucleotideType"]
+        if  "NucleotideType" not in uip :
+            uip["NucleotideType"] = ""
+        if  "cellularityPct" in uip :
+            uip["CellularityPct"] = uip["cellularityPct"]
+        if  "CellularityPct" not in uip :
+            uip["CellularityPct"] = ""
+        if  "cancerType" in uip :
+            uip["CancerType"] = uip["cancerType"]
+        if  "CancerType" not in uip :
+            uip["CancerType"] = ""
+
+
+        # all given sampleNames should be unique   TBD Jose   this requirement is going away.. need to safely remove this part. First, IRU plugin should be corrected before correcting this rule.
+        if uip["sample"] not in uniqueSamples:
+            uniqueSamples[uip["sample"]] = uip  #later if its a three level then make it into an array of uips
+        else:
+            duplicateSamplesExists = True
+            theOtherUip = uniqueSamples[uip["sample"]]
+            theOtherRowStr = theOtherUip["row"]
+            theOtherSetid = theOtherUip["setid"]
+            theOtherDNA_RNA_Workflow = ""
+            if "DNA_RNA_Workflow" in theOtherUip:
+			    theOtherDNA_RNA_Workflow = theOtherUip["DNA_RNA_Workflow"]
+            thisDNA_RNA_Workflow = ""
+            if "DNA_RNA_Workflow" in uip:
+			    thisDNA_RNA_Workflow = uip["DNA_RNA_Workflow"]
+            theOtherNucleotideType = ""
+            if "NucleotideType" in theOtherUip:
+                theOtherNucleotideType = theOtherUip["NucleotideType"]
+            thisNucleotideType = ""
+            if "NucleotideType" in uip:
+                thisNucleotideType = uip["NucleotideType"]
+            # if the rows are for DNA_RNA workflow, then dont complain .. just pass it along..
+            #debug print  uip["row"] +" == " + theOtherRowStr + " samplename similarity  " + uip["DNA_RNA_Workflow"] + " == "+ theOtherDNA_RNA_Workflow
+            if (       ((uip["Workflow"]=="Upload Only")or(uip["Workflow"] == "")) and (thisNucleotideType != theOtherNucleotideType)     ):
+                duplicateSamplesExists = False
+            if (       (uip["setid"] == theOtherSetid) and (thisDNA_RNA_Workflow == theOtherDNA_RNA_Workflow ) and (thisDNA_RNA_Workflow == "DNA_RNA")      ):
+                duplicateSamplesExists = False
+            if duplicateSamplesExists :
+                msg ="sample name "+uip["sample"] + " in row "+ rowStr+" is also in row "+theOtherRowStr+". Please change the sample name"
+                inputValidationErrorHandle(rowStr, "error", msg, rowErrors, rowWarnings)
+            # else dont flag an error
+
+        # if workflow is empty then dont validate and dont include this row in setid for further validations.
+        if uip["Workflow"] =="":
+            continue
+
+        # if setid is empty or it starts with underscore , then dont validate and dont include this row in setid hash for further validations.
+        if (   (uip["SetID"].startswith("_")) or   (uip["SetID"]=="")  ):
+            msg ="SetID in row("+ rowStr+") should not be empty or start with an underscore character. Please update the SetID."
+            inputValidationErrorHandle(rowStr, "error", msg, rowErrors, rowWarnings)
+            continue
+        # save the workflow information of the record on the setID.. also check workflow mismatch with previous row of the same setid
+        setid = uip["SetID"]
+        if  setid not in setidHash:
+            setidHash[setid] = {}
+            setidHash[setid]["records"] =[]
+            setidHash[setid]["firstRecordRow"]=uip["row"]
+            setidHash[setid]["firstWorkflow"]=uip["Workflow"]
+            setidHash[setid]["firstRelationshipType"]=uip["RelationshipType"]
+            setidHash[setid]["firstRecordDNA_RNA"]=uip["DNA_RNA_Workflow"]
+        else:
+            previousRow = setidHash[setid]["firstRecordRow"]
+            expectedWorkflow = setidHash[setid]["firstWorkflow"]
+            expectedRelationshipType = setidHash[setid]["firstRelationshipType"]
+            #print  uip["row"] +" == " + previousRow + " set id similarity  " + uip["RelationshipType"] + " == "+ expectedRelationshipType
+            if expectedWorkflow != uip["Workflow"]:
+                msg="Selected workflow "+ uip["Workflow"] + " does not match a previous sample with the same SetID, with workflow "+ expectedWorkflow +" in row "+ previousRow+ ". Either change this workflow to match the previous workflow selection for the this SetID, or change the SetiD to a new value if you intend this sample to be used in a different IR analysis."
+                inputValidationErrorHandle(rowStr, "error", msg, rowErrors, rowWarnings)
+            elif expectedRelationshipType != uip["RelationshipType"]:
+                #print  "error on " + uip["row"] +" == " + previousRow + " set id similarity  " + uip["RelationshipType"] + " == "+ expectedRelationshipType
+                msg="INTERNAL ERROR:  RelationshipType "+ uip["RelationshipType"] + " of the selected workflow, does not match a previous sample with the same SetID, with RelationshipType "+ expectedRelationshipType +" in row "+ previousRow+ "."
+                inputValidationErrorHandle(rowStr, "error", msg, rowErrors, rowWarnings)
+        setidHash[setid]["records"].append(uip)
+
+        # check if sample already exists on IR at this time and give a warning..
+        inputJson["sampleName"] = uip["sample"]
+        if uip["sample"] not in uniqueSamples:    # no need to repeat if the check has been done for the same sample name on an earlier row.
+            sampleExistsCallResults = sampleExistsOnIR(inputJson)
+            if sampleExistsCallResults.get("error") != "":
+                if sampleExistsCallResults.get("status") == "true":
+                    msg="sample name "+ uip["sample"] + " already exists in Ion Reporter "
+                    inputValidationErrorHandle(rowStr, "error", msg, rowErrors, rowWarnings)
+
+        # check all the generic rules for this uip .. the results of the check goes into the hashes provided as arguments.
+        validateAllRulesOnRecord_4_2(currentRules["restrictionRules"], uip, setidHash, rowErrors, rowWarnings)
+
+        row = row + 1
+
+
+    # after validations of basic rules look for errors all role requirements, uniqueness in roles, excess number of
+    # roles, insufficient number of roles, etc.
+    for setid in setidHash:
+        # first check all the required roles are there in the given set of records of the set
+        rowsLooked = ""
+        if "validRelationRoles" in setidHash[setid]:
+            for validRole in setidHash[setid]["validRelationRoles"]:
+                foundRole=0
+                rowsLooked = ""
+                for record in setidHash[setid]["records"]:
+                    if rowsLooked != "":
+                        rowsLooked = rowsLooked + "," + record["row"]
+                    else:
+                        rowsLooked = record["row"]
+                    if validRole == record["Relation"]:   #or RelationRole
+                        foundRole = 1
+                if foundRole == 0 :
+                    msg="For workflow " + setidHash[setid]["firstWorkflow"] +", a required RelationRole "+ validRole + " is not found. "
+                    if   rowsLooked != "" :
+                        if rowsLooked.find(",") != -1  :
+                            msg = msg + "Please check the rows " + rowsLooked
+                        else:
+                            msg = msg + "Please check the row " + rowsLooked
+                    inputValidationErrorHandle(setidHash[setid]["firstRecordRow"], "error", msg, rowErrors, rowWarnings)
+            # check if any extra roles exists.  Given that the above test exists for lack of roles, it is sufficient if we 
+            # verify the total number of roles expected and number of records got, for this setid. If there is a mismatch,
+            # it means there are more than the number of roles required.
+            #    Use the value of the rowsLooked,  populated from the above loop.
+            sizeOfRequiredRoles = len(setidHash[setid]["validRelationRoles"])
+            numRecordsForThisSetId = len(setidHash[setid]["records"])
+            if (numRecordsForThisSetId > sizeOfRequiredRoles):
+                complainAboutTooManyRoles = True
+
+                if setidHash[setid]["firstRecordDNA_RNA"] == "DNA_RNA":
+                    complainAboutTooManyRoles = False
+
+                if complainAboutTooManyRoles:
+                    msg="For workflow " + setidHash[setid]["firstWorkflow"] + ", more than the required number of RelationRoles is found. Expected number of roles is " + str(sizeOfRequiredRoles) + ". "
+                    if   rowsLooked != "" :
+                        if rowsLooked.find(",") != -1  :
+                            msg = msg + "Please check the rows " + rowsLooked
+                        else:
+                            msg = msg + "Please check the row " + rowsLooked
+                    inputValidationErrorHandle(setidHash[setid]["firstRecordRow"], "error", msg, rowErrors, rowWarnings)
+
+        ##
+        # validate the nucleotidetypes, similar to the roles.
+        # first check all the required nucleotides are there in the given set of records of the set
+        #    Use the value of the rowsLooked,  populated from the above loop.
+        if (   (setidHash[setid]["firstRecordDNA_RNA"] == "DNA_RNA")  or  (setidHash[setid]["firstRecordDNA_RNA"] == "RNA")   ): 
+            for validNucloetide in setidHash[setid]["validNucleotideTypes"]:
+                foundNucleotide=0
+                for record in setidHash[setid]["records"]:
+                    if validNucloetide == record["NucleotideType"]:   #or NucleotideType
+                        foundNucleotide = 1
+                if foundNucleotide == 0 :
+                    msg="For workflow " + setidHash[setid]["firstWorkflow"] +", a required NucleotideType "+ validNucloetide + " is not found. "
+                    if   rowsLooked != "" :
+                        if rowsLooked.find(",") != -1  :
+                            msg = msg + "Please check the rows " + rowsLooked
+                        else:
+                            msg = msg + "Please check the row " + rowsLooked
+                    inputValidationErrorHandle(setidHash[setid]["firstRecordRow"], "error", msg, rowErrors, rowWarnings)
+            # check if any extra nucleotides exists.  Given that the above test exists for missing nucleotides, it is sufficient if we 
+            # verify the total number of nucleotides expected and number of records got, for this setid. If there is a mismatch,
+            # it means there are more than the number of nucleotides required.
+            #    Use the value of the rowsLooked,  populated from the above loop.
+            sizeOfRequiredNucleotides = len(setidHash[setid]["validNucleotideTypes"])
+            #numRecordsForThisSetId = len(setidHash[setid]["records"])   #already done as part of roles check
+            if (numRecordsForThisSetId > sizeOfRequiredNucleotides):
+                msg="For workflow " + setidHash[setid]["firstWorkflow"] + ", more than the required number of Nucleotides is found. Expected number of Nucleotides is " + str(sizeOfRequiredNucleotides) + ". "
+                if   rowsLooked != "" :
+                    if rowsLooked.find(",") != -1  :
+                        msg = msg + "Please check the rows " + rowsLooked
+                    else:
+                        msg = msg + "Please check the row " + rowsLooked
+                inputValidationErrorHandle(setidHash[setid]["firstRecordRow"], "error", msg, rowErrors, rowWarnings)
+
+
+        # calculate the cost of the analysis
+        cost={}
+        cost["row"]=setidHash[setid]["firstRecordRow"]
+        cost["workflow"]=setidHash[setid]["firstWorkflow"]
+        cost["cost"]="50.00"     # TBD  actually, get it from IR. There are now APIs available.. TS is not yet popping this to user before plan submission.
+        analysisCost["workflowCosts"].append(cost)
+
+    analysisCost["totalCost"]="2739.99"   # TBD need to have a few lines to add the individual cost... TS is not yet popping this to user before plan submission.
+    analysisCost["text1"]="The following are the details of the analysis planned on the IonReporter, and their associated cost estimates."
+    analysisCost["text2"]="Press OK if you have reviewed and agree to the estimated costs and wish to continue with the planned IR analysis, or press CANCEL to make modifications."
+
+
+
+
+
+    """
+    print ""
+    print ""
+    print "userInputInfo"
+    print userInputInfo
+    print ""
+    print ""
+    """
+    #print ""
+    #print ""
+    #print "setidHash"
+    #print setidHash
+    #print ""
+    #print ""
+
+    # consolidate the  errors and warnings per row and return the results
+    foundAtLeastOneError = 0
+    for uip in userInputInfo:
+        rowstr=uip["row"]
+        emsg=""
+        wmsg=""
+        if rowstr in rowErrors:
+           for e in  rowErrors[rowstr]:
+              foundAtLeastOneError =1
+              emsg = emsg + e + " ; "
+        if rowstr in rowWarnings:
+           for w in  rowWarnings[rowstr]:
+              wmsg = wmsg + w + " ; "
+        k={"row":rowstr, "errorMessage":emsg, "warningMessage":wmsg, "errors": rowErrors[rowstr], "warnings": rowWarnings[rowstr]}
+        validationResults.append(k)
+
+    # forumulate a few constant advices for use on certain conditions, to TS users
+    advices={}
+    #advices["onTooManyErrors"]= "Looks like there are some errors on this page. If you are not sure of the workflow requirements, you can opt to only upload the samples to IR and not run any IR analysis on those samples at this time, by not selecting any workflow on the Workflow column of this tabulation. You can later find the sample on the IR, and launch IR analysis on it later, by logging into the IR application."
+    #advices["onTooManyErrors"]= "There are errors on this page. If you only want to upload samples to Ion Reporter and not perform an Ion Reporter analysis at this time, you do not need to select a Workflow. When you are ready to launch an Ion Reporter analysis, you must log into Ion Reporter and select the samples to analyze."
+    advices["onTooManyErrors"]= "<html> <body> There are errors on this page. To remove them, either: <br> &nbsp;&nbsp;1) Change the Workflow to &quot;Upload Only&quot; for affected samples. Analyses will not be automatically launched in Ion Reporter.<br> &nbsp;&nbsp;2) Correct all errors to ensure autolaunch of correct analyses in Ion Reporter.<br> Visit the Torrent Suite documentation at <a href=/ion-docs/Home.html > docs </a>  for examples. </body> </html>"
+
+    #true/false return code is reserved for error in executing the functionality itself, and not the condition of the results itself.
+    # say if there are networking errors, talking to IR, etc will return false. otherwise, return pure results. The results internally
+    # may contain errors, which is to be interpretted by the caller. If there are other helpful error info regarding the results itsef,
+    # then additional variables may be used to reflect metadata about the results. the status/error flags may be used to reflect the
+    # status of the call itself.
+    #if (foundAtLeastOneError == 1):
+    #    return {"status": "false", "error": "none", "validationResults": validationResults, "cost":analysisCost}
+    #else:
+    #    return {"status": "true", "error": "none", "validationResults": validationResults, "cost":analysisCost}
+    return {"status": "true", "error": "none", "validationResults": validationResults, "cost":analysisCost, "advices": advices}
+
+    """
+    # if we want to implement this logic in grws, then here is the interface code.  But currently it is not yet implemented there.
+    try:
+        url = protocol + "://" + server + ":" + port + "/" + grwsPath + "/data/TSUserInputValidate/"
+        hdrs = {'Authorization': token}
+        resp = requests.post(url, verify=False, headers=hdrs,timeout=30)  #timeout is in seconds
+        result = {}
+        if resp.status_code == requests.codes.ok:
+            result = json.loads(resp.text)
+        else:
+            #raise Exception ("IR WebService Error Code " + str(resp.status_code))
+            raise Exception("IR WebService Error Code " + str(resp.status_code))
+    except requests.exceptions.Timeout, e:
+        return {"status": "false", "error": "Timeout"}
+    except requests.exceptions.ConnectionError, e:
+        #raise Exception("Error Code " + str(e))
+        return {"status": "false", "error": str(e)}
+    except requests.exceptions.HTTPError, e:
+        #raise Exception("Error Code " + str(e))
+        return {"status": "false", "error": str(e)}
+    except requests.exceptions.RequestException, e:
+        #raise Exception("Error Code " + str(e))
+        return {"status": "false", "error": str(e)}
+    except Exception, e:
+        #raise Exception("Error Code " + str(e))
+        return {"status": "false", "error": str(e)}
+    return {"status": "true", "error": "none", "validationResults": result}
+    """
+
+def validateAllRulesOnRecord_4_4(rules, uip, setidHash, rowErrors, rowWarnings):
+    row=uip["row"]
+    setid=uip["SetID"]
+    for  rule in rules:
+        # find the rule Number
+        if "ruleNumber" not in rule:
+            msg="INTERNAL ERROR  Incompatible validation rules for this version of IRU. ruleNumber not specified in one of the rules."
+            inputValidationErrorHandle(row, "error", msg, rowErrors, rowWarnings)
+            ruleNum="unkhown"
+        else:
+            ruleNum=rule["ruleNumber"]
+
+        # find the validation type
+        if "validationType" in rule:
+            validationType = rule["validationType"]
+        else:
+            validationType = "error"
+        if validationType not in ["error", "warn"]:
+            msg="INTERNAL ERROR ON RULE # "+ruleNum+"   Incompatible validation rules for this version of IRU. unrecognized validationType \"" + validationType + "\""
+            inputValidationErrorHandle(row, "error", msg, rowErrors, rowWarnings)
+
+        # execute all the rules
+        if "For" in rule:
+            if rule["For"]["Name"] not in uip:
+                #msg="INTERNAL ERROR ON RULE # "+ruleNum+"   Incompatible validation rules for this version of TSS. No such \"For\" field \"" + rule["For"]["Name"] + "\""
+                #inputValidationErrorHandle(row, "error", msg, rowErrors, rowWarnings)
+                continue
+            if "Valid" in rule:
+                if rule["Valid"]["Name"] not in uip:
+                    msg="INTERNAL ERROR ON RULE # "+ruleNum+"   Incompatible validation rules for this version of TSS. No such \"Valid\"field \"" + rule["Valid"]["Name"] + "\""
+                    inputValidationErrorHandle(row, "error", msg, rowErrors, rowWarnings)
+                else:
+                    kFor=rule["For"]["Name"]
+                    vFor=rule["For"]["Value"]
+                    kValid=rule["Valid"]["Name"]
+                    vValid=rule["Valid"]["Values"]
+                    #print  "validating   kfor " +kFor  + " vFor "+ vFor + "  kValid "+ kValid
+                    if uip[kFor] == vFor :
+                        if uip[kValid] not in vValid :
+                            #msg="Incorrect value \"" + uip[kValid] + "\" found for " + kValid + " When "+ kFor + " is \"" + vFor +"\"   rule # "+ ruleNum
+                            msg="Incorrect value \"" + uip[kValid] + "\" found for " + kValid + " When "+ kFor + " is \"" + vFor +"\"."
+                            inputValidationErrorHandle(row, validationType, msg, rowErrors, rowWarnings)
+                        # a small hardcoded update into the setidHash for later evaluation of the role uniqueness
+                        if kValid == "Relation":
+                            if setid  in setidHash:
+                                if "validRelationRoles" not in setidHash[setid]:
+                                    #print  "saving   row " +row + "  setid " + setid + "  kfor " +kFor  + " vFor "+ vFor + "  kValid "+ kValid
+                                    setidHash[setid]["validRelationRoles"] = vValid   # this is actually roles
+                        # another small hardcoded update into the setidHash for later evaluation of the nucleotideType  uniqueness
+                        if kValid == "NucleotideType":
+                            if setid  in setidHash:
+                                if "validNucleotideTypes" not in setidHash[setid]:
+                                    #print  "saving   row " +row + "  setid " + setid + "  kfor " +kFor  + " vFor "+ vFor + "  kValid "+ kValid
+                                    setidHash[setid]["validNucleotideTypes"] = vValid   # this is actually list of valid nucleotideTypes
+            elif "Invalid" in rule:
+                if rule["Invalid"]["Name"] not in uip:
+                    msg="INTERNAL ERROR ON RULE # "+ruleNum+"   Incompatible validation rules for this version of TSS. No such \"Invalid\" field \"" + rule["Invalid"]["Name"] + "\""
+                    inputValidationErrorHandle(row, "error", msg, rowErrors, rowWarnings)
+                else:
+                    kFor=rule["For"]["Name"]
+                    vFor=rule["For"]["Value"]
+                    kInvalid=rule["Invalid"]["Name"]
+                    vInvalid=rule["Invalid"]["Values"]
+                    #print  "validating   kfor " +kFor  + " vFor "+ vFor + "  kInvalid "+ kInvalid
+                    if uip[kFor] == vFor :
+                        if uip[kInvalid] in vInvalid :
+                            #msg="Incorrect value \"" + uip[kInvalid] + "\" found for " + kInvalid + " When "+ kFor + " is \"" + vFor +"\"   rule # "+ ruleNum
+                            msg="Incorrect value \"" + uip[kInvalid] + "\" found for " + kInvalid + " When "+ kFor + " is \"" + vFor +"\"."
+                            inputValidationErrorHandle(row, validationType, msg, rowErrors, rowWarnings)
+            elif "NonEmpty" in rule:
+                kFor=rule["For"]["Name"]
+                vFor=rule["For"]["Value"]
+                kNonEmpty=rule["NonEmpty"]["Name"]
+                print  "non empty validating   kfor " +kFor  + " vFor "+ vFor + "  kNonEmpty "+ kNonEmpty
+                #if kFor not in uip :
+                #    print  "kFor not in uip   "  + " kFor "+ kFor 
+                #    continue
+                if uip[kFor] == vFor :
+                    if (   (kNonEmpty not in uip)   or  (uip[kNonEmpty] == "")   ):
+                        msg="Empty value found for " + kNonEmpty + " When "+ kFor + " is \"" + vFor +"\"."
+                        inputValidationErrorHandle(row, "error", msg, rowErrors, rowWarnings)
+            elif "Disabled" in rule:
+                pass
+            else:
+                 msg="INTERNAL ERROR ON RULE # "+ruleNum+"   Incompatible validation rules for this version of IRU. \"For\" specified without a \"Valid\" or \"Invalid\" tag."
+                 inputValidationErrorHandle(row, "error", msg, rowErrors, rowWarnings)
+        else:
+            msg="INTERNAL ERROR ON RULE # "+ruleNum+"   Incompatible validation rules for this version of IRU. No action provided on this rule."
+            inputValidationErrorHandle(row, "error", msg, rowErrors, rowWarnings)
+
+
+
+
+
+
+
 def inputValidationErrorHandle(row, validationType, msg, rowErrors, rowWarnings):
     if validationType == "error":
         rowErrors[row].append(msg)
@@ -1805,13 +2407,13 @@ def getIRGUIBaseURL(inputJson):
                 "IRGUIBaseURL": ""}
 
     # for now, return a hardcoded version of the url for 40 production.  The url returned from IR is wrong.. 
-    if (   (version == "40") and (server == "40.dataloader.ionreporter.lifetechnologies.com")  ):
-        returnUrl = protocol + "://" + "ionreporter.lifetechnologies.com" + ":" + port
-        return {"status": "true", "error": "none", "IRGUIBaseURL": returnUrl,"version":version}
+    #if (   (version == "40") and (server == "40.dataloader.ionreporter.lifetechnologies.com")  ):
+    #    returnUrl = protocol + "://" + "ionreporter.lifetechnologies.com" + ":" + port
+    #    return {"status": "true", "error": "none", "IRGUIBaseURL": returnUrl,"version":version}
 
     # for now, return a hardcoded debug version of the url, because there are still configuraiton issues in the local IR servers.
-    returnUrl = protocol + "://" + server + ":" + port
-    return {"status": "true", "error": "none", "IRGUIBaseURL": returnUrl,"version":version}
+    #returnUrl = protocol + "://" + server + ":" + port
+    #return {"status": "true", "error": "none", "IRGUIBaseURL": returnUrl,"version":version}
 
 
     #get the correct ui server address, port and protocol from the grws and use that one instead of using iru-server's address.
@@ -2079,10 +2681,10 @@ def setPluginDir(x):
 
 if __name__ == "__main__":
 
-    k = {'port': '443',
+    k = {'port': '443',    # this is the one that is used for most of the test cases below
          'protocol': 'https',
          #'server': 'plum.itw',
-         'server': 'plum.itw',
+         'server': 'teemo.itw',
          #'server': '40.dataloader.ionreporter.lifetechnologies.com',
          #'version': 'IR40',
          'version': 'IR42',
@@ -2122,7 +2724,7 @@ if __name__ == "__main__":
           "Gender": "Female",
           "barcodeId": "IonXpress_011",
           "sample": "pgm-s11",
-          "Relation": "Self",
+          #"Relation": "Self",
           "RelationRole": "Self",
           "setid": "0__837663e7-f7f8-4334-b14b-dea091dd353b"
         },
@@ -2132,7 +2734,7 @@ if __name__ == "__main__":
           "Gender": "Unknown",
           "barcodeId": "IonXpress_012",
           "sample": "pgm-s12T",
-          "Relation": "Tumor_Normal",
+          #"Relation": "Tumor_Normal",
           "RelationRole": "Tumor",
           "setid": "1__7179df4c-c6bb-4cbe-97a4-bb48951a4acd"
         },

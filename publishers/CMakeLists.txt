@@ -15,8 +15,7 @@ set(CPACK_SET_DESTDIR "ON")
 
 # BED
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/BED" DESTINATION "publishers"
-    USE_SOURCE_PERMISSIONS
-    PATTERN ".svn" EXCLUDE)
+    USE_SOURCE_PERMISSIONS )
 
 configure_file (
         "${PROJECT_SOURCE_DIR}/debian/preinst.in"

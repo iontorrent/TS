@@ -27,7 +27,7 @@ configure_file (
 )
 
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig" DESTINATION sbin )
-#install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig-ansible" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig-ansible" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSchkconfig" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSsetproxy" DESTINATION sbin )
@@ -42,8 +42,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/ts_params" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/config/iptables.rules" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/config/torrentsuite-packagelist.json" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/stresstest.tgz" DESTINATION share/ion-tsconfig )
-install(DIRECTORY "${PROJECT_SOURCE_DIR}/sge-configuration" DESTINATION share/ion-tsconfig
-    PATTERN ".svn" EXCLUDE )
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/sge-configuration" DESTINATION share/ion-tsconfig )
 
 install(FILES "${PROJECT_SOURCE_DIR}/bin/grp_functions" DESTINATION share/ion-tsconfig )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/grp_validate.sh" DESTINATION sbin )
@@ -59,35 +58,26 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/prep_node_sudo.sh" DESTINATION share
 install(FILES "${PROJECT_SOURCE_DIR}/README.clusters" DESTINATION share/ion-tsconfig )
 
 # perl modules used by plugins for json file parsing
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-2.53.tar.gz" DESTINATION "/tmp/perlModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-XS-2.32.tar.gz" DESTINATION "/tmp/perlModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-2.53.tar.gz" DESTINATION share/ion-tsconfig/perl)
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/JSON-XS-2.32.tar.gz" DESTINATION share/ion-tsconfig/perl)
 # perl modules used by plugins for ???
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/IO-All-0.44.tar.gz" DESTINATION "/tmp/perlModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/List-MoreUtils-0.33.tar.gz" DESTINATION "/tmp/perlModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Readonly-1.03.tar.gz" DESTINATION "/tmp/perlModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-Descriptive-3.0300.tar.gz" DESTINATION "/tmp/perlModIn")
-install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-LineFit-0.07.tar.gz" DESTINATION "/tmp/perlModIn")
-##install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/common-sense-3.4.tar.gz" DESTINATION "/tmp/perlModIn")
-##install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/autodie-2.10.tar.gz" DESTINATION "/tmp/perlModIn")
-##install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Carp-Assert-0.20.tar.gz" DESTINATION "/tmp/perlModIn")
-##install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/IPC-System-Simple-1.21.tar.gz" DESTINATION "/tmp/perlModIn")
-##install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Log-Log4perl-1.35.tar.gz" DESTINATION "/tmp/perlModIn")
-##install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Perl6-Slurp-0.050000.tar.gz" DESTINATION "/tmp/perlModIn")
-##install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Regexp-Common-2011121001.tar.gz" DESTINATION "/tmp/perlModIn")
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/IO-All-0.44.tar.gz" DESTINATION share/ion-tsconfig/perl)
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/List-MoreUtils-0.33.tar.gz" DESTINATION share/ion-tsconfig/perl)
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Readonly-1.03.tar.gz" DESTINATION share/ion-tsconfig/perl)
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-Descriptive-3.0300.tar.gz" DESTINATION share/ion-tsconfig/perl)
+install(FILES "${PROJECT_SOURCE_DIR}/../external/perl/Statistics-LineFit-0.07.tar.gz" DESTINATION share/ion-tsconfig/perl)
 
 # postgresql-shm config file: configures kernel memory compatible with our postgres memory settings
 install(FILES "${PROJECT_SOURCE_DIR}/config/10-postgresql-shm.conf" DESTINATION "/etc/sysctl.d")
 # Install prolog/epilog scripts
 install(DIRECTORY "${PROJECT_SOURCE_DIR}/gridengine-scripts" DESTINATION share/ion-tsconfig
-    USE_SOURCE_PERMISSIONS
-    PATTERN ".svn" EXCLUDE )
+    USE_SOURCE_PERMISSIONS )
 # Disable apt archive which deletes deb package files
 install(FILES "${PROJECT_SOURCE_DIR}/config/99torrentserver" DESTINATION /etc/apt/apt.conf.d/)
 
-## Deploy the ansible heirarchy for internal testing
-#install(DIRECTORY "${PROJECT_SOURCE_DIR}/ansible" DESTINATION share/ion-tsconfig
-#    USE_SOURCE_PERMISSIONS
-#    PATTERN ".svn" EXCLUDE )
+# Deploy the ansible heirarchy for internal testing
+install(DIRECTORY "${PROJECT_SOURCE_DIR}/ansible" DESTINATION share/ion-tsconfig
+    USE_SOURCE_PERMISSIONS )
 	
 #################################
 # Install python library files
@@ -101,9 +91,7 @@ execute_process (
 )
 set(PYTHON_SITE_PACKAGES "${PYTHON_SITE_PACKAGES}" CACHE PATH "Python Install Prefix")
 #install(DIRECTORY ion_tsconfig DESTINATION ${PYTHON_SITE_PACKAGES}
-#    USE_SOURCE_PERMISSIONS
-#    PATTERN ".svn" EXCLUDE
-#)
+#    USE_SOURCE_PERMISSIONS )
 install(FILES "${PROJECT_SOURCE_DIR}/ion_tsconfig/__init__.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/ion_tsconfig/TSconfig.py" DESTINATION ${PYTHON_SITE_PACKAGES}/ion_tsconfig )
 
@@ -115,8 +103,7 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 #% nice to automate this
 set(CPACK_PACKAGE_DESCRIPTION "This package contains scripts for configuring Torrent Server.")
 # TODO: putty-tools is only here so that it gets installed with 3.0 from 2.2 GUI update
-#set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect, gcc, make, python-jsonpipe, putty-tools, lsscsi, xfsprogs, lvm2, pdsh, clusterssh, ansible")
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect, gcc, make, python-jsonpipe, putty-tools, lsscsi, xfsprogs, lvm2, pdsh, clusterssh")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect, gcc, make, python-jsonpipe, putty-tools, lsscsi, xfsprogs, lvm2, pdsh, clusterssh, ansible")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/prerm

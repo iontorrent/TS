@@ -24,3 +24,6 @@ headnode
 
 [gridengine_clients:children]
 computes
+
+[igv:children]
+headnode

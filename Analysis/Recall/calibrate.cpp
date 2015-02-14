@@ -181,6 +181,8 @@ struct HPPMDistribution{
   vector<vector<double> > predictions;
   vector<vector<double> > measurements;
   vector<vector<int> > calledHPs;
+  vector<vector<int> > alignPositions; //read level alignment position, for data analysis
+  vector<vector<int> > flows; //for data analysis
   vector<mat> models;
   vector<mat> modelsSlopeAndIntercept;
   vector<mat> modelsSlopeOnly;
@@ -205,10 +207,14 @@ struct HPPMDistribution{
       predictions.resize(numHPs, vector<double>());
       measurements.resize(numHPs, vector<double>());
       calledHPs.resize(numHPs, vector<int>());
+      alignPositions.resize(numHPs, vector<int>());
+      flows.resize(numHPs, vector<int>());
       for(int hp=0; hp < numHPs; ++hp){
           predictions[hp].reserve(recordsLimit);
           measurements[hp].reserve(recordsLimit);
           calledHPs[hp].reserve(recordsLimit);
+          alignPositions[hp].reserve(recordsLimit);
+          flows[hp].reserve(recordsLimit);
       }
       slopeAndIntercept = false;
       saveModelStats = false;
@@ -232,6 +238,8 @@ struct HPPMDistribution{
           predictions[hp].reserve(recordsLimit);
           measurements[hp].reserve(recordsLimit);
           calledHPs[hp].reserve(recordsLimit);
+          alignPositions[hp].reserve(recordsLimit);
+          flows[hp].reserve(recordsLimit);
       }
   }
 
@@ -240,7 +248,8 @@ struct HPPMDistribution{
   }
 
   //should no-op be handled in higher level
-  void add(int calledHP, int refHP, double prediction, double measurement){
+  void add(int calledHP, int refHP, double prediction, double measurement, int alignPosition, int flow){
+    //alignPosition and flow are added for data analysis
     ////ignore dramtic shift observation; handle non-correct HP calls (effect?)
 
     //disabled the two lines below to collect all samples, decide what to use for fitting later.
@@ -248,11 +257,12 @@ struct HPPMDistribution{
 
     //if(prediction - measurement > 1 || measurement - prediction > 1)
       //return;
-
     if(refHP >0 && refHP < numHPs && (int)predictions[refHP].size() < recordsLimit){
         predictions[refHP].push_back(prediction);
         measurements[refHP].push_back(measurement);
         calledHPs[refHP].push_back(calledHP);
+        alignPositions[refHP].push_back(alignPosition);
+        flows[refHP].push_back(flow);
     }
   }
 
@@ -269,7 +279,8 @@ struct HPPMDistribution{
     }
   }
 
-  void add(vector<vector<double> >& ps,  vector<vector<double> >& ms, vector<vector<int> >& called_hps){
+  void add(vector<vector<double> >& ps,  vector<vector<double> >& ms, vector<vector<int> >& called_hps, vector<vector<int> >& aligns, vector<vector<int> >&fs){
+    //aligns and fs are added for data analysis
     for(int refHP=0; refHP < numHPs; ++refHP){
       int size = ps[refHP].size();
       for(int ind = 0; ind < size; ++ind){
@@ -277,6 +288,8 @@ struct HPPMDistribution{
           predictions[refHP].push_back(ps[refHP][ind]);
           measurements[refHP].push_back(ms[refHP][ind]);
           calledHPs[refHP].push_back(called_hps[refHP][ind]);
+          alignPositions[refHP].push_back(aligns[refHP][ind]);
+          flows[refHP].push_back(fs[refHP][ind]);
         }
       }
     }
@@ -827,7 +840,6 @@ struct HPTable{
     for(int regionInd = 0; regionInd < numRegions; ++regionInd){
         hpPMDistributionList.push_back(make_shared<HPPMDistribution>(HPPMDistribution(numHPs, recordsLimit)));
     }
-
     //create alignmentStratifiedList startified*numHPs
     for(int alignInd = 0; alignInd < numRegions*numHPs; ++alignInd){
         alignmentStratifiedList.push_back(make_shared<set<AlignmentInfo> >());
@@ -864,11 +876,10 @@ struct HPTable{
     for(int ind = 0; ind < (int)aggregatedHPPerturbationDistribution.size(); ++ind){
         aggregatedHPPerturbationDistribution[ind]->add(hpTablePtr->aggregatedHPPerturbationDistribution[ind]->refHPDistribution);
     }
-
     //add records to   std::vector<boost::shared_ptr<HPPMDistribution> > hpPMDistributionList;
     for(int ind = 0; ind < (int)hpPMDistributionList.size(); ++ind){
-        //hpPMDistributionList[ind]->add(hpTablePtr->hpPMDistributionList[ind]->predictions, hpTablePtr->hpPMDistributionList[ind]->measurements);
-        hpPMDistributionList[ind]->add(hpTablePtr->hpPMDistributionList[ind]->predictions, hpTablePtr->hpPMDistributionList[ind]->measurements, hpTablePtr->hpPMDistributionList[ind]->calledHPs);
+        //hpPMDistributionList[ind]->add(hpTablePtr->hpPMDistributionList[ind]->predictions, hpTablePtr->hpPMDistributionList[ind]->measurements, hpTablePtr->hpPMDistributionList[ind]->calledHPs);
+        hpPMDistributionList[ind]->add(hpTablePtr->hpPMDistributionList[ind]->predictions, hpTablePtr->hpPMDistributionList[ind]->measurements, hpTablePtr->hpPMDistributionList[ind]->calledHPs, hpTablePtr->hpPMDistributionList[ind]->alignPositions, hpTablePtr->hpPMDistributionList[ind]->flows);
 
     }
 
@@ -920,7 +931,9 @@ struct HPTable{
     aggregatedHPPerturbationDistribution[NucToInt(nuc)]->add(calledHP, perturbation, refHP);
     hpPerturbationDistributionList[regionIndex]->add(calledHP, perturbation, refHP);
     //refHP
-    hpPMDistributionList[regionIndex]->add(calledHP, refHP, prediction, measurement);
+    //hpPMDistributionList[regionIndex]->add(calledHP, refHP, prediction, measurement, alignInfo.position);
+    hpPMDistributionList[regionIndex]->add(calledHP, refHP, prediction, measurement, alignInfo.position, flow);
+
     //nuc-based
 //    hpPMDistributionList[NucToInt(nuc)]->add(calledHP, refHP, prediction, measurement);
 
@@ -1053,6 +1066,9 @@ struct HPTable{
                   file.write(reinterpret_cast<const char *>(&(hpPMDist->predictions[refHP][ind])), sizeof(double));
                   file.write(reinterpret_cast<const char *>(&(hpPMDist->measurements[refHP][ind])), sizeof(double));
                   file.write(reinterpret_cast<const char *>(&(hpPMDist->calledHPs[refHP][ind])), sizeof(int));
+                  //alignPositions and flows are added for data analysis
+                  file.write(reinterpret_cast<const char *>(&(hpPMDist->alignPositions[refHP][ind])), sizeof(int));
+                  file.write(reinterpret_cast<const char *>(&(hpPMDist->flows[refHP][ind])), sizeof(int));
 
               }
           }
@@ -1096,6 +1112,52 @@ struct HPTable{
     else
       printf("Unable to open file\n");
     //add checksum
+  }
+
+  void savePMSampleDataToJsonFile(const char* fileName){    
+	//so many 1-3 mers that it takes very long time to load the json file
+    int sampling_rate[11]={1,20,10,5,1,1,1,1,1,1,1};
+    Json::Value jsono(Json::objectValue);
+    //save hpPMDistributionList
+    char buf[10];
+    for(int regionInd = 0; regionInd < numRegions; ++regionInd){
+       sprintf(buf, "%d", regionInd);
+       string sRegionInd = buf;
+       HPPMDistribution* hpPMDist =  hpPMDistributionList[regionInd].get();
+       int maxHP2Save = min(numHPs, 10);
+       for(int refHP = 1; refHP < maxHP2Save; ++refHP){
+         sprintf(buf, "%d", refHP);
+         string sRefHP = buf;
+         unsigned int sz = hpPMDist->predictions[refHP].size();
+         int ind_sampled = 0;
+         for(unsigned int ind = 0; ind < sz; ++ind){
+           if((ind % sampling_rate[refHP])!= 0) continue;
+           jsono[sRegionInd]["Predictions"][sRefHP][ind_sampled]= hpPMDist->predictions[refHP][ind];
+           jsono[sRegionInd]["Measurements"][sRefHP][ind_sampled]= hpPMDist->measurements[refHP][ind];
+           jsono[sRegionInd]["calledHPs"][sRefHP][ind_sampled]= hpPMDist->calledHPs[refHP][ind];
+           jsono[sRegionInd]["alignPositions"][sRefHP][ind_sampled]= hpPMDist->alignPositions[refHP][ind];
+           jsono[sRegionInd]["flows"][sRefHP][ind_sampled]= hpPMDist->flows[refHP][ind];
+           ind_sampled++;
+         }
+       }
+    }
+    ofstream ofs(fileName, ofstream::out);
+    ofs << jsono.toStyledString();
+    ofs.flush();
+    ofs.close(); 
+  }
+
+  void printRegionList(const char* fileName){
+      FILE * pFile = fopen (fileName,"w");
+      if(pFile == 0){
+          printf("%s does not exist", fileName);
+          return;
+      }
+      for(int regionInd = 0; regionInd < numRegions; ++regionInd){
+          Region r = regionList[regionInd];
+           fprintf(pFile, "%c\t%d\t%d\t%d\t%d\t%d\t%d\n", r.nuc, r.flowStart, r.flowEnd, r.xMin, r.xMax, r.yMin, r.yMax);
+      }
+      fclose(pFile);
   }
 
   void printStratifiedAlignSummary(const char* fileName){
@@ -1304,6 +1366,13 @@ HPTable* loadHPTable(const char* hpTableFile){
                     int calledHP;
                     file.read(reinterpret_cast<char *>(&calledHP), sizeof(int));
                     hpPMDist->calledHPs[refHP].push_back(calledHP);
+                    //alignPos and flow are added for data analysis
+                    int alignPos;
+                    file.read(reinterpret_cast<char *>(&alignPos), sizeof(int));
+                    hpPMDist->alignPositions[refHP].push_back(alignPos);
+                    int flow;
+                    file.read(reinterpret_cast<char *>(&flow), sizeof(int));
+                    hpPMDist->flows[refHP].push_back(flow);
                   }
               }
           }
@@ -1622,7 +1691,7 @@ void* RecallFunc(void* arg0)
                   else
 				  {
 					double measureVal = zm_tag[flowPosition] * 0.00390625;
-						arg->hptable->addAlignmentRecord(qseq[pos], tseq[pos], perturbation[pos], bcRead.prediction[flowPosition], measureVal, AlignmentInfo(refID, position), flowOrder[pos], flowPosition, x, y ); //zm_tag[flowPosition] * 0.00390625
+                        arg->hptable->addAlignmentRecord(qseq[pos], tseq[pos], perturbation[pos], bcRead.prediction[flowPosition], measureVal, AlignmentInfo(refID, position), flowOrder[pos], flowPosition, x, y ); //zm_tag[flowPosition] * 0.00390625
 
 					if(dump4Plugin)
 					{
@@ -1748,7 +1817,7 @@ void* RecallFunc(void* arg0)
 
 int main (int argc, const char *argv[])
 {
-  printf ("calibrate %s-%s (%s)\n", IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetSvnRev().c_str());
+  printf ("calibrate %s-%s (%s)\n", IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
 
   OptArgs opts;
   opts.ParseCmdLine(argc, argv);
@@ -1869,6 +1938,14 @@ int main (int argc, const char *argv[])
 
     if(!alignmentStratified.empty())
       mergedHPTable->printStratifiedAlignSummary(alignmentStratified.c_str());
+
+    string pmSampleJsonFile = "pmSampleData.json";
+    pmSampleJsonFile = output_dir + "/" + pmSampleJsonFile;
+    //save data to json file for analysis, need to have an option for this
+    mergedHPTable->savePMSampleDataToJsonFile(pmSampleJsonFile.c_str());
+    string regionListFile = "regionList.txt";
+    regionListFile = output_dir + "/" + regionListFile;
+    mergedHPTable->printRegionList(regionListFile.c_str());
 
     delete mergedHPTable;
 
@@ -2041,7 +2118,7 @@ int main (int argc, const char *argv[])
 		  int startFlowT[DEFAULT_NUM_HP];
 		  int endFlowT[DEFAULT_NUM_HP];
 
-		  string filename_json(dump_dir);
+          string filename_json(dump_dir);
 		  filename_json += "/flow_data.json";	  
 		  string filename_json2(dump_dir);
 		  filename_json2 += "/scatter_data.json";

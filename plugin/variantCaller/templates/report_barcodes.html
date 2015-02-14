@@ -2,6 +2,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+<script type="text/javascript" src="/site_media/resources/jquery/jquery-1.8.2.js"></script>
 <script type="text/javascript" src="/site_media/jquery/js/jquery-ui-1.8.13.min.js"></script>
 <script type="text/javascript" src="/site_media/jquery/js/tipTipX/jquery.tipTipX.js"></script>
 
@@ -61,13 +62,13 @@ $(function() {
   <table class="table-striped">
     <thead class="k-grid-header">
     <tr>
-     <th><span class="help" title="The barcode ID for each set of reads.">Barcode Name</span></th>
-      <th><span class="help" title="Sample name">Sample Name</span></th>
-      <th><span class="help" title="Number of called variants">Variants</span></th>
+     <th class="k-header"><span class="help" title="The barcode ID for each set of reads.">Barcode Name</span></th>
+      <th class="k-header"><span class="help" title="Sample name">Sample Name</span></th>
+      <th class="k-header"><span class="help" title="Number of called variants">Variants</span></th>
       {% if options.has_hotspots %}
-        <th><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
+        <th class="k-header"><span class="help" title="Number of called variants in hotspot locations">Hotspot Variants</span></th>
       {% endif %}
-      <th><span class="help" title="Download links">Download Links</span></th>
+      <th class="k-header"><span class="help" title="Download links">Download Links</span></th>
     </tr>
     </thead>
     
@@ -124,8 +125,37 @@ $(function() {
   {% endif %}
 
 
+<pre id="log" style="display: none"></pre>
+
+<div id="reloadLog" class="btn btn-primary">Show Log</div>
+
 
 <script type="text/javascript">
+
+$(function () {
+
+  function reloadLog() {
+      $("#reloadLog").html("Loading Log..");
+      var request = $.ajax({
+          type: 'GET',
+          url: 'drmaa_stdout.txt',
+          contentType: "text/plain",
+          dataType: "text/plain",
+          async: true
+      });
+
+      request.always(function (data) {
+          $("#reloadLog").html("Reload Log");
+          $("#log").show();
+          $("#log").html(data.responseText);
+      });
+
+  }
+
+  $("#reloadLog").click(reloadLog);
+});
+
+
 $(document).ready(function(){
   $('h2').prepend('<a href="javascript:;" class="expandCollapseButton" title="Collapse Section"></a>');
   $('.expandCollapseButton').toggle(function() {
@@ -171,6 +201,7 @@ $(document).ready(function(){
   $(".heading tr:odd").addClass("zebra");
   $(".noheading tr:odd").addClass("zebra");
 });
+
 </script>
 
 <div class="clear"></div>

@@ -17,7 +17,7 @@ QUICK START on Ubuntu 10.04 (=Lucid)
         libcurl4-openssl-dev \
         libncurses-dev \
         libboost-serialization-dev \
-		r-base
+        r-base
 
 
    MODULES="gpu Analysis" ./buildTools/build.sh
@@ -50,7 +50,7 @@ QUICK START on Ubuntu 11.10 (=Oneiric) (EXPERIMENTAL)
         libbz2-dev \
         libcurl4-openssl-dev \
         libncurses-dev \
-		r-base
+        r-base
 
    # icc needs sudo apt-get install libboost1.42-all-dev
 
@@ -78,9 +78,8 @@ QUICK START on Ubuntu 14.04 (=Trusty) (EXPERIMENTAL)
         libcurl4-openssl-dev \
         libncurses5-dev \
         libboost-serialization-dev \
-        libfftw3-dev \
         libhdf5-dev \
-		r-base
+        r-base
 
    MODULES="gpu Analysis" ./buildTools/build.sh
 
@@ -108,10 +107,7 @@ you will need to install the following Ubuntu packages:
 * libgsl0-dev
 * libcurl4-openssl-dev
 
-The lapack++ (included external) depends on atlas and blas. 
-Instructions for lapack++ on Ubuntu can be found at:
 
-	https://help.ubuntu.com/community/Lapack%2B%2B
 
 BUILD EVERYTHING
 

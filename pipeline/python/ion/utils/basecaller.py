@@ -278,7 +278,8 @@ def merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS):
         
         # Doing the actual filtering - exclude no-match read group
         for read_group in combined_datasets_json['read_groups']:
-            if "barcode_sequence" in combined_datasets_json['read_groups'][read_group]:
+            filter_me = (combined_datasets_json['read_groups'][read_group]['sample'] == 'none')
+            if ("barcode_sequence" in combined_datasets_json['read_groups'][read_group]) and filter_me:
                 if combined_datasets_json['read_groups'][read_group]['read_count'] <= filter_threshold:
                     combined_datasets_json['read_groups'][read_group]['filtered'] = True
                 if (not combined_datasets_json['read_groups'][read_group]['filtered']) and (combined_datasets_json['barcode_filters']['filter_errors_hist'] > 0):

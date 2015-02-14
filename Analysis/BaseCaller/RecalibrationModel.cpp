@@ -139,22 +139,29 @@ void RecalibrationModel::SetupStratification(int flowStart, int flowEnd, int flo
 
 // --------------------------------------------------------------------
 
-void RecalibrationModel::Initialize(OptArgs& opts)
+void RecalibrationModel::Initialize(OptArgs& opts, vector<string> &bam_comments, const string & run_id, const ion::ChipSubset & chip_subset)
 {
-  string model_file_name = opts.GetFirstString ('-', "model-file", "");
-  int model_threshold = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
-  InitializeModel(model_file_name, model_threshold);
+  string model_file_name    = opts.GetFirstString ('-', "model-file", "");
+  int model_threshold       = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
+  bool save_hpmodel         = opts.GetFirstBoolean('-', "save-hpmodel", true);
+  bool diagonal_state_prog  = opts.GetFirstBoolean('-', "diagonal-state-prog", false);
+
+  if (diagonal_state_prog)
+    model_file_name.clear();
+
+  if (InitializeModel(model_file_name, model_threshold) and save_hpmodel)
+    SaveModelFileToBamComments(model_file_name, bam_comments, run_id, chip_subset.GetColOffset(), chip_subset.GetRowOffset());
 }
 
 // --------------------------------------------------------------------
 
-void RecalibrationModel::InitializeModel(string model_file_name, int model_threshold)
+bool RecalibrationModel::InitializeModel(string model_file_name, int model_threshold)
 {
     is_enabled_ = false;
 
     if (model_file_name.empty() or model_file_name == "off") {
         printf("RecalibrationModel: disabled\n\n");
-        return;
+        return false;
     }
 
     ifstream model_file;
@@ -162,12 +169,12 @@ void RecalibrationModel::InitializeModel(string model_file_name, int model_thres
     if (model_file.fail()) {
         printf("RecalibrationModel: disabled (cannot open %s)\n\n", model_file_name.c_str());
         model_file.close();
-        return;
+        return false;
     }
 
     if (model_threshold < 0 or model_threshold > MAX_HPXLEN) {
       cout << "RecalibrationModel: disabled (invalid model threshold of "<< model_threshold <<")" << endl;
-      return;
+      return false;
     } else
       recalModelHPThres = model_threshold;
 
@@ -195,8 +202,10 @@ void RecalibrationModel::InitializeModel(string model_file_name, int model_thres
 
     model_file.close();
 
-    printf("Recalibration: enabled (using calibration file %s)\n\n", model_file_name.c_str());
+    printf("Recalibration Model: enabled (using calibration file %s)\n", model_file_name.c_str());
+    printf(" - using calibration model for HPs %d and up.\n\n",recalModelHPThres);
     is_enabled_ = true;
+    return is_enabled_;
 }
 
 void RecalibrationModel::FillIndexes(int offsetRegion, int nucInd, int refHP, int flowStart, int flowEnd, float paramA, float paramB) {
@@ -248,7 +257,80 @@ const vector<vector<vector<float> > > * RecalibrationModel::getBs(int x, int y) 
         return &(stratifiedBs[offsetRegion]);
 }
 
+// ----------------------------------------------------------------
+void RecalibrationModel::SaveModelFileToBamComments(string model_file_name, vector<string> &comments, const string &run_id, int block_col_offset, int block_row_offset)
+{
 
+    if (!model_file_name.empty())
+    {
+        ifstream model_file;
+        model_file.open(model_file_name.c_str());
+        if (!model_file.fail())
+        {
+            Json::Value hpJson(Json::objectValue);
+
+            char buf[1000];
+            string id = run_id;
+
+            sprintf(buf, ".block_X%d_Y%d", block_col_offset, block_row_offset);
+            id += buf;
+            hpJson["MagicCode"] = "6d5b9d29ede5f176a4711d415d769108"; // md5hash "This uniquely identifies json comments for recalibration."
+            hpJson["MasterKey"] = id;
+            hpJson["MasterCol"] = block_col_offset;
+            hpJson["MasterRow"] = block_row_offset;
+
+            string comment_line;
+            getline(model_file, comment_line); //skip the comment time
+
+            int flowStart, flowEnd, flowSpan, xMin, xMax, xSpan, yMin, yMax, ySpan, max_hp_calibrated;
+            model_file >> flowStart >> flowEnd >> flowSpan >> xMin >> xMax >> xSpan >> yMin >> yMax >> ySpan >> max_hp_calibrated;
+            hpJson[id]["flowStart"] = flowStart;
+            hpJson[id]["flowEnd"] = flowEnd;
+            hpJson[id]["flowSpan"] = flowSpan;
+            hpJson[id]["xMin"] = xMin;
+            hpJson[id]["xMax"] = xMax;
+            hpJson[id]["xSpan"] = xSpan;
+            hpJson[id]["yMin"] = yMin;
+            hpJson[id]["yMax"] = yMax;
+            hpJson[id]["ySpan"] = ySpan;
+            hpJson[id]["max_hp_calibrated"] = max_hp_calibrated;
+
+            char flowBase;
+            int refHP;
+            float paramA, paramB;
+            int item = 0;
+            while (model_file.good())
+            {
+                model_file >> flowBase >> flowStart >> flowEnd >> xMin >> xMax >> yMin >> yMax >> refHP >> paramA >> paramB;
+                hpJson[id]["modelParameters"][item]["flowBase"] = flowBase;
+                hpJson[id]["modelParameters"][item]["flowStart"] = flowStart;
+                hpJson[id]["modelParameters"][item]["flowEnd"] = flowEnd;
+                hpJson[id]["modelParameters"][item]["xMin"] = xMin;
+                hpJson[id]["modelParameters"][item]["xMax"] = xMax;
+                hpJson[id]["modelParameters"][item]["yMin"] = yMin;
+                hpJson[id]["modelParameters"][item]["yMax"] = yMax;
+                hpJson[id]["modelParameters"][item]["refHP"] = refHP;
+                hpJson[id]["modelParameters"][item]["paramA"] = paramA;
+                hpJson[id]["modelParameters"][item]["paramB"] = paramB;
+                ++item;
+            }
+
+            model_file.close();
+            Json::FastWriter writer;
+            string str = writer.write(hpJson);
+            // trim unwanted newline added by writer
+            int last_char = str.size()-1;
+            if (last_char>=0) {
+                if (str[last_char]=='\n'){
+                    str.erase(last_char,1);
+                }
+            }
+            comments.push_back(str);
+        } else {
+          cerr << "RecalModel: Failed to save hp model file " << model_file_name  << " to BAM comments."<< endl;
+        }
+    }
+}
 
 
 

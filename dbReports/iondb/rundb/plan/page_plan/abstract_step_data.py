@@ -14,7 +14,7 @@ class AbstractStepData(object):
     PrepopulatedFields are fields that the step page shows to the user.
     '''
 
-    def __init__(self):
+    def __init__(self, sh_type):
         self.resourcePath=None
         self.savedFields = {}
         self.savedListFieldNames = []
@@ -24,21 +24,98 @@ class AbstractStepData(object):
         self._dependsOn = []
         self._changedFields = {}
 
+        #some section can appear in multiple chevrons, key is the step name and value is the step_data object
+        self.step_sections = {}
+        
+        self.sh_type = sh_type
+
     def getCurrentSavedFieldDict(self):
         return self.savedFields
 
+    def getSectionSavedFieldDict(self, sectionName):
+        """
+        Sections are optional for a step.  Return the savedFields dictionary of the section if it exists.
+        Otherwise, return an empty dictionary
+        """        
+        default_value = {}
+        
+        if not self.step_sections:
+            return default_value
+        if sectionName in self.step_sections.keys():
+            sectionObj = self.step_sections[sectionName]
+            if  sectionObj:
+                #logger.debug("abstract_step_data.getSectionSavedFieldDict() sectionObj.savedFields=%s" %(sectionObj.savedFields))
+                return sectionObj.savedFields
+            else:
+                return default_value
+        return default_value
+
+
+    def hasStepSections(self):
+        """
+        Sections are optional for a step. Assume no section by default. 
+        """
+        if self.step_sections:
+            return True
+        return False
+
+
+    def getDefaultSection(self):
+        """
+        Sections are optional for a step.  Let subclass override this. 
+        TODO: add more section support      
+        """
+        return None
+    
+
+    def getDefaultSectionSavedFieldDict(self):
+        """
+        Sections are optional for a step.  Let subclass override this.
+        TODO: add more section support          
+        """
+        return {}
+
+
+    def getDefaultSectionPrepopulatedFieldDict(self):
+        """
+        Sections are optional for a step.  Let subclass override this.
+        TODO: add more section support          
+        """
+        return {}
+
+    
     def updateSavedFieldValuesFromRequest(self, request):
         changed = False
         for key in self.savedFields.keys():
             if self.updateSavedFieldValueFromRequest(request, key):
                 changed = True
         
+        for sectionKey, sectionObj in self.step_sections.items():
+            if sectionObj:
+                for key in sectionObj.getCurrentSavedFieldDict().keys():
+                    if sectionObj.updateSavedFieldValueFromRequest(request, key):
+                        changed = True
+                            
         self.validate()
         return changed
+
 
     def validate(self):
         for key in self.savedFields.keys():
             self.validateField(key, self.savedFields[key])
+
+        for sectionKey, sectionObj in self.step_sections.items():
+            if sectionObj:
+                #logger.debug("abstract_step_data.validate() sectionKey=%s" %(sectionKey))
+                for key in sectionObj.getCurrentSavedFieldDict().keys():
+                    self.validationErrors.pop(key, None)
+                    sectionObj.validateField_in_section(key, sectionObj.savedFields[key])
+
+                ##if sectionObj.validationErrors:
+                if (len(sectionObj.validationErrors) > 0):
+                    logger.debug("after validateField_in_section sectionObj.validationErrors=%s" %(sectionObj.validationErrors))                    
+                    self.validationErrors.update(sectionObj.validationErrors)
+
 
         self.validateField_crossField_dependencies(self.savedFields.keys(), self.savedFields)
         
@@ -85,6 +162,13 @@ class AbstractStepData(object):
         '''
         return
 
+
+    def validateField_in_section(self, field_name, new_field_value):
+        """
+        field validation for a step that acts as a section to another step
+        """
+        return
+        
             
     def updateSavedObjectsFromSavedFields(self):
         raise NotImplementedError('you must use a subclass to invoke this method')
@@ -94,6 +178,12 @@ class AbstractStepData(object):
 
     def updateFromStep(self, step_depended_on):
         raise NotImplementedError('you must use a subclass to invoke this method')
+
+    def alternateUpdateFromStep(self, step_depended_on):
+        """
+        update a step or section with alternate logic based on the step it is depending on
+        """
+        return
 
     def getPrePopulatedFieldDict(self):
         return self.prepopulatedFields

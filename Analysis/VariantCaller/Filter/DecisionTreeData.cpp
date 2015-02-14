@@ -2,9 +2,9 @@
 
 #include "DecisionTreeData.h"
 
-void AutoFailTheCandidate(vcf::Variant &candidate_variant, bool suppress_no_calls) {
+void AutoFailTheCandidate(vcf::Variant &candidate_variant, bool use_position_bias) {
   candidate_variant.quality = 0.0f;
-  NullInfoFields(candidate_variant); // no information, destroy any spurious entries, add all needed tags
+  NullInfoFields(candidate_variant, use_position_bias); // no information, destroy any spurious entries, add all needed tags
   NullGenotypeAllSamples(candidate_variant);
   NullFilterReason(candidate_variant);
   string my_reason = "NODATA";
@@ -99,6 +99,7 @@ void SuppressReferenceCalls(vcf::Variant &candidate_variant, const ExtendParamet
 void DecisionTreeData::SetupFromMultiAllele(const EnsembleEval &my_ensemble) {
   //multi_allele = _multi_allele;
   allele_identity_vector = my_ensemble.allele_identity_vector;
+  info_fields = my_ensemble.info_fields;
 //  summary_stats_vector.resize(multi_allele.allele_identity_vector.size());
   all_summary_stats.Allocate(allele_identity_vector.size()+1); // ref plus num alternate alleles
   summary_info_vector.resize(allele_identity_vector.size());
@@ -158,10 +159,14 @@ void FilterByBasicThresholds( int i_alt, MultiBook &m_summary_stats,
   if (variant_specific_params.strand_bias_override)
     effective_strand_bias_thr = variant_specific_params.strand_bias;
 
+  float effective_strand_bias_pval_thr = basic_filter.strand_bias_pval_threshold;
+  if (variant_specific_params.strand_bias_pval_override)
+    effective_strand_bias_thr = variant_specific_params.strand_bias_pval;
+
   float strand_bias = m_summary_stats.OldStrandBias(i_alt, tune_sbias);
   float strand_bias_pval = m_summary_stats.StrandBiasPval(i_alt, tune_sbias);
   if (strand_bias > effective_strand_bias_thr &&
-      strand_bias_pval <= basic_filter.strand_bias_pval_threshold) {
+      strand_bias_pval <= effective_strand_bias_pval_thr) {
      string my_reason = "STDBIAS";
      my_reason += convertToString(strand_bias);
      my_reason += ">";
@@ -171,7 +176,7 @@ void FilterByBasicThresholds( int i_alt, MultiBook &m_summary_stats,
      string my_reason1 = "STDBIASPVAL";
      my_reason1 += convertToString( strand_bias_pval );
      my_reason1 += "<=";
-     my_reason1 += convertToString(basic_filter.strand_bias_pval_threshold);
+     my_reason1 += convertToString(effective_strand_bias_pval_thr);
      l_summary_info.filterReason.push_back(my_reason1);
 
      l_summary_info.isFiltered = true;
@@ -188,6 +193,54 @@ void FilterByBasicThresholds( int i_alt, MultiBook &m_summary_stats,
 
 }
 
+void DecisionTreeData::FilterOnPositionBias(int i_alt, MultiBook &m_summary_stats,
+						VariantOutputInfo &l_summary_info,
+						const ControlCallAndFilters &my_filters,
+						const VariantSpecificParams& variant_specific_params)
+{
+  if (!my_filters.use_position_bias)
+    return;
+
+  float effective_position_bias_pval_thr = my_filters.position_bias_pval;
+  if (variant_specific_params.position_bias_pval_override)
+    effective_position_bias_pval_thr = variant_specific_params.position_bias_pval;
+
+  float effective_position_bias_thr = my_filters.position_bias;
+  if (variant_specific_params.position_bias_override)
+    effective_position_bias_thr = variant_specific_params.position_bias;
+
+  i_alt = i_alt + 1;   // confusing, ref is 0, but iterating from 0 excluding ref
+
+  float position_bias = m_summary_stats.PositionBias(i_alt);
+  float position_bias_pval = m_summary_stats.GetPositionBiasPval(i_alt);
+
+  // low fraction of ref reads is not associated with real position bias
+  unsigned int ref_count = m_summary_stats.GetAlleleCount(-1,0);      //FRO
+  unsigned int var_count = m_summary_stats.GetAlleleCount(-1,i_alt);  //FAO
+  float ref_fraction = ((float)ref_count) / (ref_count + var_count);
+
+  if ( ref_fraction <= my_filters.position_bias_ref_fraction ) {
+    return;
+  }
+
+  if ((position_bias_pval < effective_position_bias_pval_thr) &&
+      (position_bias > effective_position_bias_thr)){
+    string my_reason = "POSBIAS";
+    my_reason += convertToString(position_bias);
+    my_reason += ">";
+    my_reason += convertToString(effective_position_bias_thr);
+    l_summary_info.filterReason.push_back(my_reason);
+    
+    string my_reason1 = "POSBIASPVAL";
+    my_reason1 += convertToString(position_bias_pval);
+    my_reason1 += "<";
+    my_reason1 += convertToString(effective_position_bias_pval_thr);
+    l_summary_info.filterReason.push_back(my_reason1);
+
+    l_summary_info.isFiltered = true;
+  }
+}
+
 
 void DecisionTreeData::FilterOneAllele(int i_alt, VariantOutputInfo &l_summary_info, AlleleIdentity &l_variant_identity,
     const ControlCallAndFilters &my_filters, const VariantSpecificParams& variant_specific_params)
@@ -196,7 +249,8 @@ void DecisionTreeData::FilterOneAllele(int i_alt, VariantOutputInfo &l_summary_i
    // if some reason from the identity to filter it
   if (l_variant_identity.status.isProblematicAllele){
     l_summary_info.isFiltered = true;
-    l_summary_info.filterReason.push_back(l_variant_identity.filterReason);
+    for (unsigned int i_reason=0; i_reason<l_variant_identity.filterReasons.size(); i_reason++)
+      l_summary_info.filterReason.push_back(l_variant_identity.filterReasons.at(i_reason));
   }
 
   //filter values specific to SNPs, MNVs and Non Homopolymer Indels
@@ -218,6 +272,7 @@ void DecisionTreeData::FilterOneAllele(int i_alt, VariantOutputInfo &l_summary_i
     FilterByBasicThresholds( i_alt, all_summary_stats, l_summary_info, my_filters.filter_hp_indel, tune_xbias, tune_sbias, variant_specific_params);
   }
 
+  FilterOnPositionBias(i_alt, all_summary_stats, l_summary_info, my_filters, variant_specific_params);
 }
 
 /* Method  to loop thru alleles and filter ones that fail the filter condition*/
@@ -344,6 +399,39 @@ void DetectSSEForNoCall(VariantOutputInfo &l_summary_info, AlleleIdentity &var_i
   // cout << alt_counts_positive << "\t" << alt_counts_negative << "\t" << ref_counts_positive << "\t" << ref_counts_negative << endl;
 }
 
+void DecisionTreeData::FilterBlackList(const vector<VariantSpecificParams>& variant_specific_params)
+{
+  for (unsigned int i_allele=0; i_allele<allele_identity_vector.size(); i_allele++) {
+
+   VariantOutputInfo &l_summary_info = summary_info_vector[i_allele];
+   
+    float coverage = all_summary_stats.GetAlleleCount(-1,i_allele+1);
+    float coverage_fwd = all_summary_stats.GetAlleleCount(0,i_allele+1);
+    float coverage_rev = all_summary_stats.GetAlleleCount(1,i_allele+1);
+   
+   char black_list_strand = variant_specific_params[i_allele].black_strand;
+   
+          if(black_list_strand == 'F') { 
+          if( (coverage_fwd / coverage) > .7)
+            l_summary_info.isFiltered = true;
+            string my_reason = "NOCALLxLowQualityForwardStrand";
+            l_summary_info.filterReason.push_back(my_reason);
+        } else if(black_list_strand == 'R') {
+          if( (coverage_rev / coverage) > .7 )
+            l_summary_info.isFiltered = true;
+            string my_reason = "NOCALLxLowQualityReverseStrand";
+            l_summary_info.filterReason.push_back(my_reason);
+        } else if(black_list_strand == 'B') {
+            l_summary_info.isFiltered = true;
+            string my_reason = "NOCALLxLowQualityBothStrand";
+            l_summary_info.filterReason.push_back(my_reason);
+        }
+  
+  
+}
+}
+
+
 void DecisionTreeData::FilterSSE(vcf::Variant &candidate_variant, const ClassifyFilters &filter_variant, const vector<VariantSpecificParams>& variant_specific_params)
 {
   for (unsigned int i_allele=0; i_allele<allele_identity_vector.size(); i_allele++) {
@@ -367,10 +455,32 @@ void DecisionTreeData::FilterSSE(vcf::Variant &candidate_variant, const Classify
 
 void DecisionTreeData::AddStrandBiasTags(vcf::Variant &candidate_variant){
   for ( int i_allele=0; i_allele<all_summary_stats.NumAltAlleles(); i_allele++){
+    // ignore the ref allele, by convention allele 0, increment done all_summary_stats
     candidate_variant.info["STB"].push_back(convertToString(all_summary_stats.OldStrandBias(i_allele, tune_sbias)));
     candidate_variant.info["STBP"].push_back(convertToString(all_summary_stats.StrandBiasPval(i_allele, tune_sbias)));
 //    (*candidate_variant)->info["SXB"].push_back(convertToString(all_summary_stats.GetXBias(i_allele,tune_xbias)));  // variance zero = 0.1^2
     }
+}
+
+inline bool isinitialized (float x){
+  return ( x != -1);
+}
+void DecisionTreeData::AddPositionBiasTags(vcf::Variant &candidate_variant)
+{
+  for ( int i_allele=0; i_allele<all_summary_stats.NumAltAlleles(); i_allele++){
+    // ignore the ref allele, by convention allele 0
+    int i_alt = i_allele+1;
+    float v = all_summary_stats.GetPositionBias(i_alt);
+    if ( isinitialized(v) ) {
+      string val = convertToString(v);
+      candidate_variant.info["PB"].push_back(val);
+    }
+    float v1 = all_summary_stats.GetPositionBiasPval(i_alt);
+    if ( isinitialized(v1) ) {
+      string val1 = convertToString(all_summary_stats.GetPositionBiasPval(i_alt));
+      candidate_variant.info["PBP"].push_back(val1);
+    }
+  }
 }
 
 void DecisionTreeData::AddCountInformationTags(vcf::Variant & candidate_variant, const string &sampleName) {
@@ -379,6 +489,8 @@ void DecisionTreeData::AddCountInformationTags(vcf::Variant & candidate_variant,
   AddStrandBiasTags(candidate_variant);
     // depth by allele statements
   // complex with multialleles
+
+  AddPositionBiasTags(candidate_variant);
 
    map<string, vector<string> >& infoOutput = candidate_variant.info;
    PushAlleleCountsOntoStringMaps(infoOutput,all_summary_stats);
@@ -509,7 +621,7 @@ void DecisionTreeData::SpecializedFilterFromHypothesisBias(vcf::Variant & candid
   float ref_bias = RetrieveQualityTagValue(candidate_variant, "REFB", _allele);
   float var_bias = RetrieveQualityTagValue(candidate_variant, "VARB", _allele);
 
-  if (allele_identity.status.isHPIndel) {
+  if (allele_identity.ActAsHPIndel()) {
     if (allele_identity.status.isDeletion) {
       FilterAlleleHypothesisBias( ref_bias, var_bias, deletion_bias, _allele);
     }
@@ -535,6 +647,8 @@ void DecisionTreeData::AggregateFilterInformation(vcf::Variant & candidate_varia
 {
   // complete the decision tree for SSE using observed counts in base space
   // adds tags to the file
+  FilterBlackList(variant_specific_params);
+  
   FilterSSE(candidate_variant, parameters.my_controls.filter_variant, variant_specific_params);
 
   FilterOnSpecialTags(candidate_variant, parameters, variant_specific_params);
@@ -586,9 +700,12 @@ void DecisionTreeData::GenotypeAlleleFilterMyCandidate(vcf::Variant  &candidate_
       std::sort(filter_triggered.begin(), filter_triggered.end());
     }
 
+    // Abuse FR tag to write out info fields
+    for (unsigned int i_info=0; i_info<info_fields.size(); i_info++)
+      AddFilterReason(candidate_variant, info_fields.at(i_info));
+
     // if no-one escaped
     if (!no_filter){
-
 
       // report the reasons for everyone who didn't escape
       for (unsigned int i_ndx=0; i_ndx<filter_triggered.size(); i_ndx++){

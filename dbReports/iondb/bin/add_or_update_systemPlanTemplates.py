@@ -316,7 +316,7 @@ def add_or_update_sys_template(planDisplayedName, application, applicationGroup 
             "chipBarcode" : "", "planPGM" : "",
             "templatingKitName" : templateKitName, "controlSequencekitname" : controlSeqKitName, "samplePrepKitName" : samplePrepKitName, 
             "metaData" : "", "date" : currentTime, "applicationGroup" : applicationGroup_obj, "sampleGrouping" : sampleGrouping_obj, "categories" : categories})
-        
+
     if isCreated:
             print "...Created System template.id=%d; name=%s; isSystemDefault=%s" %(sysTemplate.id, sysTemplate.planDisplayedName, str(isSystemDefault))
     else:

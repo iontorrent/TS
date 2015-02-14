@@ -251,7 +251,7 @@ def send_nightly():
         pass
     
     
-    gc = models.GlobalConfig.objects.all()[0]
+    gc = models.GlobalConfig.get()
     web_root = gc.web_root
     if len(web_root) > 0:
         if web_root[-1] == '/':

@@ -48,9 +48,7 @@ def setUpModule():
     assert os.path.exists(path)
 
     for (dirpath, dirnames, filenames) in os.walk(path):
-        if '.svn' in dirpath: continue
         for name in dirnames:
-            if name == '.svn': continue
             launchsh = os.path.join(dirpath, name, 'launch.sh')
             if os.path.exists(launchsh):
                 log.info("Plugin [launch]: '%s'",launchsh)

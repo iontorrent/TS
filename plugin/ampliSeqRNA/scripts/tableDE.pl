@@ -16,6 +16,8 @@ my $OPTIONS = "Options:
   -a Retain Annotation fields, being all fields after barcode fields. (Requires -M specified.)
   -r Output up/down Regulation instead of RPM ratio, assuming first barcode is control.
   -t Output Threshold modified values for min/max or barcode RPMs. Default: output direct RPM values.
+  -A <action> Action to take for targets with read counts below the threshold (-T). Default: 'threshold'.
+     'threshold' => set count to threshold value. 'exclude' => exclude the target from output table.
   -B <list> Comma-separated subset of Barcode IDs to use to produce DE table. Thresholded barcode RPM's output if <= 3 specified barcodes.
   -L <int> Number of leading (row ID) fields before barcodes, which are copied to output file. Default: 2.
   -M <int> Maximum number of barcode fields to read. Default: 0 (assume all fields are barcode data).
@@ -33,6 +35,7 @@ my $normNom = 0;
 my $barcodeList = "";
 my $maxBarcodes = 0;
 my $thresOut = 0;
+my $thresAction = 'threshold';
 
 my $help = (scalar(@ARGV) == 0);
 while( scalar(@ARGV) > 0 ) {
@@ -41,6 +44,7 @@ while( scalar(@ARGV) > 0 ) {
   if($opt eq '-a') {$keepAnno = 1;}
   elsif($opt eq '-r') {$regulation = 1;}
   elsif($opt eq '-t') {$thresOut = 1;}
+  elsif($opt eq '-A') {$thresAction = shift;}
   elsif($opt eq '-B') {$barcodeList = shift;}
   elsif($opt eq '-L') {$leadFields = int(shift);}
   elsif($opt eq '-M') {$maxBarcodes = int(shift);}
@@ -69,12 +73,16 @@ if( $help ) {
 my $matfile = shift(@ARGV);
 
 if( $normNom < 0 ) {
-  print STDERR "Warning: Negative normalization numerator (-N) value ($normNom) ignored.";
+  print STDERR "Warning: Negative normalization numerator (-N) value ($normNom) ignored.\n";
   $normNom = 0;
 }
 if( $rd_thres < 1 ) {
-  print STDERR "Warning: Reads threshold (-T) value ($rd_thres) reset to minimum value of 1.";
+  print STDERR "Warning: Reads threshold (-T) value ($rd_thres) reset to minimum value of 1.\n";
   $rd_thres = 1;
+}
+if( $thresAction ne 'threshold' && $thresAction ne 'exclude' ) {
+  print STDERR "Warning: Unknown threshold action provided (-A $thresAction). Default 'threshold' action assumed.\n";
+  $thresAction = 'threshold';
 }
 
 # for RPM normalization factors are calcualted even if not directly applied (to avoid extra logic in code)
@@ -85,6 +93,7 @@ $maxBarcodes = 0 if( $maxBarcodes < 0 );
 $leadFields = 0 if( $leadFields < 0 );
 
 my $rpmTitle = $regulation ? "log2(DER)" : "DERatio";
+my $excludeMode = $thresAction eq 'exclude' ? 1 : 0;
 
 #--------- End command arg parsing ---------
 
@@ -172,6 +181,7 @@ while(<MATFILE>) {
   my ($maxRdBelowT,$norFcBelowT) = (-1,0);
   my ($controlNrds,$controlTrds) = (0,0);
   my @origRds = ();
+  my $readsBelowThreshold = 0;
   for( my $i = 0; $i < $nbc; ++$i ) {
     next unless( $fieldIDs[$i+$leadFields] );
     my $nrds = $fields[$i+$leadFields];
@@ -197,11 +207,14 @@ while(<MATFILE>) {
     }
     # select representative barcode (values) of those with reads < threshold
     # - use highest number of raw reads and split ties by most total barcode reads (=> lower normalization factor)
+    ++$readsBelowThreshold;
     if( $nrds > $maxRdBelowT || ($nrds == $maxRdBelowT && $norms[$i] < $norFcBelowT) ) {
       $maxRdBelowT = $nrds;
       $norFcBelowT = $norms[$i];
     }
   }
+  # exclude targets where any read was beow threshold
+  next if( $excludeMode && $readsBelowThreshold );
   # set min/max for DE based of values for selected barcodes above and below threshold
   if( $maxRdBelowT >= 0 ) {
     # reads for best barcode below threshold set to threshold

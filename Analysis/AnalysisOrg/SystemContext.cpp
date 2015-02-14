@@ -294,7 +294,9 @@ void SystemContext::SetUpAnalysisLocation()
 void SystemContext::FindExpLogPath()
 {
   if (explog_path.length() == 0){
-    explog_path = MakeExpLogPathFromDatDir(dat_source_directory);
+    char *path =  MakeExpLogPathFromDatDir(dat_source_directory);
+    explog_path = path;
+    free(path);
     if (explog_path.length() == 0)
     {
       fprintf (stderr, "Unable to find explog file.  Exiting.\n");

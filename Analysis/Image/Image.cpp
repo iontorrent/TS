@@ -225,15 +225,10 @@ bool Image::ReadyToLoad ( const char *filename )
 
 }
 
-
-
-// determines offset from Chip origin of this image data.  Only needed for block
-// datasets.
-void Image::SetOffsetFromChipOrigin ( const char *filepath )
-{
-  // Block datasets are stored in subdirectories named for the x and y coordinates
-  // of the origin of the block data, i.e. "X256_Y1024"
-  // extract the subdirectory and parse the coordinates from that
+// Block datasets are stored in subdirectories named for the x and y coordinates
+// of the origin of the block data, i.e. "X256_Y1024"
+// extract the subdirectory and parse the coordinates from that
+bool Image::GetOffsetFromChipPath (const char * filepath, int &x_offset, int &y_offset) {
   char *path = NULL;
   path = strdup ( filepath );
 
@@ -244,29 +239,33 @@ void Image::SetOffsetFromChipOrigin ( const char *filepath )
   coords = basename ( dir );
 
   int val = -1;
-  int chip_offset_x = 0;
-  int chip_offset_y = 0;
-  val = sscanf ( coords, "X%d_Y%d", &chip_offset_x, &chip_offset_y );
-  if ( val != 2 )
-  {
-    // ERROR
-    raw->chip_offset_x = -1;
-    raw->chip_offset_y = -1;
-    fprintf ( stdout, "Could not determine this image's chip origin offset from directory name\n" );
-  }
-  else
-  {
-    // SUCCESS
-    raw->chip_offset_x = chip_offset_x;
-    raw->chip_offset_y = chip_offset_y;
-    fprintf ( stdout, "Determined this image's chip origin offset:\n X: %d Y: %d\n", chip_offset_x,chip_offset_y );
+  x_offset = 0;
+  y_offset = 0;
+  bool success = false;
+  val = sscanf ( coords, "X%d_Y%d", &x_offset, &y_offset );
+  if (val == 2) {
+    success = true;
   }
   if (path)
-    free (path);
-  //if (dir)
-  //free (dir);
-  //if (coords)
-  //free (coords);
+     free (path);
+  return success;
+}
+
+// determines offset from Chip origin of this image data.  Only needed for block
+// datasets.
+void Image::SetOffsetFromChipOrigin ( const char *filepath )
+{
+  int chip_offset_x, chip_offset_y;
+  bool success = GetOffsetFromChipPath(filepath, chip_offset_x, chip_offset_y);
+  if (success) {  
+    fprintf ( stdout, "Determined this image's chip origin offset:\n X: %d Y: %d\n", chip_offset_x,chip_offset_y ); 
+  }
+  else {
+    chip_offset_x = chip_offset_y = -1;
+    fprintf ( stdout, "Could not determine this image's chip origin offset from directory name\n" );
+  }
+  raw->chip_offset_x = chip_offset_x;
+  raw->chip_offset_y = chip_offset_y;
 }
 
 
@@ -350,6 +349,34 @@ bool Image::LoadRaw_noWait ( const char *rawFileName, int frames, bool allocate,
   ActuallyLoadRaw ( rawFileName,frames,headerOnly );
   return true;
 }
+
+
+bool Image::LoadRaw_noWait_noSem ( const char *rawFileName, int frames, bool allocate, bool headerOnly)
+{
+    struct stat buffer;
+    //if ( !WaitForMyFileToWakeMeFromSleep ( rawFileName ) )
+    if (stat(rawFileName, &buffer)) // file does not exist
+    {
+        fprintf (stdout, "LoadRaw_noWait warning... file %s doest not exist\n", rawFileName);
+        fflush (stdout);
+        return (false);
+    }
+
+    ( void ) allocate;
+    cleanupRaw();
+
+    //set default name only if not already set
+    if ( !results_folder )
+    {
+        results_folder = ( char * ) malloc ( 3 );
+        strncpy ( results_folder, "./", 3 );
+    }
+
+    //int rc =
+    ActuallyLoadRaw_noSem ( rawFileName,frames,headerOnly );
+    return true;
+}
+
 
 
 // This is the actual function
@@ -500,7 +527,59 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
 
   raw->frameStride = raw->rows * raw->cols;
 
-//  printf ( "Loading raw file: %s...done\n", rawFileName );
+    //  printf ( "Loading raw file: %s...done\n", rawFileName );
+
+    return ( rc );
+}
+
+int Image::ActuallyLoadRaw_noSem ( const char *rawFileName, int frames,  bool headerOnly )
+{
+    int rc;
+    raw->channels = 4;
+    raw->interlaceType = 0;
+    raw->image = NULL;
+    if ( frames )
+        raw->frames = frames;
+
+    if ( headerOnly )
+    {
+        rc = deInterlace_c ( ( char * ) rawFileName,NULL,NULL,
+                             &raw->rows,&raw->cols,&raw->frames,&raw->uncompFrames,
+                             0,0,
+                             ImageCropping::chipSubRegion.col,ImageCropping::chipSubRegion.row,
+                             ImageCropping::chipSubRegion.col+ImageCropping::chipSubRegion.w,ImageCropping::chipSubRegion.row+ImageCropping::chipSubRegion.h,
+                             ignoreChecksumErrors, &raw->imageState );
+    }
+    else
+    {
+        double startT = TinyTimer();
+
+        rc = deInterlace_c ( ( char * ) rawFileName,&raw->image,&raw->timestamps,
+                             &raw->rows,&raw->cols,&raw->frames,&raw->uncompFrames,
+                             0,0,
+                             ImageCropping::chipSubRegion.col,ImageCropping::chipSubRegion.row,
+                             ImageCropping::chipSubRegion.col+ImageCropping::chipSubRegion.w,ImageCropping::chipSubRegion.row+ImageCropping::chipSubRegion.h,
+                             ignoreChecksumErrors, &raw->imageState );
+
+
+
+        if ( ImageCropping::chipSubRegion.h != 0 )
+            raw->rows = ImageCropping::chipSubRegion.h;
+        if ( ImageCropping::chipSubRegion.w != 0 )
+            raw->cols = ImageCropping::chipSubRegion.w;
+
+        if (rc == 0 )
+        {
+            std::cout << "Invalid dat file: " << rawFileName << endl;
+            exit (EXIT_FAILURE);
+        }
+        TimeStampCalculation();
+        FileLoadTime=TinyTimer()-startT;
+    }
+
+    raw->frameStride = raw->rows * raw->cols;
+
+    //  printf ( "Loading raw file: %s...done\n", rawFileName );
 
   return ( rc );
 }

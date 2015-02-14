@@ -1,6 +1,6 @@
 // html for chart container and filters bar - note these are invisible and moved into position later
 document.write('\
-<div id="TC-chart" style="border:2px solid #666;display:none">\
+<div id="TC-chart" class="unselectable" style="border:2px solid #666;display:none">\
   <div id="TC-titlebar" class="grid-header" style="min-height:24px;border:0">\
     <span id="TC-collapsePlot" style="float:left" class="ui-icon ui-icon-triangle-1-n" title="Collapse View"></span>\
     <span id="TC-titletext" class="table-title" style="float:none">Target Coverage Chart</span>\
@@ -8,6 +8,7 @@ document.write('\
       <span class="TC-shy flyhelp" id="TC-plotLabel" style="padding-left:20px">Plot:</span>\
       <select class="TC-selectParam TC-shy txtSelect" id="barAxis">\
        <option value=0 selected="selected">Total Reads</option>\
+       <option value=2 style="display:none">Read Depths</option>\
        <option value=1>Strand Reads</option>\
       </select>\
     </span>\
@@ -44,13 +45,13 @@ document.write('\
     <td><input id="TC-export" type="button" value="Export"></td>\
   </tr></table>\
   <table><tr>\
-    <td id="TC-filtertitle" class="nwrap">Target Filters:</td>\
-    <td class="nwrap"><span class="flyhelp" id="TC-filterDepthLabel">Reads</span>:\
+    <td id="TC-filtertitle" class="nwrap">Data Filters:</td>\
+    <td class="nwrap"><span class="flyhelp" id="TC-filterDepthLabel">Depth</span>:\
       <input type="text" class="txtSearch" id="TC-filterCovMin" value="0" size=4>&nbsp;-&nbsp;<input type="text" class="txtSearch" id="TC-filterCovMax" value="" size=4></td>\
     <td id="TC-chromFilter" class="nwrap"><span class="flyhelp" id="TC-filterChromLabel">Chrom/Contig</span>:\
       <select class="txtSelect" id="TC-selectChrom"></select></td>\
-    <td class="nwrap"><span class="flyhelp" id="TC-filterGeneSymLabel">Gene Symbol</span>:\
-      <input class="txtSearch" type="text" id="TC-filterGeneSym" value="" size=20></td>\
+    <td class="nwrap"><span class="flyhelp" id="TC-filterGeneSymLabel">Attribute</span>:\
+      <input class="txtSearch" type="text" id="TC-filterGeneSym" value="" size=19></td>\
     <td><input id="TC-clearFilters" type="button" value="Clear" style="width:45px"></td>\
   </tr></table>\
 </div>\
@@ -88,7 +89,7 @@ $(function () {
   var useExCan = (fixIE && !useFlash);
 
   // minimum sizes for chart widget
-  var def_minWidth = 620;
+  var def_minWidth = 625;
   var def_minHeight = 200;
 
   // configure widget size and file used from placement div attributes
@@ -105,36 +106,34 @@ $(function () {
   // default customization set for target seq with target base coverage & averaging
   var ampliconReads = false; // just changes description text
   var baseCoverage = true;   // false => number of reads rather than base reads
+  var enableReadDepthPlot = false; // input enabled display option
 
   // customization is controlled by just one flag for now indicating amplicon reads
   // but more flags could be added later or geven ability to switch between two data sets
   var amplicons = $("#TargetCoverageChart").attr("amplicons");
   if( amplicons == undefined || amplicons == '' ) amplicons = 0;
-  if( amplicons > 0 ) {
+  if( amplicons > 0 && amplicons <= 3 ) {
     ampliconReads = true;
     baseCoverage = false;
   }
-  var transcriptBed = (amplicons == 2) ? 1 : 0;
+  var transcriptBed = (amplicons == 2 || amplicons == 3) ? 1 : 0;
+  var contigChart = (amplicons == 3 || amplicons == 4);
   var reportPassingCov = false; // transcriptBed;
   // lengthNormal => make averages by total length (number of bases) ELSE divide by bin size
   var lengthNormal = baseCoverage || !ampliconReads;
 
-  var showPlotOptions = $("#TargetCoverageChart").attr("showplotoptions");
-  showPlotOptions = (showPlotOptions != undefined);
-  // URL override to enable by-strand plot option - quick dirty method to just find single parameter
-  var query = '&' + window.location.search.substring(1) + '&';
-  var urlEnablePlotOptions = query.indexOf('&EPO&') >= 0 || query.indexOf('&EPO=') >= 0;
-  if( urlEnablePlotOptions ) showPlotOptions = 1;
-
+  var autolegend = $("#TargetCoverageChart").attr("autolegend");
+  autolegend = (autolegend != undefined);
   var startHideLegend = $("#TargetCoverageChart").attr("hidelegend");
   startHideLegend = (startHideLegend != undefined);
 
+  var startCollapsed = $("#TargetCoverageChart").attr("collapse");
+  startCollapsed = (startCollapsed != undefined);
+
   // possible input options
+  showPlotOptions = true;
   autoJumpToGene = true;
 
-  if( !showPlotOptions ) {
-    $('#TC-PlotOptions').hide();
-  }
   if( transcriptBed ) {
     $('#TC-chromFilter').hide();
     $('#TC-OpenInRCC').hide();
@@ -354,7 +353,7 @@ $(function () {
     showLegend : true,
     numPoints : def_numPoints,
     aveBase : 1,
-    barAxis : urlEnablePlotOptions ? 1 : 0,
+    barAxis : 0,
     overPlot : amplicons == 1 ? 1 : 0,
     zoomMode : 1
   };
@@ -382,29 +381,37 @@ $(function () {
     cov_length : 6,
     uncov_5p : 7,
     uncov_3p : 8,
-    reads_mean : 9,
+    reads_tot : 9,
     reads_fwd : 10,
     reads_rev : 11,
     bin_size : 1,
     bin_length : 2,
-    sum_gcbias : 4
+    sum_gcbias : 4,
+    cov_20x : 12,
+    cov_100x : 13,
+    cov_500x : 14
   };
 
   var LegendLabels = {
     targType : "Target",
     meanType : "Average ",
-    rcovType : "Base ",
+    rcovType : "Reads",
+    rcovOrig : "Reads",
     allReads : "Total Reads",
     fwdReads : "Forward Reads",
     revReads : "Reverse Reads",
-    allBaseReads : "Total Base Reads",
-    fwdBaseReads : "Forward Base Reads",
-    revBaseReads : "Reverse Base Reads",
+    allBaseReads : "Total Base Read Depth",
+    fwdBaseReads : "Forward Base Reads Depth",
+    revBaseReads : "Reverse Base Reads Depth",
     allBaseRead_cov : "% Target length covered",
-    allBaseReads_u3p : "% Target length uncovered at 5'",
-    allBaseReads_u5p : "% Target length uncovered at 3'",
-    fwdBaseReads_u3p : "% Target length covered from 5'",
-    revBaseReads_u5p : "% Target length covered from 3'",
+    allBaseReads_u3p : "% Target length uncovered at 3'",
+    allBaseReads_u5p : "% Target length uncovered at 5'",
+    fwdBaseReads_u3p : "% Target length uncovered at 3'",
+    revBaseReads_u5p : "% Target length uncovered at 5'",
+    covDepth_1x : "% Base Coverage at <20x",
+    covDepth_20x : "% Base Coverage at 20x",
+    covDepth_100x : "% Base Coverage at 100x",
+    covDepth_500x : "% Base Coverage at 500x",
     allReads_pss : "% Passing Reads",
     fwdReads_pss: "Forward % Passing Reads",
     revReads_pss : "Reverse % Passing Reads",
@@ -419,35 +426,47 @@ $(function () {
 
   var ColorSet = {
     allReads : "rgb(128,160,192)",
-    fwdReads : "rgb(240,160,96)",
-    revReads : "rgb(64,200,96)",
     allReads_sd2 : "rgb(64,80,160)",
     allReads_shd : "rgb(0,0,128)",
-    fwdReads_shd: "rgb(240,96,64)",
+    fwdReads : "rgb(240,120,100)",
+    revReads : "rgb(100,240,120)",
+    fwdReads_shd: "rgb(160,32,32)",
     revReads_shd : "rgb(32,160,32)",
-    percentGC : "rgb(224,96,96)",
-    targLen : "rgb(112,144,102)",
-    fwdBias : "rgb(200,96,160)",
-    gcBias : "rgb(180,64,64)"
+    covDepth_1x : "rgb(255,220,96)",
+    covDepth_20x : "rgb(237,194,64)",
+    covDepth_100x : "rgb(180,143,32)",
+    covDepth_500x : "rgb(129,105,0)",
+    allReads_pss : "% Passing Reads",
+    percentGC : "rgb(200,62,128)",
+    targLen : "rgb(64,126,200)",
+    fwdBias : "rgb(220,96,200)",
+    gcBias : "rgb(190,190,190)"
   }
 
   function customizeChart() {
     LegendLabels.targType = ampliconReads ? "Amplicon" : "Target";
+    if( amplicons == 3 ) LegendLabels.targType = "Contig";
+    if( amplicons == 4 ) LegendLabels.targType = "Chromosome";
     LegendLabels.meanType = (baseCoverage || ampliconReads) ? "Average " : "Normalized ";
-    LegendLabels.rcovType = baseCoverage ? "Base " : "Assigned ";
-    var rtp = " " + LegendLabels.rcovType.toLowerCase() + "reads ";
+    LegendLabels.rcovType = baseCoverage ? (plotParams.aveBase ? "Base Read Depth" : "Total Base Reads") : "Assigned Reads";
+    LegendLabels.rcovOrig = baseCoverage ? "base reads" : "assigned reads";
+    LegendLabels.allBaseRead_cov = "% "+LegendLabels.targType+" length covered";
+    LegendLabels.allBaseReads_u3p = "% "+LegendLabels.targType+" length uncovered at 3'";
+    LegendLabels.allBaseReads_u5p = "% "+LegendLabels.targType+" length uncovered at 5'";
+    LegendLabels.fwdBaseReads_u3p = "% "+LegendLabels.targType+" length uncovered at 3'";
+    LegendLabels.revBaseReads_u5p = "% "+LegendLabels.targType+" length uncovered at 5'";
+
+    var rtp = " " + LegendLabels.rcovType.toLowerCase();
     var trg = LegendLabels.targType.toLowerCase();
 
     $('#TC-titletext').text(LegendLabels.targType+' Coverage Chart');
-    $('#TC-filtertitle').text(LegendLabels.targType+' Filters:');
-    //$('#TC-export').val('Export '+LegendLabels.targType+'s in View');
+    $('#TC-filterDepthLabel').text(ampliconReads ? 'Reads' : 'Depth');
 
     // cusomize primary help text
     var barShading = ampliconReads ? "number of amplicons covered " + (reportPassingCov ? "at 70% of their length" : "from end to end")
        : "proportion of uncovered target regions at the 3' and/or 5' ends";
     $('#TC-helptext').html(
-      "This chart shows the representation ("+LegendLabels.rcovType.toLowerCase()+
-      " reads) of individual targeted regions.<br/><br/>"+
+      "This chart shows the representation ("+LegendLabels.rcovType.toLowerCase()+ ") of individual targeted regions.<br/><br/>"+
       "Typically there are more individual regions than space available for display and a<br/>"+
       "data bar (or point) will represent a number of binned "+trg+"s, with corresponding<br/>"+
       "values representing totals or averages for those "+trg+"s. Data bars may be shaded<br/>"+
@@ -468,10 +487,7 @@ $(function () {
       "Look for additional fly-over help on or near the controls provided." );
 
     // add fly-over help to controls here in case need to customize for chart data
-    $("#TC-plotLabel").attr( "title",
-      "Select the how the data is plotted.\n'Total Reads' shows bar plots of"+rtp+
-      "to both DNA strands, whereas 'Strand Reads' plots the numbers of forward and reverse (DNA strand)"+rtp+
-      "separately, above and below the 0 reads line." );
+    customizePlotOptions();
     $("#TC-overlayLabel").attr( "title",
       "Select a particular property of the (binned) targets to plot over the coverage (bar) data to see " +
       "if there is an obvious correlation between target(s) representation and that property. " +
@@ -489,9 +505,9 @@ $(function () {
       "s with relatively low representation. When unchecked the range is set to the largest"+rtp+
       "value for all "+trg+"s in the set selected by the "+LegendLabels.targType+
       " Filters, regardless of which "+trg+"s are currently in view." );
-    var logMsg = baseCoverage ? "BR+1) to avoid -ve log values (for BR<1)," : "AR+1) to avoid";
-    $("#TC-logAxisLabel").attr( "title", "Check to display the "+LegendLabels.rcovType+"Reads axis with log10 scaling."+
-      " Log axis values are log("+logMsg+" log(0) and so 0 bar height => 0 reads." );
+    var logMsg = baseCoverage ? "BRD+1" : "AR+1";
+    $("#TC-logAxisLabel").attr( "title", "Check to display the "+LegendLabels.rcovType+" axis with log10 scaling."+
+      " Log axis values are log10("+logMsg+") to give positive numbers and so 0 bar height => 0 reads." );
     $("#TC-showLegendLabel").attr( "title", "Select whether the legend is displayed over the plot area." );
     $("#TC-numPointsLabel").attr( "title",
       "This value specifies the maximum number of data bars and overlay points to display. Should there be more "+trg+
@@ -504,20 +520,39 @@ $(function () {
     $("#TC-export").attr( "title", "Click to open Export "+LegendLabels.targType+"s in View dialog." );
     $("#TC-dialog-title").html( "Export "+LegendLabels.targType+"s in View" );
     $("#TC-filterDepthLabel").attr( "title",
-      "Filter data presented using a range of"+rtp+"(the y-axis range). There are two independent settings for the " +
-      "minimum and maximum filters and the data will be automatically filtered immediately when either value is changed." );
+      "Filter data presented using a range of"+rtp+" (the y-axis range). There are two settings for the " +
+      "minimum and maximum thresholds. After typing a number press tab or enter to update the view. " +
+      "Tip: Uncheck the Log Axis option when using this filter, since it filters on the non-logged data." );
     $("#TC-filterChromLabel").attr( "title",
       "Use this selector to select a particular chromosome (or contig) of the reference to filter to only "+trg+
       "s on this chromosome, or to set to no filter by selecting the 'ALL' value. If there is only one chromosome in your "+
       "reference this value is set and cannot be changed." );
     $("#TC-filterGeneSymLabel").attr( "title",
-      "Type in the gene symbol in to filter the view to just "+trg+"s in that gene. Alternatively you may filter on any single "+
-      "attribute specified in the "+trg+"s file by giving the name and value, e.g. 'Pool=1' or 'GENE_ID=TBP'. Press the enter or tab "+
-      "key to perform the filter. The gene symbol (or attribute name and value) typed in must match that of the "+trg+"(s) "+
-      "exactly but is not case-sensitive." );
+      "Type in a gene symbol or name to filter the view to just "+trg+"s in that gene or having that "+trg+" ID. "+
+      "Alternatively you filter on any single attribute specified in the "+trg+"s file by giving the name and value, "+
+      "e.g. 'Pool=1' or 'GENE_ID=TBP'. Press the enter or tab key to perform the filter. "+
+      "The attibute text typed in must match that of the "+trg+"(s) exactly but is not case-sensitive." );
     $("#TC-clearFilters").attr( "title",
       "Click this button to clear all specified filters: Coverage data is presented for all "+trg+"s." );
     $("#TC-help").attr( "title", "Click for help." );
+  }
+
+  function customizePlotOptions() {
+    // separate function as dependent on coverage file read - for backwards compatibility
+    if( !showPlotOptions ) {
+      $('#TC-PlotOptions').hide();
+    }
+    $('#TC-PlotOptions').show();
+    var rtp = " " + LegendLabels.rcovType.toLowerCase();
+    $("#TC-plotLabel").attr( "title",
+      "Select the how the data is plotted.\n'Total Reads' shows bar plots of"+rtp+"to both DNA strands.\n"+
+      (enableReadDepthPlot ? "'Read Depths' shows the same bar plots colored by percentage of targets covered at specific base read depths.\n" : "")+
+      "'Strand Reads' shows bar plots of forward and reverse DNA strand"+rtp+"separately, above and below the 0 reads line." );
+    if( enableReadDepthPlot ) {
+      $("#barAxis option[value=2]").show();
+    } else {
+      $("#barAxis option[value=2]").hide();
+    }
   }
 
   // (re)initiailize page from default user options
@@ -647,33 +682,44 @@ $(function () {
   }
 
   function showTooltip(item,pos,sticky) {
+    renderTooltip( item, Math.floor(pos.x), (pos.y < 0 ? -1 : 1), sticky, pos.pageX, pos.pageY );
+  }
+
+  // create tooptip relative to plot area - Flot object item may be NULL
+  function renderTooltip(item,binNum,dir,sticky,pageX,pageY) {
+    // clear previous non-sticky toolip timeout - just in case
     if( timeout != null ) {
       clearTimeout(timeout);
       timeout = null;
     }
     // get label for checking need to resolve selection issues
+    // - if in not in Strand Reads view, dir < 0 => reverse, dir > 0 => forward, dir == 0 => all
+    var isRev = (dir < 0);
+    var forceReportAll = (dir == 0 && plotParams.barAxis == 1);
     var label, bgColor;
-    var isRev = pos.y < 0;
     if( overlayPoint(item) ) {
       label = item.series.label;
       bgColor = item.series.color;
-    } else if( plotParams.barAxis == 0 ) {
+    } else if( plotParams.barAxis == 0 || forceReportAll ) {
       label = baseCoverage ? LegendLabels.allBaseReads : LegendLabels.allReads;
       bgColor = ColorSet.allReads;
-    } else {
+    } else if( plotParams.barAxis == 1 ) {
       if( baseCoverage ) {
         label = isRev ? LegendLabels.revBaseReads : LegendLabels.fwdBaseReads;
       } else {
         label = isRev ? LegendLabels.revReads : LegendLabels.fwdReads;
       }
       bgColor = isRev ? ColorSet.revReads : ColorSet.fwdReads;
+    } else {
+      label = baseCoverage ? LegendLabels.allBaseReads : LegendLabels.allReads;
+      bgColor = ColorSet.covDepth_1x;
     }
-    // resolve issues for near/overlapping points selection
-    // note: item not reliable when they may be multiple sections in each bar point
+    // resolve for overlapping points selection - override supplied binNum for points selection
     var clickBar = dataBar(label);
-    var binNum = item && !clickBar ? item.dataIndex : Math.floor(pos.x);
+    if( item && !clickBar ) binNum = item.dataIndex;
+    if( binNum < 0 ) binNum = 0;
     if( binNum >= plotStats.numPoints ) binNum = plotStats.numPoints-1;
-    // do not output the same message (e.g. if move cursor)
+    // do not output the current message (e.g. if move cursor)
     if( lastHoverBar.binNum == binNum && lastHoverBar.sticky == sticky &&
         lastHoverBar.isRev == isRev && lastHoverBar.label == label ) return;
     hideTooltip();
@@ -681,24 +727,28 @@ $(function () {
     lastHoverBar.isRev = isRev;
     lastHoverBar.sticky = sticky;
     lastHoverBar.label = label;
+    // generate text message content
     $('#TC-tooltip-body').html( sticky ? tooltipMessage(label,binNum) : tooltipHint(label,binNum) );
-    var posx = pos.pageX+10;
-    var posy = pos.pageY-10;
+    // position and display message box
+    var whiteText = (label === LegendLabels.targLen || label === LegendLabels.fwdBias || label === LegendLabels.gcBias || label === LegendLabels.percentGC);
+    var posx = pageX+10;
+    var posy = pageY-10;
     var minTipWidth = 0;
     if( sticky ) {
       if( clickBar ) minTipWidth = plotParams.barAxis ? 230 : 210;
       var cof = $('#TC-chart').offset();
       var ht = $('#TC-tooltip').height();
       var ymax = cof.top + $('#TC-chart').height() - ht;
-      posy = pos.pageY - $('#TC-tooltip').height()/2;
+      posy = pageY - $('#TC-tooltip').height()/2;
       if( posy > ymax ) posy = ymax;
       if( posy < cof.top-4 ) posy = cof.top-4;
       var xmid = cof.left + $('#TC-chart').width()/2;
-      if( pos.pageX > xmid ) posx = pos.pageX - $('#TC-tooltip').width() - 26;
+      if( pageX > xmid ) posx = pageX - $('#TC-tooltip').width() - 26;
     }
     $('#TC-tooltip').css({
       position: 'absolute', left: posx, top: posy, minWidth: minTipWidth,
-      background: bgColor, padding: (sticky ? 3 : 4)+'px',
+      background: bgColor, padding: '3px '+(sticky ? '7px' : '4px'),
+      color: whiteText ? "white" : "black",
       border: (sticky ? 2 : 1)+'px solid #444',
       opacity: sticky ? 1: 0.7
     }).appendTo("body").fadeIn(sticky ? 10 : 100);
@@ -762,7 +812,7 @@ $(function () {
     if( id === LegendLabels.percentGC ) {
       return (targLen > 0 ? sigfig(100 * dataTable[bin][DataField.target_gc] / targLen) : 0)+'%';
     } else if( id === LegendLabels.targLen ) {
-      return binBar(bin) ? sigfig(targLen / dataTable[bin][DataField.bin_size]) : targLen;
+      return commify(binBar(bin) ? sigfig(targLen / dataTable[bin][DataField.bin_size]) : targLen);
     } else if( id === LegendLabels.fwdBias ) {
       var fwdReads = dataTable[bin][DataField.reads_fwd];
       var totalReads = fwdReads + dataTable[bin][DataField.reads_rev];
@@ -811,10 +861,9 @@ $(function () {
       totalReads = revReads;
     }
     // customize message fields
-    var readType = dir+LegendLabels.rcovType.toLowerCase()+'read';
     var leadStr = binBar(bin) ? "Total "+LegendLabels.targType.toLowerCase() : LegendLabels.targType;
-    var readStr = readType+'s: ';
-    var meanStr = LegendLabels.meanType+readType+" depth: ";
+    var readStr = dir+LegendLabels.rcovOrig.toLowerCase()+': ';
+    var meanStr = LegendLabels.meanType+dir+LegendLabels.rcovType.toLowerCase()+": ";
     var e2eStr = (reportPassingCov ? "Passing coverage " : "End-to-end ");
     // create 'average' - dependent on bar and axis
     var meanReads;
@@ -825,42 +874,49 @@ $(function () {
     }
     // compose message
     var br = "<br/>";
-    var msg = "<span style='white-space:nowrap'>"+id+" in bin#"+(bin+1)+".</span>"+br;
-    var contigType = transcriptBed ? "Transcript: " : "Contig: ";
+    var msg = "(Bin#"+(bin+1)+")"+br;
+    var contigType = amplicons == 3 ? "Contig: " : (transcriptBed ? "Transcript: " : "Choromosome: ");
     if( binBar(bin) && dataTable[bin][DataField.bin_size] > 1 ) {
-      msg += contigType+dataTable[bin][DataField.contig_id]+br;
       var nbins = dataTable[bin][DataField.bin_size];
       msg += LegendLabels.targType+"s represented: "+nbins+br;
+      msg += contigType+dataTable[bin][DataField.contig_id]+br;
       if( barData ) {
-        msg += "Average "+LegendLabels.targType.toLowerCase()+" length: "+sigfig(targLen/nbins)+br;
+        msg += "Average "+LegendLabels.targType.toLowerCase()+" length: "+commify(sigfig(targLen/nbins))+br;
       }
     } else {
-      gstr = dataTable[bin][DataField.gene_id]
-      msg += (gstr.indexOf('=') > 0 ? "Attributes" : "Gene Sym")+": ";
-      if( gstr.length > 50 ) gstr = gstr.substring(0,50)+"...";
-      msg += gstr+br;
       var i, targID = dataTable[bin][DataField.target_id];
       while( (i = targID.indexOf(',')) > 0 ) {
         targID = targID.substr(0,i)+br+'+  '+targID.substr(i+1);
       }
       msg += leadStr+" ID: "+targID+br;
-      msg += contigType+dataTable[bin][DataField.contig_id]+br;
-      msg += "Location: "+dataTable[bin][DataField.pos_start]+"-"+dataTable[bin][DataField.pos_end]+br;
+      if( amplicons < 3 ) {
+        msg += contigType+dataTable[bin][DataField.contig_id]+br;
+        msg += "Location: "+commify(dataTable[bin][DataField.pos_start])+"-"+commify(dataTable[bin][DataField.pos_end])+br;
+      }
+      gstr = dataTable[bin][DataField.gene_id]
+      if( gstr != '' && gstr != '.' ) {
+        msg += (gstr.indexOf('=') > 0 ? "Attributes" : "Gene Sym")+": ";
+        if( gstr.length > 50 ) gstr = gstr.substring(0,50)+"...";
+        msg += gstr+br;
+      }
       if( barData ) {
-        msg += LegendLabels.targType+" length: "+targLen+br;
+        msg += LegendLabels.targType+" length: "+commify(targLen)+br;
       }
     }
     if( barData || id === LegendLabels.percentGC || id === LegendLabels.gcBias )
       msg += leadStr+" GC content: "+pcGC+"%"+br;
     if( barData ) {
       if( baseCoverage ) {
-        msg += leadStr+" length covered: "+pcCov+"%"+br;
+        // moved to below for new reports
+        if( !enableReadDepthPlot ) {
+          msg += leadStr+" length covered: "+pcCov+"%"+br;
+        }
       } else {
-        msg += leadStr+" overlapping reads: "+lenCov+br;
+        msg += leadStr+" overlapping reads: "+commify(lenCov)+br;
       }
-      msg += leadStr+" "+readStr+totalReads+br;
+      msg += leadStr+" "+readStr+commify(totalReads)+br;
       if( lengthNormal || binBar(bin) ) {
-        msg += meanStr+sigfig(meanReads)+br;
+        msg += meanStr+commify(sigfig(meanReads))+br;
       }
     }
     if( id === LegendLabels.fwdReads || id === LegendLabels.fwdBaseReads ) {
@@ -880,7 +936,7 @@ $(function () {
         msg += e2eStr+readStr+sigfig(pcU5p)+"%"+br;
       }
     } else if( id === LegendLabels.allReads || id === LegendLabels.allBaseReads ) {
-      msg += "Percent forward "+readType+"s: "+sigfig(pcFwd)+'%'+br;
+      msg += "Percent forward "+readStr+sigfig(pcFwd)+'%'+br;
       if( baseCoverage ) {
         msg += "Uncovered target 5' length: "+sigfig(pcU5p)+"%"+br;
         msg += "Uncovered target 3' length: "+sigfig(pcU3p)+"%"+br;
@@ -890,13 +946,13 @@ $(function () {
       }
     } else if( id === LegendLabels.targLen ) {
       if( binBar(bin) ) {
-        targLen /= dataTable[bin][DataField.bin_size];
-        msg += "Average "+LegendLabels.targType.toLowerCase()+" length: "+sigfig(targLen)+br;
+        var aveTargLen = targLen / dataTable[bin][DataField.bin_size];
+        msg += "Average "+LegendLabels.targType.toLowerCase()+" length: "+commify(sigfig(aveTargLen))+br;
       } else {
-        msg += LegendLabels.targType+" length: "+targLen+br;
+        msg += LegendLabels.targType+" length: "+commify(targLen)+br;
       }
     } else if( id === LegendLabels.fwdBias ) {
-      msg += "Percent forward "+readType+"s: "+sigfig(pcFwd)+'%'+br;
+      msg += "Percent forward "+readStr+sigfig(pcFwd)+'%'+br;
       msg += pcFwd >= 50 ? "Forward" : "Reverse";
       pcFwd = Math.abs(2*pcFwd-100);
       msg += " bias: "+sigfig(pcFwd)+'%'+br;
@@ -905,6 +961,14 @@ $(function () {
                                       : Math.abs(dataTable[bin][DataField.target_gc]/targLen - 0.5) );
       if( binBar(bin) ) msg += "Average ";
       msg += "GC or AT bias: "+gcbias.toFixed(1)+"%"+br;
+    }
+    if( enableReadDepthPlot && barData ) {
+      if( baseCoverage ) {
+        msg += "Target base coverage at 1x: "+sigfig(pcCov)+"%"+br;
+      }
+      msg += "Target base coverage at 20x: "+sigfig(100*dataTable[bin][DataField.cov_20x]/targLen)+'%'+br;
+      msg += "Target base coverage at 100x: "+sigfig(100*dataTable[bin][DataField.cov_100x]/targLen)+'%'+br;
+      msg += "Target base coverage at 500x: "+sigfig(100*dataTable[bin][DataField.cov_500x]/targLen)+'%'+br;
     }
     // show tooltip controls if appropriate
     if( barData && !binBar(bin) ) {
@@ -953,7 +1017,7 @@ $(function () {
   function sigfig(val) {
     val = parseFloat(val);
     var av = Math.abs(val);
-    if( av == 0 ) return "0";
+    if( av == parseInt(av) ) return val.toFixed(0);
     if( av >= 100 ) return val.toFixed(0);
     if( av >= 10 ) return val.toFixed(1);
     if( av >= 1 ) return val.toFixed(2);
@@ -962,9 +1026,14 @@ $(function () {
   }
 
   function commify(val) {
-    // expects positive integers
     var jrs = val.toString();
-    return jrs.replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,");
+    var dps = "";
+    var i = jrs.indexOf('.');
+    if( i >= 0 ) {
+      dps = jrs.substring(i);
+      jrs = jrs.substring(0,i);
+    }
+    return jrs.replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,")+dps;
   }
 
   function setCursor(curs) {
@@ -999,31 +1068,36 @@ $(function () {
   }
 
   $('#TC-clearFilters').click(function() {
+    if( clearFilters(true) ) unzoomData();
+  });
+
+  function clearFilters(allFilters) {
     // only reset if any filter is not at its default
+    // allFilters forces all to be reset, otherwise cumulative filters are not changed
     var numReset = 0;
-    if( tsvFilter.covmin != 0 ) {
-      $('#TC-filterCovMin').val(tsvFilter.covmin = 0);
-      ++numReset;
-    }
-    if( $('#TC-filterCovMax').val() != '' ) {
-      $('#TC-filterCovMax').val('');
-      tsvFilter.covmax = def_hugeCov;
-      ++numReset;
+    if( allFilters ) {
+      if( tsvFilter.covmin != 0 ) {
+        $('#TC-filterCovMin').val(tsvFilter.covmin = 0);
+        ++numReset;
+      }
+      if( $('#TC-filterCovMax').val() != '' ) {
+        $('#TC-filterCovMax').val('');
+        tsvFilter.covmax = def_hugeCov;
+        ++numReset;
+      }
+      if( tsvFilter.chrom != '' ) {
+        $('#TC-selectChrom').val('ALL');
+        tsvFilter.chrom = '';
+        ++numReset;
+      }
     }
     if( tsvFilter.gene != '' ) {
       $('#TC-filterGeneSym').val(tsvFilter.gene = '');
       ++numReset;
     }
-    if( tsvFilter.chrom != '' ) {
-      $('#TC-selectChrom').val('ALL');
-      tsvFilter.chrom = '';
-      ++numReset;
-    }
-    if( numReset > 0 ) {
-      tsvFilter.numrec = 0;
-      unzoomData();
-    }
-  });
+    tsvFilter.numrec = 0;
+    return numReset;
+  }
 
   $('#TC-autoZoom').change(function() {
     plotParams.zoomMode = ($(this).attr("checked") == "checked") ? 1 : 0;
@@ -1050,14 +1124,13 @@ $(function () {
   $('#TC-filterCovMin').change(function() {
     var val = this.value.trim();
     if( val == '' || isNaN(val) || val <= 0 ) val = 0;
-    val = parseInt(val);
     this.value = val;
     if( val > tsvFilter.covmax ) {
       $('#TC-filterCovMax').val('');
       tsvFilter.covmax = def_hugeCov;
     }
     if( val != tsvFilter.covmin ) {
-      tsvFilter.numrec = 0;
+      clearFilters(false);
       tsvFilter.covmin = val;
       unzoomData();
     }
@@ -1069,7 +1142,6 @@ $(function () {
       val = def_hugeCov;
       this.value = '';
     } else {
-      val = parseInt(val);
       if( val <= 0 ) val = 0;
       this.value = val;
       if( val < tsvFilter.covmin ) {
@@ -1078,7 +1150,7 @@ $(function () {
       }
     }
     if( val != tsvFilter.covmax ) {
-      tsvFilter.numrec = 0;
+      clearFilters(false);
       tsvFilter.covmax = val;
       unzoomData();
     }
@@ -1088,21 +1160,32 @@ $(function () {
     var val = this.value;
     if( val == 'ALL' ) val = '';
     if( val != tsvFilter.chrom ) {
-      tsvFilter.numrec = 0;
+      clearFilters(false);
       tsvFilter.chrom = val;
+      this.value = val ? val : 'ALL';
       unzoomData();
+      if( contigChart && val ) {
+        renderTooltip( null, 0, 0, true, 203, 1195 );
+      } 
     }
   });
 
   $('#TC-filterGeneSym').change(function() {
     var val = this.value.trim();
-    this.value = val;
     if( val != tsvFilter.gene ) {
-      tsvFilter.numrec = 0;
+      clearFilters(true);
       tsvFilter.gene = val;
+      this.value = val;
       unzoomData();
       if( autoJumpToGene && val != '' ) {
         viewTargetsInRRC();
+      }
+      if( plotStats.numPoints == 1 ) {
+        renderTooltip( null, 0, 0, true, 203, 1195 );
+        if( contigChart ) {
+          $('#TC-selectChrom').val(val);
+          tsvFilter.chrom = val;
+        }
       }
     }
   });
@@ -1133,12 +1216,12 @@ $(function () {
   $('.TC-selectParam').change(function() {
     plotParams[this.id] = parseInt(this.value);
     plotParams.resetYScale = this.id == 'barAxis';
-    autoHideLegend();
+    autoShowLegend();
     updatePlot();
   });
 
-  function autoHideLegend() {
-    if( !plotParams.showLegend ) {
+  function autoShowLegend() {
+    if( autolegend && !plotParams.showLegend ) {
       $('#TC-showLegend').attr('checked', plotParams.showLegend = true );
     }
   }
@@ -1182,7 +1265,9 @@ $(function () {
     selObj.empty();
     selObj.css('width','66px');
     if( plotStats.chrList == '' ) return;
-    var chrs = plotStats.chrList.split(':');
+    // allow ':' in contig ids as separator, unless '&' is present (the later being new and the old for backwards compat)
+    var splitChr = plotStats.chrList.indexOf('&') > 0 ? '&' : ':';
+    var chrs = plotStats.chrList.split(splitChr);
     if( chrs.length > 1 ) {
       selObj.append("<option value='ALL'>ALL</option>");
     }
@@ -1269,13 +1354,15 @@ $(function () {
 
     // check for small (filtered) data sets
     plotStats.minNumPoints = plotStats.numPoints < def_minPoints ? plotStats.numPoints : def_minPoints;
-
-    // Indicate a smaler number of points loaded
     if( plotParams.numPoints != plotStats.numPoints ) {
       $('#TC-numBars').text('('+plotStats.numPoints+')');
     } else {
       $('#TC-numBars').text('');
     }
+
+    // enable Read Depth plot if the extra fields are available
+    enableReadDepthPlot = (plotStats.numFields > 12);
+    customizePlotOptions();
   }
 
   function roundAxis( maxVal ) {
@@ -1335,6 +1422,9 @@ $(function () {
     var uncov5p  = DataField.uncov_5p; // or fwd_e2e
     var fwdReads = DataField.reads_fwd; // base reads or assigned reads
     var revReads = DataField.reads_rev; // base reads or assigned reads
+    var cov20x  = DataField.cov_20x;
+    var cov100x = DataField.cov_100x;
+    var cov500x = DataField.cov_500x;
     var logAxis = plotParams.logAxis;
     var barScale;
     for( var i = 0; i < plotStats.numPoints; ++i ) {
@@ -1359,7 +1449,7 @@ $(function () {
       }
       var fcov =  (logAxis ? log10(frds) : frds);
       var rcov = -(logAxis ? log10(rrds) : rrds);
-      var ncov = (logAxis ? log10(trds) : trds);
+      var ncov = logAxis ? log10(trds) : trds;
       if( plotParams.barAxis == 0 ) {
         if( baseCoverage ) {
           ucov5 *= ncov * barScale;
@@ -1369,7 +1459,6 @@ $(function () {
           ucov5 = numReads == 0 ? 0 : ncov * (ucov3+ucov5)/numReads;
         }
         if( baseCoverage ) {
-          //d1.push( [i,ncov], [i,ucov3], [i,ucov5] );
           d1.push( [i,ucov3] );
           d2.push( [i,ncov] );
           d3.push( [i,ucov5] );
@@ -1377,10 +1466,12 @@ $(function () {
           d1.push( [i,ncov] );
           d2.push( [i,ucov5] );
         }
-      } else {
+      } else if( plotParams.barAxis == 1 ) {
         if( baseCoverage ) {
-          ucov3 = fcov * (1 - ucov3 * barScale);
-          ucov5 = rcov * (1 - ucov5 * barScale);
+          ucov3 = fcov * ucov3 * barScale;
+          ucov5 = rcov * ucov5 * barScale;
+          //ucov3 = fcov * (1 - ucov3 * barScale);
+          //ucov5 = rcov * (1 - ucov5 * barScale);
         } else {
           // fractional passing coverage shows as ratio (not log)
           // Note: the order of the data fields is opposite to that for base coverage
@@ -1393,6 +1484,13 @@ $(function () {
         d2.push( [i,ucov3] );
         d3.push( [i,rcov] );
         d4.push( [i,ucov5] );
+      } else {
+        // base coveage stats always normalized by total target length
+        var lenScale = targLen > 0 ? 1/targLen : 0;
+        d1.push( [i,ncov] );
+        d2.push( [i,ncov*dataTable[i][cov20x]*lenScale] );
+        d3.push( [i,ncov*dataTable[i][cov100x]*lenScale] );
+        d4.push( [i,ncov*dataTable[i][cov500x]*lenScale] );
       }
     }
     // collect the range bounds
@@ -1403,8 +1501,8 @@ $(function () {
       plotStats.strandMaxY = roundAxis(dmax);
     }
     // set absolute man/max depending on plot type (i.e. if negative bars are drawn)
-    ymin = plotParams.barAxis ? dmin : ymin;
-    ymax = plotParams.barAxis ? dmax : ymax;
+    ymin = plotParams.barAxis == 1 ? dmin : ymin;
+    ymax = plotParams.barAxis == 1 ? dmax : ymax;
     if( plotStats.zoom && !plotParams.resetYScale ) {
       // always adjust zoom if max/min increase due to re-binning
       if( ymin < plotStats.minY ) plotStats.minY = ymin;
@@ -1413,46 +1511,46 @@ $(function () {
          ymin = plotStats.minY;
          ymax = plotStats.maxY;
       } else if( plotParams.zoomMode == 0 ) {
-         ymin = plotParams.barAxis ? plotStats.strandMinY : plotStats.totalMinY;
-         ymax = plotParams.barAxis ? plotStats.strandMaxY : plotStats.totalMaxY;
+         ymin = plotParams.barAxis == 1 ? plotStats.strandMinY : plotStats.totalMinY;
+         ymax = plotParams.barAxis == 1 ? plotStats.strandMaxY : plotStats.totalMaxY;
       }
     } else {
       plotParams.resetYScale = false;
       plotStats.minY = ymin;
       plotStats.maxY = ymax;
     }
+    var logLeg = logAxis ? "Log " : "";
     if( plotParams.barAxis == 0 ) {
       if( baseCoverage ) {
-        plotData.push( { label: LegendLabels.allBaseReads_u5p, color: ColorSet.allReads, data: d1 } );
-        plotData.push( { label: LegendLabels.allBaseRead_cov, color: ColorSet.allReads_sd2, data: d2 } );
-        plotData.push( { label: LegendLabels.allBaseReads_u3p, color: ColorSet.allReads_shd, data: d3 } );
+        plotData.push( { label: LegendLabels.allBaseReads_u3p, color: ColorSet.allReads, data: d1 } );
+        plotData.push( { color: ColorSet.allReads_sd2, data: d2 } );
+        plotData.push( { label: LegendLabels.allBaseReads_u5p, color: ColorSet.allReads_shd, data: d3 } );
       } else {
-        plotData.push( { label: LegendLabels.allReads, color: ColorSet.allReads, data: d1 } );
+        plotData.push( { label: logLeg+LegendLabels.allReads, color: ColorSet.allReads, data: d1 } );
         plotData.push( { label: (reportPassingCov ? LegendLabels.allReads_pss : LegendLabels.allReads_e2e),
           color: ColorSet.allReads_shd, data: d2 } );
       }
-    } else {
+    } else if( plotParams.barAxis == 1 ) {
       if( baseCoverage ) {
-        plotData.push( { label: LegendLabels.fwdBaseReads, color: ColorSet.fwdReads, data: d1 } );
+        plotData.push( { label: logLeg+LegendLabels.fwdBaseReads, color: ColorSet.fwdReads, data: d1 } );
         plotData.push( { label: LegendLabels.fwdBaseReads_u3p, color: ColorSet.fwdReads_shd, data: d2 } );
-        plotData.push( { label: LegendLabels.revBaseReads, color: ColorSet.revReads, data: d3 } );
+        plotData.push( { label: logLeg+LegendLabels.revBaseReads, color: ColorSet.revReads, data: d3 } );
         plotData.push( { label: LegendLabels.revBaseReads_u5p, color: ColorSet.revReads_shd, data: d4 } );
       } else {
-        plotData.push( { label: LegendLabels.fwdReads, color: ColorSet.fwdReads, data: d1 } );
+        plotData.push( { label: logLeg+LegendLabels.fwdReads, color: ColorSet.fwdReads, data: d1 } );
         plotData.push( { label: (reportPassingCov ? LegendLabels.fwdReads_pss : LegendLabels.fwdReads_e2e),
           color: ColorSet.fwdReads_shd, data: d2 } );
-        plotData.push( { label: LegendLabels.revReads, color: ColorSet.revReads, data: d3 } );
+        plotData.push( { label: logLeg+LegendLabels.revReads, color: ColorSet.revReads, data: d3 } );
         plotData.push( { label: (reportPassingCov ? LegendLabels.revReads_pss : LegendLabels.revReads_e2e),
           color: ColorSet.revReads_shd, data: d4 } );
       }
-    }
-    var ytitle; // title depend on data and if binned or not
-    if( lengthNormal || plotStats.binnedData ) {
-      // Here the term "Average " (LegendLabels.meanType) was omitted at Anup's request
-      ytitle = (plotParams.aveBase ? "" : "Total ") + LegendLabels.rcovType + "Reads";
     } else {
-      ytitle = LegendLabels.rcovType + "Reads";
+      plotData.push( { label: LegendLabels.covDepth_1x, color: ColorSet.covDepth_1x, data: d1 } );
+      plotData.push( { label: LegendLabels.covDepth_20x, color: ColorSet.covDepth_20x, data: d2 } );
+      plotData.push( { label: LegendLabels.covDepth_100x, color: ColorSet.covDepth_100x, data: d3 } );
+      plotData.push( { label: LegendLabels.covDepth_500x, color: ColorSet.covDepth_500x, data: d4 } );
     }
+    var ytitle = LegendLabels.rcovType;
     // account for limits on log axis and round
     if( logAxis ) {
       ytitle = "log10("+ytitle+")";
@@ -1584,6 +1682,7 @@ $(function () {
   function exportTSV(expOpt) {
     var clipLeft = tsvFilter.clipleft;
     var clipRight = tsvFilter.clipright;
+    var maxrows = plotStats.targetsRepresented;
     if( plotStats.targetsRepresented < plotStats.numPoints ) {
       // temporaily modify file extraction region for over-zoom 
       var lam = plotStats.minX / plotStats.numPoints;
@@ -1597,12 +1696,22 @@ $(function () {
       "&chrom="+tsvFilter.chrom+"&gene="+tsvFilter.gene+
       "&covmin="+tsvFilter.covmin+"&covmax="+tsvFilter.covmax+
       "&clipleft="+clipLeft+"&clipright="+clipRight+
-      "&maxrows="+tsvFilter.maxrows+"&numrec="+tsvFilter.numrec );
+      "&maxrows="+maxrows+"&numrec="+tsvFilter.numrec );
   }
 
   // autoload - after everything is defined
   if( startHideLegend ) $('#TC-showLegend').attr('checked',plotParams.showLegend = false);
   unzoomToFile(coverageFile);
-  if( !startHideLegend ) autoHideLegend();
+  if( !startHideLegend ) autoShowLegend();
+
+  // collapse view after EVRYTHING has been drawn in open chart (to avoid flot issues)
+  if( startCollapsed ) {
+    $("#TC-collapsePlot").attr("class","ui-icon ui-icon-triangle-1-s");
+    $("#TC-collapsePlot").attr("title","Expand view");
+    $('#TC-controlpanel').hide();
+    $('.TC-shy').hide();
+    $('#TC-chart').resizable('destroy');
+    $('#TC-noncanvas').hide();
+  }
 
 });

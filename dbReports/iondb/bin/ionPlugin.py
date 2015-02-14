@@ -396,16 +396,26 @@ class Plugin(xmlrpc.XMLRPC):
         logger.debug("Uptime called - %d (s)" % seconds)
         return seconds
 
-    def xmlrpc_pluginStatus(self, jobid):
-        """Get the status of the job"""
-        try:
-            logging.debug("jobstatus for %s" % jobid)
-            status = _session.jobStatus(jobid)
-        except:
-            logging.error(traceback.format_exc())
-            status = "DRMAA BUG"
-            return status
-        return _decodestatus[status]
+    def xmlrpc_pluginStatus(self, jids):
+        """Get the status of the job(s)"""
+        if isinstance(jids, list):
+            return_list = True
+        else:
+            jids = [jids]
+            return_list = False
+        
+        ret = []
+        for jobid in jids:
+            try:
+                jobid = str(jobid)
+                logging.debug("jobstatus for %s" % jobid)
+                status = _session.jobStatus(jobid)
+                ret.append(_decodestatus[status])
+            except:
+                logging.error(traceback.format_exc())
+                ret.append("DRMAA BUG")
+        
+        return ret if return_list else ret[0]
 
     def xmlrpc_createPR(self, resultpk, pluginpk, username=None, config={}):
         if username is None:

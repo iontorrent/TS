@@ -1,0 +1,14 @@
+/results/dbase_backup/*.sql {
+	daily
+	rotate 30
+	missingok
+	compress
+	compressext .gz
+	nodelaycompress
+    copytruncate
+	create 644 postgres postgres
+#	dateext
+	prerotate
+	/usr/bin/pg_dump -U ion -c iondb > /results/dbase_backup/iondb.sql
+	endscript
+}

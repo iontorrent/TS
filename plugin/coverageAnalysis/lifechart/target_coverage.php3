@@ -22,7 +22,7 @@ if( $allout )
   $redirect = '';
   if( $tobed || !$oktoWriteFile ) {
     header("Content-type: text/csv");
-    header("Content-disposition: attachment;filename='$filename'");
+    header("Content-disposition: attachment;filename=$filename");
   } else {
     # allows it to be openned in excel automatically
     header("Location: ../".$filename);

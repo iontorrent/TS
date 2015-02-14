@@ -30,8 +30,8 @@ class PluginFieldNames():
 
 class PluginsStepData(AbstractStepData):
 
-    def __init__(self):
-        super(PluginsStepData, self).__init__()
+    def __init__(self, sh_type):
+        super(PluginsStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_plugins.html'
         self.all_enabled_plugins = Plugin.objects.filter(selected=True, active=True).order_by('name', '-version')
         self.non_ir_plugins = []
@@ -61,6 +61,8 @@ class PluginsStepData(AbstractStepData):
         self.savedObjects[PluginFieldNames.PLUGIN_ID_LIST] = []
         self.updateSavedObjectsFromSavedFields()
 
+        self.sh_type = sh_type
+        
     def getStepName(self):
         return StepNames.PLUGINS
 

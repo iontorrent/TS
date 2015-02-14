@@ -7,12 +7,9 @@ Created on May 21, 2013
 import logging
 
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
-from iondb.rundb.models import RunType, ApplProduct, ApplicationGroup,\
-    SampleGroupType_CV, Plugin
+from iondb.rundb.models import RunType, ApplProduct, ApplicationGroup
 from iondb.rundb.plan.page_plan.step_names import StepNames
-from iondb.rundb.plan.page_plan.export_step_data import ExportFieldNames
 
-from iondb.rundb.plan.views_helper import isOCP_enabled, is_operation_supported
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +34,8 @@ class ApplicationFieldNames():
     
 class ApplicationStepData(AbstractStepData):
 
-    def __init__(self):
-        super(ApplicationStepData, self).__init__()
+    def __init__(self, sh_type):
+        super(ApplicationStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan_application.html'
 
         # self._dependsOn = [StepNames.IONREPORTER]
@@ -47,7 +44,7 @@ class ApplicationStepData(AbstractStepData):
         self.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = None
         self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = None        
         self.savedFields[ApplicationFieldNames.SAMPLE_GROUPING] = None
-        self.savedFields[ApplicationFieldNames.PLAN_STATUS] = ""
+        self.prepopulatedFields[ApplicationFieldNames.PLAN_STATUS] = ""
         self.savedFields[ApplicationFieldNames.CATEGORIES] = ''
          
         self.savedObjects[ApplicationFieldNames.RUN_TYPE] = None
@@ -66,11 +63,12 @@ class ApplicationStepData(AbstractStepData):
         # self.prepopulatedFields[ApplicationFieldNames.SAMPLE_GROUPINGS] = SampleGroupType_CV.objects.filter(isActive=True).order_by('uid')
         # self._dependsOn = [StepNames.EXPORT]
 
+        self.sh_type = sh_type
 
     def getStepName(self):
         return StepNames.APPLICATION
 
-    def updateSavedObjectsFromSavedFields(self):        
+    def updateSavedObjectsFromSavedFields(self):      
         #logger.debug("ENTER application_step_data.updateSavedObjectsFromSavedFields() self.savedFields=%s" %(self.savedFields))
         previous_run_type = self.savedObjects[ApplicationFieldNames.RUN_TYPE]
         

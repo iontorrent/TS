@@ -3,16 +3,20 @@ import os
 from time import strftime
 
 
-def create_summary_block(OUTPUT_DIR,dr,MINIMUM_RSQUARED):
+def create_summary_block(SUMMARY_BLOCK,dr,MINIMUM_RSQUARED):
   #in the case where the plugin is run more than once, the summary block will be cached by the browser
   #and not refreshed if it is named simply "summary_block.html".  Therefore, we include an infix of
   #the date and time so that it will be a different filename (still ending in "_block.html" each time,
   #and the browser will therefore not use the cached version.
-  for filename in os.listdir(OUTPUT_DIR): #will also catch dir names but they will be screened out by next line
-    if (filename[0:7] == 'summary') and (filename.endswith('block.html')):
-      os.remove(OUTPUT_DIR+filename)
+
+  # GDM: Changed since unnecessary to give specific names now files writen to separate folders
+  # - Using the same name the file is easier to link to, etc. for reports (in fact there should only be one block report)
+  #for filename in os.listdir(OUTPUT_DIR): #will also catch dir names but they will be screened out by next line
+  #  if (filename[0:7] == 'summary') and (filename.endswith('block.html')):
+  #    os.remove(OUTPUT_DIR+filename)
   infix = strftime("%Y-%m-%d_%H-%M-%S")
-  SUMMARY_BLOCK = OUTPUT_DIR + 'summary_' + infix + '_block.html'
+  # GDM: Original OUPUT_DIR replaced with full file name as input
+  #SUMMARY_BLOCK = OUTPUT_DIR + 'summary_' + infix + '_block.html'
   summary_block = open(SUMMARY_BLOCK,'w')
   rsquared = '%.2f' % (dr[5])
   msg_to_user = ''

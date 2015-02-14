@@ -48,6 +48,8 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle,
       // Prepare objects for holding and passing back results
       Rcpp::NumericMatrix        predicted_out(nRead,nFlow);
       Rcpp::NumericMatrix        residual_out(nRead,nFlow);
+      Rcpp::NumericMatrix        norm_additive_out(nRead,nFlow);
+      Rcpp::NumericMatrix        norm_multipl_out(nRead,nFlow);
       std::vector< std::string> seq_out(nRead);
 
       // Set up key flow vector
@@ -118,15 +120,19 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle,
 
         seq_out[iRead].assign(read.sequence.begin(), read.sequence.end());
         for(unsigned int iFlow=0; iFlow < nFlow; iFlow++) {
-          predicted_out(iRead,iFlow) = (double) read.prediction[iFlow];
-          residual_out(iRead,iFlow)  = (double) read.normalized_measurements[iFlow] - read.prediction[iFlow];
+          predicted_out(iRead,iFlow)     = (double) read.prediction[iFlow];
+          residual_out(iRead,iFlow)      = (double) read.normalized_measurements[iFlow] - read.prediction[iFlow];
+          norm_multipl_out(iRead,iFlow)  = (double) read.multiplicative_correction.at(iFlow);
+          norm_additive_out(iRead,iFlow) = (double) read.additive_correction.at(iFlow);
         }
       }
 
       // Store results
       ret = Rcpp::List::create(Rcpp::Named("seq")       = seq_out,
                                Rcpp::Named("predicted") = predicted_out,
-                               Rcpp::Named("residual")  = residual_out);
+                               Rcpp::Named("residual")  = residual_out,
+                               Rcpp::Named("norm_additive") = norm_additive_out,
+                               Rcpp::Named("norm_multipl")  = norm_multipl_out);
     }
   } catch(std::exception& ex) {
     forward_exception_to_r(ex);

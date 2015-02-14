@@ -51,18 +51,22 @@
 </h4></td></tr><tr><td>
 
 <table class="block-rounded"><tr>
-{% if rna_stats %}
+{% if rna_stats or chr_stats %}
   <td><a href="{{rep_overview_png}}" title="{{help_dict.Representation_Overview}}"><img  style="height:100px" src="{{rep_overview_png}}" alt="Representation Overview"/></a></td>
 {% else %}
   <td><a href="{{overview_png}}" title="{{help_dict.Coverage_Overview}}"><img  style="height:100px" src="{{overview_png}}" alt="Coverage Overview"/></a></td>
 {% endif %}
-  <td><div class="statsdata" style="width:320px">
+  <td><div class="statsdata">
   <table>
     <tr><td class="inleft"><span title="{{help_dict.Number_of_mapped_reads}}">Number of mapped reads</span></td>
         <td class="inright">{{Number_of_mapped_reads|intcomma}}</td></tr>
-{% if not wgn_stats %}
+{% if trg_stats %}
     <tr><td class="inleft"><span title="{{help_dict.Percent_reads_on_target}}">Percent reads on target</span></td>
         <td class="inright">{{Percent_reads_on_target}}</td></tr>
+{% endif %}
+{% if chr_stats and Average_reads_per_contig %}
+    <tr><td class="inleft"><span title="{{help_dict.Average_reads_per_contig}}">Average reads per contig</span></td>
+        <td class="inright">{{Average_reads_per_contig|intcomma}}</td></tr>
 {% endif %}
 {% if samp_track %}
     <tr><td class="inleft"><span title="{{help_dict.Percent_sample_tracking_reads}}">Percent sample tracking reads</span></td>
@@ -78,5 +82,6 @@
 </tr></table>
 
 </td></tr></table>
+
 </body>
 </html>

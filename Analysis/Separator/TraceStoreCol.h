@@ -27,7 +27,17 @@ class TraceStoreCol : public TraceStore
   void SetMinRefProbes (int n) { mMinRefProbes = n; }
 
   TraceStoreCol (Mask &mask, size_t frames, const char *flowOrder,
-		    int numFlowsBuff, int maxFlow, int rowStep, int colStep) {
+                 int numFlowsBuff, int maxFlow, int rowStep, int colStep) {
+    Init(mask, frames,flowOrder, numFlowsBuff, maxFlow, rowStep, colStep);
+  }
+  TraceStoreCol() { 
+    mUseMeshNeighbors = 0;
+    mRows = mCols = mFrames = mRowRefStep = mColRefStep = 0;
+    mFrames = mFrameStride = mMaxDist = mFlowFrameStride = 0;
+  }
+  void Init(Mask &mask, size_t frames, const char *flowOrder,
+       int numFlowsBuff, int maxFlow, int rowStep, int colStep) {
+
     pthread_mutex_init (&mLock, NULL);
     mUseMeshNeighbors = 1;
     mRowRefStep = rowStep;
@@ -165,8 +175,6 @@ class TraceStoreCol : public TraceStore
     rowIx = index / mCols;
     colIx = index % mCols;
   }
-
-  virtual int PrepareReference (size_t flowIx) { assert(0); } // @todo cws - get rid of some of these virtual functions not used}
 
   int PrepareReference(size_t flowIx, std::vector<char> &filteredWells) {
     mRefWells.resize(mUseAsReference.size());

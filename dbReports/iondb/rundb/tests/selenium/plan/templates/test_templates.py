@@ -33,7 +33,7 @@ class TestCreateNewTemplate(SeleniumTestCase):
         #now save the template
         self.wd.find_element_by_xpath('//a[@class="btn btn-primary btn-100 pull-right"]').click()
         
-        self.open(reverse('plans'))
+        self.open(reverse('plan_templates'))
 
         #now we pull the template from the API
         latest_template_as_json = self.get_latest_planned_experiment()

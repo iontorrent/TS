@@ -12,6 +12,16 @@
 
 class Mask;
 
+typedef struct writeFlowDataFuncArg
+{
+  string filePath;
+  int numCols;
+  size_t stepSize;
+  SemQueue* packQueuePtr;
+  SemQueue* writeQueuePtr;
+} writeFlowDataFuncArg;
+
+void* WriteFlowDataFunc(void* arg0);
 
 void GetMetaDataForWells(char *dirExt, RawWells &rawWells, const char *chipType);
 void SetWellsToLiveBeadsOnly(RawWells &rawWells, Mask *maskPtr);

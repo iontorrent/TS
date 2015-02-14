@@ -18,6 +18,7 @@ class Acq {
 		void	Write();
         bool	Write(const char *name, int ox, int oy, int ow, int oh);
         bool    WriteVFC(const char *name, int ox, int oy, int ow, int oh, bool verbose=false);
+        bool    WriteThumbnailVFC(const char *acqName, int cropx, int cropy, int kernx, int kerny, int region_len_x, int region_len_y, int marginx, int marginy, int ow, int oh, bool verbose);
         bool	WriteAscii(const char *acqName, int ox, int oy, int ow, int oh);
 		int	PinnedLow() {return pinnedLow;}
 		int	PinnedHigh() {return pinnedHigh;}

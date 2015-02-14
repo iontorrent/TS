@@ -43,7 +43,7 @@ public:
   //! @param    flow_order          Flow order object, also stores number of flows
   //! @param    keys                Key sequences in use
   //! @param    mask                Mask object
-  BaseCallerFilters(OptArgs& opts, const ion::FlowOrder& flow_order,
+  BaseCallerFilters(OptArgs& opts, vector<string> & bam_comments, const ion::FlowOrder& flow_order,
       const vector<KeySequence>& keys, const Mask& mask);
 
   //! @brief    Print usage
@@ -53,10 +53,10 @@ public:
   //!
   //! @param    output_directory    Directory where optional log files can be placed
   //! @param    wells               Wells file reader object, source of filter training reads
-  //! @param    sample_size         Max number of reads to sample for training
+  //! @param    max_sample_size     Max number of reads to sample for training
   //! @param    mask                Mask for determining which reads are eligible for training set
   //! @param    opts                User options for polyclonal filter and flows
-  void TrainClonalFilter(const string& output_directory, RawWells& wells, int sample_size, Mask& mask, const PolyclonalFilterOpts & opts);
+  void TrainClonalFilter(const string& output_directory, RawWells& wells, Mask& mask, const PolyclonalFilterOpts & opts);
 
   //! @brief    Once filtering is complete, transfer filtering outcomes to Mask object.
   //!
@@ -73,12 +73,20 @@ public:
   //! @return   Number of visited reads, filtered or unfiltered
   int NumWellsCalled() const;
 
+  //! @ brief   Provides access to the (3') library bead adapters
+  const vector<string> & GetLibBeadAdapters() const {return trim_adapter_;};
+
+  //! @ brief   Provides access to the (3') test-fragment bead adapters
+  const vector<string> & GetTFBeadAdapters() const {return trim_adapter_tf_;};
+
 
   // *** API for applying filters to individual reads
 
   //! @brief    Touch a read and mark it as valid. Filters can now be applied to it.
   //! @param    read_index          Read index
   void SetValid                     (int read_index);
+
+  void SetFiltered                  (int read_index, int read_class, ReadFilteringHistory& filter_history);
 
   //! @brief    Unconditionally mark a valid read as polyclonal, as determined in background model.
   //! @param    read_index          Read index
@@ -162,15 +170,11 @@ public:
   //! @param    read_index          Read index
   bool IsPolyclonal(int read_index) const;
 
-  // Write the bead adapters to comments for BAM header
-  void WriteAdaptersToBamComments(vector<string> &comments);
-
-  //! @brief    Saving adapter classification results to json
-  void WriteToBaseCallerJson(Json::Value &json);
-
-
 
 protected:
+
+  // Write the bead adapters to comments for BAM header
+  void WriteAdaptersToBamComments(vector<string> &comments);
 
   //! @brief    Check input strings from non-ACGT characters
   void ValidateBaseStringVector(vector<string>& string_vector);
@@ -199,7 +203,9 @@ protected:
   double              filter_residual_max_value_;         //!< Residual filter threshold
   bool                filter_clonal_enabled_;             //!< Is polyclonal filter enabled for library reads?
   bool                filter_clonal_enabled_tfs_;         //!< Is polyclonal filter enabled for TFs?
+  int                 filter_clonal_maxreads_;            //!< Number of reads to be used for clonal filter training
   clonal_filter       clonal_population_;                 //!< Object implementing clonal filter
+  int                 extra_trim_right_;                  //!< Make quality trimming delete some extra bases
 
   // Beverly filter
   bool                filter_beverly_enabled_;            //!< Is Beverly filter enabled?
@@ -217,12 +223,6 @@ protected:
   double              trim_qual_cutoff_;                  //!< Quality cutoff used by quality trimmer
   int                 trim_min_read_len_;                 //!< If adapter or quality trimming makes the read shorter than this, the read is filtered
   vector<string>      trim_adapter_tf_;                   //!< Test Fragment adapter sequences. If empty, do not perform adapter trimming on TFs.
-  // Accounting for adapter trimming
-  vector<uint64_t>    adapter_class_num_reads_;           //!< Number of reads per library adapter
-  vector<uint64_t>    adapter_class_num_decisions_;        //!< Reporting in how many cases more than one adapter where found
-  vector<double>      adapter_class_av_score_;            //!< Average classification score for library reads
-  vector<double>      adapter_class_av_separation_;       //!< Average separation between adapter types
-
 
   // Avalanche filter (sort readlength filter, higher QV on shorter reads, and lower QV for longer reads)
   bool                filter_avalanche_enabled_;          //!< Is Avalanche filter enabled?

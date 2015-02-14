@@ -92,5 +92,6 @@ export(
   calcHypothesesDistances,
   SimulateAndSolveSeq,
   readIonBamStack,
-  normalizeRead
+  normalizeRead,
+  flowAlignment
 )

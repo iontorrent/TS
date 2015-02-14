@@ -182,8 +182,10 @@ def isbadblock(blockdir, message):
     return False
 
 
-def get_datasets_basecaller(BASECALLER_RESULTS):
-    datasets_basecaller_path = os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json")
+def get_datasets_basecaller(BASECALLER_RESULTS, datasets_basecaller_path=None):
+
+    if datasets_basecaller_path==None:
+        datasets_basecaller_path = os.path.join(BASECALLER_RESULTS,"datasets_basecaller.json")
 
     if not os.path.exists(datasets_basecaller_path):
         printtime("ERROR: %s does not exist" % datasets_basecaller_path)

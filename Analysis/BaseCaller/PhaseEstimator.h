@@ -37,20 +37,19 @@ public:
 
   //! @brief  Initialize the object.
   //! @param  opts                Command line options
-  void InitializeFromOptArgs(OptArgs& opts);
+  void InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset & chip_subset);
 
   //! @brief  Perform phasing estimation using appropriate algorithm.
   //! @param  wells               Wells reader object
   //! @param  mask                Mask object
   //! @param  flow_order          Flow order object, also stores number of flows
   //! @param  keys                Key sequences in use
-  //! @param  region_size_x       Width of hdf5 chunk
-  //! @param  region_size_y       Height of hdf5 chunk
   //! @param  use_single_core     Do not use multithreading?
 //  void DoPhaseEstimation(RawWells *wells, Mask *mask, int num_flows, int region_size_x, int region_size_y,
 //      const string& flow_order, const vector<KeySequence>& keys, bool use_single_core);
-  void DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order, const vector<KeySequence>& keys,
-      int region_size_x, int region_size_y, bool use_single_core);
+  void DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, bool use_single_core);
+
+  bool HaveEstimates() const { return have_phase_estimates_; };
 
   //! @brief    Save phasing estimates and configuration to json.
   //! @param    json                Json value object, to be populated by filtering statistics
@@ -87,10 +86,6 @@ public:
   //! @brief    Save train subset to json.
   //! @param    json                Json value object
   void ExportTrainSubsetToJson(Json::Value &json);
-
-  //! @brief	Load phase estimation from json file
-  bool LoadPhaseEstimationTrainSubset(const string& phase_file_name,  Mask *mask,
-                                      int region_size_x, int region_size_y);
 
 
 protected:
@@ -129,6 +124,8 @@ protected:
   //! @return   Squared error between measurements and predicted fit. The lower the better the fit.
   static float EvaluateParameters(vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, const float *parameters, const bool usePIDNorm);
 
+  //! @brief	Load phase estimation from json file
+  bool LoadPhaseEstimationTrainSubset(const string& phase_file_name);
 
 
   //! @brief  Sub-block of the chip for which phasing can be estimated. Also a node in chip partition tree.
@@ -200,8 +197,13 @@ protected:
   int                   get_subset(int x, int y) const { return (x+y) % train_subset_count_; }
 
   int                   windowSize_;              //!< Normalization window size
+  int                   phasing_start_flow_;      //!< First flow for phase estimation
+  int                   phasing_end_flow_;        //!< Last flow for phase estimation
   int                   max_phasing_levels_;      //!< Limits the number of levels of phasing estimation in SpatialRefiner
-
+  unsigned int          num_reads_per_region_;    //!< Target number of reads per region that are used for phase estimation
+  unsigned int          min_reads_per_region_;    //!< Minimum number of reads per region to try phase estimation
+  string                phase_file_name_;         //!< Load phasing estimates from a file.
+  bool                  have_phase_estimates_;    //!< Signals whether parameters have been set from the outside or if estimation is desired.
 };
 
 

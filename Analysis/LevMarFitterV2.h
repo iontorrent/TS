@@ -6,9 +6,6 @@
 #include <string.h>
 #include <stdlib.h>
 
-// some of the code uses <complex.h>, and in <complex.h> 'I' is defined and this
-// interferes w/ lapackpp.  I undef it here in case anyone above has included <complex.h>
-#undef I
 #define LEVMAR_STEP_V2 10.0
 #define REGULARIZER_VAL 0.0000001
 

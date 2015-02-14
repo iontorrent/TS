@@ -5,8 +5,17 @@ IF(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
    SET(CMAKE_BUILD_TYPE Release)
 ENDIF()
 
+find_program(LSB_RELEASE_COMMAND lsb_release)
+if(LSB_RELEASE_COMMAND)
+    execute_process(COMMAND ${LSB_RELEASE_COMMAND} -s -c
+        OUTPUT_VARIABLE TMP_LSB_RELEASE_CODENAME
+        OUTPUT_STRIP_TRAILING_WHITESPACE)
+    string(TOLOWER ${TMP_LSB_RELEASE_CODENAME} LSB_RELEASE_CODENAME)
+    message(STATUS "LSB release codename: ${LSB_RELEASE_CODENAME}")
+endif(LSB_RELEASE_COMMAND)
+
 # Common compiler flags
-if (${LSB_RELEASE_CODENAME} STREQUAL "lucid" OR ${LSB_RELEASE_CODENAME} STREQUAL "raring")
+if (${LSB_RELEASE_CODENAME} STREQUAL "lucid" OR ${LSB_RELEASE_CODENAME} STREQUAL "trusty")
     set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -Werror -fPIC")
 else()
     set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -Wall -Wextra -fPIC")
@@ -20,7 +29,7 @@ execute_process(COMMAND ${CMAKE_CXX_COMPILER} -dumpversion OUTPUT_VARIABLE GCC_C
 # GCC depresses SSEx instructions when -mavx is used. Instead, it generates new AVX instructions or AVX equivalence for all SSEx instructions when needed.
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
     if(GCC_C_VERSION VERSION_EQUAL 4.4 OR (GCC_C_VERSION VERSION_GREATER 4.4) AND NOT CMAKE_SSE_ONLY)
-        if (${LSB_RELEASE_CODENAME} STREQUAL "lucid")
+        if (${LSB_RELEASE_CODENAME} STREQUAL "lucid" OR ${LSB_RELEASE_CODENAME} STREQUAL "trusty")
             set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
         else()
             set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -mavx")

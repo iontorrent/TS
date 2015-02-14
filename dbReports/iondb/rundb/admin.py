@@ -1,4 +1,5 @@
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
+from __future__ import absolute_import
 
 from iondb.rundb.models import *
 from iondb.rundb import tasks
@@ -7,6 +8,7 @@ from iondb.rundb.forms import NetworkConfigForm
 from iondb.utils import files
 from django.contrib import admin
 from django.forms import TextInput, Textarea
+from django.forms.models import model_to_dict
 
 from django.template import RequestContext
 from django.template.defaultfilters import filesizeformat
@@ -366,14 +368,9 @@ def update(request):
         return http.HttpResponse(data, content_type="application/json")
     elif request.method=="GET":
         about, meta_version = findUpdates()
-        config = GlobalConfig.get()
-        from iondb.rundb.api import GlobalConfigResource
-        resource = GlobalConfigResource()
-        bundle = Bundle(config)
-        serialized_config = resource.serialize(None,
-                                               resource.full_dehydrate(bundle),
-                                               "application/json")
-
+        # don't use cached method here, update page needs current info
+        config = GlobalConfig.objects.filter()[0]
+        config_dict = model_to_dict(config)
         try:
             # Disable Update Server button for some reason
             # Checking root partition for > 1GB free
@@ -381,7 +378,7 @@ def update(request):
             if not allow_update:
                 GlobalConfig.objects.update(ts_update_status="Insufficient disk space")
             else:
-                if GlobalConfig.objects.get().ts_update_status in "Insufficient disk space":
+                if config.ts_update_status in "Insufficient disk space":
                     GlobalConfig.objects.update(ts_update_status="No updates")
         except:
             allow_update = True
@@ -390,7 +387,7 @@ def update(request):
             "admin/update.html",
             {"about": about, "meta": meta_version,
              "show_available": config.ts_update_status not in ['No updates', 'Finished installing'],
-             "global_config_json": serialized_config,
+             "global_config_json": json.dumps(config_dict),
              "allow_update": allow_update},
             RequestContext(request, {}),
         )
@@ -401,11 +398,9 @@ def version_lock(request, enable):
 
     if enable == "enable_lock":
         # hide repository list file /etc/apt/sources.list
-        #async_result = tasks.hide_apt_sources.delay()
         async_result = tasks.lock_ion_apt_sources.delay(enable=True)
     else:
         # restore repository list file /etc/apt/sources.list
-        #async_result = tasks.restore_apt_sources.delay()
         async_result = tasks.lock_ion_apt_sources.delay(enable=False)
 
     try:
@@ -777,15 +772,25 @@ class CruncherAdmin(admin.ModelAdmin):
     list_display = ('name','state','date','comments')
     list_filter = ('state',)
 
+class KitInfoAdmin(admin.ModelAdmin):
+    list_display = ('name', 'description', 'kitType', 'instrumentType','isActive')
+    list_filter = ('kitType',)
+    
+class RigAdmin(admin.ModelAdmin):
+    list_display = ('name', 'ftpserver', 'location', 'state', 'serial')
+    list_filter = ('ftpserver', 'location')
+
+class SharedServerAdmin(admin.ModelAdmin):
+    list_display = ('name', 'address', 'username', 'active')
+
 admin.site.register(Experiment, ExperimentAdmin)
 admin.site.register(Results, ResultsAdmin)
 admin.site.register(Message)
 admin.site.register(Location,LocationAdmin)
-admin.site.register(Rig)
+admin.site.register(Rig, RigAdmin)
 admin.site.register(FileServer,FileServerAdmin)
 admin.site.register(TFMetrics, TFMetricsAdmin)
 admin.site.register(ReportStorage,ReportStorageAdmin)
-admin.site.register(RunScript)
 admin.site.register(Cruncher,CruncherAdmin)
 admin.site.register(AnalysisMetrics)
 admin.site.register(LibMetrics)
@@ -813,7 +818,7 @@ admin.site.register(ReferenceGenome,ReferenceGenomeAdmin)
 
 admin.site.register(Project,ProjectAdmin)
 
-admin.site.register(KitInfo)
+admin.site.register(KitInfo, KitInfoAdmin)
 admin.site.register(KitPart)
 admin.site.register(LibraryKey, LibraryKeyAdmin)
 
@@ -832,6 +837,7 @@ admin.site.register(FileMonitor)
 admin.site.register(SupportUpload)
 admin.site.register(NewsPost)
 admin.site.register(AnalysisArgs,AnalysisArgsAdmin)
+admin.site.register(SharedServer,SharedServerAdmin)
 
 # Add sessions to admin
 class SessionAdmin(admin.ModelAdmin):

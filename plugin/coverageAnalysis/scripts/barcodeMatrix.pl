@@ -10,19 +10,20 @@ if( scalar(@ARGV) < 3 ) {
 }
 my $genome = shift;
 
-# allow customization for reading the chromosome coverage summary file: arg2 = "chrom"
 my $propType = shift;
 my $idField = 3;
 my $propNum = int($propType+0);
+# allow customization for reading the chromosome coverage summary file: arg2 = "chrom"
 if( $propType eq "chrom" ) {
   $idField = 0;
   $propNum = 3;
-}
-elsif( $propNum <= 0 ) {
+} elsif( $propType eq "contig" ) {
+  $idField = 0;
+  $propNum = 5;
+} elsif( $propNum <= 0 ) {
   print STDERR "Error at $CMD arg#2: <Property Index> must be an integer > 0.\n";
-  exit 0;
+  exit 1;
 }
-my $propNum2 = $propNum+1;
 
 # flag for extra target location output (useful for debugging sort)
 my $addCoords = 0;
@@ -109,7 +110,12 @@ while(<>) {
     }
   }
   my $prop = $fields[$propNum];
-  $prop += $fields[$propNum2] if( $propType eq "chrom" );
+  # convert whole genome output to be mean base coverage per contig, for consistecy with target base coverage modes
+  if( $propType eq "chrom" ) {
+    # maybe DIV#0 error if an invalid file was provided
+    $prop = ($prop+$fields[4])/$fields[2];
+    $prop = sprintf( "%.3f", $prop ) if( $prop >= 0.5 );
+  }
   $targets{$trgid} .= $prop;
 }
 # sort arrays for each chromosome on target start then stop
@@ -117,8 +123,9 @@ while( my ($chr,$ary) = each(%sortlist) ) {
   @$ary = sort { $a->[0] <=> $b->[0] || $a->[1] <=> $b->[1] } @$ary;
 }
 # output matrix using amplicons sorted by chromosome, start, stop (even thouh these fields are not output)
-if( $propType eq "chrom" ) {
-  print "Chrom\t";
+my $ctgrep = $propType eq "chrom" || $propType eq "contig";
+if( $ctgrep ) {
+  print $propType eq "chrom" ? "Chrom\t" : "Contig\t";
   print "Start\tEnd\t" if( $addCoords );
   print "$barcode_fields\n";
 } else {
@@ -131,7 +138,7 @@ for( my $chrn = 0; $chrn < $numChroms; ++$chrn ) {
   for( my $i = 0; $i < scalar(@$ary); ++$i ) {
     my $subary = $ary->[$i];
     my $trgid = $subary->[3].':'.$subary->[0].'-'.$subary->[1];
-    if( $propType eq "chrom" ) {
+    if( $ctgrep ) {
       print "$chr\t";
       print "$subary->[0]\t$subary->[1]\t" if( $addCoords );
       print "$targets{$trgid}\n";

@@ -31,6 +31,7 @@ void PhaseEstimator::PrintHelp()
   printf ("     --libcf-ie-dr             cf,ie,dr don't estimate phasing and use specified values [not using]\n");
   printf ("     --phasing-residual-filter FLOAT    maximum sum-of-squares residual to keep a read in phasing estimation [1.0]\n");
   printf ("     --max-phasing-levels      INT      max number of rounds of phasing in SpatialRefiner [%d]\n",max_phasing_levels_default_);
+  printf ("     --phase-estimation-file   FILE     Enable reusing phase estimation from provided file [off]\n");
   printf ("\n");
 }
 
@@ -62,25 +63,43 @@ PhaseEstimator::PhaseEstimator()
 
   train_subset_count_ = 1;
   train_subset_ = 0;
+  min_reads_per_region_ = 1000;
+  num_reads_per_region_ = 5000;
+  phasing_start_flow_ = 20;
+  phasing_end_flow_ = 100;
 
   average_cf_ = 0;
   average_ie_ = 0;
   average_dr_ = 0;
 
   use_pid_norm_ = false;
+  have_phase_estimates_ = false;
 
   windowSize_ = DPTreephaser::kWindowSizeDefault_;
   max_phasing_levels_ = max_phasing_levels_default_;
 }
 
-void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts)
+void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset & chip_subset)
 {
   phasing_estimator_      = opts.GetFirstString ('-', "phasing-estimator", "spatial-refiner-2");
   string arg_cf_ie_dr     = opts.GetFirstString ('-', "libcf-ie-dr", "");
   residual_threshold_     = opts.GetFirstDouble ('-', "phasing-residual-filter", 1.0);
   max_phasing_levels_     = opts.GetFirstInt    ('-', "max-phasing-levels", max_phasing_levels_default_);
+  num_reads_per_region_   = opts.GetFirstInt    ('-', "num-phasing-reads", 5000);
+  min_reads_per_region_   = opts.GetFirstInt    ('-', "min-phasing-reads", 1000);
   use_pid_norm_           = opts.GetFirstString ('-', "keynormalizer", "keynorm-old") == "keynorm-new";
   windowSize_             = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
+  phase_file_name_        = opts.GetFirstString ('s', "phase-estimation-file", "");
+  phasing_start_flow_     = opts.GetFirstInt    ('-', "phasing-start-flow", 20);
+  phasing_end_flow_       = opts.GetFirstInt    ('-', "phasing-end-flow", 100);
+
+  chip_size_x_   = chip_subset.GetChipSizeX();
+  chip_size_y_   = chip_subset.GetChipSizeY();
+  region_size_x_ = chip_subset.GetRegionSizeX();
+  region_size_y_ = chip_subset.GetRegionSizeY();
+  num_regions_x_ = chip_subset.GetNumRegionsX();
+  num_regions_y_ = chip_subset.GetNumRegionsY();
+  num_regions_   = chip_subset.NumRegions();
 
   if (!arg_cf_ie_dr.empty()) {
     phasing_estimator_ = "override";
@@ -93,20 +112,23 @@ void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts)
       fprintf (stderr, "Option Error: libcf-ie-dr %s\n", arg_cf_ie_dr.c_str());
       exit (EXIT_FAILURE);
     }
+    cout << "Phase Estimator: Set cf,ie,dr as " << result_cf_[0] << "," << result_ie_[0] << "," << result_dr_[0] << endl;
+    have_phase_estimates_ = true;
     return; // --libcf-ie-dr overrides other phasing-related options
+  }
+
+  if (not phase_file_name_.empty()) {
+	have_phase_estimates_ = LoadPhaseEstimationTrainSubset(phase_file_name_);
+    if (have_phase_estimates_)
+      phasing_estimator_ = "override";
   }
 }
 
-void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order, const vector<KeySequence>& keys,
-    int region_size_x, int region_size_y,  bool use_single_core)
+void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order,
+		                               const vector<KeySequence>& keys, bool use_single_core)
 {
   flow_order_.SetFlowOrder(flow_order.str(), min(flow_order.num_flows(), 120));
   keys_ = keys;
-  chip_size_x_ = mask->W();
-  chip_size_y_ = mask->H();
-  region_size_x_ = region_size_x;
-  region_size_y_ = region_size_y;
-
 
   printf("Phase estimation mode = %s\n", phasing_estimator_.c_str());
 
@@ -251,17 +273,17 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers
 {
   printf("PhaseEstimator::analyze start\n");
 
-  num_regions_x_ = (chip_size_x_+region_size_x_-1) / region_size_x_;
-  num_regions_y_ = (chip_size_y_+region_size_y_-1) / region_size_y_;
-  num_regions_ = num_regions_x_ * num_regions_y_;
-
   int num_levels = 1;
-  if (num_regions_x_ >= 2 and num_regions_y_ >= 2 and max_phasing_levels_ >= 2)
-    num_levels = 2;
-  if (num_regions_x_ >= 4 and num_regions_y_ >= 4 and max_phasing_levels_ >= 3)
-    num_levels = 3;
-  if (num_regions_x_ >= 8 and num_regions_y_ >= 8 and max_phasing_levels_ >= 4)
-    num_levels = 4;
+  int num_regions_sqrt = 1;
+  for (int i_level=2; i_level < max_phasing_levels_+1; i_level++) {
+	num_regions_sqrt = 2* num_regions_sqrt;
+    if (num_regions_x_ >= num_regions_sqrt and num_regions_y_ >= num_regions_sqrt)
+      num_levels++;
+    else {
+      printf("Phase estimation can maximally support %d phasing levels", num_levels);
+      break;
+    }
+  }
 
   printf("Using numEstimatorFlows %d, chip is %d x %d, region is %d x %d, numRegions is %d x %d, numLevels %d\n",
       flow_order_.num_flows(), chip_size_x_, chip_size_y_, region_size_x_, region_size_y_, num_regions_x_, num_regions_y_, num_levels);
@@ -641,10 +663,10 @@ void PhaseEstimator::EstimatorWorker()
           use_pid_norm_ ? (void)treephaser.PIDNormalize(*R, 8, 40) : (void)treephaser.Normalize(*R, 11, 80);
           treephaser.Solve    (*R, min(120, flow_order_.num_flows()));
           use_pid_norm_ ? (void)treephaser.PIDNormalize(*R, 8, 80) : (void)treephaser.Normalize(*R, 11, 100);
-          treephaser.Solve    (*R, min(120, flow_order_.num_flows()));
+          treephaser.Solve    (*R, min((phasing_end_flow_+20), flow_order_.num_flows()));
 
           float metric = 0;
-          for (int flow = 20; flow < 100 and flow < flow_order_.num_flows(); ++flow) {
+          for (int flow = phasing_start_flow_; flow < phasing_end_flow_ and flow < flow_order_.num_flows(); ++flow) {
             if (R->normalized_measurements[flow] > 1.2)
               continue;
             float delta = R->normalized_measurements[flow] - R->prediction[flow];
@@ -661,11 +683,11 @@ void PhaseEstimator::EstimatorWorker()
           useful_reads.push_back(&(*R));
         }
 
-        if (useful_reads.size() >= 5000)
+        if (useful_reads.size() >= num_reads_per_region_)
           break;
       }
 
-      if (s.level > 1 and useful_reads.size() < 1000) // Not enough reads to even try
+      if (s.level > 1 and useful_reads.size() < min_reads_per_region_) // Not enough reads to even try
         break;
 
       // Do estimation with reads collected, update estimates
@@ -710,7 +732,7 @@ void PhaseEstimator::EstimatorWorker()
     }
 
 
-    if (s.subblocks[0] == NULL or useful_reads.size() < 4000) {
+    if (s.subblocks[0] == NULL or useful_reads.size() < 4*min_reads_per_region_) {
       // Do not subdivide this block
       for (vector<int>::iterator region = s.sorted_regions.begin(); region != s.sorted_regions.end(); region++)
         region_reads_[*region].clear();
@@ -960,19 +982,11 @@ void PhaseEstimator::ExportTrainSubsetToJson(Json::Value &json)
     }
 }
 
-bool PhaseEstimator::LoadPhaseEstimationTrainSubset(const string& phase_file_name, Mask *mask,
-                                                    int region_size_x, int region_size_y)
+bool PhaseEstimator::LoadPhaseEstimationTrainSubset(const string& phase_file_name)
 {
-    Json::Value json;
-    chip_size_x_ = mask->W();
-    chip_size_y_ = mask->H();
-    region_size_x_ = region_size_x;
-    region_size_y_ = region_size_y;
-    num_regions_x_ = (chip_size_x_+region_size_x_-1) / region_size_x_;
-    num_regions_y_ = (chip_size_y_+region_size_y_-1) / region_size_y_;
-    num_regions_ = num_regions_x_ * num_regions_y_;
-
+	Json::Value json;
 	ifstream ifs(phase_file_name.c_str());
+
     if(ifs)
     {
 		ifs >> json;	
@@ -1039,10 +1053,12 @@ bool PhaseEstimator::LoadPhaseEstimationTrainSubset(const string& phase_file_nam
           average_dr_ /= count;
         }
 		
+        cout << "PhaseEstimator: Successfully loaded phase estimates from file: " << phase_file_name << endl;
 		return true;
 	}
 	else
 	{
+		cerr << "PhaseEstimator: Unable to load phase estimates from file: " << phase_file_name << endl;
 		return false;
 	}
 }

@@ -22,28 +22,55 @@
 #include "hdf5.h"
 
 // Option defaults
-#define DEFAULT_HELP              false
-#define DEFAULT_INPUT_BAM         ""
-#define DEFAULT_OUTPUT_JSON       "ionstats_alignment.json"
-#define DEFAULT_OUTPUT_H5         "ionstats_error_summary.h5"
-#define DEFAULT_SKIP_RG_SUFFIX    ""
-#define DEFAULT_HISTOGRAM_LENGTH  400
-#define DEFAULT_MINIMUM_AQ_LENGTH 21
-#define DEFAULT_BC_ADJUST         false
-#define DEFAULT_SEQ_KEY           "TCAG"
-#define DEFAULT_EVALUATE_HP       "false"
-#define DEFAULT_EVALUATE_FLOW     "true"
-#define DEFAULT_CHIP_ORIGIN       ""
-#define DEFAULT_CHIP_DIM          ""
-#define DEFAULT_SUBREGION_DIM     ""
-#define DEFAULT_AQ_ERROR_RATES    "0.2,0.1,0.02,0.01,0.001,0"
-#define DEFAULT_MAX_HP            10
-#define DEFAULT_SUBREGION_MAX_HP  1
+#define DEFAULT_HELP                       "false"
+#define DEFAULT_INPUT_BAM                  ""
+#define DEFAULT_OUTPUT_JSON                "ionstats_alignment.json"
+#define DEFAULT_OUTPUT_H5                  "ionstats_error_summary.h5"
+#define DEFAULT_SKIP_RG_SUFFIX             ""
+#define DEFAULT_HISTOGRAM_LENGTH           400
+#define DEFAULT_MINIMUM_AQ_LENGTH          21
+#define DEFAULT_BC_ADJUST                  "false"
+#define DEFAULT_SEQ_KEY                    "TCAG"
+#define DEFAULT_EVALUATE_HP                "false"
+#define DEFAULT_IGNORE_TERMINAL_HP         "true"
+#define DEFAULT_EVALUATE_FLOW              "true"
+#define DEFAULT_EVALUATE_PER_READ_PER_FLOW "false"
+#define DEFAULT_CHIP_ORIGIN                ""
+#define DEFAULT_CHIP_DIM                   ""
+#define DEFAULT_SUBREGION_DIM              ""
+#define DEFAULT_AQ_ERROR_RATES             "0.2,0.1,0.02,0.01,0.001,0"
+#define DEFAULT_MAX_HP                     10
+#define DEFAULT_SUBREGION_MAX_HP           1
+#define DEFAULT_DEBUG                      "false"
+#define DEFAULT_DEBUG_ERROR_FLOW           -1
+#define DEFAULT_DEBUG_ALIGNED_FLOW         -1
+#define DEFAULT_DEBUG_POSITIVE_REF_FLOW    -1
 
 #define MAX_GROUP_NAME_LEN 5000
 
 using namespace std;
 using namespace BamTools;
+
+typedef struct error_data_merge_t {
+  map< string, ErrorData > error_data;
+  bool merge_proton_blocks;
+} error_data_merge_t;
+
+typedef struct hp_data_merge_t {
+  map< string, HpData > hp_data;
+  bool merge_proton_blocks;
+} hp_data_merge_t;
+
+typedef struct regional_summary_merge_t {
+  map< string, RegionalSummary > regional_summary;
+  bool merge_proton_blocks;
+} regional_summary_merge_t;
+
+typedef struct debug_options_t {
+  int error_flow;
+  int aligned_flow;
+  int positive_ref_flow;
+} debug_options_t;
 
 bool isAqLength(string s);
 bool revSort(double i, double j) { return(i>j); };
@@ -53,7 +80,7 @@ void computeAQ(vector<int> &aq_length, vector<double> &aq_error_rate, ReadAlignm
 int toPhred(double e);
 bool getRegionIndex(unsigned int &region_idx, bool &no_region, bool &out_of_bounds, string &name, vector<unsigned int> &chip_origin, vector<unsigned int> &chip_dim, vector<unsigned int> &subregion_dim, unsigned int n_col_subregions);
 void parseMD(const string &MD_tag, vector<char> &MD_op, vector<int> &MD_len, vector<string> &MD_seq);
-void getReadGroupInfo(const BamReader &input_bam, map< string, string > &flow_orders, unsigned int &max_flow_order_len, map< string, string > &key_bases, map< string, int > &key_len, string &seq_key, string &skip_rg_suffix);
+void getReadGroupInfo(const BamReader &input_bam, map< string, int > &read_groups, map< string, string > &flow_orders, unsigned int &max_flow_order_len, map< string, string > &key_bases, map< string, int > &key_len, string &seq_key, string &skip_rg_suffix);
 void getBarcodeResults(BamAlignment &alignment, map< string, int > &key_len, int &bc_bases, int &bc_errors);
 int checkDimensions(bool &spatial_stratify, const vector<unsigned int> &chip_origin, const vector<unsigned int> &chip_dim, const vector<unsigned int> &subregion_dim, unsigned int &n_col_subregions, unsigned int &n_row_subregions);
 void assignRegionNames(vector<string> &region_name, const vector<unsigned int> &chip_origin, const vector<unsigned int> &chip_dim, const vector<unsigned int> &subregion_dim, vector< vector<unsigned int> > &region_specific_origin, vector< vector<unsigned int> > &region_specific_dim);
@@ -74,8 +101,16 @@ int parseAlignment(
   vector<int16_t> &       ref_hp_err,
   vector<uint16_t> &      ref_hp_flow
 );
+void debug_alignment(
+  debug_options_t         debug_opt,
+  BamAlignment &          alignment,
+  ReadAlignmentErrors &   base_space_errors,
+  ReadAlignmentErrors &   flow_space_errors,
+  bool                    evaluate_flow,
+  vector<uint16_t> &      ref_hp_flow
+);
 void scoreBarcodes(ReadAlignmentErrors &base_space_errors, int bc_bases, int bc_errors, vector<double> &aq_error_rate, int minimum_aq_length, vector<int> &aq_length, ReadLengthHistogram &aligned_histogram_bc, vector< ReadLengthHistogram > &aq_histogram_bc);
-string getReferenceBases(const string &read_bases, vector< CigarOp > CigarData, const vector<char> &MD_op, vector<int> MD_len, vector<string> &MD_seq, const bool rev_strand, const map<char,char> &reverse_complement_map);
+string getReferenceBases(const string &read_bases, vector< CigarOp > CigarData, const vector<char> &MD_op, vector<int> MD_len, const vector<string> &MD_seq, const bool rev_strand, const map<char,char> &reverse_complement_map);
 void getHpBreakdown(const string &bases, vector<char> &hp_nuc, vector<uint16_t> &hp_len);
 int writeIonstatsAlignmentJson(
   string &json_filename,
@@ -94,6 +129,7 @@ int writeIonstatsAlignmentJson(
 );
 void writeIonstatsH5(
   string h5_filename, 
+  bool append_h5_file,
   ErrorData & base_position,
   ErrorData & flow_position,
   HpData &    per_hp,
@@ -107,27 +143,15 @@ void AddToReadLengthHistogramFromJson(const Json::Value &input_json, const strin
 void AddToSimpleHistogramFromJson(const Json::Value &input_json, const string &var_name, SimpleHistogram &hist, bool &found);
 bool getTagZF(BamAlignment & alignment, uint32_t &flow_idx);
 bool hasInvalidCigar(BamAlignment & alignment);
-bool hasInvalidBases(string &b);
+void checkBases(string &b, bool &ambiguous_bases, bool &invalid_bases);
 string transform_proton_block_read_group_name(const string &group_name);
 void GetAggregatorSize(map<string, ErrorData> &error_data, map<string, HpData> &hp_data, map<string, RegionalSummary> &regional_summary, unsigned int &group_count, uint64_t &total_bytes);
+bool is_unambiguous_base(char b);
+bool compatible_bases(char a, char b);
+unsigned char base_to_bitcode(char base);
 
 
 enum align_t {ALIGN_MATCH, ALIGN_INS, ALIGN_DEL, ALIGN_SUB};
-
-typedef struct error_data_merge_t {
-  map< string, ErrorData > error_data;
-  bool merge_proton_blocks;
-} error_data_merge_t;
-
-typedef struct hp_data_merge_t {
-  map< string, HpData > hp_data;
-  bool merge_proton_blocks;
-} hp_data_merge_t;
-
-typedef struct regional_summary_merge_t {
-  map< string, RegionalSummary > regional_summary;
-  bool merge_proton_blocks;
-} regional_summary_merge_t;
 
 void hpAdvance(
   // Inputs
@@ -144,9 +168,9 @@ void hpAdvance(
   const vector<uint16_t> &  read_hp_len,      // read hp lengths
   const vector<uint16_t> &  read_hp_cum_len,  // read hp cumulative lengths
   int                       ref_idx,          // index of where we are in ref_bases
-  const vector<char> &      ref_hp_nuc,       // read hp nucs
-  const vector<uint16_t> &  ref_hp_len,       // read hp lengths
-  const vector<uint16_t> &  ref_hp_cum_len,   // read hp cumulative lengths
+  const vector<char> &      ref_hp_nuc,       // ref hp nucs
+  const vector<uint16_t> &  ref_hp_len,       // ref hp lengths
+  const vector<uint16_t> &  ref_hp_cum_len,   // ref hp cumulative lengths
   // Objects that may be modified
   int &                     stored_read_match_count, // number of read bases matching current ref hp that have been seen so far
   unsigned int &            read_hp_idx,             // index of where we are in read_hp_nuc, read_hp_len, read_hp_cum_len
@@ -158,25 +182,27 @@ void hpAdvance(
 void IonstatsAlignmentHelp()
 {
   cout << endl;
-  cout << "ionstats " << IonVersion::GetVersion() << "-" << IonVersion::GetRelease() << " (" << IonVersion::GetSvnRev() << ") - Generate performance metrics and statistics for Ion sequences." << endl;
+  cout << "ionstats " << IonVersion::GetVersion() << "-" << IonVersion::GetRelease() << " (" << IonVersion::GetGitHash() << ") - Generate performance metrics and statistics for Ion sequences." << endl;
   cout << endl;
   cout << "Usage:   ionstats alignment -i in.bam [options]" << endl;
   cout << endl;
   cout << "General options:" << endl;
-  cout << "  --help                  BOOL      print this help message [" << DEFAULT_HELP << "]" << endl;
-  cout << "  -i,--input              STRING    input BAM (mapped) [" << DEFAULT_INPUT_BAM << "]" << endl;
-  cout << "  -o,--output             STRING    output json file [" << DEFAULT_OUTPUT_JSON << "]" << endl;
-  cout << "  --output-h5             STRING    output hdf5 file [" << DEFAULT_OUTPUT_H5 << "]" << endl;
-  cout << "  --skip-rg-suffix        STRING    ignore read groups matching suffix [\"" << DEFAULT_SKIP_RG_SUFFIX << "\"]" << endl;
-  cout << "  -h,--histogram-length   INT       read length histogram cutoff [" << DEFAULT_HISTOGRAM_LENGTH << "]" << endl;
-  cout << "  -m,--minimum-aq-length  INT       minimum AQ read length [" << DEFAULT_MINIMUM_AQ_LENGTH << "]" << endl;
-  cout << "  -b,--bc-adjust          BOOL      give credit to barcode bases, assumes barcodes have no errors [" << DEFAULT_BC_ADJUST << "]" << endl;
-  cout << "  -k,--key                STRING    seq key to remove when using -b option [" << DEFAULT_SEQ_KEY << "]" << endl;
-  cout << "  -a,--aq-error-rates     STRING    error rates for which to evaluate AQ lengths [" << DEFAULT_AQ_ERROR_RATES << "]" << endl;
-  cout << "  --evaluate-flow         BOOL      evaluate per-flow accuracy [" << DEFAULT_EVALUATE_FLOW << "]" << endl;
-  cout << "  --evaluate-hp           BOOL      evaluate homopolymer accuracy [" << DEFAULT_EVALUATE_HP << "]" << endl;
-  cout << "  --max-hp                INT       max HP length for chip-wide summary [" << DEFAULT_MAX_HP << "]" << endl;
-  cout << "  --max-subregion-hp      INT       max HP length for regional summary [" << DEFAULT_SUBREGION_MAX_HP << "]" << endl;
+  cout << "  --help                       BOOL      print this help message [" << DEFAULT_HELP << "]" << endl;
+  cout << "  -i,--input                   STRING    input BAM (mapped) [" << DEFAULT_INPUT_BAM << "]" << endl;
+  cout << "  -o,--output                  STRING    output json file [" << DEFAULT_OUTPUT_JSON << "]" << endl;
+  cout << "  --output-h5                  STRING    output hdf5 file [" << DEFAULT_OUTPUT_H5 << "]" << endl;
+  cout << "  --skip-rg-suffix             STRING    ignore read groups matching suffix [\"" << DEFAULT_SKIP_RG_SUFFIX << "\"]" << endl;
+  cout << "  -h,--histogram-length        INT       read length histogram cutoff [" << DEFAULT_HISTOGRAM_LENGTH << "]" << endl;
+  cout << "  -m,--minimum-aq-length       INT       minimum AQ read length [" << DEFAULT_MINIMUM_AQ_LENGTH << "]" << endl;
+  cout << "  -b,--bc-adjust               BOOL      give credit to barcode bases, assumes barcodes have no errors [" << DEFAULT_BC_ADJUST << "]" << endl;
+  cout << "  -k,--key                     STRING    seq key to remove when using -b option [" << DEFAULT_SEQ_KEY << "]" << endl;
+  cout << "  -a,--aq-error-rates          STRING    error rates for which to evaluate AQ lengths [" << DEFAULT_AQ_ERROR_RATES << "]" << endl;
+  cout << "  --evaluate-flow              BOOL      evaluate per-flow accuracy [" << DEFAULT_EVALUATE_FLOW << "]" << endl;
+  cout << "  --evaluate-hp                BOOL      evaluate homopolymer accuracy [" << DEFAULT_EVALUATE_HP << "]" << endl;
+  cout << "  --ignore-terminal-hp         BOOL      ignore first and last HPs when tracking HP accuracy [" << DEFAULT_IGNORE_TERMINAL_HP << "]" << endl;
+  cout << "  --evaluate-per-read-per-flow BOOL      evaluate per-read per-flow accuracy (big output!) [" << DEFAULT_EVALUATE_PER_READ_PER_FLOW << "]" << endl;
+  cout << "  --max-hp                     INT       max HP length for chip-wide summary [" << DEFAULT_MAX_HP << "]" << endl;
+  cout << "  --max-subregion-hp           INT       max HP length for regional summary [" << DEFAULT_SUBREGION_MAX_HP << "]" << endl;
   cout << endl;
   cout << "Options for spatial stratification of results.  All 3 options must be used together." << endl;
   cout << "  Each option specifies two comma-separated values in the form x,y" << endl;
@@ -184,6 +210,12 @@ void IonstatsAlignmentHelp()
   cout << "  --chip-dim              INT,INT   dimensions of chip [" << DEFAULT_CHIP_DIM << "]" << endl;
   cout << "  --subregion-dim         INT,INT   dimensions of sub-regions for spatial stratification [" << DEFAULT_SUBREGION_DIM << "]" << endl;
   cout << endl;
+  cout << "Debug options.  Use with care, may produce lots to stdout." << endl;
+  cout << "  Reads meeting all requested properties will be printed." << endl;
+  cout << "  --debug                    BOOL   Turns on debugging [" << DEFAULT_DEBUG << "]" << endl;
+  cout << "  --debug-error-flow         INT    Require read to have an error in a flow [" << DEFAULT_DEBUG_ERROR_FLOW << "]" << endl;
+  cout << "  --debug-aligned-flow       INT    Require read to be aligned in a flow [" << DEFAULT_DEBUG_ALIGNED_FLOW << "]" << endl;
+  cout << "  --debug-positive-ref-flow  INT    Require reference to have positive HP length in a flow [" << DEFAULT_DEBUG_POSITIVE_REF_FLOW  << "]" << endl;
 }
 
 // Metrics in ionstats_alignment.json should carry the following data:
@@ -209,17 +241,29 @@ int IonstatsAlignment(int argc, const char *argv[])
   vector<string> input_bam_filename;
   opts.GetOption(input_bam_filename, DEFAULT_INPUT_BAM, 'i', "input");
 
-  string output_json_filename   = opts.GetFirstString ('o', "output",            DEFAULT_OUTPUT_JSON);
-  string output_h5_filename     = opts.GetFirstString ('-', "output-h5",         DEFAULT_OUTPUT_H5);
-  string skip_rg_suffix         = opts.GetFirstString ('-', "skip-rg-suffix",    DEFAULT_SKIP_RG_SUFFIX);
-  int histogram_length          = opts.GetFirstInt    ('h', "histogram-length",  DEFAULT_HISTOGRAM_LENGTH);
-  int minimum_aq_length         = opts.GetFirstInt    ('m', "minimum-aq-length", DEFAULT_MINIMUM_AQ_LENGTH);
-  bool bc_adjust                = opts.GetFirstBoolean('b', "bc-adjust",         DEFAULT_BC_ADJUST);
-  string seq_key                = opts.GetFirstString ('k', "key",               DEFAULT_SEQ_KEY);
-  bool evaluate_hp              = opts.GetFirstBoolean('-', "evaluate-hp",       DEFAULT_EVALUATE_HP);
-  bool evaluate_flow            = opts.GetFirstBoolean('-', "evaluate-flow",     DEFAULT_EVALUATE_FLOW);
-  unsigned int max_hp           = opts.GetFirstInt    ('-', "max-hp",            DEFAULT_MAX_HP);
-  unsigned int max_subregion_hp = opts.GetFirstInt    ('-', "max-subregion-hp",  DEFAULT_SUBREGION_MAX_HP);
+  string output_json_filename     = opts.GetFirstString ('o', "output",                     DEFAULT_OUTPUT_JSON);
+  string output_h5_filename       = opts.GetFirstString ('-', "output-h5",                  DEFAULT_OUTPUT_H5);
+  string skip_rg_suffix           = opts.GetFirstString ('-', "skip-rg-suffix",             DEFAULT_SKIP_RG_SUFFIX);
+  int histogram_length            = opts.GetFirstInt    ('h', "histogram-length",           DEFAULT_HISTOGRAM_LENGTH);
+  int minimum_aq_length           = opts.GetFirstInt    ('m', "minimum-aq-length",          DEFAULT_MINIMUM_AQ_LENGTH);
+  bool bc_adjust                  = opts.GetFirstBoolean('b', "bc-adjust",                  DEFAULT_BC_ADJUST);
+  string seq_key                  = opts.GetFirstString ('k', "key",                        DEFAULT_SEQ_KEY);
+  bool evaluate_hp                = opts.GetFirstBoolean('-', "evaluate-hp",                DEFAULT_EVALUATE_HP);
+  bool ignore_terminal_hp         = opts.GetFirstBoolean('-', "ignore-terminal-hp",         DEFAULT_IGNORE_TERMINAL_HP);
+  bool evaluate_flow              = opts.GetFirstBoolean('-', "evaluate-flow",              DEFAULT_EVALUATE_FLOW);
+  bool evaluate_per_read_per_flow = opts.GetFirstBoolean('-', "evaluate-per-read-per-flow", DEFAULT_EVALUATE_PER_READ_PER_FLOW);
+  unsigned int max_hp             = opts.GetFirstInt    ('-', "max-hp",                     DEFAULT_MAX_HP);
+  unsigned int max_subregion_hp   = opts.GetFirstInt    ('-', "max-subregion-hp",           DEFAULT_SUBREGION_MAX_HP);
+  bool debug                      = opts.GetFirstBoolean('-', "debug",                      DEFAULT_DEBUG);
+  debug_options_t debug_opt;
+  debug_opt.error_flow            = opts.GetFirstInt    ('-', "debug-error-flow",           DEFAULT_DEBUG_ERROR_FLOW);
+  debug_opt.aligned_flow          = opts.GetFirstInt    ('-', "debug-aligned-flow",         DEFAULT_DEBUG_ALIGNED_FLOW);
+  debug_opt.positive_ref_flow     = opts.GetFirstInt    ('-', "debug-positive-ref-flow",    DEFAULT_DEBUG_POSITIVE_REF_FLOW);
+
+  if(evaluate_per_read_per_flow) {
+    evaluate_flow = true;
+    evaluate_hp = true;
+  }
 
   // Options related to spatial stratification of results
   vector<unsigned int> chip_origin,chip_dim,subregion_dim;
@@ -282,6 +326,7 @@ int IonstatsAlignment(int argc, const char *argv[])
   ErrorData base_position;
   ErrorData flow_position;
   HpData per_hp;
+  PerReadFlowMatrix per_read_flow;
   // Read Group per-base and per-flow error data
   map< string, ErrorData > read_group_base_position;
   map< string, ErrorData > read_group_flow_position;
@@ -315,6 +360,10 @@ int IonstatsAlignment(int argc, const char *argv[])
     flow_position.Initialize(flow_histogram_length);
   if(evaluate_hp)
     per_hp.Initialize(max_hp);
+  if(evaluate_per_read_per_flow) {
+    per_read_flow.Initialize(flow_histogram_length);
+    per_read_flow.InitializeNewH5(output_h5_filename);
+  }
 
   // Regional summary data
   if(spatial_stratify)
@@ -330,14 +379,15 @@ int IonstatsAlignment(int argc, const char *argv[])
     }
 
     // Get flow orders and keys for each read group
+    map< string, int > read_groups;
     map< string, string > flow_orders;
     map< string, string > key_bases;
     map< string, int > key_len;
     unsigned int max_flow_order_len=0;
-    getReadGroupInfo(input_bam,flow_orders,max_flow_order_len,key_bases,key_len,seq_key,skip_rg_suffix);
+    getReadGroupInfo(input_bam,read_groups,flow_orders,max_flow_order_len,key_bases,key_len,seq_key,skip_rg_suffix);
 
     // Initialize per-read-group structures for any new read groups
-    for(map< string, string >::iterator it = key_bases.begin(); it != key_bases.end(); ++it) {
+    for(map< string, int >::iterator it = read_groups.begin(); it != read_groups.end(); ++it) {
       // Check if the read group has already been seen
       map< string, ErrorData >::iterator rg_it = read_group_base_position.find(it->first);
       if(rg_it != read_group_base_position.end())
@@ -495,6 +545,10 @@ int IonstatsAlignment(int argc, const char *argv[])
           assert(ref_hp_nuc.size() == ref_hp_flow.size());
       }
 
+      // Possible debug output
+      if(debug)
+        debug_alignment(debug_opt, alignment, base_space_errors, flow_space_errors, evaluate_flow, ref_hp_flow);
+
       // Compute the infamous AQ lengths
       vector<int> aq_length;
       computeAQ(aq_length,aq_error_rate,base_space_errors);
@@ -519,12 +573,16 @@ int IonstatsAlignment(int argc, const char *argv[])
       if(evaluate_flow && flow_space_errors.have_data())
         flow_position.Add(flow_space_errors);
       if(evaluate_hp && !invalid_ref_bases)
-         per_hp.Add(ref_hp_nuc, ref_hp_len, ref_hp_err);
+         per_hp.Add(ref_hp_nuc, ref_hp_len, ref_hp_err, ignore_terminal_hp);
+      if(evaluate_per_read_per_flow && !invalid_ref_bases) {
+        per_read_flow.Add(alignment.Name,flow_space_errors, ref_hp_len, ref_hp_err, ref_hp_flow);
+        per_read_flow.FlushToH5Buffered();
+      }
 
       // Accumulate per-read-group performance stratified by base, flow or hp
       if(read_group == "") {
         n_no_read_group++;
-      } else if(key_bases.find(read_group) == key_bases.end()) {
+      } else if(read_groups.find(read_group) == read_groups.end()) {
         n_unmatched_read_group++;
       } else {
         read_group_base_position[read_group].Add(base_space_errors);
@@ -537,7 +595,7 @@ int IonstatsAlignment(int argc, const char *argv[])
       // Accumulate regional performance
       if(spatial_stratify && have_region) {
         regional_summary[region_idx].Add(base_space_errors);
-        if(evaluate_flow && evaluate_hp && !invalid_ref_bases)
+        if(evaluate_flow && evaluate_hp && !invalid_ref_bases && (ref_hp_len.size() > 0) && (ref_hp_flow.size() > 0))
            regional_summary[region_idx].Add(ref_hp_len, ref_hp_err, ref_hp_flow);
       }
 
@@ -568,6 +626,16 @@ int IonstatsAlignment(int argc, const char *argv[])
     if( (n_no_read_group > 0) || (n_unmatched_read_group > 0) )
       cerr << "WARNING: of " << program << ": " << *input_bam_filename_it << ": " << n_aligned << " aligned reads, " << n_no_read_group << " have no RG tag " << n_unmatched_read_group << " have an RG tag that does not match the header." << endl;
   }
+  if(evaluate_per_read_per_flow) {
+    if(per_read_flow.n_read() > 0)
+      per_read_flow.FlushToH5Forced();
+    per_read_flow.CloseH5();
+  }
+
+  // Fill depths for base_position data
+  base_position.ComputeDepth();
+  for(map< string, ErrorData >::iterator it = read_group_base_position.begin(); it != read_group_base_position.end(); ++it)
+    it->second.ComputeDepth();
 
   // Processing complete, generate ionstats_alignment.json
   writeIonstatsAlignmentJson(
@@ -583,8 +651,10 @@ int IonstatsAlignment(int argc, const char *argv[])
     read_group_flow_position
   );
 
+  bool append_h5_file = evaluate_per_read_per_flow;
   writeIonstatsH5(
     output_h5_filename,
+    append_h5_file,
     base_position, flow_position, per_hp,
     read_group_base_position, read_group_flow_position, read_group_per_hp,
     region_name,
@@ -838,8 +908,40 @@ void flowCatchup(unsigned int &flow_idx, const string &flow_order, unsigned int 
 
 //
 // Modifies flow_idx by stepping along n_advance bases in the read
+// Modifies flow_space_incorporation by adding flows in which there is an incorporation
 //
 void flowAdvance(
+  unsigned int n_advance,
+  unsigned int &flow_idx,
+  const string &flow_order,
+  unsigned int read_idx,
+  const string &read_bases,
+  vector <uint16_t> &flow_space_incorporation
+) {
+  assert(n_advance <= (read_bases.size()-read_idx)); // Make sure we're not being asked to advance beyond the end of the read
+  while(n_advance > 0) {
+    char current_base = read_bases[read_idx];
+    if(current_base == flow_order[flow_idx % flow_order.size()]) {
+      // there is an incorporation
+      read_idx++;
+      n_advance--;
+      // check if we need to record an incorporation in the flow
+      if(flow_space_incorporation.size()==0 || flow_space_incorporation.back() != flow_idx)
+        flow_space_incorporation.push_back(flow_idx);
+      // increase flow if an HP was completed
+      if((read_idx < read_bases.size()) && (read_bases[read_idx] != current_base))
+        flow_idx++;
+    } else {
+      // no incorporation, proceed to the next flow
+      flow_idx++;
+    }
+  }
+}
+
+//
+// Modifies flow_idx by stepping along n_advance bases in the read
+//
+void flowAdvanceToNextHP(
   unsigned int n_advance,
   unsigned int &flow_idx,
   const string &flow_order,
@@ -854,8 +956,11 @@ void flowAdvance(
       read_idx++;
       n_advance--;
       // increase flow if an HP was completed
-      if((read_idx < read_bases.size()) && (read_bases[read_idx] != current_base))
-        flow_idx++;
+      if((read_idx < read_bases.size()) && (read_bases[read_idx] != current_base)) {
+        char next_base = read_bases[read_idx];
+        while(next_base != flow_order[flow_idx % flow_order.size()])
+          flow_idx++;
+      }
     } else {
       // no incorporation, proceed to the next flow
       flow_idx++;
@@ -884,15 +989,17 @@ int parseAlignment(
   if(hasInvalidCigar(alignment))
     invalid_cigar=true;
 
-  // Get read bases
+  // Get read bases and check them
   string read_bases = alignment.QueryBases;
   if(alignment.IsReverseStrand())
     assert(!reverse_complement(read_bases,reverse_complement_map));
-  if(hasInvalidBases(read_bases))
-    invalid_read_bases=true;
+  bool ambiguous_read_bases = false;
+  checkBases(read_bases,ambiguous_read_bases,invalid_read_bases);
 
   if(invalid_read_bases || invalid_cigar)
     return(1);
+  if(ambiguous_read_bases)
+    evaluate_flow=false;
 
   // Parse MD tag to extract MD_op and MD_len
   string MD_tag;
@@ -905,6 +1012,10 @@ int parseAlignment(
   MD_len.reserve(1024);
   MD_seq.reserve(1024);
   parseMD(MD_tag,MD_op,MD_len,MD_seq);
+  if(alignment.IsReverseStrand()) {
+    for(vector<string>::iterator it=MD_seq.begin(); it != MD_seq.end(); ++it)
+      reverse_complement(*it,reverse_complement_map);
+  }
 
   // Initialize data related to per-flow summary
   string flow_order = "";
@@ -926,12 +1037,14 @@ int parseAlignment(
   vector<char> read_hp_nuc;
   vector<uint16_t> read_hp_len;
   vector<uint16_t> ref_hp_cum_len,read_hp_cum_len;
+  bool ambiguous_ref_bases = false;
   if(evaluate_hp) {
     ref_hp_err.clear();
     ref_hp_flow.clear();
     ref_bases = getReferenceBases(read_bases, alignment.CigarData, MD_op, MD_len, MD_seq, alignment.IsReverseStrand(), reverse_complement_map);
-    if(hasInvalidBases(ref_bases)) {
-      invalid_ref_bases=true;
+    checkBases(ref_bases,ambiguous_ref_bases,invalid_ref_bases);
+    if(invalid_ref_bases) {
+      evaluate_hp = false;
     } else {
       getHpBreakdown(read_bases, read_hp_nuc, read_hp_len);
       getHpBreakdown(ref_bases,  ref_hp_nuc,  ref_hp_len );
@@ -941,7 +1054,7 @@ int parseAlignment(
           read_hp_cum_len.push_back(read_hp_len[i] + read_hp_cum_len.back());
         }
       }
-      if(!invalid_ref_bases && ref_hp_len.size() > 0) {
+      if(ref_hp_len.size() > 0) {
         ref_hp_cum_len.push_back(ref_hp_len[0]);
         for(unsigned int i=1; i<ref_hp_nuc.size(); ++i) {
           ref_hp_cum_len.push_back(ref_hp_len[i] + ref_hp_cum_len.back());
@@ -964,6 +1077,7 @@ int parseAlignment(
   bool alignmentStarted = false;
   base_space_errors.Initialize();
   flow_space_errors.Initialize();
+  vector<uint16_t> & flow_space_incorporations = flow_space_errors.inc();
   if(evaluate_flow)
     flow_space_errors.SetHaveData();
 
@@ -980,6 +1094,10 @@ int parseAlignment(
       unsigned int nclip = alignment.CigarData[cigar_idx].Length;
       cigar_idx += increment;
       read_idx  += nclip;
+      if(evaluate_hp) {
+        while(read_hp_idx < read_hp_cum_len.size() && read_hp_cum_len[read_hp_idx] <= read_idx)
+          read_hp_idx++;
+      }
       // we don't advance flow_idx through soft clipping as we rely instead on the ZF tag to tell us the first aligned flow
       continue;
     }
@@ -1000,10 +1118,10 @@ int parseAlignment(
     if (alignment.CigarData[cigar_idx].Type == 'M' and MD_idx < (int) MD_op.size() and MD_idx >= 0 and MD_op[MD_idx] == 'M') {
       // Perfect match
       int advance = min((int)alignment.CigarData[cigar_idx].Length, MD_len[MD_idx]);
-      if(!invalid_ref_bases && evaluate_hp)
+      if(evaluate_hp)
         hpAdvance(ALIGN_MATCH,advance,evaluate_flow,flow_idx,flow_order,read_bases,read_idx, read_hp_nuc, read_hp_len, read_hp_cum_len, ref_idx, ref_hp_nuc, ref_hp_len, ref_hp_cum_len, stored_read_match_count, read_hp_idx, ref_hp_idx, ref_hp_err, ref_hp_flow);
       if(evaluate_flow)
-        flowAdvance(advance,flow_idx,flow_order,read_idx,read_bases);
+        flowAdvance(advance,flow_idx,flow_order,read_idx,read_bases,flow_space_incorporations);
       read_idx  += advance;
       ref_idx   += advance;
       alignment.CigarData[cigar_idx].Length -= advance;
@@ -1011,13 +1129,13 @@ int parseAlignment(
     } else if (alignment.CigarData[cigar_idx].Type == 'I') {
       // Insertion (read has a base, reference doesn't)
       int advance = alignment.CigarData[cigar_idx].Length;
-      if(!invalid_ref_bases && evaluate_hp)
+      if(evaluate_hp)
         hpAdvance(ALIGN_INS,advance,evaluate_flow,flow_idx,flow_order,read_bases,read_idx,read_hp_nuc,read_hp_len,read_hp_cum_len,ref_idx,ref_hp_nuc,ref_hp_len,ref_hp_cum_len,stored_read_match_count,read_hp_idx,ref_hp_idx,ref_hp_err,ref_hp_flow);
       for (int cnt = 0; cnt < advance; ++cnt) {
         if(evaluate_flow) {
           flowCatchup(flow_idx,flow_order,read_idx,read_bases);
           flow_space_errors.AddIns(flow_idx);
-          flowAdvance(1,flow_idx,flow_order,read_idx,read_bases);
+          flowAdvance(1,flow_idx,flow_order,read_idx,read_bases,flow_space_incorporations);
         }
         base_space_errors.AddIns(read_idx);
         read_idx++;
@@ -1026,7 +1144,7 @@ int parseAlignment(
     } else if (alignment.CigarData[cigar_idx].Type == 'D' and MD_idx < (int) MD_op.size() and MD_idx >= 0 and MD_op[MD_idx] == 'D') {
       // Deletion (reference has a base, read doesn't)
       int advance = min((int)alignment.CigarData[cigar_idx].Length, MD_len[MD_idx]);
-      if(!invalid_ref_bases && evaluate_hp)
+      if(evaluate_hp)
         hpAdvance(ALIGN_DEL,advance,evaluate_flow,flow_idx,flow_order,read_bases,read_idx,read_hp_nuc,read_hp_len,read_hp_cum_len,ref_idx,ref_hp_nuc,ref_hp_len,ref_hp_cum_len,stored_read_match_count,read_hp_idx,ref_hp_idx,ref_hp_err,ref_hp_flow);
       if(evaluate_flow) {
         // For now we are lazy and just assign a deletion to the current incorporating flow
@@ -1040,15 +1158,19 @@ int parseAlignment(
     } else if (MD_idx < (int) MD_op.size() and MD_idx >= 0 and MD_op[MD_idx] == 'X') {
       // Substitution
       int advance = min((int)alignment.CigarData[cigar_idx].Length, MD_len[MD_idx]);
-      if(!invalid_ref_bases && evaluate_hp)
+      if(evaluate_hp)
         hpAdvance(ALIGN_SUB,advance,evaluate_flow,flow_idx,flow_order,read_bases,read_idx,read_hp_nuc,read_hp_len,read_hp_cum_len,ref_idx,ref_hp_nuc,ref_hp_len,ref_hp_cum_len,stored_read_match_count,read_hp_idx,ref_hp_idx,ref_hp_err,ref_hp_flow);
       for (int cnt = 0; cnt < advance; ++cnt) {
+        // Check if the substitution is an error (as opposed to a matching ambiguity code)
+        bool is_error = !compatible_bases(read_bases[read_idx],MD_seq[MD_idx][cnt]);
         if(evaluate_flow) {
           flowCatchup(flow_idx,flow_order,read_idx,read_bases);
-          flow_space_errors.AddSub(flow_idx);
-          flowAdvance(1,flow_idx,flow_order,read_idx,read_bases);
+          if(is_error)
+            flow_space_errors.AddSub(flow_idx);
+          flowAdvance(1,flow_idx,flow_order,read_idx,read_bases,flow_space_incorporations);
         }
-        base_space_errors.AddSub(read_idx);
+        if(is_error)
+          base_space_errors.AddSub(read_idx);
         read_idx++;
         ref_idx++;
       }
@@ -1072,10 +1194,40 @@ int parseAlignment(
   // Check to make sure we have accounted properly
   assert(read_idx == alignment.Length);
 
+  // If there were any ambiguities in the reference bases then we need to modify any HP evaluation
+  if(ambiguous_ref_bases && evaluate_hp) {
+    // Determine which HPs must go
+    unsigned int n_hp=ref_hp_nuc.size();
+    vector<bool> to_delete(n_hp,false);
+    for(unsigned int i=0; i<n_hp; ++i) {
+      if(!is_unambiguous_base(ref_hp_nuc[i])) {
+        to_delete[i] = true;
+        if((i > 0) && compatible_bases(ref_hp_nuc[i],ref_hp_nuc[i-1]))
+          to_delete[i-1] = true;
+        if((i+1 < n_hp) && compatible_bases(ref_hp_nuc[i],ref_hp_nuc[i+1]))
+          to_delete[i+1] = true;
+      }
+    }
+    // Delete the offending HPs, scanning backwards through each vector
+    for(int i=n_hp-1; i>=0; --i) {
+      if(to_delete[i]) {
+        unsigned int delete_stop=i+1;
+        unsigned int delete_start=i;
+        while((i > 0) && to_delete[--i])
+          delete_start--;
+        ref_hp_nuc.erase (ref_hp_nuc.begin() +delete_start, ref_hp_nuc.begin() +delete_stop);
+        ref_hp_len.erase (ref_hp_len.begin() +delete_start, ref_hp_len.begin() +delete_stop);
+        ref_hp_err.erase (ref_hp_err.begin() +delete_start, ref_hp_err.begin() +delete_stop);
+        if(evaluate_flow)
+          ref_hp_flow.erase(ref_hp_flow.begin()+delete_start, ref_hp_flow.begin()+delete_stop);
+      }
+    }
+  }
+
   return(0);
 }
 
-void getReadGroupInfo(const BamReader &input_bam, map< string, string > &flow_orders, unsigned int &max_flow_order_len, map< string, string > &key_bases, map< string, int > &key_len, string &seq_key, string &skip_rg_suffix) {
+void getReadGroupInfo(const BamReader &input_bam, map< string, int > &read_groups, map< string, string > &flow_orders, unsigned int &max_flow_order_len, map< string, string > &key_bases, map< string, int > &key_len, string &seq_key, string &skip_rg_suffix) {
   flow_orders.clear();
   key_bases.clear();
   key_len.clear();
@@ -1083,8 +1235,9 @@ void getReadGroupInfo(const BamReader &input_bam, map< string, string > &flow_or
   int seq_key_len = seq_key.length();
   SamHeader samHeader = input_bam.GetHeader();
   if(samHeader.HasReadGroups()) {
-    SamReadGroupDictionary read_groups = samHeader.ReadGroups;
-    for( SamReadGroupIterator it = read_groups.Begin(); it != read_groups.End(); ++it) {
+    SamReadGroupDictionary sam_groups = samHeader.ReadGroups;
+    for( SamReadGroupIterator it = sam_groups.Begin(); it != sam_groups.End(); ++it) {
+      read_groups[it->ID] = 0;
       if((skip_rg_suffix != "") && (it->ID != "")) {
         int pos = it->ID.rfind(skip_rg_suffix);
         if((pos != (int) std::string::npos) && (pos == (int)(it->ID.length() - skip_rg_suffix.length())))
@@ -1216,7 +1369,7 @@ void scoreBarcodes(ReadAlignmentErrors &base_space_errors, int bc_bases, int bc_
   }
 }
 
-string getReferenceBases(const string &read_bases, vector< CigarOp > CigarData, const vector<char> &MD_op, vector<int> MD_len, vector<string> &MD_seq, const bool rev_strand, const map<char,char> &reverse_complement_map) {
+string getReferenceBases(const string &read_bases, vector< CigarOp > CigarData, const vector<char> &MD_op, vector<int> MD_len, const vector<string> &MD_seq, const bool rev_strand, const map<char,char> &reverse_complement_map) {
   string ref_bases = "";
 
   int increment  = rev_strand ? -1 : 1;
@@ -1260,16 +1413,12 @@ string getReferenceBases(const string &read_bases, vector< CigarOp > CigarData, 
       // Deletion (reference has a base, read doesn't)
       int advance = min((int) CigarData[cigar_idx].Length, MD_len[MD_idx]);
 assert(advance == (int) (MD_seq[MD_idx]).length());
-      if(rev_strand)
-        reverse_complement(MD_seq[MD_idx],reverse_complement_map);
       ref_bases += MD_seq[MD_idx];
       CigarData[cigar_idx].Length -= advance;
       MD_len[MD_idx] -= advance;
     } else if (MD_op[MD_idx] == 'X') {
       int advance = min((int)CigarData[cigar_idx].Length, MD_len[MD_idx]);
 assert(advance == (int) (MD_seq[MD_idx]).length());
-      if(rev_strand)
-        reverse_complement(MD_seq[MD_idx],reverse_complement_map);
       ref_bases += MD_seq[MD_idx];
       read_idx += advance;
       CigarData[cigar_idx].Length -= advance;
@@ -1382,9 +1531,9 @@ void hpAdvance(
   const vector<uint16_t> &  read_hp_len,      // read hp lengths
   const vector<uint16_t> &  read_hp_cum_len,  // read hp cumulative lengths
   int                       ref_idx,          // index of where we are in ref_bases
-  const vector<char> &      ref_hp_nuc,       // read hp nucs
-  const vector<uint16_t> &  ref_hp_len,       // read hp lengths
-  const vector<uint16_t> &  ref_hp_cum_len,   // read hp cumulative lengths
+  const vector<char> &      ref_hp_nuc,       // ref hp nucs
+  const vector<uint16_t> &  ref_hp_len,       // ref hp lengths
+  const vector<uint16_t> &  ref_hp_cum_len,   // ref hp cumulative lengths
   // Objects that may be modified
   int &                     stored_read_match_count, // number of read bases matching current ref hp that have been seen so far
   unsigned int &            read_hp_idx,             // index of where we are in read_hp_nuc, read_hp_len, read_hp_cum_len
@@ -1427,11 +1576,11 @@ void hpAdvance(
 assert(ref_hp_err.back() + ref_hp_len[ref_hp_idx] >= 0);
         if(evaluate_flow)
           ref_hp_flow.push_back(flow_idx);
-        // Addvance
+        // Advance
         ref_idx += ref_match_count;
         ref_hp_idx++;
         if(evaluate_flow)
-          flowAdvance(read_match_count,flow_idx,flow_order,read_idx,read_bases);
+          flowAdvanceToNextHP(read_match_count,flow_idx,flow_order,read_idx,read_bases);
         read_idx += read_match_count;
         read_hp_idx++;
         stored_read_match_count = 0;
@@ -1496,7 +1645,7 @@ assert(ref_hp_err.back() + ref_hp_len[ref_hp_idx] >= 0);
       }
       ref_idx += ref_count;
       if(evaluate_flow)
-        flowAdvance(ref_count,flow_idx,flow_order,read_idx,read_bases);
+        flowAdvanceToNextHP(ref_count,flow_idx,flow_order,read_idx,read_bases);
       read_idx += ref_count;
       while( (read_hp_idx < read_hp_cum_len.size()) && (read_hp_cum_len[read_hp_idx] <= read_idx) )
         read_hp_idx++;
@@ -1621,6 +1770,7 @@ bool isAqLength(string s) {
 
 void writeIonstatsH5(
   string h5_filename, 
+  bool append_h5_file, 
   ErrorData & base_position,
   ErrorData & flow_position,
   HpData &    per_hp,
@@ -1656,8 +1806,13 @@ void writeIonstatsH5(
   for(unsigned int i=0; i<region_name.size(); ++i)
     regional_data["per_region/" + region_name[i]] = regional_summary[i];
 
-  // Open h5 file and write all the error_data map elements
-  hid_t file_id = H5Fcreate(h5_filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+  // Open or create h5 file
+  hid_t file_id;
+  if(append_h5_file)
+    file_id = H5Fopen(h5_filename.c_str(), H5F_ACC_RDWR, H5P_DEFAULT);
+  else
+    file_id = H5Fcreate(h5_filename.c_str(), H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+  // Write all the error_data map elements
   for(map< string, ErrorData >::iterator it = error_data.begin(); it != error_data.end(); ++it)
     it->second.writeH5(file_id,it->first);
   for(map< string, HpData >::iterator it = hp_data.begin(); it != hp_data.end(); ++it)
@@ -1897,9 +2052,10 @@ bool hasInvalidCigar(BamAlignment & alignment) {
   return(problem);
 }
 
-bool hasInvalidBases(string &b) {
+void checkBases(string &b, bool &ambiguous_bases, bool &invalid_bases) {
   unsigned int n = b.length();
-  bool invalid_bases=false;
+  ambiguous_bases=false;
+  invalid_bases=false;
   for(unsigned int i=0; i<n; ++i) {
     switch(b[i]) {
       case 'A':
@@ -1919,11 +2075,69 @@ bool hasInvalidBases(string &b) {
       case 't':
         b[i] = 'T';
         break;
+
+      case 'M':
+      case 'R':
+      case 'W':
+      case 'S':
+      case 'Y':
+      case 'K':
+      case 'V':
+      case 'H':
+      case 'D':
+      case 'B':
+      case 'N':
+        ambiguous_bases=true;
+        break;
+      case 'm':
+        b[i] = 'M';
+        ambiguous_bases=true;
+        break;
+      case 'r':
+        b[i] = 'R';
+        ambiguous_bases=true;
+        break;
+      case 'w':
+        b[i] = 'W';
+        ambiguous_bases=true;
+        break;
+      case 's':
+        b[i] = 'S';
+        ambiguous_bases=true;
+        break;
+      case 'y':
+        b[i] = 'Y';
+        ambiguous_bases=true;
+        break;
+      case 'k':
+        b[i] = 'K';
+        ambiguous_bases=true;
+        break;
+      case 'v':
+        b[i] = 'V';
+        ambiguous_bases=true;
+        break;
+      case 'h':
+        b[i] = 'H';
+        ambiguous_bases=true;
+        break;
+      case 'd':
+        b[i] = 'D';
+        ambiguous_bases=true;
+        break;
+      case 'b':
+        b[i] = 'B';
+        ambiguous_bases=true;
+        break;
+      case 'n':
+        b[i] = 'N';
+        ambiguous_bases=true;
+        break;
+
       default:
         invalid_bases=true;
     }
   }
-  return(invalid_bases);
 }
 
 string transform_proton_block_read_group_name(const string &read_group) {
@@ -1973,4 +2187,119 @@ void GetAggregatorSize(map<string, ErrorData> &error_data, map<string, HpData> &
     rs_size += it->second.Size();
   group_count = error_data.size() + hp_data.size() + regional_summary.size();
   total_bytes = ed_size + hd_size + rs_size;
+}
+
+void debug_alignment(
+  debug_options_t         debug_opt,
+  BamAlignment &          alignment,
+  ReadAlignmentErrors &   base_space_errors,
+  ReadAlignmentErrors &   flow_space_errors,
+  bool                    evaluate_flow,
+  vector<uint16_t> &      ref_hp_flow
+) {
+  bool skip=false;
+  if( (debug_opt.error_flow >= 0) && (!evaluate_flow || !flow_space_errors.HasError(debug_opt.error_flow)) )
+    skip=true;
+  else if( (debug_opt.aligned_flow >= 0) && (!evaluate_flow || !flow_space_errors.IsAligned(debug_opt.aligned_flow)) )
+    skip=true;
+  else if( (debug_opt.positive_ref_flow >= 0) && (!evaluate_flow || !binary_search(ref_hp_flow.begin(),ref_hp_flow.end(),debug_opt.positive_ref_flow)) )
+    skip=true;
+
+  if(skip)
+    return;
+
+  cout << alignment.Name << "\t" << alignment.AlignedBases << endl;
+  cout << "Base-space Errors:" << endl;
+  base_space_errors.Print();
+  cout << "Flow-space Errors:" << endl;
+  flow_space_errors.Print();
+}
+
+bool is_unambiguous_base(char b) {
+  bool unambiguous=false;
+  switch(b) {
+    case 'A':
+    case 'C':
+    case 'G':
+    case 'T':
+      unambiguous=true;
+      break;
+    default:
+      unambiguous=false;
+  }
+  return(unambiguous);
+}
+
+bool compatible_bases(char a, char b) {
+  return((base_to_bitcode(a) & base_to_bitcode(b)) > 0);
+}
+
+unsigned char base_to_bitcode(char base) {
+  // Bases get encoded this way:
+  //  A   001   A   
+  //  C   002    C  
+  //  M   003   AC  
+  //  G   004     G 
+  //  R   005   A G 
+  //  S   006    CG 
+  //  V   007   ACG 
+  //  T   010      T
+  //  W   011   A  T
+  //  Y   012    C T
+  //  H   013   AC T
+  //  K   014     GT
+  //  D   015   A GT
+  //  B   016    CGT
+  //  N   017   ACGT
+  unsigned char bitcode=0;
+  switch(base) {
+    case 'A':
+      bitcode = 001;
+      break;
+    case 'C':
+      bitcode = 002;
+      break;
+    case 'M':
+      bitcode = 003;
+      break;
+    case 'G':
+      bitcode = 004;
+      break;
+    case 'R':
+      bitcode = 005;
+      break;
+    case 'S':
+      bitcode = 006;
+      break;
+    case 'V':
+      bitcode = 007;
+      break;
+    case 'T':
+      bitcode = 010;
+      break;
+    case 'W':
+      bitcode = 011;
+      break;
+    case 'Y':
+      bitcode = 012;
+      break;
+    case 'H':
+      bitcode = 013;
+      break;
+    case 'K':
+      bitcode = 014;
+      break;
+    case 'D':
+      bitcode = 015;
+      break;
+    case 'B':
+      bitcode = 016;
+      break;
+    case 'N':
+      bitcode = 017;
+      break;
+    default:
+      assert(1);
+  }
+  return(bitcode);
 }

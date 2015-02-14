@@ -6,15 +6,17 @@ except ImportError:
     from ordereddict import OrderedDict
 
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
-from iondb.rundb.models import dnaBarcode, Sample, SampleAnnotation_CV
+from iondb.rundb.models import dnaBarcode, SampleAnnotation_CV
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNames
 from iondb.rundb.plan.page_plan.kits_step_data import KitsFieldNames
 from iondb.rundb.plan.page_plan.reference_step_data import ReferenceFieldNames
 from iondb.rundb.plan.page_plan.save_plan_step_data import SavePlanFieldNames
-from iondb.rundb.plan.plan_validator import validate_sample_tube_label, validate_barcode_sample_association
+from iondb.rundb.plan.plan_validator import validate_sample_tube_label, validate_barcode_sample_association, validate_targetRegionBedFile_for_runType
+from iondb.rundb.plan.page_plan.ionreporter_step_data import IonReporterFieldNames
 
-from iondb.rundb.plan.views_helper import convert
+
+from iondb.utils.utils import convert
 
 import json
 import logging
@@ -28,20 +30,23 @@ class BarcodeBySampleFieldNames():
 
 class BarcodeBySampleStepData(AbstractStepData):
 
-    def __init__(self):
-        super(BarcodeBySampleStepData, self).__init__()
+    def __init__(self, sh_type):
+        super(BarcodeBySampleStepData, self).__init__(sh_type)
 
         self.resourcePath = 'rundb/plan/page_plan/page_plan_by_sample_barcode.html'
         
         self.savedFields = OrderedDict()
         self.savedFields[SavePlanFieldNames.BARCODE_SET] = ''
         self.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = ''
-        self.savedFields['applicationType'] = ''
-        self.savedFields['irDown'] = '0'
+
+        #for non-barcoded planBySampleSet
+        self.savedFields[SavePlanFieldNames.TUBE_LABEL] = ''
+        self.savedFields[SavePlanFieldNames.APPLICATION_TYPE] = ''
+        self.savedFields[SavePlanFieldNames.IR_DOWN] = '0'
 
         self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS] = []
         self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all().order_by("annotationType", "iRValue"))
-        self.prepopulatedFields['fireValidation'] = "1"
+        self.prepopulatedFields[SavePlanFieldNames.FIRE_VALIDATION] = "1"
 
         self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES] = []
         self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE] = OrderedDict()
@@ -52,30 +57,39 @@ class BarcodeBySampleStepData(AbstractStepData):
             all_barcodes.setdefault(bc['name'],[]).append(bc)
         self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes)
 
-        self.savedObjects['samplesTableList'] = [{"row":"1"}]
-        self.savedFields['samplesTable'] = json.dumps(self.savedObjects['samplesTableList'])
+        self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = [{"row":"1"}]
+        self.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = json.dumps(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
 
         self.savedFields[SavePlanFieldNames.ONCO_SAME_SAMPLE] = False
 
         self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER] = None
-        
+
+        self.updateSavedObjectsFromSavedFields()
+        self.savedObjects[SavePlanFieldNames.APPL_PRODUCT] = None
+                
         self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE] = ""
         self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE] = ""
         self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE] = ""
 
         self._dependsOn.append(StepNames.IONREPORTER)
         self._dependsOn.append(StepNames.APPLICATION)
-        self._dependsOn.append(StepNames.REFERENCE)
+        #self._dependsOn.append(StepNames.REFERENCE)
 
+        self.sh_type = sh_type
+        
     def getStepName(self):
         return StepNames.BARCODE_BY_SAMPLE
-
+          
     
     def updateFromStep(self, updated_step):
         if updated_step.getStepName() not in self._dependsOn:
             return
 
         if updated_step.getStepName() == StepNames.APPLICATION:
+            if not updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:
+                logger.debug("barcode_by_sample_step_data.updateFromStep() --- NO-OP --- APPLICATION APPL_PRODUCT IS NOT YET SET!!! ")
+                return
+                
             if updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE]:
                 self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE].runType
             else:
@@ -86,10 +100,10 @@ class BarcodeBySampleStepData(AbstractStepData):
         if updated_step.getStepName() == StepNames.IONREPORTER:
             
             # update samples table with saved sampleset items fields for IR 
-            if updated_step.savedFields['irAccountId'] and self.prepopulatedFields.get('selectedIr') != updated_step.savedFields['irAccountId']:
-                sorted_sampleSetItems = self.prepopulatedFields['samplesetitems']
-                for row in self.savedObjects['samplesTableList']:
-                    row[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields['irworkflow']
+            if updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID] and self.prepopulatedFields.get(SavePlanFieldNames.SELECTED_IR) != updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]:
+                sorted_sampleSetItems = self.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS]
+                for row in self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]:
+                    row[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
                     sampleset_item = [item for item in sorted_sampleSetItems if item.sample.displayedName == row['sampleName']]
                     if len(sampleset_item) > 0:
                         row[SavePlanFieldNames.IR_GENDER] = sampleset_item[0].gender
@@ -99,10 +113,10 @@ class BarcodeBySampleStepData(AbstractStepData):
                         row[SavePlanFieldNames.IR_CANCER_TYPE] = sampleset_item[0].cancerType
                         row[SavePlanFieldNames.IR_CELLULARITY_PCT] = sampleset_item[0].cellularityPct                        
                         
-                self.savedFields['samplesTable'] = json.dumps(self.savedObjects['samplesTableList'])
+                self.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = json.dumps(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])
             
-            self.prepopulatedFields['irworkflow'] = updated_step.savedFields['irworkflow']
-            self.prepopulatedFields['selectedIr'] = updated_step.savedFields['irAccountId']
+            self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
+            self.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]
  
         if updated_step.getStepName() == StepNames.APPLICATION and updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]:         
             applProduct = updated_step.savedObjects[ApplicationFieldNames.APPL_PRODUCT]
@@ -128,100 +142,103 @@ class BarcodeBySampleStepData(AbstractStepData):
             for bc in barcodeDetails:
                 all_barcodes.setdefault(bc['name'],[]).append(bc)
             self.prepopulatedFields[SavePlanFieldNames.BARCODE_SETS_BARCODES] = json.dumps(all_barcodes) 
-                
-        elif updated_step.getStepName() == StepNames.REFERENCE:
-            self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER] = updated_step
 
-            self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE] = updated_step.savedFields.get(ReferenceFieldNames.REFERENCE, "")
-            self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE] = updated_step.savedFields.get(ReferenceFieldNames.TARGET_BED_FILE, "")
-            self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE] = updated_step.savedFields.get(ReferenceFieldNames.HOT_SPOT_BED_FILE, "")
-
-            #logger.debug("barcode_by_sample_step_data.updateFromStep() REFERENCE plan_reference=%s" %(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]))
-       
-            self.updateSavedFieldsForSamples()
-            logger.debug("barcode_by_sample_step_data.updateFromStep() REFERENCE reference.savedFields=%s" %(updated_step.savedFields))
-          
-
-    def updateSavedFieldsForSamples(self):      
-        #logger.debug("ENTER barcode_by_sample_step_data.updateSavedFieldsForSamples() self.savedFields[SavePlanFieldNames.BARCODE_SET]=%s" %(self.savedFields[SavePlanFieldNames.BARCODE_SET]))
-  
-        if self.savedFields[SavePlanFieldNames.BARCODE_SET]:
-            #convert tuple to string
-            planReference = str(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE])
-            planHotSptRegionBedFile = str(self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE])
-            planTargetRegionBedFile = str(self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE])
-                    
-            #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() type(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE])=%s; self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]=%s" %(type(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]), self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]))
-
-            hasAnyChanges = False
-            myTable = json.loads(self.savedFields['samplesTable'])
-            #convert unicode to str
-            myTable = convert(myTable)
+            self.savedObjects[SavePlanFieldNames.APPL_PRODUCT] = applProduct
             
-            for index, row in enumerate(myTable):
-                #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() B4 CHANGES... BARCODE_SET LOOP row=%s" %(row))                   
-                                              
-                sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
-                if sample_name:
-                   
-                    sample_nucleotideType = row.get(SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, "")
-                    
-                    sampleReference = row.get(SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE, "")
-                    sampleHotSpotRegionBedFile = row.get(SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE, "")
-                    sampleTargetRegionBedFile = row.get(SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE, "")
+            #logger.debug("barcode_by_sample_step_data.updateFromStep() APPLPRODUCT... isReferenceBySampleSupported=%s;" %(applProduct.isReferenceBySampleSupported))
 
-                    runType = self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE]
 
-                    if runType == "AMPS_DNA_RNA" and sample_nucleotideType == "RNA":
-                        newSampleReference = sampleReference
-                        newSampleHotspotRegionBedFile = sampleHotSpotRegionBedFile
-                        newSampleTargetRegionBedFile = sampleTargetRegionBedFile
-                    else:
+#         elif updated_step.getStepName() == StepNames.REFERENCE:
+#             self.savedObjects[SavePlanFieldNames.REFERENCE_STEP_HELPER] = updated_step
+# 
+#             self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE] = updated_step.savedFields.get(ReferenceFieldNames.REFERENCE, "")
+#             self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE] = updated_step.savedFields.get(ReferenceFieldNames.TARGET_BED_FILE, "")
+#             self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE] = updated_step.savedFields.get(ReferenceFieldNames.HOT_SPOT_BED_FILE, "")
+# 
+#             #logger.debug("barcode_by_sample_step_data.updateFromStep() REFERENCE plan_reference=%s" %(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]))
+#        
+#             self.updateSavedFieldsForSamples()
+#             logger.debug("barcode_by_sample_step_data.updateFromStep() REFERENCE reference.savedFields=%s" %(updated_step.savedFields))
+
+    def updateSavedFieldsForSamples_retired(self):      
+        #logger.debug("ENTER barcode_by_sample_step_data.updateSavedFieldsForSamples() self.savedFields[SavePlanFieldNames.BARCODE_SET]=%s" %(self.savedFields[SavePlanFieldNames.BARCODE_SET]))
+
+        #convert tuple to string
+        planReference = str(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE])
+        planHotSpotRegionBedFile = str(self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE])
+        planTargetRegionBedFile = str(self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE])
+
+        #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() type(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE])=%s; self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]=%s" %(type(self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]), self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]))
+
+        hasAnyChanges = False
+        myTable = json.loads(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE])
+        #convert unicode to str
+        myTable = convert(myTable)
+
+        for index, row in enumerate(myTable):
+            #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() B4 CHANGES... BARCODE_SET LOOP row=%s" %(row))
+
+            sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
+            if sample_name:
+
+                sample_nucleotideType = row.get(SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, "")
+
+                sampleReference = row.get(SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE, "")
+                sampleHotSpotRegionBedFile = row.get(SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE, "")
+                sampleTargetRegionBedFile = row.get(SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE, "")
+
+                runType = self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE]
+
+                if runType == "AMPS_DNA_RNA" and sample_nucleotideType == "RNA":
+                    newSampleReference = sampleReference
+                    newSampleHotSpotRegionBedFile = sampleHotSpotRegionBedFile
+                    newSampleTargetRegionBedFile = sampleTargetRegionBedFile
+                else:
+                    newSampleReference = planReference
+                    newSampleHotSpotRegionBedFile = planHotSpotRegionBedFile
+                    newSampleTargetRegionBedFile = planTargetRegionBedFile
+
+
+                #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() BARCODE_SET LOOP  planReference=%s; type(newSampleReference)=%s; newSampleReference=%s;" %(planReference, type(newSampleReference), newSampleReference))
+
+                #cascade the reference and BED file info to sample if none specified at the sample level
+                if runType != "AMPS_DNA_RNA":
+                    if not sampleReference:
                         newSampleReference = planReference
-                        newSampleHotspotRegionBedFile = planHotSptRegionBedFile
+                        newSampleHotSpotRegionBedFile = planHotSpotRegionBedFile
                         newSampleTargetRegionBedFile = planTargetRegionBedFile
-                        
-                                                
-                    #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() BARCODE_SET LOOP  planReference=%s; type(newSampleReference)=%s; newSampleReference=%s;" %(planReference, type(newSampleReference), newSampleReference))
 
-                    #cascade the reference and BED file info to sample if none specified at the sample level
-                    if runType != "AMPS_DNA_RNA":
-                        if not sampleReference:
-                            newSampleReference = planReference
-                            newSampleHotspotRegionBedFile = planHotSptRegionBedFile
-                            newSampleTargetRegionBedFile = planTargetRegionBedFile
+                hasChanged = False
+                if newSampleReference != sampleReference:
+                    row[SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE] = newSampleReference
+                    hasChanged = True
+                if newSampleHotSpotRegionBedFile != sampleHotSpotRegionBedFile:
+                    row[SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE] = newSampleHotSpotRegionBedFile
+                    hasChanged = True
+                if newSampleTargetRegionBedFile != sampleTargetRegionBedFile:
+                    row[SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE] = newSampleTargetRegionBedFile
+                    hasChanged = True
 
-                    hasChanged = False
-                    if newSampleReference != sampleReference:
-                        row[SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE] = newSampleReference
-                        hasChanged = True
-                    if newSampleHotspotRegionBedFile != sampleHotSpotRegionBedFile:
-                        row[SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE] = newSampleHotspotRegionBedFile
-                        hasChanged = True
-                    if newSampleTargetRegionBedFile != sampleTargetRegionBedFile:
-                        row[SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE] = newSampleTargetRegionBedFile
-                        hasChanged = True
-                        
-                    #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasChanged=%s; row=%s" %(hasChanged, row))
-                    
-                    if hasChanged:
-                        myTable[index] = row 
-                        #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() AFTER CHANGES  BARCODE_SET LOOP myTable[index]=%s" %(myTable[index]))                                     
-                        hasAnyChanges = True
-                        
- 
-            if hasAnyChanges:    
-                #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasAnyChanges AFTER CHANGES... type=%s; myTable=%s" %(type(myTable), myTable))       
+                #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasChanged=%s; row=%s" %(hasChanged, row))
 
-                #convert list with single quotes to str with double quotes. Then convert it to be unicode
-                self.savedFields['samplesTable'] = unicode(json.dumps(myTable))
-                
-                #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasAnyChanges AFTER unicode(json.dumps)... type=%s; self.savedFields[samplesTable]=%s" %(type(self.savedFields['samplesTable']), self.savedFields['samplesTable']))       
- 
-                self.savedObjects['samplesTableList'] = json.loads(self.savedFields['samplesTable'])
-                self.updateSavedObjectsFromSavedFields()
-                #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasAnyChanges AFTER json.loads... type=%s; self.savedObjects[samplesTableList]=%s" %(type(self.savedObjects['samplesTableList']), self.savedObjects['samplesTableList']))       
-                
+                if hasChanged:
+                    myTable[index] = row
+                    #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() AFTER CHANGES  BARCODE_SET LOOP myTable[index]=%s" %(myTable[index]))
+                    hasAnyChanges = True
+
+
+        if hasAnyChanges:
+            #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasAnyChanges AFTER CHANGES... type=%s; myTable=%s" %(type(myTable), myTable))
+
+            #convert list with single quotes to str with double quotes. Then convert it to be unicode
+            self.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = unicode(json.dumps(myTable))
+
+            #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasAnyChanges AFTER unicode(json.dumps)... type=%s; self.savedFields[samplesTable]=%s" %(type(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE]), self.savedFields[SavePlanFieldNames.SAMPLES_TABLE]))
+
+            self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = json.loads(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE])
+            self.updateSavedObjectsFromSavedFields()
+            #logger.debug("barcode_by_sample_step_data.updateSavedFieldsForSamples() hasAnyChanges AFTER json.loads... type=%s; self.savedObjects[samplesTableList]=%s" %(type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]), self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]))
+
                                                          
 
                 
@@ -235,11 +252,50 @@ class BarcodeBySampleStepData(AbstractStepData):
         if errors:
             self.validationErrors[field_name] = '\n'.join(errors)
 
+        #if the plan has been sequenced, do not enforce the target bed file to be selected
+        planStatus = self.getDefaultSectionPrepopulatedFieldDict().get("planStatus", "")
+
+        if field_name == SavePlanFieldNames.SAMPLES_TABLE:
+            sample_table_list = json.loads(new_field_value)            
+            samples_errors = []
+
+            applProduct = self.savedObjects[SavePlanFieldNames.APPL_PRODUCT]
+            #applProduct object is not saved yet
+            if applProduct:
+                isTargetRegionSelectionRequired = applProduct.isTargetRegionBEDFileSelectionRequiredForRefSelection
+            else:
+                isTargetRegionSelectionRequired = False
+            
+            for row in sample_table_list:                               
+                sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
+                if sample_name:                
+                    sample_nucleotideType = row.get(SavePlanFieldNames.BARCODE_SAMPLE_NUCLEOTIDE_TYPE, "")
+                    
+                    sampleReference = row.get(SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE, "")
+                    sampleTargetRegionBedFile = row.get(SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE, "")
+                    
+                    runType = self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE]
+                    
+                    logger.debug("barcode_by_sample_step_data.validateField()() runType=%s; sample_nucleotideType=%s; sampleReference=%s; sampleTargetRegionBedFile=%s" %(runType, sample_nucleotideType, sampleReference, sampleTargetRegionBedFile))
+
+                    errors = []  
+                    #if the plan has been sequenced, do not enforce the target bed file to be selected 
+                    if planStatus != "run":  
+                        errors = validate_targetRegionBedFile_for_runType(sampleTargetRegionBedFile, runType, sampleReference, sample_nucleotideType, "Target Regions BED File for " + sample_name)
+
+                    if errors:
+                        samples_errors.append('\n'.join(errors))
+                            
+                if samples_errors:                                            
+                    logger.debug("barcode_by_sample_step_data.validateField()() samples_errors=%s" %(samples_errors))
+                    self.validationErrors[field_name] = '\n'.join(samples_errors)          
+
+        
     def validateStep(self):
         self.validationErrors.pop(SavePlanFieldNames.NO_BARCODE,None)
         self.validationErrors.pop(SavePlanFieldNames.BAD_BARCODES,None)
                 
-        samplesTable = json.loads(self.savedFields['samplesTable'])
+        samplesTable = json.loads(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE])
         barcodeSet = self.savedFields[SavePlanFieldNames.BARCODE_SET]
 
         selectedBarcodes = []
@@ -259,13 +315,13 @@ class BarcodeBySampleStepData(AbstractStepData):
             if myErrors.get("DUPLICATE_BARCODE", ""):
                 self.validationErrors[SavePlanFieldNames.BAD_BARCODES] = myErrors.get("DUPLICATE_BARCODE", "")
  
-        self.prepopulatedFields['fireValidation'] = "0"
+        self.prepopulatedFields[SavePlanFieldNames.FIRE_VALIDATION] = "0"
 
 
     def updateSavedObjectsFromSavedFields(self):
         #logger.debug("ENTER barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() self.savedFields[SavePlanFieldNames.BARCODE_SET]=%s" %(self.savedFields[SavePlanFieldNames.BARCODE_SET]))
         
-        self.savedObjects['samplesTableList'] = json.loads(self.savedFields['samplesTable'])
+        self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST] = json.loads(self.savedFields[SavePlanFieldNames.SAMPLES_TABLE])
         
         if self.savedFields[SavePlanFieldNames.BARCODE_SET]:
 
@@ -274,14 +330,14 @@ class BarcodeBySampleStepData(AbstractStepData):
             
 
             planReference = self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]
-            planHotSptRegionBedFile = self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE]
+            planHotSpotRegionBedFile = self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE]
             planTargetRegionBedFile = self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE]
     
-            logger.debug("barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() BARCODE_SET PLAN_REFERENCE=%s; TARGET_REGION=%s; HOTSPOT_REGION=%s;" %(planReference, planTargetRegionBedFile, planHotSptRegionBedFile))
+            logger.debug("barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() BARCODE_SET PLAN_REFERENCE=%s; TARGET_REGION=%s; HOTSPOT_REGION=%s;" %(planReference, planTargetRegionBedFile, planHotSpotRegionBedFile))
 
             self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE] = {}
             self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES] = []
-            for row in self.savedObjects['samplesTableList']:
+            for row in self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]:
                 sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
                 if sample_name:
                     id_str = row['barcodeId']
@@ -309,19 +365,23 @@ class BarcodeBySampleStepData(AbstractStepData):
                             if sampleReference != planReference:
                                 reference_step_helper.savedFields[ReferenceFieldNames.REFERENCE] = sampleReference
                                  
-                            if sampleHotSpotRegionBedFile != planHotSptRegionBedFile:
+                            if sampleHotSpotRegionBedFile != planHotSpotRegionBedFile:
                                 reference_step_helper.savedFields[ReferenceFieldNames.HOT_SPOT_BED_FILE] = sampleHotSpotRegionBedFile
                                 
                             if sampleTargetRegionBedFile != planTargetRegionBedFile:
                                 reference_step_helper.savedFields[ReferenceFieldNames.TARGET_BED_FILE] = sampleTargetRegionBedFile
 
-
                     #cascade the reference and BED file info to sample if none specified at the sample level
                     if runType != "AMPS_DNA_RNA":
-                        if not sampleReference:
+                        if not sampleReference and self.savedObjects[SavePlanFieldNames.APPL_PRODUCT]  and not self.savedObjects[SavePlanFieldNames.APPL_PRODUCT].isReferenceBySampleSupported:
+                            logger.debug("barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() NOT REFERENCE_BY_SAMPLE GOING to set sampleReference to planReference... planReference=%s" %(planReference))
+                            
                             sampleReference = planReference
-                            sampleHotspotRegionBedFile = planHotSptRegionBedFile
+                            sampleHotSpotRegionBedFile = planHotSptRegionBedFile
                             sampleTargetRegionBedFile = planTargetRegionBedFile
+                        else:
+                            logger.debug("barcode_by_sample_step_data.updateSavedObjectsFromSavedFields() SKIP SETTING sampleReference to planReference... planReference=%s" %(planReference))
+
        
                     self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][KitsFieldNames.BARCODES].append(id_str)
                     self.savedObjects[SavePlanFieldNames.SAMPLE_TO_BARCODE][sample_name][SavePlanFieldNames.BARCODE_SAMPLE_INFO][id_str] = \
@@ -333,7 +393,7 @@ class BarcodeBySampleStepData(AbstractStepData):
 
                             SavePlanFieldNames.BARCODE_SAMPLE_REFERENCE : sampleReference,
                             SavePlanFieldNames.BARCODE_SAMPLE_TARGET_REGION_BED_FILE : sampleTargetRegionBedFile,
-                            SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE : sampleHotspotRegionBedFile,
+                            SavePlanFieldNames.BARCODE_SAMPLE_HOTSPOT_REGION_BED_FILE : sampleHotSpotRegionBedFile,
                                                         
                             SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE : row.get(SavePlanFieldNames.BARCODE_SAMPLE_CONTROL_SEQ_TYPE, ""),
                         }
@@ -360,5 +420,5 @@ class BarcodeBySampleStepData(AbstractStepData):
                    
                     self.savedObjects[SavePlanFieldNames.BARCODED_IR_PLUGIN_ENTRIES].append(barcode_ir_userinput_dict)
 
-        #logger.debug("EXIT barcode_by_sample_step_date.updateSavedObjectsFromSaveFields() type(self.savedObjects['samplesTableList'])=%s; self.savedObjects['samplesTableList']=%s" %(type(self.savedObjects['samplesTableList']), self.savedObjects['samplesTableList']));
+        #logger.debug("EXIT barcode_by_sample_step_date.updateSavedObjectsFromSaveFields() type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST])=%s; self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]=%s" %(type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]), self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]));
        

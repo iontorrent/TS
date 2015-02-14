@@ -1,4 +1,5 @@
 #!/bin/bash
+# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 function deny_ssh_access ()
 {
     deny_user=$1

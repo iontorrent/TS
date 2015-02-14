@@ -393,7 +393,7 @@ def alignment_rate_plot2(ionstats_alignment_filename, output_png_filename, graph
 
 ''' Generate plot with error rate vs base position '''
 
-def base_error_plot(ionstats_alignment_filename, output_png_filename, graph_max_x):
+def old_base_error_plot(ionstats_alignment_filename, output_png_filename, graph_max_x):
     
     try:
         printtime("DEBUG: Generating plot %s" % output_png_filename)
@@ -433,6 +433,167 @@ def base_error_plot(ionstats_alignment_filename, output_png_filename, graph_max_
         ax.set_xlabel('Position in Read')
         ax.set_ylabel("Accuracy at Position")
         
+        #ax.subplots_adjust(left=0.2, right=0.9, top=0.9, bottom=0.1)
+        fig.patch.set_alpha(0.0)
+        fig.savefig(output_png_filename)
+        plt.close()
+        
+    except:
+        printtime('Unable to generate plot %s' % output_png_filename)
+        traceback.print_exc()
+
+
+def cumulative_sum(values):
+    """
+    Returns the cumulative sum of a collection of numbers
+    """
+    cum_sum = []
+    y = 0
+    for value in values:
+        y += value 
+        cum_sum.append(y)
+
+    return cum_sum
+
+
+def _get_per_base_err(ins_values, del_values, sub_values, max_base):
+    """
+    Returns an array of errors for each base
+    """
+    min_array_entries = min(min(len(ins_values), len(del_values)), len(sub_values))
+    max_count = min(min_array_entries, max_base)
+    ##printtime("DEBUG: _get_per_base_err() min_array_entries=%d; max_base=%d" %(min_array_entries, max_base))
+    
+    per_base_err_values = [0] *  max_count
+
+    for i in range(0, max_count):        
+        per_base_err_values[i] = ins_values[i] + del_values[i] + sub_values[i]
+        ##printtime("DEBUG: _get_per_base_err() i=%d; ins=%d; del=%d; sub=%d; per_base_err=%d" %(i, ins_values[i], del_values[i], sub_values[i], per_base_err_values[i]))
+        
+    return per_base_err_values
+    
+
+def _which_depth_indices(depth_values, total_depth, threshold):
+    """
+    Gives the TRUE indices of a logical object, allowing for array indices.
+    """
+    ##printtime("DEBUG: _which_depth_indices() total_depth=%0.2f; depth_throughput_threshold=%0.3f" %(total_depth, threshold))
+        
+    count = len(depth_values)
+    ##true_indices = []
+    true_indices = [0] * count
+    true_index = 0
+    collection_index = 0
+    
+    for depth in depth_values:
+        if float(depth) / float(total_depth) <= threshold:
+            ##printtime("DEBUG: _which_depth_indices() true_index=%d; collection_index=%d; depth=%0.2f; total_depth=%0.2f; depth_ratio=%0.4f" %(true_index, collection_index, depth, total_depth, float(depth) / float(total_depth)))
+
+            true_indices[true_index] = collection_index
+            true_index += 1
+#         else:
+#             printtime("DEBUG: SKIPPED!!!! _which_depth_indices() BEYOND THRESHOLD!! collection_index=%d; depth=%d; total_depth=%d" %(collection_index, depth, total_depth))
+            
+        collection_index += 1
+
+    return true_indices
+
+                    
+
+def _get_per_base_accuracy(error_values, depth_values):
+    """
+    Returns the accuracy per base
+    """
+    error_count = len(error_values)
+    depth_count = len(depth_values)
+    max_count = min(error_count, depth_count)
+    
+    per_base_accuracy = [0] * max_count
+    ##printtime("DEBUG: _get_per_base_accuracy() error_count=%d; depth_count=%d; max_count=%d" %(error_count, depth_count, max_count))
+
+    for i in range(0, max_count):
+        if depth_values[i] != 0:
+            per_base_accuracy[i] = 100 * (1 - float(error_values[i]) / float(depth_values[i]))
+                
+            #printtime("_get_per_base_accuracy() i=%d; error_value=%d; depth_value=%d; per_base_accuracy=%0.2f" %(i, error_values[i], depth_values[i], per_base_accuracy[i]))
+
+        else:
+            printtime("DEBUG: BAD should not happen!!! _get_per_base_accuracy() depth_values[i=%d] is zero!!" %(i)) 
+            per_base_accuracy[i] = 0           
+        
+    return per_base_accuracy
+
+
+def base_error_plot(ionstats_alignment_filename, output_png_filename, graph_max_x):
+    """
+    Generates plot with error rate vs base position
+    """
+    try:
+        printtime("DEBUG: Generating NEW base error (AKA per-base accuracy plot %s" % output_png_filename)
+    
+        f = open(ionstats_alignment_filename,'r')
+        ionstats_alignment = json.load(f);
+        f.close()
+    
+        #Info about this new code vs the old_base_error_plot function...
+        #
+        #In runs where 5' soft-clipping is disabled (which it is by default),
+        #data["by_base"]["depth"] and data["aligned"]["read_length_histogram"] contain mathematically equivalent information. 
+        #The former is more useful as it remains valid for using with the accuracy plot when 5' soft clipping is used, 
+        #the latter does not.
+
+        #data["error_by_position"] is equal to the sum of the other three data["by_base"] entries. 
+        #Relying on the latter three is preferred because they are more flexible 
+        #(we will have the option of partitioning error rate into sub/ins/del) 
+        #and because it will allow us to then retire data["error_by_position"] which is redundant.
+        
+        depth_throughput_fraction = 0.995
+        
+        # Keep only the by_base section from the json file
+        by_base_data = ionstats_alignment['by_base']
+
+        # determine the max base that will be plotted
+        total_depth = sum(by_base_data['depth'])
+        
+        cumulative_depth = cumulative_sum(by_base_data['depth'])
+
+        ##printtime("cumulative_depth=%s" %(cumulative_depth))
+                
+        my_max_base = max(_which_depth_indices(cumulative_depth, total_depth, depth_throughput_fraction))
+        max_base = min(graph_max_x, my_max_base)
+        
+        ##max_base = min(graph_max_x, len(by_base_data['depth']))
+        
+        printtime("DEBUG: >>>>> depth_throughput_fraction=%0.4f; total_depth=%d; my_max_base=%d; max_base=%d" %(depth_throughput_fraction, total_depth, my_max_base, max_base))
+
+        # get per-base error and depth
+        per_base_err = _get_per_base_err(by_base_data['ins'], by_base_data['del'], by_base_data['sub'], max_base)
+        
+#         for value in per_base_err:
+#             printtime("per_base_err=%d" %(value))
+            
+        per_base_depth = by_base_data['depth'][0:max_base]
+        
+#         for value in per_base_depth:
+#             printtime("per_base_depth=%d" %(value))
+                    
+        per_base_accuracy = _get_per_base_accuracy(per_base_err, per_base_depth)
+        
+        overall_accuracy = 100 * (1 - float(sum(per_base_err)) / float(sum(per_base_depth)))
+
+        fig = plt.figure(figsize = (4,4), dpi=100)
+        ax = fig.add_subplot(111,frame_on=False, position=[0.2,0.1,0.7,0.8])
+        ax.plot(range(0, max_base), per_base_accuracy, linewidth=3.0, color="#2D4782")
+
+        x_axis_max = min(graph_max_x, len(by_base_data['depth']))        
+        print("DEBUG: >>>>>  graph_max_x=%d; len(by_base_data[depth]=%d; x_axis_max=%d" %(graph_max_x, len(by_base_data['depth']), x_axis_max))
+        
+        ax.set_xlim(0, x_axis_max)
+        
+        ax.set_ylim(90 , 100.9)
+        ax.set_xlabel('Position')
+        ax.set_ylabel("Accuracy")
+                        
         #ax.subplots_adjust(left=0.2, right=0.9, top=0.9, bottom=0.1)
         fig.patch.set_alpha(0.0)
         fig.savefig(output_png_filename)

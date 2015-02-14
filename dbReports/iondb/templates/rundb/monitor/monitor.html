@@ -38,11 +38,12 @@
 {% endblock extra_head %}
 {% block sub-nav %}
 <li class="active"><a href="{% url "monitor" %}">Runs in Progress</a></li>
+<li><a href="{% url "monitor_chef" %}">Ion Chef</a></li>
 {% endblock sub-nav %}
 {% block content %}
 <div id="monitor_view" class="content group">
     <div class="pull-right">
-        <small id="update_status">Page is updating automatically</small> <a id='live_button' class="btn">Stop Updates</a>
+        <small id="update_status">Page is static until refreshed</small> <a id='live_button' class="btn btn-success">Auto Update</a>
     </div>
     <h1 style="margin-bottom:5px;">Runs in Progress</h1>
 	<div class="view-toggle" data-toggle="buttons-radio" style="margin-right: 15px;" >
@@ -145,7 +146,11 @@
     <div>
         {{#prev}}<a href="#" class="prev">Previous {{limit}}</a>{{/prev}}
         {{#total}}{{lower_range}} to {{upper_range}} of {{total}}{{/total}}
-        {{^total}}<h2>0 Runs in Progress</h2>{{/total}}
+        {{^total}}
+            <div class="well">
+                There are no current or recent TS runs at this time.
+            </div>
+        {{/total}}
         {{#next}}<a href="#" class="next">Next {{limit}}</a>{{/next}}
     </div>
     <div>

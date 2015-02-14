@@ -4,13 +4,25 @@
 #-----------------------------------------------------------------------------
 # Install system packages for igv
 #-----------------------------------------------------------------------------
-- name: Install system packages for master node
-  apt: name={{item}} state=latest force=yes
-  with_items: igv_syspkg_list
-
+- name: Install tomcat server - lucid
+  apt: name={{ item }} state=latest force=yes
+  when: ansible_distribution_release == "lucid"
+  with_items:
+    - tomcat6
+    - tomcat6-admin
+  
+- name: Install tomcat server - trusty
+  apt: name={{ item }} state=latest force=yes
+  when: ansible_distribution_release == "trusty"
+  with_items:
+    - tomcat7
+    - tomcat7-admin
+  
 #-----------------------------------------------------------------------------
 # Install Ion Torrent Packages for igv
 #-----------------------------------------------------------------------------
-- name: Install packages for head node
+- name: Install packages for igv node
   apt: name={{ item }} state=latest force=yes
-  with_items: igv_ionpkg_list
+  with_items:
+    - ion-jk
+    - ion-igv

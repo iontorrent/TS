@@ -1,13 +1,13 @@
 ---
 # file: site.yml
-
+# The ordering of these operations matters
 - include: common.yml               # Common settings
 - include: db.yml                   # Postgresql server
+- include: nfs_client.yml           # Configure NFS mountpoints
 - include: webserver.yml            # Apache2 server
 - include: fileserver.yml           # Handles direct-connect sequencers
-- include: nfs_client.yml           # Configure NFS mountpoints
-- include: iontorrent_master.yml    # Headnode
-- include: iontorrent_computes.yml  # Compute nodes (or headnode if stand-alone)
 - include: gridengine_master.yml    # Gridengine master host
 - include: gridengine_clients.yml   # Gridengine exec host
+- include: iontorrent_master.yml    # Headnode
+- include: iontorrent_computes.yml  # Compute nodes (or headnode if stand-alone)
 - include: igv.yml                  # 

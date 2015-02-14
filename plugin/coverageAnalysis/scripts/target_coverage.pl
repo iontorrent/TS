@@ -14,6 +14,9 @@ my $allout = 0;
 my $bedout = 0;
 my $chrret = 1;
 
+my $accuracy = 1e-10;
+my $contigSep = '&';
+
 while( scalar(@ARGV) > 0 )
 {
   last if($ARGV[0] !~ /^-/);
@@ -63,6 +66,10 @@ unless( $genome eq '' || $genome eq '-' )
   }
 }
 
+# set target ID check as default match if gene symbol not matched
+# - disabled using tab if no gene query or explicit KVP query
+my $checkID = ($gene eq "" || index($gene,'=') > 0) ? '\t' : uc($gene);
+
 open( TSVFILE, $dataFile );
 if( !TSVFILE || eof(TSVFILE) ) {
   print "Error: Could not open data file $dataFile\n";
@@ -103,7 +110,7 @@ if( $numrec <= 0 )
     my @fields = split('\t',$_);
     if( $chrret && !defined($chrid{$fields[0]}) )
     {
-      $chrList .= $fields[0] . ':';
+      $chrList .= $fields[0] . $contigSep;
       $chrid{$fields[0]} = 1;
     }
     next if( $chrom ne "" && $chrom ne $fields[0] );
@@ -113,10 +120,10 @@ if( $numrec <= 0 )
       # allow to work on merged fields by replacing merge separator character (@) with a key match
       my $fld = ';'.uc($fields[4]).';';
       $fld =~ s/&/$keyswp/g;
-      next if( index( $fld, $genq ) < 0 );
+      next if( index( $fld, $genq ) < 0 && $checkID ne uc($fields[3]) );
     } elsif( $checkGene ) {
       # support for pre-4.0 format
-      next if( $genq ne uc($fields[4]) );
+      next if( $genq ne uc($fields[4]) && $checkID ne uc($fields[3]) );
     }
     ++$numHits;
   }
@@ -133,13 +140,15 @@ if( $genome ne '' )
     chomp;
     my ($chr) = split;
     # only include chromosome with targets
-    $chrList .= $chr . ':' if( $numrec > 0 || defined($chrid{$chr}) );
+    $chrList .= $chr . $contigSep if( $numrec > 0 || defined($chrid{$chr}) );
   }
   close( GENOME );
 }
 # output header line with extra first field for numHits to query
 # - also output all chromosomes as extra field if asked for by supplying $numrec < 0
 my $line = <TSVFILE>;
+my @fields= split('\t',$line);
+my $numFields = scalar(@fields);
 # code is repeated here since earlier pre-scan might not have been perfomed
 if( $gene ne "" ) {
   $checkGene = ($line =~ m/\sgene_id\s/);
@@ -171,12 +180,8 @@ $clipright = 100 if( $clipright > 100 );
 
 # done this way so representation (total number of binned tatgets) can be reproduced using elsewhere
 my $cliprows = int(0.5 + $numHits * 0.01 * ($clipright - $clipleft));
-my $skipStart = 1+int(0.01 * $clipleft * $numHits);
+my $firstRow = 1+int(0.01 * $clipright * $numHits)-$cliprows;  # handles effective round vs clipleft 
 my $binsize = $cliprows / $maxrows;
-
-# reduce number of rows returned if range is smaller
-my $skipEndRow = 1+int(0.01 * $clipright * $numHits) - $skipStart;
-$maxrows = $skipEndRow if( $skipEndRow < $maxrows );
 
 my $bin = 0;
 my $bincnt = 0;
@@ -186,13 +191,13 @@ my $nout = 0;
 my $ccnt = 0;
 my $gcbias = 0;
 my $slen = 0;
-my @fields;
 my @record;
 
 $" = "\t";
 
 while( <TSVFILE> )
 {
+  chomp;
   @fields = split('\t',$_);
   next if( $chrom ne "" && $chrom ne $fields[0] );
   next if( $covmin > $fields[9] );
@@ -201,13 +206,13 @@ while( <TSVFILE> )
     # allow to work on merged fields by replacing merge separator character (@)
     my $fld = ';'.uc($fields[4]).';';  # do not want to affect output string!
     $fld =~ s/&/$keyswp/g;
-    next if( index( $fld, $gene ) < 0 );
+    next if( index( $fld, $gene ) < 0 && $checkID ne uc($fields[3]) );
   } elsif( $checkGene ) {
     # support for pre-4.0 format
-    next if( $gene ne uc($fields[4]) );
+    next if( $gene ne uc($fields[4]) && $checkID ne uc($fields[3]) );
   }
   # to get to correct window this must be done after all filters
-  next if( ++$nrec < $skipStart );
+  next if( ++$nrec < $firstRow );
   if( $allout ) {
     if( $bedout ) {
       --$fields[1];
@@ -231,18 +236,16 @@ while( <TSVFILE> )
   ++$bincnt;
   $slen = $fields[2] - $fields[1] + 1;
   if( $bincnt == 1 ) {
-    @record = @fields;
     $sumLen = $slen;
+    @record = @fields;
     $gcbias = abs(($fields[5] / $slen)-0.5);
     $ccnt = 0;
   } else {
+    # sum count fields for averaging
     $sumLen += $slen;
-    $record[5] += $fields[5]; # gc count
-    $record[6] += $fields[6]; # bases covered
-    $record[7] += $fields[7]; # bases uncov 3'
-    $record[8] += $fields[8]; # bases uncov 3'
-    $record[10] += $fields[10]; # fwd base reads
-    $record[11] += $fields[11]; # rev base reads
+    for( my $f = 5; $f < $numFields; ++$f ) {
+      $record[$f] += $fields[$f];
+    }
     $gcbias += abs(($fields[5] / $slen)-0.5);
     ++$ccnt if( $record[0] ne $fields[0] );
   }
@@ -255,11 +258,9 @@ while( <TSVFILE> )
       $record[3] = 0; # => no amplicon ID => must be binned
       $record[4] = sprintf("%.3f", $gcbias);
     }
-    # this could be normalized read counts or base counts
-    $record[9] = sprintf("%.3f", ($record[10]+$record[11])/$sumLen);
-    print "@record\n";
     $bin -= $binsize;
     $bincnt = 0;
+    print "@record\n";
     last if( ++$nout >= $maxrows );
   }
 }
@@ -273,7 +274,6 @@ if( $nout < $maxrows && !$allout ) {
     $record[3] = 0; # => no amplicon ID => must be binned
     $record[4] = sprintf("%.3f", $gcbias);
   }
-  $record[9] = sprintf("%.3f", ($record[10]+$record[11])/$sumLen);
   print "@record\n";
 }
 close(TSVFILE);

@@ -83,14 +83,14 @@ class NNAvg {
      @param image - pointer to the image of data
    */
   void CalcNNAvg(int row_clip, int col_clip, 
-                 int num_row_neighbors, int num_col_neighbors);
+                 int num_row_neighbors, int num_col_neighbors,float default_value=0.0f);
 
   /** Function for grabbing the cumulative sum for region around well. Useful for rolling variance. */
   inline void GetRegionSum(int row_ix, int col_ix, int frame_ix,
                            int row_step, int col_step,
                            int row_neighbors, int col_neighbors,
                            float &sum, int &good_count) {
-    const float *__restrict cum_sum_frame = m_cum_sum + (frame_ix * m_cs_frame_stride);
+    const double *__restrict cum_sum_frame = m_cum_sum + (frame_ix * m_cs_frame_stride);
     int row_below_clip = row_step * (row_ix / row_step) -1;
     int row_above_clip = std::min(row_below_clip + row_step, m_num_rows - 1);
     int col_below_clip = col_step * (col_ix / col_step)  -1;
@@ -115,7 +115,7 @@ class NNAvg {
      with frame, row major order. The memory is owned by the object, don't try to free it
    */
   const float *GetNNAvgPtr() { return m_nn_avg; }
-  const float *GetNNCumSumPtr() { return m_cum_sum; }
+  const double *GetNNCumSumPtr() { return m_cum_sum; }
   const int *GetNumGoodWellsPtr() { return  m_num_good_wells; }
 
   /**
@@ -155,7 +155,7 @@ class NNAvg {
   /// Size of the cumulative sum array
   size_t m_cum_sum_size;
   int m_cs_frame_stride, m_cs_col_size;
-  float *__restrict m_cum_sum; ///< Cumulative sum of image data frame major order for each frame individually
+  double *__restrict m_cum_sum; ///< Cumulative sum of image data frame major order for each frame individually
   int *__restrict m_num_good_wells; ///< Cumulative sum of good wells in region
   float *__restrict m_nn_avg; ///< Average for specified NN region
 

@@ -1,10 +1,10 @@
-/* Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved */
+/* Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "realign_util.h"
 extern "C" {
 #include "../samtools/bam.h"
 #include "../util/tmap_error.h"
 }
-#include <exception>
+//#include <exception>
 #include <string>
 
 #define CONSUME_QRY 1

@@ -37,6 +37,7 @@ urlpatterns = patterns(
     url(r'^references/tf/(\d+)/delete/$', 'views.references_TF_delete', name='references_TF_delete'),
 
     url(r'^references/genome/download/$', 'genomes.download_genome', name='references_genome_download'),
+    url(r'^references/custom_download/$', 'genomes.references_custom_download', name='references_custom_download'),
     url(r'^references/genome/add/$', 'genomes.new_genome', name='references_genome_add'),
     url(r'^references/genome/edit/(\w+)$', 'genomes.edit_genome', name='references_genome_edit'),
     url(r'^references/genome/delete/(\d+)$', 'genomes.delete_genome', name='references_genome_delete'),
@@ -68,7 +69,9 @@ urlpatterns = patterns(
     url(r'^services/queueStat/$', 'views.queueStatus'),
     url(r'^services/jobStat/(\d+)/$', 'views.jobStatus'),
     url(r'^services/sgejob/(\d+)/$', 'views.jobDetails'),
-    url(r'^services/cluster_info_refresh/$', 'views.cluster_info_refresh', name='cluster_info_refresh'),
+    url(r'^services/cluster_info/refresh/$', 'views.cluster_info_refresh', name='cluster_info_refresh'),
+    url(r'^services/cluster_info/log/(?P<pk>\d+)/$', 'views.cluster_info_log', name='cluster_info_log'),
+    url(r'^services/cluster_info/history/$', 'views.cluster_info_history', name='cluster_info_history'),
     (r'^getZip/(.+)$', 'chips.getChipZip'),
     (r'^getChipLog/(.+)$', 'chips.getChipLog'),
     (r'^getChipPdf/(.+)$', 'chips.getChipPdf'),

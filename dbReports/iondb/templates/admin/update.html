@@ -203,10 +203,12 @@
             this.$("#unknown").slideDown();
           },
           "Checking for update": function() {
+            this.$("#check_update").attr("disabled", "disabled");
             this.$("#confirm_update").attr("disabled", "disabled");
             this.$("#update_checking").show();
           },
           "Available": function() {
+            this.$("#check_update").removeAttr("disabled");
             if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
             this.$("#update_actions").slideDown();
             if (this.previous_status != null) {
@@ -216,10 +218,12 @@
             }
           },
           "No updates": function() {
+            this.$("#check_update").removeAttr("disabled");
             this.$("#confirm_update").attr("disabled", "disabled");
             this.$("#update_actions").slideDown();
           },
           "Ready to install": function() {
+            this.$("#check_update").removeAttr("disabled");
             if ({{allow_update|yesno:"true,false"}}) this.$("#confirm_update").removeAttr("disabled");
             this.$("#ready_install").slideDown();
             this.$("#update_actions").slideDown();
@@ -272,6 +276,7 @@
         },
 
         check_update: function(){
+          this.$("#check_update").attr("disabled", "disabled");
           $.post("/admin/update/check/");
         },
 

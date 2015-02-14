@@ -1,6 +1,6 @@
 // html for table container - note these are invisible and moved into position later
 document.write('\
-<div id="FL-tablecontent" style="display:none">\
+<div id="FL-tablecontent" class="unselectable" style="display:none">\
   <div id="FL-titlebar" class="grid-header">\
     <span id="FL-collapseGrid" style="float:left" class="ui-icon ui-icon ui-icon-triangle-1-n" title="Collapse view"></span>\
     <span class="table-title">File Links</span>\

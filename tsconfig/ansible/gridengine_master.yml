@@ -5,5 +5,3 @@
     - gridengine_master
   tags:
     - gridengine
-  tasks:
-    - include: roles/iontorrent_master/handlers/main.yml  # restart ion daemons

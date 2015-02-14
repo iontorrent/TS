@@ -174,7 +174,8 @@ def create_ionstats(
         basecaller_meta_information,
         basecaller_datasets,
         graph_max_x,
-        activate_barcode_filter):
+        activate_barcode_filter,
+        evaluate_hp):
 
     # TEST
     basecaller_bam_file_list = []
@@ -182,7 +183,8 @@ def create_ionstats(
 
 
     ionstats_alignment_file_list = []
-    ionstats_alignment_h5_file_list = []
+    if evaluate_hp:
+        ionstats_alignment_h5_file_list = []
 
     ionstats_basecaller_file_list = []
 
@@ -213,12 +215,13 @@ def create_ionstats(
             ionstats.generate_ionstats_alignment(
                 [os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam')],
                 os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_alignment.json'),
-                os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5'),
-                basecaller_meta_information,
+                os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5') if evaluate_hp else None,
+                basecaller_meta_information if evaluate_hp else None,
                 graph_max_x)
 
             ionstats_alignment_file_list.append(os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_alignment.json'))
-            ionstats_alignment_h5_file_list.append(os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5'))
+            if evaluate_hp:
+                ionstats_alignment_h5_file_list.append(os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5'))
         else:
 
             # TEST
@@ -227,8 +230,6 @@ def create_ionstats(
             ionstats.generate_ionstats_basecaller(
                 [os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])],
                 os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
-                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5'), # TODO, not needed
-                basecaller_meta_information,
                 graph_max_x)
 
             ionstats_basecaller_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'))
@@ -252,8 +253,8 @@ def create_ionstats(
             ionstats.generate_ionstats_alignment(
                 ['empty_dummy.bam'],
                 os.path.join(ALIGNMENT_RESULTS, 'ionstats_alignment.json'),
-                os.path.join(ALIGNMENT_RESULTS, 'ionstats_error_summary.h5'),
-                basecaller_meta_information,
+                os.path.join(ALIGNMENT_RESULTS, 'ionstats_error_summary.h5') if evaluate_hp else None,
+                basecaller_meta_information if evaluate_hp else None,
                 graph_max_x)
 
         except:
@@ -276,8 +277,6 @@ def create_ionstats(
             ionstats.generate_ionstats_basecaller(
                 ['empty_dummy.bam'],
                 os.path.join(BASECALLER_RESULTS, 'ionstats_tmp_basecaller.json'),
-                os.path.join(BASECALLER_RESULTS, 'ionstats_tmp_error_summary.h5'), # TODO, not needed
-                basecaller_meta_information,
                 graph_max_x)
         except:
             pass
@@ -293,7 +292,7 @@ def create_ionstats(
     if len(ionstatslist) > 0:
         ionstats.reduce_stats( ionstatslist, os.path.join(BASECALLER_RESULTS,'ionstats_basecaller_with_aligninfos.json'))
         ionstats.reduce_stats( reversed(ionstatslist), os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'))
-    if len(ionstats_alignment_h5_file_list) > 0 and basecaller_meta_information:
+    if evaluate_hp and len(ionstats_alignment_h5_file_list) > 0 and basecaller_meta_information:
         ionstats.reduce_stats_h5(ionstats_alignment_h5_file_list,os.path.join(ALIGNMENT_RESULTS,'ionstats_error_summary.h5'))
 
     '''
@@ -473,8 +472,7 @@ def merge_bams(dirs, BASECALLER_RESULTS, ALIGNMENT_RESULTS, basecaller_datasets,
                     blockprocessing.merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates)
                 else:
                     composite_bai_filepath=""
-                    mark_duplicates=False
-                    blockprocessing.merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates, method='samtools')
+                    blockprocessing.merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates=False, method='samtools')
 
         except:
             print traceback.format_exc()

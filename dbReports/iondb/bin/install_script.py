@@ -225,7 +225,7 @@ def add_global_config():
                   'site_name':'Torrent Server',
                   'default_storage_options':defaultStore,
                   'auto_archive_ack':False,
-                  'base_recalibrate':True,
+                  'base_recalibration_mode' : 'standard_recal'
                   }
         gc = models.GlobalConfig(**kwargs)
         gc.save()
@@ -702,7 +702,7 @@ def add_libraryKey (direction, name, sequence, description, isDefault):
 def add_barcode_args():
     #print "Adding barcode_args"
     try:
-        gc = models.GlobalConfig.objects.all()[0]
+        gc = models.GlobalConfig.get()
         try:
             barcode_args = gc.barcode_args
         except AttributeError:
@@ -1124,5 +1124,13 @@ if __name__=="__main__":
     ]
     for item in groupList:
         add_prune_group(item)
-    
-    load_dbData("rundb/fixtures/ts_dbData.json")        
+
+    # This is necessary to be able to re-order analysisArgs entries in ts_dbData.json
+    for analysisArgs in models.AnalysisArgs.objects.all():
+        analysisArgs.delete()
+
+    # This is necessary to be able to re-order chip entries in ts_dbData.json
+    for chip in models.Chip.objects.all():
+        chip.delete()
+
+    load_dbData("rundb/fixtures/ts_dbData.json")

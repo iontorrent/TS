@@ -67,6 +67,7 @@ void VariantCallerHelp() {
   printf("     --suppress-recalibration           on/off      Suppress homopolymer recalibration [on].\n");
   printf("     --do-snp-realignment               on/off      Realign reads in the vicinity of candidate snp variants [on].\n");
   printf("     --do-mnp-realignment               on/off      Realign reads in the vicinity of candidate mnp variants [do-snp-realignment].\n");
+  printf("     --realignment-threshold            FLOAT       Max. allowed fraction of reads where realignment causes an alignment change [1.0].\n");
   printf("\n");
 
   printf("Advanced variant candidate scoring options:\n");
@@ -80,6 +81,7 @@ void VariantCallerHelp() {
   printf("     --k-zero                           FLOAT       variance increase for adding systematic bias [3.0]\n");
   printf("     --sse-relative-safety-level        FLOAT       dampen strand bias detection for SSE events for low coverage [0.025]\n");
   printf("     --tune-sbias                       FLOAT       dampen strand bias detection for low coverage [0.01]\n");
+  printf("     --max-detail-level                 INT         number of evaluated frequencies for a given hypothesis, reduce for very high coverage, set to zero to disable this option [0]\n");
   printf("\n");
 
   printf("Variant filtering:\n");
@@ -118,12 +120,21 @@ void VariantCallerHelp() {
   printf("  -e,--error-motifs                     FILE        table of systematic error motifs and their error rates [optional]\n");
   printf("     --sse-prob-threshold               FLOAT       filter out variants in motifs with error rates above this [0.2]\n");
   printf("     --min-ratio-reads-non-sse-strand   FLOAT       minimum required alt allele frequency for variants with error motifs on opposite strand [0.2]\n");
+  printf("  --indel-as-hpindel                    on/off      apply indel filters to non HP indels [off]\n");
+  // position-bias filter
+  printf("\nPosition bias variant filtering:\n");
+  printf("     --use-position-bias                on/off      enable the position bias filter [off]\n");
+  printf("     --position-bias                    FLOAT       filter out variants with position bias relative to soft clip ends in reads > position-bias [0.75]\n");
+  printf("     --position-bias-pval               FLOAT       filter out if position bias above position-bias given pval < position-bias-pval [0.05]\n");
+  printf("     --position-ref-fraction            FLOAT       skip position bias filter if (reference read count)/(reference + alt allele read count) <= to this [0.05]\n");
   // These filters depend on scoring
+  printf("\nFilters that depend on scoring across alleles:\n");
   printf("     --data-quality-stringency          FLOAT       minimum mean log-likelihood delta per read [4.0]\n");
   printf("     --read-rejection-threshold         FLOAT       filter variants where large numbers of reads are rejected as outliers [0.5]\n");
   printf("     --filter-unusual-predictions       FLOAT       posterior log likelihood threshold for accepting bias estimate [0.3]\n");
   printf("     --filter-deletion-predictions      FLOAT       check post-evaluation systematic bias in deletions [100.0]\n");
   printf("     --filter-insertion-predictions     FLOAT       check post-evaluation systematic bias in insertions [100.0]\n");
+  printf("\n");
   printf("     --heal-snps                        on/off      suppress in/dels not participating in diploid variant genotypes if the genotype contains a SNP or MNP [on].\n");
   printf("\n");
 
@@ -146,6 +157,12 @@ ControlCallAndFilters::ControlCallAndFilters() {
   // all defaults handled by sub-filters
   data_quality_stringency = 4.0f;  // phred-score for this variant per read
   read_rejection_threshold = 0.5f; // half the reads gone, filter this
+
+  use_position_bias = false;
+  position_bias_ref_fraction = 0.05;  // FRO/(FRO+FAO)
+  position_bias = 0.75f;              // position bias
+  position_bias_pval = 0.05f;         // pval for observed > threshold
+
   //xbias_tune = 0.005f;
   sbias_tune = 0.5f;
   downSampleCoverage = 2000;
@@ -287,6 +304,7 @@ void EnsembleEvalTuningParameters::SetOpts(OptArgs &opts, Json::Value& tvc_param
   soft_clip_bias_checker                = RetrieveParameterDouble(opts, tvc_params, '-', "soft-clip-bias-checker", 0.1f);
   filter_deletion_bias                  = RetrieveParameterDouble(opts, tvc_params, '-', "filter-deletion-predictions", 100.0f);
   filter_insertion_bias                 = RetrieveParameterDouble(opts, tvc_params, '-', "filter-insertion-predictions", 100.0f);
+  max_detail_level                      = RetrieveParameterInt(opts, tvc_params, '-', "max-detail-level", 0);		
 
   // shouldn't majorly affect anything, but still expose parameters for completeness
   pseudo_sigma_base                     = RetrieveParameterDouble(opts, tvc_params, '-', "shift-likelihood-penalty", 0.3f);
@@ -310,6 +328,7 @@ void EnsembleEvalTuningParameters::CheckParameterLimits() {
   CheckParameterLowerUpperBound<float>("soft-clip-bias-checker",        soft_clip_bias_checker, 0.0f, 1.0f);
   CheckParameterLowerBound<float>     ("filter-deletion-predictions",   filter_deletion_bias,         0.0f);
   CheckParameterLowerBound<float>     ("filter-insertion-predictions",  filter_insertion_bias,        0.0f);
+  CheckParameterLowerUpperBound<int>     ("max-detail-level",    max_detail_level,   0, 10000);
 
   CheckParameterLowerBound<float>     ("shift-likelihood-penalty",  pseudo_sigma_base,    0.01f);
   CheckParameterLowerBound<float>     ("minimum-sigma-prior",       magic_sigma_base,     0.01f);
@@ -329,7 +348,9 @@ void ClassifyFilters::SetOpts(OptArgs &opts, Json::Value & tvc_params) {
   // min ratio of reads supporting variant on non-sse strand for variant to be called
   do_snp_realignment                    = RetrieveParameterBool  (opts, tvc_params, '-', "do-snp-realignment", true);
   do_mnp_realignment                    = RetrieveParameterBool  (opts, tvc_params, '-', "do-mnp-realignment", do_snp_realignment);
+  realignment_threshold                 = RetrieveParameterDouble(opts, tvc_params, '-', "realignment-threshold", 1.0);
 
+  indel_as_hpindel               = RetrieveParameterBool  (opts, tvc_params, '-', "indel-as-hpindel", false);
 }
 
 void ClassifyFilters::CheckParameterLimits() {
@@ -338,6 +359,7 @@ void ClassifyFilters::CheckParameterLimits() {
   CheckParameterLowerUpperBound<float>("sse-prob-threshold",   sseProbThreshold, 0.0f, 1.0f);
   CheckParameterLowerUpperBound<float>("min-ratio-reads-non-sse-strand",   minRatioReadsOnNonErrorStrand, 0.0f, 1.0f);
   CheckParameterLowerUpperBound<float>("sse-relative-safety-level",   sse_relative_safety_level, 0.0f, 1.0f);
+  CheckParameterLowerUpperBound<float>("realignment-threshold",   realignment_threshold, 0.0f, 1.0f);
 
 }
 
@@ -349,7 +371,9 @@ void ControlCallAndFilters::CheckParameterLimits() {
   CheckParameterLowerBound<float>     ("data-quality-stringency",  data_quality_stringency,  0.0f);
   CheckParameterLowerUpperBound<float>("read-rejection-threshold", read_rejection_threshold, 0.0f, 1.0f);
   CheckParameterLowerUpperBound<int>  ("downsample-to-coverage",   downSampleCoverage,       20, 100000);
-
+  CheckParameterLowerUpperBound<float>("position-bias-ref-fraction",position_bias_ref_fraction,  0.0f, 1.0f);
+  CheckParameterLowerUpperBound<float>("position-bias",            position_bias,  0.0f, 1.0f);
+  CheckParameterLowerUpperBound<float>("position-bias-pval",       position_bias_pval,  0.0f, 1.0f);
  // CheckParameterLowerUpperBound<float>("tune-xbias",      xbias_tune,     0.001f, 1000.0f);
   CheckParameterLowerUpperBound<float>("tune-sbias",      sbias_tune,     0.001f, 1000.0f);
 
@@ -396,6 +420,12 @@ void ControlCallAndFilters::SetOpts(OptArgs &opts, Json::Value& tvc_params) {
   data_quality_stringency               = RetrieveParameterDouble(opts, tvc_params, '-', "data-quality-stringency",4.0f);
   // if we reject half the reads from evaluator, something badly wrong with this position
   read_rejection_threshold              = RetrieveParameterDouble(opts, tvc_params, '-', "read-rejection-threshold",0.5f);
+
+  use_position_bias                     = RetrieveParameterBool(opts, tvc_params, '-', "use-position-bias", false);
+  position_bias_ref_fraction            = RetrieveParameterDouble(opts, tvc_params, '-', "position-bias-ref-fraction",0.05f);
+  position_bias                         = RetrieveParameterDouble(opts, tvc_params, '-', "position-bias",0.75f);
+  position_bias_pval                    = RetrieveParameterDouble(opts, tvc_params, '-', "position-bias-pval",0.05f);
+
   downSampleCoverage                    = RetrieveParameterInt   (opts, tvc_params, '-', "downsample-to-coverage", 2000);
   
   //xbias_tune                            = RetrieveParameterDouble(opts, tvc_params, '-', "tune-xbias", 0.005f);

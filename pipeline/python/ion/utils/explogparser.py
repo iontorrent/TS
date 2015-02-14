@@ -77,7 +77,7 @@ def getparameter(parameterfile=None):
     env['basecallerArgs'] = EXTERNAL_PARAMS.get("basecallerArgs","")
     env['prebasecallerArgs'] = EXTERNAL_PARAMS.get("prebasecallerArgs","")
     env['recalibArgs'] = EXTERNAL_PARAMS.get("recalibArgs","")
-    env['doBaseRecal'] = EXTERNAL_PARAMS.get("doBaseRecal", False)
+    env['doBaseRecal'] = EXTERNAL_PARAMS.get("doBaseRecal", "no_recal")
 
     #previousReports
     env['previousReport'] = EXTERNAL_PARAMS.get("previousReport","")
@@ -328,8 +328,6 @@ def getBlocksFromExpLogDict(explogdict, excludeThumbnail=False):
     blocks = []
     # contains regular blocks and a thumbnail block
     blockstatus = explogdict.get('blocks', [])
-    if not blockstatus:
-        print >> sys.stderr, "ERROR: No blocks found in explog"
     for line in blockstatus:
         # Remove keyword; divide argument by comma delimiter into an array
         args = line.strip().replace('BlockStatus:','').split(',')
@@ -495,10 +493,6 @@ def exp_kwargs(d, folder, logobj):
         ret['rawdatastyle'] = 'tiled'
         ret['autoAnalyze'] = False
         for bs in d['blocks']:
-            # Hack alert.  Watch how explogparser.parse_log munges these strings when detecting which one is the thumbnail entry
-            # Only thumbnail will have 0,0 as first and second element of the string.
-            if '0' in bs.split(',')[0] and '0' in bs.split(',')[1]:
-                continue
             if auto_analyze_block(bs, logobj):
                 ret['autoAnalyze'] = True
                 logobj.debug("Block Run. Detected at least one block to auto-run analysis")
@@ -619,3 +613,14 @@ def folder_mtime(folder):
             fname = folder
         stat = os.stat(fname)
         return datetime.datetime.fromtimestamp(stat.st_mtime)
+
+
+if __name__ == '__main__':
+    '''Provide path to the explog file'''
+    import sys
+    import logging
+    logobj = logging.getLogger('crawler')
+    logobj.propagate = True
+    exp = parse_log(load_log_path(sys.argv[1]))
+    (folder, filename) = os.path.split(sys.argv[1])
+    exp_kwargs(exp, folder, logobj)

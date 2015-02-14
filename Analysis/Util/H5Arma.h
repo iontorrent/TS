@@ -110,7 +110,7 @@ bool H5Arma::ReadMatrix(const std::string &hdf5FilePath, arma::Mat<T> &mat) {
 
 template <typename T>
 void  H5Arma::WriteMatrix(H5File &h5, const std::string &h5path, arma::Mat<T> &mat) {
-  H5DataSet *ds = CreateDataSet(h5, h5path, mat, 3);
+  H5DataSet *ds = CreateDataSet(h5, h5path, mat, 0);
   ION_ASSERT(ds != NULL, "Couldn't make dataset: " + h5path);
   WriteMatrix(*ds, mat);
 }

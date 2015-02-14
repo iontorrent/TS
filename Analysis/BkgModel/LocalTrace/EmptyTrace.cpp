@@ -365,8 +365,10 @@ void EmptyTrace::GenerateAverageEmptyTrace (
               // shift it to account for relative timing differences - "mean zero shift"
               // ax and ay are global coordinates and need to have the region location subtracted
               // off in order to index into the region-sized t0_map
+              //if ( t0_map.size() > 0 )
+                //TraceHelper::SpecialShiftTrace ( tmp,tmp_shifted,imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
               if ( t0_map.size() > 0 )
-                TraceHelper::SpecialShiftTrace ( tmp,tmp_shifted,imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
+                TraceHelper::ShiftTraceBiDirect( tmp,tmp_shifted,imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
               else
                 printf ( "Alert in EmptyTrace: t0_map nonexistent\n" );
 
@@ -795,8 +797,10 @@ float EmptyTrace::TrimWildTraces ( Region *region, float *bPtr,
           
           if ( sdat == NULL )  {
             TraceHelper::GetUncompressedTrace ( tmp,img,ax,ay, imgFrames );
+            //if ( t0_map.size() > 0 )
+              //TraceHelper::SpecialShiftTrace ( tmp,&tmp_shifted[0],imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
             if ( t0_map.size() > 0 )
-              TraceHelper::SpecialShiftTrace ( tmp,&tmp_shifted[0],imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
+              TraceHelper::ShiftTraceBiDirect(tmp,&tmp_shifted[0],imgFrames,t0_map[ax-region->col+ ( ay-region->row ) *region->w] );
           }
           else {
             //        if ( regionAndTimingMatchesSdat )

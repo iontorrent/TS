@@ -38,7 +38,7 @@ string getVCFHeader(const ExtendParameters *parameters, const vector<string>& sa
   << "##fileformat=VCFv4.1" << endl
   << "##fileDate=" << dateStr() << endl
   << "##fileUTCtime=" << get_time_iso_string(time(NULL)) << endl
-  << "##source=\"tvc " << IonVersion::GetVersion() << "-" << IonVersion::GetRelease() << " (" << IonVersion::GetSvnRev() << ") - Torrent Variant Caller\"" << endl;
+  << "##source=\"tvc " << IonVersion::GetVersion() << "-" << IonVersion::GetRelease() << " (" << IonVersion::GetGitHash() << ") - Torrent Variant Caller\"" << endl;
 
   if (not parameters->params_meta_name.empty())
     headerss << "##parametersName=\"" << parameters->params_meta_name << "\"" << endl;
@@ -96,9 +96,10 @@ string getVCFHeader(const ExtendParameters *parameters, const vector<string>& sa
   << "##INFO=<ID=SSSB,Number=A,Type=Float,Description=\"Strand-specific strand bias for allele.\">" << endl
   << "##INFO=<ID=SSEN,Number=A,Type=Float,Description=\"Strand-specific-error prediction on negative strand.\">" << endl
   << "##INFO=<ID=SSEP,Number=A,Type=Float,Description=\"Strand-specific-error prediction on positive strand.\">" << endl
-  
   << "##INFO=<ID=STB,Number=A,Type=Float,Description=\"Strand bias in variant relative to reference.\">" << endl
   << "##INFO=<ID=STBP,Number=A,Type=Float,Description=\"Pval of Strand bias in variant relative to reference.\">" << endl
+  << "##INFO=<ID=PB,Number=A,Type=Float,Description=\"Bias of relative variant position in reference reads versus variant reads. Equals Mann-Whitney U rho statistic P(Y>X)+0.5P(Y=X)\">" << endl
+  << "##INFO=<ID=PBP,Number=A,Type=Float,Description=\"Pval of relative variant position in reference reads versus variant reads.  Related to GATK ReadPosRankSumTest\">" << endl
 //  << "##INFO=<ID=SXB,Number=A,Type=Float,Description=\"Experimental strand bias based on approximate bayesian score for difference in frequency.\">" << endl
   
   << "##INFO=<ID=MLLD,Number=A,Type=Float,Description=\"Mean log-likelihood delta per read.\">" << endl;
@@ -206,6 +207,10 @@ void clearInfoTags(vcf::Variant &var) {
   if (it != var.info.end())
     var.info["STBP"].clear();
 
+  it = var.info.find("PBP");
+  if (it != var.info.end())
+    var.info["PBP"].clear();
+
 /*  it = var.info.find("SXB");
   if (it != var.info.end())
     var.info["SXB"].clear();*/
@@ -223,7 +228,7 @@ void clearInfoTags(vcf::Variant &var) {
   ClearVal(var,"QD");
 }
 
-void NullInfoFields(vcf::Variant &var){
+void NullInfoFields(vcf::Variant &var, bool use_position_bias){
    clearInfoTags(var);
    for (vector<string>::iterator I = var.alt.begin(); I != var.alt.end(); ++I) {
      var.info["AO"].push_back(convertToString(0));
@@ -244,6 +249,10 @@ void NullInfoFields(vcf::Variant &var){
      var.info["SSEP"].push_back(convertToString(0));
      var.info["STB"].push_back(convertToString(0));
      var.info["STBP"].push_back(convertToString(0));
+     if(use_position_bias) {
+    	 var.info["PB"].push_back(convertToString(0.5f));
+    	 var.info["PBP"].push_back(convertToString(1.0f));
+     }
      var.info["MLLD"].push_back(convertToString(0));
    }
    var.info["DP"].push_back(convertToString(0));

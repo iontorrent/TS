@@ -14,6 +14,13 @@ case "$1" in
         fi
     fi
 
+    #gridengine drmaa support on lucid
+    if [ -e /usr/lib/libdrmaa.so.1.0 ]; then
+        if [ ! -h /usr/lib/libdrmaa.so ]; then
+            ln -s /usr/lib/libdrmaa.so.1.0 /usr/lib/libdrmaa.so || true
+        fi
+    fi
+
     chmod ugo+x @ION_INSTALL_PREFIX@/iondb/bin/*
 
     DJANGOADMIN=@ION_INSTALL_PREFIX@/manage.py
@@ -62,6 +69,30 @@ case "$1" in
     # Default Ubuntu file is empty. Config now in /etc/apache2/conf.d/
     touch /etc/apache2/httpd.conf
 
+    # Get PROXY variables into apache environment
+    if grep -q 'ION_APACHE_PROXY_ENV' /etc/apache2/envvars; then
+        # Remove existing PROXY_ENV lines
+        sed -i -e '/ION_APACHE_PROXY_ENV/,/END_ION_APACHE_PROXY_ENV/d' /etc/apache2/envvars
+    fi
+    # NOTE: Use of leading TABS below is intended. Do not replace with spaces!
+    cat >> /etc/apache2/envvars <<-'ENDAPACHEENVHEREDOC'
+		# ION_APACHE_PROXY_ENV Import Proxy Server settings from /etc/environment
+		if [ -e "/etc/environment" ]; then
+		    . "/etc/environment"
+		    if [ ! -z "${http_proxy}" ]; then
+		        if [ -z "${HTTP_PROXY}" ]; then
+		            HTTP_PROXY="${http_proxy}"
+		        fi
+		        if [ -z "${no_proxy}" ]; then
+		            # Set default value for no_proxy if missing
+		            no_proxy="localhost,127.0.0.1"
+		        fi
+		        export http_proxy no_proxy HTTP_PROXY
+		    fi
+		fi
+		# END_ION_APACHE_PROXY_ENV
+ENDAPACHEENVHEREDOC
+
     #create hard-coded credentials to handle <Location "/basicauthlogout"> within torrent-server.in
     htpasswd -b -c /etc/apache2/users logout logout
 
@@ -70,18 +101,28 @@ case "$1" in
     # Note: wsgi and ssl are non-core and installed separately. Check depends list
 
     # Switch to the torrent-server apache vhost - remove stock ubuntu vhosts
-    /usr/sbin/a2dissite default
-    /usr/sbin/a2dissite default-ssl
+    /usr/sbin/a2dissite 000-default || true
+    /usr/sbin/a2dissite default || true
+    /usr/sbin/a2dissite default-ssl || true
 
     # Some machines have files instead of symlinks here, which a2ensite and a2dissite choke on.
     /bin/rm -f /etc/apache2/sites-enabled/default /etc/apache2/sites-enabled/default-ssl
     /bin/rm -f /etc/apache2/sites-enabled/torrent-server /etc/apache2/sites-enabled/torrent-server-ssl
 
     # Enable Torrent Suite vhosts - http and https
-    /usr/sbin/a2ensite torrent-server
-    # Only enable https if user configured it -
-    #   file is installed as torrent-server-ssl.example and must be edited
-    [ -e /etc/apache2/sites-available/torrent-server-ssl ] && /usr/sbin/a2ensite torrent-server-ssl
+    /usr/sbin/a2ensite torrent-server.conf
+    /usr/sbin/a2ensite torrent-server-ssl.conf
+
+    # Enable config files
+    if [ -x /usr/sbin/a2enconf ]; then
+        # Apache 2.4 on Ubuntu 14.04
+        /usr/sbin/a2enconf h5bp-server.conf
+        /usr/sbin/a2enconf torrent-server-config.conf
+    else
+        # Compat with Apache 2.2 and conf.d on Ubuntu 10.04
+        /bin/ln -snf /etc/apache2/conf-available/h5bp-server.conf /etc/apache2/conf.d/
+        /bin/ln -snf /etc/apache2/conf-available/torrent-server-config.conf /etc/apache2/conf.d/
+    fi
 
     # apache2 restarted by invoke-rc.d command below
 
@@ -106,8 +147,11 @@ case "$1" in
         ln -s -f /results/analysis/output /var/www/output
     fi
 
-    if [ ! -h /var/www/chef_logs ]; then
+    rm -f /var/www/chef_logs
+    if [ -d /rawdata ]; then
         # link does not exist...but it might be a file or dir.
+        ln -s -f /rawdata/chef_logs /var/www/chef_logs
+    else
         ln -s -f /results/chef_logs /var/www/chef_logs
     fi
     if [ ! -h /var/www/ot_logs ]; then
@@ -156,6 +200,7 @@ case "$1" in
         ionJobServer
         ionPlugin
         celeryd
+        celerybeat
         )
     for DAEMON in ${DAEMONS[@]}; do
         # Need to fix the start/kill priority for the daemons
@@ -186,6 +231,7 @@ case "$1" in
     chown ionian:www-data /var/log/ion/django.log
     chown ionian:www-data /var/log/ion/celery_plugins.log
     chown ionian:www-data /var/log/ion/ionPlugin.log
+    chown root:www-data /var/log/ion/data_management.log
 
     chown -R www-data:www-data @ION_INSTALL_PREFIX@/iondb
 
@@ -203,11 +249,16 @@ case "$1" in
         rm -rf @PYTHON_LOCAL_SITE_PACKAGES@/ion
     fi
 
+    # stop the
+    invoke-rc.d apache2 stop
+    invoke-rc.d celerybeat stop
+    invoke-rc.d celeryd stop
+
     # Setup python and database environment
     (
         cd @ION_INSTALL_PREFIX@/iondb/
 
-        # Create ionadmin if a superuser doesn't exist
+        # Create ionadmin if a superuser does not exist
         /usr/bin/python ./bin/initsprusr.py
 
         # Legacy DB migration - Updates an existing database schema to 2.2
@@ -226,10 +277,12 @@ case "$1" in
         /usr/bin/python ${DJANGOADMIN} backfill_api_keys
 
         # Loads Test Fragment entries into database
-        /usr/bin/python ${DJANGOADMIN} loaddata template_init.json
+        #/usr/bin/python ${DJANGOADMIN} loaddata template_init.json
+        /usr/bin/python ./bin/install_testfragments.py rundb/fixtures/template_init.json
 
-        # Collect static files (eg. admin pages css/js). No --clear, preserve md5 hashed versions
-        /usr/bin/python ${DJANGOADMIN} collectstatic --verbosity=0 --noinput --link
+        # Collect static files (eg. admin pages css/js).
+        # TS-9967 Purging content with clear instead of keeping old md5 hashed versions
+        /usr/bin/python ${DJANGOADMIN} collectstatic --verbosity=0 --noinput --link --clear
 
         # Creates default report templates with site-specific content
         /usr/bin/python ./bin/base_template.py
@@ -261,8 +314,6 @@ EOF
         rm -rf /var/lib/rabbitmq/mnesia/rabbit@localhost || true
         service rabbitmq-server start
     fi
-    invoke-rc.d apache2 restart
-    invoke-rc.d celeryd restart
 
     # -------------------------------------------------------------------------
     # Configure Celery's RabbitMQ user, vhost, and permission state
@@ -277,6 +328,10 @@ EOF
         rabbitmqctl set_permissions -p ion ion ".*" ".*" ".*"
     fi
 
+    invoke-rc.d apache2 start
+    invoke-rc.d celeryd start
+    invoke-rc.d celerybeat start
+
     #load the references for a first time
     (wget -q -O /dev/null http://localhost/configure/references/ > /dev/null) || \
         echo "Loading references failed."
@@ -288,12 +343,6 @@ EOF
     # Schedule plugin rescan task to run after various delays, catches plugins installed by other packages.
     python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=2)'
     python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.add_remove_plugins.apply_async(countdown=60)'
-
-    #TS-5598: Schedule task to fill diskusage field for all Experiments
-    python -c 'import iondb.bin.djangoinit, iondb.rundb.data.backfill_tasks as tasks; tasks.backfill_exp_diskusage.apply_async(countdown=40)'
-
-    #TS-5908: Schedule task to fix value in Results.diskusage field
-    python -c 'import iondb.bin.djangoinit, iondb.rundb.data.backfill_tasks as tasks; tasks.backfill_result_diskusage.apply_async(countdown=40)'
 
     # Rescan size and inode count for PluginResults
     python -c 'import iondb.bin.djangoinit, iondb.plugins.tasks as tasks; tasks.backfill_pluginresult_diskusage.apply_async(countdown=60)'

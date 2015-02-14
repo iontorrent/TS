@@ -20,11 +20,18 @@
     - gridengine-client
     - gridengine-exec
 
-- name: configure gridengine execd
-  lineinfile: dest=/var/lib/gridengine/iontorrent/common/act_qmaster
-                regexp='.*'
-                line="{{groups.gridengine_master[0]}}"
-  notify: restart gridengine-exec
+- name: Hard shutdown of gridengine-execd
+  shell: bash -lc "kill -9 $(pgrep sge_execd)"
+  ignore_errors: yes
+  
+- name: Set ignore_fqdn to TRUE in bootstrap file
+  lineinfile: state=present dest=/var/lib/gridengine/iontorrent/common/bootstrap
+                line="ignore_fqdn             true"
+                regexp="^ignore_fqdn.*"
+                mode=0644
+
+- name: Start gridengine-execd
+  service: name=gridengine-exec state=restarted
 
 # Copy gridengine scripts
 - name: Create /usr/share/ion-tsconfig/gridengine-scripts directory

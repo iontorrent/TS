@@ -3,32 +3,33 @@
 #-----------------------------------------------------------------------------
 # Mount NAS resources
 # Except, if a node is exporting, then it should not mount its own resource
-#-----------------------------------------------------------------------------  
+#-----------------------------------------------------------------------------
+- name: DEBUG
+  debug: msg="No NFS mounts to be configured"
+  with_items: nas_mounts
+  when: nas_mounts|default(None) == None
+- name: DEBUG
+  debug: msg=""
+  with_items: nas_mounts
+  when: nas_mounts|default(None) != None
+  
 - name: Create external storage mountpoints
-  when: "nas_mounts is defined and '{{ ansible_nodename }}' != '{{ item.name }}'"
   shell: bash -lc 'if [ ! -d {{ item.mountpoint }} ]; then mkdir -p {{ item.mountpoint }}; chmod 0777 {{ item.mountpoint }}; fi'
-  with_items:
-    - "{{nas_mounts}}"
+  with_items: nas_mounts
+  when: nas_mounts|default(None) != None and item.name != ansible_hostname
   
 - name: Create fstab entry
-  when: "nas_mounts is defined and '{{ ansible_nodename }}' != '{{ item.name }}'"
   lineinfile: dest=/etc/fstab
                 state=present
                 regexp='{{item.name}}:{{item.directory}}.*'
                 line='{{item.name}}:{{item.directory}} {{item.mountpoint}} nfs defaults 0 0'
-  with_items:
-    - "{{nas_mounts}}"
+  with_items: nas_mounts
+  when: nas_mounts|default(None) != None and item.name != ansible_hostname
 
 - name: Execute mount command
-  when: "nas_mounts is defined and '{{ ansible_nodename }}' != '{{ item.name }}'"
   shell: bash -lc 'if ! mount|grep "{{ item.name }}:{{ item.directory }}"; then mount {{ item.mountpoint }}; fi'
-  with_items:
-    - "{{nas_mounts}}"
-  
-- shell: bash -lc 'echo "{{ ansible_nodename }} does not equal {{ item.name }}"'
-  when: "'{{ ansible_nodename }}' != '{{ item.name }}' and nas_mounts is defined"
-  with_items:
-    - "{{nas_mounts}}"
+  with_items: nas_mounts
+  when: nas_mounts|default(None) != None and item.name != ansible_hostname
   
 
 #-----------------------------------------------------------------------------

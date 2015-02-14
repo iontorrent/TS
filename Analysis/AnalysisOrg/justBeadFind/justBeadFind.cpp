@@ -54,7 +54,7 @@ void DumpStartingStateOfProgram (int argc, char *argv[], TrackProgress &my_progr
   fprintf (stdout, "Start Time = %s", ctime (&my_progress.analysis_start_time));
   fprintf (stdout, "Version = %s-%s (%s) (%s)\n",
            IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(),
-           IonVersion::GetSvnRev().c_str(), IonVersion::GetBuildNum().c_str());
+           IonVersion::GetGitHash().c_str(), IonVersion::GetBuildNum().c_str());
   fprintf (stdout, "Command line = ");
   for (int i = 0; i < argc; i++)
     fprintf (stdout, "%s ", argv[i]);
@@ -324,6 +324,13 @@ int main (int argc, char *argv[])
   {
 	  inception_state.sys_context.dat_source_directory = argv[argc - 1];
 	  cout << "dat_source_directory = " << inception_state.sys_context.dat_source_directory << endl;
+  }
+
+  struct stat sb;
+  if(!(stat(inception_state.sys_context.dat_source_directory, &sb) == 0 && S_ISDIR(sb.st_mode)))
+  {
+      cerr << "ERROR: " << inception_state.sys_context.dat_source_directory << " does not exist or it is not a directory." << endl; 
+	  exit ( EXIT_FAILURE );
   }
 
   inception_state.PostProcessArgs(opts);

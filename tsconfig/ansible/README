@@ -3,6 +3,8 @@ effectively replaces the ad-hoc scripts (ts_functions, et al.) currently used to
 The goal is to enable consistent configuration management for stand-alone servers as well as Ion
 Clusters.
 
+Date: June 30, 2014
+
 ===== 
 Before running the provisioning command, each compute node needs to have secure-key access
 setup.  For each compute node, run:
@@ -17,22 +19,23 @@ ssh-keygen
 =====
 Still a work in progress.  But for now, there are two files which need manual editing.
 
-ansible_hosts:
+torrentsuite_hosts:
 
-Modify the hostname under [headnode] and [computes].
+The local hostname will automatically appear under [headnode].  It is put there during package installation.
+If this is a cluster installation, put the hostname(s) of the compute nodes under [computes].
 
-1 - If it is a stand-alone server with direct connected instruments, put the hostname in headnode.
 
-2 - If it is a cluster, put the hostname(s) of the compute nodes.
 
 vars/nfs_client:
 
-1 - If there are NAS storage units that need to be NFS mounted on each resource, add them under the
+1 - If there are NAS storage units that need to be NFS mounted on each compute resource, add them under the
 nas_mounts: category with an entry like so:
 
   - { name: <<nas hostname>>, directory: <<exported directory>>, mountpoint: <<local mountpoint>> }
   
 Note: Space character after the colon is important!
+
+
 
 host_vars/<<hostname>>:
 

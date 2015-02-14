@@ -11,11 +11,12 @@ class LoginTestCase(TestCase):
                 'iondb/rundb/tests/models/fixtures/users.json']
     def setUp(self):
         self.ionadmin = User.objects.get(username='ionadmin')
-
-    def testLogin(self):
-        self.client.login(username='ionadmin', password='ionadmin')
-        response = self.client.get(reverse('login'))
-        self.assertEqual(response.status_code, 200)
+        
+#retired_test
+#    def testLogin(self):
+#        self.client.login(username='ionadmin', password='ionadmin')
+#        response = self.client.get(reverse('login'))
+#        self.assertEqual(response.status_code, 200)
 
 class UserRegistrationFormTest(TestCase):
 

@@ -340,6 +340,7 @@ void TaubAdjustForExponentialTailFitting(
   dim3 block, 
   int smem, 
   cudaStream_t stream,
+  bead_state* pState,
   float* fg_buffers,
   float* Ampl,
   float* pR,
@@ -362,6 +363,7 @@ void ExponentialTailFitting(
   dim3 block, 
   int smem, 
   cudaStream_t stream,
+  bead_state* pState,
   float* tauAdjust,
   float* Ampl,
   float* pR,
@@ -382,6 +384,7 @@ void ProjectionSearch(
   dim3 block, 
   int smem, 
   cudaStream_t stream,
+  bead_state* pState,
   float* fg_buffers, // FLxFxN (already background and xtalk corrected if applicable))
   float* emphasisVec, // FxLAST_POISSON_TABLE_COL
   float* nucRise, // ISIG_SUB_STEPS_MULTI_FLOW*F*FL 

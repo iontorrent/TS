@@ -87,6 +87,13 @@
                                                         document.getElementById("zipVCF").checked = true;
                                                 }
                                         }
+                                        if(key == "zipXLS")
+                                        {
+                                                if (val == "on")
+                                                {
+                                                        document.getElementById("zipXLS").checked = true;
+                                                }
+                                        }
 					if(key == "compressedType")
 					{
 						if (val == "zip")
@@ -120,6 +127,12 @@
 						report("");
 					}
 				});
+
+				// make sure that appropriate options are disabled/enabled as necessary
+				// this also fixes issues when serializing later where disabled options don't auto-serialize
+				updateSFF();
+				updateFASTQ();
+				updateVCF();
 			}
 		});
 		});
@@ -143,6 +156,39 @@
 
        return o;
       };
+
+		function updateSFF() {
+			if (document.getElementById("sffCreate").checked == true) {
+				document.getElementById("zipSFF").disabled = false;
+			} else {
+				document.getElementById("zipSFF").disabled = true;
+				document.getElementById("zipSFF").checked = false;
+			}
+		}
+
+		function updateFASTQ() {
+			if (document.getElementById("fastqCreate").checked == true) {
+				document.getElementById("zipFASTQ").disabled = false;
+			} else {
+				document.getElementById("zipFASTQ").disabled = true;
+				document.getElementById("zipFASTQ").checked = false;
+			}
+		}
+
+		function updateVCF() {
+			if (document.getElementById("vcCreate").checked == true) {
+				document.getElementById("zipBAM").disabled = false;
+				document.getElementById("zipVCF").disabled = false;
+				document.getElementById("zipXLS").disabled = false;
+			} else {
+				document.getElementById("zipBAM").disabled = true;
+				document.getElementById("zipVCF").disabled = true;
+				document.getElementById("zipXLS").disabled = true;
+				document.getElementById("zipBAM").checked = false;
+				document.getElementById("zipVCF").checked = false;
+				document.getElementById("zipXLS").checked = false;
+			}
+		}
 
 		// Note: I don't know if I'll end up using the option arg; keep it for now just in case.
 		function report(optGiven) {
@@ -291,16 +337,16 @@
 	<div id="formwrap" align="left">
 		<form id="bamform" name="bamform" align="left">
 			<h1>Output File Options</h1>
-			Create SFF?  <input type="checkbox" id="sffCreate" name="sffCreate" /><br>
-			Create FASTQ? <input type="checkbox" id="fastqCreate" name="fastqCreate" /><br>
-			Include Variant Caller Files (if available)? <input type="checkbox" id="vcCreate" name="vcCreate" /><br>
-			<div>Compressed type: &nbsp;&nbsp;&nbsp;<input type="radio" name="compressedType" value="zip"> zip <input type="radio" name="compressedType" value="tar"> tar.bz2</div>
-			Compressed contents:
-				BAM/BAI: <input type="checkbox" id="zipBAM" name="zipBAM" />&nbsp;&nbsp;&nbsp;
-				SFF: <input type="checkbox" id="zipSFF" name="zipSFF" />&nbsp;&nbsp;&nbsp;
-				FASTQ: <input type="checkbox" id="zipFASTQ" name="zipFASTQ" />&nbsp;&nbsp;&nbsp;
-				VCF: <input type="checkbox" id="zipVCF" name="zipVCF" />&nbsp;&nbsp;&nbsp;
-			<br>
+			Create SFF?  <input type="checkbox" id="sffCreate" name="sffCreate" onchange="updateSFF()"/>
+			&nbsp;&nbsp;&nbsp;Move SFF to compressed file?  <input type="checkbox" id="zipSFF" name="zipSFF" disabled="disabled"/><br>
+			Create FASTQ? <input type="checkbox" id="fastqCreate" name="fastqCreate" onchange="updateFASTQ()"/>
+			&nbsp;&nbsp;&nbsp;Move FASTQ to compressed file?  <input type="checkbox" id="zipFASTQ" name="zipFASTQ" disabled="disabled"/><br>
+			Include TVC files (if available)? <input type="checkbox" id="vcCreate" name="vcCreate" onchange="updateVCF()"/>
+			&nbsp;&nbsp;&nbsp;Move TVC files to compressed file:&nbsp;&nbsp;
+				BAM/BAI: <input type="checkbox" id="zipBAM" name="zipBAM" disabled="disabled"/>&nbsp;&nbsp;&nbsp;
+				VCF: <input type="checkbox" id="zipVCF" name="zipVCF" disabled="disabled"/>&nbsp;&nbsp;&nbsp;
+				XLS: <input type="checkbox" id="zipXLS" name="zipXLS" disabled="disabled"/>&nbsp;&nbsp;&nbsp;<br>
+			<br><div>Compressed file type: &nbsp;&nbsp;&nbsp;<input type="radio" name="compressedType" value="zip"> zip <input type="radio" name="compressedType" value="tar"> tar.bz2</div>
 			<h1>Customize file names</h1>
 			<p>Delimiter selection:
 				<select name="delimiter_select" id="delimiter_select" onchange="report(this.value)">

@@ -4,7 +4,7 @@ project(variantCallerPlugin)
 
 
 message("Custom Installation Procedure for variantCaller")
- 
+
 add_custom_target(parameter_sets ALL
                    COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/pluginMedia/parameter_sets/build_parameter_sets.py" "${CMAKE_CURRENT_BINARY_DIR}/parameter_sets.json"
                    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/pluginMedia/parameter_sets/"

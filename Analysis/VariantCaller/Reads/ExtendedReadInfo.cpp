@@ -81,6 +81,10 @@ void UnpackAlignmentInfo(Alignment *rai)
         break;
     }
   }
+  // after possible trimming
+  // rai->align_start = rai->alignment.Position;
+  // rai->align_end = rai->alignment.GetEndPosition(false, true);
+
   // Basic alignment sanity check
   if (num_query_bases != rai->alignment.QueryBases.length()) {
     cerr << "WARNING in ExtendedReadInfo::UnpackAlignmentInfo: Invalid Cigar String in Read " << rai->alignment.Name << " Cigar: ";

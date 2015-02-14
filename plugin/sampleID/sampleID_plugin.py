@@ -98,12 +98,7 @@ def run_plugin(skiprun=False,barcode=""):
   output_prefix = pluginParams['output_prefix']
   bamfile = pluginParams['bamfile']
   config = pluginParams['config']
-  if barcode == "":
-    sample = pluginParams['sample_names']
-  else:
-    samples = pluginParams['sample_names']
-    sample = samples[barcode] if barcode in samples else ''
-  if sample == '': sample = 'None'
+  sample = sampleName(barcode,'None')
 
   # link from source BAM since pipeline uses the name as output file stem
   linkbam = os.path.join(output_dir,output_prefix+".bam")
@@ -192,12 +187,8 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
   if barcode != "":
     resultData = pluginResult['barcodes'][barcode]
     reportData = pluginReport['barcodes'][barcode]
-    # check for error status
-    errMsg = ""
-    if 'Error' in resultData:
-      errMsg = resultData['Error']
-    sample = resultData['Sample Name']
-    if sample == '': sample = 'None'
+    errMsg = resultData.get('Error','')
+    sample = sampleName(barcode,'None')
     # barcodes_json dictionary is firm-coded in Kendo table template that we are using for main report styling
     if errMsg != "":
       detailsLink = "<span class='help' title='%s' style='color:red'>%s</span>" % ( errMsg, barcode )
@@ -235,11 +226,10 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
 
 def createIncompleteReport(errorMsg=""):
   '''Called to create an incomplete or error report page for non-barcoded runs.'''
-  sample = pluginParams['sample_names'] if isinstance(pluginParams['sample_names'],basestring) else ''
   render_context = {
     "autorefresh" : (errorMsg == ""),
     "run_name": pluginParams['prefix'],
-    "Sample_Name": sample,
+    "Sample_Name": sampleName(),
     "Error": errorMsg }
   createReport( os.path.join(pluginParams['results_dir'],pluginParams['report_name']), 'incomplete.html', render_context )
 
@@ -449,6 +439,14 @@ def sampleNames():
     return ""
   return samplenames
 
+def sampleName(barcode='',default=''):
+  if not 'sample_names' in pluginParams:
+    return default
+  sample_names = pluginParams['sample_names']
+  if isinstance(sample_names,basestring):
+    return sample_names if sample_names else default
+  return sample_names.get(barcode,default) if barcode else default
+
 def targetFiles():
   trgfiles = {}
   try:
@@ -635,10 +633,9 @@ def runForBarcodes():
   skip_analysis = pluginParams['cmdOptions'].skip_analysis
   stop_on_error = pluginParams['cmdOptions'].stop_on_error
   create_scraper = pluginParams['cmdOptions'].scraper
-  sample_names = pluginParams['sample_names']
   postout = False; # just for logfile prettiness
   for barcode in barcodes:
-    sample = sample_names[barcode] if barcode in sample_names else ''
+    sample = sampleName(barcode)
     bamfile = bcBamFile.pop(0)
     if bamfile[0] == ":":
       if postout:
@@ -664,7 +661,7 @@ def runForBarcodes():
       except Exception, e:
         printerr('Analysis of barcode %s failed:'%barcode)
         pluginReport['num_barcodes_failed'] += 1
-        pluginResult['barcodes'][barcode] = { "Sample_Name" : sample, "Error" : str(e) }
+        pluginResult['barcodes'][barcode] = { "Sample Name" : sample, "Error" : str(e) }
         pluginReport['barcodes'][barcode] = {}
         if stop_on_error: raise
         traceback.print_exc()

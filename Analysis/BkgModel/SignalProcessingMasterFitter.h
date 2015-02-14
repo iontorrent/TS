@@ -273,7 +273,12 @@ class SignalProcessingMasterFitter
       return trace_xtalk_execute;
     }
     GlobalWriter &GetGlobalStage() { return global_state; }
-      
+
+	void setWashoutThreshold(float threshold) { washout_threshold = threshold; }
+	float getWashoutThreshold() { return washout_threshold; }
+	void setWashoutFlowDetection(int detection) { washout_flow_detection = detection; }
+	int getWashoutFlowDetection() { return washout_flow_detection; }
+
 // making this public for temporary simplicity
     // Data and parameters here --------------
     RegionalizedData *region_data;
@@ -388,6 +393,9 @@ class SignalProcessingMasterFitter
    
     // flag controlling whether to write debug file pertaining to bead and region params
     bool write_debug_files; 
+
+    float washout_threshold; 
+    int washout_flow_detection; 
 
  private:
     SignalProcessingMasterFitter();

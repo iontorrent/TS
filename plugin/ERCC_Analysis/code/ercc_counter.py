@@ -4,18 +4,18 @@ from __future__ import print_function
 import sys
 import re
 
-def parse_transcript_line(line):
+def parse_transcript_line(line,fwd_only=False):
     parsed_line = line.split()
     if parsed_line[0][0] == '@':
         return '@', 'na' #header line or other non-data
-#    elif parsed_line[1] != '0': #something other than primary mapping, forward strand
-#        return '*', 'na'
+    elif fwd_only and parsed_line[1] != '0': #something other than primary mapping, forward strand
+        return '*', 'na'
     elif int(parsed_line[4]) <= 50: #low mapping quality
         return '*', 'na'
     else:
         return parsed_line[2], int(parsed_line[4])
 
-def process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file):
+def process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file,fwd_only=False):
     result_counts = {}
     all_ercc_counts = 0
     total_counts = 0
@@ -25,7 +25,7 @@ def process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file):
     #todo: check if path_to_raw_sam_file is a valid file name
     with open(path_to_raw_sam_file) as sam_file:
         for line in sam_file:
-            transcript_name, transcript_mapq = parse_transcript_line(line)
+            transcript_name, transcript_mapq = parse_transcript_line(line,fwd_only)
             # if transcript_name == '*':
             if transcript_name == '@':
                 filtered_sam_file.write(line)
@@ -47,8 +47,8 @@ def process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file):
                 filtered_sam_file.write(line)
     return result_counts, all_ercc_counts, total_counts, mean_mapqs
 
-def write_output_counts_file(path_to_raw_sam_file,path_to_filtered_sam_file,path_to_output_counts_file,transcript_names):
-    result_counts, all_ercc_counts, total_counts, mean_mapqs = process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file)
+def write_output_counts_file(path_to_raw_sam_file,path_to_filtered_sam_file,path_to_output_counts_file,transcript_names,fwd_only=False):
+    result_counts, all_ercc_counts, total_counts, mean_mapqs = process_sam_file(path_to_raw_sam_file,path_to_filtered_sam_file,fwd_only)
     #todo: check that result_counts is a valid result
     #todo: check that the path_to_output_counts_file is valid
     with open(path_to_output_counts_file,'w') as fout:

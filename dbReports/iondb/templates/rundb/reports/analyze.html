@@ -23,7 +23,7 @@
                         <a data-toggle="tab" href="#options">Analysis Options</a>
                     </li>
                     <li>
-                        <a data-toggle="tab" href="#reference">Reference</a>
+                        <a data-toggle="tab" href="#reference">Reference/Barcode</a>
                     </li>
                     <li>
                         <a data-toggle="tab" href="#plugins">Plugins</a>
@@ -57,10 +57,10 @@
                         <div class="controls">
                             {{ rpf.blockArgs }}
                             <label for="fromRaw" class="checkbox inline" rel="tooltip" title='Start from .dat files'>
-                                <input type="radio" id="fromRaw" name="pipetype" value="fromRaw" checked="checked"/ >
+                                <input type="radio" id="fromRaw" name="pipetype" value="fromRaw" {% if not isProton %}checked="checked"{% endif %}/ >
                                 Signal Processing</label>
                             <label for="fromWells" class="checkbox inline" rel="tooltip" title='Start from previous analysis 1.wells files'>
-                                <input type="radio" id="fromWells" name="pipetype" value="fromWells" />
+                                <input type="radio" id="fromWells" name="pipetype" value="fromWells" {% if isProton %}checked="checked"{% endif %}/>
                                 Base Calling</label>
                         </div>
                     </div>
@@ -117,16 +117,18 @@
                             {{ rpf.mark_duplicates.errors }}
                         </div>
                     </div>
-                    <div class="control-group">
+                    <!-- div class="control-group">
                         <label for="id_barcodeKitName" class="control-label" rel="tooltip" title='Barcode Set'>Barcode Set</label>
                         <div class="controls">
                             {{ eas_form.barcodeKitName }}
                             {{ exp_form.barcodeKitName.errors }}
                         </div>
-                    </div>
+                        <div id='unsupported'>  Please use the run Edit page to change barcode set and assign samples to the barcodes.
+                        </div>              
+                    </div -->
                     <div class="control-group">
-                        <label for="id_do_base_recal" class="control-label" rel="tooltip" title='Recalculate signal measurements for homopolymers'>Enable Base Recalibration</label>
-                        <div class="controls">
+                        <label for="id_do_base_recal" class="control-label" rel="tooltip" title="Base Calibration allows for empirical alignments to influence flow signals to achieve better homopolymer calibration to improve overall accuracy">Base Calibration Mode</label>
+                        <div class="controls" name="do_base_recal">
                             {{ rpf.do_base_recal }}
                             {{ rpf.do_base_recal.errors }}
                         </div>
@@ -141,41 +143,58 @@
                 </div>
                 <div class="tab-pane" id="reference">
                     <div class="control-group">
-                        <label for="id_reference" class="control-label" rel="tooltip" title='Genomic reference to align to'>Alignment Reference</label>
+                        <label for="id_reference" class="control-label" rel="tooltip" title='Genomic reference to align to'>Default Alignment Reference</label>
                         <div class="controls">
                             {{ eas_form.reference }}
                             {{ eas_form.reference.errors }}
                         </div>
                     </div>
                     <div class="control-group">
-                        <label for="id_targetRegionBedFile" class="control-label" rel="tooltip" title='Targeted regions of interest file'>Target Regions BED File</label>
+                        <label for="id_targetRegionBedFile" class="control-label" rel="tooltip" title='Targeted regions of interest file'>Default Target Regions BED File</label>
                         <div class="controls">
                             {{ eas_form.targetRegionBedFile }}
                             {{ eas_form.targetRegionBedFile.errors }}
                         </div>
                     </div>
                     <div class="control-group">
-                        <label for="id_hotSpotRegionBedFile" class="control-label" rel="tooltip" title='Hotspots file. Variant caller includes each hotspot position in its output VCF file'>Hotspot Regions BED File</label>
+                        <label for="id_hotSpotRegionBedFile" class="control-label" rel="tooltip" title='Hotspots file. Variant caller includes each hotspot position in its output VCF file'>Default Hotspot Regions BED File</label>
                         <div class="controls">
                             {{ eas_form.hotSpotRegionBedFile }}
                             {{ eas_form.hotSpotRegionBedFile.errors }}
                         </div>
                     </div>
+                    
+                    <div class="control-group" style="color: #08c;">Default reference info is used for barcodes with no sample name. If you need to change the reference and BED files assignment to barcoded samples, please use the <b>Run Edit Page</b>.
+                    </div>
+
                     {% if barcodesWithSamples %}
-                    <div class="control-group">
+                                                
+                    <!--TODO-use-plan-wizard div class="control-group">
                         <label for="useBarcodedReference" class="control-label">Select Barcoded Reference</label>
                         <div class="controls">
                             <input id="useBarcodedReference" type="checkbox">
                         </div>
                     </div>
-                    <div id='barcodedReference_container' class="control-group hide">
-                        <div class="controls">
+                    <div id='barcodedReference_container' class="control-group hide" -->
+                    <!--TODO -->
+
+                    <div class="control-group">
+                        <label for="id_barcodeKitName" class="control-label" style="text-align: center;" rel="tooltip" title='Barcode Set'>Barcode Set </label>
+                        <div class="controls" >
+                            {{ eas_form.barcodeKitName }}
+                        </div>
+                    </div>
+
+                    <div id='barcodedReference_container' class="control-group">
+                        <!--div class="controls" -->
                             <table class="table table-condensed">
                             <thead>
                                 <tr>
                                     <th>Barcode</th>
                                     <th>Sample Name</th>
                                     <th>Reference</th>
+                                    <th>Target Regions</th>
+                                    <th>Hotspot Regions</th>
                                     <th>DNA/RNA</th>
                                 </tr>
                             </thead>
@@ -186,19 +205,36 @@
                                     <td id="barcodeReference{{forloop.counter}}" class="input-xlarge">{{eas_form.reference}}</td>
                                     <script type="text/javascript">
                                         $("#barcodeReference{{forloop.counter}}").children('select').val("{{barcode.reference}}");
+                                        $("#barcodeReference{{forloop.counter}}").children('select').attr('disabled', 'disabled');
                                     </script>
+                                    <td id="barcodeTargetRegion{{forloop.counter}}" class="input-xlarge">{{eas_form.targetRegionBedFile}}</td>
+                                    <script type="text/javascript">
+                                        $("#barcodeTargetRegion{{forloop.counter}}").children('select').val("{{barcode.targetRegionBedFile}}");
+                                        $("#barcodeTargetRegion{{forloop.counter}}").children('select').attr('disabled', 'disabled');                              
+                                    </script>
+                                    <td id="barcodeHotSpot{{forloop.counter}}" class="input-xlarge">{{eas_form.hotSpotRegionBedFile}}</td>
+                                    <script type="text/javascript">
+                                        $("#barcodeHotSpot{{forloop.counter}}").children('select').val("{{barcode.hotSpotRegionBedFile}}");
+                                        $("#barcodeHotSpot{{forloop.counter}}").children('select').attr('disabled', 'disabled');                                      
+                                    </script>                                                          
                                     <td>
-                                        <select class="input-small">
+                                        <select class="input-small" disabled>
                                             <option value='DNA' {%if barcode.nucType == 'DNA'%}selected{%endif%}>DNA</option>
                                             <option value='RNA' {%if barcode.nucType == 'RNA'%}selected{%endif%}>RNA</option>
                                         </select>
                                     </td>
                                 </tr>
                             {% endfor %}
+
                             </table>
-                        </div>
+                        <!-- /div -->
                     </div>
                     {{ eas_form.barcodedReferences }}
+                    {% else %}
+                        <div class="control-group">
+                            <label for="id_noBarcodeKitName" class="control-label" style="text-align: center;" rel="tooltip" title='Barcode Set'>Barcode Set </label>
+                            <div class="controls" style="height: 30px; line-height: 30px;">None</div>
+                        </div>
                     {% endif %}
                 </div>
                 <div class="tab-pane" id="plugins">
@@ -340,6 +376,21 @@
             if ($("#plugin_iframe").attr("src"))
                 save_plugin_config();
         });
+        
+
+        $("#id_do_base_recal").each( function (){
+            var i =0;
+            var sel = this;
+            for(i = 0; i < sel.length;i++){
+                if (sel.options[i].text == "Default Calibration") {
+                    sel.options[i].title = "A random sample of reads (up to 100,000 by default) is aligned and used to determine calibration parameters, which are then applied to the rest of the run";
+                }
+                else if (sel.options[i].text == "Enable Calibration Standard") {
+                    sel.options[i].title = "Select Enable Calibration Standard when the experiment does not include a reference BAM file.  Only choose this option if you have added Calibration Standards with the library for AmpMix preparation.";
+                }
+            }
+           } 
+        );
     });
     var WARNINGS = {{warnings|safe}};
     var _save_barcoded_reference = false;

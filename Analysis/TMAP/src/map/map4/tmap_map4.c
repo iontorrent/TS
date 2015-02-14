@@ -44,9 +44,9 @@ tmap_map4_get_seed_length(uint64_t ref_len)
 }
 
 static int32_t
-tmap_map4_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt)
+tmap_map4_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap_refseq_t *refseq)
 {
-  tmap_map_util_mapq(sams, seq_len, opt);
+  tmap_map_util_mapq(sams, seq_len, opt, refseq);
   return 0;
 }
 

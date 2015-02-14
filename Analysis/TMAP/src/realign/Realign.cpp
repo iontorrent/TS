@@ -103,7 +103,7 @@ bool Realigner::SetScores(const vector<int> score_vec) {
   kGapOpen       =  score_vec[2];
   kGapExtend     =  score_vec[3];
   if (verbose_)
-    cout << "Set aligner scores: match " << kMatchScore << ", mismatch " << kMismatchScore
+    cerr << "Set aligner scores: match " << kMatchScore << ", mismatch " << kMismatchScore
          << ", gap open " << kGapOpen << " gap extend " <<kGapExtend << endl;
   return true;
 }
@@ -149,10 +149,10 @@ void Realigner::SetClipping(int clipping, bool is_forward_strand)
     ReverseClipping();
 
   if (verbose_ and debug_) {
-    cout << "Clipping settings for read from the ";
-    if (is_forward_strand) cout << "forward ";
-    else cout << "reverse ";
-    cout << "strand:" << endl
+    cerr << "Clipping settings for read from the ";
+    if (is_forward_strand) cerr << "forward ";
+    else cerr << "reverse ";
+    cerr << "strand:" << endl
          << "start_anywhere_in_ref_" << start_anywhere_in_ref_ << endl
          << "stop_anywhere_in_ref_" << stop_anywhere_in_ref_ << endl
          << "soft_clip_left_" << soft_clip_left_ << endl
@@ -220,7 +220,7 @@ vector<bool> Realigner::getNucMatches(char nuc)
 void Realigner::SetSequences(const string& q_seq, const string& t_seq, const string& aln_path, const bool isForward)
 {
   if (debug_ and verbose_)
-    cout << "Hello from SetSequences." << endl;
+    cerr << "Hello from SetSequences." << endl;
 
   // We align all sequences in forward direction
   pretty_aln_ = aln_path;
@@ -245,7 +245,7 @@ void Realigner::SetSequences(const string& q_seq, const string& t_seq, const str
     DP_matrix[0][q_idx].initialize(0);
   
   if (debug_ and verbose_)
-    cout << "Successfully set sequences." << endl;
+    cerr << "Successfully set sequences." << endl;
 }
 
 
@@ -297,20 +297,20 @@ bool Realigner::ComputeTubedAlignmentBoundaries()
   // Sanity check whether a correct path was followed to create tube
   if (center_point_t != (int)t_seq_.size() or center_point_q != (int)q_seq_.size()) {
     if (verbose_)
-      cout << "Error: An invalid alignment path was used to create the tube." << endl
+      cerr << "Error: An invalid alignment path was used to create the tube." << endl
            << "        Ending coordinates: (" << center_point_t << "," << center_point_q << ")" << endl
            << "        Sequence sizes:     (" << t_seq_.size() << "," << q_seq_.size() << ")" << endl;
     //verbose_ = true;
     return false;
   } else {
     if (debug_ and verbose_) {
-      cout << "Tube lower limits for each row: " << endl;
+      cerr << "Tube lower limits for each row: " << endl;
       for (unsigned int i=0; i<q_limit_minus_.size(); i++)
-        cout << q_limit_minus_[i] << " ";
-      cout << endl << "Tube upper limits for each row: " << endl;
+        cerr << q_limit_minus_[i] << " ";
+      cerr << endl << "Tube upper limits for each row: " << endl;
       for (unsigned int i=0; i<q_limit_plus_.size(); i++)
-        cout << q_limit_plus_[i] << " ";
-      cout << endl << endl;
+        cerr << q_limit_plus_[i] << " ";
+      cerr << endl << endl;
     }
     return true;
   }
@@ -541,7 +541,7 @@ void Realigner::backtrackAlignment(unsigned int t_idx, unsigned int q_idx,
     last_move = current_move;
     current_move = next_move;
     if (verbose_ and debug_) {
-      cout << "Added: " << PrintAlignType(last_move) << " Next: " << PrintAlignType(current_move)
+      cerr << "Added: " << PrintAlignType(last_move) << " Next: " << PrintAlignType(current_move)
            << " at (" << t_idx << ", " << q_idx
            << ") Score: " << DP_matrix[t_idx][q_idx].scores[current_move] << endl;
     }
@@ -575,7 +575,7 @@ void Realigner::backtrackAlignment(unsigned int t_idx, unsigned int q_idx,
   }
 
   if (verbose_) {
-    cout << "The newly computed alignments are (query Seq., alignment, target Seq.):" << endl
+    cerr << "The newly computed alignments are (query Seq., alignment, target Seq.):" << endl
          << pretty_qseq_ << endl << pretty_aln_ << endl << pretty_tseq_ << endl;
   }
 }
@@ -668,7 +668,7 @@ void Realigner::addCigarElement(int align_type, int last_move,
     if (last_move >= 0) {
       CigarData.push_back(current_cigar_element);
       if (verbose_ and debug_)
-        cout << "Added cigar element " << current_cigar_element.Length << current_cigar_element.Type << endl;
+        cerr << "Added cigar element " << current_cigar_element.Length << current_cigar_element.Type << endl;
     }
     current_cigar_element.Length = 1;
     switch (align_type) {
@@ -676,7 +676,7 @@ void Realigner::addCigarElement(int align_type, int last_move,
       case FROM_I:     current_cigar_element.Type = 'I'; break;
       case FROM_D:     current_cigar_element.Type = 'D'; break;
       default :
-          cout << "Error in addCigarElement; align_type = " << align_type << " Last move = " << last_move << endl;
+          cerr << "Error in addCigarElement; align_type = " << align_type << " Last move = " << last_move << endl;
         break;
     }
   }
@@ -745,7 +745,7 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
     cigar_it--;
   } else if (cigar_data.begin()->Type == 'S') {
       if (verbose_)
-        cout << "Error, invalid cigar: Soft clipping occurred after left anchor!" << endl;
+        cerr << "Error, invalid cigar: Soft clipping occurred after left anchor!" << endl;
       return false;
   }
   while (cigar_it > clipped_anchors_.cigar_left.begin()) {
@@ -763,7 +763,7 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
     cigar_it--;
   } else if ((cigar_data.end()-1)->Type == 'S') {
       if (verbose_)
-        cout << "Error, invalid cigar: Soft clipping occurred before right anchor!" << endl;
+        cerr << "Error, invalid cigar: Soft clipping occurred before right anchor!" << endl;
       return false;
   }
   while (cigar_it > clipped_anchors_.cigar_right.begin()) {
@@ -779,7 +779,7 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
   if (clipped_anchors_.md_left.size() > 0) {
     if (md_it->Type[0] != '=') {
       if (verbose_)
-        cout << "Error, invalid md tag: Left clipping MD does not end with a match field!" << endl;
+        cerr << "Error, invalid md tag: Left clipping MD does not end with a match field!" << endl;
       return false;
     }
     MD_data.begin()->Length += md_it->Length;
@@ -795,7 +795,7 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
     md_it = clipped_anchors_.md_right.end()-1;
     if (md_it->Type[0] != '=') {
       if (verbose_)
-        cout << "Error, invalid md tag: Right clipping MD does not end with a match field!" << endl;
+        cerr << "Error, invalid md tag: Right clipping MD does not end with a match field!" << endl;
       return false;
     }
     (MD_data.end()-1)->Length += md_it->Length;
@@ -814,14 +814,14 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
   }
   if (nr_bases != nr_read_bases) {
     if (verbose_)
-      cout << "Warning: generated an erroneous cigar string. Not updating alignment." << endl;
+      cerr << "Warning: generated an erroneous cigar string. Not updating alignment." << endl;
     return false;
   }
   if (verbose_){
-    cout << "New cigar tag:";
+    cerr << "New cigar tag:";
     for (vector<CigarOp>::const_iterator cigar = cigar_data.begin(); cigar != cigar_data.end(); ++cigar)
-      cout << cigar->Length << cigar->Type;
-    cout << endl << "New MD tag   : " << GetMDstring(MD_data) << endl;
+      cerr << cigar->Length << cigar->Type;
+    cerr << endl << "New MD tag   : " << GetMDstring(MD_data) << endl;
   }
 
   return true;
@@ -899,7 +899,7 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
     // Do not realign perfect matches
     if (start_idx == 0 and pretty_idx == pretty_aln_.size()) {
       if (verbose_)
-        cout << "Nothing to realign!" << endl << endl;
+        cerr << "Nothing to realign!" << endl << endl;
       return false;
     } else if (pretty_idx > pretty_aln_.size() - 2* alignment_bandwidth_)
       get_next_point = false;
@@ -936,7 +936,7 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
             break;
           default :
             if (verbose_)
-              cout << "Error in ClipAnchors: position before start point is '"
+              cerr << "Error in ClipAnchors: position before start point is '"
                    << pretty_aln_[start_idx -1] << "'" << endl;
             RestoreAnchors();
 	    clip_failed = true;
@@ -961,7 +961,7 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
 
   if (start_idx > pretty_aln_.size()) {
     if (verbose_)
-      cout << "Nothing to realign!" << endl << endl;
+      cerr << "Nothing to realign!" << endl << endl;
     return false;
   } else {
     // get start points and do not split HPs
@@ -980,7 +980,7 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
       }
       if (offset == alignment_bandwidth_){
         if (verbose_)
-          cout << "Warning: Failed to find start or end of HP on left anchor. Aligning whole read." << endl;
+          cerr << "Warning: Failed to find start or end of HP on left anchor. Aligning whole read." << endl;
         RestoreAnchors();
 	clip_failed = true;
         return true;
@@ -995,10 +995,10 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
     }
 
     if (verbose_) {
-      cout << "Clipped anchor bases on the left side; Cigar: ";
+      cerr << "Clipped anchor bases on the left side; Cigar: ";
       for (vector<CigarOp>::const_iterator cigar = clipped_anchors_.cigar_left.begin(); cigar != clipped_anchors_.cigar_left.end(); ++cigar)
-        cout << (cigar->Length) << (cigar->Type);
-      cout << " MD: " << GetMDstring(clipped_anchors_.md_left) << endl;
+        cerr << (cigar->Length) << (cigar->Type);
+      cerr << " MD: " << GetMDstring(clipped_anchors_.md_left) << endl;
     }
   }
   // */
@@ -1019,7 +1019,7 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
 
     if (pretty_idx <= start_idx) {
       if (verbose_)
-        cout << "Nothing to realign!" << endl << endl;
+        cerr << "Nothing to realign!" << endl << endl;
       return false;
     } else if (pretty_idx < 2* alignment_bandwidth_)
       get_next_point = false;
@@ -1057,7 +1057,7 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
             break;
           default :
             if (verbose_)
-              cout << "Error in ClipAnchors: stop point is '"
+              cerr << "Error in ClipAnchors: stop point is '"
                    << pretty_aln_[stop_idx] << "'" << endl;
             RestoreAnchors();
 	    clip_failed = true;
@@ -1096,7 +1096,7 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
     }
     if (offset == alignment_bandwidth_){
       if (verbose_)
-        cout << "Warning: Failed to find start or end of HP on right anchor. Aligning whole read." << endl;
+        cerr << "Warning: Failed to find start or end of HP on right anchor. Aligning whole read." << endl;
       RestoreAnchors();
       clip_failed = true;
       return true;
@@ -1112,10 +1112,10 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
   }
 
   if (verbose_) {
-    cout << "Clipped anchor bases on the right side; Cigar: ";
+    cerr << "Clipped anchor bases on the right side; Cigar: ";
     for (vector<CigarOp>::const_iterator cigar = clipped_anchors_.cigar_right.begin(); cigar != clipped_anchors_.cigar_right.end(); ++cigar)
-      cout << (cigar->Length) << (cigar->Type);
-    cout << " MD: " << GetMDstring(clipped_anchors_.md_right) << endl;
+      cerr << (cigar->Length) << (cigar->Type);
+    cerr << " MD: " << GetMDstring(clipped_anchors_.md_right) << endl;
   }
   // */
 
@@ -1123,7 +1123,7 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
 
   if (q_start >= q_seq_.size() or t_start >= t_seq_.size() or start_idx >= pretty_aln_.size()) {
       if (verbose_)
-        cout << "Error in anchor clipping: start indices are no good. q: "
+        cerr << "Error in anchor clipping: start indices are no good. q: "
               << q_start << " qseq: " << q_seq_.size() << " t: "
               << t_start << " tseq: " << t_seq_.size() << " p: "
               << start_idx << " pseq: " << pretty_aln_.size() << endl;
@@ -1139,11 +1139,11 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
 
   } else {
     if (verbose_)
-      cout << "Nothing to realign!" << endl << endl;
+      cerr << "Nothing to realign!" << endl << endl;
     return false;
   }
   if (verbose_)
-    cout << "Sequences after anchor clipping: " << endl << q_seq_ << endl << pretty_aln_ << endl << t_seq_ << endl;
+    cerr << "Sequences after anchor clipping: " << endl << q_seq_ << endl << pretty_aln_ << endl << t_seq_ << endl;
 
   // Make sure clipping settings are consistent with chosen substring i.e. no soft clipping if anchor has been reduced
   bool changed_clipping = false;
@@ -1159,14 +1159,14 @@ bool Realigner::ClipAnchors(bool& clip_failed) {
   }
   if (verbose_ and debug_) {
     if (changed_clipping) {
-      cout << "New clipping after anchor trimming:" << endl
+      cerr << "New clipping after anchor trimming:" << endl
            << " - soft_clip_left_" << soft_clip_left_<< endl
            << " - soft_clip_right_" << soft_clip_right_ << endl
            << " - start_anywhere_in_ref_" << start_anywhere_in_ref_ << endl
            << " - stop_anywhere_in_ref_" << stop_anywhere_in_ref_ << endl;
     }
     else {
-      cout << "No change to clipping by anchor trimming." << endl;
+      cerr << "No change to clipping by anchor trimming." << endl;
     }
   }
   return true;

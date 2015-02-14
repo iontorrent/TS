@@ -56,7 +56,7 @@ class VarButton {
 
   bool isHotSpot;           // Signifies a hotspot variant (set per variant for all alleles, regardless of their specific origin)
   bool isProblematicAllele; // There is something wrong with this allele, we should filter it.
-  bool doRealignment;       // Switch to turn realignment on or off
+  bool doRealignment;       // Switch to turn realignment on or off 
 
   VarButton() {
     isHPIndel      = false;
@@ -144,7 +144,9 @@ class AlleleIdentity {
     // need to know when I do filtering
     float  sse_prob_positive_strand;
     float  sse_prob_negative_strand;
-    string filterReason;
+    vector<string> filterReasons;
+
+    bool indelActAsHPIndel;   // Switch to make all indels match HPIndel behavior
 
     AlleleIdentity() {
 
@@ -160,6 +162,8 @@ class AlleleIdentity {
       // filterable statuses
       sse_prob_positive_strand = 0;
       sse_prob_negative_strand = 0;
+
+      indelActAsHPIndel = false;
     };
 
     bool Ordinary() {
@@ -168,13 +172,19 @@ class AlleleIdentity {
     
     bool ActAsSNP(){
       // return(status.isSNP || status.isMNV || (status.isIndel && !status.isHPIndel));
-      return(status.isSNP || status.isPaddedSNP || (status.isIndel && !status.isHPIndel));
+      if (indelActAsHPIndel)
+	return(status.isSNP || status.isPaddedSNP);
+      else
+	return(status.isSNP || status.isPaddedSNP || (status.isIndel && !status.isHPIndel));
     }
     bool ActAsMNP(){
       return(status.isMNV);
     }
     bool ActAsHPIndel(){
-      return(status.isIndel && status.isHPIndel);
+      if (indelActAsHPIndel)
+	return(status.isIndel);
+      else
+	return(status.isIndel && status.isHPIndel);
     }
     //void DetectPotentialCorrelation(const LocalReferenceContext &reference_context);
     bool SubCategorizeInDel(const LocalReferenceContext &reference_context,

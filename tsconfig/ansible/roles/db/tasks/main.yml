@@ -10,7 +10,7 @@
 - name: Determine postgresql version string
   shell: "psql --version | grep ^psql | awk '{print $3}' | cut -f1-2 -d."
   register: psql_version
-  notify: restart postgresql
+  
 - debug: msg='Postgresql version {{ psql_version.stdout }}'
 
 
@@ -23,7 +23,8 @@
 - name: Modify pg_hba.conf file
   sudo_user: postgres
   replace: dest=/etc/postgresql/{{ psql_version.stdout }}/main/pg_hba.conf
-             regexp='(.*)(peer|ident|md5|ident sameuser)' replace='\1trust'
+           regexp='(.*)(peer|ident|md5|ident sameuser)$'
+           replace='\1trust'
              
 - name: Modify postgresql.conf - effective_cache_size
   sudo_user: postgres
@@ -68,9 +69,24 @@
   when: response|success
   notify: reload sysctl
   
-# I would like to call the existing handler here but no way to just trigger it?
+# 8.4 has special script name for service
+- name: Find postgresql start file script
+  command: /usr/bin/test -e /etc/init.d/postgresql-{{ psql_version.stdout }} 
+  register: exists
+  ignore_errors: yes
+  
 - name: Reload postgresql
   service: name=postgresql-{{ psql_version.stdout }} state=reloaded enabled=yes
+  when: exists|success
+  
+- name: Find postgresql start file script
+  command: /usr/bin/test -e /etc/init.d/postgresql
+  register: exists
+  ignore_errors: yes
+  
+- name: Reload postgresql
+  service: name=postgresql state=reloaded enabled=yes
+  when: exists|success
   
 # Initialize the iondb database and default user
 - name: Initialize postgresql database
@@ -85,3 +101,12 @@
                      priv=ALL
                      state=present
   sudo_user: postgres
+  
+- name: Create db backup directory
+  file: path=/results/dbase_backup state=directory mode=0755 owner=root group=root
+  
+- name: Create db backup file
+  file: path=/results/dbase_backup/iondb.sql state=touch mode=0644 owner=postgres group=postgres
+  
+- name: Enable daily backups of the postgresql database
+  copy: src=iondb.template dest=/etc/logrotate.d/iondb force=yes

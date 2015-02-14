@@ -103,19 +103,39 @@
 
                 <div class="row-fluid chevrons workflow">
                     <ul>
-                        <li class="parent" style="width:9.722%;"><a href="#">Run Parameters</a></li>
+                        {% if helper.isPlan %}
+                            {% if helper.isEdit %}
+                                <li class="parent" style="width:9.722%;"><a href="#" style="color: #FFFF66">Edit Plan</a></li>
+                            {% elif helper.isEditRun %}
+                                <li class="parent" style="width:9.722%;"><a href="#" style="color: #99FFFF;">Edit Run</a></li>
+                            {% elif helper.isCopy %}
+                                <li class="parent" style="width:9.722%;"><a href="#" style="color: #FFCC33;">Copy Plan</a></li>
+                            {% else %}
+                                <li class="parent" style="width:9.722%;"><a href="#" style="color: #FFCC33;">Create Plan</a></li>                            
+                            {% endif %}
+                        {% else %}
+                            {% if helper.isEdit %}
+                                <li class="parent" style="width:9.722%;"><a href="#">Edit Template</a></li> 
+                            {% elif helper.isCopy %}
+                                <li class="parent" style="width:9.722%;"><a href="#">Copy Template</a></li>                             
+                            {% else %}
+                                <li class="parent" style="width:9.722%;"><a href="#">Create Template</a></li>                                
+                            {% endif %}
+                        {% endif %}
+                        
                         <li class="disabled" style="width:9.722%;" id="Ionreporter"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_ionreporter" %}');$('#step_form').submit();return false;">IonReporter</a></li>
                         <li id="Application" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_application" %}');$('#step_form').submit();return false;">Application</a></li>
                         <li id="Kits" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_kits" %}');$('#step_form').submit();return false;">Kits</a></li>
-                        <li id="Monitoring" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_monitoring" %}');$('#step_form').submit();return false;">Monitoring</a></li>
-                        <li id="Reference" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_reference" %}');$('#step_form').submit();return false;">Reference</a></li>
+                        <!--- TODO: Remove Dead Monitoring Page Code
+                            <li id="Monitoring" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_monitoring" %}');$('#step_form').submit();return false;">Monitoring</a></li>
+                        -->
                         <li id="Plugins" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_plugins" %}');$('#step_form').submit();return false;">Plugins</a></li>
                         {%if helper.isPlanBySample%}
                             <li id="Barcode_by_sample" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_barcode" %}');$('#step_form').submit();return false;">Barcoding</a></li>
-                            <li id="Output" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">Output</a></li>
+                            <li id="Output" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">Projects</a></li>
                             <li id="Save_plan_by_sample" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_by_sample_save_plan" %}');$('#step_form').submit();return false;">Save & Finish</a></li>
                         {%else%}
-                            <li id="Output" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">Output</a></li>
+                            <li id="Output" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_output" %}');$('#step_form').submit();return false;">Projects</a></li>
                             {% if helper.isPlan %}
                                 {% if helper.isCreate %}
                                     <li id="Save_plan" class="disabled" style="width:9.722%;"><a href="#" onclick="$('#step_form').attr('action', '{% url "page_plan_save_plan" %}');$('#step_form').submit();return false;">Plan</a></li>
@@ -175,23 +195,6 @@
             </div>
          </div>
      </div>
-
-    <script>
-    //Third party(hub) planning support
-    //Embedded in body to prevent blink/redraw after hiding elements
-    if(typeof(sessionStorage) != 'undefined'){
-        if(window.location.href.indexOf("hide_nav=true") != -1){
-            sessionStorage.setItem('hide_nav', 'true')
-        }
-        if(sessionStorage.getItem('hide_nav')){
-            $(".header").hide();
-            $(".sub-nav").hide();
-            $("#chipToSampleTable").find("tr").find("input:not(:last)").prop('readonly', true);
-            $("#numPlans").parent().hide();
-
-        }
-    }
-    </script>
 
 {% endblock content %}
 {% block post-raw %}
@@ -255,8 +258,14 @@
             libKitNameToDesc['{{kit.name}}'] = '{{kit.description}}';
         {% endfor %}
         $("#selectedLibraryKitType").text(libKitNameToDesc['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.librarykitname}}']);
-
-       
+             
+        templateKitNameToDesc = {};
+        {% for kit in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}
+            templateKitNameToDesc['{{kit.name}}'] = '{{kit.description}}';
+        {% endfor %}
+        $("#selectedTemplatingKitName").text(templateKitNameToDesc['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.templatekitname}}']);
+        
+               
         seqKitNameToDesc = {};
         {% for kit in helper.getStepDict.Kits.getPrePopulatedFieldDict.seqKits %}
             seqKitNameToDesc['{{kit.name}}'] = '{{kit.description}}';

@@ -47,7 +47,7 @@ $(document).ready(function(){
             type: "json",
             transport: {
                 read: {
-                    url: '{% url "api_dispatch_list" resource_name="eventlog" api_name="v1" %}?object_pk={{pk}}&content_type_id={{cttype}}',
+                    url: '{% url "api_dispatch_list" resource_name="eventlog" api_name="v1" %}?object_pk__in={{pk}}&content_type_id={{cttype}}',
                     contentType: 'application/json; charset=utf-8',
                     type: 'GET',
                     dataType: 'json'

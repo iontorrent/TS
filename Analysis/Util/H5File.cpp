@@ -633,6 +633,93 @@ void H5File::WriteStringVector ( const std::string &name, const char **values, i
   H5Pclose (plist);
 }
 
+// void H5File::WriteString ( const std::string &name, const char *value ) {
+//   H5DataSet set;
+//   set.mName = name;
+//   // Create info dataspace
+//   hsize_t dimsf[1];
+//   dimsf[0] = 1;
+//   set.mDataspace = H5Screate_simple ( 1, dimsf, NULL );
+//   set.mDatatype = H5Tcopy ( H5T_C_S1 );
+//   herr_t status = 0;
+//   status = H5Tset_size ( set.mDatatype, H5T_VARIABLE );
+//   if ( status < 0 ) {
+//     ION_ABORT ( "Couldn't set string type to variable in set: " + name );
+//   }
+
+//   hid_t memType = H5Tcopy ( H5T_C_S1 );
+//   status = H5Tset_size ( memType, H5T_VARIABLE );
+//   if ( status < 0 ) {
+//     ION_ABORT ( "Couldn't set string type to variable in set: " + name );
+//   }
+
+//   // Setup the chunking values
+//   hsize_t cdims[1];
+//   cdims[0] = std::min ( 100, strlen(value));
+
+//   //  hid_t plist;
+//   //  plist = H5Pcreate ( H5P_DATASET_CREATE );
+//   hid_t plist;
+//   plist = H5Pcreate ( H5P_DATASET_CREATE );
+//   H5Pset_chunk ( plist, 1, cdims );
+
+//   set.mDataSet = H5Dcreate2 ( mHFile, set.mName.c_str(), set.mDatatype, set.mDataspace,
+//                               H5P_DEFAULT, plist, H5P_DEFAULT );
+//   status = H5Dwrite ( set.mDataSet, set.mDatatype, H5S_ALL, H5S_ALL, H5P_DEFAULT, value );
+//   if ( status < 0 ) {
+//     ION_ABORT ( "ERRROR - Unsuccessful write to file: " + mName + " dataset: " + set.mName );
+//   }
+//   //  set.Close();
+//   H5Sclose ( set.mDataspace );
+//   H5Tclose ( set.mDatatype );
+//   H5Tclose ( memType );
+//   H5Dclose ( set.mDataSet );
+//   // H5Pclose (plist);
+// }
+
+void H5File::WriteString ( const std::string &name, const char *value ) {
+  H5DataSet set;
+  set.mName = name;
+  // Create info dataspace
+  set.mDataspace = H5Screate (H5S_SCALAR);
+  set.mDatatype = H5Tcopy (H5T_C_S1);
+  herr_t status = 0;
+  status = H5Tset_size ( set.mDatatype, strlen(value) + 1 );
+  if ( status < 0 ) {
+    ION_ABORT ( "Couldn't set string type to variable in set: " + name );
+  }
+
+  hid_t memType = H5Tcopy ( H5T_C_S1 );
+  status = H5Tset_size ( memType, strlen(value) + 1 );
+  if ( status < 0 ) {
+    ION_ABORT ( "Couldn't set string type to variable in set: " + name );
+  }
+
+  // // Setup the chunking values
+  // hsize_t cdims[1];
+  // cdims[0] = std::min ( (size_t)100, strlen(value));
+
+  // //  hid_t plist;
+  // //  plist = H5Pcreate ( H5P_DATASET_CREATE );
+  // hid_t plist;
+  // plist = H5Pcreate ( H5P_DATASET_CREATE );
+  // H5Pset_chunk ( plist, 1, cdims );
+
+  set.mDataSet = H5Dcreate2 ( mHFile, set.mName.c_str(), set.mDatatype, set.mDataspace,
+                              H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT );
+  status = H5Dwrite ( set.mDataSet, memType, H5S_ALL, H5S_ALL, H5P_DEFAULT, value );
+  if ( status < 0 ) {
+    ION_ABORT ( "ERRROR - Unsuccessful write to file: " + mName + " dataset: " + set.mName );
+  }
+  //  set.Close();
+  H5Sclose ( set.mDataspace );
+  H5Tclose ( set.mDatatype );
+  H5Tclose ( memType );
+  H5Dclose ( set.mDataSet );
+  // H5Pclose (plist);
+}
+
+
 void H5File::ReadStringVector ( const std::string &name, std::vector<std::string> &strings )
 {
   strings.clear();

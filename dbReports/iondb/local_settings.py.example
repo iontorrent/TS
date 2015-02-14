@@ -80,7 +80,11 @@ LOGGING = {
 
 TEST_INSTALL = True
 LOCALPATH = path.dirname(__file__)
-TEMPLATE_DIRS = ((TEST_INSTALL and path.join(LOCALPATH, "templates")))
+
+#TEMPLATE_DIRS setting now must be a tuple. Need trailing comma
+TEMPLATE_DIRS = ((TEST_INSTALL and path.join(LOCALPATH, "templates")),
+                 )
+
 DEBUG = True
 TEMPLATE_DEBUG = True
 TASTYPIE_FULL_DEBUG = True

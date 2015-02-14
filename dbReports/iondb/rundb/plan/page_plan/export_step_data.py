@@ -18,8 +18,8 @@ class ExportStepData(AbstractStepData):
     Holds the data needed by and saved into the export step.
     '''
 
-    def __init__(self):
-        super(ExportStepData, self).__init__()
+    def __init__(self, sh_type):
+        super(ExportStepData, self).__init__(sh_type)
         self.resourcePath = 'rundb/plan/page_plan/page_plan.html'
         self.savedFields[ExportFieldNames.IR_OPTIONS] = ''
         self.savedFields[ExportFieldNames.IR_ACCOUNT_ID] = '0'
@@ -30,6 +30,8 @@ class ExportStepData(AbstractStepData):
             self.prepopulatedFields[ExportFieldNames.IR_PLUGIN] = None
         # self.prepopulatedFields[ExportFieldNames.IR_OPTIONS] = [ExportFieldNames.IR_VERSION_NONE, ExportFieldNames.IR_VERSION_16, ExportFieldNames.IR_VERSION_40]
 
+        self.sh_type = sh_type
+        
     def getStepName(self):
         return StepNames.EXPORT
 

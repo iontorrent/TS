@@ -5,16 +5,16 @@
 #include <string>
 #include <vector>
 #include <pthread.h>
-#include "KeyReporter.h"
+#include <armadillo>
 #include "SampleStats.h"
 #include "SampleQuantiles.h"
-#include "KeyClassifier.h"
 #include "GridMesh.h"
+#include "EvaluateKey.h"
 
 #define KEY_SAMPLE_SIZE 1000
 
 template <class T>
-class RegionAvgKeyReporter : public KeyReporter<T> {
+class RegionAvgKeyReporter { //: public KeyReporter<T> {
   
 public:
   void Init(const std::string &prefix, int nRows, int nCols,
@@ -70,9 +70,9 @@ public:
   }
 
   void Report(const KeyFit &fit, 
-	      const Mat<T> &wellFlows,
-	      const Mat<T> &refFlows,
-	      const Mat<T> &predicted) {
+	      const arma::Mat<T> &wellFlows,
+	      const arma::Mat<T> &refFlows,
+	      const arma::Mat<T> &predicted) {
     if (fit.keyIndex < 0 || fit.mad > 50 || refFlows.n_cols == 0) {
       return;
     }

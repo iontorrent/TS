@@ -1,17 +1,5 @@
 [
     {
-        "file"          : "ampliseq_germline_highstringency_pgm_parameters.json",
-        "name"          : "Generic - PGM - Germ Line - High Stringency",
-        "tooltip"       : "Optimized for allele frequencies >10% and high specificity",
-        "configuration" : "germline_high_stringency",
-        "compatibility" : {
-          "chip"        : ["pgm"],
-          "library"     : ["wholegenome","ampliseq","targetseq"],
-          "frequency"   : ["germline"],
-          "stringency"  : ["high"]
-        }
-    },
-    {
         "file"          : "ampliseq_germline_lowstringency_pgm_parameters.json",
         "name"          : "Generic - PGM - Germ Line - Low Stringency",
         "tooltip"       : "Optimized for allele frequencies >10% and high sensitivity",
@@ -24,19 +12,7 @@
         }
     },
     {
-        "file"          : "ccp_somatic_highstringency_pgm_parameters.json",
-        "name"          : "Generic - PGM - Somatic - High Stringency",
-        "tooltip"       : "Optimized for allele frequencies >2% and high specificity",
-        "configuration" : "somatic_high_stringency",
-        "compatibility" : {
-          "chip"        : ["pgm"],
-          "library"     : ["wholegenome","ampliseq","targetseq"],
-          "frequency"   : ["somatic"],
-          "stringency"  : ["high"]
-        }
-    },
-    {
-        "file"          : "ccp_somatic_lowstringency_pgm_parameters.json",
+        "file"          : "ampliseq_somatic_lowstringency_pgm_parameters.json",
         "name"          : "Generic - PGM - Somatic - Low Stringency",
         "tooltip"       : "Optimized for allele frequencies >2% and high sensitivity",
         "configuration" : "somatic_low_stringency",
@@ -45,19 +21,6 @@
           "library"     : ["wholegenome","ampliseq","targetseq"],
           "frequency"   : ["somatic"],
           "stringency"  : ["low"]
-        }
-    },
-    
-    {
-        "file"          : "ampliseqexome_germline_highstringency_p1_parameters.json",
-        "name"          : "Generic - Proton - Germ Line - High Stringency",
-        "tooltip"       : "Parameter settings optimized for high frequency variants and minimum false positives on AmpliSeq libraries and Proton chips",
-        "configuration" : "germline_high_stringency_proton",
-        "compatibility" : {
-          "chip"        : ["proton_p1"],
-          "library"     : ["wholegenome","ampliseq"],
-          "frequency"   : ["germline"],
-          "stringency"  : ["high"]
         }
     },
     {
@@ -73,18 +36,6 @@
         }
     },
     {
-        "file"          : "ampliseqexome_somatic_highstringency_p1_parameters.json",
-        "name"          : "Generic - Proton - Somatic - High Stringency",
-        "tooltip"       : "Parameter settings optimized for low frequency variants and minimum false positives on Proton chips",
-        "configuration" : "somatic_high_stringency_proton",
-        "compatibility" : {
-          "chip"        : ["proton_p1"],
-          "library"     : ["wholegenome","ampliseq","targetseq"],
-          "frequency"   : ["somatic"],
-          "stringency"  : ["high"]
-        }
-    },
-    {
         "file"          : "ampliseqexome_somatic_lowstringency_p1_parameters.json",
         "name"          : "Generic - Proton - Somatic - Low Stringency",
         "tooltip"       : "Parameter settings optimized for low frequency variants and minimum false negatives on Proton chips",
@@ -95,11 +46,6 @@
           "frequency"   : ["somatic"],
           "stringency"  : ["low"]
         }
-    },
-    
-    
-    {
-        "file"          : "targetseq_germline_highstringency_p1_parameters.json"
     },
     {
         "file"          : "targetseq_germline_lowstringency_p1_parameters.json"

@@ -4,7 +4,11 @@
 
 #include <string>
 #include <fstream>
+#include <sstream>
 #include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <limits.h>
 #include <ctype.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -16,6 +20,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <cstring>
+#include <cmath>
 
 #include "OptArgs.h"
 #include "IonVersion.h"
@@ -29,7 +34,7 @@ void ValidateBedHelp()
 {
   printf ("\n");
   printf ("tvcutils %s-%s (%s) - Miscellaneous tools used by Torrent Variant Caller plugin and workflow.\n",
-      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetSvnRev().c_str());
+      IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(), IonVersion::GetGitHash().c_str());
   printf ("\n");
   printf ("Usage:   tvcutils validate_bed [options]\n");
   printf ("\n");
@@ -46,6 +51,7 @@ void ValidateBedHelp()
   printf ("     --unmerged-plain-bed        FILE       output a valid plain unmerged BED [none]\n");
   printf ("     --merged-detail-bed         FILE       output an (almost) valid bedDetail merged BED [none]\n");
   printf ("     --merged-plain-bed          FILE       output a valid plain merged BED [none]\n");
+  printf ("     --effective-bed             FILE       output a valid effective BED [none]\n");
   printf ("\n");
 }
 
@@ -227,6 +233,10 @@ struct BedLine {
   // Bookkeeping
   bool          filtered;
   int           line;
+
+  // effective_bed
+  long trim_left;
+  long trim_right;
 };
 
 bool compare_lines (const BedLine& a, const BedLine& b)
@@ -301,6 +311,23 @@ public:
       log_message.back().filter_message = message_suffix;
     return &log_message.back();
   }
+
+  BedFile(const BedFile &bed) {  // deep copy constructor
+    num_lines = bed.num_lines;
+    is_bed_detail = bed.is_bed_detail;
+    ion_version = bed.ion_version;
+    num_fields = bed.num_fields;
+    num_standard_fields = bed.num_standard_fields;
+    is_hotspot = bed.is_hotspot;
+    track_key = bed.track_key;
+    track_value = bed.track_value;
+    track_quoted = bed.track_quoted;
+    valid_lines.resize(bed.valid_lines.size());
+    for (int chr_idx = 0; chr_idx < (int)bed.valid_lines.size(); ++chr_idx) {
+      valid_lines[chr_idx].assign(bed.valid_lines[chr_idx].begin(), bed.valid_lines[chr_idx].end());
+    }
+    // don't care about log_message
+  }
 };
 
 
@@ -370,9 +397,8 @@ bool parse_track_line(char *track_line, int line_number, BedFile& bed)
       bed.is_bed_detail = true;
     }
     if (bed.track_key[idx] == "torrentSuiteVersion" and bed.track_value[idx] == "3.6") {
-      bed.log_line(kLineFixed, kUnsuppressable, line_number, 0, "Treating torrentSuiteVersion=3.6 as synonym for ionVersion=4.0");
+      bed.log_line(kLineFixed, kUnsuppressable, line_number, 0, "Treating torrentSuiteVersion=3.6 as synonym for ionVersion=4.0 or higher");
       bed.track_quoted[idx] = false;
-      bed.ion_version = 4.0;
     }
     if (bed.track_key[idx] == "ionVersion") {
       bed.track_quoted[idx] = false;
@@ -380,14 +406,14 @@ bool parse_track_line(char *track_line, int line_number, BedFile& bed)
     }
   }
 
-  if (not bed.is_bed_detail and bed.ion_version) {
+  if (not bed.is_bed_detail and (bed.ion_version != 0)) {
     bed.log_line(kFileUnusable, kUnsuppressable, line_number, 0, "ionVersion track key is only valid with type=bedDetail");
     return false;
   }
 
-  if (bed.ion_version > 4.0)
+  if (bed.ion_version > 4.0f) {
     bed.log_line(kLineFixed, kUnsuppressable, line_number, 0, "track line has ionVersion higher than current ionVersion=4.0");
-
+  }
 
   return true;
 }
@@ -462,6 +488,46 @@ void parse_bed_detail_targets(char *id, char *description, int line_number, int 
         bed_line->gene_id = value;
       else if (key == "SUBMITTED_REGION")
         bed_line->submitted_region = value;
+      else if (key == "TRIM_LEFT") {
+	int saved = errno;
+	char *tmp;
+	errno = 0;
+	long val = strtol (value.c_str(), &tmp, 0);
+	if (tmp == value.c_str() || *tmp != '\0' || ((val == LONG_MIN || val == LONG_MAX) && errno == ERANGE) || val < 0) {
+	  invalid_format = true;
+	  error_details += "; ";
+          error_details += "value for key " + key + " must be >= 0, is " + value;
+	}
+	else
+	  bed_line->trim_left = val;
+	errno = saved;
+        bed_line->ion_key.push_back(key);
+	string number;
+	stringstream strstream;
+	strstream << val;
+	strstream >> number;
+        bed_line->ion_value.push_back(number);
+      }
+      else if (key == "TRIM_RIGHT") {
+	int saved = errno;
+	char *tmp;
+	errno = 0;
+	long val = strtol (value.c_str(), &tmp, 0);
+	if (tmp == value.c_str() || *tmp != '\0' || ((val == LONG_MIN || val == LONG_MAX) && errno == ERANGE) || val < 0) {
+	  invalid_format = true;
+	  error_details += "; ";
+          error_details += "value for key " + key + " must be >= 0, is " + value;
+	}
+	else 
+	  bed_line->trim_right = val;
+	errno = saved;
+        bed_line->ion_key.push_back(key);
+	string number;
+	stringstream strstream;
+	strstream << val;
+	strstream >> number;
+        bed_line->ion_value.push_back(number);
+      }
       else {
         bed_line->ion_key.push_back(key);
         bed_line->ion_value.push_back(value);
@@ -780,6 +846,8 @@ bool load_and_validate_bed(const string& input_file, ReferenceReader& reference_
     bed_line.end = strtol(fields[2],NULL,10);
     bed_line.filtered = false;
     bed_line.line = bed.num_lines;
+    bed_line.trim_left = 0;
+    bed_line.trim_right = 0;
 
     if (bed.num_standard_fields >= 4)
       bed_line.name = validate_name(fields[3], bed.num_lines, 4, &bed_line, bed);
@@ -1192,6 +1260,7 @@ int ValidateBed(int argc, const char *argv[])
   string unmerged_plain_bed       = opts.GetFirstString ('-', "unmerged-plain-bed", "");
   string merged_detail_bed        = opts.GetFirstString ('-', "merged-detail-bed", "");
   string merged_plain_bed         = opts.GetFirstString ('-', "merged-plain-bed", "");
+  string effective_bed            = opts.GetFirstString ('-', "effective-bed", "");
   opts.CheckNoLeftovers();
 
   string input_mode;
@@ -1262,6 +1331,35 @@ int ValidateBed(int argc, const char *argv[])
   if (not unmerged_plain_bed.empty())
     save_to_bed(unmerged_plain_bed, reference_reader, bed, false);
 
+
+  if (not effective_bed.empty())
+  {
+    BedFile bed1 = bed;  // should be deep copy, merge_overlapping_regions modifies BedFile arg
+
+    for (int chr_idx = 0; chr_idx < (int)bed1.valid_lines.size(); ++chr_idx) {
+      deque<BedLine>::iterator A = bed1.valid_lines[chr_idx].begin();
+      while(A != bed1.valid_lines[chr_idx].end()) {
+	// cout << A->start << ", " << A->trim_left  << ", " << A->end << ", " << A->trim_right << endl;
+	A->start = A->start + A->trim_left;
+	A->end = A->end - A->trim_right;
+	if (A->end <= A->start){
+	  //cout << A->start << " " << A->end << endl;
+	  A = bed1.valid_lines[chr_idx].erase(A);
+	}
+	else {
+	  A++;
+	}
+      }
+      sort(bed1.valid_lines[chr_idx].begin(), bed1.valid_lines[chr_idx].end(), compare_lines);
+    }
+    merge_overlapping_regions(reference_reader, bed1);
+
+    bed1.track_key.push_back("tvc_effective");
+    bed1.track_quoted.push_back(true);
+    bed1.track_value.push_back("1");
+
+    save_to_bed(effective_bed, reference_reader, bed1, true);
+  }
 
   merge_overlapping_regions(reference_reader, bed);
 

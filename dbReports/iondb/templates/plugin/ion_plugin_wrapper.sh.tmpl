@@ -22,6 +22,24 @@
 ## ======================================================================
 VERSION="{{ version|default_if_none:"0" }}"
 
+# Import Proxy Server settings from /etc/environment
+if [ -e "/etc/environment" ]; then
+    source "/etc/environment"
+    if [ ! -z "${http_proxy}" ]; then
+        echo "Proxy: http_proxy=${http_proxy}"
+        # Clone to HTTP_PROXY to aid consistent use
+        [ -z "${HTTP_PROXY}" ] && HTTP_PROXY="${http_proxy}"
+        if [ ! -z "${no_proxy}" ]; then
+            echo "Proxy: no_proxy=${no_proxy}"
+        else
+            # Set default value for no_proxy if missing
+            no_proxy="localhost,127.0.0.1"
+            echo "Proxy: no_proxy=${no_proxy}  [DEFAULT]"
+        fi
+        export http_proxy no_proxy HTTP_PROXY
+    fi
+fi
+
 # NB: DIRNAME isn't the path to this script anymore. Path to plugin's launch.sh
 export DIRNAME="{{ pluginpath }}"
 export PROGRAM="{{ pluginname }}"

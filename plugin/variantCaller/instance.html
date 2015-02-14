@@ -83,7 +83,7 @@
         .hide {
             display: none;
         }
-        
+
         .font_13 {
             font-size: 13px;
         }
@@ -107,49 +107,52 @@ var ampliseq_panels_loaded = false;
 var reference_genome_loaded = false;
 var bed_files_loaded = false;
 var experiment_info_loaded = false;
+var barcodedness_info_loaded = false;
 
 var parameter_sets = [];
 var builtin_sets = null;
 var ampliseq_sets = null;
 var experiment_details = null;
+var current_reference = "";
+var barcoded = true;
 
 
 //
-// NewParameterSet - Register new parameter set and create radio list entry 
+// NewParameterSet - Register new parameter set and create radio list entry
 //
 
 function NewParameterSet(new_set) {
-  
+
   var idx = parameter_sets.length;
   parameter_sets.push(new_set);
   var param = parameter_sets[idx]["meta"];
   var compat = param["compatibility"];
   var row_id = "parameter_row_" + idx;
   var set_id = "parameter_set_" + idx;
-  
+
   var table_entry = '';
-  
+
   table_entry += '<div id="'+row_id+'" class="row-fluid" style="margin-bottom:10px">';
   if ("panel" in compat)
     table_entry += '<div class="span1" style="width:20px"><input type="radio" name="variationtype" value="'+param['configuration']+'" id="'+set_id+'" data-panel="'+compat["panel"]+'"></div>';
   else
     table_entry += '<div class="span1" style="width:20px"><input type="radio" name="variationtype" value="'+param['configuration']+'" id="'+set_id+'"></div>';
-  
+
   table_entry += '<label for="'+set_id+'">';
   table_entry += '<div class="span11">';
   table_entry += '    <div><span class="help" style="font-weight:normal" title="'+param['tooltip']+'">'+param['name']+'</span></div>';
   table_entry += '<div class="parameter-subname">';
   if (param['configuration'] != "")
     table_entry += param['configuration']+', ';
-  if (param['repository_id'] != "")
-    table_entry += param['repository_id'].replace(/\$/g,'') + ', ';
+  //if (param['repository_id'] != "")
+  //  table_entry += param['repository_id'].replace(/\$/g,'') + ', ';
   table_entry += 'TS version: '+param['ts_version'];
   table_entry += '</div>';
   table_entry += '</div>';
   table_entry += '</label>';
   table_entry += '</div>';
   $("#parameter_sets_table").append(table_entry);
-  
+
   param['dom'] = $("#"+row_id);
   $('.help').tooltip({"placement": "right"});
 }
@@ -162,7 +165,7 @@ function NewParameterSet(new_set) {
 function UpdateParameterValues() {
   var config = $("#parameter_sets_table input[type='radio']:checked").attr("id");
   var idx = parseInt(config.substr(14));
-  
+
   var topparams = ["snp_min_cov_each_strand",
                    "snp_min_variant_score",
                    "snp_min_allele_freq",
@@ -186,7 +189,7 @@ function UpdateParameterValues() {
                    "filter_insertion_predictions",
                    "filter_deletion_predictions"
   ];
-  
+
   var parameters_are_readonly = true;
   if ("custom" in parameter_sets[idx]["meta"] && parameter_sets[idx]["meta"]["custom"])
     parameters_are_readonly = false;
@@ -233,13 +236,13 @@ function UpdateParameterValues() {
 //
 
 function ApplyParameterFilters () {
-  
+
   var chip_selection = $("#chipSelector input[type='radio']:checked").val();
   var library_selection = $("#libraryGroup input[type='radio']:checked").val();
   var frequency_selection = $("#frequencySelector input[type='radio']:checked").val();
   var panel_selection = $("#ampliseq_panel option:selected").val();
 
-  
+
   // Update the list of displayed panels based on chip selection
   if (chip_selection == 'pgm') {
     if ($("#ampliseq_panel option:selected").data("chip") == 'proton') {
@@ -259,16 +262,16 @@ function ApplyParameterFilters () {
   }
   $(".dropdown").trigger("liszt:updated");
 
-  
-  
+
+
   var reset_selection = true;
   var first_valid_id = null;
-  
+
   for (var idx = 0; idx < parameter_sets.length; idx++) {
     var param = parameter_sets[idx]["meta"];
     var compat = param["compatibility"];
     var tmp_id = "parameter_set_" + idx;
-    
+
     var keep_visible = true;
     if (chip_selection != "unspecified" && "chip" in compat && $.inArray(chip_selection,compat["chip"]) < 0)
       keep_visible = false;
@@ -278,7 +281,7 @@ function ApplyParameterFilters () {
       keep_visible = false;
     if (library_selection == "ampliseq" && "panel" in compat && (panel_selection != compat["panel"]))
       keep_visible = false;
-      
+
     if (keep_visible) {
       if ($("#"+tmp_id).prop("checked"))
         reset_selection = false;
@@ -289,22 +292,21 @@ function ApplyParameterFilters () {
       param.dom.hide();
     }
   }
-  
+
   if (reset_selection) {
     if (first_valid_id != null) {
       $("#"+first_valid_id).prop("checked",true);
       UpdateParameterValues();
     }
   }
-  
-  if (library_selection == "ampliseq") {
+
+  $("#ptrim").hide();
+  if (library_selection == "ampliseq" && !plan_page) {
     $("#ampliseq_panel_row").show();
-    $("#ptrim").show();
   } else {
     $("#ampliseq_panel_row").hide();
-    $("#ptrim").hide();
   }
-  
+
 }
 
 
@@ -313,26 +315,31 @@ function ApplyParameterFilters () {
 //
 
 function serializeForm() {
-  
+
   var config = $("#parameter_sets_table input[type='radio']:checked").attr("id");
   var idx = parseInt(config.substr(14));
   var base_set = parameter_sets[idx];
-  
+
   delete base_set["meta"]["dom"];
-  
+
   base_set["meta"]["trimreads"] = $("#trimreads").prop('checked');
   base_set["meta"]["tvcargs"] = $("#tvcargs").val().replace(/(\r\n|\n|\r)/gm, " ");
-  
+  base_set["meta"]["barcode_mode"] = "match";
+  //base_set["meta"]["barcode_mode"] = $("#barcodeModeSelector input[type='radio']:checked").val();
+  if ($("#barcodeModeSelector").is(":checked")) {
+    base_set["meta"]["barcode_mode"] = "force";
+  }
+
   base_set["meta"]["user_selections"] = {
     "chip":       $("#chipSelector input[type='radio']:checked").val(),
     "library":    $("#libraryGroup input[type='radio']:checked").val(),
     "frequency":  $("#frequencySelector input[type='radio']:checked").val(),
     "panel":      $("#ampliseq_panel option:selected").val()
   };
-  
+
   base_set["meta"]["librarytype"] = $("#libraryGroup input[type='radio']:checked").val();
   if (!plan_page) {
-    base_set["meta"]["reference"] = TB_result_json["fields"]["reference"];
+    base_set["meta"]["reference"] = current_reference;
     base_set["meta"]["targetregions_id"] = $("#targetregions option:selected").text();
     base_set["meta"]["targetregions"] = $("#targetregions option:selected").val();
     base_set["meta"]["targetregions_merge"] = base_set["meta"]["targetregions"].replace('/unmerged/detail/','/merged/plain/');
@@ -367,8 +374,15 @@ function ActualRestoreForm() {
     $("#trimreads").prop("checked", restore_form_data["meta"]["trimreads"]);
   if ("tvcargs" in restore_form_data["meta"])
     $("#tvcargs").val(restore_form_data["meta"]["tvcargs"]);
-  
-  
+  //$("#barcodeModeSelector input[value='match']").prop("checked", true);
+  $('#barcodeModeSelector').attr('checked', false);
+  if ("barcode_mode" in restore_form_data['meta']) {
+    if (restore_form_data['meta']['barcode_mode'] == 'force') {
+      //$("#barcodeModeSelector input[value='force']").prop("checked", true);
+      $('#barcodeModeSelector').attr('checked', true);
+    }
+  }
+
   // Determine if parameter set is built in: if yes - select, if no - add and select
   var config_restored = false;
   if ("built_in" in restore_form_data["meta"] && restore_form_data["meta"]["built_in"] == true) {
@@ -377,8 +391,8 @@ function ActualRestoreForm() {
         continue;
       if (parameter_sets[idx]["meta"]["ts_version"] != restore_form_data["meta"]["ts_version"])
         continue;
-      if (parameter_sets[idx]["meta"]["repository_id"] != restore_form_data["meta"]["repository_id"])
-        continue;
+      //if (parameter_sets[idx]["meta"]["repository_id"] != restore_form_data["meta"]["repository_id"])
+      //  continue;
       if (parameter_sets[idx]["meta"]["compatibility"]["panel"] != restore_form_data["meta"]["compatibility"]["panel"])
         continue;
 
@@ -387,14 +401,15 @@ function ActualRestoreForm() {
       break;
     }
   }
-  
+
   if (!config_restored) {
     delete restore_form_data["meta"]["user_selections"];
     delete restore_form_data["meta"]["librarytype"];
     delete restore_form_data["meta"]["trimreads"];
     delete restore_form_data["meta"]["tvcargs"];
     delete restore_form_data["meta"]["compatibility"];
-    
+    delete restore_form_data["meta"]["barcode_mode"];
+
     if (!("configuration" in restore_form_data["meta"]))
       restore_form_data["meta"]["configuration"] = "";
     if (!("name" in restore_form_data["meta"]))
@@ -402,22 +417,22 @@ function ActualRestoreForm() {
     if (!("tooltip" in restore_form_data["meta"]))
       restore_form_data["meta"]["tooltip"] = "Legacy";
     if (!("ts_version" in restore_form_data["meta"]))
-      restore_form_data["meta"]["ts_version"] = "4.0";
-    if (!("repository_id" in restore_form_data["meta"]))
-      restore_form_data["meta"]["repository_id"] = "";
+      restore_form_data["meta"]["ts_version"] = "4.4";
+    //if (!("repository_id" in restore_form_data["meta"]))
+    //  restore_form_data["meta"]["repository_id"] = "";
     if (!("compatibility" in restore_form_data["meta"]))
       restore_form_data["meta"]["compatibility"] = {};
     restore_form_data["meta"]["built_in"] = false;
-    
+
     NewParameterSet(restore_form_data);
     $("#parameter_set_" + (parameter_sets.length-1)).prop("checked", true);
   }
 
-  
+
   $(".dropdown").trigger("liszt:updated");
   ApplyParameterFilters ();
   UpdateParameterValues();
-  
+
   restore_form_data = null;
 }
 
@@ -434,29 +449,28 @@ function restoreForm(data) {
 
 
 function LoadingPhaseCompleted() {
-  
+
   if (plan_page) {
     if (!builtin_sets_loaded || !ampliseq_panels_loaded || !descriptions_loaded)
       return;
-    
   } else {
     if (!builtin_sets_loaded || !ampliseq_panels_loaded || !reference_genome_loaded ||
-        !bed_files_loaded || !experiment_info_loaded || !descriptions_loaded)
+        !bed_files_loaded || !experiment_info_loaded || !descriptions_loaded || !barcodedness_info_loaded)
       return;
   }
 
   // Loading is complete. Finalize the page details.
-  
+
   // Step 1. Finalize parameter set table
-  
+
   for (var idx = 0; idx < builtin_sets.length; idx++)
     NewParameterSet(builtin_sets[idx]);
 
   for (var idx = 0; idx < ampliseq_sets.length; idx++)
     NewParameterSet(ampliseq_sets[idx]);
-  
+
   // Step 2. Use experiment details to set default chip, library, and beds
-  
+
   if (!plan_page) {
     if (experiment_details["chipType"]) {
       if (experiment_details["chipType"].substr(0,2) == "31")
@@ -473,7 +487,7 @@ function LoadingPhaseCompleted() {
       if (experiment_details["runtype"] == "TARS")
         $("#libraryGroup input[value=targetseq]").prop("checked", true);
     }
-  
+
     // These sections depend on bed list being initialized
     try {
       var target_filename = experiment_details["eas_set"][0]["targetRegionBedFile"];
@@ -481,7 +495,7 @@ function LoadingPhaseCompleted() {
       if (target_option.length > 0)
         $("#targetregions").val(target_option.val());
     } catch (e) {}
-    
+
     try {
       var hotspot_filename = experiment_details["eas_set"][0]["hotSpotRegionBedFile"];
       var hotspot_option = $("#targetloci option[value='" + hotspot_filename + "']");
@@ -489,22 +503,22 @@ function LoadingPhaseCompleted() {
         $("#targetloci").val(hotspot_option.val());
     } catch (e) {}
   }
-  
+
   //chosen wants this to update the dropdowns
   $(".dropdown").trigger("liszt:updated");
   ApplyParameterFilters ();
 
   if (restore_form_data != null)
     ActualRestoreForm();
-  
+
   $(".hide_until_loaded").show();
   $("#show_until_loaded").hide();
+  if (!barcoded) $(".exclude-for-nonbarcoded").hide();
+  UpdateHotspotColumn();
 }
 
 
-function LoadingPhaseFailed() {
-  
-}
+function LoadingPhaseFailed() {}
 
 
 
@@ -517,9 +531,9 @@ function UpdateHotspotColumn() {
 
 
 function HandleAmpliseqChange() {
-  
+
   ApplyParameterFilters ();
-  
+
   var entry = $("#ampliseq_panel option:selected");
   var key = entry.val()
   if (key != "") {
@@ -529,14 +543,14 @@ function HandleAmpliseqChange() {
       $("#targetregions").val("").trigger("liszt:updated");
     else
       $("#targetregions").val(target_option.val()).trigger("liszt:updated");
-    
+
     var hotspot_option = $("#targetloci option[data-id='" + entry.data("hotspot") + "']");
     if (hotspot_option.length == 0)
       $("#targetloci").val("").trigger("liszt:updated");
     else
       $("#targetloci").val(hotspot_option.val()).trigger("liszt:updated");
     UpdateHotspotColumn();
-    
+
     var config = $("#parameter_sets_table input[data-panel='"+key+"']");
     if (config.length > 0) {
       config.prop("checked", true);
@@ -545,10 +559,146 @@ function HandleAmpliseqChange() {
   }
 }
 
+
+function RetrieveBedFilesInfo() {
+    if (!plan_page) {
+        $.get('/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/' +
+            current_reference + '/unmerged/detail/&order_by=path', function (data) {
+            $.each(data.objects, function (intIndex, result) {
+                var targfile = result.file;
+                var i = targfile.lastIndexOf('/unmerged/detail/');
+                if (i < 0) return true;
+                var bed_filename = targfile.substr(i + 17);
+                var j = bed_filename.lastIndexOf('.bed');
+                if (j <= 0) return true;
+                var selName = bed_filename.substr(0, j);
+                if (result.meta.hotspot)
+                    $("#targetloci").append("<option value='" + targfile + "' data-id='" + bed_filename + "'>" + selName + "</option>");
+                else
+                    $("#targetregions").append("<option value='" + targfile + "' data-id='" + bed_filename + "'>" + selName + "</option>");
+            });
+            bed_files_loaded = true;
+            console.log("Success: Loaded bed file information");
+            LoadingPhaseCompleted();
+        }).fail(function () {
+            console.log("ERROR: Failed to load bed file information");
+            LoadingPhaseFailed();
+        });
+    }
+}
+
+
+function RetrieveAmpliseqPanelInfo() {
+    $.get("/rundb/api/v1/contentupload/?format=json&limit=0&status=Successfully%20Completed", function(data) {
+        ampliseq_sets = [];
+        $.each(data.objects, function (intIndex, result) {
+            try {
+                if (result["meta"]["is_ampliseq"] != true) return true;
+                if (!plan_page) {
+                    if (result["meta"]["reference"] != current_reference) return true;
+                }
+                var my_date = new Date(result["meta"]["design"]["created_date"]);
+                var my_date_str = ""
+                if (!isNaN(my_date.getMilliseconds())) my_date_str = " - " + my_date.toLocaleDateString();
+
+                var ampliseq_panel_option = "<option value='"+result["resource_uri"]+"'";
+                if ("plan" in result["meta"]["design"]) {
+                    if ("designed_bed" in result["meta"]["design"]["plan"])
+                        ampliseq_panel_option += " data-target='"+result["meta"]["design"]["plan"]["designed_bed"]+"'";
+                    if ("hotspot_bed" in result["meta"]["design"]["plan"])
+                        ampliseq_panel_option += " data-hotspot='"+result["meta"]["design"]["plan"]["hotspot_bed"]+"'";
+                }
+
+                if ("choice" in result["meta"])
+                    ampliseq_panel_option += " data-chip='"+result["meta"]["choice"]+"'";
+                else
+                    ampliseq_panel_option += " data-chip='None'";
+
+                ampliseq_panel_option += ">";
+                ampliseq_panel_option += result["meta"]["design"]["design_name"] + " ( " + result["meta"]["design"]["design_id"] + my_date_str;
+                if ("choice" in result["meta"]) {
+                    if (result["meta"]["choice"] == 'pgm') ampliseq_panel_option += " - PGM";
+                    if (result["meta"]["choice"] == 'proton') ampliseq_panel_option += " - Proton";
+                }
+                ampliseq_panel_option += " )</option>";
+
+                $("#ampliseq_panel").append(ampliseq_panel_option);
+
+                var new_config = result["meta"]["design"]["plan"]["selectedPlugins"]["variantCaller"]["userInput"];
+
+                if (!("meta" in new_config))
+                    new_config["meta"] = {};
+                if (!("name" in new_config["meta"]))
+                    new_config["meta"]["name"] = "Panel-optimized - " + result["meta"]["design"]["design_name"] + my_date_str;
+                if (!("tooltip" in new_config["meta"]))
+                    new_config["meta"]["tooltip"] = "Panel-optimized parameters from AmpliSeq.com";
+                if (!("configuration" in new_config["meta"]) || new_config["meta"]["configuration"] == "custom")
+                    new_config["meta"]["configuration"] = "";
+                if (!("ts_version" in new_config["meta"]))
+                    new_config["meta"]["ts_version"] = "4.4";
+                //if (!("repository_id" in new_config["meta"]))
+                //    new_config["meta"]["repository_id"] = "";
+                new_config["meta"]["compatibility"] = {
+                    "chip"        : ["pgm","proton_p1"],
+                    "library"     : ["ampliseq"],
+                    "panel"       : result["resource_uri"]
+                };
+                new_config["meta"]["built_in"] = true;
+
+                ampliseq_sets.push(new_config);
+            } catch(e) {
+            }
+        });
+        ampliseq_panels_loaded = true;
+        console.log("Success: Loaded ampliseq panels information");
+        LoadingPhaseCompleted();
+    }).fail(function () {
+        console.log("ERROR: Failed to load ampliseq panels information");
+        LoadingPhaseFailed();
+    });
+}
+
+
+function HandleReferenceChange() {
+    bed_files_loaded = false;
+    ampliseq_panels_loaded = false;
+    current_reference = $("#referenceid").val();
+    $("#targetregions").empty();
+    $("#targetloci").empty();
+    $("#ampliseq_panel").empty();
+    $("#parameter_sets_table").empty();
+    $("#targetregions").append("<option value=''>None</option>");
+    $("#targetloci").append("<option value=''>None</option>");
+    $("#ampliseq_panel").append("<option value=''>Unspecified</option>");
+    ampliseq_sets = [];
+    parameter_sets = [];
+    RetrieveBedFilesInfo();
+    RetrieveAmpliseqPanelInfo();
+}
+
+
+//only call after experiment_details are loaded
+function GetBarcodedness() {
+    if (!("plan" in experiment_details)) {
+        console.log("Error: Plan not found in experiment_details");
+        return;
+    }
+    $.get(experiment_details['plan'] + '/?format=json', function (data) {
+        if (!("barcodeId" in data) || (data['barcodeId'] == "")) barcoded = false;
+        barcodedness_info_loaded = true;
+        console.log("Success: Got barcodedness info");
+        LoadingPhaseCompleted();
+    }).fail(function () {
+        console.log("ERROR: Failed to get barcodedness info");
+        LoadingPhaseFailed();
+    });
+}
+
+
 $(function () {
-    
+
   /*****  Retrieve built-in parameter sets *****/
-  
+
   $.get(TB_pluginMedia + "parameter_sets/parameter_sets.json", function (data) {
     builtin_sets = data;
     for (var idx = 0; idx < builtin_sets.length; ++idx)
@@ -561,9 +711,9 @@ $(function () {
     LoadingPhaseFailed();
   });
 
-  
+
   /*****  Retrieve parameter descriptions *****/
-  
+
   $.get(TB_pluginMedia + "configs/description.json", function (data) {
     window.help = data;
     descriptions_loaded = true;
@@ -573,64 +723,48 @@ $(function () {
     console.log("ERROR: Failed to load parameter descriptions from description.json");
     LoadingPhaseFailed();
   });
-      
-  
+
+
   /*****  Retrieve reference info *****/
-  
+
   if (!plan_page) {
-    $.get('/rundb/api/v1/referencegenome/?short_name='+TB_result_json["fields"]["reference"]+'&format=json', function (data) {
-      if (data["objects"][0]["name"])
-        $('#referenceid').html(TB_result_json["fields"]["reference"] + " - " + data["objects"][0]["name"]);
-      else
-        $('#referenceid').html(TB_result_json["fields"]["reference"]);
+    current_reference = TB_result_json["fields"]["reference"];
+
+    $.get('/rundb/api/v1/referencegenome/?limit=0&format=json', function (data) {
+      $.each(data.objects, function (intIndex, result) {
+        if(result.name)
+          $("#referenceid").append("<option value='" + result.short_name + "' data-id='" + result.short_name + "'>" +
+                result.short_name +  " - " + result.name + "</option>");
+        else
+          $("#referenceid").append("<option value='" + result.short_name + "' data-id='" + result.short_name + "'>" +
+                result.short_name + "</option>");
+        $("#referenceid").val(result.short_name);
+        $("#referenceid").find("option[value='']").remove();
+      });
+      var ref_option = $("#referenceid option[value='" + current_reference + "']");
+      if (ref_option.length > 0) $("#referenceid").val(ref_option.val());
+      else {
+        $("#referenceid").val('None');
+        current_reference = '';
+      }
       reference_genome_loaded = true;
-      console.log("Success: Loaded reference info for " + TB_result_json["fields"]["reference"]);
+      console.log("Success: Loaded reference info");
       LoadingPhaseCompleted();
     }).fail(function () {
-      console.log("ERROR: Failed to load reference info for " + TB_result_json["fields"]["reference"]);
+      console.log("ERROR: Failed to load reference info");
       LoadingPhaseFailed();
     });
   }
 
-  
-  /*****  Retrieve bed files info *****/
-  
-  if (!plan_page) {
-    $.get('/rundb/api/v1/content/?format=json&limit=0&publisher__name=BED&path__startswith=/' +
-          TB_result_json["fields"]["reference"] + '/unmerged/detail/&order_by=path', function (data) {
-      
-      $.each(data.objects, function (intIndex, result) {
-        var targfile = result.file;
-        var i = targfile.lastIndexOf('/unmerged/detail/');
-        if (i < 0) return true;
-        var bed_filename = targfile.substr(i + 17);
-        var j = bed_filename.lastIndexOf('.bed');
-        if (j <= 0) return true;
-        var selName = bed_filename.substr(0, j);
-        if (result.meta.hotspot)
-          $("#targetloci").append("<option value='" + targfile + "' data-id='" + bed_filename + "'>" + selName + "</option>");
-        else
-          $("#targetregions").append("<option value='" + targfile + "' data-id='" + bed_filename + "'>" + selName + "</option>");
-      });
-        
-      bed_files_loaded = true;
-      console.log("Success: Loaded bed file information");
-      LoadingPhaseCompleted();
-    }).fail(function () {
-      console.log("ERROR: Failed to load bed file information");
-      LoadingPhaseFailed();
-    });
-  }
-  
-  
-  /*****  Retrieve experiment info *****/    
-  
+  /*****  Retrieve experiment info *****/
+
   if (!plan_page) {
     // Retrieve experiment record via REST api. Use it to determine chip type and experiment type
     $.get('/rundb/api/v1/experiment/'+TB_result_json["fields"]["experiment"]+'/?format=json', function (data) {
       experiment_details = data;
       experiment_info_loaded = true;
       console.log("Success: Loaded experiment info for " + TB_result_json["fields"]["experiment"]);
+      GetBarcodedness();
       LoadingPhaseCompleted();
     }).fail(function () {
       console.log("ERROR: Failed to load experiment info for " + TB_result_json["fields"]["experiment"]);
@@ -638,95 +772,13 @@ $(function () {
     });
   }
 
-  
-  /*****  Retrieve ampliseq panel info *****/    
-  
-  $.get("/rundb/api/v1/contentupload/?format=json&limit=0&status=Successfully%20Completed", function(data) {
-    ampliseq_sets = [];
-    $.each(data.objects, function (intIndex, result) {
-      try {
-        
-        if (result["meta"]["is_ampliseq"] != true)
-          return true;
-        if (!plan_page) {
-          if (result["meta"]["reference"] != TB_result_json["fields"]["reference"])
-            return true;
-        }
-        
-        var my_date = new Date(result["meta"]["design"]["created_date"]);
-        var my_date_str = ""
-        if (!isNaN(my_date.getMilliseconds()))
-          my_date_str = " - " + my_date.toLocaleDateString();
-        
-        
-        var ampliseq_panel_option = "<option";
-        ampliseq_panel_option += " value='"+result["resource_uri"]+"'";
-        if ("plan" in result["meta"]["design"]) {
-          if ("designed_bed" in result["meta"]["design"]["plan"])
-            ampliseq_panel_option += " data-target='"+result["meta"]["design"]["plan"]["designed_bed"]+"'";
-          if ("hotspot_bed" in result["meta"]["design"]["plan"])
-            ampliseq_panel_option += " data-hotspot='"+result["meta"]["design"]["plan"]["hotspot_bed"]+"'";
-        }
-        
-        if ("choice" in result["meta"])
-          ampliseq_panel_option += " data-chip='"+result["meta"]["choice"]+"'";
-        else
-          ampliseq_panel_option += " data-chip='None'";
-        
-        ampliseq_panel_option += ">";
-        ampliseq_panel_option += result["meta"]["design"]["design_name"] + " ( " + result["meta"]["design"]["design_id"] + my_date_str;
-        if ("choice" in result["meta"]) {
-          if (result["meta"]["choice"] == 'pgm')
-            ampliseq_panel_option += " - PGM";
-          if (result["meta"]["choice"] == 'proton')
-            ampliseq_panel_option += " - Proton";
-        }
-        ampliseq_panel_option += " )</option>";
-        
-        $("#ampliseq_panel").append(ampliseq_panel_option);
+  RetrieveBedFilesInfo();
+  RetrieveAmpliseqPanelInfo();
 
-        var new_config = result["meta"]["design"]["plan"]["selectedPlugins"]["variantCaller"]["userInput"];
-        
-        if (!("meta" in new_config))
-          new_config["meta"] = {};
-        if (!("name" in new_config["meta"]))
-          new_config["meta"]["name"] = "Panel-optimized - " + result["meta"]["design"]["design_name"] + my_date_str;
-        if (!("tooltip" in new_config["meta"]))
-          new_config["meta"]["tooltip"] = "Panel-optimized parameters from AmpliSeq.com";
-        if (!("configuration" in new_config["meta"]) || new_config["meta"]["configuration"] == "custom")
-          new_config["meta"]["configuration"] = "";
-        if (!("ts_version" in new_config["meta"]))
-          new_config["meta"]["ts_version"] = "4.0";
-        if (!("repository_id" in new_config["meta"]))
-          new_config["meta"]["repository_id"] = "";
-        //if (!("compatibility" in new_config["meta"]))
-        new_config["meta"]["compatibility"] = {
-          "chip"        : ["pgm","proton_p1"],
-          "library"     : ["ampliseq"],
-          "panel"       : result["resource_uri"]
-        };
-        
-        new_config["meta"]["built_in"] = true;
-        
-        ampliseq_sets.push(new_config);
-        
-      } catch(e) {
-      }
-      
-    });
-    
-    ampliseq_panels_loaded = true;
-    console.log("Success: Loaded ampliseq panels information");
-    LoadingPhaseCompleted();
-  }).fail(function () {
-    console.log("ERROR: Failed to load ampliseq panels information");
-    LoadingPhaseFailed();
-  });
-  
   if (plan_page) {
     $(".exclude-from-plan").hide();
   }
-  
+
   // Manually changing selected parameter set updates parameter values
   $("#parameter_sets_table").on('click','input',UpdateParameterValues);
 
@@ -752,26 +804,28 @@ $(function () {
     $("#showAdv").html('Show Advanced Settings <i class="icon-chevron-down"></i>');
   });
 
-  
+
   $('.help').tooltip({"placement": "right"});
   $('.plain-help').tooltip({"placement": "bottom"});
   $('.vcconfig').tooltip({"placement": "bottom"});
   $(".dropdown").chosen({disable_search_threshold: 5});
-  
+
   $(".chipSelector").click(HandleAmpliseqChange);
   $(".frequencySelector").click(ApplyParameterFilters);
   $(".libraryGroup").click(ApplyParameterFilters);
   $("#targetloci").chosen().change(UpdateHotspotColumn);
-  
-  UpdateHotspotColumn();
-  
+  $("#referenceid").chosen().change(HandleReferenceChange);
+
+
+  //UpdateHotspotColumn();
+
   // Event handler: AmpliSeq Panel
-  
+
   $("#ampliseq_panel").chosen().change(HandleAmpliseqChange);
-  
+
 
   // Load External Parameter Set - event handler
-  
+
   $("#files").change(function (evt) {
     var JsonObj = null;
     var files = evt.target.files; // FileList object
@@ -795,19 +849,19 @@ $(function () {
         if (!("configuration" in new_config["meta"]))
           new_config["meta"]["configuration"] = "";
         if (!("ts_version" in new_config["meta"]))
-          new_config["meta"]["ts_version"] = "4.0";
-        if (!("repository_id" in new_config["meta"]))
-          new_config["meta"]["repository_id"] = "";
+          new_config["meta"]["ts_version"] = "4.4";
+        //if (!("repository_id" in new_config["meta"]))
+        //  new_config["meta"]["repository_id"] = "";
         //if (!("compatibility" in new_config["meta"]))
           new_config["meta"]["compatibility"] = {};
 
         new_config["meta"]["built_in"] = false;
-        
+
         NewParameterSet(new_config);
 
         $("#parameter_set_" + (parameter_sets.length-1)).prop("checked", true);
         UpdateParameterValues();
-        
+
       }
       catch (e) {
         $("#file-form").trigger('reset');
@@ -819,12 +873,12 @@ $(function () {
     // Read in JSON as a data URL.
     reader.readAsText(theFile, 'UTF-8');
   });
-  
-  
+
+
   // Create Custom Parameter Set - event handler
-  
+
   $("#create_custom").click(function(){
-    
+
     var config = $("#parameter_sets_table input[type='radio']:checked").attr("id");
     var idx = parseInt(config.substr(14));
     var base_set = parameter_sets[idx];
@@ -835,7 +889,7 @@ $(function () {
         "tooltip"       : "Manually created custom set",
         "configuration" : "custom",
         "ts_version"    : base_set["meta"]["ts_version"],
-        "repository_id" : "",
+        //"repository_id" : "",
         "compatibility" : {},
         "custom"        : true,
         "built_in"      : false
@@ -844,7 +898,7 @@ $(function () {
       "long_indel_assembler" : {},
       "freebayes" : {}
     };
-    
+
     $.each(base_set["torrent_variant_caller"], function(k,v) {
       custom_set["torrent_variant_caller"][k] = v;
     });
@@ -854,15 +908,15 @@ $(function () {
     $.each(base_set["freebayes"], function(k,v) {
       custom_set["freebayes"][k] = v;
     });
-    
+
     NewParameterSet(custom_set);
 
     $("#parameter_set_" + (parameter_sets.length-1)).prop("checked", true);
     UpdateParameterValues();
   });
-  
 
-  
+
+
   // Submit Button - event handler
 
   $('#postbutton').click(function () {
@@ -877,7 +931,7 @@ $(function () {
     $.ajax({
       type: 'POST',
       url: pluginURL,
-      async: false,
+      async: true,
       contentType: "application/json; charset=utf-8",
       data: pluginAPIJSON, dataType: "json",
       success: function (data) {
@@ -900,16 +954,14 @@ $(function () {
 <div class="container">
 <div class="row-fluid" style="margin-bottom:0px">
 <div class="span8">
-<h3>Torrent Variant Caller 4.2</h3>
+<h3>Torrent Variant Caller 4.4</h3>
 </div>
-
   <div class="span4 hide_until_loaded" style="margin-top:14px;display:none">
       <input id="postbutton" class="btn btn-primary exclude-from-plan" style="float:right" type="submit" value="Submit">
   </div>
 </div>
 
 <div class="hide_until_loaded" style="display:none">
-
 
 
 <div class="row-fluid">
@@ -930,8 +982,7 @@ $(function () {
 </div>
 
 
-
-<div class="row-fluid">
+<div class="row-fluid exclude-from-plan">
     <div class="span3">
         <span class="help" title="Select/verify the library enrichment type used in this experiment.">Library Type:</span>
     </div>
@@ -953,7 +1004,6 @@ $(function () {
 </div>
 
 
-
 <div class="row-fluid">
     <div class="span3">
         <span class="help" title="To detect alleles at low frequencies, select Somatic. Otherwise select Germ Line.">Variant Frequency:</span>
@@ -967,18 +1017,11 @@ $(function () {
             <input class="frequencySelector" type="radio" name="frequency" style="vertical-align:baseline" value="somatic">
             Somatic
         </label></div>
-        <!-- 
-        <div style="float:left;margin-right:30px"><label>
-            <input class="frequencySelector" type="radio" name="frequency" style="vertical-align:baseline" value="unspecified">
-            Unspecified
-        </label></div>
-         -->
     </div>
 </div>
 
-<div class="row-fluid" style="height:40px">
-
-<div id="ampliseq_panel_row">
+<div class="row-fluid exclude-from-plan" style="height:40px">
+<div id="ampliseq_panel_row" class="row-fluid">
     <div class="span3">
         <span class="help"
               title="Select an installed AmpliSeq panel to pre-select recommended Target Region, Hotspot Region, and Parameter Settings">
@@ -996,7 +1039,6 @@ $(function () {
          href="/configure/ampliseq/" target="_blank">Add panel...</a>
     </div>
 </div>
-
 </div>
 
 <div class="row-fluid exclude-from-plan">
@@ -1006,8 +1048,10 @@ $(function () {
             Reference Genome:
         </span>
     </div>
-    <div class="span9">
-        <div id="referenceid"></div>
+    <div class="span7">
+        <select id="referenceid" name="referenceid" class="dropdown long">
+            <option value="">None</option>
+        </select>
     </div>
 </div>
 
@@ -1049,9 +1093,21 @@ $(function () {
     </div>
 </div>
 
-<div class="exclude-from-plan" style="margin-bottom:20px"></div>
+<div class="row-fluid exclude-for-nonbarcoded exclude-from-plan">
+    <div class="span3">
+        <span class="help barcodeModeHelp" title='The variantCaller plugin does not carry out realignment and will only process barcodes mapped to the above-specified Reference.'>
+        Barcode Handling:</span>
+    </div>
+    <div class="span9">
+        <div style="float:left;margin-right:30px;">
+            <input type="checkbox" id="barcodeModeSelector" name="barcodemode" style="width:16px;">
+            <span class="barcodeModeText" title="">Override the barcode-specific target regions in the Run Plan and process all barcodes with the above-specified Reference and Target Regions. (Custom Setting)
+            </span>
+        </div>
+    </div>
+</div>
 
-<div class="row-fluid">
+<div class="row-fluid" style="margin-top:20px">
     <div class="span3">
         <span class="help" title="Select one of predefined Variant Caller parameter settings.
                                   Alternatively, provide a customized settings by uploading a json parameter file
@@ -1064,8 +1120,8 @@ $(function () {
     <div id="parameter_sets_table">
     </div>
 
-      <div  style="margin-bottom:20px">
-     
+      <div  style="margin-bottom:30px">
+
         <form id="file-form" style="margin:0px;display:inline;height:0px;width:0px;">
         </form>
         <input form="file-form" class="btn btn-small font_13" type="button" onclick="$('#files').click()" value="Load external parameter file" />
@@ -1073,9 +1129,9 @@ $(function () {
 
         <button class="btn btn-small font_13" id="create_custom">Create custom parameter set</button>
       </div>
-      
+
     </div>
-    
+
 </div>
 
 
@@ -1234,7 +1290,7 @@ $(function () {
             <td class="hot" style="border-left-width:0px;"></td>
         </tr>
 
-        
+
         </tbody>
     </table>
 
@@ -1273,7 +1329,7 @@ $(function () {
             <h4>Advanced Settings</h4>
 
             <form class="form-horizontal">
-            
+
                 <div class="row zebra" id="ptrim" style="display:none">
                     <div class="span3">
                         <span class="help"
@@ -1285,8 +1341,8 @@ $(function () {
                         <input type="checkbox" id="trimreads" name="trimreads" checked="checked"/>
                     </div>
                 </div>
-            
-            
+
+
                 <div class="row zebra">
                     <div class="span3">
                         <span>Torrent Variant Caller arguments</span>
@@ -1314,14 +1370,14 @@ $(function () {
 <div id="json_result"></div>
 
 <div>
-    <h4>About Torrent Variant Caller 4.2</h4>
-    <p>TVC 4.2 analyzes mapped reads covering each individual reference base
+    <h4>About Torrent Variant Caller 4.4</h4>
+    <p>TVC 4.4 analyzes mapped reads covering each individual reference base
        to deduce whether there is sufficient statistical evidence to support calling
        a SNP or INDEL at a given position.
        The analysis can be restricted to a subset of the genome by defining targeted regions.
        If hotspot regions are defined, TVC includes their positions in the report,
        even if variants have not been specifically identified.</p>
-    
+
     <p>Get more information by visiting <a href="http://ioncommunity.lifetechnologies.com/docs/DOC-7426" target="_blank">
       Torrent Variant Caller page on Ion Community</a>.</p>
 

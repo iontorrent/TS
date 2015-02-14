@@ -542,6 +542,8 @@ tmap_version_to_int(const char *v, int32_t v_n[3])
           }
           v_n[j] = atoi(v + i);
           j++;
+          // if (j == 3)
+          //    break; // do not read the ION_VERSION_BUILDNUM
       }
   }
   if(3 != j) {

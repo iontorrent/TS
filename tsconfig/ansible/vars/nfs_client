@@ -2,10 +2,9 @@
 # file: group_vars/nfs_clients
 
 #----------------------------------------------------------------------------
-# To enable NFS mounts, uncomment nas_mounts: line and add mount definitions
-# per format specified
-#
+# To enable NFS mounts, add mount definitions per format specified
 #----------------------------------------------------------------------------
 nas_mounts:
-  - { name: ion-nas3, directory: /results, mountpoint: /results1 }
-  - { name: ion-nas4, directory: /results, mountpoint: /results4 }
+#  - { name: ion-nas3, directory: /results, mountpoint: /results1 }
+#  - { name: ion-nas4, directory: /results, mountpoint: /results4 }
+#  - { name: devbox-bpp, directory: /results, mountpoint: /results4 }

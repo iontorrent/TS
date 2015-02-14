@@ -1,0 +1,80 @@
+## NOTE to Ion Torrent FAS / Customers
+# So, you want to configure HTTPS...
+
+# [Optional] consider creating and signing your own ssl-cert,
+# and replace the 'snakeoil' cert below.
+
+# To activate this vhost:
+
+# sudo apt-get install libapache2-mod-gnutls ssl-cert
+# sudo a2enmod ssl
+# sudo a2dissite default-ssl   ## should already be disabled, but just in case
+# sudo a2ensite torrent-server-ssl
+# sudo service apache2 restart
+
+# [Optional] If you want to block access by plain http, 
+# you can disable the default site.
+# This may block PGM access to the Torrent Server.
+# Disable at your own risk.
+
+# echo "I'm sure I want to do this." && sudo a2dissite torrent-server
+
+<IfModule mod_ssl.c>
+<VirtualHost _default_:443>
+
+    SSLEngine on
+    # Self signed, generated cert. Replace with your own signed cert, if you have one
+    SSLCertificateFile    /etc/ssl/certs/ssl-cert-snakeoil.pem
+    SSLCertificateKeyFile /etc/ssl/private/ssl-cert-snakeoil.key
+
+    # Broken IE Compat
+    BrowserMatch "MSIE [2-6]" \
+            nokeepalive ssl-unclean-shutdown \
+            downgrade-1.0 force-response-1.0
+    # MSIE 7 and newer should be able to use keepalive
+    BrowserMatch "MSIE [17-9]" ssl-unclean-shutdown
+
+    ServerAdmin webmaster@localhost
+    DocumentRoot /var/www
+    <Directory />
+        Options FollowSymLinks
+        AllowOverride None
+    </Directory>
+    <Directory /var/www/>
+        Options +Indexes +FollowSymLinks
+        AllowOverride None
+        Order allow,deny
+        Allow from all
+    </Directory>
+
+    <Directory /opt/ion/iondb/>
+        Options +ExecCGI
+        <IfModule !mod_authz_core.c>
+            Order allow,deny
+            Allow from all
+        </IfModule>
+        <IfModule mod_authz_host.c>
+            Require all granted
+        </IfModule>
+        Satisfy Any
+    </Directory>
+
+    ErrorDocument 404 /404.html
+    ErrorDocument 500 /500.html
+
+    ErrorLog /var/log/apache2/error.log
+
+    # Possible values include: debug, info, notice, warn, error, crit, alert, emerg.
+    LogLevel warn
+
+    # Log is filtered
+    CustomLog /var/log/apache2/ssl_access.log combined env=!dontlog
+
+
+    <IfModule mod_rewrite.c>
+      RewriteEngine On
+      RewriteOptions inherit
+    </IfModule>
+
+</VirtualHost>
+</IfModule>
