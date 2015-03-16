@@ -186,13 +186,17 @@ while( <BEDFILE> )
     print STDERR "ERROR: Region $chrid:$srt-$end is out-of-order vs. previous region $chrid:$targSrt-$targEnd.\n";
     exit 1;
   }
+  my $sameSrt = ($srt == $targSrt);
   $targSrt = $srt;
-  if( $srt <= $targEnd )
+  if( $srt <= $targEnd || $sameSrt )
   {
     ++$numBedWarnings;
-    if( $end <= $targEnd )
+    if( $end <= $targEnd || $sameSrt )
     {
-      print STDERR "Warning: Region $chrid:$srt-$end is entirely overlapped previous region $chrid:$targSrt-$targEnd.\n" if( $bedwarn );
+      if( $bedwarn ) {
+        printf STDERR "Warning: Region $chrid:$srt-$end %s previous region $chrid:$targSrt-$targEnd.\n",
+          $end <= $targEnd ? "is entirely overlapped by" : "entirely overlaps";
+      }
       $targEnd = $end;
       next;
     }

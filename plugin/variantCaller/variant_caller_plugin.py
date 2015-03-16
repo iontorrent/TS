@@ -326,7 +326,10 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
     # Create xml template required for adding IGV links
     fxml = open(os.path.join(results_directory,'igv_session.xml'), "w")
     fxml.write('<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n')
-    fxml.write('<Global genome="{plugin_url}/%s.fasta" version="3">\n' % (barcode_modifier + vc_options['genome_name']))
+    if (vc_options['genome_name'] == 'hg19'):
+        fxml.write('<Global genome="%s" version="3">\n' % vc_options['genome_name'])
+    else:    
+        fxml.write('<Global genome="{plugin_url}/%s.fasta" version="3">\n' % (barcode_modifier + vc_options['genome_name']))
     fxml.write('    <Resources>\n')
     fxml.write('        <Resource name="%s.gz" path="{plugin_url}/%s.gz"/>\n' % (basename_variants_vcf,basename_variants_vcf))
     if vc_options['trim_reads']:

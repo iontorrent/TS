@@ -243,12 +243,13 @@ class StepHelper(object):
         return self.steps[StepNames.APPLICATION].savedObjects[ApplicationFieldNames.RUN_TYPE]
 
     def getApplicationGroupName(self):
-        logger.debug("ENTER getApplicationGroupName() applicationGroup=%s" %(self.steps[StepNames.APPLICATION].savedFields[ApplicationFieldNames.APPLICATION_GROUP]))
-        logger.debug("..getApplicationGroupName applicationGroupName=%s" %(self.steps[StepNames.APPLICATION].savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]))
+        #logger.debug("ENTER getApplicationGroupName() applicationGroup=%s" %(self.steps[StepNames.APPLICATION].savedFields[ApplicationFieldNames.APPLICATION_GROUP]))
+        #logger.debug("..getApplicationGroupName applicationGroupName=%s" %(self.steps[StepNames.APPLICATION].prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]))
         
-        #20140401-BUG-could be None sometimes!! return self.steps[StepNames.APPLICATION].savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
+        #20150301-TODO- this may be fixed. Need to retest
+        #20140401-BUG-could be None sometimes!! return self.steps[StepNames.APPLICATION].prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
         #20140401-WORKAROUND
-        applicationGroupName = self.steps[StepNames.APPLICATION].savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
+        applicationGroupName = self.steps[StepNames.APPLICATION].prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
         return applicationGroupName if applicationGroupName else self.getSelectedApplicationGroupName()
 
    

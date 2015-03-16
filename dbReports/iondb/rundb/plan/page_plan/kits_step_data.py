@@ -53,19 +53,13 @@ class KitsFieldNames():
     FLOWS = 'flows'
     
     TEMPLATE_KITS = "templateKits"
-    ALL_TEMPLATE_KITS = "allTemplateKits"
         
     ONE_TOUCH_AVALANCHE = "Avalanche"   
     AVALANCHE_FORWARD_3_PRIME_ADAPTERS = 'avalancheForward3PrimeAdapters'
     AVALANCHE_FORWARD_3_PRIME_ADAPTER = 'avalancheForward3PrimeAdapter'
-    AVALANCHE_TEMPLATE_KIT_NAME = 'avalancheTemplateKitName'
     AVALANCHE_SEQUENCE_KIT_NAME = 'avalancheSequencekitname'
     AVALANCHE_FLOWS = "avalancheFlows"
 
-    NON_AVALANCHE_FORWARD_3_PRIME_ADAPTER = 'nonAvalancheForward3PrimeAdapter'
-    NON_AVALANCHE_TEMPLATE_KIT_NAME = 'nonAvalancheTemplateKitName'
-    NON_AVALANCHE_SEQUENCE_KIT_NAME = 'nonAvalancheSequencekitname' 
-  
     IS_BARCODE_KIT_SELECTION_REQUIRED = "isBarcodeKitSelectionRequired"
     IS_CHIP_TYPE_REQUIRED = "is_chipType_required"
     BARCODE_KIT_NAME = "barcodeId"
@@ -136,8 +130,7 @@ class KitsStepData(AbstractStepData):
         self.prepopulatedFields[KitsFieldNames.SEQ_KITS] = KitInfo.objects.filter(kitType='SequencingKit', isActive=True).order_by("description")
                             
         self.savedFields[KitsFieldNames.TEMPLATE_KIT_NAME] = None
-        self.prepopulatedFields[KitsFieldNames.TEMPLATE_KITS] = KitInfo.objects.filter(kitType__in=['TemplatingKit', 'AvalancheTemplateKit'], isActive=True).order_by("description")
-        self.prepopulatedFields[KitsFieldNames.ALL_TEMPLATE_KITS] = KitInfo.objects.filter(kitType__in=['TemplatingKit', 'AvalancheTemplateKit', 'IonChefPrepKit'], isActive=True).order_by("description")
+        self.prepopulatedFields[KitsFieldNames.TEMPLATE_KITS] = KitInfo.objects.filter(kitType__in=['TemplatingKit', 'AvalancheTemplateKit', 'IonChefPrepKit'], isActive=True).order_by("description")
 
         self.savedFields[KitsFieldNames.CONTROL_SEQUENCE] = None
         self.prepopulatedFields[KitsFieldNames.CONTROL_SEQ_KITS] = KitInfo.objects.filter(kitType='ControlSequenceKit', isActive=True).order_by("description")
@@ -259,7 +252,6 @@ class KitsStepData(AbstractStepData):
             
             if applProduct.defaultAvalancheTemplateKit:
                 self.prepopulatedFields[KitsFieldNames.TEMPLATE_KIT_TYPES][KitsFieldNames.ONE_TOUCH_AVALANCHE][KitsFieldNames.APPLICATION_DEFAULT] = applProduct.defaultAvalancheTemplateKit
-                self.savedFields[KitsFieldNames.AVALANCHE_TEMPLATE_KIT_NAME] = applProduct.defaultAvalancheTemplateKit.name
                 logger.debug("kits_step_data.updateFieldsFromDefaults() defaultAvalancheTemplateKit=%s" %(applProduct.defaultAvalancheTemplateKit.name))
                                 
             if applProduct.defaultTemplateKit:
@@ -290,13 +282,6 @@ class KitsStepData(AbstractStepData):
                 elif applProduct.defaultSequencingKit:
                     self.savedFields[KitsFieldNames.FLOWS] = applProduct.defaultSequencingKit.flowCount                
                 logger.debug("kits_step_data.updateFieldsFromDefaults() USE SEQ KIT- flowCount=%s" %(str(self.savedFields[KitsFieldNames.FLOWS])))
-
-            nonAvalanche3PrimeAdapters = ThreePrimeadapter.objects.filter(direction='Forward', runMode='single').exclude(chemistryType = 'avalanche').order_by('-isDefault', 'name')
-            self.savedFields[KitsFieldNames.NON_AVALANCHE_FORWARD_3_PRIME_ADAPTER] = nonAvalanche3PrimeAdapters[0].sequence
-            if applProduct.defaultTemplateKit:
-                self.savedFields[KitsFieldNames.NON_AVALANCHE_TEMPLATE_KIT_NAME] = applProduct.defaultTemplateKit.name
-            if applProduct.defaultSequencingKit:
-                self.savedFields[KitsFieldNames.NON_AVALANCHE_SEQUENCE_KIT_NAME] = applProduct.defaultSequencingKit.name
 
 
     def validateField(self, field_name, new_field_value):

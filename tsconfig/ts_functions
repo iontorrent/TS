@@ -1337,15 +1337,14 @@ function install_ion_packages()
         read_packagelist_file torrentsuite master master_files
         pkg_list=( ${server_files[@]} ${master_files[@]} )
 
-        #Load proton specific packages if this is Proton Torrent Server
+        #Load PGM instrument packages
         inst_files=
+        read_packagelist_file torrentsuite pgm inst_files
+        pkg_list=( ${pkg_list[@]} ${inst_files[@]} )
         if is_proton_ts; then
-            read_packagelist_file torrentsuite pgm proton inst_files
-            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
-        else
-            #Default to PGM specific packages
-            read_packagelist_file torrentsuite pgm inst_files
-            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
+            #Load Proton instrument packages if this is Proton Torrent Server
+            read_packagelist_file torrentsuite proton inst_files
+            pkg_list=( ${pkg_list[@]} ${inst_files[@]} )
         fi
     else
         pkg_list=( ${server_files[@]} )

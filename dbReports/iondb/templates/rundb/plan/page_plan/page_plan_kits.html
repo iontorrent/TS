@@ -6,7 +6,6 @@
 {% block page-plan-content %}
 <div class="row-fluid">
     <div class="span6">
-        <input type="hidden" id="selectedTemplateKitType" name="selectedTemplateKitType" value="" />
         <input type="hidden" id="isBarcodeKitRequired" name="isBarcodeKitRequired" value="" />
 
         <label class="form-label">Sample Preparation Kit (optional)</label>
@@ -112,65 +111,42 @@
         <p class="form-label">Template Kit
         <span class="option-group">
         <small style="font-weight: normal; font-size: 75%;">
-            {% for kitTypeName in step.getPrePopulatedFieldDict.templateKitTypes.keys %}
-                {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
-                	{% ifequal kitTypeName "Avalanche" %}
-                	{% else %}
-                    	<input checked="checked" type="radio"  id="{{kitTypeName}}__templatekitType" name="templatekitType" value="{{kitTypeName}}" />{{kitTypeName}}
-                    {% endifequal %}
+            {% for kitTypeName, kitDict in step.getPrePopulatedFieldDict.templateKitTypes.items %}
+                {% ifequal kitTypeName "Avalanche" %}
                 {% else %}
-            		{% ifequal kitTypeName "Avalanche" %}
-             		{% else %}
-                    	<input type="radio"  id="{{kitTypeName}}__templatekitType" name="templatekitType" value="{{kitTypeName}}" />{{kitTypeName}}
-                    {% endifequal  %}
+                <input type="radio" id="{{kitTypeName}}__templatekitType" name="templatekitType" value="{{kitTypeName}}"
+                    {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
+                        checked="checked" data-templatekitname="{{step.getCurrentSavedFieldDict.templatekitname}}"
+                    {% endifequal %}
+                >{{kitTypeName}}
                 {% endifequal %}
             {% endfor %}
-            
-            <!--
-            {% for kitTypeName in step.getPrePopulatedFieldDict.templateKitTypes.keys %}
-	            {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
-	            	{% ifequal kitTypeName "Avalanche" %}
-	            		<input checked="checked" type="checkbox" id="templatekitSubType" name="templatekitSubType" value="{{kitTypeName}}" />{{kitTypeName}}
-	                {% endifequal %}
-	            {% else %}
-	        		{% ifequal kitTypeName "Avalanche" %}
-	        			<input type="checkbox" id="templatekitSubType" name="templatekitSubType" value="{{kitTypeName}}" />{{kitTypeName}}
-	                {% endifequal  %}
-	            {% endifequal %}
-	        {% endfor %}   
-	        -->
         </p>      
         </small>
         </span>
-        </p>
+        
         <div id="templateKitHolder">
             {% if not step.getCurrentSavedFieldDict.templatekitType %}
                 <input id="templateKit_comment" name="templateKit_comment" type="text" placeholder="Choose instrument to view Template Kit menu" style="width: 335px" disabled>
             {% endif %}
             
-            {% for kitTypeName, kitDict in step.getPrePopulatedFieldDict.templateKitTypes.items %}
-                {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
-                    <select id="{{kitTypeName}}__templatingKit" name="templatekitname" style="width: 350px;">
-                {% else %}
-                    <select id="{{kitTypeName}}__templatingKit" name="{{kitTypeName}}__templatekitname" style="width: 350px; display: none;">
-                {% endifequal %}
-                
+            <select id="templateKit" name="templatekitname" style="width: 350px;" {% if not step.getCurrentSavedFieldDict.templatekitType %} class="hide" {% endif %}>
                 <option value=""></option>
-                {% for kit in kitDict.kit_values %}
-                    {% if kit.name == step.getCurrentSavedFieldDict.templatekitname %}
-                        <option SELECTED value="{{kit.name}}">{{kit.description}}</option>
-                    {% elif kit.name == kitDict.applDefault.name %}
-                        {% ifequal kitTypeName step.getCurrentSavedFieldDict.templatekitType %}
-                            <option {{step.getCurrentSavedFieldDict.templatekitname|yesno:",,SELECTED"}} value="{{kit.name}}">{{kit.description}}</option>
-                        {% else %}
-                            <option SELECTED value="{{kit.name}}">{{kit.description}}</option>
-                        {% endifequal %}
-                    {% else %}
-                        <option value="{{kit.name}}">{{kit.description}}</option>
-                    {% endif %}
+                {% for kitTypeName, kitDict in step.getPrePopulatedFieldDict.templateKitTypes.items %}
+                    {% for kit in kitDict.kit_values %}
+                        <option value="{{kit.name}}" class="{{kitTypeName}}"
+                            {% if kitTypeName != step.getCurrentSavedFieldDict.templatekitType %}
+                                style="display: none;"
+                            {% elif kit.name == step.getCurrentSavedFieldDict.templatekitname %}
+                                SELECTED
+                            {% elif kit.name == kitDict.applDefault.name and not step.getCurrentSavedFieldDict.templatekitname %}
+                                SELECTED
+                            {% endif %}
+                                >{{kit.description}}</option>
+                    {% endfor %}
                 {% endfor %}
-                </select>
-            {% endfor %}
+            </select>
+            
         </div>
     </div>
 
@@ -195,12 +171,11 @@
         <span class="option-group">
             <small style="font-weight: normal; font-size: 100%;">
                 {% for size in step.getPrePopulatedFieldDict.templatingSizeChoices %}
-                    {% ifequal size step.getCurrentSavedFieldDict.templatingSize %}
-                         <input checked="checked" type="radio"  id="templatingSize" name="templatingSize" value="{{size}}" {% if helper.isEditRun %} readonly {% endif %} />{{size}}</input>
-                    {% else %}        
-                         <input type="radio"  id="templatingSize" name="templatingSize" value="{{size}}"  {% if helper.isEditRun %} readonly {% endif %} />{{size}}</input>
-                    {% endifequal %}
-                {% endfor %}     
+                    <label style="display: inline;">
+                        <input type="radio" id="templatingSize_{{size}}" name="templatingSize" value="{{size}}" {% if helper.isEditRun %} readonly {% endif %}
+                            {% ifequal size step.getCurrentSavedFieldDict.templatingSize %} checked="checked" {% endifequal %}\>{{size}}
+                    </label>
+                {% endfor %}
             </small>
         </span>
         </p>
@@ -309,59 +284,29 @@
            } 
         );
         
+        var _isEditRun = "{{helper.isEditRun}}" == "True" ? true : false;
+        
         var seq_kits_to_flows_map = {};
-
-        {%for kitinfoobj in step.getPrePopulatedFieldDict.seqKits %}
-            seq_kits_to_flows_map["{{kitinfoobj.name}}"] = "{{kitinfoobj.flowCount}}";
-        {%endfor%}
-
-
         var seq_kits_to_categories_map = {};
 
         {%for kitinfoobj in step.getPrePopulatedFieldDict.seqKits %}
+            seq_kits_to_flows_map["{{kitinfoobj.name}}"] = "{{kitinfoobj.flowCount}}";
             seq_kits_to_categories_map["{{kitinfoobj.name}}"] = "{{kitinfoobj.categories}}";
         {%endfor%}
-        
-        var template_kits_to_flows_map = {};        
 
-        {% for templateKitInfoObj in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}        
-            template_kits_to_flows_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.flowCount}}";
-        {%endfor%}
-
-        {% for templateKitInfoObj in step.getPrePopulatedFieldDict.allTemplateKits %}
-            template_kits_to_flows_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.flowCount}}";
-        {%endfor%}
-       
-        var template_kits_to_readLengths_map = {};        
-
-        {% for templateKitInfoObj in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}        
-            template_kits_to_readLengths_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.libraryReadLength}}";
-        {%endfor%}
-
-        {% for templateKitInfoObj in step.getPrePopulatedFieldDict.allTemplateKits %}
-            template_kits_to_readLengths_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.libraryReadLength}}";
-        {%endfor%}
-                 
-        var template_kits_to_templatingSize_map = {};        
-
-        {% for templateKitInfoObj in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}        
-            template_kits_to_templatingSize_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.templatingSize}}";
-        {%endfor%}
-
-        {% for templateKitInfoObj in step.getPrePopulatedFieldDict.allTemplateKits %}
-            template_kits_to_templatingSize_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.templatingSize}}";
-        {%endfor%}
-  
-        var template_kits_to_categories_map = {};        
+        var template_kits_to_flows_map = {};
+        var template_kits_to_readLengths_map = {};
+        var template_kits_to_templatingSize_map = {};
+        var template_kits_to_categories_map = {};
 
         {% for templateKitInfoObj in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}
+            template_kits_to_flows_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.flowCount}}";
+            template_kits_to_readLengths_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.libraryReadLength}}";
+            template_kits_to_templatingSize_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.templatingSize}}";
             template_kits_to_categories_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.categories}}";
         {%endfor%}
-        
-        {%for templateKitInfoObj in step.getPrePopulatedFieldDict.allTemplateKits %}            
-            template_kits_to_categories_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.categories}}";
-        {%endfor%}
-        
+
+
         var lib_kits_to_categories_map = {};
 
         {%for kitinfoobj in step.getPrePopulatedFieldDict.libKits %}
@@ -380,375 +325,137 @@
             barcode_kits_all_list.push("{{barcodeKit.name}}");
         {% endfor %}
         
-        
-        var defaultAvalancheTemplateKitObj = "{{step.getPrePopulatedFieldDict.templateKitTypes.Avalanche.applDefault}}";
-        var defaultAvalancheTemplateKitName = "{{step.getCurrentSavedFieldDict.avalancheTemplateKitName}}";
-        //this can be the previously selected template kit name
-        var defaultOneTouchTemplateKitName = "{{step.getCurrentSavedFieldDict.templatekitname}}";
-        if (defaultOneTouchTemplateKitName === '' ||  defaultOneTouchTemplateKitName === null) {
-        	console.log("BLANK OR NULL step.getCurrentSavedFieldDict.templatekitname.  User prePopulatedFieldDict!!");
-        	
-        	defaultOneTouchTemplateKitName = "{{step.getPrePopulatedFieldDict.templateKitTypes.OneTouch.applDefault}}";
-        }    
-        
-        var defaultAvalancheSequenceKitObj = "{{step.getCurrentSavedFieldDict.avalancheSequencekitname}}";
-        var defaultAvalanche3PrimeAdapterObj = "{{step.getCurrentSavedFieldDict.avalancheForward3PrimeAdapter}}";
-        
-        //var defaultAvalancheFlowCount = template_kits_to_flows_map["{{step.getPrePopulatedFieldDict.templateKitTypes.Avalanche.applDefault.name}}"];
-        var defaultAvalancheFlowCount = template_kits_to_flows_map["{{step.getCurrentSavedFieldDict.avalancheTemplateKitName}}"];
-        
-        var defaultNonAvalanche3PrimeAdapter = "{{step.getCurrentSavedFieldDict.nonAvalancheForward3PrimeAdapter}}";
-        var defaultNonAvalancheTemplateKitName = "{{step.getCurrentSavedFieldDict.nonAvalancheTemplateKitName}}";
-        var defaultNonAvalancheSequenceKitName = "{{step.getCurrentSavedFieldDict.nonAvalancheSequencekitname}}";
-
-    	function updateForAvalanche() {
-    		updateAvalanche3PrimeAdapter();
-    		updateAvalancheTemplateKit();
-    		updateAvalancheSeqKit();
-    		updateAvalancheFlowCount();
-    	}
-    	
-    	function updateAvalanche3PrimeAdapter() {
-    		//no-op
-    		
-//            {% for adapter in step.getPrePopulatedFieldDict.forward3Adapters %}
-//        		{% ifequal adapter.sequence  step.getCurrentSavedFieldDict.avalancheForward3PrimeAdapter %}
-//            	 	$("select[name$='forward3primeAdapter']").val("{{adapter.sequence}}");
-//            	 	$("#selected3PrimeAdapter").text(threePrimeAdapterSeqToNameAndSeq[$("select[name$='forward3primeAdapter']").val()]); 
-//            	{% endifequal %}
-//            {% endfor %}
-    	}
-
-    	function updateNonAvalanche3PrimeAdapter() {    		
-            {% for adapter in step.getPrePopulatedFieldDict.forward3Adapters %}
-        		{% ifequal adapter.sequence  step.getCurrentSavedFieldDict.nonAvalancheForward3PrimeAdapter %}
-        	 		$("select[name$='forward3primeAdapter']").val("{{adapter.sequence}}");
-        	 		$("#selected3PrimeAdapter").text(threePrimeAdapterSeqToNameAndSeq[$("select[name$='forward3primeAdapter']").val()]);             	 	
-            	{% endifequal %}
-            {% endfor %}		
-    	}
-    	
-    	function updateAvalancheTemplateKit() {
-    		//no-op
-    		
-        	//$("select[name='templatekitname']").val("{{step.getPrePopulatedFieldDict.templateKitTypes.Avalanche.applDefault}}");
-    		//console.log("updateAvalancheTemplateKit() defaultAvalancheTemplateKitName=", defaultAvalancheTemplateKitName);
-    		
-//        	$("select[name='templatekitname']").val(defaultAvalancheTemplateKitName);
-//        	$("#selectedTemplatingKitName").text($("select[name='templatekitname']").find("option:selected").val());		
-    	}
-
-    	function updateOneTouchTemplateKit() {
-    		//console.log("updateOneTouchTemplateKit() defaultOneTouchTemplateKitName=", defaultOneTouchTemplateKitName, "; defaultNonAvalancheTemplateKitName=", defaultNonAvalancheTemplateKitName);
-
-        	$("select[name$='templatekitname']").val(defaultNonAvalancheTemplateKitName);
-        	$("#selectedTemplatingKitName").text(templateKitNameToDesc[$("select[name='templatekitname']").find("option:selected").val()]);		
-    	}
-
-    	function updateAvalancheSeqKit() {
-    		//no-op
-    		
-//            {% for kit in step.getPrePopulatedFieldDict.seqKits %}
-//    	    	{% ifequal kit.name step.getCurrentSavedFieldDict.avalancheSequencekitname %}
-//    	        	$("select[name$='sequencekitname']").val("{{kit.name}}");
-//    	            $("#selectedSequenceKit").text(seqKitNameToDesc["{{kit.name}}"]);
-//    	        {% endifequal %}
-//    	    {% endfor %}		
-    	}
-    	
-
-    	function updateAvalancheFlowCount() {
-    		//no-op
-    		
-//            if (!$("#flows").prop('readonly')){
-//            	//$('input[name = "flows"]').val(template_kits_to_flows_map["{{step.getPrePopulatedFieldDict.templateKitTypes.Avalanche.applDefault.name}}"]); 
-//            	//$('input[name = "flows"]').val(template_kits_to_flows_map["{{step.getCurrentSavedFieldDict.avalancheTemplateKitName}}"]);
-//            	$('input[name = "flows"]').val(defaultAvalancheFlowCount);
-//            	$("#selectedFlows").text($('input[name = "flows"]').val());
-//    		}		
-    	}
-    	
-
-    	function updateNonAvalancheFlowCount() {
-            if (!$("#flows").prop('readonly')){
-            	$('input[name = "flows"]').val(seq_kits_to_flows_map[$("select[name$='sequencekitname']").val()]);
-            	updateFlowsInSummaryPanel();
-            }            
-    	}
-
-    	function refreshTemplateKitSelectionList() {
-    		var templateType = $('input[name="templatekitType"]').val();
-    		
-    		console.log("refreshTemplateKitSelectionList() templateType=", templateType);
-    		
-	        $("#templateKitHolder select").each(function(){
-	            var currentSelect = $(this);
-	            
-	    		console.log("refreshTemplateKitSelectionList() LOOP currentSelect=", currentSelect);
-	    		
-	            if (currentSelect.attr('id') == templateType + '__templatingKit') {
-	                currentSelect.attr('style', 'width: 350px;');
-	                currentSelect.attr('name', 'templatekitname');
-	                $("#selectedTemplatingKitName").text(templateKitNameToDesc[currentSelect.find("option:selected").val()]);
-	            } else {
-	                currentSelect.attr('style', 'width: 350px; display: none;');
-	                currentSelect.attr('name', currentSelect.attr('id').replace('__templatingKit', '') + '__templatekitname');
-	            }
-	        });
-    	}
-
-    	function handleAvalancheForPreviousSelection() {
-    		//no-op
-    		
-//    		var prevSelectedTemplateKitName = $("select[name$='templatekitname']").find("option:selected").val();
-//    		var prevSelected3PrimeAdapter = $("#forward3primeAdapter").val();
-//    		
-//    		if ((prevSelectedTemplateKitName == defaultAvalancheTemplateKitName) || (prevSelected3PrimeAdapter == defaultAvalanche3PrimeAdapterObj)) {
-//        		$('input[name = "templatekitSubType"]').removeAttr('disabled');
-//    			$('input[name = "templatekitSubType"]').attr('checked', true);
-//    		}
-//    		else {
-//    			$('input[name = "templatekitSubType"]').removeAttr('checked');
-//    			
-//    			var prevSelectedTemplateKitType = $('input[name="templatekitType"]').val();
-//    			if (prevSelectedTemplateKitType == "IonChef") {
-//                	$('input[name = "templatekitSubType"]').attr("disabled", true);    				
-//    			}
-//    		}
-    	}
-
 
         function handleTemplateKitSelectionForTemplatingSize(selectedTemplateKitName) {
-            //console.log("at handleTemplateKitSelectionForLibraryReadLength() selectedTemplateKitName=", selectedTemplateKitName);
+            $('input[name = "templatingSize"]').prop('checked', false);                    
+            $('.templating_size_info').hide();
+            
             var defaultTemplatingSize = "";
-            var allowed_templatingSizes = "";
             
             if (selectedTemplateKitName) {
-                var categories = template_kits_to_categories_map[selectedTemplateKitName];
-                allowed_templatingSizes = template_kits_to_templatingSize_map[selectedTemplateKitName];
+                var categories = template_kits_to_categories_map[selectedTemplateKitName] || '';
 
-                if (categories.toLowerCase().indexOf("multipletemplatingsize") >= 0) {                                        
+                if (categories.toLowerCase().indexOf("multipletemplatingsize") >= 0) {
+                    var allowed_templatingSizes = template_kits_to_templatingSize_map[selectedTemplateKitName];
                     //console.log("at handleTemplateKitSelectionForTemplatingSize() categories=", categories, "; allowed_templatingSizes=", allowed_templatingSizes);
-
                     if (allowed_templatingSizes) {
-                        allowed_size_array = allowed_templatingSizes.split(";");
-                        $('input[name = "templatingSize"]').attr('disabled', true);
+                        $('input[name = "templatingSize"]').parent().hide();
 
-                        jQuery.each(allowed_size_array, function(index, item) {
-                            $('input[name = "templatingSize"][value="' + item + '"]').attr('disabled', false);
-                            
+                        jQuery.each(allowed_templatingSizes.split(";"), function(index, item) {
+                            $('input[name = "templatingSize"][value="' + item + '"]').parent().show();
                             if (index == 0) {
                                 $('input[name = "templatingSize"][value="' + item + '"]').prop('checked', true);
                                 defaultTemplatingSize = item;
                             }
                         });
                         $('.templating_size_info').show(); 
-                     }
-                    else {
-                        $('.templating_size_info').hide();
                     }
-                    updateTemplatingSizeInSummaryPanel(defaultTemplatingSize);
                 }
-                else {                                
-                    console.log("at handleTemplateKitSelectionForTemplatingSize() categories NOT FOUND!! going to check flowOverridable");
-
-                    $('input[name = "templatingSize"]').prop('checked', false);                    
-                    $('.templating_size_info').hide();
-                    updateTemplatingSizeInSummaryPanel("");
-
-                }
-            }             
+            }
+            updateSummaryPanel("#selectedTemplatingSize", defaultTemplatingSize);
         }
 
         function handleTemplateKitSelectionForLibraryReadLength(selectedTemplateKitName) {
-            //console.log("at handleTemplateKitSelectionForLibraryReadLength() selectedTemplateKitName=", selectedTemplateKitName);
+            $('.library_read_length_info').hide();
+
             var defaultLibraryReadLength = 0;
             
             if (selectedTemplateKitName) {
-                var categories = template_kits_to_categories_map[selectedTemplateKitName];
                 defaultLibraryReadLength = template_kits_to_readLengths_map[selectedTemplateKitName];
+                $('input[name = "libraryReadLength"]').val(defaultLibraryReadLength);
 
-                console.log("at handleTemplateKitSelectionForLibraryReadLength() selectedTemplateKitName=", selectedTemplateKitName, "; categories=", categories);
-                
-                if (categories.toLowerCase().indexOf("supportlibraryreadlength") >= 0) {
-                    $('input[name = "libraryReadLength"]').val(defaultLibraryReadLength);
-                    if (defaultLibraryReadLength > 0) {
-                        $('.library_read_length_info').show(); 
+                if (defaultLibraryReadLength > 0) {
+                    var categories = template_kits_to_categories_map[selectedTemplateKitName] || '';
+    
+                    if (categories.toLowerCase().indexOf("supportlibraryreadlength") >= 0) {
+                        $('.library_read_length_info').show();
                         setFlowCountByLibraryReadLength(defaultLibraryReadLength);
                     }
-                    else {
-                        $('.library_read_length_info').hide();
-                    }
-                    updateLibraryReadLengthInSummaryPanel(defaultLibraryReadLength);
-                }
-                else {                                
-                    console.log("at handleTemplateKitSelectionForLibraryReadLength() categories NOT FOUND!! going to check flowOverridable");
-
-                    $('input[name = "libraryReadLength"]').val(defaultLibraryReadLength);
-                    $('.library_read_length_info').hide();
-
-                    updateLibraryReadLengthInSummaryPanel(defaultLibraryReadLength);
-
-                    var seq_categories = seq_kits_to_categories_map[$("select[name$='sequencekitname']").val()];
-                    var templateKitFlowCount = template_kits_to_flows_map[selectedTemplateKitName];
-                                
-                    //console.log("at handleTemplateKitSelectionForLibraryReadLength() categories NOT FOUND!! seq_categories=", seq_categories, "; templateKitFlowCount=", templateKitFlowCount);
-                    
-                    if (seq_categories.toLowerCase().indexOf("flowoverridable") >= 0 && templateKitFlowCount > 0) {                                                       
-                        $('input[name = "flows"]').val(templateKitFlowCount);
-                        updateFlowsInSummaryPanel();
-                    }
-                    else {                                                    
-                        console.log("at handleTemplateKitSelectionForLibraryReadLength() categories NOT FOUND!! going to use seq kit default");
-                        setFlowCountBySeqKitDefault();
-                    }                 
                 }
             }
-            else {
-                setFlowCountByLibraryReadLength(defaultLibraryReadLength);
-                $('.library_read_length_info').hide();
-                                
-                updateLibraryReadLengthInSummaryPanel(defaultLibraryReadLength);
-            }                          
+            updateSummaryPanel("#selectedLibraryReadLength", defaultLibraryReadLength);
         }
         
 
-        function handleSeqKitSelectionForLibraryReadLength(selectedSeqKitName, selectedTemplateKitName) {
-            //console.log("at handleSeqKitSelectionForLibraryReadLength() selectedSeqKitName=", selectedSeqKitName, "; selectedTemplateKitName=", selectedTemplateKitName);
+        function handleSeqKitSelectionForLibraryReadLength(selectedSeqKitName) {
             
-            var seqKitFlowCount = seq_kits_to_flows_map[selectedSeqKitName];
-            //console.log("at handleSeqKitSelectionForLibraryReadLength() selectedSeqKitName=", selectedSeqKitName, "; seqKitFlowCount=", seqKitFlowCount);
-            
-            if (selectedTemplateKitName) {
-                var categories = template_kits_to_categories_map[selectedTemplateKitName];               
+            var templateKit = $("select[name='templatekitname']").val()
+            if (templateKit) {
+                var categories = template_kits_to_categories_map[templateKit] || '';
+                
                 if (categories.toLowerCase().indexOf("supportlibraryreadlength") >= 0) {
-                    setLibraryReadLengthByFlowCount(seqKitFlowCount);
+                    setLibraryReadLengthByFlowCount();
                 }
-            }                
+            }
         }
 
-        function setLibraryReadLengthByFlowCount(seqKitFlowCount) {
-            //console.log("at setLibraryReadLengthByFlowCount() seqKitFlowCount=", seqKitFlowCount);
-            $('input[name = "libraryReadLength"]').val(seqKitFlowCount / 2);
-            updateLibraryReadLengthInSummaryPanel($('input[name = "libraryReadLength"]').val());
-        }    
+        function setLibraryReadLengthByFlowCount() {
+            var sequenceKit = $("select[name='sequencekitname']").val();
+            
+            if (sequenceKit) {
+                var categories = seq_kits_to_categories_map[sequenceKit] || '';
+                if (categories.toLowerCase().indexOf("readlengthderivablefromflows") >= 0){
+                    var seqKitFlowCount = seq_kits_to_flows_map[sequenceKit];
+                    
+                    $('input[name = "libraryReadLength"]').val(seqKitFlowCount / 2);
+                    updateSummaryPanel("#selectedLibraryReadLength", seqKitFlowCount / 2);
+                }
+            }
+        }
         
+
+        function updateSummaryPanel(el, value){
+            if (typeof value == 'undefined') value = '';
+            if (el=="#selectedLibraryReadLength" && value<=0) value = "--";
+            $(el).text(value);
+        }
+        
+        
+        function updateFlows(value) {
+            if (!_isEditRun && value > 0){
+                $('input[name = "flows"]').val(value);
+                updateSummaryPanel("#selectedFlows", value);
+            }
+        }
+        
+        function setFlowCountBySelectedKits(){
+            
+            if (_isEditRun) return;
+            
+            var templateKit = $("#templateKit :selected").val();
+            var sequenceKit = $("#sequenceKit :selected").val();
+            var templateKitFlowCount = template_kits_to_flows_map[templateKit];
+            var sequenceKitFlowCount = seq_kits_to_flows_map[sequenceKit];
+
+            var flowCount = 0;
+            if (!templateKit){
+                flowCount = sequenceKitFlowCount;
+            } else if (!sequenceKit){
+                flowCount = templateKitFlowCount;
+            } else {
+                // both kits selected: use templateKit flows if flowoverridable, otherwise use sequenceKit flows
+                var categories = seq_kits_to_categories_map[sequenceKit] || '';
+                if ((categories.toLowerCase().indexOf("flowoverridable") >= 0) && (templateKitFlowCount > 0)){
+                    flowCount = templateKitFlowCount;
+                } else {
+                    flowCount = sequenceKitFlowCount;
+                }
+            }
+            updateFlows(flowCount);
+        }
         
         function setFlowCountByLibraryReadLength(libraryReadLength) {
-            //console.log("at setFlowCountByLibraryReadLength() libraryReadLength=", libraryReadLength);
-            selectedSeqKit = $("#sequenceKit option:selected").val();
-            if (selectedSeqKit) {
-                var categories = seq_kits_to_categories_map[selectedSeqKit];
-                //console.log("at setFlowCountByLibraryReadLength() categories=", categories);
- 
-                if (categories.toLowerCase().indexOf("flowsderivablefromreadlength") >= 0) {
-                    if (libraryReadLength > 0) { 
-                        $('input[name = "flows"]').val(libraryReadLength * 2);
-                        updateFlowsInSummaryPanel();
-                    }
-                    else {
-                        setFlowCountBySeqKitDefault();
-                    }
+            var sequenceKit = $("#sequenceKit :selected").val();
+            if (sequenceKit) {
+                var categories = seq_kits_to_categories_map[sequenceKit] || '';
+                if (categories.toLowerCase().indexOf("flowsderivablefromreadlength") >= 0){
+                    updateFlows(libraryReadLength * 2);
                 }
-                else {
-                    setFlowCountBySeqKitDefault();
-                }
-            } 
-        }    
-        
-
-        function setFlowCountBySeqKitDefault() {
-            $('input[name = "flows"]').val(seq_kits_to_flows_map[$("select[name$='sequencekitname']").val()]);
-            updateFlowsInSummaryPanel();        
-        }
-
-        function updateTemplatingSizeInSummaryPanel(templatingSize) {
-            $("#selectedTemplatingSize").text(templatingSize);
-        }
-
-        function updateLibraryReadLengthInSummaryPanel(libraryReadLength) {
-            var value = libraryReadLength;
-            if (value <= 0) {
-                value = "--";
-            }
-            $("#selectedLibraryReadLength").text(value);
-        }
-        
-
-        function updateFlowsInSummaryPanel() {
-            $("#selectedFlows").text($('input[name = "flows"]').val());
-        }         
-        
-        function handleTemplateKitSelectionForFlowOverride(selectedTemplateKitName) {
-            selectedSeqKit = $("#sequenceKit option:selected").val();
-            var seqKitFlowCount = seq_kits_to_flows_map[selectedSeqKit];
-                                
-            if (selectedTemplateKitName) {
-                var templateKitFlowCount = template_kits_to_flows_map[selectedTemplateKitName];
-            
-                if (templateKitFlowCount > 0) {
-                     
-                    if (selectedSeqKit) {
-                        var categories = seq_kits_to_categories_map[selectedSeqKit];
- 
-                        if (categories.toLowerCase().indexOf("flowoverridable") >= 0) {                                                       
-                            $('input[name = "flows"]').val(templateKitFlowCount);
-                             updateFlowsInSummaryPanel();
-                        }
-                    }
-                }               
-            }    
-        }
-        
-
-        function handleFlowOverridableSeqKitSelection(selectedSeqKitName, seqKitFlowCount) {
-                                
-            var selectedTemplateKit = null;
-            //if the selected templating kit has a flow count value, use that
-            
-            //WORKAROUND: $('input[name="templatekitType"]').val() is NOT always CORRECT!!!
-            var templateKitType = $('input[name="selectedTemplateKitType"]').val();
-
-            if (templateKitType == "") {            
-                templateKitType = $('input[name="templatekitType"]').val(); 
-            }
-                 
-            if (templateKitType == "OneTouch") {                  
-                selectedTemplateKit = $("#OneTouch__templatingKit option:selected").val();
-            }
-            else if (templateKitType == "IonChef") {                  
-                selectedTemplateKit = $("#IonChef__templatingKit option:selected").val();
-            }
-             
-            if (selectedTemplateKit) {
-                var templateKitFlowCount = template_kits_to_flows_map[selectedTemplateKit];
-                
-                if (templateKitFlowCount > 0) {
-                    $('input[name = "flows"]').val(templateKitFlowCount);
-                }
-                else {                 
-                    $('input[name = "flows"]').val(seqKitFlowCount);
-                }                                   
-            }
-            else {                        
-                $('input[name = "flows"]').val(seqKitFlowCount);
-            } 
-            updateFlowsInSummaryPanel(); 
-        }
-        
-
-        function setBarcodeKitSelectionList(selectedLibKit, categories) {
-            if (categories.toLowerCase().indexOf("bcshowsubset") >= 0) {
-                var $selects = $("#barcodeId");
-                set_barcodeKit_to_select($selects, barcode_kits_subset_list);
-            }
-            else {                
-                var $selects = $("#barcodeId");                                           
-                set_barcodeKit_to_select($selects, barcode_kits_all_list);
             }
         }
-        
-        function  set_barcodeKit_to_select($selects, value_list) {
+
+        function  set_barcodeKit_to_select(value_list) {
+            var $selects = $("#barcodeId");
             $selects.empty();
             $selects.append($("<option></option>"));
             
@@ -766,280 +473,149 @@
             });
                 
         }        
-        
-    	//at document.ready...
-    	handleAvalancheForPreviousSelection();
 
-        //at document.ready...
-        //set up barcode kit label selection based on library kit selection
-        var selectedLibKit = "{{step.getCurrentSavedFieldDict.librarykitname}}";
-        
-        if (selectedLibKit) {
-            var categories = lib_kits_to_categories_map[selectedLibKit];            
-            if (categories.toLowerCase().indexOf("bcrequired") >= 0) {
-                $('#barcodeKitLabel').text("Barcode Set (required)");
-                $('input[name = "isBarcodeKitRequired"]').val("true");
-            }
-            else {
-                $('#barcodeKitLabel').text("Barcode Set (optional)");
-                $('input[name = "isBarcodeKitRequired"]').val("false");
-            }
-            
-            setBarcodeKitSelectionList(selectedLibKit, categories);
-        }
-        else {
-            $('input[name = "isBarcodeKitRequired"]').val("false");
-        }
-        
         $("#sequenceKit").on('change', function(){
-            if (!$("#flows").prop('readonly')){
-                var flowCount = seq_kits_to_flows_map[$(this).val()];
-
+            if (!_isEditRun) {
                 var selectedSequenceKitName = $(this).val();
-                
-                var categories = seq_kits_to_categories_map[$(this).val()];
-
-                //note: tokens in categories are not mutually exclusive
-                if (categories.toLowerCase().indexOf("flowoverridable") >= 0) {
-                    handleFlowOverridableSeqKitSelection($(this).val(), flowCount);
-                }
-                
-                $('input[name = "flows"]').val(flowCount);
-                updateFlowsInSummaryPanel();
-                    
-                if (categories.toLowerCase().indexOf("readlengthderivablefromflows") >= 0) {
-                    handleSeqKitSelectionForLibraryReadLength(selectedSequenceKitName, $("select[name='templatekitname']").val());                      
-                }
-
-                $("#selectedSequenceKit").text(seqKitNameToDesc[$(this).val()]);
+    
+                setFlowCountBySelectedKits()
+                handleSeqKitSelectionForLibraryReadLength(selectedSequenceKitName);
             }
+
+            updateSummaryPanel("#selectedSequenceKit", seqKitNameToDesc[selectedSequenceKitName]);
         });
 
         $("#samplePreparationKit").change(function()  {
-            $("#selectedSamplePreparationKit").text($(this).val());
+            updateSummaryPanel("#selectedSamplePreparationKit", $(this).val());
         });
-        
-        $("#libraryKitType").change(function()  {
-        	$("#selectedLibraryKitType").text(libKitNameToDesc[$(this).val()]);
 
+
+        $("#libraryKitType").change(function()  {
         	//update barcode kit selection list on library kit selection changed
         	var libKitName = $(this).val();
-        	console.log("at libraryKitType.change() libKitName=", libKitName);
+        	//console.log("at libraryKitType.change() libKitName=", libKitName);
         	
+            $('#barcodeKitLabel').text("Barcode Set (optional)");
+            $('input[name = "isBarcodeKitRequired"]').val("false");
+            
         	if (libKitName) {
-            	var categories = lib_kits_to_categories_map[libKitName];
+            	var categories = lib_kits_to_categories_map[libKitName] || '';
                 
                 if (categories.toLowerCase().indexOf("bcrequired") >= 0) {
                     $('#barcodeKitLabel').text("Barcode Set (required)");
                     $('input[name = "isBarcodeKitRequired"]').val("true");
                 }
-                else {
-                    $('#barcodeKitLabel').text("Barcode Set (optional)");
-                    $('input[name = "isBarcodeKitRequired"]').val("false");
-                }
                 
-                setBarcodeKitSelectionList(libKitName, categories);
+                if (categories.toLowerCase().indexOf("bcshowsubset") >= 0) {
+                    set_barcodeKit_to_select(barcode_kits_subset_list);
+                } else {
+                    set_barcodeKit_to_select(barcode_kits_all_list);
+                }
             }
             else {
-                $('#barcodeKitLabel').text("Barcode Set (optional)");   
-                setBarcodeKitSelectionList(libKitName, "");         
+                set_barcodeKit_to_select(barcode_kits_all_list);
             }
-        });
+            
+            updateSummaryPanel("#selectedLibraryKitType", libKitNameToDesc[libKitName]);
+        }).change();
 
-        //logic to support avalanche 
-        //1) If IonChef is selected, uncheck and disable Avalanche checkbox, 
-        //   auto-select default non-Avalanche 3' adapter, set flowcount to selected sequencing kit's flow count
-        //2) If Avalanche checkbox is selected, 
-        //   auto-select Avalanche templating kit, 3' adapter, sequencing kit and flow count according to applProduct specification
-        //3) If Avalanche 3' adapter is selected, 
-        //   auto-select Avalanche checkbox, templating kit, sequencing kit and flow count according to applProduct specification
-        //4) If Avalanche templating kit is selected, 
-        //   auto-check Avalanche checkbox, auto-select Avalanche 3' adapter, sequencing kit and flow count
-        //5) If Avalanche checkbox is unchecked (and OneTouch is selected), 
-        //   auto-select non-Avalanche templating kit, and non-Avalanche 3' adapter, and set flow count according to sequencing kit's
 
-        
         $('input[name="templatekitType"]').change(function () {
-            var checkedRadioButton = $(this)
 
             $("#templateKit_comment").hide();
+            $("#templateKit").show();
                 
-            console.log("templatekitType - checkedRadioButton=", checkedRadioButton);
+            // show/hide templateKit select options based on type
+            var templateType = $(this).val();
+            var $options = $("#templateKit option");
+            $options.not(':first').hide();
+            $options.filter("."+templateType).show();
             
-            var templateType = checkedRadioButton.val();
-
-			//WORKAROUND
-            $('input[name = "selectedTemplateKitType"]').val(templateType);
-            
-            if (templateType == "IonChef") {             
-            	$('input[name = "templatekitSubType"]').removeAttr('checked');
-            	$('input[name = "templatekitSubType"]').attr("disabled", true);
-                
-                updateNonAvalanche3PrimeAdapter();
-                updateNonAvalancheFlowCount();
-            	$("#selectedTemplatingKitName").text(templateKitNameToDesc[$("select[name='templatekitname']").find("option:selected").val()]);
-            }
-            else {             
-            	$('input[name = "templatekitSubType"]').removeAttr('disabled'); 
-               	
-            	var selectedTemplateKit = $("select[name='templatekitname']").val();
-            	
-            	//avalanche templating kit could have been previously selected prior to switching to IonChef
-            	if (!$('input[name = "templatekitSubType"]').is(':checked')) {            		
-            		updateOneTouchTemplateKit();
-            	}
-            }
-            
-            //20130827-TODO-retest-why OT or IC template kit is not auto-selected
-            //refreshTemplateKitSelectionList();
-            
-
-            $("#templateKitHolder select").each(function(){
-                var currentSelect = $(this);
-                if (currentSelect.attr('id') == templateType + '__templatingKit') {
-                    currentSelect.attr('style', 'width: 350px;');
-                    currentSelect.attr('name', 'templatekitname');
-                    $("#selectedTemplatingKitName").text(templateKitNameToDesc[currentSelect.find("option:selected").val()]);
-
-                    handleTemplateKitSelectionForFlowOverride(currentSelect.find("option:selected").val());
-                    handleTemplateKitSelectionForTemplatingSize(currentSelect.find("option:selected").val());
-                    handleTemplateKitSelectionForLibraryReadLength(currentSelect.find("option:selected").val());
+            // retrieve previously selected kit or default if any
+            var templateKit = $(this).data('templatekitname');
+            if (!templateKit){
+                if (templateType == 'OneTouch') {
+                    templateKit = "{{helper.getStepDict.Application.savedObjects.applProduct.defaultTemplateKit.name}}";
+                } else if (templateType == 'IonChef') {
+                    templateKit = "{{helper.getStepDict.Application.savedObjects.applProduct.defaultIonChefPrepKit.name}}";
                 } else {
-                    currentSelect.attr('style', 'width: 350px; display: none;');
-                    currentSelect.attr('name', currentSelect.attr('id').replace('__templatingKit', '') + '__templatekitname');
+                    templateKit = '';
                 }
-            });
+            }
 
+            $("#templateKit").val(templateKit).change();
         });
-        
 
-        //id="{{kitTypeName}}__templatingKit" name="templatekitname"
 
-        $("select[name$='templatekitname']").change(function()  {
+        $("#templateKit").change(function()  {
 
         	var selectedVal = $(this).find("option:selected").val();
         	
-        	//console.log("templateKitName... selectedVal=", selectedVal+"; defaultAvalancheTemplateKitName=", defaultAvalancheTemplateKitName);
-        	
-        	if (selectedVal == defaultAvalancheTemplateKitName) {
-            	$('input[name = "templatekitSubType"]').attr('checked', true);
-                
-            	updateAvalanche3PrimeAdapter();            	                                
-            	updateAvalancheSeqKit();                
-            	updateAvalancheFlowCount();
-        	}
-        	else {
-        		//select non-Avalanche 3' adapter and update flow count
-            	$('input[name = "templatekitSubType"]').removeAttr('checked');
-            	
-        		updateNonAvalanche3PrimeAdapter();
-        		
-        		var previousFlowCount = $('input[name = "flows"]').val();
-        		if (previousFlowCount == defaultAvalancheFlowCount) {
-        			updateNonAvalancheFlowCount();        			
-        		}
-        	}
-
-        	handleTemplateKitSelectionForFlowOverride(selectedVal);
+            // save kit value to restore if type selection changes
+            $('input[name="templatekitType"]:checked').data('templatekitname', selectedVal);
+            
+            setFlowCountBySelectedKits();
         	handleTemplateKitSelectionForTemplatingSize(selectedVal)
         	handleTemplateKitSelectionForLibraryReadLength(selectedVal);
         	
-            $("#selectedTemplatingKitName").text(templateKitNameToDesc[$(this).find("option:selected").val()]);
-        });
-
-        
-        $('input[name = "templatekitSubType"]').change(function () {
-        	var checkBox = $(this);
-
-        	if( checkBox.is(':checked')) {
-            	//console.log("CHECKED at templatekitSubType!!");
-            	
-            	updateAvalancheTemplateKit();            	
-            	updateAvalanche3PrimeAdapter(); 
-            	updateAvalancheSeqKit();                
-            	updateAvalancheFlowCount();
-        	}
-        	else {
-            	//console.log("UNCHECKED at templatekitSubType!!");
-            	
-            	//need to work for copy or edit as well
-        		updateNonAvalanche3PrimeAdapter();
-        		
-                updateOneTouchTemplateKit();
-            	updateNonAvalancheFlowCount();
-
-        	}
+            updateSummaryPanel("#selectedTemplatingKitName", templateKitNameToDesc[selectedVal]);
         });
 
 
         $("#libraryKey").change(function() {
-            $("#selectedLibraryKey").text(libraryKeySeqToNameAndSeq[$(this).val()]);        	
+            updateSummaryPanel("#selectedLibraryKey", libraryKeySeqToNameAndSeq[$(this).val()]);
         });
         
 
         $("#forward3primeAdapter").change(function() {
         	var value = $(this).val();
-        	
-            $("#selected3PrimeAdapter").text(threePrimeAdapterSeqToNameAndSeq[$(this).val()]);        
 
             if (value == "{{step.getCurrentSavedFieldDict.avalancheForward3PrimeAdapter}}") {
-            	$('input[name = "templatekitSubType"]').removeAttr('disabled');             	
-            	$('input[name = "templatekitSubType"]').attr('checked', true);
-
-            	$('input[name="templatekitType"][value="OneTouch"]').attr('checked', true);
-                
-            	//if user changes to Avalanche 3' adapter while IonChef is selected
-            	refreshTemplateKitSelectionList();
-                
-            	updateAvalancheTemplateKit();            	
-            	updateAvalancheSeqKit();               
-            	updateAvalancheFlowCount();       	
+            	$('input[name="templatekitType"][value="OneTouch"]').attr('checked', true).change();
             }
+            
+            updateSummaryPanel("#selected3PrimeAdapter", threePrimeAdapterSeqToNameAndSeq[value]);
         });
 
-                
+
         var flowsSpinner = $("#flows").spinner({min: 1, max: 2000});
         flowsSpinner.spinner("value", '{{step.getCurrentSavedFieldDict.flows}}');
-        $("#flows").on("spinchange", function(event, ui){
-            updateFlowsInSummaryPanel();
-        });
-        $("#flows").on("spinstop", function(event, ui) {
-            updateFlowsInSummaryPanel();
-        });
-        if ($("#flows").prop('readonly'))
+        if (_isEditRun){
             flowsSpinner.spinner("disable").prop('disabled',false);
-    
+        } else {
+            $("#flows").on("spinstop spinchange", function(event, ui){
+                updateSummaryPanel("#selectedFlows", flowsSpinner.spinner("value"));
+            });
+        }
+
     
         var readLengthSpinner = $("#libraryReadLength").spinner({min: 0, max: 1000});
         readLengthSpinner.spinner("value", '{{step.getCurrentSavedFieldDict.libraryReadLength}}');
-        $("#libraryReadLength").on("spinchange", function(event, ui){
-            var value = readLengthSpinner.spinner("value");
-            updateLibraryReadLengthInSummaryPanel(value);
-            setFlowCountByLibraryReadLength(value);
-        });
-        
-        $("#libraryReadLength").on("spinstop", function(event, ui) {
-            var value = readLengthSpinner.spinner("value");
-            updateLibraryReadLengthInSummaryPanel(value);
-            setFlowCountByLibraryReadLength(value);           
-        });
-        if ($("#libraryReadLength").prop('readonly'))
-            readLengthSpinner.spinner("disable").prop('disabled',false);  
+        if (_isEditRun){
+            readLengthSpinner.spinner("disable").prop('disabled',false);
+        } else {
+            $("#libraryReadLength").on("spinstop spinchange", function(event, ui){
+                var value = readLengthSpinner.spinner("value");
+                updateSummaryPanel("#selectedLibraryReadLength", value); 
+                setFlowCountByLibraryReadLength(value);
+            });
+        }
+
 
         $('input[type=radio][name=templatingSize]').change(function() {
-            updateTemplatingSizeInSummaryPanel(this.value);
+            updateSummaryPanel("#selectedTemplatingSize", this.value);
         });
         
         $("#controlsequence").change(function()  {
-            $("#selectedControlSequence").text($(this).val());
+            updateSummaryPanel("#selectedControlSequence", $(this).val());
         });     
 
         $("#chipType").change(function()  {
-            $("#selectedChipType").text(chipNameToDisplayName[$(this).val()]);
+            updateSummaryPanel("#selectedChipType", chipNameToDisplayName[$(this).val()]);
         });     
         
         $("#barcodeId").change(function()  {
-            $("#selectedBarcode").text($(this).val());
+            updateSummaryPanel("#selectedBarcode", $(this).val());
         });
         
         $(".extra_kit_forward_info").hide();

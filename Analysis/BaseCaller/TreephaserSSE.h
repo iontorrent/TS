@@ -117,10 +117,11 @@ public:
     return pm_model_available_;
   };
 
-  //! @brief     Disables the use of recalibration until a new model is set.
+  //! @brief     Disables and deletes the recalibration model information.
   void DisableRecalibration() {
-    //pm_model_available_ = false;
+    pm_model_available_ = false;
     recalibrate_predictions_ = false;
+    As_ = 0; Bs_ = 0;
   };
 
   //! @brief  Switch to disable / enable the use of recalibration during the normalization phase

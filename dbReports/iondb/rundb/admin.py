@@ -630,21 +630,6 @@ class LocationAdmin(admin.ModelAdmin):
     list_display = ('name','defaultlocation')
 
 
-class BackupAdmin(admin.ModelAdmin):
-    list_display = ('experiment','backupDate','backupPath')
-    search_fields = ['backupName' ]
-    ordering = ( "-id", )
-
-    def has_add_permission(self, request):
-        return False
-
-class BackupConfigAdmin(admin.ModelAdmin):
-    list_display = ('backup_directory',)
-
-    def has_add_permission(self, request):
-        return False
-
-
 class PluginAdmin(admin.ModelAdmin):
     list_display = ('name','selected','version','date','active','path','url')
     list_filter = ('active','selected')
@@ -796,8 +781,6 @@ admin.site.register(AnalysisMetrics)
 admin.site.register(LibMetrics)
 admin.site.register(QualityMetrics)
 admin.site.register(Template)
-admin.site.register(Backup, BackupAdmin)
-admin.site.register(BackupConfig, BackupConfigAdmin)
 admin.site.register(GlobalConfig, GlobalConfigAdmin)
 admin.site.register(Plugin, PluginAdmin)
 admin.site.register(PluginResult, PluginResultAdmin)

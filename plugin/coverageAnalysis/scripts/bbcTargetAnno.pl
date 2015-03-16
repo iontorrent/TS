@@ -163,6 +163,7 @@ while( <BEDFILE> )
     $targSrt = 0;
     $targEnd = 0;
   }
+  my $sameSrt = ($srt == $targSrt);
   $targSrt = $srt;
   if( $srt < $targSrt )
   {
@@ -172,10 +173,13 @@ while( <BEDFILE> )
   if( $srt <= $targEnd )
   {
     ++$numBedWarnings;
-    if( $end <= $targEnd )
+    if( $end <= $targEnd || $sameSrt )
     {
-      print STDERR "Warning: Region $chrid:$srt-$end is entirely overlapped previous region $chrid:$targSrt-$targEnd.\n" if( $bedwarn );
-      print STDERR " - This region will be excluded from the output file.\n" if( $bedwarn );
+      if( $bedwarn ) {
+        printf STDERR "Warning: Region $chrid:$srt-$end %s previous region $chrid:$targSrt-$targEnd.\n",
+          $end <= $targEnd ? "is entirely overlapped by" : "entirely overlaps";
+        print STDERR " - This region will be excluded from the output file.\n";
+      }
       $targEnd = $end;
       next;
     }

@@ -253,7 +253,13 @@
             $new_select.change();
             $parent.append($new_select); 
         });
-        updateSamplesTable();
+
+        var isPlan = $('input[id=isPlan]').val();
+        //console.log("page_plan_reference_section.html - create_bedFileSelects - isPlan=", isPlan);
+            
+        if (isPlan == "True") {
+            updateSamplesTable();
+        }
     }
    
 
@@ -380,7 +386,13 @@
             $parent.append($new_select);
  
         });
-        updateSamplesTable();
+
+        var isPlan = $('input[id=isPlan]').val();
+        //console.log("page_plan_reference_section.html - create_bedFileSelects2 - isPlan=", isPlan);
+            
+        if (isPlan == "True") {
+            updateSamplesTable();
+        }        
     }
     
 

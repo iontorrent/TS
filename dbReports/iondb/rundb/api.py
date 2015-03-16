@@ -2167,10 +2167,7 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
     platform = fields.CharField(readonly = True, blank=True, null=True)
 
-    chefStatus = fields.CharField(blank=True, default='')
-    chefProgress = fields.FloatField(default=0.0, blank=True)
-    chefMessage = fields.CharField(blank=True, default='')
-    chefLogPath = fields.CharField(blank=True, null=True)
+    chefInfo = fields.DictField(default={})
 
     def prepend_urls(self):
         return [
@@ -2290,6 +2287,15 @@ class PlannedExperimentResource(PlannedExperimentDbResource):
 
         sampleGrouping = bundle.obj.sampleGrouping
         bundle.data['sampleGroupingName'] = sampleGrouping.displayedName if sampleGrouping else ""
+
+        # IonChef parameters from Experiment
+        if experiment.chefInstrumentName:
+            try:
+                chefFields = [f.name for f in experiment._meta.fields if f.name.startswith('chef')]
+                for field in chefFields:
+                    bundle.data['chefInfo'][field] = getattr(experiment,field)
+            except:
+                logger.error('Error getting Chef fields for Plan %s(%s)' % (bundle.obj.planName, bundle.obj.pk))
 
         return bundle
 

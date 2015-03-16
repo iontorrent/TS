@@ -399,36 +399,41 @@ void DetectSSEForNoCall(VariantOutputInfo &l_summary_info, AlleleIdentity &var_i
   // cout << alt_counts_positive << "\t" << alt_counts_negative << "\t" << ref_counts_positive << "\t" << ref_counts_negative << endl;
 }
 
+
 void DecisionTreeData::FilterBlackList(const vector<VariantSpecificParams>& variant_specific_params)
 {
+
+  return; // disable pending algo changes, revert to 4.2 behavior
+
   for (unsigned int i_allele=0; i_allele<allele_identity_vector.size(); i_allele++) {
 
-   VariantOutputInfo &l_summary_info = summary_info_vector[i_allele];
+    VariantOutputInfo &l_summary_info = summary_info_vector[i_allele];
    
     float coverage = all_summary_stats.GetAlleleCount(-1,i_allele+1);
     float coverage_fwd = all_summary_stats.GetAlleleCount(0,i_allele+1);
     float coverage_rev = all_summary_stats.GetAlleleCount(1,i_allele+1);
    
-   char black_list_strand = variant_specific_params[i_allele].black_strand;
-   
-          if(black_list_strand == 'F') { 
-          if( (coverage_fwd / coverage) > .7)
-            l_summary_info.isFiltered = true;
-            string my_reason = "NOCALLxLowQualityForwardStrand";
-            l_summary_info.filterReason.push_back(my_reason);
-        } else if(black_list_strand == 'R') {
-          if( (coverage_rev / coverage) > .7 )
-            l_summary_info.isFiltered = true;
-            string my_reason = "NOCALLxLowQualityReverseStrand";
-            l_summary_info.filterReason.push_back(my_reason);
-        } else if(black_list_strand == 'B') {
-            l_summary_info.isFiltered = true;
-            string my_reason = "NOCALLxLowQualityBothStrand";
-            l_summary_info.filterReason.push_back(my_reason);
-        }
-  
-  
-}
+    char black_list_strand = variant_specific_params[i_allele].black_strand;
+    if( coverage > 0) {
+      if(black_list_strand == 'F') { 
+	if( (coverage_fwd / coverage) > .7) {
+	  l_summary_info.isFiltered = true;
+	  string my_reason = "NOCALLxLowQualityForwardStrand";
+	  l_summary_info.filterReason.push_back(my_reason);
+	}
+      } else if(black_list_strand == 'R') {
+	if( (coverage_rev / coverage) > .7 ) {
+	  l_summary_info.isFiltered = true;
+	  string my_reason = "NOCALLxLowQualityReverseStrand";
+	  l_summary_info.filterReason.push_back(my_reason);
+	}
+      } else if(black_list_strand == 'B') {
+	l_summary_info.isFiltered = true;
+	string my_reason = "NOCALLxLowQualityBothStrand";
+	l_summary_info.filterReason.push_back(my_reason);
+      }
+    }
+  }
 }
 
 

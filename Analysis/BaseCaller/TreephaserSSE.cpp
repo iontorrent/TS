@@ -219,9 +219,9 @@ TreephaserSSE::TreephaserSSE()
 // Constructor used in Basecaller
 TreephaserSSE::TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize)
 {
-	SetFlowOrder(flow_order, windowSize);
-        my_cf_ = -1.0f;
-        my_ie_ = -1.0f;
+  SetFlowOrder(flow_order, windowSize);
+  my_cf_ = -1.0f;
+  my_ie_ = -1.0f;
 }
 
 // ----------------------------------------------------------------
@@ -1052,8 +1052,8 @@ void TreephaserSSE::RecalibratePredictions(PathRec *maxPathPtr)
 
 void TreephaserSSE::ResetRecalibrationStructures(int num_flows) {
   for (int p = 0; p <= 8; ++p) {
-    setValueSSE(&(sv_PathPtr[p]->calib_A[0]), 1.0f, num_flows_);
-	setZeroSSE(&(sv_PathPtr[p]->calib_B[0]), num_flows_*sizeof(float));
+    setValueSSE(&(sv_PathPtr[p]->calib_A[0]), 1.0f, num_flows);
+	setZeroSSE(&(sv_PathPtr[p]->calib_B[0]), num_flows*sizeof(float));
   }
 }
 
@@ -1110,10 +1110,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
       parent->sequence[base] = best->sequence[base];
       if (base and parent->sequence[base] != parent->sequence[base-1])
         parent->last_hp = 0;
-      parent->last_hp++;
-      if (parent->last_hp > MAX_HPXLEN) { // Safety to not overrun recalibration array
-        parent->last_hp = MAX_HPXLEN;
-      }
+      parent->last_hp = min(parent->last_hp+1, MAX_HPXLEN);
 
       nextState(parent, char_to_nuc[best->sequence[base]&7], end_flow);
       if (parent->flow >= num_flows_)
@@ -1387,7 +1384,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
       parent->sequence[parent->sequence_length] = flow_order_[parent->flow];
       if (parent->sequence_length and parent->sequence[parent->sequence_length] != parent->sequence[parent->sequence_length-1])
         parent->last_hp = 0;
-      parent->last_hp++;
+      parent->last_hp = min(parent->last_hp+1, MAX_HPXLEN);
       parent->sequence_length++;
 
       //update calib_A and calib_B for parent
@@ -1427,7 +1424,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
   // At the end change predictions according to recalibration model and reset data structures
   if (recalibrate_predictions_) {
     RecalibratePredictions(sv_PathPtr[MAX_PATHS]);
-    ResetRecalibrationStructures(end_flow);
+    ResetRecalibrationStructures(num_flows_);
   }
 
   return false;
@@ -1621,8 +1618,9 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
 
       copySSE(childToKeep->pred, parent->pred, parent->window_start << 2);
 
+
       if (childToKeep->flow == parent->flow)
-        childToKeep->last_hp = parent->last_hp + 1;
+        childToKeep->last_hp = min(parent->last_hp+1, MAX_HPXLEN);
       else
         childToKeep->last_hp = 1;
 

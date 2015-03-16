@@ -8,7 +8,7 @@ from iondb.rundb.plan.page_plan.step_helper_types import StepHelperType
 from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNames
 from iondb.rundb.plan.page_plan.reference_step_data import ReferenceFieldNames
-from iondb.rundb.plan.page_plan.export_step_data import ExportFieldNames
+from iondb.rundb.plan.page_plan.ionreporter_step_data import IonReporterFieldNames
 from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_sample_name, validate_sample_tube_label, \
     validate_barcode_sample_association, validate_QC, validate_targetRegionBedFile_for_runType
 
@@ -138,6 +138,7 @@ class SavePlanStepData(AbstractStepData):
         self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE] = ""
                     
         self.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = None
+        self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = None
         self.prepopulatedFields[SavePlanFieldNames.IR_CONFIG_JSON] = None
         self.prepopulatedFields[SavePlanFieldNames.SAMPLE_ANNOTATIONS] = list(SampleAnnotation_CV.objects.all().order_by("annotationType", "iRValue"))
         self.savedFields[SavePlanFieldNames.BARCODE_SAMPLE_TUBE_LABEL] = None
@@ -171,6 +172,7 @@ class SavePlanStepData(AbstractStepData):
         self.savedFields[SavePlanFieldNames.LIMS_META] = None
         self.savedFields[SavePlanFieldNames.META] = {}
         
+        self._dependsOn.append(StepNames.IONREPORTER)
         self._dependsOn.append(StepNames.APPLICATION)
         self._dependsOn.append(StepNames.KITS)
         # self._dependsOn.append(StepNames.REFERENCE)
@@ -480,7 +482,6 @@ class SavePlanStepData(AbstractStepData):
     
     def updateFromStep(self, updated_step):
         #logger.debug("ENTER save_plan_step_data.updateFromStep() updated_step.stepName=%s; self.savedFields=%s" %(updated_step.getStepName(), self.savedFields))
- 
 
         if updated_step.getStepName() not in self._dependsOn:
             for sectionKey, sectionObj in self.step_sections.items():
@@ -550,13 +551,17 @@ class SavePlanStepData(AbstractStepData):
                 #if barcode kit selection changes, re-validate
                 self.validateStep()
                 
-        elif updated_step.getStepName() == StepNames.EXPORT:
-            if ExportFieldNames.IR_ACCOUNT_ID not in updated_step.savedFields\
-                or not updated_step.savedFields[ExportFieldNames.IR_ACCOUNT_ID]\
-                or updated_step.savedFields[ExportFieldNames.IR_ACCOUNT_ID] == '0':
+        if updated_step.getStepName() == StepNames.IONREPORTER:
+
+            if updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID] and updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID] != "0" \
+                and self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] != updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]:
                 
-                if SavePlanFieldNames.BAD_IR_SET_ID in self.validationErrors:
-                    self.validationErrors.pop(SavePlanFieldNames.BAD_IR_SET_ID, None)
+                    for row in self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]:
+                        row[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
+
+            self.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = updated_step.savedFields[IonReporterFieldNames.IR_WORKFLOW]
+            self.prepopulatedFields[SavePlanFieldNames.SELECTED_IR] = updated_step.savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]
+
 
         for sectionKey, sectionObj in self.step_sections.items():
             if sectionObj:

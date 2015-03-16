@@ -256,7 +256,7 @@ LOGOPT=''
 if [ $SHOWLOG -eq 1 ]; then
   LOGOPT='-l'
 fi
-AMPCOVOPTS=''
+AMPCOVOPTS='-a'
 AMPLICONS=0
 TARGETTYPE='target'
 if [ "$AMPOPT" = "-a" ]; then
@@ -270,6 +270,7 @@ elif [ $RNABED -eq 1 ]; then
   TRGCOVDEPTH=0
   REP_OVERVIEW=1
 else
+  AMPCOVOPTS=''
   AMPE2EREADS=0
 fi
 REPLENPLOT=$AMPLICONS

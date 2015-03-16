@@ -87,6 +87,7 @@ if( $genomebed ) {
         next unless( /^>/ );
         chomp;
         s/^>//;
+        s/\s.*//; # ID is defined up to first whitespace
         last if( $_ eq $chr );
       }
     }
@@ -96,6 +97,7 @@ if( $genomebed ) {
       chomp;
       if( /^>/ ) {
         s/^>//;
+        s/\s.*//;
         $fastaChr = $_;
         last;
       }
@@ -199,10 +201,13 @@ while( <BEDFILE> )
   }
   if( $srt <= $lastEnd )
   {
-    if( $end <= $lastEnd )
+    if( $end <= $lastEnd || $srt == $lastSrt )
     {
       ++$numWarn;
-      print STDERR "Warning: Region $chrid:$srt-$end is entirely overlapped previous region $chrid:$lastSrt-$lastEnd.\n" if( $bedwarn );
+      if( $bedwarn ) {
+        printf STDERR "Warning: Region $chrid:$srt-$end %s previous region $chrid:$lastSrt-$lastEnd.\n",
+          $end <= $lastEnd ? "is entirely overlapped by" : "entirely overlaps";
+      }
       #next;  # if want to discard this region
     }
     #print STDERR "Warning: Region $chrid:$srt-$end overlaps previous region $chrid:$lastSrt-$lastEnd.\n" if( $bedwarn );

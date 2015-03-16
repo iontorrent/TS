@@ -563,3 +563,22 @@ p.grid-footnote {
   margin-bottom: 1px;
   margin-right: -1px;
 }
+
+.ui-slider.grid-microslider {
+  z-index:1;
+  width:100%;
+  height:5px;
+  background:#CDF;
+  margin-bottom:4px;
+  margin-left:2px;
+}
+
+.ui-slider.grid-microslider .ui-slider-handle {
+  margin-top:1px;
+  margin-left:-5px;
+  background:#78C;
+  border-color:#56A;
+  height:9px;
+  width:7px;
+}
+

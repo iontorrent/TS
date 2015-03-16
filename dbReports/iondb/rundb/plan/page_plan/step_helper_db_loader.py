@@ -52,8 +52,8 @@ class StepHelperDbLoader():
     def _updateApplicationStepData(self, runTypeObj, step_helper, application_step_data):
         application_step_data.savedFields[ApplicationFieldNames.RUN_TYPE] = runTypeObj.pk
         application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = runTypeObj.applicationGroups.all()[0:1][0].pk
-        application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = runTypeObj.applicationGroups.all()[0:1][0].name
-
+        application_step_data.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = runTypeObj.applicationGroups.all()[0:1][0].name
+        
         ##application_step_data.savedObjects["runType"] = runTypeObj
         ##application_step_data.savedObjects["applProduct"] = ApplProduct.objects.get(isActive=True, isDefault=True, isVisible=True,
         ##                                                               applType__runType = runTypeObj.runType)
@@ -184,6 +184,7 @@ class StepHelperDbLoader():
         save_plan_step_data.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE] = planned_experiment.get_bedfile()
         save_plan_step_data.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE] = planned_experiment.get_regionfile()
         save_plan_step_data.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = planned_experiment.runType
+        save_plan_step_data.prepopulatedFields[SavePlanFieldNames.IR_WORKFLOW] = planned_experiment.irworkflow
           
         isOncoSameSample = False
 
@@ -215,6 +216,11 @@ class StepHelperDbLoader():
                     samplesTable = sorted(samplesTable, key=lambda item: item['barcodeId'])
                 else:
                     samplesTable = sorted(samplesTable, key=lambda item: item['sampleName'])
+
+            # if a plan is created from IR-enabled template, userInputInfo doesn't exist yet so need to add irWorkflow
+            if planned_experiment.irworkflow and not (irInfo and irInfo['userInputInfo']):
+                for sampleDict in samplesTable:
+                    sampleDict['irWorkflow'] = planned_experiment.irworkflow
 
             save_plan_step_data.savedFields[SavePlanFieldNames.SAMPLES_TABLE] = json.dumps(samplesTable)
         
@@ -290,25 +296,32 @@ class StepHelperDbLoader():
             step_helper.steps[StepNames.OUTPUT].savedFields[OutputFieldNames.PROJECTS].append(project.pk)
 
     
-    def _updateUniversalStep_applicationData(self, step_helper, planned_experiment, application_step_data):                
-        selectedRunType = RunType.objects.filter(runType="GENS")[0:1][0]
+    def _updateUniversalStep_applicationData(self, step_helper, planned_experiment, application_step_data): 
+        selectedRunType = None
+        if (application_step_data.savedFields[ApplicationFieldNames.RUN_TYPE]):
+            selectedRunType = application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE]
+            logger.debug("_updateUniversalStep_applicationData selectedRunType=%s" %(selectedRunType))
+        #selectedRunType should not be undefined, but just in case...
+        if not selectedRunType:
+            selectedRunType = RunType.objects.filter(runType="GENS")[0:1][0]
+        
         if selectedRunType.applicationGroups.all().count() > 0:
             application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = selectedRunType.applicationGroups.all()[0:1][0].pk
-            application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = selectedRunType.applicationGroups.all()[0:1][0].name
+            application_step_data.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = selectedRunType.applicationGroups.all()[0:1][0].name
             
         #only set the runtype if its still a valid one, otherwise keep the default that was set in the constructor.
         if RunType.objects.filter(runType=planned_experiment.runType).count() > 0:
             selectedRunType = RunType.objects.filter(runType=planned_experiment.runType)[0:1][0]
             if hasattr(planned_experiment, 'applicationGroup') and planned_experiment.applicationGroup:
                 application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = planned_experiment.applicationGroup.pk
-                application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = planned_experiment.applicationGroup.name
+                application_step_data.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = planned_experiment.applicationGroup.name
+
             else:
                 #if no application group is selected, pick the first one associated with the runType
                 application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = selectedRunType.applicationGroups.all()[0:1][0].pk
-                application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = selectedRunType.applicationGroups.all()[0:1][0].name
-                #logger.debug("step_helper_db_loader.updateUniversalStepHelper() planned_experiment.id=%d; PICKING applicationGroup.id=%d" %(planned_experiment.id, application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP])) 
+                application_step_data.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = selectedRunType.applicationGroups.all()[0:1][0].name
 
-        logger.debug("step_helper_db_loader._updateUniversalStep_applicationData() planned_experiment.id=%d; PICKING applicationGroup.id=%d; applicationGroupName=%s" %(planned_experiment.id, application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP], application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME])) 
+        logger.debug(" step_helper_db_loader._updateUniversalStep_applicationData() planned_experiment.id=%d; PICKING applicationGroup.id=%d; applicationGroupName=%s" %(planned_experiment.id, application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP], application_step_data.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME])) 
 
         application_step_data.savedFields[ApplicationFieldNames.RUN_TYPE] = selectedRunType.pk
         application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE] = selectedRunType
@@ -319,9 +332,8 @@ class StepHelperDbLoader():
         ##logger.debug("step_helper_db_loader._updateUniversalStep_applicationData() saving appl_product now!!")
         application_step_data.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = appl_product
         
-        application_step_data.savedFields[ApplicationFieldNames.CATEGORIES] =  planned_experiment.categories
-        
-        #logger.debug("step_helper_db_loader_updateUniversalStep_applicationData() helper.sh_type=%s   application_step_data.categories=%s" %(step_helper.sh_type, application_step_data.savedFields[ApplicationFieldNames.CATEGORIES]))
+        application_step_data.prepopulatedFields[ApplicationFieldNames.CATEGORIES] =  planned_experiment.categories
+        #logger.debug(" step_helper_db_loader_updateUniversalStep_applicationData() helper.sh_type=%s   application_step_data.categories=%s" %(step_helper.sh_type, application_step_data.prepopulatedFields[ApplicationFieldNames.CATEGORIES]))
             
         return appl_product 
 
@@ -343,7 +355,7 @@ class StepHelperDbLoader():
         kits_step_data.savedFields[KitsFieldNames.BARCODE_ID] = planned_experiment.get_barcodeId()
 
         chipType = planned_experiment.get_chipType()
-        kits_step_data.savedFields[KitsFieldNames.CHIP_TYPE] = 'P1.1.17' if chipType == '900v2' else chipType
+        kits_step_data.savedFields[KitsFieldNames.CHIP_TYPE] = '318' if chipType == '318v2' else chipType
         kits_step_data.prepopulatedFields[KitsFieldNames.IS_CHIP_TYPE_REQUIRED] = step_helper.isPlan()
 
         kits_step_data.savedFields[KitsFieldNames.FLOWS] = planned_experiment.get_flows()
@@ -363,27 +375,21 @@ class StepHelperDbLoader():
 
         avalanche3PrimeAdapters = ThreePrimeadapter.objects.filter(direction='Forward', runMode='single', chemistryType = 'avalanche').order_by('-isDefault', 'name')
         kits_step_data.savedFields[KitsFieldNames.AVALANCHE_FORWARD_3_PRIME_ADAPTER] = avalanche3PrimeAdapters[0].sequence
-        if appl_product.defaultAvalancheTemplateKit:
-            kits_step_data.savedFields[KitsFieldNames.AVALANCHE_TEMPLATE_KIT_NAME] = appl_product.defaultAvalancheTemplateKit.name
         if appl_product.defaultAvalancheSequencingKit:
             kits_step_data.savedFields[KitsFieldNames.AVALANCHE_SEQUENCE_KIT_NAME] = appl_product.defaultAvalancheSequencingKit.name
         
-        nonAvalanche3PrimeAdapters = ThreePrimeadapter.objects.filter(direction='Forward', runMode='single').exclude(chemistryType = 'avalanche').order_by('-isDefault', 'name')
-        kits_step_data.savedFields[KitsFieldNames.NON_AVALANCHE_FORWARD_3_PRIME_ADAPTER] = nonAvalanche3PrimeAdapters[0].sequence
-        if appl_product.defaultTemplateKit:
-            kits_step_data.savedFields[KitsFieldNames.NON_AVALANCHE_TEMPLATE_KIT_NAME] = appl_product.defaultTemplateKit.name
-        if appl_product.defaultSequencingKit:
-            kits_step_data.savedFields[KitsFieldNames.NON_AVALANCHE_SEQUENCE_KIT_NAME] = appl_product.defaultSequencingKit.name
-            
         kits_step_data.prepopulatedFields[KitsFieldNames.IS_BARCODE_KIT_SELECTION_REQUIRED] = appl_product.isBarcodeKitSelectionRequired        
 
 
     def _updateUniversalStep_kitData_for_edit(self, step_helper, planned_experiment, appl_product, application_step_data, kits_step_data): 
         application_step_data.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = appl_product
                        
+        # no chip type selection for sequenced run
+        if step_helper.isEditRun():
+            kits_step_data.prepopulatedFields[KitsFieldNames.CHIP_TYPES] = Chip.objects.filter(name=kits_step_data.savedFields[KitsFieldNames.CHIP_TYPE])
+
         # if editing a sequenced run old/obsolete chipType and kits must be included
         if step_helper.isEditRun() or step_helper.isEdit():
-            kits_step_data.prepopulatedFields[KitsFieldNames.CHIP_TYPES] = Chip.objects.filter(name=kits_step_data.savedFields[KitsFieldNames.CHIP_TYPE])
             kits_step_data.prepopulatedFields[KitsFieldNames.CONTROL_SEQ_KITS] |= KitInfo.objects.filter(name=kits_step_data.savedFields[KitsFieldNames.CONTROL_SEQUENCE])
             kits_step_data.prepopulatedFields[KitsFieldNames.SAMPLE_PREP_KITS] |= KitInfo.objects.filter(name=kits_step_data.savedFields[KitsFieldNames.SAMPLE_PREPARATION_KIT])
             kits_step_data.prepopulatedFields[KitsFieldNames.LIB_KITS] |= KitInfo.objects.filter(name=kits_step_data.savedFields[KitsFieldNames.LIBRARY_KIT_NAME])

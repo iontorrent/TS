@@ -221,10 +221,6 @@ $(function () {
     $("#TC-help").attr( "title", "Click for help." );
   });
 
-  $('#TC-placeholder').dblclick(function(e) {
-    if( zoomViewOnBin( lastHoverBar.binNum, true ) ) hideTooltip();
-  });
-
   function zoomViewOnBin(binNum,zoomIn) {
     // Always perform zoom out if binNum < 0
     if( plotStats.numPlots <= 0 ) return false;
@@ -643,19 +639,34 @@ $(function () {
     }
   });
 
+  var numClicks = 0;
+  var clickTimer = null;
   placeholder.bind("plotclick", function(e,pos,item) {
+    // manual implement of dblclick since single click always fires
+    if( ++numClicks > 1 ) {
+      clearTimeout(clickTimer);
+      numClicks = 0;
+      var binNum = item ? Math.floor(pos.x) : -1;
+      if( zoomViewOnBin( binNum, true ) ) hideTooltip();
+      return;
+    }
     // ignore false triggering due to mouse selection for zoom
     if( lastHoverBar.postZoom ) {
       lastHoverBar.postZoom = false;
+      numClicks = 0;
       return;
     }
-    if( cursorOverItem(pos,item) ) {
-      showTooltip(item,pos,true);
-      lastHoverBar.clickItem = item;
-      if( item != null ) plotObj.highlight(item.series,item.datapoint);
-    } else {
-      hideTooltip();
-    }
+    // defer click event to enable dblclick catch
+    clickTimer = setTimeout( function() {
+      if( cursorOverItem(pos,item) ) {
+        showTooltip(item,pos,true);
+        lastHoverBar.clickItem = item;
+        if( item ) plotObj.highlight(item.series,item.datapoint);
+      } else {
+        hideTooltip();
+      }
+      numClicks = 0;
+    }, 250 );
   });
 
   placeholder.bind("mouseleave", function() {

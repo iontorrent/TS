@@ -36,8 +36,6 @@ from django.core.urlresolvers import reverse
 from django.shortcuts import get_object_or_404, redirect, render_to_response
 from django.conf import settings
 from datetime import datetime, date
-from iondb.rundb.data import tasks as dmtasks
-from iondb.rundb.data import dmactions_types
 from iondb.plugins.launch_utils import get_plugins_dict
 from iondb.rundb.data import dmactions_types
 
@@ -2155,30 +2153,6 @@ def metal(request, pk, path):
     else:
         return show_file(report, pk, path, root, full_path)
 
-
-@login_required
-def report_action(request, pk, action):
-    logger.info("report_action: request '%s' on report: %s" % (action, pk))
-
-    if request.method != "POST":
-        return http.HttpResponseNotAllowed(['POST'])
-
-    comment = request.POST.get("comment", "No Comment")
-    async_task_result = None
-    if action == 'Z':
-        ret = get_object_or_404(models.Results, pk=pk)
-        ret.autoExempt = not ret.autoExempt
-        ret.save()
-    elif action == 'A':
-        async_task_result = dmtasks.archive_report.delay(request.user, pk, comment)
-    elif action == 'E':
-        async_task_result = dmtasks.export_report.delay(request.user, pk, comment)
-    elif action == "P":
-        async_task_result = dmtasks.prune_report.delay(request.user, pk, comment)
-    if async_task_result:
-        logger.info(async_task_result)
-
-    return http.HttpResponse()
 
 def getZip(request, pk):
 	try:

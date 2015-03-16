@@ -393,7 +393,7 @@
     $("#still_loading").hide();
     $("#postbutton").show();
 
-    if( deadTarget ) alert("Warning: Original target regions in Plan no longer exist.");
+    if( deadTarget ) alert("Warning: The original target regions specified by the Plan no longer exists or was replaced with a newer version.");
 
     $('#postbutton').click(function() {
       var libType = $('#librarytype option:selected').val();

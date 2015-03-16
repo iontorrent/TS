@@ -42,9 +42,10 @@ AlleleParser::AlleleParser(const ExtendParameters& parameters, const ReferenceRe
   if (parameters.allowComplex)
     allowed_allele_types_ |= ALLELE_COMPLEX;
 
-   black_list_strand = '.';
-   hp_max_lenght_override_value = 0;
-   strand_bias_override_value = 0.0;
+  // black_list_strand.clear(); black_list_strand.push_back('.');  // revert to 4.2
+  black_list_strand = '.';
+  hp_max_lenght_override_value = 0;
+  strand_bias_override_value = 0.0;
 
 }
 
@@ -531,6 +532,7 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
       continue;
     }
 
+    // if (hotspot_reader_->next_chr() == position_ticket->chr and hotspot_reader_->next_pos() < position_ticket->pos + /*hotspot_window*/ min(haplotype_length,15)) { //revert to 4.2
     if (hotspot_reader_->next_chr() == position_ticket->chr and hotspot_reader_->next_pos() <= position_ticket->pos + hotspot_window) {
       for (size_t i = 0; i < hotspot_reader_->next().size(); i++)
         hotspot_alleles_.push_back(hotspot_reader_->next()[i]);
@@ -540,8 +542,7 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
     break;
   }
 
-
-
+  // black_list_strand.clear();black_list_strand.push_back('.'); revert to 4.2
   black_list_strand = '.';
   hp_max_lenght_override_value = 0;
   strand_bias_override_value = 0.0;
@@ -552,10 +553,19 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
      
     //record bad-strand information if provided
     if(a->params.black_strand != '.') {
+      // revert to 4.2
+      // int pos_offset = a->pos - position_ticket->pos;
+      // for(int i=black_list_strand.size();i<=pos_offset;i++) black_list_strand.push_back('.');
+      //  if(black_list_strand[pos_offset] == '.')
+      //   black_list_strand[pos_offset] = a->params.black_strand;
+      // else if(a->params.black_strand != 'H' && black_list_strand[pos_offset] != a->params.black_strand)
+      //   black_list_strand[pos_offset] = 'B';
       if(black_list_strand == '.')
-        black_list_strand = a->params.black_strand;
+	black_list_strand = a->params.black_strand;
       else if(a->params.black_strand != 'H' && black_list_strand != a->params.black_strand)
-        black_list_strand = 'B';
+	black_list_strand = 'B';
+      // end reversion to 4.2
+
       if(a->params.hp_max_length != 0) hp_max_lenght_override_value = a->params.hp_max_length;
       if(a->params.strand_bias > 0.0) strand_bias_override_value = a->params.strand_bias;
       
@@ -582,6 +592,26 @@ void AlleleParser::PileUpAlleles(int allowed_allele_types, int haplotype_length,
 
     allele_pileup_[Allele(allele.type,allele.pos,allele.ref_length,allele.alt.size(),allele.alt.c_str())].add_hotspot(allele, num_samples_);
   }
+
+  //revert to 4.2; remove denovo alleles generated from the bad-strand
+  if (black_list_strand != '.') {
+    for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
+      AlleleDetails& allele = I->second;
+      if (not allele.is_hotspot) {
+	if(black_list_strand == 'F') {
+	  if( ((float)allele.coverage_fwd ) / ((float) allele.coverage) > .7)
+	    allele.filtered = true;
+	} else if(black_list_strand == 'R') {
+	  if( ((float)allele.coverage_rev ) / ((float) allele.coverage) > .7 )
+	    allele.filtered = true;
+	} else if(black_list_strand == 'B') {
+	  allele.filtered = true;
+	}
+      }
+    }
+  }
+  // end reversion to 4.2
+
   
   if (only_use_input_alleles_) {
     for (pileup::iterator I = allele_pileup_.begin(); I != allele_pileup_.end(); ++I) {
@@ -1097,7 +1127,7 @@ void AlleleParser::GenerateCandidateVariant(deque<VariantCandidate>& variant_can
       candidate.variant_specific_params.push_back(allele.hotspot_params->params);
     else {
     candidate.variant_specific_params.push_back(VariantSpecificParams());
-    candidate.variant_specific_params.back().black_strand = black_list_strand;
+    // candidate.variant_specific_params.back().black_strand = black_list_strand.size()>(unsigned)allele.minimized_prefix ? black_list_strand[allele.minimized_prefix] : '.'; // revert to 4.2
     if(hp_max_lenght_override_value > 0) 
     {
        candidate.variant_specific_params.back().hp_max_length = hp_max_lenght_override_value;

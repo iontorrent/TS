@@ -70,7 +70,7 @@ while(<>) {
     $barcode_fields .= $fn;
     next;  # skip header line
   }
-  my @fields = split;
+  my @fields = split('\t',$_);
   # collect contig IDs if not provided by genome file for ordering
   my $chr = $fields[0];
   unless( defined($chromIDs{$chr}) ) {

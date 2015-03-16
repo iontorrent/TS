@@ -24,7 +24,7 @@ my $OPTIONS = "Options:
   -C <num> Percentage Coverage threshold for 'full' target coverage read to be counted. When more than 0,
      specifiying this value causes fwd_cov and rev_cov counts to replace fwd_e2e and rev_e2e. Default: 0.
   -D <int> Downstream limit for matching read start to target end (appropriate for +/- strand mapping).
-     This assignment parameter is only employed if the -a option is provided. Default: 5.
+     This assignment parameter is only employed if the -a option is provided. Default: 1. Currently unused.
   -U <int> Upstream limit for matching read start to target end (appropriate for +/- strand mapping).
      This assignment parameter is only employed if the -a option is provided. Default: 30.
   -N <int> (Algorithm) Minimum Number of merged targets to use per samtools command. Default: 50.
@@ -39,7 +39,7 @@ my $OPTIONS = "Options:
 my $logopt = 0;
 my $bedout = 0;
 my $ampreads = 0;
-my $dsLimit = 5;
+my $dsLimit = 1;
 my $usLimit = 30;
 my $e2eLimit = 2;
 my $tcovLimit = 0;
@@ -240,8 +240,8 @@ while(1) {
       while( $cig =~ s/^(\d+)(.)// ) {
         $end += $1 if( $2 eq "M" || $2 eq "D" || $2 eq "X" || $2 eq "=" );
       }
-      my $maxOvlp = -1;
-      my $bestTn = $0;
+      my ($bestTn,$bestPrm) = (-1,0);
+      my ($maxOvlp,$bestPrmDist) = (0,$usLimit);
       my ($maxEndDist,$bestTrgLen);
       for( my $tn = $firstRegion; $tn < $nTrgs; ++$tn ) {
         # safe to looking when read end is prior to start of target
@@ -259,10 +259,19 @@ while(1) {
         ++$targOvpReads[$tn];
         $dSrt = $srt - $tSrt;
         $dEnd = $tEnd - $end;
-        # test if this can be assigned to an amplicon
+        # test if this can be assigned using expected read starts
         if( $ampreads ) {
-          my $aSrt = $rev ? $dEnd : $dSrt;
-          next if( $aSrt < $usLimit || $aSrt > $dsLimit );
+          # favor target with least distance BEFORE primer if within range of priming
+          my $ddSrt = $rev ? $dEnd : $dSrt;
+          if( $ddSrt < 0 && $ddSrt >= $bestPrmDist ) {
+            $bestPrm = 1;
+            $bestPrmDist = $ddSrt;
+            # force this as best choice if mostly likely start so far, else use ovlp to split ties
+            $maxOvlp = 0 if( $ddSrt > $bestPrmDist );
+          } elsif( $bestPrm ) {
+            # ignore this target if a suitable target start has been seen already
+            next;
+          }
         }
         # save region number for max overlap
         $dSrt = 0 if( $dSrt < 0 );
@@ -276,7 +285,7 @@ while(1) {
           $bestTrgLen = $trgLen;
         }
       }
-      if( $maxOvlp >= 0 ) {
+      unless( $bestTn < 0 ) {
         if( $rev ) {
           ++$targRevReads[$bestTn];
           if( $usePcCov ) {

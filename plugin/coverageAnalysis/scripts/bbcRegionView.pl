@@ -289,21 +289,22 @@ my @binRevOnt = ((0) x $numOutBins);
 print STDERR "Specified CBC file ignorred based on region size.\n" if( $haveCbc && $logopt );
 
 # by-pass all the work if only the boundaries wanted as a BED file
+my $bin0 = int(($targStart-1)/$binsize);
 if( $regionBed ) {
   close( BBCFILE );
-  my ($srt,$bin,$lbn) = ($targStart,0,0);
-  for( my $pos = $targStart+1; $pos <= $targEnd; ++$pos )
+  my ($srt,$bin,$lbn) = ($targStart-1,0,0);
+  for( my $pos = $targStart; $pos < $targEnd; ++$pos )
   {
-    $bin = int( ($pos-$targStart) / $binsize );
+    $bin = int($pos/$binsize)-$bin0;
     if( $bin != $lbn )
     {
-      printf "$targChrom\t%.0f\t%.0f\n", $srt-1, $pos-1 if( $bin > $srtBin );
+      printf "$targChrom\t%.0f\t%.0f\n", $srt, $pos if( $bin > $srtBin );
       $lbn = $bin;
       $srt = $pos;
       last if( $bin >= $endBin );
     }
   }
-  printf "$targChrom\t%.0f\t%.0f\n", $srt-1, $targEnd if( $bin < $endBin );
+  printf "$targChrom\t%.0f\t%.0f\n", $srt, $targEnd if( $bin < $endBin );
   exit 0;
 }
 
@@ -353,7 +354,7 @@ if( $seekStart > 0 )
       {
         read( BBCFILE, my $buffer, $wdsiz );
         ($fcov,$rcov) = unpack $upcstr, $buffer;
-        $bin = int(($pos-$targStart)/$binsize);
+        $bin = int(($pos-1)/$binsize)-$bin0;
         $binFwdOnt[$bin] += $fcov;
         $binRevOnt[$bin] += $rcov;
         --$rdlen;
@@ -366,7 +367,7 @@ if( $seekStart > 0 )
       {
         read( BBCFILE, my $buffer, $wdsiz );
         ($fcov,$rcov) = unpack $upcstr, $buffer;
-        $bin = int(($pos-$targStart)/$binsize);
+        $bin = int(($pos-1)/$binsize)-$bin0;
         $binFwdOff[$bin] += $fcov;
         $binRevOff[$bin] += $rcov;
         --$rdlen;
@@ -378,38 +379,22 @@ if( $seekStart > 0 )
 }
 close( BBCFILE );
 
-  # by-pass all the work if only the boundaries wanted as a BED file
-  if( $regionBed ) {
-    for( my $i = $srtBin; $i < $endBin && $lastRec < 1; ++$i )
-    {
-      my $srt = $targStart+$i*$binsize;
-      my $end = $srt + $binsize - 1;
-      if( $end > $targChromLen )
-      {
-        $end = $targChromLen;
-        $i = $endBin;
-      }
-      printf "$targChrom\t%.0f\t%.0f\n", $srt-1, $end if( $i >= $srtBin )
-    }
-    exit 0;
-  }
-
 # output bins as tsv - region looked at using same math to avoid round-off errors
 print "$header\n";
 my ($srt,$bin,$lbn) = ($targStart,0,0);
-for( my $pos = $targStart+1; $pos <= $targEnd; ++$pos )
+for( my $pos = $targStart; $pos < $targEnd; ++$pos )
 {
-  $bin = int( ($pos-$targStart) / $binsize );
+  $bin = int($pos/$binsize)-$bin0; # pos here is 0-based
   if( $bin != $lbn )
   {
     if( $bin > $srtBin )
     {
-      printf "$targChrom\t%.0f\t%.0f\t%.0f\t%.0f", $srt, $pos-1, $binFwdOff[$lbn]+$binFwdOnt[$lbn], $binRevOff[$lbn]+$binRevOnt[$lbn];
+      printf "$targChrom\t%.0f\t%.0f\t%.0f\t%.0f", $srt, $pos, $binFwdOff[$lbn]+$binFwdOnt[$lbn], $binRevOff[$lbn]+$binRevOnt[$lbn];
       printf "\t%.0f\t%.0f", $binFwdOnt[$lbn], $binRevOnt[$lbn] if( $haveTargets );
       print "\n";
     }
     $lbn = $bin;
-    $srt = $pos;
+    $srt = $pos+1;
     last if( $bin >= $endBin );
   }
 }

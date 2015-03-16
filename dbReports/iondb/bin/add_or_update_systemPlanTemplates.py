@@ -444,7 +444,7 @@ def add_or_update_all_system_templates():
         #ampliseq RNA        
         #10
         templateName = "Ion AmpliSeq RNA Panel"
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "RNA", "318v2", True, False, False, DEFAULT_TEMPLATE_KIT_NAME)
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME)
         
  
         #pre-select plugins 
@@ -475,7 +475,7 @@ def add_or_update_all_system_templates():
 
         plugins["PartekFlowUploader"] = thirdPartyPluginDict
         
-        finish_sys_template(sysTemplate, isCreated, "318v2", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "hg19_rna", plugins, instrumentType)
+        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "hg19_rna", plugins, instrumentType)
 
         #generic sequencing           
         #11
@@ -511,14 +511,14 @@ def add_or_update_all_system_templates():
         #rna sequencing
         #17
         templateName = "Ion RNA - small"
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "RNA", "RNA", "318v2", True, False, False, DEFAULT_TEMPLATE_KIT_NAME)
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "RNA", "RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME)
                 
         #pre-select plugins 
         plugins = {}
 
         plugins["PartekFlowUploader"] = thirdPartyPluginDict
                  
-        finish_sys_template(sysTemplate, isCreated, "318v2", 160, DEFAULT_SEQ_KIT_NAME, "Ion Total RNA Seq Kit v2", "IonXpressRNA", True, False, False, "", "", "", plugins, instrumentType)        
+        finish_sys_template(sysTemplate, isCreated, "318", 160, DEFAULT_SEQ_KIT_NAME, "Ion Total RNA Seq Kit v2", "IonXpressRNA", True, False, False, "", "", "", plugins, instrumentType)        
             
         #18
         templateName = "Ion RNA - Whole Transcriptome"
@@ -567,34 +567,34 @@ def add_or_update_all_system_templates():
         #Oncomine
         #22
         templateName = "OCP DNA"
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS", "DNA", "318v2", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Oncomine")
-        finish_sys_template(sysTemplate, isCreated, "318v2", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS", "DNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Oncomine")
+        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
         
         #23
         templateName = "OCP Fusions"
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318v2", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Oncomine")        
-        finish_sys_template(sysTemplate, isCreated, "318v2", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType)
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Oncomine")        
+        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType)
                       
         #24
         templateName = "OCP DNA and Fusions"        
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318v2", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Oncomine")        
-        finish_sys_template(sysTemplate, isCreated, "318v2", 500, DEFAULT_SEQ_KIT_NAME,  "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Oncomine")        
+        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME,  "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
     
         #OncoNetwork
         #25
         templateName = "Ion AmpliSeq Colon and Lung Cancer Panel v2"
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS", "DNA", "318v2", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Onconet")
-        finish_sys_template(sysTemplate, isCreated, "318v2", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS", "DNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Onconet")
+        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
         
         #26
         templateName = "Ion AmpliSeq RNA Lung Fusion Panel"
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318v2", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Onconet")
-        finish_sys_template(sysTemplate, isCreated, "318v2", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Onconet")
+        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
                       
         #27
         templateName = "Ion AmpliSeq Colon Lung v2 with RNA Lung Fusion Panel"        
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318v2", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Onconet")      
-        finish_sys_template(sysTemplate, isCreated, "318v2", 500, DEFAULT_SEQ_KIT_NAME,  "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Onconet")      
+        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME,  "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
              
         
         #28

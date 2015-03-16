@@ -25,7 +25,7 @@ plugin_dir = ""
 
 
 class IonReporterUploader(IonPlugin):
-    version = "4.4.0.2"
+    version = "4.4.2.0"
     runtypes = [RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE]
     runlevels = [RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST]
     features = [Feature.EXPORT]
@@ -332,6 +332,24 @@ class IonReporterUploader(IonPlugin):
         return True
 
     def set_serial_number(self):
+        paramsJsonFilePath = os.getenv("ANALYSIS_DIR") + "/ion_params_00.json"
+        paramsJsonFile = open(paramsJsonFilePath)
+        paramsJsonData = json.load(paramsJsonFile)
+        paramsJsonFile.close()
+
+        paramsExpJson = paramsJsonData["exp_json"]
+        if not isinstance(paramsExpJson, dict):
+            paramsExpJson = json.loads(paramsJsonData["exp_json"])
+        paramsExpJsonLog = paramsExpJson["log"]
+        if not isinstance(paramsExpJsonLog, dict):
+            paramsExpJsonLog = json.loads(paramsExpJson["log"])
+        serialNum = paramsExpJsonLog["serial_number"]
+
+        serialFile = open(commonScratchDir + "/serial.txt", "w")
+        serialFile.write(serialNum)
+        serialFile.close()
+
+    def set_serial_number_old_depricated(self):
         sub1 = subprocess.Popen("cat " + os.getenv("ANALYSIS_DIR") + "/ion_params_00.json", shell=True,
                                 stdout=subprocess.PIPE)
         word = sub1.stdout.read().strip()

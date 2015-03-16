@@ -326,7 +326,7 @@ function serializeForm() {
   base_set["meta"]["tvcargs"] = $("#tvcargs").val().replace(/(\r\n|\n|\r)/gm, " ");
   base_set["meta"]["barcode_mode"] = "match";
   //base_set["meta"]["barcode_mode"] = $("#barcodeModeSelector input[type='radio']:checked").val();
-  if ($("#barcodeModeSelector").is(":checked")) {
+  if ($("#barcodeModeSelector").is(":checked") || !barcoded) {
     base_set["meta"]["barcode_mode"] = "force";
   }
 
@@ -689,8 +689,10 @@ function GetBarcodedness() {
         console.log("Success: Got barcodedness info");
         LoadingPhaseCompleted();
     }).fail(function () {
-        console.log("ERROR: Failed to get barcodedness info");
-        LoadingPhaseFailed();
+        barcoded = false;
+	barcodedness_info_loaded = true;
+        console.log("No barcodedness info found; assume not barcoded");
+        LoadingPhaseCompleted();
     });
 }
 

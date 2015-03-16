@@ -387,12 +387,11 @@ $(function () {
           for( var i = 0; i < fields.length; ++i ) { fields[i] = +fields[i]; }
           // fill data that appears to be missing - typically derived fields are not even read in
           if( fields[0] > exptDepth ) {
-            var mfields = fields.slice();
-            mfields[0] = 0;
-            for( var i = 0; i < fields.length; ++i ) { mfields[i] = fields[i]; }
+            var mfields = fields.slice();  // copy
+            mfields[1] = 0; // no reads at depth
             while( exptDepth < fields[0] ) {
               mfields[0] = exptDepth++;
-              dataTable.push( fields );
+              dataTable.push( mfields );
             }
           }
           dataTable.push( fields );

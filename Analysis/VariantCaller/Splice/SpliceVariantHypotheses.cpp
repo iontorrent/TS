@@ -146,6 +146,24 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
     }
   }
 
+  // Check for non-ACGT bases in hypotheses strings
+  bool valid_bases = true;
+  for (unsigned int i_hyp=0; i_hyp<my_hypotheses.size(); i_hyp++) {
+    unsigned int iBase = 0;
+    while (iBase<my_hypotheses[i_hyp].length() and valid_bases){
+      if (my_hypotheses[i_hyp].at(iBase) == 'A' or my_hypotheses[i_hyp].at(iBase) == 'C' or
+          my_hypotheses[i_hyp].at(iBase) == 'G' or my_hypotheses[i_hyp].at(iBase) == 'T')
+      iBase++;
+      else
+        valid_bases = false;
+  	}
+  }
+  if (not valid_bases){
+    cerr << "Non-Fatal ERROR in Splicing for " << local_context.contigName << ":" << local_context.position0+1
+         << ": Read Hypotheses for " << current_read.alignment.Name << " contain non-ACGT characters." << endl;
+    did_splicing = false;
+  }
+
   // --- Fail safe for hypotheses and verbose
   if (!did_splicing) {
 	for (unsigned int i_hyp=1; i_hyp<my_hypotheses.size(); i_hyp++)

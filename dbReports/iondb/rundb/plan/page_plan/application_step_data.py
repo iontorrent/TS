@@ -42,15 +42,16 @@ class ApplicationStepData(AbstractStepData):
         
         self.savedFields[ApplicationFieldNames.RUN_TYPE] = None
         self.savedFields[ApplicationFieldNames.APPLICATION_GROUP] = None
-        self.savedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = None        
         self.savedFields[ApplicationFieldNames.SAMPLE_GROUPING] = None
         self.prepopulatedFields[ApplicationFieldNames.PLAN_STATUS] = ""
-        self.savedFields[ApplicationFieldNames.CATEGORIES] = ''
-         
+        
         self.savedObjects[ApplicationFieldNames.RUN_TYPE] = None
         self.savedObjects[ApplicationFieldNames.APPL_PRODUCT] = None
         self.savedObjects[ApplicationFieldNames.UPDATE_KITS_DEFAULTS] = True
         self.prepopulatedFields[ApplicationFieldNames.RUN_TYPES] = list(RunType.objects.all().order_by('nucleotideType', 'runType'))
+
+        self.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME] = None  
+        self.prepopulatedFields[ApplicationFieldNames.CATEGORIES] = ''
 
 #        isSupported = isOCP_enabled()
 #        if isSupported:

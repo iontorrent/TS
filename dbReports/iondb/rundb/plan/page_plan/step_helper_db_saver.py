@@ -57,20 +57,27 @@ class StepHelperDbSaver():
         
         isFavorite = False
 
-        categories =  application_step_data.savedFields.get(ApplicationFieldNames.CATEGORIES, "")
+        categories =  application_step_data.prepopulatedFields.get(ApplicationFieldNames.CATEGORIES, "")
+
+        #if user has changed the application or target technique during template copying, reset categories value        
+        applicationGroup = application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP]
+        applicationGroupNames = ApplicationGroup.objects.filter(pk = applicationGroup)
+        if (applicationGroupNames):
+            applicationGroupName = applicationGroupNames[0].name
+        else:
+            applicationGroupName = application_step_data.prepopulatedFields.get(ApplicationFieldNames.APPLICATION_GROUP_NAME, "")
         
         #if user has changed the application or target technique during template copying, reset categories value
-        applicationGroupName = application_step_data.savedFields.get(ApplicationFieldNames.APPLICATION_GROUP_NAME, "")
         if applicationGroupName != "DNA + RNA":
             if categories:
-                categories.replace("Onconet", "");
-                categories.replace("Oncomine", "");  
+                categories = categories.replace("Onconet", "");
+                categories = categories.replace("Oncomine", ""); 
+
                             
         if not step_helper.isPlan():
             isFavorite = save_template_step_data.savedFields[SaveTemplateStepDataFieldNames.SET_AS_FAVORITE]
-
                                
-        logger.debug("step_helper_db_saver.__get_universal_params() applicationGroupName=%s; categories=%s" %(applicationGroupName, categories))
+        logger.debug(" step_helper_db_saver.__get_universal_params() applicationGroupName=%s; categories=%s" %(applicationGroupName, categories))
 
         #logger.debug("step_helper_db_saver.__get_universal_params() application_step_data.savedFields=%s" %(application_step_data.savedFields))
         

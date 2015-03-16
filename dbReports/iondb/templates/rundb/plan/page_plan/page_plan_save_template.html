@@ -22,9 +22,7 @@
 <div id="error" style="color:red;"></div>
 {% for key, validationErrors in step.validationErrors.items %}
     <div class="row-fluid">
-        {% if key == "templateName" %}        
-            <h4 style="color: red;">{{validationErrors|linebreaks }}</h4>
-        {% endif %}
+        <h4 style="color: red;">{{validationErrors|linebreaks }}</h4>
     </div>
 {% endfor %}
 

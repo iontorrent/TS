@@ -181,9 +181,11 @@ class KitInfo(models.Model):
         ('', 'Any'),
         ('flowOverridable', 'Flows can be overridden'),
         ('bcShowSubset;bcRequired;', 'Mandatory barcode kit selection'),
-        ("flowOverridable;readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Hi-Q sequencing kit categories"),
+        #("flowOverridable;readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Hi-Q sequencing kit categories"),
+        ("flowOverridable;readLengthDerivableFromFlows;", "Hi-Q sequencing kit categories"),
         ("multipleTemplatingSize;supportLibraryReadLength", "Hi-Q templating kit categories"),
-        ("readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Non-Hi-Q sequencing kit categories"),   
+        #("readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Non-Hi-Q sequencing kit categories"),
+        ("readLengthDerivableFromFlows;", "Non-Hi-Q sequencing kit categories"),
     )    
     categories = models.CharField(max_length=256, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
     libraryReadLength = models.PositiveIntegerField(default = 0)
@@ -1117,6 +1119,12 @@ class PlannedExperiment(models.Model):
         logger.debug("PDD models.save_plannedExperiment_association() self_id=%d exp_kwargs=..." %(self.id))
         logger.debug(exp_kwargs)
 
+        # update Chef fields, if specified
+        chefInfo = kwargs.get('chefInfo')
+        if chefInfo:
+            for key, value in chefInfo.items():
+                setattr(experiment, key, value)
+
         #need this!
         experiment.plan = self
         experiment.save()
@@ -1498,21 +1506,6 @@ class Experiment(models.Model):
         else:
             return rset.order_by('-libmetrics__extrapolated_100q17_reads')
 
-    #TODO: deprecated in TS3.6
-    def available(self):
-        try:
-            backup = Backup.objects.get(backupName=self.expName)
-        except:
-            return False
-        if backup.backupPath == 'DELETED':
-            return 'Deleted'
-        if backup.backupPath == 'PARTIAL-DELETE':
-            return 'Partial-delete'
-        if backup.backupPath == 'PURGED':
-            return 'Purged'
-        if backup.isBackedUp:
-            return 'Archived'
-
 
     def isBarcoded(self):
         try:
@@ -1832,6 +1825,9 @@ class ExperimentAnalysisSettings(models.Model):
     # Alignment args
     alignmentargs = models.CharField(max_length=5000, blank=True, verbose_name="Alignment args")
     thumbnailalignmentargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Alignment args")
+    # Ionstats args
+    ionstatsargs = models.CharField(max_length=5000, blank=True, verbose_name="Ionstats args")
+    thumbnailionstatsargs = models.CharField(max_length=5000, blank=True, verbose_name="Thumbnail Ionstats args")
 
 
     def get_base_recalibration_mode_choices(self):
@@ -2003,6 +1999,14 @@ class SampleSetItem(models.Model):
 
     cancerType = models.CharField(max_length = 127, blank = True, null = True)
     cellularityPct = models.IntegerField(blank = True, null = True)
+
+    ALLOWED_NUCLEOTIDE_TYPES = (
+        ('', 'Any'),
+        ('dna', 'DNA'),
+        ('rna', 'RNA')
+    )
+
+    nucleotideType = models.CharField(max_length=64, choices=ALLOWED_NUCLEOTIDE_TYPES, default='', blank=True)
 
     # #optional sample-dnabarcode.id_str assignment
     #removed by Sam Mohamed, we are replacing with a foreign key to the
@@ -3101,6 +3105,7 @@ class Template(models.Model):
     def __unicode__(self):
         return self.name
 
+# Backup objects are obsolete, replaced by DMFileStat, DMFileSet; not removing the class for Data Management update from pre-TS3.6 servers
 class Backup(models.Model):
     experiment = models.ForeignKey(Experiment)
     backupName = models.CharField(max_length=256, unique=True)
@@ -3114,86 +3119,6 @@ class Backup(models.Model):
     def __unicode__(self):
         return u'%s' % self.experiment
 
-class BackupConfig(models.Model):
-    name = models.CharField(max_length=64)
-    location = models.ForeignKey(Location)
-    backup_directory = models.CharField(max_length=256, blank=True, default=None)
-    backup_threshold = models.IntegerField(blank=True)
-    number_to_backup = models.IntegerField(blank=True)
-    grace_period = models.IntegerField(default=72)
-    timeout = models.IntegerField(blank=True)
-    bandwidth_limit = models.IntegerField(blank=True)
-    status = models.CharField(max_length=512, blank=True)
-    online = models.BooleanField()
-    comments = models.TextField(blank=True)
-    email = models.EmailField(blank=True)
-    keepTN = models.BooleanField(default=True)
-    def __unicode__(self):
-        return self.name
-
-    def get_free_space(self):
-        dev = devices.disk_report()
-        for d in dev:
-            if self.backup_directory == d.get_path():
-                return d.get_free_space()
-
-    def check_if_online(self):
-        if os.path.exists(self.backup_directory):
-            return True
-        else:
-            return False
-
-    @classmethod
-    def get(cls):
-        """This represents pretty much the only query on this entire
-        table, find the 'canonical' BackupConfig record.  The primary
-        key order is used in all cases as the tie breaker.
-        Since there is *always* supposed to be one of these in the DB,
-        this call to get will properly raises a DoesNotExist error.
-        """
-        return cls.objects.order_by('pk')[:1].get()
-
-#TODO: Remove this from database
-class dm_reports(models.Model):
-    '''This object holds the options for report actions.
-    Which level(s) to prune at, what those levels are, how far back to look when recording space saved, etc.'''
-    location = models.CharField(max_length=512)
-    pruneLevel = models.CharField(max_length=128, default = 'No-op')    #FRAGILE: requires dm_prune_group.name == "No-op"
-    autoPrune = models.BooleanField(default = False)
-    autoType = models.CharField(max_length=32, default = 'P')
-    autoAge = models.IntegerField(default=90)
-    class Meta:
-        verbose_name_plural = "DM - Configuration"
-
-    def __unicode__(self):
-        return self.location
-
-    @classmethod
-    def get(cls):
-        """This represents pretty much the only query on this entire
-        table, find the 'canonical' dm_reports record.  The primary
-        key order is used in all cases as the tie breaker.
-        Since there is *always* supposed to be one of these in the DB,
-        this call to get will properly raises a DoesNotExist error.
-        """
-        return cls.objects.order_by('pk')[:1].get()
-
-#TODO: Remove this from database
-class dm_prune_group(models.Model):
-    name = models.CharField(max_length=128, default="")
-    editable = models.BooleanField(default=True)    # This actually signifies "deletable by customer"
-    ruleNums = models.CommaSeparatedIntegerField(max_length=128, default='', blank = True)
-    class Meta:
-        verbose_name_plural = "DM - Prune Groups"
-
-    def __unicode__(self):
-        return self.name
-
-#TODO: Remove this from database
-class dm_prune_field(models.Model):
-    rule = models.CharField(max_length=64, default = "")
-    class Meta:
-        verbose_name_plural = "DM - Prune Rules"
 
 class Chip(models.Model):
     name = models.CharField(max_length=128)
@@ -4496,6 +4421,10 @@ class AnalysisArgs(models.Model):
     # Alignment args
     alignmentargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Alignment args")
     thumbnailalignmentargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Alignment args")
+    # Ionstats args
+    ionstatsargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Ionstats args")
+    thumbnailionstatsargs = models.CharField(max_length=5000, blank=True, verbose_name="Default Thumbnail Ionstats args")
+
 
     def get_args(self):
         args = {

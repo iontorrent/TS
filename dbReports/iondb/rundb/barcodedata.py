@@ -8,6 +8,7 @@ import logging
 import csv
 
 from django.core.exceptions import ValidationError
+from django.conf import settings
 
 
 #from django.core.serializers.json import DjangoJSONEncoder
@@ -45,6 +46,7 @@ class BarcodeSampleInfo(object):
                     logger.warn("Overriding pipeline sample '%s' with eas value '%s'", d['sample'],sample)
                     d['sample'] = sample
             else:
+                logger.warn("Requested barcode name %s not found, using given sample %s with no bam data", barcode_name, sample)
                 # default values if user requested sample not found in run
                 d = {
                     'bam': None,
@@ -52,40 +54,63 @@ class BarcodeSampleInfo(object):
                     'sample': sample,
                     'read_count': 0,
                 }
+
             # Pull in DB data about barcode. Return None when data not found.
-            dnaBarcode = self.dnabarcodes.get(barcode_name)
-            if dnaBarcode:
-                for k in ['sequence', 'adapter', 'annotation', 'type']:
-                    d["barcode_%s" % k] = getattr(dnaBarcode, k)
+            if barcode_name != "nomatch":
+                dnaBarcode = self.dnabarcodes.get(barcode_name)
+                if dnaBarcode:
+                    for k in ['sequence', 'adapter', 'annotation', 'type']:
+                        d["barcode_%s" % k] = getattr(dnaBarcode, k)
+                else:
+                    logger.error("Barcode given does not exist in TS database: %s", barcode_name)
 
             # These default to eas values
             for k in ['reference', 'targetRegionBedFile', 'hotSpotRegionBedFile']:
                 v = d.get(k)
                 if (v is None) or (not v):
                     d[k] = getattr(self.eas, k)
+
             # Guarantee all are filled in
             for k in self._basecaller_fields:
                 if k not in d:
                     d[k] = None
+
             return d
 
 
         data = {}
         # Process User data in plan
         #example: "barcodedSamples":"{'s1':{'barcodes': ['IonSet1_01']},'s2': {'barcodes': ['IonSet1_02']},'s3':{'barcodes': ['IonSet1_03']}}"
-        for (sample, barcodes) in self.barcodedSamples.items():
-            for bc in barcodes:
-                data[bc] = getPipelineValue(bc, sample)
+        for (sample, info) in self.barcodedSamples.items():
+            for bc in info.get('barcodes'):
+                data[bc] = getPipelineValue(bc)
+                # Override pipeline with plan supplied values.
+                if sample != data[bc].get('sample'):
+                    logger.warn("Overriding pipeline sample '%s' with eas value '%s'", data[bc]['sample'],sample)
+                    data[bc]['sample'] = sample
+                # nucleotideType?
+                plan_barcodeSampleInfo = info.get('barcodeSampleInfo', {}).get(bc)
+                if plan_barcodeSampleInfo:
+                    # Barcode Specific reference data from plan
+                    for k in ['reference', 'targetRegionBedFile', 'hotSpotRegionBedFile']:
+                        if k in plan_barcodeSampleInfo:
+                            data[bc][k] = plan_barcodeSampleInfo[k]
+                #logger.debug("User planned sample: %s has barcode data %s", sample, data[bc])
 
         # Add in any additional barcodes which pipeline found
         for bc in barcodedata.keys():
-            if bc not in data:
-                # Pipeline generated data for sample user didn't specify
-                data[bc] = getPipelineValue(bc)
+            if bc in data:
+                continue
+            if barcodedata[bc].get('filtered', False):
+                continue
+            # Pipeline generated data for sample user didn't specify
+            data[bc] = getPipelineValue(bc)
+            #logger.debug("Pipeline found extra barcode [%s]: %s", bc, data[bc])
 
         # Probably redundant. Should be in barcodedata.keys()
         if 'nomatch' not in data:
             data['nomatch'] = getPipelineValue('nomatch')
+            logger.debug("Generated placeholder entry for nomatch: %s", data['nomatch'])
 
         return data
 
@@ -100,11 +125,43 @@ class BarcodeSampleInfo(object):
     @cached_property
     def barcodedSamples(self):
         barcodedSamples = self.eas.barcodedSamples
-        #for both string and unicode
         if isinstance(barcodedSamples, basestring):
-            #example: "barcodedSamples":"{'s1':{'barcodes': ['IonSet1_01']},'s2': {'barcodes': ['IonSet1_02']},'s3':{'barcodes': ['IonSet1_03']}}"
+            # barcodedSamples: {
+            #Sample 1: {
+            #    barcodeSampleInfo: {
+            #        IonXpress_078: {
+            #            controlSequenceType: "",
+            #            description: "",
+            #            externalId: "",
+            #            hotSpotRegionBedFile: "",
+            #            nucleotideType: "DNA",
+            #            reference: "hg19",
+            #            targetRegionBedFile: "/results/uploads/BED/46/hg19/unmerged/detail/AmpliSeqExome.20131001.designed.bed"
+            #        }
+            #    },
+            #    barcodes: [
+            #        "IonXpress_078"
+            #    ]
+            #},
+            #Sample 2: {
+            #    barcodeSampleInfo: {
+            #        IonXpress_089: {
+            #            controlSequenceType: "",
+            #            description: "",
+            #            externalId: "",
+            #            hotSpotRegionBedFile: "",
+            #            nucleotideType: "DNA",
+            #            reference: "hg19",
+            #            targetRegionBedFile: "/results/uploads/BED/46/hg19/unmerged/detail/AmpliSeqExome.20131001.designed.bed"
+            #        }
+            #    },
+            #    barcodes: [
+            #        "IonXpress_089"
+            #    ]
+            #}
+            #},
             try:
-                barcodedSamples = json.loads(barcodedSamples)
+                barcodedSamples = json.loads(barcodedSamples, encoding=settings.DEFAULT_CHARSET)
             except ValueError as j:
                 try:
                     ## What is this? Was barcodedSamples getting python string dumps?
@@ -116,9 +173,9 @@ class BarcodeSampleInfo(object):
                 if isinstance(v['barcodes'],list):
                     for bc in v['barcodes']:
                         if not isinstance(bc,str):
-                            logger.debug("INVALID bc - NOT an str - bc=%s" %(bc))
+                            logger.error("INVALID bc - NOT an str - bc=%s" %(bc))
                 else:
-                    logger.debug("INVALID v[barcodes] - NOT a list!!! v[barcodes]=%s" %(v['barcodes']))
+                    logger.error("INVALID v[barcodes] - NOT a list!!! v[barcodes]=%s" %(v['barcodes']))
         except:
             logger.exception("Invalid barcodedSampleInfo value")
         return barcodedSamples
@@ -141,7 +198,7 @@ class BarcodeSampleInfo(object):
     def datasetsBaseCaller(self):
         datasetsBaseCallerFile = os.path.join(self.result.get_report_path(), "basecaller_results", "datasets_basecaller.json")
         with open(datasetsBaseCallerFile) as f:
-            datasetsBaseCaller = json.load(f)
+            datasetsBaseCaller = json.load(f, encoding=settings.DEFAULT_CHARSET)
 
         # File is tagged with a version number (yay!). Best check it.
         ver = datasetsBaseCaller.get('meta',{}).get('format_version', "0")
@@ -161,29 +218,28 @@ class BarcodeSampleInfo(object):
         for item in self.datasetsBaseCaller.get('datasets', {}):
             rgs = []
             # Each file has multiple read groups. Though in practice just one.
-            for idx, rg in enumerate(item.get('read_groups')):
+            for idx, rg in enumerate(item.get('read_groups',[])):
                 if idx > 1:
                     logger.warn("Multiple read_groups on single barcode not supported")
-                    continue
+                    break
 
+                # Get matching section from top level read_groups section
                 rgdata = self.datasetsBaseCaller.get('read_groups',{}).get(rg)
+                #logger.debug("Got RG %s data: %s", rg, rgdata)
                 if not rgdata:
                     logger.error("Invalid read group: %s", rg)
-                    continue
-                # filtered==true means rg was excluded by analysis pipeline
-                if rgdata.get('filtered'):
                     continue
 
                 # Grab these keys out of the read_groups.{{rg}}.{{k}}
                 x = { 'index': idx }
                 for k in self._basecaller_fields:
                     x[k] = rgdata.get(k)
-
                 # Inconsistency in non-barcoded output
                 if 'reference' not in x:
                     x['reference'] = rgdata.get('library')
 
                 rgs.append(x)
+                break
 
             bcd = {
                 'bam': "%s.bam" % item['file_prefix'],
@@ -192,13 +248,16 @@ class BarcodeSampleInfo(object):
             }
             # Primary read group only!
             if rgs:
+                #logger.debug("Updating bcd %s with %s", bcd, rgs)
                 bcd.update(rgs[0])
 
             if bcd.get('barcode_name') is None:
                 bcd['barcode_name'] = 'nomatch'
 
+            #logger.debug("Parsed Basecaller Dataset: %s", bcd)
             # dict by name
             ret[bcd['barcode_name']] = bcd
+        #logger.debug("BasecallerDatasets: %s", bcd.keys())
         return ret
 
     def validate(self):

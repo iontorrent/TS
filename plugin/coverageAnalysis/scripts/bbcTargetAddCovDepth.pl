@@ -127,6 +127,7 @@ while( <TRGFILE> )
     exit 1;
   }
   # optional warnings for overlaping regions
+  my $sameSrt = ($srt == $targSrt);
   $targSrt = $srt;
   if( $srt <= $targEnd )
   {
@@ -134,7 +135,9 @@ while( <TRGFILE> )
     if( $bedwarn )
     {
       if( $end <= $targEnd ) {
-        print STDERR "Warning: Region $chrid:$srt-$end is entirely overlapped previous region $chrid:$targSrt-$targEnd.\n";
+        print STDERR "Warning: Region $chrid:$srt-$end is entirely overlapped by previous region $chrid:$targSrt-$targEnd.\n";
+      } elsif( $sameSrt ) {
+        print STDERR "Warning: Region $chrid:$srt-$end entirely overlaps previous region $chrid:$targSrt-$targEnd.\n";
       } else {
         print STDERR "Warning: Region $chrid:$srt-$end overlaps previous region $chrid:$targSrt-$targEnd.\n";
       }

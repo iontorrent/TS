@@ -189,8 +189,9 @@ public:
 
   //! @brief     Diasbles the use of recalibration and clears model information.
   void DisableRecalibration() {
-    //pm_model_available_ = false;
+    pm_model_available_ = false;
     recalibrate_predictions_ = false;
+    As_ = 0; Bs_ = 0;
   };
 
   //! @brief    Treephaser's slot for partial base sequence, complete with tree search metrics and state for extending

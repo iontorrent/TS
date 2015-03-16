@@ -72,8 +72,8 @@ def makeCSA(reportDir, rawDataDir, csa_file_name=None):
                 'sigproc.log',
                 'BkgModelFilterData.h5',
                 # Basecaller files
-                '*alignment.summary',
-                '*quality.summary',
+                '*ionstats_alignment.json',
+                '*ionstats_basecaller.json',
                 'alignmentQC_out.txt',
                 'alignmentQC_out_*.txt',
                 'alignStats_err.json',

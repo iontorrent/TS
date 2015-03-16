@@ -684,16 +684,11 @@ void * BasecallerWorker(void *input)
                 if (bc.recalModel.is_enabled() && read_class == 0) { //do not recalibrate TF read bc.chip_subset.GetChipSizeX()
                   aPtr = bc.recalModel.getAs(x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset());
                   bPtr = bc.recalModel.getBs(x+bc.chip_subset.GetColOffset(), y+bc.chip_subset.GetRowOffset());
-                  treephaser_sse.SetAsBs(aPtr, bPtr);  // Set recalibration model for this read
-                  treephaser.SetAsBs(aPtr, bPtr);
-                } else {
-                  // Make sure we don't inadvertently use the recalibration model of the previously processed read.
-                  treephaser_sse.DisableRecalibration();
-                  treephaser.DisableRecalibration();
                 }
 
                 // Execute the iterative solving-normalization routine - switch by specified algorithm
                 if (bc.dephaser == "treephaser-sse") {
+                  treephaser_sse.SetAsBs(aPtr, bPtr);  // Set/delete recalibration model for this read
                   treephaser_sse.SetModelParameters(cf, ie); // sse version has no hookup for droop.
                   treephaser_sse.NormalizeAndSolve(read);
                   treephaser.SetModelParameters(cf, ie); // Adapter trimming uses the cpp treephaser
@@ -703,6 +698,7 @@ void * BasecallerWorker(void *input)
                     treephaser.SetModelParameters(cf, ie);
                   else
                     treephaser.SetModelParameters(cf, ie, dr);
+                  treephaser.SetAsBs(aPtr, bPtr); // Set/delete recalibration model for this read
 
                   if (bc.dephaser == "dp-treephaser") {
                     // Single parameter gain estimation

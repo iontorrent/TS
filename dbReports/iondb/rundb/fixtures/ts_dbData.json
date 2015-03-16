@@ -123,7 +123,7 @@
       "instrumentType": "pgm",
       "isActive": false,
       "description": "(100bp) Ion Sequencing Kit",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },
   {
@@ -154,7 +154,7 @@
       "instrumentType": "pgm",
       "isActive": false,
       "description": "(200bp) Ion PGM 200 Sequencing Kit",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },
   {
@@ -414,7 +414,7 @@
       "instrumentType": "pgm",
       "isActive": true,
       "description": "Ion PGM Install Kit",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },
   {
@@ -611,7 +611,7 @@
       "instrumentType": "pgm",
       "isActive": true,
       "description": "Ion PGM Sequencing 200 Kit v2",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },
   {
@@ -643,7 +643,7 @@
       "instrumentType": "pgm",
       "isActive": true,
       "description": "Ion PGM Sequencing 400 Kit",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },
   {
@@ -782,7 +782,7 @@
       "instrumentType": "proton",
       "isActive": true,
       "description": "Ion PI Sequencing 200 Kit v2",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },
   {
@@ -813,7 +813,7 @@
       "instrumentType": "proton",
       "isActive": true,
       "description": "Ion PI Sequencing 200 Kit v2 with XT",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },
   {
@@ -860,7 +860,7 @@
       "instrumentType": "proton",
       "isActive": true,
       "description": "Ion PI Sequencing 200 Kit v3",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },
   {
@@ -969,7 +969,7 @@
       "samplePrep_instrumentType" : "IC",      
       "isActive": true,
       "description": "Ion PGM IC 200 Sequencing Kit",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },  
  {
@@ -1002,7 +1002,7 @@
       "samplePrep_instrumentType" : "IC",      
       "isActive": true,
       "description": "Ion PI IC 200 Seq Kit",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },  
   {
@@ -1083,7 +1083,7 @@
       "samplePrep_instrumentType" : "OT_IC",
       "isActive": true,
       "description": "Ion PGM Hi-Q Sequencing Kit",
-      "categories" : "flowOverridable;readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "flowOverridable;readLengthDerivableFromFlows;"
     }
   },
   {
@@ -1145,7 +1145,7 @@
       "instrumentType": "proton",
       "isActive": true,
       "description": "Ion PI Sequencing 200 v3 - 2X520",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },
   {
@@ -1196,7 +1196,7 @@
       "uid": "ICPREP0004",
       "instrumentType": "proton",
       "samplePrep_instrumentType" : "IC",
-      "isActive": false,
+      "isActive": true,
       "description": "Ion PI Hi-Q Chef Kit",
       "categories" : "multipleTemplatingSize;supportLibraryReadLength"
     }
@@ -1215,7 +1215,7 @@
       "samplePrep_instrumentType" : "OT_IC",
       "isActive": true,
       "description": "Ion PI Hi-Q Sequencing 200 Kit",
-      "categories" : "readLengthDerivableFromFlows;flowsDerivableFromReadLength;"
+      "categories" : "readLengthDerivableFromFlows;"
     }
   },
   {
@@ -1266,7 +1266,38 @@
       "description": "No BeadFind Template"
     }
   },
-  
+  {
+    "pk": 20076,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM Hi-Q OT2 Kit - 200",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "uid": "TEMPLT0011",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion PGM Hi-Q OT2 Kit - 200"
+    }
+  },    
+  {
+    "pk": 20077,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM Hi-Q OT2 Kit - 400",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 850,
+      "uid": "TEMPLT0012",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion PGM Hi-Q OT2 Kit - 400"
+    }
+  },     
                         
   {
     "pk": 20001,
@@ -2901,7 +2932,67 @@
       ]
     }
   },
-      
+  {     
+    "pk": 20167,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A27744",
+      "kit": [
+        "TEMPLT0011"
+      ]
+    }
+  },
+  {     
+    "pk": 20168,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A27743",
+      "kit": [
+        "TEMPLT0011"
+      ]
+    }
+  },
+  {     
+    "pk": 20169,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A27742",
+      "kit": [
+        "TEMPLT0011"
+      ]
+    }
+  }, 
+  {     
+    "pk": 20170,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A27744_400",
+      "kit": [
+        "TEMPLT0012"
+      ]
+    }
+  },
+  {     
+    "pk": 20171,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A27743_400",
+      "kit": [
+        "TEMPLT0012"
+      ]
+    }
+  },
+  {     
+    "pk": 20172,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A27742_400",
+      "kit": [
+        "TEMPLT0012"
+      ]
+    }
+  },      
+        
   {
     "pk": 20001,
     "model": "rundb.applproduct",
@@ -3099,7 +3190,7 @@
         "LIB0010"
       ],
       "productCode": "RNA_0",
-      "defaultChipType": "318v2",
+      "defaultChipType": "318",
       "isPairedEndSupported": false,
       "isDefault": true,
       "description": "",
@@ -3162,7 +3253,7 @@
         "LIB0013"
       ],
       "productCode": "AMPS_RNA_0",
-      "defaultChipType": "318v2",
+      "defaultChipType": "318",
       "isPairedEndSupported": false,
       "isDefault": true,
       "description": "",
@@ -3756,7 +3847,7 @@
     "fields": {
       "name": "318",
       "slots": 1,
-      "description": "318",
+      "description": "318v2",
       "isActive": true,
       "instrumentType": "pgm"
     }
@@ -3790,7 +3881,7 @@
       "name": "318v2",
       "slots": 1,
       "description": "318v2",
-      "isActive": true,
+      "isActive": false,
       "instrumentType": "pgm"
     }
   },
@@ -4132,6 +4223,21 @@
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
       "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailalignmentargs"     : "-J 25 --end-repair 15 --do-repeat-clip --context stage1 map4"
+    }
+  },
+    {
+    "pk": 27,
+    "model": "rundb.analysisargs",
+    "fields": {
+      "name": "318_smallRNA",
+      "chipType": "318",
+      "libraryKitName": "Ion Total RNA Seq Kit v2",
+      "beadfindargs"               : "justBeadFind",
+      "analysisargs"               : "Analysis --from-beadfind --use-alternative-etbR-equation",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --min-read-length 8",
+      "alignmentargs"              : "stage1 map4"
     }
   },
   

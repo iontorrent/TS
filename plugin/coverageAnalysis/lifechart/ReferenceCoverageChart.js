@@ -16,14 +16,14 @@ document.write('\
      <option value=2>Strand Bias</option>\
     </select>\
     <input class="RC-shy" id="RC-unzoomToggle" type="button" value="Zoom In" style="margin-left:10px;width:70px">\
-    <span id="RC-toggleControls" style="float:right" class="RC-shy ui-icon ui-icon-search" title="Show/Hide the view/filter options panel"></span>\
+    <span id="RC-toggleControls" style="float:right" class="RC-shy ui-icon ui-icon-search" title="Show/Hide the view options panel"></span>\
     <span id="RC-help" style="float:right;margin-left:0;margin-right:0" class="RC-shy ui-icon ui-icon-help"></span>\
     <span id="RC-message" class="message"></span>\
   </div>\
   <div id="RC-noncanvas" style="background:#EEF;border-top:2px solid #666">\
    <div id="RC-plotspace" style="padding:4px">\
+    <div id="RC-slider" class="grid-microslider" style="display:none"></div>\
     <div id="RC-placeholder" style="width:100%"></div>\
-    <div id="RC-cursorCoords" style="color:#bbd"></div>\
    </div>\
   </div>\
 </div>\
@@ -44,7 +44,7 @@ document.write('\
     <td class="nwrap"><span class="flyhelp" id="RC-filterChromLabel">Chrom/Contig</span>:\
       <select class="txtSelect" id="RC-selectChrom" style="width:66px"></select>&nbsp;<span id="RC-numChroms"></span></td>\
     <td class="nwrap"><span class="flyhelp" id="RC-filterChromRangeLabel">Range</span>:\
-      <input type="text" class="numSearch" id="RC-chromRange" value="" size=20></td>\
+      <input type="text" class="numSearch" id="RC-chromRange" value="" size=24></td>\
     <td class="nwrap">\
       <input type="button" id="RC-OpenIGV" value="View in IGV" style="width:76px"></td>\
   </tr></table>\
@@ -56,28 +56,24 @@ document.write('\
   <div><span id="RC-tooltip-zoomin" title="Zoom in on this region" class="help-box ui-icon ui-icon-zoomin"></span></div>\
   <div id="RC-tooltip-body"></div>\
 </div>\
-<div id="RC-helptext" class="helpblock" style="display:none">\
+<div id="RC-helptext" class="helpblock" style="z-index:10;display:none">\
 This chart shows the base coverage due to reads aligned across the whole reference.<br/><br/>\
 For a reference of multiple contigs (chromosomes), the initial view will show total<br/>\
 coverage as a data bar per contig. If there are many contigs each bar itself may<br/>\
-represent a binned average over a smaller number of contigs. Click-and-drag or<br/>\
-double-click the mouse pointer to zoom in on a range of contigs. Where data bars<br/>\
-represent single contigs the double-click will zoom the view to base coveage across<br/>\
-that contig. A single contig may also be viewed using the drop-down selector on the<br/>\
-options panel; opened by clicking on the spy-glass icon at the top right of the chart.<br/><br/>\
-With a single contig (chromosome) in view, typically each data bar (or overlay point)<br/>\
-will represent the average base coveage over a range of the reference genome.<br/>\
-Click-and-drag or double-click with the mouse to zoom in to regions along the contig,<br/>\
-or type in a specific range to view usiing the Range field of the options panel.<br/><br/>\
-Double-click in the white-space around the plotted data to zoom out (by 10x).<br/>\
+represent a binned average over a smaller number of contigs. Click-and-drag or double-<br/>\
+click the mouse pointer to zoom in on either a range of contigs or bases of a single contig.<br/><br/>\
+With a single contig (chromosome) in view each data bar (or overlay point) will represent<br/>\
+the average base coveage over a range of the reference genome. Click-and-drag or double-<br/>\
+click to zoom in to regions along the contig, or use the Range field of the options panel.<br/><br/>\
+Double-click in the white-space around the plotted data to zoom out (by upto 10x).<br/>\
 Click on the Zoom Out button to return to the coverage view across the whole contig<br/>\
-currently in view, or to zoom out to the (full) coverage-per-contig view.<br/><br/>\
+currently in view or the coverage-per-contig view for the whole reference.<br/><br/>\
 Hover the mouse pointer over a data bar (or overlay point) to review minimal information<br/>\
 or click on the data to show a detailed information box that remains until dismissed.<br/><br/>\
-More viewing options are available using the Plot and Overlay selectors in the title bar<br/>\
-and other controls on the options panel. Depending on the total number of contigs, the<br/>\
-Zoom In button may also be available to view coverage over all contigs as a single stand.<br/>\
-Look for additional fly-over help on or near the controls provided.\
+More display features are available using the Plot and Overlay selectors in the title bar<br/>\
+or accessed using the view options panel (by clicking on the adjacent spy-glass icon).<br/>\
+Depending on the total number of contigs, the "Zoom In" button may also be available.<br/>\
+Look for additional tool-tip help on or near the controls provided.\
 </div>\
 <div id="RC-mask" class="grid-mask"></div>\
 <div id="RC-dialog" class="tools-dialog" style="width:450px;display:none">\
@@ -88,7 +84,6 @@ Look for additional fly-over help on or near the controls provided.\
     <input type="button" value="Cancel" onclick="$(\'#RC-dialog\').hide();$(\'#RC-mask\').hide();">\
   </div>\
 </div>\
-<div id="RC-helptext" class="helpblock" style="display:none"></div>\
 <input type="hidden" id="RC-ViewRequest"/>\
 ');
 
@@ -182,6 +177,9 @@ $(function () {
     if( !lastHoverBar.sticky ) hideTooltip();
   });
 
+  $("#RC-slider").slider({min:0,step:1});
+  var sliderHandle = $('.ui-slider.grid-microslider .ui-slider-handle');
+
   $("#RC-collapsePlot").click(function(e) {
     if( disableTitleBar ) return;
     if( $('#RC-plotspace').is(":visible") ) {
@@ -232,95 +230,6 @@ $(function () {
     $("#RC-help").attr( "title", "Click for help." );
   });
 
-  $('#RC-placeholder').dblclick(function(e) {
-    if( zoomViewOnBin( lastHoverBar.binNum, true ) ) hideTooltip();
-  });
-
-  function zoomViewOnBin(binNum,zoomIn) {
-    // Always perform zoom out if binNum < 0
-    if( plotStats.numPlots <= 0 ) return false;
-    var overzoom = plotStats.minX > 0 || plotStats.maxX < plotStats.numPoints;
-    if( binNum >= 0 && zoomIn ) {
-      if( overzoom ) return false;
-      var chr = dataTable[binNum][DataField.contig_id];
-      if( plotStats.binnedChroms ) {
-        plotStats.zmSrtBin = binNum;
-        var i = chr.indexOf(' - ');
-        if( i >= 0 ) {
-          plotStats.zmSrtChrom = chr.substr(0,i);
-          plotStats.zmEndChrom = chr.substr(i+3);
-        } else {
-          plotStats.zmSrtChrom = plotStats.zmEndChrom = chr;
-        }
-        unzoomData(); // requires file reload
-        return true;
-      }
-      if( plotParams.dblCenter && plotStats.zoomChrom ) {
-        return centerViewOnBin(binNum);
-      }
-      var srt = dataTable[binNum][DataField.pos_start];
-      var end = dataTable[binNum][DataField.pos_end];
-      zoomDataRange(chr,srt,end);
-    } else if( plotStats.zoomChrom ) {
-      // set zoom out range by limits of current view
-      var chr = covFilter.chrom;
-      var srt = covFilter.pos_srt;
-      var end = covFilter.pos_end;
-      // return to previous view if in over-zoom
-      if( overzoom ) {
-        plotStats.minX = 0;
-        plotStats.maxX = plotStats.numPoints;
-        setMaxZoomXtitle(0,plotStats.maxX-1);
-        updatePlot(false);
-        return true;
-      } else if( binNum >= 0 && !zoomIn ) {
-        // override limits by selected bin if provided
-        var cbin = Math.floor(plotStats.numPoints/2);
-        var csrt = dataTable[binNum][DataField.pos_start];
-        var cend = dataTable[binNum][DataField.pos_end];
-        var csiz = cend - csrt + 1;
-        csrt -= (cbin * csiz) + 1;
-        cend += cbin * csiz;
-        if( csrt > 0 && cend <= plotStats.chromLength ) {
-          chr = dataTable[binNum][DataField.contig_id];
-          srt = csrt;
-          end = cend;
-        }
-      }
-      var siz = dblclickUnzoomFac*(end-srt+1);
-      srt = Math.floor(0.5*(end+srt-siz));
-      end = srt + siz - 1;
-      zoomDataRange(chr,srt,end);
-    } else if( plotStats.zmSrtChrom != "" ) {
-      // flag this since requires a reload to find outer contig range
-      plotStats.zmOutChrom = true;
-      unzoomData();
-    } else {
-      return false;
-    }
-    return true;
-  }
-
-  function centerViewOnBin(binNum) {
-    if( plotStats.numPlots <= 0 || binNum < 0 ) return false;
-    // binNum 0-based so 99 (bin#100) is center of 200 bins and 100 (bin#101) is center of 201 bins
-    var cbin = (plotStats.numPoints-1) >> 1;
-    if( binNum == cbin ) return true;
-    // check for zoomed multi-contig views
-    if( plotStats.zmSrtChrom != "" ) return false;
-    // skip for fully zoomed-out views
-    if( !plotStats.zoomChrom ) return false;
-    // to prevent zoom out view changing on re-center the current bin start position for the shift rather than it's center
-    var srt = dataTable[0][DataField.pos_start];
-    var end = dataTable[plotStats.numPoints-1][DataField.pos_end];
-    var siz = end - srt + 1;
-    srt += (binNum - cbin) * (siz / plotStats.numPoints);
-    end = srt + siz - 1;
-    var chr = dataTable[binNum][DataField.contig_id];
-    zoomDataRange(chr,srt,end);
-    return true;
-  }
-
   //$('#RC-chart').noContext();
 
   function rightClickMenu(e) {
@@ -339,29 +248,73 @@ $(function () {
     //$('#RC-chart').rightClick(rightClickMenu);
   }
 
+  function customizeChart() {
+    // add fly-over help to controls here in case need to customize for chart data
+    $("#RC-plotLabel").attr( "title",
+      "Select the how the data is plotted.\n'Total Reads' shows bar plots of base reads aligned "+
+      "to both DNA strands, whereas 'Strand Reads' plots the numbers of forward and reverse (DNA strand) base reads "+
+      "separately, above and below the 0 reads line. If a set of target regions was specified, the numbers of reads "+
+      "that were inside or outside of these regions are shown by stacked colors of each data bar." );
+    $("#RC-overlayLabel").attr( "title",
+      "Select a particular property of the data to plot as an overlay of points parallel to each data bar. " +
+      "For example, the Strand Bias can be overlayed with the Total Reads plot to see if there is any obvious strand "+
+      "bias for the reference regions in view. Whether there is specific or general strand bias "+
+      "may depend on the current zoom level to those regions (i.e. the region size represented by the binned data). "+
+      "Adding an overlay plot is also useful for identifying very low coverage regions, since these points are not "+
+      "plotted for any region with 0 base coverage." );
+    $("#RC-offScaleOutlierLabel").attr( "title",
+      "Select to indicate that a single outlier data point is plotted off-scale. "+
+      "The y-axis is re-scaled so that the over-represented contig (or range) does not hide the relative representation "+
+      "of other data curently in view. This option only becomes available when the maximum value (height) of any "+
+      "data point (bar) is at least "+def_outlierFactor+" times greater than all others in view." );
+    $("#RC-showLegendLabel").attr( "title", "Select whether the legend is displayed over the plot area." );
+    $("#RC-numPointsLabel").attr( "title",
+      "This value specifies the maximum number of data bars and overlay points to display. Typically each bar (or point) "+
+      "plotted will represent the binned totals and averages of many individual base regions along the genome. If there is "+
+      "less data to plot than this value, e.g. when in the maximum zoom-out mode showing coverage per chromosome, the "+
+      "number of bars actually plotted is displayed in parentheses. This value may be set to any value 10 and 1000, "+
+      "although values greater than 200 are not recommended as this may make selection of individual bars difficult.\n"+
+      "Note that the number of bars represented in the 'Zoom In' view is fixed at 200." );
+    $("#RC-export").attr( "title", "Click to open Export Reference Coverage in View dialog." );
+    $("#RC-dialog-title").html( "Export Reference Coverage in View" );
+    $("#RC-filterChromLabel").attr( "title",
+      "Use this selector to select a particular chromosome (or contig) of the reference to view or to go to an overview " +
+      "across the whole reference by selecting the 'ALL' value. " +
+      "You may also change to a Chrom/Contig selection by typing its full name (or ID) in the Range field." );
+    $("#RC-filterChromRangeLabel").attr( "title",
+      "Edit current contig/chromosome range in view using the format <contig>:<start>-<end>. "+
+      "The <end> coordinate may be omitted to center the view on the <start>, or just the <contig> typed to "+
+      "view the whole contig. If <contig> is omitted the contig already in view is assumed. The range may be "+
+      "modified to fit the contig, limits of the binned data or meet the number of Bars/Points specified. "+
+      "Large ranges may be adjusted to the nearest multiple of 1,000 to make use of pre-binned averaged coverage." );
+    $("#RC-OpenIGV").attr( "title",
+      "Click this button to open an instance of IGV (Integrated Genome Viewer) with whatever Chrom/Contig and Range selection "+
+      "is currently in view. Your target/amplicon regions are also uploaded as a separate annotation track if a target regions "+
+      "file was specified." );
+    $("#RC-help").attr( "title", "Click for help." );
+  }
+
   var plotStats = {
     xTitle : "Reference Range",
     defNumPoints : def_numPoints,
     minNumPoints : def_minPoints,
     maxNumPoints : 1000,
+    maxSideBars : 500,
     maxXaxisLabels : 25,
     multiChrom : false,
+    zoomInOption : false,
+    zoomInActive : false,
     binnedChroms : false,
-    zmSrtBin : 0,
-    zmSrtChrom : "",
-    zmEndChrom : "",
-    zmOutChrom : false,
-    zoomInMode : false,
     zoomChrom: false,
+    chromSrtNum : 1,
     chromsInView : 0,
-    targetsRepresented : 0,
-    targetBinSize : 0,
-    binnedData : false,
+    basesInView : 0,
+    baseBinSize : 0,
+    binnedBases : false,
     onTargets : false,
     numFields : 0,
     numPlots : 0,
     numPoints : 0,
-    wgnNumPoints : 0,
     minX : 0,
     maxX : 0,
     minY : 0,
@@ -370,7 +323,16 @@ $(function () {
     totalChroms : 0,
     chromLength : 0,
     chrList : "",
-    chrLens : {}
+    chrLens : {},
+    chrIdx : {},
+    chromLbins : 0,
+    chromRbins : 0,
+    baseLbins : 0,
+    baseRbins : 0,
+    sliderMotive : false,
+    sliderScale : 0,
+    sliderRfPos : 0,
+    sliderShift : 0
   };
 
   var plotParams = {
@@ -385,8 +347,7 @@ $(function () {
     dblCenter : false
   };
 
-  var covFilter = {
-    inputfile : '',
+  var baseRangeParam = {
     bbcfile : bbcFile,
     cbcfile : cbcFile,
     chrom : '',
@@ -396,8 +357,23 @@ $(function () {
     srt_bin : 0,
     end_bin : 0,
     clipleft : 0,
-    clipright : 100,
-    numrec : 0
+    clipright : 100
+  };
+
+  var i = bbcFile.lastIndexOf('/');
+  var fpath = i < 0 ? "" : bbcFile.substring(0,i+1);
+
+  var contigRangeParam = {
+    filename : fpath+chrcovFile,
+    outfile : '',
+    startline : 1,
+    numlines : 1,
+    binsize : 1,
+    binsrt : 0,
+    binend : 0,
+    bedcoords : 0,
+    headlines : 1,
+    numfields : 7
   };
 
   var DataField = {
@@ -443,74 +419,77 @@ $(function () {
 
   function setUnzoomTitle(zoomin) {
     var txt;
-    if( zoomin) {
-      txt = "'Zoom in' to a special view of coverage over the reference as a single sequence with all chromsomes (or contigs) "+
-      "laid end-to-end. Coverage across each is distributed over a number of bins that is approximately proportional to the "+
-      "relative sizes of the chromsome, with each represented by at least one bin.";
+    if( zoomin ) {
+      txt = "Zoom in to a special view of coverage over the reference as a single sequence with all chromsomes\n"+
+      "(or contigs) laid end-to-end. This view is only available for references with 2 to 25 contigs.\n"+
+      "Coverage across each is distributed over a number of bins that is apportioned by relative sizes of\n"+
+      "the chromsomes, with each chromsome represented by at least one bin.";
     } else {
-      txt = "'Zoom out' to the maximum distance for the current view. If zoomed in on a single chromosome, this "+
-      "will zoom out to the view for coverage across the whole of that chromosome. Otherwise it will return to the last "+
-      "view for multiple contigs or back to the initial view for coverage across all contigs in the reference. "+
-      "Note that this is a different operation from double-clicking the mouse in plot area (outside of any data bar). "+
-      "That operation will zoom out to a region that is 10 times the current region size (from a zoomed-in view).";
+      txt = "Zoom out to the maximum stop distance for the current view: Coverage over the whole chromosome\n"+
+      "or to the initial view for coverage off all chomosomes/contigs in the whole reference.";
     }
+    plotStats.zoomInOption = zoomin;
     $("#RC-unzoomToggle").val(zoomin ? "Zoom In" : "Zoom Out");
     $("#RC-unzoomToggle").attr( "title", txt );
   }
 
-  function customizeChart() {
-    // add fly-over help to controls here in case need to customize for chart data
-    $("#RC-plotLabel").attr( "title",
-      "Select the how the data is plotted.\n'Total Reads' shows bar plots of base reads aligned "+
-      "to both DNA strands, whereas 'Strand Reads' plots the numbers of forward and reverse (DNA strand) base reads "+
-      "separately, above and below the 0 reads line. If a set of target regions was specified, the numbers of reads "+
-      "that were inside or outside of these regions are shown by stacked colors of each data bar." );
-    $("#RC-overlayLabel").attr( "title",
-      "Select a particular property of the data to plot as an overlay of points parallel to each data bar. " +
-      "For example, the Strand Bias can be overlayed with the Total Reads plot to see if there is any obvious strand "+
-      "bias for the reference regions in view. Whether there is specific or general strand bias "+
-      "may depend on the current zoom level to those regions (i.e. the region size represented by the binned data). "+
-      "Adding an overlay plot is also useful for identifying very low coverage regions, since these points are not "+
-      "plotted for any region with 0 base coverage." );
-    $("#RC-offScaleOutlierLabel").attr( "title",
-      "Select to indicate that a single outlier data point is plotted off-scale. "+
-      "The y-axis is re-scaled so that the over-represented contig (or range) does not hide the relative representation "+
-      "of other data curently in view. This option only becomes available when the maximum value (height) of any "+
-      "data point (bar) is at least "+def_outlierFactor+" times greater than all others in view." );
-    $("#RC-showLegendLabel").attr( "title", "Select whether the legend is displayed over the plot area." );
-    $("#RC-numPointsLabel").attr( "title",
-      "This value specifies the maximum number of data bars and overlay points to display. Typically each bar (or point) "+
-      "plotted will represent the binned totals and averages of many individual base regions along the genome. If there is "+
-      "less data to plot than this value, e.g. when in the maximum zoom-out mode showing coverage per chromosome, the "+
-      "number of bars actually plotted is displayed in parentheses. This value may be set to any value 10 and 1000, "+
-      "although values greater than 200 are not recommended as this may make selection of individual bars difficult.\n"+
-      "Note that the number of bars represented in the 'Zoom In' view, where coverage is visualized along the whole genome "+
-      "with a proportional number of bins per chromosome, is fixed at 200 regardless of the current Bars/Points setting." );
-    $("#RC-export").attr( "title", "Click to open Export Reference Coverage in View dialog." );
-    $("#RC-dialog-title").html( "Export Reference Coverage in View" );
-    $("#RC-filterChromLabel").attr( "title",
-      "Use this selector to select a particular chromosome (or contig) of the reference to view or to go to an overview " +
-      "across the whole reference by selecting the 'ALL' value. " +
-      "You may also change to a Chrom/Contig selection by typing its full name (or ID) in the Range field." );
-    $("#RC-filterChromRangeLabel").attr( "title",
-      "Use this selector to select a particular region of the currently selected chromosome to bring into view. "+
-      "The range may be in the form <start>-<end> where 'start' and 'end' are positional base coordinates (1-based). "+
-      "These numbers may include commas (which are ignored) but may not include other characters, such as space or dot. "+
-      "After typing a value, press enter or tab or click on another field to execute your selection.\n"+
-      "The actual range requested may be 'corrected' if it exceeds the size of the current chromosome or is adjusted to "+
-      "statisfy the specified Bars/Points setting. In partcular, if only one number is provided the view will be centered "+
-      "at this location with (e.g.) 200 base locations in view. Large ranges are typically adjusted to the nearest 1KB "+
-      "range (or greater round-off) because of the way regions of the genome are pre-binned for this chart for performance.\n"+
-      "If the value of the Range field is empty then it will be filled in with the whole range for the selected chromosome. "+
-      "However, the Range entry is completely ignorred if the current Chrom/Contig setting is 'ALL'. You may also include "+
-      "the chromosome name in the range by typing, e.g. chr1:100000-200000 or chr1:250000, which brings up the specified "+
-      "location without having to first select the chromosome using the Chrom/Contig selector." );
-    $("#RC-OpenIGV").attr( "title",
-      "Click this button to open an instance of IGV (Integrated Genome Viewer) with whatever Chrom/Contig and Range selection "+
-      "is currently in view. Your target/amplicon regions are also uploaded as a separate annotation track if a target regions "+
-      "file was specified." );
-    $("#RC-help").attr( "title", "Click for help." );
-    setUnzoomTitle(true);
+  function checkZoomInOption() {
+    if( wgncovFile === '' ) return;
+    if( plotStats.zoomInOption ) {
+      setUnzoomTitle(false);
+    } else if( plotStats.multiChrom && plotStats.totalChroms == plotStats.chromsInView ) {
+      if( !plotStats.zoomInActive ) setUnzoomTitle(true);
+    }
+  }
+
+  // Sets up range loading in a multi-contig views and reloads data if necessary - return true if ziew updated
+  // If in Zoom In mode either switch a standard single contig zoom or just set the number of contigs in view.
+  function setLoadChromRange(binSrt,binEnd) {
+    var srtChr = dataTable[binSrt][DataField.contig_id];
+    var endChr = dataTable[binEnd][DataField.contig_id];
+    var i = srtChr.indexOf(' - ');
+    if( i >= 0 ) srtChr = srtChr.substr(0,i);
+    i = endChr.indexOf(' - ');
+    if( i >= 0 ) endChr = endChr.substr(i+3);
+    plotStats.chromSrtNum = plotStats.chrIdx[srtChr];
+    plotStats.chromsInView = plotStats.chrIdx[endChr] - plotStats.chromSrtNum + 1;
+    if( srtChr == endChr ) {
+      zoomDataRange(srtChr,dataTable[binSrt][DataField.pos_start],dataTable[binEnd][DataField.pos_end]);
+      return true;
+    }
+    if( plotStats.zoomInActive ) return false;
+    if( plotStats.chromsInView < plotStats.minNumPoints ) {
+      plotStats.chromSrtNum -= (plotStats.minNumPoints-plotStats.chromsInView) / 2;
+      if( plotStats.chromSrtNum < 1 ) plotStats.chromSrtNum = 1;
+      plotStats.chromsInView = plotStats.minNumPoints;
+    }
+    // expand range for over-loading for slider
+    var numPoints = plotStats.maxX - plotStats.minX;
+    var binsize = plotStats.chromsInView / numPoints;
+    if( binsize < 1 ) binsize = 1;
+    if( numPoints > plotStats.maxSideBars ) numPoints = plotStats.maxSideBars;
+    var lbins = (plotStats.chromSrtNum-1)/binsize;
+    if( lbins > numPoints ) lbins = numPoints;
+    var rbins = (plotStats.totalChroms-plotStats.chromSrtNum-plotStats.chromsInView)/binsize;
+    if( rbins > numPoints ) rbins = numPoints;
+    contigRangeParam.binsize = binsize;
+    plotStats.chromLbins = lbins;
+    plotStats.chromRbins = rbins;
+    if( plotStats.binnedChroms ) {
+      zoomData();
+      return true;
+    }
+    return false;
+  }
+
+  // return true if bin is (now) at center
+  function centerViewOnBin(binNum) {
+    if( plotStats.numPlots <= 0 || binNum < 0 ) return false;
+    // binNum 0-based so 99 (bin#100) is center of 200 bins and 100 (bin#101) is center of 201 bins
+    var shift = binNum - ((plotStats.minX+plotStats.maxX-1) >> 1);
+    if( shift == 0 ) return true;
+    zoomViewToBinRange( plotStats.minX+shift, plotStats.maxX+shift-1 );
+    return true;
   }
 
   // (re)initiailize page from default user options
@@ -518,7 +497,6 @@ $(function () {
   updateGUIPlotParams();
 
   // --------- initialize plot bindings - controls inside plot area ----------
-
 
   var fieldIds = [];
   var dataTable = [];
@@ -536,86 +514,9 @@ $(function () {
       plotStats.minY = options.yaxes[0].min = ranges.yaxis.from;
       plotStats.maxY = options.yaxes[0].max = ranges.yaxis.to;
     }
+    lastHoverBar.postZoom = true;  // prevent help pop-up
     zoomViewToBinRange( Math.floor(ranges.xaxis.from), Math.floor(ranges.xaxis.to) );
   });
-
-  function zoomViewToBinRange(binSrt,binEnd) {
-    // correct for selections dragged beyond end of last bin
-    if( binEnd >= plotStats.numPoints ) binEnd = plotStats.numPoints - 1;
-    lastHoverBar.postZoom = true;
-    // deal with range zooms across multiple and single contig views
-    if( plotStats.multiChrom ) {
-      plotStats.zmSrtBin = binSrt; // for export
-      plotStats.zmSrtChrom = dataTable[binSrt][DataField.contig_id];
-      plotStats.zmEndChrom = dataTable[binEnd][DataField.contig_id];
-      if( plotStats.binnedChroms ) {
-        var i = plotStats.zmSrtChrom.indexOf(' - ');
-        if( i >= 0 ) {
-          plotStats.zmSrtChrom = plotStats.zmSrtChrom.substr(0,i);
-        }
-        i = plotStats.zmEndChrom.indexOf(' - ');
-        if( i >= 0 ) {
-          plotStats.zmEndChrom = plotStats.zmEndChrom.substr(i+3);
-        }
-      }
-      if( plotStats.zmSrtChrom != plotStats.zmEndChrom ) {
-        setUnzoomTitle(false);
-        unzoomData(); // resets plotStats.zoomChrom
-        return;
-      }
-    }
-    // escape multi-contig view since only one contig is now selected
-    plotStats.zmSrtBin = 0;
-    plotStats.zmSrtChrom = "";
-    plotStats.zmEndChrom = "";
-    plotStats.multiChrom = false;
-    plotStats.zoomInMode = false;
-    // check for zoom on a chromosome view
-    if( plotStats.binnedData ) {
-      // ensure only the middle chromosome is selected
-      if( covFilter.chrom == '' ) {
-        var midBin = Math.round(0.5*(binSrt+binEnd));
-        var chr = dataTable[midBin][DataField.contig_id];
-        while( dataTable[binSrt][DataField.contig_id] != chr ) ++binSrt;
-        while( dataTable[binEnd][DataField.contig_id] != chr ) --binEnd;
-      }
-      var chr = dataTable[binSrt][DataField.contig_id];
-      var srt = dataTable[binSrt][DataField.pos_start];
-      var end = dataTable[binEnd][DataField.pos_end];
-      zoomDataRange(chr,srt,end);
-    } else {
-      // recenter at max zoom, or zoom out at over zoom
-      var clip = binEnd - binSrt + 1;
-      if( clip >= plotStats.minNumPoints ) {
-        plotStats.minX = options.xaxis.min = binSrt;
-        plotStats.maxX = options.xaxis.max = binEnd + 1;
-      } else {
-        var diff = 0.5 * (plotStats.minNumPoints - clip);
-        plotStats.minX = Math.floor(0.5+binSrt-diff);
-        plotStats.maxX = plotStats.minX + plotStats.minNumPoints;
-        if( plotStats.minX < 0 ) {
-          plotStats.maxX -= plotStats.minX;
-          plotStats.minX = 0;
-        }
-        if( plotStats.maxX > plotStats.numPoints ) {
-          plotStats.minX -= plotStats.maxX - plotStats.numPoints;
-          plotStats.maxX = plotStats.numPoints;
-        }
-        binSrt = plotStats.minX;
-        binEnd = plotStats.maxX - 1;
-      }
-      plotStats.targetBinSize = 1;
-      setMaxZoomXtitle(binSrt,binEnd);
-      updatePlot();
-    }
-  }
-
-  function setMaxZoomXtitle(binSrt,binEnd) {
-    plotStats.targetsRepresented = binEnd - binSrt + 1;
-    var chr = dataTable[binSrt][DataField.contig_id];
-    plotStats.xTitle = chr + ': ' + commify(dataTable[binSrt][DataField.pos_start]) + ' - ' + commify(dataTable[binEnd][DataField.pos_end]);
-    plotStats.xTitle += '  (' + commify(plotStats.targetsRepresented) + ' bases)';
-  }
 
   placeholder.bind("plothover", function(event, pos, item) {
     var hoverTip = !lastHoverBar.sticky;
@@ -633,24 +534,50 @@ $(function () {
     }
   });
 
+  var numClicks = 0;
+  var clickTimer = null;
   placeholder.bind("plotclick", function(e,pos,item) {
+    // manual implement of dblclick since single click always fires
+    if( ++numClicks > 1 ) {
+      clearTimeout(clickTimer);
+      numClicks = 0;
+      var binNum = item ? Math.floor(pos.x) : -1;
+      if( zoomViewOnBin( binNum, true ) ) hideTooltip();
+      return;
+    }
     // ignore false triggering due to mouse selection for zoom
     if( lastHoverBar.postZoom ) {
       lastHoverBar.postZoom = false;
+      numClicks = 0;
       return;
     }
-    if( cursorOverItem(pos,item) ) {
-      showTooltip(item,pos,true);
-      lastHoverBar.clickItem = item;
-      if( item ) plotObj.highlight(item.series,item.datapoint);
-    } else {
-      hideTooltip();
-    }
+    // defer click event to enable dblclick catch
+    clickTimer = setTimeout( function() {
+      if( cursorOverItem(pos,item) ) {
+        showTooltip(item,pos,true);
+        lastHoverBar.clickItem = item;
+        if( item ) plotObj.highlight(item.series,item.datapoint);
+      } else {
+        hideTooltip();
+      }
+      numClicks = 0;
+    }, 250 );
   });
 
   placeholder.bind("mouseleave", function() {
     setCursor('default');
   });
+
+  function setCursor(curs) {
+    if( curs == null || curs == "" )
+       curs = 'default';
+    if( useFlash && canvas != null ) {
+      // prevents tooltip from appearing!
+      //FlashCanvas.setCursor(canvas,curs);
+    } else {
+      document.body.style.cursor = curs;
+    }
+  }
 
   function cursorOverPlot(x,y) {
     return plotStats.numPlots > 0 && x >= plotStats.minX && x < plotStats.maxX && y >= plotStats.minY && y <= plotStats.maxY;
@@ -692,8 +619,10 @@ $(function () {
       label = isRev ? LegendLabels.revReads : LegendLabels.fwdReads;
       bgColor = isRev ? ColorSet.revReads : ColorSet.fwdReads;
     }
+    // at hi-res can trigger for bin just outside view!
     var binNum = Math.floor(pos.x);
-    if( binNum >= plotStats.numPoints ) binNum = plotStats.numPoints-1;
+    if( binNum < plotStats.minX ) binNum = plotStats.minX;
+    if( binNum >= plotStats.maxX ) binNum = plotStats.maxX-1;
     if( lastHoverBar.binNum == binNum && lastHoverBar.sticky == sticky &&
         lastHoverBar.isRev == isRev && lastHoverBar.label == label ) return;
     hideTooltip();
@@ -723,14 +652,14 @@ $(function () {
       if( posy > ymax ) posy = ymax;
       if( posy < cof.top-4 ) posy = cof.top-4;
       var xmid = cof.left + $('#RC-chart').width()/2;
-      if( pos.pageX > xmid ) posx = pos.pageX - $('#RC-tooltip').width() - 16;
+      if( pos.pageX > xmid ) posx = pos.pageX - $('#RC-tooltip').width() - 26;
     }
     $('#RC-tooltip').css({
       position: 'absolute', left: posx, top: posy, minWidth: minTipWidth,
       background: bgColor, padding: '3px '+(sticky ? '7px' : '4px'),
       color: whiteText ? "white" : "black",
       border: (sticky ? 2 : 1)+'px solid #444',
-      opacity: sticky ? 1: 0.7
+      opacity: (sticky ? 1: 0.7), 'z-index': 20
     }).appendTo("body").fadeIn(sticky ? 10 : 100);
     if( !sticky ) {
       timeout = setTimeout( function() { hideTooltip(); }, 200 );
@@ -764,7 +693,7 @@ $(function () {
     $('#RC-tooltip-zoomin').hide();
     if( dataBar(id) ) {
       var chr = dataTable[bin][DataField.contig_id];
-      if( dataTable[bin][DataField.pos_start] < 0 ) {
+      if( plotStats.binnedChroms ) {
         return chr;
       } else if( dataTable[bin][DataField.pos_start] == 1 && dataTable[bin][DataField.pos_end] == plotStats.chrLens[chr] ) {
         return chr;
@@ -792,18 +721,18 @@ $(function () {
     var i = id.indexOf(' ');
     var dirStr = id.substr(0,i+1);
     var dir = dirStr.charAt(0);
-    var binChrom = dataTable[bin][DataField.pos_start] < 0;
+    //var binChrom = dataTable[bin][DataField.pos_start] < 0;
     var regionLen = dataTable[bin][DataField.pos_end];
-    if( !binChrom ) regionLen += 1-dataTable[bin][DataField.pos_start];
     var numReads = dataTable[bin][DataField.fwd_reads]+dataTable[bin][DataField.rev_reads];
-    var msg = "(Bin#"+(bin+1)+")"+br;
-    if( binChrom ) {
+    var msg = "(Bin#"+(bin+1-plotStats.minX)+")"+br;
+    if( plotStats.binnedChroms ) {
       msg += "Contigs: "+dataTable[bin][DataField.contig_id]+br;
-      msg += "Number of contigs: "+(-dataTable[bin][DataField.pos_start])+br;
+      msg += "Number of contigs: "+dataTable[bin][DataField.pos_start]+br;
       msg += "Total contig length: "+commify(regionLen)+br;
     } else {
+      regionLen += 1-dataTable[bin][DataField.pos_start];
       msg += "Contig: "+dataTable[bin][DataField.contig_id]+br;
-      msg += "Region: "+commify(dataTable[bin][DataField.pos_start])+"-"+commify(dataTable[bin][DataField.pos_end])+br;
+      msg += "Region: "+commify(dataTable[bin][DataField.pos_start])+(regionLen>1 ? "-"+commify(dataTable[bin][DataField.pos_end]) : "")+br;
       msg += "Region length: "+commify(regionLen)+br;
     }
     if( id == LegendLabels.fwdBias ) {
@@ -841,6 +770,33 @@ $(function () {
     return msg;
   }
 
+  function commify(val) {
+    var jrs = val.toString();
+    var dps = "";
+    var i = jrs.indexOf('.');
+    if( i >= 0 ) {
+      dps = jrs.substring(i);
+      jrs = jrs.substring(0,i);
+    }
+    return jrs.replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,")+dps;
+  }
+
+  function roundAxis( maxVal ) {
+    if( maxVal == 0 ) return 0;
+    var sgn = maxVal < 0 ? -1 : 1;
+    maxVal = Math.abs(maxVal);
+    var b = Math.pow( 10, Math.round(Math.log(maxVal)/Math.LN10)-1 );
+    return sgn * b * Math.floor(1+maxVal/b);
+  }
+
+  function percentFormat(val, axis) {
+    return ''+val.toFixed(axis.tickDecimals)+'%';
+  }
+
+  function absFormat(val, axis) {
+    return ''+Math.abs(val.toFixed(axis.tickDecimals));
+  }
+
   function sigfig(val) {
     var av = Math.abs(val);
     if( av == parseInt(av) ) return val.toFixed(0);
@@ -849,17 +805,6 @@ $(function () {
     if( av >= 1 ) return val.toFixed(2);
     if( av >= 0.1 ) return val.toFixed(3);
     return val.toFixed(3);
-  }
-
-  function setCursor(curs) {
-    if( curs == null || curs == "" )
-       curs = 'default';
-    if( useFlash && canvas != null ) {
-      // prevents tooltip from appearing!
-      //FlashCanvas.setCursor(canvas,curs);
-    } else {
-      document.body.style.cursor = curs;
-    }
   }
 
   // --------- Set up charting controls outside of plot area ---------
@@ -876,7 +821,7 @@ $(function () {
     $('#RC-numPoints').val(plotParams.numPoints);
     $('#RC-offScaleOutlier').attr('checked',plotParams.offScaleOutlier);
     $('#RC-showLegend').attr('checked',plotParams.showLegend);
-    $('#RC-selectChrom').val(covFilter.chrom);
+    $('#RC-selectChrom').val(baseRangeParam.chrom);
   }
 
   $('#RC-offScaleOutlier').change(function() {
@@ -901,16 +846,16 @@ $(function () {
     }
     this.value = val;
     if( val != plotParams.numPoints ) {
-      covFilter.maxrows = plotParams.numPoints = val;
+      baseRangeParam.maxrows = plotParams.numPoints = val;
       // Selected bars are fixed for Zoom In mode so just update GUI
-      if( plotStats.zoomInMode ) {
+      if( plotStats.zoomInActive ) {
         if( plotParams.numPoints != plotStats.numPoints ) {
           $('#RC-numBars').text('('+plotStats.numPoints+')');
         } else {
           $('#RC-numBars').text('');
         }
       } else {
-        zoomData();
+        unzoomData();
       }
     }
   });
@@ -936,15 +881,14 @@ $(function () {
         chr = '';
       }
     }
-    if( chr != '' ) {
-      if( val == '' ) {
+    if( chr !== '' ) {
+      if( val === '' ) {
         this.value = '';
         updateContigView(chr);
         return;
       }
       setContig(chr);
-      setUnzoomTitle(false);
-    } else if( covFilter.chrom == '' ) {
+    } else if( baseRangeParam.chrom === '' ) {
       // range is reset if no contig selected
       this.value = '';
       return;
@@ -955,17 +899,29 @@ $(function () {
   });
 
   function setContigRange(rangeStr) {
+    // format is 'x' or 'x-y' or 'x y' where x and y are number strings with commas removed
     // range becomes whole contig on parsing error or empty string
     // return true if a slice of the contig is selected, or false if whole contig in view
     var val = $.trim(rangeStr.replace(/,/g,''));
-    var pos = val.split('-');
+    var pos;
+    if( val.indexOf('-') > 0 ) {
+      val = val.replace(/\s/g,'');
+      pos = val.split('-');
+    } else {
+      pos = val.split(/\s+/);
+    }
     var srt = 1;
     var end = plotStats.chromLength;
+    // reset view assuming already focused on contig
+    baseRangeParam.maxrows = plotStats.numPoints = plotParams.numPoints;
+    plotStats.minX = 0;
+    plotStats.maxX = plotStats.numPoints;
+    plotStats.zoomInActive = plotStats.multiChrom = false;
     // short circuit for invalid format of start location
     if( pos.length < 1 || isNaN(pos[0]) ) {
       $('#RC-chromRange').val(commify(srt)+'-'+commify(end));
-      covFilter.pos_srt = srt;
-      covFilter.pos_end = end;
+      baseRangeParam.pos_srt = srt;
+      baseRangeParam.pos_end = end;
       return false;
     }
     // center view around bases at single position
@@ -1006,33 +962,30 @@ $(function () {
       }
     }
     $('#RC-chromRange').val(commify(srt)+'-'+commify(end));
-    covFilter.pos_srt = srt;
-    covFilter.pos_end = end;
+    baseRangeParam.pos_srt = srt;
+    baseRangeParam.pos_end = end;
     return (srt > 1 || end < plotStats.chromLength);
   }
 
   function updateContigView(chr) {
     if( chr == '' ) return;
     setContig(chr);
-    if( chr == 'ALL' ) {
-      covFilter.inputfile = wgncovFile != '' ? wgncovFile : chrcovFile;
-      covFilter.numrec = 0;
-    }
     unzoomData();
-    setUnzoomTitle(false);
   }
 
   function setContig(chr) {
-    if( chr == '' ) return;
+    if( chr == '' || plotStats.totalChroms < 2 ) return;
+    plotStats.chromSrtNum = 1;
     if( chr == 'ALL' ) {
-      plotStats.zmSrtBin = 0;
-      plotStats.zmSrtChrom = "";
-      plotStats.zmEndChrom = "";
-      covFilter.chrom = '';
+      plotStats.chromsInView = plotStats.totalChroms;
       plotStats.chromLength = 0;
-    } else if( chr != covFilter.chrom ) {
-      covFilter.chrom = chr;
+      baseRangeParam.chrom = '';
+    } else if( chr != baseRangeParam.chrom ) {
+      plotStats.chromsInView = 1;
       plotStats.chromLength = plotStats.chrLens[chr];
+      baseRangeParam.chrom = chr;
+    } else {
+      return;
     }
     $('#RC-selectChrom').val(chr);
   }
@@ -1053,47 +1006,13 @@ $(function () {
   }
   
   $("#RC-unzoomToggle").click(function() {
-    // check for zoom out after zoom in mode and not at max zoom out already
-    if( plotStats.multiChrom && plotStats.zmSrtChrom == "" ) {
-      plotStats.zoomInMode = false;
+    if( this.value == "Zoom In" ) {
+      plotStats.zoomInActive = true;
+    } else if( plotStats.zoomInActive ) {
+      plotStats.zoomInActive = (plotStats.maxX - plotStats.minX < plotStats.numPoints);
     }
-    if( plotStats.zoomInMode || this.value == "Zoom In" ) {
-      plotStats.zmSrtBin = 0;
-      plotStats.zmSrtChrom = "";
-      plotStats.zmEndChrom = "";
-      plotStats.zmOutChrom = false;
-      unzoomToFile( wgncovFile );
-      plotStats.wgnNumPoints = plotStats.numPoints;
-      plotStats.zoomInMode = true;
-      setUnzoomTitle(false);
-      return;
-    }
-    // this means zoomed in on a contig
-    if( plotStats.zoomChrom ) {
-      if( covFilter.pos_srt > 1 || covFilter.pos_end < plotStats.chromLength ) {
-        // make exception for single, especially small, genomes
-        if( plotStats.totalChroms == 1 && plotStats.wgnNumPoints == plotParams.numPoints && wgncovFile != '' ) {
-          unzoomToFile( wgncovFile );
-          plotStats.zoomInMode = true;
-        } else {
-          unzoomData();
-        }
-        return;
-      }
-    }
-    // always zoom out to full view if in multiChrom view
-    if( plotStats.multiChrom ) {
-      plotStats.zmSrtBin = 0;
-      plotStats.zmSrtChrom = "";
-      plotStats.zmEndChrom = "";
-    }
-    plotStats.chrList = '';
-    plotStats.chrLens = {};
-    covFilter.chrom = '';
-    unzoomToFile( chrcovFile );
-    if( wgncovFile != '' ) {
-      setUnzoomTitle(true);
-    }
+    if( !plotStats.zoomChrom ) setContig('ALL');
+    unzoomData();
   });
 
   $('#RC-OpenIGV').click(function() {
@@ -1103,8 +1022,8 @@ $(function () {
   function getDisplayRegion(viewBuffer) {
     var chr = $('#RC-selectChrom').val();
     if( chr == '' || chr == 'ALL' ) return '';
-    var srt = covFilter.pos_srt;
-    var end = covFilter.pos_end;
+    var srt = baseRangeParam.pos_srt;
+    var end = baseRangeParam.pos_end;
     if( srt <= 0 ) return chr;
     if( end <= 0 ) return chr+':'+end;
     // expand the region slightly for better viewing in context
@@ -1137,15 +1056,29 @@ $(function () {
     $('#RC-chromRange').val(this.value).change();
   });
 
-  function unzoomToFile(filename) {
-    covFilter.inputfile = filename;
-    covFilter.chrom = '';
-    plotStats.minNumPoints = def_minPoints;
-    plotParams.numPoints = plotStats.defNumPoints = def_numPoints;
-    plotParams.zoomMode = 1;
-    $('#RC-numPoints').val(plotParams.numPoints);
-    unzoomData(true);
-    setChromSearch();
+  function loadContigs() {
+    var chrid = '';
+    $('#RC-message').text('Loading...');
+    $.ajaxSetup( {dataType:"text",async:false} );
+    $.get( chrcovFile, function(mem) {
+      var lines = mem.split("\n");
+      $.each(lines, function(n,row) {
+        if( n > 0 ) {
+          var fields = $.trim(row).split('\t');
+          if( fields[0] !== '' && chrid !== fields[0] ) {
+            chrid = fields[0];
+            plotStats.chrList += chrid + '\t';
+            plotStats.chrLens[chrid] = parseInt(fields[2]);
+            plotStats.chrIdx[chrid] = n;
+          }
+        }
+      });
+    }).error(function(){
+      $('#RC-message').text('Failed to load from contig summary file.');
+    }).success(function(){
+      setChromSearch();
+      $('#RC-message').text('');
+    });
   }
 
   function setChromSearch() {
@@ -1167,144 +1100,127 @@ $(function () {
     if( mclen > 6 ) selObj.css('width','');
     // if only one chromosome then the selection cannot be changed => ensure it is the one selected
     if( plotStats.totalChroms == 1 ) {
-      covFilter.chrom = chrs[0];
+      baseRangeParam.chrom = chrs[0];
       plotStats.chromLength = plotStats.chrLens[chrs[0]];
     }
   }
 
-  function loadData() {
-    loadTSV();
-    updateContigRange();
-    updatePlotStats();
-  }
-
-  function updateContigRange() {
-    plotStats.multiChrom = false;
-    plotStats.binnedChroms = false;
-    if( dataTable.length <= 1 ) return;
-    plotStats.multiChrom = (dataTable[0][DataField.contig_id] != dataTable[dataTable.length-1][DataField.contig_id]);
-    if( plotStats.multiChrom || plotStats.zmOutChrom ) {
-      zoomcontigs();
-      plotStats.multiChrom = (dataTable[0][DataField.contig_id] != dataTable[dataTable.length-1][DataField.contig_id]);
-      plotStats.binnedChroms = bincontigs();
-    }
-  }
-
-  function zoomcontigs() {
-    // focus on range of contigs after loading
-    // Also ensure the Zoom In button is only available at max zoom out
-    if( plotStats.zmSrtChrom == "" && plotStats.zmEndChrom == "" ) {
-      if( wgncovFile != '' ) {
-        setUnzoomTitle(true);
-      }
-      return;
-    } else if( plotStats.zoomInMode ) {
-      setUnzoomTitle(false);
-    }
-    var srtRange = 0;
-    var endRange = dataTable.length;
-    var i = 0;
-    for( ; i < dataTable.length; ++i ) {
-      if( dataTable[i][0] == plotStats.zmSrtChrom ) {
-        srtRange = i;
-        break;
-      }
-    }
-    // look backwards for end contig for sake of concat contigs zoom
-    for( i = dataTable.length-1; i >= 0; --i ) {
-      if( dataTable[i][0] == plotStats.zmEndChrom ) {
-        endRange = i+1;
-        break;
-      }
-    }
-    // check if this is to be a zoom-out operation
-    var newcv = endRange - srtRange; // default zoom in range - to specified contigs
-    if( plotStats.zmOutChrom ) {
-      plotStats.zmOutChrom = false;  // reset default operation to zoom in
-      if( plotStats.numPoints < plotStats.maxXaxisLabels ) {
-        // zoom out from over-zoom to max labels
-        newcv = plotStats.maxXaxisLabels;
-      } else {
-        // zoom out by factor
-        newcv *= dblclickUnzoomFac;
-      }
-    } else if( plotStats.zoomInMode ) {
-      // no zoom-in restrictions for concat contigs view
-    } else if( newcv < plotStats.maxXaxisLabels ) {
-      if( plotStats.numPoints > plotStats.maxXaxisLabels ) {
-        // zoom in to max labels before over-zoom
-        newcv = plotStats.maxXaxisLabels;
-      } else if( newcv < plotStats.minNumPoints ) {
-        // zoom in to max zoom in level
-        newcv = plotStats.minNumPoints;
-      }
-    }
-    // zoom to new contig range
-    if( newcv >= dataTable.length ) {
-      plotStats.zmSrtBin = 0;
-      plotStats.zmSrtChrom = "";
-      plotStats.zmEndChrom = "";
-      return;
-    }
-    srtRange = parseInt(0.5*(endRange + srtRange - newcv));
-    if( srtRange < 0 ) srtRange = 0;
-    endRange = srtRange + newcv;
-    if( endRange > dataTable.length ) {
-      endRange = dataTable.length;
-      srtRange = endRange - newcv;
-    }
-    // need to reset these for correct level of zoom-out, etc.
-    plotStats.zmSrtBin = srtRange;
-    plotStats.zmSrtChrom = dataTable[srtRange][DataField.contig_id];
-    plotStats.zmEndChrom = dataTable[endRange-1][DataField.contig_id];
-    // reduce data:- could later just set limits of loaded contigs for viewing
-    i = 0;
-    for( var j = srtRange; j < endRange; ++j ) {
-      dataTable[i++] = dataTable[j];
-    }
-    dataTable = dataTable.slice( 0, i );
-  }
-
-  function bincontigs() {
-    // resolve issues of having too many contigs by binning
-    if( dataTable.length <= plotParams.numPoints ) return false;
-    var numFields = dataTable[0].length;
-    var binSize = dataTable.length / plotParams.numPoints;
-    var binIndx = 0;
-    var binCnt = 0;
-    var binMod = 0;
-    for( var i = 0; i < dataTable.length; ++i ) {
-      binMod += 1.0;
-      if( ++binCnt == 1 ) {
-        dataTable[binIndx] = dataTable[i];
-      } else {
-        for( var j = 2; j < numFields; ++j ) {
-          dataTable[binIndx][j] += dataTable[i][j];
+  function zoomViewOnBin(binNum,zoomIn) {
+    // always perform zoom out if binNum < 0
+    if( plotStats.numPlots <= 0 ) return false;
+    var vsiz = plotStats.maxX - plotStats.minX;
+    var overzoom = vsiz < plotParams.numPoints;
+    if( binNum >= 0 && zoomIn ) {
+      setLoadChromRange(binNum,binNum);
+    } else if( plotStats.zoomChrom ) {
+      // set zoom out range by limits of current view
+      var chr = baseRangeParam.chrom;
+      var srt = baseRangeParam.pos_srt;
+      var end = baseRangeParam.pos_end;
+      // exception: return to previous view if in over-zoom
+      if( overzoom ) {
+        plotStats.minX = plotStats.baseLbins;
+        plotStats.maxX = plotStats.numPoints-plotStats.baseRbins;
+        setViewXtitle();
+        updatePlot();
+        return true;
+      } else if( binNum >= 0 && !zoomIn ) {
+        // zoom out from the center of the selected bin
+        var csrt = dataTable[binNum][DataField.pos_start];
+        var cend = dataTable[binNum][DataField.pos_end];
+        var csiz = 0.5 * vsiz * plotStats.baseBinSize;
+        csrt = cend = (csrt+cend) >> 1;
+        csrt -= csiz;
+        cend += csiz-1;
+        if( csrt > 0 && cend <= plotStats.chromLength ) {
+          chr = dataTable[binNum][DataField.contig_id];
+          srt = csrt;
+          end = cend;
         }
       }
-      if( binMod >= binSize ) {
-        if( binCnt > 1 ) {
-          dataTable[binIndx][0] += ' - ' + dataTable[i][0];
-          dataTable[binIndx][1] = -binCnt;  // indicates size of bin
-        }
-        binMod -= binSize;
-        binCnt = 0;
-        ++binIndx;
-      }
+      var siz = dblclickUnzoomFac*(end-srt+1);
+      srt = Math.floor(0.5*(end+srt-siz));
+      end = srt + siz - 1;
+      zoomDataRange(chr,srt,end);
+    } else if( plotStats.zoomInActive ) {
+      $("#RC-unzoomToggle").click();
+    } else if( plotStats.chromsInView < plotStats.totalChroms ) {
+      // No partial zoom out with many contigs
+      unzoomData();
     }
-    // finish up last bin if round-off error in binMod
-    if( binCnt > 1 ) {
-      dataTable[binIndx][0] += ' - ' + dataTable[i-1][0];
-      dataTable[binIndx][1] = -binCnt;
-    }
-    dataTable = dataTable.slice( 0, plotParams.numPoints );
-    plotStats.endRange = dataTable.length;
     return true;
+  }
+
+  function zoomViewToBinRange(binSrt,binEnd) {
+    // correct for selections focused beyond end of last bin
+    var nbin = binEnd - binSrt;
+    if( binSrt < 0 ) {
+      binSrt = 0;
+      binEnd = binSrt + nbin;
+    }
+    if( binEnd >= plotStats.numPoints ) {
+      binEnd = plotStats.numPoints - 1;
+      binSrt = binEnd - nbin;
+      if( binSrt < 0 ) binSrt = 0;
+    }
+    if( binSrt == binEnd ) {
+      return zoomViewOnBin(binSrt,true);
+    }
+    // deal with range zooms across multiple and single contig views
+    if( plotStats.multiChrom ) {
+      if( setLoadChromRange(binSrt,binEnd) ) return;
+    }
+    // check for zoom on a chromosome view
+    if( plotStats.binnedBases ) {
+      // ensure only the middle chromosome is selected
+      if( baseRangeParam.chrom === '' ) {
+        var midBin = Math.round(0.5*(binSrt+binEnd));
+        var chr = dataTable[midBin][DataField.contig_id];
+        while( dataTable[binSrt][DataField.contig_id] != chr ) ++binSrt;
+        while( dataTable[binEnd][DataField.contig_id] != chr ) --binEnd;
+      }
+      var chr = dataTable[binSrt][DataField.contig_id];
+      var srt = dataTable[binSrt][DataField.pos_start];
+      var end = dataTable[binEnd][DataField.pos_end];
+      zoomDataRange(chr,srt,end);
+    } else {
+      // recenter at max zoom, or zoom out at over zoom
+      var clip = binEnd - binSrt + 1;
+      if( clip >= plotStats.minNumPoints ) {
+        plotStats.minX = options.xaxis.min = binSrt;
+        plotStats.maxX = options.xaxis.max = binEnd + 1;
+      } else {
+        var diff = 0.5 * (plotStats.minNumPoints - clip);
+        plotStats.minX = Math.floor(0.5+binSrt-diff);
+        plotStats.maxX = plotStats.minX + plotStats.minNumPoints;
+        if( plotStats.minX < 0 ) {
+          plotStats.maxX -= plotStats.minX;
+          plotStats.minX = 0;
+        }
+        if( plotStats.maxX > plotStats.numPoints ) {
+          plotStats.minX -= plotStats.maxX - plotStats.numPoints;
+          plotStats.maxX = plotStats.numPoints;
+        }
+        binSrt = plotStats.minX;
+        binEnd = plotStats.maxX - 1;
+      }
+      plotStats.baseBinSize = 1;
+      // determine if re-load is not required - true overzoom mode
+      if( plotStats.zoomInActive || binEnd-binSrt+1 < plotParams.numPoints ) {
+        setViewXtitle();
+        checkZoomInOption();
+        updatePlot();
+      } else {
+        var chr = dataTable[binSrt][DataField.contig_id];
+        var srt = dataTable[binSrt][DataField.pos_start];
+        var end = dataTable[binEnd][DataField.pos_end];
+        zoomDataRange(chr,srt,end);
+      }
+    }
   }
 
   function zoomDataRange(chr,srt,end) {
     setContig(chr);
-    // adjust coordinates if would put view beyond the ends of selected contig
     var siz = end - srt;
     if( srt < 1 ) srt = 1;
     end = srt + siz;
@@ -1313,61 +1229,124 @@ $(function () {
       srt = end - siz;
       if( siz < 0 ) siz = 1;
     }
-    // reset flags based on viewing single contig
-    plotStats.zmSrtBin = 0;
-    plotStats.zmSrtChrom = "";
-    plotStats.zmEndChrom = "";
-    plotStats.zmOutChrom = false;
-    plotStats.zoomInMode = false;
+    baseRangeParam.maxrows = plotStats.numPoints = plotParams.numPoints;
+    plotStats.zoomInActive = false;
     plotStats.zoomChrom = setContigRange(srt+'-'+end);
     zoomData();
-    setUnzoomTitle(false);
   }
 
-  function zoomData(fromFile) {
-    loadData();
-    // to avoid recursion
-    if( fromFile == undefined || fromFile == false ) {
-      // For single contig references the whole genome view is better binned than using the coarse grained view
-      // and the difference is noticable when switching from the whole genome view. Hence override this situation.
-      if( plotStats.totalChroms == 1 && covFilter.pos_srt == 1 && covFilter.pos_end == plotStats.chromLength ) {
-        if( plotStats.wgnNumPoints == plotParams.numPoints && wgncovFile != '' ) {
-          setUnzoomTitle(false);
-          unzoomToFile( wgncovFile );
-          return;
-        }
-      }
+  // zoom view to a region within a single contig
+  function zoomData() {
+    // expand requested plot area to over-load for view panning
+    if( plotStats.zoomChrom ) {
+      var numPoints = plotStats.maxX - plotStats.minX;
+      if( numPoints > plotStats.maxSideBars ) numPoints = plotStats.maxSideBars;
+      var binsize = (baseRangeParam.pos_end - baseRangeParam.pos_srt + 1) / baseRangeParam.maxrows;
+      var lbins = parseInt( (baseRangeParam.pos_srt-1)/binsize );
+      if( lbins > numPoints ) lbins = numPoints;
+      var rbins = parseInt( (plotStats.chromLength-baseRangeParam.pos_end)/binsize );
+      if( rbins > numPoints ) rbins = numPoints;
+      plotStats.baseLbins = lbins;
+      plotStats.baseRbins = rbins;
+      baseRangeParam.pos_srt -= parseInt(0.5+lbins*binsize);
+      baseRangeParam.pos_end += parseInt(rbins*binsize);
+      baseRangeParam.maxrows += lbins + rbins;
+    } else {
+      plotStats.baseLbins = plotStats.baseRbins = 0;
     }
-    updatePlot();
-  }
-
-  function unzoomData() {
-    plotStats.zoomChrom = false;
-    covFilter.pos_srt = 0;
-    covFilter.pos_end = 0;
-    covFilter.maxrows = plotParams.numPoints;
     loadData();
     updatePlot();
   }
 
-  function loadError() {
-    alert("An error occurred while loading from "+
-      (covFilter.chrom == '' ? covFilter.inputfile : covFilter.bbcfile)+"\n"+
-      covFilter.chrom+":"+covFilter.pos_srt+"-"+covFilter.pos_end+"\n("+
-      covFilter.clipleft+"-"+covFilter.clipright+")");
-    $('#RC-message').text('');
+  // return view whole reference or whole contig view
+  function unzoomData() {
+    if( baseRangeParam.chrom !== '' ) {
+      plotStats.numPoints = plotParams.numPoints;
+    } else {
+      plotStats.numPoints = plotStats.totalChroms < plotParams.numPoints ? plotStats.totalChroms : plotParams.numPoints;
+    }
+    plotStats.baseLbins = plotStats.baseRbins = 0;
+    plotStats.chromLbins = plotStats.chromRbins = 0;
+    plotStats.chromSrtNum = 1;
+    plotStats.chromsInView = plotStats.totalChroms;
+    plotStats.zoomChrom = false;
+    baseRangeParam.pos_srt = 0;
+    baseRangeParam.pos_end = 0;
+    baseRangeParam.maxrows = plotStats.numPoints;
+    contigRangeParam.binsize = plotStats.totalChroms / plotStats.numPoints;
+    if( contigRangeParam.binsize < 1 ) contigRangeParam.binsize = 1;
+    loadData();
+    updatePlot();
   }
 
-  // load data using PHP to dataTable[] using options in covFilter{}
+  function updateScrollBar() {
+    if( plotStats.sliderMotive ) return;
+    var slider = $('#RC-slider');
+    if( plotStats.multiChrom ) {
+      if( plotStats.chromsInView == plotStats.totalChroms ) return slider.hide();
+    } else if( !plotStats.zoomChrom ) {
+      return slider.hide();
+    }
+    // if looking at a window of the whole view (formally overzoom mode) then this is the slide window
+    plotStats.sliderShift = 0;
+    if( plotStats.maxX - plotStats.minX < plotStats.numPoints ) {
+      plotStats.sliderScale = plotStats.numPoints - plotStats.maxX + plotStats.minX;
+      plotStats.sliderRfPos = plotStats.minX;
+    } else {
+      // allow sliding beyond the data currently loaded
+      var srtBin = parseInt(0.5+(dataTable[0][DataField.pos_start]-1)/plotStats.baseBinSize);
+      var endBin = parseInt(0.5+plotStats.numPoints*plotStats.chromLength/plotStats.basesInView)-plotStats.numPoints;
+      var dlt = plotStats.numPoints-1;
+      var drt = srtBin+dlt < endBin ? dlt : endBin-srtBin;
+      if( dlt > srtBin ) dlt = srtBin;
+      plotStats.sliderScale = dlt+drt;
+      plotStats.sliderRfPos = dlt;
+    }
+    slider.css('width',(plotObj.width()+2)+'px');
+    slider.css('margin-left',(plotObj.getPlotOffset().left-2)+'px');
+    slider.slider( "option", "max", plotStats.sliderScale );
+    slider.slider( "option", "value", plotStats.sliderRfPos );
+    slider.show();
+  }
+
+  $('#RC-slider').on( 'slide', function(e,u) {
+    plotStats.sliderShift = u.value - plotStats.sliderRfPos;
+    plotStats.sliderMotive = true;
+    updatePlot();
+  });
+
+  $('#RC-slider').on( 'slidestop', function(e,u) {
+    var shift = plotStats.sliderShift;
+    plotStats.sliderMotive = false;
+    plotStats.sliderShift = 0;
+    if( shift == 0 ) return;
+    zoomViewToBinRange( plotStats.minX+shift, plotStats.maxX+shift-1 );
+  });
+
+  function loadData() {
+    loadTSV();
+    updatePlotStats();
+    checkZoomInOption();
+  }
+
   function loadTSV() {
-    var readChrList = (plotStats.chrList == '');
-    var chrid = '';
     var noTargets = false;
-    var srcf = (covFilter.chrom === '' ? covFilter.inputfile : 'lifechart/region_coverage.php3');
+    var pspvars = baseRangeParam;
+    var srcf = 'lifechart/region_coverage.php3';
+    if( plotStats.zoomInActive ) {
+      srcf = wgncovFile;
+    } else if( baseRangeParam.chrom === '' ) {
+      var nlt = parseInt(0.5+plotStats.chromLbins*contigRangeParam.binsize);
+      var nrt = parseInt(0.5+plotStats.chromRbins*contigRangeParam.binsize);
+      contigRangeParam.startline = plotStats.chromSrtNum - nlt;
+      contigRangeParam.numlines = plotStats.chromsInView + nlt + nrt;
+      srcf = "lifechart/fileslice.php3";
+      pspvars = contigRangeParam;
+    }
     dataTable = [];
     $('#RC-message').text('Loading...');
     $.ajaxSetup( {dataType:"text",async:false} );
-    $.get(srcf, covFilter, function(mem) {
+    $.get( srcf, pspvars, function(mem) {
       var lines = mem.split("\n");
       $.each(lines, function(n,row) {
         var fields = $.trim(row).split('\t');
@@ -1375,7 +1354,7 @@ $(function () {
           fieldIds = fields;
           noTargets = fields.length <= 6;
           if( fields.length < 3 ) {
-            loadError();
+            $('#RC-message').text('An error occurred while loading from server.');
             return false;
           }
           if( fields[0].substr(0,5).toLowerCase() == 'error' ) alert(row);
@@ -1384,52 +1363,48 @@ $(function () {
           for( var i = 1; i < fields.length; ++i ) { fields[i] = +fields[i]; }
           if( noTargets ) fields[5] = fields[6] = 0;
           dataTable.push( fields );
-          if( readChrList && chrid != fields[0] ) {
-            chrid = fields[0];
-            plotStats.chrList += chrid + '\t';
-            plotStats.chrLens[chrid] = parseInt(fields[2]);
-          }
         }
       });
-    }).error(loadError).success(function(){
+    }).error(function(){
+      $('#RC-message').text('An error occurred while loading from server.');
+    }).success(function(){
       $('#RC-message').text('');
     });
-  }
-
-  function commify(val) {
-    var jrs = val.toString();
-    var dps = "";
-    var i = jrs.indexOf('.');
-    if( i >= 0 ) {
-      dps = jrs.substring(i);
-      jrs = jrs.substring(0,i);
-    }
-    return jrs.replace(/(\d)(?=(\d\d\d)+(?!\d))/g, "$1,")+dps;
   }
 
   function updatePlotStats() {
     plotStats.numPoints = dataTable.length;
     plotStats.numFields = fieldIds.length;
     plotStats.onTargets = !wholeGenome && fieldIds.length > 5;
-    if( plotStats.numPoints == 0 ) {
-      plotStats.minX = 0;
-      return;
-    }
-    // to show the full width of last bin, maxX is the limit to start of one bin beyond those shown
+    plotStats.multiChrom =  baseRangeParam.chrom === '';
+    plotStats.binnedChroms = false;
     plotStats.minX = 0;
     plotStats.maxX = plotStats.numPoints;
-    var chr1 = dataTable[0][DataField.contig_id];
-    var str1 = dataTable[0][DataField.pos_start];
-    var lastp = plotStats.numPoints - 1;
-    var chrN = dataTable[lastp][DataField.contig_id];
-    var endN = dataTable[lastp][DataField.pos_end];
-    plotStats.multiChrom = (chr1 != chrN);
-    var numRep = 0;
-    var numChr = 0;
-    var lastChr = "";  // required for counting when concat contigs view
-    for( var i = 0; i < plotStats.numPoints; ++i ) {
+    if( plotStats.numPoints == 0 ) return;
+    if( !plotStats.zoomInActive && plotStats.multiChrom ) {
+      plotStats.binnedChroms = contigRangeParam.binsize > 1;
+      plotStats.minX = parseInt(plotStats.chromLbins);
+      plotStats.maxX -= parseInt(plotStats.chromRbins);
+    } else {
+      plotStats.minX = plotStats.baseLbins;
+      plotStats.maxX -= plotStats.baseRbins;
+    }
+    setViewXtitle();
+    plotStats.baseBinSize = plotStats.basesInView / (plotStats.maxX - plotStats.minX);
+    plotStats.binnedBases = !plotStats.multiChrom;
+    if( plotStats.baseBinSize < 1.0000001 ) {
+      plotStats.binnedBases = false;
+      plotStats.baseBinSize = 1;
+    }
+    plotStats.minNumPoints = plotStats.numPoints < def_minPoints ? plotStats.numPoints : def_minPoints;
+  }
+
+  // count contigs and bases in view and set x-axis range title
+  function setViewXtitle() {
+    var numChr = 0, numRep = 0, lastChr = "";
+    for( var i = plotStats.minX; i < plotStats.maxX; ++i ) {
       if( plotStats.binnedChroms ) {
-        numChr += Math.abs(dataTable[i][DataField.pos_start]);
+        numChr += dataTable[i][DataField.pos_start];
         numRep += dataTable[i][DataField.pos_end];
       } else {
         if( dataTable[i][DataField.contig_id] != lastChr ) {
@@ -1439,10 +1414,12 @@ $(function () {
         numRep += dataTable[i][DataField.pos_end] - dataTable[i][DataField.pos_start] + 1;
       }
     }
+    var chr1 = dataTable[plotStats.minX][DataField.contig_id];
+    var str1 = dataTable[plotStats.minX][DataField.pos_start];
+    var chrN = dataTable[plotStats.maxX-1][DataField.contig_id];
+    var endN = dataTable[plotStats.maxX-1][DataField.pos_end];
     plotStats.chromsInView = numChr;
-    plotStats.targetBinSize = numRep / covFilter.maxrows;
-    plotStats.targetsRepresented = Math.floor(numRep);
-    // adjust contig title if binned
+    plotStats.basesInView = numRep;
     if( plotStats.binnedChroms ) {
       var i = chr1.indexOf(' - ');
       if( i >= 0 ) chr1 = chr1.substr(0,i);
@@ -1450,61 +1427,38 @@ $(function () {
       if( i >= 0 ) chrN = chrN.substr(i+3);
     }
     plotStats.xTitle = chr1;
-    if( plotStats.multiChrom ) {
+    if( chr1 !== chrN ) {
       plotStats.xTitle = chr1 + ' - ' + chrN;
     } else if( str1 > 1 || endN < plotStats.chromLength ) {
       plotStats.xTitle += ': ' + commify(str1) + ' - ' + commify(endN);
     }
-    plotStats.xTitle += '  (' + (plotStats.multiChrom ? commify(numChr) + ' contigs, ' : '');
-    plotStats.xTitle += commify(plotStats.targetsRepresented) + ' bases)';
-    plotStats.binnedData = (plotStats.targetBinSize > 1.0000001);
-    if( !plotStats.binnedData ) plotStats.targetBinSize = 1;
-
-    // check for small (filtered) data sets
-    plotStats.minNumPoints = plotStats.numPoints < def_minPoints ? plotStats.numPoints : def_minPoints;
-
-    // update filters to reflect current loading
+    plotStats.xTitle += '  (' + (chr1 !== chrN ? commify(numChr) + ' contigs, ' : '');
+    plotStats.xTitle += commify(plotStats.basesInView) + ' bases)';
     if( chr1 == chrN ) {
-      covFilter.pos_srt = str1;
-      covFilter.pos_end = endN;
+      baseRangeParam.pos_srt = str1;
+      baseRangeParam.pos_end = endN;
       $("#RC-chromRange").val(commify(str1)+'-'+commify(endN));
     } else {
       $("#RC-chromRange").val('');
     }
-    if( plotParams.numPoints != plotStats.numPoints ) {
-      $('#RC-numBars').text('('+plotStats.numPoints+')');
+    var pointsInView = plotStats.maxX - plotStats.minX ;
+    if( plotParams.numPoints != pointsInView ) {
+      $('#RC-numBars').text('('+pointsInView+')');
     } else {
       $('#RC-numBars').text('');
     }
   }
 
-  function roundAxis( maxVal ) {
-    if( maxVal == 0 ) return 0;
-    var sgn = maxVal < 0 ? -1 : 1;
-    maxVal = Math.abs(maxVal);
-    var b = Math.pow( 10, Math.round(Math.log(maxVal)/Math.LN10)-1 );
-    return sgn * b * Math.floor(1+maxVal/b);
-  }
-
-  function percentFormat(val, axis) {
-    return ''+val.toFixed(axis.tickDecimals)+'%';
-  }
-
-  function absFormat(val, axis) {
-    return ''+Math.abs(val.toFixed(axis.tickDecimals));
-  }
-
   function updatePlot() {
     plotData = [];
-    if( plotStats.numFields <= 1 ) {
-      return;
-    }
+    if( plotStats.numFields <= 1 ) return;
     options = {
       grid: {minBorderMargin:0, hoverable:true, clickable:true, backgroundColor:"#F8F8F8"},
       selection: {mode:plotParams.zoomMode == 2 ? "xy" : "x"},
       legend: {position:plotParams.barAxis == 0 ? "nw" : "sw"},
       series: {axis:1, bars:{show:true,align:"left"}, line:{show:false}},
-      xaxis: {ticks:0, tickLength:0, axisLabel:plotStats.xTitle, axisLabelFontSizePixels:18, min:plotStats.minX, max:plotStats.maxX },
+      xaxis: {ticks:0, tickLength:0, axisLabel:plotStats.xTitle, axisLabelFontSizePixels:18,
+        min:plotStats.minX+plotStats.sliderShift, max:plotStats.maxX+plotStats.sliderShift },
       yaxis: {tickFormatter:absFormat, axisLabelFontSizePixels:16},
       xaxes: {}, yaxes: []
     };
@@ -1515,7 +1469,7 @@ $(function () {
     var d4 = [];
     var ymin = 0, ymax = 0;
     var pmin = 0, pmax = 0;
-    var binned = plotStats.binnedData;
+    var binned = plotStats.binnedBases;
     var f_reads = DataField.fwd_reads;
     var r_reads = DataField.rev_reads;
     var f_ontarg = DataField.fwd_ont;
@@ -1525,8 +1479,11 @@ $(function () {
     var end = DataField.pos_end;
     var chrView = (plotStats.multiChrom && plotStats.numPoints > 1);
     var onTargets = plotStats.onTargets;
-    // def_tinyValue is used so zero height bars are visible/selectable at maximum zoom
-    for( var i = 0; i < plotStats.numPoints; ++i ) {
+    // Minor scroll performance improvement by only working on visible window. 
+    // But needs extra coding to fix variable Y axis heights and max left scroll issue.
+    var xSrt = 0; //plotStats.minX + plotStats.sliderShift;
+    var xEnd = plotStats.numPoints; //plotStats.maxX + plotStats.sliderShift;
+    for( var i = xSrt; i < xEnd; ++i ) {
       var scale = plotParams.aveBase ? 1.0/(dataTable[i][end]-dataTable[i][srt]+1) : 1;
       if( plotParams.barAxis == 0 ) {
         var reads = scale * (dataTable[i][f_reads]+dataTable[i][r_reads]);
@@ -1571,9 +1528,6 @@ $(function () {
       var lastChr = '';
       var lastX = 0;
       var chrN = 0;
-      //var forms = '<span style="font-size:9px;line-height:7px">';
-      //var formU = '<span style="font-size:9px;padding-top:0px">';
-      //var formL = '<span style="font-size:9px;padding-top:7px">';
       var formU = '<span style="font-size:9px;line-height:1px;position:relative:top:-10px">';
       var formL = '<span style="font-size:9px;line-height:1px;padding-top:-5px"><br/>';
       var formE = '</span>';
@@ -1585,7 +1539,6 @@ $(function () {
           var dtick = (i - lastX) * 200 / plotStats.numPoints;
           lastX = i;
           // staggered labels - cludgy as do not know actual sizes (until after drawing!)
-          //if( (chrN % 2) == 1 && dtick <= 2+chr.length ) label = '<br>'+chr;
           label = ((chrN % 2) == 1 && dtick <= 2+chr.length ? formL : formU) + chr + formE;
           xticks.push( [i+0.5,label] );
           ++chrN;
@@ -1685,7 +1638,7 @@ $(function () {
       }
       plotData.push( {
         label: pLabel, color: pColor, data: d3, yaxis: 2, bars: {show:false}, points: {show:true}, shadowSize: 0 } );
-      options.yaxes.push( {position:"right", axisLabel:aLabel, min:0, max:100, tickFormatter: percentFormat} );
+      options.yaxes.push( {position:"right", axisLabel:aLabel, min:0, max:101, tickFormatter: percentFormat} );
       options.grid.aboveData = true;
       if( plotParams.overPlot == 2 ) {
         options.grid.markings = [ {color: pColor, linewidth: 1, y2axis: {from:50,to:50}} ];
@@ -1697,6 +1650,7 @@ $(function () {
     hideTooltip();
     plotObj = $.plot(placeholder, plotData, options);
     canvas = plotObj.getCanvas();
+    updateScrollBar();
   }
 
   $('#RC-export').click( function() {
@@ -1710,8 +1664,8 @@ $(function () {
     var bedDisable = "";
     var wstr = "";
     if( plotStats.multiChrom ) {
-      if( plotStats.zoomInMode ) {
-        wstr = plotStats.zoomInMode ? "Apportioned by relative contig lengths" : "Whole contig lengths";
+      if( plotStats.zoomInActive ) {
+        wstr = plotStats.zoomInActive ? "Apportioned by relative contig lengths" : "Whole contig lengths";
       } else if( plotStats.binnedChroms ) {
         var nchr = plotStats.chromsInView / numbins;
         var ichr = parseInt(nchr);
@@ -1722,20 +1676,20 @@ $(function () {
         wstr = "Whole contig lengths";
       }
     } else {
-      var binint = parseInt(plotStats.targetBinSize);
-      var binfrc = plotStats.targetBinSize - binint;
+      var binint = parseInt(plotStats.baseBinSize);
+      var binfrc = plotStats.baseBinSize - binint;
       if( binfrc == 0 ) {
         wstr = commify(binint)+" base"+(binint > 1 ? "s" : "");
-      } else if( plotStats.targetBinSize > 10*cbcsize ) {
+      } else if( plotStats.baseBinSize > 10*cbcsize ) {
         // to account CBC file pre-binned kick-in test used in code
-        var numcbcs = plotStats.targetBinSize / cbcsize;
+        var numcbcs = plotStats.baseBinSize / cbcsize;
         binint = parseInt(numcbcs);
         if( numcbcs > binint ) ++binint;
         binint *= cbcsize;
-        var sbins =  plotStats.targetsRepresented - binint * (numbins-1);
+        var sbins =  plotStats.basesInView - binint * (numbins-1);
         wstr = commify(binint)+" bases ("+commify(sbins)+" in last bin)";
       } else {
-        var sbins = plotStats.targetsRepresented - binint * numbins;
+        var sbins = plotStats.basesInView - binint * numbins;
         var sstr = "more";
         if( binfrc >= 0.5 ) {
           sstr = "less";
@@ -1781,33 +1735,65 @@ $(function () {
 
   function exportTSV(toTable) {
     // choose suitable output file name
-    var fname = "RCC_download";
+    var outfile = "RCC_download";
     if( chrcovFile ) {
-      fname = chrcovFile;
+      outfile = chrcovFile;
     } else if( wgncovFile ) {
-      fname = wgncovFile;
+      outfile = wgncovFile;
     }
-    var i = fname.lastIndexOf('/');
-    if( i >= 0 ) fname = fname.substr(i+1);
-    i = fname.indexOf('.');
-    if( i >= 0 ) fname = fname.substr(0,i);
-    fname += ".ref.cov.xls";
+    var i = outfile.lastIndexOf('/');
+    if( i >= 0 ) outfile = outfile.substr(i+1);
+    i = outfile.indexOf('.');
+    if( i >= 0 ) outfile = outfile.substr(0,i);
+    outfile += ".ref.cov.xls";
     // HTML5 download facility not supported for IE9 or less.
     // Browser detection disabled on TS and form/post not working at time of writing.
     // Hence, solution is to just GET and PHP to (re)extract and process the data already at hand in this script.
-    if( covFilter.chrom === '' ) {
-      var i = covFilter.bbcfile.lastIndexOf('/');
-      var fpath = i < 0 ? "" : covFilter.bbcfile.substring(0,i+1);
-      var binsize  = plotStats.zoomInMode ? 1 : plotStats.chromsInView / plotStats.numPoints;
-      var numlines = plotStats.zoomInMode ? plotStats.numPoints : plotStats.chromsInView;
-      window.open( "lifechart/fileslice.php3"+ "?filename="+fpath+covFilter.inputfile+"&outfile="+fname+
-        "&startline="+(plotStats.zmSrtBin+1)+"&numlines="+numlines+"&binsize="+binsize+
+    if( baseRangeParam.chrom === '' ) {
+      var pspvars = contigRangeParam;
+      var i = baseRangeParam.bbcfile.lastIndexOf('/');
+      var fpath = i < 0 ? "" : baseRangeParam.bbcfile.substring(0,i+1);
+      var fname, srtline, binsize, numlines, binsrt, binend;
+      if( plotStats.zoomInActive ) {
+        fname = wgncovFile;
+        srtline = plotStats.minX + 1;
+        binsize = 1;
+        numlines = plotStats.maxX - plotStats.minX;
+        binsrt = binend = 0;
+      } else {
+        // use view of same region as last (over) loaded to ensure data matches view exactly
+        fname = chrcovFile;
+        srtline = contigRangeParam.startline;
+        binsize = contigRangeParam.binsize;
+        numlines = contigRangeParam.numlines;
+        binsrt = plotStats.minX + 1;
+        binend = plotStats.maxX;
+      }
+      window.open( "lifechart/fileslice.php3"+ "?filename="+fpath+fname+"&outfile="+outfile+
+        "&startline="+srtline+"&numlines="+numlines+"&binsize="+binsize+"&binsrt="+binsrt+"&binend="+binend+
         "&bedcoords="+(toTable ? 0 : 1)+"&headlines="+(toTable ? 1 : -1)+"&numfields="+(toTable ? 7 : 3) );
     } else {
+      var pos_srt, pos_end, srt_bin, end_bin, maxrows;
+      if( plotStats.baseBinSize <= 1 ) {
+        // single base extract allows for over zoom
+        pos_srt = baseRangeParam.pos_srt;
+        pos_end = baseRangeParam.pos_end;
+        maxrows = pos_end - pos_srt + 1;
+        srt_bin = end_bin = 0;
+      } else {
+        // recalculate full loading so that data matches view exactly
+        var numBins = baseRangeParam.maxrows - plotStats.baseLbins - plotStats.baseRbins;
+        var binsize = (baseRangeParam.pos_end - baseRangeParam.pos_srt + 1) / numBins;
+        pos_srt = baseRangeParam.pos_srt - parseInt(0.5+plotStats.baseLbins*binsize);
+        pos_end = baseRangeParam.pos_end + parseInt(plotStats.baseRbins*binsize);
+        maxrows = baseRangeParam.maxrows;
+        srt_bin = plotStats.minX;
+        end_bin = plotStats.maxX;
+      }
       window.open( "lifechart/region_coverage.php3"+
-        "?bbcfile="+covFilter.bbcfile+"&cbcfile="+covFilter.cbcfile+"&maxrows="+covFilter.maxrows+
-        "&chrom="+covFilter.chrom+"&pos_srt="+covFilter.pos_srt+"&pos_end="+covFilter.pos_end+
-        "&outfile="+fname+"&srt_bin="+plotStats.minX+"&end_bin="+plotStats.maxX+
+        "?bbcfile="+baseRangeParam.bbcfile+"&cbcfile="+baseRangeParam.cbcfile+"&maxrows="+maxrows+
+        "&chrom="+baseRangeParam.chrom+"&pos_srt="+pos_srt+"&pos_end="+pos_end+
+        "&outfile="+outfile+"&srt_bin="+srt_bin+"&end_bin="+end_bin+
         "&options="+(toTable ? "" : "-r") );
     }
   }
@@ -1817,17 +1803,18 @@ $(function () {
     $('#RC-controlpanel').show();
   if( startOutlierOffScale )
     $('#RC-offScaleOutlier').attr('checked', (plotParams.offScaleOutlier = true) );
-  unzoomToFile(chrcovFile);
+  loadContigs();
+  unzoomData();
   autoHideLegend();
 
   // automatically change initial view to full contig if only one
   if( plotStats.totalChroms == 1 ) {
+    wgncovFile = '';
     $("#RC-unzoomToggle").click();
   } else if( plotStats.totalChroms > plotStats.maxXaxisLabels ) {
-    // disable loads from whole genome view if too many contigs (how many?)
-    setUnzoomTitle(false);
     wgncovFile = '';
   }
+  setUnzoomTitle( wgncovFile !== '' );
 
   // collapse view after EVRYTHING has been drawn in open chart (to avoid flot issues)
   if( startCollapsed ) {

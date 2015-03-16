@@ -118,30 +118,6 @@ def add_reportstorage():
                                   default=True)
         rs.save()
 
-def add_backupconfig():
-    '''Creates a backup configuration with default values
-    if one doesn't exist.'''
-    bk = models.BackupConfig.objects.all()
-    if len(bk)>0:
-        #print 'BackupConfig exists: %s' % bk[0].name
-        pass
-    else:
-        kwargs = {'name':'Archive', 
-                  'location': models.Location.objects.all()[0],
-                  'backup_directory': '',
-                  'backup_threshold': 90,
-                  'number_to_backup': 10,
-                  'grace_period':72,
-                  'timeout': 60,
-                  'bandwidth_limit': 0,
-                  'status': '-',
-                  'online': True,
-                  'comments': '',
-                  'email': ''
-                  }
-        bk = models.BackupConfig(**kwargs)
-        bk.save()
-        print 'BackupConfig added'
 
 def add_chips_obsolete():
     from iondb.utils.default_chip_args import default_chip_args
@@ -814,42 +790,6 @@ def add_library_kit_part_info(kitName, barcode):
     else:
         print "Kit:", kitName, " not found. Barcode:", barcode, " is not added"
         
-def add_prune_rule(_rule):
-    try:
-        obj = models.dm_prune_field.objects.get(rule=_rule)
-    except:
-        obj = models.dm_prune_field()
-        obj.rule = _rule
-        obj.save()
-    return obj.pk
-        
-def add_prune_group(_item):
-    '''This redefines(or creates) the prune group object as described by the _item variable'''
-    
-    def getRuleNums(_list):
-        '''Returns list of pk for given rule pattern strings'''
-        ruleNums = []
-        for pattern in _list:
-            try:
-                rule = models.dm_prune_field.objects.get(rule=pattern)
-                ruleNums.append(int(rule.pk))
-            except:
-                ruleNums.append(add_prune_rule(pattern))
-        # The ruleNums field is a CommaSeparatedIntegerField so we convert array to comma separated integers
-        ruleStr = ','.join(['%d' % i for i in ruleNums])
-        return ruleStr
-    
-    try:
-        obj = models.dm_prune_group.objects.get(name=_item['groupName'])
-    except:
-        obj = models.dm_prune_group()
-        
-    obj.name = _item['groupName']
-    obj.rules = ''
-    obj.editable = _item['editable']
-    obj.ruleNums = getRuleNums(_item['ruleList'])
-    obj.save()
-        
 
 def load_dbData(file_name):
     """
@@ -1006,13 +946,6 @@ if __name__=="__main__":
 #        sys.exit(1)
         
     try:
-    	add_backupconfig()
-    except:
-        print "Adding backup configuration failed"
-        print traceback.format_exc()
-        sys.exit(1)
-        
-    try:
         add_barcode_args()
     except:
         print "Modifying barcode-args list failed"
@@ -1031,99 +964,6 @@ if __name__=="__main__":
         print traceback.format_exc()
         sys.exit(1)
     
-    #
-    # Create Report Data Management Configuration object.
-    # There will only ever be one object in the table
-    if models.dm_reports.objects.count() == 0:
-        rdmobj = models.dm_reports()
-        rdmobj.save()
-       
-    #
-    # Cleanup 3.0 release default prune groups
-    #
-    rdmobj = models.dm_reports.objects.all().order_by('pk').reverse()[0]
-    nameList = ['light prune', 'moderate prune', 'heavy prune']
-    for groupname in nameList:
-        try:
-            prunegroup = models.dm_prune_group.objects.get(name=groupname)
-            prunegroup.delete()
-            # Reset default prune group if it was set to the deleted group
-            if rdmobj.pruneLevel == groupname:
-                rdmobj.pruneLevel = "No-op"
-                rdmobj.save()
-        except ObjectDoesNotExist:
-            pass
-    #
-    # Cleanup 3.0 release default rules that are dangerous
-    #
-    nameList = ['*']
-    for rulename in nameList:
-        try:
-            rule = models.dm_prune_field.objects.get(rule=rulename)
-            rule.delete()
-        except:
-            pass
-        
-    # Add Rules Objects.  Not strictly necessary to add rules since rules are added when prune_groups are defined, below.
-    checkList = [
-        'MaskBead.mask',
-        '1.wells',
-        '1.tau',
-        '1.lmres',
-        '1.cafie-residuals',
-        'bg_param.h5',
-        'separator.h5',
-        'BkgModel*.txt',
-        'separator*.txt',
-        '*.bam',
-        '*.bai',
-        '*.sff',
-        '*.fastq',
-        '*.zip',
-        ]
-    for item in checkList:
-        add_prune_rule(item)
-    #
-    # Define the Default Prune Groups:  These are the default groups and we overwrite existing groups with same name.
-    # Note that the No-op group is the default, which is set in numerous places in the code.
-    #
-    groupList = [
-        {'groupName':'No-op',
-         'ruleList':[],
-         'editable':False},
-        {'groupName':'logs-dev',
-        'ruleList':['BkgModel*.txt',
-                    'separator*.txt'],
-        'editable':False},
-        {'groupName':'diag-dev',
-        'ruleList':['BkgModel*.txt',
-                    'separator*.txt',
-                    'MaskBead.mask',
-                    '1.tau',
-                    '1.lmres',
-                    '1.cafie-residuals',
-                    'bg_param.h5',
-                    'separator.h5'],
-        'editable':False},
-        {'groupName':'deliverables',
-        'ruleList':['BkgModel*.txt',
-                    'separator*.txt',
-                    'MaskBead.mask',
-                    '1.tau',
-                    '1.lmres',
-                    '1.cafie-residuals',
-                    'bg_param.h5',
-                    'separator.h5',
-                    '*.bam',
-                    '*.bai',
-                    '*.sff',
-                    '*.fastq',
-                    '*.zip',
-                    '!pgm_logs.zip',],
-        'editable':False},
-    ]
-    for item in groupList:
-        add_prune_group(item)
 
     # This is necessary to be able to re-order analysisArgs entries in ts_dbData.json
     for analysisArgs in models.AnalysisArgs.objects.all():

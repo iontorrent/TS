@@ -261,20 +261,23 @@ sub loadBedRegions
       print STDERR "ERROR: Region $chrid:$srt-$end is out-of-order vs. previous region $chrid:$lastSrt-$lastEnd.\n";
       exit 1;
     }
+    my $sameSrt = ($srt == $lastSrt);
+    $lastSrt = $srt;
     if( $srt <= $lastEnd )
     {
       ++$numWarn;
-      if( $end <= $lastEnd )
+      if( $end <= $lastEnd || $sameSrt )
       {
-        print STDERR "Warning: Region $chrid:$srt-$end is entirely overlapped previous region $chrid:$lastSrt-$lastEnd.\n" if( $bedwarn );
-        #print STDERR " - This region will be excluded from the output file.\n" if( $bedwarn );
-        next;
+        if( $bedwarn ) {
+          printf STDERR "Warning: Region $chrid:$srt-$end %s previous region $chrid:$lastSrt-$lastEnd.\n",
+            $end <= $lastEnd ? "is entirely overlapped by" : "entirely overlaps";
+        }
+        $lastEnd = $end;
+        next;  # do not account for this region twice
       }
       print STDERR "Warning: Region $chrid:$srt-$end overlaps previous region $chrid:$lastSrt-$lastEnd.\n" if( $bedwarn );
-      $srt = $lastEnd + 1;
-      #print STDERR " - Report will contain partial coverage for the overlap region $chrid:$srt-$end.\n" if( $bedwarn );
+      $srt = $lastEnd + 1;  # only cover the new bit of region
     }
-    $lastSrt = $srt;
     $lastEnd = $end;
     ++$numTargets;
     push( @{$targSrts{$chrid}}, $srt );

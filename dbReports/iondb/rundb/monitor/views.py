@@ -4,6 +4,7 @@ from django.http import HttpResponse
 from django.shortcuts import render_to_response, render
 from django.template.context import RequestContext
 from django.core.paginator import Paginator, InvalidPage
+
 from iondb.rundb.api import MonitorResultResource
 from iondb.rundb.models import GlobalConfig
 from iondb.rundb import models
@@ -97,7 +98,7 @@ def get_int(querydict, key, default=0):
 
 def chef(request):
     querydict = request.GET
-    days = get_int(querydict, "days", 2)
+    days = get_int(querydict, "days", 7)
     size = get_int(querydict, "size", 10)
     page = get_int(querydict, "page", 1)
 

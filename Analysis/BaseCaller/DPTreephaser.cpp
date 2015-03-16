@@ -534,6 +534,7 @@ void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *par
     child->last_hp = parent->last_hp + 1;
   else
     child->last_hp = 1;
+  int calib_hp   = min(child->last_hp, MAX_HPXLEN);
 
   // Initialize window
   child->window_start = parent->window_start + diagonal_shift;
@@ -547,7 +548,7 @@ void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *par
     for (int flow = parent->flow+1; flow < child->flow; flow++)
       child->calibA.at(flow) = (*As_).at(flow).at(flow_order_.int_at(flow)).at(0);
     if (child->flow < max_flow)
-      child->calibA.at(child->flow) = (*As_).at(child->flow).at(flow_order_.int_at(child->flow)).at(min(child->last_hp, MAX_HPXLEN));
+      child->calibA.at(child->flow) = (*As_).at(child->flow).at(flow_order_.int_at(child->flow)).at(calib_hp);
   }
   // ---
 
@@ -589,7 +590,7 @@ void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *par
 
   for (int flow = parent->window_start; flow < parent->window_end; ++flow) {
     if (recalibrate_predictions_ and flow <= child->flow) {
-      if (flow < child->flow) {
+      if (flow < child->flow or child->last_hp>MAX_HPXLEN) {
         child->prediction[flow] = parent->prediction[flow] + (child->calibA[flow] * child->state[flow]);
       }
       else {
@@ -600,9 +601,8 @@ void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *par
                               / (*As_).at(flow).at(flow_order_.int_at(flow)).at(child->last_hp-1);
         }
         // Apply recalibration for the flow where we changed a base
-        int hp_length = min(child->last_hp, MAX_HPXLEN);
         child->prediction[flow] = ( (original_prediction + child->state[flow]) * child->calibA.at(flow) )
-   		                          + (*Bs_).at(flow).at(flow_order_.int_at(flow)).at(hp_length);
+   		                          + (*Bs_).at(flow).at(flow_order_.int_at(flow)).at(calib_hp);
       }
     }
     else {
@@ -614,7 +614,7 @@ void DPTreephaser::AdvanceState(TreephaserPath *child, const TreephaserPath *par
     if (recalibrate_predictions_ and flow <= child->flow) {
       child->prediction[flow] = child->state[flow] * child->calibA.at(flow);
       if (flow == child->flow)
-        child->prediction[flow] += (*Bs_).at(flow).at(flow_order_.int_at(flow)).at(min(child->last_hp, MAX_HPXLEN));
+        child->prediction[flow] += (*Bs_).at(flow).at(flow_order_.int_at(flow)).at(calib_hp);
     }
     else {
       // The simple no HP recalibration case
@@ -652,12 +652,13 @@ void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_
     state->last_hp++;
   else
     state->last_hp = 1;
+  int calib_hp = min(state->last_hp, MAX_HPXLEN);
 
   // --- Maintaining recalibration data structures & logging coefficients for this path
   if (recalibrate_predictions_) {
     for (int flow = old_flow+1; flow < state->flow; flow++)
       state->calibA.at(flow) = (*As_).at(flow).at(flow_order_.int_at(flow)).at(0);
-    state->calibA.at(state->flow) = (*As_).at(state->flow).at(flow_order_.int_at(state->flow)).at(min(state->last_hp, MAX_HPXLEN));
+    state->calibA.at(state->flow) = (*As_).at(state->flow).at(flow_order_.int_at(state->flow)).at(calib_hp);
   }
   // ---
 
@@ -686,7 +687,7 @@ void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_
   // Create predictions through incremental homopolymer recalibration model
   for (int flow = old_window_start; flow < state->window_end; ++flow) {
     if (recalibrate_predictions_ and flow <= state->flow) {
-      if (flow < state->flow) {
+      if (flow < state->flow or state->last_hp>MAX_HPXLEN) {
     	  state->prediction[flow] += state->calibA[flow] * state->state[flow];
       }
       else {
@@ -698,7 +699,7 @@ void DPTreephaser::AdvanceStateInPlace(TreephaserPath *state, char nuc, int max_
 	    }
 	    // Apply recalibration for the flow where we changed a base
 	    state->prediction[flow] = ( (original_prediction + state->state[flow]) * state->calibA.at(flow) )
-	    		                  + (*Bs_).at(flow).at(flow_order_.int_at(flow)).at(min(state->last_hp, MAX_HPXLEN));
+	    		                  + (*Bs_).at(flow).at(flow_order_.int_at(flow)).at(calib_hp);
       }
 	}
 	else
