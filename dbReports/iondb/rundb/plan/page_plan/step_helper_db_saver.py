@@ -59,6 +59,10 @@ class StepHelperDbSaver():
 
         categories =  application_step_data.prepopulatedFields.get(ApplicationFieldNames.CATEGORIES, "")
 
+        runType = ""
+        if application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE]:
+            runType = application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE].runType 
+                           
         #if user has changed the application or target technique during template copying, reset categories value        
         applicationGroup = application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP]
         applicationGroupNames = ApplicationGroup.objects.filter(pk = applicationGroup)
@@ -69,7 +73,9 @@ class StepHelperDbSaver():
         
         #if user has changed the application or target technique during template copying, reset categories value
         if applicationGroupName != "DNA + RNA":
-            if categories:
+            #workaround: OCP DNA has DNA as applicationGroupName and AMPS as run type so it can be ambiguous. 
+            #If user creates/copies/edits a template or plan from an OCP template, preserve the categories that starts out with.
+            if categories and applicationGroupName != "DNA" and runType != "AMPS":
                 categories = categories.replace("Onconet", "");
                 categories = categories.replace("Oncomine", ""); 
 
@@ -80,12 +86,10 @@ class StepHelperDbSaver():
         logger.debug(" step_helper_db_saver.__get_universal_params() applicationGroupName=%s; categories=%s" %(applicationGroupName, categories))
 
         #logger.debug("step_helper_db_saver.__get_universal_params() application_step_data.savedFields=%s" %(application_step_data.savedFields))
-        
-        runType = ''
+
         application_group = None
         sampleGrouping = None
         if application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE]:
-            runType = application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE].runType
             application_group = application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE].applicationGroups.all()[0:1][0]
         
         if application_step_data.savedFields[ApplicationFieldNames.APPLICATION_GROUP]:
@@ -367,6 +371,7 @@ class StepHelperDbSaver():
             user_input_dict['sampleDescription'] = sampleValueDict[SavePlanFieldNames.SAMPLE_DESCRIPTION]
             user_input_dict['Relation'] = sampleValueDict.get(SavePlanFieldNames.IR_RELATIONSHIP_TYPE, "")
             user_input_dict['RelationRole'] = sampleValueDict.get(SavePlanFieldNames.IR_RELATION_ROLE, "")
+            user_input_dict['ApplicationType'] = sampleValueDict.get(SavePlanFieldNames.IR_APPLICATION_TYPE, "")
 
             if SavePlanFieldNames.IR_SET_ID in sampleValueDict:
                 if step_helper.isEdit() or step_helper.isCopy():
@@ -384,23 +389,14 @@ class StepHelperDbSaver():
             # parentDict['x_selectedPlugins'][ir_plugin.name] = self.__get_ir_plugins_entry(ir_plugin, [user_input_dict])
             accountId = step_helper.steps[StepNames.IONREPORTER].savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]
             accountName = step_helper.steps[StepNames.IONREPORTER].savedFields[IonReporterFieldNames.IR_ACCOUNT_NAME]
-            applicationType = step_helper.steps[StepNames.IONREPORTER].savedFields[IonReporterFieldNames.APPLICATION_TYPE]
-            if not applicationType:
-                try:
-                    applicationType = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.APPLICATION_TYPE]
-                    is_IR_Down = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
-                except:
-                    applicationType = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields[SavePlanFieldNames.APPLICATION_TYPE]
-                    is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
-            else:
-                try:
-                    is_IR_Down = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
-                except:
-                    is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
+            try:
+                is_IR_Down = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
+            except:
+                is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
 
             if not is_IR_Down:
                 parentDict['x_selectedPlugins']['IonReporterUploader'] = self.__get_ir_plugins_entry(ir_plugin, [user_input_dict],
-                                                                                                 accountId, accountName, applicationType)
+                                                                                                 accountId, accountName)
             elif is_IR_Down and (step_helper.isEdit() or step_helper.isCopy() or step_helper.isEditRun()) and step_helper.previous_plan_id > 0:
                 _json_selectedPlugins = PlannedExperiment.objects.get(pk=step_helper.previous_plan_id).experiment.get_EAS().selectedPlugins
                 if _json_selectedPlugins:
@@ -419,19 +415,10 @@ class StepHelperDbSaver():
             # parentDict['x_selectedPlugins'][ir_plugin.name] = self.__get_ir_plugins_entry(ir_plugin, userInputList)
             accountId = step_helper.steps[StepNames.IONREPORTER].savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]
             accountName = step_helper.steps[StepNames.IONREPORTER].savedFields[IonReporterFieldNames.IR_ACCOUNT_NAME]
-            applicationType = step_helper.steps[StepNames.IONREPORTER].savedFields[IonReporterFieldNames.APPLICATION_TYPE]
-            if not applicationType:
-                try:
-                    applicationType = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.APPLICATION_TYPE]
-                    is_IR_Down = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
-                except:
-                    applicationType = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields[SavePlanFieldNames.APPLICATION_TYPE]
-                    is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
-            else:
-                try:
-                    is_IR_Down = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
-                except:
-                    is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
+            try:
+                is_IR_Down = step_helper.steps[StepNames.SAVE_PLAN].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
+            except:
+                is_IR_Down = step_helper.steps[StepNames.BARCODE_BY_SAMPLE].savedFields[SavePlanFieldNames.IR_DOWN] == '1'
 
             for item in userInputList:
                 # adding unique suffix to setid value
@@ -447,14 +434,14 @@ class StepHelperDbSaver():
             if not is_IR_Down:
             	if ir_plugin:
                 	parentDict['x_selectedPlugins']['IonReporterUploader'] = self.__get_ir_plugins_entry(ir_plugin, userInputList,
-                                                                                        accountId, accountName, applicationType)
+                                                                                        accountId, accountName)
             elif is_IR_Down and (step_helper.isEdit() or step_helper.isCopy() or step_helper.isEditRun()) and step_helper.previous_plan_id > 0:
                 _json_selectedPlugins = PlannedExperiment.objects.get(pk=step_helper.previous_plan_id).experiment.get_EAS().selectedPlugins
                 if _json_selectedPlugins:
                     if 'IonReporterUploader' in _json_selectedPlugins:
                         parentDict['x_selectedPlugins']['IonReporterUploader'] = _json_selectedPlugins['IonReporterUploader']
             
-    def __get_ir_plugins_entry(self, ir_plugin, userInputList, accountId, accountName, applicationType):
+    def __get_ir_plugins_entry(self, ir_plugin, userInputList, accountId, accountName):
         # version = 1.0 if ir_plugin.name == 'IonReporterUploader_V1_0' else ir_plugin.version
         version = ir_plugin.version
         ir_plugin_dict = {
@@ -465,7 +452,6 @@ class StepHelperDbSaver():
                 }
 
         for userInput in userInputList:
-            userInput['ApplicationType'] = applicationType
             if userInput['Workflow'] == 'Upload Only': userInput['Workflow'] = ''
 
         user_input = {PluginFieldNames.ACCOUNT_ID: accountId,
@@ -616,9 +602,8 @@ class StepHelperDbSaver():
         if step_helper.steps[StepNames.IONREPORTER].savedFields[IonReporterFieldNames.IR_OPTIONS] != '0':
             accountId = step_helper.steps[StepNames.IONREPORTER].savedFields[IonReporterFieldNames.IR_ACCOUNT_ID]
             accountName = step_helper.steps[StepNames.IONREPORTER].savedFields[IonReporterFieldNames.IR_ACCOUNT_NAME]
-            applicationType = step_helper.steps[StepNames.IONREPORTER].savedFields[IonReporterFieldNames.APPLICATION_TYPE]
             kwargs['x_selectedPlugins']['IonReporterUploader'] = self.__get_ir_plugins_entry(step_helper.steps[StepNames.IONREPORTER].prepopulatedFields[IonReporterFieldNames.IR_PLUGIN],
-                                                                                             '', accountId, accountName, applicationType)
+                                                                                             '', accountId, accountName)
 
         logger.debug("step_helper_db_saver.saveTemplate() sh_type=%s; previous_template_id=%s" %(step_helper.sh_type, str(step_helper.previous_template_id)))
 

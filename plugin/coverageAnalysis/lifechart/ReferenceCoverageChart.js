@@ -1804,17 +1804,20 @@ $(function () {
   if( startOutlierOffScale )
     $('#RC-offScaleOutlier').attr('checked', (plotParams.offScaleOutlier = true) );
   loadContigs();
-  unzoomData();
   autoHideLegend();
 
   // automatically change initial view to full contig if only one
-  if( plotStats.totalChroms == 1 ) {
-    wgncovFile = '';
-    $("#RC-unzoomToggle").click();
-  } else if( plotStats.totalChroms > plotStats.maxXaxisLabels ) {
+  if( plotStats.totalChroms == 1 || plotStats.totalChroms > plotStats.maxXaxisLabels ) {
     wgncovFile = '';
   }
   setUnzoomTitle( wgncovFile !== '' );
+
+  // done this way to plot only once (for sake of auto PDF)
+  if( plotStats.totalChroms == 1 ) {
+    $("#RC-unzoomToggle").click();
+  } else {
+    unzoomData();
+  }
 
   // collapse view after EVRYTHING has been drawn in open chart (to avoid flot issues)
   if( startCollapsed ) {

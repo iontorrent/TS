@@ -67,16 +67,25 @@ def main():
     parser.add_option('-r', '--reference-fasta',  help='FASTA file containing reference genome (required)', dest='reference')
     parser.add_option('-o', '--output-dir',       help='Output directory (default: current)', dest='outdir', default='.')
     parser.add_option('-p', '--parameters-file',  help='JSON file containing variant calling parameters (recommended)', dest='paramfile')
-    parser.add_option('-B', '--bin-dir',          help='Directory path to location of variant caller programs. Defaults to the directory this script is located', dest='rundir', default=os.path.dirname(os.path.realpath(__file__)))
+    parser.add_option('-B', '--bin-dir',          help='Directory path to location of variant caller programs. Defaults to the directory this script is located', dest='bindir')
+    parser.add_option('-t', '--tvc-root-dir',     help='Directory path to TVC root directory', dest='tvcrootdir')
     parser.add_option('-n', '--num-threads',      help='Set TVC number of threads (default: 12)', dest='numthreads',default='12')
     parser.add_option(      '--primer-trim-bed',  help='Perform primer trimming using provided BED file. (optional)', dest='ptrim_bed')
     parser.add_option(      '--postprocessed-bam',help='Perform primer trimming, storing the results in provided BAM file name (optional)', dest='postprocessed_bam')
     parser.add_option(      '--error-motifs',     help='Error motifs file', dest='errormotifsfile')
     (options, args) = parser.parse_args()
 
+    if options.tvcrootdir:
+        tvcrootdir = options.tvcrootdir
+    elif options.bindir:
+        tvcrootdir = os.path.join( options.bindir, "..")
+    else:
+        tvcrootdir = os.path.join( os.path.dirname(os.path.realpath(__file__)), "..")
+    tvcrootdir = os.path.normpath( tvcrootdir )
+
     #if options.errormotifsfile is None:
         # currently a required argument
-     #   options.errormotifsfile = os.path.join(options.rundir,'TVC/sse/motifset.txt')
+     #   options.errormotifsfile = os.path.join(tvcrootdir,'share/TVC/sse/motifset.txt')
 
     if not options.bamfile or not options.reference:
         parser.print_help()
@@ -127,8 +136,8 @@ def main():
     # This logic might go to variant_caller_plugin.py
     meta_tvc_args = parameters.get('meta',{}).get('tvcargs','tvc')
     # try local binary first, then go to global one
-    if meta_tvc_args == 'tvc' and os.path.exists(options.rundir + '/tvc'):
-        tvc_command =           '%s/tvc' % options.rundir
+    if meta_tvc_args == 'tvc' and os.path.exists(tvcrootdir + '/bin/tvc'):
+        tvc_command =           '%s/bin/tvc' % tvcrootdir
     else:
         tvc_command =           meta_tvc_args
     tvc_command +=              '   --output-dir %s' % options.outdir
@@ -161,13 +170,13 @@ def main():
         RunCommand(bamindex_command,'Index postprocessed bam')
         RunCommand('rm -f ' + postprocessed_bam_tmp, 'Remove unsorted postprocessed bam')
 
-    vcfsort_command =           '%s/scripts/sort_vcf.py' % options.rundir
+    vcfsort_command =           '%s/share/TVC/scripts/sort_vcf.py' % tvcrootdir
     vcfsort_command +=          '   --input-vcf %s/small_variants.vcf' % options.outdir
     vcfsort_command +=          '   --output-vcf %s/small_variants.sorted.vcf' % options.outdir
     vcfsort_command +=          '   --index-fai %s.fai' % options.reference
     RunCommand(vcfsort_command, 'Sort small variant vcf')
 
-    left_align_command =        'java -Xmx8G -jar %s/TVC/jar/GenomeAnalysisTK.jar' % options.rundir
+    left_align_command =        'java -Xmx8G -jar %s/share/TVC/jar/GenomeAnalysisTK.jar' % tvcrootdir
     left_align_command +=       '   -T LeftAlignVariants'
     left_align_command +=       '   -R %s' % options.reference
     left_align_command +=       '   --variant %s/small_variants.sorted.vcf' % options.outdir
@@ -183,7 +192,7 @@ def main():
         RunCommand(tvcutils_command,'Write effective bed')
 
     # create command for long indel assembly and run
-    long_indel_command =        'java -Xmx8G -cp %s/TVC/jar/ -jar %s/TVC/jar/GenomeAnalysisTK.jar' % (options.rundir,options.rundir)
+    long_indel_command =        'java -Xmx8G -cp %s/share/TVC/jar/ -jar %s/share/TVC/jar/GenomeAnalysisTK.jar' % (tvcrootdir,tvcrootdir)
     long_indel_command +=       '   -T IndelAssembly --bypassFlowAlign'
     long_indel_command +=       '   -R %s' % options.reference
     long_indel_command +=       '   -I %s' % options.bamfile
@@ -202,7 +211,7 @@ def main():
 
     # Perform variant unification step.
 
-    unify_command =             '%s/scripts/unify_variants_and_annotations.py' % options.rundir
+    unify_command =             '%s/share/TVC/scripts/unify_variants_and_annotations.py' % tvcrootdir
     #unify_command +=            '   --novel-tvc-vcf %s/small_variants.vcf' % options.outdir
     unify_command +=            '   --novel-tvc-vcf %s/small_variants.left.vcf' % options.outdir
     if os.path.exists("%s/indel_assembly.vcf" % options.outdir):

@@ -44,15 +44,17 @@ class StepHelper(object):
     Helper class for interacting with the plan/template creation steps.
     '''
 
-    def __init__(self, sh_type=StepHelperType.CREATE_NEW_TEMPLATE, previous_template_id=-1, previous_plan_id=-1):
+    def __init__(self, sh_type=StepHelperType.CREATE_NEW_TEMPLATE, previous_template_id=-1, previous_plan_id=-1, experiment_id=-1):
         self.sh_type = sh_type
         self.previous_template_id = previous_template_id
         self.previous_plan_id = previous_plan_id
+        self.experiment_id = experiment_id
         self.parentName = None
         
         if (sh_type in [StepHelperType.EDIT_PLAN, StepHelperType.EDIT_PLAN_BY_SAMPLE, StepHelperType.EDIT_RUN, StepHelperType.EDIT_TEMPLATE] and previous_template_id == -1 and previous_plan_id == -1):
             logger.error("step_helper - StepHelper.init() for EDIT should have an existing ID.")
             raise ValueError("You must pass in a plan id or a template id.")
+
         
         self.steps = OrderedDict()
         if sh_type == StepHelperType.CREATE_NEW_PLAN_BY_SAMPLE or sh_type == StepHelperType.EDIT_PLAN_BY_SAMPLE or sh_type == StepHelperType.COPY_PLAN_BY_SAMPLE:

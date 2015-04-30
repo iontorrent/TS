@@ -40,26 +40,6 @@
             "platform_unit": "Unspecified/IonLControl_0004", 
             "barcode_adapter": "GGTGAT"
         }, 
-        "IonLControl_0003": {
-            "sample": "IonControl", 
-            "index": 2, 
-            "barcode_name": "IonLControl_0003", 
-            "barcode_sequence": "GAAGATCTTC", 
-            "description": "IonControlBarcodes", 
-            "reference": "hg19", 
-            "platform_unit": "Unspecified/IonLControl_0003", 
-            "barcode_adapter": "GGTGAT"
-        }, 
-        "IonLControl_0002": {
-            "sample": "IonControl", 
-            "index": 1, 
-            "barcode_name": "IonLControl_0002", 
-            "barcode_sequence": "GCAACACGAC", 
-            "description": "IonControlBarcodes", 
-            "reference": "hg19", 
-            "platform_unit": "Unspecified/IonLControl_0002", 
-            "barcode_adapter": "GGTGAT"
-        }, 
         "IonLControl_0001": {
             "sample": "IonControl", 
             "index": 0, 
@@ -105,20 +85,6 @@
             ], 
             "file_prefix": "IonLControl_0001_rawlib", 
             "dataset_name": "IonControl/IonLControl_0001"
-        }, 
-        {
-            "read_groups": [
-                "IonLControl_0002"
-            ], 
-            "file_prefix": "IonLControl_0002_rawlib", 
-            "dataset_name": "IonControl/IonLControl_0002"
-        }, 
-        {
-            "read_groups": [
-                "IonLControl_0003"
-            ], 
-            "file_prefix": "IonLControl_0003_rawlib", 
-            "dataset_name": "IonControl/IonLControl_0003"
         }, 
         {
             "read_groups": [

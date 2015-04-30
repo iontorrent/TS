@@ -865,7 +865,7 @@ void * BasecallerWorker(void *input)
                     max_flow = min(bc.flow_order.num_flows(), base_to_flow[processed_read.filter.n_bases_filtered-1] + 16);
 
                 for (int flow = 0; flow < max_flow; ++flow)
-                    flowgram2.push_back(2*(int16_t)(128*read.normalized_measurements[flow]));
+                    flowgram2.push_back(2*(int16_t)(128*min(max(-128.0f, read.normalized_measurements[flow]), 128.0f) ));
                 processed_read.bam.AddTag("ZM", flowgram2);
                 //flowgram2.push_back(1*(int16_t)(256*read.normalized_measurements[flow]));
                 //flowgram2.push_back(2*(int16_t)(128*read.normalized_measurements[flow]));

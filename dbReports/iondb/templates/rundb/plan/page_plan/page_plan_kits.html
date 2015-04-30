@@ -54,7 +54,9 @@
             {% if helper.isEditRun %}
                 <option SELECTED value="{{step.getCurrentSavedFieldDict.chipType}}">Ion 
                 {% if step.getPrePopulatedFieldDict.chipTypes %}
-                    {{step.getPrePopulatedFieldDict.chipTypes.0.getChipDisplayedNamePrefix}}&trade; Chip {{chipType.0.getChipDisplayedVersion}}
+                    {% with step.getPrePopulatedFieldDict.chipTypes.0 as chipType %}
+                        {{chipType.getChipDisplayedNamePrimaryPrefix}}&trade;{{chipType.getChipDisplayedNameSecondaryPrefix}} Chip {{chipType.getChipDisplayedVersion}}
+                    {% endwith %}
                 {% else %}
                     {{step.getCurrentSavedFieldDict.chipType.getChipDisplayedNamePrefix}}&trade; Chip {{chipType.getChipDisplayedVersion}}
                 {% endif %}
@@ -69,7 +71,7 @@
                     {% else %}                    
                         <option 
                     {% endif %}
-                    value="{{chipType.name}}">Ion {{chipType.getChipDisplayedNamePrefix}}&trade; Chip {{chipType.getChipDisplayedVersion}}</option>
+                    value="{{chipType.name}}">Ion {{chipType.getChipDisplayedNamePrimaryPrefix}}&trade;{{chipType.getChipDisplayedNameSecondaryPrefix}} Chip {{chipType.getChipDisplayedVersion}}</option>
                 {% endfor %}
             {% endif %}
         </select>
@@ -299,13 +301,12 @@
         var template_kits_to_templatingSize_map = {};
         var template_kits_to_categories_map = {};
 
-        {% for templateKitInfoObj in helper.getStepDict.Kits.getPrePopulatedFieldDict.templateKits %}
+        {% for templateKitInfoObj in step.getPrePopulatedFieldDict.templateKits %}
             template_kits_to_flows_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.flowCount}}";
             template_kits_to_readLengths_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.libraryReadLength}}";
             template_kits_to_templatingSize_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.templatingSize}}";
             template_kits_to_categories_map["{{templateKitInfoObj.name}}"] = "{{templateKitInfoObj.categories}}";
         {%endfor%}
-
 
         var lib_kits_to_categories_map = {};
 
@@ -604,6 +605,11 @@
 
         $('input[type=radio][name=templatingSize]').change(function() {
             updateSummaryPanel("#selectedTemplatingSize", this.value);
+
+            // TS-10547 set number of flows based on templating size selection
+            var templating_size_to_flows_map = {'200':'500', '400':'850'};
+            var flowCount = templating_size_to_flows_map[this.value];
+            updateFlows(flowCount);
         });
         
         $("#controlsequence").change(function()  {

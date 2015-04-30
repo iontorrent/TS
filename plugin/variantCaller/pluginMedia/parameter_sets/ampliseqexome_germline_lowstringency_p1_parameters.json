@@ -3,7 +3,7 @@
         "name"          : "AmpliSeq Exome Panel - Proton - Germ Line - Low Stringency",
         "tooltip"       : "Panel-specific parameters optimized for AmpliSeq Exome Panel",
         "configuration" : "ampliseqexome_germline_low_stringency_p1",
-        "ts_version": "4.4",
+        "ts_version"    : "4.4",
         "compatibility" : {
           "chip"        : ["proton_p1"],
           "library"     : ["ampliseq"],
@@ -18,44 +18,44 @@
         "hp_max_length":8,
         "filter_unusual_predictions":0.25,
         "filter_insertion_predictions": 0.2,
-        "filter_deletion_predictions": 0.2, 
+        "filter_deletion_predictions": 0.2,
 	"indel_as_hpindel": 1,
 
         "snp_min_cov_each_strand":0,
         "snp_min_variant_score":15.0,
         "snp_min_allele_freq":0.10,
         "snp_min_coverage":5,
-        "snp_strand_bias":0.98, 
+        "snp_strand_bias":0.98,
         "snp_strand_bias_pval":0.01,
-        
+
         "mnp_min_cov_each_strand":0,
         "mnp_min_variant_score":60.0,
         "mnp_min_allele_freq":0.10,
         "mnp_min_coverage":5,
-        "mnp_strand_bias":0.98, 
+        "mnp_strand_bias":0.98,
         "mnp_strand_bias_pval":0.01,
-        
+
         "indel_min_cov_each_strand":5,
         "indel_min_variant_score":20.0,
         "indel_min_allele_freq":0.25,
         "indel_min_coverage":10,
         "indel_strand_bias":0.9,
         "indel_strand_bias_pval":1.0,
-        
+
         "hotspot_min_cov_each_strand":3,
         "hotspot_min_variant_score":10.0,
         "hotspot_min_allele_freq":0.10,
         "hotspot_min_coverage":6,
         "hotspot_strand_bias":0.95,
         "hotspot_strand_bias_pval":1.0,
-        
+
         "downsample_to_coverage":400,
         "outlier_probability":0.01,
 
         "do_snp_realignment":0,
         "do_mnp_realignment":0,
         "realignment_threshold":0,
-	
+
         "use_position_bias":1,
         "position_bias":0.75,
         "position_bias_pval":0.05,
@@ -72,9 +72,9 @@
         "short_suffix_match":5,
         "min_indel_size":4,
         "max_hp_length":8,
-        "min_var_freq":0.15,       
+        "min_var_freq":0.15,
         "relative_strand_bias":0.8,
-        "output_mnv":0        
+        "output_mnv":0
     },
     "freebayes":{
         "allow_indels":1,

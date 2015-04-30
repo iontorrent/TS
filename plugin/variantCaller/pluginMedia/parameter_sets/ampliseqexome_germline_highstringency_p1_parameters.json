@@ -3,7 +3,7 @@
         "name"          : "AmpliSeq Exome Panel - Proton - Germ Line - High Stringency",
         "tooltip"       : "Panel-specific parameters optimized for AmpliSeq Exome Panel",
         "configuration" : "ampliseqexome_germline_high_stringency_p1",
-        "ts_version": "4.4",
+        "ts_version"    : "4.4",
         "compatibility" : {
           "chip"        : ["proton_p1"],
           "library"     : ["ampliseq"],
@@ -27,21 +27,21 @@
         "snp_min_coverage":5,
         "snp_strand_bias":0.99,
         "snp_strand_bias_pval":1.0,
-        
+
         "mnp_min_cov_each_strand":0,
         "mnp_min_variant_score":15.0,
         "mnp_min_allele_freq":0.10,
         "mnp_min_coverage":5,
         "mnp_strand_bias":0.99,
         "mnp_strand_bias_pval":1.0,
-        
+
         "indel_min_cov_each_strand":1,
         "indel_min_variant_score":20.0,
         "indel_min_allele_freq":0.10,
         "indel_min_coverage":5,
         "indel_strand_bias":0.95,
         "indel_strand_bias_pval":1.0,
-        
+
         "hotspot_min_cov_each_strand":0,
         "hotspot_min_variant_score":15.0,
         "hotspot_min_allele_freq":0.10,

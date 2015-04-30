@@ -284,10 +284,10 @@
  {% endif %}
 {% endif %}
 {% if trg_stats or chr_stats or wgn_stats %}
-<div id='TargetCoverageChart' amplicons={{trg_type}} datafile='{{output_dir}}/{{finecov_tsv}}' {% if bas_stats %}hidelegend{% endif %} initfile='{{aux_ttc}}' class='center' style='width:800px;height:300px'></div> <br/>
+<div id='TargetCoverageChart' {% if wgn_stats %}collapse{% endif %} amplicons={{trg_type}} datafile='{{output_dir}}/{{finecov_tsv}}' {% if bas_stats %}hidelegend{% endif %} initfile='{{aux_ttc}}' class='center' style='width:800px;height:300px'></div> <br/>
 {% endif %}
 {% if bas_stats %}
-<div id='ReferenceCoverageChart' {% if wgn_stats %}genome{% endif %} collapse bbcfile='{{output_dir}}/{{aux_bbc}}' cbcfile='{{output_dir}}/{{aux_cbc}}' chrcovfile='{{chr_cov_tsv}}' wgncovfile='{{wgn_cov_tsv}}' class='center' style='width:800px;height:300px'></div> <br/>
+<div id='ReferenceCoverageChart' {% if wgn_stats %}genome outlieroffscale{% else %}collapse{% endif %} bbcfile='{{output_dir}}/{{aux_bbc}}' cbcfile='{{output_dir}}/{{aux_cbc}}' chrcovfile='{{chr_cov_tsv}}' wgncovfile='{{wgn_cov_tsv}}' class='center' style='width:800px;height:300px'></div> <br/>
 {% endif %}
 <div id='FileLinksTable' fileurl='filelinks.xls' class='center' style='width:420px'></div>
 

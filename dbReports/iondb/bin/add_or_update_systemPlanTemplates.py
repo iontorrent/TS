@@ -344,7 +344,19 @@ def add_or_update_sys_template(planDisplayedName, application, applicationGroup 
                         
             sysTemplate.templatingKitName = templateKitName
             hasChanges = True
-            
+
+        if (sysTemplate.controlSequencekitname != controlSeqKitName):
+            print ">>> DIFF: orig sysTemplate.controlSequencekitname=%s for system template.id=%d; name=%s" % (sysTemplate.controlSequencekitname, sysTemplate.id, sysTemplate.planName) 
+                        
+            sysTemplate.controlSequencekitname = controlSeqKitName
+            hasChanges = True
+
+        if (sysTemplate.samplePrepKitName != samplePrepKitName):
+            print ">>> DIFF: orig sysTemplate.samplePrepKitName=%s for system template.id=%d; name=%s" % (sysTemplate.samplePrepKitName, sysTemplate.id, sysTemplate.planName) 
+                        
+            sysTemplate.samplePrepKitName = samplePrepKitName
+            hasChanges = True
+       
         if (isPGM and sysTemplate.usePostBeadfind != True):
             print ">>> DIFF: orig PGM sysTemplate.usePostBeadfind=%s for system template.id=%d; name=%s" % (sysTemplate.usePostBeadfind, sysTemplate.id, sysTemplate.planName) 
                         
@@ -573,13 +585,32 @@ def add_or_update_all_system_templates():
         #23
         templateName = "OCP Fusions"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Oncomine")        
-        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType)
+        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "", {}, instrumentType)
                       
         #24
         templateName = "OCP DNA and Fusions"        
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Oncomine")        
-        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME,  "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
-    
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Oncomine")
+
+        #pre-select plugins 
+        plugins = {}
+        pluginUserInput = {}
+                                            
+        selectedPlugins = models.Plugin.objects.filter(name__in = ["coverageAnalysis"], selected = True, active = True).order_by("-id")
+        if len(selectedPlugins) > 0:
+            selectedPlugin = selectedPlugins[0]   
+
+            pluginDict = {
+                          "id" : selectedPlugin.id,
+                          "name" : selectedPlugin.name,
+                          "version" : selectedPlugin.version,
+                          "userInput" : pluginUserInput,
+                          "features": []
+                          }
+            
+            plugins[selectedPlugin.name] = pluginDict
+        
+        finish_sys_template(sysTemplate, isCreated, "318", 400, DEFAULT_SEQ_KIT_NAME,  "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "/hg19/unmerged/detail/OCP3.20140718.designed.bed", "/hg19/unmerged/detail/OCP3.20140611.hotspots.blist.bed", "hg19", plugins, instrumentType) 
+
         #OncoNetwork
         #25
         templateName = "Ion AmpliSeq Colon and Lung Cancer Panel v2"
@@ -589,7 +620,7 @@ def add_or_update_all_system_templates():
         #26
         templateName = "Ion AmpliSeq RNA Lung Fusion Panel"
         sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "Self", "Onconet")
-        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "hg19", {}, instrumentType) 
+        finish_sys_template(sysTemplate, isCreated, "318", 500, DEFAULT_SEQ_KIT_NAME, "Ion AmpliSeq RNA Library Kit", "IonXpress", True, False, False, "", "", "", {}, instrumentType) 
                       
         #27
         templateName = "Ion AmpliSeq Colon Lung v2 with RNA Lung Fusion Panel"        
@@ -630,6 +661,26 @@ def add_or_update_all_system_templates():
             plugins["ampliSeqRNA"] = ionCommunityPluginDict
   
         finish_sys_template(sysTemplate, isCreated, "P1.1.17", 500, DEFAULT_PROTON_SEQ_KIT_NAME,  "Ion AmpliSeq Library Kit Plus", "IonXpress", False, False, False, "/hg19_AmpliSeq_Transcriptome_ERCC_v1/unmerged/detail/hg19_AmpliSeq_Transcriptome_ERCC_v1.bed", "", "hg19_AmpliSeq_Transcriptome_ERCC_v1", plugins, instrumentType) 
+
+        #OCP Focus
+        OCP_FOCUS_SEQ_KIT_NAME = "IonPGMSelectKit"
+        OCP_FOCUS_LIB_KIT_NAME = "Ion PGM Select Library Kit"
+        OCP_FOCUS_TEMPLATE_KIT_NAME = "Ion PGM OneTouch Select Template Kit"
+        OCP_FOCUS_BARCODE_KIT_NAME = "Ion Select BC Set-1"
+        #29
+        templateName = "Oncomine Focus DNA"
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS", "DNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "Self", "Oncomine")
+        finish_sys_template(sysTemplate, isCreated, "318select", 500, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
+        
+        #30
+        templateName = "Oncomine Focus Fusions"
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_RNA", "DNA + RNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "Self", "Oncomine")        
+        finish_sys_template(sysTemplate, isCreated, "318select", 500, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "", {}, instrumentType)
+                      
+        #31
+        templateName = "Oncomine Focus DNA and Fusions"        
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "DNA_RNA", "Oncomine")                
+        finish_sys_template(sysTemplate, isCreated, "318select", 500, OCP_FOCUS_SEQ_KIT_NAME,  OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
 
         
     except:

@@ -30,7 +30,7 @@ string IonVersion::GetFullVersion(std::string module)
 	v += "@ION_VERSION_GITPATH@";
 	v += " (";
 	v += "@ION_VERSION_GITHASH@";
-	v += ")\nCopyright 2011 Ion Torrent Systems, Inc.\n";
+	v += ")\n";
 	return v;
 }
 

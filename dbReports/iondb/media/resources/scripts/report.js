@@ -214,30 +214,43 @@ $(document).ready(function () {
 
             launchObj["launchoption"] = "upload_only";
 
+            //check to see if previous instance of plugin exists and still running
             var alreadyGoing = false;
-
-            var check_iru = $.ajax({
+            var pluginresult='';
+            $.ajax({
                 type: 'GET',
                 url: djangoURL,
                 contentType: "application/json; charset=utf-8",
                 async: false,
                 dataType: "json"
-            });
-
-            check_iru.done(function (data) {
-                $.each(data, function (i, plugin) {
-                    if (plugin.Name === "IonReporterUploader") {
-                        alreadyGoing = true;
-                        //TODO: make this give an additional warning to the users
-                        //TODO: check to make sure the account authCheck works from here
-                        //console.log("going already " + alreadyGoing);
-                    }
+            }).done(function(data){
+                pluginresult = $.map(data,function(pr) {
+                    if(pr.Name === "IonReporterUploader"){return pr;}
                 });
             });
 
-            var upload = "";
+            if(pluginresult.length>0){
+                $.ajax({
+                    dataType: "json",
+                    contentType: "application/json",
+                    url: "/rundb/api/v1/plugin/IonReporterUploader/extend/lastrun/",
+                    type: "POST",
+                    async: false,
+                    data: JSON.stringify({'pluginresult':pluginresult[0]})
+                }).done(function(data){
+                    console.log('lastrun', data);
+                    alreadyGoing = data.in_progress;
+                });
+            }
 
-            bootbox.dialog("Are you sure you want to upload this report to Ion Reporter?", [
+            if (alreadyGoing) {
+                uploadMsg = "<div class='text-error'>WARNING Are you sure you want to upload to Ion Reporter, there is an upload already in progress?</div>";
+            } else {
+                uploadMsg = "Are you sure you want to upload to Ion Reporter?";
+            }
+
+            var upload = "";
+            bootbox.dialog(uploadMsg, [
                 {
                     "label": "Upload just BAM",
                     "class": "btn-primary",
@@ -269,9 +282,6 @@ $(document).ready(function () {
                     }
                 }
             ]);
-
-
-
         });
 
     });

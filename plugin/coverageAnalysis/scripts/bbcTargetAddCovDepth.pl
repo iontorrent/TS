@@ -50,6 +50,8 @@ my $trgfile = shift(@ARGV);
 
 #--------- End command arg parsing ---------
 
+use constant BIGWORD => 2**32;
+
 # Open BBCFILE and read contig header string
 open( BBCFILE, "<:raw", $bbcfile ) || die "Failed to open BBC file $bbcfile\n";
 chomp( my $contigList = <BBCFILE> );
@@ -253,6 +255,15 @@ sub loadBCI
   @bciIndex = unpack "L[$bciIndexSize]", $buffer;
   close(BCIFILE);
   $bciLastChr = -1;
+  # convert bciIndex to double integers
+  my $highWord = 0;
+  my @bigints = (($highBit) x $bciIndexSize);
+  $bigints[0] = $bciIndex[0];
+  for( my $i = 1; $i < $bciIndexSize; ++$i ) {
+    $highWord += BIGWORD if( $bciIndex[$i] > 0 && $bciIndex[$i] < $bciIndex[$i-1] );
+    $bigints[$i] = $bciIndex[$i] + $highWord;
+  }
+  @bciIndex = @bigints;
   return 1;
 }
 

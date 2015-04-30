@@ -3216,7 +3216,7 @@ PerFlowRelaxedKmultGaussNewtonFit_k(
       } // end ITER loop
 
       // probably slower incorporation
-      if ((krate - localMinKmult) < 0.01f) {
+      if (fabs(krate - localMinKmult) < 0.01f) {
         if (sqrtf(residual) > 20.0f) {
           localMaxKmult = localMinKmult;
           krate = 0.3f;

@@ -811,7 +811,7 @@
       "flowCount": 520,
       "uid": "SEQ0013",
       "instrumentType": "proton",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PI Sequencing 200 Kit v2 with XT",
       "categories" : "readLengthDerivableFromFlows;"
     }
@@ -828,7 +828,7 @@
       "uid": "TEMPLT0007",
       "instrumentType": "proton",
       "samplePrep_instrumentType" : "OT",
-      "isActive": true,
+      "isActive": false,
       "description": "Ion PI Template OT2 200 Kit v2 with XT"
     }
   },
@@ -951,8 +951,8 @@
       "flowCount": 0,
       "uid": "IATEMP0001",
       "instrumentType": "pgm",
-      "isActive": true,
-      "description": "Ion PGM Template IA Tech Access Kit"
+      "isActive": false,
+      "description": "Ion PGM Template IA 500 Kit"
     }
   },  
  {
@@ -1077,7 +1077,7 @@
       "name": "IonPGMHiQ",
       "nucleotideType": "",
       "runMode": "",
-      "flowCount": 1100,
+      "flowCount": 500,
       "uid": "SEQ0018",
       "instrumentType": "pgm",
       "samplePrep_instrumentType" : "OT_IC",
@@ -1267,6 +1267,22 @@
     }
   },
   {
+    "pk": 20075,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "IonPicoPlex",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0020",
+      "instrumentType": "",
+      "samplePrep_instrumentType" : "",
+      "isActive": false,
+      "description": "Ion SingleSeq Kit"
+    }
+  },  
+  {
     "pk": 20076,
     "model": "rundb.kitinfo",
     "fields": {
@@ -1297,8 +1313,59 @@
       "isActive": true,
       "description": "Ion PGM Hi-Q OT2 Kit - 400"
     }
+  },
+  {
+    "pk": 20079,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "SequencingKit",
+      "name": "IonPGMSelectKit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 500,
+      "uid": "SEQ0022",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "",
+      "isActive": true,
+      "description": "Ion PGM Select Sequencing Kit",
+      "categories" : ""
+    }
+  },
+  {
+    "pk": 20080,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "LibraryKit",
+      "name": "Ion PGM Select Library Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "LIB0021",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "",
+      "isActive": true,
+      "description": "Ion PGM Select Library Kit",
+      "categories" : ""
+    }
   },     
-                        
+  {
+    "pk": 20081,
+    "model": "rundb.kitinfo",
+    "fields": {
+      "kitType": "TemplatingKit",
+      "name": "Ion PGM OneTouch Select Template Kit",
+      "nucleotideType": "",
+      "runMode": "",
+      "flowCount": 0,
+      "uid": "TEMPLT0013",
+      "instrumentType": "pgm",
+      "samplePrep_instrumentType" : "OT",
+      "isActive": true,
+      "description": "Ion OneTouch Select Template Kit",
+      "categories" : ""
+    }
+  },
+
   {
     "pk": 20001,
     "model": "rundb.kitpart",
@@ -2932,7 +2999,17 @@
       ]
     }
   },
-  {     
+  {
+    "pk": 20166,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28955",
+      "kit": [
+        "LIB0020"
+      ]
+    }
+  },  
+  {
     "pk": 20167,
     "model": "rundb.kitpart",
     "fields": {
@@ -2991,8 +3068,128 @@
         "TEMPLT0012"
       ]
     }
-  },      
-        
+  },
+  {     
+    "pk": 20176,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28396",
+      "kit": [
+        "SEQ0022"
+      ]
+    }
+  },  
+  {     
+    "pk": 20177,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28393",
+      "kit": [
+        "SEQ0022"
+      ]
+    }
+  },  
+  {     
+    "pk": 20178,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28391",
+      "kit": [
+        "SEQ0022"
+      ]
+    }
+  },  
+  {     
+    "pk": 20179,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28392",
+      "kit": [
+        "SEQ0022"
+      ]
+    }
+  },         
+  {     
+    "pk": 20180,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28394",
+      "kit": [
+        "LIB0021"
+      ]
+    }
+  },    
+  {     
+    "pk": 20181,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28385",
+      "kit": [
+        "LIB0021"
+      ]
+    }
+  },    
+  {     
+    "pk": 20182,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28386",
+      "kit": [
+        "LIB0021"
+      ]
+    }
+  },          
+  {     
+    "pk": 20183,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28395",
+      "kit": [
+        "TEMPLT0013"
+      ]
+    }
+  },
+  {     
+    "pk": 20184,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28390",
+      "kit": [
+        "TEMPLT0013"
+      ]
+    }
+  },
+  {     
+    "pk": 20185,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28387",
+      "kit": [
+        "TEMPLT0013"
+      ]
+    }
+  },  
+  {     
+    "pk": 20186,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28389",
+      "kit": [
+        "TEMPLT0013"
+      ]
+    }
+  },
+  {     
+    "pk": 20187,
+    "model": "rundb.kitpart",
+    "fields": {
+      "barcode": "A28388",
+      "kit": [
+        "TEMPLT0013"
+      ]
+    }
+  },
+ 
   {
     "pk": 20001,
     "model": "rundb.applproduct",
@@ -3825,7 +4022,7 @@
     "fields": {
       "name": "314",
       "slots": 1,
-      "description": "314",
+      "description": "314v2",
       "isActive": true,
       "instrumentType": "pgm"
     }
@@ -3837,7 +4034,7 @@
       "name": "316",
       "slots": 1,
       "description": "316",
-      "isActive": true,
+      "isActive": false,
       "instrumentType": "pgm"
     }
   },  
@@ -3859,7 +4056,7 @@
       "name": "314v2",
       "slots": 1,
       "description": "314v2",
-      "isActive": true,
+      "isActive": false,
       "instrumentType": "pgm"
     }
   },    
@@ -3951,7 +4148,18 @@
       "instrumentType": "proton"
     }
   },
-    
+  {
+    "pk": 19,
+    "model": "rundb.chip",
+    "fields": {
+      "name": "318select",
+      "slots": 1,
+      "description": "318 Select",
+      "isActive": true,
+      "instrumentType": "pgm"
+    }
+  }, 
+
   {
     "pk": 1,
     "model": "rundb.analysisargs",
@@ -3965,7 +4173,8 @@
       "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
-      "alignmentargs"              : "stage1 map4"
+      "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
     }
   },
   {
@@ -3980,7 +4189,8 @@
       "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
-      "alignmentargs"              : "stage1 map4"
+      "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
     }
   },  
   {
@@ -3995,7 +4205,8 @@
       "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
-      "alignmentargs"              : "stage1 map4"
+      "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
     }
   },
   {
@@ -4010,7 +4221,8 @@
       "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
-      "alignmentargs"              : "stage1 map4"
+      "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
     }
   },
   {
@@ -4026,12 +4238,14 @@
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
       "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment",
       "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
       "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
       "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
       "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
-      "thumbnailalignmentargs"     : "stage1 map4"
+      "thumbnailalignmentargs"     : "stage1 map4",
+      "thumbnailionstatsargs"      : "ionstats alignment"
     }
   },
   {
@@ -4047,12 +4261,14 @@
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
       "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment",
       "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=50,50 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
       "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=50,50 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
       "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
       "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
-      "thumbnailalignmentargs"     : "stage1 map4"
+      "thumbnailalignmentargs"     : "stage1 map4",
+      "thumbnailionstatsargs"      : "ionstats alignment"
     }
   },
   {
@@ -4068,12 +4284,14 @@
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
       "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment",
       "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=50,50 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
       "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=50,50 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --bkg-use-proton-well-correction false --bkg-exp-tail-fit false --bkg-pca-dark-matter true",
       "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
       "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
-      "thumbnailalignmentargs"     : "stage1 map4"
+      "thumbnailalignmentargs"     : "stage1 map4",
+      "thumbnailionstatsargs"      : "ionstats alignment"
     }
   },
   {
@@ -4089,12 +4307,14 @@
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
       "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment",
       "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
       "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
       "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
       "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
-      "thumbnailalignmentargs"     : "stage1 map4"
+      "thumbnailalignmentargs"     : "stage1 map4",
+      "thumbnailionstatsargs"      : "ionstats alignment"
     }
   },
   {
@@ -4110,12 +4330,14 @@
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1 --barcode-bam-tag",
       "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment",
       "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1 --beadfind-diagnostics 2 ",
       "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel false --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 0 --beadfind-thumbnail 1 --bkg-debug-files --bkg-well-xtalk-name /opt/ion/config/xtalk.p1.2.well.settings.20140102.json",
       "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
       "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --barcode-bam-tag --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000",
-      "thumbnailalignmentargs"     : "stage1 map4"
+      "thumbnailalignmentargs"     : "stage1 map4",
+      "thumbnailionstatsargs"      : "ionstats alignment"
     }
   },
   {
@@ -4131,12 +4353,14 @@
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1 --barcode-bam-tag",
       "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment",
       "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1 --beadfind-diagnostics 2",
       "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel false --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 0 --beadfind-thumbnail 1 --bkg-debug-files --bkg-well-xtalk-name /opt/ion/config/xtalk.p2.2.1.settings.20140120.json",
       "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
       "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --barcode-bam-tag --disable-all-filters on --phasing-residual-filter=2.0 --num-unfiltered 100000",
-      "thumbnailalignmentargs"     : "stage1 map4"
+      "thumbnailalignmentargs"     : "stage1 map4",
+      "thumbnailionstatsargs"      : "ionstats alignment"
     }
   },
   {
@@ -4152,7 +4376,8 @@
       "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
       "calibrateargs"              : "calibrate --skipDroop --kit-info HiQ314",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.314.B5.h5",
-      "alignmentargs"              : "stage1 map4"
+      "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
     }
   },
   {
@@ -4168,7 +4393,8 @@
       "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
       "calibrateargs"              : "calibrate --skipDroop --kit-info HiQ316",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.316.B5.h5",
-      "alignmentargs"              : "stage1 map4"
+      "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
     }
   },  
   {
@@ -4184,7 +4410,8 @@
       "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
       "calibrateargs"              : "calibrate --skipDroop --kit-info HiQ316",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.316v2.B5.h5",
-      "alignmentargs"              : "stage1 map4"
+      "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
     }
   },
   {
@@ -4200,7 +4427,8 @@
       "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
       "calibrateargs"              : "calibrate --skipDroop --kit-info HiQ318",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --phred-table-file /opt/ion/config/phredTable.318.B5.h5",
-      "alignmentargs"              : "stage1 map4"
+      "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
     }
   },    
   {
@@ -4217,12 +4445,14 @@
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 1000 --barcode-filter-postpone 1",
       "alignmentargs"              : "-J 25 --end-repair 15 --do-repeat-clip --context stage1 map4",
+      "ionstatsargs"               : "ionstats alignment",
       "thumbnailbeadfindargs"      : "justBeadFind --beadfind-minlivesnr 3 --region-size=100,100 --beadfind-thumbnail 1",
       "thumbnailanalysisargs"      : "Analysis --from-beadfind --clonal-filter-bkgmodel true --region-size=100,100 --bkg-bfmask-update false --gpuWorkLoad 1 --bkg-debug-param 1 --beadfind-thumbnail 1 --gopt /opt/ion/config/gopt_p1.1.17_ampliseq_exome.param.json",
       "prethumbnailbasecallerargs" : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
       "thumbnailcalibrateargs"     : "calibrate --skipDroop",
       "thumbnailbasecallerargs"    : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 10 --keypass-filter on --phasing-residual-filter=2.0 --num-unfiltered 100000",
-      "thumbnailalignmentargs"     : "-J 25 --end-repair 15 --do-repeat-clip --context stage1 map4"
+      "thumbnailalignmentargs"     : "-J 25 --end-repair 15 --do-repeat-clip --context stage1 map4",
+      "thumbnailionstatsargs"      : "ionstats alignment"
     }
   },
     {
@@ -4237,11 +4467,27 @@
       "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
       "calibrateargs"              : "calibrate --skipDroop",
       "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20 --min-read-length 8",
-      "alignmentargs"              : "stage1 map4"
+      "alignmentargs"              : "stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
+    }
+  },
+  {
+    "pk": 29,
+    "model": "rundb.analysisargs",
+    "fields": {
+      "name": "default_318select",
+      "chipType": "318select",
+      "chip_default": true,
+      "beadfindargs"               : "justBeadFind",
+      "analysisargs"               : "Analysis --from-beadfind --use-alternative-etbR-equation",
+      "prebasecallerargs"          : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "calibrateargs"              : "calibrate --skipDroop",
+      "basecallerargs"             : "BaseCaller --barcode-filter 0.01 --barcode-filter-minreads 20",
+      "alignmentargs"              : "tmap mapall ... stage1 map4",
+      "ionstatsargs"               : "ionstats alignment"
     }
   },
   
-    
   {
     "pk": 1,
     "model": "rundb.samplegrouptype_cv",

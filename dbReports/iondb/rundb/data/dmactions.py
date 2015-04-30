@@ -378,10 +378,22 @@ def _copy_to_dir(filepath, _start_dir, _destination):
     start_dir is directory to root the copy in the _destination dir
     '''
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra = logid)
+    
+    # Catch broken links and do not copy them
+    try:
+        os.stat(filepath)
+    except OSError as e:
+        if e.errno == errno.ENOENT:
+            logger.info("Broken link not copied: %s" % filepath, extra = logid)
+            return True
+        else:
+            raise
+    
     src = filepath
     dst = filepath.replace(_start_dir,'')
     dst = dst[1:] if dst[0] == '/' else dst
     dst = os.path.join(_destination, dst)
+    
     
     # Check that remote mount is still mounted
     # We create the root destination directory once.  If it no longer is available, the mount has disappeared
@@ -418,7 +430,7 @@ def _copy_to_dir(filepath, _start_dir, _destination):
                 if e.errno == errno.EEXIST:
                     # Target exists so leave it alone
                     return True
-                elif e.errno == errno.EOPNOTSUPP:
+                elif e.errno in [errno.EOPNOTSUPP, errno.EACCES]:
                     # Cannot create a link so continue to copy instead below
                     pass
                 else:

@@ -187,7 +187,9 @@ def printStartupMessage():
   if config['barcodebeds'] == 'Yes':
     target_files = pluginParams['target_files']
     for bctrg in sorted(target_files):
-      printlog('    %s  %s' % (bctrg,fileName(target_files[bctrg])))
+      trg = fileName(target_files[bctrg])
+      if trg == "": trg = "None"
+      printlog('    %s  %s' % (bctrg,trg))
   printlog('  Target Padding:   %s' % config['padtargets'])
   printlog('  Sample Tracking:  %s' % config['sampleid'])
   printlog('  Uniquely Mapped:  %s' % config['uniquemaps'])
@@ -243,7 +245,7 @@ def run_plugin(skiprun=False,barcode=""):
   createlink(bamfile+'.bai',linkbam+'.bai')
   bamfile = linkbam
 
-  # Run-type flags used to customize the report
+  # Run-type flags used to customize this barcode report - not necessarily the same as in renderOptions()
   samp_track = (config['sampleid'] == 'Yes')
   trg_stats = (bedfile != "")
   amp_stats = (trg_stats and pluginParams['is_ampliseq'])
@@ -409,19 +411,22 @@ def run_meta_plugin():
   if pluginParams['cmdOptions'].cmdline: return
   printtime("Collating barcodes summary data...")
   # get correct file/type for reads matrix
+  fileext2 = ""
   renderOpts = renderOptions()
-  if renderOpts['chr_stats']:
+  if renderOpts['runType'] == "RNA":
     fieldid = '9'
     typestr = 'contig'
     fileext = '.contig.cov.xls'
-  elif renderOpts['trg_stats']:
-    fieldid = '9'
-    typestr = 'amplicon' if pluginParams['is_ampliseq'] or renderOpts['runType'] == "RNA" else 'target'
-    fileext = '.'+typestr+'.cov.xls'
-  else:
+    if renderOpts['trg_stats']: fileext2 = '.amplicon.cov.xls'
+  elif renderOpts['runType'] == "WGNM":
     fieldid = 'chrom'
     typestr = 'chromosome'
     fileext = '.chr.cov.xls'
+  else:
+    # includes 'GENS' runType
+    fieldid = '9'
+    typestr = 'amplicon' if pluginParams['is_ampliseq'] or renderOpts['runType'] == "RNA" else 'target'
+    fileext = '.'+typestr+'.cov.xls'
   bctable = []
   reportFiles = []
   bcresults = pluginResult['barcodes']
@@ -443,8 +448,11 @@ def run_meta_plugin():
           if not rfile in refs: refs.append(rfile)
     bctable.append(bcline)
     reportfile = os.path.join(bcrep['output_dir'],bcrep['output_prefix']+fileext)
+    reportfile2 = os.path.join(bcrep['output_dir'],bcrep['output_prefix']+fileext2)
     if os.path.exists(reportfile):
       reportFiles.append(reportfile)
+    elif fileext2 and os.path.exists(reportfile2):
+      reportFiles.append(reportfile2)
 
   if len(bctable) > 0:
     bctabfile = pluginParams['prefix']+".bc_summary.xls"
@@ -475,7 +483,7 @@ def run_meta_plugin():
       runcmd.communicate()
       if runcmd.poll():
         raise Exception("Failed to create barcode x %s reads matrix."%typestr)
-      fieldstr = "reads assigned to" if typestr == 'amplicon' or typestr == 'contig' else "mean base read depth for"
+      fieldstr = "mean base read depth for" if typestr == 'target' else "reads assigned to"
       barcodeReport.update({ "bcmatrix":bcmatrix, "bcmtype":typestr, "bcmfield":fieldstr })
 
   plugin_dir = pluginParams['plugin_dir']
@@ -544,26 +552,28 @@ def updateBarcodeSummaryReport(barcode,autoRefresh=False):
 
 
 def renderOptions():
-  '''coverageAnalysis support method to generate list of condensed rendering options and values.'''
+  '''coverageAnalysis support method to generate list of condensed rendering options for (barcode) summary reports.'''
   config = pluginParams['config']
+  librarytype = config['librarytype']
   targets = 'Barcode-specific' if config['barcodebeds'] == 'Yes' else config['targetregions_id']
   if targets == 'None': targets = ""
   filter_options = []
   if pluginParams['is_ampliseq'] and config['sampleid'] == 'Yes': filter_options.append('Sample tracking')
-  if not config['librarytype'] == 'AMPS_RNA' and config['uniquemaps'] == 'Yes': filter_options.append('Uniquely mapped')
+  if not librarytype == 'AMPS_RNA' and config['uniquemaps'] == 'Yes': filter_options.append('Uniquely mapped')
   if not pluginParams['is_ampliseq'] and config['nonduplicates'] == 'Yes': filter_options.append('Non-duplicate')
   trg_stats = pluginParams['have_targets']
   return {
-    "runType" : config['librarytype'],
+    "runType" : librarytype,
     "library_type" : config['librarytype_id'],
     "target_regions" : targets,
     "target_padding" : config['padtargets'],
     "filter_options" : ', '.join(filter_options),
     "samp_track" : (config['sampleid'] == 'Yes'),
-    "mixed_stats" : (config['librarytype'] == "AMPS_DNA_RNA"),
-    "chr_stats" : (config['librarytype'] == "RNA" and not trg_stats),
+    "mixed_stats" : (librarytype == "AMPS_DNA_RNA"),
+    "chr_stats" : (librarytype == "RNA" and not trg_stats),
+    "wgn_stats" : (librarytype == 'WGNM' or librarytype == 'GENS'),
     "trg_stats" : trg_stats,
-    "bas_stats" : (config['librarytype'] != 'AMPS_RNA' and config['librarytype'] != 'RNA' )
+    "bas_stats" : (librarytype != 'AMPS_RNA' and librarytype != 'RNA')
   }
   
 
@@ -622,6 +632,11 @@ def createBlockReport():
     render_context.update(pluginReport)
     tplate = 'report_block.html'
   createReport( pluginParams['block_report'], tplate, render_context )
+
+
+def createProgressReport(progessMsg):
+  '''General method to write a message directly to the block report, e.g. when starting prcessing of a new barcode.'''
+  createReport( pluginParams['block_report'], "progress_block.html", { "progress_text" : progessMsg } )
 
 
 def helpDictionary():
@@ -1044,6 +1059,7 @@ def runForBarcodes():
   create_scraper = pluginParams['cmdOptions'].scraper
   sample_names = pluginParams['sample_names']
   postout = False; # just for logfile prettiness
+  barcodeProcessed = 0
   for barcode in barcodes:
     sample = sample_names[barcode] if barcode in sample_names else ''
     bamfile = bcBamFile.pop(0)
@@ -1070,7 +1086,7 @@ def runForBarcodes():
           pluginParams['bedfile'] = target_file
           if not pluginParams['is_ampliseq']:
             target_file = target_file.replace('unmerged','merged',1)
-          printlog('Target Regions: %s' % target_file)
+          if target_file != "None" and target_file != "": printlog('Target Regions: %s' % target_file)
         else:
           pluginParams['bedfile'] = ''
         pluginParams['bamfile'] = bamfile
@@ -1079,6 +1095,8 @@ def runForBarcodes():
         pluginParams['output_prefix'] = barcode+"_"+pluginParams['prefix']
         if not os.path.exists(pluginParams['output_dir']):
            os.makedirs(pluginParams['output_dir'])
+        barcodeProcessed += 1
+        createProgressReport( "Processing barcode %d of %d..." % (barcodeProcessed,numGoodBams) )
         (resultData,reportData) = run_plugin(skip_analysis,barcode)
         pluginResult['barcodes'][barcode] = resultData
         pluginReport['barcodes'][barcode] = reportData
@@ -1094,6 +1112,7 @@ def runForBarcodes():
         traceback.print_exc()
       updateBarcodeSummaryReport(barcode,True)
 
+  createProgressReport( "Compiling barcode summary report..." )
   run_meta_plugin()
   updateBarcodeSummaryReport("")
   if create_scraper:

@@ -65,6 +65,8 @@
             <input type="hidden" name="runType_nucleotideType" value="{{helper.getRunTypeObject.nucleotideType}}" />                    
             <input type="hidden" name="irVersion" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irVersion}}"/>
             <input type="hidden" name="irAccountName" value="{{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}}"/>
+            <input type="hidden" name="planCategories" value="{{helper.getStepDict.Ionreporter.getPrePopulatedFieldDict.categories}}"/>
+            
             <div id="irAccountDoesNotExistError" style="color:red;font-weight:bold; display: none;">
                 The IR account {{helper.getStepDict.Ionreporter.getCurrentSavedFieldDict.irAccountName}} no longer exists or is inaccessible. Please select a valid IR account.
             </div>

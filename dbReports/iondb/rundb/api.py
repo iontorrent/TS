@@ -1617,6 +1617,8 @@ class PluginResource(ModelResource):
             bucket["request_post"] = json.loads(request.body)
         bucket["user"] = request.user
         bucket["request_method"] = request.method
+        bucket["name"] = plugin.name
+        bucket["version"] = plugin.version
         #not sure if we want this or not, keep it for now
         bucket["config"] = plugin.config
 
@@ -1997,8 +1999,10 @@ class PlannedExperimentValidation(Validation):
                 reference = bundle.data.get("x_library")    
 
                 planStatus = bundle.data.get("planStatus")
+
+                applicationGroupDisplayedName = bundle.data.get("applicationGroupDisplayedName", "")
                 if planStatus != "run":            
-                    err = plan_validator.validate_targetRegionBedFile_for_runType(value, runType, reference)
+                    err = plan_validator.validate_targetRegionBedFile_for_runType(value, runType, reference, "", applicationGroupDisplayedName)
             if key == "x_library":
                     err = plan_validator.validate_reference_short_name(value)
                 

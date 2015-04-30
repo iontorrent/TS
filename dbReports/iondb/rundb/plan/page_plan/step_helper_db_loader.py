@@ -191,7 +191,7 @@ class StepHelperDbLoader():
         if (planned_experiment.runType == "AMPS_DNA_RNA"):
             sample_count = planned_experiment.get_sample_count()
             barcode_count =  getPlanBarcodeCount(planned_experiment)
-            isOncoSameSample =  (sample_count < barcode_count) or (planned_experiment.categories and "oncomine" in planned_experiment.categories.lower())               
+            isOncoSameSample = (sample_count * 2 == barcode_count)
 
         save_plan_step_data.savedFields[SavePlanFieldNames.ONCO_SAME_SAMPLE] = isOncoSameSample               
 
@@ -210,7 +210,8 @@ class StepHelperDbLoader():
         samplesTable = self._getSamplesTable_from_plan(planned_experiment, step_helper, irInfo)
         if samplesTable:
             if planned_experiment.runType == "AMPS_DNA_RNA":
-                samplesTable = sorted(samplesTable, key=lambda item: item['nucleotideType'])
+                #need to sort samples as sample DNA/RNA pairs                
+                samplesTable = sorted(samplesTable, key=lambda item: item['orderKey'])
             else:
                 if planned_experiment.get_barcodeId():
                     samplesTable = sorted(samplesTable, key=lambda item: item['barcodeId'])
@@ -248,9 +249,8 @@ class StepHelperDbLoader():
         
         # application_step_data.updateFromStep(export_step_data)
         
-        ionreporter_step_data.savedFields[IonReporterFieldNames.SAMPLE_GROUPING] = planned_experiment.sampleGrouping.pk if planned_experiment.sampleGrouping else None
-        ionreporter_step_data.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING] = planned_experiment.sampleGrouping if planned_experiment.sampleGrouping else None
-
+        self._updateUniversalStep_ionReporterData(step_helper, planned_experiment, ionreporter_step_data)
+        
         appl_product = self._updateUniversalStep_applicationData(step_helper, planned_experiment, application_step_data)
 
         logger.debug("step_helper_db_loader.updateUniversalStepHelper() planned_experiment.id=%d; applProduct.productCode=%s" %(planned_experiment.id, appl_product.productCode))
@@ -295,6 +295,13 @@ class StepHelperDbLoader():
         for project in projects:
             step_helper.steps[StepNames.OUTPUT].savedFields[OutputFieldNames.PROJECTS].append(project.pk)
 
+
+    def _updateUniversalStep_ionReporterData(self, step_helper, planned_experiment, ionreporter_step_data):        
+        ionreporter_step_data.savedFields[IonReporterFieldNames.SAMPLE_GROUPING] = planned_experiment.sampleGrouping.pk if planned_experiment.sampleGrouping else None
+        ionreporter_step_data.savedObjects[IonReporterFieldNames.SAMPLE_GROUPING] = planned_experiment.sampleGrouping if planned_experiment.sampleGrouping else None
+
+        ionreporter_step_data.prepopulatedFields[IonReporterFieldNames.CATEGORIES] =  planned_experiment.categories
+        
     
     def _updateUniversalStep_applicationData(self, step_helper, planned_experiment, application_step_data): 
         selectedRunType = None
@@ -335,9 +342,31 @@ class StepHelperDbLoader():
         application_step_data.prepopulatedFields[ApplicationFieldNames.CATEGORIES] =  planned_experiment.categories
         #logger.debug(" step_helper_db_loader_updateUniversalStep_applicationData() helper.sh_type=%s   application_step_data.categories=%s" %(step_helper.sh_type, application_step_data.prepopulatedFields[ApplicationFieldNames.CATEGORIES]))
             
+        step = step_helper.steps.get(StepNames.REFERENCE, "")
+        if step:
+            self._updateStep_with_applicationData(step, application_step_data)
+            step.prepopulatedFields[ReferenceFieldNames.RUN_TYPE] = application_step_data.savedObjects[ApplicationFieldNames.RUN_TYPE].runType
+
+        step = step_helper.steps.get(StepNames.BARCODE_BY_SAMPLE, "")
+        if step:
+            self._updateStep_with_applicationData(step, application_step_data)
+
+        step = step_helper.steps.get(StepNames.SAVE_PLAN, "")
+        if step:           
+            self._updateStep_with_applicationData(step, application_step_data)
+
+        step = step_helper.steps.get(StepNames.SAVE_PLAN_BY_SAMPLE, "")
+        if step:               
+            self._updateStep_with_applicationData(step, application_step_data)
+            
         return appl_product 
 
 
+    def _updateStep_with_applicationData(self, step, application_step_data):
+        if step and application_step_data:
+            step.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME] = application_step_data.prepopulatedFields[ApplicationFieldNames.APPLICATION_GROUP_NAME]
+        
+        
     def _updateUniversalStep_applicationData_for_edit(self, step_helper, planned_experiment, application_step_data):
         application_step_data.prepopulatedFields[ApplicationFieldNames.PLAN_STATUS] = planned_experiment.planStatus
             
@@ -666,9 +695,7 @@ class StepHelperDbLoader():
                 barcode_count =  getPlanBarcodeCount(planned_experiment)
                 #logger.debug("step_helper_db_loader.updatePlanBySampleSpecificStepHelper() sample_count=%d; barcode_count=%d" %(sample_count, barcode_count))
                 
-                isOncoSameSample = (sample_count < barcode_count)  
-            else:
-                isOncoSameSample =  ("oncomine" in planned_experiment.categories.lower())               
+                isOncoSameSample = (sample_count * 2 == barcode_count)
 
         barcoding_step.savedFields[BarcodeBySampleFieldNames.ONCO_SAME_SAMPLE] = isOncoSameSample
         save_plan_step.savedFields[SavePlanFieldNames.ONCO_SAME_SAMPLE] = isOncoSameSample
@@ -682,7 +709,10 @@ class StepHelperDbLoader():
 
         save_plan_step.savedObjects[SavePlanBySampleFieldNames.SAMPLESET] = sampleset
         
-        sorted_sampleSetItems = list(sampleset.samples.all().order_by("sample__displayedName"))
+        #sorted_sampleSetItems = list(sampleset.samples.all().order_by("sample__displayedName"))
+        sorted_sampleSetItems = list(sampleset.samples.all().order_by("relationshipGroup", "nucleotideType", "sample__displayedName"))
+        ##logger.debug("db_loader sorted_sampleSetItems=%s" %(sorted_sampleSetItems))
+        
         barcoding_step.prepopulatedFields[BarcodeBySampleFieldNames.SAMPLESET_ITEMS] = sorted_sampleSetItems
 
         # Pick barcode set to use:
@@ -699,7 +729,7 @@ class StepHelperDbLoader():
         #logger.debug("step_helper_db_loader.updatePlanBySampleSpecificStepHelper() barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SET]=%s" %(barcoding_step.savedFields[SavePlanFieldNames.BARCODE_SET]))
         
         if barcodeSet:
-            barcoding_step.prepopulatedFields[SavePlanFieldNames.PLAN_DNA_BARCODES] = list(dnaBarcode.objects.filter(name=barcodeSet).order_by('id_str'))
+            barcoding_step.prepopulatedFields[SavePlanFieldNames.PLAN_DNA_BARCODES] = list(dnaBarcode.objects.filter(name=barcodeSet).order_by('index'))
 
         # IonReporter parameters
         irInfo = self._getIRinfo(planned_experiment)
@@ -710,13 +740,14 @@ class StepHelperDbLoader():
         # Populate samples table
         if existing_plan:
             samplesTable = self._getSamplesTable_from_plan(planned_experiment, step_helper, irInfo)
-            #need to sort collection by nucleotideType
-            samplesTable = sorted(samplesTable, key=lambda item: item['nucleotideType'])  
-
-            if barcodeSet:
-                samplesTable = sorted(samplesTable, key=lambda item: item['barcodeId'])
+            if planned_experiment.runType == "AMPS_DNA_RNA":
+                #need to sort samples as sample DNA/RNA pairs
+                samplesTable = sorted(samplesTable, key=lambda item: item['orderKey'])
             else:
-                samplesTable = sorted(samplesTable, key=lambda item: item['sampleName'])
+                if barcodeSet:
+                    samplesTable = sorted(samplesTable, key=lambda item: item['barcodeId'])
+                else:
+                    samplesTable = sorted(samplesTable, key=lambda item: item['sampleName'])
         else:
             samplesTable = []
             for item in sorted_sampleSetItems:
@@ -725,7 +756,7 @@ class StepHelperDbLoader():
                     "sampleName"        : item.sample.displayedName,
                     "sampleExternalId"  : item.sample.externalId, 
                     "sampleDescription" : item.sample.description,
-                    "nucleotideType"       : "",
+                    "nucleotideType"       : item.nucleotideType.upper(),
                     "controlSequenceType"  : "",                    
                     "reference"            : "",
                     "targetRegionBedFile"  : "",
@@ -830,7 +861,9 @@ class StepHelperDbLoader():
         runType = planned_experiment.runType
         
         logger.debug("step_helper_db_loader._getSamplesTable_from_plan() planNucleotideType=%s; runType=%s" %(planNucleotideType, runType))
-        
+
+        order_counter = 1
+                    
         if step_helper.isBarcoded():
             # build samples table from barcodedSamples
             
@@ -839,7 +872,6 @@ class StepHelperDbLoader():
             #WORKAROUND FOR HUB: plan from HUB can have barcodeKit selected but with empty barcodedSamples JSON blob
             application_group_name = "" if not planned_experiment.applicationGroup else planned_experiment.applicationGroup.name
             #logger.debug("step_helper_db_loader._getSamplesTable_from_plan() application_group_name=%s" %(application_group_name))               
-            
             
             if not sample_to_barcode:
                 #logger.debug("step_helper_db_loader._getSamplesTable_from_plan()")               
@@ -858,15 +890,20 @@ class StepHelperDbLoader():
                                "controlSequenceType"  : sampleInfo.get('controlSequenceType', "") if sampleInfo else None, 
                               "reference"            : planned_experiment.get_library() if planned_experiment.get_library() else "",
                               "hotSpotRegionBedFile" : planned_experiment.get_regionfile() if planned_experiment.get_regionfile() else "",
-                              "targetRegionBedFile"  : planned_experiment.get_bedfile() if planned_experiment.get_bedfile() else "",                                      
+                              "targetRegionBedFile"  : planned_experiment.get_bedfile() if planned_experiment.get_bedfile() else "", 
+                              "orderKey"             : format(order_counter, "05d")                                     
                               }                        
                 samplesTable.append(sampleDict)
                 
                 logger.debug("step_helper_db_loader._getSamplesTable_from_plan() NO existing barcodedSamples for plan.pk=%d; planName=%s; sampleDict=%s"  %(planned_experiment.id, planned_experiment.planDisplayedName, sampleDict))               
                         
             else:
+                order_counter_dna = 1
+                order_counter_rna = 1
+                
                 for sample, value in sample_to_barcode.items():                
                     if 'barcodeSampleInfo' in value:
+                        orderKey = ""
 
                         for barcode, sampleInfo in value['barcodeSampleInfo'].items():
                             sampleReference = sampleInfo.get("reference", "")
@@ -889,10 +926,20 @@ class StepHelperDbLoader():
                                         sampleTargetRegionBedFile = planned_experiment.get_bedfile()
                                     #else:
                                     #    logger.debug("step_helper_db_loader._getSamplesTable_from_plan() SKIP SETTING sampleTargetRegionBedFile")
-                            
 
+                                orderKey = format(order_counter, "05d")
+                                       
                             logger.debug("step_helper_db_loader._getSamplesTable_from_plan() NO existing barcodedSamples for plan.pk=%d; planName=%s" %(planned_experiment.id, planned_experiment.planDisplayedName))               
-                            
+
+                            if runType == "AMPS_DNA_RNA":
+                                if (sampleInfo.get("nucleotideType", planNucleotideType).lower() == "dna"):
+                                    orderKey = format(order_counter_dna, "05d") + "_DNA"
+                                    order_counter_dna += 1
+                                elif (sampleInfo.get("nucleotideType", planNucleotideType).lower() == "rna"):
+                                    orderKey = format(order_counter_rna, "05d") + "_RNA"
+                                    order_counter_rna += 1
+                                else:
+                                    orderKey = format(order_counter, "05d")
                             sampleDict = {
                                 "barcodeId"            : barcode,
                                 "sampleName"           : sample,
@@ -902,9 +949,12 @@ class StepHelperDbLoader():
                                 "controlSequenceType"  : sampleInfo.get("controlSequenceType", ""),
                                 "reference"            : sampleReference,
                                 "hotSpotRegionBedFile" : sampleHotSpotRegionBedFile,
-                                "targetRegionBedFile"  : sampleTargetRegionBedFile
+                                "targetRegionBedFile"  : sampleTargetRegionBedFile,
+                                "orderKey"             : orderKey   
                                  
                             }
+                            order_counter += 1
+                            
                             samplesTable.append(sampleDict)
                             logger.debug("step_helper_db_loader._getSamplesTable_from_plan() barcodeSampleInfo plan.pk=%d; planName=%s; sampleName=%s; sampleDict=%s" %(planned_experiment.id, planned_experiment.planDisplayedName, sample, sampleDict))               
 
@@ -920,9 +970,10 @@ class StepHelperDbLoader():
                                           "controlSequenceType"  : None,
                                           "reference"            : planned_experiment.get_library(),
                                           "hotSpotRegionBedFile" : "" if planNucleotideType == "RNA" else planned_experiment.get_regionfile(),
-                                          "targetRegionBedFile"  : "" if planNucleotideType == "RNA" else planned_experiment.get_bedfile(),                              
+                                          "targetRegionBedFile"  : "" if planNucleotideType == "RNA" else planned_experiment.get_bedfile(),  
+                                          "orderKey"             : format(order_counter, "05d")                             
                                           }                  
-
+                            order_counter += 1
                             samplesTable.append(sampleDict)
 
             # add IR values
@@ -939,6 +990,8 @@ class StepHelperDbLoader():
                             sampleDict['irRelationshipType'] = irvalue
                         elif irkey == 'setid':
                             sampleDict['irSetID'] = irvalue.split('__')[0]
+                            orig_orderKey = sampleDict['orderKey']
+                            sampleDict['orderKey'] = str(irvalue) + str(orig_orderKey)                            
                         else:
                             sampleDict['ir'+irkey] = irvalue
 
@@ -953,7 +1006,8 @@ class StepHelperDbLoader():
                 'sampleExternalId' : planned_experiment.get_sample_external_id(),
                 'sampleDescription': planned_experiment.get_sample_description(),
                 'tubeLabel':   sampleTubeLabel,
-                "nucleotideType"       : planNucleotideType,                  
+                "nucleotideType"       : planNucleotideType, 
+                "orderKey" : format(order_counter, "05d")                 
             }
             
             # add IR values
@@ -963,9 +1017,13 @@ class StepHelperDbLoader():
                         sampleDict['irRelationshipType'] = irvalue
                     elif irkey == 'setid':
                         sampleDict['irSetID'] = irvalue.split('__')[0]
+                        orig_orderKey = sampleDict['orderKey']
+                        sampleDict['orderKey'] = str(irvalue) + str(orig_orderKey)                        
                     else:
                         sampleDict['ir'+irkey] = irvalue
-            
+
+            order_counter += 1
+                                        
             samplesTable = [sampleDict]
         
         return samplesTable
@@ -1038,8 +1096,11 @@ class StepHelperDbLoader():
         '''
         logger.debug("ENTER step_helper_db_loader.getStepHelperForPlanPlannedExperiment() step_helper_type=%s; pe_id=%s" %(step_helper_type, str(pe_id)))
         
-        step_helper = StepHelper(sh_type=step_helper_type, previous_plan_id=pe_id)
         planned_experiment = PlannedExperiment.objects.get(pk=pe_id)
+        if step_helper_type == StepHelperType.EDIT_RUN:
+            step_helper = StepHelper(sh_type=step_helper_type, previous_plan_id=pe_id, experiment_id=planned_experiment.experiment.id)
+        else:
+            step_helper = StepHelper(sh_type=step_helper_type, previous_plan_id=pe_id)
 
         planDisplayedName = getPlanDisplayedName(planned_experiment)
 

@@ -283,7 +283,7 @@ def _is_barcoded(template):
 def _get_barcoded_sample_headers(template, prefix):
     hdrs = []
     if _is_barcoded(template):
-        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("id_str")
+        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("index")
         barcodeCount = barcodes.count()
         for barcode in barcodes:
             hdrs.append(barcode.id_str + prefix)
@@ -293,7 +293,7 @@ def _get_barcoded_sample_headers(template, prefix):
 def _get_barcoded_sample_names(template):
     cells = []
     if _is_barcoded(template):
-        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("id_str")
+        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("index")
         for barcode in barcodes:
             cells.append("")
 
@@ -302,7 +302,7 @@ def _get_barcoded_sample_names(template):
 def _get_barcoded_sample_IR_beyond_v1_0_headers(template, prefix):    
     hdrs = []
     if _is_barcoded(template):
-        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("id_str")
+        barcodes = dnaBarcode.objects.filter(name=template.get_barcodeId()).order_by("index")
         barcodeCount = barcodes.count()
         index = 0
         for barcode in barcodes:

@@ -259,9 +259,15 @@ if __name__=="__main__":
         ########################################################
         # Flow Space Recalibration and re-basecalling          #
         ########################################################
+        #
+        #          'no_recal' : 'No Calibration'
+        #    'standard_recal' : 'Default Calibration'
+        #       'panel_recal' : 'Calibration Standard'
+        #
+
         additional_basecallerArgs = ""
-        if env['doBaseRecal'] != "no_recal" and reference_selected:
-            printtime("DEBUG: Flow Space Recalibration is enabled with Reference: %s" % env['referenceName'])
+        if (env['doBaseRecal'] == "standard_recal" and reference_selected) or env['doBaseRecal'] == "panel_recal":
+            printtime("DEBUG: Flow Space Recalibration is enabled, Mode: %s" % env['doBaseRecal'])
             set_result_status('Flow Space Recalibration')
             try:
 

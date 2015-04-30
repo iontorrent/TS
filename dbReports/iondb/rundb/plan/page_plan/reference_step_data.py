@@ -9,6 +9,8 @@ from iondb.rundb.plan.page_plan.step_names import StepNames
 from iondb.rundb.plan.page_plan.application_step_data import ApplicationFieldNames
 from iondb.rundb.plan.page_plan.step_helper_types import StepHelperType
 
+from iondb.rundb.plan.plan_validator import validate_targetRegionBedFile_for_runType
+
 import logging
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,8 @@ class ReferenceFieldNames():
     TARGET_BED_FILE_MISSING = 'targetBedFileMissing'
 
     PLAN_STATUS = "planStatus"
+    RUN_TYPE = "runType"
+    APPLICATION_GROUP_NAME = "applicationGroupName"
 
 class ReferenceStepData(AbstractStepData):
 
@@ -73,6 +77,9 @@ class ReferenceStepData(AbstractStepData):
         self.savedFields[ReferenceFieldNames.SAME_REF_INFO_PER_SAMPLE] = True
         
         self.prepopulatedFields[ReferenceFieldNames.PLAN_STATUS] = ""
+        
+        self.prepopulatedFields[ReferenceFieldNames.RUN_TYPE] = ""
+        self.prepopulatedFields[ReferenceFieldNames.APPLICATION_GROUP_NAME] = "" 
         
         self.sh_type = sh_type
 
@@ -132,16 +139,20 @@ class ReferenceStepData(AbstractStepData):
         if self.prepopulatedFields[ReferenceFieldNames.PLAN_STATUS] != "run":
             if field_name == ReferenceFieldNames.TARGET_BED_FILE:
                 reference = self.savedFields[ReferenceFieldNames.REFERENCE]
-    
-                #logger.debug("at validateField_in_section reference=%s; REQUIRE_TARGET_BED_FILE=%s; targetBed=%s" %(reference, str(self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE]), new_field_value))               
-                if self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE]:
-                    if reference:
-                        if validation.has_value(new_field_value):
-                            self.validationErrors.pop(field_name, None)
-                        else:
-                            self.validationErrors[field_name] = validation.required_error("Target Regions BED File")
-                    else:
-                        self.validationErrors.pop(field_name, None)
+                targetRegionBedFile = new_field_value
+ 
+                runType = self.prepopulatedFields[ReferenceFieldNames.RUN_TYPE] if self.prepopulatedFields[ReferenceFieldNames.RUN_TYPE] else ""
+                applicationGroupName = self.prepopulatedFields[ReferenceFieldNames.APPLICATION_GROUP_NAME]
+                logger.debug(" validateField_in_section reference=%s; targetBed=%s; runType=%s; applicationGroupName=%s" %(reference, new_field_value, runType, applicationGroupName))                   
+
+                errors = []
+                errors = validate_targetRegionBedFile_for_runType(targetRegionBedFile, runType, reference, "", applicationGroupName, "Target Regions BED File") 
+                if errors:
+                    self.validationErrors[field_name] = ''.join(errors)
+                else:
+                    self.validationErrors.pop(field_name, None) 
+
+
 
         
     def updateFromStep(self, updated_step):        
@@ -183,5 +194,8 @@ class ReferenceStepData(AbstractStepData):
                 self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE] = True
             else:
                 self.prepopulatedFields[ReferenceFieldNames.REQUIRE_TARGET_BED_FILE] = False
+
+            self.prepopulatedFields[ReferenceFieldNames.RUN_TYPE] = updated_step.savedObjects[ApplicationFieldNames.RUN_TYPE].runType
+            
 
         #logger.debug("EXIT reference_step_data.updateFromStep() self.savedFields=%s" %(self.savedFields))

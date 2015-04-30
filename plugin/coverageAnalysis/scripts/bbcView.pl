@@ -58,6 +58,8 @@ my $haveBed = ($bedfile ne '' && $bedfile ne '-');
 
 #--------- End command arg parsing ---------
 
+use constant BIGWORD => 2**32;
+
 # Open BBCFILE and read contig header string
 open( BBCFILE, "<:raw", $bbcfile ) || die "Failed to open BBC file $bbcfile\n";
 chomp( my $contigList = <BBCFILE> );
@@ -308,6 +310,25 @@ sub loadBCI
   @bciIndex = unpack "L[$bciIndexSize]", $buffer;
   close(BCIFILE);
   $bciLastChr = -1;
+  # convert bciIndex to double integers
+  my $highWord = 0;
+  my @bigints = (($highBit) x $bciIndexSize);
+  $bigints[0] = $bciIndex[0];
+  for( my $i = 1; $i < $bciIndexSize; ++$i ) {
+    $highWord += BIGWORD if( $bciIndex[$i] > 0 && $bciIndex[$i] < $bciIndex[$i-1] );
+    $bigints[$i] = $bciIndex[$i] + $highWord;
+  }
+  @bciIndex = @bigints;
+  if( $detailLog ) {
+    print STDERR "Num indexes @ $bciBlockSize = $bciIndexSize\n";
+    for( my $i = 0; $i < $bciNumChroms; ++$i ) {
+      my $j = $bciBlockOffsets[$i];
+      print STDERR "Contig #$i @ $j -> file pos $bciIndex[$j]\n";
+    }
+    for( my $i = 0; $i < $bciIndexSize; ++$i ) {
+      print STDERR "Offset $i -> file pos $bciIndex[$i]\n";
+    }
+  }
   return 1;
 }
 
@@ -333,7 +354,7 @@ sub bciSeekForward
   }
   $bciLastChr = $chromIdx;
   my $blockSrt = $bciIndex[$blockIdx];
-  printf STDERR "Block start = $blockSrt at index $blockIdx, file at %d\n", tell(BBCFILE) if( $detailLog );
+  printf STDERR "Block start = $blockSrt at index $blockIdx for $chromIdx,$srt; file at %d\n", tell(BBCFILE) if( $detailLog );
   # skip non-represented contigs - ok since BBCFILE starts with contig names - 0 seek not allowed
   return 0 unless( $blockSrt );
   seek(BBCFILE,$blockSrt,0) if( $blockSrt > tell(BBCFILE) );

@@ -136,62 +136,79 @@ $("#id_do_base_recal").change(function(){
 // ***************************** Reference ******************************
 
 // match available BED files to reference
-$("#id_reference").change(function(){
+$("[id^=id_reference]").change(function(){
     var reference = this.value;
-    var select = $("#id_targetRegionBedFile option, #id_hotSpotRegionBedFile option");
+
+    var region = $('#' + this.id.replace('reference','targetRegionBedFile'));
+    var hotspot = $('#' + this.id.replace('reference','hotSpotRegionBedFile'));
+    var select = region.children('option').add(hotspot.children('option'))
+
     select.filter('[value != ""]').hide();
     select.each(function(i,elem){
         var bedfile_path = elem.value;
-        if( bedfile_path.split('/').indexOf(reference)>0 )
+        if( bedfile_path.split('/').indexOf(reference)>0 ){
             $(this).show();
+        } else {
+            $(this).prop('selected', false);
+        }
     })
 }).change();
 
-// update barcoded references when reference selection changes
-$("#id_reference").change(function(){
-    if ($("#useBarcodedReference").length == 1){
-        var reference = this.value;
-        $('#barcodedReference_container tbody tr').each(function(){
-            $(this).find("select[name='reference']").val(reference);
-        });
+// update barcoded references when default reference selection changes
+$("#id_reference, #id_targetRegionBedFile, #id_hotSpotRegionBedFile, #useDefaultReference").change(function(){
+    if ($("#useDefaultReference").is(':checked')){
+        $("#barcodedReference_container tbody select[id*='reference']").val($("#id_reference").val());
+        $("#barcodedReference_container tbody select[id*='reference']").change();
+        $("#barcodedReference_container tbody select[id*='targetRegionBedFile']").val($("#id_targetRegionBedFile").val());
+        $("#barcodedReference_container tbody select[id*='hotSpotRegionBedFile']").val($("#id_hotSpotRegionBedFile").val());
         _save_barcoded_reference = true;
     }
+});
+
+$("#useDefaultReference").change(function(){
+    var disable = $(this).is(':checked');
+    $('#barcodedReference_container tbody').find("select[name='reference']").prop('disabled', disable);
+    $('#barcodedReference_container tbody').find("select[name='targetRegionBedFile']").prop('disabled', disable);
+    $('#barcodedReference_container tbody').find("select[name='hotSpotRegionBedFile']").prop('disabled', disable);
+});
+
+$('#barcodedReference_container table').change(function(){
+    _save_barcoded_reference = true;
 });
 
 // re-Analysis page doesn't support selecting barcoded samples, if user changes Barcode Set - disable barcoded references section
 $('#id_barcodeKitName').change(function(){
     var barcodeSet = this.value;
-    if ($("#useBarcodedReference").length == 1){
-        if (barcodeSet != _barcode_set){
-            $('#barcodedReference_container table').hide();
-            $('#barcodedReference_container div')
-                .append("<div id='unsupported'> Barcoded References are not supported when Barcode Set value is changed. Please use run Edit page to assign samples to new barcodes.</div>");
-        } else {
-            $('#barcodedReference_container table').show();
-            $('#barcodedReference_container div').remove("#unsupported");
-        }
+    if (barcodeSet != _barcode_set){
+        $('#barcodedReference_container #barcodedReference_div').hide();
+        $('#barcodedReference_container #unsupported').addClass('unsupported').show();
+        _save_barcoded_reference = true;
+    } else {
+        $('#barcodedReference_container #barcodedReference_div').show();
+        $('#barcodedReference_container #unsupported').removeClass('unsupported').hide();
     }
-});
-
-// Barcoded references
-$("#useBarcodedReference").click(function(){
-    _save_barcoded_reference = true;
-    if ( $(this).is(':checked') ){ $('#barcodedReference_container').show(); }else{$('#barcodedReference_container').hide();}
 });
 
 get_barcodedReferences = function(){
-    if (_save_barcoded_reference && $('#barcodedReference_container div #unsupported').length==0){
+    if (_save_barcoded_reference){
         var barcodedReferences = {};
-        $('#barcodedReference_container tbody tr').each(function(){
-            var $cells = $(this).children();
-            barcodedReferences[$cells.eq(0).text()] = {
-                'reference': $cells.find('select').eq(0).val(),
-                'nucType': $cells.find('select').eq(1).val()
-            };
-        });
+        if ( !$('#barcodedReference_container #unsupported').hasClass('unsupported') ){
+            $('#barcodedReference_div tbody tr').each(function(){
+                var $cells = $(this).children();
+                barcodedReferences[$cells.eq(0).text()] = {
+                    'reference': $cells.find("select[id*='reference']").val(),
+                    'targetRegionBedFile': $cells.find("select[id*='targetRegionBedFile']").val(),
+                    'hotSpotRegionBedFile': $cells.find("select[id*='hotSpotRegionBedFile']").val()
+                };
+            });
+        } else {
+            barcodedReferences['unsupported']= true;
+        }
         $('#id_barcodedReferences').val(JSON.stringify(barcodedReferences));
+        console.log('barcoded references', barcodedReferences);
     }
-    $('#barcodedReference_container tbody tr').find('select').removeAttr('name');
+    // remove name attribute to avoid submitting extra barcoded data with the form
+    $('#barcodedReference_div tbody tr').find('select').removeAttr('name');
 }
 
 // ***************************** PLUGINS *********************************

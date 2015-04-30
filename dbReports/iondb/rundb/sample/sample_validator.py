@@ -1,5 +1,7 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
 
+from django.shortcuts import get_object_or_404
+
 from iondb.rundb import models
 import types
 import datetime
@@ -7,8 +9,7 @@ import logging
 
 import re
 
-
-from iondb.rundb.models import SampleGroupType_CV, SampleAnnotation_CV, SampleSet
+from iondb.rundb.models import SampleGroupType_CV, SampleAnnotation_CV, SampleSet, SampleSetItem
 from iondb.utils import validation 
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,8 @@ MAX_LENGTH_SAMPLE_ATTRIBUTE_DISPLAYED_NAME = 127
 MAX_LENGTH_SAMPLE_ATTRIBUTE_DESCRIPTION = 1024
 
 MAX_LENGTH_SAMPLE_ATTRIBUTE_VALUE = 1024
+MAX_LENGTH_SAMPLE_NUCLEOTIDE_TYPE = 64
+VALID_NUCLEOTIDE_TYPES = ["dna", "rna"]
 
 ERROR_MSG_INVALID_DATATYPE = " should be a whole number. "
 ERROR_MSG_INVALID_PERCENTAGE = " should be a whole number between 0 to 100"
@@ -139,6 +142,47 @@ def validate_barcoding_for_existing_sampleset(queryDict):
     samplesetitems = item.sampleSet.samples.all()
 
     return validate_barcoding_samplesetitems(samplesetitems, queryDict.get('barcodeKit', None), queryDict.get('barcode', None), samplesetitem_id)
+
+
+def validate_samplesetitem_update_for_existing_sampleset(sampleSetItem, sample, selectedDnaBarcode, selectedNucleotideType):
+    """
+    validate if the changed sampleSetItem will become identical to an existing one. Error off if identical 
+    """
+    isValid = True
+    errorMessage = None
+    
+    sampleSet = get_object_or_404(SampleSet, pk = sampleSetItem.sampleSet.id)        
+    sampleSetItems = SampleSetItem.objects.filter(sampleSet = sampleSet, sample = sample)
+
+
+    if selectedNucleotideType:
+        sampleSetItems = sampleSetItems.filter(nucleotideType = selectedNucleotideType)
+        
+        if sampleSetItem.id:
+            sampleSetItems = sampleSetItems.exclude(id = sampleSetItem.id)
+
+        logger.debug("views_helper - DNA/RNA _create_or_update_sampleSetItem sampleSetItem.id=%d sampleSetItems.count=%d" %(sampleSetItem.id, sampleSetItems.count()))
+
+        if sampleSetItems.count() > 0:
+            logger.debug("views_helper - _create_or_update_sampleSetItem DUPLICATE - SKIP UPDATE for sampleSetItem.id=%d" %(sampleSetItem.id))
+            isValid = False
+            errorMessage = "Error, Another sample with the same name and DNA/RNA type already exists in this sample set"
+
+    if selectedDnaBarcode:
+        sampleSetItems = SampleSetItem.objects.filter(sampleSet = sampleSet, dnabarcode = selectedDnaBarcode)
+        
+        if sampleSetItem.id:
+            sampleSetItems = sampleSetItems.exclude(id = sampleSetItem.id)
+
+        logger.debug("views_helper - BARCODE _create_or_update_sampleSetItem sampleSetItem.id=%d sampleSetItems.count=%d" %(sampleSetItem.id, sampleSetItems.count()))
+
+        #!!!could be same or different sample
+        if sampleSetItems.count() > 0:
+            logger.debug("views_helper - _create_or_update_sampleSetItem DUPLICATE - SKIP UPDATE for sampleSetItem.id=%d" %(sampleSetItem.id))
+            isValid = False
+            errorMessage = "Error, Another sample with the same barcode already exists in this sample set" 
+     
+    return isValid, errorMessage
 
 
 def validate_barcoding_for_new_sampleset(request, queryDict):
@@ -459,4 +503,22 @@ def validate_barcodekit_and_id_str(barcodeKit, barcode_id_str):
 
     return isValid, errorMessage, item
   
+
+def validate_nucleotideType(nucleotideType, displayedName='Sample Nucleotide Type'):
+    """
+    validate nucleotide type case-insensitively with leading/trailing blanks in the input ignored
+    """
+    isValid = True      
+    errors = []
+    input = ""
+                    
+    if nucleotideType:
+        input = nucleotideType.strip().lower()
+                           
+        if not validation.is_valid_keyword(input, VALID_NUCLEOTIDE_TYPES):
+            errors.append(validation.invalid_keyword_error(displayedName, VALID_NUCLEOTIDE_TYPES))
+            isValid = False
+             
+    return isValid, errors, input
+
     

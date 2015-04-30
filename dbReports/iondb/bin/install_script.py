@@ -461,7 +461,9 @@ def add_ion_xpress_rna_adapter_dnabarcode_set():
     add_or_update_barcode_set(blist,btype,name,adapter)  
     return    
 
-def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff ):
+def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff, alt_barcode_prefix = None, skip_barcode_leading_zero = False):
+    print("add_or_update_barcode_set2... name=%s; alt_barcode_prefix=%s" %(name, alt_barcode_prefix))
+    
 # Attempt to read dnabarcode set named 'IonXpress' from dbase
     dnabcs = models.dnaBarcode.objects.filter(name=name)
     if len(dnabcs) > 0:
@@ -473,6 +475,19 @@ def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff 
             if len(bc_found) > 1:
                 print "ERROR: More than one entry with sequence %s" % sequence
                 print "TODO: Fix this situation, Mr. Programmer!"
+
+            # Make sure id string has zero padded index field if skip_barcode_leading_zero is not true
+            if alt_barcode_prefix:
+                if skip_barcode_leading_zero:
+                    barcode_name = '%s%d' % (alt_barcode_prefix,index)
+                else:
+                    barcode_name = '%s%02d' % (alt_barcode_prefix,index)
+            else:
+                if skip_barcode_leading_zero:
+                    barcode_name = '%s_%d' % (name,index) 
+                else:     
+                    barcode_name = '%s_%02d' % (name,index)
+                            
             if len(bc_found) == 1:
 
                 #print "%s dnaBarcode sequence %s already in the database" % (name, sequence)  
@@ -480,9 +495,8 @@ def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff 
                 # Make sure floworder field is not 'none'
                 if bc_found[0].floworder == 'none':
                     bc_found[0].floworder = ''
-                    
-                # Make sure id string has zero padded index field
-                bc_found[0].id_str = '%s_%02d' % (name,index)
+             
+                bc_found[0].id_str = barcode_name
                 
                 # update type
                 bc_found[0].type = btype
@@ -494,7 +508,7 @@ def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff 
                 #print "Adding entry for %s" % sequence
                 kwargs = {
                     'name':name,
-                    'id_str':'%s_%02d' % (name,index),
+                    'id_str': barcode_name,
                     'sequence':sequence,
                     'type':btype,
                     'length':len(sequence),
@@ -511,9 +525,20 @@ def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff 
         # Add the barcodes because they do not exist.
         # NOTE: name for id_str
         for index,sequence in enumerate(blist,start=1):
+            if alt_barcode_prefix:
+                if skip_barcode_leading_zero:
+                    barcode_name = '%s%d' % (alt_barcode_prefix,index)
+                else:
+                    barcode_name = '%s%02d' % (alt_barcode_prefix,index)
+            else:
+                if skip_barcode_leading_zero:
+                    barcode_name = '%s_%d' % (name,index) 
+                else:     
+                    barcode_name = '%s_%02d' % (name,index)
+            
             kwargs = {
                 'name':name,
-                'id_str':'%s_%02d' % (name,index),
+                'id_str': barcode_name,
                 'sequence':sequence,
                 'type':btype,
                 'length':len(sequence),
@@ -563,6 +588,34 @@ def add_or_update_ion_dnabarcode_set():
     add_or_update_barcode_set2(blist,btype,name,adapter, 0, 0.90)  
 
 
+def add_or_update_ion_select_dnabarcode_set():
+    '''Add barcode kit Ion Select BC Set-1 List for TS-10595 
+    '''
+    blist=[
+        "CTAAGGTAAC",
+        "TTACAACCTC",
+        "CCTGCCATTCGC",
+        "TGGAGGACGGAC",
+        "TGAGCGGAAC",
+        "CCTTAGAGTTC",
+        "TCCTCGAATC",
+        "AACCTCATTC",
+        "CGGACAATGGC",
+        "TCCTGAATCTC",
+        "TAAGCCATTGTC",
+        "CTGAGTTCCGAC",
+        "CGGAAGAACCTC",
+        "TCTTACACAC",
+        "AAGGAATCGTC",
+        "TAGGTGGTTC"]
+    btype=''
+    name='Ion Select BC Set-1'
+    adapter = 'GAT'
+    barcode_prefix = "IonSelect-"
+
+    #This Select barcode kit has been released with no leading zero padding         
+    add_or_update_barcode_set2(blist, btype, name, adapter, 1, 2.00, barcode_prefix, True)  
+    
 def ensure_dnabarcodes_have_id_str():
     #For the 1.5 release, we are adding the id_str field to each dnabarcode record.
     allbarcodes = models.dnaBarcode.objects.all()
@@ -930,8 +983,24 @@ if __name__=="__main__":
     except:
         print 'Adding dnaBarcodeset: IonXpress_RNA failed'
         print traceback.format_exc()
-        sys.exit(1)            
-        
+        sys.exit(1)
+
+    try:
+        add_or_update_ion_select_dnabarcode_set()
+        ensure_dnabarcodes_have_id_str()    # for existing barcode records        
+    except:
+        print 'Adding dnaBarcodeset: IonSelect failed'
+        print traceback.format_exc()
+        sys.exit(1)
+
+
+#     try:
+#         add_or_update_singleSeq_dnabarcode_set()
+#         ensure_dnabarcodes_have_id_str()    # for existing barcode records        
+#     except:
+#         print 'Adding dnaBarcodeset: SingleSeq failed'
+#         print traceback.format_exc()
+#         sys.exit(1)
 
 #    try:
 #        add_ThreePrimeadapter('Forward', 'Ion P1B', 'ATCACCGACTGCCCATAGAGAGGCTGAGAC', 'Default forward adapter', True)

@@ -19,6 +19,7 @@ class IonReporterFieldNames():
     IR_WORKFLOW = 'irworkflow'
     IR_VERSION = "irVersion"
     APPLICATION_TYPE = 'applicationType'
+    CATEGORIES = "categories"
 
 
 class IonreporterStepData(AbstractStepData):
@@ -40,6 +41,7 @@ class IonreporterStepData(AbstractStepData):
         self.savedFields[IonReporterFieldNames.IR_ACCOUNT_NAME] = 'None'
         self.savedFields[IonReporterFieldNames.APPLICATION_TYPE] = ''
 
+        self.prepopulatedFields[IonReporterFieldNames.CATEGORIES] = ''
         try:
             self.prepopulatedFields[IonReporterFieldNames.IR_PLUGIN] = Plugin.objects.get(name__iexact='IonReporterUploader', active=True)
         except Exception, e:

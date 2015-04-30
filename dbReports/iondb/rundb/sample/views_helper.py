@@ -11,6 +11,10 @@ from traceback import format_exc
 import json
 import simplejson
 
+try:
+    from collections import OrderedDict
+except ImportError:
+    from ordereddict import OrderedDict
 
 from iondb.rundb import models
 
@@ -211,15 +215,13 @@ def _create_or_update_sample_for_sampleSetItem_with_id_values(request, user, sam
             else:
                 #create a new sample record
                 sample_kwargs = {
-                                 'name' : name,
                                  'displayedName' : sampleDisplayedName,
-                                 'externalId': sampleExternalId,
                                  'description': sampleDesc,
                                  'status' : "created",
                                  'date' : currentDateTime,
                                  }
 
-                sample = Sample.objects.get_or_create(displayedName = sampleDisplayedName, externalId=sampleExternalId, defaults=sample_kwargs)[0]
+                sample = Sample.objects.get_or_create(name = name, externalId=sampleExternalId, defaults=sample_kwargs)[0]
 
                 orig_sampleSetItem.sample = sample
 
@@ -255,15 +257,13 @@ def _create_or_update_sample_for_sampleSetItem_with_values(request, user, sample
         name = sampleDisplayedName.replace(' ', '_')
 
         sample_kwargs = {
-                         'name' : name,
                          'displayedName' : sampleDisplayedName,
-                         'externalId': sampleExternalId,
                          'description': sampleDesc,
                          'status' : "created",
                          'date' : currentDateTime,
                          }
 
-        sample = Sample.objects.get_or_create(displayedName = sampleDisplayedName, externalId=sampleExternalId, defaults=sample_kwargs)[0]
+        sample = Sample.objects.get_or_create(name = name, externalId=sampleExternalId, defaults=sample_kwargs)[0]
                         
         logger.debug("views_helper._create_or_update_sample_for_sampleSetItem_with_values() #10 create new sample.id=%d; name=%s" %(sample.id, sample.displayedName))
 
@@ -364,6 +364,8 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     cancerType = queryDict.get("cancerType", "")
     cellularityPct = queryDict.get("cellularityPct", None)
                 
+    nucleotideType = queryDict.get("nucleotideType", "")
+    
     isValid, errorMessage, sampleAttributes_dict = _create_pending_sampleAttributes_for_sampleSetItem(request)
     
     if errorMessage:
@@ -383,6 +385,7 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['barcode'] = barcode
     sampleSetItem_dict['status'] = "created"
 
+    sampleSetItem_dict['nucleotideType'] = nucleotideType
     sampleSetItem_dict['gender'] = gender
     sampleSetItem_dict['relationshipRole'] = relationshipRole
     sampleSetItem_dict['relationshipGroup'] = relationshipGroup
@@ -418,6 +421,7 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     relationshipRole = queryDict.get("relationshipRole", "")
     relationshipGroup = queryDict.get("relationshipGroup", None)
 
+    nucleotideType = queryDict.get("nucleotideType", "")
     cancerType = queryDict.get("cancerType", "")
     cellularityPct = queryDict.get("cellularityPct", None)   
 
@@ -440,6 +444,7 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['description'] = sampleDesc
     sampleSetItem_dict['status'] = "created"
 
+    sampleSetItem_dict['nucleotideType'] = nucleotideType
     sampleSetItem_dict['gender'] = gender
     sampleSetItem_dict['relationshipRole'] = relationshipRole
     sampleSetItem_dict['relationshipGroup'] = relationshipGroup
@@ -623,8 +628,8 @@ def _create_or_update_sampleAttributes_for_sampleSetItem_with_values(request, us
                         existingAttributeValue.save()
                         logger.debug("views_helper - _create_or_update_sampleAttributes_for_sampleSetItem_with_values - #7 UPDATED with None!! attributeValue.id=%d;" %(attributeValue.id))                                                                        
               
-
-def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct):
+def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, \
+                                            selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType):
     currentDateTime = timezone.now()  ##datetime.datetime.now()      
     
     if selectedBarcode:
@@ -634,17 +639,20 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
         
     for sampleSet_id in sampleSet_ids:
         sampleSet = get_object_or_404(SampleSet, pk = sampleSet_id)        
-    
-        sampleSetItems = SampleSetItem.objects.filter(sampleSet = sampleSet, sample = sample)
+        sampleSetItems = SampleSetItem.objects.filter(sampleSet = sampleSet, sample = sample, dnabarcode = dnabarcode, nucleotideType = sampleNucleotideType)
 
         relationshipGroup = int(sampleRelationshipGroup) if sampleRelationshipGroup else 0
         
         if sampleSetItems.count() > 0:
-            sampleSetItem = sampleSetItems[0]
-            if sampleSetItem.gender == sampleGender and sampleSetItem.relationshipRole == sampleRelationshipRole and sampleSetItem.relationshipGroup == relationshipGroup and sampleSetItem.cancerType == sampleCancerType and sampleSetItem.cellularityPct == sampleCellularityPct :
-                logger.debug("views_helper - _create_or_update_pending_sampleSetItem NO change for sampleSetItem.id=%d" %(sampleSetItem.id))
-            else:
-                    
+            need_update = True
+            for sampleSetItem in sampleSetItems:
+                if sampleSetItem.gender == sampleGender and sampleSetItem.relationshipRole == sampleRelationshipRole and sampleSetItem.relationshipGroup == relationshipGroup and \
+                    sampleSetItem.cancerType == sampleCancerType and sampleSetItem.cellularityPct == sampleCellularityPct and sampleSetItem.dnabarcode == dnabarcode and \
+                    sampleSetItem.nucleotideType == sampleNucleotideType:
+                    logger.debug("views_helper - _create_or_update_pending_sampleSetItem NO UPDATE NEEDED for sampleSetItem.id=%d" %(sampleSetItem.id))
+                    need_update = False
+                
+            if need_update:
                 sampleSetItem_kwargs = {
                                         'gender' : sampleGender,
                                         'relationshipRole' : sampleRelationshipRole,
@@ -653,6 +661,7 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                         'cellularityPct' : sampleCellularityPct,
                                         # 'barcode' : selectedBarcode,  ##SAM MOHAMED: WE ARE USING THE PK OF DNABARCODE 
                                         'dnabarcode' : dnabarcode,
+                                        'nucleotideType' : sampleNucleotideType,
                                         'lastModifiedUser' : user,                     
                                         'lastModifiedDate' : currentDateTime   
                                         }
@@ -668,8 +677,7 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                      'relationshipGroup' : relationshipGroup,
                                      'cancerType' : sampleCancerType,
                                      'cellularityPct' : sampleCellularityPct,                                        
-                                     # 'barcode' : selectedBarcode,  ##SAM MOHAMED: WE ARE USING THE PK OF DNABARCODE 
-                                     'dnabarcode' : dnabarcode,                                  
+                                     # 'barcode' : selectedBarcode,  ##SAM MOHAMED: WE ARE USING THE PK OF DNABARCODE                                                                      
                                      'creator' : user,
                                      'creationDate' : currentDateTime,
                                      'lastModifiedUser' : user,
@@ -677,9 +685,11 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                  }
 
             logger.debug("_create_or_update_pending_sampleSetItem - sampleSetItem_kwargs=%s" %(sampleSetItem_kwargs))
-            
+
             sampleSetItem, isCreated = SampleSetItem.objects.get_or_create(sample = sample, 
                                                                            sampleSet_id = sampleSet_id, 
+                                                                           dnabarcode = dnabarcode,
+                                                                           nucleotideType = sampleNucleotideType,
                                                                            defaults = sampleSetItem_kwargs)
     
             logger.debug("views_helper._create_or_update_pending_sampleSetItem() after get_or_create isCreated=%s; sampleSetItem=%s; samplesetItem.id=%d" %(str(isCreated), sample.displayedName, sampleSetItem.id))
@@ -709,26 +719,45 @@ def _create_or_update_sampleSetItem(request, user, sample):
     selectedDnaBarcode = None
     if selectedBarcodeKitName and selectedBarcode:
         selectedDnaBarcode = models.dnaBarcode.objects.get(name = selectedBarcodeKitName, id_str = selectedBarcode)    
-       
-    if sampleSetItem.gender == gender and sampleSetItem.relationshipRole == relationshipRole and str(sampleSetItem.relationshipGroup) == str(relationshipGroup) and (sampleSetItem.dnabarcode == selectedDnaBarcode) and sampleSetItem.cancerType == cancerType and (sampleSetItem.cellularityPct == cellularityPct):
+
+    selectedNucleotideType = queryDict.get("nucleotideType", "").strip()
+    
+    if sampleSetItem.gender == gender and sampleSetItem.relationshipRole == relationshipRole and str(sampleSetItem.relationshipGroup) == str(relationshipGroup) and \
+        (sampleSetItem.dnabarcode == selectedDnaBarcode) and sampleSetItem.cancerType == cancerType and (sampleSetItem.cellularityPct == cellularityPct) and \
+        (sampleSetItem.nucleotideType == selectedNucleotideType):
         logger.debug("views_helper - _create_or_update_sampleSetItem NO change for sampleSetItem.id=%d" %(sampleSetItem.id))
     else:
-            
-        sampleSetItem_kwargs = {
-                                'gender' : gender,
-                                'relationshipRole' : relationshipRole,
-                                'relationshipGroup' : relationshipGroup, 
-                                'dnabarcode' : selectedDnaBarcode,
-                                'cancerType' : cancerType,
-                                'cellularityPct' : cellularityPct,                 
-                                'lastModifiedUser' : user,                     
-                                'lastModifiedDate' : currentDateTime   
-                                }
-        for field, value in sampleSetItem_kwargs.iteritems():
-            setattr(sampleSetItem, field, value)
+        isValid, errorMessage = sample_validator.validate_samplesetitem_update_for_existing_sampleset(sampleSetItem, sample, selectedDnaBarcode, selectedNucleotideType)
+        if isValid:            
+            sampleSetItem_kwargs = {
+                                    'gender' : gender,
+                                    'relationshipRole' : relationshipRole,
+                                    'relationshipGroup' : relationshipGroup,
+                                    'dnabarcode' : selectedDnaBarcode,
+                                    'cancerType' : cancerType,
+                                    'cellularityPct' : cellularityPct,
+                                    'nucleotideType' : selectedNucleotideType,
+                                    'lastModifiedUser' : user,
+                                    'lastModifiedDate' : currentDateTime
+                                    }
+            for field, value in sampleSetItem_kwargs.iteritems():
+                setattr(sampleSetItem, field, value)
 
-        logger.debug("views_helper._create_or_update_sampleSetItem sampleSetItem_kwargs=%s" %(sampleSetItem_kwargs)) 
-                
-        sampleSetItem.save()                   
-        logger.debug("views_helper - _create_or_update_sampleSetItem UPDATED for sampleSetItem.id=%d" %(sampleSetItem.id))
+            logger.debug("views_helper._create_or_update_sampleSetItem sampleSetItem_kwargs=%s" %(sampleSetItem_kwargs)) 
+
+            sampleSetItem.save()
+            logger.debug("views_helper - _create_or_update_sampleSetItem UPDATED for sampleSetItem.id=%d" %(sampleSetItem.id))
+        else:
+            return isValid, errorMessage
+        
+    return True, None
+
+
+def _get_nucleotideType_choices(request):
+    nucleotideType_tuple = SampleSetItem.get_nucleotideType_choices()        
+    nucleotideType_choices = OrderedDict()
+    for i, (internalValue, displayedValue) in enumerate(nucleotideType_tuple):
+        nucleotideType_choices[internalValue] = displayedValue
+
+    return nucleotideType_choices
 

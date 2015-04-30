@@ -66,6 +66,7 @@ class SavePlanFieldNames():
     IR_DOWN = 'irDown'
     IR_RELATION_ROLE = 'irRelationRole'
     IR_RELATIONSHIP_TYPE = 'irRelationshipType'
+    IR_APPLICATION_TYPE = 'ApplicationType'
     IR_SET_ID = 'irSetID'
 
     BAD_SAMPLE_NAME = 'bad_sample_name'
@@ -113,6 +114,7 @@ class SavePlanFieldNames():
 
     LIMS_META = 'LIMS_meta'
     META = 'meta'
+    APPLICATION_GROUP_NAME = "applicationGroupName"
 
 class MonitoringFieldNames():
     QC_TYPES = 'qcTypes'
@@ -171,6 +173,8 @@ class SavePlanStepData(AbstractStepData):
 
         self.savedFields[SavePlanFieldNames.LIMS_META] = None
         self.savedFields[SavePlanFieldNames.META] = {}
+
+        self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME] = "" 
         
         self._dependsOn.append(StepNames.IONREPORTER)
         self._dependsOn.append(StepNames.APPLICATION)
@@ -230,7 +234,8 @@ class SavePlanStepData(AbstractStepData):
                 isTargetRegionSelectionRequired = applProduct.isTargetRegionBEDFileSelectionRequiredForRefSelection
             else:
                 isTargetRegionSelectionRequired = False
-                
+
+            applicationGroupName = self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME]        
             for row in sample_table_list:
                                
                 sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
@@ -245,7 +250,7 @@ class SavePlanStepData(AbstractStepData):
                     errors = []
                     #if the plan has been sequenced, do not enforce the target bed file to be selected
                     if planStatus != "run":  
-                        errors = validate_targetRegionBedFile_for_runType(sampleTargetRegionBedFile, runType, sampleReference, sample_nucleotideType, "Target Regions BED File for " + sample_name)
+                        errors = validate_targetRegionBedFile_for_runType(sampleTargetRegionBedFile, runType, sampleReference, sample_nucleotideType, applicationGroupName, "Target Regions BED File for " + sample_name)
 
                     if errors:
                         samples_errors.append('\n'.join(errors))
@@ -368,7 +373,7 @@ class SavePlanStepData(AbstractStepData):
         #logger.debug("save_plan_step_data.updateSavedObjectsFromSavedFields() AFTER JSON.LOADS... type(self.savedObjects[samplesTableList])=%s; self.savedObjects[samplesTableList]=%s" %(type(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]), self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]))       
 
         if self.savedFields[SavePlanFieldNames.BARCODE_SET]:
-            planned_dnabarcodes = list(dnaBarcode.objects.filter(name=self.savedFields[SavePlanFieldNames.BARCODE_SET]).order_by('id_str'))
+            planned_dnabarcodes = list(dnaBarcode.objects.filter(name=self.savedFields[SavePlanFieldNames.BARCODE_SET]).order_by('index'))
             self.prepopulatedFields[SavePlanFieldNames.PLAN_DNA_BARCODES] = planned_dnabarcodes
 
             planReference = self.prepopulatedFields[SavePlanFieldNames.PLAN_REFERENCE]
@@ -467,9 +472,10 @@ class SavePlanStepData(AbstractStepData):
                                                                             
                         SavePlanFieldNames.CANCER_TYPE        : row.get(SavePlanFieldNames.IR_CANCER_TYPE, ""),
                         SavePlanFieldNames.CELLULARITY_PCT    : row.get(SavePlanFieldNames.IR_CELLULARITY_PCT, ""),
-                                                    
+
                         SavePlanFieldNames.RELATION_ROLE      : row.get(SavePlanFieldNames.IR_RELATION_ROLE,''),
                         SavePlanFieldNames.RELATIONSHIP_TYPE  : row.get(SavePlanFieldNames.IR_RELATIONSHIP_TYPE,''),
+                        SavePlanFieldNames.IR_APPLICATION_TYPE: row.get(SavePlanFieldNames.IR_APPLICATION_TYPE,''),
                         SavePlanFieldNames.SET_ID             : row.get(SavePlanFieldNames.IR_SET_ID, '')
                     }
 
@@ -538,7 +544,7 @@ class SavePlanStepData(AbstractStepData):
             if str(barcode_set) != str(self.savedFields[SavePlanFieldNames.BARCODE_SET]):
                 self.savedFields[SavePlanFieldNames.BARCODE_SET] = barcode_set
                 if barcode_set:
-                    barcodes = list(dnaBarcode.objects.filter(name=barcode_set).order_by('id_str'))
+                    barcodes = list(dnaBarcode.objects.filter(name=barcode_set).order_by('index'))
                     self.prepopulatedFields[SavePlanFieldNames.PLAN_DNA_BARCODES] = barcodes
 
                     bc_count = min(len(barcodes), len(self.savedObjects[SavePlanFieldNames.SAMPLES_TABLE_LIST]))

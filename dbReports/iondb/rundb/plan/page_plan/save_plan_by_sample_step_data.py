@@ -2,6 +2,7 @@
 from iondb.rundb.plan.page_plan.abstract_step_data import AbstractStepData
 from iondb.rundb.models import dnaBarcode, Plugin, QCType
 from iondb.rundb.plan.page_plan.step_names import StepNames
+from iondb.rundb.plan.page_plan.save_plan_step_data import SavePlanFieldNames
 from iondb.rundb.plan.plan_validator import validate_plan_name, validate_notes, validate_QC
 try:
     from collections import OrderedDict
@@ -41,7 +42,9 @@ class SavePlanBySampleStepData(AbstractStepData):
 
         self.savedFields[SavePlanBySampleFieldNames.LIMS_META] = None
         self.savedFields[SavePlanBySampleFieldNames.META] = {}
-        
+
+        self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = "" 
+        self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME] = ""     
         
         self.sh_type = sh_type
 

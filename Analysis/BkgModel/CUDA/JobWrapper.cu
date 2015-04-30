@@ -271,12 +271,7 @@ float WorkSet::getMaxEmphasis()
 
 bool WorkSet::useDynamicEmphasis()
 {
-  if (ChipIdDecoder::IsProtonChip())
-    return true;
-  else
-    return false;
-
-
+  return true;
 }
 
 

@@ -830,8 +830,9 @@ def runForBarcodes():
     if not os.path.exists(bcbam):
       bcBamFile.append(": BAM file not found")
       continue
-    if os.stat(bcbam).st_size < minFileSize:
+    if os.stat(bcbam).st_size < minBamSize:
       bcBamFile.append(": BAM file too small")
+      numBamSmall += 1
       continue
     bedfile = target_files.get(barcode,'')
     if not bedfile:
@@ -850,7 +851,7 @@ def runForBarcodes():
     ckbb = checkBamBed(bcbam,bedfile)
     if ckbb:
       bcBamFile.append(":\nERROR: "+ckbb)
-      ++numInvalidBarcodes;
+      numInvalidBarcodes += 1
       continue
     if( len(barcode) > maxBarcodeLen ):
       maxBarcodeLen = len(barcode)

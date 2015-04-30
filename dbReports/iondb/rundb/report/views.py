@@ -744,14 +744,13 @@ def _report_context(request, report_pk):
 
 
     eas_reference = report.eas.reference
-    barcodedSamples_reference_names = ""
     barcodedSamples_reference_name_count = 0
-    if not eas_reference:
-        barcodedSamples_reference_names = report.eas.get_barcoded_samples_reference_names()
-        if barcodedSamples_reference_names:
-            eas_reference = barcodedSamples_reference_names[0]
-            barcodedSamples_reference_name_count = len(barcodedSamples_reference_names)
-            
+
+    barcodedSamples_reference_names = report.eas.get_barcoded_samples_reference_names()
+    if barcodedSamples_reference_names:
+        eas_reference = barcodedSamples_reference_names[0]
+        barcodedSamples_reference_name_count = len(barcodedSamples_reference_names)
+
     #Alignment
     try:
         reference = models.ReferenceGenome.objects.filter(short_name = eas_reference).order_by("-index_version")[0]
@@ -1901,11 +1900,17 @@ def reanalyze(request, exp, eas, plugins_list, start_from_report=None):
             barcodedReferences = eas_form.cleaned_data.get('barcodedReferences')
             if barcodedReferences:
                 barcodedReferences = json.loads(barcodedReferences)
-                for sample in barcodedSamples.values():
-                    for barcode, info in sample.get('barcodeSampleInfo',{}).items():
-                        info['reference'] = barcodedReferences[barcode]['reference'] if barcodedReferences[barcode]['reference'] != 'none' else ''
-                        info['nucleotideType'] = barcodedReferences[barcode]['nucType']
-            
+                if barcodedReferences.get('unsupported', False):
+                    # changing Barcode set on re-analysis page invalidates previous samples selection
+                    barcodedSamples = {}
+                else:
+                    for sample in barcodedSamples.values():
+                        for barcode, info in sample.get('barcodeSampleInfo',{}).items():
+                            info['reference'] = barcodedReferences[barcode]['reference'] if barcodedReferences[barcode]['reference'] != 'none' else ''
+                            info['targetRegionBedFile'] = barcodedReferences[barcode]['targetRegionBedFile']
+                            info['hotSpotRegionBedFile'] = barcodedReferences[barcode]['hotSpotRegionBedFile']
+                            #info['nucleotideType'] = barcodedReferences[barcode]['nucType']
+
             eas_kwargs = {
                 'libraryKey': rpf.cleaned_data['libraryKey'] or globalConfig.default_library_key,
                 'tfKey': rpf.cleaned_data['tfKey'] or globalConfig.default_test_fragment_key,

@@ -2001,7 +2001,7 @@ class SampleSetItem(models.Model):
     cellularityPct = models.IntegerField(blank = True, null = True)
 
     ALLOWED_NUCLEOTIDE_TYPES = (
-        ('', 'Any'),
+        ('', 'Unspecified'),
         ('dna', 'DNA'),
         ('rna', 'RNA')
     )
@@ -2012,6 +2012,11 @@ class SampleSetItem(models.Model):
     #removed by Sam Mohamed, we are replacing with a foreign key to the
     #dnaBarcode table
     # barcode = models.CharField(max_length = 128, blank = True, null = True)
+
+    @staticmethod
+    def get_nucleotideType_choices():
+        return SampleSetItem.ALLOWED_NUCLEOTIDE_TYPES
+
 
     def __unicode__(self):
         return u'%s/%s/%d' % (self.sampleSet, self.sample, self.relationshipGroup)
@@ -3143,19 +3148,62 @@ class Chip(models.Model):
             return self.name;
 
 
-    def getChipDisplayedNamePrefix(self):
-        value = self.getChipDisplayedName()
-        
-        parts = value.rsplit("v", 1)
-        return parts[0]
-
     def getChipDisplayedVersion(self):
         value = self.getChipDisplayedName()
         
-        parts = value.rsplit("v", 1)
+        parts = value.split("v", 1)
         return "v"+ parts[1]  if len(parts) > 1 else ""
 
+    def getChipDisplayedNamePrimaryPrefix(self):
+        """
+        Returns all the primary chip displayed name for UI to display 
+        e.g., for chip name "318 Select", return 318
+        """
+        isVersionInfoFound, prefixes = Chip.getChipDisplayedNameParts(self.getChipDisplayedName())
+        
+        return prefixes[0]
 
+    def getChipDisplayedNameSecondaryPrefix(self):
+        """
+        Returns all the second portion of the chip displayed name for UI to display 
+        e.g., for chip name "318 Select", return "Select"
+        """
+        isVersionInfoFound, prefixes = Chip.getChipDisplayedNameParts(self.getChipDisplayedName())
+        
+        return prefixes[-1] if len(prefixes) > 1 else ""
+
+    @staticmethod    
+    def getChipDisplayedNameParts(value):
+        """
+        Returns all the relevant parts of the chip displayed name for UI to display
+        If value is "318v2 Select", this API will skip version info and return "318" and "Select"
+        """
+        
+        parts = value.split("v", 1)
+        isVersionInfoFound = True if len(parts) > 1 else False
+        index = len(parts) - 1
+        if index >= 0:
+            parts2 = parts[index].rsplit(" ", 1)
+            
+            parts3 = []
+                                    
+            if len(parts2) > 1:
+                if isVersionInfoFound:
+                    parts3.append(parts[0])
+
+                for i, part in enumerate(parts2):
+                    if isVersionInfoFound:
+                        if i > 0:
+                            parts3.append(part)
+                    else:
+                        parts3.append(part)
+
+                return isVersionInfoFound, parts3
+            else:
+                parts3.append(parts[0])
+    
+        return isVersionInfoFound, parts3
+        
 class GlobalConfig(models.Model):
     name = models.CharField(max_length=512)
     selected = models.BooleanField()

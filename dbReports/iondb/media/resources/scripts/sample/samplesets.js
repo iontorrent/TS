@@ -546,7 +546,10 @@ function detailInit(e) {
 						},
 						cellarlarityPct: {
 							type : "number"
-						}						
+						},
+                        nucleotideType: {
+                            type : "string"
+                        }
 					}
 				}
 			},
@@ -673,7 +676,12 @@ function getColumns() {
          field: "sampleDescription",
          title: "Description",        
          sortable: false,
-         //template: kendo.template($('#sample_barcoding_id_kendo_template').html())         
+         //template: kendo.template($('#sample_barcoding_id_kendo_template').html())    
+     } , {       
+         field: "nucleotideType",
+         title: "DNA/RNA",
+         sortable: true,
+         template: kendo.template($('#sample_nucleotideType_kendo_template').html())  
      } , {    	 
          field: "gender",
          title: "Gender",       

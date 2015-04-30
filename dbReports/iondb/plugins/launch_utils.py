@@ -101,8 +101,8 @@ def depsolve(plugins, pk):
         for dependency in active_plugins_deps[name]:
             if dependency not in active_plugins_deps:
                 logger.error("Plugin %s requested dependency on %s, which isn't installed", name, dependency)
-                del plugins[name]
-                break
+                #del plugins[name]
+                #break
             if dependency not in plugin_names:
                 plugin_names.append(dependency)
         else:
@@ -125,13 +125,13 @@ def depsolve(plugins, pk):
                     'version': pr[0].plugin.version,
                     'pluginresult_path': pr[0].path()
                 }
-            else:
-                # add dependency plugin to be launched
-                try:
-                    p = active_plugins.get(name=name)
-                    plugins.update(get_plugins_dict([p]))
-                except Plugin.DoesNotExist:
-                    logger.exception("Plugin requested dependency on %s, which isn't installed", name)
+            # else:
+            #     # add dependency plugin to be launched
+            #     try:
+            #         p = active_plugins.get(name=name)
+            #         plugins.update(get_plugins_dict([p]))
+            #     except Plugin.DoesNotExist:
+            #         logger.exception("Plugin requested dependency on %s, which isn't installed", name)
 
             
     return plugins, sorted_names, satisfied_dependencies

@@ -286,33 +286,36 @@ $(function () {
   // Uses button names for type string
   function standardPlot(type) {
     if( plotStats.numFields <= 1 ) return;
-    plotParams.readAxis = 1; // 99.9%
     plotParams.barType = 1;  // bar
     plotParams.barAxis = 1;  // %
     plotParams.plotType = 1; // line
-    plotParams.plotAxis = 1; // %
-    plotParams.binSize = plotStats.binSizeDef; // auto
     plotParams.include0x = true;
     plotParams.showLegend = true;
     if( type == "Full" ) {
-      plotParams.readAxis = 0; // full
+      $('.DOC-hideFilter').show();
+      plotParams.readAxis = 0;
+    } else if( type == "View" ) {
+      plotParams.readAxis = 1;
       $('.DOC-hideFilter').show();
     } else if( type == "Mean" ) {
       $('.DOC-hideFilter').hide();
-      plotParams.readAxis = 2; // mean normalized
-      plotParams.barType = 0;  // hidden
-      plotParams.binSize = 1;  // use 0 to turn on density plot
+      plotParams.readAxis = 2;
+      plotParams.barType = 0; // hidden
       plotParams.showLegend = false;
-    } else if( type == "View" ) {
-      $('.DOC-hideFilter').show();
-      if( 2 * plotStats.cov999x <= plotStats.maxX ) {
-        plotParams.binSize = roundBinSize(plotStats.cov999x);
-      }
     }
+    plotParams.binSize = autoBinSize();
     updateBinSizeUsed(plotParams.binSize);
     updateGUIPlotParams();
     updatePlotTitles();
     updatePlot(true);
+  }
+
+  function autoBinSize() {
+    if( plotParams.readAxis > 1 ) return 1;
+    if( plotParams.readAxis == 1 && 2 * plotStats.cov999x <= plotStats.numPoints ) {
+       return roundBinSize(plotStats.cov999x);
+    }
+    return plotStats.binSizeDef;
   }
 
   function updateGUIPlotParams() {
@@ -330,7 +333,7 @@ $(function () {
   $('#DOC-binSize').change(function() {
     var val = $.trim(this.value);
     if( val == '' ) {
-      this.value = plotParams.binSize = plotStats.binSizeDef;  // reset to auto
+      this.value = plotParams.binSize = autoBinSize();  // reset to auto
     } else if( isNaN(val) || val < 0 ) {
       this.value = plotParams.binSize; // reset to current value
     } else {

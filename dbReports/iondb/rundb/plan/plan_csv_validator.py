@@ -788,9 +788,11 @@ def _validate_sample_target_bed(input, runType, sampleReference, selectedTemplat
             
         #validate to ensure mandatory targetBedFile rule, if present, is satisfied
         bedFile = input if isKeywordFound else planTargetRegion
-        errors = validate_targetRegionBedFile_for_runType(bedFile, runType, selectedReference, nucleotideType)
+        applicationGroupName = selectedTemplate.applicationGroup.name if selectedTemplate and selectedTemplate.applicationGroup else ""
 
-        logger.debug("_validate_sample_target_bed() isMixedTypeRNA=%s; isKeywordFound=%s; planReference=%s; selectedReference=%s; planTargetRegion=%s; bedFile=%s" %(str(isMixedTypeRNA), str(isKeywordFound), planReference, selectedReference, planTargetRegion, bedFile))
+        errors = validate_targetRegionBedFile_for_runType(bedFile, runType, selectedReference, nucleotideType, applicationGroupName)
+
+        logger.debug("_validate_sample_target_bed()  runType=%s; applicationGroupName=%s; isMixedTypeRNA=%s; isKeywordFound=%s; planReference=%s; selectedReference=%s; planTargetRegion=%s; bedFile=%s" %(runType, applicationGroupName, str(isMixedTypeRNA), str(isKeywordFound), planReference, selectedReference, planTargetRegion, bedFile))
  
         if errors:
             errorMsg = '  '.join(errors)
@@ -1210,12 +1212,14 @@ def _validate_barcodedSamples_collectively(barcodedSampleJson, selectedTemplate,
     unique_nucleotideType_count = len(set(planObj.get_nucleotideTypeList()))
         
     ##if (runType == "AMPS_DNA_RNA" and applicationGroup == "DNA + RNA"):
-    if (runType == "AMPS_DNA_RNA"):        
-        if (unique_sampleName_count > 2 or unique_sampleId_count > 2):
-            errorMsg = "Only up to two samples are allowed for this plan creation. "
-        if (unique_nucleotideType_count != 2):
-            errorMsg = errorMsg + "Both DNA and RNA nucleotide types are needed for this plan creation"
-
+    if (runType == "AMPS_DNA_RNA"):  
+        #we now allow mixed types for AMPS_DNA_RNA 
+        #if (unique_sampleName_count > 2 or unique_sampleId_count > 2):
+        #    errorMsg = "Only up to two samples are allowed for this plan creation. "
+        #if (unique_nucleotideType_count != 2):
+        #    errorMsg = errorMsg + "Both DNA and RNA nucleotide types are needed for this plan creation"
+        logger.debug("plan_csv_validator - runType=%s; unique_nucleotideType_count=%d; unique_sampleName_count=%d; unique_sampleId_count=%d" \
+                     %(runType, unique_nucleotideType_count, unique_sampleName_count, unique_sampleId_count))
     else:
         if (unique_nucleotideType_count > 2):
             errorMsg = "Mixed nucleotide types are not supported for this plan creation"
@@ -1367,6 +1371,10 @@ def _validate_barcodedSamples(input, selectedTemplate, barcodeKitName, planObj):
                     errorMsgDict[key] = '  '.join(["Sample name is required "])
                     
                 if sampleName:
+                    #If NO keyword is provided, use the default reference determined before we get to here
+                    if not foundSampleRefKeyword:
+                        sampleReference = planObj.get_easObj().reference
+                        
                     errors, ref_short_name, rna_ref_short_name, sample_nucleotideType = validate_barcoded_sample_info(applicationGroupName, runType, sampleName, sampleId, sampleNucleotideType, runType, sampleReference, sampleRnaReference)
 
                     logger.debug("validate_barcode_sample_info applicationGroupName=%s; runType=%s; sampleReference=%s; ref_short_name=%s; rna_ref_short_name=%s; sampleTargetBed=%s; sampleHotSpotBed=%s; sample_nucleotideType=%s" %(applicationGroupName, runType, sampleReference, ref_short_name, rna_ref_short_name, sampleTargetBed, sampleHotSpotBed, sample_nucleotideType))

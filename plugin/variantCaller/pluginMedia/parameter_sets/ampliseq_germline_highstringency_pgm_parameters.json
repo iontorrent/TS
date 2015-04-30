@@ -3,13 +3,13 @@
         "name"          : "Generic - PGM - Germ Line - High Stringency",
         "tooltip"       : "Optimized for allele frequencies >10% and high specificity",
         "configuration" : "germline_high_stringency",
-        "ts_version": "4.4",
+        "ts_version"    : "4.4",
         "compatibility" : {
           "chip"        : ["pgm"],
           "library"     : ["wholegenome","ampliseq","targetseq"],
           "frequency"   : ["germline"],
           "stringency"  : ["high"]
-          
+
         }
     },
     "torrent_variant_caller":{
@@ -18,7 +18,7 @@
         "hp_max_length":8,
         "filter_unusual_predictions":0.25,
         "filter_insertion_predictions": 0.2,
-        "filter_deletion_predictions": 0.2, 
+        "filter_deletion_predictions": 0.2,
         "indel_as_hpindel": 0,
 
         "snp_min_cov_each_strand":3,
@@ -41,14 +41,14 @@
         "indel_min_coverage":20,
         "indel_strand_bias":0.85,
         "indel_strand_bias_pval":1.0,
-        
+
         "hotspot_min_cov_each_strand":3,
         "hotspot_min_variant_score":10.0,
         "hotspot_min_allele_freq":0.15,
         "hotspot_min_coverage":20,
         "hotspot_strand_bias":0.95,
         "hotspot_strand_bias_pval":1.0,
-        
+
         "downsample_to_coverage":400,
         "outlier_probability":0.01,
         "do_snp_realignment":1,

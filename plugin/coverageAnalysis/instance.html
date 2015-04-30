@@ -414,8 +414,14 @@
       }
       if( libType == "WGNM" || libType == "RNA" ) {
         if( tarn > 0 || bcTargetList != "" ) {
-          var msg = "Selecting targeted regions is typically not appropriate for Library Type: " + libName;
-          msg += ". (Coverage analysis will be limited to these targets regions.)";
+          var msg = "Specifying targeted regions is typically not appropriate for Library Type: " + libName + ". ";
+          if( libType == "WGNM" ) {
+            msg += "Analysis for barcodes with targeted regions will be limited to base coverage within these regions ";
+            msg += "but the barcode/target matrix will still record reads per chromosome.";
+          } else {
+            msg += "Analysis for barcodes with targeted regions will be limited to read coverage within these regions ";
+            msg += "and the barcode/target matrix will record reads per target, or reads per contig where the target is 'None'.";
+          }
           msg += "\n\nDo you wish to continue?";
           if( !confirm(msg) ) return false;
         }
@@ -569,9 +575,19 @@ reported over the specified target regions. Typically a Targeted Regions selecti
 for enriched library types and set to 'None' for Whole Genome runs.
 (The default selections will match those defined by the Run Plan for this report.)</p>
     <p>
-If the option for Barcode-specific Targets is presented you may check this option to use and further specify Targeted Regions
-for analysis of reads associated with specific barcode IDs. If the planned Library Type is AmpliSeq DNA/RNA only targets for
-the references of pre-specified barcodes may be employed.</p>
+If the option for Barcode-specific Targets is presented you may check this option to specify and employ different target
+regions for particular barcodes. Individual barcode reports will depend on the type of reference (DNA/RNA) and whether
+a specific target region is employed. A barcode-specific target explicitly set to 'None' will be excluded from analysis
+if the default target, Target Regions, is specified. If Target Regions is set to 'None' barcode-specific explicitly set
+to 'None' or left unspecified will either be excluded from analysis or assumes whole contig targets depending on whether
+whether the library type requires targets or not.</p>
+    <p>
+The barcode/target matrix produced depends on the library type selected. For Whole Genome analysis this will report the
+reads per chromosome for all barcodes, even if barcode-specific targets are specified. For Generic Sequencing analysis
+this will report mean base read depth per target, even if the targets default to whole contigs. This is the same data
+as produced by TargetSeq analysis except that barcodes without target regions are totally excluded from the analysis.
+For other library types the barcode/target matrix will report reads per target, which are either whole contigs or
+assumed to be produced by PCR amplification.</p>
     <p>
 The SampleID Tracking option is recommended if your AmpliSeq panel was 'spiked' with SampleID sample tracking targets.
 This will inform the analysis to produce an extra statistic for reads mapped to these targets so that

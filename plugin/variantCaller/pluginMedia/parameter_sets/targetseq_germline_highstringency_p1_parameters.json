@@ -3,13 +3,13 @@
         "name"          : "TargetSeq - Proton - Germ Line - High Stringency",
         "tooltip"       : "Parameter settings optimized for high frequency variants amd minimum false positives on TargetSeq libraries and Proton chips",
         "configuration" : "germline_high_stringency_targetseq",
-        "ts_version": "4.4",
+        "ts_version"    : "4.4",
         "compatibility" : {
           "chip"        : ["proton_p1"],
           "library"     : ["targetseq"],
           "frequency"   : ["germline"],
           "stringency"  : ["high"]
-          
+
         }
     },
     "torrent_variant_caller":{
@@ -18,37 +18,37 @@
         "hp_max_length":8,
         "filter_unusual_predictions":0.25,
         "filter_insertion_predictions": 0.2,
-        "filter_deletion_predictions": 0.2, 
+        "filter_deletion_predictions": 0.2,
         "indel_as_hpindel": 0,
 
         "snp_min_cov_each_strand":1,
         "snp_min_variant_score":10.0,
         "snp_min_allele_freq":0.10,
         "snp_min_coverage":10,
-        "snp_strand_bias":0.95, 
+        "snp_strand_bias":0.95,
         "snp_strand_bias_pval":1.0,
-        
+
         "mnp_min_cov_each_strand":1,
         "mnp_min_variant_score":10.0,
         "mnp_min_allele_freq":0.10,
         "mnp_min_coverage":10,
-        "mnp_strand_bias":0.95, 
+        "mnp_strand_bias":0.95,
         "mnp_strand_bias_pval":1.0,
-        
+
         "indel_min_cov_each_strand":5,
         "indel_min_variant_score":20.0,
         "indel_min_allele_freq":0.15,
         "indel_min_coverage":20,
         "indel_strand_bias":0.85,
         "indel_strand_bias_pval":1.0,
-        
+
         "hotspot_min_cov_each_strand":3,
         "hotspot_min_variant_score":10.0,
         "hotspot_min_allele_freq":0.15,
         "hotspot_min_coverage":20,
         "hotspot_strand_bias":0.95,
         "hotspot_strand_bias_pval":1.0,
-        
+
         "downsample_to_coverage":400,
         "outlier_probability":0.01,
         "do_snp_realignment":1,
@@ -70,7 +70,7 @@
         "short_suffix_match":5,
         "min_indel_size":4,
         "max_hp_length":8,
-        "min_var_freq":0.15, 
+        "min_var_freq":0.15,
         "relative_strand_bias":0.8,
         "output_mnv":0
     },

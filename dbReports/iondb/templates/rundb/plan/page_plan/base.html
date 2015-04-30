@@ -274,7 +274,7 @@
         
         chipNameToDisplayName = {};
         {% for chipType in helper.getStepDict.Kits.getPrePopulatedFieldDict.chipTypes %}
-            chipNameToDisplayName['{{chipType.name}}'] = 'Ion {{chipType.getChipDisplayedNamePrefix}}\u2122 Chip {{chipType.getChipDisplayedVersion}}';
+            chipNameToDisplayName['{{chipType.name}}'] = 'Ion {{chipType.getChipDisplayedNamePrimaryPrefix}}\u2122{{chipType.getChipDisplayedNameSecondaryPrefix}} Chip {{chipType.getChipDisplayedVersion}}';
         {% endfor %}
         $("#selectedChipType").text(chipNameToDisplayName['{{helper.getStepDict.Kits.getCurrentSavedFieldDict.chipType}}']);
         

@@ -1,5 +1,6 @@
 # Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
 # This script handles creating an NxN matrix of N paired correlation functions.
+# NOTE: Checks for sum(values) == 0 is used to prevent plot failures
 options(warn=1)
 
 args <- commandArgs(trailingOnly=TRUE)
@@ -51,28 +52,39 @@ panel.density <- function(x, ...) {
   usr <- par("usr")
   on.exit(par(usr))
   par(usr=c(usr[1:2],0,1.05), lwd=2 )
-  d <- density(x,na.rm=TRUE)
-  dm <- max(d$y)
-  if( dm > 0 ) d$y <- d$y/max(d$y)
-  lines(d,col=col_plot)
+  if( sum(x) == 0 ) {
+    par(usr = c(0, 1, 0, 1))
+    text(0.5, 0.5, "NA", cex=cor_cex )
+  } else {
+    d <- density(x,na.rm=TRUE)
+    dm <- max(d$y)
+    if( dm > 0 ) d$y <- d$y/max(d$y)
+    lines(d,col=col_plot)
+  }
 }
 
 panel.abline <- function(x, y, ...) {
   usr <- par("usr")
   points(x,y,col=col_plot,cex=0.7,pch=point_type)
-  reg <- coef(lm(y ~ x))
-  abline(coef=reg,col=col_fitline)
-  slope <- sprintf("s=%.2f",reg[2])
-  #const  <- sprintf("s=%.2f",reg[1])
-  #text( 0.85*usr[1]+0.15*usr[2], 0.95*usr[4]+0.05*usr[3], slope, cex=1.1 )
-  text( 0.85*usr[2]+0.15*usr[1], 0.95*usr[3]+0.05*usr[4], slope, cex=1.1)
+  if( sum(x) > 0 && sum(y) > 0 ) {
+    reg <- coef(lm(y ~ x))
+    abline(coef=reg,col=col_fitline)
+    slope <- sprintf("s=%.2f",reg[2])
+    #const  <- sprintf("s=%.2f",reg[1])
+    #text( 0.85*usr[1]+0.15*usr[2], 0.95*usr[4]+0.05*usr[3], slope, cex=1.1 )
+    text( 0.85*usr[2]+0.15*usr[1], 0.95*usr[3]+0.05*usr[4], slope, cex=1.1)
+  }
 }
 
 panel.cor <- function(x, y, digits=2, ...) {
   usr <- par("usr")
   par(usr = c(0, 1, 0, 1))
-  r <- abs(cor(x,y,method="pearson"))
-  txt <- sprintf("r = %.3f",r)
+  if( sum(x) > 0 && sum(y) > 0 ) {
+    r <- abs(cor(x,y,method="pearson"))
+    txt <- sprintf("r = %.3f",r)
+  } else {
+    txt <- "r = NA"
+  }
   text(0.5, 0.5, txt, cex=cor_cex )
   #test <- cor.test(x,y,method="pearson")
   #Signif <- ifelse( round(test$p.value,3)<0.001, "p < 0.001", paste("p = ",round(test$p.value,3)) )  

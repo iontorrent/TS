@@ -1096,6 +1096,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
   parent->sequence_length = 0;
   parent->last_hp = 0;
   parent->pred[0] = 0.0f;
+  parent->state_inphase[0] = 1.0f;
 
   int pathCnt = 1;
   float bestDist = 1e20;
@@ -1327,9 +1328,10 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
               copySSE(child->state_inphase, parent->state_inphase, cpSize);
             }
             //extending from parent->state_inphase[parent->flow] to fill the gap
-            for(int tempInd = parent->flow; tempInd <= child->flow; tempInd++){
-                child->state_inphase[tempInd] = child->state[child->flow];
+            for(int tempInd = parent->flow+1; tempInd < child->flow; tempInd++){
+                child->state_inphase[tempInd] = max(child->state[child->flow],0.01f);
             }
+            child->state_inphase[child->flow] = max(child->state[child->flow], 0.01f);
         }
 
         child->sequence_length = parent->sequence_length + 1;
@@ -1389,19 +1391,19 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
 
       //update calib_A and calib_B for parent
       if (recalibrate_predictions_) {
-        // This for-loop should not be necessary if the arrays where copied properly
-        for(int tempInd = parent->flow + 1; tempInd < child->flow; tempInd++){
-          child->calib_A[tempInd] = 1.0f;
-          child->calib_B[tempInd] = 0.0f;
+        for(int tempInd = parent_flow + 1; tempInd < child->flow; tempInd++){
+          parent->calib_A[tempInd] = 1.0f;
+          parent->calib_B[tempInd] = 0.0f;
         }
         parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
         parent->calib_B[parent->flow] = (*Bs_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
       }
 
       if(state_inphase_enabled_){
-          for(int tempInd = parent_flow; tempInd <= parent->flow; tempInd++){
-              parent->state_inphase[tempInd] = parent->state[parent->flow];
+          for(int tempInd = parent_flow+1; tempInd < parent->flow; tempInd++){
+              parent->state_inphase[tempInd] = max(parent->state[parent->flow], 0.01f);
           }
+          parent->state_inphase[parent->flow] = max(parent->state[parent->flow], 0.01f);
       }
 
       parent->window_start = child->window_start;
@@ -1562,7 +1564,7 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
 
       float penalty[4] = { 0, 0, 0, 0 };
 
-      int called_nuc = 0;
+      int called_nuc = -1;
 
       if(recalibrate_predictions_) {
         parent->calib_A[parent->flow] = (*As_).at(parent->flow).at(flow_order_.int_at(parent->flow)).at(parent->last_hp);
@@ -1575,18 +1577,18 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
       for(int nuc = 0; nuc < 4; ++nuc) {
         PathRec RESTRICT_PTR child = children[nuc];
 
-        child->flow = ad_Idx[nuc];
-        child->window_start = ad_Beg[nuc];
-        child->window_end = ad_End[nuc];
+        if (nuc_int_to_char[nuc] == flow_order_[solution_flow])
+          called_nuc = nuc;
+
+        child->flow = min(ad_Idx[nuc], flow_order_.num_flows());
+        child->window_end = min(ad_End[nuc], flow_order_.num_flows());
+        child->window_start = min(ad_Beg[nuc], child->window_end);
 
         // Apply easy termination rules
         if (child->flow >= flow_order_.num_flows() || parent->last_hp >= MAX_HPXLEN ) {
           penalty[nuc] = 25; // Mark for deletion
           continue;
         }
-
-        if (nuc_int_to_char[nuc] == flow_order_[solution_flow])
-          called_nuc = nuc;
 
         // pointer in the ad_Buf buffer pointing at the running sum of positive residuals at start of parent window
         char RESTRICT_PTR pn = ad_Buf+nuc*4+(AD_NRES_OFS-16)-parent->window_start*16;
@@ -1601,6 +1603,7 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
       }
 
       // find current incorporating base
+      assert(called_nuc > -1);
       assert(children[called_nuc]->flow == solution_flow);
 
       PathRec RESTRICT_PTR childToKeep = children[called_nuc];

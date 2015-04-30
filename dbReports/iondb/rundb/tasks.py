@@ -18,6 +18,8 @@ from celery.task import periodic_task
 from celery.utils.log import get_task_logger
 from celery.schedules import crontab
 from celery.exceptions import SoftTimeLimitExceeded
+from django.core import mail
+from django.contrib.auth.models import User
 from iondb.celery import app
 import urllib2
 import os
@@ -1092,19 +1094,18 @@ def check_disk_space():
 
 def notify_diskfull(msg):
     '''sends an email with message'''
-    from django.core import mail
-    #TODO make a utility function to send email
+    logid = {'logid':"%s" % ('notify_diskfull')}
     try:
-        recipient = models.User.objects.get(username='dm_contact').email
-        logger.warning("dm_contact is %s." % recipient)
+        recipient = User.objects.get(username='dm_contact').email
+        logger.warning("dm_contact is %s." % recipient, extra = logid)
     except:
-        logger.warning("Could not retrieve dm_contact.  No email sent.")
+        logger.warning("Could not retrieve dm_contact.  No email sent.", extra = logid)
         return False
 
     # Check for blank email
     # TODO: check for valid email address
-    if recipient is None or recipient == "":
-        logger.warning("No dm_contact email configured.  No email sent.")
+    if not recipient:
+        logger.warning("No dm_contact email configured.  No email sent.", extra = logid)
         return False
 
     #Needed to send email
@@ -1129,13 +1130,13 @@ def notify_diskfull(msg):
     # Send the email
     try:
         recipient = recipient.replace(',',' ').replace(';',' ').split()
-        logger.debug(recipient)
+        logger.debug(recipient, extra = logid)
         mail.send_mail(subject_line, message, reply_to, recipient)
     except:
-        logger.warning(traceback.format_exc())
+        logger.warning(traceback.format_exc(), extra = logid)
         return False
     else:
-        logger.info("Notification email sent for user acknowledgement")
+        logger.info("Notification email sent for user acknowledgement", extra = logid)
         return True
 
 

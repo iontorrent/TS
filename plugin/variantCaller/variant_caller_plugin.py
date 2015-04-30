@@ -76,7 +76,7 @@ def is_bam_invalid(bam_filename):
     if SKIP_BAMFILE_VERSION_CHECK:
         return False
     #check for BAM file compatibility
-    validate_command  = 'java -Xmx500m -cp %s/TVC/jar/GenomeAnalysisTK.jar' % DIRNAME
+    validate_command  = 'java -Xmx500m -cp %s/share/TVC/jar/GenomeAnalysisTK.jar' % DIRNAME
     validate_command += ' org.iontorrent.vc.locusWalkerAttributes.validateBamFile'
     validate_command += ' "%s"' % bam_filename
     RTBAM = run_command(validate_command, 'Verify BAM file compatibility')
@@ -178,7 +178,7 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
 
 
     # Execute main variant caller script
-    variantcaller_command        = '%s/variant_caller_pipeline.py' % DIRNAME
+    variantcaller_command        = '%s/bin/variant_caller_pipeline.py' % DIRNAME
     variantcaller_command   +=     '  --input-bam "%s"' % untrimmed_bam
     if vc_options['trim_reads']:
         variantcaller_command   += '  --primer-trim-bed "%s"' % vc_options['targets_bed_unmerged']
@@ -186,7 +186,7 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
     variantcaller_command       += '  --reference-fasta "%s"' % vc_options['genome_fasta']
     variantcaller_command       += '  --output-dir "%s"' % results_directory
     variantcaller_command       += '  --parameters-file "%s"' % os.path.join(results_directory,barcode_modifier+BASENAME_PARAMETERS_JSON)
-    variantcaller_command       += '  --bin-dir "%s"' % DIRNAME
+    variantcaller_command       += '  --bin-dir "%s/bin"' % DIRNAME
     if vc_options['has_targets']:
         variantcaller_command   += '  --region-bed "%s"' % vc_options['targets_bed_merged']
     if vc_options['has_hotspots']:
@@ -409,12 +409,12 @@ def options_for_manual_start(startplugin_json):
 
     # hard code for existing behavior with exception around HiQ on Proton 4.4 TSS release
     options['has_error_motifs'] = True
-    options['error_motifs'] = os.path.join(DIRNAME,'TVC/sse/motifset.txt')
+    options['error_motifs'] = os.path.join(DIRNAME,'share/TVC/sse/motifset.txt')
     try:
         expmeta = startplugin_json['expmeta']
         plan = startplugin_json['plan']
         if plan['samplePrepKitName'] == 'Ion AmpliSeq Exome Kit' and expmeta['chiptype'] == 'P1.1.17' and plan['sequencekitname'] == 'IonProtonIHiQ':
-            options['error_motifs'] =  os.path.join(DIRNAME,'TVC/sse/ampliseqexome_germline_p1_hiq_motifset.txt')
+            options['error_motifs'] =  os.path.join(DIRNAME,'share/TVC/sse/ampliseqexome_germline_p1_hiq_motifset.txt')
     except:
         pass
 
@@ -834,13 +834,15 @@ def plugin_main():
                 continue
 
             if barcode_entry['name'] in barcode_sample_info:
-                barcode_nuc_type = barcode_sample_info[barcode_entry['name']].get('nucleotideType','')
+                # assume 'dna' and 'DNA' and 'dNa' etc. are the same
+                barcode_nuc_type = barcode_sample_info[barcode_entry['name']].get('nucleotideType','').upper()
+                # assume DNA if no nucleotideType exists
                 if not barcode_nuc_type:
                     barcode_nuc_type = 'DNA'
-                #decision to support variant calling for RNA type
-                #if barcode_nuc_type != 'DNA':
-                #    printtime('Skipping barcode ' + barcode_entry['name'] + ' : Unsupported nuc type ' + barcode_nuc_type)
-                #    continue
+                # revert decision to support variant calling for RNA type
+                if barcode_nuc_type != 'DNA':
+                    printtime('Skipping barcode ' + barcode_entry['name'] + ' : Unsupported nuc type ' + barcode_nuc_type)
+                    continue
 
             if vc_options['barcode_mode'] == 'force':
                 if barcode_entry['name'] in barcode_sample_info:

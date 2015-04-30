@@ -264,10 +264,10 @@ while(1) {
           # favor target with least distance BEFORE primer if within range of priming
           my $ddSrt = $rev ? $dEnd : $dSrt;
           if( $ddSrt < 0 && $ddSrt >= $bestPrmDist ) {
-            $bestPrm = 1;
-            $bestPrmDist = $ddSrt;
             # force this as best choice if mostly likely start so far, else use ovlp to split ties
             $maxOvlp = 0 if( $ddSrt > $bestPrmDist );
+            $bestPrm = 1;
+            $bestPrmDist = $ddSrt;
           } elsif( $bestPrm ) {
             # ignore this target if a suitable target start has been seen already
             next;

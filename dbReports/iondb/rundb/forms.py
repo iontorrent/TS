@@ -218,8 +218,9 @@ class AnalysisSettingsForm(forms.ModelForm):
     plugins = forms.ModelMultipleChoiceField(required=False, widget=Plugins_SelectMultiple(),
     queryset=models.Plugin.objects.filter(selected=True, active=True).order_by('name', '-version'))
     pluginsUserInput = forms.CharField(required=False, widget=forms.HiddenInput())
-    barcodeKitName = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class': 'input-xlarge', 'readonly':'true'}) )
-     
+    #barcodeKitName = forms.CharField(required=False, max_length=128, widget=forms.TextInput(attrs={'class': 'input-xlarge', 'readonly':'true'}) )
+    barcodeKitName = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
+
     threePrimeAdapter = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': 'input-xlarge'}) )
     barcodedReferences = forms.CharField(required=False, widget=forms.HiddenInput())
         

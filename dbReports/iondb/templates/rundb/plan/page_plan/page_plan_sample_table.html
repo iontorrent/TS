@@ -8,6 +8,8 @@
 <input type="hidden" id="isTargetBEDFileBySampleSupported" name="isTargetBEDFileBySampleSupported" value="{{helper.getApplProduct.isTargetRegionBEDFileBySampleSupported}}" />
 <input type="hidden" id="isHotSpotBEDFileBySampleSupported" name="isHotSpotBEDFileBySampleSupported" value="{{helper.getApplProduct.isHotSpotBEDFileBySampleSupported}}" />
 
+<input type="hidden" name="planCategories" value="{{helper.getStepDict.Application.getPrePopulatedFieldDict.categories}}"/>
+
 <div class="row-fluid">
     <div class="span12">
         <div class="form-inline">
@@ -22,12 +24,12 @@
                 <input type="checkbox" id="isOncoSameSample" name="isOncoSameSample" style="vertical-align:top;" {% if step.getCurrentSavedFieldDict.isOncoSameSample %}checked{%endif%}>Same sample for DNA and RNA?
             </label>
         </div>
-        </br>        
-        <div class="form-inline"  {%if helper.isDualNucleotideTypeBySample %} style="display: none;"{%endif%} >
+        </br>
+        <div class="form-inline">
             <label class="form-label" id="numRowsLabel" for="numRows">Number of {%if helper.isBarcodeKitSelectionRequired or step.getCurrentSavedFieldDict.barcodeSet %}barcodes{% else %}chips{% endif %}</label>
             <input type="text" id="numRows" name="numRows" value="{{step.savedObjects.samplesTableList|length}}" class="integer input-small" style="vertical-align: top;"/>
             <a id="numRowsClick" title="Change number of rows below for plan creation" class="btn"><i class="icon-ok-sign"></i></a>
-        </div>     
+        </div>
     </div>
 </div>
 
@@ -150,13 +152,8 @@
 
                         <td class="hideable_sampleAnnotation_nt input-small" {%if not helper.isDualNucleotideTypeBySample %} style="display: none;"{%endif%}>
                             <select class="input-small nucleotideType" name="nucleotideType">
-
-                            <option value="{{helper.getRunTypeObject.nucleotideType}}" data-counter="{{forloop.counter0}}" data-nucleotideType="{{helper.getRunTypeObject.nucleotideType}}">RunTypeObject - {{helper.getRunTypeObject.nucleotideType}}</option>
-                            <option value="{{helper.getApplicationGroupName}}" data-counter="{{forloop.counter0}}" data-nucleotideType="{{helper.getApplicationGroupName}}">ApplicationGroupName - {{helper.getApplicationGroupName}}</option>
-                            <option value="{{row.nucleotideType}}" data-counter="{{forloop.counter0}}" data-nucleotideType="{{row.nucleotideType}}">row - {{row.nucleotideType}}</option -->
                                                         
                             {%for nucleotideType in helper.getNucleotideTypeList %}
-                                
                                 {% if row.nucleotideType != "" %}
                                     {%if nucleotideType == row.nucleotideType.upper or helper.getRunTypeObject.nucleotideType == row.nucleotideType.upper %} 
                                         <option SELECTED value="{{nucleotideType}}" data-counter="{{forloop.counter0}}" data-nucleotideType="{{nucleotideType}}"> 

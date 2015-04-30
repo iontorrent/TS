@@ -219,7 +219,10 @@ $(document).ready(function() {
                         },
     					barcode : {
     						type : "string",
-    					}					
+    					},
+                        nucleotideType : {
+                            type : "string",
+                        }
     				}
                 }
             },
@@ -290,6 +293,10 @@ function getColumns() {
          field: "description",
          title: "Description",        
          sortable: false,         
+     } , {
+         field: "nucleotideType",
+         title: "DNA/RNA",       
+         sortable: true,
      } , {
          field: "gender",
          title: "Gender",       

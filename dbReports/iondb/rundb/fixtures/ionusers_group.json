@@ -36,21 +36,6 @@
           "backup"
         ],
         [
-          "add_backupconfig",
-          "rundb",
-          "backupconfig"
-        ],
-        [
-          "change_backupconfig",
-          "rundb",
-          "backupconfig"
-        ],
-        [
-          "delete_backupconfig",
-          "rundb",
-          "backupconfig"
-        ],
-        [
           "add_chip",
           "rundb",
           "chip"

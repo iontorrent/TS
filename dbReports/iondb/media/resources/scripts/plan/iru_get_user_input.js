@@ -14,6 +14,7 @@ USERINPUT.workflow_to_application_type_map = {};
 
 USERINPUT.workflow_to_ocp_map = {};
 USERINPUT.workflow_ocp_list = [];
+USERINPUT.decorated_workflow_for_display_map = {};
 USERINPUT.gender_list = [];
 USERINPUT.relation_to_gender_map = {};
 
@@ -86,7 +87,8 @@ function create_iru_ui_elements(data) {
         //console.log("at iru_get_user_input.create_iru_ui_elements() each i=", i, "; row=", $row);
         var isToDisable = false;
     	
-        if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual) && i > 0) {
+    	
+        if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual) && (i % 2 != 0)) {
         	isToDisable = true;
         }
 
@@ -195,7 +197,14 @@ function add_ir_general_to_select(name, values) {
         $.each(values, function(i,value){
             var $opt = $("<option></option>");
             $opt.attr('value', value);
-            $opt.text(value);
+
+            if (name == "Workflow" && !(jQuery.isEmptyObject(USERINPUT.decorated_workflow_for_display_map)) && (value in USERINPUT.decorated_workflow_for_display_map)) {
+                var displayedValue = USERINPUT.decorated_workflow_for_display_map[value];
+                $opt.text(displayedValue);
+            }
+            else {
+            	$opt.text(value);
+            }
             $select.append($opt);
             
             if (name == "Gender") {
@@ -247,10 +256,20 @@ function populate_sample_grouping_to_workflow_map(data) {
             	if ($.inArray(workflow, USERINPUT.workflow_ocp_list) === -1) {
             		USERINPUT.workflow_ocp_list.push(workflow);
             	}
+            	var displayedWorkflow =  workflow + " (" + cm["DNA_RNA_Workflow"] + ")";
+                if ($.inArray(displayedWorkflow, USERINPUT.workflow_with_sample_grouping_ocp_list) === -1) {
+                    USERINPUT.decorated_workflow_for_display_map[workflow] = displayedWorkflow;
+                }            	
         	}
+        	else {
+                USERINPUT.workflow_to_ocp_map[workflow] = "false";
+            }       	
         }
         else {
         	USERINPUT.workflow_to_ocp_map[workflow] = "false";
+        	if (workflow.toLowerCase() == "upload only") {
+        	   USERINPUT.decorated_workflow_for_display_map[workflow] = workflow;
+        	}
         }
         
         //console.log("populate_sample_grouping_to_workflow_map() workflow_ocp_list=", USERINPUT.workflow_ocp_list);
@@ -454,20 +473,21 @@ function get_workflow_url() {
 	var runType_name = $('input[name=runType_name]').val();
 	var runType_nucleotideType = $('input[name=runType_nucleotideType]').val();
 	
-	console.log("iru_get_user_input.get_workflow_url() applicationGroupName=", applicationGroupName, "; runType_name=", runType_name, "; runType_nucleotideType=", runType_nucleotideType);
+	var planCategories = $('input[name=planCategories]').val();
+	console.log("iru_get_user_input.get_workflow_url() applicationGroupName=", applicationGroupName, "; runType_name=", runType_name, "; runType_nucleotideType=", runType_nucleotideType, "; planCategories=", planCategories);
   
 	var myURL = USERINPUT.user_input_url;
   	
 	myURL += "?format=json&id=" + USERINPUT.account_id;
 	var isFilterSet = false;
 	
-	if (runType_nucleotideType.toLowerCase() == "dna") {
+	if (runType_nucleotideType.toLowerCase() == "dna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "dna")) {
 		myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
 		myURL += "DNA";
 		
 		isFilterSet = true;
 	}
-	else if (runType_nucleotideType.toLowerCase() == "rna") {
+	else if (runType_nucleotideType.toLowerCase() == "rna" || (runType_nucleotideType == "" && applicationGroupName.toLowerCase() == "rna")) {
 		myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
 		myURL += "RNA";
 		
@@ -475,23 +495,43 @@ function get_workflow_url() {
 	}
 	
     if (applicationGroupName == "DNA + RNA") {
+        /*for mixed single & paired type support
     	if (runType_nucleotideType.toLowerCase() == "dna_rna") {
     		myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
     		myURL += "DNA_RNA";
-    		
     		isFilterSet = true;
     	}
-    	myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+        */
+    	//myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+    	
+        if (planCategories.toLowerCase().indexOf("oncomine") != -1) {            
+//            if (!isFilterSet) {
+//                myURL += "&filterKey=Onconet_Workflow&filterValue=false";  
+//            }
+            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";     
+        }
+        else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
+            if (!isFilterSet) {
+                myURL += "&filterKey=Onconet_Workflow&filterValue=true";
+            }
+//            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
+        }
     }
     else {
     	if (runType_name.toLowerCase() != "amps") {
-    		if (isFilterSet) {    		
-    			myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";  
-    		}
-    		else {
-    			myURL += "&filterKey=OCP_Workflow&filterValue=false";  
-    		}
+            if (!isFilterSet) {
+                myURL += "&filterKey=Onconet_Workflow&filterValue=false";
+            }
+            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
     	}
+        else {
+            if (planCategories.toLowerCase().indexOf("oncomine") != -1) {
+                myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
+            }
+            else if (planCategories.toLowerCase().indexOf("onconet") != -1) {
+                myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";
+            }          
+        }    	
     }
   
 	return myURL;

@@ -15,7 +15,7 @@ import requests
 import tarfile
 
 class FileExporter(IonPlugin):
-        version = "4.4.0.0"
+        version = "4.4.3.0"
 	runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
 	runlevels = [ RunLevel.DEFAULT ]
 	features = [ Feature.EXPORT ]
@@ -335,9 +335,10 @@ class FileExporter(IonPlugin):
 			try:
 				api_url = self.json_dat['runinfo']['api_url'] + '/v1/pluginresult/?format=json&plugin__name=variantCaller&result=' + str(self.json_dat['runinfo']['pk'])
 				api_key = self.json_dat['runinfo'].get('api_key', None)
-				if api_key is not None:
-					api_url = api_url + '&api_key=%s' % api_key
-					print 'Using API key: %s' % api_key
+				prpk = self.json_data['runinfo'].get('pluginresult') or self.json_data['runinfo'].get('plugin',{}).get('pluginresult')
+				if prpk is not None and api_key is not None:
+					api_url = api_url + '&pluginresult=%s&api_key=%s' % (prpk, api_key)
+					print 'Using pluginresult %s with API key: %s' % (prpk, api_key)
 				else:
 					print 'No API key available'
 				f = urllib2.urlopen(api_url)

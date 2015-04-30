@@ -30,7 +30,7 @@ from iondb.rundb.api import PlannedExperimentResource, RunTypeResource, \
 from django.core.urlresolvers import reverse
 
 from iondb.utils import toBoolean
-from iondb.rundb.plan.views_helper import get_projects, dict_bed_hotspot, isOCP_enabled, is_operation_supported, getChipDisplayedNamePrefix, getChipDisplayedVersion
+from iondb.rundb.plan.views_helper import get_projects, dict_bed_hotspot, isOCP_enabled, is_operation_supported, getChipDisplayedNamePrimaryPrefix, getChipDisplayedNameSecondaryPrefix, getChipDisplayedVersion
 
 from iondb.utils.validation import is_valid_chars, is_valid_leading_chars, is_valid_length
 from iondb.utils.utils import convert
@@ -388,7 +388,7 @@ def page_plan_by_sample_save_plan(request):
 
 
 @login_required
-def page_plan_save(request):
+def page_plan_save(request, exp_id=None):
     ''' you may only come here from the last plan/template step that has a save button. '''
     
     # update the step_helper with the latest data from the save page
@@ -409,6 +409,8 @@ def page_plan_save(request):
             step_helper = request.session['plan_step_helper']
             if step_helper.isTemplateBySample():
                 return HttpResponseRedirect(reverse('page_plan_new_plan_by_sample', args=(planTemplate.pk, step_helper.steps['Ionreporter'].savedFields['sampleset_id'])))
+            if step_helper.isEditRun() and exp_id:
+                return HttpResponseRedirect(reverse('report_analyze', kwargs={'exp_pk': exp_id, 'report_pk': 0} ))
         except:
             step_helper_db_saver = None
             logger.exception(format_exc())
@@ -766,7 +768,8 @@ class PlanDetailView(DetailView):
         context['templatingKit'] = KitInfo.objects.filter(name = plan.templatingKitName)
         context['sequenceKit'] = KitInfo.objects.filter(name = plan.experiment.sequencekitname)
         context['controlSequencekit'] = KitInfo.objects.filter(name = plan.controlSequencekitname)
-        context["chipTypePrefix"] = getChipDisplayedNamePrefix(chipType[0]) if chipType else  plan.experiment.chipType
+        context["chipTypePrefix"] = getChipDisplayedNamePrimaryPrefix(chipType[0]) if chipType else  plan.experiment.chipType
+        context["chipTypeSecondaryPrefix"] = getChipDisplayedNameSecondaryPrefix(chipType[0]) if chipType else  plan.experiment.chipType
         context["chipTypeVersion"] = getChipDisplayedVersion(chipType[0]) if chipType else ""
 
         context['thumbnail'] = True if report_pk and result.isThumbnail else False

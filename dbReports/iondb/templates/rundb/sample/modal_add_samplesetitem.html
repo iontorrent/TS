@@ -166,6 +166,39 @@
                     </div>
                     
                     <div class="control-group">
+                        <label class="control-label" for="gender">DNA/RNA</label>
+                        <div class="controls">
+                            <select id="nucleotideType" name="nucleotideType"style="height:28px;">
+                            <option value="" >.....</option>                 
+                            {% if intent == "edit" %}
+                                {% for nucType, displayedNucType in nucleotideType_choices.items %}
+                                    {% ifequal sampleSetItem.nucleotideType nucType %}
+                                        <option SELECTED value="{{sampleSetItem.nucleotideType}}">{{displayedNucType}}</option>
+                                    {% else %}
+                                        <option value="{{nucType}}" >{{displayedNucType}}</option>
+                                    {% endifequal %}
+                                {% endfor %}                             
+                            {% elif intent == "edit_pending" %}  
+                                {% for nucType, displayedNucType in nucleotideType_choices.items %}
+                                    {% ifequal pending_sampleSetItem.nucleotideType nucType %}
+                                        <option SELECTED value="{{pending_sampleSetItem.nucleotideType}}">{{displayedNucType}}</option>
+                                    {% else %}
+                                        <option value="{{nucType}}" >{{displayedNucType}}</option>
+                                    {% endifequal %}
+                                {% endfor %}                                                        
+                            {% else %}           
+                                {% for nucType, displayedNucType in nucleotideType_choices.items %}
+                                    <option value="{{nucType}}" >{{displayedNucType}}</option>
+                                {% endfor %}                                              
+                            {% endif %}
+                            </select>
+    
+                            <div class="help-block">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="control-group">
                         <label class="control-label" for="gender">Gender</label>
                         <div class="controls">
                             <select id="gender" name="gender"style="height:28px;">

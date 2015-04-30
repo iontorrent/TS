@@ -23,7 +23,7 @@
                         <a data-toggle="tab" href="#options">Analysis Options</a>
                     </li>
                     <li>
-                        <a data-toggle="tab" href="#reference">Reference/Barcode</a>
+                        <a data-toggle="tab" href="#reference">Reference & Barcoding</a>
                     </li>
                     <li>
                         <a data-toggle="tab" href="#plugins">Plugins</a>
@@ -164,29 +164,29 @@
                         </div>
                     </div>
                     
-                    <div class="control-group" style="color: #08c;">Default reference info is used for barcodes with no sample name. If you need to change the reference and BED files assignment to barcoded samples, please use the <b>Run Edit Page</b>.
-                    </div>
-
-                    {% if barcodesWithSamples %}
-                                                
-                    <!--TODO-use-plan-wizard div class="control-group">
-                        <label for="useBarcodedReference" class="control-label">Select Barcoded Reference</label>
-                        <div class="controls">
-                            <input id="useBarcodedReference" type="checkbox">
-                        </div>
-                    </div>
-                    <div id='barcodedReference_container' class="control-group hide" -->
-                    <!--TODO -->
-
                     <div class="control-group">
-                        <label for="id_barcodeKitName" class="control-label" style="text-align: center;" rel="tooltip" title='Barcode Set'>Barcode Set </label>
+                        <label for="id_barcodeKitName" class="control-label" rel="tooltip" title='Barcode Set'>Barcode Set </label>
                         <div class="controls" >
                             {{ eas_form.barcodeKitName }}
                         </div>
                     </div>
 
-                    <div id='barcodedReference_container' class="control-group">
-                        <!--div class="controls" -->
+                    <div class="control-group text-success">
+                        Default reference info is used for barcodes with no sample name. Additional options for barcoded samples are available on the
+                        <a href="{% url "page_plan_edit_run" pk %}">Edit Run Plan</a> page.
+                    </div>
+                    
+                    {% if barcodesWithSamples %}
+
+                    <div id='barcodedReference_container'>
+                        <div id='unsupported' class="text-error" style="display: none;">
+                            Barcoded References selection is not supported. Please use <a href='{% url "page_plan_edit_run" pk %}'>Edit Run Plan</a> page to assign samples to new barcodes.
+                        </div>
+                        <div id='barcodedReference_div'>
+                            <div class="control-group">
+                                <input id="useDefaultReference" type="checkbox" style="margin-left: 25px;"><b> Use Default Reference & BED files for all barcodes</b>
+                            </div>
+
                             <table class="table table-condensed">
                             <thead>
                                 <tr>
@@ -194,8 +194,8 @@
                                     <th>Sample Name</th>
                                     <th>Reference</th>
                                     <th>Target Regions</th>
-                                    <th>Hotspot Regions</th>
-                                    <th>DNA/RNA</th>
+                                    <!-- <th>Hotspot Regions</th>
+                                    <th>DNA/RNA</th> -->
                                 </tr>
                             </thead>
                             {% for barcode in barcodesWithSamples %}
@@ -203,38 +203,34 @@
                                     <td>{{barcode.barcodeId}}</td>
                                     <td>{{barcode.sample}}</td>
                                     <td id="barcodeReference{{forloop.counter}}" class="input-xlarge">{{eas_form.reference}}</td>
-                                    <script type="text/javascript">
-                                        $("#barcodeReference{{forloop.counter}}").children('select').val("{{barcode.reference}}");
-                                        $("#barcodeReference{{forloop.counter}}").children('select').attr('disabled', 'disabled');
-                                    </script>
+                                        <script type="text/javascript">
+                                            $("#barcodeReference{{forloop.counter}}").children('select').val("{{barcode.reference}}");
+                                            $("#barcodeReference{{forloop.counter}}").children('select').attr('id', "id_reference_bc{{forloop.counter}}");
+                                        </script>
                                     <td id="barcodeTargetRegion{{forloop.counter}}" class="input-xlarge">{{eas_form.targetRegionBedFile}}</td>
-                                    <script type="text/javascript">
-                                        $("#barcodeTargetRegion{{forloop.counter}}").children('select').val("{{barcode.targetRegionBedFile}}");
-                                        $("#barcodeTargetRegion{{forloop.counter}}").children('select').attr('disabled', 'disabled');                              
-                                    </script>
-                                    <td id="barcodeHotSpot{{forloop.counter}}" class="input-xlarge">{{eas_form.hotSpotRegionBedFile}}</td>
-                                    <script type="text/javascript">
-                                        $("#barcodeHotSpot{{forloop.counter}}").children('select').val("{{barcode.hotSpotRegionBedFile}}");
-                                        $("#barcodeHotSpot{{forloop.counter}}").children('select').attr('disabled', 'disabled');                                      
-                                    </script>                                                          
+                                        <script type="text/javascript">
+                                            $("#barcodeTargetRegion{{forloop.counter}}").children('select').val("{{barcode.targetRegionBedFile}}");
+                                            $("#barcodeTargetRegion{{forloop.counter}}").children('select').attr('id', "id_targetRegionBedFile_bc{{forloop.counter}}");
+                                        </script>
+                                    <td id="barcodeHotSpot{{forloop.counter}}" class="input-xlarge hide">{{eas_form.hotSpotRegionBedFile}}</td>
+                                        <script type="text/javascript">
+                                            $("#barcodeHotSpot{{forloop.counter}}").children('select').val("{{barcode.hotSpotRegionBedFile}}");
+                                            $("#barcodeHotSpot{{forloop.counter}}").children('select').attr('id', "id_hotSpotRegionBedFile_bc{{forloop.counter}}");
+                                        </script>
+                                    <!--
                                     <td>
                                         <select class="input-small" disabled>
                                             <option value='DNA' {%if barcode.nucType == 'DNA'%}selected{%endif%}>DNA</option>
                                             <option value='RNA' {%if barcode.nucType == 'RNA'%}selected{%endif%}>RNA</option>
                                         </select>
                                     </td>
+                                    -->
                                 </tr>
                             {% endfor %}
-
                             </table>
-                        <!-- /div -->
+                        </div>
                     </div>
                     {{ eas_form.barcodedReferences }}
-                    {% else %}
-                        <div class="control-group">
-                            <label for="id_noBarcodeKitName" class="control-label" style="text-align: center;" rel="tooltip" title='Barcode Set'>Barcode Set </label>
-                            <div class="controls" style="height: 30px; line-height: 30px;">None</div>
-                        </div>
                     {% endif %}
                 </div>
                 <div class="tab-pane" id="plugins">

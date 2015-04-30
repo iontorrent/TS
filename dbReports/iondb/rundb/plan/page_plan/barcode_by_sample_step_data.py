@@ -71,6 +71,9 @@ class BarcodeBySampleStepData(AbstractStepData):
         self.prepopulatedFields[SavePlanFieldNames.PLAN_TARGET_REGION_BED_FILE] = ""
         self.prepopulatedFields[SavePlanFieldNames.PLAN_HOTSPOT_REGION_BED_FILE] = ""
 
+        self.prepopulatedFields[SavePlanFieldNames.RUN_TYPE] = "" 
+        self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME] = "" 
+         
         self._dependsOn.append(StepNames.IONREPORTER)
         self._dependsOn.append(StepNames.APPLICATION)
         #self._dependsOn.append(StepNames.REFERENCE)
@@ -266,6 +269,7 @@ class BarcodeBySampleStepData(AbstractStepData):
             else:
                 isTargetRegionSelectionRequired = False
             
+            applicationGroupName = self.prepopulatedFields[SavePlanFieldNames.APPLICATION_GROUP_NAME]            
             for row in sample_table_list:                               
                 sample_name = row.get(SavePlanFieldNames.SAMPLE_NAME,'').strip()
                 if sample_name:                
@@ -281,7 +285,7 @@ class BarcodeBySampleStepData(AbstractStepData):
                     errors = []  
                     #if the plan has been sequenced, do not enforce the target bed file to be selected 
                     if planStatus != "run":  
-                        errors = validate_targetRegionBedFile_for_runType(sampleTargetRegionBedFile, runType, sampleReference, sample_nucleotideType, "Target Regions BED File for " + sample_name)
+                        errors = validate_targetRegionBedFile_for_runType(sampleTargetRegionBedFile, runType, sampleReference, sample_nucleotideType, applicationGroupName, "Target Regions BED File for " + sample_name)
 
                     if errors:
                         samples_errors.append('\n'.join(errors))
@@ -415,6 +419,7 @@ class BarcodeBySampleStepData(AbstractStepData):
                         
                         SavePlanFieldNames.RELATION_ROLE      : row.get(SavePlanFieldNames.IR_RELATION_ROLE,''),
                         SavePlanFieldNames.RELATIONSHIP_TYPE  : row.get(SavePlanFieldNames.IR_RELATIONSHIP_TYPE,''),
+                        SavePlanFieldNames.IR_APPLICATION_TYPE: row.get(SavePlanFieldNames.IR_APPLICATION_TYPE,''),
                         SavePlanFieldNames.SET_ID             : row.get(SavePlanFieldNames.IR_SET_ID, '')
                     }
                    

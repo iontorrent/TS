@@ -84,6 +84,8 @@ $endBin = 0 if( $endBin < 0 );
 
 #--------- End command arg parsing ---------
 
+use constant BIGWORD => 2**32;
+
 # table file fields line
 my $header = "chrom\tstart\tend\tfwd_basereads\trev_basereads";
 $header .= "\tfwd_trg_basereads\trev_trg_basereads" if( $haveTargets );
@@ -431,9 +433,9 @@ sub bciSeekStart
   my $intsize = 4;
   my $numbytes = $intsize * 2;
   read(BCIFILE, my $buffer, $numbytes) == $numbytes or die "Did not read $numbytes bytes from $bcifile\n";
-  my ($bciblocksize,$numchroms) = unpack "L2", $buffer;
-  print STDERR "Read blocksize ($bciblocksize) and number of contigs ($numchroms) from $bcifile\n" if( $logopt );
-  if( $bciblocksize <= 0 || $chrom > $numchroms )
+  my ($bciBlockSize,$numchroms) = unpack "L2", $buffer;
+  print STDERR "Read blocksize ($bciBlockSize) and number of contigs ($numchroms) from $bcifile\n" if( $logopt );
+  if( $bciBlockSize <= 0 || $chrom > $numchroms )
   {
     close( BCIFILE );
     return 0;
@@ -441,34 +443,31 @@ sub bciSeekStart
   $numbytes = $numchroms * $intsize;
   read(BCIFILE, $buffer, $numbytes) == $numbytes or die "Did not read $numbytes bytes from $bcifile\n";
   my @bciBlockOffsets = unpack "L[$numchroms]", $buffer;
+  # to support large BBC the file offsets need to be converted to long ints, which requires reading the whole block
+  $numbytes = $fsize - (2 + $numchroms) * $intsize;
+  read(BCIFILE, $buffer, $numbytes) == $numbytes or die "Did not read $numbytes bytes from $bcifile\n";
+  my $bciIndexSize = $numbytes >> 2;
+  my @bciIndex = unpack "L[$bciIndexSize]", $buffer;
+  close(BCIFILE);
+  # convert bciIndex to double integers
+  my $highWord = 0;
+  my @bigints = (($highBit) x $bciIndexSize);
+  $bigints[0] = $bciIndex[0];
+  for( my $i = 1; $i < $bciIndexSize; ++$i ) {
+    $highWord += BIGWORD if( $bciIndex[$i] > 0 && $bciIndex[$i] < $bciIndex[$i-1] );
+    $bigints[$i] = $bciIndex[$i] + $highWord;
+  }
+  @bciIndex = @bigints;
+  # find the place to start reading the requested coverage
   my $chrBlockSrt = $bciBlockOffsets[$chrom-1];
-  my $blockIdx = int(($srt_pos-1)/$bciblocksize);
-  my $blockSrt = ($chrBlockSrt+$blockIdx+2+$numchroms) * $intsize;
-  print STDERR "- Read chr#$chrom block start: $chrBlockSrt + $blockIdx\n" if( $logopt );
-  # test start position is not beyond contig length
-  my $nextBlockSrt = ($chrom < $numchroms) ? ($bciBlockOffsets[$chrom]+2+$numchroms)*$intsize : $fsize;
-  printf STDERR "- blockSrt for pos. $srt_pos: $blockSrt (block end=$nextBlockSrt)\n" if( $logopt );
-  if( $blockSrt >= $nextBlockSrt )
+  my $blockSrt = $chrBlockSrt + int(($srt_pos-1)/$bciBlockSize);
+  my $blockEnd = $chrBlockSrt + int(($end_pos-1)/$bciBlockSize);
+  # get the bin range for the end position to find first no 0 coverage region
+  while( $blockSrt <= $blockEnd )
   {
-    print STDERR "$CMD: Seek attempted outside range for chr#$chrom from $bcifile\n";
-    close( BCIFILE );
-    return 0;
+    return $bciIndex[$blockSrt] if( $bciIndex[$blockSrt] );
+    ++$blockSrt;
   }
-  # get the bin range for the end position
-  $blockIdx = int(($end_pos-1)/$bciblocksize);
-  my $blockEnd = ($chrBlockSrt+$blockIdx+2+$numchroms) * $intsize;
-  $blockEnd = $blockSrt if( $blockEnd < $blockSrt );  # safety
-  my $seekStart = 0;
-  while( $blockSrt <= $blockEnd && $seekStart == 0 )
-  {
-    seek( BCIFILE, $blockSrt, 0 );
-    $numbytes = $intsize;
-    read(BCIFILE, $buffer, $numbytes) == $numbytes or die "Did not read $numbytes bytes from $bcifile\n";
-    $seekStart = unpack "L", $buffer;
-    print STDERR "Seek to $seekStart for bin $blockSrt.\n" if( $logopt );
-    $blockSrt += $intsize;
-  }
-  close( BCIFILE );
-  return $seekStart;
+  return 0;
 }
 

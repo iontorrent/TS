@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 JOBSERVER_HOST = "127.0.0.1"
 
 
+@login_required
 def file_upload(request):
     return plupload_file_upload(request, settings.TEMP_PATH)
 

@@ -85,6 +85,9 @@ my $haveTargets = ($bedfile ne "" && $bedfile ne "-");
 
 print STDERR "$CMD started at ".localtime()."\n" if( $logopt );
 
+use constant BIGWORD => 2**32;
+use constant MAXUINT => BIGWORD - 1;
+
 # read expected contigs
 my @chromSize;
 my @chromName;
@@ -395,6 +398,12 @@ sub dump_reads
   }
   else
   {
+    # for files >4Gb avoid writting region on 32 word boundary by adding a NOP
+    my $fpos = tell(BBCFILE);
+    if( $fpos >= BIGWORD && ($fpos & MAXUINT) == 0 ) {
+      print STDERR "Warning: Inserted 0 region into BBC to avoid 32-bit word boundary.\n";
+      print BBCFILE pack "L2", $srtPos, 0;
+    }
     # pack position + length.wordSizeCode.onTargetBit
     my $cd = ($nReads << 3) | ($wordSize == 8 ? 6 : $wordSize) | $lstOntarg;
     print BBCFILE pack "L2", $srtPos, $cd;

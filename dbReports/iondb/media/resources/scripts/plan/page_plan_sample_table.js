@@ -21,6 +21,12 @@ updateSamplesTable = function () {
             }
         });
 
+        // add IR pass-through fields, properties of IR workflow
+        if (USERINPUT.is_ir_connected) {
+            var irWorkflow = $(this).find('select[name=irWorkflow]').val();
+            row['ApplicationType'] = USERINPUT.workflow_to_application_type_map[irWorkflow];
+        }
+        
         table.push(row);
 
     });
@@ -30,55 +36,327 @@ updateSamplesTable = function () {
     }
 }
 
+var isEven = function(aNumber){
+    return (aNumber % 2 == 0) ? true : false;
+};
+ 
 // create new table row by copying first row
 createRow = function (i) {
-    var $row = $('#row0').clone(true, true).attr('id', 'row' + i);
-
+    //console.log("createRow() i=", i);
+    
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
+    
+    var previousRowIndex = i - 1;
+    if (isDualNucleotideType == "True" && isEven(i)) {
+        previousRowIndex = i - 2;
+    }
+    if (previousRowIndex < 0) {
+        previousRowIndex = 0;
+    }
+
+    var $row = $('#row' + previousRowIndex).clone(true, true).attr('id', 'row' + i);
+
+    $row.children().find('select[name=barcode]').val(i);
+    
     if (isDualNucleotideType != "True") {
         //empty values for the new rows
-        $row.find("input").each(function () {
+        $row.find("input").not("[name=irRelationshipType]").each(function () {
             $(this).val('');
         });
 
+        //auto-assign row number value
+        $row.children().eq(0).find('input').attr('value', i + 1);
+        
         var $row0_reference = $('#row0').find('select[name=reference]').val();
         var $row0_target = $('#row0').find('select[name=targetRegionBedFile]').val();
         var $row0_hotSpot = $('#row0').find('select[name=hotSpotRegionBedFile]').val();
         //console.log("createRow() $row0_reference=", $row0_reference, "; $row0_target=", $row0_target, "; $row0_hotSpot=", $row0_hotSpot);
- 
-        //var $row_reference = $row.find('select[name=reference]').val();
-        //var $row_target = $row.find('select[name=targetRegionBedFile]').val();
-        //var $row_hotSpot = $row.find('select[name=hotSpotRegionBedFile]').val();
-        //console.log("createRow() NEW $row_reference=", $row_reference, "; $row_target=", $row_target, "; $row_hotSpot=", $row_hotSpot);
 
         $row.find('select[name=reference]').val($row0_reference);
         $row.find('select[name=targetRegionBedFile]').val($row0_target);
         $row.find('select[name=hotSpotRegionBedFile]').val($row0_hotSpot);
-        
-        //$row_reference = $row.find('select[name=reference]').val();
-        //$row_target = $row.find('select[name=targetRegionBedFile]').val();
-        //$row_hotSpot = $row.find('select[name=hotSpotRegionBedFile]').val();
-        //console.log("createRow() ALTERED!!! NEW $row_reference=", $row_reference, "; $row_target=", $row_target, "; $row_hotSpot=", $row_hotSpot);
 
+        //auto-assign sample name
+        $row.find('.irSampleName').val("Sample " + (i + 1));
     }
+    else {
+        //auto-assign row number value
+        $row.children().eq(0).find('input').attr('value', i + 1);
 
-    //auto-assign row number value
-    $row.children().eq(0).find('input').attr('value', i + 1);
-    $row.children().find('select[name=barcode]').val(i);
-
-    //auto-assign sample name
-    $row.find('.irSampleName').val("Sample " + (i + 1));
+        var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
+        initForDualNucleotideType(isDualNucleotideType, isSameSampleForDual, i, $row, $('#row' + previousRowIndex), true); 
+    
+    }
     return $row;
 }
 
+function initForDualNucleotideType(isDualNucleotideType, isSameSampleForDual, rowIndex, row, previousRow, isCreateRow) {
+    //(1) for even row, set nucleotide type to DNA; set to RNA if odd row
+    //(2) for even row, increment sample name; set to previous row's sample name if odd row
+    //(3) auto-populate reference, target region and hotSpot from Reference chevron for the DNA sample
+    //(4) disable and disallow user input for RNA's target region and hotSpot
 
-prepareEasyDualNucleotideTypeSupport = function () {
+    var isCreate = $('input[id=isCreate]').val();
+    var autoSampleName = rowIndex + 1;
+    
+    if (isEven(rowIndex)) {
+        row.children().find('select[name=nucleotideType]').val("DNA");  
+        if (isSameSampleForDual) {
+            autoSampleName = rowIndex / 2 + 1;
+        }
+        row.find('.irSampleName').val("Sample " + autoSampleName);
+       
+        row.children().find('input[name=sampleExternalId]').val('');
+        row.children().find('input[name=sampleDescription]').val('');
+
+        row.removeClass("rna");
+        row.addClass("dna");
+        initSampleRefInfoForDualNucleotideType(row);
+
+        setIRValuesForDualNucleotideType(rowIndex, row, previousRow, isCreateRow);        
+    }
+    else {
+        row.children().find('select[name=nucleotideType]').val("RNA");
+        if (isSameSampleForDual) {
+            row.children().find('input[name=sampleName]').val(previousRow.find('.irSampleName').val());
+            
+            var value = previousRow.children().find('input[name=sampleExternalId]').val();            
+            row.children().find('input[name=sampleExternalId]').val(value);
+            
+            value = previousRow.children().find('input[name=sampleDescription]').val();
+            row.children().find('input[name=sampleDescription]').val(value);
+        }
+        else {
+            row.find('.irSampleName').val("Sample " + autoSampleName);
+        }
+
+        row.removeClass("dna");
+        row.addClass("rna");
+        initSampleRefInfoForDualNucleotideType(row);
+        
+        setIRValuesForDualNucleotideType(rowIndex, row, previousRow, isCreateRow);
+
+        if (isSameSampleForDual) {
+            disableRNARowForDualNucleotideType(isDualNucleotideType, isSameSampleForDual, rowIndex, row);
+        }
+    } 
+}
+
+
+function initSampleRefInfoForDualNucleotideType(currentRow) {
+    var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
+    var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
+    var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
+    var isSameRefInfoPerSample = $('input[id=isSameRefInfoPerSample]').is(":checked");
+    
+    if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True")) {
+        if (currentRow.hasClass("dna")) {
+            var selectedReference = $('select[name=default_reference]').val();
+            var selectedTargetBedFile = $('select[name=default_targetBedFile]').val();
+            var selectedHotSpotBedFile = $('select[name=default_hotSpotBedFile]').val();
+            
+            currentRow.children().find('select[name=reference]').val(selectedReference);
+            currentRow.children().find('select[name=targetRegionBedFile]').val(selectedTargetBedFile);
+            currentRow.children().find('select[name=hotSpotRegionBedFile]').val(selectedHotSpotBedFile);  
+        }
+        else if (currentRow.hasClass("rna")) {
+            var mixedTypeRNA_selectedReference = $('select[name=mixedTypeRNA_reference]').val();
+            var mixedTypeRNA_selectedTargetBedFile = $('select[name=mixedTypeRNA_targetBedFile]').val();
+            
+            //console.log("rowIndex=", rowIndex, "; mixedTypeRNA_selectedReference=", mixedTypeRNA_selectedReference, "; mixedTypeRNA_selectedTargetBedFile=", mixedTypeRNA_selectedTargetBedFile);
+            
+            currentRow.children().find('select[name=reference]').val(mixedTypeRNA_selectedReference);
+            currentRow.children().find('select[name=targetRegionBedFile]').val(mixedTypeRNA_selectedTargetBedFile);
+                    
+            //RNA sample has no hotSpot selection
+            currentRow.children().find('select[name=hotSpotRegionBedFile]').val("");
+        }
+    }
+}
+
+function setIRValuesForDualNucleotideType(rowIndex, row, previousRow, isCreateRow) {
+    if (!isEven(rowIndex)) {
+        var value = previousRow.children().find('select[name=ircancerType]').val();
+        row.children().find('select[name=ircancerType]').val(value);
+
+        value = previousRow.children().find('input[name=ircellularityPct]').val();
+        row.children().find('input[name=ircellularityPct]').val(value);
+
+        value = previousRow.children().find('select[name=irWorkflow]').val();
+        row.children().find('select[name=irWorkflow]').val(value);
+
+        value = previousRow.children().find(".irRelationshipType").val();
+
+        //console.log("page_plan_sample_table.setIRValuesForDualNucleotideType() - relationshipType.value=", value);
+        row.children().find(".irRelationshipType").val(value);
+
+        value = previousRow.children().find('select[name=irRelationRole]').val();
+
+        if (value) {
+            //the 2nd row may not have the selected value in the drop down yet
+            var isExist = false;
+            row.children().find('select[name=irRelationRole]').each(function () {
+                if (this.value == value) {
+                    isExist = true;
+                }
+            });
+            console.log("row selected relation=", value, "; isExist=", isExist);
+
+            if (isExist == false) {
+                var options = previousRow.children().find('select[name=irRelationRole] option').clone();
+
+                row.children().find('select[name=irRelationRole]').empty();
+                row.children().find('select[name=irRelationRole]').append(options);
+            }
+            row.children().find('select[name=irRelationRole]').val(value);
+        }
+
+        value = previousRow.children().find('select[name=irGender]').val();
+        row.children().find('select[name=irGender]').val(value);
+
+        value = previousRow.children().find('input[name=irSetID]').val();
+        row.children().find('input[name=irSetID]').val(value);
+    }
+
+    if (isCreateRow) {
+        row.children().find('input[name=irSetID]').val("");
+    }
+    
+    var selectedWorkflow = previousRow.children().find('select[name=irWorkflow]').val();
+    updateIRWorkflowSelectionForDualNucleotideType(previousRow, row, selectedWorkflow);
+}
+
+function disableRNARowsForDualNucleotideType(isDualNucleotideType, isSameSampleForDual) {
+    if (isDualNucleotideType != "True") {
+        return;
+    }
+    var numRowValue = $('#numRows').val();
+    var rowCount = parseInt(numRowValue);
+     
+    var isCreate = $('input[id=isCreate]').val();
+    
+    for (var i = 0; i < rowCount; i++) {
+        var row = $('#row' + i);
+
+        if (!isEven(i)) {
+            if (isSameSampleForDual) {
+                var previousRowIndex = i - 1;
+                var previousRow = $('#row' + previousRowIndex);
+                initForDualNucleotideType(isDualNucleotideType, isSameSampleForDual, i, row, previousRow, false); 
+            }
+            else {
+                disableRNARowForDualNucleotideType(isDualNucleotideType, isSameSampleForDual, i, row);
+            }
+        }
+        else {
+            disableIRCells(false, i, row);
+        }
+    }
+}
+
+function disableRNARowForDualNucleotideType(isDualNucleotideType, isSameSampleForDual, rowIndex, row) {
+    if (isSameSampleForDual) {
+        row.children().find('input[name=sampleName]').attr("disabled", true);
+        row.children().find('input[name=sampleExternalId]').attr("disabled", true);
+        row.children().find('input[name=sampleDescription]').attr("disabled", true);
+                
+        row.children().find('select[name=hotSpotRegionBedFile]').attr("disabled", true);
+
+        var isToDisable = true;
+        if (isEven(rowIndex)) {
+            isToDisable = false;
+            row.children().find('select[name=ircancerType]').removeAttr("disabled");
+            row.children().find('input[name=ircellularityPct]').removeAttr("disabled");
+        }
+        else {
+            row.children().find('select[name=ircancerType]').attr("disabled", true);
+            row.children().find('input[name=ircellularityPct]').attr("disabled", true);
+        
+        }
+        disableIRCells(isToDisable, rowIndex, row);   
+    }   
+    else {
+        row.children().find('input[name=sampleName]').removeAttr("disabled");
+        row.children().find('input[name=sampleExternalId]').removeAttr("disabled");
+        row.children().find('input[name=sampleDescription]').removeAttr("disabled");
+
+        row.children().find('select[name=ircancerType]').removeAttr("disabled");
+        row.children().find('input[name=ircellularityPct]').removeAttr("disabled");
+ 
+        disableIRCells(false, rowIndex, row);
+    }
+}
+
+
+function disableIRCells(isToDisable, rowIndex, row) {
+    if (isToDisable) {
+        //row.children().find('select[name=ircancerType]').attr("disabled", true);
+        //row.children().find('input[name=ircellularityPct]').attr("disabled", true);
+
+        row.children().find('select[name=irWorkflow]').attr("disabled", "disabled");
+        row.children().find('select[name=irRelationRole]').attr("disabled", true);  
+        row.children().find('select[name=irGender]').attr("disabled", true);  
+        row.children().find('input[name=irSetID]').attr("disabled", true);  
+    }
+    else {
+        //row.children().find('select[name=ircancerType]').removeAttr("disabled");
+        //row.children().find('input[name=ircellularityPct]').removeAttr("disabled");
+
+        row.children().find('select[name=irWorkflow]').removeAttr("disabled");
+        row.children().find('select[name=irRelationRole]').removeAttr("disabled");
+        row.children().find('select[name=irGender]').removeAttr("disabled");
+        row.children().find('input[name=irSetID]').removeAttr("disabled");
+    }
+}
+
+function updateIRWorkflowSelectionForDualNucleotideType(currentRow, nextRow, selectedWorkflow) {
+    if (isEven(currentRow.index())) {
+        nextRow.children().find('select[name=irWorkflow]').val(selectedWorkflow);
+
+        //clear the 2nd row's relation selected value
+        nextRow.children().find('select[name=irRelationRole]').val("");
+        //if the 1st row only has 1 value, it will be auto-select and change won't be triggered
+        relationValue = currentRow.children().find('select[name=irRelationRole]').val();
+        
+        //console.log("updateIRWorkflowSelectionForDualNucleotideType() selectedWorkflow=", selectedWorkflow, "; relationValue=", relationValue);
+
+        if (selectedWorkflow && !relationValue) {
+            //select the first non-blank value if that is the only non-blank choice
+            var count = currentRow.children().find('select[name=irRelationRole] option').length;
+            if (count == 2) {
+                currentRow.children().find('select[name=irRelationRole] :nth-child(2)').prop('selected', true); // To select via index
+                relationValue = currentRow.children().find('select[name=irRelationRole]').val();
+            }
+            //console.log("updateIRWorkflowSelectionForDualNucleotideType() AGAIN!! relationValue=", relationValue);
+        }
+        
+        if (relationValue) {
+            //the 2nd row may not have the selected value in the drop down
+            var isExist = false;
+            nextRow.children().find('select[name=irRelationRole]').each(function () {
+                if (this.value == relationValue) {
+                    isExist = true;
+                }
+            });
+            if (isExist == false) {
+                var options = currentRow.children().find('select[name=irRelationRole] option').clone();
+
+                nextRow.children().find('select[name=irRelationRole]').empty();
+                nextRow.children().find('select[name=irRelationRole]').append(options);
+            }
+            nextRow.children().find('select[name=irRelationRole]').val(relationValue);
+        }
+    }
+}
+
+//20150205TODO - refactor to take advantage of the generalized code in this file
+function initForBasicDualNucleotideType() {
     //(1) auto-set number of barcode count to 2;
     //(2) auto-set nucleotide type to DNA on row 1 and RNA on row 2;
     //(3) disable sample name, sample id and description ui widgets on row 2
     //(4) auto-populate reference, target region and hotSpot from Reference chevron for the DNA sample
     //(5) disable and disallow user input for RNA's target region and hotSpot
-
+    
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
     //console.log("typeof isDualNucleotideType=", Object.prototype.toString.call(isDualNucleotideType));
     var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
@@ -86,28 +364,35 @@ prepareEasyDualNucleotideTypeSupport = function () {
 
     var isCreate = $('input[id=isCreate]').val();
 
-    if (isDualNucleotideType == "True"){
-        $('#row1').children().find('select[name=hotSpotRegionBedFile]').val("");
-    }
-
     if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True")) {
+        disableRNARowsForDualNucleotideType(isDualNucleotideType, isSameSampleForDual);             
         var numRowValue = $('#numRows').val();
-        console.log("current numRowValue=", numRowValue);
-        console.log("typeof numRowValue=", Object.prototype.toString.call(numRowValue));
+        //console.log("current numRowValue=", numRowValue);
+        //console.log("typeof numRowValue=", Object.prototype.toString.call(numRowValue));
 
+        if (isCreate != "True") {
+            setRowsMetaDataForDualNucleotideType(isDualNucleotideType, isSameSampleForDual);             
+            return;
+        }
+        if (parseInt(numRowValue) > 1) {
+            setRowsMetaDataForDualNucleotideType(isDualNucleotideType, isSameSampleForDual);             
+            return;
+        }
+        
         $('#numRows').val("2");
         $('#numRows').change();
-        $("#numRows").attr("disabled", true);
 
         var row0 = $('#row0');
         var row1 = $('#row1');
-
+    
         row0.children().find('select[name=nucleotideType]').val("DNA");
-        row0.children().find('select[name=nucleotideType]').attr("disabled", true);
-
+        row0.removeClass("rna");
+        row0.addClass("dna");
+        
         row1.children().find('select[name=nucleotideType]').val("RNA");
-        row1.children().find('select[name=nucleotideType]').attr("disabled", true);
-
+        row1.removeClass("dna");
+        row1.addClass("rna");
+        
         //do not clear selection or data loss during edit!! row1.children().find('select[name=targetRegionBedFile]').val("");
         row1.children().find('select[name=hotSpotRegionBedFile]').val("");
 
@@ -119,7 +404,7 @@ prepareEasyDualNucleotideTypeSupport = function () {
     /*
         //applicable regardless if isSameSampleForDual
         if (isCreate == "True") {
-            console.log("at page_plan_sample_table.prepareEasyDualNucleotideTypeSupport - isCreate!!!");
+            console.log("at page_plan_sample_table.initForBasicDualNucleotideType - isCreate!!!");
             row1.children().find('select[name=reference]').val("");
         }
     */
@@ -157,7 +442,7 @@ prepareEasyDualNucleotideTypeSupport = function () {
 
             value = row0.children().find(".irRelationshipType").val();
 
-            //console.log("page_plan_sample_table.prepareEasyDualNucleotideTypeSupport() - relationshipType.value=", value);
+            //console.log("page_plan_sample_table.initForBasicDualNucleotideType() - relationshipType.value=", value);
             row1.children().find(".irRelationshipType").val(value);
 
             value = row0.children().find('select[name=irRelationRole]').val();
@@ -187,16 +472,7 @@ prepareEasyDualNucleotideTypeSupport = function () {
 
             value = row0.children().find('input[name=irSetID]').val();
             row1.children().find('input[name=irSetID]').val(value);
-
-            row1.children().find('input[name=sampleExternalId]').attr("disabled", true);
-            row1.children().find('input[name=sampleDescription]').attr("disabled", true);
-            row1.children().find('select[name=ircancerType]').attr("disabled", true);
-            row1.children().find('input[name=ircellularityPct]').attr("disabled", true);
-
-            row1.children().find('select[name=irWorkflow]').attr("disabled", true);
-            row1.children().find('select[name=irRelationRole]').attr("disabled", true);
-            row1.children().find('select[name=irGender]').attr("disabled", true);
-            row1.children().find('input[name=irSetID]').attr("disabled", true);
+            disableRNARowForDualNucleotideType(isDualNucleotideType, isSameSampleForDual, 1, row1);
         }
         else {
             if (isPlanBySample == "True") {
@@ -205,17 +481,7 @@ prepareEasyDualNucleotideTypeSupport = function () {
             else {
                 row1.children().find('input[name=sampleName]').removeAttr("disabled");
             }
-
-            row1.children().find('input[name=sampleExternalId]').removeAttr("disabled");
-            row1.children().find('input[name=sampleDescription]').removeAttr("disabled");
-
-            row1.children().find('select[name=ircancerType]').removeAttr("disabled");
-            row1.children().find('input[name=ircellularityPct]').removeAttr("disabled");
-
-            row1.children().find('select[name=irWorkflow]').removeAttr("disabled");
-            row1.children().find('select[name=irRelationRole]').removeAttr("disabled");
-            row1.children().find('select[name=irGender]').removeAttr("disabled");
-            row1.children().find('input[name=irSetID]').removeAttr("disabled");
+            disableRNARowForDualNucleotideType(isDualNucleotideType, isSameSampleForDual, 1, row1);
         }
 
         //var currentValue = row1.children().find('select[name=reference]').val();
@@ -226,6 +492,29 @@ prepareEasyDualNucleotideTypeSupport = function () {
 //        	console.log("Going to clear row1 reference value. currentValue=", currentValue, "; SELECTED_PLAN_REFERENCE=", SELECTED_PLAN_REFERENCE);
 //            row1.children().find('select[name=reference]').val("");        	
 //        }
+    }
+}
+
+
+function setRowsMetaDataForDualNucleotideType(isDualNucleotideType, isSameSampleForDual) {
+    if (isDualNucleotideType != "True") {
+        return;
+    }
+    var numRowValue = $('#numRows').val();
+    var rowCount = parseInt(numRowValue);
+   
+    for (var i = 0; i < rowCount; i++) {
+        var row = $('#row' + i);
+        
+        var value = row.children().find('select[name=nucleotideType]').val(); 
+        if (value.toLowerCase() == "dna") {
+            row.removeClass("rna");
+            row.addClass("dna")        
+        }  
+        else if (value.toLowerCase() == "rna") {
+            row.removeClass("dna");
+            row.addClass("rna")        
+        }
     }
 }
 
@@ -244,7 +533,7 @@ prepareSampleIRConfiguration = function () {
 }
 
 
-function updateSampleReferenceColumnsWithDefaults(defaultReference, defaultTargetBedFile, defaultHotSpotBedFile, mixedTypeRNA_reference, mixedTypeRNA_targetBedFile) {
+function updateSampleReferenceColumnsWithDefaults(defaultReference, defaultTargetBedFile, defaultHotSpotBedFile, mixedTypeRNA_reference, mixedTypeRNA_targetBedFile) {    
     updateSamplesForReference(defaultReference, false);
     updateSamplesForTargetRegion(defaultTargetBedFile, false);
     updateSamplesForHotSpot(defaultHotSpotBedFile, false);
@@ -256,7 +545,15 @@ function updateSampleReferenceColumnsWithDefaults(defaultReference, defaultTarge
     var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
 
     if (isDualNucleotideType == "True"){
-        $('#row1').children().find('select[name=hotSpotRegionBedFile]').val("");
+        $(".hideable_referenceBySample_hotSpot").each(function (index, value) {
+
+            //here, table header is being iterated as well    
+            //process RNA sample row    
+            var row = $("#row" + index);
+            if (row && row.hasClass("rna")) {
+                row.children().find('select[name=hotSpotRegionBedFile]').val("");
+            }
+        });
     }
     
     //console.log("done with updateSampleReferenceColumnsWithDefaults - GOING to updateSamplesTable NOW");
@@ -267,23 +564,29 @@ function updateSampleReferenceColumnsWithDefaults(defaultReference, defaultTarge
 function updateSamplesForReference(defaultReference, isToUpdateSamplesTableNow) {
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
     var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
-    
-    var mixedTypeRNA_reference = ""
-    if (isDualNucleotideType == "True") {
-        mixedTypeRNA_reference = $('#row1').children().find('select[name=reference]').val();
+
+    //20141002-WIP-TODO - needs to filter OCP BED file selection!! 
+    if (isDualNucleotideType == "True"){    
+        $(".hideable_referenceBySample_ref").each(function (index, value) {      
+            //console.log("updateSamplesForReference...index=", index, "; value=", value );
+
+            //here, table header is being iterated as well  
+            //process DNA sample row
+            var row = $("#row" + index);
+            if (row && row.hasClass("dna")) {
+                row.children().find('select[name=reference]').val(defaultReference).prop('selected', true);
+            }
+        });    
     }
-    
-    $("select[name=reference]").each(function(){
-        $(this).val(defaultReference).prop('selected', true);
-    });
+    else {
+        $("select[name=reference]").each(function(){
+            $(this).val(defaultReference).prop('selected', true);
+        });    
+    }
         
     //trigger the change event manually
     $("select[name=reference]").change();
-         
-    //20141002-WIP-TODO - needs to filter OCP BED file selection!! 
-    if (isDualNucleotideType == "True"){
-        $('#row1').children().find('select[name=reference]').val(mixedTypeRNA_reference).prop('selected', true);
-    }
+        
 	if (isToUpdateSamplesTableNow == true) {
         updateSamplesTable();
     }
@@ -294,8 +597,17 @@ function updateMixedTypeRNASamplesForReference(planReference, isToUpdateSamplesT
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
 
     if (isDualNucleotideType == "True"){
-        $('#row1').children().find('select[name=reference]').val(planReference).prop('selected', true);
+        $(".hideable_referenceBySample_ref").each(function (index, value) {     
+            //console.log("updateMixedTypeRNASamplesForReference...index=", index, "; value=", value );
 
+            //here, table header is being iterated as well
+            //process RNA sample row  
+            var row = $("#row" + index);
+            if (row && row.hasClass("rna")) {
+                row.children().find('select[name=reference]').val(planReference).prop('selected', true);
+            }            
+        });    
+        
         //trigger the change event manually
          $("select[name=reference]").change();
     }
@@ -310,18 +622,24 @@ function updateSamplesForTargetRegion(defaultTargetBedFile, isToUpdateSamplesTab
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
     var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
 
-    var mixedTypeRNA_targetRegion = ""
-    if (isDualNucleotideType == "True") {
-        mixedTypeRNA_targetRegion = $('#row1').children().find('select[name=targetRegionBedFile]').val();
-    }    
-
-    $("select[name=targetRegionBedFile]").each(function(){
-        $(this).val(defaultTargetBedFile).prop('selected', true);
-    });
-    
     if (isDualNucleotideType == "True"){
-        $('#row1').children().find('select[name=targetRegionBedFile]').val(mixedTypeRNA_targetRegion).prop('selected', true);
+        $(".hideable_referenceBySample_targetRegion").each(function (index, value) {   
+            //console.log("updateSamplesForTargetRegion...index=", index, "; value=", value );
+
+            //here, table header is being iterated as well    
+            //process DNA sample row
+            var row = $("#row" + index);
+            if (row && row.hasClass("dna")) {
+                row.children().find('select[name=targetRegionBedFile]').val(defaultTargetBedFile).prop('selected', true);
+            }                        
+        });           
     }
+    else {
+        $("select[name=targetRegionBedFile]").each(function(){
+            $(this).val(defaultTargetBedFile).prop('selected', true);
+        });        
+    }
+    
 	if (isToUpdateSamplesTableNow == true) {
         updateSamplesTable();
     }
@@ -332,7 +650,16 @@ function updateMixedTypeRNASamplesForTargetRegion(planTargetBedFile, isToUpdateS
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
 
     if (isDualNucleotideType == "True"){
-        $('#row1').children().find('select[name=targetRegionBedFile]').val(planTargetBedFile).prop('selected', true);
+        $(".hideable_referenceBySample_targetRegion").each(function (index, value) {      
+            //console.log("updateMixedTypeRNASamplesForTargetRegion...index=", index, "; value=", value );
+
+            //here, table header is being iterated as well   
+            //process RNA sample row     
+            var row = $("#row" + index);
+            if (row && row.hasClass("rna")) {
+                row.children().find('select[name=targetRegionBedFile]').val(planTargetBedFile).prop('selected', true);
+            }                        
+        });     
     }
 
 	if (isToUpdateSamplesTableNow == true) {
@@ -344,21 +671,25 @@ function updateMixedTypeRNASamplesForTargetRegion(planTargetBedFile, isToUpdateS
 function updateSamplesForHotSpot(defaultHotSpot, isToUpdateSamplesTableNow) {
     var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
     var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
-
-    var mixedTypeRNA_hotSpot = ""
-    if (isDualNucleotideType == "True") {
-        mixedTypeRNA_hotSpot = $('#row1').children().find('select[name=hotSpotRegionBedFile]').val();
-    }    
-    
- 
-    $("select[name=hotSpotRegionBedFile]").each(function(){
-        $(this).val(defaultHotSpot).prop('selected', true);
-    });
-    
     
     if (isDualNucleotideType == "True"){
-        $('#row1').children().find('select[name=hotSpotRegionBedFile]').val(mixedTypeRNA_hotSpot).prop('selected', true);
+        $(".hideable_referenceBySample_hotSpot").each(function (index, value) {      
+            //console.log("updateSamplesForHotSpot...index=", index, "; value=", value );
+
+            //here, table header is being iterated as well  
+            //process DNA sample row  
+            var row = $("#row" + index);
+            if (row && row.hasClass("dna")) {
+                row.children().find('select[name=hotSpotRegionBedFile]').val(defaultHotSpot).prop('selected', true);
+            }                      
+        });      
     }
+    else {
+        $("select[name=hotSpotRegionBedFile]").each(function(){
+            $(this).val(defaultHotSpot).prop('selected', true);
+        });
+    }
+    
 	if (isToUpdateSamplesTableNow == true) {
         updateSamplesTable();
     }
@@ -412,7 +743,7 @@ toggleSampleReferenceColumnEnablements = function(isToDisable, isTargetRegionBED
     }
     
     if (isHotspotRegionBEDFileSupported == "True" && isHotSpotBEDFileBySampleSupported == "True") {
-        $(".hideable_referenceBySample_hotSpot").each(function (index, value) {            
+        $(".hideable_referenceBySample_hotSpot").each(function (index, value) {
             //console.log("going to enable/disable hideable_referenceBySample_hotSpot_ref...index=", index, "; value=", value, "; attr(id)=", $(this).attr("id"), "this.id=", $(this).id );
             if (isToDisable) {
                $(this).find('select').attr("disabled", true);
@@ -421,9 +752,11 @@ toggleSampleReferenceColumnEnablements = function(isToDisable, isTargetRegionBED
                 $(this).find('select').removeAttr("disabled");
 
                 //need to keep DNA+Fusion's RNA sample's hot spot disabled at all time        
-                var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();            
+                var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();   
+                //here, table header is being iterated as well       
+                //if (isDualNucleotideType == "True" && isEven(index)){
                 if (isDualNucleotideType == "True"){
-                    $('#row1').children().find('select[name=hotSpotRegionBedFile]').attr("disabled", true);
+                    $('#row'+ index).children().find('select[name=hotSpotRegionBedFile]').attr("disabled", true);
                 } 
             }
         });    
@@ -486,9 +819,7 @@ $(document).ready(function () {
                 }
                 else {
                     var previousIndex = index - 1;
-                    var previousRow = $('#row' + previousIndex.toString());
-                    var value = previousRow.children().find('input[name=sampleName]').val();
-                    $(this).val(value);
+                    $(this).val('barcode_' + (index + 1));
                 }
             }
             else {
@@ -706,7 +1037,12 @@ $(document).ready(function () {
         if ($('input[id=chk_barcoded]').is(':checked')) {
             // limit to number of barcodes in set
             var num_barcodes = BARCODES[$('#barcodeSet').val()].length;
-            this.value = (this.value > num_barcodes) ? num_barcodes : this.value;
+            //20150212-TEMP until anything goes-OCP is live - for OCP sample pairs need to be even number
+            var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
+            var numRowsValue = parseInt(this.value);
+
+            //this.value = (this.value > num_barcodes) ? num_barcodes : this.value;
+            this.value = (numRowsValue > num_barcodes) ? num_barcodes : numRowsValue;
         }
 
         if (this.value > nrows) {
@@ -730,11 +1066,12 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
-                row1.children().find('input[name=sampleName]').val(value);
+                nextRow.children().find('input[name=sampleName]').val(value);
             }
         }
     });
@@ -748,11 +1085,12 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
-                row1.children().find('select[name=sampleName]').val(value);
+                nextRow.children().find('select[name=sampleName]').val(value);
             }
         }
     });
@@ -765,11 +1103,12 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
-                row1.children().find('input[name=sampleExternalId]').val(value);
+                nextRow.children().find('input[name=sampleExternalId]').val(value);
             }
         }
     });
@@ -782,11 +1121,12 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
-                row1.children().find('input[name=sampleExternalId]').val(value);
+                nextRow.children().find('input[name=sampleExternalId]').val(value);
             }
         }
     });
@@ -799,11 +1139,12 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
-                row1.children().find('input[name=sampleDescription]').val(value);
+                nextRow.children().find('input[name=sampleDescription]').val(value);
             }
         }
     });
@@ -816,15 +1157,31 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
-                row1.children().find('input[name=sampleDescription]').val(value);
+                nextRow.children().find('input[name=sampleDescription]').val(value);
             }
         }
     });
 
+    $('select[name=nucleotideType]').change(function () {
+        var currentRow = $(this).closest('tr');                
+        var value = $(this).val().toLowerCase();
+
+        if (value == "dna") {
+         currentRow.removeClass("rna");
+         currentRow.addClass("dna");
+        }
+        if (value == "rna") {
+         currentRow.removeClass("dna");
+         currentRow.addClass("rna");
+        }
+        initSampleRefInfoForDualNucleotideType(currentRow);
+    });
+    
     $('select[name=ircancerType]').change(function () {
         var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
         var isBarcodeKitSelection = $('input[id=isBarcodeKitSelectionRequired]').val();
@@ -832,12 +1189,13 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            //console.log("ircancerType current row index=", currentRow.index());
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            //console.log("ircancerType current row index=", currentRow.index());            
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
-                row1.children().find('select[name=ircancerType]').val(value);
+                nextRow.children().find('select[name=ircancerType]').val(value);
             }
         }
     });
@@ -849,11 +1207,12 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
-                row1.children().find('input[name=ircellularityPct]').val(value);
+                nextRow.children().find('input[name=ircellularityPct]').val(value);
             }
         }
     });
@@ -867,39 +1226,12 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
-
-                var value = $(this).val();
-
-                row1.children().find('select[name=irWorkflow]').val(value);
-
-                //clear the 2nd row's relation selected value
-                row1.children().find('select[name=irRelationRole]').val("");
-                //if the 1st row only has 1 value, it will be auto-select and change won't be triggered
-                relationValue = currentRow.children().find('select[name=irRelationRole]').val();
-                //console.log("irWorkflow.change - relationValue=", relationValue);
-
-                if (relationValue) {
-
-                    //the 2nd row may not have the selected value in the drop down
-                    var isExist = false;
-                    row1.children().find('select[name=irRelationRole]').each(function () {
-                        if (this.value == relationValue) {
-                            isExist = true;
-                        }
-                    });
-                    //console.log("first row selected relation=", relationValue, "; isExist=", isExist);
-
-                    if (isExist == false) {
-                        var options = currentRow.children().find('select[name=irRelationRole] option').clone();
-
-                        row1.children().find('select[name=irRelationRole]').empty();
-                        row1.children().find('select[name=irRelationRole]').append(options);
-                    }
-                    row1.children().find('select[name=irRelationRole]').val(relationValue);
-                }
-            }
+            //console.log("### irWorkflow change - currentRow.index=", currentRow.index());
+            var nextRowIndex = currentRow.index() + 1;
+            var nextRow = $('#row' + nextRowIndex);
+            var value = $(this).val();
+            
+            updateIRWorkflowSelectionForDualNucleotideType(currentRow, nextRow, value);
         }
     });
 
@@ -911,15 +1243,18 @@ $(document).ready(function () {
         var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
-            var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            var currentRow = $(this).closest('tr');           
+            //console.log("### irRelationRole change - currentRow.index=", currentRow.index());
+            
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
 
                 //the 2nd row may not have the selected value in the drop down
                 var isExist = false;
-                row1.children().find('select[name=irRelationRole]').each(function () {
+                nextRow.children().find('select[name=irRelationRole]').each(function () {
                     if (this.value == value) {
                         isExist = true;
                     }
@@ -928,11 +1263,11 @@ $(document).ready(function () {
                 if (isExist == false) {
                     var options = currentRow.children().find('select[name=irRelationRole] option').clone();
 
-                    row1.children().find('select[name=irRelationRole]').empty();
-                    row1.children().find('select[name=irRelationRole]').append(options);
+                    nextRow.children().find('select[name=irRelationRole]').empty();
+                    nextRow.children().find('select[name=irRelationRole]').append(options);
                 }
 
-                row1.children().find('select[name=irRelationRole]').val(value);
+                nextRow.children().find('select[name=irRelationRole]').val(value);
             }
         }
     });
@@ -946,11 +1281,12 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
-                row1.children().find('select[name=irGender]').val(value);
+                nextRow.children().find('select[name=irGender]').val(value);
             }
         }
     });
@@ -965,11 +1301,12 @@ $(document).ready(function () {
 
         if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True") && (isSameSampleForDual)) {
             var currentRow = $(this).closest('tr');
-            if (currentRow.index() == 0) {
-                var row1 = $('#row1');
+            if (isEven(currentRow.index())) {
+                var nextRowIndex = currentRow.index() + 1;
+                var nextRow = $('#row' + nextRowIndex);
 
                 var value = $(this).val();
-                row1.children().find('input[name=irSetID]').val(value);
+                nextRow.children().find('input[name=irSetID]').val(value);
             }
         }
     });
@@ -978,10 +1315,10 @@ $(document).ready(function () {
      Checkbox for same sample in a DNA + RNA plan is clicked
      */
     $("input[name=isOncoSameSample]").click(function () {
-        //var isSameSampleForDual = $(this).is(":checked");
-
-        prepareEasyDualNucleotideTypeSupport();
-
+        var isSameSampleForDual = $(this).is(":checked");
+        var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
+        
+        disableRNARowsForDualNucleotideType(isDualNucleotideType, isSameSampleForDual);
         updateSamplesTable();
     });
 
@@ -991,17 +1328,17 @@ $(document).ready(function () {
     var isSameSampleForDual = $('input[id=isOncoSameSample]').is(":checked");
 
     if ((isDualNucleotideType == "True") && (isBarcodeKitSelection == "True")) {
-        prepareEasyDualNucleotideTypeSupport();
+        initForBasicDualNucleotideType();
     }
     else {
         $("#numRows").removeAttr("disabled");
-
+        
+        //20150203TODO-do we still need this?
         if ($('#numRows').val() > 1) {
             var row1 = $('#row1');
             row1.children().find('input[name=sampleName]').removeAttr("disabled");
             row1.children().find('input[name=sampleExternalId]').removeAttr("disabled");
             row1.children().find('input[name=sampleDescription]').removeAttr("disabled");
-            row1.children().find('select[name=nucleotideType]').removeAttr("disabled");
             row1.children().find('select[name=targetRegionBedFile]').removeAttr("disabled");
             row1.children().find('select[name=hotSpotRegionBedFile]').removeAttr("disabled");
 
@@ -1117,7 +1454,7 @@ $(document).ready(function () {
 
         var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
         if (isDualNucleotideType == "True") {       
-            console.log("$$$ skipping targetBedSelect.children().remove() for dualNucleotideType");
+            //console.log("$$$ skipping targetBedSelect.children().remove() for dualNucleotideType");
          	//console.log("### reference.change - targetBedSelect.children=", targetBedSelect.children());
          	
             //20141006-WIP-TODO - filter the targetBedSelect and hotspotBedSelect for the specific row!!

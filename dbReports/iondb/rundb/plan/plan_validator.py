@@ -409,17 +409,18 @@ def validate_barcode_sample_association(selectedBarcodes, selectedBarcodeKit):
 
 
 
-def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleotideType = None, displayedName="Target Regions BED File"):
+def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleotideType = None, applicationGroupName = None, displayedName="Target Regions BED File"):
     """
     validate targetRegionBedFile based on the selected reference and the plan's runType
     """            
     errors = []
     
-    logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() value=%s; runType=%s; reference=%s; nucleotideType=%s" %(value, runType, reference, nucleotideType))
+    logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() value=%s; runType=%s; reference=%s; nucleotideType=%s; applicationGroupName=%s" %(value, runType, reference, nucleotideType, applicationGroupName))
     
     if reference:
         if runType:
             runType = runType.strip()
+            #TODO: ApplProduct needs to have definition by both runType and applicationGroup
             applProducts = ApplProduct.objects.filter(applType__runType = runType)
             if applProducts:
                 applProduct = applProducts[0]
@@ -430,6 +431,8 @@ def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleoti
                         #skip for now
                         if runType == "AMPS_DNA_RNA" and nucleotideType and nucleotideType.upper() == "RNA":                        
                             logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() ALLOW MISSING targetRegionBed for runType=%s; nucleotideType=%s" %(runType, nucleotideType))
+                        elif runType == "AMPS_RNA" and applicationGroupName and applicationGroupName in ["DNA + RNA", "DNA and Fusions"]:
+                            logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() ALLOW MISSING targetRegionBed for runType=%s; applicationGroupName=%s" %(runType, applicationGroupName))                            
                         else:    
                             errors.append("%s is required for this application" %(displayedName))
             else:

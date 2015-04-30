@@ -1,5 +1,5 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
-from iondb.rundb.models import Project, PlannedExperiment, Content, Plugin, GlobalConfig
+from iondb.rundb.models import Project, PlannedExperiment, Content, Plugin, GlobalConfig, Chip
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
 
@@ -217,15 +217,30 @@ def is_operation_supported_by_obj(plan_or_template):
     
     return True
 
-
-def getChipDisplayedNamePrefix(chipDisplayedName):  
-    parts = chipDisplayedName.rsplit("v", 1)
-    return parts[0]
-
-
 def getChipDisplayedVersion(chipDisplayedName):
-    parts = chipDisplayedName.rsplit("v", 1)
+    parts = chipDisplayedName.split("v", 1)
     return "v"+ parts[1]  if len(parts) > 1 else ""
+
+
+def getChipDisplayedNamePrimaryPrefix(chipDisplayedName):
+    """
+    Returns all the primary chip displayed name for UI to display 
+    e.g., for chip name "318 Select", return 318
+    """
+    isVersionInfoFound, prefixes = Chip.getChipDisplayedNameParts(chipDisplayedName)
+    
+    return prefixes[0]
+
+
+def getChipDisplayedNameSecondaryPrefix(chipDisplayedName):
+    """
+    Returns all the second portion of the chip displayed name for UI to display 
+    e.g., for chip name "318 Select", return "Select"
+    """
+    isVersionInfoFound, prefixes = Chip.getChipDisplayedNameParts(chipDisplayedName)
+        
+    return prefixes[-1] if len(prefixes) > 1 else ""
+
 
 
         

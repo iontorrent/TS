@@ -161,13 +161,14 @@ def download_samplefile_format(request):
     response = http.HttpResponse(mimetype='text/csv')
     now = str(datetime.datetime.now().strftime("%Y_%m_%d_%H_%M_%S"))
     response['Content-Disposition'] = 'attachment; filename=sample_file_format_%s.csv' % now
-    
+
     hdr = [ import_sample_processor.COLUMN_SAMPLE_NAME
             , import_sample_processor.COLUMN_SAMPLE_EXT_ID
             , import_sample_processor.COLUMN_GENDER
             , import_sample_processor.COLUMN_GROUP_TYPE
             , import_sample_processor.COLUMN_GROUP
             , import_sample_processor.COLUMN_SAMPLE_DESCRIPTION
+            , import_sample_processor.COLUMN_NUCLEOTIDE_TYPE
             , import_sample_processor.COLUMN_CANCER_TYPE
             , import_sample_processor.COLUMN_CELLULARITY_PCT          
             , import_sample_processor.COLUMNS_BARCODE_KIT
@@ -432,10 +433,15 @@ def save_samplesetitem(request):
                     if not isValid:
                         transaction.rollback()
                         #return HttpResponse(errorMessage,  mimetype="text/html")
-                        return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
-                        
+                        return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                                        
+
+                    isValid, errorMessage = views_helper._create_or_update_sampleSetItem(request, user, new_sample)
                     
-                    views_helper._create_or_update_sampleSetItem(request, user, new_sample)
+                    if not isValid:
+                        transaction.rollback()
+                        #return HttpResponse(errorMessage,  mimetype="text/html")
+                        return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
+                    
                 elif intent == "add_pending":
 
                     isValid, errorMessage, pending_sampleSetItem = views_helper._create_pending_sampleSetItem_dict(request, userName, currentDateTime)
@@ -574,6 +580,8 @@ def save_input_samples_for_sampleset(request):
 
                 selectedBarcodeKit = pending_sampleSetItem.get("barcodeKit", "")
                 selectedBarcode = pending_sampleSetItem.get("barcode", "")
+
+                sampleNucleotideType = pending_sampleSetItem.get("nucleotideType", "")
                 
                 new_sample = views_helper._create_or_update_sample_for_sampleSetItem_with_values(request, user, sampleDisplayedName, sampleExternalId, sampleDesc, selectedBarcodeKit, selectedBarcode)
                             
@@ -583,7 +591,8 @@ def save_input_samples_for_sampleset(request):
                     #return HttpResponse(errorMessage, mimetype="text/html")
                     return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
                 
-                views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct)
+                views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, \
+                                                                     selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType)
                    
             clear_samplesetitem_session(request)
                        
@@ -820,7 +829,9 @@ def show_add_pending_samplesetitem(request):
     
     barcodeKits = list(dnaBarcode.objects.values('name').distinct().order_by('name'))
     barcodeInfo = list(dnaBarcode.objects.all().order_by('name', 'index'))
-            
+
+    nucleotideType_choices = views_helper._get_nucleotideType_choices(request)
+    
     ctxd = {
             'sampleSetItem' : None,
             'sample_groupType_CV_list' : sample_groupType_CV_list,
@@ -832,6 +843,7 @@ def show_add_pending_samplesetitem(request):
             "selectedBarcodeKitName" : None,            
             'barcodeKits': barcodeKits,
             'barcodeInfo' : barcodeInfo,
+            'nucleotideType_choices' : nucleotideType_choices,
             ##'sampleAttributeValue_dict' : simplejson.dumps(sampleAttributeValue_dict),           
             'intent' : "add_pending"
             }
@@ -868,7 +880,8 @@ def show_edit_pending_samplesetitem(request, pending_sampleSetItemId):
     
     barcodeKits = list(dnaBarcode.objects.values('name').distinct().order_by('name'))
     barcodeInfo = list(dnaBarcode.objects.all().order_by('name', 'index'))
-            
+
+    nucleotideType_choices = views_helper._get_nucleotideType_choices(request)          
 
     ctxd = {
             'pending_sampleSetItem' : pending_sampleSetItem,
@@ -880,7 +893,8 @@ def show_edit_pending_samplesetitem(request, pending_sampleSetItemId):
             'sampleAttributeValue_list' : sampleAttributeValue_list,
             "selectedBarcodeKitName" : None,            
             'barcodeKits': barcodeKits,
-            'barcodeInfo' : barcodeInfo,                    
+            'barcodeInfo' : barcodeInfo, 
+            'nucleotideType_choices' : nucleotideType_choices,                               
             'intent' : "edit_pending"
             }
 
@@ -1265,6 +1279,8 @@ def show_edit_sample_for_sampleset(request, sampleSetItemId):
 
     selectedBarcodeKit = sampleSetItem.dnabarcode.name if sampleSetItem.dnabarcode else None                
 
+    nucleotideType_choices = views_helper._get_nucleotideType_choices(request)
+
     ctxd = {
             'sampleSetItem' : sampleSetItem,
             'sample_groupType_CV_list' : sample_groupType_CV_list,
@@ -1276,7 +1292,8 @@ def show_edit_sample_for_sampleset(request, sampleSetItemId):
             ##'sampleAttributeValue_dict' : simplejson.dumps(sampleAttributeValue_dict),  
             "selectedBarcodeKitName" : selectedBarcodeKit,            
             'barcodeKits': barcodeKits,
-            'barcodeInfo' : barcodeInfo,                           
+            'barcodeInfo' : barcodeInfo,
+            'nucleotideType_choices' : nucleotideType_choices,                                       
             'intent' : "edit"
             }
 

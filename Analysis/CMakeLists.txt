@@ -544,21 +544,6 @@ add_dependencies(tvc IONVERSION bamtools armadillo_proj htslib_proj)
 install(TARGETS tvc DESTINATION bin)
 
 
-add_executable(tvcvalidator
-  VariantCaller/validator/tvcvalidator.cpp
-  ${ION_VCFLIB_DIR}/Variant.cpp
-  ${ION_VCFLIB_DIR}/split.cpp
-  ${ION_VCFLIB_DIR}/tabixpp/tabix.cpp
-  ${ION_VCFLIB_DIR}/tabixpp/index.c
-  ${ION_VCFLIB_DIR}/tabixpp/bgzf.c
-  ${ION_VCFLIB_DIR}/smithwaterman/LeftAlign.cpp
-  ${ION_VCFLIB_DIR}/smithwaterman/Repeats.cpp
-  ${ION_VCFLIB_DIR}/smithwaterman/IndelAllele.cpp
-  ${ION_VCFLIB_DIR}/smithwaterman/SmithWatermanGotoh.cpp
-)
-target_link_libraries(tvcvalidator ${ION_BAMTOOLS_LIBS} z ion-analysis pthread dl)
-add_dependencies(tvcvalidator IONVERSION bamtools)
-
 add_executable(tvcutils
   VariantCaller/tvcutils/tvcutils.cpp
   VariantCaller/tvcutils/prepare_hotspots.cpp

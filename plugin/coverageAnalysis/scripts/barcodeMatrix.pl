@@ -13,13 +13,16 @@ my $genome = shift;
 my $propType = shift;
 my $idField = 3;
 my $propNum = int($propType+0);
-# allow customization for reading the chromosome coverage summary file: arg2 = "chrom"
-if( $propType eq "chrom" ) {
+my $contigRep = 0;
+# allow customization for reading the chromosome coverage summary file
+if( $propType eq "chrom" || $propType eq "contig" ) {
+  $idField = 0;
+  $propNum = -1;
+  $contigRep = 1;
+} elsif( $propType eq "chrombase" ) {
   $idField = 0;
   $propNum = 3;
-} elsif( $propType eq "contig" ) {
-  $idField = 0;
-  $propNum = 5;
+  $contigRep = 2;
 } elsif( $propNum <= 0 ) {
   print STDERR "Error at $CMD arg#2: <Property Index> must be an integer > 0.\n";
   exit 1;
@@ -38,6 +41,7 @@ if( $genome ne '-' ) {
   foreach my $file (@files) {
     open( GENOME, $file ) || die "Cannot read genome info. from $file.\n";
     while( <GENOME> ) {
+      chomp;
       my ($chrid) = split;
       next if( $chrid !~ /\S/ );
       unless( defined($chromIDs{$chrid}) ) {
@@ -70,6 +74,7 @@ while(<>) {
     $barcode_fields .= $fn;
     next;  # skip header line
   }
+  chomp;
   my @fields = split('\t',$_);
   # collect contig IDs if not provided by genome file for ordering
   my $chr = $fields[0];
@@ -110,8 +115,8 @@ while(<>) {
     }
   }
   my $prop = $fields[$propNum];
-  # convert whole genome output to be mean base coverage per contig, for consistecy with target base coverage modes
-  if( $propType eq "chrom" ) {
+  # chrombase mode outputs mean base read depth per contig
+  if( $contigRep == 2 ) {
     # maybe DIV#0 error if an invalid file was provided
     $prop = ($prop+$fields[4])/$fields[2];
     $prop = sprintf( "%.3f", $prop ) if( $prop >= 0.5 );
@@ -122,10 +127,9 @@ while(<>) {
 while( my ($chr,$ary) = each(%sortlist) ) {
   @$ary = sort { $a->[0] <=> $b->[0] || $a->[1] <=> $b->[1] } @$ary;
 }
-# output matrix using amplicons sorted by chromosome, start, stop (even thouh these fields are not output)
-my $ctgrep = $propType eq "chrom" || $propType eq "contig";
-if( $ctgrep ) {
-  print $propType eq "chrom" ? "Chrom\t" : "Contig\t";
+# output matrix using amplicons sorted by chromosome, start, stop (even though these fields are not output)
+if( $contigRep ) {
+  print $propType eq "contig" ? "Contig\t" : "Chrom\t";
   print "Start\tEnd\t" if( $addCoords );
   print "$barcode_fields\n";
 } else {
@@ -138,7 +142,7 @@ for( my $chrn = 0; $chrn < $numChroms; ++$chrn ) {
   for( my $i = 0; $i < scalar(@$ary); ++$i ) {
     my $subary = $ary->[$i];
     my $trgid = $subary->[3].':'.$subary->[0].'-'.$subary->[1];
-    if( $ctgrep ) {
+    if( $contigRep ) {
       print "$chr\t";
       print "$subary->[0]\t$subary->[1]\t" if( $addCoords );
       print "$targets{$trgid}\n";

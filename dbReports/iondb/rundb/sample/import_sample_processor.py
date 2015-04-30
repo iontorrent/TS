@@ -31,6 +31,7 @@ COLUMNS_BARCODE_KIT = "Barcodekit"
 COLUMN_BARCODE = "Barcode"
 COLUMN_CANCER_TYPE = "Cancer Type"
 COLUMN_CELLULARITY_PCT = "Cellularity %"
+COLUMN_NUCLEOTIDE_TYPE = "DNA/RNA"
 
 def process_csv_sampleSet(csvSampleDict, request, user, sampleSet_ids):
     """ read csv contents and convert data to raw data to prepare for sample persistence
@@ -67,6 +68,7 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     sampleDescription = csvSampleDict.get(COLUMN_SAMPLE_DESCRIPTION, '').strip()
     barcodeKit = csvSampleDict.get(COLUMNS_BARCODE_KIT, '').strip()
     barcodeAssignment = csvSampleDict.get(COLUMN_BARCODE, '').strip()
+    nucleotideType = csvSampleDict.get(COLUMN_NUCLEOTIDE_TYPE, "").strip()
     
     cancerType = csvSampleDict.get(COLUMN_CANCER_TYPE, "").strip()
     cellularityPct = csvSampleDict.get(COLUMN_CELLULARITY_PCT, None).strip()
@@ -74,6 +76,8 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     if not sampleGroup:
         sampleGroup = '0'
 
+    isValid, errorMessage, nucleotideType_internal_value = sample_validator.validate_nucleotideType(nucleotideType)
+    
     #validation has been done already, this is just to get the official value
     isValid, errorMessage, gender_CV_value = sample_validator.validate_sampleGender(sampleGender)      
     isValid, errorMessage, role_CV_value = sample_validator.validate_sampleGroupType(sampleGroupType)
@@ -99,7 +103,7 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
             
             logger.debug("import_sample_processor._create_sampleSetItem() just updated sample description for sample=%s; id=%d" %(sampleDisplayedName, sample.id))
         
-    logger.debug("import_sample_processor._create_sampleSetItem() after get_or_create isCreated=%s; sample=%s; sample.id=%d" %(str(isCreated), sampleDisplayedName, sample.id))
+    ##logger.debug("import_sample_processor._create_sampleSetItem() after get_or_create isCreated=%s; sample=%s; sample.id=%d" %(str(isCreated), sampleDisplayedName, sample.id))
 
 
     for sampleSetId in sampleSet_ids: 
@@ -121,11 +125,12 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
                                  'creationDate' : currentDateTime,
                                  'lastModifiedUser' : user,
                                  'lastModifiedDate' : currentDateTime,
-                                 'dnabarcode' : dnabarcode                                
                              }
-    
+
         sampleSetItem, isCreated = SampleSetItem.objects.get_or_create(sample = sample, 
                                                                        sampleSet_id = sampleSetId, 
+                                                                       dnabarcode = dnabarcode,
+                                                                       nucleotideType = nucleotideType_internal_value,                                                                       
                                                                        defaults = sampleSetItem_kwargs)
 
         logger.debug("import_sample_processor._create_sampleSetItem() after get_or_create isCreated=%s; sampleSetItem=%s; samplesetItem.id=%d" %(str(isCreated), sampleDisplayedName, sampleSetItem.id))            
@@ -229,10 +234,11 @@ def validate_csv_sample(csvSampleDict, request):
         sampleDescription = csvSampleDict.get(COLUMN_SAMPLE_DESCRIPTION, '').strip()
         barcodeKit = csvSampleDict.get(COLUMNS_BARCODE_KIT, '').strip()
         barcodeAssignment = csvSampleDict.get(COLUMN_BARCODE, '').strip()
-    
+        
+        nucleotideType = csvSampleDict.get(COLUMN_NUCLEOTIDE_TYPE, "").strip()
+     
         cancerType = csvSampleDict.get(COLUMN_CANCER_TYPE, "").strip()
         cellularityPct = csvSampleDict.get(COLUMN_CELLULARITY_PCT, None).strip()
-
 
         #skip blank line
         hasAtLeastOneValue = bool([v for v in csvSampleDict.values() if v != ''])
@@ -274,6 +280,11 @@ def validate_csv_sample(csvSampleDict, request):
             isValid, errorMessage, value = sample_validator.validate_cellularityPct(cellularityPct)
             if not isValid:
                 failed.append((COLUMN_CELLULARITY_PCT, errorMessage))     
+
+        if nucleotideType:
+            isValid, errorMessage, nucleotideType_internal_value = sample_validator.validate_nucleotideType(nucleotideType)
+            if not isValid:
+                failed.append((COLUMN_NUCLEOTIDE_TYPE, errorMessage))     
         
           
         ##NEW VALIDATION FOR BARCODEKIT AND BARCODE_ID_STR

@@ -160,12 +160,12 @@
         color: #b94a48;
         font-weight: bold;
     }
-    
+
     .oldIR{
         color: #b94a48;
         font-weight: bold;
     }
-    
+
     .newIR{
         visibility: hidden;
     }
@@ -276,7 +276,7 @@
 <script type="text/template" id="version">
 
     <label class="radio">
-        <input type="radio" name="version" value="{{version}}" {{checked}}>
+        <input type="radio" name="version" value="{{version}}" {{checked}} {{#unless isNew}}disabled{{/unless}}>
         {{fullHumanVersion version}}
     </label>
 
@@ -317,7 +317,7 @@
 
 <script type="text/template" id="modal_layout">
     <div id="ir-config" class="row">
-        <h3>Add Ion Reporter account</h3>
+        <h3>{{#if isNew}}Add{{else}}Edit{{/if}} Ion Reporter account</h3>
 
         <div class="topSpace span12">
             <div id="timeout" class="alert alert-error" style="display: none;"></div>
@@ -329,12 +329,12 @@
 
                     <div class="controls">
                         <label class="radio">
-                            <input type="radio" name="protocol" value="https" {{https}}>
+                            <input type="radio" name="protocol" value="https" {{https}} {{#unless isNew}}disabled{{/unless}}>
                             HTTPS
                         </label>
 
                         <label class="radio">
-                            <input type="radio" name="protocol" value="http" {{http}}>
+                            <input type="radio" name="protocol" value="http" {{http}} {{#unless isNew}}disabled{{/unless}}>
                             HTTP
                         </label>
                     </div>
@@ -354,7 +354,7 @@
 
                     <div class="controls">
                         <input type="text" id="server" name="server" placeholder="" value="{{server}}"
-                               autocomplete="off">
+                               autocomplete="off" {{#unless isNew}}disabled{{/unless}}>
                     </div>
                 </div>
 
@@ -362,7 +362,7 @@
                     <label class="control-label" for="port">Port</label>
 
                     <div class="controls">
-                        <input type="text" id="port" name="port" value="{{port}}" autocomplete="off">
+                        <input type="text" id="port" name="port" value="{{port}}" autocomplete="off" {{#unless isNew}}disabled{{/unless}}>
                     </div>
                 </div>
 
@@ -370,7 +370,7 @@
                     <label class="control-label" for="userid">Username</label>
 
                     <div class="controls">
-                        <input type="text" id="userid" name="userid" placeholder="" value="{{userid}}">
+                        <input type="text" id="userid" name="userid" placeholder="" value="{{userid}}" {{#unless isNew}}disabled{{/unless}}>
                     </div>
                 </div>
 
@@ -407,7 +407,7 @@
                 {{#if confirm}}
                 <div class="control-group">
                     <div class="controls">
-                        <span class='btn versionCheck'><i class='icon-repeat'></i> Get versions</span>
+                        <span class='btn versionCheck {{#unless isNew}}hide{{/unless}}'><i class='icon-repeat'></i> Get versions</span>
                     </div>
                 </div>
                 {{/if}}
@@ -1029,7 +1029,7 @@ $(function () {
             authXHR.done(function (data) {
                 that.model.set({"_version_cache": data["Version List"].sort() });
                 $(".version-group").html("");
-                that.versionRender();
+                that.versionRender(true);
             });
 
             authXHR.fail(function (data) {
@@ -1091,7 +1091,7 @@ $(function () {
                     that.model.unset("_details_timeout");
                     $("#password + p").html("");
                     $("#userid + p").html("");
-                } else if (data["error"] !== "") {    
+                } else if (data["error"] !== "") {
                     $("#timeout").html("Unable to login, " + data["error"]);
                     $("#timeout").show();
                     console.log("generic extend api error");
@@ -1129,21 +1129,24 @@ $(function () {
             //legacy code, remove later
             return false
         },
-        versionRender: function () {
+        versionRender: function (isNew) {
             if (this.model.has("_version_cache")) {
                 for (var i = 0, len = this.model.get("_version_cache").length; i < len; i++) {
 
-                    var check = {"version": this.model.get("_version_cache")[i]};
+                    var check = {"version": this.model.get("_version_cache")[i], "isNew": isNew};
 
                     if (this.model.get("version") === this.model.get("_version_cache")[i]) {
                         check["checked"] = "checked"
                     }
 
-                    $(".version-group").append(this.versionTemplate(check));
+                    //Only show results other than the selected one if we are create a new account.
+                    if(isNew || check["checked"] == "checked") {
+                        $(".version-group").append(this.versionTemplate(check));
+                    }
                 }
             } else {
                 var msg = "An account must specify the Ion Reporter version. </br> Once the server, port, and token have been entered above please click the button below to retrieve the list of available versions ";
-                $(".version-group").html(this.versionStatusTemplate({"error": false, "msg": msg, "status": "versionStatus"}));
+                $(".version-group").html(this.versionStatusTemplate({"error": false, "msg": msg, "status": "versionStatus", "isNew": isNew}));
             }
         },
         render: function (isNew) {
@@ -1152,6 +1155,7 @@ $(function () {
             renderTemp["legacy"] = this.legacy();
 
             if (isNew) {
+                renderTemp["isNew"] = true;
                 renderTemp["storeText"] = "Get Versions";
                 renderTemp["storeClass"] = "add";
                 renderTemp["icon"] = "repeat";
@@ -1163,6 +1167,7 @@ $(function () {
                 }
 
             } else {
+                renderTemp["isNew"] = false;
                 if (this.model.has("_version_cache")) {
                     renderTemp["storeText"] = "Update";
                     renderTemp["storeClass"] = "update";
@@ -1188,7 +1193,7 @@ $(function () {
             $("#whine").hide();
             this.$el.html(this.template(renderTemp));
             $("#modal").html(this.el);
-            this.versionRender();
+            this.versionRender(isNew);
 
             Backbone.Validation.bind(this);
 

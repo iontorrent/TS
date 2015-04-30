@@ -1,0 +1,81 @@
+{
+    "meta":{
+        "name"          : "TP53 Panel - PGM - Somatic - Low Stringency",
+        "tooltip"       : "Panel-specific parameters optimized for TP53 AmpliSeq Panel",
+        "configuration" : "tp53_somatic_lowstringency_pgm",
+        "ts_version"    : "4.2",
+        "compatibility" : {
+          "chip"        : ["pgm"],
+          "library"     : ["ampliseq"],
+          "frequency"   : ["somatic"],
+          "stringency"  : ["low"],
+          "panel"       : true
+        }
+    },
+    "torrent_variant_caller":{
+
+        "data_quality_stringency":6.5,
+        "hp_max_length":8,
+        "filter_unusual_predictions":0.7,
+        "filter_insertion_predictions": 0.4,
+        "filter_deletion_predictions": 0.2,
+
+        "snp_min_cov_each_strand":0,
+        "snp_min_variant_score":6,
+        "snp_min_allele_freq":0.02,
+        "snp_min_coverage":6,
+        "snp_strand_bias":0.95,
+        "snp_strand_bias_pval":1.0,
+
+        "mnp_min_cov_each_strand":0,
+        "mnp_min_variant_score":6,
+        "mnp_min_allele_freq":0.02,
+        "mnp_min_coverage":6,
+        "mnp_strand_bias":0.95,
+        "mnp_strand_bias_pval":1.0,
+
+        "indel_min_cov_each_strand":2,
+        "indel_min_variant_score":6,
+        "indel_min_allele_freq":0.05,
+        "indel_min_coverage":15,
+        "indel_strand_bias":0.90,
+        "indel_strand_bias_pval":1.0,
+
+        "hotspot_min_cov_each_strand":2,
+        "hotspot_min_variant_score":6,
+        "hotspot_min_allele_freq":0.01,
+        "hotspot_min_coverage":6,
+        "hotspot_strand_bias":0.95,
+        "hotspot_strand_bias_pval":1.0,
+
+        "downsample_to_coverage":2000,
+        "outlier_probability":0.005,
+        "do_snp_realignment":1,
+
+        "prediction_precision":1.0,
+        "heavy_tailed":3,
+        "suppress_recalibration":1
+    },
+    "long_indel_assembler":{
+        "kmer_len":19,
+        "min_var_count":5,
+        "short_suffix_match":5,
+        "min_indel_size":4,
+        "max_hp_length":8,
+        "min_var_freq":0.15,
+        "relative_strand_bias":0.8,
+        "output_mnv":0
+    },
+    "freebayes":{
+        "allow_indels":1,
+        "allow_snps":1,
+        "allow_mnps":1,
+        "allow_complex":0,
+        "min_mapping_qv":4,
+        "read_snp_limit":10,
+        "read_max_mismatch_fraction":1.0,
+        "gen_min_alt_allele_freq":0.03,
+        "gen_min_indel_alt_allele_freq":0.10,
+        "gen_min_coverage":6
+    }
+}

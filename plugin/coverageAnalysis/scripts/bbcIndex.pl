@@ -96,7 +96,7 @@ print BCIFILE pack "L L[$headSize]", $bciBlocksize, @bciBlockOffsets;
 
 # The depth file MUST have same contigs in the same order as in the genome file for indexing - other wise an error is issued
 my @bciChromOffsets;
-my ($numIndexed,$chrid,$bciChromIndex,$bciCoordCheck);
+my ($numIndexed,$chrid,$bciChromIndex);
 my ($chrnum,$bciCoordCheck) = (0,0);
 my $intsize = 4;
 my $headbytes = 2 * $intsize;
@@ -142,16 +142,19 @@ while(1)
     $bciCoordCheck = 1;
     next;
   }
-  # add in region length in case region spans boundary
-  $pos += $cd >> 3;
-  while( $pos > $bciCoordCheck )
-  {
-    #print "Recorded offset $bciChromIndex @ $seekDepthChrom for $pos >= $bciBlocksize\n" if( $logopt );
-    $bciChromOffsets[$bciChromIndex++] = $seekDepthChrom;
-    $bciCoordCheck += $bciBlocksize;
+  # avoid NULL ranges added to avoid 32-bit boundaries in large BBC files
+  if( $cd ) {
+    # add in region length in case region spans boundary
+    $pos += $cd >> 3;
+    while( $pos > $bciCoordCheck )
+    {
+      #print "Recorded offset $bciChromIndex @ $seekDepthChrom for $pos >= $bciBlocksize\n" if( $logopt );
+      $bciChromOffsets[$bciChromIndex++] = $seekDepthChrom;
+      $bciCoordCheck += $bciBlocksize;
+    }
+    $wrdsz = ($cd >> 1) & 3;
+    seek( BBCFILE, ($cd >> 3) << $wrdsz, 1 ) if( $wrdsz );
   }
-  $wrdsz = ($cd >> 1) & 3;
-  seek( BBCFILE, ($cd >> 3) << $wrdsz, 1 ) if( $wrdsz );
   $seekDepthChrom = tell(BBCFILE);
 }
 # Output index array for last contig if generated
