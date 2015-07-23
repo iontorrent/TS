@@ -140,7 +140,7 @@ int main(int argc, char *argv[])
     int mode = 0;
     bool allocate = true;
 
-    char *postNameList[] = {
+    const char *postNameList[] = {
         "beadfind_post_0000.dat", "beadfind_post_0001.dat",
         "beadfind_post_0002.dat", "beadfind_post_0003.dat"
     };

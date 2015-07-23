@@ -1,14 +1,17 @@
-# Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
-# This script handles creating an NxN matrix of N paired correlation functions.
+# Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved
+# This script handles creating an NxN plot of N paired correlation functions.
 # NOTE: Checks for sum(values) == 0 is used to prevent plot failures
+# The optional 5th argument may be the name of a text table for output of presented r-values
+
 options(warn=1)
 
 args <- commandArgs(trailingOnly=TRUE)
 
-nFileIn  <- ifelse(is.na(args[1]),"bcmatrix.xls",args[1])
-nFileOut <- ifelse(is.na(args[2]),"bcmatrix.png",args[2])
+nFileIn  <- ifelse(is.na(args[1]),"corplot.xls",args[1])
+nFileOut <- ifelse(is.na(args[2]),"corplot.png",args[2])
 nBarcode <- ifelse(is.na(args[3]),0,args[3])
 title    <- ifelse(is.na(args[4]),"",args[4])
+rValuOut <- ifelse(is.na(args[5]),"",args[5])
 
 scalePicSize <- 128
 minPicSize <- 3 * scalePicSize
@@ -36,8 +39,8 @@ cor_cex = 2.3 ; # r2 & p-val text size
 # read in matrix file and check expected format
 bcrmat <- read.table(nFileIn, header=TRUE, sep="\t", as.is=TRUE, comment.char="")
 ncols = ncol(bcrmat)
-if( ncols < 3 ) {
-  write(sprintf("ERROR: Expected at least 3 columns of data, including 2 row ID fields from bcmatrix file %s\n",nFileIn),stderr())
+if( ncols < 2 ) {
+  write(sprintf("ERROR: Expected at least 2 columns of data, including row ID field from bcmatrix file %s\n",nFileIn),stderr())
   q(status=1)
 }
 nrows = nrow(bcrmat)
@@ -45,6 +48,18 @@ if( nrows < 1 ) {
   write(sprintf("ERROR: Expected at least 1 row of data plus header line bcmatrix file %s\n",nFileIn),stderr())
   q(status=1)
 }
+
+# Remove first column and any (annotation) columns after barcode data and take log2(x+1) of counts
+bcrrep <- bcrmat[,-c(1,2),drop=FALSE]
+if( nBarcode > 0 ) {
+  bcrrep <- bcrrep[,1:nBarcode,drop=FALSE]
+}
+bcrrep <- log2(bcrrep+1)
+
+# globals for collecting r-value matrix
+r_value <- 0
+nsams = ncol(bcrrep)
+r_matrx <- matrix( nrow=nsams, ncol=nsams )
 
 # define panels to be output in pairs matrix
 
@@ -70,8 +85,6 @@ panel.abline <- function(x, y, ...) {
     reg <- coef(lm(y ~ x))
     abline(coef=reg,col=col_fitline)
     slope <- sprintf("s=%.2f",reg[2])
-    #const  <- sprintf("s=%.2f",reg[1])
-    #text( 0.85*usr[1]+0.15*usr[2], 0.95*usr[4]+0.05*usr[3], slope, cex=1.1 )
     text( 0.85*usr[2]+0.15*usr[1], 0.95*usr[3]+0.05*usr[4], slope, cex=1.1)
   }
 }
@@ -83,13 +96,11 @@ panel.cor <- function(x, y, digits=2, ...) {
     r <- abs(cor(x,y,method="pearson"))
     txt <- sprintf("r = %.3f",r)
   } else {
+    r <- 0
     txt <- "r = NA"
   }
   text(0.5, 0.5, txt, cex=cor_cex )
-  #test <- cor.test(x,y,method="pearson")
-  #Signif <- ifelse( round(test$p.value,3)<0.001, "p < 0.001", paste("p = ",round(test$p.value,3)) )  
-  #text(0.5, 0.35, Signif, cex=cor_cex )
-  #text(0.5, 0.65, paste("r = ",txt), cex=cor_cex )
+  r_value <<- r
 }
 
 # Define function to draw matrix of defined panels: Based on standard pairs() function but customized to get over limitations
@@ -187,11 +198,17 @@ corpairs <- function(x, labels, panel = points, ..., lower.panel = panel, upper.
           }
           text.panel(0.5, label.pos, labels[i], cex = cex.labels, font = font.labels)
         }
+        r_matrx[i,i] <<- 1
       }
-      else if (i < j)
+      else if (i < j) {
+        # Something wrong here: calling the localLowerPanel() actually ends up calling panel.upper
         localLowerPanel(as.vector(x[, j]), as.vector(x[, i]), ...)
-      else
+        r_matrx[i,j] <<- r_value
+        r_matrx[j,i] <<- r_value
+      } else {
+        # Something wrong here: calling the upperLowerPanel() actually ends up calling panel.lower
         localUpperPanel(as.vector(x[, j]), as.vector(x[, i]), ...)
+      }
       if (any(par("mfg") != mfg)) 
         stop("the 'panel' function made a new plot")
     }
@@ -204,13 +221,6 @@ corpairs <- function(x, labels, panel = points, ..., lower.panel = panel, upper.
   }
   invisible(NULL)
 }
-
-# Remove first 2 cols, columns after barcode data and take log2(x+1) of counts
-bcrrep <- bcrmat[,-c(1,2),drop=FALSE]
-if( nBarcode > 0 ) {
-  bcrrep <- bcrrep[,1:nBarcode,drop=FALSE]
-}
-bcrrep <- log2(bcrrep+1)
 
 # Create otuput window based on size of NxN matrix
 bcdim <- if( is.null(ncol(bcrrep)) ) 1 else ncol(bcrrep)
@@ -225,5 +235,13 @@ if( title == "" ) {
 
 # Call the corpairs() functions with input matrix and custom styling...
 corpairs( bcrrep, main=title, lower.panel=panel.abline, diag.panel=panel.density, upper.panel=panel.cor, gap=0.6, cex.axis=1 )
+
+# Output optional r-values table
+if( rValuOut != "" ) {
+  bcnames <- colnames(bcrrep)
+  colnames(r_matrx) <- bcnames
+  rownames(r_matrx) <- bcnames
+  write.table( r_matrx, file=rValuOut, sep="\t", quote=FALSE )
+}
 
 q()

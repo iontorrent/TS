@@ -126,6 +126,7 @@ void RefineFit::CrazyDumpToHDF5(BeadParams *p, int ibd, float * block_signal_pre
   bkg.global_state.SendXyflow_Timeframe_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, max_frames, flow_block_start );
   bkg.global_state.SendXyflow_R_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_SP_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
+  bkg.global_state.SendXyflow_GainSens_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_FitType_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, fitType, flow_block_start );
   bkg.global_state.SendXyflow_Taub_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
   bkg.global_state.SendXyflow_Dmult_ToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
@@ -164,6 +165,7 @@ void RefineFit::CrazyDumpToHDF5(BeadParams *p, int ibd, float * block_signal_pre
   {
       bkg.global_state.SendRegionCenter_TimeframeToHDF5(*bkg.region_data, bkg.region_data_extras, max_frames);
       bkg.global_state.SendRegionCenter_LocationToHDF5(ibd, *bkg.region_data );
+      bkg.global_state.SendRegionCenter_RegionParamsToHDF5(ibd, *bkg.region_data );
       bkg.global_state.SendRegionCenter_GainSensToHDF5(ibd, *bkg.region_data );
       bkg.global_state.SendRegionCenter_AmplitudeToHDF5(ibd, *bkg.region_data, bkg.region_data_extras, flow_block_start );
       bkg.global_state.SendRegionCenter_ResidualToHDF5(ibd, err_t, *bkg.region_data, bkg.region_data_extras, flow_block_start );
@@ -237,6 +239,6 @@ void RefineFit::FitAmplitudePerFlow ( int flow_block_size, int flow_block_start 
     if (bkg.region_data->my_beads.params_nn[ibd].FitBeadLogic ())
       FitAmplitudePerBeadPerFlow (ibd,bkg.region_data->my_regions.cache_step, flow_block_size, flow_block_start);
   }
-
+  
 //    printf("krate fit reduction cnt:%d amt:%f\n",krate_cnt,krate_red);
 }

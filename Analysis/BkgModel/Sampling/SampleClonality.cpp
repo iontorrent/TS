@@ -1,9 +1,11 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "FitDensity.h"
 #include "SampleClonality.h"
+#include "Stats.h"
 #include <stdio.h>
+#include <assert.h>
+#include <math.h>
 
-using namespace std;
 
 Clonality::Clonality()
 {
@@ -143,7 +145,11 @@ void Clonality::AddClonalPenalty(std::vector<float> const& signalInFlow, std::ve
       continue;
 
     // maximum penalty already applied
+#if __cplusplus >= 201103L
+    if ( std::isinf(penalty[ibd]) )
+#else
     if ( isinf(penalty[ibd]) )
+#endif
       continue;
 
     // reject any bead where signal is not present by using maximum penalty
@@ -326,7 +332,11 @@ void Clonality::GetPeaks(vector<float> const& in_data, vector<double>& peaks){
   peaks[0] = 0;
   size_t n = 0;
   for (size_t i=0; i<cnt; i++) {
+#if __cplusplus >= 201103L
+    if ( ! std::isinf(data[i]) ) {
+#else
     if ( ! isinf(data[i]) ) {
+#endif
       n++;
       peaks[0] += data[i];
     }

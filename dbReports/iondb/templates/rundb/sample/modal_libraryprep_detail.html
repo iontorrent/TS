@@ -1,0 +1,85 @@
+{% load url from future %}
+{% load static from staticfiles %}
+<div id="modal_libraryprep_detail" title="" class="modal">
+    <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h3>
+            Library Prep Summary
+        </h3>
+    </div>
+    <div class="modal-body">
+        {% if data %}
+        <table class="table table-striped">
+            <tr>
+                <td><b>Library Prep Type:</b></td>
+                <td>{{ data.libraryPrepData_sampleSet.all.0.get_libraryPrepType_display }}</td>
+            </tr>
+            <tr>
+                <td><b>PCR Plate Type:</b></td>
+                <td>{{ data.libraryPrepData_sampleSet.all.0.libraryPrepPlateType }}</td>
+            </tr>
+            <tr>
+                <td><b>PCR Plate Serial Number:</b></td>
+                <td>{{ data.libraryPrepData_sampleSet.all.0.pcrPlateSerialNum }}</td>
+            </tr>
+            <tr>
+                <td><b>Combined Library Tube Label:</b></td>
+                <td>{{ data.libraryPrepData_sampleSet.all.0.combinedLibraryTubeLabel }}</td>
+            </tr>
+            <tr>
+                <td><b>Chef Last Updated:</b></td>
+                <td>{{ data.lastUpdate }}</td>
+            </tr>
+            <tr>
+                <td><b>Chef Instrument Name:</b></td>
+                <td>{{ data.instrumentName }}</td>
+            </tr>
+            <tr>
+                <td><b>Tip Rack Barcode:</b></td>
+                <td>{{ data.tipRackBarcode }}</td>
+            </tr>
+            <tr>
+                <td><b>Library Kit Type:</b></td>
+                <td>{{ data.kitType }}</td>
+            </tr>
+            <tr>
+                <td><b>Reagent Lot Number:</b></td>
+                <td>{{ data.reagentsLot }}</td>
+            </tr>
+            <tr>
+                <td><b>Reagent Part Number:</b></td>
+                <td>{{ data.reagentsPart }}</td>
+            </tr>
+            <tr>
+                <td><b>Reagent Expiration:</b></td>
+                <td>{{ data.reagentsExpiration }}</td>
+            </tr>
+            <tr>
+                <td><b>Solution Lot Number:</b></td>
+                <td>{{ data.solutionsLot }}</td>
+            </tr>
+            <tr>
+                <td><b>Solution Part Number:</b></td>
+                <td>{{ data.solutionsPart }}</td>
+            </tr>
+            <tr>
+                <td><b>Solution Expiration:</b></td>
+                <td>{{ data.solutionsExpiration }}</td>
+            </tr>
+            <tr>
+                <td><b>Chef Script Version:</b></td>
+                <td>{{ data.scriptVersion }}</td>
+            </tr>
+            <tr>
+                <td><b>Chef Package Version:</b></td>
+                <td>{{ data.packageVer }}</td>
+            </tr>
+        </table>
+        {% else %}
+        <p>No library prep info is available for this Sample Set</p>
+        {% endif %}
+    </div>
+    <div class="modal-footer">
+        <a href="#" class="btn" data-dismiss="modal">Close</a>
+    </div>
+</div>

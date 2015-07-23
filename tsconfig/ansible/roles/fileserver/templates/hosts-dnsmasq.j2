@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+{{ b_subnet }}.1.1 ts
+{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != ansible_default_ipv4.interface|default(default_interface) %}
+{{ b_subnet }}.{{ loop.index + class_c }}.10    instrument{{loop.index}}
+{% endfor %}

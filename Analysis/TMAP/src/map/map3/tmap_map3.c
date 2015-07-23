@@ -84,8 +84,8 @@ tmap_map3_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, tmap
       mapq = 0;
   }
   else {
-      double c = 0.0;
-      c = n_seeds / (double)tot_seeds;
+      // double c = 0.0;
+      double c = n_seeds / (double)tot_seeds;
       if(best_subo < score_thr) best_subo = score_thr;
       mapq = (int32_t)(c * (best_score - best_subo) * (250.0 / best_score + 0.03 / score_match) + .499);
       if(mapq > 250) mapq = 250;

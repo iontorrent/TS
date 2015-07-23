@@ -22,10 +22,6 @@ import scipy.misc
 import scipy.signal
 
 
-# This array is convolved with the bead data in bfmask.bin to compute a sum in the range [0-100] of a 10x10 well area.
-array_ten_by_ten =  numpy.ones((10,10), dtype=numpy.int16)
-
-
 def imresize(arr, size, interp='bilinear', mode=None):
     """Backported from scipy 0.11.0; not that complicated"""
     im = scipy.misc.toimage(arr, mode=mode)
@@ -33,11 +29,6 @@ def imresize(arr, size, interp='bilinear', mode=None):
     imnew = im.resize(size, resample=Image.ANTIALIAS)
     return scipy.misc.fromimage(imnew)
 
-
-def calculate_scores(bfmask_data):
-    """Compute an array whose values are the sum of a 10x10 well area around each well in bfmask_data.
-    """
-    return scipy.ndimage.correlate(bfmask_data, array_ten_by_ten, mode='reflect')
 
 
 def reasonable_shrink(scores, bound=1000, threshold=2000):
@@ -53,7 +44,16 @@ def reasonable_shrink(scores, bound=1000, threshold=2000):
 
 
 def makeContourMap(arr, HEIGHT, WIDTH, outputId, maskId, plt_title, average, outputdir, barcodeId=-1, vmaxVal=100):
-    scores = calculate_scores(arr)
+    # downsample P2 bfmask data
+    H, W = arr.shape
+    if max(H,W)>20000 and (H % 2 == 0) and (W % 2 == 0):
+        h=H/2
+        w=W/2
+        arr = arr.reshape((h,H/h,w,W/w)).mean(3).mean(1)
+        HEIGHT, WIDTH = arr.shape
+
+    # Compute an array whose values are the sum [0-100] of a 10x10 well area around each well in bfmask_data.
+    scores = scipy.ndimage.correlate(arr, numpy.ones((10,10), dtype=numpy.int16), mode='reflect')
     del arr
     scores = reasonable_shrink(scores)
     makeContourPlot(scores, average, HEIGHT, WIDTH, outputId, maskId, plt_title, outputdir, barcodeId, vmaxVal)
@@ -78,11 +78,6 @@ def getTicksForMaxVal (maxVal):
     elif(maxVal<=20): ticksVal = map(lambda x:x/5.0,ticksVal)
     elif(maxVal<=50): ticksVal = map(lambda x:x/2.0,ticksVal)
     return ticksVal
-
-
-def autoGetVmaxFromAverage (average):
-    vmaxVal = average*2
-    return vmaxVal
 
 
 def makeRawDataPlot(scores, outputId, outputdir):

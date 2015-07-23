@@ -9,6 +9,7 @@ import sys
 
 import iondb.bin.djangoinit
 from iondb.rundb.models import Template
+from iondb.rundb.tasks import generate_TF_files
 from django.core import serializers
 
 def main(filename):
@@ -41,6 +42,14 @@ def main(filename):
             obj.save()
 
             print("%s %s test fragment" % ("Added new" if created else "Updated", obj.object.name))
+            
+    # create files
+    for key in Template.objects.filter(isofficial=True).values_list('key',flat=True).distinct():
+        try:
+            generate_TF_files(tfkey=key)
+            print "Generated Test Fragment reference files for TF key %s" % key
+        except:
+            print "ERROR generating Test Fragment files for TF key %s" % key
 
 
 if __name__ == '__main__':

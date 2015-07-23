@@ -54,12 +54,29 @@ class XtalkCurry{
                              FlowBufferInfo *_my_flow_p,
                              BkgTrace *_my_trace_p, bool _use_vectorization);
     const int* GetNeighborIndexMap() const { return neiIdxMap; }
+    const int* GetNeighbourIndexmapForSampleLocations() const { return sampleNeiIdxMap; }
 
   private:
+    // create a list of xtalk neighbours for each of the live wells
     void GenerateNeighborIndexMapForAllBeads();
+
+    // create a list of xtalk neighbours for a sample of wells...Needed to 
+    // compute a typical xtalk signal seen in the well. Need for simple xtalk
+    // model..Ideally should have the locations of the empty wells
+    void GenerateNeighbourIndexMapForSampleWells();
+
+    // Generate sample locations in the region for calculating typical crosstalk
+    // under the simple xtalk model
+    void ObtainGenericXtalkSampleLocation(
+      int sampIdx,
+      int &sampCol,
+      int &sampRow);
 
     // For each bead, list all its neighbour beads
     int* neiIdxMap; // neis x beads
+
+    // list of neighbours for the sample locations in the region
+    int* sampleNeiIdxMap; // neis x GENERIC_SIMPLE_XTALK_SAMPLE
 };
 
 #endif // XTALKCURRY_H

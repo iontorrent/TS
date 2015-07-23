@@ -96,15 +96,14 @@ function get_workflow_url() {
 	}
 
     if (applicationGroupName == "DNA + RNA") {
-   	/*for mixed single & paired type support
+        /*for mixed single & paired type support  
     	if (runType_nucleotideType.toLowerCase() == "dna_rna") {
     		myURL += "&filterKey=DNA_RNA_Workflow&filterValue=";
     		myURL += "DNA_RNA";
 
     		isFilterSet = true;
     	}
-    	*/
-
+        */
         //myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=true";
         
         if (planCategories.toLowerCase().indexOf("oncomine") != -1) {            
@@ -117,7 +116,9 @@ function get_workflow_url() {
             if (!isFilterSet) {
                 myURL += "&filterKey=Onconet_Workflow&filterValue=true";
             }
-//            myURL += "&andFilterKey2=OCP_Workflow&andFilterValue2=false";
+            else {
+            	myURL += "&andFilterKey2=Onconet_Workflow&andFilterValue2=true";  
+            }
         }
     }
     else {

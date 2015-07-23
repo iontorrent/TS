@@ -28,9 +28,6 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.doRecoverSdFilter = inception_state.bfd_control.skipBeadfindSdRecover == 0;
   opts.nCores = inception_state.bfd_control.numThreads;
   opts.useSeparatorRef = inception_state.bfd_control.beadfindUseSepRef == 1;
-  opts.tfFilterQuantile = inception_state.bfd_control.bfTfFilterQuantile;
-  opts.libFilterQuantile = inception_state.bfd_control.bfLibFilterQuantile;
-  opts.doSdat = inception_state.img_control.doSdat;
   opts.minTfPeakMax = inception_state.bfd_control.minTfPeakMax;
   opts.minLibPeakMax = inception_state.bfd_control.minLibPeakMax;
   opts.sdAsBf = inception_state.bfd_control.sdAsBf;
@@ -40,6 +37,9 @@ void DoDiffSeparatorFromCLO (DifferentialSeparator *diffSeparator, CommandLineOp
   opts.doComparatorCorrect = inception_state.img_control.col_flicker_correct;
   opts.aggressive_cnc = inception_state.img_control.aggressive_cnc;
   opts.blobFilter = inception_state.bfd_control.blobFilter == 1;
+  opts.col_pair_pixel_xtalk_correct = inception_state.img_control.col_pair_pixel_xtalk_correct;
+  opts.pair_xtalk_fraction = inception_state.img_control.pair_xtalk_fraction;
+
   if (!opts.outData.empty())
   {
     string sep = "";

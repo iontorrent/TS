@@ -20,17 +20,13 @@ along with this library; if not, write to the Free Software Foundation, Inc.,
 #ifndef FITDENSITY_H
 #define FITDENSITY_H
 
-#include <assert.h>
+#include <cstddef>
 #include <vector>
-#include <math.h>
-#include <algorithm>
-#include <limits>
-
-#include "Stats.h"
+#include <cmath>
 
 namespace FitDensity {
   void XLimits(std::vector<double> const& data, double const bandwidth, std::vector<double>& out, double const range_limit=4.0f, double const bw_increment=3.0f);
-    void kdensity(std::vector<double> const &dat, std::vector<double> &density, std::vector<double> &xOut, std::vector<double> const& weight, double const bandWidth, double const from, double const to);
+  void kdensity(std::vector<double> const &dat, std::vector<double> &density, std::vector<double> &xOut, std::vector<double> const& weight, double const bandWidth, double const from, double const to);
   int findpeaks(std::vector<size_t> &valleyIndex, std::vector<size_t> &peakIndex, std::vector<double> const& y, double const delta, std::vector<double> const& x);
   double findBandWidth(std::vector<double> const& x);
   double SquaredIntegral(std::vector<double> const& x, std::vector<double> const& y);

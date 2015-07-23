@@ -83,6 +83,7 @@ v1_api.register(api.ClusterInfoHistoryResource())
 
 v1_api.register(api.IonChefPrepKitInfoResource())
 v1_api.register(api.ActiveIonChefPrepKitInfoResource())
+v1_api.register(api.ActiveIonChefLibraryPrepKitInfoResource())
 
 v1_api.register(api.AvailableIonChefPlannedExperimentResource())
 v1_api.register(api.AvailableIonChefPlannedExperimentSummaryResource())
@@ -108,6 +109,8 @@ v1_api.register(api.SampleSetItemInfoResource())
 
 v1_api.register(api.SampleAttributeResource())
 v1_api.register(api.SampleAttributeDataTypeResource())
+
+v1_api.register(api.SamplePrepDataResource())
 
 v1_api.register(api.AnalysisArgsResource())
 
@@ -136,11 +139,9 @@ urlpatterns = patterns(
     (r'^report/(\d+)$', 'views.displayReport'),
     (r'^graphiframe/(\d+)/$', 'report.classic.graph_iframe'),
 
-    (r'^publish/frame/(\w+)$', 'publishers.publisher_upload', {"frame": True}),  #REFACTOR: move to rundb/configure
     (r'^publish/api/(?P<pub_name>\w+)$', 'publishers.publisher_api_upload'),  #REFACTOR: move to rundb/configure
     (r'^publish/plupload/(?P<pub_name>\w+)/$', 'publishers.write_plupload'),  #REFACTOR: move to rundb/configure
     (r'^publish/(\w+)$', 'publishers.publisher_upload'),  #REFACTOR: move to rundb/configure
-    (r'^publish/$', 'publishers.upload_view'),  #REFACTOR: move to rundb/configure
     (r'^published/$', 'publishers.list_content'),  #REFACTOR: move to rundb/configure
     (r'^uploadstatus/(\d+)/$', 'publishers.upload_status'),  #REFACTOR: move to rundb/configure
     (r'^uploadstatus/frame/(\d+)/$', 'publishers.upload_status', {"frame": True}),  #REFACTOR: move to rundb/configure

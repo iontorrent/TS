@@ -15,7 +15,7 @@ void PairPixelXtalkCorrector::Correct(RawImage *raw, float xtalk_fraction)
     int nFrames = raw->frames;
 
     int phase = (raw->chip_offset_y)%2;
-    float denominator = (1-xtalk_fraction*xtalk_fraction);
+    float denominator = (1-2*xtalk_fraction);
     /*-----------------------------------------------------------------------------------------------------------*/
     // doublet xtalk correction - electrical xtalk between two neighboring pixels in the same column is xtalk_fraction
     //
@@ -29,8 +29,8 @@ void PairPixelXtalkCorrector::Correct(RawImage *raw, float xtalk_fraction)
             for(int r=phase; r<nRows-1; r+=2 ){
                 short p1 = raw->image[f*raw->frameStride+r*raw->cols+c];
                 short p2 = raw->image[f*raw->frameStride+(r+1)*raw->cols+c];
-                raw->image[f*raw->frameStride+r*raw->cols+c] = (p1-xtalk_fraction*p2)/denominator;
-                raw->image[f*raw->frameStride+(r+1)*raw->cols+c] = (p2-xtalk_fraction*p1)/denominator;
+                raw->image[f*raw->frameStride+r*raw->cols+c] = ((1-xtalk_fraction)*p1-xtalk_fraction*p2)/denominator;
+                raw->image[f*raw->frameStride+(r+1)*raw->cols+c] = ((1-xtalk_fraction)*p2-xtalk_fraction*p1)/denominator;
             }
         }
     }

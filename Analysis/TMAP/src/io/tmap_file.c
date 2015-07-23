@@ -335,7 +335,7 @@ tmap_file_fread(void *ptr, size_t size, size_t count, tmap_file_t *fp)
 void *
 tmap_file_mmap(tmap_file_t *fp, size_t *fp_length)
 {
-	  size_t len;
+	  // size_t len;
 
 	  struct stat statbuf;
 	  fstat ( fileno(fp->fp),&statbuf );
@@ -494,7 +494,7 @@ int32_t tmap_log_enabled ()
 {
   return logging_enabled;
 }
-  
+
 int32_t tmap_log (const char* format, ...)
 {
   int32_t n = 0;

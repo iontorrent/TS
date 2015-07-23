@@ -75,8 +75,12 @@ $(function() {
   $('#ASRNA-DLDE-dialog').click(function() {
     $('#ASRNA-mask').css({ position:'fixed' });
     $('#ASRNA-mask').show();
+    var x = window.innerWidth || document.documentElement.clientWidth || document.body.clientWidth;
+    var y = window.innerHeight || document.documentElement.clientHeight || document.body.clientHeight;
     var pos = $(this).offset();
-    $('#ASRNA-dialog').css({ left:pos.left-5, top:pos.top });
+    var a = $('#ASRNA-dialog').width();
+    var b = $('#ASRNA-dialog').height();
+    $('#ASRNA-dialog').css({ left:(x-a)/2, top:(y-b)/2 });
     $('#ASRNA-dialog').show();
   });
 

@@ -11,10 +11,10 @@
 #include "../samtools/sam_header.h"
 
 #include "../util/tmap_alloc.h"
+#include "../util/tmap_error.h"
 #include "../util/tmap_definitions.h"
 #include "../util/tmap_string.h"
 #include "tmap_sam.h"
-#include "../io/tmap_sam_io.h"
 
 tmap_sam_t *
 tmap_sam_init()

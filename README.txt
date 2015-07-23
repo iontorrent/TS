@@ -19,3 +19,12 @@ http://ioncommunity.lifetechnologies.com/welcome
 - For standalone Torrent Variant Caller, please see the below link for instructions.
 
 http://updates.iontorrent.com/tvc_standalone/README.txt
+
+Note:
+
+Due to github file size restricion, these two files are not included:
+
+- plugin/RNASeqAnalysis/annotations/mm10/gene.gtf
+- plugin/RNASeqAnalysis/annotations/hg19/gene.gtf
+
+https://help.github.com/articles/working-with-large-files/

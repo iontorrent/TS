@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <math.h>
+#include <getopt.h>
 
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"

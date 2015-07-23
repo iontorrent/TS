@@ -338,6 +338,15 @@ char * GetChipId (const char *filepath)
         else if (strncmp ("p1.0.19",chipversion,7) == 0) chip = strdup("p1.0.19");
         else if (strncmp ("p1.0.20",chipversion,7) == 0) chip = strdup("p1.0.20");
         else if (strncmp ("p2.2.1", chipversion,6) == 0) chip = strdup("p2.2.1");
+        else if (strncmp ("p2.2.2", chipversion,6) == 0) chip = strdup("p2.2.2");
+        else if (strncmp ("550", chipversion,3) == 0)    chip = strdup("550");
+        else if (strncmp ("540", chipversion,3) == 0)    chip = strdup("540");
+        else if (strncmp ("530", chipversion,3) == 0)    chip = strdup("530");
+        else if (strncmp ("520", chipversion,3) == 0)    chip = strdup("520");
+        else if (strncmp ("551", chipversion,3) == 0)    chip = strdup("551");
+        else if (strncmp ("541", chipversion,3) == 0)    chip = strdup("541");
+        else if (strncmp ("531", chipversion,3) == 0)    chip = strdup("531");
+        else if (strncmp ("521", chipversion,3) == 0)    chip = strdup("521");
         else                                             chip = strdup("p1.1.17");  // default
         //Add new  P chips here and in chipIdDecoder too.
     }
@@ -385,7 +394,16 @@ void GetChipDim (const char *type, int dims[2], const char *filepath)
       dims[0] = 3392;
       dims[1] = 3792;
     }
-    else if ((strncmp ("p1",type,2) == 0)|| (strncmp("p2",type,2)==0))
+    else if ((strncmp ("p1",type,2) == 0) ||
+             (strncmp ("p2",type,2) == 0) ||
+             (strncmp ("550",type,3) == 0) ||
+             (strncmp ("540",type,3) == 0) ||
+             (strncmp ("530",type,3) == 0) ||
+             (strncmp ("520",type,3) == 0) ||
+             (strncmp ("551",type,3) == 0) ||
+             (strncmp ("541",type,3) == 0) ||
+             (strncmp ("531",type,3) == 0) ||
+             (strncmp ("521",type,3) == 0))
     {
 
       // Method using the explog.txt

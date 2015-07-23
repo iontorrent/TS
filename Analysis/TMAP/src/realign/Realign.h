@@ -68,7 +68,7 @@ public:
 
   //! @brief  Set the scores for the Smith-Waterman aligner
   //! @param[in]  score_vec      integer vector of length 4 containing scores
-  bool SetScores(const vector<int> score_vec);
+  bool SetScores(const vector<int>& score_vec);
 
   //! @brief  Computes a Smith-Waterman alignment.
   //! @param[out]  CigarData         Cigar Vector of newly computed alignment

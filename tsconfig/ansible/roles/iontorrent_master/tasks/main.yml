@@ -1,6 +1,9 @@
 ---
 # file: roles/iontorrent_master/tasks/main.yml
 
+- name:
+  include: '../../../globals.yml'
+  
 #-----------------------------------------------------------------------------
 # Install system packages for a master node
 #-----------------------------------------------------------------------------
@@ -16,6 +19,12 @@
 - name: Install system packages for master node
   apt: name={{item}} state=latest update_cache=yes force=yes
   with_items: ionmaster_syspkg_list
+  
+# Set install_xserver variable in group_vars/all
+- name: Install X server packages for remote desktop
+  apt: name={{item}} state=latest update_cache=yes force=yes
+  with_items: xserver_pkg_list
+  when: install_xserver == true and S5_virtual_guest|bool == False
   
 #-----------------------------------------------------------------------------
 # Copy configuration and init scripts celeryd and celerybeat daemons
@@ -44,24 +53,26 @@
   shell: /usr/sbin/a2dismod gnutls
   ignore_errors: yes
   
+# This file is required prior to installing ion-rsmts (others?)
+- name: Tag the headnode with the masternode indicator file
+  file: path=/opt/ion/.masternode owner=root group=root mode=0644 state=touch
+  
 #-----------------------------------------------------------------------------
 # Install Ion Torrent Packages for a master node
 #-----------------------------------------------------------------------------
 - name: Install packages for head node
   apt: name={{ item }} state=latest update_cache=yes force=yes
   with_items: ionmaster_ionpkg_list
-
  
 # optional install:
 # ion-pgmupdates -or- ion-protonupdates -or- both(?)
 # Check for existence of previous install of ion-protonupdates
-- command: /usr/bin/test -e /results/proton/updates
-  register: proton
-  ignore_errors: yes
+- stat: path=/results/proton/updates
+  register: p
   
 - name: Install ion-protonupdates
   apt: name=ion-protonupdates state=latest force=yes
-  when: proton|success
+  when: p.stat.exists
 
 # Ensure Ion system daemons are running
 - name: Ion Daemons

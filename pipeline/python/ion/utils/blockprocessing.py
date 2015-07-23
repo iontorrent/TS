@@ -1,37 +1,21 @@
 #!/usr/bin/python
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
-__version__ = filter(str.isdigit, "$Revision: 17459 $")
+__version__ = filter(str.isdigit, "$Revision$")
 
 import os
-
-# import /etc/torrentserver/cluster_settings.py, provides PLUGINSERVER_HOST, PLUGINSERVER_PORT
 import sys
-sys.path.append('/etc')
-from torrentserver.cluster_settings import *
-
 import ConfigParser
 import StringIO
 import datetime
 import shutil
 import socket
-import xmlrpclib
 import subprocess
 import time
-import os.path
-from collections import deque
-
-from ion.plugin.remote import call_launchPluginsXMLRPC
-from ion.plugin.constants import RunLevel, RunType
-
-from ion.reports.plotters import *
-from ion.utils.aggregate_alignment import *
-
-sys.path.append('/opt/ion/')
-
 import traceback
 import json
 
+sys.path.append('/opt/ion/')
 
 class MyConfigParser(ConfigParser.RawConfigParser):
     def read(self, filename):
@@ -46,7 +30,7 @@ class MyConfigParser(ConfigParser.RawConfigParser):
 def printtime(message, *args):
     if args:
         message = message % args
-    print "[ " + time.strftime('%X') + " ] " + message
+    print "[ " + time.strftime('%a %Y-%m-%d %X %Z') + " ] " + message
     sys.stdout.flush()
     sys.stderr.flush()
 
@@ -74,101 +58,12 @@ def parse_metrics(fileIn):
         ret[key]=value
     return ret
 
-def initTLReport(basefolder):
-    if not os.path.isdir(basefolder):
-        oldmask = os.umask(0000)   #grant write permission to plugin user
-        os.mkdir(basefolder)
-        os.umask(oldmask)
-
-    # Begin report writing
-    os.umask(0002)
-    #TMPL_DIR = os.path.join(distutils.sysconfig.get_python_lib(),'ion/web/db/writers')
-    TMPL_DIR = '/usr/share/ion/web/db/writers'
-    templates = [
-        # DIRECTORY, SOURCE_FILE, DEST_FILE or None for same as SOURCE
-        (TMPL_DIR, "report_layout.json", None),
-        (TMPL_DIR, "parsefiles.php", None),
-        (TMPL_DIR, "format_whole.php", "Default_Report.php",), ## Renamed during copy
-        #(os.path.join(distutils.sysconfig.get_python_lib(), 'ion', 'reports',  "BlockTLScript.py", None)
-    ]
-    for (d,s,f) in templates:
-        if not f: f=s
-        # If owner is different copy fails - unless file is removed first
-        if os.access(f, os.F_OK):
-            os.remove(f)
-        shutil.copy(os.path.join(d,s), f)
-
-def initBlockReport(blockObj,SIGPROC_RESULTS,BASECALLER_RESULTS,ALIGNMENT_RESULTS,pluginbasefolder,from_sigproc_analysis=False):
-    """Performs initialization for both report writing and background report generation."""
-
-    printtime("INIT BLOCK REPORT")
-    
-    if blockObj['id_str'] == "wholechip":
-        resultDir = "."
-    elif blockObj['id_str'] == "thumbnail":
-        resultDir = "."
-    else:
-        resultDir = '%s%s' % ('block_', blockObj['id_str'])
-
-        if not os.path.exists(resultDir):
-            os.mkdir(resultDir)
-        
-        block_pluginbasefolder = os.path.join(resultDir,pluginbasefolder)    
-        if not os.path.isdir(block_pluginbasefolder):
-            oldmask = os.umask(0000)   #grant write permission to plugin user
-            os.mkdir(block_pluginbasefolder)
-            os.umask(oldmask)  
-
-        _SIGPROC_RESULTS = os.path.join(SIGPROC_RESULTS, resultDir)
-        _BASECALLER_RESULTS = os.path.join(BASECALLER_RESULTS, resultDir)
-        _ALIGNMENT_RESULTS = os.path.join(ALIGNMENT_RESULTS, resultDir)
-
-        if from_sigproc_analysis:
-            if not os.path.isdir(_SIGPROC_RESULTS):
-                try:
-                    os.mkdir(_SIGPROC_RESULTS)
-                except:
-                    traceback.print_exc()
-
-        if not os.path.isdir(_BASECALLER_RESULTS):
-            try:
-                os.mkdir(_BASECALLER_RESULTS)
-            except:
-                traceback.print_exc()
-
-        
-        try:
-          os.symlink(os.path.join("..",_SIGPROC_RESULTS), os.path.join(resultDir,SIGPROC_RESULTS))
-          os.symlink(os.path.join("..",_BASECALLER_RESULTS), os.path.join(resultDir,BASECALLER_RESULTS))
-#        os.symlink(os.path.join("..",_ALIGNMENT_RESULTS), os.path.join(resultDir,ALIGNMENT_RESULTS))
-        except:
-          printtime("couldn't create symbolic link")
-
-        file_in = open("ion_params_00.json", 'r')
-        TMP_PARAMS = json.loads(file_in.read())
-        file_in.close()
-
-        # update path to data
-        TMP_PARAMS["pathToData"] = os.path.join(TMP_PARAMS["pathToData"], blockObj['datasubdir'])
-        TMP_PARAMS["mark_duplicates"] = False
-
-        #write block specific ion_params_00.json
-        file_out = open("%s/ion_params_00.json" % resultDir, 'w')
-        json.dump(TMP_PARAMS, file_out)
-        file_out.close()
-
-        cwd = os.getcwd()
-        try:
-            os.symlink(os.path.join(cwd,"Default_Report.php"), os.path.join(resultDir,"Default_Report.php"))
-        except:
-            printtime("couldn't create symbolic link")
-
-    return resultDir
-
 
 def create_index_file(composite_bam_filepath, composite_bai_filepath):
     try:
-        cmd = 'samtools index %s %s' % (composite_bam_filepath,composite_bai_filepath)
+        # TODO: samtools 1.2: Samtools-htslib-API: bam_index_build2() not yet implemented
+        # cmd = 'samtools index %s %s' % (composite_bam_filepath,composite_bai_filepath)
+        cmd = 'samtools index %s' % (composite_bam_filepath)
         printtime("DEBUG: Calling '%s'" % cmd)
         subprocess.call(cmd,shell=True)
     except:
@@ -228,50 +123,6 @@ def printheader():
     sys.stdout.flush()
     sys.stderr.flush()
 
-def get_plugins_to_run(plugins, report_type):
-    """ Sort out runtype and runlevel of each plugin and return plugins appropriate for this analysis """
-    blocklevel = False
-    plugins_to_run = {}
-    printtime("Gettings plugins to run, report type = %s" % report_type)    
-    for name in plugins.keys():
-        plugin = plugins[name]
-        
-        # default is run on wholechip and thumbnail, but not composite
-        selected = report_type in [RunType.FULLCHIP, RunType.THUMB]          
-        if plugin.get('runtype',''):
-            selected = (report_type in plugin['runtype'])
-    
-        # TODO hardcoded specials
-        if (report_type == RunType.COMPOSITE) and (plugin['name'] in ['torrentscout','contourPlots','seq_dependent_errors']):
-            selected = True
-        if (report_type == RunType.THUMB) and (plugin['name'] in ['rawPlots', 'separator', 'chipNoise']):
-            plugin['runlevel'] = [RunLevel.SEPARATOR, RunLevel.DEFAULT]
-        
-        if selected:            
-            plugin['runlevel'] = plugin.get('runlevel') if plugin.get('runlevel') else [RunLevel.DEFAULT]
-            printtime("Plugin %s is enabled, runlevels=%s" % (plugin['name'],','.join(plugin['runlevel'])))
-            plugins_to_run[name] = plugin
-  
-            # check if have any blocklevel plugins        
-            if report_type == RunType.COMPOSITE and RunLevel.BLOCK in plugin['runlevel']:
-                blocklevel = True
-  
-    return plugins_to_run, blocklevel
-
-
-def runplugins(plugins, env, level = RunLevel.DEFAULT, params={}):
-    printtime("Starting plugins runlevel=%s" % level )
-    params.setdefault('run_mode', 'pipeline') ## Plugins launched here come from pipeline
-    try:
-        pluginserver = xmlrpclib.ServerProxy("http://%s:%d" % (PLUGINSERVER_HOST, PLUGINSERVER_PORT), allow_none=True)
-        # call ionPlugin xmlrpc function to launch selected plugins
-        # note that dependency plugins may be added to the plugins dict
-        plugins, msg = call_launchPluginsXMLRPC(env['primary_key'], plugins, env['net_location'], env['username'], level, params, pluginserver)
-        print msg
-    except:
-        traceback.print_exc()
-
-    return plugins  
 
 
 def merge_bam_files(bamfilelist,composite_bam_filepath,composite_bai_filepath,mark_duplicates,method="samtools"):
@@ -291,7 +142,7 @@ def merge_bam_files_samtools(bamfilelist,composite_bam_filepath,composite_bai_fi
             printtime("DEBUG: Calling '%s'" % cmd)
             subprocess.call(cmd,shell=True)
 
-        cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/MergeSamFiles.jar'
+        cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/picard.jar MergeSamFiles'
         for bamfile in bamfilelist:
             cmd = cmd + ' I=%s.header.sam' % bamfile
         cmd = cmd + ' O=%s.header.sam' % (composite_bam_filepath)
@@ -309,7 +160,7 @@ def merge_bam_files_samtools(bamfilelist,composite_bam_filepath,composite_bai_fi
                 cmd = 'samtools reheader %s.header.sam %s > %s' % (composite_bam_filepath, bamfilelist[0], composite_bam_filepath)
         else:
             # Usage: samtools merge [-nr] [-h inh.sam] <out.bam> <in1.bam> <in2.bam> [...]
-            cmd = 'samtools merge -l1 -p8'
+            cmd = 'samtools merge -l1 -@8'
             if mark_duplicates:
                 cmd += ' - '
             else:
@@ -339,7 +190,7 @@ def merge_bam_files_picard(bamfilelist,composite_bam_filepath,composite_bai_file
         if mark_duplicates:
             cmd = 'java -Xmx8g -jar /usr/local/bin/MarkDuplicates.jar M=%s.markduplicates.metrics.txt' % composite_bam_filepath
         else:
-            cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/MergeSamFiles.jar'
+            cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/picard.jar MergeSamFiles'
 
         for bamfile in bamfilelist:
             cmd = cmd + ' I=%s' % bamfile
@@ -386,11 +237,12 @@ def remove_unneeded_block_files(blockdirs):
             traceback.print_exc()
 
 def bam2fastq_command(BAMName,FASTQName):
-    com = "java -Xmx8g -jar /opt/picard/picard-tools-current/SamToFastq.jar"
+    com = "java -Xmx8g -jar /opt/picard/picard-tools-current/picard.jar SamToFastq"
     com += " I=%s" % BAMName
     com += " F=%s" % FASTQName
     return com
 
+'''
 def merge_raw_key_signals(filelist,composite_file):
 
     mergedKeyPeak = {}
@@ -420,3 +272,60 @@ def merge_raw_key_signals(filelist,composite_file):
         printtime(traceback.format_exc())
 
     return 0
+'''
+
+def merge_bams(dirs, BASECALLER_RESULTS, ALIGNMENT_RESULTS, basecaller_datasets, mark_duplicates):
+
+    for dataset in basecaller_datasets['datasets']:
+
+        try:
+            read_group = dataset['read_groups'][0]
+            reference = basecaller_datasets['read_groups'][read_group]['reference']
+
+            filtered = False #True
+            for rg_name in dataset["read_groups"]:
+                if not basecaller_datasets["read_groups"][rg_name].get('filtered',False):
+                    filtered = False
+
+            if reference and not filtered:
+                bamdir = ALIGNMENT_RESULTS
+                bamfile = dataset['file_prefix']+'.bam'
+            else:
+                bamdir = BASECALLER_RESULTS
+                bamfile = dataset['basecaller_bam']
+            block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in dirs]
+            block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
+            composite_bam_filepath = os.path.join(bamdir, bamfile)
+            if block_bam_list:
+                if reference and not filtered:
+                    composite_bai_filepath = composite_bam_filepath+'.bai'
+                    merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates)
+                else:
+                    composite_bai_filepath=""
+                    merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates=False, method='samtools')
+
+        except:
+            print traceback.format_exc()
+            printtime("ERROR: merging %s unsuccessful" % bamfile)
+
+
+def merge_unmapped_bams(dirs, BASECALLER_RESULTS, basecaller_datasets, method):
+
+    for dataset in basecaller_datasets['datasets']:
+
+        try:
+            bamdir = BASECALLER_RESULTS
+            bamfile = dataset['basecaller_bam']
+            block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in dirs]
+            block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
+            composite_bam_filepath = os.path.join(bamdir, bamfile)
+            if block_bam_list:
+                composite_bai_filepath=""
+                mark_duplicates=False
+                merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates, method)
+        except:
+            traceback.print_exc()
+            printtime("ERROR: merging %s unsuccessful" % bamfile)
+
+    printtime("Finished merging basecaller BAM files")
+

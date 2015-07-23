@@ -2,7 +2,6 @@
 #ifndef FLOWCHUNK_H
 #define FLOWCHUNK_H
 
-#include "H5File.h"
 
 struct FlowChunk {
   size_t CompressionType;

@@ -75,9 +75,12 @@
                         {{#is_proton}}
                             {% endraw %}<img src="{% static "resources/img/proton_jumbo_icon.png"%}" />{% raw %}
                         {{/is_proton}}
-                        {{^is_proton}}
+                        {{#is_s5}}
+                            {% endraw %}<img src="{% static "resources/img/raptor-thumbnail_icon.png"%}" />{% raw %}
+                        {{/is_s5}}
+                        {{#other_instrument}}
                             {% endraw %}<img src="{% static "resources/img/pgm_jumbo_icon.png"%}" />{% raw %}
-                        {{/is_proton}}
+                        {{/other_instrument}}
                     </div>
                     <div style="float:left;">
                     <h1><span rel="tooltip" title="{{ exp.expName }}">{{ prettyExpName }}</span></h1>
@@ -137,7 +140,7 @@
 	</div>
     <div class="run-progress">
         <h4>Flow Transfer: {{progress_flows}} of {{exp.flows}} flows</h4>
-        <div rel="tooltip" title="Progress is {{progress_flows}} of {{exp.flows}} flows" class="progress{{#in_progress}} progress-striped active{{/in_progress}}">
+        <div rel="tooltip" title="Progress is {{progress_flows}} of {{exp.flows}} flows" class="progress{{#in_progress}} progress-striped {{/in_progress}}">
             <div class="bar" style="width: {{progress_percent}}%;"></div>
         </div>
     </div>
@@ -168,7 +171,7 @@
         <td>
             {{#in_progress}}
                 {{progress_flows}}/{{exp.flows}} flows
-                <div class="progress progress-striped active">
+                <div class="progress progress-striped">
                     <div class="bar" style="width: {{progress_percent}}%;"></div>
                 </div>
             {{/in_progress}}

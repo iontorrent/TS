@@ -303,7 +303,7 @@ class Plugin(xmlrpc.XMLRPC):
 
                     p['results_dir'] = plugin_output
                     p['pluginresult'] = pr.pk
-                    p = add_hold_jid(p, plugins, runlevel)
+                    p, holding_for = add_hold_jid(p, plugins, runlevel, satisfied_dependencies)
                     
                     start_json = make_plugin_json(result_pk, report_dir, p, plugin_output, net_location, url_root, username,
                         runlevel, params.get('blockId',''), params.get('block_dirs',["."]), plugin_params.get('instance_config',{}) )
@@ -342,8 +342,8 @@ class Plugin(xmlrpc.XMLRPC):
                         # Release now that jobid and queued state are set.
                         _session.control(jid, drmaa.JobControlAction.RELEASE) # no return value
 
-                    msg += 'Launched plugin %s: jid %s, depends %s, hold_jid %s \n' % \
-                           (p['name'], jid, p['depends'], p['hold_jid'])
+                    msg += 'Plugin: %s result: %s, jid %s, depends %s, holding for %s \n' % \
+                        (p['name'], result.resultsName, jid, p['depends'], holding_for)
 
                     if runlevel != RunLevel.BLOCK:
                         p['jid'] = jid

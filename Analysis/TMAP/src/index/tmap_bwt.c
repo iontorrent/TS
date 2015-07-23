@@ -32,6 +32,7 @@
 #include <assert.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <getopt.h>
 
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"
@@ -480,10 +481,10 @@ static void
 tmap_bwt_gen_hash_helper(tmap_bwt_t *bwt, uint32_t len)
 {
   tmap_bwt_sint_t i;
-  tmap_bwt_sint_t n;
+  // tmap_bwt_sint_t n;
   uint8_t *seq = NULL;
   tmap_bwt_match_occ_t match_sa;
-  tmap_bwt_int_t sum = 0;
+  // tmap_bwt_int_t sum = 0;
   uint64_t hash_i = 0, low, high;
   
   seq = tmap_calloc(len, sizeof(uint8_t), "seq");
@@ -495,13 +496,14 @@ tmap_bwt_gen_hash_helper(tmap_bwt_t *bwt, uint32_t len)
           tmap_error("ABORT", Exit, OutOfRange);
       }
       if(i == len) {
-          n = tmap_bwt_match_exact(bwt, len, seq, &match_sa);
+          // n = tmap_bwt_match_exact(bwt, len, seq, &match_sa);
+          tmap_bwt_match_exact(bwt, len, seq, &match_sa);
           bwt->hash_k[len-1][hash_i] = match_sa.k;
           bwt->hash_l[len-1][hash_i] = match_sa.l;
 
-          if(TMAP_BWT_INT_MAX != match_sa.k && match_sa.k <= match_sa.l) {
-              sum += n;
-          }
+          // if(TMAP_BWT_INT_MAX != match_sa.k && match_sa.k <= match_sa.l) {
+          //     sum += n;
+          // }
 
           // find the next base
           i--;
@@ -678,7 +680,7 @@ __occ_aux16(uint32_t y, int c)
   return (((y + (y >> 4)) & 0xF0F0F0F) * 0x1010101) >> 24; // count
 }
 
-inline tmap_bwt_int_t 
+tmap_bwt_int_t
 tmap_bwt_occ(const tmap_bwt_t *bwt, tmap_bwt_int_t k, uint8_t c)
 {
   tmap_bwt_int_t n, j, l;
@@ -776,7 +778,7 @@ tmap_bwt_2occ_orig(const tmap_bwt_t *bwt, tmap_bwt_int_t k, tmap_bwt_int_t l, ui
 }
 
 // TODO:
-inline void 
+void
 tmap_bwt_2occ(const tmap_bwt_t *bwt, tmap_bwt_int_t k, tmap_bwt_int_t l, uint8_t c, tmap_bwt_int_t *ok, tmap_bwt_int_t *ol)
 {
 #if TMAP_BWT_RUN_TYPE != 0 // Not just the original
@@ -861,7 +863,7 @@ __occ_aux8_alt(const tmap_bwt_t *bwt, uint64_t b, tmap_bwt_int_t cnt[4])
   cnt[0] += y&0xff; cnt[1] += y>>8&0xff; cnt[2] += y>>16&0xff; cnt[3] += y>>24&0xff;
 }
 
-inline void 
+void
 tmap_bwt_occ4(const tmap_bwt_t *bwt, tmap_bwt_int_t k, tmap_bwt_int_t cnt[4])
 {
   tmap_bwt_int_t l, j, x;
@@ -895,7 +897,7 @@ tmap_bwt_occ4(const tmap_bwt_t *bwt, tmap_bwt_int_t k, tmap_bwt_int_t cnt[4])
 }
 
 // an analogy to tmap_bwt_occ4() but more efficient, requiring k <= l
-inline void 
+void
 tmap_bwt_2occ4(const tmap_bwt_t *bwt, tmap_bwt_int_t k, tmap_bwt_int_t l, tmap_bwt_int_t cntk[4], tmap_bwt_int_t cntl[4])
 {
   tmap_bwt_int_t _k, _l;

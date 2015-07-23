@@ -14,6 +14,15 @@
         height: 30px;
         float: left;
         margin: 0 15px 15px 0;
+	}
+    .search-field-run {
+        display: inline-block;
+        zoom: 1;
+        *display: inline;
+        width: 200px;
+        height: 30px;
+        float: left;
+        margin: 0 15px 15px 0 ;
     }
     .search-field #rangeA {
         margin: 0;
@@ -51,6 +60,9 @@
         color: gray;
         padding: 5px 0;
         vertical-align: middle;
+    }
+    .k-grid {
+        min-width: 1000px;
     }
     #main_table td {
         word-wrap: break-word;
@@ -93,7 +105,52 @@
             console.log("Send to project error:", data);
         });
     });
+
+    $(function () {
+        $('.search_sampleTubeLabel').click(function(e) {
+            set_search_subject_sampleTubeLabel(e);
+        });
+    });
+
+    $(function () {
+        $('.search_runName').click(function(e) {
+            set_search_subject_runName(e);
+        });
+    });
   });
+</script>
+<script type="text/javascript">
+
+function set_search_subject_runName(e) {
+    e.preventDefault();
+    $('.search_runName_selected').removeClass("icon-white icon-check");
+    $('.search_runName_selected').addClass("icon-check");
+    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_sampleTubeLabel_selected').addClass("icon-white");
+
+    $("label[for='searchSubject']").text("runName");
+    $("#search_subject_nav").attr("title", "Search by run name");
+    $("#run_search_dropdown_menu").toggle();
+}
+
+function set_search_subject_sampleTubeLabel(e) {
+    e.preventDefault();
+    $('.search_runName_selected').removeClass("icon-white icon-check");
+    $('.search_runName_selected').addClass("icon-white");
+    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_sampleTubeLabel_selected').addClass("icon-check");
+
+    $("label[for='searchSubject']").text("sampleTubeLabel");
+    $("#search_subject_nav").attr("title", "Search by sample tube label");
+    $("#run_search_dropdown_menu").toggle();
+}
+
+ $(function () {
+        $('#search_subject_nav').click(function(e) {
+            $("#run_search_dropdown_menu").show();
+        });
+    });
+
 </script>
 {% endblock extra_head %}
 {% block sub-nav %}
@@ -131,9 +188,18 @@
                 <label for="dateRange" class=" hide">Date</label>
                 <input type="text" name="dateRange" id="rangeA" placeholder="Date"/>
             </div>
-            <div class="input-append search-field">
-                <label for="searchText" class=" hide">Search Names</label>
-                <input id="search_text" name="searchText" type="text" placeholder="Search names" style="width: 150px;" /><button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+			<div class="input-append search-field-run" style="width: 250px;>
+                <label for="searchText" class="hide">Search Names</label>
+                <input id="search_text" type="text" placeholder="Search names" style="width: 150px;" />
+                <div class="btn-group" style="width: 50px;" >
+                    <a id="search_subject_nav" class="btn dropdown-toggle" title="Search by run name" data-toggle="dropdown" href="\\#">
+                    <i class="icon-search" border="0"></i><span class="caret"></span></a>
+                    <ul id="run_search_dropdown_menu" class="dropdown-menu pull-right search_subject_selection">
+                        <li><a href="#" class="search_runName"><span class="search_runName_selected icon-check"></span>Run name</a></li>
+                        <li><a href="#" class="search_sampleTubeLabel"><span class="search_sampleTubeLabel_selected icon-white"></span>Sample Tube Label</a></li>
+                    </ul>
+                  <button id="search_text_go" class="btn" type="button" style="margin: 0 0 0 -1px">Go</button>
+                </div>
             </div>
             <div class="search-field">
                 <label for="id_project" class=" hide">Project</label>
@@ -310,11 +376,16 @@
                     <img src="{% static "resources/img/proton_jumbo_icon.png"%}" class="pull-left" />
 {% raw %}
                 {{/is_proton}}
-                {{^is_proton}}
+                {{#is_s5}}
+{% endraw %}
+                    <img src="{% static "resources/img/raptor-thumbnail_icon.png"%}" class="pull-left" />
+{% raw %}
+                {{/is_s5}}
+                {{#other_instrument}}
 {% endraw %}
                     <img src="{% static "resources/img/pgm_jumbo_icon.png"%}" class="pull-left" />
 {% raw %}
-                {{/is_proton}}
+                {{/other_instrument}}
                 {{#exp.plan}}<span class="{{exp.plan.runType}} app-icon-completed"></span>{{/exp.plan}}
             </div>
             <h1><span rel="tooltip" title="{{ exp.expName }}">{{ prettyExpName }}</span></h1>
@@ -323,7 +394,7 @@
                 <div class="span3">
                     {{#in_progress}}
                         {{progress_flows}}/{{exp.flows}} flows
-                        <div class="progress progress-striped active">
+                        <div class="progress progress-striped">
                             <div class="bar" style="width: {{progress_percent}}%;"></div>
                         </div>
                     {{/in_progress}}
@@ -436,24 +507,25 @@
     <div class="k-widget k-grid table-dense">
         <table id="main_table" class='table-striped'>
             <colgroup>
-                <col style="width:26px">
-                <col>
-                <col style="width:10%">
-                <col style="width:7%">
-                <col style="width:32px">
-                <col style="width:60px">
-                <col style="width:60px">
-                <col style="width:90px">
-                <col style="width:40px">
+                <col style="width:2%">
+                <col style="width:17%">
+                <col style="width:4%">
+                <col style="width:4%">
                 <col>
                 <col style="width:5%">
-                <col style="width:10%">
-                <col style="width:40px">
-                <col style="width:46px">
-                <col style="width:36px">
-                <col style="width:46px">
-                <col style="width:46px">
-                <col style="width:24px">
+                <col style="width:5%">
+                <col style="width:6%">
+                <col style="width:4%">
+                <col style="width:11%">
+                <col style="width:7%">
+                <col style="width:6%">
+                <col style="width:5%">
+                <col>
+                <col style="width:4%">
+                <col style="width:4%">
+                <col style="width:4%">
+                <col style="width:4%">
+                <col>
             </colgroup>
             <thead class="k-grid-header">
                 <tr>
@@ -469,6 +541,7 @@
                     <th class="k-header">Report Name</th>
                     <th class="k-header">Reference</th>
                     <th class="k-header">Barcode</th>
+                    <th class="k-header">Sample Tube Label</th>
                     <th class="k-header"><a class="sort_link" data-name="flows" href="#">Flows<span class="order_indicator"></span></a></th>
                     <th class="k-header">Total Reads</th>
                     <th class="k-header">Mean Read Len.</th>
@@ -498,7 +571,7 @@
     <td>
         {{ exp.expName }}
     </td>
-    <td>{{ exp.sample }}</td>
+    <td class="samples"></td>
     <td>
     	{{#exp.sampleSetName}}
 			{{exp.sampleSetName}}
@@ -506,7 +579,7 @@
     </td>
     <td>
         {{#exp.plan}}
-            <span class="{{plan.runType}}" rel="tooltip" title=""></span>
+            <span class="{{exp.plan.runType}}" rel="tooltip" title=""></span>
         {{/exp.plan}}
     </td>
     <td>{{ run_date_string }}</td>
@@ -514,7 +587,7 @@
     <td>
         {{#in_progress}}
             {{progress_flows}}/{{exp.flows}} flows
-            <div class="progress progress-striped active">
+            <div class="progress progress-striped">
                 <div class="bar" style="width: {{progress_percent}}%;"></div>
             </div>
         {{/in_progress}}
@@ -528,6 +601,11 @@
     </td>
     <td>{{ exp.library }}</td>
     <td>{{ exp.barcodeId }}</td>
+    <td>
+        {{#exp.plan}}
+           <span class="{{exp.plan.sampleTubeLabel}}" rel="tooltip" title=""> {{exp.plan.sampleTubeLabel}}</span>
+        {{/exp.plan}}
+    </td>
     <td>{{ exp.flows }}</td>
     <td>{{ reads_q20 }}</td>
     <td>{{ read_length }}</td>
@@ -632,5 +710,7 @@
         }
     });
 </script>
+
+{%include "rundb/common/samples_popover_template.html"%}
 
 {% endblock content %}

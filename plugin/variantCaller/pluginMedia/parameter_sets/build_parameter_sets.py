@@ -9,8 +9,11 @@ import xml.etree.ElementTree as ET
 
 index_filename = 'builtin_parameter_sets.json'
 with open(index_filename,'r') as f:
-    input_files = json.load(f)
-
+    try:
+        input_files = json.load(f)
+    except:
+        print "Failure to load %s" % (index_filename)
+        raise 
 
 output_json = []
 
@@ -22,7 +25,11 @@ for set_info in input_files:
     entry_filename = set_info["file"]
     print "Processing " + entry_filename
     with open(entry_filename,'r') as f:
-        entry_content = json.load(f)
+        try:
+            entry_content = json.load(f)
+        except:
+            print "Failure to load %s" % (entry_filename)
+            raise 
 
     entry_content["meta"]["based_on"] = entry_filename
     if "name" in set_info:

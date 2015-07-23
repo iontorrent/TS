@@ -34,6 +34,20 @@ MessageList = Backbone.Collection.extend({
 
     comparator: function(msg) {
         return  -1 * msg.get('id');
+    },
+
+    add: function(models) {
+        // limit to one message per tag
+        var dup = [];
+        for (var i = 0; i < models.length; i++) {
+            var tag = models[i].tags;
+            if (tag){
+                dup.push.apply(dup, this.where({'tags':tag}));
+            }
+        }
+        if (dup.length>0) this.remove(dup);
+
+        Backbone.Collection.prototype.add.call(this, models);
     }
 });
 UserMessageList = MessageList.extend({
@@ -69,6 +83,8 @@ MessageView = Backbone.View.extend({
 
     render: function() {
         this.$el.html(this.template(this.model.toJSON()));
+        var tag = this.model.get('tags');
+        if (tag) this.$el.addClass(tag);
     }
 });
 
@@ -96,6 +112,9 @@ MessageBox = Backbone.View.extend({
     addOne: function(message) {
         var view = new MessageView({model: message});
         view.$el.hide();
+        // show single message per tag
+        var tag = message.get('tags');
+        if (tag) this.$el.find('.'+tag).remove();
         this.$el.prepend(view.el);
         view.$el.slideDown();
     },

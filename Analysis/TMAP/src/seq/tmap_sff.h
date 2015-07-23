@@ -164,7 +164,7 @@ tmap_sff_to_char(tmap_sff_t *sff);
   @param  sff  a pointer to a sequence structure
   @details     this will include the key sequence qualities
  */
-inline tmap_string_t *
+tmap_string_t *
 tmap_sff_get_bases(tmap_sff_t *sff);
 
 /*!
@@ -172,7 +172,7 @@ tmap_sff_get_bases(tmap_sff_t *sff);
   @param  sff  a pointer to a sequence structure
   @details     this will include the key sequence qualities
  */
-inline tmap_string_t *
+tmap_string_t *
 tmap_sff_get_qualities(tmap_sff_t *sff);
 
 /*! 

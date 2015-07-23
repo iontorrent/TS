@@ -60,12 +60,30 @@ function insert_before()
 	fi
 }
 
+function outbound_net_port()
+{
+    port=$(/sbin/route | awk '/default/{print $8}')
+    if [[ ! -z $port ]]; then
+        echo $port
+    fi
+}
+#=====================================================================
+# editing /etc/iptables.custom
+# Need to preserve current contents of the file while adding the lines
+# required.  Methodology: Copy the contents of the section to be updated
+# to a temporary file.  Copy the contents of /etc/iptables.custom to a
+# temporary file while deleting the section to be updated.  Edit the section
+# contents file and then append to the temporary iptables.custom file.
+# Copy the new iptables.custom file to /etc/ directory.
+#=====================================================================
 function enable_nfs_rule()
 {
+    PORT=$(outbound_net_port)
     FILE=/etc/iptables.custom
     if [ -e $FILE ]; then
-        TMPFILE=$(mktemp)
-        cp $FILE $TMPFILE
+        # Create the two temporary files
+        TMPFILE=$(get_filter_rules $FILE)
+        sed '/^*filter/,/COMMIT/d' $FILE > /tmp/iptables.custom.new
         
         # Allows NFS traffic
         LINE="-A INPUT -s 192.168.35.10 -j ACCEPT"
@@ -76,9 +94,61 @@ function enable_nfs_rule()
         LINE="-A INPUT -p tcp -m state --state NEW -m tcp --dport 8082 -j ACCEPT"
         insert_before "$TMPFILE" "$LINE" "COMMIT"
         
-        sudo cp $TMPFILE $FILE
+        cat $TMPFILE >> /tmp/iptables.custom.new
+        rm -f $TMPFILE
+        sudo cp /tmp/iptables.custom.new $FILE
+        rm /tmp/iptables.custom.new
+        
         sudo iptables-restore < /etc/iptables.rules
         sudo iptables-restore --noflush < $FILE
+    fi
+}
+
+function enable_nat_rule()
+{
+    PORT=$(outbound_net_port)
+    FILE=/etc/iptables.custom
+    if [ -r $FILE ]; then
+        # Create the two temporary files
+        TMPFILE=$(get_nat_rules $FILE)
+        sed '/^*nat/,/COMMIT/d' $FILE > /tmp/iptables.custom.new
+        
+        # IP masquerade
+        LINE="-A POSTROUTING -s 192.168.35.10\/24 -o $PORT -j MASQUERADE"
+        insert_before "$TMPFILE" "$LINE" "COMMIT"
+        insert_before "$TMPFILE" "*nat" "$LINE"  # ONLY DO THIS ONCE
+        
+        cat $TMPFILE >> /tmp/iptables.custom.new
         rm -f $TMPFILE
+        sudo cp /tmp/iptables.custom.new $FILE
+        rm /tmp/iptables.custom.new
+        
+        sudo iptables-restore < /etc/iptables.rules
+        sudo iptables-restore --noflush < $FILE
+    fi
+}
+
+#=========================================================================
+# Extract *filter--->COMMIT lines from iptables rules file
+#=========================================================================
+function get_filter_rules()
+{
+    input_file=$1
+    if [ -e $input_file ]; then
+        TMPFILE=$(mktemp)
+        sed -n '/^*filter/,/COMMIT/p' $input_file
+        echo $TMPFILE
+    fi
+}
+#=========================================================================
+# Extract *nat--->COMMIT lines from iptables rules file
+#=========================================================================
+function get_nat_rules()
+{
+    input_file=$1
+    if [ -e $input_file ]; then
+        TMPFILE=$(mktemp)
+        sed -n '/^*nat/,/COMMIT/p' $input_file > $TMPFILE
+        echo $TMPFILE
     fi
 }

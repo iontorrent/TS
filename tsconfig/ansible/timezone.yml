@@ -1,0 +1,19 @@
+---
+# file: timezone.yml
+ 
+- name: Set Time Zone
+  hosts: iontorrent_computes
+  gather_facts: False
+  tasks:
+    - name: Set timezone variables
+      copy: src=/etc/timezone
+            dest=/etc/timezone
+            owner=root
+            group=root
+            mode=0644
+            backup=yes
+      notify:
+        - update timezone
+  handlers:
+    - name: update timezone
+      command: dpkg-reconfigure --frontend noninteractive tzdata

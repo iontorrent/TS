@@ -222,7 +222,10 @@ $(document).ready(function() {
     					},
                         nucleotideType : {
                             type : "string",
-                        }
+                        },
+                        pcrPlateRow : {
+                            type : "string",
+                        }                        
     				}
                 }
             },
@@ -281,6 +284,10 @@ function getColumns() {
          field: "externalId",
          title: "Sample ID",         
          sortable: true,
+     } , {
+         field: "pcrPlateRow",
+         title: "PCR Plate Position",        
+         sortable: true,           
      } , {
          field: "barcodeKit",
          title: "Barcode Kit",        

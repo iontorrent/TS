@@ -5,8 +5,9 @@
 #include "FlowBuffer.h"
 #include "DiffEqModel.h"
 
-struct SlicedChipExtras
+class SlicedChipExtras
 {
+  public:
   incorporation_params_block_flows  *cur_bead_block;
   buffer_params_block_flows         *cur_buffer_block;
   FlowBufferInfo                    *my_flow;

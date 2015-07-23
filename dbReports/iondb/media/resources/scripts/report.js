@@ -99,7 +99,9 @@ function pluginStatusLoad() {
                 var name = data[i].Name;
                 table_plugin_names.push(name);
                 (function (name) {
-                    $("#pluginStatusTable").append(row).find(".plugin-collapse:last").click(function () {
+                    $("#pluginStatusTable").append(row);
+                    if (row.indexOf('plugin-collapse') > -1){
+                    $("#pluginStatusTable").find(".plugin-collapse:last").click(function () {
                         $(this).text($(this).text() == '-' ? '+' : '-');
                         var block = $(this).closest(".pluginGroup").find(".pluginGroupList");
                         var is_visible = block.is(":visible");
@@ -109,6 +111,7 @@ function pluginStatusLoad() {
                         block.slideToggle(250);
                         return false;
                     });
+                    }
                 })(name);
             }
         },

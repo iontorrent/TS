@@ -69,14 +69,14 @@ typedef struct {
   @param  fp  a pointer to a file structure from which to read
   @return     pointer to the initialized memory for reading in fastqs
   */
-inline tmap_fq_io_t *
+tmap_fq_io_t *
 tmap_fq_io_init(tmap_file_t *fp);
 
 /*! 
   destroys fastq reading structure
   @param  fqio  a pointer to the fastq structure
   */
-inline void 
+void
 tmap_fq_io_destroy(tmap_fq_io_t *fqio);
 
 /*! 

@@ -78,10 +78,14 @@ struct Alignment {
     left_sc = 0;
     right_sc = 0;
     start_sc = 0;
-    align_end = 0;
+    align_start = 0;
     align_end = 0;
     start_flow = 0;
+    prefix_flow = -1;
     flow_index.clear();
+    flow_order_index = -1;
+    read_group.clear();
+
     worth_saving = false;
   }
 
@@ -110,7 +114,7 @@ struct Alignment {
   // Candidate evaluator information
   bool                  is_reverse_strand;  //! Indicates whether read is from the forward or reverse strand
   bool                  evaluator_filtered; //! Is unusable for candidate evaluator?
-  vector<float>         measurements;       //! The measurement values for this read
+  vector<float>         measurements;       //! The measurement values for this read blown up to the length of the flow order
   int                   measurements_length;//! Original trimmed length of the ZM measurements vector
   vector<float>         phase_params;       //! cf, ie, droop parameters of this read
   string                runid;              //! Identify the run from which this read came: used to find run-specific parameters
@@ -123,7 +127,10 @@ struct Alignment {
   int                   align_start;        //! genomic 0-based end position of soft clipped untrimmed read
   int                   align_end;          //! genomic 0-based end position of soft clipped untrimmed read
   int                   start_flow;         //! Flow corresponding to the first base in read_bases
+  int                   prefix_flow;        //! Flow corresponding to to the last base of the 5' hard clipped prefix
   vector<int>           flow_index;         //! Main incorporating flow for each base in read_bases
+  short                 flow_order_index;   //! Index of the flow order belonging to this read
+  string                read_group;         //! Read group of this read
 
   // Post-processing information
   bool                  worth_saving;
@@ -150,7 +157,7 @@ public:
   BAMWalkerEngine();
   ~BAMWalkerEngine();
   void Initialize(const ReferenceReader& ref_reader, TargetsManager& targets_manager,
-      const vector<string>& bam_filenames, const string& postprocessed_bam);
+      const vector<string>& bam_filenames, const string& postprocessed_bami, int px);
   void Close();
   const SamHeader& GetBamHeader() { return bam_header_; }
 
@@ -225,6 +232,13 @@ private:
 
   bool                      bam_writing_enabled_;
   BamWriter                 bam_writer_;
+
+  int                       prefix_exclude;
+
+  int                       temp_read_size;
+  vector<BamAlignment>      temp_reads;
+  BamAlignment              *next_temp_read;
+  vector<BamAlignment *>    temp_heap;
 
 };
 

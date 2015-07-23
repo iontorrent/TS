@@ -461,32 +461,37 @@ def add_ion_xpress_rna_adapter_dnabarcode_set():
     add_or_update_barcode_set(blist,btype,name,adapter)  
     return    
 
-def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff, alt_barcode_prefix = None, skip_barcode_leading_zero = False):
+def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff, alt_barcode_prefix = None, skip_barcode_leading_zero = False, barcode_num_digits = 2, start_id_str_value = 1, index = 0):
     print("add_or_update_barcode_set2... name=%s; alt_barcode_prefix=%s" %(name, alt_barcode_prefix))
+    
+    digitCount = str(barcode_num_digits)
     
 # Attempt to read dnabarcode set named 'IonXpress' from dbase
     dnabcs = models.dnaBarcode.objects.filter(name=name)
     if len(dnabcs) > 0:
         #print '%s dnaBarcode Set exists in database' % name
         # make sure we have all the sequences we expect
-        for index,sequence in enumerate(blist,start=1):
+        for id_index,sequence in enumerate(blist,start= start_id_str_value):
             # Search for this sequence in the list of barcode records
             bc_found = dnabcs.filter(sequence=sequence)
             if len(bc_found) > 1:
                 print "ERROR: More than one entry with sequence %s" % sequence
                 print "TODO: Fix this situation, Mr. Programmer!"
 
+            index += 1
             # Make sure id string has zero padded index field if skip_barcode_leading_zero is not true
             if alt_barcode_prefix:
                 if skip_barcode_leading_zero:
-                    barcode_name = '%s%d' % (alt_barcode_prefix,index)
+                    barcode_name = '%s%d' % (alt_barcode_prefix,id_index)
                 else:
-                    barcode_name = '%s%02d' % (alt_barcode_prefix,index)
+                    format_string = '%s%0'+digitCount+ 'd'
+                    barcode_name = format_string % (alt_barcode_prefix,id_index)
             else:
                 if skip_barcode_leading_zero:
-                    barcode_name = '%s_%d' % (name,index) 
+                    barcode_name = '%s_%d' % (name,id_index) 
                 else:     
-                    barcode_name = '%s_%02d' % (name,index)
+                    format_string = '%s_%0'+digitCount+'d'
+                    barcode_name = format_string % (name,id_index)
                             
             if len(bc_found) == 1:
 
@@ -500,6 +505,9 @@ def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff,
                 
                 # update type
                 bc_found[0].type = btype
+
+                # update index
+                bc_found[0].index = index
                                 
                 # Save changes to database
                 bc_found[0].save()
@@ -524,17 +532,21 @@ def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff,
     else:
         # Add the barcodes because they do not exist.
         # NOTE: name for id_str
-        for index,sequence in enumerate(blist,start=1):
+          
+        format_string = '%s%0'+digitCount+'d'
+                    
+        for id_index,sequence in enumerate(blist,start= start_id_str_value):
+            index += 1
             if alt_barcode_prefix:
                 if skip_barcode_leading_zero:
-                    barcode_name = '%s%d' % (alt_barcode_prefix,index)
+                    barcode_name = '%s%d' % (alt_barcode_prefix,id_index)
                 else:
-                    barcode_name = '%s%02d' % (alt_barcode_prefix,index)
+                    barcode_name = format_string % (alt_barcode_prefix,id_index)
             else:
                 if skip_barcode_leading_zero:
-                    barcode_name = '%s_%d' % (name,index) 
+                    barcode_name = '%s_%d' % (name,id_index) 
                 else:     
-                    barcode_name = '%s_%02d' % (name,index)
+                    barcode_name = format_string % (name,id_index)
             
             kwargs = {
                 'name':name,
@@ -552,7 +564,8 @@ def add_or_update_barcode_set2(blist,btype,name,adapter, scoreMode, scoreCutoff,
             ret = models.dnaBarcode(**kwargs)
             ret.save()
         print '%s dnaBarcode Set added to database' % name
-         
+
+    return index
 
 def add_or_update_ion_dnabarcode_set():
     '''List from TS-1517 or, file Barcodes_052611.xlsx
@@ -615,7 +628,494 @@ def add_or_update_ion_select_dnabarcode_set():
 
     #This Select barcode kit has been released with no leading zero padding         
     add_or_update_barcode_set2(blist, btype, name, adapter, 1, 2.00, barcode_prefix, True)  
+
+def add_or_update_singleSeq_dnabarcode_set():
+    '''Add barcode kit SingleSeq List for TS-10680
+    '''
+    blist=[
+        "TAGGTGGTTC",
+        "TCTATTCGTC",
+        "TCGCAATTAC",
+        "TTGAGCCTATTC",
+        "CTGGCAATCCTC",
+        "CCGGAGAATCGC",
+        "TCTAGCTCTTC",
+        "TCACTCGGATC",
+        "TCCTGGCACATC",
+        "TTCCTACCAGTC",
+        "TCAAGAAGTTC",
+        "CCTACTGGTC",
+        "TCAGGAATAC",
+        "CGGAAGAACCTC",
+        "CGAAGCGATTC",
+        "CAGCCAATTCTC",
+        "TTGGCATCTC",
+        "CTAGGACATTC",
+        "CCAGCCTCAAC",
+        "CTTGGTTATTC",
+        "CTAGGAACCGC",
+        "CTTGTCCAATC",
+        "TCCGACAAGC",
+        "TTAAGCGGTC"]
+    btype=''
+    name='Ion SingleSeq Barcode set 1'
+    adapter = 'GAT'
+    barcode_prefix = "SingleSeq_"
+   
+    add_or_update_barcode_set2(blist, btype, name, adapter, 1, 2.00, barcode_prefix, False, 3)  
+
+
+def add_or_update_ionCode_dnabarcode_set():
+    '''Add barcode kit IonCode List for TS-10614
+    '''
+    blist=[
+        "CTAAGGTAAC",
+        "TAAGGAGAAC",
+        "AAGAGGATTC",
+        "TACCAAGATC",
+        "CAGAAGGAAC",
+        "CTGCAAGTTC",
+        "TTCGTGATTC",
+        "TTCCGATAAC",
+        "TGAGCGGAAC",
+        "CTGACCGAAC",
+        "TCCTCGAATC",
+        "TAGGTGGTTC",
+        "TCTAACGGAC",
+        "TTGGAGTGTC",
+        "TCTAGAGGTC",
+        "TCTGGATGAC",
+        "TCTATTCGTC",
+        "AGGCAATTGC",
+        "TTAGTCGGAC",
+        "CAGATCCATC",
+        "TCGCAATTAC",
+        "TTCGAGACGC",
+        "TGCCACGAAC",
+        "AACCTCATTC",
+        "CCTGAGATAC",
+        "TTACAACCTC",
+        "AACCATCCGC",
+        "ATCCGGAATC",
+        "CGAGGTTATC",
+        "TCCAAGCTGC",
+        "TCTTACACAC",
+        "TTCTCATTGAAC",
+        "TCGCATCGTTC",
+        "TAAGCCATTGTC",
+        "AAGGAATCGTC",
+        "CTTGAGAATGTC",
+        "TGGAGGACGGAC",
+        "TAACAATCGGC",
+        "CTGACATAATC",
+        "TTCCACTTCGC",
+        "AGCACGAATC",
+        "TTGGAGGCCAGC",
+        "TGGAGCTTCCTC",
+        "TCAGTCCGAAC",
+        "TAAGGCAACCAC",
+        "TTCTAAGAGAC",
+        "TCCTAACATAAC",
+        "CGGACAATGGC",
+        "TTGAGCCTATTC",
+        "CCGCATGGAAC",
+        "CTGGCAATCCTC",
+        "TCCACCTCCTC",
+        "CAGCATTAATTC",
+        "TCCTTGATGTTC",
+        "TCTAGCTCTTC",
+        "TCACTCGGATC",
+        "TTCCTGCTTCAC",
+        "CCTTAGAGTTC",
+        "CTGAGTTCCGAC",
+        "TCCTGGCACATC",
+        "CCGCAATCATC",
+        "CCAACATTATC",
+        "TCAAGAAGTTC",
+        "TTCAATTGGC",
+        "CCTACTGGTC",
+        "TGAGGCTCCGAC",
+        "CGAAGGCCACAC",
+        "TCTGCCTGTC",
+        "CGATCGGTTC",
+        "TCAGGAATAC",
+        "CGGAAGAACCTC",
+        "CGAAGCGATTC",
+        "CAGCCAATTCTC",
+        "TCGAAGGCAGGC",
+        "CCTGCCATTCGC",
+        "CTAGGACATTC",
+        "CTTCCATAAC",
+        "CCAGCCTCAAC",
+        "CTTGGTTATTC",
+        "TTGGCTGGAC",
+        "CCGAACACTTC",
+        "TCCTGAATCTC",
+        "CTAACCACGGC",
+        "CGGAAGGATGC",
+        "CTTGTCCAATC",
+        "TCCGACAAGC",
+        "CGGACAGATC",
+        "CCTTGAGGCGGC",
+        "TTCTTCCTCTTC",
+        "TTCTTCAAGATC",
+        "CTTGGAACTGTC",
+        "TCGGCCGGAATC",
+        "TGGAGATAATTC",
+        "TGAATTCCGGAC",
+        "CTTGCCACCGTC",
+        "CTAACAATTCAC",
+        "TTCGCAATGAAC",
+        "TTCCGCACGGC",
+        "TTGGCCAATTGC",
+        "TCTAGTTCAAC",
+        "TGAGAAGAATTC",
+        "CCTCAACCATC",
+        "CCTGCTGGATTC",
+        "TGGCAGGAATTC",
+        "CGCTTCGATTC",
+        "TTCCAGATTGC",
+        "TCCGGAGTCTTC",
+        "TACATCCATC",
+        "GCAACACGAC",
+        "TAAGCAATTCTC",
+        "CTGATCCATTC",
+        "TAGGAACAATC",
+        "AACCGGAATTC",
+        "CCGGAGGTAATC",
+        "TTCAGGACCTTC",
+        "TCTAACCAATGC",
+        "TCCGAGCTGATC",
+        "TTACCATGTTC",
+        "CTCATTCCGGTC",
+        "TCGAGGCCTGGC",
+        "TGGAAGGTTGC",
+        "TAGGATTCCGAC",
+        "TTGAAGCTCCGC",
+        "TTCAACTTCTTC",
+        "TTAGGCTCAAC",
+        "CCAAGGCGAATC",
+        "CTTAGATCGGTC",
+        "CCGGTCCGATTC",
+        "TTGGAGCGAC",
+        "CTTGTTCCGGC",
+        "TCCGGCAAGATC",
+        "TTCCTATCCGAC",
+        "CTAATTGAATC",
+        "TTCGACACCAC",
+        "TCCGCCATGC",
+        "CCAGTTCCTC",
+        "TAACAATAATTC",
+        "TGCCTGGATC",
+        "CTGAAGTCGGAC",
+        "AAGGAATGGAAC",
+        "TTCCGAACCGAC",
+        "TTCACCAGGATC",
+        "CTACAACTTC",
+        "CTGAGGCATCAC",
+        "CCAGCATCATTC",
+        "CCGGCTTGAAC",
+        "TCAGGCAGATTC",
+        "TTCTGCACGATC",
+        "TCCGAAGATAAC",
+        "CCTCATCGTTC",
+        "TGCAACCAAC",
+        "CGGAATCCGGTC",
+        "TCTTGAGGAAGC",
+        "CCGCCACCAATC",
+        "AAGGTTATTC",
+        "TGGAGATTGGTC",
+        "TCTCCATCAATC",
+        "TGGAGCCAACAC",
+        "TCTAATCGATTC",
+        "CCACCAATAC",
+        "CTTGGATTCGAC",
+        "TTCTGGATTATC",
+        "TTCTTCTGGC",
+        "TCCTGAGACTC",
+        "CTGGAACAAGAC",
+        "TCTTGCTTAATC",
+        "CTCCAATTGGAC",
+        "CTAAGGAAGGTC",
+        "TGAAGGCACCTC",
+        "ACAATCCGGTTC",
+        "TCCTTACAGAAC",
+        "TGAATCGAAC",
+        "CTTGAAGCCGTC",
+        "TTGAGATCAATC",
+        "CAGCAATTCGAC",
+        "CGAAGCTAATC",
+        "CTTAAGGCTGAC",
+        "CTGGAGAACCAC",
+        "TACTTGGAATC",
+        "CTAGGCCTCCTC",
+        "CCGAGAACAAC",
+        "TTAAGACGTC",
+        "CTAAGATCCGC",
+        "TGGCTTCATC",
+        "CGAACAATTGTC",
+        "TTCAAGGTGTTC",
+        "CTTAACCACCAC",
+        "TCCGGACCGTTC",
+        "CCTTGAGCATGC",
+        "TCTTAGATATTC",
+        "CCTGAATTAC",
+        "AAGCCAACCAAC",
+        "TCTGGCAACGGC",
+        "CTAGGAACCGC",
+        "TTAAGCGGTC",
+        "TTGGCATCTC",
+        "TTGGTTCCAAC",
+        "TTAGGCTGATTC",
+        "TGGAACCACGTC",
+        "AGGCAACGGAAC",
+        "TCCTCCTCCAC",
+        "TCTCATTCATTC",
+        "TTCGGAACGTTC",
+        "TTAAGATTATC",
+        "CCTTATGGATTC",
+        "CTTGAACAGGTC",
+        "CCGAACCTATC",
+        "CCAGGACGTC",
+        "CCTTGTCGTC",
+        "CTAGCCAATGAC",
+        "CCTGGCTCAATC",
+        "CTGAGGCTTGTC",
+        "CAAGAATAATTC",
+        "CCGAACCAACGC",
+        "CCTAGATTAATC",
+        "TCAACCACAAC",
+        "AGGCCATTGATC",
+        "TCGAGAATCGGC",
+        "TTCTGCCACTTC",
+        "CTAAGCCATCTC",
+        "CCTTAGCTCGGC",
+        "TCTTAGGACGGC",
+        "CTTGCAATGGAC",
+        "TCTAATGGTC",
+        "CCTCCACGATC",
+        "CCTAAGGCAGGC",
+        "TCTGGAAGTCGC",
+        "TCTTAGGTAATC",
+        "TCCAGGCTTATC",
+        "TGAATTCTTC",
+        "CTTGAGAATTAC",
+        "AAGGCCTCGAAC",
+        "TTCCTTCAACAC",
+        "TGGTTGGATTC",
+        "CGGCAACATTC",
+        "TGCATTCCGGTC",
+        "CGGAAGCATCAC",
+        "CTTGGAGTCCTC",
+        "CGGACCACGGAC",
+        "TTGCCAACCGGC",
+        "CTGTTCGAAC",
+        "CCGAGTGGTC",
+        "CAAGGCTTCCAC",
+        "TCTTCATGAATC",
+        "TTGACATTAATC",
+        "TCAGGCCGAAC",
+        "TTCCGCATTGAC",
+        "TGGAAGGTCCAC",
+        "TTAGCAACATTC",
+        "TCTTAGCGATC",
+        "AAGCAATCCATC",
+        "CCAAGTTGTTC",
+        "TGGACTCAATTC",
+        "TCTGTAATTC",
+        "TTGAAGGATCGC",
+        "TTCTACCGGC",
+        "TGGAAGAAGGAC",
+        "CACCATCCGGTC",
+        "CCTGCCGGAATC",
+        "CGGCCTTCGGTC",
+        "CCTTGGCCTGGC",
+        "CTAGTCGAATTC",
+        "TAGACGGAATTC",
+        "TCCTCCAAGTTC",
+        "CCTAAGCTAC",
+        "CTAACCGATTC",
+        "CCACATCGAAC",
+        "TCTTCCTTCCGC",
+        "TGGACAATTGAC",
+        "TTAGCCTTAAC",
+        "TCACCTCGTTC",
+        "TCTGACATTCGC",
+        "TCCGCTCGGAC",
+        "TTCTTGATCATC",
+        "CTGACTCCGGC",
+        "GAAGATCTTC",
+        "TTCCGAAGTCAC",
+        "TCCTGGAGTAAC",
+        "TGACCAATCCAC",
+        "TGGAGGCCGGTC",
+        "TAGCATCCGGC",
+        "TAAGTCGATC",
+        "TCGGCCATAC",
+        "TTCCAATCCGTC",
+        "CTTGAAGACGAC",
+        "TAGAATTCCGTC",
+        "CGAGATGAAC",
+        "TTCTACAATATC",
+        "CCTGGTTGTC",
+        "TTCTGAGCGTTC",
+        "TCCAAGGACAC",
+        "CCAAGCAACGGC",
+        "TTCTTAAGTATC",
+        "TTCGACTCGTC",
+        "TCCGGAACTAC",
+        "CGGCCTCAATTC",
+        "CAGCCTCCGGAC",
+        "TCTGACGGAATC",
+        "TCCTTATTGAC",
+        "TTCTCCATTATC",
+        "AACTTCCGGATC",
+        "TCCACAATTAAC",
+        "AAGGCTCGGTTC",
+        "CCGAGTCGATTC",
+        "TTCTTCACCAAC",
+        "CGGAACCTTGC",
+        "CTAGGCCAGGAC",
+        "CCTGAAGGCTGC",
+        "CTTGAAGGTCTC",
+        "CTCTCCGATTC",
+        "CTTAACATCCTC",
+        "TTGAATGGTC",
+        "TGAGGAATTCAC",
+        "TGGAAGCAAGTC",
+        "CTGAGCAATCTC",
+        "TCCAGCCATATC",
+        "CCTTACTCATC",
+        "TCCTTCCACTTC",
+        "TGAACCATTGAC",
+        "TTAGGATCATTC",
+        "TTCCAATTCCAC",
+        "TTCTGGTTCTTC",
+        "TTCTGTCCGC",
+        "TCCGAAGAGATC",
+        "TTACACGGAC",
+        "TAAGTCCAATTC",
+        "TAAGATTCGGC",
+        "AGGCCTAATTC",
+        "TCTTCAGGATTC",
+        "TTCCTTGGTCAC",
+        "TTCCTTGCCGTC",
+        "CTTAGGCAAGTC",
+        "AACAATTCGAAC",
+        "CGAGGATCCGTC",
+        "TCCTCTTCCTC",
+        "TCGAAGCTTCGC",
+        "CTAAGGTTCGAC",
+        "TTAGGAATCCGC",
+        "TGGCCAATCGAC",
+        "CTTAAGCATTAC",
+        "TTCCTCTAATTC",
+        "CTTCCATTCGAC",
+        "CCTACAAGATTC",
+        "TCTTGAAGATGC",
+        "TGAAGCCATCTC",
+        "CTAAGCTTGGTC",
+        "CTTGGATAAC",
+        "CAAGCCACCGTC",
+        "CCTAGGTCTTC",
+        "TTGACTTCCGGC",
+        "CCAGACCGAAC",
+        "TCTAGCCATCGC",
+        "CGCCAAGAATC",
+        "TGAGGCATGGTC",
+        "CGAGATTCGGAC",
+        "TCAACCTGATC",
+        "TCCTGAGGTATC",
+        "AAGATGAATC",
+        "CCTGGAAGACGC",
+        "TTGCACCGTTC",
+        "TCTAAGACTTC",
+        "CGAACATATTC",
+        "TTGGACTTATTC",
+        "CGAGGCAATGAC",
+        "TCGAGATTAATC",
+        "TTCGCCAACAC",
+        "TCGGCACGAATC",
+        "TCCGTTCGGTC",
+        "CCTTAGGATGGC",
+        "CACCACCAATTC",
+        "TTGAAGCCAGGC",
+        "CCTCCAATCGGC",
+        "TTACAATGAATC",
+        "TCCTGCATGATC",
+        "CGCTTCCAAC",
+        "TGACAACTTC",
+        "CTTGGCCAACTC",
+        "TCTTGGCAATGC",
+        "AAGGCATCCAAC",
+        "CCGACCGGATTC",
+        "TTCATTCCGTTC",
+        "CTGGCATCGGAC",
+        "CTTGACCTGGTC",
+        "TTCTACCTCAAC"]        
+     
+    btype=''
+    name='IonCode'
+    adapter = 'GGTGAT'
+    barcode_prefix = "IonCode_"
+
+    #IonCode barcodes come in 96-well plates. The first two numerical digits are plate number, and the last two digits mark barcodes 1-96 within a plate.
+    index = 0
+    index = add_or_update_barcode_set2(blist[0 : 96], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 101, index)   
+    index = add_or_update_barcode_set2(blist[96 : 96*2], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 201, index)  
+    index = add_or_update_barcode_set2(blist[96*2 : 96*3], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 301, index)  
+    index = add_or_update_barcode_set2(blist[96*3 : 96*4], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 401, index)  
+    index = add_or_update_barcode_set2(blist[96*4 : 96*5], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 501, index)  
+    index = add_or_update_barcode_set2(blist[96*5 : 96*6], btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 601, index)  
     
+
+def add_or_update_ionCode1_32_dnabarcode_set():
+    '''Add barcode kit IonCode List for TS-10873
+    '''
+    blist=[
+        "CTAAGGTAAC",
+        "TAAGGAGAAC",
+        "AAGAGGATTC",
+        "TACCAAGATC",
+        "CAGAAGGAAC",
+        "CTGCAAGTTC",
+        "TTCGTGATTC",
+        "TTCCGATAAC",
+        "TGAGCGGAAC",
+        "CTGACCGAAC",
+        "TCCTCGAATC",
+        "TAGGTGGTTC",
+        "TCTAACGGAC",
+        "TTGGAGTGTC",
+        "TCTAGAGGTC",
+        "TCTGGATGAC",
+        "TCTATTCGTC",
+        "AGGCAATTGC",
+        "TTAGTCGGAC",
+        "CAGATCCATC",
+        "TCGCAATTAC",
+        "TTCGAGACGC",
+        "TGCCACGAAC",
+        "AACCTCATTC",
+        "CCTGAGATAC",
+        "TTACAACCTC",
+        "AACCATCCGC",
+        "ATCCGGAATC",
+        "CGAGGTTATC",
+        "TCCAAGCTGC",
+        "TCTTACACAC",
+        "TTCTCATTGAAC"]        
+     
+    btype=''
+    name='IonCode Barcodes 1-32'
+    adapter = 'GGTGAT'
+    barcode_prefix = "IonCode_"
+
+    #IonCode barcodes come in 96-well plates. The first two numerical digits are plate number, and the last two digits mark barcodes 1-96 within a plate.
+    index = 0
+    index = add_or_update_barcode_set2(blist, btype, name, adapter, 1, 2.00, barcode_prefix, False, 4, 101, index)      
+
+           
 def ensure_dnabarcodes_have_id_str():
     #For the 1.5 release, we are adding the id_str field to each dnabarcode record.
     allbarcodes = models.dnaBarcode.objects.all()
@@ -994,13 +1494,30 @@ if __name__=="__main__":
         sys.exit(1)
 
 
+#    try:
+#        add_or_update_singleSeq_dnabarcode_set()
+#        ensure_dnabarcodes_have_id_str()    # for existing barcode records        
+#    except:
+#        print 'Adding dnaBarcodeset: SingleSeq failed'
+#        print traceback.format_exc()
+#        sys.exit(1)
+
 #     try:
-#         add_or_update_singleSeq_dnabarcode_set()
+#         add_or_update_ionCode_dnabarcode_set()
 #         ensure_dnabarcodes_have_id_str()    # for existing barcode records        
 #     except:
-#         print 'Adding dnaBarcodeset: SingleSeq failed'
+#         print 'Adding dnaBarcodeset: IonCode failed'
 #         print traceback.format_exc()
 #         sys.exit(1)
+
+#     try:
+#         add_or_update_ionCode1_32_dnabarcode_set()
+#         ensure_dnabarcodes_have_id_str()    # for existing barcode records        
+#     except:
+#         print 'Adding dnaBarcodeset: IonCode1-32 failed'
+#         print traceback.format_exc()
+#         sys.exit(1)
+
 
 #    try:
 #        add_ThreePrimeadapter('Forward', 'Ion P1B', 'ATCACCGACTGCCCATAGAGAGGCTGAGAC', 'Default forward adapter', True)

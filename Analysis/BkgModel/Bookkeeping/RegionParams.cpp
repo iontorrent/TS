@@ -142,6 +142,7 @@ void reg_params::SetStandardHigh( float t0_start, int flow_block_size)
 
   fit_taue = false;
   use_alternative_etbR_equation = false; 
+  use_log_taub = false;
 
   tshift    = 3.5f;
   nuc_shape.sigma = 8.5f; // increase for super slow project
@@ -173,6 +174,7 @@ void reg_params::SetStandardHigh( float t0_start, int flow_block_size)
   tauE = 20.0f;
   min_tauB = 4.0f;
   max_tauB = 65.0f;
+  mid_tauB = 12.0f;
 
   NucModifyRatio[TNUCINDEX] = 1.1f;
   NucModifyRatio[ANUCINDEX] = 1.1f;
@@ -209,6 +211,7 @@ void reg_params::SetStandardLow(float t0_start, int flow_block_size)
 
   fit_taue = false;
   use_alternative_etbR_equation = false; 
+  use_log_taub = false;
 
   tshift    = -1.5f;
   nuc_shape.sigma  = 0.4f;
@@ -321,6 +324,13 @@ void reg_params_setBuffModel(reg_params *cur, float tau_E_default)
   cur->RatioDrift = 2.5f;
 }
 
+void reg_params_setBuffRange(reg_params *cur, float min_tauB_default, float max_tauB_default, float mid_tauB_default)
+{
+  cur->min_tauB = min_tauB_default;
+  cur->max_tauB = max_tauB_default;
+  cur->mid_tauB = mid_tauB_default;
+}
+
 void reg_params_setNoRatioDriftValues(reg_params *cur)
 {
     cur->RatioDrift    = 1.3f;
@@ -344,7 +354,7 @@ void reg_params::SetTshift(float _tshift){
 
 //@TODO: can this be exported to a sensible JSON file?
 void reg_params::SetStandardValue(float t_mid_nuc_start, float sigma_start, 
-        float *dntp_concentration_in_uM, bool _fit_taue, bool _use_alternative_etbR_equation,
+        float *dntp_concentration_in_uM, bool _fit_taue, bool _use_alternative_etbR_equation, bool _use_log_taub,
         int _hydrogenModelType, int flow_block_size)
 {
   // per-region parameters
@@ -362,6 +372,7 @@ void reg_params::SetStandardValue(float t_mid_nuc_start, float sigma_start,
 
   fit_taue = _fit_taue;
   use_alternative_etbR_equation = _use_alternative_etbR_equation;
+  use_log_taub = _use_log_taub;
 
   hydrogenModelType = _hydrogenModelType;
 
@@ -530,12 +541,15 @@ void reg_params_copyTo_reg_params_H5 ( reg_params &rp, reg_params_H5 &rp5 )
   rp5.tshift = rp.tshift;
   rp5.tau_R_m = rp.tau_R_m;
   rp5.tau_R_o = rp.tau_R_o;
+  rp5.tauE = rp.tauE;
+  rp5.min_tauB = rp.min_tauB;
+  rp5.mid_tauB = rp.mid_tauB;
+  rp5.max_tauB = rp.max_tauB;
   rp5.RatioDrift = rp.RatioDrift;
   rp5.CopyDrift = rp.CopyDrift;
   rp5.sens = rp.sens;
-  rp5.tauE = rp.tauE;
   rp5.nuc_shape = rp.nuc_shape;
-
+  rp5.reg_error = rp.reg_error;
 }
 
 void reg_params_H5_copyTo_reg_params ( reg_params_H5 &rp5, reg_params &rp )
@@ -554,11 +568,14 @@ void reg_params_H5_copyTo_reg_params ( reg_params_H5 &rp5, reg_params &rp )
   rp.tshift = rp5.tshift;
   rp.tau_R_m = rp5.tau_R_m;
   rp.tau_R_o = rp5.tau_R_o;
+  rp.tauE = rp5.tauE;
+  rp.min_tauB = rp5.min_tauB;
+  rp.mid_tauB = rp5.mid_tauB;
+  rp.max_tauB = rp5.max_tauB;
   rp.RatioDrift = rp5.RatioDrift;
   rp.CopyDrift = rp5.CopyDrift;
   rp.sens = rp5.sens;
-  rp.tauE = rp5.tauE;
   rp.nuc_shape = rp5.nuc_shape;
-
+  rp.reg_error = rp5.reg_error;
 }
 

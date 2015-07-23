@@ -270,7 +270,8 @@ tmap_map2_core_aln(const tmap_map_opt_t *opt, const tmap_bwtl_t *target,
 {
   tmap_map2_stack_t *stack = (tmap_map2_stack_t*)pool->stack;
   tmap_map2_aln_t *b, *b1, **b_ret;
-  int32_t i, j, score_mat[16], *heap, heap_size, n_tot = 0;
+  // int32_t i, j, score_mat[16], *heap, heap_size, n_tot = 0;
+  int32_t i, j, score_mat[16], *heap, heap_size;
   tmap_hash_t(tmap_map2_qintv) *rhash = NULL;
   tmap_hash_t(64) *chash = NULL;
 
@@ -303,7 +304,7 @@ tmap_map2_core_aln(const tmap_map_opt_t *opt, const tmap_bwtl_t *target,
       uint32_t tcntk[4], tcntl[4];
 
       v = tmap_map2_stack_pop(stack); old_n = v->n;
-      n_tot += v->n;
+      // n_tot += v->n;
 
       for(i = 0; i < v->n; ++i) { // test max depth and band width
           tmap_map2_cell_t *p = v->array + i;

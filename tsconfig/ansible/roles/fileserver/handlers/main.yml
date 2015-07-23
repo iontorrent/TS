@@ -6,6 +6,9 @@
 - name: load custom iptables
   shell: bash -lc '/sbin/iptables-restore --noflush < /etc/iptables.custom'
   
+- name: flush iptables
+  shell: bash -lc '/sbin/iptables -F && iptables -P INPUT ACCEPT'
+  
 - name: restart network
   service: name=networking state=restarted
   

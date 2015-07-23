@@ -3,7 +3,7 @@
         "name"          : "TargetSeq - Proton - Germ Line - High Stringency",
         "tooltip"       : "Parameter settings optimized for high frequency variants amd minimum false positives on TargetSeq libraries and Proton chips",
         "configuration" : "germline_high_stringency_targetseq",
-        "ts_version"    : "4.4",
+        "ts_version"    : "4.6",
         "compatibility" : {
           "chip"        : ["proton_p1"],
           "library"     : ["targetseq"],
@@ -60,6 +60,7 @@
         "position_bias_pval":0.05,
         "position_bias_ref_fraction":0.05,
 
+        "sse_prob_threshold":0.2,
         "prediction_precision":1.0,
         "heavy_tailed":3,
         "suppress_recalibration":0

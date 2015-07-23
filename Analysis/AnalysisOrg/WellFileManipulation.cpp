@@ -98,6 +98,8 @@ void* WriteFlowDataFunc(void* arg0)
   wells.mDataspace = H5Dget_space ( wells.mDataset ); /* dataspace handle */
   H5Eset_auto2 ( H5E_DEFAULT, old_func, old_client_data );
 
+  wells.mSaveAsUShort = arg->saveAsUShort;
+
   RawWellsWriter writer;
 
   bool quit = false;

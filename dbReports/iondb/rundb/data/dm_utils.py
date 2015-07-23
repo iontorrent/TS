@@ -1,5 +1,6 @@
 # Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved 
 
+from __future__ import absolute_import
 import re
 import os
 import sys
@@ -80,6 +81,7 @@ def get_walk_filelist(input_dirs, list_dir=None, save_list=False):
                     logger.error("Unhandled error in get_walk_filelist on: %s" % item, extra = logid)
                     logger.error(traceback.format_exc(), extra = logid)
                     continue
+                
             this_dir = os.path.join(item, 'plugin_out')
             if os.path.isdir(this_dir):
                 os.chdir(this_dir)
@@ -107,6 +109,7 @@ def get_walk_filelist(input_dirs, list_dir=None, save_list=False):
                     logger.error("Unhandled error in get_walk_filelist on: %s" % item, extra = logid)
                     logger.error(traceback.format_exc(), extra = logid)
                     continue
+
             for root, dirs, files in os.walk('./', topdown=True):
                 for j in dirs + files:
                     # This code address specific issue caused by bad plugin code: TS-9917

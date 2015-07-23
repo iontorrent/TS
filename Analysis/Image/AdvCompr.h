@@ -25,6 +25,7 @@
 #define AdvComprPrintf DTRACE
 #endif
 #include "ComparatorNoiseCorrector.h"
+#include "CorrNoiseCorrector.h"
 #include "datahdr.h"
 #include "deInterlace.h"
 #endif
@@ -57,7 +58,9 @@ typedef struct {
 	double Extract;
 	double populate;
 	double mean;
+	double xtalk;
 	double ccn;
+	double rcn;
 	double clear;
 	double subtract;
 	double CompressBlock;
@@ -76,8 +79,8 @@ typedef struct {
 
 
 #define ADVC_MAX_REGIONS 97
-#define BLK_SZ_X (16*12) // must be a multiple of 16 for avx
-#define BLK_SZ_Y (16*12) // must be a multiple of 16 for avx
+#define BLK_SZ_X (16*18) // must be a multiple of 16 for avx
+#define BLK_SZ_Y (16*18) // must be a multiple of 16 for avx
 #define BLK_SZ (BLK_SZ_X*BLK_SZ_Y)
 
 #define TRCS_ACCESS(nt,np) (trcs[(np)*ntrcsL+(nt)])
@@ -89,16 +92,18 @@ public:
 
 	AdvCompr(FILE_HANDLE _fd, short int *raw, int _w, int _h, int _nImgPts,
 			int _nUncompImgPts, int *_timestamps_in, int *_timestamps_out,
-			int _testUncompr, char *fname, char *options);
+			int _testUncompr, char *fname, char *options, int frameRate=15);
 	~AdvCompr();
 
 	/*  un-compress the image into memory */
 	int  UnCompress(int threadNum=-1);
 
 	/* compress the image to a file */
-	int  Compress(int threadNum=-1, uint32_t region=0);
+	int  Compress(int threadNum=-1, uint32_t region=0, int targetAvg=8192);
 
-        void SetDoCNC(bool value) { do_cnc = value; }
+    void SetDoCNC(bool value) { do_cnc = value; }
+    static void SetGain(int region, int w, int h, float conv, uint16_t *gainPtr);
+    static void ClearGain(int region);
 
 private:
         AdvCompr() {} // no default constructor
@@ -111,7 +116,7 @@ private:
 	int  Read(FILE_HANDLE fd, void *buf, int len);
 	void UnPackBits(uint64_t *trcs_coeffs_buffer, uint64_t *bufferEnd);
 	float findt0();
-	int   PopulateTraceBlock();
+	int   PopulateTraceBlock_ComputeMean();
 	void  ComputeMeanTrace();
 	int   CompressBlock();
 	void  SubtractMeanFromTraces();
@@ -121,7 +126,7 @@ private:
 	void  SaveRawTrace();
 	int   WriteTraceBlock();
 	void  ComputeGain();
-	void  SetMeanOfFramesToZero(int earlyFrames);
+	void  SetMeanOfFramesToZero_SubMean(int earlyFrames);
 	void  doTestComprPre();
 	void  doTestComprPost();
 	int   ExtractTraceBlock();
@@ -130,6 +135,23 @@ private:
 	float ExtractVectors();
 	void  NormalizeVectors();
 	void  ComputeEmphasisVector(float *gv, float mult, float adder, float width);
+	void  AddDcOffsetToMeanTrace();
+	void  AddSavedMeanToTrace(float *saved_mean);
+	void  SetMeanTraceToZero();
+	void  smoothBeginning();
+	void  adjustForDrift();
+	void  ApplyGain_FullChip(float targetAvg);
+	void  ComputeGain_FullChip();
+	void  ZeroBelow(float thresh);
+	void  NeighborSubtract(short int *raw, int h, int w, int npts, float *saved_mean);
+	void  ZeroTraceMean(short int *raw, int h, int w, int npts);
+	void  TimeTransform(int *timestamps_compr, int *newtimestamps_compr,
+			int frameRate, int &tmp_npts, int &tmp_nUncompImgPts);
+	void TimeTransform_trace(int npts, int npts_newfr, int *timestamps_compr,
+			int *timestamps_newfr, float *vectors, float * nvectors, int nvect);
+    void xtalkCorrect(short int *raw, int nCols, int nRows, int nFrames, int chip_offset_y, float xtalk_fraction);
+    void SmoothMean();
+    void ClearBeginningOfTrace();
 
 
 	int nPcaBasisVectors;       // number of pca basis vectors
@@ -147,7 +169,8 @@ private:
 	int   *trcs_state;          // pinned mask -1, as well as number of coeffs per trace later
 	float *basis_vectors;       // pca/spline basis vectors
 	float *mean_trc;            // mean trace, subtracted from every trace
-        bool do_cnc;                // should cnc correction be peformed.
+    bool do_cnc;                // should cnc correction be peformed.
+    bool do_rnc;                // should rnc correction be peformed.
 	int w;
 	int h;
 	int ntrcs;            // num trcs in the block
@@ -157,6 +180,13 @@ private:
 	int t0est;            // estimate of t0 in frames.
     int doGain;           // internal flag used for controling gain correction
     int pinnedTrcs;       // number of pinned trcs
+
+    int frameRate;        // incomming data frame rate
+    int npts_newfr;
+    int nUncompImgPts_newfr;
+    int *timestamps_newfr;
+    int timestamps_newfr_len;
+
 
 	float *minVals;       // coefficient minimum values
 	float *maxVals;       // coefficient maximum values
@@ -182,6 +212,8 @@ private:
 	char *GblMemPtr;
 	uint32_t GblMemLen;
 	int ThreadNum;
+	short int *mMask;
+	uint32_t mMask_len;
 
 	uint32_t trcs_len;
 	uint32_t trcs_coeffs_len;
@@ -193,8 +225,8 @@ private:
 	uint32_t bitsNeeded_len;
 	uint32_t sampleMatrix_len;
 
-#define TARGET_SAMPLE_RATE 24
-#define TARGET_MIN_SAMPLES 500
+#define TARGET_SAMPLE_RATE 10
+#define TARGET_MIN_SAMPLES 800
 
 #define SETLEN(vn,ln,l,t) ln = (l)*sizeof(t) + VEC8F_SIZE_B; ln &= ~(VEC8F_SIZE_B-1); memLen += ln;
 #define ALLOC_PTR(vn,ln,vt) vn = (vt *)memPtr; memPtr += ln;
@@ -209,6 +241,8 @@ private:
 		SETLEN(minVals,minVals_len,nv,float);
 		SETLEN(maxVals,maxVals_len,nv,float);
 		SETLEN(bitsNeeded,bitsNeeded_len,nv,int);
+		SETLEN(mMask,mMask_len,w*h,short int);
+		SETLEN(timestamps_newfr,timestamps_newfr_len,npts*2,int);
 //		int sample_rate = TARGET_SAMPLE_RATE;//ntrcsL/TARGET_SAMPLES;
 //		if(sample_rate < 1)
 //			sample_rate=1;
@@ -265,6 +299,8 @@ private:
 		ALLOC_PTR(maxVals,maxVals_len,float);
 		ALLOC_PTR(bitsNeeded,bitsNeeded_len,int);
 		ALLOC_PTR(sampleMatrix,sampleMatrix_len,float);
+		ALLOC_PTR(mMask,mMask_len,short int);
+		ALLOC_PTR(timestamps_newfr,timestamps_newfr_len, int);
 	}
 
     void FREE_STRUCTURES(bool doFree)
@@ -278,6 +314,7 @@ private:
 		maxVals=NULL; maxVals_len=0;
 		bitsNeeded=NULL; bitsNeeded_len=0;
 		sampleMatrix=NULL; sampleMatrix_len=0;
+		mMask=NULL; mMask_len=0;
 //		printf("freeing thread %d doFree=%d\n",ThreadNum,doFree);
 
 		if(doFree || !(ThreadNum >= 0 && ThreadNum < ADVC_MAX_REGIONS))
@@ -322,6 +359,7 @@ private:
 	AdvCompr_Timing_t timing;
 
 	static float *gainCorrection[ADVC_MAX_REGIONS];
+	static uint32_t gainCorrectionSize[ADVC_MAX_REGIONS];
 	static char *threadMem[ADVC_MAX_REGIONS];
 	static uint32_t threadMemLen[ADVC_MAX_REGIONS];
 };

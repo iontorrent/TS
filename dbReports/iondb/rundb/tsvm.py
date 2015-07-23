@@ -24,8 +24,8 @@ def _do_celery_subprocess(command):
         response_obj['state'] = stdout
         response_obj['msg'] = stderr
     return response_obj
-    
-    
+
+
 def _do_subprocess(command, User=None):
     '''General purpose shell to call tsvm bash scripts'''
     logger = get_task_logger(__name__)
@@ -46,7 +46,7 @@ def _do_subprocess(command, User=None):
         mytask = _do_celery_subprocess.delay(command)
         #Wait for celery task to complete
         response_obj = AsyncResult(mytask.task_id).get()
-        
+
     return response_obj
 
 
@@ -58,7 +58,7 @@ def status():
     response_obj = _do_subprocess(command)
     if response_obj['state'] in ['BIOS Disabled', 'Error']:
         return response_obj
-    
+
     response_obj = {'action': 'status'}
     command = ['./tsvm-status']
     response_obj = dict(chain(response_obj.iteritems(), _do_subprocess(command, User='ionadmin').iteritems()))
@@ -67,13 +67,13 @@ def status():
 
 def setup(version):
     '''Sends commands to initialize/setup the VM'''
-    
+
     # As root user, need to ensure the iptables firewall rules allow NFS export to the TS-VM
     command = ['bash', '-lc', 'source ./tsvm-include; enable_nfs_rule']
     response_obj = _do_subprocess(command)
     if response_obj['state'] == 'Error':
         return response_obj
-    
+
     response_obj = {'action': 'setup'}
     command = ['./tsvm-setup', '--version', version]
     response_obj = dict(chain(response_obj.iteritems(), _do_subprocess(command, User='ionadmin').iteritems()))
@@ -104,18 +104,39 @@ def check_for_new_tsvm():
     # NOTE: Must be run with root privileges
     response_obj = {'action': 'check_update'}
     try:
+        import pkg_resources
+        from distutils.version import LooseVersion
         import apt
         apt_cache = apt.Cache()
         apt_cache.update()
         apt_cache.open()
         pkg = apt_cache['ion-tsvm']
-        response_obj.update({
-            'state': 'Upgradable' if bool(pkg.isUpgradable) else 'NotUpgradable',
-            'msg': 'New ion-tsvm package version %s is available' % pkg.candidateVersion
-        })
+
+        if LooseVersion(pkg_resources.get_distribution("python-apt").version) >= LooseVersion('0.9.3.5'):
+            if bool(pkg.is_installed):
+                state = 'Upgradable' if bool(pkg.is_upgradable) else 'NotUpgradable'
+            else:
+                state = 'NotInstalled'
+
+            response_obj.update({
+                'state': state,
+                'msg': 'New ion-tsvm package version %s is available' % pkg.candidate
+            })
+        else:
+            # compatible with python-apt 0.7.94.1 on ubuntu 10.04 - Lucid
+            if bool(pkg.isInstalled):
+                state = 'Upgradable' if bool(pkg.isUpgradable) else 'NotUpgradable'
+            else:
+                state = 'NotInstalled'
+
+            response_obj.update({
+                'state': state,
+                'msg': 'New ion-tsvm package version %s is available' % pkg.candidateVersion
+            })
+
     except Exception as e:
         response_obj.update({'state': 'Error', 'msg': str(e)})
-    
+
     return response_obj
 
 @task
@@ -124,15 +145,29 @@ def install_new_tsvm():
     # NOTE: Must be run with root privileges
     response_obj = {'action': 'update'}
     try:
+        import pkg_resources
+        from distutils.version import LooseVersion
         import apt
         apt_cache = apt.Cache()
         apt_cache.update()
         apt_cache.open()
         pkg = apt_cache['ion-tsvm']
-        pkg.markUpgrade()
+
+        if LooseVersion(pkg_resources.get_distribution("python-apt").version) >= LooseVersion('0.9.3.5'):
+            if bool(pkg.is_installed):
+                pkg.mark_upgrade()
+            else:
+                pkg.mark_install()
+        else:
+            # compatible with python-apt 0.7.94.1 on ubuntu 10.04 - Lucid
+            if bool(pkg.isInstalled):
+                pkg.markUpgrade()
+            else:
+                pkg.markInstall()
+
         apt_cache.commit()
         response_obj.update({'state':'Success', 'msg': "ion-tsvm updated"})
     except Exception as e:
         response_obj.update({'state': 'Error', 'msg': str(e) })
-    
-    return response_obj 
+
+    return response_obj

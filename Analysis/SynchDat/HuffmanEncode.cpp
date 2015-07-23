@@ -70,9 +70,9 @@ Huffman::Huffman(const uint8_t* vv, size_t size) : bit_size(8), node_curr(0), pr
 }
 
 Huffman::~Huffman() { 
-  forIter ( i, prefixes ) delete[] *i; 
-  //for(vector<Prefix*>::iterator i=prefixes.begin();i!=prefixes.end();++i)
-  //    delete[] *i;
+  //forIter ( i, prefixes ) delete[] *i; 
+  for(vector<Prefix*>::iterator i=prefixes.begin();i!=prefixes.end();++i)
+      delete[] *i;
 }
 	
 	

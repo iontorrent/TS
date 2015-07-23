@@ -1,0 +1,110 @@
+{
+ "chip_proprieties": {
+    "chip_type": "520",
+    "grid_type": "HexPackedColumnsOffset",
+    "initial_phase": 0,
+    "max_x_composite": 7680,
+    "max_y_composite": 1728,
+    "max_x": 1200,
+    "max_y": 800
+    },
+ "cross_talk_model": {
+    "model": "Simple",
+    "parameters": "PerBlock",
+    "number_of_neighbors": 18,
+    "number_of_blocks_x": 1,
+    "number_of_blocks_y": 1,
+    "blocks_x": [ 0 ],
+    "blocks_y": [ 0 ],
+    "neighbour_000": {
+       "offset_x": -1,
+       "offset_y": -1,
+       "multipliers": [ 0.024 ]
+       },
+    "neighbour_001": {
+       "offset_x": 0,
+       "offset_y": -2,
+       "multipliers": [ 0.018 ]
+       },
+    "neighbour_002": {
+       "offset_x": 1,
+       "offset_y": -1,
+       "multipliers": [ 0.013 ]
+       },
+    "neighbour_003": {
+       "offset_x": -2,
+       "offset_y": -1,
+       "multipliers": [ 0.023 ]
+       },
+    "neighbour_004": {
+       "offset_x": -1,
+       "offset_y": 0,
+       "multipliers": [ 0.071 ]
+       },
+    "neighbour_005": {
+       "offset_x": 0,
+       "offset_y": -1,
+       "multipliers": [ 0.066 ]
+       },
+    "neighbour_006": {
+       "offset_x": 1,
+       "offset_y": 0,
+       "multipliers": [ 0.045 ]
+       },
+    "neighbour_007": {
+       "offset_x": 2,
+       "offset_y": -1,
+       "multipliers": [ 0.011 ]
+       },
+    "neighbour_008": {
+       "offset_x": -2,
+       "offset_y": 0,
+       "multipliers": [ 0.034 ]
+       },
+    "neighbour_009": {
+       "offset_x": -1,
+       "offset_y": 1,
+       "multipliers": [ 0.071 ]
+       },
+    "neighbour_010": {
+       "offset_x": 1,
+       "offset_y": 1,
+       "multipliers": [ 0.045 ]
+       },
+    "neighbour_011": {
+       "offset_x": 2,
+       "offset_y": 0,
+       "multipliers": [ 0.012 ]
+       },
+    "neighbour_012": {
+       "offset_x": -2,
+       "offset_y": 1,
+       "multipliers": [ 0.023 ]
+       },
+    "neighbour_013": {
+       "offset_x": -1,
+       "offset_y": 2,
+       "multipliers": [ 0.024 ]
+       },
+    "neighbour_014": {
+       "offset_x": 0,
+       "offset_y": 1,
+       "multipliers": [ 0.066 ]
+       },
+    "neighbour_015": {
+       "offset_x": 1,
+       "offset_y": 2,
+       "multipliers": [ 0.013 ]
+       },
+    "neighbour_016": {
+       "offset_x": 2,
+       "offset_y": 1,
+       "multipliers": [ 0.011 ]
+       },
+    "neighbour_017": {
+       "offset_x": 0,
+       "offset_y": 2,
+       "multipliers": [ 0.018 ]
+       }
+    }
+}

@@ -138,8 +138,8 @@ def registration(request):
 
             # Send global message notifying of pending registration
             msg = "New pending user registration for '%s'. " + \
-                "Please visit <a href='%s'>Account Management</a> (as an admin user) to review."
-            Message.warn(msg % (username, urlresolvers.reverse('configure_account')))
+                "Please visit <a href='%s'>Account Management</a> to review."
+            Message.warn(msg % (username, urlresolvers.reverse('configure_account')), route=Message.USER_STAFF)
 
             # Otherwise redirect to a success page. Awaiting approval
             return shortcuts.redirect(urlresolvers.reverse('signup_pending'))

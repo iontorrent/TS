@@ -73,7 +73,7 @@ int main(int argc, char* argv[])
   targets_manager.Initialize(ref_reader, parameters);
 
   BAMWalkerEngine bam_walker;
-  bam_walker.Initialize(ref_reader, targets_manager, parameters.bams, parameters.postprocessed_bam);
+  bam_walker.Initialize(ref_reader, targets_manager, parameters.bams, parameters.postprocessed_bam, parameters.prefixExclusion);
   bam_walker.GetProgramVersions(parameters.basecaller_version, parameters.tmap_version);
 
   SampleManager sample_manager;
@@ -110,7 +110,8 @@ int main(int argc, char* argv[])
   pthread_cond_init(&vc.alignment_tail_cond, NULL);
 
   vc.candidate_counter = 0;
-  vc.candidate_dot = 0;
+  vc.dot_time = time(NULL) + 30;
+  //vc.candidate_dot = 0;
 
   pthread_t worker_id[parameters.program_flow.nThreads];
   for (int worker = 0; worker < parameters.program_flow.nThreads; worker++)
@@ -304,15 +305,18 @@ void * VariantCallerWorker(void *input)
 
       int vcf_writer_slot = vc.vcf_writer->ReserveSlot();
       vc.candidate_counter += variant_candidates.size();
-      while (vc.candidate_counter > vc.candidate_dot) {
-        cerr << ".";
-        /*
-        pthread_mutex_lock(&vc.bam_walker_mutex);
-        vc.bam_walker->PrintStatus();
-        pthread_mutex_unlock(&vc.bam_walker_mutex);
-        */
-
-        vc.candidate_dot += 50;
+      //while (vc.candidate_counter > vc.candidate_dot) {
+      //  cerr << ".";
+      //  /*
+      //  pthread_mutex_lock(&vc.bam_walker_mutex);
+      //  vc.bam_walker->PrintStatus();
+      //  pthread_mutex_unlock(&vc.bam_walker_mutex);
+      //  */
+      //  vc.candidate_dot += 50;
+      //}
+      if (time(NULL) > vc.dot_time) {
+        cerr << '.';
+        vc.dot_time += 30;
       }
 
       pthread_mutex_unlock(&vc.candidate_generation_mutex);

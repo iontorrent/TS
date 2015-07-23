@@ -1,0 +1,64 @@
+{
+    "metadata": {
+        "compatible_chip_type": "521",
+        "created": "2015-05-14 11:25:51.416860",
+        "optimizable params": "km_const(1-4), krate(6-9), d_coeff(11-14), sigma_mult(16-19), t_mid_nuc_delay(21-24), sens(25), tau_R_m(26), tau_R_o(27), emphasis(28-35), emp_amplitude(36), emp_width(37), clonal_call_scale(38-42), tau_E(43), min_tauB/max_tauB/mid_tauB(44/45/46)",
+        "source": "gopt",
+        "version": 1
+    },
+    "parameters": {
+        "clonal_call_scale": [
+            0.63261,
+            0.788535,
+            0.273375,
+            0.02,
+            0.11484
+        ],
+        "d_coeff": [
+            24.15711,
+            171.928555,
+            165.583961,
+            57.731805
+        ],
+        "emp_amplitude": 6.941,
+        "emp_width": 5.038,
+        "emphasis": [
+            9.7713,
+            0.977625,
+            0.381375,
+            0.325688,
+            4.433137,
+            0.748687,
+            0.299475,
+            15.615787
+        ],
+        "km_const": [
+            16.901915,
+            20.056608,
+            15.57785,
+            13.973732
+        ],
+        "krate": [
+            14.331013,
+            25.069727,
+            25.222591,
+            31.601732
+        ],
+        "molecules_to_micromolar_conv": 6.2e-05,
+        "sens": 3.022941,
+        "sigma_mult": [
+            1.325238,
+            1.759406,
+            1.39392,
+            1.33811
+        ],
+        "t_mid_nuc_delay": [
+            0.636308,
+            1.829713,
+            0.007555,
+            0.229932
+        ],
+        "tau_R_m": 1.608,
+        "tau_R_o": 28.719999
+    }
+}

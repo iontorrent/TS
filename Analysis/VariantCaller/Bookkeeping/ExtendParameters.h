@@ -223,6 +223,7 @@ public:
   bool              processInputPositionsOnly;
 
   bool              trim_ampliseq_primers;
+  int               prefixExclusion;
 
   // operation parameters
   bool useDuplicateReads;      // -E --use-duplicate-reads
@@ -266,6 +267,8 @@ public:
 
   // functions
   ExtendParameters(int argc, char** argv);
+
+  bool ValidateAndCanonicalizePath(string &path);
   void SetupFileIO(OptArgs &opts);
   void SetFreeBayesParameters(OptArgs &opts, Json::Value& fb_params);
   void ParametersFromJSON(OptArgs &opts, Json::Value &tvc_params, Json::Value &fb_params, Json::Value &params_meta);

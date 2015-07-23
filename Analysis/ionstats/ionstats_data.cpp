@@ -81,8 +81,6 @@ void ErrorData::MergeFrom(ErrorData &other) {
 }
 
 void ErrorData::writeH5(hid_t &file_id, string group_name) {
-  herr_t status;
-
   hid_t group_id = H5CreateOrOpenGroup(file_id, group_name);
   hid_t dataset_id;
   hid_t dataspace_id;
@@ -97,18 +95,18 @@ void ErrorData::writeH5(hid_t &file_id, string group_name) {
   region_dims[0] = 2;
   dataspace_id = H5Screate_simple (1, region_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "region_origin", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &buf32[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &buf32[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
   // dim
   buf32[0] = region_dim_.first;
   buf32[1] = region_dim_.second;
   region_dims[0] = 2;
   dataspace_id = H5Screate_simple (1, region_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "region_dim", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &buf32[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &buf32[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // error_data_dim
   unsigned int n_row=ERROR_DATA_N_ROWS;
@@ -118,9 +116,9 @@ void ErrorData::writeH5(hid_t &file_id, string group_name) {
   region_dims[0] = 2;
   dataspace_id = H5Screate_simple (1, region_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "error_data_dim", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &buf32[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &buf32[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // make buffer for NxERROR_DATA_N_ROWS matrix of error data to write
   vector<uint64_t> buf64;
@@ -136,15 +134,15 @@ void ErrorData::writeH5(hid_t &file_id, string group_name) {
   //hsize_t  cdims[2];
   //cdims[0] = min(n_row,(unsigned int) 24);
   //cdims[1] = min(n_col,(unsigned int) 200);
-  //status = H5Pset_chunk (plist_id, 2, cdims);
-  //status = H5Pset_deflate (plist_id, 9); 
+  //H5Pset_chunk (plist_id, 2, cdims);
+  //H5Pset_deflate (plist_id, 9); 
 
   dataset_id = H5Dcreate2 (group_id, "error_data", H5T_NATIVE_UINT_LEAST64, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &buf64[0]);
-  status = H5Dclose (dataset_id);
-  //status = H5Pclose (plist_id);
-  status = H5Sclose (dataspace_id);
-  status = H5Gclose (group_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &buf64[0]);
+  H5Dclose (dataset_id);
+  //H5Pclose (plist_id);
+  H5Sclose (dataspace_id);
+  H5Gclose (group_id);
 }
 
 void ErrorData::LoadErrorDataBuffer(unsigned int n_col, unsigned int n_row, vector<uint64_t> &buf) {
@@ -334,6 +332,47 @@ assert(read_hp_len >= 0);
 }
 
 
+void HpData::Add(vector<char> &ref_hp_nuc, vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> & ref_hp_flow, vector<uint16_t> & zeromer_insertion_flow, vector<uint16_t> & zeromer_insertion_len, string &flow_order, bool ignore_terminal_hp) {
+
+  unsigned int first_flow = ref_hp_flow.front();
+  unsigned int last_flow  = ref_hp_flow.back();
+  unsigned int ref_hp_idx=0;
+  if(ignore_terminal_hp) {
+    first_flow++;
+    last_flow--;
+    ref_hp_idx++;
+  }
+
+  unsigned int zeromer_insertion_idx=0;
+  unsigned int n_zeromer_insertions = zeromer_insertion_flow.size();
+  unsigned int n_ref_hp = ref_hp_flow.size();
+  for(unsigned int flow=first_flow; flow <= last_flow && ref_hp_idx < n_ref_hp; ++flow) {
+
+    // Determine read & reference lengths - most commonly it will be zero for both
+    char this_nuc = flow_order[flow % flow_order.size()];
+    uint16_t this_ref_len = 0;
+    int this_read_len = 0;
+    if(flow == ref_hp_flow[ref_hp_idx]) {
+      this_ref_len = ref_hp_len[ref_hp_idx];
+      this_read_len = this_ref_len + ref_hp_err[ref_hp_idx];
+      ref_hp_idx++;
+    } else if( zeromer_insertion_idx < n_zeromer_insertions && flow == zeromer_insertion_flow[zeromer_insertion_idx] ) {
+      this_read_len = zeromer_insertion_len[zeromer_insertion_idx++];
+    }
+
+    if(this_ref_len > max_hp_)
+      continue;
+    if(this_read_len > (int) max_hp_)
+      continue;
+    assert(this_read_len >= 0);
+
+    map< char, vector< vector<uint64_t> > >::iterator hp_it = HpCountFind(this_nuc);
+    if(hp_it != hp_count_.end())
+      hp_it->second[this_ref_len][this_read_len] += 1;
+  }
+}
+
+
 void HpData::LoadHpDataBuffer(unsigned int n_col, unsigned int n_row, vector<uint64_t> &buf, vector< vector<uint64_t> > &hp_table) {
   buf.resize(n_row*n_col);
   vector<uint64_t>::iterator it = buf.begin();
@@ -346,8 +385,6 @@ void HpData::LoadHpDataBuffer(unsigned int n_col, unsigned int n_row, vector<uin
 
 
 void HpData::writeH5(hid_t &file_id, string group_name) {
-  herr_t status;
-
   hid_t group_id = H5CreateOrOpenGroup(file_id, group_name);
   hid_t dataset_id;
   hid_t dataspace_id;
@@ -361,18 +398,18 @@ void HpData::writeH5(hid_t &file_id, string group_name) {
   region_dims[0] = 2;
   dataspace_id = H5Screate_simple (1, region_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "region_origin", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
   // dim
   coord_buf[0] = dim_.first;
   coord_buf[1] = dim_.second;
   region_dims[0] = 2;
   dataspace_id = H5Screate_simple (1, region_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "region_dim", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   unsigned int n_row = 0;
   unsigned int n_col = 0;
@@ -387,9 +424,9 @@ void HpData::writeH5(hid_t &file_id, string group_name) {
   region_dims[0] = 2;
   dataspace_id = H5Screate_simple (1, region_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "hp_data_dim", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // now write the per-nuc error tables
   vector<uint64_t> hp_table_buf;
@@ -411,18 +448,18 @@ void HpData::writeH5(hid_t &file_id, string group_name) {
     hsize_t  cdims[2];
     cdims[0] = min(n_row,(unsigned int) 20);
     cdims[1] = min(n_col,(unsigned int) 20);
-    status = H5Pset_chunk (plist_id, 2, cdims);
-    status = H5Pset_deflate (plist_id, 9); 
+    H5Pset_chunk (plist_id, 2, cdims);
+    H5Pset_deflate (plist_id, 9); 
   
     dataset_id = H5Dcreate2 (group_id, nuc.c_str(), H5T_NATIVE_UINT_LEAST64, dataspace_id, H5P_DEFAULT, plist_id, H5P_DEFAULT); 
-    status = H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &hp_table_buf[0]);
+    H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &hp_table_buf[0]);
   
-    status = H5Dclose (dataset_id);
-    status = H5Pclose (plist_id);
-    status = H5Sclose (dataspace_id);
+    H5Dclose (dataset_id);
+    H5Pclose (plist_id);
+    H5Sclose (dataspace_id);
   }
 
-  status = H5Gclose (group_id);
+  H5Gclose (group_id);
 }
 
 
@@ -481,8 +518,8 @@ void RegionalSummary::Initialize(unsigned int max_hp, unsigned int n_flow, vecto
   hp_count_.resize(n_flow_);
   hp_err_.resize(n_flow_);
   for(unsigned int i=0; i<n_flow_; ++i) {
-    hp_count_[i].assign(max_hp_,0);
-    hp_err_[i].assign(max_hp_,0);
+    hp_count_[i].assign(1+max_hp_,0);
+    hp_err_[i].assign(1+max_hp_,0);
   }
 }
 
@@ -494,17 +531,53 @@ void RegionalSummary::Add(ReadAlignmentErrors &e) {
   n_aligned_ += e.last() - e.first() + 1;
 }
 
-void RegionalSummary::Add(vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow) {
+void RegionalSummary::Add(vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, bool ignore_terminal_hp) {
+  unsigned int i_start = 0;
   unsigned int n_hp = ref_hp_len.size();
-  for(unsigned int i=0; i<n_hp; ++i) {
+  if(ignore_terminal_hp) {
+    i_start++;
+    n_hp--;
+  }
+  for(unsigned int i=i_start; i<n_hp; ++i) {
     if(ref_hp_len[i] > max_hp_)
       continue;
-    if(ref_hp_len[i] == 0)
-      continue;
     assert(ref_hp_flow[i] < n_flow_);
-    hp_count_[ref_hp_flow[i]][ref_hp_len[i]-1] += 1;
+    hp_count_[ref_hp_flow[i]][ref_hp_len[i]] += 1;
     if(ref_hp_err[i] != 0)
-      hp_err_[ref_hp_flow[i]][ref_hp_len[i]-1] += 1;
+      hp_err_[ref_hp_flow[i]][ref_hp_len[i]] += 1;
+  }
+}
+
+
+void RegionalSummary::Add(vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, vector<uint16_t> & zeromer_insertion_flow, bool ignore_terminal_hp) {
+  unsigned int first_flow = ref_hp_flow.front();
+  unsigned int last_flow  = ref_hp_flow.back();
+  unsigned int ref_hp_idx=0;
+  if(ignore_terminal_hp) {
+    first_flow++;
+    last_flow--;
+    ref_hp_idx++;
+  }
+
+  unsigned int zeromer_insertion_idx=0;
+  unsigned int n_zeromer_insertions = zeromer_insertion_flow.size();
+  unsigned int n_ref_hp = ref_hp_flow.size();
+  for(unsigned int flow=first_flow; flow <= last_flow && ref_hp_idx < n_ref_hp; ++flow) {
+    uint16_t this_ref_len = 0;
+    bool have_error = false;
+    if(flow == ref_hp_flow[ref_hp_idx]) {
+      this_ref_len = ref_hp_len[ref_hp_idx];
+      have_error = (ref_hp_err[ref_hp_idx] != 0);
+      ref_hp_idx++;
+    } else if( zeromer_insertion_idx < n_zeromer_insertions && flow == zeromer_insertion_flow[zeromer_insertion_idx] ) {
+      have_error = true;
+      zeromer_insertion_idx++;
+    }
+    if(this_ref_len > max_hp_)
+      continue;
+    hp_count_[flow][this_ref_len] += 1;
+    if(have_error)
+      hp_err_[flow][this_ref_len] += 1;
   }
 }
 
@@ -518,7 +591,7 @@ int RegionalSummary::MergeFrom(RegionalSummary &other) {
   const vector< vector<uint64_t> > &other_hp_count = other.HpCount();
   const vector< vector<uint64_t> > &other_hp_err   = other.HpErr();
   for(unsigned int iFlow=0; iFlow<n_flow_; ++iFlow) {
-    for(unsigned int iHp=0; iHp<max_hp_; ++iHp) {
+    for(unsigned int iHp=0; iHp<=max_hp_; ++iHp) {
       hp_count_[iFlow][iHp] += other_hp_count[iFlow][iHp];
       hp_err_[iFlow][iHp]   += other_hp_err[iFlow][iHp];
     }
@@ -527,8 +600,6 @@ int RegionalSummary::MergeFrom(RegionalSummary &other) {
 }
 
 void RegionalSummary::writeH5(hid_t &file_id, string group_name) {
-  herr_t status;
-
   hid_t group_id = H5CreateOrOpenGroup(file_id, group_name);
   hid_t dataset_id;
   hid_t dataspace_id;
@@ -542,9 +613,9 @@ void RegionalSummary::writeH5(hid_t &file_id, string group_name) {
   h5_dims[0] = 2;
   dataspace_id = H5Screate_simple (1, h5_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "region_origin", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // region_dim
   coord_buf[0] = dim_.first;
@@ -552,74 +623,74 @@ void RegionalSummary::writeH5(hid_t &file_id, string group_name) {
   h5_dims[0] = 2;
   dataspace_id = H5Screate_simple (1, h5_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "region_dim", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // n_err_
   h5_dims[0] = 1;
   dataspace_id = H5Screate_simple (1, h5_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "n_err", H5T_NATIVE_UINT_LEAST64, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_err_);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_err_);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // n_aligned_
   h5_dims[0] = 1;
   dataspace_id = H5Screate_simple (1, h5_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "n_aligned", H5T_NATIVE_UINT_LEAST64, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_aligned_);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_aligned_);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // data_dim
   AssertDims();
   coord_buf[0] = n_flow_;
-  coord_buf[1] = max_hp_;
+  coord_buf[1] = 1+max_hp_;
   h5_dims[0] = 2;
   dataspace_id = H5Screate_simple (1, h5_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "data_dim", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &coord_buf[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // hp_count_ and hp_err_
   hsize_t  dims[2];
   dims[0] = n_flow_;
-  dims[1] = max_hp_;
+  dims[1] = 1+max_hp_;
   vector<uint64_t> data_buf;
   hsize_t  cdims[2];
   hid_t plist_id;
 
   // hp_count_
-  LoadDataBuffer(max_hp_,n_flow_,data_buf,hp_count_);
+  LoadDataBuffer(1+max_hp_,n_flow_,data_buf,hp_count_);
   dataspace_id = H5Screate_simple (2, dims, NULL);
   plist_id  = H5Pcreate (H5P_DATASET_CREATE);
   cdims[0] = min(n_flow_,(unsigned int) 20);
-  cdims[1] = min(max_hp_,(unsigned int) 20);
-  status = H5Pset_chunk (plist_id, 2, cdims);
-  status = H5Pset_deflate (plist_id, 9); 
+  cdims[1] = min(1+max_hp_,(unsigned int) 20);
+  H5Pset_chunk (plist_id, 2, cdims);
+  H5Pset_deflate (plist_id, 9); 
   dataset_id = H5Dcreate2 (group_id, "hp_count", H5T_NATIVE_UINT_LEAST64, dataspace_id, H5P_DEFAULT, plist_id, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &data_buf[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Pclose (plist_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &data_buf[0]);
+  H5Dclose (dataset_id);
+  H5Pclose (plist_id);
+  H5Sclose (dataspace_id);
 
   // hp_err_
-  LoadDataBuffer(max_hp_,n_flow_,data_buf,hp_err_);
+  LoadDataBuffer(1+max_hp_,n_flow_,data_buf,hp_err_);
   dataspace_id = H5Screate_simple (2, dims, NULL);
   plist_id  = H5Pcreate (H5P_DATASET_CREATE);
   cdims[0] = min(n_flow_,(unsigned int) 20);
-  cdims[1] = min(max_hp_,(unsigned int) 20);
-  status = H5Pset_chunk (plist_id, 2, cdims);
-  status = H5Pset_deflate (plist_id, 9); 
+  cdims[1] = min(1+max_hp_,(unsigned int) 20);
+  H5Pset_chunk (plist_id, 2, cdims);
+  H5Pset_deflate (plist_id, 9); 
   dataset_id = H5Dcreate2 (group_id, "hp_err", H5T_NATIVE_UINT_LEAST64, dataspace_id, H5P_DEFAULT, plist_id, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &data_buf[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Pclose (plist_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &data_buf[0]);
+  H5Dclose (dataset_id);
+  H5Pclose (plist_id);
+  H5Sclose (dataspace_id);
 
-  status = H5Gclose (group_id);
+  H5Gclose (group_id);
 }
 
 int RegionalSummary::LoadDataBuffer(unsigned int n_col, unsigned int n_row, vector<uint64_t> &buf, const vector< vector<uint64_t> > & data) {
@@ -638,8 +709,8 @@ void RegionalSummary::AssertDims(void) {
   assert(hp_count_.size() == n_flow_);
   assert(hp_err_.size() == n_flow_);
   if(n_flow_ > 0) {
-    assert(hp_count_[0].size() == max_hp_);
-    assert(hp_err_[0].size() == max_hp_);
+    assert(hp_count_[0].size() == 1+max_hp_);
+    assert(hp_err_[0].size() == 1+max_hp_);
   }
 }
 
@@ -658,7 +729,7 @@ int RegionalSummary::readH5(hid_t group_id) {
   dataset_id = H5Dopen2(group_id,"data_dim",H5P_DEFAULT);
   H5Dread(dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &data_dim[0]);
   H5Dclose (dataset_id);
-  Initialize(data_dim[1],data_dim[0],region_origin,region_dim);
+  Initialize(data_dim[1]-1,data_dim[0],region_origin,region_dim);
 
   dataset_id = H5Dopen2(group_id,"n_err",H5P_DEFAULT);
   H5Dread(dataset_id, H5T_NATIVE_UINT_LEAST64, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_err_);
@@ -678,8 +749,8 @@ int RegionalSummary::readH5(hid_t group_id) {
   uint64_t *countStart = &hp_count[0];
   uint64_t *errStart   = &hp_err[0];
   for(unsigned int i_flow=0; i_flow <n_flow_; ++i_flow) {
-    uint64_t *countEnd = countStart + max_hp_;
-    uint64_t *errEnd   = errStart   + max_hp_;
+    uint64_t *countEnd = countStart + 1 + max_hp_;
+    uint64_t *errEnd   = errStart   + 1 + max_hp_;
     hp_count_[i_flow].assign(countStart, countEnd);
     hp_err_[i_flow].assign(errStart, errEnd);
     countStart = countEnd;
@@ -711,20 +782,27 @@ void PerReadFlowMatrix::InitializeNewH5(string h5_out_file) {
 
 void PerReadFlowMatrix::CloseH5(void) {
   if(h5_out_file_ != "") {
-    herr_t status = H5Fclose (h5_file_id_);
+    H5Fclose (h5_file_id_);
     h5_out_file_ = "";
     h5_group_counter_ = 0;
   }
 }
 
-int PerReadFlowMatrix::Add(string &id, ReadAlignmentErrors &e, vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow) {
+int PerReadFlowMatrix::Add(string &id, ReadAlignmentErrors &e, vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, bool ignore_terminal_hp) {
   if(n_read_ >= read_buffer_size_)
     return(EXIT_FAILURE);
   
+  unsigned int i_start=0;
+  unsigned int n_hp = ref_hp_flow.size();
+  if(ignore_terminal_hp) {
+    i_start++;
+    n_hp--;
+  }
+
   read_id_[n_read_] = id;
   n_substitutions_[n_read_] = e.sub().size();
   unsigned int offset = n_read_ * n_flow_;
-  for(unsigned int i_hp=0; i_hp<ref_hp_flow.size(); ++i_hp) {
+  for(unsigned int i_hp=i_start; i_hp < n_hp; ++i_hp) {
     unsigned int this_offset = offset + ref_hp_flow[i_hp];
     assert(this_offset < offset + n_flow_);
     ref_flow_[this_offset] =      min( ref_hp_len[i_hp], (uint16_t) numeric_limits<int8_t>::max() );
@@ -741,14 +819,49 @@ int PerReadFlowMatrix::Add(string &id, ReadAlignmentErrors &e, vector<uint16_t> 
   return(EXIT_SUCCESS);
 }
 
+int PerReadFlowMatrix::Add(string &id, ReadAlignmentErrors &e, vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, vector<uint16_t> & zeromer_insertion_flow, vector<uint16_t> & zeromer_insertion_len, bool ignore_terminal_hp) {
+  if(n_read_ >= read_buffer_size_)
+    return(EXIT_FAILURE);
+
+  unsigned int first_flow = ref_hp_flow.front();
+  unsigned int last_flow  = ref_hp_flow.back();
+  unsigned int ref_hp_idx=0;
+  if(ignore_terminal_hp) {
+    first_flow++;
+    last_flow--;
+    ref_hp_idx++;
+  }
+
+  read_id_[n_read_] = id;
+  n_substitutions_[n_read_] = e.sub().size();
+  unsigned int zeromer_insertion_idx=0;
+  unsigned int n_zeromer_insertions = zeromer_insertion_flow.size();
+  unsigned int n_ref_hp = ref_hp_flow.size();
+  unsigned int offset = n_read_ * n_flow_;
+  for(unsigned int flow=first_flow; flow <= last_flow && ref_hp_idx < n_ref_hp; ++flow) {
+    uint16_t this_ref_len = 0;
+    int16_t this_error = 0;
+    if(flow == ref_hp_flow[ref_hp_idx]) {
+      this_ref_len = ref_hp_len[ref_hp_idx];
+      this_error   = ref_hp_err[ref_hp_idx];
+      ref_hp_idx++;
+    } else if( zeromer_insertion_idx < n_zeromer_insertions && flow == zeromer_insertion_flow[zeromer_insertion_idx] ) {
+      this_error   = zeromer_insertion_len[zeromer_insertion_idx++];
+    }
+    unsigned int this_offset = offset + flow;
+    ref_flow_[this_offset] =      min( this_ref_len, (uint16_t) numeric_limits<int8_t>::max() );
+    err_flow_[this_offset] = max( min( this_error,    (int16_t) numeric_limits<int8_t>::max() ), (int16_t) numeric_limits<int8_t>::min() );
+  }
+  n_read_++;
+  return(EXIT_SUCCESS);
+}
+
 void PerReadFlowMatrix::FlushToH5Buffered(void) {
   if(n_read_ == read_buffer_size_)
     FlushToH5Forced();
 }
 
 void PerReadFlowMatrix::FlushToH5Forced(void) {
-  herr_t status;
-
   string h5_group_counter_string = static_cast<ostringstream*>( &(ostringstream() << h5_group_counter_) )->str();
   string group_name = "/per_read_per_flow/" + h5_group_counter_string;
   hid_t group_id = H5CreateOrOpenGroup(h5_file_id_, group_name);
@@ -762,17 +875,17 @@ void PerReadFlowMatrix::FlushToH5Forced(void) {
   vector_dims[0] = 1;
   dataspace_id = H5Screate_simple (1, vector_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "n_read", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_read_);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_read_);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // n_flow
   vector_dims[0] = 1;
   dataspace_id = H5Screate_simple (1, vector_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "n_flow", H5T_NATIVE_UINT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_flow_);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_UINT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_flow_);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // read_id
   vector<const char *> read_id_cstr;
@@ -786,35 +899,35 @@ void PerReadFlowMatrix::FlushToH5Forced(void) {
   hid_t props = H5Pcreate(H5P_DATASET_CREATE);
   dataset_id = H5Dcreate(group_id, "read_id", string_datatype, dataspace_id, H5P_DEFAULT, props, H5P_DEFAULT); 
   H5Dwrite(dataset_id,string_datatype,H5S_ALL,H5S_ALL,H5P_DEFAULT,&read_id_cstr[0]);
-  status = H5Dclose(dataset_id);
-  status = H5Pclose(props);
-  status = H5Tclose (string_datatype);
-  status = H5Sclose (dataspace_id);
+  H5Dclose(dataset_id);
+  H5Pclose(props);
+  H5Tclose (string_datatype);
+  H5Sclose (dataspace_id);
 
   // n_sub
   vector_dims[0] = n_read_;
   dataspace_id = H5Screate_simple (1, vector_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "n_sub", H5T_NATIVE_USHORT, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_USHORT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_substitutions_[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_USHORT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &n_substitutions_[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // ref
   vector_dims[0] = n_read_*n_flow_;
   dataspace_id = H5Screate_simple (1, vector_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "ref", H5T_NATIVE_SCHAR, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_SCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT, &ref_flow_[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_SCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT, &ref_flow_[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
   // err
   vector_dims[0] = n_read_*n_flow_;
   dataspace_id = H5Screate_simple (1, vector_dims, NULL);
   dataset_id = H5Dcreate2 (group_id, "err", H5T_NATIVE_SCHAR, dataspace_id, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT); 
-  status = H5Dwrite (dataset_id, H5T_NATIVE_SCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT, &err_flow_[0]);
-  status = H5Dclose (dataset_id);
-  status = H5Sclose (dataspace_id);
+  H5Dwrite (dataset_id, H5T_NATIVE_SCHAR, H5S_ALL, H5S_ALL, H5P_DEFAULT, &err_flow_[0]);
+  H5Dclose (dataset_id);
+  H5Sclose (dataspace_id);
 
-  status = H5Gclose (group_id);
+  H5Gclose (group_id);
   Initialize(n_flow_,read_buffer_size_,h5_group_counter_+1);
 }

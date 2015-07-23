@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <getopt.h>
+#include <sys/types.h>
 
 #include "main.h"
 #include "ion_error.h"

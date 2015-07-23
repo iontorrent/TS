@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"

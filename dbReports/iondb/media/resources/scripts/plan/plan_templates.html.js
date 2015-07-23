@@ -401,26 +401,6 @@ function bindActions(source) {
             console.log("error:", data);
         });
     });
-    
-
-    $('.upload-plan').click(function(e) {
-        e.preventDefault();
-        $('#error-messages').hide().empty();
-        url = $(this).attr('href');
-
-    	//console.log("upload-plan.click() url=", url);
-    	
-        $('body #modal_batch_planning_upload').remove();
-        $.get(url, function(data) {
-            $('body').append(data);
-            $('#modal_batch_planning_upload').modal("show");
-            return false;
-        }).fail(function(data) {
-            $('#error-messages').empty().show();
-            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
-            console.log("error:", data);
-        });
-    });
 }
 
 
@@ -658,6 +638,23 @@ $(document).ready(function() {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
             delete busyDiv;
+        });
+    });
+
+    $('.upload-plan').click(function(e) {
+        e.preventDefault();
+        $('#error-messages').hide().empty();
+        url = $(this).attr('href');
+
+        $('body #modal_batch_planning_upload').remove();
+        $.get(url, function(data) {
+            $('body').append(data);
+            $('#modal_batch_planning_upload').modal("show");
+            return false;
+        }).fail(function(data) {
+            $('#error-messages').empty().show();
+            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            console.log("error:", data);
         });
     });
 });

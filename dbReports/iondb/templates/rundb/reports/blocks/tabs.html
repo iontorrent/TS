@@ -224,11 +224,19 @@ function precisionUnits(num, div) {
 
         <div id="ChefSummary" data-title="Chef Summary" class="tab-pane">
             <table class="table table-striped">
-                {% if chef_info %}
-                    {% for item, info in chef_info %}
+                {% if chefLibPrep_info %}
+                	<tr><td colspan=2><b><font style="font-family: 'Comic Sans MS', cursive, sans-serif" size="4">Chef Library Prep Information:</font></b></td></tr>
+                    {% for item, info in chefLibPrep_info %}
+                        <tr><td align="center" valign="middle">{{item}}</td><td>{{info}}</td></tr>
+                    {% endfor %}
+                {% endif %}
+        		{% if chef_info %}
+                	<tr><td colspan=2><b><font style="font-family: 'Comic Sans MS', cursive, sans-serif" size="4">Chef Template Prep Information:</font></b></td></tr>
+                	{% for item, info in chef_info %}
                         <tr><td>{{item}}</td><td>{{info}}</td></tr>
                     {% endfor %}
-                {% else %}
+                {% endif %}
+                {% if not chef_info and not chefLibPrep_info %}
                     <h2>Ion Chef was not used for this run</h2>
                 {% endif %}                
             </table>

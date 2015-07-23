@@ -87,15 +87,15 @@ void VariantCallerHelp() {
   printf("Variant filtering:\n");
   // Filters depending on the variant type
   printf("  -k,--snp-min-coverage                 INT         filter out snps with total coverage below this [6]\n");
-  printf("  -C,--snp-min-cov-each-strand          INT         filter out snps with coverage on either strand below this [1]\n");
-  printf("  -B,--snp-min-variant-score            FLOAT       filter out snps with QUAL score below this [2.5]\n");
+  printf("  -C,--snp-min-cov-each-strand          INT         filter out snps with coverage on either strand below this [0]\n");
+  printf("  -B,--snp-min-variant-score            FLOAT       filter out snps with QUAL score below this [10.0]\n");
   printf("  -s,--snp-strand-bias                  FLOAT       filter out snps with strand bias above this [0.95] given pval < snp-strand-bias-pval\n");
   printf("     --snp-strand-bias-pval             FLOAT       filter out snps with pval below this [1.0] given strand bias > snp-strand-bias\n");
   //  printf("  -s,--snp-strand-bias                FLOAT       filter out snps with strand bias above this [0.95]\n");
   printf("  -A,--snp-min-allele-freq              FLOAT       minimum required alt allele frequency for non-reference snp calls [0.2]\n");
 
   printf("     --mnp-min-coverage                 INT         filter out mnps with total coverage below this [snp-min-coverage]\n");
-  printf("     --mnp-min-cov-each-strand          INT         filter out mnps with coverage on either strand below this, [snp-min-coverage-each-strand]\n");
+  printf("     --mnp-min-cov-each-strand          INT         filter out mnps with coverage on either strand below this, [snp-min-cov-each-strand]\n");
   printf("     --mnp-min-variant-score            FLOAT       filter out mnps with QUAL score below this [snp-min-variant-score]\n");
   printf("     --mnp-strand-bias                  FLOAT       filter out mnps with strand bias above this [snp-strand-bias] given pval < mnp-strand-bias-pval\n");
   printf("     --mnp-strand-bias-pval             FLOAT       filter out mnps with pval below this [snp-strand-bias-pval] given strand bias > mnp-strand-bias\n");
@@ -103,14 +103,14 @@ void VariantCallerHelp() {
 
   printf("     --indel-min-coverage               INT         filter out indels with total coverage below this [30]\n");
   printf("     --indel-min-cov-each-strand        INT         filter out indels with coverage on either strand below this [1]\n");
-  printf("     --indel-min-variant-score          FLOAT       filter out indels with QUAL score below this [2.5]\n");
+  printf("     --indel-min-variant-score          FLOAT       filter out indels with QUAL score below this [10.0]\n");
   printf("  -S,--indel-strand-bias                FLOAT       filter out indels with strand bias above this [0.95] given pval < indel-strand-bias-pval\n");
   printf("     --indel-strand-bias-pval           FLOAT       filter out indels with pval below this [1.0] given strand bias > indel-strand-bias\n");
   //  printf("  -S,--indel-strand-bias                FLOAT       filter out indels with strand bias above this [0.85]\n");
   printf("     --indel-min-allele-freq            FLOAT       minimum required alt allele frequency for non-reference indel call [0.2]\n");
   printf("     --hotspot-min-coverage             INT         filter out hotspot variants with total coverage below this [6]\n");
-  printf("     --hotspot-min-cov-each-strand      INT         filter out hotspot variants with coverage on either strand below this [1]\n");
-  printf("     --hotspot-min-variant-score        FLOAT       filter out hotspot variants with QUAL score below this [2.5]\n");
+  printf("     --hotspot-min-cov-each-strand      INT         filter out hotspot variants with coverage on either strand below this [snp-min-cov-each-strand]\n");
+  printf("     --hotspot-min-variant-score        FLOAT       filter out hotspot variants with QUAL score below this [snp-min-variant-score]\n");
   printf("     --hotspot-strand-bias              FLOAT       filter out hotspot variants with strand bias above this [0.95] given pval < hotspot-strand-bias-pval\n");
   printf("     --hotspot-strand-bias-pval         FLOAT       filter out hotspot variants with pval below this [1.0] given strand bias > hotspot-strand-bias\n");
   //  printf("     --hotspot-strand-bias              FLOAT       filter out hotspot variants with strand bias above this [0.95]\n");
@@ -126,14 +126,14 @@ void VariantCallerHelp() {
   printf("     --use-position-bias                on/off      enable the position bias filter [off]\n");
   printf("     --position-bias                    FLOAT       filter out variants with position bias relative to soft clip ends in reads > position-bias [0.75]\n");
   printf("     --position-bias-pval               FLOAT       filter out if position bias above position-bias given pval < position-bias-pval [0.05]\n");
-  printf("     --position-ref-fraction            FLOAT       skip position bias filter if (reference read count)/(reference + alt allele read count) <= to this [0.05]\n");
+  printf("     --position-bias-ref-fraction       FLOAT       skip position bias filter if (reference read count)/(reference + alt allele read count) <= to this [0.05]\n");
   // These filters depend on scoring
   printf("\nFilters that depend on scoring across alleles:\n");
   printf("     --data-quality-stringency          FLOAT       minimum mean log-likelihood delta per read [4.0]\n");
   printf("     --read-rejection-threshold         FLOAT       filter variants where large numbers of reads are rejected as outliers [0.5]\n");
   printf("     --filter-unusual-predictions       FLOAT       posterior log likelihood threshold for accepting bias estimate [0.3]\n");
-  printf("     --filter-deletion-predictions      FLOAT       check post-evaluation systematic bias in deletions [100.0]\n");
-  printf("     --filter-insertion-predictions     FLOAT       check post-evaluation systematic bias in insertions [100.0]\n");
+  printf("     --filter-deletion-predictions      FLOAT       check post-evaluation systematic bias in deletions; a high value like 100 effectively turns off this filter [100.0]\n");
+  printf("     --filter-insertion-predictions     FLOAT       check post-evaluation systematic bias in insertions; a high value like 100 effectively turns off this filter [100.0]\n");
   printf("\n");
   printf("     --heal-snps                        on/off      suppress in/dels not participating in diploid variant genotypes if the genotype contains a SNP or MNP [on].\n");
   printf("\n");
@@ -498,6 +498,18 @@ void ProgramControlSettings::SetOpts(OptArgs &opts, Json::Value &tvc_params) {
 
 // ===========================================================================
 
+bool ExtendParameters::ValidateAndCanonicalizePath(string &path)
+{
+  char *real_path = realpath (path.c_str(), NULL);
+  if (real_path == NULL) {
+    perror(path.c_str());
+    exit(EXIT_FAILURE);
+  }
+  path = real_path;
+  free(real_path);
+  return true;
+}
+
 void ExtendParameters::SetupFileIO(OptArgs &opts) {
   // freeBayes slot
   fasta                                 = opts.GetFirstString('r', "reference", "");
@@ -505,38 +517,44 @@ void ExtendParameters::SetupFileIO(OptArgs &opts) {
     cerr << "Fatal ERROR: Reference file not specified via -r" << endl;
     exit(1);
   }
+  ValidateAndCanonicalizePath(fasta);
 
   // freeBayes slot
   variantPriorsFile                     = opts.GetFirstString('c', "input-vcf", "");
   if (variantPriorsFile.empty()) {
     cerr << "INFO: No input VCF (Hotspot) file specified via -c,--input-vcf" << endl;
-    //exit(1);
   }
+  else
+	ValidateAndCanonicalizePath(variantPriorsFile);
 
   sseMotifsFileName                     = opts.GetFirstString('e', "error-motifs", "");
   sseMotifsProvided = true;
   if (sseMotifsFileName.empty()) {
     sseMotifsProvided = false;
     cerr << "INFO: Systematic error motif file not specified via -e" << endl;
-    //exit(1);
   }
+  else
+	ValidateAndCanonicalizePath(sseMotifsFileName);
 
   opts.GetOption(bams, "", 'b', "input-bam");
   if (bams.empty()) {
     cerr << "FATAL ERROR: BAM file not specified via -b" << endl;
     exit(-1);
   }
-  outputDir                             = opts.GetFirstString('O', "output-dir", ".");
-  // freeBayes slot
-  outputFile                            = opts.GetFirstString('o', "output-vcf", "");
+  for (unsigned int i_bam = 0; i_bam < bams.size(); ++i_bam)
+    ValidateAndCanonicalizePath(bams[i_bam]);
 
+  outputDir                             = opts.GetFirstString('O', "output-dir", ".");
+  ValidateAndCanonicalizePath(outputDir);
+
+  outputFile                            = opts.GetFirstString('o', "output-vcf", "");
   if (outputFile.empty()) {
     cerr << "Fatal ERROR: Output VCF filename not specified via -o" << endl;
     exit(1);
   }
 
+  // Are those file names?
   postprocessed_bam                     = opts.GetFirstString('-', "postprocessed-bam", "");
-
   sampleName                            = opts.GetFirstString('g', "sample-name", "");
   force_sample_name                     = opts.GetFirstString('-', "force-sample-name", "");
 
@@ -694,6 +712,9 @@ ExtendParameters::ExtendParameters(int argc, char** argv)
   // Dummy lines for HP recalibration
   recal_model_file_name = opts.GetFirstString ('-', "model-file", "");
   recalModelHPThres = opts.GetFirstInt('-', "recal-model-hp-thres", 4);
+
+  prefixExclusion =  opts.GetFirstInt('-', "prefix-exclude", 6);
+  cerr << "prefix-exclude = " <<  prefixExclusion << endl;
 
   SetFreeBayesParameters(opts, freebayes_params);
   bool overrideLimits          = RetrieveParameterBool  (opts, tvc_params, '-', "override-limits", false);

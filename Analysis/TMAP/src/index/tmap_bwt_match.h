@@ -26,7 +26,7 @@ typedef struct {
   @param  next     pointer to the next match structure
   @details         this will not set the upper occurrence of the SA interval
   */
-inline void
+void
 tmap_bwt_match_occ(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, uint8_t c, tmap_bwt_match_occ_t *next);
 
 /*! 
@@ -37,7 +37,7 @@ tmap_bwt_match_occ(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, uint8_t c,
   @param  next     pointer to the next match structure
   @details         this will not set the upper occurrences of the SA interval
   */
-inline void
+void
 tmap_bwt_match_2occ(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, uint8_t c, tmap_bwt_match_occ_t *next);
 
 /*! 
@@ -46,7 +46,7 @@ tmap_bwt_match_2occ(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, uint8_t c
   @param  prev     pointer to the previous match structure
   @param  next     pointer to the next match structure
   */
-inline void
+void
 tmap_bwt_match_occ4(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, tmap_bwt_match_occ_t next[4]);
 
 /*! 
@@ -55,7 +55,7 @@ tmap_bwt_match_occ4(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, tmap_bwt_
   @param  prev     pointer to the previous match structure
   @param  next     pointer to the next match structure
   */
-inline void
+void
 tmap_bwt_match_2occ4(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, tmap_bwt_match_occ_t next[4]);
 
 /*! 
@@ -73,7 +73,7 @@ typedef struct {
   @param  str    the string with bases in integer format
   @param  width  array of widths, one for each interval [i,len-1], for 0 <= i < len
 */
-inline void
+void
 tmap_bwt_match_cal_width_forward(const tmap_bwt_t *bwt, int len, const char *str, tmap_bwt_match_width_t *width);
 
 /*! 
@@ -83,7 +83,7 @@ tmap_bwt_match_cal_width_forward(const tmap_bwt_t *bwt, int len, const char *str
   @param  str    the string with bases in integer format
   @param  width  array of widths, one for each interval [0,i], for 0 <= i < len
 */
-inline void
+void
 tmap_bwt_match_cal_width_reverse(const tmap_bwt_t *bwt, int len, const char *str, tmap_bwt_match_width_t *width);
 
 /*! 
@@ -140,7 +140,7 @@ tmap_bwt_match_exact_alt_reverse(const tmap_bwt_t *bwt, int len, const uint8_t *
   @param  s  the loop counter to return
   @return  the suffix array position
   */
-inline tmap_bwt_int_t
+tmap_bwt_int_t
 tmap_bwt_match_invPsi(const tmap_bwt_t *bwt, uint32_t sa_intv, tmap_bwt_int_t k, uint32_t *s);
 
 #endif // TMAP_BWT_MATCH_H

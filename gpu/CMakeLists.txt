@@ -81,11 +81,7 @@ if (1)
     set (CMAKE_C_FLAGS_RELEASE "")
     set (CMAKE_CXX_FLAGS_RELEASE "")
     include_directories( "${PROJECT_SOURCE_DIR}/common/inc" )
-    SET( CUDA_NVCC_FLAGS "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math" 
-                         "-gencode=arch=compute_20,code=sm_20" 
-                         "-gencode=arch=compute_30,code=sm_30" 
-                         "-gencode=arch=compute_35,code=sm_35" 
-                         "-maxrregcount=48" )
+
     CUDA_ADD_EXECUTABLE(bandwidthTest bandwidthTest.cu)
     CUDA_ADD_EXECUTABLE(deviceQuery deviceQuery.cpp)
     CUDA_ADD_EXECUTABLE(xtalk_sim

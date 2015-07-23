@@ -98,7 +98,7 @@ tmap_sam2fs_aux_flow_convert(tmap_sam2fs_aux_flow_t *a, uint8_t *seq, int32_t le
 {
   int32_t i, k, l, next_i;
 
-  i = k = a->l = a->m = 0;
+  k = a->l = a->m = 0;
 
   // move to the first flow
   /*
@@ -580,7 +580,7 @@ tmap_sam2fs_aux_flow_align(tmap_file_t *fp, uint8_t *qseq, int32_t qseq_len,
   if(best_score < dp[f_qseq->l][f_tseq->l].match_score) {
       best_i = f_qseq->l;
       best_j = f_tseq->l;
-      best_score = dp[f_qseq->l][f_tseq->l].match_score;
+      // best_score = dp[f_qseq->l][f_tseq->l].match_score;
       best_ctype = TMAP_SAM2FS_AUX_FROM_M;
   }
 

@@ -4,6 +4,11 @@ set -e
 #set -x
 echo "postinst $@"
 
+: <<'COMMENT'
+# GUI update troubleshooting
+# commented out to preserve default behavior
+#
+echo "stdout and stderr are redirected to /tmp/*.dbreports"
 ## Store stdout fd
 exec 3<&1
 ## Store stderr fd
@@ -11,6 +16,7 @@ exec 4<&2
 ## Redirect stderr to a file
 exec 1>/tmp/stdout.dbreports
 exec 2>/tmp/stderr.dbreports
+COMMENT
 
 unset CELERY_LOADER
 
@@ -60,11 +66,13 @@ case "$1" in
     mkdir -p /results/referenceLibrary/disabled/tmap-f1
     mkdir -p /results/referenceLibrary/disabled/tmap-f2
     mkdir -p /results/referenceLibrary/disabled/tmap-f3
+    mkdir -p /results/referenceLibrary/TestFragment
     chmod -R 777 /results/referenceLibrary/temp
     chmod -R 777 /results/referenceLibrary/tmap-f1
     chmod -R 777 /results/referenceLibrary/tmap-f2
     chmod -R 777 /results/referenceLibrary/tmap-f3
     chmod -R 777 /results/referenceLibrary/disabled
+    chmod -R 777 /results/referenceLibrary/TestFragment
     #make pluginMedia dir
     mkdir -p /results/pluginMedia
     chmod -R 777 /results/pluginMedia
@@ -80,12 +88,9 @@ case "$1" in
     touch /etc/apache2/httpd.conf
 
     # Get PROXY variables into apache environment
-    if grep -q 'ION_APACHE_PROXY_ENV' /etc/apache2/envvars; then
-        # Remove existing PROXY_ENV lines
-        sed -i -e '/ION_APACHE_PROXY_ENV/,/END_ION_APACHE_PROXY_ENV/d' /etc/apache2/envvars
-    fi
-    # NOTE: Use of leading TABS below is intended. Do not replace with spaces!
-    cat >> /etc/apache2/envvars <<-'ENDAPACHEENVHEREDOC'
+    if ! grep -q 'ION_APACHE_PROXY_ENV' /etc/apache2/envvars; then
+        # NOTE: Use of leading TABS below is intended. Do not replace with spaces!
+        cat >> /etc/apache2/envvars <<-ENDOFAPACHEENV
 		# ION_APACHE_PROXY_ENV Import Proxy Server settings from /etc/environment
 		if [ -e "/etc/environment" ]; then
 		    . "/etc/environment"
@@ -100,8 +105,9 @@ case "$1" in
 		        export http_proxy no_proxy HTTP_PROXY
 		    fi
 		fi
-		# END_ION_APACHE_PROXY_ENV
-ENDAPACHEENVHEREDOC
+ENDOFAPACHEENV
+
+    fi
 
     #create hard-coded credentials to handle <Location "/basicauthlogout"> within torrent-server.in
     htpasswd -b -c /etc/apache2/users logout logout

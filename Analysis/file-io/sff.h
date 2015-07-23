@@ -184,7 +184,7 @@ extern "C" {
       @param  sff  a pointer to a sequence structure
       @details     this will include the key sequence qualities
       */
-    inline ion_string_t *
+    ion_string_t *
       sff_get_bases(sff_t *sff);
 
     /*!
@@ -192,7 +192,7 @@ extern "C" {
       @param  sff  a pointer to a sequence structure
       @details     this will include the key sequence qualities
       */
-    inline ion_string_t *
+    ion_string_t *
       sff_get_qualities(sff_t *sff);
 
     /*! 
@@ -201,7 +201,7 @@ extern "C" {
       @details     this will only remove the key sequence from the SFF
       structure, and then only the read and quality (not the read header etc.)
       */
-    inline void
+    void
       sff_remove_key_sequence(sff_t *sff);
 
     /*! 

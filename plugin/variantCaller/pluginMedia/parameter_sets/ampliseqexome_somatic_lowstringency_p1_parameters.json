@@ -3,7 +3,7 @@
         "name"          : "AmpliSeq Exome Panel - Proton - Somatic - Low Stringency",
         "tooltip"       : "Panel-specific parameters optimized for AmpliSeq Exome Panel",
         "configuration" : "ampliseqexome_somatic_low_stringency_p1",
-        "ts_version"    : "4.4",
+        "ts_version"    : "4.6",
         "compatibility" : {
           "chip"        : ["proton_p1"],
           "library"     : ["ampliseq"],
@@ -55,6 +55,7 @@
         "do_mnp_realignment":1,
         "realignment_threshold":1,
 
+        "sse_prob_threshold":0.2,
         "use_position_bias":0,
         "position_bias":0.75,
         "position_bias_pval":0.05,

@@ -1,6 +1,6 @@
 <?php
 header('Content-Type: application/zip');
-header('Content-Disposition: attachment; filename="coverageAnalysisReport"');
+header('Content-Disposition: attachment; filename="coverageAnalysisReport.zip"');
 header('Content-Transfer-Encoding: binary');
 ob_clean();
 flush();

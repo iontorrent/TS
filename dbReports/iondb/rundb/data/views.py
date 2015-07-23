@@ -1,7 +1,6 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 from django import http, template
 from django.core import urlresolvers
-from django.core import serializers
 from django.conf import settings
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
@@ -14,6 +13,7 @@ from django.template.loader import render_to_string
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 from django.core.servers.basehttp import FileWrapper
 from django.core.serializers.json import DjangoJSONEncoder
+from django.forms.models import model_to_dict
 
 import json
 import cStringIO
@@ -24,6 +24,7 @@ import shutil
 import subprocess
 import glob
 import time
+from django.views.generic import ListView
 from iondb.rundb.models import (
     Experiment,
     Results,
@@ -137,32 +138,54 @@ def data(request):
         cache.set("data_tab_context", context, 29)
     return render(request, "rundb/data/data.html", context)
 
-@login_required
-def data_fast(request):
-    page = request.GET.get('page', 1)
-    page_size = GlobalConfig.get().records_to_display
-    show_status = False
-    q = Experiment.objects.select_related("repResult", "repResult__qualitymetrics", "repResult__eas").exclude(repResult=None).order_by('-repResult__timeStamp')
-    paginator = Paginator(q, page_size)
-    try:
-        exps = paginator.page(page)
-    except PageNotAnInteger:
-        exps = paginator.page(1)
-    except EmptyPage:
-        exps = paginator.page(paginator.num_pages)
 
-    for exp in exps.object_list:
-        if exp.ftpStatus != "Complete" or exp.ftpStatus == '':
-            show_status = True
+class ExperimentListView(ListView):
+    """This is a class based view using the Django ListView generic view.
+    It shows Experiment objects and data from their representative report.
+    """
+    queryset = Experiment.objects.select_related(
+        "repResult", "repResult__qualitymetrics", "repResult__eas"
+    ).exclude(repResult=None).order_by('-repResult__timeStamp')
+
+    template_name = "rundb/data/fast.html"
+    paginate_by = 30
+
+    def get_object(self):
+        exp = super(ExperimentListView, self).get_object()
+        if exp.has_status:
             exp.in_progress = exp.ftpStatus.isdigit()
             if exp.in_progress:
                 exp.progress_percent = 100 * float(exp.ftpStatus) / float(exp.flows)
+        return exp
 
-    context = {
-        "experiments": exps,
-        "show_status": show_status
-    }
-    return render(request, "rundb/data/fast.html", context)
+    def get_context_data(self, **kwargs):
+        context = super(ExperimentListView, self).get_context_data(**kwargs)
+        context['show_status'] = any(e.has_status for e in self.object_list)
+        return context
+
+
+class ResultsListView(ListView):
+    """This ListView shows Results objects and is meant to be quick and light weight
+    """
+    queryset = Results.objects.select_related(
+        "experiment", "qualitymetrics", "eas"
+    ).order_by('-timeStamp')
+
+    template_name = "rundb/data/results_list.html"
+    paginate_by = 30
+
+    def get_object(self):
+        result = super(ResultsListView, self).get_object()
+        if result.experiment.has_status():
+            result.experiment.in_progress = result.experiment.ftpStatus.isdigit()
+            if result.experiment.in_progress:
+                result.experiment.progress_percent = 100 * float(result.experiment.ftpStatus) / float(result.experiment.flows)
+        return result
+
+    def get_context_data(self, **kwargs):
+        context = super(ResultsListView, self).get_context_data(**kwargs)
+        context['show_status'] = any(r.experiment.has_status for r in self.object_list)
+        return context
 
 
 def data_table(request):
@@ -543,7 +566,7 @@ def validate_results_to_combine(selected_results, override_samples=False):
     warnings = []
     ver_map = {'analysis': 'an', 'alignment': 'al', 'dbreports': 'db', 'tmap': 'tm'}
     common = {}
-    for r in selected_results:
+    for i,r in enumerate(selected_results):
         version = {}
         for name, shortname in ver_map.iteritems():
             version[name] = next((v.split(':')[1].strip() for v in r.analysisVersion.split(',') if v.split(':')[0].strip() == shortname), '')
@@ -553,12 +576,13 @@ def validate_results_to_combine(selected_results, override_samples=False):
         if not version['alignment']: r.alignment_version = version['analysis']
         
         if not common:
-            common = {
-                'floworder': r.experiment.flowsInOrder,
-                'barcodeId': r.eas.barcodeKitName,
-                'barcodedSamples': r.eas.barcodedSamples if r.eas.barcodeKitName else {},
-                'sample': r.experiment.get_sample() if not r.eas.barcodeKitName else ''               
-            }
+            if r.resultsType != 'CombinedAlignments' or i==(len(selected_results)-1):
+                common = {
+                    'floworder': r.experiment.flowsInOrder,
+                    'barcodeId': r.eas.barcodeKitName,
+                    'barcodedSamples': r.eas.barcodedSamples if r.eas.barcodeKitName else {},
+                    'sample': r.experiment.get_sample() if not r.eas.barcodeKitName else ''
+                }
 
     if len(set([getattr(r, 'tmap_version') for r in selected_results])) > 1:
         warnings.append("Selected results have different TMAP versions.")
@@ -635,10 +659,19 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     barcodeId = common['barcodeId']
     if override_samples:
         sample = json_data.get('sample','')
-        barcodeSamples = json.dumps(json_data.get('barcodedSamples',{}), cls=DjangoJSONEncoder)
+        barcodedSamples = json_data.get('barcodedSamples',{})
+        if barcodedSamples and common['barcodedSamples']:
+            # try to update with original barcodeSampleInfo
+            for sample, value in barcodedSamples.items():
+                for barcode in value['barcodes']:
+                    barcodeSampleInfo = [v.get('barcodeSampleInfo',{}).get(barcode) for v in common['barcodedSamples'].values() if v.get('barcodeSampleInfo',{}).get(barcode)]
+                    if barcodeSampleInfo:
+                        barcodedSamples[sample].setdefault('barcodeSampleInfo',{})[barcode] = barcodeSampleInfo[0]
+        else:
+            barcodedSamples = json.dumps(barcodedSamples, cls=DjangoJSONEncoder)
     else:
         sample = common['sample']
-        barcodeSamples = common['barcodedSamples']
+        barcodedSamples = common['barcodedSamples']
 
     # create new entry in DB for combined Result
     delim = ':'
@@ -660,7 +693,7 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
             'status' : 'run',
             'reference': reference,
             'barcodeKitName': barcodeId,
-            'barcodedSamples': barcodeSamples,
+            'barcodedSamples': barcodedSamples,
             'targetRegionBedFile': '',
             'hotSpotRegionBedFile': '',
             'isDuplicateReads': mark_duplicates
@@ -675,7 +708,6 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     links = []
     bams = []
     names = []
-    plan = {}
     bamFile = 'rawlib.bam'
     for parent in parents:
         links.append(parent.reportLink)
@@ -686,14 +718,14 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         reportDir = dmfilestat.archivepath if dmfilestat.action_state == 'AD' else parent.get_report_dir()
         bams.append(os.path.join(reportDir, bamFile))
 
-        #need Plan info for VariantCaller etc. plugins: but which plan to use??
-        try:
-            planObj = [parent.experiment.plan]
-            plan_json = serializers.serialize("json", planObj)
-            plan_json = json.loads(plan_json)
-            plan = plan_json[0]["fields"]
-        except:
-            pass
+    #need Plan section for plugins, use latest report's plan
+    latest_w_plan = parents.filter(experiment__plan__isnull=False)
+    if not latest_w_plan:
+        grandparents = sum([v.split(delim) for v in parents.values_list('parentIDs', flat=True)],[])
+        grandparents = [v for v in set(grandparents) if v]
+        latest_w_plan = Results.objects.filter(id__in=grandparents, experiment__plan__isnull=False).order_by('-timeStamp')
+
+    plan_json = model_to_dict(latest_w_plan[0].experiment.plan) if latest_w_plan else {}
 
     try:
         genome = ReferenceGenome.objects.all().filter(short_name=reference, index_version=settings.TMAP_VERSION, enabled=True)[0]
@@ -704,9 +736,7 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
     except:
         genomeinfo = ""
 
-    eas_json = serializers.serialize("json", [eas])
-    eas_json = json.loads(eas_json)
-    eas_json = eas_json[0]["fields"]
+    eas_json = model_to_dict(eas)
     
     barcodedSamples_reference_names = eas.get_barcoded_samples_reference_names()
     #logger.debug("data.views._combine_results_sendto_project() barcodedSamples_reference_names=%s" %(barcodedSamples_reference_names))
@@ -725,13 +755,12 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         'referenceName': reference,
         'tmap_version': settings.TMAP_VERSION,
         'mark_duplicates': mark_duplicates,
-        'plan': plan,
+        'plan': plan_json,
         'run_name': filePrefix,
         'genomeinfo': genomeinfo,
         'flowOrder': floworder,
         'project': projectName,
         'barcodeId': barcodeId,
-        'barcodeSamples': json.dumps(eas.barcodedSamples,cls=DjangoJSONEncoder) if barcodeId else "{}",
         "barcodeSamples_referenceNames" : barcodedSamples_reference_names,
         'sample': sample,
         'override_samples': override_samples,
@@ -739,6 +768,8 @@ def _combine_results_sendto_project(project_pk, json_data, username=''):
         'warnings': warnings,
         'runid': result.runid
     }
+    params = json.dumps(params, cls=DjangoJSONEncoder)
+
 
     from distutils.sysconfig import get_python_lib
     scriptpath = os.path.join(get_python_lib(), 'ion', 'reports', 'combineReports.py')

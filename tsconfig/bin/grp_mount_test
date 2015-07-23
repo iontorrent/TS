@@ -6,9 +6,12 @@
 #=============================================================================
 function nfs_mount_test()
 {
+    #--------------------------
     # is it a mountpoint
+    #--------------------------
     isremote=false
-    mountname=$(echo $1|sed 's_/$__')   #strip trailing slash
+    mountname=$1
+
     while [[ "$mountname" != "/" ]] && [[ "$1" != "/" ]]; do
         # is it a mountpoint
         if ! /usr/bin/timelimit -q -t 10 -T 1 mountpoint -q $mountname; then
@@ -18,24 +21,47 @@ function nfs_mount_test()
             break
     	fi
 	done
-    # Replace the mangled mountname variable
-    mountname=$(echo $1|sed 's_/$__')   #strip trailing slash
+
+    # Restore the mangled mountname variable
+    mountname=$1
 	if ! $isremote; then
         echo "$mountname is not a mountpoint">&2
         return 1
     fi
+
+    #--------------------------
     # is it mounted
-    if ! mount|cut -f3- -d" "|grep -q $mountname 2>/dev/null; then
+    #--------------------------
+    ismounted=false
+
+    while [[ "$mountname" != "/" ]] && [[ "$1" != "/" ]]; do
+        if ! mount|cut -f3- -d" "|grep -q $mountname 2>/dev/null; then
+            mountname=$(dirname $mountname)
+        else
+            ismounted=true
+            break
+        fi
+    done
+
+    # Restore the mangled mountname variable
+    mountname=$1
+	if ! $ismounted; then
         echo "$mountname is not mounted">&2
         return 1
     fi
+
+    #--------------------------
     # can we detect nfs failure?  thinks its mounted, but we get nothing?
     # df will fail on inaccessible nfs mount.  needs a timeout watchdog.
+    #--------------------------
     if ! /usr/bin/timelimit -q -t 10 -T 1 df $mountname >/dev/null; then
         echo "$mountname is not available, NFS hung?">&2
         return 1
     fi
+    
+    #--------------------------
     # can we read/write it
+    #--------------------------
     filename=$(mktemp -p ${mountname} $(hostname).XXXXXXXXXX  -u)
     if ! touch $filename 2>/dev/null; then
         echo "$mountname is not writeable">&2
@@ -48,7 +74,7 @@ function nfs_mount_test()
 }
 
 set -u
-mountname=$1
+mountname=$(readlink -f $1)
 nfs_mount_test $mountname
 
 exit

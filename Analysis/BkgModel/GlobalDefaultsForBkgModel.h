@@ -20,8 +20,9 @@ struct LocalSigProcControl{
   ControlSingleFlow single_flow_master;
 
   // why would this be global again?
-  bool  no_RatioDrift_fit_first_20_flows;
+  bool no_RatioDrift_fit_first_20_flows;
   bool use_alternative_etbR_equation;
+  bool use_log_taub;
 
   bool fitting_taue;
   int hydrogenModelType;
@@ -68,6 +69,7 @@ private:
     ar
         & no_RatioDrift_fit_first_20_flows
         & use_alternative_etbR_equation
+        & use_log_taub
         & fitting_taue
         & hydrogenModelType
         & var_kmult_only
@@ -111,6 +113,7 @@ public:
 
   void FixRdrInFirst20Flows(bool fixed_RatioDrift) { signal_process_control.no_RatioDrift_fit_first_20_flows = fixed_RatioDrift; }
   void SetUse_alternative_etbR_equation(bool if_use_alternative_etbR_equation) { signal_process_control.use_alternative_etbR_equation = if_use_alternative_etbR_equation; }
+  void SetUse_log_taub(bool if_use_log_taub) { signal_process_control.use_log_taub = if_use_log_taub; }
   void SetFittingTauE(bool fit_taue) { signal_process_control.fitting_taue = fit_taue; }
   void SetHydrogenModel( int model ) { signal_process_control.hydrogenModelType = model; }
   bool GetVarKmultControl(){return(signal_process_control.var_kmult_only);};
@@ -124,7 +127,7 @@ public:
   // i/o from files for parameters
   void  SetGoptDefaults(char *gopt);
   void  ReadEmphasisVectorFromFile(char *experimentName);
-  void DumpExcitingParameters(char *fun_string);
+  void DumpExcitingParameters(const char *fun_string);
   void GoptDefaultsFromJson(char *fname);
   void GoptDefaultsFromPoorlyStructuredFile(char *fname);
 

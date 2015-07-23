@@ -1,0 +1,12 @@
+---
+# file: fixes.yml
+#
+# Code that is configuration related.
+
+# gridengine_master/tasks/main.yml
+# Raptor A hardware has 40GB RAM; needs modified plugin.q memory limits
+- name: S5 TSVM RAM = 40GB limit
+  when: "{{S5_virtual_guest|bool}}"
+  set_fact:
+    S_VMEM_LIMIT: 40GB
+    H_VMEM_LIMIT: 40GB

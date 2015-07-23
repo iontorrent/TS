@@ -67,9 +67,10 @@
                 <a id="search_subject_nav" class="btn dropdown-toggle" title="Search by plan name or code" data-toggle="dropdown" href="\\#"><i class="icon-search" border="0"></i><span class="caret"></span></a>
 
                 <ul id="plan_search_dropdown_menu" class="dropdown-menu pull-right search_subject_selection">
-                    <li><a href="#" class="search_chipBarcode"><span class="search_chipBarcode_selected icon-white"></span>Chip Barcode</a></li>
+                    <li><a href="#" class="search_chipBarcode"><span class="search_chipBarcode_selected icon-white"></span>Chip barcode</a></li>
                     <li><a href="#" class="search_planName"><span class="search_planName_selected icon-check"></span>Plan name or code</a></li>
-                    <li><a href="#" class="search_sampleTubeLabel"><span class="search_sampleTubeLabel_selected icon-white"></span>Sample Tube Label</a></li>
+                    <li><a href="#" class="search_sampleTubeLabel"><span class="search_sampleTubeLabel_selected icon-white"></span>Sample tube label</a></li>
+                    <li><a href="#" class="search_combinedLibraryTubeLabel"><span class="search_combinedLibraryTubeLabel_selected icon-white"></span>Combined library tube label</a></li>
                 </ul>
                 
                 <button id="search_text_go" class="btn search_trigger" type="button" style="margin: 0 0 0 -1px">Go</button>
@@ -90,6 +91,19 @@
         <a id="clear" class="btn clear_selection" > Clear Selection </a>
     </div>
 </div>
+<script id="LibTypeColumnTemplate" type="text/x-kendo-template">
+	#
+	var libPrepType = data.libraryPrepType;
+	var libraryPrepTypeDisplayedName = data.libraryPrepTypeDisplayedName;
+	#
+	<span class="runTypeImageClass" rel="tooltip" title="#=libraryPrepTypeDisplayedName#">
+		# if (libPrepType == "amps_on_chef_v1") { #
+		  <img src="{% static "resources/img/amps_ionChef_24x24.png"%}" width="24px" height="24px" />
+        # } else { #
+          #= libraryPrepTypeDisplayedName #             
+    # } #
+	</span>
+</script>
 <script id="RunTypeColumnTemplate" type="text/x-kendo-template">
 	# 
 	var runType = data.runType;
@@ -128,32 +142,7 @@
 	</span>
 	
 </script>
-<script id="SampleColumnTemplate" type="text/x-kendo-template">
-	# var barcodedSamples = data.barcodedSamples; #
-	# if (barcodedSamples && !$.isEmptyObject(barcodedSamples.toJSON())) { # 
-		# var json = barcodedSamples.toJSON(); #
-		#= TB.properties(json).length + " Samples " # <span class="" rel="popover" data-select="\#sample#=data.id#" data-html="true" data-title="#=data.planDisplayedName# (#=data.planShortID#)"> ... </span>
-		<div id="sample#=data.id#" class="hide">
-			<table class="table">
-			<thead>
-				<th>BC\#</th>
-				<th>Sample</th>
-			</thead>
-			<tbody>
-				
-			# for (key in json) { #
-			<tr>
-				 <td>#=json[key].barcodes# </td>
-				 <td>#=key# </td>
-			</tr>
-			# } #
-			</tbody>	
-			</table>
-		</div>
-	# } else { # 
-		#= sampleDisplayedName # 
-	# } #
-</script>
+{%include "rundb/common/samples_popover_template.html"%}
 
 <!--20130626-TODO -->
 <!-- //# var planRunCode = data.planShortID; #  <span><div class="shortcode128" data-barcode=data.planShortID data-href=""></div></span> -->

@@ -350,14 +350,14 @@ def ReadDat ( datFile , norm=True ):
         acq.miniC = 0
         # Determine chip type
         if img.shape[0] == 800 and img.shape[1] == 1200:
-            # Proton thumbnail ( 8 x 12 blocks )
+            # Thumbnail ( 8 x 12 blocks )
             acq.type  = '900'
             acq.istn  = True
             acq.miniR = 100
             acq.miniC = 100
             
         if img.shape[0] == 1332 and img.shape[1] == 1288:
-            # Proton full chip block ( 12 x 14 blocks )
+            # Full chip block ( 12 x 14 blocks )
             acq.type  = '900'
             acq.istn  = False 
             acq.miniR = 111

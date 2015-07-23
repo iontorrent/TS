@@ -11,7 +11,7 @@
 ### END INIT INFO
 
 PROGNAME=RSMAgent_TS
-LOGFILE=/var/log/$PROGNAME.log
+LOGFILE=/var/log/ion/$PROGNAME.log
 SERIALNUMFILE=/var/spool/ion/serial_number.alt
 TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
 source $TSCONFIG_SRC_DIR/ts_functions

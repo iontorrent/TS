@@ -10,23 +10,26 @@
 #include <stdint.h>
 #include <math.h>
 #include "json/json.h"
+#include "OptArgs.h"
 
 #define IONSTATS_BIGGEST_PHRED 47
 #define TYPICAL_FLOWS_PER_BASE 2
+#define NUMBER_OF_NUCLEOTIDES 4
 
 using namespace std;
 
 
-int IonstatsBasecaller(int argc, const char *argv[]);
+int IonstatsBasecaller(OptArgs &opts);
 int IonstatsBasecallerReduce(const string& output_json_filename, const vector<string>& input_jsons);
-int IonstatsAlignment(int argc, const char *argv[]);
+int IonstatsAlignment(OptArgs &opts, const string &program_str);
 int IonstatsAlignmentReduce(const string& output_json_filename, const vector<string>& input_jsons);
 int IonstatsAlignmentReduceH5(const string& output_h5_filename, const vector<string>& input_h5_filename, bool merge_proton_blocks);
 
-int IonstatsTestFragments(int argc, const char *argv[]);
+int IonstatsTestFragments(OptArgs &opts);
 int IonstatsTestFragmentsReduce(const string& output_json_filename, const vector<string>& input_jsons);
 
 
+// =================================================================================
 // ReadLengthHistogram keeps track of:
 //  - the actual histogram
 //  - number of reads
@@ -85,7 +88,9 @@ public:
       histogram_[idx] += other.histogram_[idx];
   }
 
-  uint64_t num_reads() const { return num_reads_; }
+  uint64_t num_reads() const { return num_reads_; };
+
+  unsigned int max_length() const { return max_read_length_; };
 
 private:
   vector<uint64_t>  histogram_;
@@ -95,6 +100,7 @@ private:
 
 };
 
+// =================================================================================
 
 class ReadAlignmentErrors {
 
@@ -118,6 +124,12 @@ public:
       del_len_.insert(del_len_.begin(),l);
     }
   }
+  void AddDel      (const vector <uint16_t> &d) {
+    for(vector <uint16_t>::const_iterator it=d.begin(); it != d.end(); ++it) {
+      del_.push_back(*it);
+      del_len_.push_back(1);
+    }
+  }
   void AddSub      (const uint16_t i) { sub_.push_back(i); }
   void AddNoCall   (const uint16_t i) { no_call_.push_back(i); }
 
@@ -127,6 +139,8 @@ public:
     else
       return(0);
   }
+
+  // ----------------------------------------------------
 
   void ConsolidateErrors(void) {
     // Convert deletion list so that multi-base deletions are represented as multiple single-base deletions
@@ -165,6 +179,8 @@ public:
     }
   }
 
+  // ----------------------------------------------------
+
   void Print (void) {
     cout << "(Length,First,Last) = (" << len_ << ", " << first_ << ", " << last_ << ")\n";
     vector<uint16_t>::iterator it;
@@ -196,6 +212,8 @@ public:
     }
   }
 
+  // ----------------------------------------------------
+
   void ShiftPositions (int shift) {
     if(shift==0)
       return;
@@ -216,8 +234,21 @@ public:
       *it += shift;
   }
 
+  // ----------------------------------------------------
+
   bool IsAligned(uint16_t position) { return( position >= first_ && position <= last_ ); }
   bool HasError(uint16_t position) { return(binary_search(err_.begin(),err_.end(),position)); }
+
+  void Reserve(unsigned int r) {
+    ins_.reserve(r);
+    del_.reserve(r);
+    del_len_.reserve(r);
+    sub_.reserve(r);
+    no_call_.reserve(r);
+    err_.reserve(r);
+    err_len_.reserve(r);
+    inc_.reserve(r);
+  }
 
   bool have_data() { return have_data_; }
   uint16_t len()     { return len_; }
@@ -249,105 +280,182 @@ private:
 };
 
 
+// =================================================================================
 // MetricGeneratorSNR
-
 
 class MetricGeneratorSNR {
 public:
   MetricGeneratorSNR() {
-    for (int idx = 0; idx < 8; idx++) {
-      zeromer_first_moment_[idx] = 0;
-      zeromer_second_moment_[idx] = 0;
-      onemer_first_moment_[idx] = 0;
-      onemer_second_moment_[idx] = 0;
+    for (int idx = 0; idx < NUMBER_OF_NUCLEOTIDES; idx++) {
+      zeromer_1_moment_[idx] = 0;
+      zeromer_2_moment_[idx] = 0;
+      zeromer_1_moment_kahan_compensation_[idx] = 0;
+      zeromer_2_moment_kahan_compensation_[idx] = 0;
+      zeromer_count_[idx] = 0;
+      onemer_1_moment_[idx] = 0;
+      onemer_2_moment_[idx] = 0;
+      onemer_1_moment_kahan_compensation_[idx] = 0;
+      onemer_2_moment_kahan_compensation_[idx] = 0;
+      onemer_count_[idx] = 0;
     }
-    count_ = 0;
+    nuc_to_int_['A'] = 0;
+    nuc_to_int_['C'] = 1;
+    nuc_to_int_['G'] = 2;
+    nuc_to_int_['T'] = 3;
+    nuc_to_int_['a'] = 0;
+    nuc_to_int_['c'] = 1;
+    nuc_to_int_['g'] = 2;
+    nuc_to_int_['t'] = 3;
   }
 
-  void Add(const vector<uint16_t>& flow_signal, const char *key, const string& flow_order)
-  {
-    if (flow_signal.size() < 8)
-      return;
-    for (int flow = 0; flow < 8; ++flow) {
-      char nuc = flow_order[flow % flow_order.length()];
-      if (*key == nuc) { // Onemer
-        onemer_first_moment_ [nuc&7] += flow_signal[flow];
-        onemer_second_moment_[nuc&7] += flow_signal[flow] * flow_signal[flow];
-        key++;
-      } else {  // Zeromer
-        zeromer_first_moment_ [nuc&7] += flow_signal[flow];
-        zeromer_second_moment_[nuc&7] += flow_signal[flow] * flow_signal[flow];
-      }
-    }
-    count_++;
+  void KahanRunningMean(double &mean, double &compensation, uint64_t n, double new_value) {
+    double weight = (double) (n-1) / double (n);
+    mean = mean * weight;
+    new_value *= (1.0 - weight);
+    double temp1 = new_value - compensation;
+    double temp2 = mean + new_value;
+    compensation = (temp2 - mean) - temp1;
+    mean = temp2;
   }
 
-  void Add(const vector<int16_t>& flow_signal, const char *key, const string& flow_order)
+  void Add(const vector<uint16_t>& flow_signal, const string &key, const string& flow_order)
   {
-    if (flow_signal.size() < 8)
-      return;
-    for (int flow = 0; flow < 8; ++flow) {
+    for (unsigned int flow = 0, base=0; flow < flow_signal.size(); ++flow) {
       char nuc = flow_order[flow % flow_order.length()];
-      if (*key == nuc) { // Onemer
-        onemer_first_moment_ [nuc&7] += flow_signal[flow];
-        onemer_second_moment_[nuc&7] += flow_signal[flow] * flow_signal[flow];
-        key++;
+      unsigned int nuc_idx = nuc_to_int_[nuc];
+      if (key[base] == nuc) { // Onemer
+        if(1+base == key.size()) {
+          // Last Onemer, skip as it may be connected to same base in library
+          break;
+        } else {
+          base++;
+          onemer_count_[nuc_idx]++;
+          KahanRunningMean(onemer_1_moment_[nuc_idx], onemer_1_moment_kahan_compensation_[nuc_idx], onemer_count_[nuc_idx], flow_signal[flow]);
+          KahanRunningMean(onemer_2_moment_[nuc_idx], onemer_2_moment_kahan_compensation_[nuc_idx], onemer_count_[nuc_idx], flow_signal[flow] * flow_signal[flow]);
+        }
       } else {  // Zeromer
-        zeromer_first_moment_ [nuc&7] += flow_signal[flow];
-        zeromer_second_moment_[nuc&7] += flow_signal[flow] * flow_signal[flow];
+        zeromer_count_[nuc_idx]++;
+        KahanRunningMean(zeromer_1_moment_[nuc_idx], zeromer_1_moment_kahan_compensation_[nuc_idx], zeromer_count_[nuc_idx], flow_signal[flow]);
+        KahanRunningMean(zeromer_2_moment_[nuc_idx], zeromer_2_moment_kahan_compensation_[nuc_idx], zeromer_count_[nuc_idx], flow_signal[flow] * flow_signal[flow]);
       }
     }
-    count_++;
+  }
+
+  void Add(const vector<int16_t>& flow_signal, const string &key, const string& flow_order)
+  {
+    for (unsigned int flow = 0, base=0; flow < flow_signal.size(); ++flow) {
+      char nuc = flow_order[flow % flow_order.length()];
+      unsigned int nuc_idx = nuc_to_int_[nuc];
+      if (key[base] == nuc) { // Onemer
+        if(1+base == key.size()) {
+          // Last Onemer, skip as it may be connected to same base in library
+          break;
+        } else {
+          base++;
+          onemer_count_[nuc_idx]++;
+          KahanRunningMean(onemer_1_moment_[nuc_idx], onemer_1_moment_kahan_compensation_[nuc_idx], onemer_count_[nuc_idx], flow_signal[flow]);
+          KahanRunningMean(onemer_2_moment_[nuc_idx], onemer_2_moment_kahan_compensation_[nuc_idx], onemer_count_[nuc_idx], flow_signal[flow] * flow_signal[flow]);
+        }
+      } else {  // Zeromer
+        zeromer_count_[nuc_idx]++;
+        KahanRunningMean(zeromer_1_moment_[nuc_idx], zeromer_1_moment_kahan_compensation_[nuc_idx], zeromer_count_[nuc_idx], flow_signal[flow]);
+        KahanRunningMean(zeromer_2_moment_[nuc_idx], zeromer_2_moment_kahan_compensation_[nuc_idx], zeromer_count_[nuc_idx], flow_signal[flow] * flow_signal[flow]);
+      }
+    }
   }
 
   void LoadFromJson(const Json::Value& json_value) {
-    count_ = json_value["full"]["num_reads"].asInt();
-    double system_snr = json_value["system_snr"].asDouble();
-    double variance = (1.0/system_snr) * (1.0/system_snr);
-    if (system_snr == 0)
-      variance = 0;
-
-    for (int idx = 0; idx < 8; ++idx) {
-      zeromer_first_moment_ [idx] = 0;
-      onemer_first_moment_  [idx] = count_;
-      zeromer_second_moment_[idx] = variance * count_;
-      onemer_second_moment_ [idx] = (variance + 1) * count_;
+    for(int idx = 0; idx < NUMBER_OF_NUCLEOTIDES; idx++) {
+      zeromer_1_moment_[idx] = json_value["key_zeromer_1_moment"][idx].asDouble();
+      zeromer_2_moment_[idx] = json_value["key_zeromer_2_moment"][idx].asDouble();
+      zeromer_count_[idx]    = json_value["key_zeromer_count"][idx].asInt64();
+      onemer_1_moment_[idx]  = json_value["key_onemer_1_moment"][idx].asDouble();
+      onemer_2_moment_[idx]  = json_value["key_onemer_2_moment"][idx].asDouble();
+      onemer_count_[idx]     = json_value["key_onemer_count"][idx].asInt64();
     }
   }
 
   void MergeFrom(const MetricGeneratorSNR& other) {
-    count_ += other.count_;
-    for (int idx = 0; idx < 8; ++idx) {
-      zeromer_first_moment_ [idx] += other.zeromer_first_moment_ [idx];
-      onemer_first_moment_  [idx] += other.onemer_first_moment_  [idx];
-      zeromer_second_moment_[idx] += other.zeromer_second_moment_[idx];
-      onemer_second_moment_ [idx] += other.onemer_second_moment_ [idx];
+    double weight=0;
+    for(int idx = 0; idx < NUMBER_OF_NUCLEOTIDES; idx++) {
+      if(zeromer_count_[idx] > 0 && other.zeromer_count_[idx] > 0) {
+        weight = (double) zeromer_count_[idx] / (double) (zeromer_count_[idx] + other.zeromer_count_[idx]);
+        zeromer_1_moment_[idx]  = (zeromer_1_moment_[idx]  * weight) + (other.zeromer_1_moment_[idx]  * (1.0 - weight));
+        zeromer_2_moment_[idx] = (zeromer_2_moment_[idx] * weight) + (other.zeromer_2_moment_[idx] * (1.0 - weight));
+      } else if(zeromer_count_[idx] == 0 && other.zeromer_count_[idx] > 0) {
+        zeromer_1_moment_[idx]  = other.zeromer_1_moment_[idx];
+        zeromer_2_moment_[idx] = other.zeromer_2_moment_[idx];
+      }
+
+      if(onemer_count_[idx] > 0 && other.onemer_count_[idx] > 0) {
+        weight = (double) onemer_count_[idx] / (double) (onemer_count_[idx] + other.onemer_count_[idx]);
+        onemer_1_moment_[idx]  = (onemer_1_moment_[idx]  * weight) + (other.onemer_1_moment_[idx]  * (1.0 - weight));
+        onemer_2_moment_[idx] = (onemer_2_moment_[idx] * weight) + (other.onemer_2_moment_[idx] * (1.0 - weight));
+      } else if(onemer_count_[idx] == 0 && other.onemer_count_[idx] > 0) {
+        onemer_1_moment_[idx]  = other.onemer_1_moment_[idx];
+        onemer_2_moment_[idx] = other.onemer_2_moment_[idx];
+      }
+
+      zeromer_count_[idx] += other.zeromer_count_[idx];
+      onemer_count_[idx]  += other.onemer_count_[idx];
     }
+  }
+
+  double SystemSNR(void) {
+    double nuc_snr = 0;
+    unsigned int num_valid_nucs = 0;
+    for(int idx = 0; idx < NUMBER_OF_NUCLEOTIDES; idx++) {
+      if(zeromer_count_[idx] > 0 && onemer_count_[idx] > 0) {
+        double zeromer_var  = zeromer_2_moment_[idx] - zeromer_1_moment_[idx] * zeromer_1_moment_[idx];
+        double onemer_var   = onemer_2_moment_[idx]  - onemer_1_moment_[idx]  * onemer_1_moment_[idx];
+        // This is the wrong way to summarize the variance of the difference, but it has
+        // been done this way since The Beginning so we keep it this way for backwards comparability
+        double average_stdev = (sqrt(zeromer_var) + sqrt(onemer_var)) / 2.0;
+        if (average_stdev > 0.0) {
+          nuc_snr += (onemer_1_moment_[idx] - zeromer_1_moment_[idx]) / average_stdev;
+          num_valid_nucs++;
+        }
+      }
+    }
+
+    if(num_valid_nucs > 0)
+      nuc_snr /= (double) num_valid_nucs;
+    return(nuc_snr);
   }
 
   void SaveToJson(Json::Value& json_value) {
-    double nuc_snr[8];
-    for(int idx = 0; idx < 8; idx++) { // only care about the first 3, G maybe 2-mer etc
-      double zeromer_mean = zeromer_first_moment_[idx] / count_;
-      double zeromer_var = zeromer_second_moment_[idx] / count_ - zeromer_mean * zeromer_mean;
-      double onemer_mean = onemer_first_moment_[idx] / count_;
-      double onemer_var = onemer_second_moment_[idx] / count_ - onemer_mean * onemer_mean;
-      double average_stdev = (sqrt(zeromer_var) + sqrt(onemer_var)) / 2.0;
-      nuc_snr[idx] = 0;
-      if (average_stdev > 0.0)
-        nuc_snr[idx] = (onemer_mean - zeromer_mean) / average_stdev;
+    json_value["key_zeromer_1_moment"]  = Json::arrayValue;
+    json_value["key_zeromer_2_moment"] = Json::arrayValue;
+    json_value["key_zeromer_count"]         = Json::arrayValue;
+    json_value["key_onemer_1_moment"]   = Json::arrayValue;
+    json_value["key_onemer_2_moment"]  = Json::arrayValue;
+    json_value["key_onemer_count"]          = Json::arrayValue;
+    for(int idx = 0; idx < NUMBER_OF_NUCLEOTIDES; idx++) {
+      json_value["key_zeromer_1_moment"][idx]  = zeromer_1_moment_[idx];
+      json_value["key_zeromer_2_moment"][idx] = zeromer_2_moment_[idx];
+      json_value["key_zeromer_count"][idx]         = (Json::UInt64) zeromer_count_[idx];
+      json_value["key_onemer_1_moment"][idx]   = onemer_1_moment_[idx];
+      json_value["key_onemer_2_moment"][idx]  = onemer_2_moment_[idx];
+      json_value["key_onemer_count"][idx]          = (Json::UInt64) onemer_count_[idx];
     }
-    json_value["system_snr"] = (nuc_snr['A'&7] + nuc_snr['C'&7] + nuc_snr['T'&7]) / 3.0;
+    json_value["system_snr"] = SystemSNR();
   }
 
 private:
-  double      zeromer_first_moment_[8];
-  double      zeromer_second_moment_[8];
-  double      onemer_first_moment_[8];
-  double      onemer_second_moment_[8];
-  int         count_;
+  map<char, unsigned int> nuc_to_int_;
+  double      zeromer_1_moment_[NUMBER_OF_NUCLEOTIDES];
+  double      zeromer_2_moment_[NUMBER_OF_NUCLEOTIDES];
+  double      zeromer_1_moment_kahan_compensation_[NUMBER_OF_NUCLEOTIDES];
+  double      zeromer_2_moment_kahan_compensation_[NUMBER_OF_NUCLEOTIDES];
+  uint64_t    zeromer_count_[NUMBER_OF_NUCLEOTIDES];
+  double      onemer_1_moment_[NUMBER_OF_NUCLEOTIDES];
+  double      onemer_2_moment_[NUMBER_OF_NUCLEOTIDES];
+  double      onemer_1_moment_kahan_compensation_[NUMBER_OF_NUCLEOTIDES];
+  double      onemer_2_moment_kahan_compensation_[NUMBER_OF_NUCLEOTIDES];
+  uint64_t    onemer_count_[NUMBER_OF_NUCLEOTIDES];
 };
 
+// =================================================================================
 
 class BaseQVHistogram {
 public:
@@ -378,6 +486,8 @@ private:
   vector<uint64_t> histogram_;
 };
 
+
+// =================================================================================
 
 class SimpleHistogram {
 public:
@@ -420,6 +530,7 @@ private:
   vector<uint64_t> histogram_;
 };
 
+// =================================================================================
 
 class MetricGeneratorHPAccuracy {
 public:
@@ -463,5 +574,7 @@ private:
   uint64_t hp_accuracy_[8];
   uint64_t hp_count_[8];
 };
+
+
 
 #endif // IONSTATS_H

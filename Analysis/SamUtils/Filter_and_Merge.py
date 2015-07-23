@@ -21,7 +21,7 @@ def merge_bam_files(bamfilelist,composite_bam_filepath,composite_bai_filepath):
 
     try:
 #        cmd = 'picard-tools MergeSamFiles'
-        cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/MergeSamFiles.jar'
+        cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/picard.jar MergeSamFiles'
 
         for bamfile in bamfilelist:
             cmd = cmd + ' I=%s' % bamfile

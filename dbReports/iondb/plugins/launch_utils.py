@@ -2,7 +2,7 @@
 
 import json
 from iondb.rundb.models import Plugin, PluginResult
-from ion.plugin.constants import RunLevel
+from ion.plugin.constants import Feature, RunLevel
 
 import logging
 logger = logging.getLogger(__name__)
@@ -29,10 +29,12 @@ def get_plugins_dict(pg, selectedPlugins=''):
             'version':p.version,
             'id':p.id,
             'pluginconfig': dict(p.config),
+            'userInput': ''
         } 
         
-        if selectedPlugins:
-            params['userInput'] = selectedPlugins.get(p.name, {}).get('userInput','')
+        if selectedPlugins and (p.name in selectedPlugins):
+            params['userInput'] = selectedPlugins[p.name].get('userInput','')
+            params['planning_version'] = selectedPlugins[p.name].get('version','')
 
         # with TS4.0 need to get IRU config based on selected account
         if "IonReporterUploader" in p.name:
@@ -123,6 +125,7 @@ def depsolve(plugins, pk):
                 satisfied_dependencies[name] = {
                     'pluginresult': pr[0].pk,
                     'version': pr[0].plugin.version,
+                    'jid': pr[0].jobid,
                     'pluginresult_path': pr[0].path()
                 }
             # else:
@@ -141,35 +144,54 @@ def get_plugins_to_run(plugins, result_pk, runlevel):
     # gets plugins to run for this runlevel
     plugins, sorted_names, satisfied_dependencies = depsolve(plugins, result_pk)
     plugins_to_run = []
+    export_plugins_to_run = []
     for name in sorted_names:
         if name in plugins:
             plugin_runlevels = plugins[name].get('runlevel') or [RunLevel.DEFAULT]
             if runlevel in plugin_runlevels:
-                plugins_to_run.append(name)
+                if Feature.EXPORT in plugins[name].get('features',[]):
+                    export_plugins_to_run.append(name)
+                else:
+                    plugins_to_run.append(name)
+
+    # EXPORT plugins will run after other plugins
+    plugins_to_run += export_plugins_to_run
     
     return plugins, plugins_to_run, satisfied_dependencies
     
     
-def add_hold_jid(plugin, plugins_dict, runlevel):
+def add_hold_jid(plugin, plugins_dict, runlevel, satisfied_dependencies):
     # add hold_jid values for any dependencies
     if 'hold_jid' not in plugin.keys():
         plugin['hold_jid'] = []
     
+    holding_for = []
+
     for name in plugin.get('depends',[]):
-        if name in plugins_dict and plugins_dict[name].get('jid'):            
+        if name in plugins_dict and plugins_dict[name].get('jid'):
             plugin['hold_jid'].append(plugins_dict[name]['jid'])
+            holding_for.append(name)
+        if name in satisfied_dependencies and satisfied_dependencies[name].get('jid') and satisfied_dependencies[name]['jid'] not in plugin['hold_jid']:
+            plugin['hold_jid'].append(satisfied_dependencies[name]['jid'])
+            holding_for.append(name)
 
     # multilevel plugins: add holds for themselves
     multilevel_jid = plugin.get('jid','')
     if multilevel_jid and multilevel_jid not in plugin['hold_jid']:
         plugin['hold_jid'].append(plugin['jid'])
+        holding_for.append('self_multilevel')
     
     # post runlevel gathers block runs
     if runlevel == RunLevel.POST:
         plugin['hold_jid'] += plugin.get('block_jid',[])
-        
-    # last runlevel holds for all previously launched plugins
-    if runlevel == RunLevel.LAST:
-        plugin['hold_jid'] = [p['jid'] for p in plugins_dict.values() if p.get('jid')]
-    
-    return plugin
+        holding_for.append('self_blocks')
+
+    # last runlevel and EXPORT plugins hold for all previously launched plugins
+    if runlevel == RunLevel.LAST or (Feature.EXPORT in plugin.get('features',[])):
+        for name, p in plugins_dict.items():
+            if p.get('jid') and name != plugin['name']:
+                plugin['hold_jid'].append(p['jid'])
+                holding_for.append(p.get('name'))
+       #plugin['hold_jid'] = [p['jid'] for p in plugins_dict.values() if p.get('jid')]
+
+    return plugin, sorted(set(holding_for))

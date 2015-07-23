@@ -1,6 +1,6 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "TraceChunk.h"
-#include "H5File.h"
+#include "IonH5File.h"
 #include "IonErr.h"
 #include "SynchDatSerialize.h"
 #include "VencoLossless.h"

@@ -1,9 +1,5 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
-// patch for CUDA5.0/GCC4.7
-#undef _GLIBCXX_ATOMIC_BUILTINS
-#undef _GLIBCXX_USE_INT128
-
 #include <iostream>
 
 #include "JobWrapper.h"
@@ -60,6 +56,16 @@ int WorkSet::getMaxFrames() const
   assert(maxFrames);
   return maxFrames;
 }
+
+int WorkSet::getUncompressedFrames() const
+{
+  return _info->img->raw->uncompFrames;
+}
+int WorkSet::getImageFrames() const
+{
+  return _info->img->raw->frames;
+}
+
 void WorkSet::setMaxBeads(int beads)
 {
   _maxBeads = beads;
@@ -135,8 +141,34 @@ int WorkSet::getNumFrames() const {
 
 }
 
+int WorkSet::getImgHeight() const {
+  return _info->img->GetRows();
+}
+int WorkSet::getImgWidth() const {
+  return _info->img->GetCols();
+}
 
+int WorkSet::getMaxRegionWidth() const {
+  return _info->inception_state->loc_context.regionXSize;
+  //return _info->bkgObj->region_data->region->w;
+}
 
+int WorkSet::getMaxRegionHeight() const {
+  return _info->inception_state->loc_context.regionYSize;
+  //return _info->bkgObj->region_data->region->h;
+}
+
+/*
+int WorkSet::getRegionWidth() const {
+  return _info->inception_state->loc_context.regionXSize;
+  //return _info->bkgObj->region_data->region->w;
+}
+
+int WorkSet::getRegionHeight() const {
+  return _info->inception_state->loc_context.regionYSize;
+  //return _info->bkgObj->region_data->region->h;
+}
+*/
 
 
 int WorkSet::getMaxSteps()
@@ -170,6 +202,8 @@ int WorkSet::getAbsoluteFlowNum()
 }
 
 reg_params * WorkSet::getRegionParams() {   return  &_info->bkgObj->region_data->my_regions.rp;  }
+reg_params * WorkSet::getRegionParamMinBounds() {   return  &_info->bkgObj->region_data->my_regions.rp_low;  }
+reg_params * WorkSet::getRegionParamMaxBounds() {   return  &_info->bkgObj->region_data->my_regions.rp_high;  }
 BeadTracker * WorkSet::getBeadTracker(){   return &_info->bkgObj->region_data->my_beads; }
 BeadParams * WorkSet::getBeadParams(){   return &_info->bkgObj->region_data->my_beads.params_nn[0]; }
 bead_state * WorkSet::getBeadState(){   return &_info->bkgObj->region_data->my_beads.all_status[0]; }
@@ -189,7 +223,9 @@ float * WorkSet::getShiftedBackground(){
 }
 
 float * WorkSet::getCalculateNucRise(){   
+//  _info->bkgObj->region_data->my_regions.cache_step.Unlock();
   _info->bkgObj->region_data->my_regions.cache_step.CalculateNucRiseFineStep (&_info->bkgObj->region_data->my_regions.rp, _info->bkgObj->region_data->time_c, *_info->bkgObj->region_data_extras.my_flow); // the same for the whole region because time-shift happens per well
+
   return _info->bkgObj->region_data->my_regions.cache_step.nuc_rise_fine_step; 
 }
 
@@ -202,6 +238,10 @@ float * WorkSet::getCalculateNucRiseCoarse()
  
 void WorkSet::setUpFineEmphasisVectors() {
   _info->bkgObj->region_data->SetFineEmphasisVectors();
+}
+
+void WorkSet::setUpCrudeEmphasisVectors() {
+  _info->bkgObj->region_data->SetCrudeEmphasisVectors();
 }
 
 float WorkSet::getAmpLowLimit() 
@@ -519,20 +559,32 @@ int WorkSet::getPaddedN() const{
 }
 
 
+int WorkSet::getPaddedGenericXtalkSample() const{
+  return (((GENERIC_SIMPLE_XTALK_SAMPLE)+32-1)/32)*32;
+}
+
 int WorkSet::padTo128Bytes(int size){
   return ((size+128-1)/128)*128;
 }
 
+bool WorkSet::DataAvailalbe()
+{
+  if (!isSet()) return false;
+  if (getNumBeads() <= 0) return false;
+  return true;
+}
+
+
 
 bool WorkSet::ValidJob()
 {
-  
-  if (_info->bkgObj->region_data->fitters_applied == -1 || _info == NULL) {
-    return false;
-  }
-  return isSet();
 
+  if (!DataAvailalbe()) return false;
+  if (_info->bkgObj->region_data->fitters_applied == -1 ) return false;
+  return true;
 }
+
+
 
 void WorkSet::KeyNormalize()
 {
@@ -595,12 +647,26 @@ int WorkSet::getXtalkNeiIdxMapSize(bool padded)
   return size*( (!padded)?(getNumBeads()):(getPaddedN()) ); 
 }
 
+int WorkSet::getXtalkSampleNeiIdxMapSize(bool padded)
+{
+  int size = sizeof(int) * MAX_XTALK_NEIGHBOURS;  
+  return size*((!padded) ? (GENERIC_SIMPLE_XTALK_SAMPLE) : getPaddedGenericXtalkSample()); 
+}
+
+bool WorkSet::IsSimpleTraceLevelXtalk() const {
+  return _info->bkgObj->getXtalkExecute().xtalk_spec_p->simple_model;
+}
+
 int WorkSet::getNumXtalkNeighbours() {
   return _info->bkgObj->getXtalkExecute().xtalk_spec_p->nei_affected;  
 }
 
 const int* WorkSet::getNeiIdxMapForXtalk() {
   return _info->bkgObj->getXtalkExecute().GetNeighborIndexMap();
+}
+
+const int* WorkSet::getSampleNeiIdxMapForXtalk() {
+  return _info->bkgObj->getXtalkExecute().GetNeighbourIndexmapForSampleLocations();
 }
 
 int* WorkSet::getXtalkNeiXCoords() {
@@ -637,6 +703,24 @@ bool WorkSet::performCrossTalkCorrection() const {
     return _info->bkgObj->getXtalkExecute().xtalk_spec_p->do_xtalk_correction;
   }
   return false;
+}
+
+bool WorkSet::performWellsLevelXTalkCorrection() const {
+  if(isSet()) {
+    return _info->bkgObj->getGlobalDefaultsForBkgModel().signal_process_control.enable_well_xtalk_correction;
+  }
+  return false;
+}
+
+bool WorkSet::performPolyClonalFilter() const{
+  if(isSet()) {
+      return _info->inception_state->bkg_control.polyclonal_filter.enable;
+    }
+    return false;
+}
+
+bool WorkSet::performPostFitHandshake() const {
+  return _info->inception_state->bkg_control.gpuControl.postFitHandshakeWorker;
 }
 
 bool WorkSet::performExpTailFitting() {
@@ -682,6 +766,9 @@ int WorkSet::GetNumETFCompressedFrames() {
 int* WorkSet::GetStdFramesPerPoint() {
   return &((_info->bkgObj->region_data->time_c.GetStdFramesPerPoint())[0]);
 }
+int* WorkSet::GetETFFramesPerPoint() {
+  return &((_info->bkgObj->region_data->time_c.GetETFFramesPerPoint())[0]);
+}
 
 int* WorkSet::GetETFInterpolationFrames() {
   return &((_info->bkgObj->region_data->time_c.GetETFInterpolationFrame())[0]);
@@ -698,6 +785,11 @@ int WorkSet::GetETFStartFrame() {
 int WorkSet::GetStdFramesPerPointSize(bool padded)
 {
   int size = sizeof(int)*GetNumStdCompressedFrames();
+  return (!padded)?(size):(padTo128Bytes(size));
+}
+int WorkSet::GetETFFramesPerPointSize(bool padded)
+{
+  int size = sizeof(int)*GetNumETFCompressedFrames();
   return (!padded)?(size):(padTo128Bytes(size));
 }
 
@@ -783,3 +875,20 @@ int WorkSet::GetNonZeroEmphasisFramesVecSize(bool padded)
   return (!padded) ? (size) : (padTo128Bytes(size));  
 }
 
+int WorkSet::getRegCol(){return _info->bkgObj->region_data->region->col;}
+
+int WorkSet::getRegRow(){return _info->bkgObj->region_data->region->row;}
+
+void ** WorkSet::getSampleCollectionPtr(){return _info->SampleCollection;}
+
+
+float WorkSet::getCTimeStart(){return _info->bkgObj->region_data->time_c.time_start; }
+float WorkSet::getTMidNuc() {return _info->bkgObj->region_data->my_regions.rp.nuc_shape.AccessTMidNuc()[0];}
+float WorkSet::getSigma() { return _info->bkgObj->region_data->my_regions.rp.nuc_shape.sigma;}
+float WorkSet::getTShift(){ return _info->bkgObj->region_data->my_regions.rp.tshift; }
+
+int WorkSet::getNucIdForFlow(int flow) { 
+  return _info->bkgObj->getGlobalDefaultsForBkgModel().flow_global.GetNucNdx(flow);
+}
+
+const EmphasisClass& WorkSet::getEmphasisData() { return _info->bkgObj->region_data->emphasis_data; }

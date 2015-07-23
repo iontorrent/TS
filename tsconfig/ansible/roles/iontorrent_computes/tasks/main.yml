@@ -1,7 +1,8 @@
 ---
 # file: roles/iontorrent_computes/tasks/main.yml
 
-
+- name:
+  include: '../../../globals.yml'
 #-----------------------------------------------------------------------------
 # Install system packages specifically for a compute node
 #-----------------------------------------------------------------------------
@@ -17,7 +18,6 @@
 #  yum: name={{ item }} state=latest force=yes
 #  with_items: ioncompute_syspkg_list
 #  when: "'{{ item }}' != '' and ansible_distribution == 'CentOS'"
-#  tags: debug
 
 #-----------------------------------------------------------------------------
 # Install Ion Torrent Packages for a compute node
@@ -31,17 +31,8 @@
 #  yum: name={{ item }} state=latest force=yes
 #  with_items: ioncompute_ionpkg_list
 #  when: "'{{ item }}' != '' and ansible_distribution == 'CentOS'"
-#  tags: debug
 
-#-----------------------------------------------------------------------------
-# We need to configure node to use apt-cacher-ng server
-#-----------------------------------------------------------------------------
-- name: Configure apt-cacher-ng
-  lineinfile: dest=/etc/apt/apt.conf.d/01proxy create=true state=present
-                regexp='Acquire::http::Proxy.*'
-                line='Acquire::http::Proxy "http://{{ groups.iontorrent_master[0] }}:3142";'
-                mode=0644
-  
+ 
 # Set host location of Ion Torrent Server Daemons
 #function config_cluster_settings()
 - name: Update cluster configuration file - cluster_settings.py
@@ -57,27 +48,7 @@
     - JOBSERVER_HOST
     - CRAWLER_HOST
 
-
-#-----------------------------------------------------------------------------
-# Copy scripts for cluster_info.py run from headnode
-#-----------------------------------------------------------------------------
-- name: Copy grp_mount_test script
-  copy: src=/usr/sbin/grp_mount_test dest=/usr/sbin/grp_mount_test mode=0775
-
-- name: Copy grp_configuration_test script
-  copy: src=/usr/sbin/grp_configuration_test dest=/usr/sbin/grp_configuration_test mode=0775
-
 #-----------------------------------------------------------------------------
 # Additional configuration steps
 #-----------------------------------------------------------------------------
 - include: software_update.yml
-
-# TODO: Expand and replace: function config_ionSoftware
-    # 4 items moved into common/tasks/main.yml
-    
-    # Install/Update Torrent Suite software packages
-#    preinst_ion_packages
-#    install_ion_packages
-#    config_ion_packages
-#    update_conf_file
-#    updated_mirror_check

@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <stdint.h>
 #include <netinet/in.h>
+#include <getopt.h>
 
 #include "main.h"
 #include "ion_error.h"

@@ -24,7 +24,8 @@
 
 using namespace std;
 
-enum FilteringOutcomes {
+
+enum FilteringOutcomes_t {
   kUninitialized,               //!< Read not examined by a filter
   kPassed,                      //!< Read not rejected by any filter
   kFilterZeroBases,             //!< Read filtered out, has zero length
@@ -41,6 +42,14 @@ enum FilteringOutcomes {
   kFilteredShortQualityTrim,    //!< Read filtered out, too short after quality trimming
   kFilteredAvalancheTrim        //!< Read filtered out, too short after Avalanche trimming
 };
+
+enum QualityTrimmingModes {
+  kQvTrimOff,                    //!< Quality trimming disabled
+  kQvTrimWindowed,               //!< Sliding window quality trimming
+  kQvTrimExpectedErrors,         //!< Expected number of errors quality trimming
+  kQvTrimAll                     //!< Quality trimming using all available methods
+};
+
 
 
 class ThousandsSeparator : public numpunct<char> {
@@ -478,13 +487,16 @@ void ReadFilteringStats::SaveToBasecallerJson(Json::Value &json, const string& c
 }
 
 
-// ----------------------------------------------------------------------------
+// ===================================================================================
+// XXX Start of BaseCallerFilters functions
 
 void BaseCallerFilters::PrintHelp()
 {
-  printf ("Filtering and trimming options:\n");
+  printf ("Read filtering and trimming options:\n");
   printf ("  -d,--disable-all-filters    on/off     disable all filtering and trimming, overrides other args [off]\n");
+  printf (" Key-pass filter: \n");
   printf ("  -k,--keypass-filter         on/off     apply keypass filter [on]\n");
+  printf (" Polyclonal filter in BaseCaller:\n");
   printf ("     --clonal-filter-solve    on/off     apply polyclonal filter [off]\n");
   printf ("     --clonal-filter-tf       on/off     apply polyclonal filter to TFs [off]\n");
   printf ("     --clonal-filter-maxreads INT        maximum number of library reads used for polyclonal filter training [100000]\n");
@@ -492,16 +504,31 @@ void BaseCallerFilters::PrintHelp()
   printf ("     --cr-filter              on/off     apply cafie residual filter [off]\n");
   printf ("     --cr-filter-tf           on/off     apply cafie residual filter to TFs [off]\n");
   printf ("     --cr-filter-max-value    FLOAT      cafie residual filter threshold [0.8]\n");
-  printf ("     --beverly-filter         filter_ratio,trim_ratio,min_length / off\n");
-  printf ("                                        apply Beverly filter/trimmer [off]\n");
+  printf ("     --beverly-filter      FLOAT,FLOAT   filter_ratio,trim_ratio / off\n");
+  printf ("                                         apply Beverly filter/trimmer [off]\n");
+  printf ("     --qual-filter            on/off     apply quality filter based on expected number of errors [off]\n");
+  printf ("     --qual-filter-offset     FLOAT      error offset for expected errors quality filter [0.7]\n");
+  printf ("     --qual-filter-slope      FLOAT      expected errors allowed per base for expected errors quality filter [0.02]\n");
+  printf ("\n");
+  printf ("Read trimming options:\n");
+  printf ("     --trim-min-read-len      INT        reads trimmed shorter than this are omitted from output [min-read-length]\n");
+  printf (" Adapter trimming (turn off by supplying cutoff 0):\n");
+  printf ("     --trim-adapter-mode      INT        0=use simplified metric, 1=use standard metric [1]\n");
   printf ("     --trim-adapter           STRING     reverse complement of adapter sequence [ATCACCGACTGCCCATAGAGAGGCTGAGAC]\n");
   printf ("     --trim-adapter-tf        STRING/off adapter sequence for test fragments [off]\n");
   printf ("     --trim-adapter-cutoff    FLOAT      cutoff for adapter trimming, 0=off [16]\n");
-  printf ("     --trim-adapter-min-match INT       minimum adapter bases in the read required for trimming  [6]\n");
-  printf ("     --trim-adapter-mode      INT        0=use simplified metric, 1=use standard metric [1]\n");
-  printf ("     --trim-qual-window-size  INT        window size for quality trimming [30]\n");
-  printf ("     --trim-qual-cutoff       FLOAT      cutoff for quality trimming, 100=off [15]\n");
-  printf ("     --trim-min-read-len      INT        reads trimmed shorter than this are omitted from output [8]\n");
+  printf ("     --trim-adapter-min-match INT        minimum adapter bases in the read required for trimming  [6]\n");
+  printf (" Quality trimming (turn off by supplying mode 'off'):\n");
+  printf ("     --trim-qual-mode         STRING     select the method of quality trimming [\"sliding-window\"]\n");
+  printf ("                                         mode \"off\"             :  quality trimming disabled\n");
+  printf ("                                         mode \"sliding-window\"  :  sliding window quality trimming\n");
+  printf ("                                         mode \"expected-errors\" :  quality trimming based on expected number of errors in read\n");
+  printf ("                                         mode \"all\"             :  shortest trimming point of all methods\n");
+  printf ("     --trim-qual-window-size  INT        window size for windowed quality trimming [30]\n");
+  printf ("     --trim-qual-cutoff       FLOAT      cutoff for windowed quality trimming, 100=off [16]\n");
+  printf ("     --trim-qual-offset       FLOAT      error threshold offset for expected error quality trimming [0.7]\n");
+  printf ("     --trim-qual-slope        FLOAT      increase of expected errors allowed for expected error quality trimming [0.005]\n");
+  printf (" Avalanche trimming (does anybody use this?):\n"); // XXX
   printf ("     --avalanche_start_pos    INT        Avalanche filter start base position\n");
   printf ("     --avalanche_qual_hi      INT        Avalanche filter quality cutoff before the start position [15]\n");
   printf ("     --avalanche_qual_lo      INT        Avalanche filter quality cutoff after the start position [5]\n");
@@ -510,7 +537,7 @@ void BaseCallerFilters::PrintHelp()
 
 // ----------------------------------------------------------------------------
 
-BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comments,
+BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comments, const string & run_id,
     const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, const Mask& mask)
 {
   flow_order_ = flow_order;
@@ -519,58 +546,76 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
   assert(num_classes_ == 2);
   filter_mask_.assign(mask.H()*mask.W(), kUninitialized);
 
-  // Retrieve command line options
+  // *** Retrieve filter command line options
 
   filter_keypass_enabled_      = opts.GetFirstBoolean('k', "keypass-filter", true);
   filter_min_read_length_      = opts.GetFirstInt    ('-', "min-read-length", 25);
+  trim_min_read_len_           = opts.GetFirstInt    ('-', "trim-min-read-len", filter_min_read_length_);
+
   filter_clonal_enabled_tfs_   = opts.GetFirstBoolean('-', "clonal-filter-tf", false);
   filter_clonal_enabled_       = opts.GetFirstBoolean('-', "clonal-filter-solve", false);
   filter_clonal_maxreads_      = opts.GetFirstInt    ('-', "clonal-filter-maxreads", 100000);
+
   filter_residual_enabled_     = opts.GetFirstBoolean('-', "cr-filter", false);
   filter_residual_enabled_tfs_ = opts.GetFirstBoolean('-', "cr-filter-tf", false);
+  filter_residual_max_value_   = opts.GetFirstDouble ('-', "cr-filter-max-value", 0.08);
 
-  //! \todo Get this to work right. May require "unwound" flow order, so incompatible with current wells.FlowOrder()
-  //flt_control.cafieResMaxValueByFlowOrder[std::string ("TACG") ] = 0.06;  // regular flow order
-  //flt_control.cafieResMaxValueByFlowOrder[std::string ("TACGTACGTCTGAGCATCGATCGATGTACAGC") ] = 0.08;  // xdb flow order
+  filter_quality_enabled_      = opts.GetFirstBoolean('-', "qual-filter", false);
+  filter_quality_offset_       = opts.GetFirstDouble ('-', "qual-filter-offset",0.7);
+  filter_quality_slope_        = opts.GetFirstDouble ('-', "qual-filter-slope",0.02);
+  filter_quality_quadr_        = opts.GetFirstDouble ('-', "qual-filter-quadr",0.00);
 
-  filter_residual_max_value_      = opts.GetFirstDouble ('-',  "cr-filter-max-value", 0.08);
 
-  // SFFTrim options
+  // Adapter trimming options
   trim_adapter_                = opts.GetFirstStringVector ('-', "trim-adapter", "ATCACCGACTGCCCATAGAGAGGCTGAGAC");
   trim_adapter_cutoff_         = opts.GetFirstDouble       ('-', "trim-adapter-cutoff", 16.0);
   trim_adapter_separation_     = opts.GetFirstDouble       ('-', "trim-adapter-separation", 0.0);
   trim_adapter_min_match_      = opts.GetFirstInt          ('-', "trim-adapter-min-match", 6);
   trim_adapter_mode_           = opts.GetFirstInt          ('-', "trim-adapter-mode", 1);
   trim_adapter_tf_             = opts.GetFirstStringVector ('-', "trim-adapter-tf", "");
+
+  // Quality trimming options
+  trim_qual_mode_              = opts.GetFirstString       ('-', "trim-qual-mode", "sliding-window");
   trim_qual_window_size_       = opts.GetFirstInt          ('-', "trim-qual-window-size", 30);
   trim_qual_cutoff_            = opts.GetFirstDouble       ('-', "trim-qual-cutoff", 15.0);
-  trim_min_read_len_           = opts.GetFirstInt          ('-', "trim-min-read-len", filter_min_read_length_);
+  trim_qual_offset_            = opts.GetFirstDouble       ('-', "trim-qual-offset",0.7);
+  trim_qual_slope_             = opts.GetFirstDouble       ('-', "trim-qual-slope",0.005);
+  trim_qual_quadr_             = opts.GetFirstDouble       ('-', "trim-qual-quadr",0.00);
   extra_trim_right_            = opts.GetFirstInt          ('-', "extra-trim-right", 0);
+
+  if      (trim_qual_mode_ == "off")             { trim_qual_mode_enum_ = kQvTrimOff; }
+  else if (trim_qual_mode_ == "sliding-window")  { trim_qual_mode_enum_ = kQvTrimWindowed; }
+  else if (trim_qual_mode_ == "expected-errors") { trim_qual_mode_enum_ = kQvTrimExpectedErrors; }
+  else if (trim_qual_mode_ == "all")             { trim_qual_mode_enum_ = kQvTrimAll; }
+  else {
+   cerr << "BaseCaller Option Error: Unrecognized quality trimming mode: "<< trim_qual_mode_ <<". Aborting!" << endl;
+   exit(EXIT_FAILURE);
+  }
 
   // Turn adapter trimming off if 'off' is specified in options string
   if (trim_adapter_.size() > 0 and trim_adapter_.at(0) == "off")
     trim_adapter_.clear();
-  if (trim_adapter_tf_.size() >0 and trim_adapter_tf_.at(0) == "off")
+  if (trim_adapter_tf_.size() > 0 and trim_adapter_tf_.at(0) == "off")
     trim_adapter_tf_.clear();
   // Validate adapter strings so that they contains only ACGT characters.
   ValidateBaseStringVector(trim_adapter_);
   ValidateBaseStringVector(trim_adapter_tf_);
   if (trim_adapter_.size() > 0)
-    WriteAdaptersToBamComments(bam_comments);
+    WriteAdaptersToBamComments(bam_comments, run_id);
 
-  //string filter_beverly_args      = opts.GetFirstString ('-', "beverly-filter", "0.03,0.03,8");
   string filter_beverly_args      = opts.GetFirstString ('-', "beverly-filter", "off");
-
   bool disable_all_filters        = opts.GetFirstBoolean('d', "disable-all-filters", false);
 
+  // If this flag is set all filters & trimmers will be disabled
   if (disable_all_filters) {
     filter_keypass_enabled_ = false;
     filter_clonal_enabled_tfs_ = false;
     filter_clonal_enabled_ = false;
     filter_residual_enabled_ = false;
     filter_residual_enabled_tfs_ = false;
+    filter_quality_enabled_ = false;
+    trim_qual_mode_enum_ = kQvTrimOff;
     trim_adapter_cutoff_ = 0.0; // Zero means disabled for now
-    trim_qual_cutoff_ = 100.0; // 100.0 means disabled for now
     filter_beverly_args = "off";
   }
 
@@ -590,8 +635,9 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
       filter_clonal_enabled_ = false;
       filter_residual_enabled_ = false;
       filter_residual_enabled_tfs_ = false;
+      filter_quality_enabled_ = false;
+      trim_qual_mode_enum_ = kQvTrimOff;
       trim_adapter_cutoff_ = 0.0; // Zero means disabled for now
-      trim_qual_cutoff_ = 100.0; // 100.0 means disabled for now
       filter_beverly_args = "off";
   }
 
@@ -604,7 +650,13 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
   printf("             --cr-filter %s\n", filter_residual_enabled_ ? "on" : "off");
   printf("          --cr-filter-tf %s\n", filter_residual_enabled_tfs_ ? "on" : "off");
   printf("   --cr-filter-max-value %1.3f\n", filter_residual_max_value_);
-  //printf("          --trim-adapter %s\n", trim_adapter_.c_str());
+  printf("        --beverly-filter %s\n", filter_beverly_args.c_str());
+  printf("           --qual-filter %s\n", filter_quality_enabled_ ? "on" : "off");
+  printf("    --qual-filter-offset %1.4f\n", filter_quality_offset_);
+  printf("     --qual-filter-slope %1.4f\n", filter_quality_slope_ );
+
+
+  printf("Adapter trimming settings\n");
   printf("          --trim-adapter ");
   if (!trim_adapter_.empty()) {
     for (unsigned int adpt_idx=0; adpt_idx<trim_adapter_.size()-1; adpt_idx++)
@@ -627,12 +679,17 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
   printf("     --trim-adapter-mode %d\n", trim_adapter_mode_);
   printf("   --trim-adapter-cutoff %1.1f (0.0 means disabled)\n", trim_adapter_cutoff_);
   printf("--trim-adapter-min-match %d\n", trim_adapter_min_match_);
+  printf("        --trim-qual-mode %s\n", trim_qual_mode_.c_str());
+  printf("Quality trimming settings:\n");
   printf(" --trim-qual-window-size %d\n", trim_qual_window_size_);
   printf("      --trim-qual-cutoff %1.1f (100.0 means disabled)\n", trim_qual_cutoff_);
+  printf("      --trim-qual-offset %1.4f\n", trim_qual_offset_);
+  printf("       --trim-qual-slope %1.4f\n", trim_qual_slope_);
   printf("     --trim-min-read-len %d\n", trim_min_read_len_);
-  printf("        --beverly-filter %s\n", filter_beverly_args.c_str());
+
 
   if (filter_avalanche_enabled_) { // force other filters off
+	  printf("Avalanche filter/trimming settings:\n");
       printf("         --avalanche_max %d\n", avalanche_max_pos_);
       printf("       --avalanche_start %d\n", avalanche_mid_pos_);
       printf("        --avalanche_stop %d\n", avalanche_min_pos_);
@@ -655,15 +712,10 @@ BaseCallerFilters::BaseCallerFilters(OptArgs& opts, vector<string> & bam_comment
 
   if (filter_beverly_args == "off") {
     filter_beverly_enabled_ = false; // Nothing, really
-
   } else {
-    int stat = sscanf (filter_beverly_args.c_str(), "%f,%f,%d",
-        &filter_beverly_filter_ratio_,
-        &filter_beverly_trim_ratio_,
-        &filter_beverly_min_read_length_);
-    if (stat != 3) {
-      fprintf (stderr, "Option Error: beverly-filter %s\n", filter_beverly_args.c_str());
-      fprintf (stderr, "Usage: --beverly-filter=filter_ratio,trim_ratio,min_length\n");
+	opts.StringToDoubleVector(filter_beverly_filter_trim_ratio_, filter_beverly_args, "beverly-filter");
+    if (filter_beverly_filter_trim_ratio_.size() !=2){
+      cerr << "BaseCaller Option Error: beverly-filter needs to be of the format <float>,<float>" << endl;
       exit (EXIT_FAILURE);
     }
     filter_beverly_enabled_ = true;
@@ -870,10 +922,16 @@ void BaseCallerFilters::FilterFailedKeypass(int read_index, int read_class, Read
   if(!filter_keypass_enabled_)  // Filter disabled?
     return;
 
-  bool failed_keypass = false;
-  for (int base = 0; base < keys_[read_class].bases_length(); ++base)
-    if (sequence[base] != keys_[read_class].bases()[base])
-      failed_keypass = true;
+  bool failed_keypass = true;
+
+  if ((int)sequence.size() >= keys_[read_class].bases_length()) {
+    int base=0;
+    while (base < keys_[read_class].bases_length() and sequence[base] == keys_[read_class].bases()[base])
+      ++base;
+
+    if (base == keys_[read_class].bases_length())
+      failed_keypass = false;
+  }
 
   if (failed_keypass) {
     filter_mask_[read_index] = kFilterFailedKeypass;
@@ -944,11 +1002,11 @@ void BaseCallerFilters::FilterBeverly(int read_index, int read_class, ReadFilter
           num_extreme_twomers++;
       }
 
-      if (num_extreme_onemers <= num_onemers * filter_beverly_trim_ratio_)
+      if (num_extreme_onemers <= num_onemers * filter_beverly_filter_trim_ratio_.at(1))
         max_trim_bases = base;
     }
 
-    if ((num_extreme_onemers + num_extreme_twomers) > (num_onemers + num_twomers) * filter_beverly_filter_ratio_) {
+    if ((num_extreme_onemers + num_extreme_twomers) > (num_onemers + num_twomers) * filter_beverly_filter_trim_ratio_.at(0)) {
 
       int trim_length = max_trim_bases - filter_history.n_bases_prefix;
       if (trim_length < trim_min_read_len_) { // Quality trimming led to filtering
@@ -971,6 +1029,44 @@ void BaseCallerFilters::FilterBeverly(int read_index, int read_class, ReadFilter
     filter_history.n_bases_after_beverly_trim = filter_history.n_bases_filtered  = clip_qual_right;
   }
 }
+
+// ----------------------------------------------------------------------------
+// Filter entire reads based on their quality scores XXX
+
+void BaseCallerFilters::FilterQuality(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
+{
+  if (filter_history.is_filtered or not filter_quality_enabled_)
+    return;
+
+  //for every base, compute cumulative expected errors and compare to threshold
+  bool is_filtered = false; // assume all reads are good until proven otherwise
+  double error_threshold = filter_quality_offset_;
+  double cumulative_expected_error = 0.0;
+
+  for (int ibase=0; ibase<filter_history.n_bases; ibase++){
+     error_threshold += filter_quality_slope_;
+     error_threshold += filter_quality_quadr_ * ibase; // extra quadratic to handle rise at end of read
+     cumulative_expected_error += exp(-quality[ibase]*0.2302585); // log(10)/10
+
+     // filter-v1.0 - trigger filter any time expected errors are above the allowed threshold
+     if (cumulative_expected_error > error_threshold) {
+       is_filtered = true;
+       break; // No need to waste more time!
+     }
+  }
+
+  // filter-v2.0 - trigger filter only if the expected errors at the end of the read are above the allowed threshold
+  //if (cumulative_expected_error > error_threshold)
+  //  is_filtered = true;
+
+  if(is_filtered) {
+    filter_mask_[read_index] = kFilterHighResidual;
+    filter_history.n_bases_filtered = 0;
+    filter_history.n_bases_after_high_residual = 0;
+    filter_history.is_filtered = true;
+  }
+
+};
 
 // ----------------------------------------------------------------------------
 
@@ -1287,18 +1383,54 @@ void BaseCallerFilters::TrimAdapter(int read_index, int read_class, ProcessedRea
 
 }
 
+
 // ----------------------------------------------------------------------------
 
 void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
 {
+  // Exception were we don't filter
   if (filter_history.is_filtered) // Already filtered out?
-    return;
-
-  if(trim_qual_cutoff_ >= 100.0 or trim_qual_cutoff_ == 0.0)   // 100.0 or more means disabled
-    return;
-
+	return;
   if (read_class != 0)  // Hardcoded: Don't trim TFs
     return;
+
+  int temp_clip_qual_right, clip_qual_right;
+
+  switch (trim_qual_mode_enum_) {
+    case kQvTrimOff : return;
+    case kQvTrimWindowed :
+      clip_qual_right = TrimQuality_Windowed(read_index, filter_history, quality);
+      break;
+    case kQvTrimExpectedErrors :
+      clip_qual_right = TrimQuality_ExpectedErrors(read_index, filter_history, quality);
+      break;
+    default :
+      temp_clip_qual_right = TrimQuality_Windowed(read_index, filter_history, quality);
+      clip_qual_right = min(temp_clip_qual_right, TrimQuality_ExpectedErrors(read_index, filter_history, quality));
+  };
+
+  // Store trimming results if necessary and do base accounting
+  if (clip_qual_right >= filter_history.n_bases_filtered)
+     return;
+
+  int trim_length = clip_qual_right - filter_history.n_bases_prefix;
+
+  if (trim_length < trim_min_read_len_) { // Quality trimming led to filtering
+    filter_mask_[read_index] = kFilteredShortQualityTrim;
+    filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = 0;
+    filter_history.is_filtered = true;
+  } else {
+     filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = clip_qual_right;
+  }
+}
+
+
+// ----------------------------------------------------------------------------
+
+int BaseCallerFilters::TrimQuality_Windowed(int read_index, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
+{
+  if(trim_qual_cutoff_ >= 100.0 or trim_qual_cutoff_ == 0.0)   // 100.0 or more means disabled
+    return filter_history.n_bases;
 
   int window_start = 0;
   int window_end = 0;
@@ -1317,22 +1449,39 @@ void BaseCallerFilters::TrimQuality(int read_index, int read_class, ReadFilterin
     clip_qual_right++;
   }
 
+  // We reached the end of the read - nothing to trim here, besides if extra trim is explicitly set.
   if (window_end == filter_history.n_bases)
     clip_qual_right = filter_history.n_bases - extra_trim_right_;
-  if (clip_qual_right >= filter_history.n_bases_filtered)
-    return;
+
+  return clip_qual_right;
+}
 
 
-  int trim_length = clip_qual_right - filter_history.n_bases_prefix;
+// ----------------------------------------------------------------------------
 
-  if (trim_length < trim_min_read_len_) { // Quality trimming led to filtering
-    filter_mask_[read_index] = kFilteredShortQualityTrim;
-    filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = 0;
-    filter_history.is_filtered = true;
+int BaseCallerFilters::TrimQuality_ExpectedErrors(int read_index, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality)
+{
+  //for every base, compute cumulative expected errors and compare to threshold
+  int clip_qual_right = 0; // assume all bad until proven otherwise
+  double error_threshold = trim_qual_offset_;
+  double cumulative_expected_error = 0.0;
 
-  } else {
-    filter_history.n_bases_after_quality_trim = filter_history.n_bases_filtered = clip_qual_right;
+  for (int ibase=0; ibase<filter_history.n_bases; ibase++){
+     error_threshold += trim_qual_slope_;
+     error_threshold += trim_qual_quadr_ * ibase;  // increase to handle rising error rate towards end of read
+     cumulative_expected_error += exp(-quality[ibase]*0.2302585); // log(10)/10
+
+     if (cumulative_expected_error < error_threshold)  // acceptable cumulative error at this base
+       clip_qual_right = ibase;
   }
+  // at this point, we have the last acceptable base where the expected errors up to that base meet threshold
+  clip_qual_right +=1; // clip at one base beyond?
+
+  // keep the dynamics of the old school clipper: To be removed in the future!
+  if (clip_qual_right == filter_history.n_bases)
+    clip_qual_right = filter_history.n_bases - extra_trim_right_;
+
+  return clip_qual_right;
 }
 
 // ----------------------------------------------------------------------------
@@ -1557,15 +1706,16 @@ void BaseCallerFilters::TrimAvalanche(int read_index, int read_class, ReadFilter
 
 // ----------------------------------------------------------------------------------
 
-void BaseCallerFilters::WriteAdaptersToBamComments(vector<string> &comments) {
+void BaseCallerFilters::WriteAdaptersToBamComments(vector<string> &comments, const string & run_id) {
 
   Json::Value json(Json::objectValue);
   stringstream adapter_stream;
-  json["BeadAdapters"]["num_adapters"] = (unsigned int)trim_adapter_.size();
+  json["BeadAdapters"]["MasterKey"] = run_id;
+  json["BeadAdapters"]["NumAdapters"] = (Json::UInt64)trim_adapter_.size();
   for (unsigned int adapter_idx=0; adapter_idx<trim_adapter_.size(); adapter_idx++) {
     adapter_stream.str(std::string());
     adapter_stream << "Adapter_" << adapter_idx;
-    json["BeadAdapters"][adapter_stream.str()]["adapter_sequence"] = trim_adapter_.at(adapter_idx);
+    json["BeadAdapters"][adapter_stream.str()] = trim_adapter_.at(adapter_idx);
   }
   Json::FastWriter writer;
   string str = writer.write(json);

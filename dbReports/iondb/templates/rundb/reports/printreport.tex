@@ -200,6 +200,7 @@ Run Report for {{report.resultsName|latexsafe}}
 \newpage %%starts new page
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%first column of top row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+{% if isToShowAlignmentStats %}
 \section*{Alignment Summary \textit{(aligned to {{reference.name|latexsafe}}) } } 
  \begin{minipage}[t]{70mm}
  \fcolorbox{gray}{white}{\parbox[t][70mm]{66.5mm}{\setlength{\parindent}{0mm}\small\centering%
@@ -260,7 +261,8 @@ Run Report for {{report.resultsName|latexsafe}}
  \end{tabular}
  }}
  \end{minipage}
- 
+ {% endif %} 
+
 %%second page work ends%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%third page work starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -329,17 +331,38 @@ Run Report for {{report.resultsName|latexsafe}}
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%second row starts%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 \section*{Chef Summary}
-
- \begin{tabular}{l|l}
-    {% if chef_info %}
-        {% for item, info in chef_info %}
-            \bf {{item|latexsafe}} & {{info}} \\        
+ 
+    {% if chefLibPrep_info %}
+    	\\\bf Chef Library Prep Information: \\
+    	\begin{tabular}{l|l}
+        {% for item, info in chefLibPrep_info %}
+            {%if item == "Last Updated" %}
+               \bf {{item|latexsafe}} & {{info}} \\
+            {% else %}
+               \bf {{item|latexsafe}} & {{info|latexsafe}} \\
+           {% endif %}
         {% endfor %}
-    {% else %}
-        \bf Ion Chef was not used for this run \\
-    {% endif %}     
+        \end{tabular}
+    {% endif %}
+    {% if chef_info %}
+    	\newpage
+    	\bf Chef Template Prep Information: \\
+    	\begin{tabular}{l|l}
+        {% for item, info in chef_info %}
+            {%if item == "Chef Last Updated" %}
+               \bf {{item|latexsafe}} & {{info}} \\
+            {% else %}
+               \bf {{item|latexsafe}} & {{info|latexsafe}} \\
+           {% endif %}
+        {% endfor %}
+        \end{tabular}
+    {% endif %}
 
- \end{tabular}
+    {% if not chef_info and not chefLibPrep_info %}
+    	\begin{tabular}{l|l}
+        \bf Ion Chef was not used for this run \\
+        \end{tabular}
+    {% endif %}     
 
 
 

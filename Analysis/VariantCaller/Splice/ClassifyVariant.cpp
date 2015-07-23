@@ -459,13 +459,15 @@ bool AlleleIdentity::getVariantType(
 }
 
 
-/*/ Should almost not be called anywhere anymore...
+/*
+// Should almost not be called anywhere anymore...
 void AlleleIdentity::ModifyStartPosForAllele(int variantPos) {
   if (status.isSNP || status.isMNV)
     modified_start_pos = variantPos - 1; //0 based position for SNP location
   else
     modified_start_pos = variantPos;
-} //*/
+}
+*/
 
 
 // Checks the reference area around variantPos for a multi-nucleotide repeat and it's span

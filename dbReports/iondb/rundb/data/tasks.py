@@ -1,4 +1,6 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+
+from __future__ import absolute_import
 from celery.task import task, periodic_task
 from celery.utils.log import get_task_logger
 from iondb.celery import app
@@ -112,7 +114,8 @@ def update_dmfilestats_diskspace(dmfilestat):
         cached_file_list = dm_utils.get_walk_filelist(search_dirs, list_dir=dmfilestat.result.get_report_dir())
         dmfilestat_utils.update_diskspace(dmfilestat, cached=cached_file_list)
     except:
-        logger.exception(traceback.format_exc(), extra = logid)
+        logger.error(traceback.format_exc(), extra = logid)
+        raise
 
 
 @app.task(queue="diskutil", time_limit=600, ignore_result = True)

@@ -477,7 +477,7 @@ master_fit_type_entry master_fit_type_table::base_bkg_model_fit_type[] =
 };
 
 
-fit_instructions *master_fit_type_table::GetFitInstructionsByName(char *name)
+fit_instructions *master_fit_type_table::GetFitInstructionsByName(const char *name)
 {
   for (int i=0;data[i].name != NULL;i++)
   {

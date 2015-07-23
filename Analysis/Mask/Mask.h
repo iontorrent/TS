@@ -135,11 +135,11 @@ class Mask
 
 //    void OnlySomeWells(std::vector<int> mWellIdx);
 
+    std::vector<uint16_t> mask;
   protected:
     int32_t w, h;
     int32_t xOffset, yOffset;
     //uint16_t *mask;
-    std::vector<uint16_t> mask;
     std::vector<char> numLiveNeighbors;
 
   private:

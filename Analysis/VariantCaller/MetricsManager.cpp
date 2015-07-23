@@ -61,11 +61,12 @@ void MetricsAccumulator::CollectMetrics(list<PositionInProgress>::iterator& posi
     char ref_base = *ref_ptr;
     char bases[5] = "ACGT";
     for (const char *read_base = bases; read_base < &bases[4]; ++read_base) {
-      if (forward_map[(*read_base)&7] > 0.001*forward_total and
-          forward_map[(*read_base)&7] < 0.15*forward_total and
-          reverse_map[(*read_base)&7] > 0.001*reverse_total and
-          reverse_map[(*read_base)&7] < 0.15*reverse_total)
+      if (forward_map[(*read_base)&7] > (forward_total / 1000) and
+          forward_map[(*read_base)&7] < (15*forward_total / 100) and
+          reverse_map[(*read_base)&7] > (reverse_total / 1000) and
+          reverse_map[(*read_base)&7] < (15*reverse_total / 100)) {
         substitution_events[(ref_base&7) + (((*read_base)&7)<<3)] += forward_map[(*read_base)&7] + reverse_map[(*read_base)&7];
+      }
     }
   }
 }

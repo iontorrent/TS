@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
-__version__ = filter(str.isdigit, "$Revision: 17459 $")
+__version__ = filter(str.isdigit, "$Revision$")
 
 import os
 import sys
@@ -51,13 +51,21 @@ def getparameter(parameterfile=None):
     env['prefix'] = pathprefix
 
     #get the experiment json data
-    env['exp_json'] = EXTERNAL_PARAMS.get('exp_json')
+    
+    # exp_json compatibility with old format
+    exp_json = EXTERNAL_PARAMS.get('exp_json')
+    if exp_json and not isinstance(exp_json, dict):
+        exp_json = json.loads(exp_json)
+    
+    env['exp_json'] = exp_json
 
     env['platform'] = EXTERNAL_PARAMS.get('platform','Unspecified')
-    env['instrumentName'] = EXTERNAL_PARAMS.get('pgmName','unknownInstrument')
+    if not env['platform']:
+        env['platform'] = 'Unspecified'
+    
+    env['instrumentName'] = EXTERNAL_PARAMS.get('instrumentName','unknownInstrument')
 
     #this will get the exp data from the database
-    exp_json = json.loads(env['exp_json'])
     if not isinstance(exp_json['log'], dict):
         exp_log_json = json.loads(exp_json['log'])
     else:
@@ -78,6 +86,8 @@ def getparameter(parameterfile=None):
     env['prebasecallerArgs'] = EXTERNAL_PARAMS.get("prebasecallerArgs","")
     env['recalibArgs'] = EXTERNAL_PARAMS.get("recalibArgs","")
     env['doBaseRecal'] = EXTERNAL_PARAMS.get("doBaseRecal", "no_recal")
+    env['alignmentArgs'] = EXTERNAL_PARAMS.get("aligner_opts_extra","")
+    env['ionstatsArgs'] = EXTERNAL_PARAMS.get("ionstatsArgs","")
 
     #previousReports
     env['previousReport'] = EXTERNAL_PARAMS.get("previousReport","")
@@ -116,8 +126,6 @@ def getparameter(parameterfile=None):
     env['experimentAnalysisSettings'] = EXTERNAL_PARAMS.get('experimentAnalysisSettings', {})
     # skipChecksum?
     env['skipchecksum'] = EXTERNAL_PARAMS.get('skipchecksum', False)
-    # Do Full Align?
-    env['align_full'] = EXTERNAL_PARAMS.get('align_full')
 
     env['flowOrder'] = EXTERNAL_PARAMS.get('flowOrder', "0").strip()
     # If flow order is missing, assume classic flow order:
@@ -144,7 +152,6 @@ def getparameter(parameterfile=None):
     #extra JSON
     env['extra'] = EXTERNAL_PARAMS.get('extra', '{}')
     # Aligner options
-    env['aligner_opts_extra'] = EXTERNAL_PARAMS.get('aligner_opts_extra', '{}')
     env['mark_duplicates'] = EXTERNAL_PARAMS.get('mark_duplicates')
     env['realign'] = EXTERNAL_PARAMS.get('realign')
 
@@ -316,11 +323,14 @@ def parse_log(text):
 
     return ret
 
-def getBlocksFromExpLogJson(explog, excludeThumbnail=False):
+def getBlocksFromExpLogJson(exp_json, excludeThumbnail=False):
     '''Returns array of block dictionary objects defined in explog.txt'''
     # expLog.txt contents from Experiment.log field
-    exp_json = json.loads(explog)
-    log = json.loads(exp_json['log'])
+    if not isinstance(exp_json['log'], dict):
+        log = json.loads(exp_json['log'])
+    else:
+        log = exp_json['log']
+
     return getBlocksFromExpLogDict(log, excludeThumbnail)
 
 def getBlocksFromExpLogDict(explogdict, excludeThumbnail=False):

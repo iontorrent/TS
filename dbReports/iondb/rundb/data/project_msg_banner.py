@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+
+from __future__ import absolute_import
 import sys
 import traceback
 from celery.utils.log import get_task_logger

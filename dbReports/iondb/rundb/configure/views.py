@@ -4,19 +4,14 @@ import subprocess
 import socket
 import logging
 import os
-import string
 import json
 import traceback
 import stat
-import tempfile
 import csv
 import httplib2
 import urlparse
-import time
 import datetime
 from django.utils import timezone
-from pprint import pformat
-from celery.task import task
 import celery.exceptions
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
@@ -35,10 +30,10 @@ from iondb.rundb import tasks, publishers
 from iondb.anaserve import client
 from iondb.plugins.manager import pluginmanager
 from django.contrib.auth.models import User
-from iondb.rundb.models import dnaBarcode, Plugin, PluginResult, GlobalConfig,\
-    EmailAddress, Publisher, Location, Experiment, Results, Template, UserProfile, \
-    FileMonitor, EventLog, ContentType, Cruncher
-from iondb.rundb.data import rawDataStorageReport, reportLogStorage
+from iondb.rundb.models import dnaBarcode, Plugin, PluginResult, GlobalConfig, \
+    EmailAddress, Publisher, Results, Template, UserProfile, \
+    FileMonitor, ContentType, Cruncher
+from iondb.rundb.data import rawDataStorageReport
 from iondb.rundb.configure.genomes import search_for_genomes
 from iondb.rundb.plan import ampliseq
 # Handles serialization of decimal and datetime objects
@@ -46,7 +41,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from iondb.rundb.configure.util import plupload_file_upload
 from ion.utils import makeCSA
 from django.core import urlresolvers
-from iondb.utils.raid import get_raid_status, get_raid_status_json, load_raid_status_json
+from iondb.utils.raid import get_raid_status, load_raid_status_json
 from iondb.servelocation import serve_wsgi_location
 from ion.plugin.remote import call_pluginStatus
 logger = logging.getLogger(__name__)
@@ -85,55 +80,64 @@ def configure_ionreporter(request):
 
 
 def timeout_raid_info():
+    '''Call celery task to query RAID card status'''
     async_result = tasks.get_raid_stats.delay()
     try:
-        raidinfo = async_result.get(timeout=30)
+        raidinfo = async_result.get(timeout=45)
         if async_result.failed():
             raidinfo = None
     except celery.exceptions.TimeoutError as err:
-        logger.warning("RAID status check timed out, taking longer than 30 seconds.")
+        logger.warning("RAID status check timed out, taking longer than 45 seconds.")
         raidinfo = None
     return raidinfo
 
 
 def timeout_raid_info_json():
-    async_result = tasks.get_raid_stats_json.delay()
+    '''Call celery task to query RAID card status'''
+    raidinfo = None
     err_msg = None
     try:
-        raidinfo = async_result.get(timeout=30)
+        async_result = tasks.get_raid_stats_json.delay()
+    
+        raidinfo = async_result.get(timeout=45)
         if async_result.failed():
             err_msg = "RAID status check failed."
             logger.error(err_msg)
             raidinfo = None
     except celery.exceptions.TimeoutError as err:
-        err_msg = "RAID status check timed out, taking longer than 30 seconds."
+        err_msg = "RAID status check timed out, taking longer than 45 seconds."
         logger.warning(err_msg)
-        raidinfo = None
+    except Exception as err:
+        err_msg = "Failed RAID status check: %s" % err
+        logger.error(err_msg)
+    
     return raidinfo, err_msg
 
+
 def sort_drive_array_for_display(raidstatus):
-    # sorts array to be displayed matching physical arrangement in enclosure
-    slots=12
-    for d in raidstatus:
+    '''sorts array to be displayed matching physical arrangement in enclosure'''
+    slots = 12
+    for drv in raidstatus:
         try:
-            adapter_id = d.get('adapter_id','')
-            drives = d.get('drives',[])
+            adapter_id = drv.get('adapter_id', '')
+            drives = drv.get('drives', [])
             if not adapter_id or len(drives) < slots:
                 continue
 
             if adapter_id.startswith("PERC H710"):
-                d['cols'] = 4
+                drv['cols'] = 4
             elif adapter_id.startswith("PERC H810"):
                 ncols = 4
                 temp = [drives[i:i+(slots/ncols)] for i in range(0, slots, slots/ncols)]
-                d['drives'] = sum( map(list, zip(*temp)), [])
-                d['cols'] = ncols
+                drv['drives'] = sum( map(list, zip(*temp)), [])
+                drv['cols'] = ncols
         except:
             pass
 
+
 @login_required
 def configure_services(request):
-
+    '''Render the service tab'''
     servers = get_servers()
     jobs = current_jobs() + current_plugin_jobs()
     crawler = _crawler_status(request)
@@ -171,6 +175,7 @@ def configure_services(request):
 
 @login_required
 def configure_references(request):
+    '''Render reference tab'''
     search_for_genomes()
     ctx = RequestContext(request)
     return render_to_response("rundb/configure/references.html", context_instance=ctx)
@@ -178,6 +183,7 @@ def configure_references(request):
 
 @login_required
 def configure_plugins(request):
+    '''Render plugin tab'''
     # Rescan Plugins
     ## Find new, remove missing plugins
     pluginmanager.rescan()
@@ -188,8 +194,15 @@ def configure_plugins(request):
 
 @login_required
 def configure_plugins_plugin_install(request):
+    '''Render plugin install tab'''
     ctx = RequestContext(request, {})
     return render_to_response("rundb/configure/modal_configure_plugins_plugin_install.html", context_instance=ctx)
+
+@login_required
+def configure_publisher_install(request):
+    '''Render plugin install tab'''
+    ctx = RequestContext(request, {})
+    return render_to_response("rundb/configure/modal_configure_publisher_install.html", context_instance=ctx)
 
 
 @login_required
@@ -201,12 +214,12 @@ def configure_plugins_plugin_configure(request, action, pk):
     def openfile(fname):
         """strip lines """
         try:
-            f = open(fname, 'r')
+            fhandle = open(fname, 'r')
         except:
             logger.exception("Failed to open '%s'", fname)
             return False
-        content = f.read()
-        f.close()
+        content = fhandle.read()
+        fhandle.close()
         return content
 
     # Used in javascript, must serialize to json
@@ -291,12 +304,13 @@ def configure_plugins_plugin_uninstall(request, pk):
 def configure_plugins_plugin_zip_upload(request):
     return plupload_file_upload(request, "/results/plugins/scratch/")
 
+
 @login_required
 def configure_plugins_plugin_enable(request, pk, set):
     """Allow user to enable a plugin for use in the analysis"""
     try:
         pk = int(pk)
-    except (TypeError,ValueError):
+    except (TypeError, ValueError):
         return HttpResponseNotFound
 
     plugin = get_object_or_404(Plugin, pk=pk)
@@ -304,10 +318,11 @@ def configure_plugins_plugin_enable(request, pk, set):
     plugin.save()
     return HttpResponse()
 
+
 @login_required
 def configure_plugins_plugin_autorun(request, pk):
     """
-    toogle autorun for a plugin
+    toggle autorun for a plugin
     """
     if request.method == 'POST':
         try:
@@ -338,6 +353,7 @@ def configure_plugins_plugin_autorun(request, pk):
     else:
         return HttpResponseNotAllowed(['POST'])
 
+
 @login_required
 def configure_plugins_plugin_refresh(request, pk):
     plugin = get_object_or_404(Plugin, pk=pk)
@@ -346,12 +362,14 @@ def configure_plugins_plugin_refresh(request, pk):
     ctx = RequestContext(request, {'plugin':plugin, 'action':url, 'method':'get'})
     return render_to_response("rundb/configure/plugins/modal_refresh.html", context_instance=ctx)
 
+
 @login_required
 def configure_plugins_plugin_usage(request, pk):
     plugin = get_object_or_404(Plugin, pk=pk)
     pluginresults = plugin.pluginresult_set.filter(endtime__isnull=False)
     ctx = RequestContext(request, {'plugin':plugin, 'pluginresults': pluginresults})
     return render_to_response("rundb/configure/plugins/plugin_usage.html", context_instance=ctx)
+
 
 @login_required
 def configure_configure(request):
@@ -366,10 +384,9 @@ def configure_configure(request):
 
 @login_required
 def config_publishers(request, ctx):
-    globalconfig = GlobalConfig.get()
     # Rescan Publishers
     publishers.purge_publishers()
-    publishers.search_for_publishers(globalconfig)
+    publishers.search_for_publishers()
     pubs = Publisher.objects.all().order_by('name')
     ctx.update({"publishers": pubs})
 
@@ -402,21 +419,22 @@ def _crawler_status(request):
     return ret
 
 
-def seconds2htime(s):
+def seconds2htime(_seconds):
     """Convert a number of seconds to a dictionary of days, hours, minutes,
     and seconds.
 
     >>> seconds2htime(90061)
     {"days":1,"hours":1,"minutes":1,"seconds":1}
     """
-    days = int(s / (24 * 3600))
-    s -= days * 24 * 3600
-    hours = int(s / 3600)
-    s -= hours * 3600
-    minutes = int(s / 60)
-    s -= minutes * 60
-    s = int(s)
-    return {"days": days, "hours": hours, "minutes": minutes, "seconds": s}
+    days = int(_seconds / (24 * 3600))
+    _seconds -= days * 24 * 3600
+    hours = int(_seconds / 3600)
+    _seconds -= hours * 3600
+    minutes = int(_seconds / 60)
+    _seconds -= minutes * 60
+    _seconds = int(_seconds)
+    return {"days": days, "hours": hours, "minutes": minutes, "seconds": _seconds}
+
 
 def get_servers():
     jservers = [(socket.gethostname(), socket.gethostbyname(socket.gethostname()))]
@@ -431,6 +449,7 @@ def get_servers():
             servers.append((server_name, ip, False, 0, 0,))
     return servers
 
+
 def current_jobs():
     """
     Get list of running jobs from job server
@@ -441,7 +460,7 @@ def current_jobs():
         conn = client.connect(host, settings.JOBSERVER_PORT)
         running = conn.running()
         runs = dict((r[2], r) for r in running)
-        
+
         results = Results.objects.filter(pk__in=runs.keys()).order_by('pk')
         for result in results:
             name, pid, pk, atype, stat = runs[result.pk]
@@ -460,6 +479,7 @@ def current_jobs():
         pass
 
     return jobs
+
 
 def current_plugin_jobs():
     """
@@ -487,28 +507,21 @@ def current_plugin_jobs():
                     })
         except:
             pass
-            
+
     return jobs
+
 
 def process_set():
     def process_status(process):
         return subprocess.Popen("service %s status" % process,
                                 shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    processes = [
-        "ionJobServer",
-        "ionCrawler",
-        "ionPlugin",
-        "RSM_Launch",
-        "dhcp3-server",
-        "ntp"
-    ]
-    proc_set = dict((p, process_status(p)) for p in processes)
-    for name, proc in proc_set.items():
-        stdout, stderr = proc.communicate()
-        proc_set[name] = proc.returncode == 0
-        logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
-    # tomcat specific status code so that we don't need root privilege
 
+    def simple_status(name):
+        proc = process_status(name)
+        stdout, stderr = proc.communicate()
+        logger.debug("%s out = '%s' err = %s''" % (name, stdout, stderr))
+        return proc.returncode == 0
+    
     def complicated_status(filename, parse):
         try:
             if os.path.exists(filename):
@@ -519,7 +532,26 @@ def process_set():
                 return proc.returncode == 0
         except Exception as err:
             return False
-    proc_set["tomcat6"] = complicated_status("/var/run/tomcat6.pid", int)
+    
+    processes = [
+        "ionJobServer",
+        "ionCrawler",
+        "ionPlugin",
+        "RSM_Launch",
+        "ntp"
+    ]
+    
+    proc_set = {}
+    for name in processes:
+        proc_set[name] = simple_status(name)
+    
+    # Ubuntu 10.04 lucid compatibility: dhcp3-server
+    proc_set['dhcp'] = simple_status('dhcp3-server') or simple_status('isc-dhcp-server')
+    
+    # Ubuntu 10.04 lucid compatibility: tomcat6
+    proc_set["tomcat"] = complicated_status("/var/run/tomcat6.pid", int) or \
+                         complicated_status("/var/run/tomcat7.pid", int)
+    
     # pids should contain something like '[{rabbit@TSVMware,18442}].'
     proc_set["RabbitMQ"] = complicated_status("/var/run/rabbitmq/pid", int)
 
@@ -554,9 +586,9 @@ def references_TF_delete(request, pk):
 
 
 @login_required
-def references_barcodeset(request, barCodeSetId):
-    barCodeSetName = get_object_or_404(dnaBarcode, pk=barCodeSetId).name
-    ctx = RequestContext(request, {'name': barCodeSetName, 'barCodeSetId': barCodeSetId})
+def references_barcodeset(request, barcodesetid):
+    barCodeSetName = get_object_or_404(dnaBarcode, pk=barcodesetid).name
+    ctx = RequestContext(request, {'name': barCodeSetName, 'barCodeSetId': barcodesetid})
     return render_to_response("rundb/configure/references_barcodeset.html", context_instance=ctx)
 
 
@@ -662,8 +694,8 @@ def _validate_barcode(barCodeDict):
 
 
 @login_required
-def references_barcodeset_delete(request, barCodeSetId):
-    barCodeSetName = get_object_or_404(dnaBarcode, pk=barCodeSetId).name
+def references_barcodeset_delete(request, barcodesetid):
+    barCodeSetName = get_object_or_404(dnaBarcode, pk=barcodesetid).name
     """delete a set of barcodes"""
     if request.method == 'POST':
         dnaBarcode.objects.filter(name=barCodeSetName).delete()
@@ -675,19 +707,19 @@ def references_barcodeset_delete(request, barCodeSetId):
         pks = []
         actions = []
         ctx = RequestContext(request, {
-            "id": barCodeSetName, "ids": json.dumps(pks), "method": "POST", 'methodDescription': 'Delete', "readonly": False, 'type': type, 'action': reverse('references_barcodeset_delete', args=[barCodeSetId, ]), 'actions': json.dumps(actions)
+            "id": barCodeSetName, "ids": json.dumps(pks), "method": "POST", 'methodDescription': 'Delete', "readonly": False, 'type': type, 'action': reverse('references_barcodeset_delete', args=[barcodesetid, ]), 'actions': json.dumps(actions)
         })
         return render_to_response("rundb/common/modal_confirm_delete.html", context_instance=ctx)
 
 
 @login_required
-def references_barcode_add(request, barCodeSetId):
-    return references_barcode_edit(request, barCodeSetId, None)
+def references_barcode_add(request, barcodesetid):
+    return references_barcode_edit(request, barcodesetid, None)
 
 
 @login_required
-def references_barcode_edit(request, barCodeSetId, pk):
-    dna = get_object_or_404(dnaBarcode, pk=barCodeSetId)
+def references_barcode_edit(request, barcodesetid, pk):
+    dna = get_object_or_404(dnaBarcode, pk=barcodesetid)
     barCodeSetName = dna.name
 
     def nextIndex(name):
@@ -719,7 +751,7 @@ def references_barcode_edit(request, barCodeSetId, pk):
 
 
 @login_required
-def references_barcode_delete(request, barCodeSetId, pks):
+def references_barcode_delete(request, barcodesetid, pks):
     #TODO: See about pulling this out into a common methods
     pks = pks.split(',')
     barcodes = get_list_or_404(dnaBarcode, pk__in=pks)
@@ -841,7 +873,7 @@ def configure_system_stats_data(request):
     for line in raid_stats:
         outfile.write(line)
     outfile.close()
-    
+
     # Set permissions so anyone can read/overwrite/destroy
     try:
         os.chmod(reportFileName,
@@ -861,6 +893,7 @@ def raid_info(request, index=0):
     except:
         array_status = []
     return render_to_response("rundb/configure/modal_raid_info.html", {"array_status": array_status})
+
 
 def config_contacts(request, context):
     """Essentially but not actually a context processor to handle user contact
@@ -918,6 +951,7 @@ def edit_email(request, pk=None):
         "rundb/configure/modal_configure_edit_email.html",
         context_instance=RequestContext(request, context)
     )
+
 
 @login_required
 def delete_email(request, pk=None):
@@ -1005,7 +1039,7 @@ def jobDetails(request, jid):
             if status == 'running':
                 block_status = job
             elif status == 'done':
-                if block == 'merge' and job == 'merge/zipping':
+                if block == 'merge' and job == 'merge':
                     block_status = 'done'
                 elif job == 'alignment':
                     block_status = 'done'
@@ -1013,11 +1047,12 @@ def jobDetails(request, jid):
         jobs[block]['status'] = block_status
 
     # summary count how many blocks in each category
-    summary_keys = ['pending', 'sigproc', 'basecaller', 'alignment', 'done']
+    #summary_keys = ['pending', 'sigproc', 'basecaller', 'alignment', 'done']
+    summary_keys = ['pending', 'block_processing', 'done']
     summary_values = [0] * len(summary_keys)
     num_blocks = len(jobs) - 1  # don't count merge block
     for block in jobs:
-        if block != 'merge' and jobs[block]['status'] != 'not found':
+        if block != 'merge' and jobs[block]['status'] in summary_keys:
             indx = summary_keys.index(jobs[block]['status'])
             summary_values[indx] += 1
 
@@ -1029,29 +1064,29 @@ def jobDetails(request, jid):
 def queueStatus(request):
     # get cluster queue status
     args = ['qstat', '-g', 'c', '-ext']
-    p1 = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout = p1.stdout.readlines()
+    output = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout = output.stdout.readlines()
     queues = []
     for line in stdout:
-        sl = line.split()
-        if len(sl) > 1 and '.q' in sl[0]:
+        splitline = line.split()
+        if len(splitline) > 1 and '.q' in splitline[0]:
             queues.append({
-                'name': sl[0],
+                'name': splitline[0],
                 'pending': 0,
-                'used': sl[2],
-                'avail': sl[4],
-                'error': sl[18],
-                'total': sl[5],
+                'used': splitline[2],
+                'avail': splitline[4],
+                'error': splitline[18],
+                'total': splitline[5],
             })
 
     # get pending jobs per queue
     args = ['qstat', '-u', 'www-data', '-q']
     for queue in queues:
-        p1 = subprocess.Popen(args + [queue['name']], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        stdout = p1.stdout.readlines()
+        output = subprocess.Popen(args + [queue['name']], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout = output.stdout.readlines()
         for line in stdout:
-            sl = line.split()
-            if sl[0].isdigit() and 'qw' in sl[4]:
+            splitline = line.split()
+            if splitline[0].isdigit() and 'qw' in splitline[4]:
                 queue['pending'] += 1
 
     context = RequestContext(request, {'queues': queues})
@@ -1097,10 +1132,10 @@ def system_support_archive(request):
 
 
 def get_ampliseq_designs(user, password):
-    h = httplib2.Http(disable_ssl_certificate_validation=settings.DEBUG)
-    h.add_credentials(user, password)
+    http = httplib2.Http(disable_ssl_certificate_validation=settings.DEBUG)
+    http.add_credentials(user, password)
     url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/design/list")
-    response, content = h.request(url)
+    response, content = http.request(url)
     if response['status'] == '200':
         design_data = json.loads(content)
         designs = design_data.get('AssayDesigns', [])
@@ -1114,11 +1149,12 @@ def get_ampliseq_designs(user, password):
     else:
         return response, {}
 
+
 def get_ampliseq_fixed_designs(user, password):
-    h = httplib2.Http(disable_ssl_certificate_validation=settings.DEBUG)
-    h.add_credentials(user, password)
+    http = httplib2.Http(disable_ssl_certificate_validation=settings.DEBUG)
+    http.add_credentials(user, password)
     url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/tmpldesign/list/active")
-    response, content = h.request(url)
+    response, content = http.request(url)
     if response['status'] == '200':
         designs = json.loads(content)
         fixed = []
@@ -1157,48 +1193,48 @@ def configure_ampliseq(request, pipeline=None):
                 return HttpResponseRedirect(urlresolvers.reverse("configure_ampliseq"))
 
     if 'ampliseq_username' in request.session:
-            username = request.session['ampliseq_username']
-            password = request.session['ampliseq_password']
-            try:
-                response, designs = get_ampliseq_designs(username, password)
-                if response['status'].startswith("40"):
-                    request.session.pop('ampliseq_username')
-                    request.session.pop('ampliseq_password')
-                    ctx['http_error'] = 'Your user name or password is invalid.<br> You may need to log in to <a href="https://ampliseq.com/">AmpliSeq.com</a> and check your credentials.'
-                    fixed = None
-                else:
-                    response, fixed = get_ampliseq_fixed_designs(username, password)
-            except httplib2.HttpLib2Error as err:
-                logger.error("There was a connection error when contacting ampliseq: %s" % err)
-                ctx['http_error'] = "Could not connect to AmpliSeq.com"
+        username = request.session['ampliseq_username']
+        password = request.session['ampliseq_password']
+        try:
+            response, designs = get_ampliseq_designs(username, password)
+            if response['status'].startswith("40"):
+                request.session.pop('ampliseq_username')
+                request.session.pop('ampliseq_password')
+                ctx['http_error'] = 'Your user name or password is invalid.<br> You may need to log in to <a href="https://ampliseq.com/">AmpliSeq.com</a> and check your credentials.'
                 fixed = None
+            else:
+                response, fixed = get_ampliseq_fixed_designs(username, password)
+        except httplib2.HttpLib2Error as err:
+            logger.error("There was a connection error when contacting ampliseq: %s" % err)
+            ctx['http_error'] = "Could not connect to AmpliSeq.com"
+            fixed = None
 
-            pipe_types = {
-                "RNA": "AMPS_RNA",
-                "DNA": "AMPS",
-                "exome": "AMPS_EXOME"
-            }
-            target = pipe_types.get(pipeline, None)
-            def match(design):
-                return not target or design['plan']['runType'] == target
+        pipe_types = {
+            "RNA": "AMPS_RNA",
+            "DNA": "AMPS",
+            "exome": "AMPS_EXOME"
+        }
+        target = pipe_types.get(pipeline, None)
+        def match(design):
+            return not target or design['plan']['runType'] == target
 
-            if fixed is not None:
-                form = None
-                ctx['ordered_solutions'] = []
-                ctx['fixed_solutions'] = filter(lambda x: x['status'] == "ORDERABLE" and
-                    match(x), fixed)
-                ctx['unordered_solutions'] = []
-                for design in designs:
-                    for solution in design['DesignSolutions']:
-                        if match(solution):
-                            if solution.get('ordered', False):
-                                ctx['ordered_solutions'].append((design, solution))
-                            else:
-                                ctx['unordered_solutions'].append((design, solution))
-                ctx['designs_pretty'] = json.dumps(designs, indent=4, sort_keys=True)
-                ctx['fixed_designs_pretty'] = json.dumps(fixed, indent=4, sort_keys=True)
+        if fixed is not None:
+            form = None
+            ctx['ordered_solutions'] = []
+            ctx['fixed_solutions'] = filter(lambda x: x['status'] == "ORDERABLE" and
+                match(x), fixed)
+            ctx['unordered_solutions'] = []
+            for design in designs:
+                for solution in design['DesignSolutions']:
+                    if match(solution):
+                        if solution.get('ordered', False):
+                            ctx['ordered_solutions'].append((design, solution))
+                        else:
+                            ctx['unordered_solutions'].append((design, solution))
+            ctx['designs_pretty'] = json.dumps(designs, indent=4, sort_keys=True)
+            ctx['fixed_designs_pretty'] = json.dumps(fixed, indent=4, sort_keys=True)
     ctx['form'] = form
-    ctx['ampliseq_account_update'] = timezone.now() < timezone.datetime(2013, 11, 30, tzinfo=timezone.utc)
+    ctx['ampliseq_account_update'] = timezone.now() < timezone.datetime(2013, 11, 30, tzinfo = timezone.utc)
     ctx['ampliseq_url'] = settings.AMPLISEQ_URL
     return render_to_response("rundb/configure/ampliseq.html", ctx,
         context_instance=RequestContext(request))
@@ -1233,25 +1269,27 @@ def configure_ampliseq_download(request):
     return render_to_response("rundb/configure/ampliseq_download.html", ctx,
         context_instance=RequestContext(request))
 
+
 def start_ampliseq_solution_download(design_id, solution_id, meta, auth):
     url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/design/{0}/solutions/{1}/download/results".format(design_id, solution_id))
     monitor = FileMonitor(url=url, tags="ampliseq_template", status="Queued")
     monitor.save()
-    t = tasks.download_something.apply_async(
+    tasks.download_something.apply_async(
         (url, monitor.id), {"auth": auth},
-        link=tasks.ampliseq_zip_upload.subtask((meta,)))
+        link = tasks.ampliseq_zip_upload.subtask((meta,)))
+
 
 def start_ampliseq_fixed_solution_download(design_id, meta, auth):
     url = urlparse.urljoin(settings.AMPLISEQ_URL, "ws/tmpldesign/{0}/download/results".format(design_id))
     monitor = FileMonitor(url=url, tags="ampliseq_template", status="Queued")
     monitor.save()
-    t = tasks.download_something.apply_async(
+    tasks.download_something.apply_async(
         (url, monitor.id), {"auth": auth},
-        link=tasks.ampliseq_zip_upload.subtask((meta,)))
+        link = tasks.ampliseq_zip_upload.subtask((meta,)))
+
 
 @login_required
 def cache_status(request):
-    from django import http
     import memcache
 
     host = memcache._Host(settings.CACHES['default']['LOCATION'])
@@ -1267,7 +1305,7 @@ def cache_status(request):
             break
         if line[0] == "END":
             break
-        stat, key, value = line
+        _, key, value = line
         try:
             # convert to native type, if possible
             value = int(value)
@@ -1293,8 +1331,8 @@ def cache_status(request):
 
 def cluster_info_refresh(request):
     try:
-        t = tasks.check_cluster_status()
-        t.get(timeout = 120)
+        thandle = tasks.check_cluster_status()
+        thandle.get(timeout = 120)
     except:
         return HttpResponseServerError(traceback.format_exc())
     return HttpResponse()
@@ -1302,14 +1340,14 @@ def cluster_info_refresh(request):
 
 def cluster_info_log(request, pk):
     nodes = Cruncher.objects.all()
-    ct = ContentType.objects.get_for_model(Cruncher)
+    ct_obj = ContentType.objects.get_for_model(Cruncher)
     title = "Cluster Info log for %s" % nodes.get(pk=pk).name
     
-    ctx = RequestContext(request, {"title": title, "pk": pk, "cttype": ct.id})
+    ctx = RequestContext(request, {"title": title, "pk": pk, "cttype": ct_obj.id})
     return render_to_response("rundb/common/modal_event_log.html", context_instance=ctx)
 
 
 def cluster_info_history(request):
-    nodes = Cruncher.objects.all().values_list('name',flat=True)
+    nodes = Cruncher.objects.all().values_list('name', flat=True)
     ctx = RequestContext(request, {'nodes':nodes})
     return render_to_response("rundb/configure/clusterinfo_history.html", context_instance=ctx)

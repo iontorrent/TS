@@ -6,7 +6,7 @@
 #include "CommandLineOpts.h"
 #include "ImageSpecClass.h"
 #include "DataCube.h"
-#include "H5File.h"
+#include "IonH5File.h"
 #include "BkgDataPointers.h"
 
 
@@ -21,7 +21,7 @@ class MatchedCube
     H5DataSet *h5_set;
 
     // build a basic matched cube
-    void InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, char *set_name, char *set_description,const char *param_root );
+    void InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, const char *set_name, const char *set_description, const char *param_root );
     void Close();
     DataCube<float> *Ptr()
     {
@@ -44,7 +44,7 @@ class MatchedCubeInt
     H5DataSet *h5_set;
 
     // build a basic matched cube
-    void InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, char *set_name, char *set_description,char *param_root );
+    void InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, const char *set_name, const char *set_description, const char *param_root );
     void Close();
     DataCube<int> *Ptr()
     {
@@ -64,8 +64,8 @@ class RotatingCube{
   public:
     DataCube<float> source;
     std::vector<H5DataSet * > h5_vec;
-    void RotateMyCube(H5File &h5_local_ref, int total_blocks, char *cube_name, char *cube_description);
-    void InitRotatingCube(H5File &h5_local_ref, int x, int y, int z, int total_blocks, char *cube_name, char *cube_description);
+    void RotateMyCube(H5File &h5_local_ref, int total_blocks, const char *cube_name, const char *cube_description);
+    void InitRotatingCube(H5File &h5_local_ref, int x, int y, int z, int total_blocks, const char *cube_name, const char *cube_description);
     void Close();
     DataCube<float> *Ptr()
     {
@@ -200,6 +200,7 @@ class BkgParamH5
     MatchedCube beads_regionCenter_gainSens;
     MatchedCube beads_regionCenter_timeframe;
     MatchedCube beads_regionCenter_taub;
+    MatchedCube beads_regionCenter_regionParams;
 
 //  beads specified in the sse/xyflow/rcflow file
     void InitBeads_xyflow(int write_params_flag, HashTable_xyflow &xyf_hash);
@@ -216,6 +217,7 @@ class BkgParamH5
     MatchedCube beads_xyflow_dmult;
     MatchedCube beads_xyflow_SP;
     MatchedCube beads_xyflow_R;
+    MatchedCube beads_xyflow_gainSens;
     MatchedCube beads_xyflow_timeframe;
     MatchedCube beads_xyflow_residual;
     MatchedCube beads_xyflow_taub;
@@ -235,7 +237,7 @@ class BkgParamH5
     void saveBestRegionPointers();
     void saveRegionCenterPointers();
     std::string getBeadFilename() {return hgBeadDbgFile;}
-    void ConstructOneFile ( H5File &h5_local_ref, std::string &hgLocalFile, std::string &local_results, char *my_name );
+    void ConstructOneFile ( H5File &h5_local_ref, std::string &hgLocalFile, std::string &local_results, const char *my_name );
 
   private:
     H5File h5BeadDbg;

@@ -23,7 +23,7 @@ typedef int16_t i16;
 typedef int32_t i32;
 
 #define rep(i, n) for (size_t i = 0; i < size_t(n); ++i)
-#define ALWAYS_INLINE __attribute__((always_inline))
+#define ALWAYS_INLINE inline __attribute__((always_inline))
 
 typedef float v4sf __attribute__((vector_size(16), aligned(16)));
 typedef int32_t v4si __attribute__((vector_size(16), aligned(16)));

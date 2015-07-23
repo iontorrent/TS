@@ -2,13 +2,8 @@
 #ifndef SAMPLECLONALITY_H
 #define SAMPLECLONALITY_H
 
-#include <assert.h>
+#include <cstddef>
 #include <vector>
-#include <math.h>
-#include <algorithm>
-#include <limits>
-
-#include "Stats.h"
 
 #if 0  // incrementally write debug output to buffer, set to 1 for debugging
 #define NBUFF 60000
@@ -66,7 +61,7 @@ class Clonality {
   std::vector<float> shifted_bkg;
 
   double GetBandWidth(std::vector<double> const& data);
-  void XLimits(vector<double> const& data, double const bandwidth, vector<double> &out, double const range_limit_low, double const range_limit_high,  double const bw_increment);
+  void XLimits(std::vector<double> const& data, double const bandwidth, std::vector<double> &out, double const range_limit_low, double const range_limit_high,  double const bw_increment);
   void GetPeaks(std::vector<float> const& dat, std::vector<double>& out);
 
   void getpeaksInternal(std::vector<double>& data, double const _cutoff, double const _width, int const _npoints, std::vector<double>& weights, std::vector<double>& out);

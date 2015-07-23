@@ -217,7 +217,7 @@ void DecisionTreeData::FilterOnPositionBias(int i_alt, MultiBook &m_summary_stat
   // low fraction of ref reads is not associated with real position bias
   unsigned int ref_count = m_summary_stats.GetAlleleCount(-1,0);      //FRO
   unsigned int var_count = m_summary_stats.GetAlleleCount(-1,i_alt);  //FAO
-  float ref_fraction = ((float)ref_count) / (ref_count + var_count);
+  float ref_fraction = ((float)ref_count) / ((float)ref_count + (float)var_count + 0.1);
 
   if ( ref_fraction <= my_filters.position_bias_ref_fraction ) {
     return;
@@ -553,10 +553,31 @@ void DecisionTreeData::FilterOnSpecialTags(vcf::Variant & candidate_variant, con
     const vector<VariantSpecificParams>& variant_specific_params)
 {
   // separate my control here
+  /*
+  float max_bias = 0.0f;
+  for (unsigned int _alt_allele_index = 0; _alt_allele_index < allele_identity_vector.size(); _alt_allele_index++) {
+     float bias =  RetrieveQualityTagValue(candidate_variant, "RBI", _alt_allele_index);
+     if (abs(bias) > max_bias) max_bias = abs(bias);
+  }
+  */
   for (unsigned int _alt_allele_index = 0; _alt_allele_index < allele_identity_vector.size(); _alt_allele_index++) {
      // if something is strange here
+    /*  Not to do this on allele, revert to 4.6*/
     SpecializedFilterFromLatentVariables(*(variant),  variant_specific_params[_alt_allele_index].filter_unusual_predictions_override ?
         variant_specific_params[_alt_allele_index].filter_unusual_predictions : parameters.my_eval_control.filter_unusual_predictions, _alt_allele_index); // unusual filters
+    // ZZ: Per Earl, the correct filter for bias is max of all the bias in each allele (directional), and check that with the threshold.
+    // No allele overriding.
+    /*
+    if (max_bias > parameters.my_eval_control.filter_unusual_predictions) { 
+
+      stringstream filterReasonStr;
+      filterReasonStr << "PREDICTIONSHIFTx" ;
+      filterReasonStr << max_bias;
+      string my_tmp_string = filterReasonStr.str();
+      OverrideFilter(my_tmp_string, _alt_allele_index);
+    }
+    */
+
     SpecializedFilterFromHypothesisBias(*(variant), allele_identity_vector[_alt_allele_index],
         variant_specific_params[_alt_allele_index].filter_deletion_predictions_override ?
             variant_specific_params[_alt_allele_index].filter_deletion_predictions : parameters.my_eval_control.filter_deletion_bias,
@@ -582,6 +603,7 @@ void DecisionTreeData::SpecializedFilterFromLatentVariables(vcf::Variant & candi
 
 //  float radius_bias = hypothesis_stack.cur_state.bias_generator.RadiusOfBias();
    float radius_bias = RetrieveQualityTagValue(candidate_variant, "RBI", _allele);
+//   cout << "RBI checking " << radius_bias << " threshold " << bias_threshold  << " allele " << _allele << endl; // ZZ
 
   if (radius_bias > bias_threshold) {
     stringstream filterReasonStr;

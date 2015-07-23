@@ -16,23 +16,19 @@
 #include "api/BamAlignment.h"
 
 using namespace std;
-namespace ion { class FlowOrder; }
 
-class ThousandsSeparator : public numpunct<char> {
-protected:
-    string do_grouping() const { return "\03"; }
-};
 
 // ------------------------------------------------------------------
 
 OrderedDatasetWriter::OrderedDatasetWriter()
 {
-  num_regions_ = 0;
-  num_regions_written_ = 0;
-  num_barcodes_ = 0;
-  num_read_groups_ = 0;
-  num_datasets_ = 0;
-  save_filtered_reads_ = false;
+  num_regions_           = 0;
+  num_regions_written_   = 0;
+  num_barcodes_          = 0;
+  num_read_groups_       = 0;
+  num_datasets_          = 0;
+  save_filtered_reads_   = false;
+  num_bamwriter_threads_ = 0;
   pthread_mutex_init(&dropbox_mutex_, NULL);
   pthread_mutex_init(&write_mutex_, NULL);
   pthread_mutex_init(&delete_mutex_, NULL);
@@ -45,11 +41,11 @@ OrderedDatasetWriter::~OrderedDatasetWriter()
   pthread_mutex_destroy(&delete_mutex_);
 }
 
+// ----------------------------------------------------------------------------
 
-void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& datasets, int num_regions,
-    const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
-    const string& basecaller_name, const string& basecalller_version, const string& basecaller_command_line,
-    const string& production_date, const string& platform_unit, bool save_filtered_reads, vector<string>& comments)
+void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& datasets, int read_class_idx,
+     int num_regions, const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
+     int num_bamwriter_threads, const Json::Value & basecaller_json, vector<string>& comments)
 {
   num_regions_ = num_regions;
   num_regions_written_ = 0;
@@ -65,7 +61,13 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
   num_reads_.resize(num_datasets_,0);
   bam_filename_.resize(num_datasets_);
 
-  save_filtered_reads_ = save_filtered_reads;
+  // A negative read group index indicates untrimmed/unfiltered bam files (w. library key) and we save all reads
+  if (read_class_idx < 0) {
+    save_filtered_reads_ = true;
+    read_class_idx = 0;
+  }
+  else
+    save_filtered_reads_ = false;
 
   read_group_name_.resize(num_read_groups_);
   read_group_dataset_.assign(num_read_groups_, -1);
@@ -92,6 +94,7 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
 
   bam_writer_.resize(num_datasets_, NULL);
   sam_header_.resize(num_datasets_);
+  num_bamwriter_threads_ = num_bamwriter_threads;
 
   for (int ds = 0; ds < num_datasets_; ++ds) {
 
@@ -104,9 +107,9 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
     sam_header.SortOrder = "unsorted";
 
     SamProgram sam_program("bc");
-    sam_program.Name = basecaller_name;
-    sam_program.Version = basecalller_version;
-    sam_program.CommandLine = basecaller_command_line;
+    sam_program.Name        = "BaseCaller";
+    sam_program.Version     = basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString();
+    sam_program.CommandLine = basecaller_json["BaseCaller"]["command_line"].asString();
     sam_header.Programs.Add(sam_program);
 
     for (Json::Value::iterator rg = datasets.dataset(ds)["read_groups"].begin(); rg != datasets.dataset(ds)["read_groups"].end(); ++rg) {
@@ -116,13 +119,12 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
       read_group_dataset_[datasets.read_group_name_to_id(read_group_name)] = ds;
 
       SamReadGroup read_group (read_group_name);
-      read_group.FlowOrder = flow_order.full_nucs();
-
+      read_group.FlowOrder            = flow_order.full_nucs();
       read_group.KeySequence          = key;
       read_group.KeySequence          += read_group_json.get("barcode_sequence","").asString();
       read_group.KeySequence          += read_group_json.get("barcode_adapter","").asString();
 
-      read_group.ProductionDate       = production_date;
+      read_group.ProductionDate       = basecaller_json["BaseCaller"]["start_time"].asString();
       read_group.Sample               = read_group_json.get("sample","").asString();
       read_group.Library              = read_group_json.get("library","").asString();
       read_group.Description          = read_group_json.get("description","").asString();
@@ -135,22 +137,11 @@ void OrderedDatasetWriter::Open(const string& base_directory, BarcodeDatasets& d
 
     for(size_t i = 0; i < comments.size(); ++i)
       sam_header.Comments.push_back(comments[i]);
-
-    /*
-    // Open Bam for writing
-
-    RefVector empty_reference_vector;
-    bam_writer_[ds] = new BamWriter();
-    bam_writer_[ds]->SetCompressionMode(BamWriter::Compressed);
-    //bam_writer_[ds]->SetCompressionMode(BamWriter::Uncompressed);
-    bam_writer_[ds]->Open(bam_filename_[ds], sam_header, empty_reference_vector);
-    */
   }
 
 }
 
-
-
+// ----------------------------------------------------------------------------
 
 void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& dataset_nickname)
 {
@@ -204,6 +195,7 @@ void OrderedDatasetWriter::Close(BarcodeDatasets& datasets, const string& datase
     combined_stats_.PrettyPrint(dataset_nickname);
 }
 
+// ----------------------------------------------------------------------------
 
 void OrderedDatasetWriter::WriteRegion(int region, deque<ProcessedRead> &region_reads)
 {
@@ -236,10 +228,11 @@ void OrderedDatasetWriter::WriteRegion(int region, deque<ProcessedRead> &region_
   pthread_mutex_unlock(&delete_mutex_);
 }
 
+// ----------------------------------------------------------------------------
 
 void OrderedDatasetWriter::PhysicalWriteRegion(int region)
 {
-  for (deque<ProcessedRead>::iterator entry = region_dropbox_[region].begin(); entry != region_dropbox_[region].end(); entry++) {
+  for (deque<ProcessedRead>::iterator entry = region_dropbox_[region].begin(); entry != region_dropbox_[region].end(); ++entry) {
 
     // Step 1: Read filtering and trimming accounting
 
@@ -290,6 +283,7 @@ void OrderedDatasetWriter::PhysicalWriteRegion(int region)
       RefVector empty_reference_vector;
       bam_writer_[target_file_idx] = new BamWriter();
       bam_writer_[target_file_idx]->SetCompressionMode(BamWriter::Compressed);
+      bam_writer_[target_file_idx]->SetNumThreads(num_bamwriter_threads_);
       //bam_writer_[ds]->SetCompressionMode(BamWriter::Uncompressed);
       if (not bam_writer_[target_file_idx]->Open(bam_filename_[target_file_idx], sam_header_[target_file_idx], empty_reference_vector)) {
         cerr << "BaseCaller IO error: Failed to create bam file " << bam_filename_[target_file_idx] << endl;

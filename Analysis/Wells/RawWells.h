@@ -318,10 +318,10 @@ public:
   void Set(size_t row, size_t col, size_t flow, float val) { Set(ToIndex(col, row), flow, val); }
   void Set(size_t idx, size_t flow, float val);
   virtual void WriteFlowgram(size_t flow, size_t x, size_t y, float val);
-  void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies, float multiplier);
+  virtual void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies);
 
   void ResetCurrentWell() { mCurrentWell = 0; }
-  void ResetCurrentRegionWell() { mCurrentRow = 0, mCurrentCol = -1, mCurrentRegionRow = 0, mCurrentRegionCol = 0; }
+  void ResetCurrentRegionWell() { mCurrentRow = 0, mCurrentCol = (size_t)(-1), mCurrentRegionRow = 0, mCurrentRegionCol = 0; }
 
   /* Metadata accessors. */
   /** Get the value associated with a particular key, return false if key not present. */
@@ -366,12 +366,11 @@ public:
 
   const SumTimer & GetWriteTimer() const { return writeTimer; }
   bool GetSaveAsUShort() { return mSaveAsUShort; }
-  int GetSaveCopies() { return mSaveCopies; }
-  void SetSaveCopies(int saveCopies);
-  int GetSaveMultiplier() { return mSaveMultiplier; }
-  void SetSaveMultiplier(int saveMultiplier) { mSaveMultiplier = saveMultiplier; }
+  bool GetSaveCopies() { return mSaveCopies; }
+  bool GetConvertWithCopies(){ return mConvertWithCopies; }
+  void SetSaveCopies(bool saveCopies);
+  void SetConvertWithCopies(bool withCopies);
   void WriteWellsCopies();
-  void WriteFlowMultiplier();
 
  private:
   bool InChunk(size_t row, size_t col);
@@ -423,6 +422,8 @@ protected:
   WellChunk mChunk;
   std::vector<int32_t> mIndexes; ///< Conversion of well index on chip to index in mFlowData below.
   std::vector<float> mFlowData; ///< Big chunk of data...
+  bool mSaveCopies;
+  bool mConvertWithCopies;
 
 private:
   /* Data structures containing actual data. */
@@ -454,9 +455,7 @@ private:
   float mLower;
   float mUpper;
   std::vector<float> mWellsCopies;
-  std::vector<float> mFlowMultiplier;
-  int mSaveCopies;
-  int mSaveMultiplier;
+  std::vector<float> mWellsCopies2;
 
   // We keep around a write timer.
   SumTimer writeTimer;
@@ -470,9 +469,11 @@ class ChunkyWells : public RawWells {
   int idealChunkSize;
   int startingFlow;
   int endingFlow;
+  pthread_mutex_t mMutex4Pending;
 
   // We'll have a buffer for flowgrams that are beyond the current chunk.
   std::vector< FlowGram > pendingFlowgrams;
+  std::vector< float > pendingCopies;
 
 public:
   ChunkyWells( const char *experimentPath, 
@@ -481,6 +482,8 @@ public:
                int _startingFlow,            // Starting flow (from flow_context)
                int _endingFlow               // Ending flow (from flow_context)
                );
+
+  virtual ~ChunkyWells();
 
   // Figure out what the chunk size should be, and open the underlying wells.
   void StartChunk( int chunkStart );
@@ -491,6 +494,7 @@ public:
 
   // We have to buffer stuff that isn't in the current chunk.
   void WriteFlowgram(size_t flow, size_t x, size_t y, float val);
+  void WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies);
 
   // Because of parallel stuff, we don't always know when an individual flow is done.
   // We only know about the end of a flow block.

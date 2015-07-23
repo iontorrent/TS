@@ -5,12 +5,8 @@ __version__ = filter(str.isdigit, "$Revision$")
 
 import os
 import sys
-import glob
-import subprocess
 import argparse
-import shutil
 import traceback
-import fnmatch
 import xmlrpclib
 import json
 
@@ -21,10 +17,10 @@ from ion.utils import sigproc
 from ion.utils import basecaller
 from ion.utils import alignment
 from ion.utils import flow_space_recal
-from ion.utils import ionstats_plots
 
 from ion.utils.blockprocessing import printtime
 
+sys.path.append('/etc')
 from torrentserver import cluster_settings
 
 if __name__=="__main__":
@@ -67,7 +63,7 @@ if __name__=="__main__":
         traceback.print_exc()
 
     # Speedup Flags
-    do_ionstats_evaluate_hp  = True
+    do_ionstats_spatial_accounting  = False
 
     reference_selected = False
     for barcode_name,barcode_info in sorted(env['barcodeInfo'].iteritems()):
@@ -76,21 +72,27 @@ if __name__=="__main__":
             pass
 
     if os.path.exists(primary_key_file):
-        isProtonBlock = False
+        isBlock = False
     else:
-        isProtonBlock = True
+        isBlock = True
 
+    try:
+        import math
+        graph_max_x = int(50 * math.ceil(0.014 * int(env['flows'])))
+    except:
+        traceback.print_exc()
+        graph_max_x = 400
 
     def set_result_status(status):
         try:
-            if not isProtonBlock:
+            if not isBlock:
                 if status == 'Processing finished':
                     # filter out this status (31x and Thumbnail)
                     return
                 jobserver.updatestatus(primary_key_file, status, True)
                 printtime("BlockTLStatus %s\tpid %d\tpk file %s started" % 
                     (status, os.getpid(), primary_key_file))
-            else: # Proton Block
+            else: # Block
                 if status == 'Beadfind':
                     f = open('progress.txt','w')
                     f.write('wellfinding = yellow\n')
@@ -140,7 +142,7 @@ if __name__=="__main__":
 
         print("Starting Upload Analysis Metrics")
         try:
-            if not isProtonBlock:
+            if not isBlock:
                 full_bfmaskstatspath = os.path.join(os.getcwd(), bfmaskstatspath)
                 result = jobserver.uploadanalysismetrics(full_bfmaskstatspath, primary_key_file)
                 printtime("Completed Upload Analysis Metrics: %s" % result)
@@ -175,6 +177,14 @@ if __name__=="__main__":
 
         if status != 0:
             printtime("ERROR: Beadfind finished with status '%s'" % status)
+            # write return code into file
+            try:
+                f = open(os.path.join(env['SIGPROC_RESULTS'],"analysis_return_code.txt"), 'w')
+                f.write(str(status))
+                f.close()
+                os.chmod(os.path.join(env['SIGPROC_RESULTS'],"analysis_return_code.txt"), 0775)
+            except:
+                traceback.print_exc()
             sys.exit(1)
 
 
@@ -289,7 +299,7 @@ if __name__=="__main__":
                     env['libraryKey'],
                     env['tfKey'],
                     env['runID'],
-                    env['reverse_primer_dict'],
+                    env['reverse_primer_dict']['sequence'],
                     os.path.join(env['BASECALLER_RESULTS'], 'recalibration'),
                     env['barcodeId'],
                     env['barcodeInfo'],
@@ -313,24 +323,14 @@ if __name__=="__main__":
                     traceback.print_exc()
                     raise
 
-                # Recalibrate
                 for dataset in basecaller_recalibration_datasets["datasets"]:
 
+                    if not dataset.get('read_count',0) > 0:
+                        continue
+
                     read_group = dataset['read_groups'][0]
-
-                    if basecaller_recalibration_datasets['read_groups'][read_group].get('filtered',False):
-                        continue
-
-                    if not basecaller_recalibration_datasets['read_groups'][read_group].get('read_count',0) > 0:
-                        continue
-
-                    if env['doBaseRecal'] == "standard_recal":
-                        barcode_name = basecaller_recalibration_datasets['read_groups'][read_group].get('barcode_name','no_barcode')
-                        if not env['barcodeInfo'][barcode_name]['calibrate']:
-                            continue
-
                     referenceName = basecaller_recalibration_datasets['read_groups'][read_group]['reference']
-
+                    #referenceName = dataset['reference']
                     if not referenceName:
                         continue
 
@@ -340,15 +340,23 @@ if __name__=="__main__":
                     RECALIBRATION_RESULTS = os.path.join(env['BASECALLER_RESULTS'],"recalibration", dataset['file_prefix'])
                     os.makedirs(RECALIBRATION_RESULTS)
                     sample_map_path = os.path.join(RECALIBRATION_RESULTS, "samplelib.bam")
+                    blocks=[]
+                    basecaller_meta_information=None
 
                     alignment.align(
+                        blocks,
+                        env['alignmentArgs'],
+                        env['ionstatsArgs'],
                         referenceName,
+                        basecaller_meta_information,
+                        env['libraryKey'],
+                        graph_max_x,
                         readsFile,
-                        bidirectional=False,
-                        mark_duplicates=False,
-                        realign=False,
-                        skip_sorting=True,
-                        aligner_opts_extra="",
+                        do_realign=False,
+                        do_ionstats=False,
+                        do_sorting=False,
+                        do_mark_duplicates=False,
+                        do_indexing=False,
                         logfile=os.path.join(RECALIBRATION_RESULTS,"alignmentQC_out.txt"),
                         output_dir=RECALIBRATION_RESULTS,
                         output_basename="samplelib")
@@ -383,7 +391,7 @@ if __name__=="__main__":
                 sys.exit(1)
 
         else:
-            printtime("DEBUG: Flow Space Recalibration is disabled, Reference: '%s'" % env['referenceName'])
+            printtime("DEBUG: Flow Space Recalibration is disabled")
             updated_basecallerArgs = env['basecallerArgs']
 
 
@@ -395,7 +403,7 @@ if __name__=="__main__":
                 env['libraryKey'],
                 env['tfKey'],
                 env['runID'],
-                env['reverse_primer_dict'],
+                env['reverse_primer_dict']['sequence'],
                 env['BASECALLER_RESULTS'],
                 env['barcodeId'],
                 env['barcodeInfo'],
@@ -417,10 +425,6 @@ if __name__=="__main__":
 
     if args.do_alignment:
 
-        do_merged_alignment = isProtonBlock and False
-        if do_merged_alignment:
-            sys.exit(0)
-
         try:
             c = open(os.path.join(env['BASECALLER_RESULTS'], "BaseCaller.json"),'r')
             basecaller_meta_information = json.load(c)
@@ -431,76 +435,39 @@ if __name__=="__main__":
 
         basecaller_datasets = blockprocessing.get_datasets_basecaller(env['BASECALLER_RESULTS'])
 
-        # update filtered flag
-        if isProtonBlock:
-            composite_basecaller_datasets = blockprocessing.get_datasets_basecaller(os.path.join('..',env['BASECALLER_RESULTS']))
-            for rg_name in basecaller_datasets["read_groups"]:
-                block_filtered_flag = basecaller_datasets["read_groups"][rg_name].get('filtered',False)
-                composite_filtered_flag = composite_basecaller_datasets["read_groups"][rg_name].get('filtered',False)
-                basecaller_datasets["read_groups"][rg_name]['filtered'] = composite_filtered_flag or block_filtered_flag
+        set_result_status('Alignment')
 
-        activate_barcode_filter = True
+        if isBlock:
+            do_indexing=False
+            do_ionstats=True
+        else:
+            do_indexing=True
+            do_ionstats=True
 
-        if reference_selected:
+        try:
+            blocks=[]
+            alignment.process_datasets(
+                blocks,
+                env['alignmentArgs'],
+                env['ionstatsArgs'],
+                env['BASECALLER_RESULTS'],
+                basecaller_meta_information if do_ionstats_spatial_accounting else None,
+                env['libraryKey'],
+                graph_max_x,
+                basecaller_datasets,
+                env['ALIGNMENT_RESULTS'],
+                env['realign'],
+                do_ionstats,
+                env['mark_duplicates'],
+                do_indexing,
+                env['barcodeInfo'])
+            add_status("Alignment", 0)
+        except:
+            traceback.print_exc()
+            add_status("Alignment", 1)
+            printtime ("ERROR: Alignment failed")
+            sys.exit(1)
 
-            set_result_status('Alignment')
-
-            if isProtonBlock:
-                create_index = False
-            else:
-                create_index = True
-
-            try:
-                bidirectional = False
-                alignment.alignment_unmapped_bam(
-                    env['BASECALLER_RESULTS'],
-                    basecaller_datasets,
-                    env['ALIGNMENT_RESULTS'],
-                    env['realign'],
-                    env['aligner_opts_extra'],
-                    env['mark_duplicates'],
-                    create_index,
-                    bidirectional,
-                    activate_barcode_filter,
-                    env['barcodeInfo'])
-                add_status("Alignment", 0)
-            except:
-                traceback.print_exc()
-                add_status("Alignment", 1)
-                printtime ("ERROR: Alignment failed")
-                sys.exit(1)
-
-
-        if isProtonBlock and os.path.exists('/opt/ion/.ion-internal-server'):
-
-            printtime("create block level ionstats")
-
-            try:
-                import math
-                graph_max_x = int(50 * math.ceil(0.014 * int(env['flows'])))
-            except:
-                traceback.print_exc()
-                graph_max_x = 400
-
-            try:
-                # Plot classic read length histogram (also used for Read Length Details view)
-                # TODO: change word alignment
-                alignment.create_ionstats(
-                    env['BASECALLER_RESULTS'],
-                    env['ALIGNMENT_RESULTS'],
-                    basecaller_meta_information,
-                    basecaller_datasets,
-                    graph_max_x,
-                    activate_barcode_filter,
-                    do_ionstats_evaluate_hp)
-
-                ionstats_plots.old_read_length_histogram(
-                    #os.path.join('ionstats_alignment.json'),
-                    os.path.join(env['BASECALLER_RESULTS'],'ionstats_basecaller.json'),
-                    os.path.join(env['BASECALLER_RESULTS'],'readLenHisto.png'),
-                    graph_max_x)
-            except:
-                traceback.print_exc()
 
         set_result_status('Processing finished')
 

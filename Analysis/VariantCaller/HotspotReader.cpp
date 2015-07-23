@@ -17,6 +17,8 @@ HotspotReader::HotspotReader()
   line_number_ = 0;
   next_chr_ = 0;
   next_pos_ = 0;
+  hint_header_ = 0;
+  hint_cur_ = 0;
 }
 
 
@@ -42,9 +44,77 @@ void HotspotReader::Initialize(const ReferenceReader &ref_reader, const string& 
 
   has_more_variants_ = true;
   FetchNextVariant();
+
+  MakeHintQueue(hotspot_vcf_filename);
+  // while (!blacklist_queue.empty())
+  // {
+  //   std::cout << "BL: " << blacklist_queue.front().first << ", " << blacklist_queue.front().second << endl;
+  //   blacklist_queue.pop();
+  // }
 }
 
 
+void HotspotReader::MakeHintQueue(const string& hotspot_vcf_filename)
+{
+  // go through the entire vcf to generate the blacklist
+  ifstream hotspot_vcf;
+  hotspot_vcf.open(&hotspot_vcf_filename[0], ifstream::in);
+
+  string bstrand = "BSTRAND";
+  while (!hotspot_vcf.eof()) {
+    string line(2048,'\0');
+    hotspot_vcf.getline(&line[0], 2048);
+    if ((hotspot_vcf.gcount() < 2048) && (line[0] != '#')) {
+      // look for the BSTRAND tag
+      size_t found = line.find(bstrand);
+      if (found != string::npos) {
+	// found BSTRAND, look for semicolon delimiter or end of line
+	long int hint = NO_HINT;
+	size_t semicolon_pos = line.find(";", found+bstrand.size());
+	if (semicolon_pos == string::npos)
+	  semicolon_pos = hotspot_vcf.gcount()-1;  // impute a semicolon at the end of the line
+	// look for the code B
+	size_t b_pos = line.find("B", found+bstrand.size());
+	// look for the code R
+	size_t r_pos = line.find("R", found+bstrand.size());
+	// look for the code F
+	size_t f_pos = line.find("F", found+bstrand.size());
+	bool blacklist = false;
+	if (f_pos < semicolon_pos) {
+	  hint = FWD_BAD_HINT;
+	}
+	if (r_pos < semicolon_pos) {
+	  hint = REV_BAD_HINT;
+	}
+	if (b_pos < semicolon_pos){
+	  hint = BOTH_BAD_HINT;
+	}
+	if ( (f_pos < semicolon_pos) &&  (r_pos < semicolon_pos)){
+	  hint = BOTH_BAD_HINT;
+	}
+	
+	// blacklist this position
+	if (hint != NO_HINT) {
+	  // #CHROM  POS     ID      REF     ALT     QUAL    FILTER  INFO    FORMAT [SAMPLE1 .. SAMPLEN]
+	  vector<string> fields = split(line, '\t');
+
+	  string sequenceName = fields.at(0);
+	  char* end; // dummy variable for strtoll
+	  long int pos = strtoll(fields.at(1).c_str(), &end, 10);
+	  long int chrom_idx = ref_reader_->chr_idx(sequenceName.c_str());
+	  vector<long int> hint_entry (3, NO_HINT);
+	  hint_entry[0] = chrom_idx;
+	  hint_entry[1] = pos-1;
+	  hint_entry[2] = hint;
+	  hint_vec.push_back(hint_entry);
+	}
+      }
+    }
+  }
+  // std::cout << "BL size: " << hint_vec.size() << endl; 
+}
+		  
+  
 void HotspotReader::FetchNextVariant()
 {
   if (not has_more_variants_)
@@ -55,7 +125,6 @@ void HotspotReader::FetchNextVariant()
   vcf::Variant current_hotspot(hotspot_vcf_);
 
   while (has_more_variants_) {
-
     has_more_variants_ = hotspot_vcf_.getNextVariant(current_hotspot);
     if (not has_more_variants_)
       return;

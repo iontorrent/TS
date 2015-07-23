@@ -240,18 +240,7 @@ $(document).ready(function() {
     });
     
     $.each(data.objects, function (int_index, result) {
-      var targfile = result.file_path;
-      var i = targfile.lastIndexOf('/');
-      if (i < 0) return true;
-      targfile = targfile.substr(i + 1);
-      
-      var upload_type = 'Target Regions';
-      if (result.meta.hotspot) {
-        upload_type = 'Hotspots';
-      }
-      if (result.meta.is_ampliseq) {
-        upload_type = 'AmpliSeq ZIP'
-      }
+
       label = '#5bb75b';
       if (result.status.indexOf('Complete') !== -1) {
         label = '#0088cc';
@@ -266,8 +255,8 @@ $(document).ready(function() {
             
       uploads_data.add({
         id: result.id,
-        file: targfile,
-        upload_type: upload_type,
+        file: result.name,
+        upload_type: result.upload_type,
         upload_date: upload_date,
         status: result.status,
         label: label

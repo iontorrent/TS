@@ -39,9 +39,7 @@
 #define skip_whitespaces(str) while (isspace(**str)) { skip_char(str); }
 #define MAX(a, b)             ((a) > (b) ? (a) : (b))
 
-#define parson_malloc(a)     malloc(a)
 #define parson_free(a)       free((void*)a)
-#define parson_realloc(a, b) realloc(a, b)
 
 /* Type definitions */
 typedef union json_value_value {
@@ -110,6 +108,18 @@ static JSON_Value * parse_boolean_value(const char **string);
 static JSON_Value * parse_number_value(const char **string);
 static JSON_Value * parse_null_value(const char **string);
 static JSON_Value * parse_value(const char **string, size_t nesting);
+
+void *parson_malloc(size_t size)
+{
+	// round size up to a multiple of four to keep valgrind happy.
+	return malloc(size + (4 - (size % 4)));
+}
+
+void *parson_realloc(void *ptr, size_t size)
+{
+	// round size up to a multiple of four to keep valgrind happy.
+	return realloc(ptr, size + (4 - (size % 4)));
+}
 
 /* Various */
 static int try_realloc(void **ptr, size_t new_size) {

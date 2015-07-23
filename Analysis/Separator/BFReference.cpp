@@ -8,8 +8,8 @@
 #include "SynchDatSerialize.h"
 #include "ComparatorNoiseCorrector.h"
 #include "BkgTrace.h"
-#include "H5File.h"
-#include "H5Arma.h"
+#include "IonH5File.h"
+#include "IonH5Arma.h"
 #include "Stats.h"
 
 using namespace std;

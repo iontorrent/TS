@@ -207,7 +207,7 @@ def mergeSigProcResults(dirs, SIGPROC_RESULTS, plot_title, exclusionMask=''):
 
     printtime("Finished mergeSigProcResults")
 
-
+'''
 def mergeRawPeakSignals(dirs):
 
     ###############################################
@@ -232,6 +232,7 @@ def mergeRawPeakSignals(dirs):
         printtime("Merging raw_peak_signal files failed")
 
     printtime("Finished mergeRawPeakSignals")
+'''
 
 def mergeAvgNukeTraces(dirs, SIGPROC_RESULTS, key, beads):
 

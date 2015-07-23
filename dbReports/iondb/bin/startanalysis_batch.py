@@ -133,6 +133,10 @@ def generate_post(run_name, timestamp, ebrOpt, gpu, note):
         exp.plan.latestEAS = eas
         exp.plan.save()
 
+    # reset the args to latest values
+    for key,value in args.items():
+        setattr(eas, key, value)
+
     # set analysis args
     if doThumbnail == 'False':
         analysisargs = args['analysisargs']

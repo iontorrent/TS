@@ -22,3 +22,12 @@
     
 - name: Remove the temporary directory /tmp/perl
   file: name=/tmp/perl state=absent
+  
+#-----------------------------------------------------------------------------
+# Copy scripts for cluster_info.py run from headnode
+#-----------------------------------------------------------------------------
+- name: Copy grp_mount_test script
+  copy: src=/usr/sbin/grp_mount_test dest=/usr/sbin/grp_mount_test mode=0775
+
+- name: Copy grp_configuration_test script
+  copy: src=/usr/sbin/grp_configuration_test dest=/usr/sbin/grp_configuration_test mode=0775

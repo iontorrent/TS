@@ -90,26 +90,26 @@ public:
    * Get the int option value for possibly multiple comma separated values
    */ 
   void GetOption(std::vector<int> &value, const std::string &defaultValue,
-		 char shortOption, const std::string &longOption);
+		 char shortOption, const std::string &longOption, char sep=',');
 
   /**
    * Get the unsigned int option value for possibly multiple comma separated values
    */ 
   void GetOption(std::vector<unsigned int> &value, const std::string &defaultValue,
-		 char shortOption, const std::string &longOption);
+		 char shortOption, const std::string &longOption, char sep=',');
 
 
   /**
    * Get the double option value for possibly multiple comma separated values
    */ 
   void GetOption(std::vector<double> &value, const std::string &defaultValue,
-		 char shortOption, const std::string &longOption);
+		 char shortOption, const std::string &longOption, char sep=',');
 
   /**
    * Get the double option value for possibly multiple comma separated values
    */ 
   void GetOption(std::vector<std::string> &value, const std::string &defaultValue,
-		 char shortOption, const std::string &longOption);
+		 char shortOption, const std::string &longOption, char sep=',');
 
 
   /**
@@ -131,12 +131,6 @@ public:
   std::string GetFirstString(char shortOption, const std::string &longOption, const std::string &defaultValue);
 
   /**
-   * Get a vector of comma separated string option values for the given short/long key
-   * If the option appears multiple times, use the earliest occurrence
-   */
-  std::vector<std::string> GetFirstStringVector(char shortOption, const std::string &longOption, const std::string &defaultValue);
-
-  /**
    * Get a double option value for the givent short/long key
    * If the option appears multiple times, use the earliest occurrence
    */
@@ -147,6 +141,31 @@ public:
    * If the option appears multiple times, use the earliest occurrence
    */
   int GetFirstInt(char shortOption, const std::string &longOption, int defaultInt);
+
+  /**
+   * Get a vector of 'sep' separated string option values for the given short/long key
+   * If the option appears multiple times, use the earliest occurrence
+   */
+  std::vector<std::string> GetFirstStringVector(char shortOption, const std::string &longOption, const std::string &defaultValue, char sep=',');
+
+  /**
+   * Get a vector of 'sep' separated double option values for the given short/long key
+   * If the option appears multiple times, use the earliest occurrence
+   */
+  std::vector<double> GetFirstDoubleVector(char shortOption, const std::string &longOption, const std::string &defaultValue, char sep=',');
+
+  /**
+   * Get a vector of 'sep' separated int option values for the given short/long key
+   * If the option appears multiple times, use the earliest occurrence
+   */
+  std::vector<int> GetFirstIntVector(char shortOption, const std::string &longOption, const std::string &defaultValue, char sep=',');
+
+
+
+  void StringToIntVector(std::vector<int> & values, const std::string & value_string, const std::string &longOption, char sep=',');
+
+  void StringToDoubleVector(std::vector<double> & values, const std::string & value_string, const std::string &longOption, char sep=',');
+
 
   /**
    * Fill in the options that the user supplied (possibly in error) that

@@ -1,5 +1,5 @@
 /**
- * Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
+ * Copyright 1993-2013 NVIDIA Corporation.  All rights reserved.
  *
  * Please refer to the NVIDIA end user license agreement (EULA) associated
  * with this source code for terms and conditions that govern your use of
@@ -12,6 +12,10 @@
 // Helper Timing Functions
 #ifndef HELPER_TIMER_H
 #define HELPER_TIMER_H
+
+#ifndef EXIT_WAIVED
+#define EXIT_WAIVED 2
+#endif
 
 // includes, system
 #include <vector>
@@ -51,7 +55,7 @@ class StopWatchInterface
 //////////////////////////////////////////////////////////////////
 // Begin Stopwatch timer class definitions for all OS platforms //
 //////////////////////////////////////////////////////////////////
-#ifdef WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 // includes, system
 #define WINDOWS_LEAN_AND_MEAN
 #include <windows.h>
@@ -363,7 +367,7 @@ StopWatchLinux::getDiffTime()
     return (float)(1000.0 * (t_time.tv_sec - start_time.tv_sec)
                    + (0.001 * (t_time.tv_usec - start_time.tv_usec)));
 }
-#endif // _WIN32
+#endif // WIN32
 
 ////////////////////////////////////////////////////////////////////////////////
 //! Timer functionality exported
@@ -377,7 +381,7 @@ inline bool
 sdkCreateTimer(StopWatchInterface **timer_interface)
 {
     //printf("sdkCreateTimer called object %08x\n", (void *)*timer_interface);
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
     *timer_interface = (StopWatchInterface *)new StopWatchWin();
 #else
     *timer_interface = (StopWatchInterface *)new StopWatchLinux();

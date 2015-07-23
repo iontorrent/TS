@@ -31,6 +31,10 @@ DebugMe::DebugMe(){
 
 bool DebugMe::read_file_sse(HashTable_xyflow &xyf_hash, int numFlows) const
 {
+  if (! isFile(bkgModel_xyflow_fname_in.c_str())) {
+      std::cerr << "read_file_sse() error: file " << bkgModel_xyflow_fname_in << " does not exist!!" << std::endl << std::flush;
+      exit(1);
+  }
   xyf_hash.clear();
   xyf_hash.setFilename(bkgModel_xyflow_fname_in);
   //xyf_hash.set_xyflow_limits(numFlows);
@@ -62,7 +66,8 @@ bool DebugMe::read_file_sse(HashTable_xyflow &xyf_hash, int numFlows) const
       int r = atoi(elem[nTokens-2].c_str());
       int c = atoi(elem[nTokens-1].c_str());
       int f = atoi(tokens[4].c_str());
-      bool mm = tokens[6].compare("1")==0 ? 1:0;
+      //bool mm = tokens[6].compare("1")==0 ? 1:0;
+      bool mm = tokens[6].compare("REF")==0 ? 0:1;
       std::string hp = tokens[8];
       xyf_hash.insert_rcflow(r,c,f,mm,hp);
       xyf_hash.insert_rc(r,c);
@@ -71,10 +76,16 @@ bool DebugMe::read_file_sse(HashTable_xyflow &xyf_hash, int numFlows) const
     std::cout << nLines << " lines read by read_file_sse()..."  << std::endl << std::flush;
     std::cout << "xyf_hash.size() = " << xyf_hash.size()  << std::endl << std::flush;
     std::cout << "xyf_hash.size_xy() = " << xyf_hash.size_xy()  << std::endl << std::flush;
-    //xyf_hash.print();
+    if ( xyf_hash.size() < xyf_hash.size_xy()) // something wrong, shouldn't happen, print out and exit
+    {
+        std::cout << "read_file_sse() error: xyf_hash.size(" << xyf_hash.size() << ") < xyf_hash.size_xy(" << xyf_hash.size_xy() << ")" << std::endl << std::flush;
+        //xyf_hash.print();
+        assert(xyf_hash.size() >= xyf_hash.size_xy());
+        exit(1);
+    }
   }
   else {
-    std::cerr << "read_file_sse() open error!!!"  << std::endl << std::flush;
+    std::cerr << "read_file_sse() processing error!!!"  << std::endl << std::flush;
     return (false);
   }
   infile.close();

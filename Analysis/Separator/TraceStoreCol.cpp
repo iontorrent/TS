@@ -2,7 +2,7 @@
 #include <malloc.h>
 #include "Utils.h"
 #include "TraceStoreCol.h"
-#include "H5Eigen.h"
+#include "IonH5Eigen.h"
 //#define EIGEN_USE_MKL_ALL 1
 #include <Eigen/Dense>
 #include <Eigen/LU>
@@ -140,6 +140,33 @@ void TraceStoreCol::WellProj(TraceStoreCol &store,
   }
   
 }
+
+void TraceStoreCol::Init(Mask &mask, size_t frames, const char *flowOrder,
+       int numFlowsBuff, int maxFlow, int rowStep, int colStep) {
+
+    pthread_mutex_init (&mLock, NULL);
+    mUseMeshNeighbors = 1;
+    mRowRefStep = rowStep;
+    mColRefStep = colStep;
+    mMinRefProbes = floor (mRowRefStep * mColRefStep * .1);
+    mRows = mask.H();
+    mCols = mask.W();
+    mFrames = frames;
+    mFrameStride = mRows * mCols;
+    mFlows = mFlowsBuf = maxFlow;
+    mFlowFrameStride = mFrameStride * maxFlow;
+    mMaxDist = 2 * sqrt(rowStep*rowStep + colStep+colStep);
+    mFlowOrder = flowOrder;
+    
+    mWells = mRows * mCols;
+    mUseAsReference.resize (mWells, false);
+    int keep = 0;
+    int empties = 0;
+    mRefGridsValid.resize (mFlowsBuf, 0);
+    mRefGrids.resize (mFlowsBuf);
+    mData.resize (mWells * mFrames * mFlowsBuf);
+    std::fill (mData.begin(), mData.end(), 0);
+  }
 
 /**
  * Create the basis splines for order requested at a particular value of x.
@@ -984,3 +1011,104 @@ void TraceStoreCol::SplineLossyCompress(const std::string &strategy, int order, 
   }
 }
 
+int TraceStoreCol::PrepareReference(size_t flowIx, std::vector<char> &filteredWells) {
+    mRefWells.resize(mUseAsReference.size());
+    for (size_t i = 0; i < mRefWells.size(); i++) {
+      if (mUseAsReference[i]) {
+        mRefWells[i] = 0;
+      }
+      else {
+        mRefWells[i] = 1;
+      }
+    }
+    assert(flowIx < mRefReduction.size());
+
+    int x_clip = mCols;
+    int y_clip = mRows;
+    if (mUseMeshNeighbors == 0) {
+      x_clip = THUMBNAIL_SIZE;
+      y_clip = THUMBNAIL_SIZE;
+    }
+    mRefReduction[flowIx].Init(mRows, mCols, mFrames,
+                               REF_REDUCTION_SIZE, REF_REDUCTION_SIZE, 
+                               y_clip, x_clip, 1);
+    for (size_t frame_ix = 0; frame_ix < mFrames; frame_ix++) {
+      mRefReduction[flowIx].ReduceFrame(&mData[0] + flowIx * mFrameStride + frame_ix * mFlowFrameStride, &mRefWells[0], frame_ix);
+    }
+    mRefReduction[flowIx].SmoothBlocks(REF_SMOOTH_SIZE, REF_SMOOTH_SIZE);
+    return TSM_OK;
+  }
+
+
+int TraceStoreCol::PrepareReferenceOld (size_t flowIx, std::vector<char> &filteredWells) {
+    int fIdx = flowIx;
+    CalcReference (mRowRefStep, mColRefStep, flowIx, mRefGrids[fIdx], filteredWells);
+    mRefGridsValid[fIdx] = 1;
+    mFineRefGrids.resize (mRefGrids.size());
+    mFineRefGrids[fIdx].Init (mRows, mCols, mRowRefStep/2, mColRefStep/2);
+    int numBin = mFineRefGrids[fIdx].GetNumBin();
+    int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
+    for (int binIx = 0; binIx < numBin; binIx++) {
+      mFineRefGrids[fIdx].GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
+      vector<float> &trace = mFineRefGrids[fIdx].GetItem (binIx);
+      CalcMedianReference ( (rowEnd + rowStart) /2, (colEnd + colStart) /2, mRefGrids[fIdx],
+                            mDist, mValues, trace);
+    }
+    return TSM_OK;
+  }
+
+
+int TraceStoreCol::CalcMedianReference (size_t row, size_t col,
+                           GridMesh<std::vector<float> > &regionMed,
+                           std::vector<double> &dist,
+                           std::vector<std::vector<float> *> &values,
+                           std::vector<float> &reference) {
+    int retVal = TraceStore::TS_OK;
+    reference.resize(mFrames);
+    std::fill(reference.begin(), reference.end(), 0.0);
+    regionMed.GetClosestNeighbors (row, col, mUseMeshNeighbors, dist, values);
+    int num_good = 0;
+    size_t valSize = values.size();
+    for (size_t i =0; i < valSize; i++) {
+      if (values[i]->size() > 0) {
+        num_good++;
+      }
+    }
+    // try reaching a little farther if no good reference close by
+    if (num_good == 0) {
+      regionMed.GetClosestNeighbors (row, col, 2*mUseMeshNeighbors, dist, values);
+    }
+    size_t size = 0;
+    double maxDist = 0;
+    for (size_t i = 0; i < values.size(); i++) {
+        size = max (values[i]->size(), size);
+        maxDist = max(dist[i], maxDist);
+    }
+    reference.resize (size);
+    std::fill (reference.begin(), reference.end(), 0.0);
+    double distWeight = 0;
+         valSize = values.size();
+
+    for (size_t i = 0; i < valSize; i++) {
+      if (values[i]->size()  == 0) {
+        continue;
+      }
+      double w = TraceStore::WeightDist (dist[i], mRowRefStep); //1/sqrt(dist[i]+1);
+      distWeight += w;
+      size_t vSize = values[i]->size();
+      for (size_t j = 0; j < vSize; j++) {
+        reference[j] += w * values[i]->at (j);
+      }
+    }
+    // Divide by our total weight to get weighted mean
+    if (distWeight > 0)  {
+      for (size_t i = 0; i < reference.size(); i++) {
+        reference[i] /= distWeight;
+      }
+      retVal = TraceStore::TS_OK;
+    }
+    else {
+      retVal = TraceStore::TS_BAD_DATA;
+    }
+    return retVal;
+  }

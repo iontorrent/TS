@@ -92,6 +92,9 @@
     USERINPUT.is_ir_connected = false;
     USERINPUT.by_template_url = '{% url "page_plan_save" %}';
 
+    USERINPUT.is_variantCaller_enabled  = "{{helper.getStepDict.Plugins.isVariantCallerSelected}}"
+    USERINPUT.is_variantCaller_configured  = "{{helper.getStepDict.Plugins.isVariantCallerConfigured}}"
+
     {%for sample_annotation in step.prepopulatedFields.sampleAnnotations %}
         var ir_term = "{{sample_annotation.iRValue}}";
         var ir_terms = ir_term.split("|");

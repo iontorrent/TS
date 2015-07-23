@@ -63,7 +63,7 @@ public:
         BkgFitMatrixPacker *reg_fit, unsigned int PartialDeriv_mask,
         int iter, int flow_key, int flow_block_size, int flow_block_start );
 
-    void  LevMarFitRegion ( BkgFitMatrixPacker *reg_fit, int flow_key, int flow_block_size,
+    void LevMarFitRegion ( BkgFitMatrixPacker *reg_fit, int flow_key, int flow_block_size,
                             int flow_block_start );
 
     float    LevMarFitToActiveBeadList (
@@ -123,7 +123,7 @@ public:
     void DynamicEmphasis ( BeadParams &p, int flow_block_size );
     void ChooseSkipBeads ( bool _skip_beads );
     bool SkipBeads();
-    char   *findName ( float *ptr );
+    const char* findName ( float *ptr );
     void EnterTheOptimization(BkgFitMatrixPacker* arg1, BkgFitMatrixPacker* arg2, float arg3, int arg4);
     void CleanTerminateOptimization();
     void SetupAnyIteration(reg_params &eval_rp, int iter, int flow_block_size );

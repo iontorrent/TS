@@ -12,6 +12,7 @@ Not all functions contained in ``tasks`` are actual Celery tasks, only those
 that have the  ``@app.task`` decorator.
 """
 
+from __future__ import absolute_import
 from iondb.celery import app
 from celery.utils.log import get_task_logger
 

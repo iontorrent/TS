@@ -21,20 +21,24 @@ import call_api as api
 def check_stage_pre(upload_id, meta):
     reentry = meta.get('reentry_stage', None)
     if reentry and reentry != 'pre_process':
-        # Success, we're past pre_processing already
+        # Success, we're past pre_processing already and do not need to run further
         sys.exit(0)
 
 
 def set_checkpoint(meta, args):
+    # Set a sentinel in the meta data to determine whether or not
+    # we've already run before and done this work.
     meta['reentry_stage'] = 'validate'
     api.update_meta(meta, args)
 
 
 def check_reference(meta, args):
+    """Check and install the needed reference genome"""
     print("Checking reference")
     plan_data = json.load(open(os.path.join(args.path, "plan.json")))
     version, design, meta = ampliseq.handle_versioned_plans(plan_data, meta)
     print("Got versioned stuff")
+    # If we have a genome reference, check to see if it's installed
     reference = design.get('genome_reference', None)
     print(reference)
     if not reference:
@@ -47,8 +51,12 @@ def check_reference(meta, args):
         notes = reference.get('notes', "AmpliSeq Import")
         print("Got various fields")
     except KeyError as err:
+        # If the key does not exist, that's fine, but it can't exist and be corrupt
         print("Corrupt genome_reference entry: {0}".format(err))
         sys.exit(1)
+
+    # The identity_hash matching the files_md5sum.fasta hash determines whether
+    # or not the genome is installed
     print("Checking reference " + ref_hash)
     if not models.ReferenceGenome.objects.filter(identity_hash=ref_hash).exists():
         reference = models.ReferenceGenome(
@@ -65,12 +73,17 @@ def check_reference(meta, args):
         print("created new reference")
         pub = models.Publisher.objects.get(name='BED')
         upload = models.ContentUpload.objects.get(pk=args.upload_id)
+        # This is a celery subtask that will run the publisher scripts on this upload again
         finish_me = run_pub_scripts.si(pub, upload)
         print("About t set check point")
         set_checkpoint(meta, args)
         print("check point set")
+        # With a status starting with "Waiting" the framework will stop
+        # after pre_processing, before validate.
         upload.status = "Waiting on reference"
         upload.save()
+        # the subtask finish_me will be called at the end of the reference install
+        # process to restart validation of the upload
         start_reference_download(url, reference, callback=finish_me)
         print("Started reference download")
         return True

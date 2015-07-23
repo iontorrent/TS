@@ -1264,7 +1264,7 @@ void TraceClassifier::makeHistogram(float *sig, int nSig, int nBins)
 
 
 
-float TraceClassifier::findThreshold(float *sig, int nSig, char* method, bool emptyonly)
+float TraceClassifier::findThreshold(float *sig, int nSig, const char* method, bool emptyonly)
 {
     //if (nSig <=0 )        return mThreshold;
     if (nSig < mNumBins)        return mThreshold;

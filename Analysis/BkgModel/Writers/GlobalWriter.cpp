@@ -300,7 +300,8 @@ void GlobalWriter::SendBestRegion_SPToHDF5 (int ibd, RegionalizedData &my_region
           {
             int flow= flow_block_start + fnum;
             //float SP = ( float ) ( COPYMULTIPLIER * p->Copies ) * reg_p->copy_multiplier[fnum];
-			float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
+            //float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
+            float SP = (float) (COPYMULTIPLIER * p->Copies) *pow (reg_p->CopyDrift,flow);
             mPtrs->copyCube_element ( mPtrs->m_beads_bestRegion_SP,ibd,0,flow,SP );
           }
       }
@@ -442,6 +443,30 @@ void GlobalWriter::SendRegionCenter_LocationToHDF5 (int ibd, RegionalizedData &m
 }
 
 
+void GlobalWriter::SendRegionCenter_RegionParamsToHDF5 (int ibd, RegionalizedData &my_region_data )
+{
+    if ( mPtrs!=NULL )
+    {
+      if (( mPtrs->m_beads_regionCenter_regionParams!=NULL ) )
+      {
+          reg_params *reg_p =  &my_region_data.my_regions.rp;
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          int reg = my_region_data.region->index;
+          int n = 0;
+          mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,p->gain);
+          mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,reg_p->sens );
+          mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,(float)(COPYMULTIPLIER*p->Copies) );
+          for (int i=0; i<NUMNUC; i++)
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,reg_p->kmax[i] );
+          for (int i=0; i<NUMNUC; i++)
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,reg_p->krate[i] );
+          for (int i=0; i<NUMNUC; i++)
+              mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_regionParams,reg,n++,0,reg_p->d[i] );
+      }
+    }
+}
+
+
 void GlobalWriter::SendRegionCenter_AmplitudeToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
 {
     if ( mPtrs!=NULL )
@@ -559,8 +584,9 @@ void GlobalWriter::SendRegionCenter_SPToHDF5 (int ibd, RegionalizedData &my_regi
           {
             int flow= flow_block_start + fnum;
             //float SP = ( float ) ( COPYMULTIPLIER * p->Copies ) * reg_p->copy_multiplier[fnum];
-			float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
-            mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_SP,reg,0,flow,SP );
+            //float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
+            float SP = (float) (COPYMULTIPLIER * p->Copies) *pow (reg_p->CopyDrift,flow);
+             mPtrs->copyCube_element ( mPtrs->m_beads_regionCenter_SP,reg,0,flow,SP );
           }
       }
     }
@@ -961,7 +987,9 @@ void GlobalWriter::SendXyflow_SP_ToHDF5 (int ibd, RegionalizedData &my_region_da
             int flow= flow_block_start + fnum;
             int ibd_select = select_xyflow(x,y,flow);
             if (ibd_select>=0) {
-              float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
+                //float SP = ( float ) ( COPYMULTIPLIER * p->Copies ) * reg_p->copy_multiplier[fnum];
+                //float SP = ( float ) ( p->Copies ) * reg_p->copy_multiplier[fnum];
+                float SP = (float) (COPYMULTIPLIER * p->Copies) *pow (reg_p->CopyDrift,flow);
               mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_SP,ibd_select,0,0,SP );
             }
           }
@@ -993,6 +1021,31 @@ void GlobalWriter::SendXyflow_R_ToHDF5 (int ibd, RegionalizedData &my_region_dat
     }
 }
 
+
+
+void GlobalWriter::SendXyflow_GainSens_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int flow_block_start )
+{
+    if ( mPtrs!=NULL )
+    {
+      if (( mPtrs->m_beads_xyflow_gainSens!=NULL ) )
+      {
+          BeadParams *p= &my_region_data.my_beads.params_nn[ibd];
+          int x = p->x+my_region_data.region->col;
+          int y = p->y+my_region_data.region->row;
+          //printf("GlobalWriter::SendAmplitude_xyflow_ToHDF5... ibd=%d, region_x=%d, region_y=%d, x=%d, y=%d\n",ibd,my_region_data.region->col,my_region_data.region->row,x,y);
+          for ( int fnum=0; fnum<my_region_data_extras.my_flow->flowBufferCount; fnum++ )
+          {
+            int flow= flow_block_start + fnum;
+            int ibd_select = select_xyflow(x,y,flow);
+            if (ibd_select>=0) {
+                reg_params *reg_p =  &my_region_data.my_regions.rp;
+                float gainSens = p->gain * reg_p->sens;
+                mPtrs->copyCube_element ( mPtrs->m_beads_xyflow_gainSens,ibd_select,0,0,gainSens );
+            }
+          }
+      }
+    }
+}
 
 
 void GlobalWriter::SendXyflow_Timeframe_ToHDF5 (int ibd, RegionalizedData &my_region_data, SlicedChipExtras & my_region_data_extras, int max_frames, int flow_block_start )
@@ -1231,9 +1284,9 @@ void GlobalWriter::WriteAnswersToWells ( int iFlowBuffer, Region *region, Region
     if (my_beads.params_nn[ibd].my_state->pinned or my_beads.params_nn[ibd].my_state->corrupt)
       val = 0.0f; // actively suppress pinned wells in case we are so unfortunate as to have an estimate for them
 
-    if(rawWells->GetSaveCopies() >= 0 || rawWells->GetSaveMultiplier() >= 0)
+    if(rawWells->GetSaveCopies())
 	{
-      rawWells->WriteFlowgram ( flow, x, y, val, my_beads.params_nn[ibd].Copies, my_regions->rp.copy_multiplier[iFlowBuffer] );
+      rawWells->WriteFlowgram ( flow, x, y, val, my_beads.params_nn[ibd].Copies );
 	}
 	else
 	{
@@ -1374,20 +1427,17 @@ void GlobalWriter::DumpRegionalEnzymatics ( reg_params &rp, int region_ndx, int 
     {  // float krate[NUMNUC]
       for ( int j=0; j<NUMNUC; j++ )
       {
-        mPtrs->m_enzymatics_param->At ( region_ndx, i_param, iBlk ) = rp.krate[j];
-        i_param++;
+        mPtrs->m_enzymatics_param->At ( region_ndx, i_param++, iBlk ) = rp.krate[j];
       }
       // float d[NUMNUC]
       for ( int j=0; j<NUMNUC; j++ )
       {
-        mPtrs->m_enzymatics_param->At ( region_ndx, i_param, iBlk ) = rp.d[j];
-        i_param++;
+        mPtrs->m_enzymatics_param->At ( region_ndx, i_param++, iBlk ) = rp.d[j];
       }
       // float kmax[NUMNUC]
       for ( int j=0; j<NUMNUC; j++ )
       {
-        mPtrs->m_enzymatics_param->At ( region_ndx, i_param, iBlk ) = rp.kmax[j];
-        i_param++;
+        mPtrs->m_enzymatics_param->At ( region_ndx, i_param++, iBlk ) = rp.kmax[j];
       }
     }
   }
@@ -1399,24 +1449,16 @@ void GlobalWriter::DumpRegionalBuffering ( reg_params &rp, int region_ndx, int i
   {
     if ( mPtrs->m_buffering_param!=NULL )
     {
-      // tau_R_m
-      mPtrs->m_buffering_param->At ( region_ndx, i_param, iBlk ) = rp.tau_R_m;
-      i_param++;
-      // tau_R_o
-      mPtrs->m_buffering_param->At ( region_ndx, i_param, iBlk ) = rp.tau_R_o;
-      i_param++;
-      // tauE
-      mPtrs->m_buffering_param->At ( region_ndx, i_param, iBlk ) = rp.tauE;
-      i_param++;
-      // RatioDrift
-      mPtrs->m_buffering_param->At ( region_ndx, i_param, iBlk ) = rp.RatioDrift;
-      i_param++;
+      mPtrs->m_buffering_param->At ( region_ndx, i_param++, iBlk ) = rp.tau_R_m; // tau_R_m
+      mPtrs->m_buffering_param->At ( region_ndx, i_param++, iBlk ) = rp.tau_R_o; // tau_R_o
+      mPtrs->m_buffering_param->At ( region_ndx, i_param++, iBlk ) = rp.tauE;    // tauE
+      mPtrs->m_buffering_param->At ( region_ndx, i_param++, iBlk ) = rp.RatioDrift; // RatioDrift
       // float NucModifyRatio[NUMNUC]
       for ( int j=0; j<NUMNUC; j++ )
       {
-        mPtrs->m_buffering_param->At ( region_ndx, i_param, iBlk ) = rp.NucModifyRatio[j];
-        i_param++;
+        mPtrs->m_buffering_param->At ( region_ndx, i_param++, iBlk ) = rp.NucModifyRatio[j];
       }
+      mPtrs->m_buffering_param->At ( region_ndx, i_param++, iBlk ) = rp.reg_error; // reg_error
     }
   }
 }
@@ -1429,45 +1471,36 @@ void GlobalWriter::DumpRegionNucShape ( reg_params &rp, int region_ndx, int iBlk
     {
       for ( int j=0; j<flow_block_size; j++ )
       {
-        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.AccessTMidNuc()[j];
-        i_param++;
+        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param++, iBlk ) = rp.nuc_shape.AccessTMidNuc()[j];
       }
       // float t_mid_nuc_delay[NUMNUC]
       for ( int j=0; j<NUMNUC; j++ )
       {
-        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.t_mid_nuc_delay[j];
-        i_param++;
+        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param++, iBlk ) = rp.nuc_shape.t_mid_nuc_delay[j];
       }
       // sigma
-      mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.sigma;
-      i_param++;
+      mPtrs->m_nuc_shape_param->At ( region_ndx, i_param++, iBlk ) = rp.nuc_shape.sigma;
 
       // float sigma_mult[NUMNUC]
       for ( int j=0; j<NUMNUC; j++ )
       {
-        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.sigma_mult[j];
-        i_param++;
+        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param++, iBlk ) = rp.nuc_shape.sigma_mult[j];
       }
       for ( int j=0; j<flow_block_size; j++ )
       {
-        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.t_mid_nuc_shift_per_flow[j];
-        i_param++;
+        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param++, iBlk ) = rp.nuc_shape.t_mid_nuc_shift_per_flow[j];
       }
       // float Concentration[NUMNUC]
       for ( int j=0; j<NUMNUC; j++ )
       {
-        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.C[j];
-        i_param++;
+        mPtrs->m_nuc_shape_param->At ( region_ndx, i_param++, iBlk ) = rp.nuc_shape.C[j];
       }
       //valve_open
-      mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.valve_open;
-      i_param++;
+      mPtrs->m_nuc_shape_param->At ( region_ndx, i_param++, iBlk ) = rp.nuc_shape.valve_open;
       //nuc_flow_span
-      mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.nuc_flow_span;
-      i_param++;
-      //magic_divisor_for_timing
-      mPtrs->m_nuc_shape_param->At ( region_ndx, i_param, iBlk ) = rp.nuc_shape.magic_divisor_for_timing;
-      i_param++;
+      mPtrs->m_nuc_shape_param->At ( region_ndx, i_param++, iBlk ) = rp.nuc_shape.nuc_flow_span;
+       //magic_divisor_for_timing
+      mPtrs->m_nuc_shape_param->At ( region_ndx, i_param++, iBlk ) = rp.nuc_shape.magic_divisor_for_timing;
     }
   }
 }
@@ -1486,30 +1519,22 @@ void GlobalWriter::SpecificRegionParamDump ( reg_params &rp, int region_ndx, int
 
   // tshift
   int i_param=0;
-  mPtrs->m_regional_param->At ( region_ndx, i_param, iBlk ) = rp.tshift;
-  i_param++;
+  mPtrs->m_regional_param->At ( region_ndx, i_param++, iBlk ) = rp.tshift;
 
 
   // CopyDrift
-  mPtrs->m_regional_param->At ( region_ndx, i_param, iBlk ) = rp.CopyDrift;
-  i_param++;
-  mPtrs->m_regional_param->At ( region_ndx, i_param, iBlk ) = COPYMULTIPLIER;
-  i_param++;
+  mPtrs->m_regional_param->At ( region_ndx, i_param++, iBlk ) = rp.CopyDrift;
+  mPtrs->m_regional_param->At ( region_ndx, i_param++, iBlk ) = COPYMULTIPLIER;
 
   // float darkness[]
   for ( int j=0; j<flow_block_size; j++ )
   {
-    mPtrs->m_regional_param->At ( region_ndx, i_param, iBlk ) = rp.darkness[j];
-    i_param++;
+    mPtrs->m_regional_param->At ( region_ndx, i_param++, iBlk ) = rp.darkness[j];
   }
   // sens as used?
-  mPtrs->m_regional_param->At ( region_ndx, i_param, iBlk ) = rp.sens;
-  i_param++;
-  mPtrs->m_regional_param->At ( region_ndx, i_param, iBlk ) = SENSMULTIPLIER;
-  i_param++;
-  // sens
-  mPtrs->m_regional_param->At ( region_ndx, i_param, iBlk ) = rp.molecules_to_micromolar_conversion;
-  i_param++;
+  mPtrs->m_regional_param->At ( region_ndx, i_param++, iBlk ) = rp.sens;
+  mPtrs->m_regional_param->At ( region_ndx, i_param++, iBlk ) = SENSMULTIPLIER;
+  mPtrs->m_regional_param->At ( region_ndx, i_param++, iBlk ) = rp.molecules_to_micromolar_conversion;
  }
 
 void GlobalWriter::DumpRegionFitParamsH5 ( int region_ndx, int flow, reg_params &rp, int flow_block_size, int flow_block_id )

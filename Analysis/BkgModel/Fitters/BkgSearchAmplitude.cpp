@@ -36,7 +36,10 @@ static void InitializeBinarySearch ( BeadParams *p, bool restart, float *ac, flo
   else
     for ( int fnum=0;fnum<flow_block_size;fnum++ )
     {
-      ac[fnum] =p->Ampl[fnum];
+      if(fnum < MAX_NUM_FLOWS_IN_BLOCK_GPU)
+    	  ac[fnum]   = p->Ampl[fnum];
+      else
+    	  ac[fnum]   = 0;
       done[fnum] = false;
       step[fnum] = 0.02;
     }

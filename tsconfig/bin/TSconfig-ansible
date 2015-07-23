@@ -10,8 +10,8 @@ set -e
 #--- Include function definition file	---#
 #---                                    ---#
 TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
-source $TSCONFIG_SRC_DIR/ts_params
-source $TSCONFIG_SRC_DIR/ts_functions
+source $TSCONFIG_SRC_DIR/ts_params||source ../ts_params||true
+source $TSCONFIG_SRC_DIR/ts_functions|| source ../ts_functions||true
 LOCK_FILE=/var/lock/tsconfiglock
 
 #--------------------------------------
@@ -19,32 +19,66 @@ LOCK_FILE=/var/lock/tsconfiglock
 #--------------------------------------
 trap 'error ${LINENO}' ERR
 
+#--------------------------------------
+# Call this to indicate an unimplemented option
+#--------------------------------------
+function not_implemented()
+{
+    echo
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    echo
+    echo "DRAT! This has not been implemented using Ansible yet!"
+    echo "Contact bernard.puc@thermofisher.com."
+    echo
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    exit
+}
+function in_progress()
+{
+    echo
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    echo
+    echo "So close! This is partially implemented using Ansible!"
+    echo "But there's still some troubles with the feature"
+    echo
+    echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    exit
+}
+
+
 #---                            ---#
 #---    Variable Declarations   ---#
 #---                            ---#
 EXECUTE=0
 OPTARGS="$@"
 CONF_HEAD_NODE=0        # Enables SGE qmaster,postgres,apache2,/results sharing
-CONF_COMPUTE_NODE=0     # Enables SGE exec
-#CONF_PGM_SUPPORT=0      # Enables direct-connected instruments and data dir sharing
-#REMOVE_PGM_SUPPORT=0    # Removes support for direct-connected instruments
-#CONF_FTP_SERVER=0       # Configure FTP Service
-#CONF_NTP_SERVER=0       # Configure NTP Service
 UPDATE_SOFTWARE=0       # Get software updates and install
-UPDATE_SOFTWARE_CLUSTER=0       # Get software updates and install on cluster nodes
 UPDATE_HOSTNAME=0       # Change the hostname (requires reboot)
 CONF_TIME_ZONE=0        # Run timezone configuration script
 CONF_POSTFIX=0          # Run postfix configuration script
-ETH_DEV=$(outbound_net_port)    # outgoing network device
+#ETH_DEV=$(outbound_net_port)    # outgoing network device
 APT_USB=0               # flags use of USB key drive as apt repository
-UNCONF_SERVER=0		# Removes Head Node settings and configurations
 INITIAL_CONFIG=1        # Flags interactive configuration settings - only for initial configuration
 CHANGE_PASSWORD=0       # Change ionadmin password.
 PURGE_ALL_DEB=0         # Delete all deb package files in apt cache
 RECONFIGURE=0           # Re-run configuration steps only
-SECURITY_UPDATE=0       # Enable updating packages with security updates
-CONF_APT_CACHING=false  # Install apt-cacher-ng and configure
 version=`echo '$Revision: 86238 $'|awk '{print $2}'`
+
+
+#-------------------------------------------------------------------------------
+# Check for valid distribution
+# Only Ubuntu 14.04 allowed at this time
+#-------------------------------------------------------------------------------
+if test $EXECUTE; then
+    if [ $(lsb_release -r -s) == '14.04' ]; then
+        #echo "Valid OS"
+        :
+    else
+        echo "This release not supported.  Try TSconfig"
+        exit 0
+    fi
+fi
+
 
 #---                                    ---#
 #---    Command Line Options Parsing    ---#
@@ -65,50 +99,24 @@ while [ $# != 0 ]; do
         '-d'|'--debug')
             set -x
         ;;
-        '-m')
-            echo -e "\nOption -m has been replaced\n"
-            echo -e "Use --configure-server instead\n\n"
-            exit 0
-        ;;
-        '-i')
-            echo -e "\nOption -i has been replaced\n"
-            echo -e "Use --configure-pgm-support instead\n\n"
-            exit 0
-        ;;
         '--configure-server')
             if [ $EXECUTE == 1 ];then user_msg "Configure server as Head Node"; fi
             CONF_HEAD_NODE=1
-        ;;
-        '--unconfigure-server')
-            if [ $EXECUTE == 1 ];then user_msg "Un-configure server settings"; fi
-	        UNCONF_SERVER=1
-	    ;;
-        '--reconfigure')
-            RECONFIGURE=1
-        ;;
-        '--skip-init')   # do not execute interactive, initialization steps
-            INITIAL_CONFIG=0
-        ;;
-        '--change-hostname'|'-r')
-            if [ $EXECUTE == 1 ];then user_msg "Change server hostname"; fi
-            UPDATE_HOSTNAME=1
         ;;
         '--update-torrent-suite'|'-s')
             if [ $EXECUTE == 1 ];then user_msg "Check for and install Ion Software updates"; fi
             UPDATE_SOFTWARE=1
         ;;
-        '--security-update')
-            if [ $EXECUTE == 1 ];then user_msg "Check for and install packages with security updates"; fi
-            SECURITY_UPDATE=1
+        '--reconfigure')
+            RECONFIGURE=1
         ;;
-        '--update-cluster')
-            if [ $EXECUTE == 1 ];then user_msg "Check for and install Ion Software updates on the cluster nodes"; fi
-            UPDATE_SOFTWARE_CLUSTER=1
-            if [ $(id -u) == 0 ]; then
-                USC_CMD="sudo -u $TSCONFIG_CLUSTER_ADMIN grp_update.sh"
-            else
-                USC_CMD="grp_update.sh"
-            fi
+        '--skip-init')   # do not execute interactive, initialization steps
+            INITIAL_CONFIG=0
+            not_implemented
+        ;;
+        '--change-hostname'|'-r')
+            if [ $EXECUTE == 1 ];then user_msg "Change server hostname"; fi
+            UPDATE_HOSTNAME=1
         ;;
         '--configure-timezone'|'-z')
             if [ $EXECUTE == 1 ];then user_msg "Configure time zone settings"; fi
@@ -122,10 +130,12 @@ while [ $# != 0 ]; do
             shift
             ETH_DEV=$1
             if [ $EXECUTE == 1 ];then user_msg "Ethernet device specified: $ETH_DEV"; fi
+            not_implemented
         ;;
         '--apt-usb')
             if [ $EXECUTE == 1 ];then user_msg "Use Ion Install USB Drive as apt repository"; fi
             APT_USB=1
+            not_implemented
         ;;
         '--purge-all-deb')
             PURGE_ALL_DEB=1
@@ -144,28 +154,18 @@ while [ $# != 0 ]; do
         ;;
         *)
         echo "Unknown option: $1.  Exiting"
-        echo "Use TSconfig --help for options."
+        echo "Use TSconfig-ansible --help for options."
         exit 1
         ;;
     esac
     shift
 done
 
-#---                                ---#
-#---    Check for too many options  ---#
-#---                                ---#
-NOPTS=$(how_many_options) || true
-if [ $NOPTS -gt 1 ]; then
-    echo -e "\nOnly one option at a time is allowed.\n"
-    exit 0
-fi
-
 #---                                                                        ---#
 #---    Exit and call script again this time logging all stdout and stderr  ---#
 #---                                                                        ---#
 if [ $EXECUTE -eq 0 ]; then
-#    needs_root
-	rotate_log
+    rotate_log
     exec 3>&2   # fd 3 opened and directed to stderr; 'stores' original stderr fd
     exec 2>$TSCONFIG_LOG_DIR/$TSCONFIG_DEBUG_LOG    # Redirect stderr to a file
     echo $(date) > $TSCONFIG_LOG_DIR/$TSCONFIG_INSTALL_LOG
@@ -204,6 +204,9 @@ if [ $CONF_HEAD_NODE == 1 ]; then
     #    exit 1
     #fi
     # Root partition space check
+    echo "=================================================================="
+    echo "Checking available disk space on the root partition"
+    echo "=================================================================="
     free_root=$(df -Pk |grep `mount|grep "on / type"|awk '{print $1}'`|awk '{print $4}')
     log "root partition free space:$free_root kb"
     free_threshold=10485760
@@ -217,35 +220,54 @@ if [ $CONF_HEAD_NODE == 1 ]; then
         user_msg "=================================================================="
         exit 0
     fi
-    
-    
-    export ANSIBLE_HOST_KEY_CHECKING=False
-    
-    ANSIBLE_RSA_KEY=~/.ssh/ansible_rsa_key
-    if [[ ! -e ${ANSIBLE_RSA_KEY} ]]; then
-        log "Generate ssh key"
-        ssh-keygen -f ${ANSIBLE_RSA_KEY} -t rsa -N ''
-        
-        #log "Copy public key"
-        #cat ${ANSIBLE_RSA_KEY}.pub >> $HOME/.ssh/authorized_keys
-    fi
-    
+
     # Use local hosts file, if it exists, else default
     ANSIBLE_HOME=/usr/share/ion-tsconfig/ansible
     MY_HOSTS=torrentsuite_hosts
     if [ -r $ANSIBLE_HOME/torrentsuite_hosts_local ]; then
         MY_HOSTS=torrentsuite_hosts_local
     fi
-    
+
+    #============================================================================================
+    # Compute Node Handling
+    #============================================================================================
+    fubar=$(awk '/\[computes\]/,/\[webserver:children\]/' ${ANSIBLE_HOME}/${MY_HOSTS} | grep -v '\[')
+    if [ ! -z "$fubar" ]; then
+        configure_computes=true
+    else
+        configure_computes=false
+    fi
+
+    if $configure_computes; then
+        
+        echo "=================================================================="
+        echo "Preparing compute nodes for configuration"
+        echo "=================================================================="
+        # Make sure we have an ssh key to give to the compute nodes - Run as ionadmin user, not root
+        sudo -u $TSCONFIG_CLUSTER_ADMIN mkdir --mode=0700 -p /home/$TSCONFIG_CLUSTER_ADMIN/.ssh
+        ANSIBLE_RSA_KEY=/home/$TSCONFIG_CLUSTER_ADMIN/.ssh/ansible_rsa_key
+        if [[ ! -e ${ANSIBLE_RSA_KEY} ]]; then
+            log "Generate ssh key"
+            sudo -u $TSCONFIG_CLUSTER_ADMIN ssh-keygen -q -f ${ANSIBLE_RSA_KEY} -t rsa -N ''
+        fi
+        # This prompts for a password every time.
+        echo -e "\nEnter compute node password..."
+        sudo -u $TSCONFIG_CLUSTER_ADMIN ansible all -i ${ANSIBLE_HOME}/${MY_HOSTS} -m authorized_key -a "user=$TSCONFIG_CLUSTER_ADMIN key='{{ lookup('file', '${ANSIBLE_RSA_KEY}.pub') }}' path=/home/$TSCONFIG_CLUSTER_ADMIN/.ssh/authorized_keys manage_dir=no" --ask-pass -c paramiko -vvvv 1>&2 || true
+        
+    fi
+
+    export ANSIBLE_HOST_KEY_CHECKING=False
     # Rotate the ansible log file (Also specified in /etc/ansible/ansible.cfg)
     rotate /var/log/ion/ansible.log
-    
+
     log "Configure Head Node"
+    echo "=================================================================="
+    echo "Starting the site configuration with ansible"
+    echo "=================================================================="
     cd $ANSIBLE_HOME
     ansible-playbook site.yml \
         -i ${ANSIBLE_HOME}/${MY_HOSTS} \
-        --sudo \
-        --ask-sudo-pass
+        --sudo
 
 
     #Call initial configuration steps which require user input
@@ -263,39 +285,10 @@ if [ $CONF_HEAD_NODE == 1 ]; then
 fi
 
 #---
-if [ $UNCONF_SERVER -eq 1 ]; then
-    log "Unconfigure Server"
-
-	echo
-	echo "This will disable the server from functioning as a normal Torrent Server."
-	echo "Only continue if you are prepared to reconfigure the server again."
-	echo -n "Okay to continue? (n|Y) "
-	read -p "Okay to continue? (n|Y) " userin
-	if [ "$userin" != "Y" ]; then
-		log "User-aborted unconfigure operation"
-		exit 0
-    fi
-
-	unconfigure_torrentserver
-
-    echo "=================================================================="
-    echo "Unconfigure server process completed successfully"
-    echo "=================================================================="
-    log "Unconfigure server process completed successfully"
-    exit 0
-fi
-
-
-#---
 #---    N.B. When a software update is specified, all other options are ignored
 #---
 if [ $UPDATE_SOFTWARE == 1 ]; then
-    if [ $APT_USB -eq 0 ]; then
-        if ! network_tests $ETH_DEV; then
-            msg="Cannot update software: Failed network test for device $ETH_DEV. Try using the --eth-dev argument to specify an alternate ethernet adapter"
-            error "$0:${LINENO}" "${msg}" 1
-        fi
-    fi
+
     log "Torrent Suite update"
     # Root partition space check
     free_root=$(df -Pk |grep `mount|grep "on / type"|awk '{print $1}'`|awk '{print $4}')
@@ -312,76 +305,30 @@ if [ $UPDATE_SOFTWARE == 1 ]; then
 
     else
 
-        ion_daemon_ctrl stop
-        config_ionSoftware      #N.B. $SECURITY_UPDATE will be evaluated in this function
-
-        echo "=================================================================="
-        echo "This node's software updated"
-        echo "=================================================================="
-        log "This node's software updated"
-
-        if [ $UPDATE_SOFTWARE_CLUSTER == 1 ]; then
-            echo "=================================================================="
-            echo "Updating software on the compute nodes"
-            echo "=================================================================="
-            $USC_CMD
-            echo "=================================================================="
-            echo "Compute Node software updated"
-            echo "=================================================================="
-            log "Compute Node software updated"
+        # Use local hosts file, if it exists, else default
+        ANSIBLE_HOME=/usr/share/ion-tsconfig/ansible
+        MY_HOSTS=torrentsuite_hosts
+        if [ -r $ANSIBLE_HOME/torrentsuite_hosts_local ]; then
+            MY_HOSTS=torrentsuite_hosts_local
         fi
 
-        echo "=================================================================="
-        echo "TSconfig software update process completed successfully"
-        echo "=================================================================="
-        log "TSconfig process completed successfully"
+        log "Update software"
+        cd $ANSIBLE_HOME
+        ansible-playbook software_update.yml \
+            -i ${ANSIBLE_HOME}/${MY_HOSTS} \
+            --sudo
 
-    fi
-    exit
-fi
-
-#---
-#---    Option was called by itself
-#---
-if $CONF_APT_CACHING; then
-    apt-get install apt-cacher-ng
-    echo 'Acquire::http::Proxy "http://localhost:3142";' | sudo tee /etc/apt/apt.conf.d/01proxy
-    echo "=================================================================="
-    echo 'To disable apt-cacher-ng, uninstall the package and remove file /etc/apt/apt.conf.d/01proxy'
-    echo "=================================================================="
-    echo
-fi
-
-#---
-#---    Option was called by itself
-#---
-if [ $UPDATE_SOFTWARE_CLUSTER == 1 ]; then
-    echo "=================================================================="
-    echo "Updating software on the compute nodes"
-    echo "=================================================================="
-    $USC_CMD
-    echo "=================================================================="
-    echo "Compute Node software updated"
-    echo "=================================================================="
-    log "Compute Node software updated"
-    
-    exit
-fi
-
-#---
-#---    Option was called by itself
-#---
-if [ $SECURITY_UPDATE == 1 ]; then
-    if [ $APT_USB -eq 0 ]; then
-        if ! network_tests $ETH_DEV; then
-            msg="Cannot update software: Failed network test for device $ETH_DEV. Try using the --eth-dev argument to specify an alternate ethernet adapter"
-            error "$0:${LINENO}" "${msg}" 1
+        if [ $? == 0 ]; then
+            echo "=================================================================="
+            echo "Software Update Complete"
+            echo "=================================================================="
+        else
+            echo "=================================================================="
+            echo "There was an error.  Sorry.  Check the log files."
+            echo "=================================================================="
         fi
+
     fi
-    #Processes should be stopped, update completed, restart processes
-    ion_daemon_ctrl stop
-    install_security_upgrades
-    ion_daemon_ctrl restart
 
     exit
 fi
@@ -390,66 +337,101 @@ fi
 #---    Run the reconfiguration steps only
 #---
 if [ $RECONFIGURE == 1 ]; then
-    log "Re-running configuration steps"
-    echo "=================================================================="
-    echo "Re-running configuration steps"
-    if is_master; then
-        log "No software package files will be updated"
-        echo "No software package files will be updated"
-        echo "=================================================================="
-        reconfig_head_node
-    else
-        log "ubuntu system packages will be updated, but not Torrent Suite packages"
-        echo "ubuntu system packages will be updated, but not Torrent Suite packages"
-        echo "=================================================================="
-        reconfig_compute_node
-    fi
+#    log "Re-running configuration steps"
+#    echo "=================================================================="
+#    echo "Re-running configuration steps"
+#    if is_master; then
+#        log "No software package files will be updated"
+#        echo "No software package files will be updated"
+#        echo "=================================================================="
+#        reconfig_head_node
+#    else
+#        log "ubuntu system packages will be updated, but not Torrent Suite packages"
+#        echo "ubuntu system packages will be updated, but not Torrent Suite packages"
+#        echo "=================================================================="
+#        reconfig_compute_node
+#    fi
+    not_implemented
     exit 0
 fi
 #---
 #---    N.B. When a hostname change is specified, all other options are ignored
 #---
 if [ $UPDATE_HOSTNAME == 1 ]; then
-    # TEST CODE
+    needs_root
     2>&-
-	if is_master; then
-    	echo -e "WARNING: Renaming a head node when there are compute nodes"
-        echo -e "configured will break the cluster: the compute nodes will"
-        echo -e "need to be reconfigured with the new head node name\n"
-        #TODO: check the tsconf.conf file for compute nodes.
-        #TODO: register compute nodes in tsconf.conf file.
-		log "Changing hostname"
-		change_hostname
-    else
-
-        log "Changing hostname of compute node is not supported"
-        #change_hostname
-
-        # TODO remove host from SGE
-        # qconf -de <hostname>
-        # qconf -ds <hostname>
-        # qconf -dh <hostname>
-        # remove from all.q (cluster queue)
-        # remove from host group @allhosts
+    oldFQDN=$(hostname)
+    ## User prompts to get new hostname and domain
+    # Defines three variables: newHostName, newDomainName, newFQDN
+    get_input_hostname
+    
+    # Set new name (so Ansible will pick it up as {{ansible_hostname}} and {{ansible_fqdn}})
+    /bin/hostname ${newHostName}
+    echo "${newHostName}" > /etc/hostname
+    echo "${newHostName}" > /etc/mailname
+    sed -i "s/^127\.0\.1\.1.*/127.0.1.1 ${newFQDN} ${newHostName}/" /etc/hosts
+    if [ -f /etc/postfix/main.cf ]; then
+        sed -i "s/${oldFQDN}/${newFQDN}/g" /etc/postfix/main.cf
     fi
+    
+    hostfiles=$(find /usr/share/ion-tsconfig/ansible -name torrentsuite_hosts\*)
+    for hostfile in ${hostfiles[@]}; do
+        sed -i -e "/^\[headnode\]/ { n ; s/^.*/${newHostName} ansible_connection=local/ }" $hostfile
+    done
+    
+    log "Changing hostname"
+    ANSIBLE_HOME=/usr/share/ion-tsconfig/ansible
+    MY_HOSTS=torrentsuite_hosts
+    if [ -r $ANSIBLE_HOME/torrentsuite_hosts_local ]; then
+        MY_HOSTS=torrentsuite_hosts_local
+    fi
+
+    cd $ANSIBLE_HOME
+    ansible-playbook rename_headnode.yml \
+        -i ${ANSIBLE_HOME}/${MY_HOSTS} \
+        --sudo
+    
+    (
+    set +e
+    qconf -de $oldFQDN
+    qconf -ds $oldFQDN
+    qconf -dh $oldFQDN
+    )
+    
+    #DIAGNOSTICS
+    if false; then
+        echo "===================================================================="
+        cat /var/lib/gridengine/iontorrent/common/act_qmaster
+        cat /var/lib/gridengine/iontorrent/common/host_aliases
+        cat /etc/hosts
+        cat /etc/hostname
+        cat /etc/mailname
+        grep "\[headnode\]" -A1 /usr/share/ion-tsconfig/ansible/torrentsuite_hosts*
+        cat /etc/postfix/main.cf
+        echo "===================================================================="
+    fi
+
     exit 0
 fi
-
 
 #---
 #---    Execute the timezone configuration script
 #---
 if [ $CONF_TIME_ZONE == 1 ]; then
-	log "Configuring timezone"
+    # First prompt user for interactive timezone setting
     dpkg-reconfigure tzdata
+    # Next, propagate the headnode's settings to the computes
+    cd $ANSIBLE_HOME
+    ansible-playbook -i ${ANSIBLE_HOME}/${MY_HOSTS} timezone.yml --sudo
 fi
 
 #---
 #---    Execute the postfix configuration script
 #---
 if [ $CONF_POSTFIX == 1 ]; then
-	log "configuring postfix"
-    dpkg-reconfigure postfix
+    not_implemented
+#	log "configuring postfix"
+#    dpkg-reconfigure postfix
 fi
 #---
 #---    Execute the deb package purge command
@@ -460,7 +442,8 @@ if [ $PURGE_ALL_DEB == 1 ]; then
 fi
 
 if [ $CHANGE_PASSWORD == 1 ]; then
-    exec 2>&3   # Redirect stderr (which points to a file) back to stderr (console)
-    config_password
+    not_implemented
+#    exec 2>&3   # Redirect stderr (which points to a file) back to stderr (console)
+#    config_password
 fi
 exit 0

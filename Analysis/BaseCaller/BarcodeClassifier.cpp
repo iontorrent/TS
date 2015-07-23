@@ -115,14 +115,10 @@ BarcodeClassifier::BarcodeClassifier(OptArgs& opts, BarcodeDatasets& datasets, c
   if (compute_dmin or score_auto_config_)
     ComputeHammingDistance();
 
-  int    bc_mode       = 2;
-  double bc_cutoff     = 1.0;
-  double bc_separation = 2.5;
-
   // Set options with limits that potentially depend on barcode set Hamming distance
   SetClassifiactionParams(opts.GetFirstInt    ('-', "barcode-mode", 2),
                           opts.GetFirstDouble ('-', "barcode-cutoff", 1.0),
-                          opts.GetFirstDouble ('-', "barcode-separation", 2.5));
+                          opts.GetFirstDouble ('-', "barcode-separation", 2.0));
 
 
   // --- Pretty print barcode processing settings
@@ -258,7 +254,7 @@ void BarcodeClassifier::SetClassifiactionParams(int mode, double cutoff, double 
   score_cutoff_                   = cutoff;
   score_separation_               = separation;
 
-  CheckParameterLowerUpperBound("barcode-mode",          score_mode_,      1,1, 3,1, 2);
+  CheckParameterLowerUpperBound("barcode-mode",          score_mode_,      1,1, 5,1, 2);
 
   // Do we have minimum distance information available?
   if (hamming_dmin_ > 0) {
@@ -391,6 +387,9 @@ int  BarcodeClassifier::BaseSpaceClassification(const ProcessedRead &processed_r
       if (num_errors < best_errors) {
         best_errors = num_errors;
         best_barcode = bc;
+      } else if (num_errors == best_errors){
+        // We only assign a barcode when there is a unique best barcode
+        best_barcode = -1;
       }
     }
     return best_barcode;
@@ -477,6 +476,68 @@ bool BarcodeClassifier::MatchesBarcodeSignal(const BasecallerRead& basecaller_re
 
 // ------------------------------------------------------------------------
 
+int  BarcodeClassifier::ProportionalSignalClassification(const BasecallerRead& basecaller_read, float& best_distance, int& best_errors,
+                                                  vector<float>& best_bias, int& filtered_zero_errors)
+{
+    int best_barcode     = -1;
+    best_errors          =  0;
+    filtered_zero_errors = -1;
+    best_distance        = score_cutoff_ + score_separation_;
+    float second_best_distance = 1e20;
+
+    for (int bc = 0; bc < num_barcodes_; ++bc) {
+
+      int num_errors = 0;
+      float distance = 0.0;
+      vector<float> bias(barcode_max_flows_,0);
+
+      for (int flow = barcode_min_start_flow_; flow < barcode_[bc].adapter_start_flow; ++flow) {
+
+        if (barcode_ignore_flows_ and  (flow >= classifier_ignore_flows_[0]) and (flow < classifier_ignore_flows_[1]))
+          continue;
+        double proportional_signal = (basecaller_read.normalized_measurements.at(flow)+0.5)/(barcode_[bc].predicted_signal.at(flow)+0.5);
+
+      // Compute Bias
+      bias.at(flow-barcode_min_start_flow_) = 1.0-proportional_signal;
+
+      // Compute distance
+      double residual = 1.0-proportional_signal;
+      // overcall allowed here but not undercall
+      if (flow == barcode_[bc].num_flows-1)
+          residual = max(residual, 0.0);
+
+      (score_mode_ == 4) ? (distance += residual * residual) : (distance += fabs(residual));
+
+        // Compute hard decision errors - approximation from predicted values
+        if (flow < barcode_[bc].num_flows-1)
+          num_errors += round(fabs(barcode_[bc].predicted_signal.at(flow) - basecaller_read.prediction[flow]));
+        else
+          num_errors += round(max(barcode_[bc].predicted_signal.at(flow) - basecaller_read.prediction[flow], (float)0.0));
+      }
+
+      if (distance < best_distance) {
+        best_errors = num_errors;
+        second_best_distance = best_distance;
+        best_distance = distance;
+        best_barcode = bc;
+        best_bias = bias;
+      }
+      else if (distance < second_best_distance)
+        second_best_distance = distance;
+    }
+
+    if (second_best_distance - best_distance  < score_separation_) {
+      if (best_errors == 0)
+        filtered_zero_errors = best_barcode;
+      best_barcode = -1;
+    }
+    return best_barcode;
+};
+
+
+
+// ------------------------------------------------------------------------
+
 /*
  * flowSpaceTrim - finds the closest barcode in flowspace to the sequence passed in,
  * and then trims to exactly the expected flows so it can be error tolerant in base space
@@ -498,6 +559,11 @@ void BarcodeClassifier::ClassifyAndTrimBarcode(int read_index, ProcessedRead &pr
     // Minimize L1 distance for score_mode_ == 3
 	best_barcode = SignalSpaceClassification(basecaller_read, processed_read.barcode_distance, processed_read.barcode_n_errors,
                                              processed_read.barcode_bias, processed_read.barcode_filt_zero_error);
+  } else if (score_mode_ ==4 or score_mode_ ==5){
+      //L2 for score mode 4
+      //L1 for score mode 5
+      best_barcode = ProportionalSignalClassification(basecaller_read, processed_read.barcode_distance, processed_read.barcode_n_errors,
+                                               processed_read.barcode_bias, processed_read.barcode_filt_zero_error);
   }
 
   // -------- Classification done, now accounting ----------

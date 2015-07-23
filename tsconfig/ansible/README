@@ -3,30 +3,21 @@ effectively replaces the ad-hoc scripts (ts_functions, et al.) currently used to
 The goal is to enable consistent configuration management for stand-alone servers as well as Ion
 Clusters.
 
-Date: June 30, 2014
-
-===== 
-Before running the provisioning command, each compute node needs to have secure-key access
-setup.  For each compute node, run:
-
-ssh-copy ionadmin@<<compute hostname>>
-
-This assumes you are running as ionadmin user on the headnode, and that you have previously created an
-ssh key with:
-
-ssh-keygen
+Date: February 17, 2015
 
 =====
 Still a work in progress.  But for now, there are two files which need manual editing.
 
 torrentsuite_hosts:
+To prevent package updates from overwriting this file, create a copy named torrentsuite_hosts_local and make customizations to that instead.
 
 The local hostname will automatically appear under [headnode].  It is put there during package installation.
+
 If this is a cluster installation, put the hostname(s) of the compute nodes under [computes].
 
 
-
-vars/nfs_client:
+group_vars/all:
+To prevent package updates from overwriting this file, create a copy named group_vars/all_local and make customizations to that instead.
 
 1 - If there are NAS storage units that need to be NFS mounted on each compute resource, add them under the
 nas_mounts: category with an entry like so:
@@ -36,22 +27,15 @@ nas_mounts: category with an entry like so:
 Note: Space character after the colon is important!
 
 
-
 host_vars/<<hostname>>:
 
 Put site-specific variable definitions in this file.
-For instance, to override the default apt repository (ionupdates.com) for an Ion internal site:
-The following would use lucid-alpha at updates.ite:
-
----
-ion_repository_hostname: updates.ite
-ion_build_flag: "-alpha/"
 
 
 ==================================
 ION CLUSTER IN STANDALONE
 ==================================
-This refers to a system like TRI which started with a single Torrent Server, then expanded to three and made one of the Torrent Servers the master and the rest compute nodes.  The new master node exports its /results partition.  This needs to be entered into vars/nfs_client file as
+This refers to a system like TRI which started with a single Torrent Server, then expanded to three and made one of the Torrent Servers the master and the rest compute nodes.  The new master node exports its /results partition.  This needs to be entered into group_vars/all file as
 
 nas_mounts:
   - { name: <<hostname>>, directory: /results, mountpoint: /results }

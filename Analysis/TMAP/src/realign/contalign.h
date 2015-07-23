@@ -10,6 +10,14 @@
 
 class ContAlign
 {
+public:
+    enum SCALE_TYPE
+    {
+        SCALE_NONE = 0,
+        SCALE_GEP = 1,
+        SCALE_GIP_GEP = 2
+    };
+private:
     int xref, yref, bstep;
 
     int max_ylen, max_xlen, max_size;
@@ -34,7 +42,10 @@ class ContAlign
     char *xhomo;
     char *yhomo;
 
+    std::basic_streambuf <char>* logbuf_;
+    std::ostream* own_log_;
     std::ostream* logp_;
+    SCALE_TYPE scale_type_;
 
     /*
     member inner loops used for finding alignment
@@ -53,8 +64,11 @@ public:
 
     void set_scoring (int gip, int gep, int mat, int mis);
 
-    void set_log (std::ostream& log) { logp_ = &log; }
-    void reset_log () { logp_ = NULL; }
+    void set_log (std::ostream& log);
+    void set_log (int posix_handle);
+    void reset_log ();
+    void set_scale (SCALE_TYPE scale_type) { scale_type_ = scale_type; }
+    SCALE_TYPE get_scale () const { return scale_type_; }
 
     // calculates best local alignment nucleotide sequence pair
     // returns maximum local alignment score

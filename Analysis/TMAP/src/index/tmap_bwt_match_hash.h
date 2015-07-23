@@ -62,7 +62,7 @@ tmap_bwt_match_hash_get(tmap_bwt_match_hash_t *h, tmap_bwt_int_t key, uint8_t c,
   @param  hash     a occurence array hash
   @details         this will not set the upper occurrence of the SA interval
   */
-inline void
+void
 tmap_bwt_match_hash_occ(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, uint8_t c, tmap_bwt_match_occ_t *next, tmap_bwt_match_hash_t *hash);
 
 /*! 
@@ -74,7 +74,7 @@ tmap_bwt_match_hash_occ(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, uint8
   @param  hash     a occurence array hash
   @details         this will not set the upper occurrences of the SA interval
   */
-inline void
+void
 tmap_bwt_match_hash_2occ(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, uint8_t c, tmap_bwt_match_occ_t *next, tmap_bwt_match_hash_t *hash);
 
 /*! 
@@ -84,7 +84,7 @@ tmap_bwt_match_hash_2occ(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, uint
   @param  next     pointer to the next match structure
   @param  hash     a occurence array hash
   */
-inline void
+void
 tmap_bwt_match_hash_occ4(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, tmap_bwt_match_occ_t next[4], tmap_bwt_match_hash_t *hash);
 
 /*! 
@@ -94,7 +94,7 @@ tmap_bwt_match_hash_occ4(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, tmap
   @param  next     pointer to the next match structure
   @param  hash     a occurence array hash
   */
-inline void
+void
 tmap_bwt_match_hash_2occ4(const tmap_bwt_t *bwt, tmap_bwt_match_occ_t *prev, tmap_bwt_match_occ_t next[4], tmap_bwt_match_hash_t *hash);
 
 /*! 

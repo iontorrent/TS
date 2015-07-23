@@ -1,0 +1,19 @@
+Metadata-Version: 1.0
+Name: cutadapt
+Version: 0.9.5
+Summary: trim adapters from high-throughput sequencing reads
+Home-page: http://code.google.com/p/cutadapt/
+Author: Marcel Martin
+Author-email: marcel.martin@tu-dortmund.de
+License: MIT
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python :: 2.6
+Classifier: Programming Language :: Python :: 2.7
+Classifier: Programming Language :: Python :: 3
+Classifier: Topic :: Scientific/Engineering :: Bio-Informatics

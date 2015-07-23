@@ -33,7 +33,7 @@ MatchedCubeInt::MatchedCubeInt()
 
 // set up a basic data cube + matched h5 set
 void MatchedCube::InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, 
-                                  char *set_name, char *set_description, const char *param_root )
+                                  const char *set_name, const char *set_description, const char *param_root )
 {
   //printf ( "%s\n",set_name );
   string str;
@@ -58,7 +58,7 @@ void MatchedCube::InitBasicCube ( H5File &h5_local_ref, int col, int row, int ma
 
 // set up a basic data cube + matched h5 set
 //@TODO: use templates to avoid "INT" duplication
-void MatchedCubeInt::InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, char *set_name, char *set_description,char *param_root )
+void MatchedCubeInt::InitBasicCube ( H5File &h5_local_ref, int col, int row, int maxflows, const char *set_name, const char *set_description, const char *param_root )
 {
   //printf ( "%s\n",set_name );
   string str;
@@ -133,7 +133,7 @@ void RotatingCube::SafeWrite ( int iBlk )
     h5_vec[iBlk]->WriteDataCube ( source );
 }
 
-void RotatingCube::RotateMyCube ( H5File &h5_local_ref, int total_blocks, char *cube_name, char *cube_description )
+void RotatingCube::RotateMyCube ( H5File &h5_local_ref, int total_blocks, const char *cube_name, const char *cube_description )
 {
   char s[128];
   string str;
@@ -151,7 +151,7 @@ void RotatingCube::RotateMyCube ( H5File &h5_local_ref, int total_blocks, char *
 }
 
 
-void RotatingCube::InitRotatingCube ( H5File &h5_local_ref, int x, int y, int z, int total_blocks, char *cube_name, char *cube_description )
+void RotatingCube::InitRotatingCube ( H5File &h5_local_ref, int x, int y, int z, int total_blocks, const char *cube_name, const char *cube_description )
 {
   //printf ( "%s\n", cube_name );
   source.Init ( x, y, z );
@@ -202,7 +202,7 @@ void BkgParamH5::TryInitBeads ( H5File &h5_local_ref, int verbosity )
 
 
 
-int AddOneCommaString ( string &outstr, char *my_name )
+int AddOneCommaString ( string &outstr, const char *my_name )
 {
   char my_char_string[256];
   sprintf ( my_char_string,"%s,",my_name );
@@ -210,7 +210,7 @@ int AddOneCommaString ( string &outstr, char *my_name )
   return ( 1 );
 }
 
-int AddOneNoCommaString ( string &outstr, char *my_name )
+int AddOneNoCommaString ( string &outstr, const char *my_name )
 {
   char my_char_string[256];
   sprintf ( my_char_string,"%s",my_name );
@@ -218,7 +218,7 @@ int AddOneNoCommaString ( string &outstr, char *my_name )
   return ( 1 );
 }
 
-int AddCommaStrings ( string &outstr, char *my_name, int numval )
+int AddCommaStrings ( string &outstr, const char *my_name, int numval )
 {
   char my_char_string[256];
   for ( int i=0; i<numval; i++ )
@@ -254,6 +254,7 @@ void RegionBufferingByName(string &outstr, int &my_total_names)
   my_total_names+=AddOneCommaString ( outstr,"RatioDrift" );
   //float NucModifyRatio[NUMNUC];  // buffering modifier per nuc
   my_total_names+=AddCommaStrings ( outstr,"NucModifyRatio",NUMNUC );
+  my_total_names+=AddOneCommaString ( outstr,"reg_error" );
 }
 
 static void RegionNucShapeByName(string &outstr, int &my_total_names, int flow_block_size)
@@ -384,8 +385,8 @@ void BkgParamH5::InitBeads_BestRegion( H5File &h5_local_ref, int nBeads_live, co
     beads_bestRegion_residual.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/residual","residual error","");
     beads_bestRegion_kmult.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/kmult","kMult","");
     beads_bestRegion_dmult.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/dmult","dMult","");
-    beads_bestRegion_SP.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/SP","SP","");
-    beads_bestRegion_R.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/R","R","");
+    beads_bestRegion_SP.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/SP","SP: copies*copy_multiplier","");
+    beads_bestRegion_R.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/R","R: ratio of bead buffering to empty buffering","");
     beads_bestRegion_fittype.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/fittype","fittype","");
     beads_bestRegion_taub.InitBasicCube(h5_local_ref,nBeads_live,1,datacube_numflows,"/bestRegion/taub","taub","");
     sprintf(buff,"%d",nBeads_live);
@@ -407,14 +408,15 @@ void BkgParamH5::InitBeads_RegionCenter( H5File &h5_local_ref, int nRegions)
     beads_regionCenter_timeframe.InitBasicCube (h5_local_ref,1,max_frames,1,"/regionCenter/timeframe", "Time Frame", "frameNumber");
     beads_regionCenter_gainSens.InitBasicCube(h5_local_ref,nRegions,1,1,"/regionCenter/gainSens","gain*sens","");
     beads_regionCenter_location.InitBasicCube (h5_local_ref,nRegions,2,1,"/regionCenter/location", "y(row),x(col) for each bead", "row,col" );
+    beads_regionCenter_regionParams.InitBasicCube (h5_local_ref,nRegions,3+NUMNUC*3,1,"/regionCenter/regionParams", "gain,sens,copies,kmax*4,krate*4,d*4", "" );
     beads_regionCenter_predicted.InitBasicCube(h5_local_ref,nRegions,max_frames,datacube_numflows,"/regionCenter/predicted","predicted trace","");
     beads_regionCenter_corrected.InitBasicCube(h5_local_ref,nRegions,max_frames,datacube_numflows,"/regionCenter/corrected","background-adjusted trace","");
     beads_regionCenter_amplitude.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/amplitude","amplititude","");
     beads_regionCenter_residual.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/residual","residual error","");
     beads_regionCenter_kmult.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/kmult","kMult","");
     beads_regionCenter_dmult.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/dmult","dMult","");
-    beads_regionCenter_SP.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/SP","SP","");
-    beads_regionCenter_R.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/R","R","");
+    beads_regionCenter_SP.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/SP","SP: copies*copy_multiplier","");
+    beads_regionCenter_R.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/R","R: ratio of bead buffering to empty buffering","");
     beads_regionCenter_fittype.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/fittype","fittype","");
     beads_regionCenter_taub.InitBasicCube(h5_local_ref,nRegions,1,datacube_numflows,"/regionCenter/taub","taub","");
 }
@@ -482,7 +484,7 @@ void BkgParamH5::TryInitBeads_BestRegion ( H5File &h5_local_ref, int nBeads_live
 }
 
 
-void BkgParamH5::ConstructOneFile ( H5File &h5_local_ref, string &hgLocalFile, string &local_results,char *my_name )
+void BkgParamH5::ConstructOneFile ( H5File &h5_local_ref, string &hgLocalFile, string &local_results, const char *my_name )
 {
   hgLocalFile = local_results;
 
@@ -733,6 +735,7 @@ void BkgParamH5::IncrementalWriteRegionCenter ( int flow, bool lastflow )
         beads_regionCenter_location.SafeWrite(); // this only has to done once for all flows
         beads_regionCenter_gainSens.SafeWrite();
         beads_regionCenter_timeframe.SafeWrite();
+        beads_regionCenter_regionParams.SafeWrite();
     }
 }
 
@@ -830,8 +833,8 @@ void BkgParamH5::CloseRegion()
   beads_bestRegion_dmult.Close();
   beads_bestRegion_SP.Close();
   beads_bestRegion_R.Close();
-  beads_bestRegion_fittype.Close();
   beads_bestRegion_gainSens.Close();
+  beads_bestRegion_fittype.Close();
   beads_bestRegion_timeframe.Close();
   beads_bestRegion_taub.Close();
 
@@ -844,10 +847,11 @@ void BkgParamH5::CloseRegion()
   beads_regionCenter_dmult.Close();
   beads_regionCenter_SP.Close();
   beads_regionCenter_R.Close();
-  beads_regionCenter_fittype.Close();
   beads_regionCenter_gainSens.Close();
+  beads_regionCenter_fittype.Close();
   beads_regionCenter_timeframe.Close();
   beads_regionCenter_taub.Close();
+  beads_regionCenter_regionParams.Close();
 }
 
 
@@ -863,6 +867,7 @@ void BkgParamH5::CloseTraceXYFlow()
   beads_xyflow_dmult.Close();
   beads_xyflow_SP.Close();
   beads_xyflow_R.Close();
+  beads_xyflow_gainSens.Close();
   beads_xyflow_fittype.Close();
   beads_xyflow_timeframe.Close();
   beads_xyflow_residual.Close();
@@ -946,8 +951,8 @@ void BkgParamH5::saveBestRegionPointers()
   ptrs.m_beads_bestRegion_dmult = beads_bestRegion_dmult.Ptr();
   ptrs.m_beads_bestRegion_SP = beads_bestRegion_SP.Ptr();
   ptrs.m_beads_bestRegion_R = beads_bestRegion_R.Ptr();
-  ptrs.m_beads_bestRegion_fittype = beads_bestRegion_fittype.Ptr();
   ptrs.m_beads_bestRegion_gainSens = beads_bestRegion_gainSens.Ptr();
+  ptrs.m_beads_bestRegion_fittype = beads_bestRegion_fittype.Ptr();
   ptrs.m_beads_bestRegion_timeframe = beads_bestRegion_timeframe.Ptr();
   ptrs.m_beads_bestRegion_taub = beads_bestRegion_taub.Ptr();
 }
@@ -964,10 +969,11 @@ void BkgParamH5::saveRegionCenterPointers()
   ptrs.m_beads_regionCenter_dmult = beads_regionCenter_dmult.Ptr();
   ptrs.m_beads_regionCenter_SP = beads_regionCenter_SP.Ptr();
   ptrs.m_beads_regionCenter_R = beads_regionCenter_R.Ptr();
-  ptrs.m_beads_regionCenter_fittype = beads_regionCenter_fittype.Ptr();
   ptrs.m_beads_regionCenter_gainSens = beads_regionCenter_gainSens.Ptr();
+  ptrs.m_beads_regionCenter_fittype = beads_regionCenter_fittype.Ptr();
   ptrs.m_beads_regionCenter_timeframe = beads_regionCenter_timeframe.Ptr();
   ptrs.m_beads_regionCenter_taub = beads_regionCenter_taub.Ptr();
+  ptrs.m_beads_regionCenter_regionParams = beads_regionCenter_regionParams.Ptr();
 }
 
 
@@ -988,8 +994,9 @@ void BkgParamH5::InitBeads_xyflow(int write_params_flag, HashTable_xyflow &xyf_h
         beads_xyflow_mm.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/mismatch","mismatch, m/mm=0/1","");
         beads_xyflow_kmult.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/kmult","kmult","");
         beads_xyflow_dmult.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/dmult","dmult","");
-        beads_xyflow_SP.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/SP","SP","");
-        beads_xyflow_R.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/R","R","");
+        beads_xyflow_SP.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/SP","SP: copies*copy_multiplier","");
+        beads_xyflow_R.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/R","R: ratio of bead buffering to empty buffering","");
+        beads_xyflow_gainSens.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/gainSens","gain*sens","");
         beads_xyflow_fittype.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/fittype","fittype","");
         beads_xyflow_timeframe.InitBasicCube (h5TraceDbg,nBeads_xyf,max_frames,1,"/xyflow/timeframe", "Time Frame", "frameNumber");
         beads_xyflow_taub.InitBasicCube(h5TraceDbg,nBeads_xyf,1,1,"/xyflow/taub","taub","");
@@ -1004,6 +1011,7 @@ void BkgParamH5::InitBeads_xyflow(int write_params_flag, HashTable_xyflow &xyf_h
         ptrs.m_beads_xyflow_dmult = beads_xyflow_dmult.Ptr();
         ptrs.m_beads_xyflow_SP = beads_xyflow_SP.Ptr();
         ptrs.m_beads_xyflow_R = beads_xyflow_R.Ptr();
+        ptrs.m_beads_xyflow_gainSens = beads_xyflow_gainSens.Ptr();
         ptrs.m_beads_xyflow_fittype = beads_xyflow_fittype.Ptr();
         ptrs.m_beads_xyflow_timeframe = beads_xyflow_timeframe.Ptr();
         ptrs.m_beads_xyflow_residual = beads_xyflow_residual.Ptr();
@@ -1037,6 +1045,7 @@ void BkgParamH5::IncrementalWrite_xyflow ( bool lastflow )
       beads_xyflow_dmult.SafeWrite();
       beads_xyflow_SP.SafeWrite();
       beads_xyflow_R.SafeWrite();
+      beads_xyflow_gainSens.SafeWrite();
       beads_xyflow_fittype.SafeWrite();
       beads_xyflow_timeframe.SafeWrite();
       beads_xyflow_residual.SafeWrite();

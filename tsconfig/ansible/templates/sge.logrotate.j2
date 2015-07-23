@@ -1,0 +1,12 @@
+#{{ ansible_managed }}
+
+/var/spool/gridengine/*/messages {
+    size 10M
+    compress
+    nodelaycompress
+    missingok
+    notifempty
+    copytruncate
+    weekly
+    rotate 5
+}

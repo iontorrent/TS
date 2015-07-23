@@ -4,8 +4,7 @@
 #include <vector>
 #include <string>
 
-#include "H5File.h"
-#include "H5Arma.h"
+#include "IonH5Arma.h"
 #include "Mask.h"
 #include "Utils.h"
 #include "NumericalComparison.h"

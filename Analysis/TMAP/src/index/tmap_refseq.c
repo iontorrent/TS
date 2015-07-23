@@ -7,6 +7,10 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <getopt.h>
+#include <stdint.h>
+#include <string.h>
+#include <sys/types.h>
 
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"
@@ -77,6 +81,7 @@ tmap_refseq_supported(tmap_refseq_t *refseq)
 static inline void 
 tmap_refseq_write_header(tmap_file_t *fp, tmap_refseq_t *refseq)
 {
+  // size_t ll = 5;
   if(1 != tmap_file_fwrite(&refseq->version_id, sizeof(uint64_t), 1, fp) 
      || 1 != tmap_file_fwrite(&refseq->package_version->l, sizeof(size_t), 1, fp)
      || refseq->package_version->l+1 != tmap_file_fwrite(refseq->package_version->s, sizeof(char), refseq->package_version->l+1, fp)
@@ -162,7 +167,7 @@ tmap_refseq_anno_clone(tmap_anno_t *dest, tmap_anno_t *src, int32_t reverse)
 }
 
 uint64_t
-tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_only)
+tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_only, int32_t old_v)
 {
   tmap_file_t *fp_pac = NULL, *fp_anno = NULL;
   tmap_seq_io_t *seqio = NULL;
@@ -185,7 +190,10 @@ tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_onl
   refseq = tmap_calloc(1, sizeof(tmap_refseq_t), "refseq");
 
   refseq->version_id = TMAP_VERSION_ID; 
-  refseq->package_version = tmap_string_clone2(PACKAGE_VERSION);
+  if (old_v == 0) 
+     refseq->package_version = tmap_string_clone2(PACKAGE_VERSION);
+  else 
+     refseq->package_version = tmap_string_clone2("0.3.1");
   refseq->seq = buffer; // IMPORTANT: must nullify later
   refseq->annos = NULL;
   refseq->num_annos = 0;
@@ -998,22 +1006,23 @@ tmap_refseq_amb_bases(const tmap_refseq_t *refseq, uint32_t seqid, uint32_t star
 int
 tmap_refseq_fasta2pac_main(int argc, char *argv[])
 {
-  int c, help=0, fwd_only=0;
+  int c, help=0, fwd_only=0, old_v = 0;
 
-  while((c = getopt(argc, argv, "fvh")) >= 0) {
+  while((c = getopt(argc, argv, "fvhp")) >= 0) {
       switch(c) {
         case 'v': tmap_progress_set_verbosity(1); break;
         case 'f': fwd_only = 1; break;
         case 'h': help = 1; break;
+	case 'p': old_v = 1; break;
         default: return 1;
       }
   }
   if(1 != argc - optind || 1 == help) {
-      tmap_file_fprintf(tmap_file_stderr, "Usage: %s %s [-fvh] <in.fasta>\n", PACKAGE, argv[0]);
+      tmap_file_fprintf(tmap_file_stderr, "Usage: %s %s [-fvhp] <in.fasta>\n", PACKAGE, argv[0]);
       return 1;
   }
 
-  tmap_refseq_fasta2pac(argv[optind], TMAP_FILE_NO_COMPRESSION, fwd_only);
+  tmap_refseq_fasta2pac(argv[optind], TMAP_FILE_NO_COMPRESSION, fwd_only, old_v);
 
   return 0;
 }
@@ -1161,6 +1170,7 @@ tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
     }
     refseq->bed_exist = 1;
     FILE *fp = fopen(bedfile, "r");
+    if (fp == NULL) fprintf(stderr, "Warning cannot open bed file %s \n", bedfile);
     if (fp == NULL) return 0;
     char line[10000], last_chr[100];
     int32_t seq_id = -1;
@@ -1179,7 +1189,7 @@ tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
 	if (strncmp("track", line, 5)==0) continue;
 	char chr[100];
 	uint32_t beg, end;
-	sscanf(line, "%s %u %u", chr, &beg, &end);
+	sscanf(line, "%99s %u %u", chr, &beg, &end);
 	if (strcmp(last_chr, chr) != 0) {
 	    memsize = 1000;
 	    if (num > 0) {
@@ -1192,6 +1202,7 @@ tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
 	    if (next_id < 0 || next_id <= seq_id) {
 		fprintf(stderr, "ZZ warning %s %d\t%d\n", chr, seq_id, next_id);
 		tmap_error("Bed file is not sorted by chromosome order", Warn,  OutOfRange);
+        fclose (fp);
 		return 0;
 	    }
 	    seq_id = next_id;
@@ -1206,6 +1217,7 @@ tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
 	    }
 	    if (b[num-1] > beg) {
 		tmap_error("Bed file is not sorted by begin", Warn, OutOfRange);
+        fclose (fp);
 		return 0;
 	    } else if (e[num-1] >= end) { 
 		    // ZZ:current ampl is contained in the previous one 
@@ -1219,5 +1231,11 @@ tmap_refseq_read_bed(tmap_refseq_t *refseq, char *bedfile)
 	e[num] = end;
 	num++;
     }
+    if (seq_id >=0)  {
+	refseq->bednum[seq_id] = num;
+        refseq->bedstart[seq_id] = b;
+        refseq->bedend[seq_id] = e;
+    }
+    fclose (fp);
     return 1;
 }

@@ -239,7 +239,9 @@ $(function () {
                 "progress_flows": (status == "Complete" ? this.model.get('flows') : status),
                 "progress_percent": status == "Complete" ? 100 : Math.round((status / this.model.get('flows')) * 100),
                 "in_progress": !isNaN(parseInt(status)),
-                "is_proton" : this.model.get('chipInstrumentType') == "proton"
+                "is_proton" : this.model.get('platform').toLowerCase() == "proton",
+                "is_s5" : this.model.get('platform').toLowerCase() == "s5",
+                "other_instrument" : this.model.get('platform').toLowerCase() == "pgm" || this.model.get('platform').toLowerCase() == "",
             }));
             this.reports.setElement(this.$('.table_container'));
             this.reports.render();
@@ -380,6 +382,7 @@ $(function () {
         },
 
         template: Hogan.compile($("#experiment_table_template").html()),
+        sample_template: kendo.template($('#SampleColumnTemplate').html()),
 
         render: function () {
             var king_report = this.model.reports.length > 0 ? this.model.reports.at(0).toJSON() : null;
@@ -405,6 +408,9 @@ $(function () {
                     return king_report && king_report.quality_metrics && precisionUnits(king_report.quality_metrics.q0_mean_read_length);
                 }
             }));
+            var samples = this.$el.children('.samples')
+            samples.html(this.sample_template(this.model.toJSON()));
+            samples.find('[rel=popover]').popover({content: samples.find('#sample'+this.model.id).html()});
         },
 
         edit: function (e) {
@@ -612,7 +618,6 @@ $(function () {
             //Date requires extra formatting
             var params = {
                 'all_date': $("#rangeA").val(),
-                'all_text': $("#search_text").val(),
                 'result_status': $("#id_status").val(),
                 'star': $("#id_star:checked").exists(),
                 'results__projects__name': $("#id_project").val(),
@@ -623,6 +628,15 @@ $(function () {
                 'flows': $("#id_flows").val(),
                 'order_by': $("#order_by").val()
             };
+
+            sampleTube = $("#search_subject_nav").attr("title");
+            if (sampleTube == 'Search by sample tube label') {
+               params['plan__sampleTubeLabel__icontains'] = $("#search_text").val();
+            }
+            else {
+               params['all_text'] = $("#search_text").val();
+            }
+
             if (params['all_date']) {
                 if (!/ - /.test(params['all_date'])) {
                     params['all_date'] = params['all_date'] + ' - ' + params['all_date'];

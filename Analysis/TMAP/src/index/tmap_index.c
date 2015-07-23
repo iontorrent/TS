@@ -2,6 +2,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <getopt.h>
+#include <stdint.h>
+#include <stdio.h>
+
+#include "../io/tmap_file.h"
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"
 #include "../util/tmap_progress.h"
@@ -73,7 +79,7 @@ tmap_index_core(tmap_index_opt_t *opt)
   uint64_t ref_len = 0;
 
   // pack the reference sequence
-  ref_len = tmap_refseq_fasta2pac(opt->fn_fasta, TMAP_FILE_NO_COMPRESSION, 0);
+  ref_len = tmap_refseq_fasta2pac(opt->fn_fasta, TMAP_FILE_NO_COMPRESSION, 0, opt->old_v);
       
   if(TMAP_INDEX_TOO_BIG_GENOME <= ref_len) { // too big (2^32 - 1)!
       tmap_error("Reference sequence too large", Exit, OutOfRange);
@@ -98,7 +104,8 @@ tmap_index_core(tmap_index_opt_t *opt)
   tmap_sa_bwt2sa(opt->fn_fasta, opt->sa_interval);
 
   // pack the reference sequence
-  ref_len = tmap_refseq_fasta2pac(opt->fn_fasta, TMAP_FILE_NO_COMPRESSION, 1);
+  // ref_len = tmap_refseq_fasta2pac(opt->fn_fasta, TMAP_FILE_NO_COMPRESSION, 1, opt->old_v);
+  tmap_refseq_fasta2pac(opt->fn_fasta, TMAP_FILE_NO_COMPRESSION, 1, opt->old_v);
 }
 
 static int 
@@ -121,6 +128,7 @@ usage(tmap_index_opt_t *opt)
   tmap_file_fprintf(tmap_file_stderr, "         --version   print the index format that will be created and exit\n");
   tmap_file_fprintf(tmap_file_stderr, "         -v          print verbose progress information\n");
   tmap_file_fprintf(tmap_file_stderr, "         -h          print this message\n");
+  tmap_file_fprintf(tmap_file_stderr, "         -p          pretend the version of reference built is old, so the index built can be used by older tmap\n");
   tmap_file_fprintf(tmap_file_stderr, "\n");
   return 1;
 }
@@ -137,6 +145,7 @@ tmap_index(int argc, char *argv[])
   opt.sa_interval = TMAP_SA_INTERVAL; 
   opt.is_large = -1;
   opt.check_hash = 1;
+  opt.old_v = 0;
       
   if(2 == argc && 0 == strcmp("--version", argv[1])) {
       tmap_file_stdout = tmap_file_fdopen(fileno(stdout), "wb", TMAP_FILE_NO_COMPRESSION);
@@ -145,7 +154,7 @@ tmap_index(int argc, char *argv[])
       return 0;
   }
 
-  while((c = getopt(argc, argv, "f:o:i:w:a:hvH")) >= 0) {
+  while((c = getopt(argc, argv, "f:o:i:w:a:hvHp")) >= 0) {
       switch(c) {
         case 'f':
           opt.fn_fasta = tmap_strdup(optarg); break;
@@ -166,6 +175,8 @@ tmap_index(int argc, char *argv[])
           return usage(&opt);
         case 'H':
           opt.check_hash = 0; break;
+	case 'p':
+	  opt.old_v = 1; break;
         default:
           return usage(&opt);
       }

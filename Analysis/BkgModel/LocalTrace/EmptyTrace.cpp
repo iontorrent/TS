@@ -294,6 +294,15 @@ void EmptyTrace::AccumulateEmptyTrace ( float *bPtr, float *tmp_shifted, float w
       kount++;
     }
 }
+void EmptyTrace::AccumulateEmptyTrace ( double *bPtr, float *tmp_shifted, float w )
+{
+  int kount = 0;
+  for ( int frame=0;frame<imgFrames;frame++ )
+    {
+      bPtr[kount] += tmp_shifted[frame] * w;
+      kount++;
+    }
+}
 
 
 void EmptyTrace::RemoveEmptyTrace ( float *bPtr, float *tmp_shifted, float w )
@@ -334,7 +343,8 @@ void EmptyTrace::GenerateAverageEmptyTrace (
 
   float total_weight = 0.0001;
   bPtr = &bg_buffers[flow_buffer_index*imgFrames];
-
+  double * accumtrace = new double[imgFrames];
+  for(int i = 0; i < imgFrames; i++) accumtrace[i] = 0.0;
   assert ( nRef >= 0 );
 
   int iWell = 0;
@@ -377,7 +387,7 @@ void EmptyTrace::GenerateAverageEmptyTrace (
               w = 1.0f / ( 1.0f + ( bfmask->GetNumLiveNeighbors ( ay,ax ) * 2.0f ) );
 #endif
               total_weight += w;
-              AccumulateEmptyTrace ( bPtr,tmp_shifted,w );
+              AccumulateEmptyTrace ( accumtrace,tmp_shifted,w );
               if ( do_ref_trace_trim )
                 {
                   valsAtT0[iWell] = tmp_shifted[ix_t0];
@@ -389,6 +399,7 @@ void EmptyTrace::GenerateAverageEmptyTrace (
         }
     }
   // fprintf(stdout, "GenerateAverageEmptyTrace: flow_buffer_index=%d, region row=%d, region col=%d, total weight=%f, flow=%d\n", flow_buffer_index, region->row, region->col, total_weight, flow);
+  for(int i = 0; i < imgFrames; i++) bPtr[i] = (float)accumtrace[i];
 
   //if ((regionIndex == 132) && (flow==19))
   //  fprintf(stdout, "Debug stop");

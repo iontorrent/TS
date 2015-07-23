@@ -15,7 +15,7 @@ from optparse import OptionParser
 def printtime(message, *args):
     if args:
         message = message % args
-    print "[ " + time.strftime('%X') + " ] " + message
+    print "[ " + time.strftime('%a %Y-%m-%d %X %Z') + " ] " + message
     sys.stdout.flush()
     sys.stderr.flush()
 
@@ -83,6 +83,22 @@ def main():
         tvcrootdir = os.path.join( os.path.dirname(os.path.realpath(__file__)), "..")
     tvcrootdir = os.path.normpath( tvcrootdir )
 
+    # write effective bed file
+    if options.ptrim_bed and options.bedfile:
+        tvcutils_command = "tvcutils validate_bed"
+        tvcutils_command += ' --reference "%s"' % options.reference
+        tvcutils_command += ' --target-regions-bed "%s"' % options.ptrim_bed
+        tvcutils_command += ' --effective-bed "%s"' % os.path.join(options.outdir,'effective_regions.bed')
+        RunCommand(tvcutils_command,'Write effective bed')
+    elif options.ptrim_bed and not options.bedfile:
+        tvcutils_command = "tvcutils validate_bed"
+        tvcutils_command += ' --reference "%s"' % options.reference
+        tvcutils_command += ' --target-regions-bed "%s"' % options.ptrim_bed
+        tvcutils_command += ' --merged-plain-bed "%s"' % os.path.join(options.outdir,'merged.out.bed')
+        tvcutils_command += ' --effective-bed "%s"' % os.path.join(options.outdir,'effective_regions.bed')
+        options.bedfile = "%s/merged.out.bed" % options.outdir
+        RunCommand(tvcutils_command,'Write effective bed and merged bed')
+
     #if options.errormotifsfile is None:
         # currently a required argument
      #   options.errormotifsfile = os.path.join(tvcrootdir,'share/TVC/sse/motifset.txt')
@@ -130,7 +146,6 @@ def main():
         os.makedirs(options.outdir)
 
 
-
     # New way of handling hotspots: single call to tvc
 
     # This logic might go to variant_caller_plugin.py
@@ -145,15 +160,15 @@ def main():
     tvc_command +=              '   --reference %s' % options.reference
     tvc_command +=              '   --input-bam %s' % options.bamfile
     if options.ptrim_bed:
-        tvc_command +=          '   --target-file %s' % options.ptrim_bed
+        tvc_command +=          '   --target-file "%s"' % options.ptrim_bed
         tvc_command +=          '   --trim-ampliseq-primers on'
     elif options.bedfile:
-        tvc_command +=          '   --target-file %s' % options.bedfile
+        tvc_command +=          '   --target-file "%s"' % options.bedfile
     if options.postprocessed_bam:
         postprocessed_bam_tmp = options.postprocessed_bam + '.tmp.bam'
         tvc_command +=          '   --postprocessed-bam %s' % postprocessed_bam_tmp
     if options.hotspot_vcf:
-        tvc_command +=          '   --input-vcf %s' % options.hotspot_vcf
+        tvc_command +=          '   --input-vcf "%s"' % options.hotspot_vcf
     if options.paramfile:
         tvc_command +=          '   --parameters-file %s' % options.paramfile
     tvc_command +=              '   --num-threads %s' % options.numthreads
@@ -164,7 +179,7 @@ def main():
 
 
     if options.postprocessed_bam:
-        bamsort_command = 'samtools sort %s %s' % (postprocessed_bam_tmp, options.postprocessed_bam[:-4])
+        bamsort_command = 'samtools sort -m 2G -l1 -@6 %s %s' % (postprocessed_bam_tmp, options.postprocessed_bam[:-4])
         RunCommand(bamsort_command,'Sort postprocessed bam')
         bamindex_command = 'samtools index %s' % options.postprocessed_bam
         RunCommand(bamindex_command,'Index postprocessed bam')
@@ -183,13 +198,6 @@ def main():
     left_align_command +=       '   -o %s/small_variants.left.vcf' % options.outdir
     RunCommand(left_align_command, 'Ensure left-alignment of indels')
 
-    # write effective bed file
-    if options.ptrim_bed and options.bedfile:
-        tvcutils_command = "tvcutils validate_bed"
-        tvcutils_command += ' --reference "%s"' % options.reference
-        tvcutils_command += ' --target-regions-bed "%s"' % options.ptrim_bed
-        tvcutils_command += ' --effective-bed "%s"' % os.path.join(options.outdir,'effective_regions.bed')
-        RunCommand(tvcutils_command,'Write effective bed')
 
     # create command for long indel assembly and run
     long_indel_command =        'java -Xmx8G -cp %s/share/TVC/jar/ -jar %s/share/TVC/jar/GenomeAnalysisTK.jar' % (tvcrootdir,tvcrootdir)
@@ -197,7 +205,7 @@ def main():
     long_indel_command +=       '   -R %s' % options.reference
     long_indel_command +=       '   -I %s' % options.bamfile
     if options.bedfile:
-        long_indel_command +=   '   -L %s' % options.bedfile
+        long_indel_command +=   '   -L "%s"' % options.bedfile
     long_indel_command +=       '   -o %s/indel_assembly.vcf' % options.outdir
     long_indel_command +=       '   -S SILENT -U ALL -filterMBQ'
     cmdoptions = parameters.get('long_indel_assembler',{})
@@ -217,7 +225,7 @@ def main():
     if os.path.exists("%s/indel_assembly.vcf" % options.outdir):
         unify_command +=        '   --novel-assembly-vcf %s/indel_assembly.vcf' % options.outdir
     if options.hotspot_vcf:
-        unify_command +=        '   --hotspot-annotation-vcf %s' % options.hotspot_vcf
+        unify_command +=        '   --hotspot-annotation-vcf "%s"' % options.hotspot_vcf
     unify_command +=            '   --output-vcf %s/all.merged.vcf' % options.outdir
     unify_command +=            '   --index-fai %s.fai' % options.reference
     if os.path.exists(options.outdir + '/tvc_metrics.json'):
@@ -247,7 +255,7 @@ def main():
 
         bedfilter_command  =    'vcftools'
         bedfilter_command +=    '   --vcf %s/all.merged.vcf' %  options.outdir
-        bedfilter_command +=    '   --bed %s' % bedtmp
+        bedfilter_command +=    '   --bed "%s"' % bedtmp
         bedfilter_command +=    '   --out %s/all' % options.outdir
         bedfilter_command +=    '   --recode  --keep-INFO-all'
         #bedfilter_command +=    ' > /dev/null'

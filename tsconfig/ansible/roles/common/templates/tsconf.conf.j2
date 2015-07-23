@@ -1,0 +1,20 @@
+date:{{ansible_date_time.date}} {{ansible_date_time.time}}
+hostname:{{ansible_hostname}}
+ipaddress:{{ansible_default_ipv4.address}}
+serialnumber:{{ansible_product_serial}}
+version:{{tsconfig_version.stdout}}
+hardwarename:{{ansible_product_name}}
+{% if ansible_hostname == groups.headnode[0] %}
+mode:master
+{% else %}
+mode:compute
+{% endif %}
+{% if ansible_product_name == 'VirtualBox' %}
+configuration:tsvm
+{% elif ansible_product_name == 'Bochs' %}
+configuration:raptorvm
+{% elif ansible_product_name == 'VMware Virtual Platform' %}
+configuration:vmware
+{% else %}
+configuration:
+{% endif %}

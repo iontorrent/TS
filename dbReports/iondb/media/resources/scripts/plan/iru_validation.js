@@ -96,9 +96,8 @@ function validate_user_input_from_iru($form, accountId, accountName, userInputIn
 	}
 	call_validation_api($form, $div, data, accountId);
 }
-
-function get_user_input_info_from_ui(accountId, accountName) {
-	var userInputInfo = {"userInputInfo" : [], "accountId" : accountId, "accountName" : accountName};
+function get_user_input_info_from_ui(accountId, accountName, userInput) {
+        var userInputInfo = {"userInputInfo" : [], "accountId" : accountId, "accountName" : accountName, "isVariantCallerSelected":userInput.is_variantCaller_enabled, "isVariantCallerConfigured": userInput.is_variantCaller_configured};
 	var $sampleNames = $(".irSampleName");
 
 	for (i = 0; i < $sampleNames.length; i++) {
@@ -169,7 +168,7 @@ $(document).ready(function(){
         	if (badRelation){$div.text("Relation on row " + counter + " cannot be blank");$.unblockUI();return false;}
         	else {$div.text("");}
 
-        	validate_user_input_from_iru($(this), USERINPUT.account_id, USERINPUT.account_name, get_user_input_info_from_ui(USERINPUT.account_id, USERINPUT.account_name));
+        	validate_user_input_from_iru($(this), USERINPUT.account_id, USERINPUT.account_name, get_user_input_info_from_ui(USERINPUT.account_id, USERINPUT.account_name,USERINPUT));
         	return false;
    		} else {
    			return true;

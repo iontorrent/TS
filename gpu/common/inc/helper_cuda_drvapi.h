@@ -1,5 +1,5 @@
 /**
- * Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
+ * Copyright 1993-2013 NVIDIA Corporation.  All rights reserved.
  *
  * Please refer to the NVIDIA end user license agreement (EULA) associated
  * with this source code for terms and conditions that govern your use of
@@ -22,6 +22,17 @@
 
 #ifndef MAX
 #define MAX(a,b) (a > b ? a : b)
+#endif
+
+#ifndef HELPER_CUDA_H
+inline int ftoi(float value)
+{
+    return (value >= 0 ? (int)(value + 0.5) : (int)(value - 0.5));
+}
+#endif
+
+#ifndef EXIT_WAIVED
+#define EXIT_WAIVED 2
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -90,14 +101,14 @@ inline int _ConvertSMVer2CoresDRV(int major, int minor)
 
     sSMtoCores nGpuArchCoresPerSM[] =
     {
-        { 0x10,  8 }, // Tesla Generation (SM 1.0) G80 class
-        { 0x11,  8 }, // Tesla Generation (SM 1.1) G8x class
-        { 0x12,  8 }, // Tesla Generation (SM 1.2) G9x class
-        { 0x13,  8 }, // Tesla Generation (SM 1.3) GT200 class
         { 0x20, 32 }, // Fermi Generation (SM 2.0) GF100 class
         { 0x21, 48 }, // Fermi Generation (SM 2.1) GF10x class
         { 0x30, 192}, // Kepler Generation (SM 3.0) GK10x class
+        { 0x32, 192}, // Kepler Generation (SM 3.2) GK10x class
         { 0x35, 192}, // Kepler Generation (SM 3.5) GK11x class
+        { 0x37, 192}, // Kepler Generation (SM 3.7) GK21x class
+        { 0x50, 128}, // Maxwell Generation (SM 5.0) GM10x class
+        { 0x52, 128}, // Maxwell Generation (SM 5.2) GM20x class
         {   -1, -1 }
     };
 
@@ -114,8 +125,8 @@ inline int _ConvertSMVer2CoresDRV(int major, int minor)
     }
 
     // If we don't find the values, we default use the previous one to run properly
-    printf("MapSMtoCores for SM %d.%d is undefined.  Default to use %d Cores/SM\n", major, minor, nGpuArchCoresPerSM[7].Cores);
-    return nGpuArchCoresPerSM[7].Cores;
+    printf("MapSMtoCores for SM %d.%d is undefined.  Default to use %d Cores/SM\n", major, minor, nGpuArchCoresPerSM[index-1].Cores);
+    return nGpuArchCoresPerSM[index-1].Cores;
 }
 // end of GPU Architecture definitions
 
@@ -179,13 +190,26 @@ inline int gpuDeviceInitDRV(int ARGC, const char **ARGV)
 // This function returns the best GPU based on performance
 inline int gpuGetMaxGflopsDeviceIdDRV()
 {
-    CUdevice current_device = 0, max_perf_device = 0;
-    int device_count        = 0, sm_per_multiproc = 0;
-    int max_compute_perf    = 0, best_SM_arch     = 0;
-    int major = 0, minor = 0   , multiProcessorCount, clockRate;
+    CUdevice current_device  = 0;
+    CUdevice max_perf_device = 0;
+    int device_count     = 0;
+    int sm_per_multiproc = 0;
+    unsigned long long max_compute_perf = 0;
+    int best_SM_arch = 0;
+    int major = 0;
+    int minor = 0;
+    int multiProcessorCount;
+    int clockRate;
+    int devices_prohibited = 0;
 
     cuInit(0);
     checkCudaErrors(cuDeviceGetCount(&device_count));
+
+    if (device_count == 0)
+    {
+        fprintf(stderr, "gpuGetMaxGflopsDeviceIdDRV error: no devices supporting CUDA\n");
+        exit(EXIT_FAILURE);
+    }
 
     // Find the best major SM Architecture GPU device
     while (current_device < device_count)
@@ -227,7 +251,7 @@ inline int gpuGetMaxGflopsDeviceIdDRV()
                 sm_per_multiproc = _ConvertSMVer2CoresDRV(major, minor);
             }
 
-            int compute_perf  = multiProcessorCount * sm_per_multiproc * clockRate;
+            unsigned long long compute_perf = (unsigned long long) (multiProcessorCount * sm_per_multiproc * clockRate);
 
             if (compute_perf  > max_compute_perf)
             {
@@ -248,9 +272,19 @@ inline int gpuGetMaxGflopsDeviceIdDRV()
                 }
             }
         }
+        else
+        {
+            devices_prohibited++;
+        }
 
         ++current_device;
     }
+
+    if (devices_prohibited == device_count)
+    {    
+        fprintf(stderr, "gpuGetMaxGflopsDeviceIdDRV error: all devices have compute mode prohibited.\n");
+        exit(EXIT_FAILURE);
+    }    
 
     return max_perf_device;
 }
@@ -263,10 +297,17 @@ inline int gpuGetMaxGflopsGLDeviceIdDRV()
     int max_compute_perf = 0, best_SM_arch     = 0;
     int major = 0, minor = 0, multiProcessorCount, clockRate;
     int bTCC = 0;
+    int devices_prohibited = 0;
     char deviceName[256];
 
     cuInit(0);
     checkCudaErrors(cuDeviceGetCount(&device_count));
+
+    if (device_count == 0)
+    {
+        fprintf(stderr, "gpuGetMaxGflopsGLDeviceIdDRV error: no devices supporting CUDA\n");
+        exit(EXIT_FAILURE);
+    }
 
     // Find the best major SM Architecture GPU device that are graphics devices
     while (current_device < device_count)
@@ -299,8 +340,18 @@ inline int gpuGetMaxGflopsGLDeviceIdDRV()
                 }
             }
         }
+        else
+        {
+            devices_prohibited++;
+        }
 
         current_device++;
+    }
+
+    if (devices_prohibited == device_count)
+    {
+        fprintf(stderr, "gpuGetMaxGflopsGLDeviceIdDRV error: all devices have compute mode prohibited.\n");
+        exit(EXIT_FAILURE);
     }
 
     // Find the best CUDA capable GPU device

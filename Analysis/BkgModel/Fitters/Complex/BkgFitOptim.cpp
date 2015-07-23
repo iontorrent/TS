@@ -7,7 +7,7 @@
 
 
 //@TODO BAD CODE STYLE: function in header
-void InitializeLevMarFitter(struct mat_table_build_instr *btbl,fit_instructions *instr, int flow_block_size)
+void InitializeLevMarFitter(mat_table_build_instr *btbl,fit_instructions *instr, int flow_block_size)
 {
   int np;
 
@@ -104,11 +104,11 @@ void InitializeLevMarFitter(struct mat_table_build_instr *btbl,fit_instructions 
   instr->output_len = np;
 }
 
-void DumpBuildInstructionTable(struct mat_table_build_instr *tbl, int flow_block_size)
+void DumpBuildInstructionTable(mat_table_build_instr *tbl, int flow_block_size)
 {
   for (int i=0;true;i++)
   {
-    char *pcomp;
+    std::string pcomp;
 
     switch (tbl[i].comp)
     {
@@ -152,7 +152,7 @@ void DumpBuildInstructionTable(struct mat_table_build_instr *tbl, int flow_block
         pcomp = "UNKNOWN";
     }
 
-    printf("%s % 4d [",pcomp, tbl[i].array_index );
+    printf("%s % 4d [",pcomp.c_str(), tbl[i].array_index );
     for (int j=0;j < flow_block_size-1;j++)
     {
       printf("%d,",tbl[i].GetAffectedFlow(j));
@@ -205,7 +205,7 @@ void master_fit_type_entry::CreateBuildInstructions(const int *my_nuc, int flow_
     row_cnt++;
 
     // allocate the build instruction table
-    mb = new struct mat_table_build_instr[row_cnt];
+    mb = new mat_table_build_instr[row_cnt];
 
     // zero it out
     for(int i = 0 ; i < row_cnt ; ++i )

@@ -13,7 +13,7 @@ class TrackProgress{
   time_t analysis_start_time;
   
   TrackProgress();
-  void ReportState(char *my_state);
+  void ReportState(const char *my_state);
   void InitFPLog (CommandLineOpts &inception_state);
   void WriteProcessParameters(CommandLineOpts &inception_state);
   

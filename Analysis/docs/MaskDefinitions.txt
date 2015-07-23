@@ -43,6 +43,3 @@ from a well, mark the well MaskIgnore.
 MaskKeypass - After basecalling, if the well passes the keypass filter, this bit
 gets set.  This read will be written to an SFF file.
 
-
-$Rev$
-

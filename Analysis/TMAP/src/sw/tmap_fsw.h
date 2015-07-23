@@ -175,7 +175,7 @@ tmap_fsw_flowseq_destroy(tmap_fsw_flowseq_t *flowseq);
   @param  flowseq_start_clip  1 to allow clipping at the start of the flow sequence, 0 otherwise
   @details                   this assumes that the ap parameter scores have been multiplied by 100; only include non-key flows
   */
-inline void
+void
 tmap_fsw_sub_core(uint8_t *seq, int32_t len,
                   uint8_t flow_base, uint8_t base_call, uint16_t flow_signal,
                   const tmap_fsw_param_t *ap,

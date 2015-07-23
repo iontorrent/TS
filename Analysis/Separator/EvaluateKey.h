@@ -12,13 +12,38 @@ class EvaluateKey {
  public:
 
   EvaluateKey();
-  ~EvaluateKey() { Cleanup(); }
-  void Init();
 
+  ~EvaluateKey() { Cleanup(); }
+
+  void Init();
 
   void Alloc(size_t num_well_flows, size_t num_frames, size_t num_flows, int num_wells);
 
   void Cleanup();
+
+  void SetSizes(int row_start, int row_end, 
+                int col_start, int col_end,
+                int flow_start, int flow_end,
+                int frame_start, int frame_end);
+    
+  void SetUpMatrices(TraceStoreCol &trace_store, 
+                     int col_stride, int flow_stride,
+                     int row_start, int row_end, int col_start, int col_end,
+                     int flow_start, int flow_end,
+                     int frame_start, int frame_end,
+                     float *trace_data,
+                     float *ref_data);
+
+  void SetUpMatrices(TraceStoreCol &trace_store, 
+                     int col_stride, int flow_stride,
+                     int row_start, int row_end, int col_start, int col_end,
+                     int flow_start, int flow_end,
+                     int frame_start, int frame_end) {
+    SetUpMatrices(trace_store, col_stride, flow_stride,
+                  row_start, row_end, col_start, col_end,
+                  flow_start, flow_end, frame_start, frame_end,
+                  m_trace_data, m_ref_data);
+  }
 
   static void FitTauB(const int *zero_flows, size_t n_zero_flows, 
                       const float *trace_data, const float *ref_data, 
@@ -45,66 +70,11 @@ class EvaluateKey {
                               float taue_est, float *__restrict taub,
                               double &mad);
 
-  void SetSizes(int row_start, int row_end, 
-                int col_start, int col_end,
-                int flow_start, int flow_end,
-                int frame_start, int frame_end);
-    
-  void SetUpMatrices(TraceStoreCol &trace_store, 
-                     int col_stride, int flow_stride,
-                     int row_start, int row_end, int col_start, int col_end,
-                     int flow_start, int flow_end,
-                     int frame_start, int frame_end,
-                     float *trace_data,
-                     float *ref_data) {
-    int row_size = row_end - row_start;
-    int col_size = col_end - col_start;
-    int flow_size = flow_end - flow_start;
-    int frame_size = frame_end - frame_start;
-    size_t local_flow_stride = row_size * col_size;
-    size_t total_rows = local_flow_stride * flow_size;
-
-    std::vector<float> trace(trace_store.GetNumFrames());
-    std::vector<float> ref_trace(trace_store.GetNumFrames());
-
-    for (int flow_ix = flow_start; flow_ix < flow_end; flow_ix++) {
-      for (int row_ix = row_start; row_ix < row_end; row_ix++) {
-        for (int col_ix = col_start; col_ix < col_end; col_ix++) {
-          int well_ix =  row_ix * col_stride + col_ix;
-          int local_well_ix = (flow_ix - flow_start) * local_flow_stride + (row_ix - row_start) * col_size + (col_ix - col_start);
-          trace_store.GetReferenceTrace(well_ix, flow_ix, &ref_trace[0]);
-          for (int frame_ix = frame_start; frame_ix < frame_end; frame_ix++) {
-            ref_data[local_well_ix + (frame_ix - frame_start) * total_rows] = ref_trace[frame_ix];
-          }
-        }
-        for (int frame_ix = frame_start; frame_ix < frame_end; frame_ix++) {
-          int well_ix = row_ix * col_stride + col_start;
-          int local_well_ix = (row_ix - row_start) * col_size;
-          int16_t *__restrict store_start = trace_store.GetMemPtr() + flow_ix * trace_store.mFrameStride + frame_ix * trace_store.mFlowFrameStride + well_ix;
-          int16_t *__restrict store_end = store_start + col_size;
-          float *__restrict out_start = trace_data + (frame_ix - frame_start) * total_rows + (flow_ix-flow_start) * local_flow_stride + local_well_ix;
-          while(store_start != store_end) {
-            *out_start++ = *store_start++;
-          }
-        }
-      }
-    }
-  }
 
   void FitTauB(KeySeq &key, const float *time, float taue_est, int frame_start, int frame_end, float *__restrict taub);
 
   void PredictZeromersVec(const float *time, float taue_est, float * __restrict taub);
 
-  void SetUpMatrices(TraceStoreCol &trace_store, 
-                     int col_stride, int flow_stride,
-                     int row_start, int row_end, int col_start, int col_end,
-                     int flow_start, int flow_end,
-                     int frame_start, int frame_end) {
-    SetUpMatrices(trace_store, col_stride, flow_stride,
-                  row_start, row_end, col_start, col_end,
-                  flow_start, flow_end, frame_start, frame_end,
-                  m_trace_data, m_ref_data);
-  }
 
   void ScoreKeySignals(KeySeq &key, float *__restrict key_signal_ptr, 
                        int integration_start, int integration_end,
@@ -125,14 +95,9 @@ class EvaluateKey {
                                   float *norm_factors,
                                   size_t integration_start, size_t integration_end);
 
-  
-  /* void Calculate1MerNormalization(int num_flows, int num_frames, */
-  /*                                 std::vector<int> &onemer_flows, */
-  /*                                 float *flow_1mer_avg, */
-  /*                                 int integration_start, int integration_end, */
-  /*                                 float *norm_factors); */
 
   bool m_debug;
+  // Options to change the behavior
   bool m_doing_darkmatter, m_use_projection, m_peak_signal_frames, m_integration_width, m_normalize_1mers;
   // Matrices of data with frame major, then flow, then column major indexing
   float *m_trace_data, *m_ref_data, *m_zeromer_est, *m_shifted_ref;

@@ -1,0 +1,21 @@
+---
+# file: roles/fileserver/tasks/config_network.yml
+
+#============================================================================ 
+# network interfaces configuration
+#============================================================================
+- hosts: headnode
+  include: '../../../globals.yml'
+  vars_files:
+    - [ "{{ansible_env.PWD}}/group_vars/all_local", "{{ansible_env.PWD}}/group_vars/all" ]
+  tasks:      
+    - name: Edit /etc/network/interfaces
+      template: src=../templates/interfaces.j2 dest=/etc/network/interfaces mode=0644 backup=yes
+      register: result
+    
+    - name: Restart primary network interface
+      shell: bash -lc "ifdown {{ansible_default_ipv4.interface}} && ifup {{ansible_default_ipv4.interface}}"
+      when: ansible_default_ipv4.interface is defined and result|changed
+      register: output
+      
+    - debug: var=output.stderr

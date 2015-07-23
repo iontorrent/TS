@@ -2,7 +2,7 @@
 #ifndef BKGFITTERTRACKER_H
 #define BKGFITTERTRACKER_H
 
-
+#include "RingBuffer.h"
 #include "CommandLineOpts.h"
 #include "cudaWrapper.h"
 #include "Separator.h"
@@ -25,6 +25,8 @@
 
 class BkgFitterTracker
 {
+private:
+  RingBuffer<float> *ampEstBufferForGPU;
   void InitBeads_BestRegion(const CommandLineOpts &inception_state);
   int numFitters;
 public:
@@ -50,6 +52,8 @@ public:
   BkgParamH5 all_params_hdf;
   std::vector<int16_t> washout_flow;
 
+  void CreateRingBuffer(int numBuffers, int bufSize);
+  RingBuffer<float>* getRingBuffer() const { return ampEstBufferForGPU; }
 
   bool IsGpuAccelerationUsed() { return analysis_compute_plan.use_gpu_acceleration; }
   void ThreadedInitialization ( RawWells &rawWells, const CommandLineOpts &inception_state, 
@@ -65,10 +69,20 @@ public:
   void ExecuteFitForFlow ( int raw_flow, ImageTracker &my_img_set, bool last, 
                            int flow_key, master_fit_type_table *table,
                            const CommandLineOpts * inception_state );
+  void ExecuteGPUBlockLevelSignalProcessing( 
+      int raw_flow, 
+      int flow_block_size,
+      ImageTracker &my_img_set, 
+      bool last, 
+      int flow_key, 
+      master_fit_type_table *table,
+      const CommandLineOpts *inception_state,
+      const std::vector<float> *smooth_t0_est);
   void SetUpTraceTracking ( const SlicedPrequel &my_prequel_setup, const CommandLineOpts &inception_state, const ImageSpecClass &my_image_spec, const ComplexMask &cmask, int flow_block_size );
   void PlanComputation ( BkgModelControlOpts &bkg_control);
   void SpinUpGPUThreads();
   void UnSpinGPUThreads();
+  void UnSpinCPUBkgModelThreads();
 //  void UnSpinMultiFlowFitGpuThreads();
   void SetRegionProcessOrder(const CommandLineOpts &inception_state);
   int findRegion(int x, int y);
@@ -129,6 +143,8 @@ public:
 		  }
 	  }
   }
+
+  void setUpRingBuffer(int numBuffers, int size);
 
  private:
 

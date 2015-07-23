@@ -101,13 +101,13 @@ void CommandLineOpts::SetProtonDefault()
   //@TODO: global variable abuse here
 
   // PZERO
-  if ( ChipIdDecoder::GetGlobalChipId() == ChipId1_0_19 )
+  if ( ChipIdDecoder::IsPzero() )
   {
 	  img_control.ImageControlForProton(false);
   }
 
   // PONE
-  if ( ChipIdDecoder::GetGlobalChipId() == ChipId1_1_17 )
+  if ( ChipIdDecoder::IsPone() )
   {
 	  img_control.ImageControlForProton(true);
     if (bfd_control.useSignalReferenceSet == 0) {
@@ -116,12 +116,8 @@ void CommandLineOpts::SetProtonDefault()
   }
 
   //PTWO TYPE CHIPS
-  if (ChipIdDecoder::GetGlobalChipId()== ChipId1_2_18){
-	  img_control.ImageControlForProton(true);
-  }
-
-  // HERE IS PTWO IF YOU MUST
-  if (ChipIdDecoder::GetGlobalChipId()== ChipId2_2_1){
+  if (ChipIdDecoder::IsPtwo() )
+  {
 	  img_control.ImageControlForProton(true);
   }
 }
@@ -205,7 +201,7 @@ void CommandLineOpts::PostProcessArgs(OptArgs &opts)
 		{
 			bkg_control.polyclonal_filter.enable = false;
 		}
-		if(!opts.HasOption('-', "xtalk-correction"))
+		if(!opts.HasOption('-', "xtalk-correction") && !ChipIdDecoder::IsPzero())
 		{
 			bkg_control.enable_trace_xtalk_correction = false;
 		}
@@ -254,10 +250,16 @@ ValidateOpts::ValidateOpts()
 	m_opts["gpu-single-flow-fit-type"] = VT_INT;
 	m_opts["gpu-hybrid-fit-iter"] = VT_INT;
 	m_opts["gpu-partial-deriv-blocksize"] = VT_INT;	
-	m_opts["gpu-partial-deriv-l1config"] = VT_INT;	
+	m_opts["gpu-partial-deriv-l1config"] = VT_INT;
+	m_opts["gpu-use-all-devices"] = VT_BOOL;
 	m_opts["gpu-verbose"] = VT_BOOL;	
 	m_opts["gpu-device-ids"] = VT_INT;
 	m_opts["gpu-fitting-only"] = VT_BOOL;
+  m_opts["gpu-tmidnuc-shift-per-flow"] = VT_BOOL;
+  m_opts["gpu-flow-by-flow"] = VT_BOOL;
+  m_opts["post-fit-handshake-worker"] = VT_BOOL;
+  m_opts["gpu-switch-to-flow-by-flow-at"] = VT_INT;
+
 
 	// SignalProcessingBlockControl
 	m_opts["wells-compression"] = VT_INT;
@@ -296,7 +298,7 @@ ValidateOpts::ValidateOpts()
 	m_opts["beadfind-sdasbf"] = VT_BOOL;
 	m_opts["beadfind-bfmult"] = VT_FLOAT;
 	m_opts["beadfind-minlive"] = VT_DOUBLE;
-        m_opts["beadfind-filt-noisy-col"] = VT_STRING;
+    m_opts["beadfind-filt-noisy-col"] = VT_STRING;
 	m_opts["beadfind-minlivesnr"] = VT_DOUBLE;
 	m_opts["beadfind-min-tf-snr"] = VT_DOUBLE;
 	m_opts["beadfind-tf-min-peak"] = VT_FLOAT;
@@ -418,6 +420,7 @@ ValidateOpts::ValidateOpts()
 	m_opts["limit-rdr-fit"] = VT_BOOL;
 	m_opts["use-alternative-etbr-equation"] = VT_BOOL;
 	m_opts["use-alternative-etbR-equation"] = VT_BOOL;
+    m_opts["use-log-taub"] = VT_BOOL;
 	m_opts["psp4-dev"] = VT_FLOAT;
 	m_opts["fitting-taue"] = VT_BOOL;
 	m_opts["incorporation-type"] = VT_INT;
@@ -434,8 +437,8 @@ ValidateOpts::ValidateOpts()
     m_opts["wells-convert-low"] = VT_FLOAT;
     m_opts["wells-convert-high"] = VT_FLOAT;
     m_opts["wells-save-number-copies"] = VT_BOOL;
-    m_opts["wells-save-flow-multiplier"] = VT_BOOL;
-    m_opts["bkg-washout-threshold"] = VT_FLOAT;
+    m_opts["wells-convert-with-copies"] = VT_BOOL;
+	m_opts["bkg-washout-threshold"] = VT_FLOAT;
     m_opts["bkg-washout-flow-detection"] = VT_INT;
 }
 

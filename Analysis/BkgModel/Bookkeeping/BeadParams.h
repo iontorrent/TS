@@ -132,8 +132,8 @@ struct BeadParams
   bead_state *my_state; // pointer to reduce the size of this structure
   int trace_ndx; // what trace do i correspond to
   int x,y;  // relative location within the region
-  float tauB_nuc[4];
   float tauB[MAX_NUM_FLOWS_IN_BLOCK_GPU]; // save for output trace.h5
+  //float tauB_nuc[4];
 
   // Here we have some access routines for particular parameters of interest.
   // This is the C++ way to access arbitrary members, defined at run-time. In C, we'd use offsets.
@@ -166,7 +166,7 @@ struct BeadParams
     ar & my_state;
     ar & x & y;
     ar & tauB;
-    ar & tauB_nuc;
+    //ar & tauB_nuc;
     // fprintf(stdout, "done\n");
   } 
   void LockKey(float *key, int keylen);

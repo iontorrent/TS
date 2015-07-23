@@ -34,6 +34,7 @@
 #include <limits.h>
 #include "tmap_alloc.h"
 #include "tmap_fibheap.h"
+#include "tmap_error.h"
 
 #define swap(type, a, b)		\
   do {			\

@@ -13,11 +13,20 @@ void DiagnosticWriteJson(const Json::Value & json, const std::string& filename_j
 }
 
 void DiagnosticJsonReadStack(Json::Value &json, const vector<const Alignment *>& read_stack, const InputStructures &global_context) {
-  json["FlowOrder"] = global_context.flowOrder;
+
+  bool multiple_flow_orders = false;
+  for (unsigned int iFO=0; iFO < global_context.flow_order_vector.size(); iFO++) {
+    json["FlowOrder"][iFO] = global_context.flow_order_vector.at(iFO).str();
+    if (not multiple_flow_orders and iFO > 0)
+      multiple_flow_orders = true;
+  }
+
   for (unsigned int i_read = 0; i_read < read_stack.size(); i_read++) {
     if ( ! read_stack[i_read]->well_rowcol.empty() ) {
       json["Row"][i_read] = read_stack[i_read]->well_rowcol[0];
       json["Col"][i_read] = read_stack[i_read]->well_rowcol[1];
+      if (multiple_flow_orders)
+        json["FlowOrderIndex"][i_read] = read_stack[i_read]->flow_order_index;
     }
     json["MapQuality"][i_read] = read_stack[i_read]->alignment.MapQuality;
   }

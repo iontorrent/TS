@@ -6,7 +6,7 @@
 
 CC			= gcc
 LD			= gcc
-SOURCES		= RSMAgent.c AlarmMgr.c
+SOURCES		= RSMAgent.c AlarmMgr.c list.c readhostlist.c
 # code from external sources:
 EXTSOURCES	= parson.c
 OBJECTS		= $(patsubst %.c,obj/%.o,$(SOURCES))

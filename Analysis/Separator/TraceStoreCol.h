@@ -30,41 +30,17 @@ class TraceStoreCol : public TraceStore
                  int numFlowsBuff, int maxFlow, int rowStep, int colStep) {
     Init(mask, frames,flowOrder, numFlowsBuff, maxFlow, rowStep, colStep);
   }
+
   TraceStoreCol() { 
     mUseMeshNeighbors = 0;
     mRows = mCols = mFrames = mRowRefStep = mColRefStep = 0;
     mFrames = mFrameStride = mMaxDist = mFlowFrameStride = 0;
   }
+
   void Init(Mask &mask, size_t frames, const char *flowOrder,
-       int numFlowsBuff, int maxFlow, int rowStep, int colStep) {
-
-    pthread_mutex_init (&mLock, NULL);
-    mUseMeshNeighbors = 1;
-    mRowRefStep = rowStep;
-    mColRefStep = colStep;
-    mMinRefProbes = floor (mRowRefStep * mColRefStep * .1);
-    mRows = mask.H();
-    mCols = mask.W();
-    mFrames = frames;
-    mFrameStride = mRows * mCols;
-    mFlows = mFlowsBuf = maxFlow;
-    mFlowFrameStride = mFrameStride * maxFlow;
-    mMaxDist = 2 * sqrt(rowStep*rowStep + colStep+colStep);
-    mFlowOrder = flowOrder;
-    
-    mWells = mRows * mCols;
-    mUseAsReference.resize (mWells, false);
-    int keep = 0;
-    int empties = 0;
-    mRefGridsValid.resize (mFlowsBuf, 0);
-    mRefGrids.resize (mFlowsBuf);
-    mData.resize (mWells * mFrames * mFlowsBuf);
-    std::fill (mData.begin(), mData.end(), 0);
-  }
-
-  ~TraceStoreCol() {
-    pthread_mutex_destroy (&mLock);
-  }
+            int numFlowsBuff, int maxFlow, int rowStep, int colStep);
+  
+  ~TraceStoreCol() { pthread_mutex_destroy (&mLock); }
 
   void SetSize(int frames) {
     mFrames = frames;
@@ -109,23 +85,17 @@ class TraceStoreCol : public TraceStore
   double GetTime (size_t frame) { return mTime.at (frame); }
   void SetTime(double *time, int npts) { mTime.resize(npts); std::copy(time, time+npts, mTime.begin()); }
 
-  bool HaveWell (size_t wellIx) {
-    return true;
-  }
+  bool HaveWell (size_t wellIx) { return true; }
 
-  void SetHaveWellFalse (size_t wellIx) {
-    assert(0);
-  }
+  void SetHaveWellFalse (size_t wellIx) { assert(0); }
 
-  bool HaveFlow (size_t flowIx) {
-    assert(0);
-  }
+  bool HaveFlow (size_t flowIx) { return flowIx < mFlows; }
 
   void SetReference(size_t wellIx, bool isReference) { mUseAsReference[wellIx] = isReference; }
 
   bool IsReference (size_t wellIx) { return mUseAsReference[wellIx]; }
 
-  int GetTrace (size_t wellIx, size_t flowIx,  std::vector<float>::iterator traceBegin) {
+  inline int GetTrace (size_t wellIx, size_t flowIx,  std::vector<float>::iterator traceBegin) {
     int16_t *__restrict start = &mData[0] + flowIx * mFrameStride + wellIx;
     int16_t *__restrict end = start + mFlowFrameStride * mFrames;
     while (start != end) {
@@ -135,7 +105,7 @@ class TraceStoreCol : public TraceStore
     return TSM_OK;
   }
 
-  int GetTrace (size_t wellIx, size_t flowIx, float *traceBegin) {
+  inline int GetTrace (size_t wellIx, size_t flowIx, float *traceBegin) {
     int16_t *__restrict start = &mData[0] + flowIx * mFrameStride + wellIx;
     int16_t *__restrict end = start + mFlowFrameStride * mFrames;
     while (start != end) {
@@ -145,9 +115,8 @@ class TraceStoreCol : public TraceStore
     return TSM_OK;
   }
 
-  int SetTrace (size_t wellIx, size_t flowIx,
-                 std::vector<float>::iterator traceBegin,  std::vector<float>::iterator traceEnd)
-  {
+  inline int SetTrace (size_t wellIx, size_t flowIx,
+                       std::vector<float>::iterator traceBegin,  std::vector<float>::iterator traceEnd) {
     int16_t *__restrict out = &mData[0] + flowIx * mFrameStride + wellIx;
     while (traceBegin != traceEnd) {
       *out = (int16_t) (*traceBegin + .5);
@@ -176,52 +145,9 @@ class TraceStoreCol : public TraceStore
     colIx = index % mCols;
   }
 
-  int PrepareReference(size_t flowIx, std::vector<char> &filteredWells) {
-    mRefWells.resize(mUseAsReference.size());
-    for (size_t i = 0; i < mRefWells.size(); i++) {
-      if (mUseAsReference[i]) {
-        mRefWells[i] = 0;
-      }
-      else {
-        mRefWells[i] = 1;
-      }
-    }
-    assert(flowIx < mRefReduction.size());
+  int PrepareReference(size_t flowIx, std::vector<char> &filteredWells);
 
-    int x_clip = mCols;
-    int y_clip = mRows;
-    if (mUseMeshNeighbors == 0) {
-      x_clip = THUMBNAIL_SIZE;
-      y_clip = THUMBNAIL_SIZE;
-    }
-    mRefReduction[flowIx].Init(mRows, mCols, mFrames,
-                               REF_REDUCTION_SIZE, REF_REDUCTION_SIZE, 
-                               y_clip, x_clip, 1);
-    for (size_t frame_ix = 0; frame_ix < mFrames; frame_ix++) {
-      mRefReduction[flowIx].ReduceFrame(&mData[0] + flowIx * mFrameStride + frame_ix * mFlowFrameStride, &mRefWells[0], frame_ix);
-    }
-    mRefReduction[flowIx].SmoothBlocks(REF_SMOOTH_SIZE, REF_SMOOTH_SIZE);
-    return TSM_OK;
-  }
-
-  
-
-  int PrepareReferenceOld (size_t flowIx, std::vector<char> &filteredWells) {
-    int fIdx = flowIx;
-    CalcReference (mRowRefStep, mColRefStep, flowIx, mRefGrids[fIdx], filteredWells);
-    mRefGridsValid[fIdx] = 1;
-    mFineRefGrids.resize (mRefGrids.size());
-    mFineRefGrids[fIdx].Init (mRows, mCols, mRowRefStep/2, mColRefStep/2);
-    int numBin = mFineRefGrids[fIdx].GetNumBin();
-    int rowStart = -1, rowEnd = -1, colStart = -1, colEnd = -1;
-    for (int binIx = 0; binIx < numBin; binIx++) {
-      mFineRefGrids[fIdx].GetBinCoords (binIx, rowStart, rowEnd, colStart, colEnd);
-      vector<float> &trace = mFineRefGrids[fIdx].GetItem (binIx);
-      CalcMedianReference ( (rowEnd + rowStart) /2, (colEnd + colStart) /2, mRefGrids[fIdx],
-                            mDist, mValues, trace);
-    }
-    return TSM_OK;
-  }
+  int PrepareReferenceOld (size_t flowIx, std::vector<char> &filteredWells);
 
   virtual int GetReferenceTrace (size_t wellIx, size_t flowIx,
                                  float *traceBegin) {
@@ -231,27 +157,9 @@ class TraceStoreCol : public TraceStore
     return TSM_OK;
   }
 
-  /* virtual int GetReferenceTrace (size_t wellIx, size_t flowIx, */
-  /*                                float *traceBegin) { */
-  /*   int wIdx = wellIx; */
-  /*   int fIdx = flowIx; */
-  /*   size_t row, col; */
-  /*   IndexToRowCol (wellIx, row, col); */
-  /*   vector<float> &ref = mFineRefGrids[fIdx].GetItemByRowCol (row, col); */
-  /*   //vector<float> &ref = mRefGrids[fIdx].GetItemByRowCol (row, col); */
-  /*   copy (ref.begin(), ref.end(), traceBegin); */
-  /*   return TSM_OK; */
-  /* } */
+  virtual void SetT0 (std::vector<float> &t0) { mT0 = t0; }
 
-  virtual void SetT0 (std::vector<float> &t0)
-  {
-    mT0 = t0;
-  }
-
-  virtual float GetT0 (int idx)
-  {
-    return mT0[idx];
-  }
+  virtual float GetT0 (int idx) { return mT0[idx]; }
 
   void SetMeshDist (int size) { 
     mUseMeshNeighbors = size;     
@@ -262,67 +170,16 @@ class TraceStoreCol : public TraceStore
   float GetMaxDist() { return mMaxDist; }
 
   /** wIx is the well index from mWellIndex, not the usual global one. */
-  inline size_t ToIdx (size_t wIx, size_t frameIx, size_t flowIx)
-  {
+  inline size_t ToIdx (size_t wIx, size_t frameIx, size_t flowIx) {
     // Organize so flows for same well are near each other.
     return (wIx + flowIx * mFrameStride + frameIx * mFlowFrameStride);
   }
-
 
   int CalcMedianReference (size_t row, size_t col,
                            GridMesh<std::vector<float> > &regionMed,
                            std::vector<double> &dist,
                            std::vector<std::vector<float> *> &values,
-                           std::vector<float> &reference) {
-    int retVal = TraceStore::TS_OK;
-    reference.resize(mFrames);
-    std::fill(reference.begin(), reference.end(), 0.0);
-    regionMed.GetClosestNeighbors (row, col, mUseMeshNeighbors, dist, values);
-    int num_good = 0;
-    size_t valSize = values.size();
-    for (size_t i =0; i < valSize; i++) {
-      if (values[i]->size() > 0) {
-        num_good++;
-      }
-    }
-    // try reaching a little farther if no good reference close by
-    if (num_good == 0) {
-      regionMed.GetClosestNeighbors (row, col, 2*mUseMeshNeighbors, dist, values);
-    }
-    size_t size = 0;
-    double maxDist = 0;
-    for (size_t i = 0; i < values.size(); i++) {
-        size = max (values[i]->size(), size);
-        maxDist = max(dist[i], maxDist);
-    }
-    reference.resize (size);
-    std::fill (reference.begin(), reference.end(), 0.0);
-    double distWeight = 0;
-         valSize = values.size();
-
-    for (size_t i = 0; i < valSize; i++) {
-      if (values[i]->size()  == 0) {
-        continue;
-      }
-      double w = TraceStore::WeightDist (dist[i], mRowRefStep); //1/sqrt(dist[i]+1);
-      distWeight += w;
-      size_t vSize = values[i]->size();
-      for (size_t j = 0; j < vSize; j++) {
-        reference[j] += w * values[i]->at (j);
-      }
-    }
-    // Divide by our total weight to get weighted mean
-    if (distWeight > 0)  {
-      for (size_t i = 0; i < reference.size(); i++) {
-        reference[i] /= distWeight;
-      }
-      retVal = TraceStore::TS_OK;
-    }
-    else {
-      retVal = TraceStore::TS_BAD_DATA;
-    }
-    return retVal;
-  }
+                           std::vector<float> &reference);
 
   int CalcRegionReference (int rowStart, int rowEnd,
                            int colStart, int colEnd, size_t flowIx,

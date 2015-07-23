@@ -34,16 +34,26 @@ void GpuControlOpts::DefaultGpuControl()
 
     gpuAmpGuess = 1;
 
+    gpuUseAllDevices=false;
     gpuVerbose = false;
+
+    tMidNucShiftPerFlow = true;
+    gpuFlowByFlowExecution = false;
+    postFitHandshakeWorker = false; 
+    switchToFlowByFlowAt = 20;
 }
 
 void GpuControlOpts::PrintHelp()
 {
 	printf ("     GpuControlOpts\n");
-    printf ("     --gpuworkload           FLOAT             gpu work load [1.0]\n");
-    printf ("     --gpuWorkLoad           FLOAT             same as --gpuworkload [1.0]\n");
+  printf ("     --gpuworkload           FLOAT             gpu work load [1.0]\n");
+  printf ("     --gpuWorkLoad           FLOAT             same as --gpuworkload [1.0]\n");
 	printf ("     --gpu-verbose           BOOL              gpu verbose [false]\n");
+	printf ("     --gpu-use-all-devices   BOOL              forces use of all available GPUs passing minimum requirements. may cause non-deterministic results if GPUs have varying compute version [false]\n");
 	printf ("     --gpu-fitting-only      BOOL              do gpu only fitting [true]\n");
+	printf ("     --gpu-flow-by-flow      BOOL              use new flow by flow GPU pipeline [false]\n");
+	printf ("     --post-fit-handshake-worker      BOOL     post fit steps in separate thread [false]\n");
+  printf ("     --gpu-tmidnuc-shift-per-flow     BOOL     do t_mid_nuc shift per flow [true]\n");
 	printf ("     --gpu-device-ids        INT               gpu device ids []\n");
 	printf ("     --gpu-num-streams       INT               gpu num streams [2]\n");
 	printf ("     --gpu-amp-guess         INT               gpu amp guess [1]\n");
@@ -57,6 +67,7 @@ void GpuControlOpts::PrintHelp()
 	printf ("     --gpu-single-flow-fit-type          INT   gpu single flow fit type [3]\n");
 	printf ("     --gpu-partial-deriv-blocksize       INT   gpu threads per block partialD [128]\n");
 	printf ("     --gpu-partial-deriv-l1config        INT   gpu L1 config partialD []\n");
+  printf ("     --gpu-switch-to-flow-by-flow-at     INT   if using flow by flow pipeline switch at flow [20]\n");
     printf ("\n");
 }
 
@@ -118,6 +129,7 @@ void GpuControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 	  exit ( EXIT_FAILURE );
 	}
 	gpuL1ConfigPartialD = RetrieveParameterInt(opts, json_params, '-', "gpu-partial-deriv-l1config", -1);
+	gpuUseAllDevices = RetrieveParameterBool(opts, json_params, '-', "gpu-use-all-devices", false);
 	gpuVerbose = RetrieveParameterBool(opts, json_params, '-', "gpu-verbose", false);
 	vector<int> deviceIds;
 	RetrieveParameterVectorInt(opts, json_params, '-', "gpu-device-ids", "", deviceIds);
@@ -131,4 +143,9 @@ void GpuControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
     }
 	//jz the following comes from CommandLineOpts::GetOpts
 	doGpuOnlyFitting = RetrieveParameterBool(opts, json_params, '-', "gpu-fitting-only", true);
+
+	tMidNucShiftPerFlow = RetrieveParameterBool(opts, json_params, '-', "gpu-tmidnuc-shift-per-flow", true);
+	gpuFlowByFlowExecution = RetrieveParameterBool(opts, json_params, '-', "gpu-flow-by-flow", false);
+	postFitHandshakeWorker = RetrieveParameterBool(opts, json_params, '-', "post-fit-handshake-worker", false);
+	switchToFlowByFlowAt = RetrieveParameterInt(opts, json_params, '-', "gpu-switch-to-flow-by-flow-at", 20);
 }

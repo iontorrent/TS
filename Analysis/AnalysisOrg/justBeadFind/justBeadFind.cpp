@@ -1,11 +1,4 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
-//
-// Ion Torrent Systems, Inc.
-// Analysis Pipeline
-// (c) 2009
-// $Rev: 29830 $
-//  $Date: 2012-04-24 13:57:04 -0400 (Tue, 24 Apr 2012) $
-//
 
 #include <stdio.h>
 #include <string.h>
@@ -52,7 +45,7 @@ void DumpStartingStateOfProgram (int argc, char *argv[], TrackProgress &my_progr
   fprintf (stdout, "\n");
   fprintf (stdout, "Hostname = %s\n", myHostName);
   fprintf (stdout, "Start Time = %s", ctime (&my_progress.analysis_start_time));
-  fprintf (stdout, "Version = %s-%s (%s) (%s)\n",
+  fprintf (stdout, "Version = %s.%s (%s) (%s)\n",
            IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(),
            IonVersion::GetGitHash().c_str(), IonVersion::GetBuildNum().c_str());
   fprintf (stdout, "Command line = ");

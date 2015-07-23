@@ -1,0 +1,13 @@
+---
+# file: remove_dnsmasq.yml
+# Disables dnsmasq package and its TS configuration done in fileserver role.
+- hosts: headnode
+  tasks:
+    - name: Stop dnsmasq service
+      service: name=dnsmasq state=stopped
+    - name: Remove file
+      file: path=/etc/hosts-dnsmasq state=absent
+    - name: Remove file
+      file: path=/etc/dnsmasq.d/ion-dhcp state=absent
+    - name: Remove dnsmasq package
+      apt: name=dnsmasq state=absent purge=yes

@@ -57,7 +57,8 @@
                     <a href="{% url "dm_configuration" %}">Configure</a>
                 </td>
                 <td class='archive_td'>
-                    <input {% if autoArchiveEnable %}checked{% endif %} type='checkbox' id="enable_archive">
+                    <input {% if autoArchiveEnable %}checked{% endif %} type='checkbox' id="enable_archive"
+                        {% if not request.user.is_staff %} disabled {% endif %} >
                 </td>
                 <td>
                     {% if autoArchive %}Enabled{% else %}Disabled{% endif %}
@@ -416,7 +417,7 @@ $(document).ready(function () {
 					$.post('preserve_data/', "reportpk=" + pk + "&keep=" + checked + "&type=" + type, function(data){
 						console.log(data);
 						refreshKendoGrid(source);
-					});
+					}).fail(function(data) { alert(data.responseText); });
 				});
 
 				$(".acknowledge").click(function (e) {

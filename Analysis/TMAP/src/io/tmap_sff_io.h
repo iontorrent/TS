@@ -86,7 +86,7 @@ typedef struct {
   @param  fp  a pointer to a file structure from which to read
   @return     pointer to the initialized memory for reading in sffs
   */
-inline tmap_sff_io_t *
+tmap_sff_io_t *
 tmap_sff_io_init(tmap_file_t *fp);
 
 /*! 
@@ -95,14 +95,14 @@ tmap_sff_io_init(tmap_file_t *fp);
   @param  early_eof_ok  set this to 1 if the number of reads to be read in disagrees with the SFF header
   @return     pointer to the initialized memory for reading in sffs
   */
-inline tmap_sff_io_t *
+tmap_sff_io_t *
 tmap_sff_io_init2(tmap_file_t *fp, int32_t early_eof_ok);
 
 /*! 
   destroys sff reading structure
   @param  sffio  a pointer to the sff structure
   */
-inline void 
+void
 tmap_sff_io_destroy(tmap_sff_io_t *sffio);
 
 /*! 

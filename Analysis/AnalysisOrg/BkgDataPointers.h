@@ -53,8 +53,8 @@ class BkgDataPointers {
       m_beads_bestRegion_dmult = NULL;
       m_beads_bestRegion_SP = NULL;
       m_beads_bestRegion_R = NULL;
-      m_beads_bestRegion_fittype = NULL;
       m_beads_bestRegion_gainSens = NULL;
+      m_beads_bestRegion_fittype = NULL;
       m_beads_bestRegion_timeframe = NULL;
       m_beads_bestRegion_taub = NULL;
 
@@ -67,10 +67,11 @@ class BkgDataPointers {
       m_beads_regionCenter_dmult = NULL;
       m_beads_regionCenter_SP = NULL;
       m_beads_regionCenter_R = NULL;
-      m_beads_regionCenter_fittype = NULL;
       m_beads_regionCenter_gainSens = NULL;
+      m_beads_regionCenter_fittype = NULL;
       m_beads_regionCenter_timeframe = NULL;
       m_beads_regionCenter_taub = NULL;
+      m_beads_regionCenter_regionParams = NULL;
 
       m_beads_xyflow_predicted = NULL;
       m_beads_xyflow_corrected = NULL;
@@ -80,6 +81,7 @@ class BkgDataPointers {
       m_beads_xyflow_dmult = NULL;
       m_beads_xyflow_SP = NULL;
       m_beads_xyflow_R = NULL;
+      m_beads_xyflow_gainSens = NULL;
       m_beads_xyflow_fittype = NULL;
       m_beads_xyflow_location = NULL;
       m_beads_xyflow_hplen = NULL;
@@ -169,6 +171,7 @@ public: // should be private eventually and use set/get to access them
   DataCube<float> *m_beads_regionCenter_gainSens;
   DataCube<float> *m_beads_regionCenter_timeframe;
   DataCube<float> *m_beads_regionCenter_taub;
+  DataCube<float> *m_beads_regionCenter_regionParams;
 
   // traceOutput for positions specified in sse/xyf/rcf files
   DataCube<float> *m_beads_xyflow_predicted;
@@ -178,6 +181,7 @@ public: // should be private eventually and use set/get to access them
   DataCube<float> *m_beads_xyflow_dmult;
   DataCube<float> *m_beads_xyflow_SP;
   DataCube<float> *m_beads_xyflow_R;
+  DataCube<float> *m_beads_xyflow_gainSens;
   DataCube<float> *m_beads_xyflow_timeframe;
   DataCube<float> *m_beads_xyflow_residual;
   DataCube<int> *m_beads_xyflow_location;

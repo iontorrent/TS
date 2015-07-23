@@ -1,0 +1,60 @@
+{% load url from future %}
+{% load static from staticfiles %}
+
+<div id="modal_publisher_upload" class="modal modal-750 hide">
+    <div class="modal-header">
+        <button data-dismiss="modal" class="close" type="button">&times;</button>
+        <h3>Upload Content</h3>
+    </div>
+    <div class="modal-body">
+        <div id="modal_error" class="alert alert-error" {% if not error %}style="display: none;"{% endif %}>
+            {{error}}
+        </div>
+        <div id="modal_info" class="alert alert-info hide"></div>
+        <form id="pub_form" method="POST" action={{action}} enctype="multipart/form-data">
+            {{contents|safe}}
+        </form>
+    </div>
+    <div class="modal-footer">
+        <a id="uploadfile" class="btn btn-primary" disabled>Upload</a>
+        <a id="uploadstatus" class="btn btn-primary" style="display: none;">View Upload</a>
+        <a data-dismiss="modal" href="#" class="btn">Close</a>
+    </div>
+    
+    <script type="text/javascript" src="{% static "jquery/js/jquery.form.js"%}"></script>
+    <script>
+        $('#pub_form').ajaxForm({
+            dataType : "json",
+            async: false,
+            beforeSend: function() {
+                $('#uploadfile').attr('disabled','disabled');
+            },
+            success: function(data) {
+                console.log('success', data);
+                if (data.error) {
+                    $('#modal_error').empty().append(data.error).show();
+                }
+                if (data.status) {
+                    var redirect= '/rundb/uploadstatus/' + data.id;
+                    $('#modal_info').empty().html('Content upload is <b>'+data.status+'</b>').show();
+                    $("#uploadfile").hide();
+                    $('#uploadstatus').attr('href',redirect).show();
+                }
+            },
+            error: function(data){
+                $('#modal_error').empty().append('Error uploading file.').show();
+            }
+        });
+        
+        $("#modal_publisher_upload #uploadfile").click(function(e){
+            e.preventDefault();
+            $('#pub_form').submit();
+        });
+        
+        $("#modal_publisher_upload").find([type=file]).change(function(){
+            $('#modal_error,#modal_info').empty().hide();
+            $("#uploadfile").removeAttr('disabled').show();
+            $('#uploadstatus').hide();
+        });
+    </script>
+</div>

@@ -139,10 +139,11 @@ int main (int argc, char *argv[])
     // process command-line args
     char* wellsFileName = NULL;
     char* outputFileName = NULL;
-    char* outputFolder = ".";
+    char* outputFolder = NULL;
     std::vector<std::string> folders;
     bool debug = false;
     int c;
+    outputFolder = strdup(".");
     while ( (c = getopt (argc, argv, "i:o:f:hvd")) != -1 )
         {
             switch (c)

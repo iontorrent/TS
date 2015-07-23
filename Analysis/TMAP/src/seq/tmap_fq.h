@@ -55,13 +55,13 @@ typedef struct {
   initializes sequence read structure
   @return     pointer to the initialized memory 
   */
-inline tmap_fq_t *
+tmap_fq_t *
 tmap_fq_init();
 
 /*! 
   @param  fq  a pointer to the sequence structure
   */
-inline void 
+void
 tmap_fq_destroy(tmap_fq_t *fq);
 
 /*! 
@@ -69,7 +69,7 @@ tmap_fq_destroy(tmap_fq_t *fq);
   @param  fq  pointer to the sequence read structure to be copied  
   @return     pointer to the initialized memory 
   */
-inline tmap_fq_t *
+tmap_fq_t *
 tmap_fq_clone(tmap_fq_t *fq);
 
 /*! 
@@ -111,14 +111,14 @@ tmap_fq_to_char(tmap_fq_t *fq);
   gets the read's bases
   @param  fq  a pointer to a sequence structure
  */
-inline tmap_string_t *
+tmap_string_t *
 tmap_fq_get_bases(tmap_fq_t *fq);
 
 /*!
   gets the read's qualities
   @param  fq  a pointer to a sequence structure
  */
-inline tmap_string_t *
+tmap_string_t *
 tmap_fq_get_qualities(tmap_fq_t *fq);
 
 #endif // TMAP_FQ_H

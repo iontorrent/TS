@@ -17,11 +17,11 @@
 #include "api/SamHeader.h"
 #include "api/BamAlignment.h"
 #include "api/BamWriter.h"
-
 #include "json/json.h"
 
 #include "BaseCallerUtils.h"
-class BarcodeDatasets;
+
+class  BarcodeDatasets;
 
 using namespace std;
 using namespace BamTools;
@@ -152,16 +152,20 @@ public:
   //! Destructor.
   ~OrderedDatasetWriter();
 
-  //! @brief  Open SFF file for writing.
-  //! @param  sff_filename    Filename of the SFF file to create.
-  //! @param  num_regions     Number of regions to expect.
-  //! @param  num_flows       Number of flows.
-  //! @param  flow_order      Flow order object, also stores number of flows
-  //! @param  key             Key sequence.
-  void Open(const string& base_directory, BarcodeDatasets& datasets, int num_regions,
-      const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
-      const string& basecaller_name, const string& basecalller_version, const string& basecaller_command_line,
-      const string& production_date, const string& platform_unit, bool save_filtered_reads, vector<string>& comments);
+  //! @brief  Open one BAM file per read group file for writing.
+  //! @param  base_directory        Base directory of the BAM files to create.
+  //! @param  datasets              Barcode and read group information.
+  //! @param  read_class_idx        Integer value specifying read class (Library=0, TF=1, unfiltered=-1)
+  //! @param  num_regions           Number of regions to expect.
+  //! @param  flow_order            Flow order object
+  //! @param  key                   Key sequence.
+  //! @param  bead_adapters         3' adapter sequences
+  //! @param  num_bamwriter_threads Number of threads to be used by BamWriter objects
+  //! @param  basecaller_json       JSON value.
+  //! @param  comments              BAM header comment lines
+  void Open(const string& base_directory, BarcodeDatasets& datasets, int read_class_idx,
+       int num_regions, const ion::FlowOrder& flow_order, const string& key, const vector<string> & bead_adapters,
+       int num_bamwriter_threads, const Json::Value & basecaller_json, vector<string>& comments);
 
   //! @brief  Drop off a region-worth of reads for writing. Write opportunistically.
   //! @param  region          Index of the region being dropped off.
@@ -203,6 +207,7 @@ private:
   vector<string>            bam_filename_;
 
   bool                      save_filtered_reads_;
+  int                       num_bamwriter_threads_;
 
   vector<uint64_t>          read_group_num_Q20_bases_;         //!< Number of >=Q20 bases written per read group
   vector<uint64_t>          qv_histogram_;

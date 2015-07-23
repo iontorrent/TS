@@ -1,98 +1,165 @@
 ---
 # file: roles/fileserver/tasks/main.yml
 
-#============================================================================ 
-# iptables configuration
-#============================================================================ 
-- name: iptables
-  template: src=iptables.template dest=/etc/iptables.rules
-  notify: load iptables
-  
-- name: customized iptables
-  file: name=/etc/iptables.custom owner=root mode=0644 state=touch
-  notify: load custom iptables
-  
-- name: modify /etc/network/interfaces to enable firewall rules
-  lineinfile: dest=/etc/network/interfaces
-                state=present
-                regexp='pre-up iptables-restore.*iptables.rules'
-                line='pre-up iptables-restore < /etc/iptables.rules'
-  
-- name: modify /etc/network/interfaces to enable custom firewall rules
-  lineinfile: dest=/etc/network/interfaces
-                state=present
-                regexp='pre-up iptables-restore.*iptables.custom'
-                line='pre-up iptables-restore --noflush < /etc/iptables.custom'
-   
+- name:
+  include: '../../../globals.yml'
 #============================================================================ 
 # network interfaces configuration
 #============================================================================ 
-- name: copy network_interfaces script file
-  copy: src=network_interfaces.sh dest=/tmp/network_interfaces.sh mode=0775
-  
-- name: create interfaces
-  command: /tmp/network_interfaces.sh
-  register: output
+- name: Edit /etc/network/interfaces and restart networking
+  template: src=interfaces.j2 dest=/etc/network/interfaces mode=0644 backup=yes
   notify: restart network
   
-- debug: msg="{{item}}"
-  with_items: output.stdout_lines
+#============================================================================
+# Enable IP forwarding
+#============================================================================
+- name: IP Forwarding
+  sysctl: name="net.ipv4.ip_forward" state=present value=1 reload=yes sysctl_set=yes
+  when: S5_virtual_guest|bool == False
+  
+#============================================================================ 
+# iptables configuration
+#============================================================================
+- name: Remove iptables.rules and flush iptables rules
+  file: path=/etc/iptables.rules state=absent
+# notify task does not work here because I think it gets run in separate thread.
+# so we call it explicitly
+#  notify: flush iptables
+
+- name: flush iptables
+  shell: bash -lc '/sbin/iptables -F && iptables -P INPUT ACCEPT'
+  
+- name: iptables.rules file configuration
+  template: src=iptables.j2 dest=/etc/iptables.rules mode=0644
+  notify: load iptables
+  when: S5_virtual_guest|bool == False
+  
+- name: iptables.custom initialization
+  file: name=/etc/iptables.custom owner=root mode=0644 state=touch
+  notify: load custom iptables
+  when: S5_virtual_guest|bool == False
   
 #============================================================================ 
 # ftp configuration
 #============================================================================ 
 - name: install vsftpd package
   apt: name=vsftpd state=latest
+
+# Create ftp user
+- name: initialize ftp system user
+  user: name={{ftp_username}} password={{ftp_password}} shell=/bin/sh update_password=on_create state=present
+
+- name: Test if DenyUsers directive exists
+  command: grep -q ^DenyUsers /etc/ssh/sshd_config
+  register: result
+  ignore_errors: yes
   
-- name: copy ftp configuration script file
-  copy: src=config_ftp.sh dest=/tmp/config_ftp.sh mode=0775
+- name: Add ftp user to the existing DenyUsers list
+  when: result|success
+  command: sed -i "/^DenyUsers/ {/$deny_user/! s/.*/& $deny_user/}" /etc/ssh/sshd_config
   
-- name: configure vsftpd
-  command: /tmp/config_ftp.sh
-  register: output
+- name: Add DenyUsers list
+  when: result|failed
+  command: echo "DenyUsers $deny_user" >> /etc/ssh/sshd_config
+  
+#============================================================================
+# If /results exists, link to it.  next, if /rawdata exists, link to it instead
+#============================================================================
+- name: Test if /results directory exists
+  stat: path=/results
+  register: p
+  
+- name: Set correct file permissions on /results directory
+  file: name=/results state=directory mode=0777 owner=root group=root
+  when: p.stat.exists
+  
+- name: ftp download directory symlink to /results
+  file: src=/results dest=/home/{{ftp_username}}/results state=link
+  when: p.stat.exists
+
+- name: Test if /rawdata directory exists
+  stat: path=/rawdata
+  register: p
+  
+- name: Set correct file permissions on /rawdata directory
+  file: name=/rawdata state=directory mode=0777 owner=root group=root
+  when: p.stat.exists
+              
+- name: ftp download directory symlink to /rawdata
+  file: src=/rawdata dest=/home/{{ftp_username}}/results state=link
+  when: p.stat.exists
+
+- name: configure allowed_users file
+  template: src=vsftpd.allowed_users.j2 dest=/etc/vsftpd.allowed_users mode=0644
+  
+- name: configure vsftpd service
+  template: src=vsftpd.j2 dest=/etc/vsftpd.conf mode=0644
   notify: restart vsftpd
   
-- debug: msg="{{item}}"
-  with_items: output.stdout_lines
 
 #============================================================================  
-# dhcp configuration
+# dhcp server package install
 #============================================================================ 
 - name: install dhcp3-server package for lucid
   apt: name=dhcp3-server state=latest
   when: ansible_distribution_release == "lucid"
   
-- name: install dhcp3-server package for trusty
+- name: install isc-dhcp-server package for trusty
   apt: name=isc-dhcp-server state=latest
   when: ansible_distribution_release == "trusty"
 
-- name: copy dhcp configuration script file (lucid)
-  template: src=config_dhcp.template dest=/tmp/config_dhcp.sh mode=0775
-  with_items:
-    'send host-name "<hostname>";'
+#============================================================================  
+# dhcp server configuration
+#============================================================================ 
+- name: dhcp server configuration
+  template: src=dhcpd.j2 dest=/etc/dhcp3/dhcpd.conf mode=0644
   when: ansible_distribution_release == "lucid"
-  
-- name: copy dhcp configuration script file (trusty)
-  template: src=config_dhcp.template dest=/tmp/config_dhcp.sh mode=0775
-  with_items:
-    'send host-name = gethostname();'
-  when: ansible_distribution_release == "trusty"
-    
-- name: configure dhcp
-  command: /tmp/config_dhcp.sh
-  register: output
   notify: restart dhcp
+
+- name: dhcp server configuration
+  template: src=dhcpd.j2 dest=/etc/dhcp/dhcpd.conf mode=0644
+  when: ansible_distribution_release == "trusty"
+  notify: restart isc-dhcp
+
+
+#============================================================================ 
+# dhclient configuration
+#============================================================================ 
+- name: Configure dhclient.conf
+  template: src=dhclient.j2 dest=/etc/dhcp3/dhclient.conf mode=0644
   when: ansible_distribution_release == "lucid"
   
-- name: configure dhcp
-  command: /tmp/config_dhcp.sh
-  register: output
-  notify: restart isc-dhcp
+- name: Configure dhclient.conf
+  template: src=dhclient.j2 dest=/etc/dhcp/dhclient.conf mode=0644
   when: ansible_distribution_release == "trusty"
+
   
-- debug: msg="{{item}}"
-  with_items: output.stdout_lines
+#============================================================================
+# dnsmasq configuration
+# Only DNS service is enabled; dhcp via dnsmasq is disabled
+#============================================================================
+- name: install dnsmasq package
+  apt: name=dnsmasq state=latest
+  when: S5_virtual_guest|bool == False
   
+- name: dnsmasq configuration
+  template: src=ion-dhcp.j2 dest=/etc/dnsmasq.d/ion-dhcp mode=0644
+  when: S5_virtual_guest|bool == False
+
+- name: hosts configuration
+  template: src=hosts-dnsmasq.j2 dest=/etc/hosts-dnsmasq mode=0644
+  when: S5_virtual_guest|bool == False
+
+- name: enable dnsmasq configuration subdirectory
+  lineinfile: dest=/etc/dnsmasq.conf
+                regexp="^.*conf-dir=.*"
+                line="conf-dir=/etc/dnsmasq.d"
+  when: S5_virtual_guest|bool == False
+
+- name: restart dnsmasq service
+  service: name=dnsmasq state=restarted
+  when: S5_virtual_guest|bool == False
+
 #============================================================================ 
 # ntp configuration
 #============================================================================ 
@@ -110,32 +177,35 @@
 #============================================================================
 - name: Restart nfs daemon
   service: name=nfs-kernel-server state=restarted
+  when: export_results == True
   
 - name: Status of /results
-  command: /usr/bin/test -d /results
-  register: result
-  ignore_errors: yes
+  stat: path=/results
+  register: p
+  when: export_results == True
+  
 - name: Exporting /results file system
   lineinfile: dest=/etc/exports
                 state=present
                 regexp='/results.*{{ansible_default_ipv4.network}}.*'
                 line='/results {{ansible_default_ipv4.network}}/{{CIDR}}(rw,async,subtree_check,no_root_squash)'
-  when: result|success
+  when: export_results == True and p.stat.exists
   notify: restart exportfs
 
 #============================================================================ 
 # exportfs configuration of /rawdata
 #============================================================================ 
 - name: Status of /rawdata
-  command: /usr/bin/test -d /rawdata
-  register: rawdata
-  ignore_errors: yes
+  stat: path=/rawdata
+  register: p
+  when: export_results == True
+  
 - name: Exporting /rawdata file system
   lineinfile: dest=/etc/exports
                 state=present
                 regexp='/rawdata.*{{ansible_default_ipv4.network}}.*'
                 line='/rawdata {{ansible_default_ipv4.network}}/{{CIDR}}(rw,async,subtree_check,no_root_squash)'
-  when: rawdata|success
+  when: export_results == True and p.stat.exists
   notify: restart exportfs
 
 

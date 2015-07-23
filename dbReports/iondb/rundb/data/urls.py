@@ -6,11 +6,17 @@ except ImportError:
     # Compat Django 1.4
     from django.conf.urls.defaults import patterns, url
 
+from iondb.rundb.data.views import (
+    ExperimentListView,
+    ResultsListView
+)
+from django.contrib.auth.decorators import login_required
 
 urlpatterns = patterns(
     'iondb.rundb.data',
     url(r'^$', 'views.data', name="data"),
-    url(r'^fast/$', 'views.data_fast', name="data_fast"),
+    url(r'^runs/$', login_required(ExperimentListView.as_view()), name="run_list"),
+    url(r'^reports/$', login_required(ResultsListView.as_view()), name="results_list"),
     url(r'^table/$', 'views.data_table', name="data_table"),
     url(r'^getCSV.csv$', 'views.getCSV'),
     url(r'^projects/$', 'views.projects', name="projects"),

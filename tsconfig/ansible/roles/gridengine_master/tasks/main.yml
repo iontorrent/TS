@@ -1,26 +1,8 @@
 ---
-# files: roles/griengine_master/tasks/main.yml
+# files: roles/gridengine_master/tasks/main.yml
 
-#==============================================================================
-# Firewall rules to allow network access for gridengine clients
-# TODO:Should this be in the gridengine_clients setup instead?
-#==============================================================================
-- name: Firewall rules to allow gridengine traffic
-  lineinfile: state=present line="COMMIT" insertafter=EOF dest=/etc/iptables.custom
-  tags: debug
-  
-- name: Firewall rules to allow gridengine traffic
-  lineinfile: state=present line="*filter" insertbefore=BOF dest=/etc/iptables.custom
-  tags: debug
-  
-- name: Firewall rules to allow gridengine traffic
-  lineinfile: state=present line="-A INPUT -p tcp -m state --state NEW -m tcp --dport 6444 -j ACCEPT" insertbefore="COMMIT" dest=/etc/iptables.custom
-  tags: debug
-  
-- name: Firewall rules to allow gridengine traffic
-  lineinfile: state=present line="-A INPUT -p tcp -m state --state NEW -m tcp --dport 6445 -j ACCEPT" insertbefore="COMMIT" dest=/etc/iptables.custom
-  tags: debug
-  
+- name:
+  include: '../../../globals.yml'
 #==============================================================================
 # gridengine configuration
 #==============================================================================
@@ -36,6 +18,14 @@
     - gridengine-qmon
     - gridengine-exec
 
+# TEST.  Force running package configuration for case where gridengine is installed but need to be
+# reconfigured (during headnode host renaming for example)
+#- name: Force reconfiguration to pick up headnode host name change
+#  command: dpkg-reconfigure --frontend noninteractive gridengine-master
+  
+- name: enable gridengine log rotation
+  template: src=templates/sge.logrotate.j2 dest=/etc/logrotate.d/sge mode=0644 owner=root group=root
+  
 - name: Create host_aliases file
   lineinfile: create=yes state=present dest=/var/lib/gridengine/iontorrent/common/host_aliases
                 owner=sgeadmin group=sgeadmin mode=0664
@@ -77,7 +67,7 @@
 
 # add user if user does not exist
 - name: upload user configuration file
-  template: src=user.template dest=/tmp/user.{{item}}.conf
+  template: src=user.j2 dest=/tmp/user.{{item}}.conf
   with_items:
     - sge_usernames
   
@@ -85,21 +75,38 @@
   shell: bash -lc 'if ! qconf -suserl | grep -q {{item}}; then qconf -Auser /tmp/user.{{item}}.conf; fi ; rm /tmp/user.{{item}}.conf'
   with_items:
     - sge_usernames
+
+# PowerEdge T620 comes in two flavors only distinguished by the size of internal disk space
+# Only original T620 with big drives has /rawdata.
+# We base our decision on whether a /rawdata directory exists.
+- name: Special case T620 PGM
+  stat: path=/rawdata
+  register: p
   
-# configure queue if queue does not exist
+- include_vars: "../../../group_vars/PowerEdge T620 PGM"
+  when: "p.stat.exists == false and '{{ansible_product_name}}' == 'PowerEdge T620'"
+  
+# Remove all existing queues
+- name: Remove all existing queues
+  shell: bash -lc 'for queue in $(qconf -sql); do qconf -dq $queue; done'
+  
+# Stage the queue definition template files
 - name: upload queue configuration files
-  template: src=queue.template dest=/tmp/{{item['name']}}.conf
+  template: src=queue.j2 dest=/tmp/{{item['name']}}.conf
   with_items:
     - '{{queues}}'
+
+# plugin.q queue gets special settings
+- name: upload plugin.q configuration file
+  template: src=plugin.q.j2 dest=/tmp/plugin.q.conf
   
 - name: setup queues
-  shell: bash -lc 'if ! qconf -sql | grep -q {{item['name']}}; then qconf -Aq /tmp/{{item['name']}}.conf; fi ; rm /tmp/{{item['name']}}.conf'
+  shell: bash -lc 'qconf -Aq /tmp/{{item['name']}}.conf; rm /tmp/{{item['name']}}.conf'
   with_items:
     - '{{queues}}'
-    
+  
 # set number of slots
 #    qconf -aattr queue slots $set_slots $qname
-#TODO: special case T620 hardware to get 4 slots
 - name: Assign number of slots per queue
   shell: bash -lc 'qconf -aattr queue slots {{item.slots}} {{item.name}}'
   with_items:
@@ -127,16 +134,9 @@
 - name: For network-using plugins, set a consumable resource to control bandwidth utilization
   shell: bash -lc 'qconf -aattr exechost complex_values export_plugins=10 global'
   
-# create plugin queue
-- name: upload plugin.q configuration file
-  template: src=plugin.q.template dest=/tmp/plugin.q.conf
-  
-- name: setup plugin.q
-  shell: bash -lc 'if ! qconf -sql | grep -q plugin.q; then qconf -Aq /tmp/plugin.q.conf; fi; rm /tmp/plugin.q.conf'
-
 # add execution hosts
 - name: upload host configuration file
-  template: src=host.template dest=/tmp/host.{{item}}.conf
+  template: src=host.j2 dest=/tmp/host.{{item}}.conf
   with_items:
     - '{{groups.computes}}'
     - '{{groups.headnode[0]}}'
@@ -163,7 +163,7 @@
 
 # configure parallel environment
 - name: upload PE configuration file
-  template: src=ion_pe.template dest=/tmp/ion_pe.conf
+  template: src=ion_pe.j2 dest=/tmp/ion_pe.conf
 
 - name: create PE
   shell: bash -lc 'if ! qconf -spl | grep -q ion_pe; then qconf -Ap /tmp/ion_pe.conf; fi ; rm /tmp/ion_pe.conf'
@@ -216,12 +216,11 @@
   shell: bash -lc 'qconf -Mconf /tmp/global ; rm -f /tmp/global'
   
 # N.B. - The output of qhost is not immediately available for some reason.
-- name: Waiting for qhost command to return valid values
+- name: Waiting 45 seconds so qhost command will return valid values
   command: /bin/sleep 45
   
 # SGE: Set per-host maximum mem_free to be node physical mem
 # Must be manually set to be consumable resource
-- name: set maximum free memory for all hosts
+- name: set maximum free memory for this host
   shell: bash -lc qhost | awk '{{ ansible_hostname }}/{print "qconf -mattr exechost complex_values mem_free=" $5,$1}'|sh
-  
-- debug: msg="Need to set free memory for all compute nodes"
+

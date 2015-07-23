@@ -1,6 +1,9 @@
 ---
 # file: roles/db/tasks/main.yml
 
+- name:
+  include: '../../../globals.yml'
+  
 - name: Install postgresql package
   apt: pkg=postgresql state=latest
   
@@ -19,7 +22,9 @@
   command: /usr/bin/pg_createcluster {{ psql_version.stdout }} main
            creates=/etc/postgresql/{{ psql_version.stdout }}/main/pg_hba.conf
 
+#-----------------------------------------------------------------------------
 #Modify the configuration of postgresql
+#-----------------------------------------------------------------------------
 - name: Modify pg_hba.conf file
   sudo_user: postgres
   replace: dest=/etc/postgresql/{{ psql_version.stdout }}/main/pg_hba.conf
@@ -52,43 +57,55 @@
 
 # SPECIAL CASE: Only make this edit if /etc/sysctl.d/10-postgresql-shm.conf file exists
 - name: Test for {{ postgres_sysctl_file }}
-  command: /usr/bin/test -e {{ postgres_sysctl_file }}
-  register: response
-  ignore_errors: yes
+  stat: path="{{postgres_sysctl_file}}"
+  register: p
   
 - name: Modify postgresql.conf - modify shared_buffers
   lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
                 regexp='.*shared_buffers.*'
                 line='shared_buffers = {{ shared_buffers }}'
-  when: response|success
+  when: p.stat.exists
+  
+# Special location of postgres database files for S5 TSVM
+- name: Modify db filepath for S5 TSVM
+  lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
+                regexp='^data_directory.*'
+                line='data_directory = \'/results/postgresql/{{ psql_version.stdout }}/main\''
+  when: S5_virtual_guest|bool == True
+  
+# TS-10551.  Stock max connections of 100 is too low.
+- name: 'postgresql.conf: Customize max_connections value'
+  lineinfile: dest=/etc/postgresql/{{ psql_version.stdout }}/main/postgresql.conf
+                regexp='^max_connections.*'
+                line='max_connections = 150'
 
 - name: Modify {{ postgres_sysctl_file }} - modify kernel.shmmax
   lineinfile: dest={{ postgres_sysctl_file }}
                 regexp='(kernel.shmmax)(.*)'
                 line='kernel.shmmax = {{ kernel_shmmax }}'
-  when: response|success
+  when: p.stat.exists
   notify: reload sysctl
   
 # 8.4 has special script name for service
 - name: Find postgresql start file script
-  command: /usr/bin/test -e /etc/init.d/postgresql-{{ psql_version.stdout }} 
-  register: exists
-  ignore_errors: yes
+  stat: path=/etc/init.d/postgresql-{{ psql_version.stdout }} 
+  register: p
   
 - name: Reload postgresql
   service: name=postgresql-{{ psql_version.stdout }} state=reloaded enabled=yes
-  when: exists|success
+  when: p.stat.exists
   
 - name: Find postgresql start file script
-  command: /usr/bin/test -e /etc/init.d/postgresql
-  register: exists
-  ignore_errors: yes
+  stat: path=/etc/init.d/postgresql
+  register: p
   
 - name: Reload postgresql
   service: name=postgresql state=reloaded enabled=yes
-  when: exists|success
+  when: p.stat.exists
   
+#-----------------------------------------------------------------------------
 # Initialize the iondb database and default user
+#-----------------------------------------------------------------------------
 - name: Initialize postgresql database
   postgresql_db: name=iondb state=present
   sudo_user: postgres
@@ -102,6 +119,9 @@
                      state=present
   sudo_user: postgres
   
+#-----------------------------------------------------------------------------
+# logrotate_iondb
+#-----------------------------------------------------------------------------
 - name: Create db backup directory
   file: path=/results/dbase_backup state=directory mode=0755 owner=root group=root
   
@@ -109,4 +129,4 @@
   file: path=/results/dbase_backup/iondb.sql state=touch mode=0644 owner=postgres group=postgres
   
 - name: Enable daily backups of the postgresql database
-  copy: src=iondb.template dest=/etc/logrotate.d/iondb force=yes
+  copy: src=iondb.j2 dest=/etc/logrotate.d/iondb force=yes mode=0644 owner=root group=root

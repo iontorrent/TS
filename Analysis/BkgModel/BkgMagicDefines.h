@@ -152,4 +152,14 @@ typedef int16_t FG_BUFFER_TYPE;
 #define SMALL_PRIME 541
 
 
+// please get rid of these soon - bkgmodel should treat these as global parameters
+// to support possible changes for Proton
+// we are experimenting with different sampling rates
+// please use the deltaFrameSeconds in time-compression as a central source for this conversion(?)
+#define FRAMESPERSEC 15.0f
+
+// Number of sample beads to calculate generic xtalk for simple model in
+// trace level crosstalk correction
+#define GENERIC_SIMPLE_XTALK_SAMPLE 100
+
 #endif // BKGMAGICDEFINES_H

@@ -1441,22 +1441,15 @@ $(document).ready(function () {
     }).change(function()  {
         //When the reference changes, copy the children into this select box.
         var reference = $(this).find("option:selected").data('reference');
-
         //console.log("page_plan_sample_table.js - reference change...reference=", reference, "; tr=", $(this).closest("tr"));
-
         var targetBedSelect = $(this).closest("tr").find("select[name=targetRegionBedFile]");
         var hotspotBedSelect = $(this).closest("tr").find("select[name=hotSpotRegionBedFile]");
-
         var hiddenTargetBedSelect = $(this).closest("tr").find(".hiddenTargetBedSelect").first();
         var hiddenHotspotBedSelect = $(this).closest("tr").find(".hiddenHotspotBedSelect").first();
-
         //changing the mixedTypeRNA ref selection should not clear the DNA sample's BED file selection
-
         var isDualNucleotideType = $('input[id=isDualNucleotideTypeBySample]').val();
-        if (isDualNucleotideType == "True") {       
             //console.log("$$$ skipping targetBedSelect.children().remove() for dualNucleotideType");
          	//console.log("### reference.change - targetBedSelect.children=", targetBedSelect.children());
-         	
             //20141006-WIP-TODO - filter the targetBedSelect and hotspotBedSelect for the specific row!!
 /*            
             targetBedSelect.remove();
@@ -1477,8 +1470,6 @@ $(document).ready(function () {
                 }
             }));
 */                        
-        }
-        else {        
         targetBedSelect.children().remove();
         targetBedSelect.append(hiddenTargetBedSelect.children().clone().map(function(){
             if($(this).hasClass(reference) || $(this).attr("value") == ""){
@@ -1487,7 +1478,6 @@ $(document).ready(function () {
                 return null;
             }
         }));
-        
         hotspotBedSelect.children().remove();
         hotspotBedSelect.append(hiddenHotspotBedSelect.children().clone().map(function(){
             if($(this).hasClass(reference) || $(this).attr("value") == ""){
@@ -1496,7 +1486,6 @@ $(document).ready(function () {
                 return null;
             }
         }));
-        }
     }).change();
 
 

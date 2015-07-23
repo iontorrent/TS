@@ -10,6 +10,7 @@
 #include "WorkerInfoQueue.h"
 #include "BeadTracker.h"
 #include "NucStepCache.h"
+#include "EmphasisVector.h"
 #include "GpuMultiFlowFitControl.h"
 #include "CudaDefines.h"
 
@@ -30,7 +31,6 @@ class BkgModelWorkInfo;
 
 class WorkSet 
 {
-
 
   BkgModelWorkInfo * _info;
   GpuMultiFlowFitControl _multiFlowFitControl;
@@ -54,10 +54,17 @@ public:
   int getNumBeads()  const;  // will return maxBeads if no _info object is set
   int getNumFrames() const;  // will return max Frames if no _info object is set
 
-
+  int getImgHeight() const;
+  int getImgWidth() const;
+  int getMaxRegionWidth() const;
+  int getMaxRegionHeight() const;
+  //int getRegionWidth() const;
+  //int getRegionHeight() const;
   // only used if we don't want to determine the mem sizes for a specific number of frames/beads or no item is set
   void setMaxFrames(int numFrames);
   int getMaxFrames() const;
+  int getUncompressedFrames() const;
+  int getImageFrames() const;
   void setMaxBeads(int numBeads);
   int getMaxBeads() const;
 
@@ -74,6 +81,8 @@ public:
  
 
   reg_params * getRegionParams();
+  reg_params * getRegionParamMinBounds();
+  reg_params * getRegionParamMaxBounds();
   BeadParams * getBeadParams();
   BeadTracker * getBeadTracker();
   bead_state * getBeadState();
@@ -137,6 +146,7 @@ public:
   int getFloatPerBead(bool padded = false);
 
   int getPaddedN() const;
+  int getPaddedGenericXtalkSample() const;
   int padTo128Bytes(int size);
   int multipltbyPaddedN(int size);
 
@@ -151,6 +161,7 @@ public:
   float getMaxEmphasis();
   bool performAlternatingFit();
   
+  void setUpCrudeEmphasisVectors();
   void setUpFineEmphasisVectors();
 //  BkgModelWorkInfo * getInfo();
 
@@ -164,6 +175,7 @@ public:
   void PerformePCA();
 
 
+  bool DataAvailalbe();
   bool ValidJob();
 
   void setJobToPostFitStep();
@@ -175,14 +187,21 @@ public:
   void printJobSummary();
   
   int getXtalkNeiIdxMapSize(bool padded);
+  int getXtalkSampleNeiIdxMapSize(bool padded);
+  bool IsSimpleTraceLevelXtalk() const;
   int getNumXtalkNeighbours();
   const int* getNeiIdxMapForXtalk();
+  const int* getSampleNeiIdxMapForXtalk();
   int* getXtalkNeiXCoords();
   int* getXtalkNeiYCoords();
   float* getXtalkNeiMultiplier();
   float* getXtalkNeiTauTop();
   float* getXtalkNeiTauFluid();
   bool performCrossTalkCorrection() const;
+  bool performWellsLevelXTalkCorrection() const;
+
+  bool performPolyClonalFilter() const;
+  bool performPostFitHandshake() const;
 
   void calculateCPUXtalkForBead(int ibd, float* buf);
 
@@ -199,10 +218,12 @@ public:
   int GetNumStdCompressedFrames();
   int GetNumETFCompressedFrames();
   int* GetStdFramesPerPoint();
+  int* GetETFFramesPerPoint();
   int* GetETFInterpolationFrames();
   float* GetETFInterpolationMul();
   int GetETFStartFrame();
   int GetStdFramesPerPointSize(bool padded = false);
+  int GetETFFramesPerPointSize(bool padded = false);
   int GetETFInterpolationMulSize(bool padded = false);
   int GetETFInterpolationFrameSize(bool padded = false); 
   float* GetStdTimeCompEmphasis();
@@ -218,6 +239,21 @@ public:
   int* GetNonZeroEmphasisFrames();
   int* GetNonZeroEmphasisFramesForStdCompression();
   int GetNonZeroEmphasisFramesVecSize(bool padded = false);
+  const EmphasisClass& getEmphasisData();
+
+  int getRegCol();
+  int getRegRow();
+
+
+  float getCTimeStart();
+  float getTMidNuc();
+  float getSigma();
+  float getTShift();
+  int getNucIdForFlow(int flow);
+
+
+  void ** getSampleCollectionPtr();
+
 };
 
 

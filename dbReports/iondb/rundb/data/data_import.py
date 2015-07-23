@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+from __future__ import absolute_import
 import os
 import sys
 import logging

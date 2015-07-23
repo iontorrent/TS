@@ -49,11 +49,11 @@ public:
     Image();
     virtual ~Image();
     bool LoadRaw ( const char *rawFileName, TikhonovSmoother *tikSmoother );
-    bool LoadRaw ( const char *rawFileName, int frames = 0, bool allocate = true, bool headerOnly = false );
-    bool LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly, TikhonovSmoother *tikSmoother );
+    bool LoadRaw ( const char *rawFileName, int frames = 0, bool allocate = true, bool headerOnly = false, bool timeTransform = true );
+    bool LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly, bool timeTransform, TikhonovSmoother *tikSmoother );
     bool LoadRaw_noWait ( const char *rawFileName, int frames=0, bool allocate=true, bool headerOnly=false );
     bool LoadRaw_noWait_noSem(const char *rawFileName, int frames=0, bool allocate=true, bool headerOnly=false );
-    int ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOnly );
+    int ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOnly, bool timeTransform=true);
     int ActuallyLoadRaw_noSem ( const char *rawFileName, int frames,  bool headerOnly );
     /** Not perfect as sdat has a particular time compression per region but good workaround for some use cases. */
     void InitFromSdat(SynchDat *sdat);
@@ -160,7 +160,7 @@ public:
 
     void CalcBeadfindMetric_1 ( Mask *mask, Region r, char *tr, int frameStart=-1, int frameEnd=-1 );
     void CalcBeadfindMetricIntegral (Mask *mask, Region region, char *idStr, int frameStart, int frameEnd);
-    void CalcBeadfindMetricRegionMean ( Mask *mask, Region region, char *idStr, int frameStart, int frameEnd);
+    void CalcBeadfindMetricRegionMean ( Mask *mask, Region region, const char *idStr, int frameStart, int frameEnd);
     void FindPeak ( Mask *mask, MaskType these );
     void SetMaxFrames ( int max ) {
         maxFrames = max;

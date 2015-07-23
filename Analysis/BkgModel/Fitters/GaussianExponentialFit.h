@@ -17,18 +17,21 @@ class GaussianExponentialFit : LevMarFitter
 public:
 
     // constructor
+    /*
     GaussianExponentialFit(int _len,float *_x)
     {
         xvals = new float[_len];
+        // TODO: broken memcpy call
         memcpy(xvals,_x,sizeof(xvals));
 
         Initialize(4,_len,xvals);
     }
+    */
 
     GaussianExponentialFit(int _len)
     {
         xvals = new float[_len];
-        
+
         for (int i=0;i < _len;i++) xvals[i] = (float)i;
 
         Initialize(4,_len,xvals);

@@ -222,7 +222,10 @@ void SignalProcessingMasterFitter::DoPreComputationFiltering(int flow_block_size
 
 
 
-void SignalProcessingMasterFitter::PreWellCorrectionFactors( int flow_block_size, int flow_block_start )
+void SignalProcessingMasterFitter::PreWellCorrectionFactors(
+  bool ewscale_correct,
+  int flow_block_size, 
+  int flow_block_start )
 {
   if ( region_data->fitters_applied==TIME_TO_DO_PREWELL )
   {
@@ -232,7 +235,8 @@ void SignalProcessingMasterFitter::PreWellCorrectionFactors( int flow_block_size
     // this will go away when we add sub-region empty well traces
     // UGLY: if empty-well normalization is turned on...the measured amplitude actually needs
     // to be corrected for the scaling that was done on the raw data...
-    CompensateAmplitudeForEmptyWellNormalization( flow_block_size );
+    if(ewscale_correct)
+      CompensateAmplitudeForEmptyWellNormalization( flow_block_size );
     region_data->fitters_applied = TIME_TO_DO_EXPORT;
   }
 }
@@ -404,8 +408,8 @@ SignalProcessingMasterFitter::SignalProcessingMasterFitter (
     int _rows, int _cols, int _frames, int _uncompFrames, int *_timestamps,
     EmptyTraceTracker *_emptyTraceTracker, float sigma_guess,float t_mid_nuc_guess,
     float t0_frame_guess, bool nokey, SequenceItem* _seqList,int _numSeqListItems, bool restart,
-    int16_t *_washout_flow, const CommandLineOpts *inception_state )
-  : global_defaults ( _global_defaults ), washout_threshold(WASHOUT_THRESHOLD), washout_flow_detection(WASHOUT_FLOW_DETECTION)
+    int16_t *_washout_flow, const CommandLineOpts *_inception_state )
+  : global_defaults ( _global_defaults ), inception_state(_inception_state), washout_threshold(WASHOUT_THRESHOLD), washout_flow_detection(WASHOUT_FLOW_DETECTION)
 {
   NothingInit();
 
@@ -502,8 +506,22 @@ void SignalProcessingMasterFitter::SetUpFitObjects()
 
 void SignalProcessingMasterFitter::InitXtalk()
 {
+  bool if_block_analysis = true;
+  int full_chip_x = region_data->region->col;
+  int full_chip_y = region_data->region->row;
+  // if offsets are not set,  then it is not a per-block analysis
+  if ( inception_state->loc_context.chip_offset_x==-1 || inception_state->loc_context.chip_offset_y==-1 ){
+    if_block_analysis = false;
+  } 
+  else {
+    full_chip_x += inception_state->loc_context.chip_offset_x;
+    full_chip_y += inception_state->loc_context.chip_offset_y;
+  }
   trace_xtalk_spec.BootUpXtalkSpec ( ( region_data->region!=NULL ),
-                                     global_defaults.chipType.c_str(), global_defaults.xtalk_name.c_str() );
+				     global_defaults.xtalk_name, 
+				     global_defaults.chipType, 
+				     if_block_analysis, full_chip_x, full_chip_y );
+  
   trace_xtalk_execute.CloseOverPointers ( 
     region_data->region, &trace_xtalk_spec,
     &region_data->my_beads, &region_data->my_regions, &region_data->time_c, math_poiss,

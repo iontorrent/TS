@@ -217,6 +217,12 @@ $(document).ready(function() {
                         sampleSetGroupType : {
                         	type : "string"
                         },
+                         libraryPrepType : {
+                            type : "string"
+                        },
+                        combinedLibraryTubeLabel : {
+                            type : "string"
+                        },
                         sampleTubeLabel : {
                             type : "string"
                         },
@@ -286,7 +292,18 @@ $(document).ready(function() {
             field : "sampleSetGroupType",
         	title : "Group",
         	sortable : true
-        }, {    
+        }, {
+            field : "libraryPrepType",
+        	title : "Library Prep Type",
+        	width: '75px',
+        	sortable : false,
+        	template : kendo.template($('#LibTypeColumnTemplate').html())
+        }, {
+            field : "combinedLibraryTubeLabel",
+			width: '80px',
+        	title : "Combined Library Tube Label",
+        	sortable : false
+        },{    
             field : "projects",
             title : "Project",
             sortable : false
@@ -347,6 +364,12 @@ $(document).ready(function() {
     $(function () {          
         $('.search_sampleTubeLabel').click(function(e) { 
             set_search_subject_sampleTubeLabel(e);
+        });
+    });
+
+    $(function () {
+        $('.search_combinedLibraryTubeLabel').click(function(e) {
+            set_search_subject_combinedLibraryTubeLabel(e);
         });
     });        
       
@@ -438,12 +461,14 @@ function set_search_subject_chipBarcode(e) {
     $('.search_planName_selected').addClass("icon-white"); 
     $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check"); 
     $('.search_sampleTubeLabel_selected').addClass("icon-white"); 
+    $('.search_combinedLibraryTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_combinedLibraryTubeLabel_selected').addClass("icon-white");
     
     $("label[for='searchSubject']").text("chipBarcode");  
     $("#search_subject_nav").attr("title", "Search by chip barcode");  
     $("#plan_search_dropdown_menu").toggle();        
 }
-    
+
 function set_search_subject_planName(e) {
     e.preventDefault();        
     $('.search_chipBarcode_selected').removeClass("icon-white icon-check");  
@@ -452,6 +477,8 @@ function set_search_subject_planName(e) {
     $('.search_planName_selected').addClass("icon-check"); 
     $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
     $('.search_sampleTubeLabel_selected').addClass("icon-white");
+    $('.search_combinedLibraryTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_combinedLibraryTubeLabel_selected').addClass("icon-white");
                    
     $("label[for='searchSubject']").text("planName");  
     $("#search_subject_nav").attr("title", "Search by plan name or code"); 
@@ -466,16 +493,35 @@ function set_search_subject_sampleTubeLabel(e) {
     $('.search_chipBarcode_selected').addClass("icon-white");       
     $('.search_planName_selected').removeClass("icon-white icon-check"); 
     $('.search_planName_selected').addClass("icon-white");     
-    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check")            
-    $('.search_sampleTubeLabel_selected').addClass("icon-check"); 
+    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_sampleTubeLabel_selected').addClass("icon-check");
+    $('.search_combinedLibraryTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_combinedLibraryTubeLabel_selected').addClass("icon-white");
 
     $("label[for='searchSubject']").text("sampleTubeLabel");  
     $("#search_subject_nav").attr("title", "Search by sample tube label");
     $("#plan_search_dropdown_menu").toggle();   
 } 
-    
-    
-function filter(e){  
+
+function set_search_subject_combinedLibraryTubeLabel(e) {
+    console.log("ENTER set_search_subject_combinedLibraryTubeLabel");
+
+	e.preventDefault();
+    $('.search_chipBarcode_selected').removeClass("icon-white icon-check");
+    $('.search_chipBarcode_selected').addClass("icon-white");
+    $('.search_planName_selected').removeClass("icon-white icon-check");
+    $('.search_planName_selected').addClass("icon-white");
+    $('.search_sampleTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_sampleTubeLabel_selected').addClass("icon-white");
+    $('.search_combinedLibraryTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_combinedLibraryTubeLabel_selected').addClass("icon-check");
+
+    $("label[for='searchSubject']").text("combinedLibraryTubeLabel");
+    $("#search_subject_nav").attr("title", "Search by combined library tube label");
+    $("#plan_search_dropdown_menu").toggle();
+}
+
+function filter(e){
     e.preventDefault();
     e.stopPropagation();
 
@@ -526,6 +572,20 @@ function filter(e){
         {
             field: "sampleTubeLabel",
             operator: "__icontains",
+            value: $("#search_text").val()
+        }
+    ]);
+    }
+    else if (subjectToSearch == "combinedLibraryTubeLabel") {
+    $("#grid").data("kendoGrid").dataSource.filter([
+        {
+            field: "date",
+            operator: "__range",
+            value: daterange
+        },
+        {
+            field: "combinedLibraryTubeLabel",
+            operator: "",
             value: $("#search_text").val()
         }
     ]);

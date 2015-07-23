@@ -48,8 +48,11 @@ from twisted.web import xmlrpc, server
 from iondb.rundb import models
 from ion.utils.explogparser import load_log
 from ion.utils.explogparser import parse_log
-
-__version__ = filter(str.isdigit, "$Revision$")
+try:
+    import iondb.version as version #@UnresolvedImport
+    GITHASH = version.IonVersionGetGitHash()
+except:
+    GITHASH = ""        
 
 LOG_BASENAME = "explog.txt"
 LOG_FINAL_BASENAME = "explog_final.txt"
@@ -297,7 +300,7 @@ def generate_http_post(exp, logger, thumbnail_analysis=False):
     report_name = get_name_from_json(exp, 'autoanalysisname', thumbnail_analysis)
 
     blockArgs = 'fromRaw'
-    if exp.isProton and not thumbnail_analysis:
+    if (exp.getPlatform in ['s5', 'proton']) and not thumbnail_analysis:
         blockArgs = 'fromWells' # default pipeline setting for fullchip on-instrument analysis
 
     params = urllib.urlencode({'report_name': report_name,
@@ -728,7 +731,7 @@ def main(args):
     lthread = threading.Thread(target=loopfunc)
     lthread.setDaemon(True)
     lthread.start()
-    logger.errors.info("ionCrawler Started Ver: %s" % __version__)
+    logger.errors.info("ionCrawler Started Ver: %s" % GITHASH)
 
     # check thread health periodically and exit if thread is dead
     # pass in reactor object below to kill process when thread dies

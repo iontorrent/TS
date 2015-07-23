@@ -117,14 +117,14 @@ namespace VariantAssist {
   // todo: move to Stats.h
   inline float median(std::vector<float>& values);
   inline void randperm(vector<unsigned int> &v, RandSchrange& rand_generator);
-  inline float partial_sum(vector<float> &v, size_t n);
-  void tiedrank(vector<float> &vals);
-  float MannWhitneyURho(vector<float> &ref, vector<float> &var, bool debug);
-  inline int MannWhitneyU(vector<float> &ref, vector<float> &var, bool debug);
+  inline double partial_sum(vector<double> &v, size_t n);
+  void tiedrank(vector<double> &vals);
+  double MannWhitneyURho(vector<float> &ref, vector<float> &var, bool debug);
+  inline double MannWhitneyU(vector<float> &ref, vector<float> &var, bool debug);
 
   struct mycomparison
   {
-    bool operator() (float* lhs, float* rhs) {return (*lhs) < (*rhs);}
+    bool operator() (double* lhs, double* rhs) {return (*lhs) < (*rhs);}
   };
 }
 

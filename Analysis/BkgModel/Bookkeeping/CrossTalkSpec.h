@@ -3,6 +3,7 @@
 #define CROSSTALKSPEC_H
 
 #include <vector>
+#include <sstream>
 #include "Serialization.h"
 #include "json/json.h"
 
@@ -39,6 +40,16 @@ class TraceCrossTalkSpecification
     bool simple_model;
     bool rescale_flag;
 
+    // Stores json file fields, duplicates context_xxx fields
+    // false if not a composite chip analysis
+    bool if_block_analysis; 
+    // xtalk parameters used for this region depend on absolute chip coordinates of the region
+    int full_chip_x; 
+    int full_chip_y; 
+    // type of the chip being processed, and chip type in the loaded json (if any)
+    std::string chipType; 
+    std::string chipType_loaded; 
+
 
     void Allocate ( int size );
     void SetStandardGrid();
@@ -47,23 +58,36 @@ class TraceCrossTalkSpecification
     void SetAggressiveHexGrid();
     void SetNewHexGrid();
     void SetNewHexGridP0();
-    void ReadCrossTalkFromFile ( const char * );
+
+    // changed to json format 
+    // void ReadCrossTalkFromFile ( const char * );
+
     // different chips unfortunately have different layouts
     void NeighborByGridPhase ( int &ncx, int &ncy, int cx, int cy, int cxd, int cyd, int phase );
     void NeighborByGridPhaseBB ( int &ncx, int &ncy, int cx, int cy, int cxd, int cyd, int phase );
     void NeighborByChipType ( int &ncx, int &ncy, int bead_rx, int bead_ry, int nei_idx, int region_x, int region_y );
 
-    void BootUpXtalkSpec ( bool can_do_xtalk_correction, const char *chipType, const char *xtalk_name );
-    // missing functions
-    // should be able to read in this effect from a file
-    // should be able to assign this by region to vary it across the chip
-
+    // this is effectively a constructor, loads paramters per region -- should we load xtalk.trace.json-s once and not for every region?
+    void BootUpXtalkSpec( bool can_do_xtalk_correction, std::string &fname, std::string &_chipType, bool _if_block_analysis, int _full_chip_x, int _full_chip_y );
     TraceCrossTalkSpecification();
-    // redo the IO sensibly
-    void PackTraceXtalkInfo(Json::Value &json);
+
+    void ReadCrossTalkFromFile( std::string &fname ); 
+    void LoadJson(Json::Value &json, const std::string &fname);
+    void UnpackTraceXtalkInfo(Json::Value &json);  
+    void PackTraceXtalkInfo(Json::Value &json); 
     void SerializeJson(const Json::Value &json);
-    void LoadJson(Json::Value & json, const std::string& filename_json);
-    void WriteJson(const Json::Value & json, const std::string& filename_json);
+    // Current json loading process is irreversable if xtalk varies by region/by block
+    // We cannot recunstruct full chip json structure for the output based on one loaded region
+    // Instead, only parameters computed for this region are printed into a json format (compatible with full json format)
+    // Alternatively, data stractures can be changed to accomodate the entire json (all regions), but it is probably not needed
+    void TestWrite();
+
+    // changed json format to support per-block parameters
+    // redo the IO sensibly
+    //void PackTraceXtalkInfo(Json::Value &json);
+    //void SerializeJson(const Json::Value &json);
+    //void LoadJson(Json::Value & json, const std::string& filename_json);
+    //void WriteJson(const Json::Value & json, const std::string& filename_json);
 
   private:
     // Boost serialization support:
@@ -84,7 +108,12 @@ class TraceCrossTalkSpecification
           & initial_phase
       & do_xtalk_correction
       & simple_model
-      & rescale_flag;
+      & rescale_flag
+      & if_block_analysis
+      & full_chip_x
+      & full_chip_y
+      & chipType
+      & chipType_loaded;
       fprintf ( stdout, "done\n" );
     }
 };

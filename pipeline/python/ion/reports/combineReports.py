@@ -104,7 +104,8 @@ def get_parent_barcode_files(parent_folder, datasets_path, barcodeSet):
     if len(barcode_bams) == 0:
         printtime("DEBUG: no barcoded files found from %s" % datasetsFile)
         barcode_bams = glob( os.path.join(parent_folder, barcodeSet+'*_rawlib.bam') )
-        barcode_bams.append( os.path.join(parent_folder, 'nomatch_rawlib.bam') )    
+        if os.path.exists(os.path.join(parent_folder, 'nomatch_rawlib.bam')):
+            barcode_bams.append( os.path.join(parent_folder, 'nomatch_rawlib.bam') )
         barcode_bams.sort()
         
     printtime("DEBUG: found %i barcodes in %s" % (len(barcode_bams), parent_folder) )
@@ -282,7 +283,8 @@ if __name__ == '__main__':
     mark_duplicates = env['mark_duplicates']
     override_samples = env.get('override_samples', False)
     sample = env.get('sample') or 'none'
-    barcodeSamples = json.loads(env.get('barcodeSamples','{}'))
+    barcodeSamples = env['experimentAnalysisSettings'].get('barcodedSamples','{}')
+
     barcodeSet = env['barcodeId']
     runID = env.get('runid','ABCDE')
     
@@ -342,11 +344,12 @@ if __name__ == '__main__':
                 if NUM_BARCODE_JOBS and (len(bc_jobs) > NUM_BARCODE_JOBS-1):
                     wait_on_jobs(bc_jobs, 'barcode', 'Processing barcodes', NUM_BARCODE_JOBS-1)
 
-            else:          
+            else:
                 printtime("DEBUG: copy barcode %s" % bcname)
-                shutil.copy(barcode_file_dict['bcfiles_to_merge'][0], filename)
-                if os.path.exists(barcode_file_dict['bcfiles_to_merge'][0]+'.bai'):
-                    shutil.copy(barcode_file_dict['bcfiles_to_merge'][0]+'.bai', filename+'.bai')
+                file_to_copy = barcode_file_dict['bcfiles_to_merge'][0]
+                shutil.copy(file_to_copy, filename)
+                if os.path.exists(file_to_copy+ '.bai'):
+                    shutil.copy(file_to_copy+ '.bai', filename+ '.bai')
             
             stats_args.append('--add-file')
             stats_args.append(filename)
@@ -444,7 +447,7 @@ if __name__ == '__main__':
     if os.path.exists(bamfile):
         status = 'Completed' 
     elif barcodeSet:
-        status = 'Completed' # for barcoded Proton data rawlib.bam may not get created
+        status = 'Completed' # for barcoded data rawlib.bam may not get created
     else:
         status = 'Error'
   

@@ -209,48 +209,43 @@ inline __m128 applyRecalModel(__m128 current_value, PathRec RESTRICT_PTR current
 
 // Constructor used in variant caller
 TreephaserSSE::TreephaserSSE()
+  : flow_order_("TACG", 4), my_cf_(-1.0), my_ie_(-1.0), As_(NULL), Bs_(NULL)
 {
-  flow_order_.SetFlowOrder("TACG", 4);
-  SetFlowOrder(flow_order_, 38);
-  my_cf_ = -1.0f;
-  my_ie_ = -1.0f;
+  SetNormalizationWindowSize(38);
+  SetFlowOrder(flow_order_);
 }
 
 // Constructor used in Basecaller
 TreephaserSSE::TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize)
+  : my_cf_(-1.0), my_ie_(-1.0), As_(NULL), Bs_(NULL)
 {
-  SetFlowOrder(flow_order, windowSize);
-  my_cf_ = -1.0f;
-  my_ie_ = -1.0f;
+  SetNormalizationWindowSize(windowSize);
+  SetFlowOrder(flow_order);
 }
 
 // ----------------------------------------------------------------
 // Initilizes all float variables to NAN so that they cause mayhem if we read out of bounds
 // and so that valgrind does not complain about uninitialized variables
-void TreephaserSSE::InitializeVariables() {
+void TreephaserSSE::InitializeVariables(float init_val) {
   
-  //feenableexcept(-1); // <- enable all floating point exceptions 
-  //feenableexcept(FE_DIVBYZERO | FE_INVALID | FE_OVERFLOW);
   // Initializing the elements of the paths
   for (unsigned int path = 0; path <= MAX_PATHS; ++path) {
-    sv_PathPtr[path]->flow = -1;
-    sv_PathPtr[path]->window_start = -1;
-    sv_PathPtr[path]->window_end = -1;
-    sv_PathPtr[path]->dotCnt = -1;
-    sv_PathPtr[path]->sequence_length = -1;
-    sv_PathPtr[path]->last_hp = -1;
-    sv_PathPtr[path]->nuc = -1;
+    sv_PathPtr[path]->flow            = 0;
+    sv_PathPtr[path]->window_start    = 0;
+    sv_PathPtr[path]->window_end      = 0;
+    sv_PathPtr[path]->dotCnt          = 0;
+    sv_PathPtr[path]->sequence_length = 0;
+    sv_PathPtr[path]->last_hp         = 0;
+    sv_PathPtr[path]->nuc             = 0;
     
-    sv_PathPtr[path]->res = NAN;
-    sv_PathPtr[path]->metr = NAN;
-    sv_PathPtr[path]->flowMetr = NAN;
-    sv_PathPtr[path]->penalty = NAN;
+    sv_PathPtr[path]->res      = init_val;
+    sv_PathPtr[path]->metr     = init_val;
+    sv_PathPtr[path]->flowMetr = init_val;
+    sv_PathPtr[path]->penalty  = init_val;
     for (int val=0; val<MAX_VALS; val++) {
-      sv_PathPtr[path]->state[val] = NAN;
-      sv_PathPtr[path]->pred[val] = NAN;
-      sv_PathPtr[path]->calib_A[val] = NAN;
-      sv_PathPtr[path]->calib_B[val] = NAN;
-      sv_PathPtr[path]->state_inphase[val] = NAN;
+      sv_PathPtr[path]->state[val]         = init_val;
+      sv_PathPtr[path]->pred[val]          = init_val;
+      sv_PathPtr[path]->state_inphase[val] = init_val;
     }
     for (int val=0; val<(2*MAX_VALS + 12); val++)
       sv_PathPtr[path]->sequence[val] = 0;
@@ -258,34 +253,27 @@ void TreephaserSSE::InitializeVariables() {
   
   // Initializing the other variables of the object
   for (unsigned int idx=0; idx<4; idx++) {
-    for (unsigned int val=0; val<MAX_VALS; val++) {
-      ts_Transition[idx][val] = NAN;
-      ts_Transition4[val][idx] = NAN;
-      ts_NextNuc[idx][val] = -1;
-      ts_NextNuc4[val][idx] = -1;
-      if (idx==0) {
-        rd_NormMeasure[val] = NAN;
-	rd_SqNormMeasureSum[val] = NAN;
-      }
-    }
-    ad_MinFrac[idx] = NAN;
-    ad_FlowEnd[idx] = -1;
-    ad_Idx[idx] = -1;
-    ad_End[idx] = -1;
-    ad_Beg[idx] = -1;
+    ad_FlowEnd[idx] = 0;
+    ad_Idx[idx] = 0;
+    ad_End[idx] = 0;
+    ad_Beg[idx] = 0;
+  }
+  for (unsigned int val=0; val<MAX_VALS; val++) {
+    rd_NormMeasure[val]      = init_val;
+    rd_SqNormMeasureSum[val] = init_val;
   }
   for (unsigned int idx=0; idx<(4*MAX_VALS*4*sizeof(float)); idx++) {
     ad_Buf[idx] = 0;
-  }  
+  }
+  ad_Adv = 0;
 }
 
 
 // ----------------------------------------------------------------
 
 // Initialize Object
-void TreephaserSSE::SetFlowOrder(const ion::FlowOrder& flow_order, const int windowSize)
+void TreephaserSSE::SetFlowOrder(const ion::FlowOrder& flow_order)
 {
-  SetNormalizationWindowSize(windowSize);
   flow_order_ = flow_order;
   num_flows_ = flow_order.num_flows();
 
@@ -301,8 +289,8 @@ void TreephaserSSE::SetFlowOrder(const ion::FlowOrder& flow_order, const int win
   sv_PathPtr[6] = &(sv_pathBuf[6]);
   sv_PathPtr[7] = &(sv_pathBuf[7]);
   sv_PathPtr[8] = &(sv_pathBuf[8]);
-  // -- For valgrind and debugging
-  //InitializeVariables();
+  // -- For valgrind and debugging & to make cppcheck happy
+  InitializeVariables(0.0);
   // --
 
   ad_MinFrac[0] = ad_MinFrac[1] = ad_MinFrac[2] = ad_MinFrac[3] = 1e-6f;
@@ -1061,6 +1049,10 @@ void TreephaserSSE::ResetRecalibrationStructures(int num_flows) {
 
 void TreephaserSSE::SolveRead(BasecallerRead& read, int begin_flow, int end_flow)
 {
+  end_flow = min(end_flow, num_flows_);
+  assert(end_flow>0);
+  assert((int)read.normalized_measurements.size() == num_flows_);
+  
   copySSE(rd_NormMeasure, &(read.normalized_measurements[0]), num_flows_*sizeof(float));
   setZeroSSE(sv_PathPtr[MAX_PATHS]->pred, num_flows_*sizeof(float)); // Not necessary?
   copySSE(sv_PathPtr[MAX_PATHS]->sequence, &(read.sequence[0]), (int)read.sequence.size()*sizeof(char));
@@ -1068,10 +1060,9 @@ void TreephaserSSE::SolveRead(BasecallerRead& read, int begin_flow, int end_flow
 
   Solve(begin_flow, end_flow);
 
-  int to_flow = min(sv_PathPtr[MAX_PATHS]->window_end, num_flows_);
+  int to_flow = min(sv_PathPtr[MAX_PATHS]->window_end, end_flow);
   read.sequence.resize(sv_PathPtr[MAX_PATHS]->sequence_length);
   copySSE(&(read.sequence[0]), sv_PathPtr[MAX_PATHS]->sequence, sv_PathPtr[MAX_PATHS]->sequence_length*sizeof(char));
-  copySSE(&(read.normalized_measurements[0]), rd_NormMeasure, num_flows_*sizeof(float));
   setZeroSSE(&(read.prediction[0]), num_flows_*sizeof(float));
   copySSE(&(read.prediction[0]), sv_PathPtr[MAX_PATHS]->pred, to_flow*sizeof(float));
 }
@@ -1100,6 +1091,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
 
   int pathCnt = 1;
   float bestDist = 1e20;
+  end_flow = min(end_flow, num_flows_);
 
   // Simulating beginning of the read  up to or one base past begin_flow
   if(begin_flow > 0) {
@@ -1113,7 +1105,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
         parent->last_hp = 0;
       parent->last_hp = min(parent->last_hp+1, MAX_HPXLEN);
 
-      nextState(parent, char_to_nuc[best->sequence[base]&7], end_flow);
+      nextState(parent, char_to_nuc[best->sequence[base]&7], num_flows_);
       if (parent->flow >= num_flows_)
         break;
       int to_flow = min(parent->window_end, num_flows_);
@@ -1132,6 +1124,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
       if (parent->flow >= begin_flow)
         break;
     }
+
     // No point solving the read if we simulated the whole thing.
     if(parent->window_end < begin_flow or parent->flow >= num_flows_) {
       sv_PathPtr[MAX_PATHS] = parent;
@@ -1200,7 +1193,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
       child->window_start = ad_Beg[nuc];
       child->window_end = min(ad_End[nuc], end_flow);
 
-      // seems to be a bug in third rule
+      // Do not attempt to calculate child->last_hp in this loop; bad things happen
       if(child->flow >= end_flow or parent->last_hp >= MAX_HPXLEN or parent->sequence_length >= 2*MAX_VALS-10)
         continue;
 
@@ -1331,7 +1324,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
             for(int tempInd = parent->flow+1; tempInd < child->flow; tempInd++){
                 child->state_inphase[tempInd] = max(child->state[child->flow],0.01f);
             }
-            child->state_inphase[child->flow] = max(child->state[child->flow], 0.01f);
+            child->state_inphase[child->flow] = max(child->state[child->flow],0.01f);
         }
 
         child->sequence_length = parent->sequence_length + 1;
@@ -1375,7 +1368,7 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
       parent->window_end = child->window_end;
       parent->res = child->res;
       parent->metr = child->metr;
-      parent->flowMetr = (child->metr + 0.5f*child->flowMetr) / child->flow; // ??
+      (child->flow == 0) ? (parent->flowMetr == 0) : (parent->flowMetr = (child->metr + 0.5f*child->flowMetr) / child->flow);
       parent->dotCnt = child->dotCnt;
       char RESTRICT_PTR p = ad_Buf+child->nuc*4+AD_STATE_OFS;
       for(int i = parent->window_start, j = 0, e = child->window_end; i < e; ++i, j += 16) {
@@ -1401,9 +1394,9 @@ bool TreephaserSSE::Solve(int begin_flow, int end_flow)
 
       if(state_inphase_enabled_){
           for(int tempInd = parent_flow+1; tempInd < parent->flow; tempInd++){
-              parent->state_inphase[tempInd] = max(parent->state[parent->flow], 0.01f);
+              parent->state_inphase[tempInd] = parent->state[parent->flow];
           }
-          parent->state_inphase[parent->flow] = max(parent->state[parent->flow], 0.01f);
+          parent->state_inphase[parent->flow] = parent->state[parent->flow];
       }
 
       parent->window_start = child->window_start;
@@ -1621,9 +1614,8 @@ void  TreephaserSSE::ComputeQVmetrics(BasecallerRead& read)
 
       copySSE(childToKeep->pred, parent->pred, parent->window_start << 2);
 
-
       if (childToKeep->flow == parent->flow)
-        childToKeep->last_hp = min(parent->last_hp+1, MAX_HPXLEN);
+        childToKeep->last_hp = parent->last_hp = min(parent->last_hp+1, MAX_HPXLEN);
       else
         childToKeep->last_hp = 1;
 

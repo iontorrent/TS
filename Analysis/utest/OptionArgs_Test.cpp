@@ -58,16 +58,16 @@ TEST(CommandLineTest, TypicalCase)
 {
     // Simulated command line argument
     char *argv[] = {
-        "test-prog",
-        "--mult-double", "0.0,1.0",
-        "--mult-int", "-1,-10,0",
-        "--hello", "world",
-        "-b", "true",
-        "-d", "2.0",
-        "-i", "5",
-        "--unchecked", "fun",
-        "trailing1",
-        "trailing2"
+        (char*) "test-prog",
+        (char*) "--mult-double", (char*) "0.0,1.0",
+        (char*) "--mult-int", (char*) "-1,-10,0",
+        (char*) "--hello", (char*) "world",
+        (char*) "-b", (char*) "true",
+        (char*) "-d", (char*) "2.0",
+        (char*) "-i", (char*) "5",
+        (char*) "--unchecked", (char*) "fun",
+        (char*) "trailing1",
+        (char*) "trailing2"
     };
 
     // The argument count
@@ -196,17 +196,17 @@ TEST(CommandLineTest, DoubleDashOption)
 {
     // Simulated command line argument
     char *argv[] = {
-        "test-prog",
-        "--mult-double", "0.0,1.1,2.2",
-        "--",
-        "--mult-int", "-1,-10,0",
-        "--hello", "world",
-        "-b", "true",
-        "-d", "2.0",
-        "-i", "5",
-        "--unchecked", "fun",
-        "trailing1",
-        "trailing2"
+        (char*) "test-prog",
+        (char*) "--mult-double", (char*) "0.0,1.1,2.2",
+        (char*) "--",
+        (char*) "--mult-int", (char*) "-1,-10,0",
+        (char*) "--hello", (char*) "world",
+        (char*) "-b", (char*) "true",
+        (char*) "-d", (char*) "2.0",
+        (char*) "-i", (char*) "5",
+        (char*) "--unchecked", (char*) "fun",
+        (char*) "trailing1",
+        (char*) "trailing2"
     };
 
     // The argument count
@@ -263,17 +263,17 @@ TEST(CommandLineJSONTest, WritingJSON)
     
     // Simulated command line argument
     char *argv[] = {
-        "test-prog",
-        "--mult-double", "0.0,1.1,2.2",
-        "--mult-int", "-1,-10,0",
-        "--hello", "world",
-        "-b", "true",
-        "-d", "2.0",
-        "-i", "5",
-        "--",
-        "--unchecked", "fun",
-        "trailing1",
-        "trailing2"
+        (char*) "test-prog",
+        (char*) "--mult-double", (char*) "0.0,1.1,2.2",
+        (char*) "--mult-int", (char*) "-1,-10,0",
+        (char*) "--hello", (char*) "world",
+        (char*) "-b", (char*) "true",
+        (char*) "-d", (char*) "2.0",
+        (char*) "-i", (char*) "5",
+        (char*) "--",
+        (char*) "--unchecked", (char*) "fun",
+        (char*) "trailing1",
+        (char*) "trailing2"
     };
 
     // The argument count
@@ -309,7 +309,7 @@ TEST(CommandLineJSONTest, ReadingJSON)
     const std::string strJSONFileName( "options.json" );
     
     // Simulated empty command line argument
-    char *argv[] = { "test-prog" };
+    char *argv[] = { (char*) "test-prog" };
 
     // The argument count
     int argc = ( sizeof( argv ) / sizeof( argv[0] ) );
@@ -344,7 +344,7 @@ TEST(CommandLineOptionDefinitionTest, AddWriteNewDefinitions)
     const std::string strJSONFileName( "predefopts.json" );
     
     // Simulated empty command line argument
-    char *argv[] = { "test-prog" };
+    char *argv[] = { (char*) "test-prog" };
 
     // The argument count
     int argc = ( sizeof( argv ) / sizeof( argv[0] ) );
@@ -457,7 +457,7 @@ TEST(CommandLineOptionDefinitionTest, ReadNewDefinitions)
     const std::string strJSONFileName( "predefopts.json" );
     
     // Simulated empty command line argument
-    char *argv[] = { "test-prog" };
+    char *argv[] = { (char*) "test-prog" };
 
     // The argument count
     int argc = ( sizeof( argv ) / sizeof( argv[0] ) );
@@ -559,16 +559,16 @@ TEST(CommandLineOptionDefinitionTest, MergeCommandLinePredefinitions)
 {    
     // Simulated command line argument
     char *argv[] = {
-        "test-prog",
-        "--mult-double", "0.0,1.0",
-        "--mult-int", "-1,-10,0",
-        "--hello", "world",
-        "-b", "true",
-        "-d", "2.0",
-        "-i", "5",
-        "--unchecked", "fun",
-        "trailing1",
-        "trailing2"
+        (char*) "test-prog",
+        (char*) "--mult-double", (char*) "0.0,1.0",
+        (char*) "--mult-int", (char*) "-1,-10,0",
+        (char*) "--hello", (char*) "world",
+        (char*) "-b", (char*) "true",
+        (char*) "-d", (char*) "2.0",
+        (char*) "-i", (char*) "5",
+        (char*) "--unchecked", (char*) "fun",
+        (char*) "trailing1",
+        (char*) "trailing2"
     };
     
     // The argument count

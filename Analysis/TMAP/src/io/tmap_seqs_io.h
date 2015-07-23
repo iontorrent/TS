@@ -35,14 +35,14 @@ typedef struct {
   @param  bam_end_vfo   ending virtual file offset
   @return               pointer to the initialized memory for reading/writing sequences
   */
-inline tmap_seqs_io_t *
+tmap_seqs_io_t *
 tmap_seqs_io_init(char **fns, int32_t fn_num, int8_t seq_type, int32_t compression, int64_t bam_start_vfo, int64_t bam_end_vfo);
 
 /*! 
   destroys input/output structure
   @param  io  a pointer to the sequence structure
   */
-inline void
+void
 tmap_seqs_io_destroy(tmap_seqs_io_t *io);
 
 /*! 
@@ -52,7 +52,7 @@ tmap_seqs_io_destroy(tmap_seqs_io_t *io);
   @param  header  the (output) SAM header
   @return        non-negative if successfull, -1 indicates an a EOF, -2 indicates a truncated quality string
   */
-inline int
+int
 tmap_seqs_io_read(tmap_seqs_io_t *io, tmap_seqs_t *seqs, sam_header_t *header);
 
 /*! 

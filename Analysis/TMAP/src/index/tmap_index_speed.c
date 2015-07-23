@@ -4,6 +4,8 @@
 #include <unistd.h>
 #include <sys/shm.h>
 #include <time.h>
+#include <getopt.h>
+
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"
 #include "../util/tmap_progress.h"

@@ -84,7 +84,7 @@
     function check_update(){
         $.post("check_update/", function(data){
             console.log('check_update returned:', data);
-            if (data.state=='Upgradable'){
+            if (data.state=='Upgradable' || data.state=='NotInstalled'){
                 $('#msg_update').prepend(data.msg).show();
             } else if (data.state=='Error'){
                 showMsg(data.state, 'tsvm update check: '+data.msg, '#msg_update');
@@ -162,6 +162,8 @@
                 $('#start, #destroy').prop('disabled',false);
             } else if (status.state == 'Not setup'){
                 $('#setup').prop('disabled',false);
+            }
+            if (!vmExists(status.state)) {
                 $('#update').prop('disabled',false).removeAttr('title');
             }
         }

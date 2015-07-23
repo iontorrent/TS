@@ -77,8 +77,12 @@ void ContAlignImp::set_verbose (bool)
 
 void ContAlignImp::set_debug (bool debug)
 {
-    if (debug)
-        ContAlign::set_log (std::cerr);
+}
+
+void ContAlignImp::set_log (int posix_handle)
+{
+    if (posix_handle >= 0)
+        ContAlign::set_log (posix_handle);
     else
         ContAlign::reset_log ();
 }
@@ -103,6 +107,10 @@ void ContAlignImp::set_clipping (CLIPTYPE)
 {
 }
 
+void ContAlignImp::set_gap_scale_mode (int gap_scale_mode)
+{
+    ContAlign::set_scale ((ContAlign::SCALE_TYPE) gap_scale_mode);
+}
 // alignment setup and run    
 
 // prepare internal structures for clipping and alignment
@@ -127,13 +135,13 @@ bool ContAlignImp::compute_alignment (
     already_perfect = false;
     alignment_failed = false;
     unclip_failed = false;
-    unsigned oplen;
+    // unsigned oplen;
 
-    const char* q_seq_clipped = q_seq;
-    const uint32_t* cigar_clipped = cigar;
-    unsigned cigar_sz_clipped = cigar_sz;
+    //const char* q_seq_clipped = q_seq;
+    //const uint32_t* cigar_clipped = cigar;
+    //unsigned cigar_sz_clipped = cigar_sz;
 
-    unsigned sclip_q_len, sclip_r_len, sclip_al_len;
+    //unsigned sclip_q_len, sclip_r_len, sclip_al_len;
 
     assert (cigar_sz);
 
@@ -164,7 +172,7 @@ bool ContAlignImp::compute_alignment (
     if (!ContAlign::can_align (clean_len, r_len, qry_ins + extra_bandwidth_, ref_ins + extra_bandwidth_))
         return false;
 
-    double new_score = ContAlign::align_band (
+    ContAlign::align_band (
         clean_read,                     // xseq
         clean_len,                      // xlen
         r_seq,                          // yseq
@@ -177,14 +185,16 @@ bool ContAlignImp::compute_alignment (
         true,                           // to_beg
         true                            // to_end
         );
-    unsigned bno = ContAlign::backtrace (
+    unsigned bno = ContAlign::backtrace   
+        (
             batches_,      // BATCH buffer
             MAX_BATCH_NO,  // size of BATCH buffer
             ref_ins + extra_bandwidth_        // width
-                            );
+        );
     // convert alignment to cigar
     unsigned qry_off, ref_off;
-    int ref_shift = roll_cigar (new_cigar_, MAX_CIGAR_SZ, cigar_dest_sz, batches_, bno, clean_len, clips, qry_off, ref_off);
+    // int ref_shift = 
+    roll_cigar (new_cigar_, MAX_CIGAR_SZ, cigar_dest_sz, batches_, bno, clean_len, clips, qry_off, ref_off);
     new_pos = r_pos + ref_off;
     cigar_dest = new_cigar_;
 

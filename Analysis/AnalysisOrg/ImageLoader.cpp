@@ -73,8 +73,8 @@ ImageTracker::ImageTracker ( int _flow_buffer_size, int ignoreChecksumErrors, bo
   
   AllocateReadAndProcessFlags();
 
-  AllocateSdatBuffers();
-
+  if (doingSdat)
+    AllocateSdatBuffers();
 }
 
 int ImageTracker::FlowBufferFromFlow(int flow)
@@ -87,7 +87,8 @@ void ImageTracker::FinishFlow ( int flow )
   int flow_buffer_for_flow = FlowBufferFromFlow(flow);
   
   img[flow_buffer_for_flow].Close();
-  sdat[flow_buffer_for_flow].Close();
+  if (doingSdat)
+    sdat[flow_buffer_for_flow].Close();
    ( ( int volatile * ) CurProcessed ) [flow_buffer_for_flow] = 1;
 }
 
@@ -179,7 +180,7 @@ void ImageTracker::SetUpImageLoaderInfo (const CommandLineOpts &inception_state,
 void ImageTracker::DecideOnRawDatsToBufferForThisFlowBlock()
 {
   // need dynamic read ahead every 20 block of flows for 318 chips
-  if (ChipIdDecoder::GetGlobalChipId() == ChipId318) {
+    if (ChipIdDecoder::IsChip318() ) {
     static int readahead = master_img_loader.lead;
     const double allowedFreeRatio = 0.2;
     double freeSystemMemory = GetAbsoluteFreeSystemMemoryInKB() / (1024.0*1024.0);

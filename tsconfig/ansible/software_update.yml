@@ -1,10 +1,95 @@
 ---
 # file: software_update.yml
-- hosts: iontorrent_master:iontorrent_computes
+- hosts: iontorrent_master
+  vars_files:
+    - [ "group_vars/all_local", "group_vars/all" ]
   tasks:
-    - name: apt-get dist-upgrade.  yeah, we do that...
-      shell: bash -lc 'apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy dist-upgrade'
+    - name:
+      include: globals.yml
+      
+    # Ensure Ion system daemons are stopped
+    - name: Ion Daemons shutting down...
+      service: name={{ item }} state=stopped
+      with_items:
+        - ionCrawler
+        - ionJobServer
+        - ionPlugin
+        - celerybeat
+        - celeryd
+      ignore_errors: Yes
+      
+    - name: apt-get update
+      apt: update_cache=yes
+        
+    - name: apt-get autoclean
+      shell: bash -lc 'apt-get autoclean'
+
+    - name: Set package preseed values
+      script: "files/grub-pc.preseed {{GRUB_BOOT_DEVICE}}"
+      when: GRUB_BOOT_DEVICE is defined
+
+    # Check for new entries in the common_syspkg_list and ionmaster_ionpkg_list.
+    # This will only install packages not currently installed
+    - name: Install common system packages
+      apt: name={{item}} state=latest force=yes update_cache=yes cache_valid_time=300
+      with_items: common_syspkg_list
+      when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
+    - name: Install system packages for head node
+      apt: name={{ item }} state=latest force=yes update_cache=yes cache_valid_time=300
+      with_items: ionmaster_syspkg_list
+      when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
+    - name: Install Ion packages for head node
+      apt: name={{ item }} state=latest force=yes update_cache=yes cache_valid_time=300
+      with_items: ionmaster_ionpkg_list
+      when: "'{{ item }}' != '' and ansible_distribution == 'Ubuntu'"
+  
+    # This updates all packages available via apt repository settings.  System and Ion packages
+    - shell: bash -lc 'apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy upgrade'
+      register: foobar
+       
+    - debug: msg="{{item}}"
+      with_items: foobar.stdout_lines
+      ignore_errors: yes
+      
+    - name: configuration error fixing.
+      include: fixes.yml
+      
+    # Ensure Ion system daemons are started
+    - name: Ion Daemons starting up...
+      service: name={{ item }} state=started
+      with_items:
+        - celeryd
+        - celerybeat
+        - ionCrawler
+        - ionJobServer
+        - ionPlugin
+      ignore_errors: Yes
+        
+    #-----------------------------------------------------------------------------
+    # Create/update the tsconf.log file
+    #-----------------------------------------------------------------------------
+    - name: Get version of ion-tsconfig
+      shell: dpkg -l ion-tsconfig | tail -1 | awk '{print $3}'
+      register: tsconfig_version
+      
+    - name: Create/Update tsconf.log
+      template: src=roles/common/templates/tsconf.conf.j2 dest=/etc/torrentserver/tsconf.conf mode=0644 owner=root group=root
+
+- hosts: iontorrent_computes
+  tasks:
+    - name: apt-get update
+      apt: update_cache=yes
+      
+    - name: apt-get autoclean
+      shell: bash -lc 'apt-get autoclean'
+      
+    - shell: bash -lc 'apt-get -o Dpkg::Options::="--force-confnew" --force-yes -fuy upgrade'
       register: foobar
       
-    - debug: msg={{item}}
+    - debug: msg="{{item}}"
       with_items: foobar.stdout_lines
+      ignore_errors: yes
+      
+    - include: roles/iontorrent_computes/tasks/software_update.yml
+
+

@@ -17,9 +17,9 @@ function load_test()
     echo -n $FUNCNAME:>&1
     # monitor average load
     busyness=$(qstat -f|grep $(hostname)|head -1|awk '{print $4}')
-    if ! fcomp $busyness 60.0; then
+    if ! fcomp $busyness 95.0; then
         echo failure>&1
-        echo "Node is over compute threshold (60.0): $busyness">&2
+        echo "Node is over compute threshold (95.0): $busyness">&2
         return
     fi
     # monitor error states in SGE (qstat -f output)

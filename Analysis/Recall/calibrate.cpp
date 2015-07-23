@@ -560,7 +560,7 @@ struct HPPerturbationDistribution{
   }
 
   //aggregated one passed for protection
-  void process(shared_ptr<HPPerturbationDistribution> parent){
+  void process(boost::shared_ptr<HPPerturbationDistribution> parent){
       delta.resize(boost::extents[numHPs][numPerturbations]);
       calibratedHP.resize(boost::extents[numHPs][numPerturbations]);
       accuracy.resize(boost::extents[numHPs][numPerturbations]);
@@ -809,9 +809,9 @@ struct HPTable{
       xOverallMin(xMin), xOverallMax(xMax), xOverallCuts(xCuts), yOverallMin(yMin), yOverallMax(yMax), yOverallCuts(yCuts), totalFlows(numFlows), flowOverallCuts(flowCuts), numPerturbations(perturbations), numHPs(hps),recordsLimit(rLimit)
   {
     //calculate xSpan, ySpan and flowSpan
-    xSpan = (xMax - xMin + 2) / xCuts;
-    ySpan = (yMax - yMin + 2) / yCuts;
-    flowSpan = numFlows / flowCuts;
+    xSpan = (xMax - xMin) / xCuts +1;
+    ySpan = (yMax - yMin) / yCuts +1;
+    flowSpan = (numFlows-1) / flowCuts +1;
     char nucList[4] = {'A', 'C', 'G', 'T'};
     numRegions = xCuts * yCuts * flowCuts * numNucs;
     regionList.reserve(numRegions);
@@ -832,13 +832,13 @@ struct HPTable{
     //create hpPerturbationDistributionList
     hpPerturbationDistributionList.reserve(numRegions);
     for(int regionInd = 0; regionInd < numRegions; ++regionInd){
-        hpPerturbationDistributionList.push_back(make_shared<HPPerturbationDistribution>(HPPerturbationDistribution(numHPs, numPerturbations)));
+        hpPerturbationDistributionList.push_back(boost::make_shared<HPPerturbationDistribution>(HPPerturbationDistribution(numHPs, numPerturbations)));
     }
 
     //create hpPMDistributionList
     hpPMDistributionList.reserve(numRegions);
     for(int regionInd = 0; regionInd < numRegions; ++regionInd){
-        hpPMDistributionList.push_back(make_shared<HPPMDistribution>(HPPMDistribution(numHPs, recordsLimit)));
+        hpPMDistributionList.push_back(boost::make_shared<HPPMDistribution>(HPPMDistribution(numHPs, recordsLimit)));
     }
     //create alignmentStratifiedList startified*numHPs
     for(int alignInd = 0; alignInd < numRegions*numHPs; ++alignInd){
@@ -848,7 +848,7 @@ struct HPTable{
     //create aggregatedHPPerturbationDistribution
     aggregatedHPPerturbationDistribution.reserve(numNucs);
     for(int nucInd = 0; nucInd < numNucs; ++nucInd){
-        aggregatedHPPerturbationDistribution.push_back(make_shared<HPPerturbationDistribution>(HPPerturbationDistribution(numHPs, numPerturbations)));
+        aggregatedHPPerturbationDistribution.push_back(boost::make_shared<HPPerturbationDistribution>(HPPerturbationDistribution(numHPs, numPerturbations)));
     }
 
     //create alignmentAggregatedList aggregated*numHPs
@@ -983,7 +983,7 @@ struct HPTable{
   void process(){
     //process aggregated table
     for(int nucInd = 0; nucInd < numNucs; ++nucInd){
-        aggregatedHPPerturbationDistribution[nucInd]->process(shared_ptr<HPPerturbationDistribution>()); //null shared_ptr
+        aggregatedHPPerturbationDistribution[nucInd]->process(boost::shared_ptr<HPPerturbationDistribution>()); //null shared_ptr
     }
 
     //stratification handling
@@ -1280,7 +1280,7 @@ struct HPTable{
   }
 };
 
-HPTable* mergeHPTables(vector<shared_ptr<HPTable> > hpTableList){
+HPTable* mergeHPTables(vector<boost::shared_ptr<HPTable> > hpTableList){
     if(hpTableList.size() == 0)
         return 0;
     //the list of HPTable has the same dimensions for now
@@ -1627,6 +1627,7 @@ void* RecallFunc(void* arg0)
 			BasecallerRead bcRead;
 
 			//reference-based
+			// The read group key in the BAM file contains the full prefix bases: library key + barcode + barcode adapter
 			bcRead.sequence.reserve(arg->key_by_read_group[read_group].length() + tseq_bases.length());
 			copy(arg->key_by_read_group[read_group].begin(), arg->key_by_read_group[read_group].end(), back_inserter(bcRead.sequence));
 			copy(tseq_bases.begin(), tseq_bases.end(), back_inserter(bcRead.sequence));
@@ -2080,6 +2081,7 @@ int main (int argc, const char *argv[])
       map<string,string>  key_by_read_group;
       map<string,string>  flow_order_by_read_group;
 
+      // The read group key in the BAM file contains the full prefix bases: library key + barcode + barcode adapter
       for (SamReadGroupIterator rg = sam_header.ReadGroups.Begin(); rg != sam_header.ReadGroups.End(); ++rg) {
         if(!rg->HasFlowOrder() or !rg->HasKeySequence()) {
           fprintf(stderr, "calibrate: Read group %s is missing flow order or key sequence\n", rg->ID.c_str());
@@ -2090,7 +2092,7 @@ int main (int argc, const char *argv[])
       }
 
       //HP Table initialization
-      vector<shared_ptr<HPTable> > hpTableList;
+      vector<boost::shared_ptr<HPTable> > hpTableList;
 
       int numAlignedReads = 0;
 
@@ -2098,7 +2100,7 @@ int main (int argc, const char *argv[])
 
           for(threadIndex = 0; threadIndex < numThreads; ++threadIndex)
           {
-              hpTableList.push_back(make_shared<HPTable>(HPTable(xMin, xMax, xCuts, yMin, yMax, yCuts, numFlows, flowCuts, numPerturbs, numHPs)));
+              hpTableList.push_back(boost::make_shared<HPTable>(HPTable(xMin, xMax, xCuts, yMin, yMax, yCuts, numFlows, flowCuts, numPerturbs, numHPs)));
               sem_init(&semLoadNull[threadIndex], 0, 0);
               sem_init(&semLoadFull[threadIndex], 0, 0);
               sem_post(&semLoadNull[threadIndex]);

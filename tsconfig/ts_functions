@@ -13,8 +13,8 @@ function print_help()
     echo -e "\t--configure-server            Configure this server as a head node (WARNING: This will update the Torrent Suite)"
     echo -e "\t--reconfigure                 Re-run Configuration steps (Without updating the Torrent Suite)"
     #echo -e "\t--configure-compute           Configure this server as a compute node"
-    echo -e "\t--configure-pgm-support       Add support for direct connected PGMs"
-    #echo -e "\t--remove-pgm-support          Remove support for raw data (PGMs)"
+    echo -e "\t--configure-instrument-support Add support for direct connected instruments"
+    #echo -e "\t--remove-instrument-support   Remove support for raw data (instruments)"
     echo -e "\t--change-hostname, -r         Change the server's hostname"
     echo -e "\t--update-torrent-suite, -s    Update Ion software packages"
     echo -e "\t--configure-timezone, -z      Set timezone."
@@ -25,11 +25,11 @@ function print_help()
     echo
     echo "Advanced options:"
     echo -e "\t--debug, -d                   Turns on verbose shell execution"
-    echo -e "\t--eth-dev, -e <device>        Specify ethernet device (default=eth0)"
+    echo -e "\t--eth-dev, -e <device>        Specify ethernet device, default is port assigned default route"
     echo -e "\t--apt-usb                     Use Ion Install USB drive for deb pkg repository"
     #echo -e "\t--unconfigure-server          Unconfigures head-node or compute-node specific settings"
     echo -e "\t--skip-init                   Do not execute passwd reset, timezone setup during --configure* operations"
-    echo -e "\t--skip-pgm-config             Disables FTP,DHCP,IPTABLES configuration during --configure* operations"
+    echo -e "\t--skip-instrument-config      Disables FTP,DHCP,IPTABLES configuration during --configure* operations"
     echo -e "\t--configure-ftp               Configures FTP Service.  Only makes sense with these options: --configure-server --skip-pgm-config"
     echo -e "\t--configure-ntp               Configures Network Time Protocol Service.  Only makes sense with these options: --configure-server --skip-pgm-config"
     echo -e "\t--security-update             Check for and install packages with security updates"
@@ -43,8 +43,6 @@ function how_many_options ()
     CNT=0
     if [ $CONF_HEAD_NODE -gt 0 ]; then ((CNT++)); fi
     if [ $CONF_COMPUTE_NODE -gt 0 ]; then ((CNT++)); fi
-    #if [ $CONF_PGM_SUPPORT -gt 0 -a $CONF_HEAD_NODE -eq 0 ]; then ((CNT++)); fi
-    #if [ $REMOVE_PGM_SUPPORT -gt 0 ]; then ((CNT++)); fi
     if [ $UPDATE_SOFTWARE -gt 0 ]; then ((CNT++)); fi
     if [ $UPDATE_HOSTNAME -gt 0 ]; then ((CNT++)); fi
     if [ $CONF_TIME_ZONE -gt 0 ]; then ((CNT++)); fi
@@ -263,8 +261,12 @@ function unconfigure_torrentserver ()
 
     #user_msg "\nNot Implemented - simulated apt-get"
     for pkg in ${pkg_list[@]}; do
-        user_msg "\tRemoving $pkg"
-        apt-get --assume-yes --force-yes remove $pkg 1>&2
+        if dpkg -l $pkg|grep ^ii >/dev/null; then
+             user_msg "\tRemoving $pkg"
+             apt-get --assume-yes --force-yes remove $pkg 1>&2
+        else
+            echo "$pkg not installed"
+        fi
     done
 
     # Do not execute these by default
@@ -372,6 +374,10 @@ function scrub_torrentserver()
     vsftpd
 	postgresql
 	apache2-mpm-prefork
+    apache2-mpm-itk
+    apache2-utils
+    apache2-bin
+    apache2-common
 	apache2
 	libapache2-mod-wsgi
 	libapache2-mod-php5
@@ -386,6 +392,9 @@ function scrub_torrentserver()
     python-django-celery
     python-django-kombu
     python-django-picklefield
+    bfast
+    emboss-data
+    emboss-lib
     )
     user_msg "=================================================================="
     user_msg "Packages which will be removed (using apt-get remove command )"
@@ -393,7 +402,7 @@ function scrub_torrentserver()
     for pkg in ${pkg_list[@]}; do
         user_msg "\t$pkg"
     done
-    user_msg "BPP has not tested the effects of this code!!!"
+    
     echo -n "Do you REALLY want to delete these packages? (n|Y) "
     read usrmsg
     case $usrmsg in
@@ -403,11 +412,18 @@ function scrub_torrentserver()
         exit 1
         ;;
     esac
-    #user_msg "\nNot Implemented - simulated apt-get"
+    
     for pkg in ${pkg_list[@]}; do
-        user_msg "\tRemoving $pkg"
-        apt-get --assume-yes --force-yes purge $pkg 1>&2
+        if dpkg -l $pkg|grep ^ii > /dev/null; then
+            user_msg "\tRemoving $pkg"
+            apt-get --assume-yes --force-yes remove --purge $pkg 1>&2
+        else
+            echo "$pkg not installed"
+        fi
     done
+    
+    # Remove any other dependent packages no longer required
+    apt-get --assume-yes autoremove
 }
 
 #---    ---#
@@ -662,8 +678,9 @@ function get_user_input_compute()
     return 0
 }
 
-function change_hostname()
+function get_input_hostname()
 {
+
     oldHostName=$(hostname)
 
     #--- get user to enter a valid hostname ---#
@@ -746,14 +763,21 @@ function change_hostname()
             ;;
         esac
     done
-
+    
     #---    set FQDN    ---#
-    oldFQDN=$(hostname -f)
+    oldFQDN=$(/bin/hostname -f)
     if [ "${newDomainName}" == "" ]; then
         newFQDN=${newHostName}
     else
         newFQDN=${newHostName}.${newDomainName}
     fi
+}
+
+function change_hostname()
+{
+    # User prompts to get new hostname and domain
+    # Defines three variables: newHostName, newDomainName, newFQDN
+    get_input_hostname
     log "Changing $oldFQDN to $newFQDN"
     log "Changing hostname from $oldFQDN to $newFQDN ..."
 
@@ -795,12 +819,23 @@ function change_hostname()
 
     if is_master; then
         echo "${newFQDN}" > /var/lib/gridengine/iontorrent/common/act_qmaster
+        echo "${newFQDN} localhost" > /var/lib/gridengine/iontorrent/common/host_aliases
     else
         # Compute nodes need to remove themselves from SGE configuration
         #sge_delete_host ${oldFQDN}
         :
     fi
 
+    if is_master && [ -x /usr/sbin/make-ssl-cert ]; then
+        # Regenerate self-signed SSL cert with current hostname
+        /usr/sbin/make-ssl-cert generate-default-snakeoil --force-overwrite
+    fi
+
+    hostfiles=$(find /usr/share/ion-tsconfig/ansible -name torrentsuite_hosts\*)
+    for hostfile in ${hostfiles[@]}; do
+        sed -i "s/${oldFQDN}/${newHostName}/g" $hostfile
+    done
+    
     # Reboot
     echo
     echo
@@ -1337,14 +1372,15 @@ function install_ion_packages()
         read_packagelist_file torrentsuite master master_files
         pkg_list=( ${server_files[@]} ${master_files[@]} )
 
-        #Load PGM instrument packages
+        #Load proton specific packages if this is Proton Torrent Server
         inst_files=
-        read_packagelist_file torrentsuite pgm inst_files
-        pkg_list=( ${pkg_list[@]} ${inst_files[@]} )
         if is_proton_ts; then
-            #Load Proton instrument packages if this is Proton Torrent Server
-            read_packagelist_file torrentsuite proton inst_files
-            pkg_list=( ${pkg_list[@]} ${inst_files[@]} )
+            read_packagelist_file torrentsuite pgm proton inst_files
+            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
+        else
+            #Default to PGM specific packages
+            read_packagelist_file torrentsuite pgm inst_files
+            pkg_list=( ${server_files[@]} ${master_files[@]} ${inst_files[@]} )
         fi
     else
         pkg_list=( ${server_files[@]} )
@@ -2441,12 +2477,8 @@ function config_master_sge()
     #/etc/init.d/gridengine-master restart
     /etc/init.d/gridengine-exec start
 
-# bpp - this is not necessary with deb package installation, no?
-#    #   Setup sge daemons to start at boot
-#    update-rc.d -f gridengine-exec remove
-#    update-rc.d gridengine-exec defaults
-#    update-rc.d -f gridengine-master remove
-#    update-rc.d gridengine-master defaults
+    # Enable rotation of gridengine messages file
+    cp $TSCONFIG_SRC_DIR/sge-configuration/sge.logrotate /etc/logrotate.d/sge
 
     return 0
 }
@@ -2564,6 +2596,9 @@ function config_compute_sge()
     # Restart sge.  in case its not running?
     /etc/init.d/gridengine-exec restart 1>&2
 
+    # Enable rotation of gridengine messages file
+    cp $TSCONFIG_SRC_DIR/sge-configuration/sge.logrotate /etc/logrotate.d/sge
+
     return 0
 }
 
@@ -2642,6 +2677,7 @@ function config_iptables()
     if [ -e /etc/iptables.rules ]; then rotate /etc/iptables.rules; fi
 
     #--- Write out the iptables rules file ---#
+    PORT=$(outbound_net_port)
     user_msg "See /etc/iptables.rules"
     cat >> /etc/iptables.rules <<EOFRules
 #iptables.rules for Torrent Server
@@ -2649,11 +2685,11 @@ function config_iptables()
 :PREROUTING ACCEPT [22:1936]
 :POSTROUTING ACCEPT [2:127]
 :OUTPUT ACCEPT [2:127]
--A POSTROUTING -s 192.168.2${isCN}1.0/24 -o eth0 -j MASQUERADE
--A POSTROUTING -s 192.168.2${isCN}2.0/24 -o eth0 -j MASQUERADE
--A POSTROUTING -s 192.168.2${isCN}3.0/24 -o eth0 -j MASQUERADE
--A POSTROUTING -s 192.168.2${isCN}4.0/24 -o eth0 -j MASQUERADE
--A POSTROUTING -s 192.168.2${isCN}5.0/24 -o eth0 -j MASQUERADE
+-A POSTROUTING -s 192.168.2${isCN}1.0/24 -o $PORT -j MASQUERADE
+-A POSTROUTING -s 192.168.2${isCN}2.0/24 -o $PORT -j MASQUERADE
+-A POSTROUTING -s 192.168.2${isCN}3.0/24 -o $PORT -j MASQUERADE
+-A POSTROUTING -s 192.168.2${isCN}4.0/24 -o $PORT -j MASQUERADE
+-A POSTROUTING -s 192.168.2${isCN}5.0/24 -o $PORT -j MASQUERADE
 
 COMMIT
 *filter
@@ -2671,7 +2707,7 @@ COMMIT
 #Uncomment the line below to allow connections on port 443/HTTPS
 -A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
 
-#Allow all traffic from PGM subnet
+#Allow all traffic from internal subnet
 -A INPUT -s 192.168.201.0/24 -j ACCEPT
 -A INPUT -s 192.168.202.0/24 -j ACCEPT
 -A INPUT -s 192.168.203.0/24 -j ACCEPT
@@ -2859,7 +2895,8 @@ function config_dhcp()
 
     echo "no-hosts" > /etc/dnsmasq.d/ion-dhcp
     echo "addn-hosts=/etc/hosts-dnsmasq" >> /etc/dnsmasq.d/ion-dhcp
-    echo "no-dhcp-interface=eth0" >> /etc/dnsmasq.d/ion-dhcp
+    PORT=$(outbound_net_port)
+    echo "no-dhcp-interface=$PORT" >> /etc/dnsmasq.d/ion-dhcp
     interfaces=( 1 2 3 4 5 )
     for i in ${interfaces[@]}; do
         if valid_port eth${i}; then echo -e "interface=eth${i}\nno-dhcp-interface=eth${i}\n" >> /etc/dnsmasq.d/ion-dhcp; fi
@@ -2912,7 +2949,7 @@ for i in ${interfaces[@]}; do
     if valid_port eth$i; then
 
         cat >> /etc/dhcp3/dhcpd.conf <<EOFDHCP
-# Ion PGM subnet
+# Torrent Server internal subnet
 subnet 192.168.2${isCN}$i.0 netmask 255.255.255.0 {
     range 192.168.2${isCN}$i.10 192.168.2${isCN}$i.10;
     option subnet-mask  255.255.255.0;
@@ -2936,13 +2973,13 @@ done
     if [ -e /etc/dhcp3/dhclient.conf ]; then
         mv /etc/dhcp3/dhclient.conf /etc/dhcp3/dhclient.conf.orig
     fi
-
+    PORT=$(outbound_net_port)
     cat >> /etc/dhcp3/dhclient.conf <<EOFDHCLIENT
 option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;
 
 send host-name "<hostname>";
 
-interface "eth0"
+interface "$PORT"
 {
 request subnet-mask, broadcast-address, time-offset, routers,
         domain-name, domain-name-servers, domain-search, host-name,
@@ -3654,7 +3691,7 @@ function config_apt_cache() {
 
 function outbound_net_port()
 {
-    port=$(/sbin/route | grep ^default | awk '{print $8}')
+    port=$(/sbin/route | awk '/default/{print $8}')
     if [[ ! -z $port ]]; then
         echo $port
     fi

@@ -25,7 +25,7 @@ plugin_dir = ""
 
 
 class IonReporterUploader(IonPlugin):
-    version = '4.4.3.13'
+    version = '4.6.0.21'
     runtypes = [RunType.THUMB, RunType.FULLCHIP, RunType.COMPOSITE]
     runlevels = [RunLevel.PRE, RunLevel.BLOCK, RunLevel.POST]
     features = [Feature.EXPORT]

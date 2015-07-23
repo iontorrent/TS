@@ -11,6 +11,7 @@
 #define TMAP_INDEX_TOO_BIG_GENOME 0xFFFFFFFFFFFFFFFF
 #endif
 
+#include <sys/types.h>
 #include "../server/tmap_shm.h"
 
 /*! 
@@ -54,6 +55,7 @@ typedef struct {
     int32_t sa_interval;  /*!< the suffix array interval (-i) */
     int32_t is_large;  /*!< 0 to use the short BWT construction algorith, 1 otherwise (large BWT construction algorithm) */
     int32_t check_hash;  /*< 1 to validate the BWT hash, 0 otherwise */
+    int32_t old_v;
 } tmap_index_opt_t;
 
 /*! 

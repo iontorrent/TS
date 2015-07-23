@@ -9,7 +9,7 @@ from ion.plugin import *
 from django.utils.datastructures import SortedDict
 
 class FilterDuplicates(IonPlugin):
-	version = "4.4.0.1"
+	version = '4.6.0.0'
 	runtypes = [ RunType.COMPOSITE, RunType.FULLCHIP, RunType.THUMB ]
 
 	envDict = dict(os.environ)

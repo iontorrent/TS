@@ -2,6 +2,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <getopt.h>
+#include <string.h>
+#include <sys/types.h>
 
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"

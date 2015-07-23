@@ -2,7 +2,7 @@
 #include <Eigen/Dense>
 #include <Eigen/LU>
 #include "ZeromerMatDiff.h"
-#include "H5Eigen.h"
+#include "IonH5Eigen.h"
 #include "SampleStats.h"
 #include "SampleQuantiles.h"
 
@@ -56,6 +56,7 @@ void ZeromerMatDiff::PredictZeromersSignal(const float *time, int n_frames,
   Eigen::Map<Eigen::VectorXf, Eigen::Aligned> taub_v(taub, n_flow_wells);
   Eigen::VectorXf cdelta(n_flow_wells);
   cdelta.setZero();
+  // column based operations vectorized by eigen for speed
   for (int f_ix = 1; f_ix < trace_data.cols(); f_ix++) {
     float dtime = time[f_ix] - time[f_ix -1];
     zeromer_est.col(f_ix).array() = ref_data.col(f_ix).array() * (taue_est + dtime);
@@ -127,7 +128,7 @@ void ZeromerMatDiff::ZeromerSumSqErrorTrim(const int *zero_flows, size_t n_zero_
           bad_count++;
         }
         // levmar has it's own version of residual calculation so have to sub in the nan values
-        if (!isfinite(value) || isnan(value) || value > max_value) {
+        if (!isfinite(value) || std::isnan(value) || value > max_value) {
           *predict_start = *signal_start + max_value;
         }
         bad_start++;

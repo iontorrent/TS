@@ -80,6 +80,7 @@ def read_length_sparkline(ionstats_basecaller_filename, output_png_filename, max
     except:
         printtime('Unable to generate plot %s' % output_png_filename)
         traceback.print_exc()
+        raise
 
 
 ''' Generate read length histogram for the report page '''
@@ -155,6 +156,7 @@ def old_read_length_histogram(ionstats_basecaller_filename, output_png_filename,
     except:
         printtime('Unable to generate plot %s' % output_png_filename)
         traceback.print_exc()
+        raise
 
 
 

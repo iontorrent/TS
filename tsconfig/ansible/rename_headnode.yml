@@ -1,0 +1,77 @@
+---
+# file: rename_headnode.yml
+- hosts: headnode
+  vars_files:
+    - [ "group_vars/all_local", "group_vars/all" ]
+    - roles/gridengine_master/defaults/main.yml
+    
+  tasks:      
+    - name: Restart primary network interface
+      shell: bash -lc "ifdown {{ansible_default_ipv4.alias}} && ifup {{ansible_default_ipv4.alias}}"
+      register: output
+      
+    - debug: var=output.stderr
+    
+    - name: stop gridengine-exec
+      service: name=gridengine-exec state=stopped
+      
+    - name: stop gridengine-master
+      service: name=gridengine-master state=stopped
+      
+    - name: Edit act_qmaster file
+      shell: echo {{groups.headnode[0]}} > /var/lib/gridengine/iontorrent/common/act_qmaster
+
+    #-----------------------------------------------------------------------------
+    # Create/update the tsconf.log file
+    #-----------------------------------------------------------------------------
+    - name: Get version of ion-tsconfig
+      shell: dpkg -l ion-tsconfig | tail -1 | awk '{print $3}'
+      register: tsconfig_version
+  
+    - name: Create/Update tsconf.log
+      template: src=roles/common/templates/tsconf.conf.j2 dest=/etc/torrentserver/tsconf.conf mode=0644 owner=root group=root
+
+    - name: Execute the gridengine-master playbook
+      include: roles/gridengine_master/tasks/main.yml
+      
+    - name: Restart celeryd processes
+      service: name=celeryd state=restarted
+
+    - name: Regenerate self-signed SSL cert with current hostname
+      shell: /usr/sbin/make-ssl-cert generate-default-snakeoil --force-overwrite
+      ignore_errors: True
+
+# If there are compute nodes, they need to reconfigure themselves
+- hosts: iontorrent_computes
+  tasks:
+    # Set host location of Ion Torrent Server Daemons
+    #function config_cluster_settings()
+    - name: Update cluster configuration file - cluster_settings.py
+      lineinfile: dest={{ tsconfig_dir }}/cluster_settings.py
+                    state=present
+                    create=yes
+                    owner=ionadmin mode=0644
+                    regexp="^({{item}})(.*)"
+                    line="{{item}} = '{{ groups.headnode[0] }}'"
+                    mode=0644
+      with_items:
+        - PLUGINSERVER_HOST
+        - JOBSERVER_HOST
+        - CRAWLER_HOST
+
+# gridengine-exec on compute nodes needs to be shutdown and reconfigured for the new hostname
+- hosts: gridengine_clients
+  tasks:
+    - name: Shutdown gridengine-exec from compute node
+      service: name=gridengine-exec state=stopped
+
+    - name: Edit act_qmaster file
+      shell: bash -lc "echo {{groups.headnode[0]}} > /var/lib/gridengine/iontorrent/common/act_qmaster"
+      
+    - name: Restart gridengine-exec
+      service: name=gridengine-exec state=started
+      
+# If headnode's /results is being exported to compute nodes, the mount instructions need updating.
+#- hosts: computes
+#  roles:
+#    nfs_clients

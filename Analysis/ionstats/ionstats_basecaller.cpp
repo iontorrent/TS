@@ -38,15 +38,13 @@ void IonstatsBasecallerHelp()
 
 
 
-int IonstatsBasecaller(int argc, const char *argv[])
+int IonstatsBasecaller(OptArgs &opts)
 {
-  OptArgs opts;
-  opts.ParseCmdLine(argc, argv);
   string input_bam_filename   = opts.GetFirstString('i', "input", "");
   string output_json_filename = opts.GetFirstString('o', "output", "ionstats_basecaller.json");
   int histogram_length        = opts.GetFirstInt   ('h', "histogram-length", 400);
 
-  if(argc < 2 or input_bam_filename.empty()) {
+  if(input_bam_filename.empty()) {
     IonstatsBasecallerHelp();
     return 1;
   }
@@ -137,7 +135,7 @@ int IonstatsBasecaller(int argc, const char *argv[])
 
 
   Json::Value output_json(Json::objectValue);
-  output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
+  //output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
   output_json["meta"]["format_name"] = "ionstats_basecaller";
   output_json["meta"]["format_version"] = "1.0";
 
@@ -208,7 +206,7 @@ int IonstatsBasecallerReduce(const string& output_json_filename, const vector<st
   }
 
   Json::Value output_json(Json::objectValue);
-  output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
+  //output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
   output_json["meta"]["format_name"] = "ionstats_basecaller";
   output_json["meta"]["format_version"] = "1.0";
 

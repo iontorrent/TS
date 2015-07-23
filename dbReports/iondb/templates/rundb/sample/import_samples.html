@@ -98,49 +98,7 @@
 								</div>
 							</div>
 							<div class="help-block"></div>
-							
-
-					        <div class="add_sample_set_info row-fluid optional_section" style="display: none;">
-					        <!--div class="add_sample_set_info row-fluid" style="display: none; background-color: #E1EFFA;" -->					        
-					            <table class="plan-table">
-									<tbody>
-				                	<tr>
-										<div class="control-group">
-											<label class="control-label" for="new_sampleSetName">Sample Set Name</label>
-											<div class="span6">
-												<input  maxlength="127" type="text" id="new_sampleSetName" name="new_sampleSetName" placeholder="Required">
-											</div>
-										</div>
-									</tr>
-									
-									<tr>
-										<div class="control-group">
-											<label class="control-label" for="new_sampleSet_groupType">Group Type</label>
-											<div class="span6">
-					                    		<select id="new_sampleSet_groupType" name="new_sampleSet_groupType"style="height:28px;">
-					                    			<option value="0" >.....</option>
-					                    			{% for groupType in sampleGroupType_list %}
-					                    				<option value="{{groupType.id}}" >{{groupType.displayedName}}</option>
-					                    			{%endfor%}
-					                    		</select>
-					                    	</div>
-					                    </div>
-									</tr>
-									
-									<tr>
-										<div class="control-group">
-											<label class="control-label" for="new_sampleSetDescription">Description</label>
-											<div class="span6">
-												<textarea  maxlength="1024" id="new_sampleSetDescription" name="new_sampleSetDescription" placeholder="Optional"></textarea>
-											</div>
-										</div>
-					                </tr>
-					                <tr><p id="new_sampleset_error"></p>
-			                        </tr>
-			                        </tbody>
-					              </table>
-					          </div>
-					          
+                            {% include "rundb/sample/sampleset_input_section.html" %}
 						</div>
 					</div>
 

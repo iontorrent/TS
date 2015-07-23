@@ -31,6 +31,8 @@ DEFAULT_3_PRIME_ADAPTER_SEQUENCE = "ATCACCGACTGCCCATAGAGAGGCTGAGAC"
 
 DEFAULT_MUSEEK_3_PRIME_ADAPTER_SEQUENCE = "TGAACTGACGCACGAAATCACCGACTGCCCATAGAGAGGCTGAGAC"
 
+DEFAULT_P1_3_PRIME_ADAPTER_SEQUENCE = "ATCACCGACTGCCCATAGAGAGGAAAGCGG"
+
 DEFAULT_TF_KEY = "ATCG"
 
 
@@ -99,10 +101,11 @@ def create_sys_template_experiment(currentTime, sysTemplate, chipType, flowCount
     return experiment
 
 
-def create_sys_template_eas(currentTime, experiment, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins):
-    threePrimeAdapter = DEFAULT_3_PRIME_ADAPTER_SEQUENCE
-    if (isMuSeek):
-        threePrimeAdapter = DEFAULT_MUSEEK_3_PRIME_ADAPTER_SEQUENCE
+def create_sys_template_eas(currentTime, experiment, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins, threePrimeAdapter = ""):
+    if (not threePrimeAdapter):
+        threePrimeAdapter = DEFAULT_3_PRIME_ADAPTER_SEQUENCE
+        if (isMuSeek):
+            threePrimeAdapter = DEFAULT_MUSEEK_3_PRIME_ADAPTER_SEQUENCE
 
     eas_kwargs = {
         'barcodedSamples' : "",
@@ -132,19 +135,19 @@ def create_sys_template_eas(currentTime, experiment, sysTemplate, chipType, flow
     return sysTemplate
 
 
-def finish_sys_template(sysTemplate, isCreated, chipType = "", flowCount = 500, seqKitName = "", libKitName = "", barcodeKitName = "", isPGM = True, isSystemDefault = False, isMuSeek = False, targetRegionBedFile = "", hotSpotRegionBedFile = "", reference = "", plugins = {}, instrumentType = ""):        
+def finish_sys_template(sysTemplate, isCreated, chipType = "", flowCount = 500, seqKitName = "", libKitName = "", barcodeKitName = "", isPGM = True, isSystemDefault = False, isMuSeek = False, targetRegionBedFile = "", hotSpotRegionBedFile = "", reference = "", plugins = {}, instrumentType = "",  threePrimeAdapter = ""):        
     currentTime = datetime.datetime.now()
         
     if isCreated:
         finish_creating_sys_template(currentTime, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins)        
         experiment = create_sys_template_experiment(currentTime, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins)
-        create_sys_template_eas(currentTime, experiment, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins)
+        create_sys_template_eas(currentTime, experiment, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins,  threePrimeAdapter)
 
     exps = models.Experiment.objects.filter(plan = sysTemplate)
 
     if not exps:
         experiment = create_sys_template_experiment(currentTime, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins)
-        return create_sys_template_eas(currentTime, experiment, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins)
+        return create_sys_template_eas(currentTime, experiment, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins,  threePrimeAdapter)
             
     exp = exps[0]
         
@@ -188,7 +191,7 @@ def finish_sys_template(sysTemplate, isCreated, chipType = "", flowCount = 500, 
     eas_set = models.ExperimentAnalysisSettings.objects.filter(experiment = exp, isEditable = True, isOneTimeOverride = False)
     
     if not eas_set:
-        return create_sys_template_eas(currentTime, exp, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins)
+        return create_sys_template_eas(currentTime, exp, sysTemplate, chipType, flowCount, seqKitName, libKitName, barcodeKitName, isPGM, isSystemDefault, isMuSeek, targetRegionBedFile, hotSpotRegionBedFile, reference, plugins,  threePrimeAdapter)
 
     eas = eas_set[0]
     
@@ -240,9 +243,10 @@ def finish_sys_template(sysTemplate, isCreated, chipType = "", flowCount = 500, 
         eas.targetRegionBedFile = targetRegionBedFile
         hasChanges = True  
      
-    threePrimeAdapter = DEFAULT_3_PRIME_ADAPTER_SEQUENCE
-    if (isMuSeek):
-        threePrimeAdapter = DEFAULT_MUSEEK_3_PRIME_ADAPTER_SEQUENCE
+    if (not threePrimeAdapter):
+        threePrimeAdapter = DEFAULT_3_PRIME_ADAPTER_SEQUENCE
+        if (isMuSeek):
+            threePrimeAdapter = DEFAULT_MUSEEK_3_PRIME_ADAPTER_SEQUENCE
 
     if (eas.threePrimeAdapter != threePrimeAdapter): 
         print ">>> DIFF: orig eas.threePrimeAdapter=%s for system template.id=%d; name=%s" % (eas.threePrimeAdapter, sysTemplate.id, sysTemplate.planName) 
@@ -474,6 +478,7 @@ def add_or_update_all_system_templates():
         selectedPlugins = models.Plugin.objects.filter(name__in = ["coverageAnalysis"], selected = True, active = True)
 
         for selectedPlugin in selectedPlugins:
+
             pluginDict = {
                           "id" : selectedPlugin.id,
                           "name" : selectedPlugin.name,
@@ -589,7 +594,7 @@ def add_or_update_all_system_templates():
                       
         #24
         templateName = "OCP DNA and Fusions"        
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Oncomine")
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318", True, False, False, DEFAULT_TEMPLATE_KIT_NAME, "Ion AmpliSeq Sample ID Panel", None, "DNA_RNA", "Oncomine")        
 
         #pre-select plugins 
         plugins = {}
@@ -610,7 +615,7 @@ def add_or_update_all_system_templates():
             plugins[selectedPlugin.name] = pluginDict
         
         finish_sys_template(sysTemplate, isCreated, "318", 400, DEFAULT_SEQ_KIT_NAME,  "Ion AmpliSeq 2.0 Library Kit", "IonXpress", True, False, False, "/hg19/unmerged/detail/OCP3.20140718.designed.bed", "/hg19/unmerged/detail/OCP3.20140611.hotspots.blist.bed", "hg19", plugins, instrumentType) 
-
+            
         #OncoNetwork
         #25
         templateName = "Ion AmpliSeq Colon and Lung Cancer Panel v2"
@@ -678,9 +683,15 @@ def add_or_update_all_system_templates():
         finish_sys_template(sysTemplate, isCreated, "318select", 500, OCP_FOCUS_SEQ_KIT_NAME, OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "", {}, instrumentType)
                       
         #31
-        templateName = "Oncomine Focus DNA and Fusions"        
-        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "DNA_RNA", "Oncomine")                
+        templateName = "Oncomine Focus DNA and Fusions"
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "AMPS_DNA_RNA", "DNA + RNA", "318select", True, False, False, OCP_FOCUS_TEMPLATE_KIT_NAME, None, None, "DNA_RNA", "Oncomine")
         finish_sys_template(sysTemplate, isCreated, "318select", 500, OCP_FOCUS_SEQ_KIT_NAME,  OCP_FOCUS_LIB_KIT_NAME, OCP_FOCUS_BARCODE_KIT_NAME, True, False, False, "", "", "hg19", {}, instrumentType) 
+                      
+        #32
+        templateName = "Ion ReproSeq Aneuploidy"
+        sysTemplate, isCreated, isUpdated, instrumentType = add_or_update_sys_template(templateName, "WGNM", "DNA", "318", True, False, False, "Ion PGM Template IA Tech Access Kit", None, None, "Self")                              
+        finish_sys_template(sysTemplate, isCreated, "318", 250, "IonPGMHiQ",  "IonPicoPlex", "Ion SingleSeq Barcode set 1", True, False, False, "", "", "", {}, instrumentType, DEFAULT_P1_3_PRIME_ADAPTER_SEQUENCE) 
+
 
         
     except:

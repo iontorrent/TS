@@ -1,6 +1,9 @@
 ---
 # file: roles/webserver/tasks/main.yml
 
+- name:
+  include: '../../../globals.yml'
+
 - name: Install packages for webserver
   apt: name={{ item }} state=latest force=yes
   with_items:

@@ -709,15 +709,15 @@ tmap_sam2fs_aux(bam1_t *bam, tmap_sam2fs_aux_flow_order_t *flow_order, int32_t f
           soft_clip_end += read_bases_len - tmp_read_bases_len - tmp_read_bases_offset;
 
           // Account for soft-clipping
-          tmp_read_bases_len = 0;
-          for(i=0;i<=path[0].i;i++) { // include the last flow
-              tmp_read_bases_len += flowseq->base_calls[i];
-          }
-          tmp_read_bases_offset = 0;
-          for(i=0;i<path[path_len-1].i;i++) { // do not include the first flow
-              tmp_read_bases_offset += flowseq->base_calls[i]; 
-          }
-          tmp_read_bases_len -= tmp_read_bases_offset;
+          //tmp_read_bases_len = 0;
+          //for(i=0;i<=path[0].i;i++) { // include the last flow
+          //    tmp_read_bases_len += flowseq->base_calls[i];
+          //}
+          //tmp_read_bases_offset = 0;
+          //for(i=0;i<path[path_len-1].i;i++) { // do not include the first flow
+          //    tmp_read_bases_offset += flowseq->base_calls[i]; 
+          //}
+          //tmp_read_bases_len -= tmp_read_bases_offset;
 
           bam = tmap_sam2fs_copy_to_sam(bam, path, path_len, score, soft_clip_start, soft_clip_end, strand);
 

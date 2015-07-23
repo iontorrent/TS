@@ -1,5 +1,8 @@
 ---
 # file: roles/nfs_client/tasks/main.yml
+
+- name:
+  include: '../../../globals.yml'
 #-----------------------------------------------------------------------------
 # Mount NAS resources
 # Except, if a node is exporting, then it should not mount its own resource
@@ -12,17 +15,34 @@
   debug: msg=""
   with_items: nas_mounts
   when: nas_mounts|default(None) != None
-  
+
+# Remove any ansible-added mount points from /etc/fstab
+- name: "Remove mountpoints from /etc/fstab"
+  shell: sed -i '/^{{startline}}/,/{{endline}}$/d' /etc/fstab
+
 - name: Create external storage mountpoints
   shell: bash -lc 'if [ ! -d {{ item.mountpoint }} ]; then mkdir -p {{ item.mountpoint }}; chmod 0777 {{ item.mountpoint }}; fi'
   with_items: nas_mounts
   when: nas_mounts|default(None) != None and item.name != ansible_hostname
   
+- name: Create fstab header line
+  lineinfile: dest=/etc/fstab
+                state=present
+                line='{{startline}}'
+                insertafter=EOF
+                
+- name: Create fstab footer line
+  lineinfile: dest=/etc/fstab
+                state=present
+                line='{{endline}}'
+                insertafter='{{startline}}'
+
 - name: Create fstab entry
   lineinfile: dest=/etc/fstab
                 state=present
                 regexp='{{item.name}}:{{item.directory}}.*'
                 line='{{item.name}}:{{item.directory}} {{item.mountpoint}} nfs defaults 0 0'
+                insertbefore='{{endline}}'
   with_items: nas_mounts
   when: nas_mounts|default(None) != None and item.name != ansible_hostname
 

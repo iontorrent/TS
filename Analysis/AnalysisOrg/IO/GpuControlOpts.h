@@ -36,13 +36,20 @@ class GpuControlOpts{
 
     int gpuAmpGuess; 
 
+    bool gpuUseAllDevices;
     bool gpuVerbose;
+
+
+    bool tMidNucShiftPerFlow;
+    bool gpuFlowByFlowExecution;
+    bool postFitHandshakeWorker;
+    int switchToFlowByFlowAt;
 
     // hold the device ids for the gpus to be used for computation
     std::vector<int> gpuDeviceIds;
     void DefaultGpuControl(void);
-	void PrintHelp();
-	void SetOpts(OptArgs &opts, Json::Value& json_params);
+    void PrintHelp();
+    void SetOpts(OptArgs &opts, Json::Value& json_params);
 };
 
 #endif // GPUCONTROLOPTS_H

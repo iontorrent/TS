@@ -148,7 +148,7 @@ tmap_map_sam_init(tmap_map_sam_t *s);
   @param  dest  the destination record
   @param  src   the source record
   */
-inline void
+void
 tmap_map_sam_copy(tmap_map_sam_t *dest, tmap_map_sam_t *src);
 
 /*!
@@ -162,7 +162,7 @@ tmap_map_sam_malloc_aux(tmap_map_sam_t *s);
   destroys auxiliary data for the given mapping structure
   @param  s  the mapping structure
   */
-inline void
+void
 tmap_map_sam_destroy_aux(tmap_map_sam_t *s);
 
 /*!

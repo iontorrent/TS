@@ -8,6 +8,7 @@
 #include "AdvCompr.h"
 #include "datahdr.h"
 #include "Utils.h"
+#include "DCT0Finder.h"
 #include <iostream>
 #include <fstream>
 #include <sys/types.h>
@@ -384,6 +385,7 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh, bool ver
 	int16_t *prev_data = NULL;
 	int16_t *results_data = (int16_t *)malloc(2*ow*oh);
 
+
 	for(frame=0;frame<vfr_array_cnt;frame++) {
 //		offset = ox+oy*w + rframe*frameStride;
 //		bptr = buffer;
@@ -451,12 +453,15 @@ bool Acq::WriteVFC(const char *acqName, int ox, int oy, int ow, int oh, bool ver
 					ptr++;
 				}
 			}
+			//printf("frame %d: %d bytes\n",frame,oh*ow*2);
 			offset += oh*ow*2;
 		}
 		else
 		{
 			// write out the compressed data
 			fwrite(results_data,1,results_len,fp);
+			//printf("frame %d: %ld bytes\n",frame,results_len);
+
 			offset += results_len;
 		}
 
@@ -2261,12 +2266,14 @@ bool Acq::WritePFV(char *acqName, int ox, int oy, int ow, int oh, char *options)
     int dbgType = 0;
     if(options && options[0] >= '1' && options[0] <= '9')
       dbgType = (int)options[0]-(int)'0';
+	int framerate=1000/raw->timestamps[0];
+	printf("input_framerate=%d\n",framerate);
     if(ox == 0 && oy == 0 && ow == raw->cols && oh == raw->rows)
     {
     	// full image
     	AdvCompr advc(fd, raw->image, raw->cols, raw->rows, raw->frames,
-    			raw->uncompFrames, raw->timestamps,NULL,dbgType,acqName,options);
-    	advc.Compress(-1);
+    			raw->uncompFrames, raw->timestamps,NULL,dbgType,acqName,options,framerate);
+    	advc.Compress(-1,0);
     }
     else
     {
@@ -2286,8 +2293,8 @@ bool Acq::WritePFV(char *acqName, int ox, int oy, int ow, int oh, char *options)
         }
 
     	AdvCompr advc(fd, image, ow, oh, raw->frames,
-    			raw->uncompFrames, raw->timestamps,NULL,dbgType,acqName,options);
-    	advc.Compress(-1);
+    			raw->uncompFrames, raw->timestamps,NULL,dbgType,acqName,options,framerate);
+    	advc.Compress(-1,0);
 
     	free(image);
     }
@@ -2508,5 +2515,263 @@ void Acq::GenerateExcludeMaskRegions(const char* excludeMaskFile) {
       }
       fOut.close();
 
+}
+
+int Acq::t0est_start=-1;
+int Acq::t0est_end=0;
+int Acq::slower_frames=0;
+
+static void ADD_FRAME(FILE *fp, uint32_t num, uint32_t nframes, uint32_t *fnums, uint32_t *uncompFrms, uint32_t  *numEntries, uint32_t *maxFrames)
+{
+	if(num == 0 || nframes == 0)
+		return;
+
+	if(maxFrames)
+	{
+		if(*maxFrames < (num*nframes))
+			num = *maxFrames/nframes;
+
+
+		*maxFrames -= num*nframes;
+	}
+
+	if(num == 0 || nframes == 0)
+		return;
+
+	for(uint32_t i=0;i<num;i++)
+	{
+		(fnums)[(*numEntries)++] = nframes;
+		(*uncompFrms) += nframes;
+		if(fp)
+			fprintf(fp,"%d,",nframes);
+	}
+//	DTRACE("ADD_FRAME(%d): %d(%d) %d\n",regionNum,nframes,num,*uncompFrms);
+}
+
+
+void Acq::getAverageTrace(double *avg_trace, FILE *fp)
+{
+	uint64_t avg;
+	int last_timestamp=0;
+	RawImage *raw = image->raw;
+	double avg_trace_vfc[image->raw->frames];
+	int timestamp_fnums[image->raw->frames];
+	double total=0;
+	memset(avg_trace_vfc,0,sizeof(avg_trace_vfc));
+	// TODO:  don't average pinned pixels
+
+	for(int frame=0;frame<raw->frames;frame++){
+		avg=0;
+		for(int row=0;row<raw->rows;row++){
+			for(int col=0;col<raw->cols;col++){
+				avg += raw->image[frame*raw->rows*raw->cols + row*raw->cols + col];
+			}
+		}
+		avg_trace_vfc[frame] = (double)avg;
+		avg_trace_vfc[frame] /= (double)(raw->rows*raw->cols);
+	}
+	double beginning = ((avg_trace_vfc[0] + avg_trace_vfc[1])/2);
+	for(int frame=0;frame<raw->frames;frame++){
+		avg_trace_vfc[frame] -= beginning;
+	}
+
+	// now, turn this trace into an un-vfc'd trace
+	// turn timestamps into frame numbers
+	for(int i=0;i<raw->frames;i++){
+		timestamp_fnums[i] = (raw->timestamps[i]-last_timestamp + 1) / raw->timestamps[0];
+		last_timestamp = raw->timestamps[i];
+	}
+	if(fp){
+		fprintf(fp,  "Timestamps: ");
+		int last_ts=0;
+		for(int i=0;i<raw->frames;i++){
+			fprintf(fp," %5d",((raw->timestamps[i]+10)/raw->timestamps[0]) - last_ts);
+			last_ts = ((raw->timestamps[i]+10)/raw->timestamps[0]);
+		}
+		fprintf(fp,"\nTimeFrames: ");
+		for(int i=0;i<raw->frames;i++)
+			fprintf(fp," %5d",timestamp_fnums[i]);
+		fprintf(fp,"\n\n");
+		fprintf(fp,"  Avg_trace_vfc = ");
+		for(int i=0;i<raw->frames;i++)
+			fprintf(fp," %.0lf",avg_trace_vfc[i]);
+		fprintf(fp,"\n");
+		fprintf(fp,"  Avg_trace = ");
+	}
+
+	// now, transform avg_trace_vfc into avg_trace
+	for(int frame=0;frame<raw->uncompFrames;frame++){
+	      int interf=raw->interpolatedFrames[frame];
+	      float mult = raw->interpolatedMult[frame];
+
+	      float prev=0.0f;
+	      float next=0.0f;
+
+	      next = avg_trace_vfc[interf];
+	      if ( interf )
+	        prev = avg_trace_vfc[interf-1];
+
+	      // interpolate
+	      avg_trace[frame] = ( prev-next ) *mult + next;
+	      if(fp)
+	    	  fprintf(fp," %.0lf",avg_trace[frame]);
+	}
+	if(fp)
+		fprintf(fp,"\n\n");
+}
+// t0 compress raw (already loaded)
+void Acq::doT0Compression()
+{
+	RawImage *raw = image->raw;
+	int doLogging=0;
+
+	if(t0est_start == -1)
+	{
+		doLogging=1;
+		const int inlet_side_t0est_start=10;
+		const int outlet_side_t0est_start=22;
+
+		const int inlet_side_t0est_transit_frames=24;  // 1.1 seconds nuc time + 8 frames margin
+		const int outlet_side_t0est_transit_frames=30; // an extra 6 frames for the outlet
+
+		printf("doing T0 estimation\n");
+
+		// use acq_0000.dat for the timing of t0est_start and t0est_end
+		FILE *fp=NULL;
+		double   avg_trace[image->raw->uncompFrames];
+		memset(avg_trace,0,sizeof(avg_trace));
+
+		fp = NULL;
+		fp = fopen("t0est_start_debug.txt","w");
+
+		getAverageTrace(avg_trace,fp);// first, get the average signal
+
+		// find t0est_start and t0est_end using the average trace
+		t0est_start = DCT0Finder(avg_trace,raw->uncompFrames,fp);
+		if(fp)
+			fclose(fp);
+		if(t0est_start > 4)
+			t0est_start -= 4; // we want to make sure and capture t0
+
+		t0est_start &= ~(1); // round back to the nearest even number of frames
+
+		if(t0est_start >= 12 ){
+			double proportion = t0est_start - inlet_side_t0est_start;
+			proportion /= (double)(outlet_side_t0est_start-inlet_side_t0est_start);
+			proportion *= (double)(outlet_side_t0est_transit_frames-inlet_side_t0est_transit_frames);
+			t0est_end = inlet_side_t0est_transit_frames + proportion + t0est_start;
+			slower_frames = (int)proportion;
+		}
+		else
+			t0est_start=-1;
+
+		printf("Completed t0 Analysis:  start=%d end=%d\n",t0est_start,t0est_end);
+	}
+
+	if(t0est_start > 0)
+	{
+		// t0 compress this image
+		unsigned int fnums[raw->uncompFrames];
+		unsigned int uncompFrms=0;
+		unsigned int numEntries=0;
+		FILE *fp=NULL;
+		ADD_FRAME(fp,1, 				  1,fnums,&uncompFrms,&numEntries,NULL);   //first frame is always at the base acquisition time
+		ADD_FRAME(fp,t0est_start/8,       8,fnums,&uncompFrms,&numEntries,NULL);   //skip the front of the signal up to t0
+		ADD_FRAME(fp,(t0est_start%8)/4,	  4,fnums,&uncompFrms,&numEntries,NULL);   //skip the front of the signal up to t0
+		ADD_FRAME(fp,(t0est_start%4)/2,	  2,fnums,&uncompFrms,&numEntries,NULL);   //skip the front of the signal up to t0
+
+		ADD_FRAME(fp,20+(slower_frames/2),1,fnums,&uncompFrms,&numEntries,NULL);   //capture the signal
+
+		ADD_FRAME(fp,2, 				  2,fnums,&uncompFrms,&numEntries,NULL);   // capture the tail
+		ADD_FRAME(fp,2,                   4,fnums,&uncompFrms,&numEntries,NULL);   // capture the tail
+		ADD_FRAME(fp,2,                   8,fnums,&uncompFrms,&numEntries,NULL);   // capture the tail
+
+		//now, we have the transform..  time to do the work!
+
+		uint16_t *newImage = (uint16_t *)malloc(numEntries*raw->rows*raw->cols*sizeof(uint16_t));
+		int *newTimestamps = (int *)malloc(numEntries*sizeof(int));
+		// we now have the new image..
+		unsigned int oldframe=0;
+		for(unsigned int frame=0;frame<numEntries;frame++){
+			// if this is a frame that can be directly copied from one to the other, do that.  otherwise, interpolate
+			int tmpFrame=0;
+			unsigned int tmpOldFrame=0,last_ts=0,tmp_fnum;
+			for(tmpFrame=0;tmpFrame<raw->frames;tmpFrame++){
+				tmp_fnum = ((raw->timestamps[tmpFrame]+10)/raw->timestamps[0]) - last_ts;
+				last_ts = ((raw->timestamps[tmpFrame]+10)/raw->timestamps[0]);
+				if(tmpOldFrame >= oldframe){
+					if(tmpOldFrame != oldframe || tmp_fnum != fnums[frame])
+						tmpFrame=raw->frames;
+					break;
+				}
+			}
+			if(tmpFrame < raw->frames){
+				// we should copy this frame directly
+				memcpy(&newImage[frame*raw->rows*raw->cols],
+						&raw->image[tmpFrame*raw->rows*raw->cols],
+						raw->rows*raw->cols*sizeof(newImage[0]));
+			}
+			else
+			{
+				for(int row=0;row<raw->rows;row++){
+					for(int col=0;col<raw->cols;col++){
+						// fill in this pixel
+						uint32_t sum=0;
+						for(unsigned int ig=0;ig<fnums[frame];ig++){
+							uint32_t tmp = (uint32_t)image->GetInterpolatedValue(oldframe+ig,col,row);
+	//						if(row==0 && col==0 && doLogging){
+	//							fp = fopen("t0est_start_debug.txt","a");
+	//							if(fp){
+	//								fprintf(fp," %5d",tmp);
+	//								fclose(fp);
+	//							}
+	//						}
+							sum += tmp;
+						}
+						newImage[frame*raw->rows*raw->cols + row*raw->cols + col] = sum/fnums[frame];
+					}
+				}
+			}
+			newTimestamps[frame] = ((double)oldframe)*(1.0/15.0)*1000.0; // may need some work!
+			oldframe += fnums[frame];
+		}
+
+		if(doLogging){
+			fp = fopen("t0est_start_debug.txt","a");
+			if(fp)
+			{
+				fprintf(fp,  "\n\nOrig Frames: ");
+				int last_ts=0;
+				for(int i=0;i<raw->frames;i++){
+					fprintf(fp," %d",((raw->timestamps[i]+10)/raw->timestamps[0]) - last_ts);
+					last_ts = ((raw->timestamps[i]+10)/raw->timestamps[0]);
+				}
+				fprintf(fp,"\nNew Frames:  ");
+				for(unsigned int i=0;i<numEntries;i++)
+					fprintf(fp," %d",fnums[i]);
+				fprintf(fp,"\n\n");
+
+				fprintf(fp,"Orig trace:   ");
+				for(int frame=0;frame<raw->frames;frame++)
+					fprintf(fp," %5d",raw->image[frame*raw->rows*raw->cols]);
+				fprintf(fp,"\n");
+
+				fprintf(fp,"New  trace:   ");
+				for(unsigned int frame=0;frame<numEntries;frame++)
+					fprintf(fp," %5d",newImage[frame*raw->rows*raw->cols]);
+				fprintf(fp,"\n");
+
+				fclose(fp);
+			}
+		}
+
+		free(raw->image);
+		raw->image=(short *)newImage;
+		free(raw->timestamps);
+		raw->timestamps=newTimestamps;
+		raw->uncompFrames=uncompFrms;
+		raw->frames=numEntries;
+		// transform is done!!!
+	}
 }
 

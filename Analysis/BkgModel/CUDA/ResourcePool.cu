@@ -1,9 +1,5 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
-// patch for CUDA5.0/GCC4.7
-#undef _GLIBCXX_ATOMIC_BUILTINS
-#undef _GLIBCXX_USE_INT128
-
 #include <iostream>
 
 #include "ResourcePool.h"
@@ -297,7 +293,8 @@ void cudaResourcePool::printMemoryUsage()
   double free_db = (double)free_byte ;
   double total_db = (double)total_byte ;
   double used_db = total_db - free_db ;
-  cout << getLogHeader() << " GPU memory usage: used = " << used_db/1024.0/1024.0<< ", free = " << free_db/1024.0/1024.0<< " MB, total = "<< total_db/1024.0/1024.0<<" MB" << endl;
+  double divMB = 1024*1024;
+  cout << getLogHeader() << " GPU memory usage: used = " << used_db/divMB<< ", free = " << free_db/divMB<< " MB, total = "<< total_db/divMB<<" MB" << endl;
 }
 
 size_t cudaResourcePool::requestDeviceMemory(size_t size)

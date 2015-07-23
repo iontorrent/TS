@@ -25,7 +25,7 @@
 #include "SampleQuantiles.h"
 #include "SampleStats.h"
 #include "PJobQueue.h"
-#include "H5File.h"
+#include "IonH5File.h"
 #include "SynchDatConvert.h"
 using namespace std;
 

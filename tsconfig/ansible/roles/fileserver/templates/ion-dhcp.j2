@@ -1,0 +1,15 @@
+# {{ ansible_managed }}
+#
+# WARNING
+# This file has been configured and/or optimized for the Torrent Server.
+# It is recommended that you do not alter or edit this file.
+#
+# Changing this file may break your Torrent Server immediately or problems
+# may not surface till a later software update.  Resolution of problems
+# will likely be delayed because of custom modifications to this file.
+no-hosts
+addn-hosts=/etc/hosts-dnsmasq
+{% for interface in ansible_interfaces if interface[0] == 'p' %}
+interface={{interface}}
+no-dhcp-interface={{interface}}
+{% endfor %}

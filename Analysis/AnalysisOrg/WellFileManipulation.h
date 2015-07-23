@@ -17,6 +17,7 @@ typedef struct writeFlowDataFuncArg
   string filePath;
   int numCols;
   size_t stepSize;
+  bool saveAsUShort;
   SemQueue* packQueuePtr;
   SemQueue* writeQueuePtr;
 } writeFlowDataFuncArg;

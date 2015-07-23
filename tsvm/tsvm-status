@@ -111,7 +111,7 @@ if $no_vm; then
 
     #Need disk space on /results partition to install the VM
     min_disk_space=2212607  #kilobytes
-    if [[ $(df -kP /results|tail -1|awk '{print $4}') < $min_disk_space ]]; then
+    if [[ $(df -kP /results|tail -1|awk '{print $4}') -lt $min_disk_space ]]; then
         echo -n ${STATES[$STATE]} >&1
         echo -n "Not enough free disk space in /results to install the VM." >&2
     else

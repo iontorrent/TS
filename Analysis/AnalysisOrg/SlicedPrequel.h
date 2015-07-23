@@ -48,6 +48,7 @@ public:
 	region_list &
 	num_regions &
 	region_timing &
+  smooth_t0_est &
 	tauB &
 	tauE;
       // the following are reinitialized every time

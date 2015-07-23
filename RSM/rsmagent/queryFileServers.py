@@ -1,25 +1,33 @@
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+"""
+Query localhost via REST API for list of attached file servers
 
-# simple script to query the localhost via the REST API for a list of attached file servers in the Torrent Browser
-# Author: Mel Davey
+Author: Mel Davey
+"""
 
 import json
 import httplib2
 
-#add our authentication first
-h = httplib2.Http(".cache")
-h.add_credentials('ionadmin', 'ionadmin')
 
-#ask for the list of file servers from the Torrent Browser running on localhost
-resp, content = h.request("http://localhost/rundb/api/v1/fileserver?format=json", "GET")
+def main():
+    """Query localhost via REST API for list of attached file servers"""
+    #add our authentication first
+    http = httplib2.Http(".cache")
+    http.add_credentials('ionadmin', 'ionadmin')
 
-#content is a json object, we make a python dict out of it
-contentdict = json.loads(content)
+    # ask for list of file servers from Torrent Browser running on localhost
+    url = "http://localhost/rundb/api/v1/fileserver?format=json"
+    resp, content = http.request(url, "GET")
 
-#and grab the objects dict from the content
-objects = contentdict['objects']
+    # content is a json object, we make a python dict out of it
+    contentdict = json.loads(content)
 
-#and loop through each object in our objects list and extract the field of interest
-for obj in objects:
-    print obj['filesPrefix']
+    # and grab the objects dict from the content
+    objects = contentdict['objects']
 
+    # loop through each object in objects list and extract field of interest
+    for obj in objects:
+        print obj['filesPrefix']
+
+if __name__ == "__main__":
+    main()

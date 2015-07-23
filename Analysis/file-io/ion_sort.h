@@ -134,7 +134,7 @@ void ion_sort_heapsort_##name(size_t lsize, type_t l[]) \
       tmp = *l; *l = l[i]; l[i] = tmp; ion_sort_heapadjust_##name(0, i, l); \
   } \
 } \
-inline void __ion_sort_insertsort_##name(type_t *s, type_t *t) \
+void __ion_sort_insertsort_##name(type_t *s, type_t *t) \
 { \
   type_t *i, *j, swap_tmp; \
   for (i = s + 1; i < t; ++i) \

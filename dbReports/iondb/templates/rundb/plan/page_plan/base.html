@@ -282,7 +282,7 @@
         {% for ref in helper.getStepDict.Reference.getPrePopulatedFieldDict.references %}
             referenceShortToLongName['{{ref.short_name}}'] = '{{ref.short_name}}({{ref.name}})';
         {% endfor %}
-        $('#selectedReferenceLibrary').text(referenceShortToLongName['{{helper.getStepDict.Reference.getCurrentSavedFieldDict.reference}}']);
+        $('#selectedReferenceLibrary').text(referenceShortToLongName['{{helper.getStepDict.Reference.getCurrentSavedFieldDict.default_reference}}']);
         
         pluginIdToName = {};
         var pluginStr = "";

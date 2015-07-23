@@ -129,7 +129,7 @@ struct delta_mat_output_line {
 
 // collection of all input and output instruction information for a single fit configuration
 struct fit_instructions {
-  struct mat_assy_input_line *input;
+  mat_assy_input_line *input;
   int    input_len;
   struct delta_mat_output_line *output;
   int    output_len;

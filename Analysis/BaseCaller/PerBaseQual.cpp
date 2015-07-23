@@ -23,7 +23,8 @@
 using namespace std;
 
 
-PerBaseQual::PerBaseQual() : phred_table_(0)
+PerBaseQual::PerBaseQual()
+: phred_table_(0), save_predictors_(false)
 {
   phred_thresholds_.resize(kNumPredictors);
   phred_thresholds_max_.resize(kNumPredictors);
@@ -621,7 +622,7 @@ void PerBaseQual::GenerateBaseQualities(const string& read_name, int num_bases, 
 
   stringstream predictor_dump_block;
 
-  for (int base = 0; base < max_eligible_base; base++) {
+  for (int base = 0; base < max_eligible_base; base++) { // first 4 bases are the keys TCAG
 
     float pred[kNumPredictors];
     pred[1] = predictor2[base];

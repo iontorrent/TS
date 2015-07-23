@@ -1,28 +1,27 @@
-/////////////////////////////////////////////////////////////////////////////
-//
-// Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
-//
-// Please refer to the NVIDIA end user license agreement (EULA) associated
-// with this source code for terms and conditions that govern your use of
-// this software. Any use, reproduction, disclosure, or distribution of
-// this software and related documentation outside the terms of the EULA
-// is strictly prohibited.
-//
-/////////////////////////////////////////////////////////////////////////////
+/**
+ * Copyright 1993-2013 NVIDIA Corporation.  All rights reserved.
+ *
+ * Please refer to the NVIDIA end user license agreement (EULA) associated
+ * with this source code for terms and conditions that govern your use of
+ * this software. Any use, reproduction, disclosure, or distribution of
+ * this software and related documentation outside the terms of the EULA
+ * is strictly prohibited.
+ *
+ */
 
 #ifndef TIMER_H
 #define TIMER_H
 
 #include <stdlib.h>
 
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
 #include <sys/time.h>
 #endif
 
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 double PCFreq = 0.0;
 __int64 timerStart = 0;
 #else
@@ -31,7 +30,7 @@ struct timeval timerStart;
 
 void StartTimer()
 {
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
     LARGE_INTEGER li;
 
     if (!QueryPerformanceFrequency(&li))
@@ -50,7 +49,7 @@ void StartTimer()
 // time elapsed in ms
 double GetTimer()
 {
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
     LARGE_INTEGER li;
     QueryPerformanceCounter(&li);
     return (double)(li.QuadPart-timerStart)/PCFreq;

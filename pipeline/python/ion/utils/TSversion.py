@@ -10,27 +10,26 @@ def findVersions():
     """
     find the version of the packages
     """
-    packages =  ["ion-analysis",
-                 "ion-dbreports",
-                 "ion-docs",
-                 "ion-gpu",
-                 "ion-pgmupdates",
-                 "ion-protonupdates",
-                 "ion-chefupdates",
-                 "ion-plugins",
-                 "ion-referencelibrary",
-                 "ion-rsmts",
-                 "ion-sampledata",
-                 "ion-tsconfig",
-                 "ion-tsups",
-                 "ion-publishers",
-                 "ion-onetouchupdater",
-                 "ion-pipeline",
-                 "ion-usbmount",
-                 "tmap",
-                 "ion-torrentr"]
-
-    packages = sorted(packages)
+    packages = [
+        'ion-analysis',
+        'ion-chefupdates',
+        'ion-dbreports',
+        'ion-docs',
+        'ion-gpu',
+        'ion-onetouchupdater',
+        'ion-pgmupdates',
+        'ion-pipeline',
+        'ion-plugins',
+        'ion-protonupdates',
+        'ion-publishers',
+        'ion-referencelibrary',
+        'ion-rsmts',
+        'ion-sampledata',
+        'ion-torrentr',
+        'ion-tsconfig',
+        'ion-tsups',
+        'ion-usbmount',
+        ]
 
     ret = SortedDict()
     for package in packages:
@@ -56,27 +55,26 @@ def findUpdates():
     """
     find package versions installed and candidate for updates webpage
     """
-    packages =  ["ion-analysis",
-                 "ion-dbreports",
-                 "ion-docs",
-                 "ion-gpu",
-                 "ion-pgmupdates",
-                 "ion-protonupdates",
-                 "ion-chefupdates",
-                 "ion-plugins",
-                 "ion-referencelibrary",
-                 "ion-rsmts",
-                 "ion-sampledata",
-                 "ion-tsconfig",
-                 "ion-tsups",
-                 "ion-publishers",
-                 "ion-onetouchupdater",
-                 "ion-pipeline",
-                 "ion-usbmount",
-                 "tmap",
-                 "ion-torrentr"]
-    
-    packages = sorted(packages)
+    packages = [
+        'ion-analysis',
+        'ion-chefupdates',
+        'ion-dbreports',
+        'ion-docs',
+        'ion-gpu',
+        'ion-onetouchupdater',
+        'ion-pgmupdates',
+        'ion-pipeline',
+        'ion-plugins',
+        'ion-protonupdates',
+        'ion-publishers',
+        'ion-referencelibrary',
+        'ion-rsmts',
+        'ion-sampledata',
+        'ion-torrentr',
+        'ion-tsconfig',
+        'ion-tsups',
+        'ion-usbmount',
+        ]
 
     ret = SortedDict()
     for package in packages:

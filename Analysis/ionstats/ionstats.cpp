@@ -6,7 +6,6 @@
 #include <fstream>
 #include <stdio.h>
 
-#include "OptArgs.h"
 #include "IonVersion.h"
 
 using namespace std;
@@ -59,11 +58,8 @@ void IonstatsReduceH5Help()
 
 
 
-int IonstatsReduce(int argc, const char *argv[])
+int IonstatsReduce(OptArgs &opts)
 {
-  OptArgs opts;
-  opts.ParseCmdLine(argc, argv);
-
   string output_json_filename = opts.GetFirstString('o', "output", "");
   vector<string>  input_jsons;
   opts.GetLeftoverArguments(input_jsons);
@@ -101,11 +97,8 @@ int IonstatsReduce(int argc, const char *argv[])
 
 
 
-int IonstatsReduceH5(int argc, const char *argv[])
+int IonstatsReduceH5(OptArgs &opts, const string &program_str)
 {
-  OptArgs opts;
-  opts.ParseCmdLine(argc-1, argv+1);
-
   string output_h5_filename = opts.GetFirstString  ('o', "output", "");
   bool merge_proton_blocks  = opts.GetFirstBoolean ('b', "merge-proton-blocks", "true");
   vector<string>  input_h5_filename;
@@ -115,9 +108,6 @@ int IonstatsReduceH5(int argc, const char *argv[])
     IonstatsReduceH5Help();
     return 1;
   }
-
-  if(merge_proton_blocks)
-    cout << "NOTE:" << argv[0] << " " << argv[1] << ": --merge-proton-blocks=true so any Proton block-specific read group suffixes will be merged" << endl;
 
   return IonstatsAlignmentReduceH5(output_h5_filename, input_h5_filename, merge_proton_blocks);
 }
@@ -132,12 +122,15 @@ int main(int argc, const char *argv[])
   }
 
   string ionstats_command = argv[1];
+  string program_str = string(argv[0]) + " " + string(argv[1]);
+  OptArgs opts;
+  opts.ParseCmdLine(argc-1, argv+1);
 
-  if      (ionstats_command == "basecaller") return IonstatsBasecaller(argc-1, argv+1);
-  else if (ionstats_command == "alignment")  return IonstatsAlignment(argc, argv);
-  else if (ionstats_command == "tf")         return IonstatsTestFragments(argc-1, argv+1);
-  else if (ionstats_command == "reduce")     return IonstatsReduce(argc-1, argv+1);
-  else if (ionstats_command == "reduce-h5")  return IonstatsReduceH5(argc, argv);
+  if      (ionstats_command == "basecaller") return IonstatsBasecaller(opts);
+  else if (ionstats_command == "alignment")  return IonstatsAlignment(opts, program_str);
+  else if (ionstats_command == "tf")         return IonstatsTestFragments(opts);
+  else if (ionstats_command == "reduce")     return IonstatsReduce(opts);
+  else if (ionstats_command == "reduce-h5")  return IonstatsReduceH5(opts, program_str);
   else {
       fprintf(stderr, "ERROR: unrecognized ionstats command '%s'\n", ionstats_command.c_str());
       return 1;

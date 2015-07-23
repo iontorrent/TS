@@ -32,6 +32,14 @@ function user_msg
         echo "$1"
     fi
 }
+
+function outbound_net_port()
+{
+    port=$(/sbin/route | grep ^default | awk '{print $8}')
+    if [[ ! -z $port ]]; then
+        echo $port
+    fi
+}
 #=============================================================================
 # BEGIN MAIN
 #=============================================================================
@@ -158,12 +166,16 @@ fi
 if $BASIC_SERVER; then STR_BS='true'; else STR_BS='false';fi
 sed -i "s,BASIC_SERVER.*,BASIC_SERVER = $STR_BS," ${WHERE}/Vagrantfile
 
-sed -i "s,^default_router.*,default_router = \'$(route|awk '/^default/{printf $2;exit;}')\'," ${WHERE}/Vagrantfile
+sed -i "s,^default_router.*,default_router = \'$(netstat -rn|awk '/^0.0.0.0/{printf $2;exit;}')\'," ${WHERE}/Vagrantfile
+
+# Define outbound ethernet port
+PORT=$(outbound_net_port)
+sed -i "s/^OUTBOUND.*/OUTBOUND_PORT = \'${PORT}\'/" ${WHERE}/Vagrantfile
 
 #=============================================================================
 #=============================================================================
 if ! $DEBUG; then
-    
+
     #=============================================================================
     # Prepare the existing Reports on the host system to be available for Import into VM.
     #=============================================================================
@@ -175,7 +187,7 @@ if ! $DEBUG; then
         user_msg "Run this command to enable importing Basecaller Input datasets:"
         user_msg "  ${WHERE}/serialize_runs_to_json.py"
     fi
-    
+
     #=============================================================================
     # Enable firewall rule to allow NFS to the TS-VM
     # NOTE: GUI setup calls this in separate case
@@ -183,7 +195,7 @@ if ! $DEBUG; then
     if $INTERACTIVE; then
         enable_nfs_rule
     fi
-    
+
     #=============================================================================
     # Detect if a VM has already been created
     # Possible names:
@@ -229,7 +241,7 @@ if ! $DEBUG; then
     rotate_this_pile $PROVISION_LOG
     rotate_this_pile $RUNNING_LOG
     echo $(date +"[%Y-%m-%d %H:%M:%S]") "Running: vagrant up" >>$PROVISION_LOG
-    
+
     cd ${WHERE}
     if $INTERACTIVE; then
         vagrant --provision up  2>&1 | tee -a $PROVISION_LOG

@@ -1,57 +1,29 @@
 ---
 # file: roles/common/tasks/main.yml
 
+- name:
+  include: '../../../globals.yml'
 #-----------------------------------------------------------------------------
 # On each compute node, we need to replicate the Ion Repository configured
 # on the head node.
 #-----------------------------------------------------------------------------
-- name: Replicating head node /etc/apt/source.list.d/iontorrent.list
-  copy: src=/etc/apt/sources.list.d/iontorrent.list dest=/etc/apt/sources.list.d/iontorrent.list mode=0644
+- name: Replicating head node's /etc/apt/source.list.d/
+  copy: src={{item}} dest=/etc/apt/sources.list.d/ mode=0644
   when: "'{{ansible_hostname}}' != '{{groups.headnode[0]}}'"
-  tags: debug
-  
-#-----------------------------------------------------------------------------
-# If there are compute nodes, we need to install apt-cacher-ng package and configure it
-# Only on the headnode
-#-----------------------------------------------------------------------------
-- name: Install apt-cacher-ng package on headnode
-  apt: name=apt-cacher-ng state=latest
-  when: "groups.computes|length > 0 and '{{ansible_hostname}}' == '{{groups.headnode[0]}}'"
-  
-- name: Configure apt-cacher-ng server on headnode
-  lineinfile: dest=/etc/apt/apt.conf.d/01proxy create=true state=present
-                regexp='Acquire::http::Proxy.*'
-                line='Acquire::http::Proxy "http://localhost:3142";'
-                mode=0644
-  when: "groups.computes|length > 0 and '{{ansible_hostname}}' == '{{groups.headnode[0]}}'"
-  notify: apt-get update
-  
-- name: Allow apt-cacher-ng traffic through firewall
-  lineinfile: state=present line="COMMIT" insertafter=EOF dest=/etc/iptables.custom
-  when: "groups.computes|length > 0 and '{{ansible_hostname}}' == '{{groups.headnode[0]}}'"
-  
-- name: Allow apt-cacher-ng traffic through firewall
-  lineinfile: state=present line="*filter" insertbefore=BOF dest=/etc/iptables.custom
-  when: "groups.computes|length > 0 and '{{ansible_hostname}}' == '{{groups.headnode[0]}}'"
-  
-- name: Allow apt-cacher-ng traffic through firewall
-  lineinfile: dest=/etc/iptables.custom create=true state=present
-                 line="-A INPUT -p tcp -m state --state NEW -m tcp --dport 3142 -j ACCEPT"
-                 insertbefore="COMMIT"
-  when: "groups.computes|length > 0 and '{{ansible_hostname}}' == '{{groups.headnode[0]}}'"
+  with_fileglob:
+    - /etc/apt/sources.list.d/*
 
 #-----------------------------------------------------------------------------
-# Enable apt-cacher-ng on the compute nodes
+# Clean apt cache
 #-----------------------------------------------------------------------------
-- name: Configure apt-cacher-ng on compute nodes
-  lineinfile: dest=/etc/apt/apt.conf.d/01proxy
-                create=yes
-                state=present
-                line='Acquire::http::Proxy "http://{{ groups.headnode[0] }}:3142";'
-                regexp='Acquire::http::Proxy.*'
-                mode=0644
-  when: "'{{ansible_hostname}}' != '{{groups.headnode[0]}}'"
-  notify: apt-get update
+- name: sudo apt-get autoclean
+  shell: apt-get autoclean
+
+#-----------------------------------------------------------------------------
+# Disable installation of recommended and suggested debian packages
+#-----------------------------------------------------------------------------
+#- name: Disable apt installation of recommend and suggest packages
+#  template: src=98recommends.j2 dest=/etc/apt/apt.conf.d/98recommends mode=0644
 
 #-----------------------------------------------------------------------------
 # Install system packages common to all servers
@@ -59,70 +31,55 @@
 - name: preseed tmpreaper package
   script: tmpreaper.preseed
   
+- name: Set package preseed values
+  script: "{{ansible_env.PWD}}/files/grub-pc.preseed {{GRUB_BOOT_DEVICE}}"
+  when: GRUB_BOOT_DEVICE is defined
+  
 - name: Install system packages
   apt: name={{item}} state=installed force=yes update_cache=yes cache_valid_time=300
   with_items: common_syspkg_list
 
-
+#-----------------------------------------------------------------------------
 #    named_core_files
+#-----------------------------------------------------------------------------
 - name: Enable named core files
   sysctl: name=kernel.core_pattern
             reload=yes
             state=present
             value='core.%e.%p.%h.%t'
-            
-
-#    config_grub_menu || true
-#		sed -i 's/\(GRUB_HIDDEN_TIMEOUT_QUIET=\).*/\1false/' /etc/default/grub
-#		sed -i 's/\(GRUB_HIDDEN_TIMEOUT=\).*/\15/' /etc/default/grub
-#		/usr/sbin/update-grub
-- name: Enable grub hidden timeout
-  lineinfile: dest={{ grub_config_file }}
-                state=present
-                regexp='GRUB_HIDDEN_TIMEOUT_QUIET=.*'
-                line='GRUB_HIDDEN_TIMEOUT_QUIET=false'
-  notify: update grub
-                
-- name: Set grub hidden timeout period
-  lineinfile: dest={{ grub_config_file }}
-                state=present
-                regexp='GRUB_HIDDEN_TIMEOUT=.*'
-                line='GRUB_HIDDEN_TIMEOUT=15'
-  notify: update grub
-        
+    
+#-----------------------------------------------------------------------------
 #NOTE: required: ionian user be created prior to initial installation of ion-dbreports
 # initialize_system_users
 
-# Initialize ionian group
+#-----------------------------------------------------------------------------
+# Initialize ionian group and user
 - name: Add group ionian
   group: name=ionian gid=1100 state=present system=yes
   
+- name: Initialize ionian user
+  user: name=ionian uid=1100 state=present system=yes group=ionian
+  
 # Initialize ionadmin
+# This shell method is because of having to use this password creation method
 - shell: bash -lc '/usr/bin/getent passwd | grep -q "^ionadmin:"'
   register: result
   ignore_errors: yes
   
 - name: Initialize ionadmin user
   when: result|failed
-  shell: /usr/sbin/useradd -m -s /bin/bash -p $(perl -e "print crypt(ionadmin, 'password')" $password) -G admin,ionian,www-data ionadmin;
-
-# Initialize ionian
-- name: Add group ionian
-  group: name=ionian gid=1100 state=present system=yes
-
-- shell: bash -lc '/usr/bin/getent passwd | grep -q "^ionian:"'
-  register: result
-  ignore_errors: yes
+  shell: /usr/sbin/useradd -m -s /bin/bash -p $(perl -e "print crypt(ionadmin, 'password')" $password) ionadmin;
   
-- name: Initialize ionian user
-  when: result|failed
-  shell: adduser --system --uid 1100 --ingroup ionian --disabled-password ionian
-  
-# Add www-data to the ionian group
+- name: Add ionadmin to ionian www-data groups
+  user: name=ionadmin append=yes groups=ionian,www-data
+
+# Add www-data user to the ionian group
 - name: Add www-data user to the ionian group
-  shell: bash -lc 'if ! groups www-data | cut -d":" -f2 | grep -qw ionian; then adduser www-data ionian; fi'
+  user: name=www-data append=yes groups=ionian
 
+#-----------------------------------------------------------------------------
 #    set_logfile_size_limit
+#-----------------------------------------------------------------------------
 - name: Set logfile size limit
   lineinfile: dest=/etc/logrotate.conf
                 state=present
@@ -139,22 +96,24 @@
                 insertafter='# Torrent Server maximum log file limit'
                 mode=0644
 
+#-----------------------------------------------------------------------------
 # Remove motd regarding available OS upgrade: do not want TS customers to do this.
+#-----------------------------------------------------------------------------
 - name: Remove message regarding available OS upgrade
   file: dest=/etc/update-motd.d/91-release-upgrade state=absent
 
+#-----------------------------------------------------------------------------
 # Disable checking for updates
+#-----------------------------------------------------------------------------
 - name: disable checking for updates
   lineinfile: dest=/etc/update-manager/release-upgrades
                 state=present
                 regexp='^[Pp]rompt=.*'
                 line='prompt=never'
 
+#-----------------------------------------------------------------------------
 # Configure tmpreaper package to purge old files from /tmp directory
-#    if [ -e /etc/tmpreaper.conf ]; then
-#        sed -i 's/^SHOWWARNING=true/#SHOWWARNING=true/' /etc/tmpreaper.conf
-#        sed -i 's/^.*TMPREAPER_TIME=.*/TMPREAPER_TIME=7d/' /etc/tmpreaper.conf
-#    fi
+#-----------------------------------------------------------------------------
 - name: Configure tmpreaper
   lineinfile: dest=/etc/tmpreaper.conf state=present
                 regexp='^SHOWWARNING=true'
@@ -164,14 +123,9 @@
                 regexp='^.*TMPREAPER_TIME=.*'
                 line='TMPREAPER_TIME=7d'
 
-    # Configure maximum number of open file descriptors allowed
-#    set_max_open_files
-    # The four lines we want are:
-    #*                soft    nofile          8192
-    #*                hard    nofile          8192
-    #root             soft    nofile          8192
-    #root             hard    nofile          8192
-
+#-----------------------------------------------------------------------------
+# Configure maximum number of open file descriptors allowed
+#-----------------------------------------------------------------------------
 - name: Set soft limit
   lineinfile: dest={{ security_limits_file }} state=present backrefs=yes
                 regexp='(\*.*soft.*nofile).*'
@@ -196,3 +150,16 @@
                 line='\1          {{ MAX_FILES_OPEN }}'
                 insertbefore='# End of file'
 
+#-----------------------------------------------------------------------------
+# Create/update the tsconf.log file
+#-----------------------------------------------------------------------------
+- name: Get version of ion-tsconfig
+  shell: dpkg -l ion-tsconfig | tail -1 | awk '{print $3}'
+  register: tsconfig_version
+  
+- name: Assures /etc/torrentserver dir exists
+  file: path=/etc/torrentserver state=directory mode=0755 owner=root group=root
+  
+- name: Create/Update tsconf.log
+  template: src=tsconf.conf.j2 dest=/etc/torrentserver/tsconf.conf mode=0644 owner=root group=root
+  

@@ -1,0 +1,145 @@
+{% extends "rundb/configure/base.html" %}
+{% load url from future %}
+{% load static from staticfiles %}
+{% block sub-nav %}
+    <li><a href="{% url "configure_about" %}">About</a></li>
+    <li><a href="{% url "configure_references" %}">References</a></li>
+    <li><a href="{% url "configure_services" %}">Services</a></li>
+    <li><a href="{% url "configure_plugins" %}">Plugins</a></li>
+    <li><a href="{% url "configure_configure" %}">Configure</a></li>
+    <li><a href="{% url "configure_ionreporter" %}">Ion Reporter Configure</a></li>
+    <li><a href="{% url "configure_account" %}">Accounts</a></li>
+{% endblock sub-nav %}
+{% block content %}
+<link type="text/css" rel="stylesheet" media="all" href="{% static "resources/jquery-ui-1.9.2.custom/css/smoothness/jquery-ui-1.9.2.custom.min.css"%}" />
+<style type="text/css">
+    .search-field {
+        display: inline-block;
+        *display: inline;
+        width: 200px;
+        height: 30px;
+        float: left;
+        margin: 15px 15px 0 15px;
+    }
+</style>
+
+<div class="content">
+    <h1>Upload History</h1>
+    <div class="row-fluid">
+        <div class="search-field">
+            <input type="text" class="filter" id="search_name" placeholder="Search file"/>
+        </div>
+        <div class="search-field">
+            <select id='search_pub' class="filter">
+                <option value="">All</option>
+                {% for pub in publishers %}
+                    <option value={{pub}} {% if pub.name == selected %} selected {% endif %}>{{pub}}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="input-append search-field">
+            <button id="clear_filters" class="btn" type="button">Clear Filters</button>
+        </div>    
+    </div>
+    <div id="upload_grid"></div>
+</div>
+
+<script type="text/javascript" src="{% static "js/iso8601.min.js"%}"></script>
+<script src="{% static "resources/jquery-ui-1.9.2.custom/js/jquery-ui-1.9.2.custom.min.js"%}"></script>
+
+<script type="text/x-kendo-template" id="statusTemplate">
+    # if (data.indexOf('Error') >= 0 ) { #
+        <span class="text-error">#=data#</span>
+    # }else if (data.indexOf('Success') >= 0 ) { #
+        <span class="text-success">#=data#</span>
+    # }else{ #
+        #=data#
+    # } #
+</script>
+
+<script type="text/javascript">
+
+function filter(e){
+    e.preventDefault();
+    e.stopPropagation();
+    $("#upload_grid").data("kendoGrid").dataSource.filter([
+        {
+            field: "name",
+            operator: "contains",
+            value: $("#search_name").val()
+        } , {
+            field: "pub",
+            operator: "contains",
+            value: $("#search_pub").val()
+        }
+    ]);
+}
+
+$(document).ready(function(){
+    
+    var grid = $("#upload_grid").kendoGrid({
+        dataSource: {
+            type: "json",
+            transport: {
+                read: {
+                    url: "/rundb/api/v1/contentupload/",
+                    contentType: 'application/json; charset=utf-8',
+                    type: 'GET',
+                    dataType: 'json'
+                },
+            },
+            schema: {
+                model: {
+                    fields: {
+                        "upload_date": {type : "date"},
+                    }
+                },
+                data: "objects",
+                total: "meta.total_count",
+            },
+            serverSorting: false,
+            serverFiltering: false,
+            serverPaging: true,
+            sort: { field: "upload_date", dir: "desc" },
+            pageSize: 500
+        },
+        height: 446,
+        groupable: false,
+        scrollable : {
+            virtual : true
+        },
+        sortable: true,
+        selectable: false,
+        columns: [ {
+                field: "upload_date",
+                title: "Date",
+                width: '12%',
+                format: "{0:yyyy/MM/dd}"
+            } , {
+                field: "name",
+                title: "Uploaded File",
+                template: '<a href="/rundb/uploadstatus/${id}/">${name}</a>'
+            } , {
+                field: "upload_type",
+                title: "Type",
+            } , {
+                field: "status",
+                title: "Status",
+                template: "#=statusTemplate(status)#"
+            }
+        ],
+        dataBound: function(e) {
+        }
+    });
+    
+    $('.filter').change(function (e) { filter(e); }).change();
+    
+    $('#clear_filters').click(function(e){
+        $('.filter').val('');
+        filter(e);
+    });
+});
+
+var statusTemplate = kendo.template($("#statusTemplate").html());
+</script>
+{% endblock content %}

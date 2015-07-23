@@ -86,6 +86,10 @@ void RealignImp::set_debug (bool debug)
     Realigner::debug_ = debug;
 }
 
+void RealignImp::set_log (int)
+{
+}
+
 bool RealignImp::invalid_input_cigar () const
 {
     return Realigner::invalid_cigar_in_input;

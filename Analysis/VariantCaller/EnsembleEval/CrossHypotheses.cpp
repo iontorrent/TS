@@ -141,10 +141,12 @@ void CrossHypotheses::FillInPrediction(PersistingThreadObjects &thread_objects, 
 
 
   // allocate everything here
-  CleanAllocate(instance_of_read_by_state.size(), global_context.treePhaserFlowOrder.num_flows());
-  int flow_upper_bound = splice_end_flow + 4*min_delta_for_flow;
-  max_last_flow = CalculateHypPredictions(thread_objects, my_read, global_context,
-                                          instance_of_read_by_state, predictions, normalized, flow_upper_bound);
+  CleanAllocate(instance_of_read_by_state.size(), global_context.flow_order_vector.at(my_read.flow_order_index).num_flows());
+  // We search for test flows in the flow interval [(splice_start_flow-3*max_flows_to_test), (splice_end_flow+4*max_flows_to_test)]
+  // We need to simulate further than the end of the search interval to get good predicted values within
+  int flow_upper_bound = splice_end_flow + 4*max_flows_to_test + 20;
+  max_last_flow = CalculateHypPredictions(thread_objects, my_read, global_context, instance_of_read_by_state,
+                                          same_as_null_hypothesis, predictions, normalized, flow_upper_bound);
   SetModPredictions();
   if (my_read.is_reverse_strand)
     strand_key = 1;
@@ -545,8 +547,9 @@ bool CrossHypotheses::ComputeAllComparisonsTestFlow(float threshold, int max_cho
   test_flow.clear();
   float best = -1.0f;
   int bestlocus = 0;
-  unsigned int start_flow = max(0, splice_start_flow-3*max_choice); // XXX
-  unsigned int end_flow = min(splice_end_flow+4*max_choice, min(max_last_flow, (int)predictions[0].size()));
+  // Make sure our test flows are within a window of the splicing interval
+  unsigned int start_flow = max(0, splice_start_flow-3*max_choice);
+  unsigned int end_flow = min(splice_end_flow+4*max_choice, max_last_flow);
 
   // over all flows
   for (unsigned int j_flow=start_flow; j_flow < end_flow and IsValidTestFlowIndexNew(j_flow, max_choice); j_flow++) {

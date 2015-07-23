@@ -147,17 +147,6 @@ int main (int argc, const char *argv[])
   while(reader.GetNextAlignment(alignment)){
     readcounter ++;
     position_shift = false;
-#if 0    
-    {
-      if (alignment.Name.compare("GSU0M:00155:00003") == 0)
-      {
-        cout << alignment.Name << endl;
-    	aligner.verbose_ = true;
-      }
-      else
-	aligner.verbose_ = false;
-    }
-#endif
     
     if ( (readcounter % 100000) == 0 )
        cout << "Processed " << readcounter << " reads. Elapsed time: " << (time(NULL) - start_time) << endl;

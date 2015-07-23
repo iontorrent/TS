@@ -75,7 +75,7 @@ tmap_map2_stack_destroy(tmap_map2_stack_t *stack);
   @param  stack  a pointer to the stack
   @param  e      the element to push
   */
-inline void
+void
 tmap_map2_stack_push0(tmap_map2_stack_t *stack, tmap_map2_entry_p e);
 
 /*! 
@@ -84,7 +84,7 @@ tmap_map2_stack_push0(tmap_map2_stack_t *stack, tmap_map2_entry_p e);
   @return        the popped element
   @details       this will fail (error) if the stack is empty
   */
-inline tmap_map2_entry_p 
+tmap_map2_entry_p
 tmap_map2_stack_pop(tmap_map2_stack_t *stack);
 
 /*! 
@@ -100,7 +100,7 @@ tmap_map2_stack_pop(tmap_map2_stack_t *stack);
   @return     an element from the memory pool
   @details    this will allocate more memory if necessary
   */
-inline tmap_map2_entry_p
+tmap_map2_entry_p
 tmap_map2_mempool_pop(tmap_map2_mempool_t *mp);
 
 /*! 

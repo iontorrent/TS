@@ -36,13 +36,8 @@
 #include "tmap_map_driver.h"
 #include "../realign/realign_c_util.h"
 
-#ifdef PROGRTRACE
-unsigned _tot_r = 0;
-#endif
-
 #define PARANOID_TESTS 0
 
-// #define BADCIGAR_DBG
 
 // NB: do not turn these on, as they do not currently improve run time. They
 // could be useful if many duplicate lookups are performed and the hash
@@ -162,12 +157,12 @@ tmap_map_driver_init_seqs(tmap_seq_t **seqs, tmap_seq_t *seq, int32_t max_length
 
 /* this function finds maximal length of the peridicity suffix in text that match prefix in pattern
    returns first position in a text that belongs to such periodicity position */
-unsigned tailrep (unsigned pattlen, const char* pattern, unsigned textlen, const char* text)
+unsigned tailrep_cont (unsigned pattlen, const char* pattern, unsigned textlen, const char* text)
 {
     unsigned rep_beg = textlen;
     unsigned period;
     if (!textlen || !pattlen)
-        return 0;
+        return rep_beg;
     for (period = 1; period != pattlen; ++period)
     {
         unsigned ppos = period - 1;
@@ -188,13 +183,55 @@ unsigned tailrep (unsigned pattlen, const char* pattern, unsigned textlen, const
             else
                 --ppos;
         }
-        if (tpos + period > textlen)
-            continue;
         if (reached_beg)
         {
             rep_beg = 0;
             break;
         }
+        if (tpos + period > textlen) // this enforces whatever is less then full period in read to stay unclipped
+            continue;
+        rep_beg = mymin (rep_beg, tpos+1);
+    }
+    return rep_beg;
+}
+
+/* this function finds maximal length of the peridicity suffix in text
+   returns first position in a text that belongs to such periodicity position */
+unsigned tailrep (unsigned textlen, const char* text, unsigned max_period)
+{
+    unsigned rep_beg = textlen;
+    unsigned period;
+    if (!textlen || !max_period)
+        return rep_beg;
+    for (period = 1; period != max_period; ++period)
+    {
+        if (textlen < period + 1)
+            break;
+        unsigned ppos = textlen - 1;
+        unsigned tpos = textlen - period - 1;
+        uint8_t reached_beg = 0;
+        for (;;)
+        {
+            if (text [tpos] != text [ppos])
+                break;
+            if (!tpos)
+            {
+                reached_beg = 1;
+                break;
+            }
+            --tpos;
+            if (ppos == textlen - period)
+                ppos = textlen - 1;
+            else
+                --ppos;
+        }
+        if (reached_beg)
+        {
+            rep_beg = 0;
+            break;
+        }
+        if (tpos + 2*period > textlen)
+             continue;
         rep_beg = mymin (rep_beg, tpos+1);
     }
     return rep_beg;
@@ -710,14 +747,6 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
           // estimate the pairing parameters
           if(0 == do_pairing) 
           {
-#ifdef PROGRTRACE              
-            _tot_r ++;
-            if (_tot_r % 10 == 0)
-            {
-                fprintf (stderr, "\r%d", _tot_r);
-                fflush (stderr);
-            }
-#endif
             {   // DVK - realignment integration
                 // run realignment on all matches from records [low]->sams [II] for II from 0 to seqs_buffer[low]->n
                 // ? should the realignment be run if flowspace realignment is performed ? - yes, if both are requested from command line 
@@ -756,7 +785,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             }
                             // compute alignment and subject lengths
                             unsigned q_len_cigar, r_len_cigar;
-                            unsigned al_len_cigar = seq_lens_from_bin_cigar (orig_cigar, orig_cigar_sz, &q_len_cigar, &r_len_cigar);
+                            seq_lens_from_bin_cigar (orig_cigar, orig_cigar_sz, &q_len_cigar, &r_len_cigar);
                             uint8_t* ref = (uint8_t*) ref_mem (realigner, r_len_cigar);
                             int32_t converted_cnt;
                             // extract reference. This returns reference sequence in UNPACKED but BINARY CONVERTED form - values of 0-4, one byte per base!
@@ -804,7 +833,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                                 &(stat->num_realign_unclip_failures)))
                             {
                                 // check if changes were introduced
-                                if (new_offset != ref_off || orig_cigar_sz != cigar_dest_sz || memcmp (orig_cigar, cigar_dest, orig_cigar_sz))
+                                if (new_offset != ref_off || orig_cigar_sz != cigar_dest_sz || memcmp (orig_cigar, cigar_dest, orig_cigar_sz*sizeof (*orig_cigar)))
                                 {
                                     ++(stat->num_realign_changed);
                                     if (new_offset != ref_off)
@@ -883,15 +912,6 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                         const char* qry = qrybases->s;
                         for (matchidx = 0; matchidx < sams->n; ++matchidx)
                         {
-#ifdef BADCIGAR_DBG
-                            if (1)
-                            {
-                                fprintf (stderr, "Match %d: ", matchidx);
-                                cigar_print (stderr, sams->sams [matchidx].cigar, sams->sams [matchidx].n_cigar);
-                                fprintf (stderr, "\n");
-                            }
-#endif
-
                             // extract packed cigar and it's length
                             uint32_t* orig_cigar = sams->sams [matchidx].cigar;
                             unsigned orig_cigar_sz = sams->sams [matchidx].n_cigar;
@@ -912,7 +932,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                             }
                             // compute alignment and subject lengths
                             unsigned q_len_cigar, r_len_cigar;
-                            unsigned al_len_cigar = seq_lens_from_bin_cigar (orig_cigar, orig_cigar_sz, &q_len_cigar, &r_len_cigar);
+                            seq_lens_from_bin_cigar (orig_cigar, orig_cigar_sz, &q_len_cigar, &r_len_cigar);
                             uint8_t* ref = (uint8_t*) ref_mem (realigner, r_len_cigar+1);
                             int32_t converted_cnt;
                             // extract reference. This returns reference sequence in UNPACKED but BINARY CONVERTED form - values of 0-4, one byte per base!
@@ -954,7 +974,7 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                                 NULL))
                             {
                                 // check if changes were introduced
-                                if (new_offset != ref_off || orig_cigar_sz != cigar_dest_sz || memcmp (orig_cigar, cigar_dest, orig_cigar_sz))
+                                if (new_offset != ref_off || orig_cigar_sz != cigar_dest_sz || memcmp (orig_cigar, cigar_dest, orig_cigar_sz*sizeof (orig_cigar)))
                                 {
                                     if (tmap_log_enabled ())
                                     {
@@ -979,14 +999,6 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                                     sams->sams [matchidx].n_cigar = cigar_dest_sz;
                                     memcpy (sams->sams [matchidx].cigar, cigar_dest, sizeof (uint32_t) * cigar_dest_sz);
                                     sams->sams [matchidx].pos = new_offset;
-#ifdef BADCIGAR_DBG
-                                    if (1)
-                                    {
-                                        fprintf (stderr, "Modified alignment: ");
-                                        cigar_print (stderr, sams->sams [matchidx].cigar, sams->sams [matchidx].n_cigar);
-                                        fprintf (stderr, "\n");
-                                    }
-#endif
                                 }
                                 else
                                     tmap_log ("CONTEXT-GAP: %s(%s) vs %s:%d UNCHANGED\n", qryname, (forward ? "FWD":"REV"), ref_name, ref_off);
@@ -1004,10 +1016,6 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
               {  // DVK soft-clipping tail tandem repeats
                 if (1 == driver->opt->do_repeat_clip)
                 {
-#ifdef BADCIGAR_DBG
-                    int here = 0;
-#endif
-
                     const unsigned MAX_PERIOD = 10;
 
                     // detect the repeat (using naive NxM algorithm)
@@ -1020,27 +1028,12 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
 
                         // extract query
                         const char* qryname = tmap_seq_get_name (qryseq)->s;
-#ifdef BADCIGAR_DBG
-                        if (0 == strcmp (qryname, "ZXS04:01186:04979"))
-                        {
-                            fprintf (stderr, "\nClipping query %s\n", qryname);
-                            here = 1;
-                        }
-#endif
                         tmap_string_t* qrybases = tmap_seq_get_bases (qryseq);
                         const char* qry = qrybases->s;
                         unsigned filtered = 0; // some of the alignments could be completely skipped
 
                         for (matchidx = 0; matchidx < sams->n; ++matchidx)
                         {
-#ifdef BADCIGAR_DBG
-                            if (here)
-                            {
-                                fprintf (stderr, "Match %d, filtered %d: ", matchidx, filtered);
-                                cigar_print (stderr, sams->sams [matchidx].cigar, sams->sams [matchidx].n_cigar);
-                                fprintf (stderr, "\n");
-                            }
-#endif
                             // if necessary, prepare slot for filling in the sam
                             if (filtered != matchidx)
                             { 
@@ -1083,39 +1076,47 @@ tmap_map_driver_core_worker(sam_header_t *sam_header,
                                 filtered ++;
                                 continue;
                             }
-                            // extract reference 'tail' (continuation). This returns reference sequence in UNPACKED but BINARY CONVERTED form - values of 0-4, one byte per base!
-                            int32_t ref_tail_beg = forward ? (ref_off + r_al_end) : ((MAX_PERIOD < ref_off + r_al_beg) ? (ref_off + r_al_beg - MAX_PERIOD) : 0);
-                            int32_t ref_tail_end = forward ? mymin (refseq->annos [ref_id].len, ref_tail_beg + MAX_PERIOD) : (ref_off + r_al_beg); //inclusive 1-based - same as exclusive 0-based
-                            int32_t ref_tail_len = ref_tail_end - ref_tail_beg;
-                            if (!ref_tail_len)
-                            {
-                                filtered ++;
-                                continue;
-                            }
-                            uint8_t* ref = (uint8_t*) ref_mem (realigner, ref_tail_len);
-                            int32_t converted_cnt;
-                            tmap_refseq_subseq2 (refseq, ref_id+1, ref_tail_beg+1, ref_tail_end, ref, 0, &converted_cnt);
-                            // convert reference to ascii format
-                            {
-                                int ii;
-                                for(ii = 0; ii < ref_tail_len; ++ii) 
-                                {
-                                    if (ref [ii] >= sizeof (tmap_iupac_int_to_char)) 
-                                    {
-                                        fprintf (stderr, "Invalid base: %d at position %d in reference %d:%d-%d; query is %d, match is %d\n", ref [ii], ii, ref_id, ref_tail_beg+1, ref_tail_end, low, matchidx);
-                                        tmap_bug ();
-                                    }
-                                    ref [ii] = tmap_iupac_int_to_char [ref [ii]];
-                                }
-                                ref [ref_tail_len] = 0;
-                            }
                             const char* ref_name = refseq->annos [ref_id].name->s;
-                            // inverse/complement for reverse match
-                            if (!forward)
-                                tmap_reverse_compliment ((char*) ref, ref_tail_len);
-                            // check if there is a tail periodicity extending by at least one period into reference overhang; 
-                            // tailrep returns 0 if entire (unclipped) alignment gets trimmed
-                            unsigned rep_off = tailrep (ref_tail_len, (char*) ref, q_al_end, qry);
+                            unsigned rep_off;
+                            if (driver->opt->repclip_continuation)
+                            {
+                                // extract reference 'tail' (continuation). This returns reference sequence in UNPACKED but BINARY CONVERTED form - values of 0-4, one byte per base!
+                                int32_t ref_tail_beg = forward ? (ref_off + r_al_end) : ((MAX_PERIOD < ref_off + r_al_beg) ? (ref_off + r_al_beg - MAX_PERIOD) : 0);
+                                int32_t ref_tail_end = forward ? mymin (refseq->annos [ref_id].len, ref_tail_beg + MAX_PERIOD) : (ref_off + r_al_beg); //inclusive 1-based - same as exclusive 0-based
+                                int32_t ref_tail_len = ref_tail_end - ref_tail_beg;
+                                if (!ref_tail_len)
+                                {
+                                    filtered ++;
+                                    continue;
+                                }
+                                uint8_t* ref = (uint8_t*) ref_mem (realigner, ref_tail_len);
+                                int32_t converted_cnt;
+                                tmap_refseq_subseq2 (refseq, ref_id+1, ref_tail_beg+1, ref_tail_end, ref, 0, &converted_cnt);
+                                // convert reference to ascii format
+                                {
+                                    int ii;
+                                    for(ii = 0; ii < ref_tail_len; ++ii) 
+                                    {
+                                        if (ref [ii] >= sizeof (tmap_iupac_int_to_char)) 
+                                        {
+                                            fprintf (stderr, "Invalid base: %d at position %d in reference %s:%d-%d; query is %d, match is %u\n", ref [ii], ii, ref_name, ref_tail_beg+1, ref_tail_end, low, matchidx);
+                                            tmap_bug ();
+                                        }
+                                        ref [ii] = tmap_iupac_int_to_char [ref [ii]];
+                                    }
+                                    ref [ref_tail_len] = 0;
+                                }
+                                // inverse/complement for reverse match
+                                if (!forward)
+                                    tmap_reverse_compliment ((char*) ref, ref_tail_len);
+                                // check if there is a tail periodicity extending by at least one period into reference overhang; 
+                                // tailrep returns 0 if entire (unclipped) alignment gets trimmed
+                                rep_off = tailrep_cont (ref_tail_len, (char*) ref, q_al_end, qry);
+                            }
+                            else
+                            {
+                                rep_off = tailrep (q_al_end, qry, MAX_PERIOD);
+                            }
                             // rep_off is where ON THE READ (in read's forward direction) the clip should start.
                             ++ stat->num_seen_tailclipped;
                             stat->bases_seen_tailclipped += q_al_end;
@@ -1253,7 +1254,6 @@ tmap_map_driver_create_threads(sam_header_t *header,
 #endif
                                int32_t do_pairing)
 {
-  int32_t i;
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   int32_t j;
 #endif
@@ -1261,20 +1261,23 @@ tmap_map_driver_create_threads(sam_header_t *header,
 
 #ifdef ENABLE_TMAP_DEBUG_FUNCTIONS
   // sample reads
-  if(driver->opt->sample_reads < 1) {
-      for(i=j=0;i<seqs_buffer_length;i++) {
-          if(driver->opt->sample_reads < tmap_rand_get(rand_core)) continue; // skip
-          if(j < i) {
-              tmap_seqs_t *seqs;
-              seqs = seqs_buffer[j];
-              seqs_buffer[j] = seqs_buffer[i]; 
-              seqs_buffer[i] = seqs;
+  {
+      int32_t i;
+      if(driver->opt->sample_reads < 1) {
+          for(i=j=0;i<seqs_buffer_length;i++) {
+              if(driver->opt->sample_reads < tmap_rand_get(rand_core)) continue; // skip
+              if(j < i) {
+                  tmap_seqs_t *seqs;
+                  seqs = seqs_buffer[j];
+                  seqs_buffer[j] = seqs_buffer[i]; 
+                  seqs_buffer[i] = seqs;
+              }
+              j++;
           }
-          j++;
+          tmap_progress_print2("sampling %d out of %d [%.2lf%%]", j, seqs_buffer_length, 100.0*j/(double)seqs_buffer_length);
+          seqs_buffer_length = j;
+          if(0 == seqs_buffer_length) return 0;
       }
-      tmap_progress_print2("sampling %d out of %d [%.2lf%%]", j, seqs_buffer_length, 100.0*j/(double)seqs_buffer_length);
-      seqs_buffer_length = j;
-      if(0 == seqs_buffer_length) return 0;
   }
 #endif
 
@@ -1286,6 +1289,7 @@ tmap_map_driver_create_threads(sam_header_t *header,
                                   seqs_buffer_length, &buffer_idx, index, driver, stat, rand[0], realigner [0], context [0], do_pairing, 0);
   }
   else {
+      int32_t i;
       (*attr) = tmap_calloc(1, sizeof(pthread_attr_t), "(*attr)");
       pthread_attr_init((*attr));
       pthread_attr_setdetachstate((*attr), PTHREAD_CREATE_JOINABLE);
@@ -1596,7 +1600,7 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
       tmap_progress_set_verbosity(0); 
   }
   */
-          
+
   tmap_progress_print("running with %d threads (%s)",
                        driver->opt->num_threads,
                        (0 == driver->opt->num_threads_autodetected) ? "user set" : "autodetected");
@@ -1656,51 +1660,59 @@ tmap_map_driver_core(tmap_map_driver_t *driver)
   rand = tmap_rand_init(13);
 #endif
 
-  // DVK - realigner  
-  // Note: this needs to be initialized only if --do-realign is specified, 
-  // !!! or if --do-repeat-clip is specified, as repeat clipping uses some of the structures in realigner for data holding
-  {
-#ifdef HAVE_LIBPTHREAD
-  realigner = tmap_malloc (driver->opt->num_threads * sizeof (struct RealignProxy*), "realigner");
-  context = tmap_malloc (driver->opt->num_threads * sizeof (struct RealignProxy*), "context");
-
-  for (i = 0; i != driver->opt->num_threads;  ++i)
-  {
-      realigner [i] = realigner_create ();
-      realigner_set_scores (realigner [i], driver->opt->realign_mat_score, driver->opt->realign_mis_score, driver->opt->realign_gip_score, driver->opt->realign_gep_score);
-      realigner_set_bandwidth (realigner [i], driver->opt->realign_bandwidth);
-      realigner_set_clipping (realigner [i], (enum CLIPTYPE) driver->opt->realign_cliptype);
-
-      context [i] = context_aligner_create ();
-      realigner_set_scores (context [i], driver->opt->score_match, -driver->opt->pen_mm, driver->opt->pen_gapo, driver->opt->pen_gape);
-      realigner_set_bandwidth (context [i], driver->opt->bw);
-
-}
-#else
-  realigner = realigner_create ();
-  realigner_set_scores (realigner, driver->opt->realign_mat_score, driver->opt->realign_mis_score, driver->opt->realign_gip_score, driver->opt->realign_gep_score);
-  realigner_set_bandwidth (realigner, driver->opt->realign_bandwidth);
-  realigner_set_clipping (realigner, (enum CLIPTYPE) driver->opt->realign_cliptype);
-  context = context_aligner_create ();
-  realigner_set_scores (context, driver->opt->score_match, -driver->opt->pen_mm, driver->opt->pen_gapo, driver->opt->pen_gape);
-  realigner_set_bandwidth (context, driver->opt->bw);
-  
-#endif  
-  }  
-  
-// DVK - thread-safe logging
-  FILE* logfile = NULL;
-  {
-    if (driver->opt->realign_log)
+    // DVK - thread-safe logging
+    FILE* logfile = NULL;
     {
-      logfile = fopen (driver->opt->realign_log, "w");
-      if (!logfile)
-	tmap_error ("logfile", Exit, OpenFileError );
-      tmap_log_enable (logfile);
+        if (driver->opt->realign_log)
+        {
+            logfile = fopen (driver->opt->realign_log, "w");
+            if (!logfile)
+                tmap_error ("logfile", Exit, OpenFileError );
+            tmap_log_enable (logfile);
+        }
+        else
+            tmap_log_disable ();
     }
-    else
-      tmap_log_disable ();
-  }
+
+    // DVK - realigner  
+    // Note: this needs to be initialized only if --do-realign is specified, 
+    // !!! or if --do-repeat-clip is specified, as repeat clipping uses some of the structures in realigner for data holding
+    {
+#ifdef HAVE_LIBPTHREAD
+        realigner = tmap_malloc (driver->opt->num_threads * sizeof (struct RealignProxy*), "realigner");
+        context = tmap_malloc (driver->opt->num_threads * sizeof (struct RealignProxy*), "context");
+        for (i = 0; i != driver->opt->num_threads;  ++i)
+        {
+            realigner [i] = realigner_create ();
+            realigner_set_scores (realigner [i], driver->opt->realign_mat_score, driver->opt->realign_mis_score, driver->opt->realign_gip_score, driver->opt->realign_gep_score);
+            realigner_set_bandwidth (realigner [i], driver->opt->realign_bandwidth);
+            realigner_set_clipping (realigner [i], (enum CLIPTYPE) driver->opt->realign_cliptype);
+
+            context [i] = context_aligner_create ();
+            realigner_set_scores (context [i], driver->opt->context_mat_score, driver->opt->context_mis_score, -driver->opt->context_gip_score, -driver->opt->context_gep_score);
+            realigner_set_bandwidth (context [i], driver->opt->context_extra_bandwidth);
+            realigner_set_gap_scale_mode (context [i], driver->opt->gap_scale_mode);
+            realigner_set_debug (context [i], driver->opt->context_debug_log);
+            // WARNING! not a thread-safve operation! Enable only in single-threaded mode!
+            if (driver->opt->context_debug_log && logfile)
+                realigner_set_log (context [i], fileno (logfile));
+        }
+    #else
+        realigner = realigner_create ();
+        realigner_set_scores (realigner, driver->opt->realign_mat_score, driver->opt->realign_mis_score, driver->opt->realign_gip_score, driver->opt->realign_gep_score);
+        realigner_set_bandwidth (realigner, driver->opt->realign_bandwidth);
+        realigner_set_clipping (realigner, (enum CLIPTYPE) driver->opt->realign_cliptype);
+
+        context = context_aligner_create ();
+        realigner_set_scores (context, driver->opt->context_mat_score, driver->opt->context_mis_score, driver->opt->context_gip_score, driver->opt->context_gep_score);
+        realigner_set_bandwidth (context, driver->opt->context_extra_bandwidth);
+        realigner_set_gap_scale_mode (context, driver->opt->gap_scale_mode);
+        realigner_set_debug (context, driver->opt->context_debug_log);
+        if (driver->opt->context_debug_log && logfile)
+            realigner_set_log (context, fileno (logfile));
+#endif
+    }
+
 
   // BAM Header
   header = tmap_seqs_io_to_bam_header(index->refseq, io_in, 

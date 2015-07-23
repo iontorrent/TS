@@ -30,14 +30,14 @@
 
 #define VEC32F_SIZE_B (VEC32_SIZE*4)
 
-#define LD_VEC4F(x) (v4f)  {x,x,x,x};
-#define LD_VEC4I(x) (v4i)  {x,x,x,x};
-#define LD_VEC4S(x) (v4s)  {x,x,x,x};
+#define LD_VEC4F(x) (v4f)  {x,x,x,x}
+#define LD_VEC4I(x) (v4i)  {x,x,x,x}
+#define LD_VEC4S(x) (v4s)  {x,x,x,x}
 
-#define LD_VEC8F(x) (v8f)  {x,x,x,x,x,x,x,x};
-#define LD_VEC8I(x) (v8i)  {x,x,x,x,x,x,x,x};
-#define LD_VEC8S(x) (v8s) {x,x,x,x,x,x,x,x};
-#define LD_VEC8SU(x) (v8su) {x,x,x,x,x,x,x,x};
+#define LD_VEC8F(x) (v8f)  {x,x,x,x,x,x,x,x}
+#define LD_VEC8I(x) (v8i)  {x,x,x,x,x,x,x,x}
+#define LD_VEC8S(x) (v8s) {x,x,x,x,x,x,x,x}
+#define LD_VEC8SU(x) (v8su) {x,x,x,x,x,x,x,x}
 
 #define LD_VEC32F(x) (v32f)  {x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x,x};
 
@@ -98,6 +98,9 @@ typedef union{
 
 
 #ifdef __AVX__
+// Clang: __builtin_ia32_pshufd has been removed (Jun 2009)  (Use _mm_shuffle_epi32 directly)
+// http://llvm.org/viewvc/llvm-project?view=revision&revision=72995
+// http://llvm.org/viewvc/llvm-project?view=revision&revision=72996
 #define LD_VEC8S_CVT_VEC8F(src_ptr,output_var) {\
 					/* convert the 2 4(16-bit ints) to 2 4(32-bit ints) samples*/ \
 					register v4i srcData=*((v4i*)src_ptr); \

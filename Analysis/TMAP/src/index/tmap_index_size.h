@@ -2,6 +2,9 @@
 #ifndef TMAP_INDEX_SIZE_H
 #define TMAP_INDEX_SIZE_H
 
+#include <stdint.h>
+#include <sys/types.h>
+
 /*! 
   structure to store the command line options for 'tmap indexsize'
   */

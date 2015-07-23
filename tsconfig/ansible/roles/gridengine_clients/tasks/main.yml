@@ -1,14 +1,8 @@
 ---
 # file: roles/gridengine_clients/tasks/main.yml
 
-#N.B. THIS REMOVAL OF PKGS IS PART OF CURRENT ION_TSCONFIG CONFIGURATION: STILL NEEDED??
-# Remove gridengine packages to force re-init
-#- name: Removing gridengine packages in preparation to re-install and re-configure
-#  apt: pkg={{ item }} state=absent purge=yes
-#  with_items:
-#    - gridengine-common
-#    - gridengine-client
-#    - gridengine-exec
+- name:
+  include: '../../../globals.yml'
 
 # gridengine preseed
 - name: Preseed gridengine debconf values
@@ -19,6 +13,9 @@
   with_items:
     - gridengine-client
     - gridengine-exec
+
+- name: enable gridengine log rotation
+  template: src=templates/sge.logrotate.j2 dest=/etc/logrotate.d/sge mode=0644 owner=root group=root
 
 - name: Hard shutdown of gridengine-execd
   shell: bash -lc "kill -9 $(pgrep sge_execd)"
@@ -42,10 +39,9 @@
   with_items:
     - { 'name':'{{LOCAL_EPILOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{EPILOG_SCRIPT}}' }
     - { 'name':'{{LOCAL_PROLOG_SCRIPT}}', 'path':'{{SCRIPT_PATH}}/{{PROLOG_SCRIPT}}' }
-    
+  
 # set number of slots
 #    qconf -aattr queue slots $set_slots $qname
-#TODO: special case T620 hardware to get 4 slots
 - name: Modify number of slots per queue
   shell: bash -lc 'qconf -rattr queue slots [{{ansible_hostname}}={{item['slots']}}] {{item['name']}}'
   with_items:
@@ -65,4 +61,8 @@
 
 - name: enable the global settings
   shell: bash -lc 'qconf -Mconf /tmp/global ; rm -f /tmp/global'
-  
+
+# SGE: Set per-host maximum mem_free to be node physical mem
+# Must be manually set to be consumable resource
+- name: set maximum free memory for this host
+  shell: bash -lc qhost | awk '{{ ansible_hostname }}/{print "qconf -mattr exechost complex_values mem_free=" $5,$1}'|sh

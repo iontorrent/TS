@@ -19,7 +19,7 @@ except ImportError:
 from iondb.rundb import models
 
 from iondb.rundb.models import Sample, SampleSet, SampleSetItem, SampleAttribute, SampleGroupType_CV,  \
-    SampleAttributeDataType, SampleAttributeValue
+    SampleAttributeDataType, SampleAttributeValue, SamplePrepData
 
 from django.contrib.auth.models import User
 
@@ -38,33 +38,74 @@ def validate_for_existing_samples(request, sampleSet_ids):
     else:
         pending_sampleSetItem_list = []
 
-    for samplesetitem_id in sampleSet_ids:
-        sampleset = models.SampleSet.objects.get(pk=samplesetitem_id)
+    for sampleset_id in sampleSet_ids:
+        sampleset = models.SampleSet.objects.get(pk=sampleset_id)
         samplesetitems = sampleset.samples.all()
-        for item in samplesetitems:
-            #first validate that all barcode kits are the same for all samples
-            #logger.debug("views_heoper.validate_for_existing_samples() item.dnabarcode=%s" %(item.dnabarcode))
 
-            if item.dnabarcode:
-                dnabarcode = item.dnabarcode
-                barcodeKit1 = dnabarcode.name
-                barcode1 = dnabarcode.id_str
-            else:
-                barcodeKit1 = None
-                barcode1 = None
-
-            for item1 in pending_sampleSetItem_list:
-                barcodeKit = item1.get('barcodeKit')
-                barcode = item1.get('barcode')
-                if barcodeKit and barcodeKit1 and barcodeKit != barcodeKit1:
-                    #logger.debug("views_helper... barcodeKit=%s; barcodeKit1=%s" %(barcodeKit, barcodeKit1))
-                    return False, "Error, Only one barcode kit can be used for a sample set"
+        if samplesetitems:
+            for item in samplesetitems:
+                #first validate that all barcode kits are the same for all samples
+                #logger.debug("views_heoper.validate_for_existing_samples() item.dnabarcode=%s" %(item.dnabarcode))
+    
+                if item.dnabarcode:
+                    dnabarcode = item.dnabarcode
+                    barcodeKit = dnabarcode.name
+                    barcode = dnabarcode.id_str
+                else:
+                    barcodeKit = None
+                    barcode = None
+    
+                pcrPlateRow = item.pcrPlateRow
+                
+                for item1 in pending_sampleSetItem_list:
+                    barcodeKit1 = item1.get('barcodeKit')
+                    barcode1 = item1.get('barcode')
+                    if barcodeKit and barcodeKit1 and barcodeKit != barcodeKit1:
+                        #logger.debug("views_helper... barcodeKit=%s; barcodeKit1=%s" %(barcodeKit, barcodeKit1))
+                        return False, "Error, Only one barcode kit can be used for a sample set. %s is the barcode kit for this sample set" %(barcodeKit)
+                        
+                    #next validate that all barcodes are unique per each sample
+                    if barcode and barcode1 and barcode == barcode1:
+                        return False, "Error, A barcode can be assigned to only one sample in the sample set. %s has been assigned to another sample" %(barcode)
                     
-                #next validate that all barcodes are unique per each sample
-                if barcode and barcode1 and barcode == barcode1:
-                    return False, "Error, A barcode can be assigned to only one sample in the sample set and %s has been assigned to another sample" %(barcode)
+                    pcrPlateRow1 = item1.get("pcrPlateRow")
+                    if (pcrPlateRow and pcrPlateRow1 and pcrPlateRow.lower() == pcrPlateRow1.lower()):
+                        return False, "Error, A PCR plate position can only have one sample in it. Position %s has already been occupied by another sample" %(pcrPlateRow)
+                    
+                    if (not pcrPlateRow1 and "amps_on_chef" in sampleset.libraryPrepType.lower()):
+                        return False, "Error, A PCR plate position must be specified for AmpliSeq on Chef sample %s" %(item1.get("displayedName"))
+
+        elif pending_sampleSetItem_list:
+            return validate_pending_sampleSetItem_for_sampleSets(pending_sampleSetItem_list, sampleSet_ids)
+                    
     return True, None
 
+
+def validate_pending_sampleSetItem_for_sampleSets(pending_sampleSetItem_list, sampleSet_ids):
+    """
+    Validates the pending sample set items based on the characteristics of the sample sets.
+    Returns a boolean to indicate if there is any error and an error message if any
+    """
+     
+    isValid = True
+    errorMessage = None
+    
+    for sampleset_id in sampleSet_ids:
+        sampleset = models.SampleSet.objects.get(pk=sampleset_id)
+        for pending_item in pending_sampleSetItem_list:
+            isVald, errorMessage = sample_validator.validate_barcoding_samplesetitems(pending_sampleSetItem_list, pending_item.get('barcodeKit', None), \
+                                                                                      pending_item.get('barcode', None), None, pending_id = pending_item.get('pending_id', ""))
+            if not isValid:
+                return isValid, errorMessage
+     
+            isValid, errorMessage = sample_validator.validate_pcrPlate_position_samplesetitems(pending_sampleSetItem_list ,pending_item.get('pcrPlateRow', ""), \
+                                                                                               None, pending_item.get('pending_id', ""), sampleset)                                                                                               
+            if not isValid:
+                return isValid, errorMessage
+                     
+    return isValid, errorMessage
+    
+    
 def _get_or_create_sampleSets(request, user):                
     queryDict = request.POST
     logger.info("views._get_or_create_sampleSets POST queryDict=%s" %(queryDict))
@@ -74,9 +115,12 @@ def _get_or_create_sampleSets(request, user):
     new_sampleSetName = queryDict.get("new_sampleSetName", "").strip()
     new_sampleSetDesc = queryDict.get("new_sampleSetDescription", "").strip()
     new_sampleSet_groupType_id = queryDict.get("new_sampleSet_groupType", None)
-    selected_sampleSet_ids = queryDict.getlist("sampleset", [])
+    new_sampleSet_libraryPrepType = queryDict.get("new_sampleSet_libraryPrepType", "").strip()
+    new_sampleSet_libraryPrepKitName = queryDict.get("new_sampleSet_libraryPrepKit","").strip()
 
+    new_sampleSet_pcrPlateSerialNum = queryDict.get("new_sampleSet_pcrPlateSerialNum", "").strip()
     
+    selected_sampleSet_ids = queryDict.getlist("sampleset", [])
     
     #logger.debug("views_helper._get_or_create_sampleSets selected_sampleSet_ids=%s" %(selected_sampleSet_ids))
     
@@ -94,16 +138,25 @@ def _get_or_create_sampleSets(request, user):
         
     #if new_sampleSetName is missing, the rest of the input will be ignored
     if new_sampleSetName:
-        isValid, errorMessage = sample_validator.validate_sampleSet_values(new_sampleSetName, new_sampleSetDesc, True)
+        isValid, errorMessage = sample_validator.validate_sampleSet_values(new_sampleSetName, new_sampleSetDesc, new_sampleSet_pcrPlateSerialNum, True)
         
         if errorMessage:
             return isValid, errorMessage,sampleSet_ids
         
         currentDateTime = timezone.now()  ##datetime.datetime.now() 
-        
+
+        sampleSetStatus = "created"
+        if new_sampleSet_libraryPrepType and "chef" in new_sampleSet_libraryPrepType.lower():
+            libraryPrepInstrument = "chef"
+            sampleSetStatus = "libPrep_pending"
+        else:
+            libraryPrepInstrument = ""
+            
         sampleSet_kwargs = {
                             'description' : new_sampleSetDesc,  
-                            'status' : "created",                 
+                            'pcrPlateSerialNum' : new_sampleSet_pcrPlateSerialNum,
+                            'libraryPrepKitName': new_sampleSet_libraryPrepKitName,
+                            'status' : sampleSetStatus,
                             'creationDate' : currentDateTime,
                             'lastModifiedUser' : user,                     
                             'lastModifiedDate' : currentDateTime                  
@@ -112,9 +165,25 @@ def _get_or_create_sampleSets(request, user):
         sampleSet, isCreated = SampleSet.objects.get_or_create(
                                 displayedName = new_sampleSetName.strip(), 
                                 SampleGroupType_CV_id = new_sampleSet_groupType_id, 
+                                libraryPrepType = new_sampleSet_libraryPrepType,  
+                                libraryPrepInstrument = libraryPrepInstrument, 
                                 creator = user, 
                                 defaults = sampleSet_kwargs)
-        
+
+        if isCreated:
+            if sampleSet.libraryPrepInstrument == "chef":
+                libraryPrepInstrumentData_obj = models.SamplePrepData.objects.create(samplePrepDataType = "lib_prep")
+                sampleSet.libraryPrepInstrumentData = libraryPrepInstrumentData_obj
+                logger.debug("views_helper - sampleSet.id=%d; isCreated=%s; GOING TO ADD libraryPrepInstrumentData_obj.id=%d" %(sampleSet.id, str(isCreated), libraryPrepInstrumentData_obj.id))
+                sampleSet.save()
+        else:
+            if sampleSet.libraryPrepInstrument == "":
+                if sampleSet.libraryPrepInstrumentData:
+                    logger.debug("views_helper - sampleSet.id=%d; isCreated=%s; GOIGN TO DELETE libraryPrepInstrumentData_obj.id=%d" %(sampleSet.id, str(isCreated), sampleSet.libraryPrepInstrumentData.id))                    
+                    sampleSet.libraryPrepInstrumentData.delete()
+                    ##sampleSet.save()
+            
+                
         #logger.debug("views_helper._get_or_create_sampleSets sampleSetName=%s isCreated=%s" %(new_sampleSetName, str(isCreated)))
        
         sampleSet_ids.append(sampleSet.id)
@@ -365,6 +434,7 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     cellularityPct = queryDict.get("cellularityPct", None)
                 
     nucleotideType = queryDict.get("nucleotideType", "")
+    pcrPlateRow = queryDict.get("pcrPlateRow", "").strip()
     
     isValid, errorMessage, sampleAttributes_dict = _create_pending_sampleAttributes_for_sampleSetItem(request)
     
@@ -386,6 +456,7 @@ def _create_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['status'] = "created"
 
     sampleSetItem_dict['nucleotideType'] = nucleotideType
+    sampleSetItem_dict['pcrPlateRow'] = pcrPlateRow
     sampleSetItem_dict['gender'] = gender
     sampleSetItem_dict['relationshipRole'] = relationshipRole
     sampleSetItem_dict['relationshipGroup'] = relationshipGroup
@@ -422,6 +493,8 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     relationshipGroup = queryDict.get("relationshipGroup", None)
 
     nucleotideType = queryDict.get("nucleotideType", "")
+    pcrPlateRow = queryDict.get("pcrPlateRow", "").strip()
+    
     cancerType = queryDict.get("cancerType", "")
     cellularityPct = queryDict.get("cellularityPct", None)   
 
@@ -445,6 +518,7 @@ def _update_pending_sampleSetItem_dict(request, userName, creationTimeStamp):
     sampleSetItem_dict['status'] = "created"
 
     sampleSetItem_dict['nucleotideType'] = nucleotideType
+    sampleSetItem_dict['pcrPlateRow'] = pcrPlateRow    
     sampleSetItem_dict['gender'] = gender
     sampleSetItem_dict['relationshipRole'] = relationshipRole
     sampleSetItem_dict['relationshipGroup'] = relationshipGroup
@@ -629,7 +703,7 @@ def _create_or_update_sampleAttributes_for_sampleSetItem_with_values(request, us
                         logger.debug("views_helper - _create_or_update_sampleAttributes_for_sampleSetItem_with_values - #7 UPDATED with None!! attributeValue.id=%d;" %(attributeValue.id))                                                                        
               
 def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, selectedBarcodeKit, \
-                                            selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType):
+                                            selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow):
     currentDateTime = timezone.now()  ##datetime.datetime.now()      
     
     if selectedBarcode:
@@ -642,13 +716,14 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
         sampleSetItems = SampleSetItem.objects.filter(sampleSet = sampleSet, sample = sample, dnabarcode = dnabarcode, nucleotideType = sampleNucleotideType)
 
         relationshipGroup = int(sampleRelationshipGroup) if sampleRelationshipGroup else 0
+        pcrPlateColumn = "1" if pcrPlateRow else ""
         
         if sampleSetItems.count() > 0:
             need_update = True
             for sampleSetItem in sampleSetItems:
                 if sampleSetItem.gender == sampleGender and sampleSetItem.relationshipRole == sampleRelationshipRole and sampleSetItem.relationshipGroup == relationshipGroup and \
                     sampleSetItem.cancerType == sampleCancerType and sampleSetItem.cellularityPct == sampleCellularityPct and sampleSetItem.dnabarcode == dnabarcode and \
-                    sampleSetItem.nucleotideType == sampleNucleotideType:
+                    sampleSetItem.nucleotideType == sampleNucleotideType and sampleSetItem.pcrPlateRow == pcrPlateRow:
                     logger.debug("views_helper - _create_or_update_pending_sampleSetItem NO UPDATE NEEDED for sampleSetItem.id=%d" %(sampleSetItem.id))
                     need_update = False
                 
@@ -662,6 +737,8 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                         # 'barcode' : selectedBarcode,  ##SAM MOHAMED: WE ARE USING THE PK OF DNABARCODE 
                                         'dnabarcode' : dnabarcode,
                                         'nucleotideType' : sampleNucleotideType,
+                                        'pcrPlateRow' : pcrPlateRow,
+                                        'pcrPlateColumn' : pcrPlateColumn,
                                         'lastModifiedUser' : user,                     
                                         'lastModifiedDate' : currentDateTime   
                                         }
@@ -690,6 +767,8 @@ def _create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, sample
                                                                            sampleSet_id = sampleSet_id, 
                                                                            dnabarcode = dnabarcode,
                                                                            nucleotideType = sampleNucleotideType,
+                                                                           pcrPlateRow = pcrPlateRow,
+                                                                           pcrPlateColumn = pcrPlateColumn,
                                                                            defaults = sampleSetItem_kwargs)
     
             logger.debug("views_helper._create_or_update_pending_sampleSetItem() after get_or_create isCreated=%s; sampleSetItem=%s; samplesetItem.id=%d" %(str(isCreated), sample.displayedName, sampleSetItem.id))
@@ -721,13 +800,15 @@ def _create_or_update_sampleSetItem(request, user, sample):
         selectedDnaBarcode = models.dnaBarcode.objects.get(name = selectedBarcodeKitName, id_str = selectedBarcode)    
 
     selectedNucleotideType = queryDict.get("nucleotideType", "").strip()
-    
+    pcrPlateRow = queryDict.get("pcrPlateRow", "").strip()
+    pcrPlateColumn = "1" if pcrPlateRow else ""
+            
     if sampleSetItem.gender == gender and sampleSetItem.relationshipRole == relationshipRole and str(sampleSetItem.relationshipGroup) == str(relationshipGroup) and \
         (sampleSetItem.dnabarcode == selectedDnaBarcode) and sampleSetItem.cancerType == cancerType and (sampleSetItem.cellularityPct == cellularityPct) and \
-        (sampleSetItem.nucleotideType == selectedNucleotideType):
+        (sampleSetItem.nucleotideType == selectedNucleotideType and sampleSetItem.pcrPlateRow == pcrPlateRow):
         logger.debug("views_helper - _create_or_update_sampleSetItem NO change for sampleSetItem.id=%d" %(sampleSetItem.id))
     else:
-        isValid, errorMessage = sample_validator.validate_samplesetitem_update_for_existing_sampleset(sampleSetItem, sample, selectedDnaBarcode, selectedNucleotideType)
+        isValid, errorMessage = sample_validator.validate_samplesetitem_update_for_existing_sampleset(sampleSetItem, sample, selectedDnaBarcode, selectedNucleotideType, pcrPlateRow)
         if isValid:            
             sampleSetItem_kwargs = {
                                     'gender' : gender,
@@ -737,6 +818,8 @@ def _create_or_update_sampleSetItem(request, user, sample):
                                     'cancerType' : cancerType,
                                     'cellularityPct' : cellularityPct,
                                     'nucleotideType' : selectedNucleotideType,
+                                    'pcrPlateRow' : pcrPlateRow,
+                                    'pcrPlateColumn' : pcrPlateColumn,
                                     'lastModifiedUser' : user,
                                     'lastModifiedDate' : currentDateTime
                                     }
@@ -761,3 +844,26 @@ def _get_nucleotideType_choices(request):
 
     return nucleotideType_choices
 
+def _get_pcrPlateRow_choices(request):
+    row_choices_tuple = SampleSetItem.get_ampliseq_plate_v1_row_choices()
+    row_choices = OrderedDict()
+    for i, (internalValue, displayedValue) in enumerate(row_choices_tuple):
+        row_choices[internalValue] = displayedValue
+    
+    return row_choices
+
+def _get_pcrPlateRow_valid_values(request):
+    row_choices_tuple = SampleSetItem.get_ampliseq_plate_v1_row_choices()
+    row_values = []
+    for i, (internalValue, displayedValue) in enumerate(row_choices_tuple):
+        row_values.append(displayedValue)
+    
+    return row_values
+
+def _get_libraryPrepType_choices(request):
+    choices_tuple = SampleSet.ALLOWED_LIBRARY_PREP_TYPES
+    choices = OrderedDict()
+    for i, (internalValue, displayedValue) in enumerate(choices_tuple):
+        choices[internalValue] = displayedValue
+        
+    return choices

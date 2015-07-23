@@ -138,12 +138,17 @@
 
   <div class="modal-footer">    
     <div class="row-fluid">
-      <a class="btn pull-left" href="/configure/references/#uploads">Back to Upload History</a>
+      <a id="back_to_history" class="btn pull-left" href="/rundb/published/">Back</a>
       <button class="btn btn-danger pull-right" id="delete">Delete</button>
     </div>
     <div id="ask_delete" style="display: none; margin-top:12px;">
       <div class="row-fluid">
-        <p class='pull-left'>Are you sure you want to delete these uploaded and processed files?</p>
+        <p style="text-align:left">
+            {% if contentupload.publisher.name == "BED" %}
+              Deleting {{upload_name}} will delete all of the contained uploaded and processed files. This will cause missing BED file issue for plans and templates that use the BED file contained in {{upload_name}}.        
+            {% endif %}
+            Are you sure you want to delete {{upload_name}}?
+        </p>
       </div>
       <div class="row-fluid">
         <button class="btn pull-left" id="cancel_delete">No, Keep It</button> <button class="btn btn-danger pull-left" id="confirm_delete">Yes, Delete It</button>
@@ -173,6 +178,12 @@
 <script type="text/javascript">
   $(document).ready(function () {
     
+    var prev = document.referrer;
+    if (prev){
+        if (prev.indexOf('references') > -1) prev = "/configure/references/#uploads"
+        $('#back_to_history').attr('href', prev);
+    }
+    
     $("#delete").click(function () {
       $("#ask_delete").slideDown('slow');
       return false;
@@ -192,7 +203,7 @@
         async: false,
         success: function (msg) {
           $("#status_delete").html("<p>Upload deleted</p>");
-          setTimeout(function(){window.location = "/configure/references/#uploads";}, 1000);
+          setTimeout(function(){window.location = prev;}, 1000);
         }
       });
       return false;

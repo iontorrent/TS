@@ -87,7 +87,7 @@ class SignalProcessingMasterFitter
     // constructor used by Analysis pipeline
 
     SignalProcessingMasterFitter (RegionalizedData *local_patch, 
-        const struct SlicedChipExtras & local_extras, GlobalDefaultsForBkgModel &_global_defaults, 
+        const SlicedChipExtras & local_extras, GlobalDefaultsForBkgModel &_global_defaults,
         const char *_results_folder, Mask *_mask, PinnedInFlow *_pinnedInFlow, 
         class RawWells *_rawWells, 
         Region *_region, std::set<int>& sample,
@@ -98,7 +98,7 @@ class SignalProcessingMasterFitter
 				bool ignorekey/*=false*/,
 				SequenceItem* seqList/*=NULL*/,int numSeqListItems/*=2*/,
         bool restart/*=false*/, int16_t *_washout_flow/*=NULL*/,
-        const CommandLineOpts *inception_state );
+        const CommandLineOpts *_inception_state );
 
     void SetUpFitObjects();
 
@@ -117,7 +117,7 @@ class SignalProcessingMasterFitter
     void FitAllBeadsForInitialFlowBlock( int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
     void RemainingFitStepsForInitialFlowBlock( int flow_key, int flow_block_size, master_fit_type_table *table, int flow_block_start );
     void FitEmbarassinglyParallelRefineFit( int flow_block_size, int flow_block_start );
-    void PreWellCorrectionFactors( int flow_block_size, int flow_block_start );
+    void PreWellCorrectionFactors( bool ewscale_correct, int flow_block_size, int flow_block_start );
     void ExportAllAndReset(int flow, bool last, int flow_block_size, const PolyclonalFilterOpts & opts, int flow_block_id, int flow_block_start );
     bool TestAndTriggerComputation(bool last);
     //void ExecuteBlock (int flow, bool last);
@@ -191,13 +191,16 @@ class SignalProcessingMasterFitter
     int GetModelEvaluation (int iWell,BeadParams *p,struct reg_params *rp,
                             float **fg,float **bg,float **feval,float **isig,float **pf);
 
+    /*
+    // Is direct access needed? Current initialization is via BootUpXtalkSpec()
+    // It could be moved here if we sitch to always-read-from-file mode for xtalk paramters initialization
     void SetXtalkName (char *my_name)
     {
       char xtalk_name[512];
       strcpy (xtalk_name,my_name);
       trace_xtalk_spec.ReadCrossTalkFromFile (xtalk_name); //happens after initialization
     };
-
+    */
 
     void DumpExemplarBead (FILE *my_fp, bool debug_only, int flow_block_size)
     {
@@ -263,7 +266,7 @@ class SignalProcessingMasterFitter
       return region_data->region->row;
     }
 
-    GlobalDefaultsForBkgModel getGlobalDefaultsForBkgModel()
+    GlobalDefaultsForBkgModel & getGlobalDefaultsForBkgModel()
     {
       return global_defaults;
     }
@@ -284,6 +287,7 @@ class SignalProcessingMasterFitter
     RegionalizedData *region_data;
     SlicedChipExtras region_data_extras;
 
+    void SetFittersIfNeeded(); // temporarily made public for new GPU pipeline ToDo: find beter way
 
   private:
 
@@ -310,7 +314,6 @@ class SignalProcessingMasterFitter
 
 
     void NothingFitters();
-    void SetFittersIfNeeded();
     void DestroyFitObjects();
 
     void InitXtalk();
@@ -364,6 +367,7 @@ class SignalProcessingMasterFitter
 
     // pointer to the actual common defaults entity at top level
     GlobalDefaultsForBkgModel &global_defaults;
+    const CommandLineOpts* inception_state;
 
     // talking to external world
     GlobalWriter global_state;

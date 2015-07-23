@@ -1,0 +1,29 @@
+#!/bin/bash
+# Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved
+
+pkglist=(
+ion-analysis
+ion-dbreports
+ion-docs
+ion-gpu
+ion-onetouchupdater
+ion-pipeline
+ion-plugins
+ion-publishers
+ion-rsmts
+ion-sampledata
+ion-torrentr
+ion-tsconfig
+)
+DIR=/opt/ion/bin
+for pkg in ${pkglist[@]}; do
+    pkg_path=${DIR}/${pkg}.version.env
+    if [ -r $pkg_path ]; then
+        source $pkg_path
+        IonVersionGetFullVersion $pkg
+        echo
+    fi
+    
+done
+
+exit

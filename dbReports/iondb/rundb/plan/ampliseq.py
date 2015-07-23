@@ -8,7 +8,7 @@ from iondb.rundb.models import Plugin
 # the AmpliSeq output for the 3.6 TS in every way.
 # Note: this is unlikely for most releases as a change to the Variant Caller,
 # the Plan schema, or the BED publisher might necessitate changes here.
-CURRENT_VERSION = "4.4"
+CURRENT_VERSION = "4.6"
 
 
 def setup_vc_config_36(plan):
@@ -33,6 +33,9 @@ def setup_vc_config_36(plan):
 
 
 def legacy_plan_handler(data):
+    """This is crudely supported.
+    It will successfully import the BED file.
+    """
     data["plan"] = dict(data)
     return data
 
@@ -55,6 +58,9 @@ def config_choice_handler_4_0(data, meta, config_choices):
     data["configuration_choices"] = keys
     return data, meta
 
+def plan_handler_4_6(data, meta):
+    config_choices = data["plan"]["4.6"]["configuration_choices"]
+    return config_choice_handler_4_0(data, meta, config_choices)
 
 def plan_handler_4_4(data, meta):
     """
@@ -75,6 +81,7 @@ def plan_handler_4_0(data, meta):
 
 
 def plan_handler_3_6(data, meta):
+    """This is the original version that was versioned in this"""
     plan = data["plan"]["3.6"]
 
     if "runType" in plan:
@@ -93,7 +100,11 @@ def plan_handler_3_6(data, meta):
     return data, meta
 
 
+# This maps the logical version numbers in the ampliseq plan json
+# into their individual parsing functions
+# each such function must be checked each release for compatibility
 version_plan_handlers = {
+    "4.6": plan_handler_4_6,                        
     "4.4": plan_handler_4_4,                        
     "4.2": plan_handler_4_2,
     "4.0": plan_handler_4_0,
@@ -102,6 +113,9 @@ version_plan_handlers = {
 
 
 def handle_versioned_plans(data, meta=None):
+    """This validates and parses the plan.json JSON into an
+    object meant to be read by the system in the current version.
+    """
     if meta is None:
         meta = {}
     # This is the very first iteration of AmpliSeq zip exports to be used

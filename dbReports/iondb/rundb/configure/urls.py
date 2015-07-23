@@ -31,6 +31,8 @@ urlpatterns = patterns(
     url(r'^plugins/plugin/enable/(\d+)/(\d)$', 'views.configure_plugins_plugin_enable', name='configure_plugins_plugin_enable'),
     url(r'^plugins/plugin/autorun/(\d+)$', 'views.configure_plugins_plugin_autorun', name='configure_plugins_plugin_autorun'),
 
+    url(r'^plugins/publisher/install/$', 'views.configure_publisher_install', name="configure_publisher_install"),
+
     url(r'^references/$', 'views.configure_references', name="configure_references"),
     url(r'^references/tf/$', 'views.references_TF_edit', name='references_TF_edit'),
     url(r'^references/tf/(\d+)$', 'views.references_TF_edit', name='references_TF_edit'),
@@ -46,11 +48,11 @@ urlpatterns = patterns(
     url(r'^references/genome/upload/$', 'genomes.file_upload', name='references_genome_file_upload'),
 
     url(r'^references/barcodeset/$', 'views.references_barcodeset_add', name="references_barcodeset_add"),
-    url(r'^references/barcodeset/(?P<barCodeSetId>\d+)/$', 'views.references_barcodeset', name="references_barcodeset"),
-    url(r'^references/barcodeset/(?P<barCodeSetId>\d+)/delete/$', 'views.references_barcodeset_delete', name="references_barcodeset_delete"),
-    url(r'^references/barcodeset/(?P<barCodeSetId>\d+)/barcode/add/$', 'views.references_barcode_add', name="references_barcode_add"),
-    url(r'^references/barcodeset/(?P<barCodeSetId>\d+)/barcode/(?P<pk>\d+)/$', 'views.references_barcode_edit', name="references_barcode_edit"),
-    url(r'^references/barcodeset/(?P<barCodeSetId>\d+)/barcode/(?P<pks>[\d,]+)/delete/$', 'views.references_barcode_delete', name="references_barcode_delete"),
+    url(r'^references/barcodeset/(?P<barcodesetid>\d+)/$', 'views.references_barcodeset', name="references_barcodeset"),
+    url(r'^references/barcodeset/(?P<barcodesetid>\d+)/delete/$', 'views.references_barcodeset_delete', name="references_barcodeset_delete"),
+    url(r'^references/barcodeset/(?P<barcodesetid>\d+)/barcode/add/$', 'views.references_barcode_add', name="references_barcode_add"),
+    url(r'^references/barcodeset/(?P<barcodesetid>\d+)/barcode/(?P<pk>\d+)/$', 'views.references_barcode_edit', name="references_barcode_edit"),
+    url(r'^references/barcodeset/(?P<barcodesetid>\d+)/barcode/(?P<pks>[\d,]+)/delete/$', 'views.references_barcode_delete', name="references_barcode_delete"),
 
     url(r'^services/$', 'views.configure_services', name="configure_services"),
     url(r'^services/cache/$', 'views.cache_status', name='cache_status'),

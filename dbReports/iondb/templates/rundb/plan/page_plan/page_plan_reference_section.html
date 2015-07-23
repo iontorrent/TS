@@ -212,7 +212,7 @@
             $new_select.append($("<option value=''>None</option>"));
 
             $new_select.on('change', function(){
-                if (isCreate == "True" || isInit == false || (isCreate == "False") ) {                
+                if (isCreate == "True" || isInit == false || (isCreate == "False") ) {
                 if (name == 'default_targetBedFile'){
                     //$("#selectedTargetRegions").text($(this).val() != null ? $(this).val() : '');
 
@@ -282,7 +282,7 @@
             $new_select.on('change', function(){
                 if (isCreate == "True" || isInit == false) {
                 if (name == 'mixedTypeRNA_targetBedFile'){
-                    //$("#selectedMixedTypeRNATargetRegions").text($(this).val() != null ? $(this).val() : '');
+					//$("#selectedMixedTypeRNATargetRegions").text($(this).val() != null ? $(this).val() : '');
 
                     var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
                     handle_mixedTypeRNA_targetBedFile_change(selectedBedFile, !isInit);
@@ -419,9 +419,10 @@
             $new_select.on('change', function(){
                 if (isCreate == "True" || isInit == false) {
                 if (name == 'mixedTypeRNA_targetBedFile'){
-                    //$("#selectedMixedTypeRNATargetRegions").text($(this).val() != null ? $(this).val() : '');
+					//$("#selectedMixedTypeRNATargetRegions").text($(this).val() != null ? $(this).val() : '');
+                    var selectedBedFile = $(this).val() != null ? $(this).val() : '';
 
-                    var selectedBedFile = $(this).val() != null ? $(this).val() : '';  
+                    $("#selectedMixedTypeRNATargetRegions").text(selectedBedFile.split('/').pop());
                     handle_mixedTypeRNA_targetBedFile_change(selectedBedFile);
 
                 }
@@ -457,7 +458,7 @@
                        
         console.log("page_plan_reference_section.html - handle_default_targetBedFile_change() value=", selectedBedFile, "; isSameRefInfoPerSample=", isSameRefInfoPerSample, "; isToUpdateSamplesTable=", isToUpdateSamplesTable);
                                 
-        $("#selectedTargetRegions").text(selectedBedFile);
+        $("#selectedTargetRegions").text(selectedBedFile.split('/').pop());
 
         if (isSameRefInfoPerSample) {
             var isPlan = $('input[id=isPlan]').val();
@@ -492,7 +493,7 @@
                            
         console.log("page_plan_reference_section.html - handle_default_hotSpotBedFile_change() value=", selectedBedFile, "; isSameRefInfoPerSample=", isSameRefInfoPerSample, "; isToUpdateSamplesTable=", isToUpdateSamplesTable);
                                 
-        $("#selectedHotspotRegions").text(selectedBedFile);
+        $("#selectedHotspotRegions").text(selectedBedFile.split('/').pop());
 
         if (isSameRefInfoPerSample) {
             var isPlan = $('input[id=isPlan]').val();
@@ -505,7 +506,7 @@
     }
     
     function updateFromCurrentReference(refName, $selects) {
-        $("#selectedReferenceLibrary").text(referenceShortToLongName[refName]);
+	       $("#selectedReferenceLibrary").text(referenceShortToLongName[refName]);
         // $('#targetBedFile option').attr('selected', false);
         // $('#hotSpotBedFile option').attr('selected', false);
         // $("#selectedTargetRegions").text('');
@@ -540,8 +541,8 @@
         
         
         $("#default_reference").change(function()  {
-            var selectedReference = $(this).val();                                                
-            $("#selectedReferenceLibrary").text(referenceShortToLongName[selectedReference]);
+            var selectedReference = $(this).val();
+            $("#selectedReferenceLibrary").text((selectedReference) ? referenceShortToLongName[selectedReference] : '');
 
             $rows = $("#default_reference_table td:nth-child(2)");
             
@@ -567,13 +568,13 @@
             }
 
         });
-              
-        $("#mixedTypeRNA_reference").change(function()  {
-            var selectedReference = $(this).val();            
 
-            //console.log("page_plan_reference_section.html - mixedTypeRNA_reference.change() value=", selectedReference);
-                                    
-            //$("#selectedMixedTypeRNAReferenceLibrary").text(referenceShortToLongName[selectedReference]);
+
+        $("#mixedTypeRNA_reference").change(function()  {
+            var selectedReference = $(this).val();
+			//console.log("page_plan_reference_section.html - mixedTypeRNA_reference.change() value=", selectedReference);
+
+            $("#selectedMixedTypeRNAReferenceLibrary").text((selectedReference) ? referenceShortToLongName[selectedReference] : '');
 
             $rows = $("#mixedType_default_reference_table td:nth-child(2)");
             
@@ -598,8 +599,7 @@
             }
 
         });
-        
-        
+
         // $("#targetBedFile option, #hotSpotBedFile option").filter('[value != ""]').hide().filter("[class ~= "+'{{step.getCurrentSavedFieldDict.reference}}'+"]").show();
 
         create_bedFileSelects($selects, isCreate, isInit);
@@ -613,4 +613,4 @@
         
     });  //end of document.ready
     
-</script> 
+</script>

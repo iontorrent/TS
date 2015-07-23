@@ -229,7 +229,7 @@ def call_variants(results_directory,input_bam,vc_options,barcode=None):
     table_command        = '%s/scripts/generate_variant_tables.py' % DIRNAME
     table_command       += '  --input-vcf %s'       % os.path.join(results_directory,BASENAME_VARIANTS_VCF)
     if vc_options['has_targets']:
-        table_command   += '  --region-bed %s'      % vc_options['targets_bed_unmerged']
+        table_command   += '  --region-bed "%s"'      % vc_options['targets_bed_unmerged']
     if vc_options['has_hotspots']:
         table_command   += '  --hotspots'
     table_command       += '  --output-xls %s'      % os.path.join(results_directory,BASENAME_VARIANTS_XLS)
@@ -407,13 +407,17 @@ def options_for_manual_start(startplugin_json):
         # TODO: Autostart without configuration no longer allowed
         return {'error':'Automatic analysis was not performed. Plugin does not appear to be configured.'}
 
-    # hard code for existing behavior with exception around HiQ on Proton 4.4 TSS release
+    # hard code for existing behavior with exception around HiQ on Proton 4.6 TSS release
     options['has_error_motifs'] = True
     options['error_motifs'] = os.path.join(DIRNAME,'share/TVC/sse/motifset.txt')
     try:
         expmeta = startplugin_json['expmeta']
         plan = startplugin_json['plan']
         if plan['samplePrepKitName'] == 'Ion AmpliSeq Exome Kit' and expmeta['chiptype'] == 'P1.1.17' and plan['sequencekitname'] == 'IonProtonIHiQ':
+            options['error_motifs'] =  os.path.join(DIRNAME,'share/TVC/sse/ampliseqexome_germline_p1_hiq_motifset.txt')
+        if plan['samplePrepKitName'] == 'Ion AmpliSeq Exome Kit' and plan['sequencekitname'] == 'Ion S5 Sequencing Kit':
+            options['error_motifs'] =  os.path.join(DIRNAME,'share/TVC/sse/ampliseqexome_germline_p1_hiq_motifset.txt')
+        if plan['samplePrepKitName'] == 'Ion AmpliSeq Exome Kit' and expmeta['chiptype'] == '540' and plan['sequencekitname'] == 'IonProtonIHiQ':
             options['error_motifs'] =  os.path.join(DIRNAME,'share/TVC/sse/ampliseqexome_germline_p1_hiq_motifset.txt')
     except:
         pass
@@ -437,13 +441,13 @@ def options_for_manual_start(startplugin_json):
         options["original_config_line2"] = ''
         if options['original_parameters']['meta'].get('configuration',''):
             options["original_config_line2"] += options['original_parameters']['meta']['configuration'] + ', '
-        options["original_config_line2"] += 'TS version: ' + options['original_parameters']['meta'].get('ts_version','4.4')
+        options["original_config_line2"] += 'TS version: ' + options['original_parameters']['meta'].get('ts_version','4.6')
 
     options["config_line1"] = options['parameters']['meta'].get('name','Legacy '+configuration)
     options["config_line2"] = ''
     if options['parameters']['meta'].get('configuration',''):
         options["config_line2"] += options['parameters']['meta']['configuration'] + ', '
-    options["config_line2"] += 'TS version: ' + options['parameters']['meta'].get('ts_version','4.4')
+    options["config_line2"] += 'TS version: ' + options['parameters']['meta'].get('ts_version','4.6')
 
     # Ensure nonstandard unicode characters are eliminated from config_line1, and original_config_line1
 
@@ -554,8 +558,8 @@ def options_for_manual_start(startplugin_json):
 
 def get_bam_reference_short_name(bam):
     proc = subprocess.Popen(['samtools', 'view', '-H', bam], stdout=subprocess.PIPE)
-    while True:
-        line = proc.stdout.readline()
+    lines = proc.stdout.readlines()
+    for line in lines:
         if line.startswith('@PG\tID:tmap'):
             v = line.split(' ')
             fasta = [i for i in v if i.endswith('.fasta')]
@@ -802,12 +806,13 @@ def plugin_main():
 
     if vc_options['has_barcodes']:      # Run for barcodes or single page
 
-        barcode_samples_string = startplugin_json.get('plan',{}).get('barcodedSamples',"")
         barcode_sample_info = {}
-        if barcode_samples_string:
-            barcode_samples_json = json.loads(barcode_samples_string)
-            for k,v in barcode_samples_json.iteritems():
-                barcode_sample_info.update(v.get('barcodeSampleInfo',{}))
+        samples = startplugin_json.get('plan',{}).get('barcodedSamples',"")
+        if samples and not isinstance(samples,dict):
+            samples = json.loads(samples)
+        
+        for k,v in samples.iteritems():
+            barcode_sample_info.update(v.get('barcodeSampleInfo',{}))
 
         # Load barcode list
         barcode_data = []

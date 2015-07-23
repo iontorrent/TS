@@ -1,6 +1,6 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "EvaluateKey.h"
-#include "H5Eigen.h"
+#include "IonH5Eigen.h"
 #include "ZeromerMatDiff.h"
 #include <malloc.h>
 #include <Eigen/Dense>
@@ -112,6 +112,48 @@ void EvaluateKey::SetSizes(int row_start, int row_end,
   memset(m_avg_1mer,0,sizeof(float) * num_frames);
   memset(m_sd_1mer,0,sizeof(float) * num_frames);
 }
+
+void EvaluateKey::SetUpMatrices(TraceStoreCol &trace_store, 
+                                int col_stride, int flow_stride,
+                                int row_start, int row_end, int col_start, int col_end,
+                                int flow_start, int flow_end,
+                                int frame_start, int frame_end,
+                                float *trace_data,
+                                float *ref_data) {
+  int row_size = row_end - row_start;
+  int col_size = col_end - col_start;
+  int flow_size = flow_end - flow_start;
+  int frame_size = frame_end - frame_start;
+  size_t local_flow_stride = row_size * col_size;
+  size_t total_rows = local_flow_stride * flow_size;
+
+  std::vector<float> trace(trace_store.GetNumFrames());
+  std::vector<float> ref_trace(trace_store.GetNumFrames());
+
+  for (int flow_ix = flow_start; flow_ix < flow_end; flow_ix++) {
+    for (int row_ix = row_start; row_ix < row_end; row_ix++) {
+      for (int col_ix = col_start; col_ix < col_end; col_ix++) {
+        int well_ix =  row_ix * col_stride + col_ix;
+        int local_well_ix = (flow_ix - flow_start) * local_flow_stride + (row_ix - row_start) * col_size + (col_ix - col_start);
+        trace_store.GetReferenceTrace(well_ix, flow_ix, &ref_trace[0]);
+        for (int frame_ix = frame_start; frame_ix < frame_end; frame_ix++) {
+          ref_data[local_well_ix + (frame_ix - frame_start) * total_rows] = ref_trace[frame_ix];
+        }
+      }
+      for (int frame_ix = frame_start; frame_ix < frame_end; frame_ix++) {
+        int well_ix = row_ix * col_stride + col_start;
+        int local_well_ix = (row_ix - row_start) * col_size;
+        int16_t *__restrict store_start = trace_store.GetMemPtr() + flow_ix * trace_store.mFrameStride + frame_ix * trace_store.mFlowFrameStride + well_ix;
+        int16_t *__restrict store_end = store_start + col_size;
+        float *__restrict out_start = trace_data + (frame_ix - frame_start) * total_rows + (flow_ix-flow_start) * local_flow_stride + local_well_ix;
+        while(store_start != store_end) {
+          *out_start++ = *store_start++;
+        }
+      }
+    }
+  }
+}
+
 
 void EvaluateKey::FitTauB(KeySeq &key, const float *time, float taue_est, int frame_start, int frame_end, float *__restrict taub) {
   if (m_flow_order.size() >= m_num_flows) {
@@ -484,18 +526,22 @@ void EvaluateKey::FindBestKey(int row_start, int row_end, int col_start, int col
     key_taub[key_ix].resize(m_num_well_flows);
     
   }
-  // for each key calculate our estimated signals m_num_well_flows)
-  ZeromerMatDiff::ShiftReference(m_num_frames, m_num_well_flows, shift,
-                                 m_ref_data, m_shifted_ref);
+  // for each key calculate our estimated signals m_num_well_flows, a no-op currently as we don't shift reference
+  ZeromerMatDiff::ShiftReference(m_num_frames, m_num_well_flows, shift, m_ref_data, m_shifted_ref);
   Eigen::Map<Eigen::MatrixXf, Eigen::Aligned> trace_data(m_trace_data, m_num_well_flows, m_num_frames);
   Eigen::Map<Eigen::MatrixXf, Eigen::Aligned> zeromer_est(m_zeromer_est, m_num_well_flows, m_num_frames);
   Eigen::Map<Eigen::MatrixXf, Eigen::Aligned> shifted_ref(m_shifted_ref, m_num_well_flows, m_num_frames);
   for (size_t key_ix = 0; key_ix < keys.size(); key_ix++) {
+    // Fit taub for each well assuming that key 0mers are 0mers
     FitTauB(keys[key_ix], time, taue_est, frame_start, frame_end, key_taub[key_ix].data());
+    // Predict the zeromers
     PredictZeromersVec(time, taue_est, key_taub[key_ix].data());
+    // Calculate our "signal" after subtracting estimated zeromer
     key_signals[key_ix] = trace_data - zeromer_est;
+    // Normalization default to 1.0 (no normalization)
     key_norm_signals[key_ix].resize(keys[key_ix].onemerFlows.size());
     fill(key_norm_signals[key_ix].begin(), key_norm_signals[key_ix].end(), 1.0f);
+    // Gather summary stats about each key fit
     ScoreKeySignals(keys[key_ix], key_signals[key_ix].data(), 
                     m_integration_start, m_integration_end,
                     m_peak_start, m_peak_end,
@@ -505,7 +551,7 @@ void EvaluateKey::FindBestKey(int row_start, int row_end, int col_start, int col
 
   }
 
-  // If we're doing any modifications to fitting try refitting with new modifications
+  // If we're doing any modifications to fitting try rescoring with new modifications
   if (m_doing_darkmatter || m_use_projection || m_peak_signal_frames || m_integration_width) {
     int num_samples = CalculateIncorporationStats(key_results, key_signals, keys,
                                                   m_num_wells, m_num_flows, m_num_well_flows, m_num_frames,
@@ -569,8 +615,7 @@ void EvaluateKey::FindBestKey(int row_start, int row_end, int col_start, int col
         if (m_use_projection) {
           signal = &proj_signal;
         }
-        
-        //        ScoreKeySignals(keys[key_ix], key_signals[key_ix].data(),                     
+        // rescore the key signals after all modifications
         ScoreKeySignals(keys[key_ix], signal->data(),
                         m_integration_start, m_integration_end,
                         m_peak_start, m_peak_end,

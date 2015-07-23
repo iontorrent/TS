@@ -30,12 +30,14 @@ public:
     // general control
     void set_verbose (bool verbose);
     void set_debug (bool debug);
+    void set_log (int posix_handle);
     bool invalid_input_cigar () const;
 
     // parameters setup
     void set_scores (int mat, int mis, int gip, int gep);
     void set_bandwidth (int bandwidth);
     void set_clipping (CLIPTYPE clipping);
+    void set_gap_scale_mode (int) {}
 
     // alignment setup and run
     bool compute_alignment (const char* q_seq,

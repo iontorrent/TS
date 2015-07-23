@@ -81,13 +81,13 @@
       $.getJSON("/admin/network/check", function(data) {
         var detected = '<span class="happy">Detected ✔</span>';
         var missing = '<span class="sad">Missing x</span>';
-        if (data.eth0 === null || data.route === null || data.ip_addr === null) {
+        if (data.eth_device === null || data.route === null || data.ip_addr === null) {
           $("#net_info").prepend("<p class='sad'>There was a system error during the network status check.  Refresh the page or contact support.</p>")
         }
-        if (data.eth0) {
-          $("#eth0").append(detected);
+        if (data.eth_device) {
+          $("#eth_device").append(detected);
         } else {
-          $("#eth0").append(missing + '<p>The "eth0" network port is not up.</p>');
+          $("#eth_device").append(missing + '<p>The outbound network port is not up.</p>');
         }
         if (data.ip_addr) {
           $("#ip_addr").append(detected);
@@ -268,7 +268,7 @@
         <div style="float: left; width: 400px;">
           <div id="net_info">
             <div>Ethernet 0
-              <span id="eth0"></span>
+              <span id="eth_device"></span>
             </div>
             <div>IP Address
               <span id="ip_addr"</span>

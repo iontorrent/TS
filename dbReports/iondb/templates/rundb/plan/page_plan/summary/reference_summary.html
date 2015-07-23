@@ -1,15 +1,28 @@
 {%include "rundb/plan/page_plan/summary/monitoring_summary.html"%}
 <tr>
-    <td><b>Reference Library:</b></td>
+    <td><b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Reference Library:</b></td>
     <td id="selectedReferenceLibrary"></td>
 </tr>
+
 <tr>
-    <td><b>Target Regions:</b></td>
-    <td id="selectedTargetRegions">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.targetBedFile|default_if_none:""}}</td>
+    <td><b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Target Regions:</b></td>
+    <td id="selectedTargetRegions" class="word-break-all">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.targetBedFile|default_if_none:""}}</td>
 </tr>
+
 {% if helper.getStepDict.Reference.getPrePopulatedFieldDict.showHotSpotBed %}
     <tr>
-        <td><b>Hotspot Regions:</b></td>
-        <td id="selectedHotspotRegions">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.hotSpotBedFile|default_if_none:""}}</td>
+        <td><b>{%if helper.isDualNucleotideTypeBySample %}DNA {%endif%}Hotspot Regions:</b></td>
+        <td id="selectedHotspotRegions" class="word-break-all">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.hotSpotBedFile|default_if_none:""}}</td>
     </tr>
 {% endif %}
+
+{% ifequal helper.getStepDict.Application.getCurrentSavedFieldDict.applicationGroupName "DNA + RNA"%}
+    <tr>
+        <td><b>RNA Reference Library:</b></td>
+        <td id="selectedMixedTypeRNAReferenceLibrary">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_reference|default_if_none:""}}</td>
+    </tr>
+    <tr>
+        <td><b>RNA Target Regions:</b></td>
+        <td id="selectedMixedTypeRNATargetRegions">{{helper.getStepDict.Reference.getCurrentSavedFieldDict.mixedTypeRNA_targetBedFile|default_if_none:""}}</td>
+    </tr>
+{% endifequal %}

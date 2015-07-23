@@ -1,11 +1,5 @@
 ---
 # Variables for gridengine
-
-queues: 
-  - { name: all.q, slots: 2}
-  - { name: plugin.q, slots: 4}
-  - { name: thumbnail.q, slots: 10}
-  - { name: tl.q, slots: 2}
 username:
   - www-data
   - ionadmin

@@ -8,11 +8,11 @@
 
 using namespace std;
 
-void DoConstructSignalProcessingFitterAndData (WorkerInfoQueueItem &item);
-void DoMultiFlowRegionalFit (WorkerInfoQueueItem &item);
-void DoInitialBlockOfFlowsRemainingRegionalFit (WorkerInfoQueueItem &item);
-void DoPostFitProcessing (WorkerInfoQueueItem &item);
-WorkerInfoQueueItem TryGettingFittingJobForCpuFromQueue(ProcessorQueue* pq, WorkerInfoQueue** curQ);
+static void DoConstructSignalProcessingFitterAndData (WorkerInfoQueueItem &item);
+static void DoMultiFlowRegionalFit (WorkerInfoQueueItem &item);
+static void DoInitialBlockOfFlowsRemainingRegionalFit (WorkerInfoQueueItem &item);
+static void DoPostFitProcessing (WorkerInfoQueueItem &item);
+static WorkerInfoQueueItem TryGettingFittingJobForCpuFromQueue(ProcessorQueue* pq, WorkerInfoQueue** curQ);
 
 bool sortregionProcessOrderVector (const beadRegion& r1, const beadRegion& r2)
 {
@@ -144,8 +144,9 @@ void DoPostFitProcessing(WorkerInfoQueueItem &item) {
   BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
   FlowBlockSequence::const_iterator flowBlock =
     info->inception_state->bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( info->flow );
+  bool ewscale_correct = info->img->isEmptyWellAmplitudeAvailable();
   int flow_block_id = info->inception_state->bkg_control.signal_chunks.flow_block_sequence.FlowBlockIndex( info->flow );
-  info->bkgObj->PreWellCorrectionFactors( flowBlock->size(), flowBlock->begin() ); // correct data for anything needed
+  info->bkgObj->PreWellCorrectionFactors( ewscale_correct, flowBlock->size(), flowBlock->begin() ); // correct data for anything needed
 
   // export to wells,debug, etc, reset for new set of traces
   info->bkgObj->ExportAllAndReset(info->flow, info->last, flowBlock->size(), info->polyclonal_filter_opts, flow_block_id, flowBlock->begin() ); 
@@ -156,9 +157,10 @@ void DoSingleFlowFitAndPostProcessing(WorkerInfoQueueItem &item) {
   BkgModelWorkInfo *info = (BkgModelWorkInfo *) (item.private_data);
   FlowBlockSequence::const_iterator flowBlock =
     info->inception_state->bkg_control.signal_chunks.flow_block_sequence.BlockAtFlow( info->flow );
+  bool ewscale_correct = info->img->isEmptyWellAmplitudeAvailable();
   int flow_block_id = info->inception_state->bkg_control.signal_chunks.flow_block_sequence.FlowBlockIndex( info->flow );
   info->bkgObj->FitEmbarassinglyParallelRefineFit( flowBlock->size(), flowBlock->begin() );
-  info->bkgObj->PreWellCorrectionFactors( flowBlock->size(), flowBlock->begin() ); // correct data for anything needed
+  info->bkgObj->PreWellCorrectionFactors( ewscale_correct, flowBlock->size(), flowBlock->begin() ); // correct data for anything needed
   
   // export to wells,debug, etc, reset for new set of traces
   info->bkgObj->ExportAllAndReset(info->flow,info->last, flowBlock->size(), info->polyclonal_filter_opts, flow_block_id, flowBlock->begin() ); 
@@ -197,8 +199,8 @@ void DoConstructSignalProcessingFitterAndData (WorkerInfoQueueItem &item)
           info->t_sigma,
           info->t_mid_nuc,
           info->t0_frame,
-					info->nokey,
-					info->seqList,
+          info->nokey,
+	  			info->seqList,
           info->numSeqListItems,
           info->restart,
           info->washout_flow,
@@ -238,8 +240,9 @@ bool CheckBkgDbgRegion (const Region *r, const BkgModelControlOpts &bkg_control)
 }
 
 
-void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts &bkg_control
-  )
+void PlanMyComputation(
+    ComputationPlanner &my_compute_plan, 
+    BkgModelControlOpts &bkg_control)
 {
   // -- Tuning parameters --
 
@@ -250,7 +253,7 @@ void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts
   // Option to use all GPUs in system (including display devices). If set to true, will only use the
   // devices with the highest computer version. For example, if you have a system with 4 Fermi compute
   // devices and 1 Quadro (Tesla based) for display, only the 4 Fermi devices will be used.
-  my_compute_plan.use_all_gpus = false;
+  my_compute_plan.use_all_gpus = bkg_control.gpuControl.gpuUseAllDevices;
 
   // force to run on user supplied gpu device id's
   if (bkg_control.gpuControl.gpuDeviceIds.size() > 0) {
@@ -258,8 +261,11 @@ void PlanMyComputation (ComputationPlanner &my_compute_plan, BkgModelControlOpts
     my_compute_plan.valid_devices = bkg_control.gpuControl.gpuDeviceIds;
   }
   
-  if (configureGpu (my_compute_plan.use_gpu_acceleration, my_compute_plan.valid_devices, my_compute_plan.use_all_gpus,
-                    my_compute_plan.numBkgWorkers_gpu))
+  if (configureGpu (
+          my_compute_plan.use_gpu_acceleration, 
+          my_compute_plan.valid_devices,
+          my_compute_plan.use_all_gpus,
+          my_compute_plan.numBkgWorkers_gpu))
   {
     my_compute_plan.use_gpu_only_fitting = bkg_control.gpuControl.doGpuOnlyFitting;
     my_compute_plan.gpu_multiflow_fit = bkg_control.gpuControl.gpuMultiFlowFit;

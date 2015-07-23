@@ -14,11 +14,7 @@ import shlex
 import random
 import fnmatch
 import re
-
 import json
-import string
-import httplib
-import base64
 
 from collections import deque
 
@@ -295,43 +291,17 @@ class Run:
 
 
             try:
-
-                logger.info('connect to:%s user:%s password:%s' % (TSUrl,TSUserName,TSPasswd))
-
-                headers = {
-                "Authorization": "Basic "+ string.strip(base64.encodestring(TSUserName + ':' + TSPasswd)),
-                "Content-type": "application/json",
-                "Accept": "application/json" }
-
-                conn = httplib.HTTPConnection(TSUrl)
-                if self.exp_planned_run_guid:
-                    # TODO, use original plan data from file system
-                    request = "/rundb/api/v1/analysisargs/getargs/?format=json&chipType=%s&planGUID=%s&sequenceKitName=%s&limit=20" % (self.exp_chipversion, self.exp_planned_run_guid, self.exp_seqkitplanname)
-                else:
-                    logger.debug("use default chip args")
-                    request = "/rundb/api/v1/analysisargs/getargs/?format=json&chipType=%s&sequenceKitName=%s&limit=20" % (self.exp_chipversion, self.exp_seqkitplanname)
-
-                #http://frenzy.ite/rundb/api/v1/analysisargs/getargs/?format=json&chipType=P1.2.18&planGUID=&sequenceKitName=ProtonI200Kit-v2
-                logger.info('request: %s http://%s%s' % (self.explogdict.get('runname','unknown'), TSUrl, request))
-                conn.request("GET", request, "", headers)
-
-                response = conn.getresponse()
-                logger.info('%s %s' % (response.status, response.reason))
-                data = response.read()
-                analysisargs = json.loads(data)
-                logger.debug("Plan: %s" % analysisargs)
-
-                f = open(os.path.join(self.sigproc_results_path, "retrieved_args.json"),'w')
-                f.write(json.dumps(analysisargs, indent=4))
+                f = open(os.path.join(self.dat_path, "planned_run.json"),'r')
+                analysisargs = json.load(f)['objects'][0]
                 f.close()
 
                 if analysisargs:
-                    self.exp_beadfindArgs_thumbnail = analysisargs['thumbnailbeadfindargs'] 
+                    self.exp_beadfindArgs_thumbnail = analysisargs['thumbnailbeadfindargs']
                     self.exp_analysisArgs_thumbnail = analysisargs['thumbnailanalysisargs']
                     self.exp_beadfindArgs_block     = analysisargs['beadfindargs']
                     self.exp_analysisArgs_block     = analysisargs['analysisargs']
-                    self.libraryKey                 = 'TCAG'
-                    self.tfKey                      = 'ATCG'
+                    self.libraryKey                 = analysisargs['libraryKey']
+                    self.tfKey                      = analysisargs['tfKey']
                 else:
                     raise Exception("Analysis args are empty")
             except:
@@ -618,6 +588,21 @@ class App():
               rev=False
 
           sorted_blocks = sorted(runblocks, key=lambda block: block.run.last_flow-block.successful_processed, reverse=rev)
+
+          try:
+              nb_max_beadfind_jobs = config.getint(run.exp_chipversion,'nb_max_beadfind_jobs')
+              nb_max_analysis_jobs = config.getint(run.exp_chipversion,'nb_max_analysis_jobs')
+          except:
+              nb_max_beadfind_jobs = config.getint('DefaultChip','nb_max_beadfind_jobs')
+              nb_max_analysis_jobs = config.getint('DefaultChip','nb_max_analysis_jobs')
+
+          if self.pool.beadfind_counter >= nb_max_beadfind_jobs:
+              logger.debug('max beadfind jobs limit reached (%s)' % run.exp_chipversion)
+              beadfind_request = False
+
+          if self.pool.analysis_counter >= nb_max_analysis_jobs:
+              logger.debug('max analysis jobs limit reached (%s)' % run.exp_chipversion)
+              analysis_request = False
 
           for block in sorted_blocks:
 
@@ -1052,20 +1037,13 @@ if __name__ == '__main__':
                 key = 'unknown'
                 value = 'unknown'
             logger.info('%s %s' % (key, value))
-            if key == 'TSUrl':
-                TSUrl = value
-            elif key == 'TSUserName':
-                TSUserName = value
-            elif key == 'TSPasswd':
-                TSPasswd = value
-            elif key == 'runOIADuringExp':
+            if key == 'runOIADuringExp':
                 runOIADuringExp = value
             else:
                 continue
     except:
         logger.error(traceback.format_exc())
 
-    logger.info('Use TS: %s  user:%s password:%s' % (TSUrl,TSUserName,TSPasswd))
 
     # retrieve GPU information
     if pynvml_available:

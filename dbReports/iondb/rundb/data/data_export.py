@@ -1,4 +1,5 @@
 # Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
+from __future__ import absolute_import
 from celery.task import task, periodic_task
 from celery.utils.log import get_task_logger
 from celery.result import AsyncResult

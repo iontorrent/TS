@@ -49,6 +49,10 @@
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     return parts.join(".");
   }
+  function numberToPercent(x) {
+    if( isNaN(x) ) return x;
+    return (100 * x)+"%";
+  }
 </script>
 
 <!-- Capture django variable in to javascript -->
@@ -71,7 +75,7 @@ $(document).ready(function() {
         schema: { model: { fields: {
           barcode_name: {type:"string"},
           sample: {type:"string"},
-          mapped_reads: {type:{% if Error %}"float"{% else %}"number"{% endif %}},
+          mapped_reads: {type:"float"},
 {% if trg_stats %}
           on_target: {type:"float"},
 {% endif %}
@@ -79,7 +83,7 @@ $(document).ready(function() {
           sample_target: {type:"float"},
 {% endif %}
 {% if bas_stats %}
-          mean_depth: {type:{% if mixed_stats or Error %}"float"{% else %}"number"{% endif %}},
+          mean_depth: {type:"float"},
           uniformity: {type:"float"}
 {% endif %}
         } } },
@@ -131,14 +135,14 @@ $(document).ready(function() {
         <td> #= (sample) ? sample : "None" #</td>
         <td> #= numberWithCommas(mapped_reads) # </td>
 {% if trg_stats %}
-        <td>#= on_target #</td>
+        <td>#= numberToPercent(on_target) #</td>
 {% endif %}
 {% if samp_track %}
-        <td>#= sample_target #</td>
+        <td>#= numberToPercent(sample_target) #</td>
 {% endif %}
 {% if bas_stats %}
         <td>#= numberWithCommas(mean_depth) #</td>
-        <td>#= uniformity #</td>
+        <td>#= numberToPercent(uniformity) #</td>
 {% endif %}
       </tr>
     </script>

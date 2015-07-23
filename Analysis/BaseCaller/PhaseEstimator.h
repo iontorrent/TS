@@ -37,7 +37,7 @@ public:
 
   //! @brief  Initialize the object.
   //! @param  opts                Command line options
-  void InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset & chip_subset);
+  void InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset & chip_subset, const string & key_norm_method);
 
   //! @brief  Perform phasing estimation using appropriate algorithm.
   //! @param  wells               Wells reader object
@@ -90,6 +90,9 @@ public:
 
 protected:
 
+  //! @brief    Set phase parameters and bypass phase estimation
+  void SetPhaseParameters(float cf, float ie, float dr);
+
   //! @brief    Run spatial-refiner, the nelder-mead based estimator with progressive chip partitioning
   //! @param    wells               Wells reader object
   //! @param    mask                Mask object
@@ -111,18 +114,25 @@ protected:
   //! @return   Time in microseconds to complete the I/O
   size_t LoadRegion(int region);
 
+  //! @brief    Internally selects the appropriate normalization method for a given read
+  //! @brief    treephaser          Solver object
+  //! @param    read                BasecallerRead object
+  //! @param    start_flow          Start flow for normalization
+  //! @param    end_flow            End flow for normalization
+  static void NormalizeBasecallerRead(DPTreephaser& treephaser, BasecallerRead& read, int start_flow, int end_flow);
+
   //! @brief    Execute Nelder-Mead optimization for CF,IE,DR giving best data fit
   //! @param    useful_reads        Solved reads to be used for fitting.
   //! @param    treephaser          Phasing solver/simulator
   //! @param    parameters          Initial and final CF,IE,DR estimates
-  static void NelderMeadOptimization (vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, float *parameters, const bool usePIDNorm);
+  static void NelderMeadOptimization (vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, float *parameters);
 
   //! @brief    Evaluates the data fit for a specific set of CF,IE,DR candidate values
   //! @param    useful_reads        Solved reads to be used for fitting.
   //! @param    treephaser          Phasing solver/simulator
   //! @param    parameters          Candidate CF,IE,DR values
   //! @return   Squared error between measurements and predicted fit. The lower the better the fit.
-  static float EvaluateParameters(vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, const float *parameters, const bool usePIDNorm);
+  static float EvaluateParameters(vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, const float *parameters);
 
   //! @brief	Load phase estimation from json file
   bool LoadPhaseEstimationTrainSubset(const string& phase_file_name);
@@ -148,6 +158,17 @@ protected:
     Subblock*           superblock;               //!< Parent block
   };
 
+  // Parameters needed by the static EvaluateParameters() function
+
+  static bool           norm_during_param_eval_;  //!< Turn normalization during parameter estimation step off.
+  static int            norm_method_;             //!< Switch for normalization method.
+  static int            windowSize_;              //!< Normalization window size
+  static int            phasing_start_flow_;      //!< First flow for phase estimation
+  static int            phasing_end_flow_;        //!< Last flow for phase estimation
+  static float          inclusion_threshold_;     //!< Threshold up to which (key normalized) raw measurements are used.
+  static float          maxfrac_negative_flows_;  //!< A switch for variable read normalization
+
+
   // Estimator-independent settings and results placeholders
   string                phasing_estimator_;       //!< Name of the phasing estimation method to be used
   int                   chip_size_x_;             //!< Chip size in wells along dimension X
@@ -162,12 +183,18 @@ protected:
   float                 average_ie_;              //!< Chip average of IE estimates
   float                 average_dr_;              //!< Chip average of DR estimates
 
+  float                 init_cf_;                 //!< Default cf value for starting nelder mead
+  float                 init_ie_;                 //!< Default ie value for starting nelder mead
+  float                 init_dr_;                 //!< Default dr value for starting nelder mead
+
   // Normalization algorithm selection
-  bool           use_pid_norm_;            //!< Flag indicating if we should use regular or PID normalization
+  //bool           use_pid_norm_;            //!< Flag indicating if we should use regular or PID normalization
+  string                normalization_string_;    //!< Normalization method
 
   // Data needed by SpatialRefiner worker threads
   ion::FlowOrder        flow_order_;              //!< Flow order object, also stores number of flows used for phasing estimation
   vector<KeySequence>   keys_;                    //!< Key sequences, 0 = library, 1 = TFs.
+  bool                  key_norm_new_;            //!< Method to do key normalization;
   RawWells              *wells_;                  //!< Wells file reader
   Mask                  *mask_;                   //!< Beadfind and filtering outcomes for wells
   int                   region_size_x_;           //!< Wells hdf5 dataset chunk width
@@ -196,14 +223,14 @@ protected:
 
   int                   get_subset(int x, int y) const { return (x+y) % train_subset_count_; }
 
-  int                   windowSize_;              //!< Normalization window size
-  int                   phasing_start_flow_;      //!< First flow for phase estimation
-  int                   phasing_end_flow_;        //!< Last flow for phase estimation
   int                   max_phasing_levels_;      //!< Limits the number of levels of phasing estimation in SpatialRefiner
+  int                   num_fullchip_iterations_;   //!< Number of full chip iterations on level one.
+  int                   num_region_iterations_;   //!< Number of iterations after block division.
   unsigned int          num_reads_per_region_;    //!< Target number of reads per region that are used for phase estimation
   unsigned int          min_reads_per_region_;    //!< Minimum number of reads per region to try phase estimation
   string                phase_file_name_;         //!< Load phasing estimates from a file.
   bool                  have_phase_estimates_;    //!< Signals whether parameters have been set from the outside or if estimation is desired.
+
 };
 
 

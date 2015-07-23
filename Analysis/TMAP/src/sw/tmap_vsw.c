@@ -233,9 +233,6 @@ tmap_vsw_process(tmap_vsw_t *vsw,
               int32_t is_rev, int32_t direction)
 {
   int32_t found_forward = 1, query_end, target_end, n_best, score = INT32_MIN;
-#ifdef TMAP_VSW_DEBUG
-  int32_t i;
-#endif
   // TODO: check potential overflow
   // TODO: check that gap penalties will not result in an overflow
   // TODO: check that the max/min alignment score do not result in an overflow

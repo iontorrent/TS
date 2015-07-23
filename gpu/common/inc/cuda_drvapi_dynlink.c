@@ -1,15 +1,11 @@
-/*
- * Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
+/**
+ * Copyright 1993-2013 NVIDIA Corporation.  All rights reserved.
  *
- * NVIDIA Corporation and its licensors retain all intellectual property and
- * proprietary rights in and to this software and related documentation.
- * Any use, reproduction, disclosure, or distribution of this software
- * and related documentation without an express license agreement from
- * NVIDIA Corporation is strictly prohibited.
- *
- * Please refer to the applicable NVIDIA end user license agreement (EULA)
- * associated with this source code for terms and conditions that govern
- * your use of this NVIDIA software.
+ * Please refer to the NVIDIA end user license agreement (EULA) associated
+ * with this source code for terms and conditions that govern your use of
+ * this software. Any use, reproduction, disclosure, or distribution of
+ * this software and related documentation outside the terms of the EULA
+ * is strictly prohibited.
  *
  */
 
@@ -193,14 +189,14 @@ tcuGraphicsD3D11RegisterResource      *cuGraphicsD3D11RegisterResource;
 tcuGLCtxCreate                        *cuGLCtxCreate;
 tcuGraphicsGLRegisterBuffer           *cuGraphicsGLRegisterBuffer;
 tcuGraphicsGLRegisterImage            *cuGraphicsGLRegisterImage;
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 tcuWGLGetDevice                       *cuWGLGetDevice;
 #endif
 #endif
 
 #define STRINGIFY(X) #X
 
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 #include <Windows.h>
 
 #ifdef UNICODE
@@ -479,7 +475,7 @@ CUresult CUDAAPI cuInit(unsigned int Flags, int cudaVersion)
         GET_PROC(cuGLCtxCreate);
         GET_PROC(cuGraphicsGLRegisterBuffer);
         GET_PROC(cuGraphicsGLRegisterImage);
-#  ifdef _WIN32
+#  ifdef WIN32
         GET_PROC(cuWGLGetDevice);
 #  endif
 #endif

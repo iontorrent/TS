@@ -402,6 +402,9 @@ def new_genome(request):
         if is_zip:
             zip_file = zipfile.ZipFile(reference_path, 'r')
             files = zip_file.namelist()
+            # MAC OS zip is being compressed with __MACOSX folder Ex: '__MACOSX/', '__MACOSX/._contigs_2.fasta'.
+            # Filter out those files and Upload only FASTA file
+            files = [x for x in files if not 'MACOSX' in x]
             zip_file.close()
         else:
             files = [fasta]
@@ -515,6 +518,8 @@ def get_references():
 
 def new_reference_download(url, reference_args):
     reference = ReferenceGenome(**reference_args)
+    reference.enabled = False
+    reference.status = "downloading"
     reference.save()
     return start_reference_download(url, reference)
 

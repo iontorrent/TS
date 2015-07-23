@@ -1,18 +1,19 @@
 #!/bin/bash
 # Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved
 #clear
+default_port=$(route|awk '/default/{print $8}')
 
-#================Look up the MAC address for eth0 =========================
+#================Look up the MAC address for default network =========================
 echo "=================================================================="
 echo "-----Looking up the MAC address for the server-----"
-macaddress=`/sbin/ifconfig eth0 | grep HWaddr|cut -d' ' -f11`
+macaddress=`/sbin/ifconfig $default_port | grep HWaddr | awk '{print $5}'`
 echo "MAC Address = $macaddress"
 
 #================Test that server has an IP Address=========================
 echo
 echo "=================================================================="
 echo "-----Checking that that server has acquired an IP Address-----"
-ipaddress=`/sbin/ifconfig eth0 | grep 'inet addr:'|grep -v '127.0.0.1'|cut -d: -f2|awk '{print $1}'`
+ipaddress=`/sbin/ifconfig $default_port | grep 'inet addr:'|grep -v '127.0.0.1'|cut -d: -f2|awk '{print $1}'`
 if [[ $ipaddress =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
     OIFS=$IFS
     IFS='.'
@@ -36,16 +37,16 @@ else
 fi
 
 
-#===================Test for eth0 status======================================
+#===================Test for default network status======================================
 echo
 echo "=================================================================="
 echo "-----Checking network connection-----"
-if (/sbin/ifconfig eth0 | grep UP | grep MTU &> /dev/null)
+if (/sbin/ifconfig $default_port | grep UP | grep MTU &> /dev/null)
 then
-	echo "GOOD - the 'eth0' ethernet port is UP"
+	echo "GOOD - the '$default_port' ethernet port is UP"
 else
 	echo "***ERROR***"
-	echo "The 'eth0' network port is not UP."
+	echo "The '$default_port' network port is not UP."
 	exit 0
 fi
 
@@ -123,62 +124,23 @@ else
 
 fi
 
-# Checks if an ethernet port exists
-function valid_port ()
-{
-	grep -q $1 /proc/net/dev
-	valid=$?
-	return $valid
-}
-
 #=================Test if we can ping the Sequencers ==================================
 echo
 echo "=================================================================="
 echo "-----Checking to see if Sequencers are connected to this server-----"
-if (valid_port eth1); then
-	if ping -c 2 192.168.201.10 &> /dev/null
+interfaces=$(ls -1 /sys/class/net|grep -v 'lo')
+cnt=1
+for i in ${interfaces[@]}; do
+    addr=$(ifconfig $i|awk '/inet addr/{print $2}'|cut -f2 -d:|cut -f1-3 -d.)".10"
+    if ping -c 2 $addr &> /dev/null
     then
-	    echo "Slot1 - connected"
+	echo "Slot${cnt} - connected"
     else
-	    echo "Slot1 - not connected"
+	echo "Slot${cnt} - not connected"
     fi
-else
-	echo "no eth1"
-fi
+    cnt=$((cnt+1))
+done
 
-
-if (valid_port eth2); then
-    if ping -c 2 192.168.202.10 &> /dev/null
-    then
-	    echo "Slot2 - connected"
-    else
-	    echo "Slot2 - not connected"
-    fi
-else
-	echo "no eth2"
-fi
-
-if (valid_port eth3); then
-    if ping -c 2 192.168.203.10 &> /dev/null
-    then
-	    echo "Slot3 - connected"
-    else
-	    echo "Slot3 - not connected"
-    fi
-else
-	echo "no eth3"
-fi
-
-if (valid_port eth4); then
-    if ping -c 2 192.168.204.10 &> /dev/null
-    then
-	    echo "Slot4 - connected"
-    else
-	    echo "Slot4 - not connected"
-    fi
-else
-	echo "no eth4"
-fi
 
 echo
 echo "=================================================================="

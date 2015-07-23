@@ -151,14 +151,14 @@ my $numNoBias = $numTargets - $numBias;
 my $pcBias = $numTargets > 0 ? 100*$numNoBias/$numTargets : 0;
 my $pcE2E  = $numTargets > 0 ? 100*$numE2E/$numTargets : 0;
 if( $basedepths ) {
-  printf "%ss with no strand bias:        %.2f%%\n",$targType,$pcBias;
-  printf "%ss with full coverage:         %.2f%%\n",$targType,$pcE2E if( $fullycov > 0 );
+  printf "%ss with no strand bias:      %.2f%%\n",$targType,$pcBias;
+  printf "%ss with full coverage:       %.2f%%\n",$targType,$pcE2E if( $fullycov > 0 );
 } elsif( $rnaopt ) {
-  printf "%ss with no strand bias:       %d\n",$targType,$numNoBias;
-  printf "%ss with passing coverage:     %d\n",$targType,$numE2E;
+  printf "%ss with no strand bias:      %d\n",$targType,$numNoBias;
+  printf "%ss with passing coverage:    %d\n",$targType,$numE2E;
 } else {
-  printf "%ss with no strand bias:       %.2f%%\n",$targType,$pcBias;
-  printf "%ss reading end-to-end:        %.2f%%\n",$targType,$pcE2E if( $ampout );
+  printf "%ss with no strand bias:      %.2f%%\n",$targType,$pcBias;
+  printf "%ss reading end-to-end:       %.2f%%\n",$targType,$pcE2E if( $ampout );
 }
 
 # output assigned read depth distribution

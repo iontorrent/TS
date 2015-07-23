@@ -18,10 +18,12 @@ os.environ['HOME'] = tempfile.mkdtemp()
 #use("Agg")
 
 # import /etc/torrentserver/cluster_settings.py, provides JOBSERVER_HOST, JOBSERVER_PORT
+# import /etc/torrentserver/cluster_settings.py, provides PLUGINSERVER_HOST, PLUGINSERVER_PORT
 import sys
 sys.path.append('/etc')
 from torrentserver.cluster_settings import *
 
+import re
 import hashlib
 import ConfigParser
 import shutil
@@ -38,7 +40,8 @@ from ion.utils.file_exists import file_exists
 from ion.utils.compress import make_zip
 from ion.utils.blockprocessing import printtime
 
-from ion.plugin.constants import RunLevel
+from ion.plugin.constants import RunLevel, RunType
+from ion.plugin.remote import call_launchPluginsXMLRPC
 
 from collections import deque
 from urlparse import urlunsplit
@@ -51,6 +54,7 @@ sys.path.append('/opt/ion/')
 # Analysis implementation details
 #
 #####################################################################
+
 
 def getExpLogMsgs(explogfinalfilepath):
     """
@@ -71,6 +75,141 @@ def getExpLogMsgs(explogfinalfilepath):
                 traceback.print_exc()
     except:
         printtime("Cannot open file %s" % explogfinalfilepath)
+
+
+def initTLReport():
+    plugin_folder='plugin_out'
+    if not os.path.isdir(plugin_folder):
+        oldmask = os.umask(0000)   #grant write permission to plugin user
+        os.mkdir(plugin_folder)
+        os.umask(oldmask)
+
+    # Begin report writing
+    os.umask(0002)
+    #TMPL_DIR = os.path.join(distutils.sysconfig.get_python_lib(),'ion/web/db/writers')
+    TMPL_DIR = '/usr/share/ion/web/db/writers'
+    templates = [
+        # DIRECTORY, SOURCE_FILE, DEST_FILE or None for same as SOURCE
+        (TMPL_DIR, "report_layout.json", None),
+        (TMPL_DIR, "parsefiles.php", None),
+        (TMPL_DIR, "format_whole.php", "Default_Report.php",), ## Renamed during copy
+        #(os.path.join(distutils.sysconfig.get_python_lib(), 'ion', 'reports',  "BlockTLScript.py", None)
+    ]
+    for (d,s,f) in templates:
+        if not f: f=s
+        # If owner is different copy fails - unless file is removed first
+        if os.access(f, os.F_OK):
+            os.remove(f)
+        shutil.copy(os.path.join(d,s), f)
+
+
+def initBlockReport(blockObj,SIGPROC_RESULTS,BASECALLER_RESULTS,ALIGNMENT_RESULTS,from_sigproc_analysis=False):
+    """Performs initialization for both report writing and background report generation."""
+
+    printtime("INIT BLOCK REPORT")
+    
+    if blockObj['id_str'] == "wholechip":
+        resultDir = "."
+    elif blockObj['id_str'] == "thumbnail":
+        resultDir = "."
+    else:
+        resultDir = '%s%s' % ('block_', blockObj['id_str'])
+
+        if not os.path.exists(resultDir):
+            os.mkdir(resultDir)
+
+        # TS-10734: plugin folder for IRU only
+        plugin_folder = os.path.join(resultDir,'plugin_out')
+        if not os.path.isdir(plugin_folder):
+            oldmask = os.umask(0000)   #grant write permission to plugin user
+            os.mkdir(plugin_folder)
+            os.umask(oldmask)
+
+        _SIGPROC_RESULTS = os.path.join(SIGPROC_RESULTS, resultDir)
+        _BASECALLER_RESULTS = os.path.join(BASECALLER_RESULTS, resultDir)
+        _ALIGNMENT_RESULTS = os.path.join(ALIGNMENT_RESULTS, resultDir)
+
+        if from_sigproc_analysis:
+            if not os.path.isdir(_SIGPROC_RESULTS):
+                try:
+                    os.mkdir(_SIGPROC_RESULTS)
+                except:
+                    traceback.print_exc()
+
+        if not os.path.isdir(_BASECALLER_RESULTS):
+            try:
+                os.mkdir(_BASECALLER_RESULTS)
+            except:
+                traceback.print_exc()
+
+        
+        try:
+          os.symlink(os.path.join("..",_SIGPROC_RESULTS), os.path.join(resultDir,SIGPROC_RESULTS))
+          os.symlink(os.path.join("..",_BASECALLER_RESULTS), os.path.join(resultDir,BASECALLER_RESULTS))
+#        os.symlink(os.path.join("..",_ALIGNMENT_RESULTS), os.path.join(resultDir,ALIGNMENT_RESULTS))
+        except:
+          printtime("couldn't create symbolic link")
+
+        file_in = open("ion_params_00.json", 'r')
+        TMP_PARAMS = json.loads(file_in.read())
+        file_in.close()
+
+        # update path to data
+        TMP_PARAMS["pathToData"] = os.path.join(TMP_PARAMS["pathToData"], blockObj['datasubdir'])
+        TMP_PARAMS["mark_duplicates"] = False
+
+        #write block specific ion_params_00.json
+        file_out = open("%s/ion_params_00.json" % resultDir, 'w')
+        json.dump(TMP_PARAMS, file_out)
+        file_out.close()
+
+        cwd = os.getcwd()
+        try:
+            os.symlink(os.path.join(cwd,"Default_Report.php"), os.path.join(resultDir,"Default_Report.php"))
+        except:
+            printtime("couldn't create symbolic link")
+
+    return resultDir
+
+
+def get_plugins_to_run(plugins, report_type):
+    """ Sort out runtype and runlevel of each plugin and return plugins appropriate for this analysis """
+    blocklevel = False
+    plugins_to_run = {}
+    printtime("Gettings plugins to run, report type = %s" % report_type)    
+    for name in plugins.keys():
+        plugin = plugins[name]
+        
+        # default is run on wholechip and thumbnail, but not composite
+        selected = report_type in [RunType.FULLCHIP, RunType.THUMB]          
+        if plugin.get('runtype',''):
+            selected = (report_type in plugin['runtype'])
+    
+        if selected:            
+            plugin['runlevel'] = plugin.get('runlevel') if plugin.get('runlevel') else [RunLevel.DEFAULT]
+            printtime("Plugin %s is enabled, runlevels=%s" % (plugin['name'],','.join(plugin['runlevel'])))
+            plugins_to_run[name] = plugin
+  
+            # check if have any blocklevel plugins        
+            if report_type == RunType.COMPOSITE and RunLevel.BLOCK in plugin['runlevel']:
+                blocklevel = True
+  
+    return plugins_to_run, blocklevel
+
+
+def runplugins(plugins, env, level = RunLevel.DEFAULT, params={}):
+    printtime("Starting plugins runlevel=%s" % level )
+    params.setdefault('run_mode', 'pipeline') ## Plugins launched here come from pipeline
+    try:
+        pluginserver = xmlrpclib.ServerProxy("http://%s:%d" % (PLUGINSERVER_HOST, PLUGINSERVER_PORT), allow_none=True)
+        # call ionPlugin xmlrpc function to launch selected plugins
+        # note that dependency plugins may be added to the plugins dict
+        plugins, msg = call_launchPluginsXMLRPC(env['primary_key'], plugins, env['net_location'], env['username'], level, params, pluginserver)
+        print msg
+    except:
+        traceback.print_exc()
+
+    return plugins  
 
 
 def get_pgm_log_files(rawdatadir):
@@ -143,6 +282,24 @@ def hash_matches(full_filename):
         traceback.print_exc()
         pass
     return ret
+
+
+def get_mem_usage():
+
+    meminfo={}
+    with open('/proc/meminfo') as f:
+        for line in f:
+            name,value=line.split(':')
+            meminfo[name] = int(re.findall(r'\d+',value)[0])
+
+    #Transform from kB to MB
+    mem_total = meminfo['MemTotal']/1024
+    mem_free = meminfo['MemFree']/1024
+    mem_used = (meminfo['MemTotal']-meminfo['MemFree'])/1024
+    mem_buffers = meminfo['Buffers']/1024
+    mem_cached = meminfo['Cached']/1024
+    mem_total_free = mem_free+mem_buffers+mem_cached
+    return "Memory [MB]  Total: {0:6d}   Used: {1:6d}   Free: {2:6d}   Buffers: {3:6d}   Cached: {4:6d}   TotalFree: {5:6d}".format(mem_total, mem_used, mem_free, mem_buffers, mem_cached, mem_total_free)
 
 
 def spawn_cluster_job(rpath, scriptname, args, holds=None):
@@ -308,10 +465,18 @@ if __name__=="__main__":
         explogfinalfilepath = os.path.join( env['pathToRaw'],'explog_final.txt')
 
     '''
-    Proton from raw + TS from wells
+    Instrument from raw + TS from wells
     re-analysis, from wells (BaseReport / no BaseReport(use OIA results))
-    re-analysis, from raw (checkbox OnTS/OnProton)
+    re-analysis, from raw (checkbox OnTS/OnInstrument)
     '''
+
+    do_composite_alignment = False
+
+    reference_selected = False
+    for barcode_name,barcode_info in sorted(env['barcodeInfo'].iteritems()):
+        if barcode_info['referenceName']:
+            reference_selected = True
+            pass
 
     if env['blockArgs'] == "fromRaw":
         doSigproc = True
@@ -394,8 +559,7 @@ if __name__=="__main__":
         except:
             printtime(traceback.format_exc())
 
-    pluginbasefolder = 'plugin_out'
-    blockprocessing.initTLReport(pluginbasefolder)
+    initTLReport()
 
     env['report_root_dir'] = os.getcwd()
 
@@ -426,7 +590,7 @@ if __name__=="__main__":
     #-------------------------------------------------------------
     # Initialize plugins
     #-------------------------------------------------------------
-    plugins, blocklevel_plugins = blockprocessing.get_plugins_to_run(env['plugins'], env['report_type'])
+    plugins, blocklevel_plugins = get_plugins_to_run(env['plugins'], env['report_type'])
     plugins_params = {}
 
     #-------------------------------------------------------------
@@ -453,7 +617,7 @@ if __name__=="__main__":
 
         result_dirs = {}
         for block in blocks:
-            result_dirs[block['id_str']] = blockprocessing.initBlockReport(block, env['SIGPROC_RESULTS'], env['BASECALLER_RESULTS'], env['ALIGNMENT_RESULTS'], pluginbasefolder, from_sigproc_analysis=(env['blockArgs'] == "fromRaw"))
+            result_dirs[block['id_str']] = initBlockReport(block, env['SIGPROC_RESULTS'], env['BASECALLER_RESULTS'], env['ALIGNMENT_RESULTS'], from_sigproc_analysis=(env['blockArgs'] == "fromRaw"))
 
 
         # create a list of blocks
@@ -470,7 +634,7 @@ if __name__=="__main__":
 
         while len(blocks_to_process) > 0 and timeout > 0:
 
-            printtime('waiting for %s block(s) to schedule' % str(len(blocks_to_process)))
+            printtime('waiting for %s block(s) to schedule    %s' % (str(len(blocks_to_process)), get_mem_usage()))
             sys.stdout.flush()
             sys.stderr.flush()
 
@@ -515,15 +679,12 @@ if __name__=="__main__":
                 wait_list = []
                 try:
                     if env['blockArgs'] == "fromRaw":
-                        if is_thumbnail or is_single:
-                            block_tlscript_options = ['--do-sigproc','--do-basecalling','--do-alignment']
-                        else:
-                            block_tlscript_options = ['--do-sigproc','--do-basecalling']
+                        block_tlscript_options = ['--do-sigproc','--do-basecalling']
                     else:
-                        if is_thumbnail or is_single:
-                            block_tlscript_options = ['--do-basecalling','--do-alignment']
-                        else:
-                            block_tlscript_options = ['--do-basecalling']
+                        block_tlscript_options = ['--do-basecalling']
+
+                    if is_composite and not do_composite_alignment:
+                        block_tlscript_options.append('--do-alignment')
 
                     block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py',block_tlscript_options,wait_list)
                     block_job_dict[block['id_str']] = str(block['jobid'])
@@ -534,26 +695,11 @@ if __name__=="__main__":
                 blocks_to_process.remove(block)
 
         if is_composite:
-            merge_job_dict['basecalling'] = spawn_cluster_job('.','MergeTLScript.py',['--do-basecalling'],block_job_dict.values())
-            printtime("Submitted merge basecalling job with job ID (%s)" % (str(merge_job_dict['basecalling'])))
-
-            merge_job_dict['sigproc'] = spawn_cluster_job('.','MergeTLScript.py',['--do-sigproc'],merge_job_dict.values())
-            printtime("Submitted merge sigproc job with job ID (%s)" % (str(merge_job_dict['sigproc'])))
-
-            for block in blocks:
-                #overwrite jobid?
-                block['jobid'] = spawn_cluster_job(result_dirs[block['id_str']],'BlockTLScript.py', ['--do-alignment'],merge_job_dict.values())
-                block_job_dict[block['id_str']] = str(block['jobid'])
-                printtime("Submitted block (%s) job with job ID (%s)" % (block['id_str'], str(block['jobid'])))
-
-
-        if is_thumbnail or is_single:
+            merge_job_dict['merge'] = spawn_cluster_job('.','MergeTLScript.py',['--do-sigproc','--do-basecalling','--do-zipping'],block_job_dict.values())
+            printtime("Submitted composite merge job with job ID (%s)" % (str(merge_job_dict['merge'])))
+        else:
             merge_job_dict['merge'] = spawn_cluster_job('.','MergeTLScript.py',['--do-zipping'],block_job_dict.values())
             printtime("Submitted zipping job with job ID (%s)" % (str(merge_job_dict['merge'])))
-        else:
-            # Proton Full Chip
-            merge_job_dict['merge'] = spawn_cluster_job('.','MergeTLScript.py',['--do-alignment','--do-zipping'],block_job_dict.values())
-            printtime("Submitted merge alignment job with job ID (%s)" % (str(merge_job_dict['merge'])))
 
         # write job id's to file
         job_list = {}
@@ -564,7 +710,7 @@ if __name__=="__main__":
             f.write(json.dumps(job_list,indent=2))
 
         # multilevel plugins preprocessing level
-        plugins = blockprocessing.runplugins(plugins, env, RunLevel.PRE, plugins_params)
+        plugins = runplugins(plugins, env, RunLevel.PRE, plugins_params)
 
         # Watch status of jobs.  As they finish remove the job from the list.
 
@@ -582,7 +728,7 @@ if __name__=="__main__":
 
                 if blocklevel_plugins and (block['status']=='done'):
                     plugins_params['blockId'] = block['id_str']
-                    plugins = blockprocessing.runplugins(plugins, env, RunLevel.BLOCK, plugins_params)
+                    plugins = runplugins(plugins, env, RunLevel.BLOCK, plugins_params)
 
                 if block['status']=='done' or block['status']=='failed' or block['status']=="DRMAA BUG":
                     printtime("Job %s has ended with status %s" % (str(block['jobid']),block['status']))
@@ -591,11 +737,11 @@ if __name__=="__main__":
 #                    printtime("Job %s has status %s" % (str(block['jobid']),block['status']))
 
             if os.path.exists(os.path.join(env['SIGPROC_RESULTS'],'separator.mask.bin')) and not pl_started:
-                plugins = blockprocessing.runplugins(plugins, env, RunLevel.SEPARATOR, plugins_params)
+                plugins = runplugins(plugins, env, RunLevel.SEPARATOR, plugins_params)
                 pl_started = True
 
 
-            printtime("waiting for %d blocks to be finished" % len(block_job_list))
+            printtime("waiting for %d blocks to be finished    %s" % (len(block_job_list), get_mem_usage()))
             time.sleep (10)
 
         merge_job_list = merge_job_dict.keys()
@@ -615,7 +761,7 @@ if __name__=="__main__":
                     merge_job_list.remove(key)
                     break
 
-            printtime("waiting for %d merge jobs to be finished" % len(merge_job_list))
+            printtime("waiting for %d merge jobs to be finished    %s" % (len(merge_job_list), get_mem_usage()))
             time.sleep (10)
 
 
@@ -755,7 +901,7 @@ if __name__=="__main__":
 
                     if is_composite:
                         aq17 = 0
-                        if env['referenceName']!='none' and len(env['referenceName'])>0:
+                        if reference_selected:
                             if os.path.exists(ionstats_alignment_json_path):
                                 afile = open(ionstats_alignment_json_path, 'r')
                                 ionstats_alignment = json.load(afile)
@@ -800,15 +946,15 @@ if __name__=="__main__":
         traceback.print_exc()
 
     # default plugin level
-    plugins = blockprocessing.runplugins(plugins, env, RunLevel.DEFAULT, plugins_params)
+    plugins = runplugins(plugins, env, RunLevel.DEFAULT, plugins_params)
 
     getExpLogMsgs(explogfinalfilepath)
     get_pgm_log_files(env['pathToRaw'])
 
     # multilevel plugins postprocessing
-    plugins = blockprocessing.runplugins(plugins, env, RunLevel.POST, plugins_params)
+    plugins = runplugins(plugins, env, RunLevel.POST, plugins_params)
     # plugins last level - plugins in this level will wait for all previously launched plugins to finish
-    plugins = blockprocessing.runplugins(plugins, env, RunLevel.LAST, plugins_params)
+    plugins = runplugins(plugins, env, RunLevel.LAST, plugins_params)
 
     ####################################################
     # Record disk space usage for the Result directory #

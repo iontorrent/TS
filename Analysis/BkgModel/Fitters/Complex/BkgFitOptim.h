@@ -34,7 +34,7 @@ struct CpuStep
     };
 
     unsigned int PartialDerivMask;
-    char *name;
+    const char *name;
     float *ptr;
     float diff;
     int   doBoth;
@@ -119,7 +119,7 @@ struct fit_descriptor
 struct master_fit_type_entry
 {
   // nice human-readable descriptive name for what the fit attempts to do
-  char *name;
+  const char *name;
   // high-level fit descriptor list.  One entry in the list for each parameter to be
   // fit, along with a classification of the parameter that indicates whether it's one-per-flow
   // or one-per-nuc, etc.,...  This high level description is used to build the
@@ -163,13 +163,13 @@ public:
   // Cleanup! (Used to be CleanupLevMarSparseMatrices()).
   ~master_fit_type_table();
 
-  fit_instructions *GetFitInstructionsByName(char *name);
+  fit_instructions *GetFitInstructionsByName(const char *name);
   fit_descriptor *GetFitDescriptorByName(const char* name);
 };
 
 
 
-void InitializeLevMarFitter(struct mat_table_build_instr *btbl,fit_instructions *instr, int flow_block_size);
-void DumpBuildInstructionTable(struct mat_table_build_instr *tbl, int flow_block_size);
+void InitializeLevMarFitter(mat_table_build_instr *btbl,fit_instructions *instr, int flow_block_size);
+void DumpBuildInstructionTable(mat_table_build_instr *tbl, int flow_block_size);
 
 #endif // BKGFITOPTIM_H

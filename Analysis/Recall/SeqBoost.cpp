@@ -1114,7 +1114,7 @@ void* RecallFunc(void* arg0)
 
 void usage() {
   cout << "SeqBoost - perform flow signal recalibration in an SFF/BAM with flow QV table (with gentler flow signal adjustment)." << endl;
-  fprintf (stdout, "Version = %s-%s (%s) (%s)\n",
+  fprintf (stdout, "Version = %s.%s (%s) (%s)\n",
       IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(),
       IonVersion::GetGitHash().c_str(), IonVersion::GetBuildNum().c_str());
   cout << "Usage: " << endl

@@ -72,7 +72,7 @@ $(document).ready(function() {
           barcode_name: {type:"string"},
           sample: {type:"string"},
           mapped_reads: {type:"number"},
-          on_target: {type:"float"},
+          valid_target: {type:"float"},
           detected_target: {type:"float"},
 {% if ercc_track %}
           ercc_target: {type:"float"},
@@ -84,7 +84,7 @@ $(document).ready(function() {
         {field:"barcode_name"},
         {field:"sample"},
         {field:"mapped_reads"},
-        {field:"on_target"},
+        {field:"valid_target"},
         {field:"detected_target"},
 {% if ercc_track %}
         {field:"ercc_target"},
@@ -115,7 +115,7 @@ $(document).ready(function() {
         <td> #= barcode_details #</td>
         <td> #= (sample) ? sample : "None" #</td>
         <td> #= numberWithCommas(mapped_reads) # </td>
-        <td>#= on_target #</td>
+        <td>#= valid_target #</td>
         <td>#= detected_target #</td>
 {% if ercc_track %}
         <td>#= ercc_target #</td>

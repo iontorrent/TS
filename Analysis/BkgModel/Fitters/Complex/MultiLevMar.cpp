@@ -117,7 +117,6 @@ int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParameters ( int additional_be
   bool do_both = !do_just_region & !do_just_well;
 
   int total_iter=0;
-
   // just regional parameter updates without any well updates
   if ( do_just_region )
   {
@@ -144,7 +143,7 @@ int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParameters ( int additional_be
       // do one region iteration
       if ( !skip_region )
       {
-        DoRegionIteration ( reg_fit,total_iter, flow_key, flow_block_size, flow_block_start );
+        DoRegionIteration ( reg_fit, total_iter, flow_key, flow_block_size, flow_block_start );
         total_iter++;
       }
     }
@@ -157,7 +156,6 @@ int MultiFlowLevMar::MultiFlowSpecializedLevMarFitParameters ( int additional_be
                          flow_block_start );
     total_iter++;
   }
-
 
   CleanTerminateOptimization();
   return ( total_iter );
@@ -462,6 +460,8 @@ void MultiFlowLevMar::LevMarFitRegion (
       {
         // it's better...apply the change to all the beads and the region
         // update regional parameters
+        lm_state.reg_error =  new_reg_error;
+        new_rp.reg_error = new_reg_error;  // save reg_error to be dumped to region_param.h5
         bkg.region_data->my_regions.rp = new_rp;
 
         // re-calculate current parameter values for each bead as necessary
@@ -487,6 +487,7 @@ void MultiFlowLevMar::LevMarFitRegion (
 
   if ( defend_against_infinity>SMALLINFINITY )
     printf ( "RegionLevMar taking a while: %d\n",defend_against_infinity );
+  //return (lm_state.reg_error);
 }
 
 
@@ -1018,7 +1019,7 @@ void MultiFlowLevMar::MultiFlowComputePartialDerivOfTimeShift ( float *fval,stru
   MultiplyVectorByScalar ( fval,p->gain,lev_mar_scratch.bead_flow_t );
 }
 
-char *MultiFlowLevMar::findName ( float *ptr )
+const char* MultiFlowLevMar::findName ( float *ptr )
 {
   int i;
   for ( i=0;i<BkgFitStructures::NumSteps;i++ )

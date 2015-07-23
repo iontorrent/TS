@@ -42,7 +42,7 @@
 
 char backupDir[MAX_PATH_LENGTH] = {0};
 bool ok = false;
-char *bkupExt = "Bkup_";
+const char *bkupExt = "Bkup_";
 
 struct ExpList {
 	time_t	atime;
@@ -55,16 +55,16 @@ struct HDR {
 	_expmt_hdr_v3	expHdr;
 };
 
-void GetExperimentList(char *dirToMonitor, ExpList **expList, int *numExperiments);
-void Archive(char *dirToMonitor, ExpList e);
-void Compress(char *dirToMonitor, ExpList e);
-double GetFreeSpace(char *rootDir);
+void GetExperimentList(const char *dirToMonitor, ExpList **expList, int *numExperiments);
+void Archive(const char *dirToMonitor, ExpList e);
+void Compress(const char *dirToMonitor, ExpList e);
+double GetFreeSpace(const char *rootDir);
 void GetBackupDrive();
-bool IsCompressed(char *dirToMonitor, char *instrumentName, char *experimentName);
+bool IsCompressed(const char *dirToMonitor, const char *instrumentName, const char *experimentName);
 
 int main(int argc, char *argv[])
 {
-	char	*dirToMonitor = "/results";
+	const char* dirToMonitor = "/results";
 	double	freeSpace = 0.0;
 	double	spaceThresh = 0.3; // below this amount of free space and we spring into action
 	bool	allowCompress = false;
@@ -142,7 +142,7 @@ int main(int argc, char *argv[])
 	} while (ok);
 }
 
-bool IsCompressed(char *dirToMonitor, char *instrumentName, char *experimentName)
+bool IsCompressed(const char *dirToMonitor, const char *instrumentName, const char *experimentName)
 {
 	bool compressed = false;
 
@@ -165,7 +165,7 @@ bool IsCompressed(char *dirToMonitor, char *instrumentName, char *experimentName
 	return compressed;
 }
 
-void AddExperiment(char *dirToMonitor, ExpList **expList, int *num, char *instrumentName, char *experimentName)
+void AddExperiment(const char *dirToMonitor, ExpList **expList, int *num, const char *instrumentName, const char *experimentName)
 {
 	// get last access time
 	char pathAndName[MAX_PATH_LENGTH];
@@ -201,7 +201,7 @@ void SortExperiment(ExpList *expList, int num)
 		qsort(expList, num, sizeof(ExpList), ExpListCompare);
 }
 
-void GetExperimentList(char *dirToMonitor, ExpList **expList, int *numExperiments)
+void GetExperimentList(const char *dirToMonitor, ExpList **expList, int *numExperiments)
 {
 	// expreiments are assumed to have a general directory format as follows:
 	// dirToMonitor/INSTRUMENT/EXPERIMENT
@@ -236,7 +236,7 @@ void GetExperimentList(char *dirToMonitor, ExpList **expList, int *numExperiment
 	SortExperiment(*expList, *numExperiments);
 }
 
-void Compress(char *dirToMonitor, ExpList e)
+void Compress(const char *dirToMonitor, ExpList e)
 {
 	printf("Compressing experiment: %s/%s/%s\n", dirToMonitor, e.instName, e.expName);
 
@@ -263,9 +263,9 @@ void Compress(char *dirToMonitor, ExpList e)
 	loader.Cleanup(); // will allow us to re-allocate mem since the beadfind data might have been imaged for longer
 
 	// now do any pre/post beadfinds and prerun data
-	char *nameList[] = {"beadfind_post_0000.dat", "beadfind_post_0001.dat", "beadfind_post_0002.dat", "beadfind_post_0003.dat",
-			"beadfind_pre_0000.dat", "beadfind_pre_0001.dat", "beadfind_pre_0002.dat", "beadfind_pre_0003.dat",
-			"prerun_0000.dat", "prerun_0001.dat", "prerun_0002.dat", "prerun_0003.dat", "prerun_0004.dat"};
+	const char *nameList[] = {"beadfind_post_0000.dat", "beadfind_post_0001.dat", "beadfind_post_0002.dat", "beadfind_post_0003.dat",
+                                  "beadfind_pre_0000.dat", "beadfind_pre_0001.dat", "beadfind_pre_0002.dat", "beadfind_pre_0003.dat",
+                                  "prerun_0000.dat", "prerun_0001.dat", "prerun_0002.dat", "prerun_0003.dat", "prerun_0004.dat"};
 	for(i=0;i<13;i++) {
 		sprintf(name, "%s/%s/%s/%s", dirToMonitor, e.instName, e.expName, nameList[i]);
 		if (loader.LoadRaw(name, 0, (i==0 ? true : false), false)) {
@@ -280,7 +280,7 @@ void Compress(char *dirToMonitor, ExpList e)
 	saver.SetData(NULL);
 }
 
-void Archive(char *dirToMonitor, ExpList e)
+void Archive(const char *dirToMonitor, ExpList e)
 {
 	if (backupDir[0] == 0) {
 		printf("Warning, no drive present to backup to, aborting!\n");
@@ -315,7 +315,7 @@ void Archive(char *dirToMonitor, ExpList e)
 	}
 }
 
-double GetFreeSpace(char *rootDir)
+double GetFreeSpace(const char *rootDir)
 {
 	struct statfs buf;
 	memset(&buf, 0, sizeof(buf));

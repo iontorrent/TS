@@ -45,7 +45,7 @@ typedef struct {
   @param  shm  pointer to the shared memory structure
   @return      the state of the shared memory
   */
-inline uint32_t
+uint32_t
 tmap_shm_get_state(tmap_shm_t *shm);
 
 /*! 
@@ -53,7 +53,7 @@ tmap_shm_get_state(tmap_shm_t *shm);
   @param  listing  the listing to check
   @return          1 if the listing exists, 0 otherwise
   */
-inline uint32_t
+uint32_t
 tmap_shm_listing_exists(tmap_shm_t *shm, uint32_t listing);
 
 /*! 
@@ -61,7 +61,7 @@ tmap_shm_listing_exists(tmap_shm_t *shm, uint32_t listing);
   @param  listing  the listing of the shared memory
   @param  size     size of the listing in bytes
   */
-inline void
+void
 tmap_shm_add_listing(tmap_shm_t *shm, uint32_t listing, size_t size);
 
 /*! 
@@ -69,7 +69,7 @@ tmap_shm_add_listing(tmap_shm_t *shm, uint32_t listing, size_t size);
   @param  listing  the listing of the shared memory
   @return          the number of bytes from the start of the buffer, or SIZE_MAX if the listing does not exist
   */
-inline size_t
+size_t
 tmap_shm_get_listing_bytes(tmap_shm_t *shm, uint32_t listing);
 
 /*! 
@@ -77,24 +77,24 @@ tmap_shm_get_listing_bytes(tmap_shm_t *shm, uint32_t listing);
   @param  listing  the listing of the shared memory
   @return          pointer to the beginning of the packed listing
   */
-inline uint8_t *
+uint8_t *
 tmap_shm_get_buffer(tmap_shm_t *shm, uint32_t listing);
 
 /*! 
   @param  shm  pointer to the shared memory structure
   */
-inline void
+void
 tmap_shm_set_not_ready(tmap_shm_t *shm);
 /*! 
   @param  shm  pointer to the shared memory structure
   */
-inline void
+void
 tmap_shm_set_ready(tmap_shm_t *shm);
 
 /*! 
   @param  shm  pointer to the shared memory structure
   */
-inline void
+void
 tmap_shm_set_dead(tmap_shm_t *shm);
 
 /*! 

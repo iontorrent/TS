@@ -5,9 +5,6 @@
 	.summary-section {
 		margin-bottom: 9px;
 	}
-	.break-word {
-		word-break: break-all;
-	}
 	.openclose{
 		opacity: .4;
 	}
@@ -45,6 +42,12 @@
 								<td><b>Sample Set:</b></td>
 								<td>{{ plan.sampleSet.displayedName }}</td>
 							</tr>
+							{% if isAmpsOnChef %}
+                                <tr>
+                                    <td><b>Combined Library Tube Label:</b></td>
+                                    <td>{{ plan.sampleSet.combinedLibraryTubeLabel }}</td>
+                                </tr>
+                            {% endif %}
 						</table>
 					</div>
 				</div>
@@ -68,7 +71,7 @@
 							</tr>
 							<tr>
 								<td><b>3' Adapter:</b></td>
-								<td class="break-word"><small>{{ eas.threePrimeAdapter }}</small></td>
+								<td class="word-break-all"><small>{{ eas.threePrimeAdapter }}</small></td>
 							</tr>
 							<tr>
 								<td><b>Template Kit:</b></td>
@@ -147,11 +150,11 @@
 							</tr>
 							<tr>
 								<td><b>Target Regions:</b></td>
-								<td class="break-word">{{ eas.targetRegionBedFile|default:''|basename }}</td>
+								<td class="word-break-all">{{ eas.targetRegionBedFile|default:''|basename }}</td>
 							</tr>
 							<tr>
 								<td><b>Hotspot Regions:</b></td>
-								<td class="break-word">{{ eas.hotSpotRegionBedFile|default:''|basename }}</td>
+								<td class="word-break-all">{{ eas.hotSpotRegionBedFile|default:''|basename }}</td>
 							</tr>
 						</table>
 					</div>
@@ -215,7 +218,7 @@
                     <div class="collapse in" id="LIMS_meta">
                         <table>
                             <tr>
-                                <td class="break-word">{{LIMS_meta}}</td>
+                                <td class="word-break-all">{{LIMS_meta}}</td>
                             </tr>
                         </table>
                     </div>
@@ -335,7 +338,7 @@
 								<td>{{ eas.alignmentargs }}</td>
 							</tr>
 							{% endif %}
-							{% if thumbnail or plan.experiment.isProton and state != 'Plan' %}
+							{% if thumbnail or show_thumbnail %}
 							<tr><td>&nbsp</td></tr>
 							<tr>
 								<td><b>Thumbnail Beadfind Args:</b></td>
@@ -388,8 +391,8 @@
 									{% for key, values in log.json_log.items %}
 									<tr>
 										<td>{{ key }}</td>
-										<td class="break-word">{{ values.0|linebreaks }}</td>
-										<td class="break-word">{{ values.1|linebreaks }}</td>
+										<td class="word-break-all">{{ values.0|linebreaks }}</td>
+										<td class="word-break-all">{{ values.1|linebreaks }}</td>
 									</tr>
 									{% endfor %}
 									</table>

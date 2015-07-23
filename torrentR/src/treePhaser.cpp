@@ -146,7 +146,9 @@ RcppExport SEXP treePhaser(SEXP Rsignal, SEXP RkeyFlow, SEXP RflowCycle,
   return ret;
 }
 
+
 // ======================================================================
+
 RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Rie, SEXP Rdr,
                               SEXP Rmaxflows, SEXP RgetStates, SEXP RdiagonalStates,
                               SEXP RmodelFile, SEXP RmodelThreshold, SEXP Rxval, SEXP Ryval)
@@ -156,13 +158,13 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
 
   try {
 
-    Rcpp::StringVector   sequences(Rsequence);
-    string flowCycle   = Rcpp::as<string>(RflowCycle);
-    Rcpp::NumericVector      cf_vec(Rcf);
-    Rcpp::NumericVector      ie_vec(Rie);
-    Rcpp::NumericVector      dr_vec(Rdr);
-    unsigned int max_flows       = Rcpp::as<int>(Rmaxflows);
-    unsigned int get_states      = Rcpp::as<int>(RgetStates);
+    Rcpp::StringVector            sequences(Rsequence);
+    string flowCycle            = Rcpp::as<string>(RflowCycle);
+    Rcpp::NumericMatrix           cf_vec(Rcf);
+    Rcpp::NumericMatrix           ie_vec(Rie);
+    Rcpp::NumericMatrix           dr_vec(Rdr);
+    unsigned int max_flows      = Rcpp::as<int>(Rmaxflows);
+    unsigned int get_states     = Rcpp::as<int>(RgetStates);
     unsigned int diagonalStates = Rcpp::as<int>(RdiagonalStates);
 
     // Recalibration Variables
@@ -189,9 +191,9 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
     BasecallerRead read;
     DPTreephaser dpTreephaser(flow_order);
     bool per_read_phasing = true;
-    if (cf_vec.size() == 1) {
+    if (cf_vec.ncol() == 1) {
       per_read_phasing = false;
-      dpTreephaser.SetModelParameters((double)cf_vec(0), (double)ie_vec(0), (double)dr_vec(0));
+      dpTreephaser.SetModelParameters((double)cf_vec(0,0), (double)ie_vec(0,0), (double)dr_vec(0,0));
     }
     dpTreephaser.SetStateProgression((diagonalStates>0));
     unsigned int max_length = (2*flow_order.num_flows());
@@ -206,7 +208,7 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
       }
       // Set phasing parameters for this read
       if (per_read_phasing)
-        dpTreephaser.SetModelParameters((double)cf_vec(iRead), (double)ie_vec(iRead), (double)dr_vec(iRead));
+        dpTreephaser.SetModelParameters((double)cf_vec(0,iRead), (double)ie_vec(0,iRead), (double)dr_vec(0,iRead));
 
       // If you bothered specifying a recalibration model you probably want its effect on the predictions...
       if (recalModel.is_enabled()) {
@@ -259,4 +261,294 @@ RcppExport SEXP treePhaserSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Ri
     Rf_error(exceptionMesg);
 
   return ret;
+}
+
+// =======================================================================================
+
+RcppExport SEXP DPPhaseSim(SEXP Rsequence, SEXP RflowCycle, SEXP Rcf, SEXP Rie, SEXP Rdr,
+                           SEXP Rmaxflows, SEXP RgetStates, SEXP RnucContamination)
+{
+  SEXP ret = R_NilValue;
+  char *exceptionMesg = NULL;
+
+  try {
+
+    Rcpp::StringVector        sequences(Rsequence);
+    string flowCycle        = Rcpp::as<string>(RflowCycle);
+    Rcpp::NumericMatrix       cf_mat(Rcf);
+    Rcpp::NumericMatrix       ie_mat(Rie);
+    Rcpp::NumericMatrix       dr_mat(Rdr);
+    Rcpp::NumericMatrix       nuc_contamination(RnucContamination);
+    unsigned int max_flows  = Rcpp::as<int>(Rmaxflows);
+    unsigned int get_states = Rcpp::as<int>(RgetStates);
+
+    ion::FlowOrder flow_order(flowCycle, flowCycle.length());
+    unsigned int nFlow = flow_order.num_flows();
+    unsigned int nRead = sequences.size();
+    max_flows = min(max_flows, nFlow);
+
+    vector<vector<double> >    nuc_availbality;
+    nuc_availbality.resize(nuc_contamination.nrow());
+    for (unsigned int iFlowNuc=0; iFlowNuc < nuc_availbality.size(); iFlowNuc++){
+      nuc_availbality.at(iFlowNuc).resize(nuc_contamination.ncol());
+      for (unsigned int iNuc=0; iNuc < nuc_availbality.at(iFlowNuc).size(); iNuc++){
+        nuc_availbality.at(iFlowNuc).at(iNuc) = nuc_contamination(iFlowNuc, iNuc);
+      }
+    }
+
+    // Prepare objects for holding and passing back results
+    Rcpp::NumericMatrix       predicted_out(nRead,nFlow);
+    Rcpp::StringVector        seq_out(nRead);
+
+
+    // Set Phasing Model
+    DPPhaseSimulator PhaseSimulator(flow_order);
+    PhaseSimulator.UpdateNucAvailability(nuc_availbality);
+
+    bool per_read_phasing = true;
+    if (cf_mat.nrow() == 1 and cf_mat.ncol() == 1) {
+      per_read_phasing = false;
+      cout << "DPPhaseSim: Single Phase Parameter set detected." << endl; // XXX
+      PhaseSimulator.SetPhasingParameters_Basic((double)cf_mat(0,0), (double)ie_mat(0,0), (double)dr_mat(0,0));
+    } else if (cf_mat.nrow() == (int)nFlow and cf_mat.ncol() == (int)nFlow) {
+    	cout << "DPPhaseSim: Full Phase Parameter set detected." << endl; // XXX
+      per_read_phasing = false;
+      vector<vector<double> > cf(nFlow);
+      vector<vector<double> > ie(nFlow);
+      vector<vector<double> > dr(nFlow);
+      for (unsigned int iFlowNuc=0; iFlowNuc < nFlow; iFlowNuc++){
+        cf.at(iFlowNuc).resize(nFlow);
+        ie.at(iFlowNuc).resize(nFlow);
+        dr.at(iFlowNuc).resize(nFlow);
+        for (unsigned int iFlow=0; iFlow < nFlow; iFlow++){
+          cf.at(iFlowNuc).at(iFlow) = cf_mat(iFlowNuc, iFlow);
+          ie.at(iFlowNuc).at(iFlow) = ie_mat(iFlowNuc, iFlow);
+          dr.at(iFlowNuc).at(iFlow) = dr_mat(iFlowNuc, iFlow);
+        }
+      }
+      PhaseSimulator.SetPhasingParameters_Full(cf, ie, dr);
+    }
+    else
+      cout << "DPPhaseSim: Per Read Phase Parameter set detected." << endl; //XXX
+
+
+    // --- Iterate over all sequences
+
+    string         my_sequence, sim_sequence;
+    vector<float>  my_prediction;
+
+    for(unsigned int iRead=0; iRead<nRead; iRead++) {
+
+      if (per_read_phasing)
+        PhaseSimulator.SetPhasingParameters_Basic((double)cf_mat(0,iRead), (double)ie_mat(0,iRead), (double)dr_mat(0,iRead));
+
+      my_sequence = Rcpp::as<std::string>(sequences(iRead));
+      PhaseSimulator.Simulate(my_sequence, my_prediction, max_flows);
+
+      PhaseSimulator.GetSimSequence(sim_sequence); // Simulated sequence might be shorter than input sequence.
+      seq_out(iRead) = sim_sequence;
+      for(unsigned int iFlow=0; iFlow<nFlow and iFlow<max_flows; ++iFlow) {
+		predicted_out(iRead,iFlow) = (double) my_prediction.at(iFlow);
+      }
+      //cout << "--- DPPhaseSim: Done simulating read "<< iRead << " of " << nRead << endl; // XXX
+    }
+
+    // --- Store results
+    if (nRead == 1 and get_states > 0) {
+
+      vector<vector<float> >    query_states;
+      vector<int>               hp_lengths;
+      PhaseSimulator.GetStates(query_states, hp_lengths);
+
+      Rcpp::NumericMatrix       states(hp_lengths.size(), nFlow);
+      Rcpp::NumericVector       HPlengths(hp_lengths.size());
+
+      for (unsigned int iHP=0; iHP<hp_lengths.size(); iHP++){
+        HPlengths(iHP) = (double)hp_lengths[iHP];
+        for (unsigned int iFlow=0; iFlow<nFlow; iFlow++)
+          states(iHP, iFlow) = (double)query_states.at(iHP).at(iFlow);
+      }
+
+      ret = Rcpp::List::create(Rcpp::Named("sig")       = predicted_out,
+                               Rcpp::Named("seq")       = seq_out,
+                               Rcpp::Named("states")    = states,
+                               Rcpp::Named("HPlengths") = HPlengths);
+    } else {
+      ret = Rcpp::List::create(Rcpp::Named("sig")  = predicted_out,
+                               Rcpp::Named("seq")  = seq_out);
+    }
+
+  } catch(std::exception& ex) {
+    forward_exception_to_r(ex);
+  } catch(...) {
+    ::Rf_error("c++ exception (unknown reason)");
+  }
+
+  if(exceptionMesg != NULL)
+    Rf_error(exceptionMesg);
+
+  return ret;
+}
+
+
+// ======================================================================
+
+
+RcppExport SEXP FitPhasingBurst(SEXP R_signal, SEXP R_flowCycle, SEXP R_read_sequence,
+                SEXP R_phasing, SEXP R_burstFlows, SEXP R_maxEvalFlow, SEXP R_maxSimFlow) {
+
+ SEXP ret = R_NilValue;
+ char *exceptionMesg = NULL;
+
+ try {
+
+     Rcpp::NumericMatrix  signal(R_signal);
+     Rcpp::NumericMatrix  phasing(R_phasing);     // Standard phasing parameters
+     string flowCycle   = Rcpp::as<string>(R_flowCycle);
+     Rcpp::StringVector   read_sequences(R_read_sequence);
+     Rcpp::NumericVector  phasing_burst(R_burstFlows);
+     Rcpp::NumericVector  max_eval_flow(R_maxEvalFlow);
+     Rcpp::NumericVector  max_sim_flow(R_maxSimFlow);
+     int window_size    = 38; // For normalization
+
+
+     ion::FlowOrder flow_order(flowCycle, flowCycle.length());
+     unsigned int num_flows = flow_order.num_flows();
+     unsigned int num_reads = read_sequences.size();
+
+
+     // Containers to store results
+     Rcpp::NumericVector null_fit(num_reads);
+     Rcpp::NumericMatrix null_prediction(num_reads, num_flows);
+     Rcpp::NumericVector best_fit(num_reads);
+     Rcpp::NumericVector best_ie_value(num_reads);
+     Rcpp::NumericMatrix best_prediction(num_reads, num_flows);
+
+
+     BasecallerRead bc_read;
+     DPTreephaser dpTreephaser(flow_order);
+     DPPhaseSimulator PhaseSimulator(flow_order);
+     vector<double> cf_vec(num_flows, 0.0);
+     vector<double> ie_vec(num_flows, 0.0);
+     vector<double> dr_vec(num_flows, 0.0);
+
+
+     // IE Burst Estimation Loop
+     for (unsigned int iRead=0; iRead<num_reads; iRead++) {
+
+       // Set read object
+       vector<float> my_signal(num_flows);
+       for (unsigned int iFlow=0; iFlow<num_flows; iFlow++)
+         my_signal.at(iFlow) = signal(iRead, iFlow);
+       bc_read.SetData(my_signal, num_flows);
+       string my_sequence = Rcpp::as<std::string>(read_sequences(iRead));
+
+       // Default phasing as baseline
+       double my_best_fit, my_best_ie;
+       double base_cf  = (double)phasing(iRead, 0);
+       double base_ie  = (double)phasing(iRead, 1);
+       double base_dr  = (double)phasing(iRead, 2);
+       int burst_flow = (int)phasing_burst(iRead);
+       vector<float> my_best_prediction;
+
+       cf_vec.assign(num_flows, base_cf);
+       dr_vec.assign(num_flows, base_dr);
+       int my_max_flow  = min((int)num_flows, (int)max_sim_flow(iRead));
+       int my_eval_flow = min(my_max_flow, (int)max_eval_flow(iRead));
+
+       PhaseSimulator.SetBaseSequence(my_sequence);
+       PhaseSimulator.SetMaxFlows(my_max_flow);
+       PhaseSimulator.SetPhasingParameters_Basic(base_cf, base_ie, base_dr);
+       PhaseSimulator.UpdateStates(my_max_flow);
+       PhaseSimulator.GetPredictions(bc_read.prediction);
+       dpTreephaser.WindowedNormalize(bc_read, (my_eval_flow/window_size), window_size, true);
+
+
+       my_best_ie = base_ie;
+       my_best_prediction = bc_read.prediction;
+       my_best_fit = 0;
+       for (int iFlow=0; iFlow<my_eval_flow; iFlow++) {
+         double residual = bc_read.raw_measurements.at(iFlow) - bc_read.prediction.at(iFlow);
+         my_best_fit += residual*residual;
+       }
+       for (unsigned int iFlow=0; iFlow<num_flows; iFlow++)
+         null_prediction(iRead, iFlow) = bc_read.prediction.at(iFlow);
+       null_fit(iRead) = my_best_fit;
+
+       // Make sure that there are enough flows to fit a burst
+       if (burst_flow < my_eval_flow-10) {
+    	 int    num_steps  = 0;
+    	 double step_size  = 0.0;
+    	 double step_start = 0.0;
+    	 double step_end   = 0.0;
+
+         // Brute force phasing burst value estimation using grid search, crude first, then refine
+         for (unsigned int iIteration = 0; iIteration<3; iIteration++) {
+
+           switch(iIteration) {
+             case 0:
+               step_size = 0.05;
+               step_end = 0.8;
+               break;
+             case 1:
+               step_end   = (floor(my_best_ie / step_size)*step_size) + step_size;
+               step_start = max(0.0, (step_end - 2.0*step_size));
+               step_size  = 0.01;
+               break;
+             default:
+               step_end   = (floor(my_best_ie / step_size)*step_size) + step_size;
+               step_start = max(0.0, step_end - 2*step_size);
+               step_size = step_size / 10;
+           }
+           num_steps  = 1+ ((step_end - step_start) / step_size);
+
+           for (int iPhase=0; iPhase <= num_steps; iPhase++) {
+
+        	 double try_ie = step_start+(iPhase*step_size);
+             ie_vec.assign(num_flows, try_ie);
+
+             PhaseSimulator.SetBasePhasingParameters(burst_flow, cf_vec, ie_vec, dr_vec);
+             PhaseSimulator.UpdateStates(my_max_flow);
+             PhaseSimulator.GetPredictions(bc_read.prediction);
+             dpTreephaser.WindowedNormalize(bc_read, (my_eval_flow/window_size), window_size, true);
+
+             double my_fit = 0.0;
+             for (int iFlow=burst_flow+1; iFlow<my_eval_flow; iFlow++) {
+               double residual = bc_read.raw_measurements.at(iFlow) - bc_read.prediction.at(iFlow);
+               my_fit += residual*residual;
+             }
+             if (my_fit < my_best_fit) {
+               my_best_fit = my_fit;
+               my_best_ie  = try_ie;
+               my_best_prediction = bc_read.prediction;
+             }
+           }
+         }
+       }
+
+       // Set output information for this read
+       best_fit(iRead) = my_best_fit;
+       best_ie_value(iRead)   = my_best_ie;
+       for (unsigned int iFlow=0; iFlow<num_flows; iFlow++)
+         best_prediction(iRead, iFlow) = my_best_prediction.at(iFlow);
+     }
+
+     ret = Rcpp::List::create(Rcpp::Named("null_fit")        = null_fit,
+                              Rcpp::Named("null_prediction") = null_prediction,
+                              Rcpp::Named("burst_flow")      = phasing_burst,
+                              Rcpp::Named("best_fit")        = best_fit,
+                              Rcpp::Named("best_ie_value")   = best_ie_value,
+                              Rcpp::Named("best_prediction") = best_prediction);
+
+
+ } catch(std::exception& ex) {
+   forward_exception_to_r(ex);
+ } catch(...) {
+   ::Rf_error("c++ exception (unknown reason)");
+ }
+
+ if(exceptionMesg != NULL)
+   Rf_error(exceptionMesg);
+ return ret;
+
 }

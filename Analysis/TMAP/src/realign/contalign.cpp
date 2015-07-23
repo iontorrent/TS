@@ -7,6 +7,8 @@
 #include "sequtil.h"
 #include "contalign.h"
 #include <cassert>
+#include <boost/concept_check.hpp>
+#include <ext/stdio_filebuf.h>
 
 /*
 member inner loops used for finding alignment
@@ -33,7 +35,7 @@ double ContAlign::align_y_loop (register ALIGN_FVECT* ap, unsigned char base, ch
     else
         prev_w = (ap-1)->w;
 
-    double v = low_score; // works for both to_first and normal mode: just guarantees that cost of coming from the bottom is higher then by diagonal
+    double v = low_score, nv, nh; // works for both to_first and normal mode: just guarantees that cost of coming from the bottom is higher then by diagonal
     double w, pw = prev_w;
 
     if (logp_)
@@ -41,14 +43,14 @@ double ContAlign::align_y_loop (register ALIGN_FVECT* ap, unsigned char base, ch
         (*logp_) << "\n";
         (*logp_) << std::setw (6) << std::right << x << " " << (char) ((base < 4) ? base2char (base) : base) << " ";
         if (y > yref)
-            (*logp_) << std::setw (7 * (y-yref)) << std::left << " ";
+            (*logp_) << std::setw (9 * (y-yref)) << std::left << " ";
         (*logp_) << std::flush;
     }
 
     y += len - 1;
     while (len-- > 0)
     {
-        register char dir = ALIGN_DIAG;
+        char dir = ALIGN_DIAG;
 
         //w = max (0, h, v, prev_w + s(x, y))
         w = prev_w + ((ap->r == base || ap->r == 'N') ? mat : mis); // HACK - need proper handling for non-standard IUPACs
@@ -81,16 +83,18 @@ double ContAlign::align_y_loop (register ALIGN_FVECT* ap, unsigned char base, ch
         prev_w = ap->w;
         ap->w = pw = w;
 
-        //h = max (w - gip, h) - gep;
-        w -= gip;
-        if (w > ap->h)
-            ap->h = w, dir |= ALIGN_HSKIP;
-        ap->h -= gep/xdivisor;
+        // h = max (w - gip, h) - gep;
+        nh = w - ((scale_type_ == SCALE_GIP_GEP) ? gip / xdivisor : gip);
+
+        if (nh > ap->h)
+            ap->h = nh, dir |= ALIGN_HSKIP;
+        ap->h -= ((scale_type_ == SCALE_NONE) ? gep : gep / xdivisor);
 
         //v = max (w - gip, v) - gep;
-        if (w > v)
-            v = w, dir |= ALIGN_VSKIP;
-        v -= gep/ap->div;
+        nv = w - ((scale_type_ == SCALE_GIP_GEP) ? gip / ap->div : gip);
+        if (nv > v)
+            v = nv, dir |= ALIGN_VSKIP;
+        v -= ((scale_type_ == SCALE_NONE) ? gep : gep / ap->div); 
 
         if (logp_)
         {
@@ -101,13 +105,19 @@ double ContAlign::align_y_loop (register ALIGN_FVECT* ap, unsigned char base, ch
                 case ALIGN_DIAG: (*logp_) << "\\"; break;
                 case ALIGN_STOP: (*logp_) << "#";  break;
             }
+
             if (dir & ALIGN_VSKIP)
                 (*logp_) << ((dir & ALIGN_ZERO) ? "V" : "v");
-            else if (dir & ALIGN_HSKIP)
+            else
+                (*logp_) << "-";
+
+            if (dir & ALIGN_HSKIP)
                 (*logp_) << ((dir & ALIGN_ZERO) ? "H" : "h");
             else
-                (*logp_) << ((dir & ALIGN_ZERO) ? "o" : " ");;
-            (*logp_) << std::setw (5) << std::left  << std::resetiosflags (std::ios::floatfield) << std::setprecision (3) << save_w;
+                (*logp_) << "-";
+
+            (*logp_) << std::setw (6) << std::resetiosflags (std::ios::floatfield) << std::left  << std::showpos << std::setprecision (3) << save_w;
+            // (*logp_) << std::setw (6) << std::left  << std::fixed << save_w;
         }
 
         //save bactrace pointer (4bits / byte)
@@ -128,6 +138,7 @@ btrmx (NULL),
 ap (NULL),
 xhomo (NULL),
 yhomo (NULL),
+logbuf_ (NULL),
 logp_ (NULL)
 {
 }
@@ -151,6 +162,7 @@ ContAlign::~ContAlign ()
     delete [] btrmx;
     delete [] xhomo;
     delete [] yhomo;
+    reset_log ();
 }
 
 void ContAlign::init (int max_ylen, int max_xlen, int max_size, int gip, int gep, int mat, int mis)
@@ -316,12 +328,12 @@ double ContAlign::align_band (const char* xseq, int xlen, const char* yseq, int 
     {
         (*logp_) << std::setw (9) << "";
         for (int yy = yref; yy != ylast; ++yy)
-            (*logp_) << std::setw (7) << std::left << yy;
+            (*logp_) << std::setw (9) << std::left << yy;
         (*logp_) << "\n";
         (*logp_) << std::setw (9) << "";
         for (int yy = yref; yy != ylast; ++yy)
-            (*logp_) << std::setw (7) << std::left << (char) yseq [yy];
-        (*logp_) << "\n";
+            (*logp_) << std::setw (9) << std::left << (char) yseq [yy];
+        (*logp_) << "\n" << std::flush;
         (*logp_) << std::setw (9) << "";
     }
 
@@ -333,7 +345,8 @@ double ContAlign::align_band (const char* xseq, int xlen, const char* yseq, int 
     {
         ap [i].w = curw;
         if (logp_)
-            (*logp_) << " " << std::left << std::setw (5) << std::left  << std::resetiosflags (std::ios::floatfield) << std::setprecision (3) << curw;
+            (*logp_) << "   " << std::left << std::setw (6) << std::left  << std::resetiosflags (std::ios::floatfield) << std::setprecision (3) << curw << std::flush;
+            // (*logp_) << "   " << std::left << std::setw (6) << std::left  << std::fixed << std::setprecision (4) << curw << std::flush;
 
         curw -= gep;
         ap[i].h = low_score; // guaranteed to always prevent 'coming from the right'. Works for both tobeg and not.
@@ -522,4 +535,28 @@ unsigned ContAlign::backtrace (BATCH *b_ptr, int max_cnt, unsigned width)
     }
     reverse_inplace<BATCH> (b_start, b_cnt);
     return b_cnt;
+}
+
+void ContAlign::set_log (int posix_handle)
+{
+    reset_log ();
+    if (posix_handle >= 0)
+    {
+        logbuf_ = new __gnu_cxx::stdio_filebuf<char> (posix_handle, std::ios::out);
+        own_log_ = new std::ostream (logbuf_);
+        logp_ = own_log_;
+    }
+}
+void ContAlign::set_log (std::ostream& log)
+{
+    reset_log ();
+    logp_ = &log;
+}
+void ContAlign::reset_log ()
+{
+    delete own_log_;
+    own_log_ = NULL;
+    delete logbuf_;
+    logbuf_ = NULL;
+    logp_ = NULL;
 }

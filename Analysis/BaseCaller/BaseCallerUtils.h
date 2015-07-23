@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <vector>
 #include <stdio.h>
+#include <iostream>
 #include <stdlib.h>
 #include "OptArgs.h"
 
@@ -152,35 +153,49 @@ public:
     block_col_offset_            = opts.GetFirstInt    ('-', "block-col-offset", 0);
 
     //! @todo Get default chip size from wells reader
-    std::string arg_region_size        = opts.GetFirstString ('-', "region-size", "");
-    if (!arg_region_size.empty()) {
-      if (2 != sscanf (arg_region_size.c_str(), "%dx%d", &region_size_x_, &region_size_y_)) {
-        fprintf (stderr, "Option Error: region-size %s\n", arg_region_size.c_str());
-        exit (EXIT_FAILURE);
-      }
+    std::vector<int> arg_region_size  = opts.GetFirstIntVector ('-', "region-size", "50x50", 'x');
+    if (arg_region_size.size() != 2) {
+      std::cerr << "BaseCaller Option Error: region-size needs to be of the format <Int>x<Int>" << std::endl;
+      exit (EXIT_FAILURE);
     }
+    region_size_x_ = arg_region_size.at(0);
+    region_size_y_ = arg_region_size.at(1);
     num_regions_x_ = (chip_size_x_ +  region_size_x_ - 1) / region_size_x_;
     num_regions_y_ = (chip_size_y_ +  region_size_y_ - 1) / region_size_y_;
     num_regions_ = num_regions_x_ * num_regions_y_;
 
-    std::string arg_subset_rows        = opts.GetFirstString ('r', "rows", "");
-    std::string arg_subset_cols        = opts.GetFirstString ('c', "cols", "");
-    if (!arg_subset_rows.empty()) {
-      if (2 != sscanf (arg_subset_rows.c_str(), "%u-%u", &subset_begin_y_, &subset_end_y_)) {
-        fprintf (stderr, "BaseCaller Option Error: subset rows %s\n", arg_subset_rows.c_str());
-        exit (EXIT_FAILURE);
-      }
+    // Dash as string separator protects against someone trying to input negative numbers
+    std::vector<int> arg_subset_rows  = opts.GetFirstIntVector ('r', "rows", "", '-');
+    if (arg_subset_rows.size() == 2) {
+      subset_begin_y_ = arg_subset_rows.at(0);
+      subset_end_y_   = arg_subset_rows.at(1);
+      // Immediate sanity checks
+      subset_end_y_   = std::min(subset_end_y_, chip_size_y_);
+      subset_begin_y_ = std::min(subset_begin_y_, subset_end_y_);
     }
-    if (!arg_subset_cols.empty()) {
-      if (2 != sscanf (arg_subset_cols.c_str(), "%u-%u", &subset_begin_x_, &subset_end_x_)) {
-        fprintf (stderr, "BaseCaller Option Error: subset cols %s\n", arg_subset_cols.c_str());
-        exit (EXIT_FAILURE);
-      }
+    else if (not arg_subset_rows.empty()) {
+      std::cerr << "BaseCaller Option Error: argument 'rows' needs to be in the format <Int>-<Int>" << std::endl;
+      exit (EXIT_FAILURE);
     }
-    subset_end_x_ = std::min(subset_end_x_, chip_size_x_);
-    subset_end_y_ = std::min(subset_end_y_, chip_size_y_);
+
+    std::vector<int> arg_subset_cols  = opts.GetFirstIntVector ('c', "cols", "", '-');
+    if (arg_subset_cols.size() == 2) {
+      subset_begin_x_ = arg_subset_cols.at(0);
+      subset_end_x_   = arg_subset_cols.at(1);
+      // Immediate sanity checks
+      subset_end_x_   = std::min(subset_end_x_, chip_size_x_);
+      subset_begin_x_ = std::min(subset_begin_x_, subset_end_x_);
+    }
+    else if (not arg_subset_cols.empty()) {
+      std::cerr << "BaseCaller Option Error: argument 'cols' needs to be in the format <Int>-<Int>" << std::endl;
+      exit (EXIT_FAILURE);
+    }
+
     num_wells_ = (subset_end_x_-subset_begin_x_) * (subset_end_y_-subset_begin_y_);
-    printf("Processing chip region x: %u-%u y: %u-%u with a total of %u wells.\n", subset_begin_x_, subset_end_x_, subset_begin_y_, subset_end_y_, num_wells_);
+
+    std::cout << "Processing chip region x: " << subset_begin_x_ << "-" << subset_end_x_
+    	      << " y: " << subset_begin_y_ << "-" << subset_end_y_
+    	      << " with a total of " << num_wells_ << " wells." << std::endl;
     return true;
   };
 
@@ -256,13 +271,6 @@ private:
 
 }
 
-/*
-// Idea: class that manages splitting the chip into equal-size regions.
-// Application: BaseCaller's wells reading, PhasingEstimator wells reading and cafie regions.
-class ChipPartition {
-
-};
-*/
 
 // =============================================================================
 

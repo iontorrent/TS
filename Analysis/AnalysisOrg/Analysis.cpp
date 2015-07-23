@@ -1,11 +1,4 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
-//
-// Ion Torrent Systems, Inc.
-// Analysis Pipeline
-// (c) 2009
-// $Rev$
-//  $Date$
-//
 
 #include <stdio.h>
 #include <string.h>

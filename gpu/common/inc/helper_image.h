@@ -1,5 +1,5 @@
 /**
- * Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
+ * Copyright 1993-2013 NVIDIA Corporation.  All rights reserved.
  *
  * Please refer to the NVIDIA end user license agreement (EULA) associated
  * with this source code for terms and conditions that govern your use of
@@ -28,6 +28,10 @@
 #endif
 #ifndef MAX
 #define MAX(a,b) ((a > b) ? a : b)
+#endif
+
+#ifndef EXIT_WAIVED
+#define EXIT_WAIVED 2
 #endif
 
 #include <helper_string.h>
@@ -101,7 +105,7 @@ namespace
     };
 }
 
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 #ifndef FOPEN
 #define FOPEN(fHandle,filename,mode) fopen_s(&fHandle, filename, mode)
 #endif
@@ -202,13 +206,13 @@ __loadPPM(const char *file, unsigned char **data,
     }
     else
     {
-        *data = (unsigned char *) malloc(sizeof(unsigned char) * width * height * *channels);
+        *data = (unsigned char *) malloc(sizeof(unsigned char) * width * height **channels);
         *w = width;
         *h = height;
     }
 
     // read and close file
-    if (fread(*data, sizeof(unsigned char), width * height * *channels, fp) == 0)
+    if (fread(*data, sizeof(unsigned char), width * height **channels, fp) == 0)
     {
         std::cerr << "__LoadPPM() read data returned error." << std::endl;
     }
@@ -230,7 +234,7 @@ sdkLoadPGM(const char *file, T **data, unsigned int *w, unsigned int *h)
         return false;
     }
 
-    unsigned int size = *w * *h * channels;
+    unsigned int size = *w **h * channels;
 
     // initialize mem if necessary
     // the correct size is checked / set in loadPGMc()
@@ -258,7 +262,7 @@ sdkLoadPPM4(const char *file, T **data,
     if (__loadPPM(file, &idata, w, h, &channels))
     {
         // pad 4th component
-        int size = *w * *h;
+        int size = *w **h;
         // keep the original pointer
         unsigned char *idata_orig = idata;
         *data = (T *) malloc(sizeof(T) * size * 4);
@@ -394,7 +398,7 @@ sdkReadFile(const char *filename, T **data, unsigned int *len, bool verbose)
     std::vector<T>  data_read;
 
     // open file for reading
-    FILE* fh = NULL;
+    FILE *fh = NULL;
 
     // check if filestream is valid
     if (FOPEN_FAIL(FOPEN(fh, filename, "r")))
@@ -405,10 +409,13 @@ sdkReadFile(const char *filename, T **data, unsigned int *len, bool verbose)
 
     // read all data elements
     T token;
-    while(!feof(fh)) {
+
+    while (!feof(fh))
+    {
         fscanf(fh, "%f", &token);
         data_read.push_back(token);
     }
+
     // the last element is read twice
     data_read.pop_back();
     fclose(fh);
@@ -927,7 +934,7 @@ sdkLoadPPM4ub(const char *file, unsigned char **data,
     if (__loadPPM(file, &idata, w, h, &channels))
     {
         // pad 4th component
-        int size = *w * *h;
+        int size = *w **h;
         // keep the original pointer
         unsigned char *idata_orig = idata;
         *data = (unsigned char *) malloc(sizeof(unsigned char) * size * 4);

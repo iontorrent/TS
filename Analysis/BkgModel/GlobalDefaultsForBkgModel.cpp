@@ -43,6 +43,7 @@ LocalSigProcControl::LocalSigProcControl()
   regional_sampling_type = -1;
   no_RatioDrift_fit_first_20_flows = false;
   use_alternative_etbR_equation =false;
+  use_log_taub = false;
 
   fitting_taue = false;
   hydrogenModelType = 0;
@@ -78,6 +79,7 @@ void LocalSigProcControl::PrintHelp()
     printf ("     --dark-matter-correction            BOOL  enable dark matter correction [true]\n");
     printf ("     --single-flow-projection-search     BOOL  enable single flow projection serch [false]\n");
     printf ("     --use-alternative-etbr-equation     BOOL  use alternative etbR equation [false]\n");
+    printf ("     --use-log-taub                      BOOL  use log taub [false]\n");
     printf ("     --bkg-single-gauss-newton           BOOL  use fit gauss newton [true]\n");
     printf ("     --bkg-recompress-tail-raw-trace     BOOL  use recompress tail raw trace [false]\n");
     printf ("     --bkg-single-flow-retry-limit       INT   setup single flow fit max retry [0]\n");
@@ -139,6 +141,7 @@ void LocalSigProcControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 	// from OverrideDefaultsForBkgModel//changed
 	no_RatioDrift_fit_first_20_flows = RetrieveParameterBool(opts, json_params, '-', "limit-rdr-fit", false);
 	use_alternative_etbR_equation = RetrieveParameterBool(opts, json_params, '-', "use-alternative-etbr-equation", false);
+    use_log_taub = RetrieveParameterBool(opts, json_params, '-', "use-log-taub", false);
 
 	fitting_taue = RetrieveParameterBool(opts, json_params, '-', "fitting-taue", false);
 	hydrogenModelType = RetrieveParameterInt(opts, json_params, '-', "incorporation-type", 0);
@@ -270,7 +273,7 @@ void GlobalDefaultsForBkgModel::SetGoptDefaults ( char *fname )
   DumpExcitingParameters("default");
 }
 
-void GlobalDefaultsForBkgModel::DumpExcitingParameters(char *fun_string)
+void GlobalDefaultsForBkgModel::DumpExcitingParameters(const char *fun_string)
 {
       //output defaults used
     printf ( "%s parameters used: \n",fun_string );
@@ -325,6 +328,9 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       if ( evect_size == 13 ) pset = 2;
       else if ( evect_size == 23 ) pset = 1;
       else if ( evect_size == 43 ) pset = 0;
+      else if ( evect_size == 44 ) pset = 11;
+      else if ( evect_size == 46 ) pset = 12;   // min_tauB, max_tauB
+      else if ( evect_size == 47 ) pset = 13;   // mid_tauB
       else if ( evect_size == 10 ) pset = 3;
       else if ( evect_size == 4 ) pset = 4;
       else if ( evect_size == 6 ) pset = 5;
@@ -343,7 +349,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
 
     // copy the configuration values into the right places
     int dv = 0;
-    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
     {
     // first value scales add km terms
     region_param_start.kmax_default[TNUCINDEX] *= read_data[dv];
@@ -352,7 +358,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
     region_param_start.kmax_default[GNUCINDEX] *= read_data[dv++];
     }
     // 2-5 values scale individual terms
-    if ( pset == 0 )
+    if ( pset == 0 || pset>=11)
     {
       region_param_start.kmax_default[TNUCINDEX] *= read_data[dv++];
       region_param_start.kmax_default[ANUCINDEX] *= read_data[dv++];
@@ -360,7 +366,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.kmax_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
     {
       region_param_start.krate_default[TNUCINDEX] *= read_data[dv];
       region_param_start.krate_default[ANUCINDEX] *= read_data[dv];
@@ -368,7 +374,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.krate_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    if ( pset == 0 )
+    if ( pset == 0 || pset>=11)
     {
       region_param_start.krate_default[TNUCINDEX] *= read_data[dv++];
       region_param_start.krate_default[ANUCINDEX] *= read_data[dv++];
@@ -376,7 +382,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.krate_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
     {
       region_param_start.d_default[TNUCINDEX] *= read_data[dv];
       region_param_start.d_default[ANUCINDEX] *= read_data[dv];
@@ -384,7 +390,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.d_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    if ( pset == 0 )
+    if ( pset == 0 || pset>=11)
     {
       region_param_start.d_default[TNUCINDEX] *= read_data[dv++];
       region_param_start.d_default[ANUCINDEX] *= read_data[dv++];
@@ -392,7 +398,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.d_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
     {
       region_param_start.sigma_mult_default[TNUCINDEX] *= read_data[dv];
       region_param_start.sigma_mult_default[ANUCINDEX] *= read_data[dv];
@@ -400,7 +406,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    if ( pset == 0 )
+    if ( pset == 0 || pset>=11)
     {
       region_param_start.sigma_mult_default[TNUCINDEX] *= read_data[dv++];
       region_param_start.sigma_mult_default[ANUCINDEX] *= read_data[dv++];
@@ -408,7 +414,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.sigma_mult_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
     {
       region_param_start.t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv];
       region_param_start.t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv];
@@ -416,7 +422,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    if ( pset == 0 )
+    if ( pset == 0 || pset>=11)
     {
       region_param_start.t_mid_nuc_delay_default[TNUCINDEX] *= read_data[dv++];
       region_param_start.t_mid_nuc_delay_default[ANUCINDEX] *= read_data[dv++];
@@ -424,14 +430,14 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       region_param_start.t_mid_nuc_delay_default[GNUCINDEX] *= read_data[dv++];
     }
 
-    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
     {
       region_param_start.sens_default *= read_data[dv++];
       region_param_start.tau_R_m_default *= read_data[dv++];
       region_param_start.tau_R_o_default *= read_data[dv++];
     }
 
-    if ( pset == 0 || pset==1 || pset==3)
+    if ( pset == 0 || pset==1 || pset==3 || pset>=11)
     {
       for ( int vn=0;vn < 8;vn++ )
         data_control.emp[vn] *= read_data[dv++];
@@ -440,13 +446,27 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
       data_control.emphasis_width_default *= read_data[dv++];
     }
 
-    if ( pset == 0 || pset == 1 || pset == 2 ) 
+    if ( pset == 0 || pset == 1 || pset == 2 || pset>=11)
     {
       fitter_defaults.clonal_call_scale[0] *= read_data[dv++];
       fitter_defaults.clonal_call_scale[1] *= read_data[dv++];
       fitter_defaults.clonal_call_scale[2] *= read_data[dv++];
       fitter_defaults.clonal_call_scale[3] *= read_data[dv++];
       fitter_defaults.clonal_call_scale[4] *= read_data[dv++];
+    }
+    if ( pset>=11)
+    {
+      // taue
+      region_param_start.tau_E_default *= read_data[dv++];
+    }
+    if ( pset>=12)
+    {
+      region_param_start.min_tauB_default *= read_data[dv++];
+      region_param_start.max_tauB_default *= read_data[dv++];
+    }
+    if ( pset>=13)
+    {
+      region_param_start.mid_tauB_default *= read_data[dv++];
     }
 
     if (pset >= 4 && pset <= 9)
@@ -501,7 +521,7 @@ void GlobalDefaultsForBkgModel::ReadEmphasisVectorFromFile ( char *experimentNam
 
     }
 
-    if (pset >= 5)
+    if (pset >= 5 && pset <=10)
     {
         data_control.emphasis_ampl_default *= read_data[dv++];
         data_control.emphasis_width_default *= read_data[dv++];

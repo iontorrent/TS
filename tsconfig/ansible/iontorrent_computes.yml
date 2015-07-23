@@ -5,6 +5,6 @@
     - iontorrent_computes
   tags:
     - iontorrent_computes
-  tasks:
-    - include: roles/common/tasks/write_tsconf.yml
+  vars_files:
+    - [ "group_vars/all_local", "group_vars/all" ]
 

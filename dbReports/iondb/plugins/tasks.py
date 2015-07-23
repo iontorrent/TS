@@ -1,6 +1,7 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
 # Celery tasks for managing plugins
+from __future__ import absolute_import
 import os
 import logging
 

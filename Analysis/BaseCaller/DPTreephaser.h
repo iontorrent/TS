@@ -23,8 +23,9 @@ using namespace std;
 struct BasecallerRead {
 
   void SetData(const vector<float> &measurements, int num_flows);
-  void SetDataAndKeyNormalize(const float *measurements, int num_flows, const int *key_flows, int num_key_flows);
-  void SetDataAndKeyNormalizeNew(const float *measurements, int num_flows, const int *key_flows, int num_key_flows, const bool phased = false);
+  bool SignalKeyPass(const vector<float> &measurements, int num_flows, const int *key_flows, int num_key_flows);
+  bool SetDataAndKeyNormalize(const float *measurements, int num_flows, const int *key_flows, int num_key_flows);
+  bool SetDataAndKeyNormalizeNew(const float *measurements, int num_flows, const int *key_flows, int num_key_flows, const bool phased = false);
 
   float           key_normalizer;           //!< Scaling factor used for initial key normalization
   vector<float>   raw_measurements;         //!< Measured, key-normalized flow signal
@@ -41,22 +42,34 @@ struct BasecallerRead {
   vector<float>   penalty_mismatch;         //!< Score difference to second-best nuc hypothesis
 
   // Nuc gain data
-  const static float  kZeromerMin   = -0.20f;       //!< Key flow corrected non-key flow zeromer 3-sigma minimum
-  const static float  kZeromerMax   =  0.37f;       //!< Key flow corrected non-key flow zeromer 3-sigma maximum
-  const static float  kOnemerMin    =  0.50f;       //!< Key flow corrected non-key flow onemer 3-sigma minimum
-  const static float  kOnemerMax    =  1.35f;       //!< Key flow corrected non-key flow onemer 3-sigma maximum
-  const static float  kZeromerMean  = 0.08555f;     //!< Non-key flow zeromer mean, based on 10 million nucs;
-  const static float  kOnemerMean   = 0.90255f;     //!< Non-key flow zeromer mean, based on 10 million nucs;
-  const static float  kRunZeroSigSq = 0.0078146f;   //!< Non-key flow zeromer sigma squared
-  const static float  kRunOneSigSq  = 0.015178f;    //!< Non-key flow onemer sigma squared
-  const static float  kInvZeroSigSq = 127.9849f;    //!< Non-key flow zeromer sigma squared inverse (1/sig^2)
-  const static float  kInvOneSigSq  = 65.88379f;    //!< Non-key flow onemer sigma squared inverse (1/sig^2)
+  #if __cplusplus >= 201103L
+  static constexpr float  kZeromerMin   = -0.20f;       //!< Key flow corrected non-key flow zeromer 3-sigma minimum
+  static constexpr float  kZeromerMax   =  0.37f;       //!< Key flow corrected non-key flow zeromer 3-sigma maximum
+  static constexpr float  kOnemerMin    =  0.50f;       //!< Key flow corrected non-key flow onemer 3-sigma minimum
+  static constexpr float  kOnemerMax    =  1.35f;       //!< Key flow corrected non-key flow onemer 3-sigma maximum
+  static constexpr float  kZeromerMean  = 0.08555f;     //!< Non-key flow zeromer mean, based on 10 million nucs;
+  static constexpr float  kOnemerMean   = 0.90255f;     //!< Non-key flow zeromer mean, based on 10 million nucs;
+  static constexpr float  kRunZeroSigSq = 0.0078146f;   //!< Non-key flow zeromer sigma squared
+  static constexpr float  kRunOneSigSq  = 0.015178f;    //!< Non-key flow onemer sigma squared
+  static constexpr float  kInvZeroSigSq = 127.9849f;    //!< Non-key flow zeromer sigma squared inverse (1/sig^2)
+  static constexpr float  kInvOneSigSq  = 65.88379f;    //!< Non-key flow onemer sigma squared inverse (1/sig^2)
+  #else
+  static const float  kZeromerMin   = -0.20f;       //!< Key flow corrected non-key flow zeromer 3-sigma minimum
+  static const float  kZeromerMax   =  0.37f;       //!< Key flow corrected non-key flow zeromer 3-sigma maximum
+  static const float  kOnemerMin    =  0.50f;       //!< Key flow corrected non-key flow onemer 3-sigma minimum
+  static const float  kOnemerMax    =  1.35f;       //!< Key flow corrected non-key flow onemer 3-sigma maximum
+  static const float  kZeromerMean  = 0.08555f;     //!< Non-key flow zeromer mean, based on 10 million nucs;
+  static const float  kOnemerMean   = 0.90255f;     //!< Non-key flow zeromer mean, based on 10 million nucs;
+  static const float  kRunZeroSigSq = 0.0078146f;   //!< Non-key flow zeromer sigma squared
+  static const float  kRunOneSigSq  = 0.015178f;    //!< Non-key flow onemer sigma squared
+  static const float  kInvZeroSigSq = 127.9849f;    //!< Non-key flow zeromer sigma squared inverse (1/sig^2)
+  static const float  kInvOneSigSq  = 65.88379f;    //!< Non-key flow onemer sigma squared inverse (1/sig^2)
+  #endif
 };
 
 
-const  int    kMinWindowSize_     = 20;   //!< Minimum normalization window size
-const  int    kMaxWindowSize_     = 60;   //!< Maximum normalization window size
 
+// =============================================================================
 
 //! @brief    Performs dephasing and base calling by tree search
 //! @ingroup  BaseCaller
@@ -72,8 +85,13 @@ const  int    kMaxWindowSize_     = 60;   //!< Maximum normalization window size
 class DPTreephaser {
 
 public:
-    // These need to be public for TreephaserSSE to use.
-    const static int    kWindowSizeDefault_ = 38;   //!< Default normalization window size
+  // These need to be public for TreephaserSSE to use.
+  const static int    kWindowSizeDefault_ = 38;   //!< Default normalization window size
+  const static int    kMinWindowSize_     = 20;   //!< Minimum normalization window size
+  const static int    kMaxWindowSize_     = 60;   //!< Maximum normalization window size
+
+  //! @brief  Default constructor.
+  DPTreephaser();
 
   //! @brief  Constructor.
   //! @param[in] flow_order   Flow order object, also stores number of flows
@@ -82,6 +100,10 @@ public:
   //! @brief  Set the normalization window size
   //! @param[in]  windowSize  Size of the normalization window to use.
   inline void SetNormalizationWindowSize(const int windowSize) { windowSize_ = max(kMinWindowSize_, min(windowSize, kMaxWindowSize_));}
+
+  //! @brief  Constructor.
+  //! @param[in] flow_order   Flow order object, also stores number of flows
+  void SetFlowOrder(const ion::FlowOrder& flow_order);
 
   //! @brief  Initializes phasing model using specific phasing parameters.
   //! @param[in]  cf          Carry forward rate, how much nuc from previous flow is encountered
@@ -162,7 +184,7 @@ public:
   //! @param[out] read.normalized_measurements  Flow signal after normalization
   //! @param[in]  num_steps                     Number of windows-worth of predictions to use
   //! @param[in]  window_size                   Size of a window in flows
-  void  WindowedNormalize(BasecallerRead& read, int num_steps, int window_size) const;
+  void  WindowedNormalize(BasecallerRead& read, int num_steps, int window_size,  const bool normalize_predictions=false) const;
 
   //! @brief    Use PID loop approach to correct for flow-varying gain and offset distortion
   //! @param[in]  read.prediction               Model-predicted signal
@@ -266,34 +288,137 @@ protected:
   vector<float>       transition_flow_[8];        //!< Probability of polymerase not incorporating and staying active
   vector<TreephaserPath> path_;                   //!< Preallocated space for partial path slots
 
-
-  const static int    kNumPaths = 8;              //!< Maximum number of paths considered
-  const static float  kExtendThreshold = 0.2;     //!< Threshold for extending paths
-  const static float  kNegativeMultiplier = 2.0;  //!< Extra weight on the negative residuals
-  const static float  kDotThreshold = 0.3;        //!< percentage of expected Signal that constitutes a "dot"
-  const static int    kMaxHP = MAX_HPXLEN;        //!< Maximum callable homopolymer length
-  const static float  kStateWindowCutoff = 1e-6;  //!< Minimum fraction to be taken into account
-  const static int    kMaxPathDelay = 40;         //!< Paths that are delayed more are killed
-
   // PID loop and coefficients
   PIDloop             pidOffset_;
   PIDloop             pidGain_;
 
-  const static float  kPgainO       = 0.06f;//0.075f;
-  const static float  kIgainO       = 0.005f;
-  const static float  kDgainO       = 0.0f;
-  const static float  kInitOffset   = 0.0f;
-  const static float  kPgainG       = 0.06f;//0.075f;
-  const static float  kIgainG       = 0.005f;
-  const static float  kDgainG       = 0.0f;
-  const static float  kInitGain     = 1.0f;
+  const static int    kNumPaths = 8;              //!< Maximum number of paths considered
+  const static int    kMaxHP = MAX_HPXLEN;        //!< Maximum callable homopolymer length
+  const static int    kMaxPathDelay = 40;         //!< Paths that are delayed more are killed
 
+  #if __cplusplus >= 201103L
+  static constexpr float  kExtendThreshold = 0.2;     //!< Threshold for extending paths
+  static constexpr float  kNegativeMultiplier = 2.0;  //!< Extra weight on the negative residuals
+  static constexpr float  kDotThreshold = 0.3;        //!< percentage of expected Signal that constitutes a "dot"
+  static constexpr float  kStateWindowCutoff = 1e-6;  //!< Minimum fraction to be taken into account
+
+  static constexpr float  kPgainO       = 0.06f;//0.075f;
+  static constexpr float  kIgainO       = 0.005f;
+  static constexpr float  kDgainO       = 0.0f;
+  static constexpr float  kInitOffset   = 0.0f;
+  static constexpr float  kPgainG       = 0.06f;//0.075f;
+  static constexpr float  kIgainG       = 0.005f;
+  static constexpr float  kDgainG       = 0.0f;
+  static constexpr float  kInitGain     = 1.0f;
+  #else
+  static const float  kExtendThreshold = 0.2;     //!< Threshold for extending paths
+  static const float  kNegativeMultiplier = 2.0;  //!< Extra weight on the negative residuals
+  static const float  kDotThreshold = 0.3;        //!< percentage of expected Signal that constitutes a "dot"
+  static const float  kStateWindowCutoff = 1e-6;  //!< Minimum fraction to be taken into account
+
+  static const float  kPgainO       = 0.06f;//0.075f;
+  static const float  kIgainO       = 0.005f;
+  static const float  kDgainO       = 0.0f;
+  static const float  kInitOffset   = 0.0f;
+  static const float  kPgainG       = 0.06f;//0.075f;
+  static const float  kIgainG       = 0.005f;
+  static const float  kDgainG       = 0.0f;
+  static const float  kInitGain     = 1.0f;
+  #endif
   const vector< vector< vector<float> > > *As_; //!< Pointer to recalibration structure: multiplicative constant
   const vector< vector< vector<float> > > *Bs_; //!< Pointer to recalibration structure: additive constant
   bool pm_model_available_;                     //!< Signals availability of a recalibration model
   bool recalibrate_predictions_;                //!< Switch to use recalibration model during metric generation
   bool skip_recal_during_normalization_;        //!< Switch to skip recalibration during the normalization phase
   bool diagonal_states_;                     //!< Turn on a diagonalized state model
+
+};
+
+
+// =============================================================================
+
+//! @brief    Simulates phasing scenarios using dynamic programming
+//! @ingroup  BaseCaller
+//! @details
+//! Simulates different phasing scenarios using dynamic programming.
+
+
+struct SimPathElement
+  {
+    int               flow;                     //!< In phase flow of last incorporated base
+    vector<float>     state;                    //!< Histogram of flows at which last base was incorporated
+    int               window_start;             //!< Start flow (inclusive) of meaningful state values
+    int               window_end;               //!< End flow (noninclusive) of meaningful state values
+    char              nuc;                      //!< Incorporating base
+    int               hp_length;                //!< Length of the last homopolymer in sequence
+    int               index;                    //!< Dummy for debugging!
+};
+
+class DPPhaseSimulator
+{
+
+public:
+
+  DPPhaseSimulator(const ion::FlowOrder flow_order);
+
+  void  SetBasePhasingParameters(const unsigned int base, const vector<double>& carry_forward_rates,
+	          const vector<double>& incomplete_extension_rates, const vector<double>& droop_rates);
+
+  void  SetBasePhasingParameters(const unsigned int base, const double carry_forward_rate,
+  		      const double incomplete_extension_rate, const double droop_rate=0.0);
+
+  void  SetPhasingParameters_Basic(double cf, double ie, double dr);
+
+  void  SetPhasingParameters_TimeVarying(const vector<double>& carry_forward_rates,
+                                        const vector<double>& incomplete_extension_rates,
+                                        const vector<double>& droop_rates);
+
+  void  SetPhasingParameters_Full(const vector<vector<double> >& carry_forward_rates,
+                                  const vector<vector<double> >& incomplete_extension_rates,
+                                  const vector<vector<double> >& droop_rates);
+
+  void  UpdateNucAvailability(const vector<vector<double> >& nuc_availability);
+
+  void  SetWindowCutoff(float window_cutoff) { kStateWindowCutoff_ = window_cutoff; };
+
+  void  SetBaseSequence(const string& my_sequence);
+
+  void  SetMaxFlows(int max_flows);
+
+  void  UpdateStates(int max_flow);
+
+  void  AdvanceState(SimPathElement *child, const SimPathElement *parent, char nuc, int max_flow) const;
+
+  void  GetStates(vector<vector<float> > & states, vector<int> & hp_lengths);
+
+  void  GetPredictions(vector<float>& predictions);
+
+  void  GetSimSequence(string& sim_sequence);
+
+  void  Simulate(string& sim_sequence, vector<float>& predictions, int max_flows);
+
+private:
+
+  // transitions [per base][per nuc][per flow]
+  //
+
+  ion::FlowOrder                         flow_order_;                 //!< Sequence of nucleotide flows
+  int                                    num_hp_simulated_;           //!< Number of bases simulated
+  float                                  kStateWindowCutoff_;         //!< Cutoff for state window
+  string                                 base_sequence_;              //!< Base sequence to be simulated
+  int                                    max_flow_;                   //!< Maximum flow to be simulated
+
+  vector<vector<double> >                nuc_availability_; //!< 4x4 Matrix of nuc availability per flow, alphabetically sorted
+  vector<vector<vector<float> > >        transition_base_;  //!< Probability of polymerase incorporating and staying active [nuc][flow][base]
+  vector<vector<vector<float> > >        transition_flow_;  //!< Probability of polymerase not incorporating and staying active [nuc][flow][base]
+
+  SimPathElement                         null_state_;
+  vector<SimPathElement >                state_space_;
+
+  bool                                   ready_to_go_;
+
+
+
 
 };
 

@@ -27,6 +27,7 @@ configure_file (
 )
 
 set(PLUGINS
+RNASeqAnalysis
 AssemblerSPAdes
 ampliSeqRNA
 coverageAnalysis

@@ -191,7 +191,7 @@ private:
   void GenerateCandidateVariant(deque<VariantCandidate>& variant_candidates,
       list<PositionInProgress>::iterator& position_ticket, int& haplotype_length);
   void FillInHotSpotVariant(deque<VariantCandidate>& variant_candidates, vector<HotspotAllele>& hotspot);
-
+  void BlacklistAlleleIfNeeded(AlleleDetails& allele);
 
 
   // operation parameters
@@ -223,8 +223,8 @@ private:
   pileup                      allele_pileup_;
   AlleleDetails               ref_pileup_;
   vector<long int>           coverage_by_sample_;
-  //vector<char>                black_list_strand;
-  char                        black_list_strand; // revert to 4.2
+  //vector<char>                black_list_strand_;
+  char                        black_list_strand_; // revert to 4.2
   int                         hp_max_lenght_override_value; //! if not zero then it overrides the maxHPLenght parameter in filtering
   float                       strand_bias_override_value;   //! if below zero then it overrides the strand_bias parameter in filtering
 

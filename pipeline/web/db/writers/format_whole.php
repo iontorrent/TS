@@ -71,27 +71,20 @@ $expName       = $meta["Run Name"];
 $base_name     = $expName . '_' . $resultsName;
 
 
+$is_thumbnail = False;
+$is_composite = False;
+$display_q17 = False;
 
 if (file_exists("ReportConfiguration.txt")) {
     $reportconfig = parseVersion("ReportConfiguration.txt");
-}
 
-$is_proton_thumbnail = False;
-$is_proton_composite = False;
-$is_proton = False;
-
-if ( preg_match('/900/', $meta["Chip Type"]) or preg_match('/^P/', $meta["Chip Type"]) ) {
-    $is_proton = True;
-}
-
-$display_q17 = False;
-if ($is_proton) {
-    $display_q17 = True;
     if (preg_match('/Thumbnail/', $reportconfig["Type"])) {
-        $is_proton_thumbnail = True;
+        $is_thumbnail = True;
+        $display_q17 = True;
     }
     if (preg_match('/Composite/', $reportconfig["Type"])) {
-        $is_proton_composite = True;
+        $is_composite = True;
+        $display_q17 = True;
     }
 }
 
@@ -589,7 +582,7 @@ print '<div id="IonSphere" class="report_block">';
 print '<h2>Ion Sphere&trade; Particle (ISP) Identification Summary</h2>';
 print '<div>';
 
-if ($is_proton_composite) {
+if ($is_composite) {
     print '<table id="ispMap" border="0" cellpadding="0" cellspacing="0">';
 
     foreach (array_reverse($dataY) as $dy) {
@@ -1015,7 +1008,7 @@ if ($istoplevel) {
 }
 
 if (file_exists("/opt/ion/.developerversion")) {
-    if ($is_proton_composite) {
+    if ($is_composite) {
         if(file_exists("./sigproc_results/timing.txt")) {
             print "<tr><td><a href='sigproc_results/timing.txt'>Developer link: timing.txt</a> </td> </tr>";
         } else {

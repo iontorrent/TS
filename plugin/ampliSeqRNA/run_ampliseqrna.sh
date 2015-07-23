@@ -253,13 +253,15 @@ echo "" >> "$STATSFILE"
 if [ $TRACK -eq 1 ]; then
   echo "(`date`) Generating basic reads stats..." >&2
 fi
-MAPPED_READS=`samtools view -c -F 4 "$BAMFILE"`
-echo "Number of mapped reads:      $MAPPED_READS" >> "$STATSFILE"
 
-TREADS=`samtools view -c -F 4 -L "$BEDFILE" "$BAMFILE"`
-PCTREADS=`echo "$TREADS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
-echo "Percent reads on target:     $PCTREADS%" >> "$STATSFILE"
+# basic read mappings from samtools
+read TOTAL_READS MAPPED_READS <<<$(samtools flagstat "$BAMFILE" | awk '$0~/in total/||$0~/mapped \(/ {print $1}')
+ONTRG_READS=`samtools view -c -F 4 -L "$BEDFILE" "$BAMFILE"`
+echo "Number of total reads:         $TOTAL_READS" >> "$STATSFILE"
+echo "Number of mapped reads:        $MAPPED_READS" >> "$STATSFILE"
+echo "Number of on-target reads:     $ONTRG_READS" >> "$STATSFILE"
 
+# primary read assignment analysis
 TARGETCOVFILE="${OUTFILEROOT}.amplicon.cov.xls"
 COVCMD="$RUNDIR/targetReadCoverage.pl $FILTOPTS -C 70 \"$BAMFILE\" \"$ANNOBED\" > \"$TARGETCOVFILE\""
 if [ $TRACK -eq 1 ]; then
@@ -273,8 +275,15 @@ if [ $? -ne 0 ]; then
 elif [ $SHOWLOG -eq 1 ]; then
   echo "> $TARGETCOVFILE" >&2
 fi
-# if read filtering is applied then add RPM after creating file
+# grab assigned reads and complete basic stats output
 ASN_READS=`awk '++c>1 {t+=$10} END {printf "%.0f",t}' "$TARGETCOVFILE"`
+echo "Number of assigned reads:      $ASN_READS" >> "$STATSFILE"
+PC_ONTRG_READS=`echo "$ONTRG_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
+PC_ASN_READS=`echo "$ASN_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
+echo "Percent reads on target:       $PC_ONTRG_READS%" >> "$STATSFILE"
+echo "Percent assigned reads:        $PC_ASN_READS%" >> "$STATSFILE"
+
+# add RPM to target coverage file
 RPM_FACTOR=0
 if [ "$ASN_READS" -gt 0 ];then
   RPM_FACTOR=`awk "BEGIN{printf \"%.9f\",1000000/$ASN_READS}"`
@@ -283,12 +292,12 @@ TMPFILE="fincov.rpm.tmp"
 awk "BEGIN {OFS=\"\t\"} {if(++c>1){lc=sprintf(\"%.3f\",$RPM_FACTOR*\$10)}else{lc=\"RPM\"}print \$0,lc}" "$TARGETCOVFILE" > "$TMPFILE"
 mv "$TMPFILE" "$TARGETCOVFILE"
 
-PC_ASN_READS=`echo "$ASN_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
-echo "Percent assigned reads:      $PC_ASN_READS%" >> "$STATSFILE"
+# add ERCC mapping stats if expected
 if [ -n "$TRACKINGBED" ]; then
   TRACKING_READS=`samtools view -c -F 4 -L "$TRACKINGBED" "$BAMFILE"`
   PC_TRACKING_READS=`echo "$TRACKING_READS $MAPPED_READS" | awk '{if($2<=0){$1=0;$2=1}printf "%.2f", 100*$1/$2}'`
-  echo "Percent ERCC tracking reads: $PC_TRACKING_READS%" >> "$STATSFILE"
+  echo "Number of ERCC tracking reads: $TRACKING_READS" >> "$STATSFILE"
+  echo "Percent ERCC tracking reads:   $PC_TRACKING_READS%" >> "$STATSFILE"
 fi
 echo "" >> "$STATSFILE"
 

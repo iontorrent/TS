@@ -4,12 +4,14 @@
 #include "FlowBuffer.h"
 #include "SynchDatSerialize.h"
 #include "ComparatorNoiseCorrector.h"
+#include "CorrNoiseCorrector.h"
 #include "PairPixelXtalkCorrector.h"
 #include "AdvCompr.h"
 #include "FlowSequence.h"
 #include "FluidPotentialCorrector.h"
 #include <sys/fcntl.h>
 #include <sys/prctl.h>
+#include "crop/Acq.h"
 
 typedef struct {
   int threadNum;
@@ -82,17 +84,30 @@ void *FileLoadWorker ( void *arg )
     }
 
     tmr.restart();
+
+
     // correct in-channel electrical cross-talk
     ImageTransformer::XTChannelCorrect ( one_img_loader->img[one_img_loader->cur_buffer].raw, one_img_loader->img[one_img_loader->cur_buffer].results_folder ); // buffer_ix
 
     // testing of lossy compression
     if(ImageTransformer::PCATest[0]) {
-      AdvComprTest(one_img_loader->name,&one_img_loader->img[one_img_loader->cur_buffer],ImageTransformer::PCATest,one_img_loader->inception_state->img_control.col_flicker_correct );
+      AdvComprTest(one_img_loader->name,&one_img_loader->img[one_img_loader->cur_buffer],ImageTransformer::PCATest,false/*one_img_loader->inception_state->img_control.col_flicker_correct*/ );
     }
     // col noise correction (if done during lossy compression will already have happened.
     else if ( !(img->raw->imageState & IMAGESTATE_ComparatorCorrected) &&
               one_img_loader->inception_state->img_control.col_flicker_correct )
     {
+        if( one_img_loader->inception_state->img_control.col_pair_pixel_xtalk_correct ){
+            PairPixelXtalkCorrector xtalkCorrector;
+            float xtalk_fraction = one_img_loader->inception_state->img_control.pair_xtalk_fraction;
+            xtalkCorrector.Correct(one_img_loader->img[one_img_loader->cur_buffer].raw, xtalk_fraction);
+        }
+        {
+      	  CorrNoiseCorrector rnc;
+      	  rnc.CorrectCorrNoise(one_img_loader->img[one_img_loader->cur_buffer].raw,3,one_img_loader->inception_state->bfd_control.beadfindThumbnail );
+        }
+
+
       if(one_img_loader->inception_state->bfd_control.beadfindThumbnail)
       {
         //ComparatorNoiseCorrector
@@ -100,14 +115,23 @@ void *FileLoadWorker ( void *arg )
         cnc.CorrectComparatorNoiseThumbnail(one_img_loader->img[one_img_loader->cur_buffer].raw, one_img_loader->mask, one_img_loader->inception_state->loc_context.regionXSize,one_img_loader->inception_state->loc_context.regionYSize, one_img_loader->inception_state->img_control.col_flicker_correct_verbose);
       } else {
         ComparatorNoiseCorrector cnc;
-        cnc.CorrectComparatorNoise(one_img_loader->img[one_img_loader->cur_buffer].raw, one_img_loader->mask, one_img_loader->inception_state->img_control.col_flicker_correct_verbose, one_img_loader->inception_state->img_control.aggressive_cnc );
+        cnc.CorrectComparatorNoise(one_img_loader->img[one_img_loader->cur_buffer].raw, one_img_loader->mask, one_img_loader->inception_state->img_control.col_flicker_correct_verbose, one_img_loader->inception_state->img_control.aggressive_cnc,false,threadNum );
       }
     }
-    if( one_img_loader->inception_state->img_control.col_pair_pixel_xtalk_correct ){
-        PairPixelXtalkCorrector xtalkCorrector;
-        float xtalk_fraction = one_img_loader->inception_state->img_control.pair_xtalk_fraction;
-        xtalkCorrector.Correct(one_img_loader->img[one_img_loader->cur_buffer].raw, xtalk_fraction);
-    }
+//#define DEBUG_IMAGE_CORR_ISSUES 1
+#ifdef DEBUG_IMAGE_CORR_ISSUES
+
+        char newName[1024];
+        char *nptr,*ptr=one_img_loader->name;
+        while((nptr = strstr(ptr,"/")))ptr=nptr+1;
+        if(*ptr == '/')
+        	ptr++;
+        sprintf(newName,"%s_proc",one_img_loader->name);
+
+        Acq saver;
+        saver.SetData ( &one_img_loader->img[one_img_loader->cur_buffer] );
+        saver.WriteVFC(newName, 0, 0, one_img_loader->img[one_img_loader->cur_buffer].raw->cols, one_img_loader->img[one_img_loader->cur_buffer].raw->rows);
+#endif
     T3=tmr.elapsed();
     tmr.restart();
 

@@ -7,6 +7,7 @@ celery task called manage_data() which will archive or delete one fileset catego
 for one Result object.  This function will in turn call a function to do the
 actual work in the filesystem.
 '''
+from __future__ import absolute_import
 import sys
 import os
 import re
@@ -50,6 +51,27 @@ def configure_workers(sender=None, conf=None, **kwargs):
 def manage_manual_action():
     logid = {'logid':"%s" % ('manual_action')}
     logger.debug("manage_manual_action", extra = logid)
+    
+    def getfirstmanualaction():
+        manual_selects = DMFileStat.objects.filter(action_state__in=['SA', 'SE', 'SD']).order_by('created')
+        for item in manual_selects:
+            try:
+                dmactions.action_validation(item, item.dmfileset.auto_action)
+                return item
+            except(DMExceptions.FilesInUse, DMExceptions.FilesMarkedKeep):
+                logger.debug("%s Failed action_validation.  Try next fileset" % item.result.resultsName, extra = logid)
+            except DMExceptions.BaseInputLinked:
+                # want to allow Basecalling Input delete if all results are expired
+                related_objs = DMFileStat.objects.filter(result__experiment=item.result.experiment, dmfileset__type=dmactions_types.BASE)
+                if related_objs.count() == related_objs.filter(created__lt=threshdate).count():
+                    item.allow_delete = True
+                    return item
+                else:
+                    logger.debug("%s Failed action_validation.  Try next fileset" % item.result.resultsName, extra = logid)
+            except:
+                logger.error(traceback.format_exc(), extra = logid)
+        raise DMExceptions.NoDMFileStat("NONE FOUND")
+    
     try:
         #Create lock file to prevent more than one celery task for manual action (export or archive)
         lock_id = 'manual_action_lock_id'
@@ -57,7 +79,7 @@ def manage_manual_action():
         applock = TaskLock(lock_id)
 
         if not(applock.lock()):
-            logger.debug("lock file exists: %s(%s)" % (lock_id, applock.get()), extra = logid)
+            logger.info("Currently processing: %s(%s)" % (lock_id, applock.get()), extra = logid)
             return
 
         logger.debug("lock file created: %s(%s)" % (lock_id, applock.get()), extra = logid)
@@ -73,30 +95,30 @@ def manage_manual_action():
         # These jobs should execute even when auto action is disabled.
         # Note: manual actions will not be executed in the order they are selected, but by age.
         #
-        manual_selects = DMFileStat.objects.filter(action_state__in=['SA', 'SE', 'SD']).order_by('created')
-        if manual_selects.exists():
-            actiondmfilestat = manual_selects[0]
-            user = actiondmfilestat.user_comment.get('user', 'dm_agent')
-            user_comment = actiondmfilestat.user_comment.get('user_comment', 'Manual Action')
-
-            dmfileset = actiondmfilestat.dmfileset
-            applock.update(actiondmfilestat.result.resultsName)
-            if actiondmfilestat.action_state == 'SA':
-                logger.info("Manual Archive Action: %s from %s" % (dmfileset.type, actiondmfilestat.result.resultsName), extra = logid)
-                archive_action(user, user_comment, actiondmfilestat, lock_id, msg_banner = True)
-            elif actiondmfilestat.action_state == 'SE':
-                logger.info("Manual Export Action: %s from %s" % (dmfileset.type, actiondmfilestat.result.resultsName), extra = logid)
-                export_action(user, user_comment, actiondmfilestat, lock_id, msg_banner = True)
-            elif actiondmfilestat.action_state == 'SD':
-                logger.info("Delete Action: %s from %s" % (dmfileset.type, actiondmfilestat.result.resultsName), extra = logid)
-                delete_action(user, "Continuing delete action after being suspended", actiondmfilestat, lock_id, msg_banner = True)
-            else:
-                logger.warn("Dev Error: we don't handle this '%s' here" % actiondmfilestat.action_state, extra = logid)
-
+        actiondmfilestat = getfirstmanualaction()
+        
+        user = actiondmfilestat.user_comment.get('user', 'dm_agent')
+        user_comment = actiondmfilestat.user_comment.get('user_comment', 'Manual Action')
+        logger.info("Picked: %s" % (actiondmfilestat.result.resultsName), extra = logid)
+        
+        dmfileset = actiondmfilestat.dmfileset
+        applock.update(actiondmfilestat.result.resultsName)
+        if actiondmfilestat.action_state == 'SA':
+            logger.info("Manual Archive Action: %s from %s" % (dmfileset.type, actiondmfilestat.result.resultsName), extra = logid)
+            archive_action(user, user_comment, actiondmfilestat, lock_id, msg_banner = True)
+        elif actiondmfilestat.action_state == 'SE':
+            logger.info("Manual Export Action: %s from %s" % (dmfileset.type, actiondmfilestat.result.resultsName), extra = logid)
+            export_action(user, user_comment, actiondmfilestat, lock_id, msg_banner = True)
+        elif actiondmfilestat.action_state == 'SD':
+            logger.info("Delete Action: %s from %s" % (dmfileset.type, actiondmfilestat.result.resultsName), extra = logid)
+            delete_action(user, "Continuing delete action after being suspended", actiondmfilestat, lock_id, msg_banner = True)
         else:
+            logger.warn("Dev Error: we don't handle this '%s' here" % actiondmfilestat.action_state, extra = logid)
+
+    except DMExceptions.NoDMFileStat:
             applock.unlock()
             logger.debug("Worker PID %d lock_id destroyed on exit %s" % (os.getpid(), lock_id), extra = logid)
-#NOTE: all these exceptions are also handled in manage_data() below.  beaucoup de duplication de code
+    #NOTE: all these exceptions are also handled in manage_data() below.  beaucoup de duplication de code
     except (DMExceptions.FilePermission,
             DMExceptions.InsufficientDiskSpace,
             DMExceptions.MediaNotSet,
@@ -171,7 +193,7 @@ def manage_data(deviceid, dmfileset, pathlist, auto_acknowledge_enabled, auto_ac
         applock = TaskLock(lock_id)
 
         if not(applock.lock()):
-            logger.debug("lock file exists: %s(%s)" % (lock_id, applock.get()), extra = logid)
+            logger.info("Currently processing: %s(%s)" % (lock_id, applock.get()), extra = logid)
             return
 
         logger.debug("lock file created: %s(%s)" % (lock_id, applock.get()), extra = logid)
@@ -526,7 +548,8 @@ def backfill_create_dmfilestat():
             except:
                 pass
             else:
-                continue
+                if dmfilestat:
+                    continue
 
             kwargs = {
                 'result':result,

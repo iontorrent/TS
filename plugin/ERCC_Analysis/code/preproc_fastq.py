@@ -43,10 +43,12 @@ def base_quality_trim(base_seq, quality_metric_seq, threshold, min_length):
 def process_read(read,threshold,min_length):
     # backup read.qual, pysam removes it once I set red.seq
     read_qual = read.qual
-
+    # GDM: pysam object sets properties seq/qual to None if the assignment string is ''
     read.seq = base_quality_trim(read.seq, read.qual, threshold, min_length)
-    if len(read.seq)>0:
+    if read.seq and len(read.seq)>0:
         read.qual = read_qual[0:len(read.seq)]
+    else:
+        read.qual = ''
 
 
 def bam_preproc(path_to_input_bam, path_to_output_file, threshold, min_length):
@@ -62,7 +64,8 @@ def bam_preproc(path_to_input_bam, path_to_output_file, threshold, min_length):
             x.qual = xqual[::-1]       
         process_read(x,threshold,min_length)
         #output_bam.write(x)
-        output_fastq.write("@%s\n%s\n+\n%s\n" % (x.qname,x.seq,x.qual))
+        if x.seq:
+            output_fastq.write("@%s\n%s\n+\n%s\n" % (x.qname,x.seq,x.qual))
     input_bam.close()
     #output_bam.close()
     output_fastq.close()

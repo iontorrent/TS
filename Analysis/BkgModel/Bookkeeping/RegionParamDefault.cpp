@@ -21,6 +21,10 @@ RegionParamDefault::RegionParamDefault()
   molecules_to_micromolar_conv = 0.000062f;
   tau_R_m_default = -24.36;
   tau_R_o_default = 25.16;
+  tau_E_default = tau_R_m_default + tau_R_o_default;
+  min_tauB_default = 4;
+  mid_tauB_default = 12.5;
+  max_tauB_default = 65;
   tshift_default = 0.4f;
 
 }
@@ -28,7 +32,7 @@ RegionParamDefault::RegionParamDefault()
 //@TODO: this is a bad, bad idea, due only to the fact that our default input is structured poorly
 //replace this when the JSON files are used with an actual input
 void RegionParamDefault::BadIdeaComputeDerivedInput(){
-  tau_E_default =tau_R_m_default + tau_R_o_default;
+  tau_E_default = tau_R_m_default + tau_R_o_default;
 
 }
 
@@ -62,6 +66,16 @@ void RegionParamDefault::FromJson(Json::Value &gopt_params){
     molecules_to_micromolar_conv = gopt_params["molecules_to_micromolar_conv"].asFloat();
   tau_R_m_default = gopt_params["tau_R_m"].asFloat();
   tau_R_o_default = gopt_params["tau_R_o"].asFloat();
+
+  // new params for taue (im1) optimization
+  if (!gopt_params["tau_E"].isNull())
+    tau_E_default = gopt_params["tau_E"].asFloat();
+  if (!gopt_params["min_tauB"].isNull())
+    min_tauB_default = gopt_params["min_tauB"].asFloat();
+  if (!gopt_params["mid_tauB"].isNull())
+    mid_tauB_default = gopt_params["mid_tauB"].asFloat();
+  if (!gopt_params["max_tauB"].isNull())
+    max_tauB_default = gopt_params["max_tauB"].asFloat();
 
   // of interest: we historically have not controlled this
   if (!gopt_params["tshift"].isNull())
@@ -99,6 +113,14 @@ void RegionParamDefault::FromCharacterLine(char *line){
     num = sscanf ( line,"tau_R_m: %f",&tau_R_m_default );
   if ( strncmp ( "tau_R_o",line,7 ) == 0 )
     num = sscanf ( line,"tau_R_o: %f",&tau_R_o_default );
+  if ( strncmp ( "tau_E",line,5 ) == 0 )
+    num = sscanf ( line,"tau_E: %f",&tau_E_default );
+  if ( strncmp ( "min_tauB",line,8 ) == 0 )
+    num = sscanf ( line,"min_tauB: %f",&min_tauB_default );
+  if ( strncmp ( "mid_tauB",line,8 ) == 0 )
+    num = sscanf ( line,"mid_tauB: %f",&mid_tauB_default );
+  if ( strncmp ( "max_tauB",line,8 ) == 0 )
+    num = sscanf ( line,"max_tauB: %f",&max_tauB_default );
   if ( strncmp ( "sigma_mult", line, 10 ) == 0 )
   {
     num = sscanf ( line,"sigma_mult: %f %f %f %f", &d[0],&d[1],&d[2],&d[3] );
@@ -122,6 +144,9 @@ void RegionParamDefault::DumpPoorlyStructuredText(){
   printf ( "tau_R_m: %f\n",tau_R_m_default );
   printf ( "tau_R_o: %f\n",tau_R_o_default );
   printf ( "tau_E: %f\n",tau_E_default );
+  printf ( "min_tauB: %f\n",min_tauB_default );
+  printf ( "mid_tauB: %f\n",mid_tauB_default );
+  printf ( "max_tauB: %f\n",max_tauB_default );
   printf ( "tshift: %f\n",tshift_default);
 
 }

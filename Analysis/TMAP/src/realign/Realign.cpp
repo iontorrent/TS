@@ -95,7 +95,7 @@ void Realigner::InitializeRealigner(unsigned int reserve_size, unsigned int clip
 
 // -------------------------------------------------------------------
 
-bool Realigner::SetScores(const vector<int> score_vec) {
+bool Realigner::SetScores(const vector<int>& score_vec) {
   if (score_vec.size() != 4)
     return false;
   kMatchScore    =  score_vec[0];
@@ -322,7 +322,7 @@ bool Realigner::ComputeTubedAlignmentBoundaries()
 bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>& MD_data,
                        unsigned int& start_pos_update) {
 
-  string dummy_string;
+  // string dummy_string;
   
   // Compute boundaries for tubed alignment around previously found alignment
   if (!ComputeTubedAlignmentBoundaries())
@@ -383,8 +383,11 @@ bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>
         continue;
 
       // Scoring for Match; Mismatch / Insertion / Deletion;
-      DP_matrix[t_idx][q_idx].scores.assign(FROM_NOWHERE+1, kNotApplicable);
-      DP_matrix[t_idx][q_idx].in_directions.assign(FROM_NOWHERE, FROM_NOWHERE);
+      // work around a c++11 issue
+      int kNotApplicable_tmp = kNotApplicable;
+      int FROM_NOWHERE_tmp = FROM_NOWHERE;
+      DP_matrix[t_idx][q_idx].scores.assign(FROM_NOWHERE_tmp+1, kNotApplicable_tmp); //C++11 issue
+      DP_matrix[t_idx][q_idx].in_directions.assign(FROM_NOWHERE_tmp, FROM_NOWHERE_tmp); //C++11 issue
       if (soft_clip_left_)
         DP_matrix[t_idx][q_idx].scores[FROM_NOWHERE] = 0;
 
@@ -399,7 +402,7 @@ bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>
       }
 
       // 2) - Insertion Score
-      temp_scores.assign(FROM_NOWHERE, kNotApplicable);
+      temp_scores.assign(FROM_NOWHERE, kNotApplicable_tmp);
       temp_scores[FROM_MATCH] = DP_matrix[t_idx][q_idx-1].scores[FROM_MATCH] + kGapOpen;
       temp_scores[FROM_I] = DP_matrix[t_idx][q_idx-1].scores[FROM_I] + kGapExtend;
       temp_scores[FROM_MISM] = DP_matrix[t_idx][q_idx-1].scores[FROM_MISM] + kGapOpen;
@@ -413,7 +416,7 @@ bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>
       }
 
       // 3) - Deletion Score
-      temp_scores.assign(FROM_NOWHERE, kNotApplicable);
+      temp_scores.assign(FROM_NOWHERE, kNotApplicable_tmp);
       temp_scores[FROM_MATCH] = DP_matrix[t_idx-1][q_idx].scores[FROM_MATCH] + kGapOpen;
       temp_scores[FROM_D] = DP_matrix[t_idx-1][q_idx].scores[FROM_D] + kGapExtend;
       temp_scores[FROM_MISM] = DP_matrix[t_idx-1][q_idx].scores[FROM_MISM] + kGapOpen;
@@ -439,7 +442,7 @@ bool Realigner::computeSWalignment(vector<CigarOp>& CigarData, vector<MDelement>
       // Clipping settings determine where we search for the best scoring cell to stop aligning
       bool valid_t_idx = stop_anywhere_in_ref_ or (t_idx == t_seq_.size());
       bool valid_q_idx = soft_clip_right_ or (q_idx == q_seq_.size());
-      bool investigate_highscore = valid_t_idx and valid_q_idx;
+      bool investigate_highscore = valid_t_idx && valid_q_idx;
 
       if (investigate_highscore and DP_matrix[t_idx][q_idx].best_score
                > DP_matrix[highest_score_cell[0]][highest_score_cell[1]].best_score) {
@@ -742,7 +745,7 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
   vector<CigarOp>::const_iterator cigar_it = (clipped_anchors_.cigar_left.end()-1);
   if (cigar_it->Type == cigar_data.begin()->Type) {
     cigar_data.begin()->Length += cigar_it->Length;
-    cigar_it--;
+    --cigar_it;
   } else if (cigar_data.begin()->Type == 'S') {
       if (verbose_)
         cerr << "Error, invalid cigar: Soft clipping occurred after left anchor!" << endl;
@@ -751,7 +754,7 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
   while (cigar_it > clipped_anchors_.cigar_left.begin()) {
     if (cigar_it->Length > 0)
       cigar_data.insert(cigar_data.begin(), *cigar_it);
-    cigar_it--;
+    --cigar_it;
   }
   if (cigar_it == clipped_anchors_.cigar_left.begin() and cigar_it->Length > 0)
     cigar_data.insert(cigar_data.begin(), *cigar_it);
@@ -760,7 +763,7 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
   cigar_it = clipped_anchors_.cigar_right.end()-1;
   if (cigar_it->Type == (cigar_data.end()-1)->Type) {
     (cigar_data.end()-1)->Length += cigar_it->Length;
-    cigar_it--;
+    --cigar_it;
   } else if ((cigar_data.end()-1)->Type == 'S') {
       if (verbose_)
         cerr << "Error, invalid cigar: Soft clipping occurred before right anchor!" << endl;
@@ -769,7 +772,7 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
   while (cigar_it > clipped_anchors_.cigar_right.begin()) {
     if (cigar_it->Length > 0)
       cigar_data.push_back(*cigar_it);
-    cigar_it--;
+    --cigar_it;
   }
   if (cigar_it == clipped_anchors_.cigar_right.begin() and cigar_it->Length > 0)
     cigar_data.push_back(*cigar_it);
@@ -783,10 +786,10 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
       return false;
     }
     MD_data.begin()->Length += md_it->Length;
-    md_it--;
+    --md_it;
     while (md_it != (clipped_anchors_.md_left.begin()-1)) {
       MD_data.insert(MD_data.begin(), *md_it);
-      md_it--;
+      --md_it;
     }
   }
 
@@ -799,16 +802,16 @@ bool Realigner::addClippedBasesToTags(vector<CigarOp>& cigar_data, vector<MDelem
       return false;
     }
     (MD_data.end()-1)->Length += md_it->Length;
-    md_it--;
+    --md_it;
     while (md_it != (clipped_anchors_.md_right.begin()-1)) {
       MD_data.push_back(*md_it);
-      md_it--;
+      --md_it;
     }
   }
 
   // Sanity check for newly created tag:
   unsigned int nr_bases = 0;
-  for (cigar_it = cigar_data.begin(); cigar_it != cigar_data.end(); cigar_it++) {
+  for (cigar_it = cigar_data.begin(); cigar_it != cigar_data.end(); ++cigar_it) {
     if (cigar_it->Type == 'S' or cigar_it->Type == 'M' or cigar_it->Type == 'I' or cigar_it->Type == '=' or cigar_it->Type == 'X')
       nr_bases += cigar_it->Length;
   }
@@ -842,7 +845,7 @@ int Realigner::updateReadPosition(const vector<CigarOp>& original_cigar,
   while (!is_match) {
     if (cigar_it->Type == 'D')
       nr_deletions += (int)cigar_it->Length;
-    cigar_it++;
+    ++cigar_it;
     if (cigar_it != original_cigar.end())
       is_match = cigar_it->Type == 'M' or cigar_it->Type == '=' or cigar_it->Type == 'X';
     else

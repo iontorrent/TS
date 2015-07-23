@@ -15,11 +15,11 @@
 #include "OptBase.h"
 
 void RealImagesToWells ( 
-						OptArgs &opts,
-						CommandLineOpts &inception_state,                        
-                        SeqListClass &my_keys,
-                        TrackProgress &my_progress, 
-                        ImageSpecClass &my_image_spec,
-			SlicedPrequel &my_prequel_setup);
+    OptArgs &opts,
+    CommandLineOpts &inception_state,                        
+    SeqListClass &my_keys,
+    TrackProgress &my_progress, 
+    ImageSpecClass &my_image_spec,
+    SlicedPrequel &my_prequel_setup);
 
 #endif // PROCESSIMAGETOWELL_H

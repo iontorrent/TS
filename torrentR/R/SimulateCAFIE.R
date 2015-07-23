@@ -6,7 +6,7 @@ SimulateCAFIE <- function(
   dr,
   nflows,
   hpScale      = 1,
-  simModel     = c("treePhaserSim","CafieSolver","PhaseSim"),
+  simModel     = c("treePhaserSim","CafieSolver","DPPhaseSim","PhaseSim"),
   hpSignal     = 0:11,
   sigMult      = 1,
   conc         = diag(4),
@@ -37,12 +37,23 @@ SimulateCAFIE <- function(
   if((length(hpScale) != 1) & (length(hpScale) != 4))
     stop("hpScale must be of length 1 or 4\n");
   
-  if ((length(cf) != 1) && (length(cf) != length(seq)))
-    stop("Error in SimulateCAFIE: Lenght of <cf> must be 1 or equal to length(seq)")
-  if (length(ie) != length(cf))
-    stop("Error in SimulateCAFIE: Length of <ie> must be equal to length of cf.")
-  if (length(dr) != length(cf))
-    stop("Error in SimulateCAFIE: Length of <dr> must be equal to length of cf.")
+
+  if(!is.matrix(cf))
+	cf <- matrix(cf,nrow=1)
+  size_ok_cf <- all(dim(cf)==c(1,1)) || all(dim(cf)==c(1,length(seq))) || all(dim(cf)==c(nflows,nflows))
+  if (!size_ok_cf)
+    stop("Error in SimulateCAFIE: Lenght of <cf> must be 1, equal to length(seq), or a nflowsXnflows matrix (DPPhaseSim).")
+
+  if(!is.matrix(ie))
+	ie <- matrix(ie,nrow=1)
+  if ( any(dim(ie) != dim(cf)) )
+    stop("Error in SimulateCAFIE: Dimension of <ie> must be equal to length of cf.")
+
+  if(!is.matrix(dr))
+	dr <- matrix(dr,nrow=1)
+  if ( any(dim(dr) != dim(cf)) )
+	stop("Error in SimulateCAFIE: Dimension of <dr> must be equal to length of cf.")
+
   
   if (RecalModelFile != "") {
     if (simModel != "treePhaserSim")
@@ -57,6 +68,8 @@ SimulateCAFIE <- function(
     val <- .Call("treePhaserSim", seq, flowOrder, cf, ie, dr, nflows, getStates, diagonalStates, RecalModelFile, RecalModelThreshold, xval, yval, PACKAGE="torrentR")
   } else if(simModel == "CafieSolver") {
     val <- .Call("SimulateCAFIE", seq, flowOrder, cf, ie, dr, nflows, hpSignal, sigMult, PACKAGE="torrentR")
+  } else if(simModel == "DPPhaseSim") {
+	  val <- .Call("DPPhaseSim", seq, flowOrder, cf, ie, dr, nflows, getStates, conc, PACKAGE="torrentR")
   } else {
     droopType <- match.arg(droopType)
     val <- .Call("phaseSimulator", seq, flowOrder, conc, cf, ie, dr, hpScale, nflows, maxAdvances, droopType, extraTaps, PACKAGE="torrentR")

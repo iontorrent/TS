@@ -32,6 +32,7 @@ COLUMN_BARCODE = "Barcode"
 COLUMN_CANCER_TYPE = "Cancer Type"
 COLUMN_CELLULARITY_PCT = "Cellularity %"
 COLUMN_NUCLEOTIDE_TYPE = "DNA/RNA"
+COLUMN_PCR_PLATE_POSITION = "PCR Plate Position"
 
 def process_csv_sampleSet(csvSampleDict, request, user, sampleSet_ids):
     """ read csv contents and convert data to raw data to prepare for sample persistence
@@ -72,6 +73,7 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     
     cancerType = csvSampleDict.get(COLUMN_CANCER_TYPE, "").strip()
     cellularityPct = csvSampleDict.get(COLUMN_CELLULARITY_PCT, None).strip()
+    pcrPlateRow = csvSampleDict.get(COLUMN_PCR_PLATE_POSITION, "").strip()
     
     if not sampleGroup:
         sampleGroup = '0'
@@ -82,7 +84,8 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
     isValid, errorMessage, gender_CV_value = sample_validator.validate_sampleGender(sampleGender)      
     isValid, errorMessage, role_CV_value = sample_validator.validate_sampleGroupType(sampleGroupType)
 
-    isValid, errorMessage, cancerType_CV_value = sample_validator.validate_cancerType(cancerType)        
+    isValid, errorMessage, cancerType_CV_value = sample_validator.validate_cancerType(cancerType)            
+    isValid, errorMessage, pcrPlateRow_internal_value = sample_validator.validate_pcrPlateRow(pcrPlateRow)
     
     sampleName = sampleDisplayedName.replace(' ', '_')
     sample_kwargs = {
@@ -115,6 +118,8 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
         if barcodeKit and barcodeAssignment:
             dnabarcode = models.dnaBarcode.objects.get(name__iexact=barcodeKit, id_str__iexact=barcodeAssignment)   
       
+        pcrPlateColumn = "1" if pcrPlateRow_internal_value else ""
+
         sampleSetItem_kwargs = {
                                  'gender' : gender_CV_value, 
                                  'relationshipRole' : role_CV_value, 
@@ -130,7 +135,9 @@ def _create_sampleSetItem(csvSampleDict, request, user, sampleSet_ids):
         sampleSetItem, isCreated = SampleSetItem.objects.get_or_create(sample = sample, 
                                                                        sampleSet_id = sampleSetId, 
                                                                        dnabarcode = dnabarcode,
-                                                                       nucleotideType = nucleotideType_internal_value,                                                                       
+                                                                       nucleotideType = nucleotideType_internal_value, 
+                                                                       pcrPlateRow = pcrPlateRow_internal_value, 
+                                                                       pcrPlateColumn = pcrPlateColumn,                                                                     
                                                                        defaults = sampleSetItem_kwargs)
 
         logger.debug("import_sample_processor._create_sampleSetItem() after get_or_create isCreated=%s; sampleSetItem=%s; samplesetItem.id=%d" %(str(isCreated), sampleDisplayedName, sampleSetItem.id))            
@@ -239,7 +246,8 @@ def validate_csv_sample(csvSampleDict, request):
      
         cancerType = csvSampleDict.get(COLUMN_CANCER_TYPE, "").strip()
         cellularityPct = csvSampleDict.get(COLUMN_CELLULARITY_PCT, None).strip()
-
+        pcrPlateRow = csvSampleDict.get(COLUMN_PCR_PLATE_POSITION, "").strip()
+        
         #skip blank line
         hasAtLeastOneValue = bool([v for v in csvSampleDict.values() if v != ''])
         if not hasAtLeastOneValue:
@@ -286,7 +294,11 @@ def validate_csv_sample(csvSampleDict, request):
             if not isValid:
                 failed.append((COLUMN_NUCLEOTIDE_TYPE, errorMessage))     
         
-          
+        if pcrPlateRow:
+            isValid, errorMessage, pcrPlateRow_internal_value = sample_validator.validate_pcrPlateRow(pcrPlateRow)
+            if not isValid:
+                failed.append((COLUMN_PCR_PLATE_POSITION, errorMessage))     
+
         ##NEW VALIDATION FOR BARCODEKIT AND BARCODE_ID_STR
         isValid, errorMessage, item = sample_validator.validate_barcodekit_and_id_str(barcodeKit, barcodeAssignment)
         if not isValid:
@@ -372,8 +384,7 @@ def validate_barcodes_for_existing_samples(row_list, sampleset_ids):
     count = 0
     for row in row_list:
         count += 1
-        barcode = row.get(COLUMN_BARCODE,"")
-        barcode = barcode.strip()
+        barcode = row.get(COLUMN_BARCODE,"").strip()
         
         if barcode: 
             dnabarcode = models.dnaBarcode.objects.filter(id_str__iexact=barcode)
@@ -404,4 +415,61 @@ def validate_barcodes_for_existing_samples(row_list, sampleset_ids):
                 if barcode and barcode1 and barcode == barcode1:
                     msgs[count] = ((COLUMN_BARCODE, "Error, A barcode can be assigned to only one sample in the sample set and %s has been assigned to another sample" %(barcode)))
 
+    return msgs
+
+
+def validate_pcrPlateRow_for_existing_samples(row_list, sampleset_ids):
+    """
+    Validates for uniqueness of PCR plate position and mandatory input for AmpliSeqOnChef sample sets
+    """
+        
+    msgs = dict()
+    count = 0
+    
+    for row in row_list:
+        count += 1
+        pcrPlateRow = row.get(COLUMN_PCR_PLATE_POSITION,"").strip()
+
+        for sampleset_id in sampleset_ids:
+        
+            sampleset = models.SampleSet.objects.get(pk=sampleset_id)
+            samplesetitems = sampleset.samples.all()
+
+            #validate when adding samples to pre-existing sampleset
+            if samplesetitems.count():
+                for item in samplesetitems:
+                    pcrPlateRow1 = item.pcrPlateRow
+                
+                    item_id = item.pk
+                    
+                    #ensure only 1 pcr plate position per sample
+                    if pcrPlateRow and pcrPlateRow1 and pcrPlateRow.upper() == pcrPlateRow1.upper():
+                        isValid = False
+                        errorMessage = "Error, A PCR plate position can only have one sample in it. Position %s has already been occupied by another sample  " %(pcrPlateRow.upper())
+                        msgs[count] = ((COLUMN_PCR_PLATE_POSITION, errorMessage)) 
+    
+                    if (sampleset and not pcrPlateRow and "amps_on_chef" in sampleset.libraryPrepType.lower()):
+                        errorMessage = "Error, A PCR plate position must be specified for AmpliSeq on Chef sample" 
+                        msgs[count] = ((COLUMN_PCR_PLATE_POSITION, errorMessage))
+            else:
+                if (sampleset and not pcrPlateRow and "amps_on_chef" in sampleset.libraryPrepType.lower()):
+                    errorMessage = "Error, A PCR plate position must be specified for AmpliSeq on Chef sample" 
+                    msgs[count] = ((COLUMN_PCR_PLATE_POSITION, errorMessage))            
+                                          
+    return msgs
+
+def validate_pcrPlateRow_are_unique(row_list):
+    positions = []
+    msgs = dict()
+    count = 0
+    for row in row_list:
+        count += 1
+        pcrPlateRow = row.get(COLUMN_PCR_PLATE_POSITION,"").strip().upper()
+
+        if pcrPlateRow:
+            if pcrPlateRow in positions:
+                msgs[count] = ((COLUMN_PCR_PLATE_POSITION, "Error, A PCR plate position can only have one sample in it. Position %s has already been occupied by another sample  " %(pcrPlateRow)))
+            else:
+                positions.append(pcrPlateRow)
+                
     return msgs

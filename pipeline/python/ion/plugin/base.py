@@ -201,7 +201,7 @@ class IonPlugin(IonPluginBase, IonPluginRuntime):
 
         # If plugin reported value is empty,
         if not rt:
-            # PGM runs and Proton Thumbnails
+            # PGM runs and Thumbnails
             rt = [ ion.plugin.constants.RunType.FULLCHIP,
                    ion.plugin.constants.RunType.THUMB ]
             # Infer supported RunTypes from implemented methods

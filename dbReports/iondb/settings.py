@@ -139,7 +139,6 @@ TEMPLATE_CONTEXT_PROCESSORS = (
     'django.contrib.messages.context_processors.messages',
     'iondb.rundb.context_processors.base_context_processor',
     'iondb.rundb.context_processors.message_binding_processor',
-    'django.contrib.messages.context_processors.messages',
 )
 
 INSTALLED_APPS = (
@@ -147,7 +146,6 @@ INSTALLED_APPS = (
     'django.contrib.admin',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
-    'django.contrib.messages',
     'django.contrib.admindocs',
     'django.contrib.sites',
     'django.contrib.staticfiles',

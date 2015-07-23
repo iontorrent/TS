@@ -1,7 +1,4 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
-// patch for CUDA5.0/GCC4.7
-#undef _GLIBCXX_ATOMIC_BUILTINS
-#undef _GLIBCXX_USE_INT128
 
 #include <iostream>
 
@@ -14,8 +11,17 @@
 #include "GpuMultiFlowFitControl.h"
 #include "SignalProcessingFitterQueue.h"
 
+#include "LayoutTranslator.h"
 
+#define REGIONAL_DUMP 0
 //#define MIN_MEMORY_FOR_ONE_STREAM (450*1024*1024)
+#define FGBUFFER_DUMP 0
+#define EMPTYTRACE_DUMP 0
+#define RESULT_DUMP 0
+
+#define PROJECTION_ONLY 0
+
+#define COLLECT_SAMPLES_FROM_FIRST20 0
 
 using namespace std;
 
@@ -121,7 +127,6 @@ void SimpleSingleFitStream::resetPointers()
     //all inputs are grouped now
     _hdCopyInGroup = _resource->GetCurrentPairGroup();
 
-
     //Device Only Memory Segments
     _dFgBufferFloat = _resource->getDevSegment(_myJob.getFgBufferSize(true));
     _dWorkBase = _resource->getDevSegment(getScratchSpaceAllocSize(_myJob)   );
@@ -133,8 +138,8 @@ void SimpleSingleFitStream::resetPointers()
     if(_myJob.performCrossTalkCorrection()){
       _hConstXtalkP  = _resource->getHostSegment(sizeof(ConstXtalkParams));
       _hNeiIdxMap = _resource->getHostSegment(_myJob.getXtalkNeiIdxMapSize(true));
+      _hSampleNeiIdxMap = _resource->getHostSegment(_myJob.getXtalkSampleNeiIdxMapSize(true));
     }
-
 
     //Reuse buffers on the device for other stuff ot create pointers to repacked data
 
@@ -191,7 +196,9 @@ void SimpleSingleFitStream::resetPointers()
       _dXtalk = _dNeiContribution.splitAt(padNB *_myJob.getNumXtalkNeighbours()*_F);
       _dXtalkScratch = _dXtalk.splitAt(padNB*_F);
       _dNeiIdxMap = _dXtalkScratch.splitAt(padNB * 3*_F);
-      _dNeiIdxMap.checkSize(padNB*_myJob.getNumXtalkNeighbours());
+      _dSampleNeiIdxMap = _dNeiIdxMap.splitAt(_myJob.getXtalkNeiIdxMapSize(true));
+      _dGenericXtalk = _dSampleNeiIdxMap.splitAt(_myJob.getXtalkSampleNeiIdxMapSize(true));
+      _dGenericXtalk.checkSize(_myJob.getPaddedGenericXtalkSample()*_F);
     }
 
   }
@@ -238,6 +245,18 @@ void SimpleSingleFitStream::serializeInputs()
     tmpConstP->useRecompressTailRawTrace = (_myJob.performRecompressionTailRawTrace() && 
         _myJob.performExpTailFitting());
 
+    size_t rC = _myJob.getRegCol();
+    size_t rR = _myJob.getRegRow();
+    /*
+    ImgRegParams irP;
+    irP.init(_myJob.getImgWidth(),_myJob.getImgHeight(), 216,224,_myJob.getNumFrames());
+    size_t regId  = irP.getRegId(rC,rR);
+
+    if(irP.isInRegion(regId, 321928)) tmpConstP->dumpRegion = true;
+    else tmpConstP->dumRegion = false;
+    */
+
+    memcpy(tmpConstP->std_frames_per_point, _myJob.GetETFFramesPerPoint(), _myJob.GetETFFramesPerPointSize());
         // for recompressing traces
     if (_myJob.performExpTailFitting() && _myJob.performRecompressionTailRawTrace()) {
       _hdStdTimeCompEmphVec.copyIn(_myJob.GetStdTimeCompEmphasis(), _myJob.GetStdTimeCompEmphasisSize());
@@ -249,14 +268,16 @@ void SimpleSingleFitStream::serializeInputs()
           _myJob.GetETFInterpolationMulSize());
       memcpy(tmpConstP->deltaFrames_std, _myJob.GetStdTimeCompDeltaFrame(), 
           _myJob.GetStdTimeCompDeltaFrameSize());
-      memcpy(tmpConstP->std_non_zero_emphasis_frames, 
-          _myJob.GetNonZeroEmphasisFramesForStdCompression(), 
-          _myJob.GetNonZeroEmphasisFramesVecSize());
+            memcpy(tmpConstP->std_non_zero_emphasis_frames,
+              _myJob.GetNonZeroEmphasisFramesForStdCompression(),
+              _myJob.GetNonZeroEmphasisFramesVecSize());
+
     }
 
     if(_myJob.performCrossTalkCorrection()) {
       // copy neighbor map for xtalk
       ConstXtalkParams *tmpConstXtalkP = _hConstXtalkP.getPtr();
+      tmpConstXtalkP->simpleXtalk = _myJob.IsSimpleTraceLevelXtalk();
       tmpConstXtalkP->neis = _myJob.getNumXtalkNeighbours();
       memcpy( tmpConstXtalkP->multiplier, _myJob.getXtalkNeiMultiplier(),sizeof(float)*_myJob.getNumXtalkNeighbours());
       memcpy( tmpConstXtalkP->tau_top, _myJob.getXtalkNeiTauTop(),sizeof(float)*_myJob.getNumXtalkNeighbours());
@@ -264,7 +285,77 @@ void SimpleSingleFitStream::serializeInputs()
 
       _hNeiIdxMap.copyIn(const_cast<int*>(_myJob.getNeiIdxMapForXtalk()),
           sizeof(int)*_myJob.getNumBeads()*_myJob.getNumXtalkNeighbours());
+
+      _hSampleNeiIdxMap.copyIn(const_cast<int*>(_myJob.getSampleNeiIdxMapForXtalk()),
+          sizeof(int)*(GENERIC_SIMPLE_XTALK_SAMPLE)*_myJob.getNumXtalkNeighbours());
     }
+
+
+    if( (_myJob.getAbsoluteFlowNum()%_myJob.getFlowBlockSize()) == 0 ){
+      ImgRegParams irP;
+      irP.init(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getMaxRegionWidth(),_myJob.getMaxRegionHeight());
+      if(_myJob.getAbsoluteFlowNum() >= 20){
+
+      //static RegParamDumper regDump(_myJob.getImgWidth(),_myJob.getImgHeight(),_myJob.getRegionWidth(), _myJob.getRegionHeight());
+      //regDump.DumpAtFlow(rC, rR,*tmpConstP,_myJob.getAbsoluteFlowNum());
+
+
+
+#if REGIONAL_DUMP
+      static CubePerFlowDump<reg_params> RegionDump(  irP.getGridDimX(), irP.getGridDimY(),1,1,1,1);
+
+      RegionDump.setFilePathPrefix("RegionParams");
+      RegionDump.DumpFlowBlockRegion(irP.getRegId(rC,rR),_myJob.getRegionParams(),_myJob.getAbsoluteFlowNum(),1);
+
+#endif
+
+#if EMPTYTRACE_DUMP
+      static CubePerFlowDump<float> emptyTraceDump(  irP.getGridDimX()*_myJob.getUncompressedFrames(), irP.getGridDimY(),
+                                          _myJob.getUncompressedFrames(), 1,1, _myJob.getFlowBlockSize());
+
+      //empty trace average;
+      emptyTraceDump.setFilePathPrefix("EmptyTraces");
+      emptyTraceDump.DumpFlowBlockRegion(irP.getRegId(rC,rR),_myJob.getShiftedBackground(),_myJob.getAbsoluteFlowNum(),_myJob.getNumFrames());
+#endif
+
+   /*
+      static CubePerFlowDump<float> NucRiseDump(  irP.getGridDimX()*_myJob., irP.getGridDimY(),
+                                               _myJob.getUncompressedFrames(), 1,1, _myJob.getFlowBlockSize());
+
+           //empty trace average;
+      NucRiseDump.setFilePathPrefix("NucRise");
+      NucRiseDump.DumpFlowBlockRegion(irP.getRegId(rC,rR),_myJob.getShiftedBackground(),_myJob.getAbsoluteFlowNum(),_myJob.getNumFrames());
+*/
+
+
+/*
+      static CubePerFlowDump<float> emphasisDump(  irP.getGridDimX()*_myJob.getMaxFrames()*MAX_POISSON_TABLE_COL, irP.getGridDimY(),
+          _myJob.getMaxFrames()*MAX_POISSON_TABLE_COL, 1,1,1);
+
+
+      emphasisDump.setFilePathPrefix("EmphasisDump");
+      emphasisDump.DumpFlowBlockRegion(irP.getRegId(rC,rR),_myJob.getEmphVec(), _myJob.getAbsoluteFlowNum(), _myJob.getEmphVecSize()/sizeof(float));
+*/
+
+
+#if FGBUFFER_DUMP
+      static CubePerFlowDump<short> FGDump(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getRegionWidth(),_myJob.getRegionHeight(),_myJob.getImageFrames(), _myJob.getFlowBlockSize());
+      FGDump.setFilePathPrefix("FgBufferDump");
+      size_t regId = irP.getRegId(rC,rR);
+      LayoutCubeWithRegions<short> fgBufferCube(irP.getRegW(regId),irP.getRegH(regId),irP.getRegW(regId),irP.getRegH(regId),_myJob.getNumFrames());
+
+      for(int f=0; f<_myJob.getFlowBlockSize(); f++){
+        TranslateFgBuffer_RegionToCube(fgBufferCube, _myJob.getNumBeads() , _myJob.getNumFrames(), _myJob.getFlowBlockSize(),_myJob.getFgBuffer()+_myJob.getNumFrames()*f,_myJob.getBeadParams(), 0);
+        FGDump.DumpOneFlowRegion(regId,fgBufferCube,0,_myJob.getAbsoluteFlowNum(),f,0,_myJob.getNumFrames());
+      }
+#endif
+  
+
+      }
+    }
+
+
+
   }
   catch(cudaException &e)
   {
@@ -304,13 +395,37 @@ int SimpleSingleFitStream::handleResults()
 
   if(_myJob.isSet()){
     // for actual pipeline we have to copy the results back into original buffer
-  try{
-    _hdBeadParams.copyOut(_myJob.getBeadParams(), _myJob.getBeadParamsSize());
-    _hdBeadState.copyOut(_myJob.getBeadState(),_myJob.getBeadStateSize());
+    try{
 
-    _myJob.setJobToPostFitStep();
-    _myJob.putJobToCPU(_item);
-  }
+      _hdBeadParams.copyOut(_myJob.getBeadParams(), _myJob.getBeadParamsSize());
+      _hdBeadState.copyOut(_myJob.getBeadState(),_myJob.getBeadStateSize());
+
+
+#if RESULT_DUMP
+      if( _myJob.getAbsoluteFlowNum() >= 20){
+
+        ImgRegParams irP;
+        irP.init(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getRegionWidth(),_myJob.getRegionHeight());
+        size_t rC = _myJob.getRegCol();
+        size_t rR = _myJob.getRegRow();
+        size_t regId = irP.getRegId(rC,rR);
+
+
+        static CubePerFlowDump<float> ResultDump(_myJob.getImgWidth(),_myJob.getImgHeight(), _myJob.getRegionWidth(),_myJob.getRegionHeight(), Result_NUM_PARAMS, _myJob.getFlowBlockSize());
+        ResultDump.setFilePathPrefix("ResultDump");
+
+        LayoutCubeWithRegions<float> ResultCube(irP.getRegW(regId),irP.getRegH(regId),irP.getRegW(regId),irP.getRegH(regId),Result_NUM_PARAMS);
+
+        for(int f=0; f<_myJob.getFlowBlockSize(); f++){
+             TranslateResults_RegionToCube(ResultCube, _myJob.getNumBeads() , f, _myJob.getBeadParams(), 0);
+             ResultDump.DumpOneFlowRegion(regId,ResultCube,0,_myJob.getAbsoluteFlowNum(),f);
+        }
+      }
+#endif
+
+      _myJob.setJobToPostFitStep();
+      _myJob.putJobToCPU(_item);
+    }
 
   catch(cudaException &e)
   {
@@ -373,6 +488,8 @@ void SimpleSingleFitStream::copyToDevice()
     if(_myJob.performCrossTalkCorrection()) {
       StreamingKernels::copyXtalkConstParamAsync(_hConstXtalkP.getPtr(), getStreamId() ,_stream);CUDA_ERROR_CHECK();
       _dNeiIdxMap.copyAsync(_hNeiIdxMap, _stream, sizeof(int)*_myJob.getNumBeads()*_myJob.getNumXtalkNeighbours());
+      _dSampleNeiIdxMap.copyAsync(_hSampleNeiIdxMap, _stream, sizeof(int)*(GENERIC_SIMPLE_XTALK_SAMPLE)*
+                                    _myJob.getNumXtalkNeighbours());
     }
 
   }
@@ -436,6 +553,7 @@ void SimpleSingleFitStream::executeKernel()
         _dPhi.getPtr(), // N
         (float*)_hdShiftedBkg.getPtr() + fnum*_F, // FLxF
         (float*)_dFgBufferFloat.getPtr() + fnum*_padN*_F, // FLxFxN
+        _hdBeadState.getPtr(),
         _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
         fnum,
         _N, // 4
@@ -445,28 +563,57 @@ void SimpleSingleFitStream::executeKernel()
         _dNeiContribution.getPtr(),
         getStreamId());
   
-        StreamingKernels::XtalkAccumulationAndSignalCorrection(
-            grid, 
-            block, 
-            0, 
-            _stream,
-            fnum,
-            (float*)_dFgBufferFloat.getPtr() + fnum*_padN*_F, // FLxFxN
-            _N, // 4
-            _F, // 4
-            _dNeiIdxMap.getPtr(),
-            _dNeiContribution.getPtr(),
-            _dXtalk.getPtr(),
-            _dCopies.getPtr(), // N
-            _dR.getPtr(), // N
-            _dPhi.getPtr(), // N
-            _dGain.getPtr(), // N
-            (float*)_hdShiftedBkg.getPtr() + fnum*_F,
-            _hdDarkMatter.getPtr(), // FLxF
-            _dPCA_Vals.getPtr(),
-            _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
-            getStreamId());
-      }
+        StreamingKernels::XtalkAccumulation(
+          grid, 
+	  block, 
+	  0, 
+	  _stream,
+          _hdBeadState.getPtr(),
+	  _N, // 4
+	  _F, // 4
+	  _dNeiIdxMap.getPtr(),
+	  _dNeiContribution.getPtr(),
+	  _dXtalk.getPtr(),
+	  getStreamId());
+
+        StreamingKernels::CalculateGenericXtalkForSimpleModel(
+          1, // dumb version to get things going..ultra fast already
+          GENERIC_SIMPLE_XTALK_SAMPLE, 
+          0, 
+          _stream,
+          _N,
+          _F,
+          //_myJob.getRegionWidth(),
+          //_myJob.getRegionHeight(),
+          _hdBeadState.getPtr(),
+          _dSampleNeiIdxMap.getPtr(),
+          _dNeiContribution.getPtr(),
+          _dGenericXtalk.getPtr(),
+          _dNeiContribution.getPtr(), // use for generic xtalk
+          getStreamId());
+        
+
+        StreamingKernels::ComputeXtalkAndZeromerCorrectedTrace(
+          grid, 
+	  block, 
+	  0, 
+	  _stream,
+	  fnum,
+	  (float*)_dFgBufferFloat.getPtr() + fnum*_padN*_F, // FLxFxN
+	  _N, // 4
+	  _F, // 4
+	  _dNeiContribution.getPtr(),
+	  _dXtalk.getPtr(),
+	  _dCopies.getPtr(), // N
+	  _dR.getPtr(), // N
+	  _dPhi.getPtr(), // N
+	  _dGain.getPtr(), // N
+	  (float*)_hdShiftedBkg.getPtr() + fnum*_F,
+	  _hdDarkMatter.getPtr(), // FLxF
+	  _dPCA_Vals.getPtr(),
+	  _myJob.getAbsoluteFlowNum(), // starting flow number to calculate absolute flow num
+	  getStreamId());
+     }
   }
   else {
     StreamingKernels::PreSingleFitProcessing( grid, block, 0 , _stream,
@@ -510,6 +657,8 @@ void SimpleSingleFitStream::executeKernel()
       getStreamId(),
       _myJob.getFlowBlockSize());
   }
+
+  //ampl update
 
   // perform exponential tail fitting
   if (_myJob.performExpTailFitting()) {
@@ -573,8 +722,9 @@ void SimpleSingleFitStream::executeKernel()
           _myJob.getFlowBlockSize(),
           _N,
           getStreamId());
- 
-  }
+
+
+ }
 
   // decide some data buffers based on whether tail need to be recompressed 
   // or not. Need to refactor
@@ -589,6 +739,10 @@ void SimpleSingleFitStream::executeKernel()
     numFrames = _myJob.GetNumStdCompressedFrames();
   }
 
+#if PROJECTION_ONLY
+  if(_myJob.getAbsoluteFlowNum() < 20 )
+  {
+#endif
   //std::cout << "====================> Numframes: " << numFrames << std::endl;
   // perform single flow fitting 
   switch(_fittype){
@@ -669,7 +823,7 @@ void SimpleSingleFitStream::executeKernel()
       _myJob.getkmultHighLimit(),
       _myJob.getkmultLowLimit(),
       _myJob.getkmultAdj(),
-      _myJob.fitkmultAlways(), 
+      _myJob.fitkmultAlways(),
       _myJob.getAbsoluteFlowNum() , // real flow number 
       _myJob.getNumBeads(), // 4
       numFrames,
@@ -698,7 +852,7 @@ void SimpleSingleFitStream::executeKernel()
       _myJob.getkmultHighLimit(),
       _myJob.getkmultLowLimit(),
       _myJob.getkmultAdj(),
-      _myJob.fitkmultAlways(), 
+      _myJob.fitkmultAlways(),
       _myJob.getAbsoluteFlowNum() , // real flow number 
       _myJob.getNumBeads(), // 4
       numFrames,
@@ -707,6 +861,9 @@ void SimpleSingleFitStream::executeKernel()
       _myJob.getFlowBlockSize()
     );
   }
+#if PROJECTION_ONLY
+  }
+#endif
   block.x = 32;
   block.y = 32;
 
@@ -785,13 +942,6 @@ void SimpleSingleFitStream::copyToHost()
 
 }
 
-
-
-
-
-
-
-
 void SimpleSingleFitStream::preProcessCpuSteps() {
   _myJob.setUpFineEmphasisVectors();
 
@@ -846,6 +996,7 @@ size_t SimpleSingleFitStream::getMaxHostMem(int flow_key, int flow_block_size)
   if(GpuMultiFlowFitControl::doGPUTraceLevelXtalk()){
     ret += Job.padTo128Bytes(sizeof(ConstXtalkParams)); 
     ret += Job.getXtalkNeiIdxMapSize(true);
+    ret += Job.getXtalkSampleNeiIdxMapSize(true);
   }
   ret += Job.padTo128Bytes(sizeof(ConstParams)); 
   ret += Job.getFgBufferSizeShort(true);
@@ -869,7 +1020,9 @@ size_t SimpleSingleFitStream::getScratchSpaceAllocSize(const WorkSet & Job)
   ScratchSize += 1* Job.getPaddedN() * Job.getFlowBlockSize();
 
   if(GpuMultiFlowFitControl::doGPUTraceLevelXtalk()){
-    ScratchSize += MAX_XTALK_NEIGHBOURS* Job.getPaddedN() * Job.getNumFrames();  
+    ScratchSize += MAX_XTALK_NEIGHBOURS * Job.getPaddedN() * Job.getNumFrames();  
+    ScratchSize += MAX_XTALK_NEIGHBOURS * Job.getPaddedGenericXtalkSample();
+    ScratchSize += Job.getPaddedGenericXtalkSample() * Job.getNumFrames();
   }
 
   ScratchSize *= sizeof(float);

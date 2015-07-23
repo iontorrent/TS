@@ -3,8 +3,8 @@
 #include <stdexcept>
 #include <stdio.h>
 #include <armadillo>
-#include "H5File.h"
-#include "H5Arma.h"
+#include "IonH5File.h"
+#include "IonH5Arma.h"
 
 using namespace std;
 using namespace arma;

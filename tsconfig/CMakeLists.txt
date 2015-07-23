@@ -28,8 +28,11 @@ configure_file (
 
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig-ansible" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSconfig-legacy" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSchkconfig" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip-ansible" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSstaticip-legacy" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSsetproxy" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSquery" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSdns" DESTINATION sbin )
@@ -37,6 +40,7 @@ install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSwrapper" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSinit" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TSaddstorage" DESTINATION sbin )
 install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/TScreateLocalRepository" DESTINATION sbin )
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/bin/ion" DESTINATION bin )
 install(FILES "${PROJECT_BINARY_DIR}/ts_functions" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/ts_params" DESTINATION share/ion-tsconfig )
 install(FILES "${PROJECT_SOURCE_DIR}/config/iptables.rules" DESTINATION share/ion-tsconfig )
@@ -102,8 +106,21 @@ include(../buildTools/cmake/CMakeLists.cpack.txt)
 
 #% nice to automate this
 set(CPACK_PACKAGE_DESCRIPTION "This package contains scripts for configuring Torrent Server.")
-# TODO: putty-tools is only here so that it gets installed with 3.0 from 2.2 GUI update
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect, gcc, make, python-jsonpipe, putty-tools, lsscsi, xfsprogs, lvm2, pdsh, clusterssh, ansible")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "expect,
+    gcc,
+    make,
+    python-jsonpipe,
+    lsscsi,
+    xfsprogs,
+    lvm2,
+    pdsh,
+    clusterssh,
+    ansible (>=1.6),
+    build-essential,
+    libdevmapper-event1.02.1,
+    watershed,
+    megacli,
+    dkms")
 set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
 	${CMAKE_CURRENT_BINARY_DIR}/debian/postinst
 	${CMAKE_CURRENT_BINARY_DIR}/debian/prerm

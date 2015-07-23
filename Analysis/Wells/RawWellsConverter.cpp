@@ -88,6 +88,7 @@ int main(int argc, const char *argv[])
 	char name[10];
 	string sName;
 	bool bWells = false;
+	bool bCopies = false;
 	for(unsigned int i = 0; i < group_info.nlinks; ++i)
 	{
 		int size = H5Gget_objname_by_idx(root, i, NULL, 0);
@@ -103,6 +104,10 @@ int main(int argc, const char *argv[])
 			if(sName == "wells")
 			{
 				bWells = true;
+			}
+			if(sName == "wells_copies")
+			{
+				bCopies = true;
 			}
 		}
 	}
@@ -155,6 +160,31 @@ int main(int argc, const char *argv[])
 		H5Fclose(root);
 		cerr << "RawWellsConverter ERROR: Wrong size of dataset wells - " << dsSize << endl;
 		exit(1);
+	}
+
+	int nRows = 0;
+	int nCols = 0;
+	int nFlows = 0;
+
+	int rank = H5Sget_simple_extent_ndims(dataSpace);
+    if(rank != 3)
+	{
+		bCopies = false;
+	}
+	else
+	{
+		hsize_t dims_out[3];
+		int status_n = H5Sget_simple_extent_dims(dataSpace, dims_out, NULL);
+		if(status_n < 0)
+		{
+			bCopies = false;
+		}
+		else
+		{
+			nRows = dims_out[0];
+			nCols = dims_out[1];
+			nFlows = dims_out[2];
+		}
 	}
 
 	float* fPtr = new float[dsSize];
@@ -216,6 +246,69 @@ int main(int argc, const char *argv[])
 		}
 
 		delete [] usPtr;
+
+		if(bCopies)
+		{
+			vector<float> copies(nRows * nCols, 1.0);
+			hid_t dsCopies = H5Dopen2(root, "wells_copies", H5P_DEFAULT);
+			if(dsCopies < 0)
+			{
+				cerr << "RawWellsConverter WARNING: 1.wells files does not have wells_copies." << endl;
+			}
+			else
+			{
+				hid_t dataSpace2 = H5Dget_space(dsCopies);
+				if(dataSpace2 < 0)
+				{
+					H5Dclose(dsCopies);
+					cerr << "RawWellsConverter WARNING: fail to H5Dget_space for dataset wells_copies." << endl;          
+				}
+				else
+				{
+					hssize_t dsSize2 = H5Sget_simple_extent_npoints(dataSpace2);
+					H5Sclose(dataSpace2);
+					if(dsSize2 != (hssize_t)(nRows * nCols))
+					{
+						H5Dclose(dsCopies);
+						cerr << "RawWellsConverter WARNING: dataset wells_copies size is " << dsSize2 << ", it is different from nRows * nCols = " << nRows * nCols << endl;          
+					}
+					else
+					{
+						herr_t ret = H5Dread(dsCopies, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &copies[0]);
+						H5Dclose(dsCopies);
+						if(ret < 0)
+						{
+							copies.resize(nRows * nCols, 1.0);
+							cerr << "RawWellsConverter WARNING: failto load dataset wells_copies." << endl;          
+						}
+					}
+				}
+			}
+			
+			uint64_t fptrCount = 0;
+			uint64_t copyCount = 0;
+			for(int row = 0; row < nRows; ++row)
+			{
+				for(int col = 0; col < nCols; ++col)
+				{
+					for(int flow = 0; flow < nFlows; ++flow)
+					{
+						if(copies[copyCount] > 0)
+						{
+							fPtr[fptrCount] *= copies[copyCount];
+						}
+						else
+						{
+							fPtr[fptrCount] = -1.0;
+						}
+						
+						++fptrCount;
+					}
+
+					++copyCount;
+				}
+			}
+		}
 
 	    H5Ldelete(root, "wells", H5P_DEFAULT);
 

@@ -6,6 +6,8 @@ TB.plan.batchupload.ready = function(plannedUrl) {
         $('body #modal_batch_planning_upload').remove();
     });
 
+    var processing;
+
     $(function() {
         jQuery.fn.uniform.language.required = '%s is required';
         $('#modalBatchPlanningUpload').uniform({
@@ -15,8 +17,11 @@ TB.plan.batchupload.ready = function(plannedUrl) {
             prevent_submit : false
         });
 
-        $(".submitUpload").click(function(e) {
+        processing = false;
+        $("#submitUpload").click(function(e) {
             e.preventDefault();
+            if (processing) return false;
+            else processing = true;
             $('#modalBatchPlanningUpload').submit();
         });
 
@@ -38,6 +43,7 @@ TB.plan.batchupload.ready = function(plannedUrl) {
 
         var inputVal = $("#postedfile").val();
         if (!jQuery.fn.uniform.isValid($('#modalBatchPlanningUpload'), jQuery.fn.uniform.defaults)) {
+            processing = false;
             return false;
         }
 
@@ -47,6 +53,7 @@ TB.plan.batchupload.ready = function(plannedUrl) {
 
     function AjaxError() {
         $("#loadingstatus").html("<div class='alert alert-error'>Failure uploading file!</div>");
+        processing = false;
     }
 
     //handleResponse will handle both successful upload and validation errors
@@ -89,7 +96,8 @@ TB.plan.batchupload.ready = function(plannedUrl) {
         }
 
         if (hasErrors) {
-            $('#modal_batch_planning_upload .modal-body #modal-error-messages').removeClass('hide').html(error);        	
+            $('#modal_batch_planning_upload .modal-body #modal-error-messages').removeClass('hide').html(error);
+            processing = false;
         }
         else  {
             $('#modal_batch_planning_upload').modal("hide");

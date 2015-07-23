@@ -250,7 +250,8 @@ class SavePlanStepData(AbstractStepData):
                     errors = []
                     #if the plan has been sequenced, do not enforce the target bed file to be selected
                     if planStatus != "run":  
-                        errors = validate_targetRegionBedFile_for_runType(sampleTargetRegionBedFile, runType, sampleReference, sample_nucleotideType, applicationGroupName, "Target Regions BED File for " + sample_name)
+                        if self.sh_type not in StepHelperType.TEMPLATE_TYPES:
+                            errors = validate_targetRegionBedFile_for_runType(sampleTargetRegionBedFile, runType, sampleReference, sample_nucleotideType, applicationGroupName, "Target Regions BED File for " + sample_name)
 
                     if errors:
                         samples_errors.append('\n'.join(errors))

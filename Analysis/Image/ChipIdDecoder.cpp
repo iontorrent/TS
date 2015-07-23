@@ -18,9 +18,18 @@ ChipIdDecodeArrayType ChipIdDecoder::chip_id_str_lookup_array[] =
   { "p1.1.17", ChipId1_1_17    },
   { "p1.2.18", ChipId1_2_18    },
   { "p1.0.19", ChipId1_0_19    },
-  { "p2.2.1", ChipId2_2_1    },
+  { "p2.2.1", ChipId2_2_1    }, //first version of the chip. kept temporarily for compatibility
+  { "p2.2.2", ChipId2_2_2    },
   { "900", ChipId_old_P1    },  //for backward compatibility  and basecalling of old old chips
   { "p1.0.20", ChipId1_0_20    },
+  { "550", ChipId550    },
+  { "540", ChipId540    },
+  { "530", ChipId530    },
+  { "520", ChipId520    },
+  { "551", ChipId551    },
+  { "541", ChipId541    },
+  { "531", ChipId531    },
+  { "521", ChipId521    },
   { NULL,   ChipIdUnknown },
 };
 
@@ -75,14 +84,92 @@ bool ChipIdDecoder::IsProtonChip(){
     case ChipId1_1_17:
     case ChipId1_2_18:
     case ChipId2_2_1:
+    case ChipId2_2_2:
     case ChipId1_0_19:
     case ChipId1_0_20:
     case ChipId_old_P1:
+    case ChipId550:
+    case ChipId540:
+    case ChipId530:
+    case ChipId520:
+    case ChipId551:
+    case ChipId541:
+    case ChipId531:
+    case ChipId521:
       return true;
       break;
     default:
       return false;
   }
+}
+
+bool ChipIdDecoder::IsPzero(){
+  switch (glob_chip_id) {
+    case ChipId1_0_19:
+    case ChipId1_0_20:
+    case ChipId530:
+    case ChipId520:
+    case ChipId531:
+    case ChipId521:
+      return true;
+      break;
+    default:
+      return false;
+  }
+}
+
+bool ChipIdDecoder::IsPone(){
+  switch (glob_chip_id) {
+    case ChipId1_1_17:
+    case ChipId540:
+    case ChipId541:
+      return true;
+      break;
+    default:
+      return false;
+  }
+}
+
+bool ChipIdDecoder::IsPtwo(){
+  switch (glob_chip_id) {
+    case ChipId1_2_18:
+    case ChipId2_2_1:
+    case ChipId2_2_2:
+    case ChipId550:
+    case ChipId551:
+      return true;
+      break;
+    default:
+      return false;
+  }
+}
+
+bool ChipIdDecoder::IsChip314(){
+  if (glob_chip_id == ChipId314)
+      return true;
+  else
+      return false;
+}
+
+bool ChipIdDecoder::IsChip316(){
+  if (glob_chip_id == ChipId316)
+      return true;
+  else
+      return false;
+}
+
+bool ChipIdDecoder::IsChip316v2(){
+  if (glob_chip_id == ChipId316v2)
+      return true;
+  else
+      return false;
+}
+
+bool ChipIdDecoder::IsChip318(){
+  if (glob_chip_id == ChipId318)
+      return true;
+  else
+      return false;
 }
 
 bool ChipIdDecoder::IsLargePGMChip(){
@@ -109,7 +196,16 @@ bool ChipIdDecoder::BigEnoughForGPU(){
     case ChipId1_2_18:
     case ChipId1_0_20:
     case ChipId2_2_1:
+    case ChipId2_2_2:
     case ChipId_old_P1:
+    case ChipId550:
+    case ChipId540:
+    case ChipId530:
+    case ChipId520:
+    case ChipId551:
+    case ChipId541:
+    case ChipId531:
+    case ChipId521:
       return true;
     case ChipId314:
     case ChipId316:

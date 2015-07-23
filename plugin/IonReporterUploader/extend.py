@@ -11,6 +11,7 @@ import urllib
 
 pluginName = 'IonReporterUploader'
 pluginDir = ""
+debugMode = 0     # this needs a file /tmp/a.txt   existing and 777 permissions
 
 def IRULibraryTestPrint(x):
     print "IRULibrary: ", x
@@ -18,6 +19,18 @@ def IRULibraryTestPrint(x):
 
 def testBucket(bucket):
     return bucket
+
+
+# Writes to debug file
+def write_debug_log(text):
+    if (debugMode==0):
+        return
+    log_file = "/tmp/a.txt"
+    file = open(log_file, "a")
+    file.write(text)
+    file.write("\n")
+    return log_file
+
 
 def configs(bucket):
     user = str(bucket["user"])
@@ -1170,6 +1183,8 @@ def validateUserInput(inputJson):
                 "error": "UserInput Validation Query not supported for this version of IR " + version,
                 "validationResults": []}
 
+    #write_debug_log(userInput)
+
     if version == "40":
         return validateUserInput_4_0(inputJson)
     elif version == "42":
@@ -1198,6 +1213,7 @@ def validateUserInput_4_0(inputJson):
         return {"status": "true",
                 "error": "UserInput Validation Query not supported for this version of IR " + version,
                 "validationResults": []}
+
 
     # re-arrange the rules and workflow information in a frequently usable tree structure.
     getUserInputCallResult = getUserInput(inputJson)
@@ -2565,6 +2581,16 @@ def validateUserInput_4_6(inputJson):
     version = irAccountJson["version"]
     version = version.split("IR")[1]
     grwsPath = "grws_1_2"
+
+    #variantCaller check variables
+    requiresVariantCallerPlugin = False
+    isVariantCallerSelected = "Unknown"
+    if "isVariantCallerSelected" in userInput:
+        isVariantCallerSelected = userInput["isVariantCallerSelected"]
+    isVariantCallerConfigured = "Unknown"
+    if "isVariantCallerConfigured" in userInput:
+        isVariantCallerConfigured = userInput["isVariantCallerConfigured"]
+
     #if version == "40" :
     #   grwsPath="grws"
     unSupportedIRVersionsForThisFunction = ['10', '12', '14', '16', '18', '20']
@@ -2639,7 +2665,6 @@ def validateUserInput_4_6(inputJson):
     analysisCost={}
     analysisCost["workflowCosts"]=[]
 
-    requiresVariantCallerPlugin = False
     row = 1
     for uip in userInputInfo:
         # make a row number if not provided, else use whats provided as rownumber.
@@ -2734,6 +2759,16 @@ def validateUserInput_4_6(inputJson):
         # see whether variant Caller plugin is required or not.
         if  (   ("ApplicationType" in uip)  and  (uip["ApplicationType"] == "Annotation")   ) :
             requiresVariantCallerPlugin = True
+            if (  (isVariantCallerSelected != "Unknown")  and (isVariantCallerConfigured != "Unknown")  ):
+                if (isVariantCallerSelected != "True"):
+                    msg ="Workflow "+ uip["Workflow"] +" in row("+ rowStr+") requires selecting and configuring Variant Caller plugin. Please select and configure Variant Caller plugin before using this workflow."
+                    inputValidationErrorHandle(rowStr, "error", msg, rowErrors, rowWarnings)
+                    continue
+                if (isVariantCallerConfigured != "True"):
+                    msg ="Workflow "+ uip["Workflow"] +" in row("+ rowStr+") requires selecting and configuring Variant Caller plugin. The Variant Caller plugin is selected, but not configured. Please configure Variant Caller plugin before using this workflow."
+                    inputValidationErrorHandle(rowStr, "error", msg, rowErrors, rowWarnings)
+                    continue
+
 
         # if setid is empty or it starts with underscore , then dont validate and dont include this row in setid hash for further validations.
         if (   (uip["SetID"].startswith("_")) or   (uip["SetID"]=="")  ):

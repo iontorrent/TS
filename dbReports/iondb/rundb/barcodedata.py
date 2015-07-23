@@ -95,7 +95,6 @@ class BarcodeSampleInfo(object):
                     for k in ['reference', 'targetRegionBedFile', 'hotSpotRegionBedFile']:
                         if k in plan_barcodeSampleInfo:
                             data[bc][k] = plan_barcodeSampleInfo[k]
-                #logger.debug("User planned sample: %s has barcode data %s", sample, data[bc])
 
         # Add in any additional barcodes which pipeline found
         for bc in barcodedata.keys():
@@ -225,11 +224,9 @@ class BarcodeSampleInfo(object):
 
                 # Get matching section from top level read_groups section
                 rgdata = self.datasetsBaseCaller.get('read_groups',{}).get(rg)
-                #logger.debug("Got RG %s data: %s", rg, rgdata)
                 if not rgdata:
                     logger.error("Invalid read group: %s", rg)
                     continue
-
                 # Grab these keys out of the read_groups.{{rg}}.{{k}}
                 x = { 'index': idx }
                 for k in self._basecaller_fields:
@@ -237,7 +234,6 @@ class BarcodeSampleInfo(object):
                 # Inconsistency in non-barcoded output
                 if 'reference' not in x:
                     x['reference'] = rgdata.get('library')
-
                 rgs.append(x)
                 break
 
@@ -248,16 +244,13 @@ class BarcodeSampleInfo(object):
             }
             # Primary read group only!
             if rgs:
-                #logger.debug("Updating bcd %s with %s", bcd, rgs)
                 bcd.update(rgs[0])
 
             if bcd.get('barcode_name') is None:
                 bcd['barcode_name'] = 'nomatch'
 
-            #logger.debug("Parsed Basecaller Dataset: %s", bcd)
             # dict by name
             ret[bcd['barcode_name']] = bcd
-        #logger.debug("BasecallerDatasets: %s", bcd.keys())
         return ret
 
     def validate(self):

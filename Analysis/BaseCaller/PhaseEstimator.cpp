@@ -21,20 +21,44 @@
 
 
 #include <iostream>
-//#include <fstream>
 
+// ---------------------------------------------------------------------------
+// Static member of PhaseEstimator
+
+bool       PhaseEstimator::norm_during_param_eval_  = false;
+int        PhaseEstimator::norm_method_             = 0;
+int        PhaseEstimator::windowSize_              = DPTreephaser::kWindowSizeDefault_;
+int        PhaseEstimator::phasing_start_flow_      = 70;
+int        PhaseEstimator::phasing_end_flow_        = 150;
+float      PhaseEstimator::inclusion_threshold_     = 1.4;
+float      PhaseEstimator::maxfrac_negative_flows_  = 0.2;
+
+
+// ---------------------------------------------------------------------------
 
 void PhaseEstimator::PrintHelp()
 {
   printf ("Phasing estimation options:\n");
-  printf ("     --phasing-estimator       STRING   phasing estimation algorithm [spatial-refiner-2]\n");
-  printf ("     --libcf-ie-dr             cf,ie,dr don't estimate phasing and use specified values [not using]\n");
-  printf ("     --phasing-residual-filter FLOAT    maximum sum-of-squares residual to keep a read in phasing estimation [1.0]\n");
-  printf ("     --max-phasing-levels      INT      max number of rounds of phasing in SpatialRefiner [%d]\n",max_phasing_levels_default_);
-  printf ("     --phase-estimation-file   FILE     Enable reusing phase estimation from provided file [off]\n");
+  printf ("     --phasing-estimator           STRING    phasing estimation algorithm [spatial-refiner-2]\n");
+  printf ("     --libcf-ie-dr                 cf,ie,dr  don't estimate phasing and use specified values [not used]\n");
+  printf ("     --initcf-ie-dr                cf,ie,dr  initial values of phase parameters to start optimizer [0.006,0.004,0]\n");
+  printf ("     --phase-estimation-file       FILE      Load phase estimation from provided file [not used]\n");
+  printf ("     --max-phasing-levels          INT       max number of rounds of phasing in SpatialRefiner [%d]\n",max_phasing_levels_default_);
+  printf ("     --phasing-fullchip-iterations INT       Number of EM iterations on level 1 [3]");
+  printf ("     --phasing-region-iterations   INT       Number of EM iterations on levels >1 [1]");
+  printf ("     --phasing-num-reads           INT       Target number of reads per region to do estimation [5000]");
+  printf ("     --phasing-min-reads           INT       Minimum number of reads per region to do estimation [1000]");
+  printf ("     --phasing-start-flow          INT       Start of phase estimation window [70]");
+  printf ("     --phasing-end-flow            INT       End of phase estimation window [150]");
+  printf ("     --phasing-signal-cutoff       FLOAT     Estimation uses measurement values below this cutoff [1.4]");
+  printf ("     --phasing-residual-filter     FLOAT     maximum sum-of-squares residual to use a read in phasing estimation [1.0]\n");
+  printf ("     --phase-normalization         STRING    Read normalization method [adaptive]\n");
+  printf ("     --phase-norm-during-eval      BOOL      Invoke read normalization during parameter estimation [off]");
+  printf ("     --phasing-norm-threshold      FLOAT     Threshold for switching methods in variable normalization [0.2]\n");
   printf ("\n");
 }
 
+// ---------------------------------------------------------------------------
 
 class CompareDensity {
 public:
@@ -44,55 +68,74 @@ private:
   const vector<unsigned int> &density_;
 };
 
+// ---------------------------------------------------------------------------
 
 PhaseEstimator::PhaseEstimator()
 {
-  chip_size_x_ = 0;
-  chip_size_y_ = 0;
+  chip_size_x_   = 0;
+  chip_size_y_   = 0;
   region_size_x_ = 0;
   region_size_y_ = 0;
   num_regions_x_ = 0;
   num_regions_y_ = 0;
-  num_regions_ = 0;
+  num_regions_   = 0;
   wells_ = NULL;
   mask_ = NULL;
   jobs_in_progress_ = 0;
-  result_regions_x_ = 13;
-  result_regions_y_ = 12;
+  result_regions_x_ = 1;
+  result_regions_y_ = 1;
   residual_threshold_ = 1.0;
 
-  train_subset_count_ = 1;
+  train_subset_count_ = 0;
   train_subset_ = 0;
   min_reads_per_region_ = 1000;
   num_reads_per_region_ = 5000;
-  phasing_start_flow_ = 20;
-  phasing_end_flow_ = 100;
 
   average_cf_ = 0;
   average_ie_ = 0;
   average_dr_ = 0;
 
-  use_pid_norm_ = false;
-  have_phase_estimates_ = false;
+  init_cf_ = 0.006;
+  init_ie_ = 0.004;
+  init_dr_ = 0.0;
 
-  windowSize_ = DPTreephaser::kWindowSizeDefault_;
+  normalization_string_    = "gain";
+  key_norm_new_            = false;
+  num_fullchip_iterations_ = 3;
+  num_region_iterations_   = 1;
+  maxfrac_negative_flows_  = 0.2;
+
+  have_phase_estimates_ = false;
   max_phasing_levels_ = max_phasing_levels_default_;
 }
 
-void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset & chip_subset)
+// ---------------------------------------------------------------------------
+
+void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset & chip_subset, const string & key_norm_method)
 {
+  // Parse command line options
   phasing_estimator_      = opts.GetFirstString ('-', "phasing-estimator", "spatial-refiner-2");
-  string arg_cf_ie_dr     = opts.GetFirstString ('-', "libcf-ie-dr", "");
+  vector<double> cf_ie_dr = opts.GetFirstDoubleVector('-', "libcf-ie-dr", "");
+  vector<double> init_cf_ie_dr = opts.GetFirstDoubleVector('-', "initcf-ie-dr", "");
   residual_threshold_     = opts.GetFirstDouble ('-', "phasing-residual-filter", 1.0);
   max_phasing_levels_     = opts.GetFirstInt    ('-', "max-phasing-levels", max_phasing_levels_default_);
-  num_reads_per_region_   = opts.GetFirstInt    ('-', "num-phasing-reads", 5000);
-  min_reads_per_region_   = opts.GetFirstInt    ('-', "min-phasing-reads", 1000);
-  use_pid_norm_           = opts.GetFirstString ('-', "keynormalizer", "keynorm-old") == "keynorm-new";
-  windowSize_             = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
-  phase_file_name_        = opts.GetFirstString ('s', "phase-estimation-file", "");
-  phasing_start_flow_     = opts.GetFirstInt    ('-', "phasing-start-flow", 20);
-  phasing_end_flow_       = opts.GetFirstInt    ('-', "phasing-end-flow", 100);
+  num_fullchip_iterations_= opts.GetFirstInt    ('-', "phasing-fullchip-iterations", 3);
+  num_region_iterations_  = opts.GetFirstInt    ('-', "phasing-region-iterations", 1);
+  num_reads_per_region_   = opts.GetFirstInt    ('-', "phasing-num-reads", 5000);
+  min_reads_per_region_   = opts.GetFirstInt    ('-', "phasing-min-reads", 1000);
+  phase_file_name_        = opts.GetFirstString ('-', "phase-estimation-file", "");
+  normalization_string_   = opts.GetFirstString ('-', "phase-normalization", "adaptive");
+  key_norm_new_           = (key_norm_method == "keynorm-new");
 
+  // Static member variables
+  norm_during_param_eval_ = opts.GetFirstBoolean('-', "phase-norm-during-eval", false);
+  windowSize_             = opts.GetFirstInt    ('-', "window-size", DPTreephaser::kWindowSizeDefault_);
+  phasing_start_flow_     = opts.GetFirstInt    ('-', "phasing-start-flow", 70);
+  phasing_end_flow_       = opts.GetFirstInt    ('-', "phasing-end-flow", 150);
+  inclusion_threshold_    = opts.GetFirstDouble ('-', "phasing-signal-cutoff", 1.4);
+  maxfrac_negative_flows_ = opts.GetFirstDouble ('-', "phasing-norm-threshold", 0.2);
+
+  // Initialize chip size - needed for loading phase parameters
   chip_size_x_   = chip_subset.GetChipSizeX();
   chip_size_y_   = chip_subset.GetChipSizeY();
   region_size_x_ = chip_subset.GetRegionSizeX();
@@ -101,39 +144,125 @@ void PhaseEstimator::InitializeFromOptArgs(OptArgs& opts, const ion::ChipSubset 
   num_regions_y_ = chip_subset.GetNumRegionsY();
   num_regions_   = chip_subset.NumRegions();
 
-  if (!arg_cf_ie_dr.empty()) {
-    phasing_estimator_ = "override";
-    result_regions_x_ = 1;
-    result_regions_y_ = 1;
-    result_cf_.assign(1, 0.0);
-    result_ie_.assign(1, 0.0);
-    result_dr_.assign(1, 0.0);
-    if (3 != sscanf (arg_cf_ie_dr.c_str(), "%f,%f,%f", &result_cf_[0], &result_ie_[0], &result_dr_[0])) {
-      fprintf (stderr, "Option Error: libcf-ie-dr %s\n", arg_cf_ie_dr.c_str());
+  // Loading existing phase estimates from a file takes precedence over all other options
+  if (not phase_file_name_.empty()) {
+	have_phase_estimates_ = LoadPhaseEstimationTrainSubset(phase_file_name_);
+    if (have_phase_estimates_) {
+      phasing_estimator_ = "override";
+      printf("Phase estimator settings:\n");
+      printf("  phase file name        : %s\n", phase_file_name_.c_str());
+      printf("  phase estimation mode  : %s\n\n", phasing_estimator_.c_str());
+      return;
+    } else
+      cout << "PhaseEstimator Error loading TrainSubset from file " << phase_file_name_ << endl;
+  }
+
+  // Set phase parameters if provided by command line
+  if (!cf_ie_dr.empty()) {
+    if (cf_ie_dr.size() != 3){
+      cerr << "BaseCaller Option Error: libcf-ie-dr needs to be a comma separated vector of 3 values." << endl;
       exit (EXIT_FAILURE);
     }
-    cout << "Phase Estimator: Set cf,ie,dr as " << result_cf_[0] << "," << result_ie_[0] << "," << result_dr_[0] << endl;
-    have_phase_estimates_ = true;
+    SetPhaseParameters(cf_ie_dr.at(0), cf_ie_dr.at(1), cf_ie_dr.at(2));
     return; // --libcf-ie-dr overrides other phasing-related options
   }
 
-  if (not phase_file_name_.empty()) {
-	have_phase_estimates_ = LoadPhaseEstimationTrainSubset(phase_file_name_);
-    if (have_phase_estimates_)
-      phasing_estimator_ = "override";
+  // Set starting values for estimation
+  if (!init_cf_ie_dr.empty()) {
+    if (init_cf_ie_dr.size() != 3){
+      cerr << "BaseCaller Option Error: initcf-ie-dr needs to be a comma separated vector of 3 values." << endl;
+      exit (EXIT_FAILURE);
+    }
+    init_cf_ = init_cf_ie_dr.at(0);
+    init_ie_ = init_cf_ie_dr.at(1);
+    init_dr_ = init_cf_ie_dr.at(2);
   }
+
+  if (phasing_start_flow_ >= phasing_end_flow_ or phasing_start_flow_ < 0) {
+    cerr << "BaseCaller Option Error: phasing-start-flow " << phasing_start_flow_
+         << "needs to be positive and smaller than phasing-end-flow " << phasing_end_flow_ << endl;
+    exit (EXIT_FAILURE);
+  }
+
+  if (normalization_string_ == "adaptive")
+    norm_method_ = 1;
+  else if (normalization_string_ == "pid")
+    norm_method_ = 2;
+  else if (normalization_string_ == "variable")
+    norm_method_ = 3;
+  else
+    norm_method_ = 0;
+
+  printf("Phase estimator settings:\n");
+  printf("  phase file name        : %s\n", phase_file_name_.c_str());
+  printf("  phase estimation mode  : %s\n", phasing_estimator_.c_str());
+  printf("  initial cf,ie,dr values: %f,%f,%f\n", init_cf_,init_ie_,init_dr_);
+  printf("  reads per region target: %d-%d\n", min_reads_per_region_, num_reads_per_region_);
+  printf("  normalization method   : %s\n", normalization_string_.c_str());
+  printf("  variable norm threshold: %f\n", maxfrac_negative_flows_);
+  printf("\n");
 }
+
+// ---------------------------------------------------------------------------
+
+void PhaseEstimator::SetPhaseParameters(float cf, float ie, float dr)
+{
+  phasing_estimator_ = "override";
+  result_regions_x_ = 1;
+  result_regions_y_ = 1;
+  result_cf_.assign(1, cf);
+  result_ie_.assign(1, ie);
+  result_dr_.assign(1, dr);
+  cout << "Phase Estimator: Set cf,ie,dr as " << result_cf_.at(0) << ","
+       << result_ie_.at(0) << "," << result_dr_.at(0) << endl;
+  have_phase_estimates_ = true;
+}
+
+// ---------------------------------------------------------------------------
+
 
 void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::FlowOrder& flow_order,
 		                               const vector<KeySequence>& keys, bool use_single_core)
 {
-  flow_order_.SetFlowOrder(flow_order.str(), min(flow_order.num_flows(), 120));
+  // We only load / process what is necessary
+  flow_order_.SetFlowOrder(flow_order.str(), min(flow_order.num_flows(), phasing_end_flow_+20));
   keys_ = keys;
 
-  printf("Phase estimation mode = %s\n", phasing_estimator_.c_str());
+  // Do we have enough flows to do phase estimation?
+  // Check and, if necessary, adjust flow interval for estimation,
+
+  if (not have_phase_estimates_) {
+
+    if (flow_order_.num_flows() < 50) {
+      phasing_estimator_ = "override";
+      cout << "PhaseEstimator WARNING: Not enough flows to estimate phase; using default values." << endl;
+    }
+
+    else  {
+
+      // Make sure we have at least 30 flows to estimate over
+      if (phasing_end_flow_ - phasing_start_flow_ < 30) {
+        phasing_end_flow_   = min(phasing_start_flow_+30, flow_order_.num_flows());
+        phasing_start_flow_ = phasing_end_flow_ - 30; // We are guaranteed to have at least 50 flows
+        cout << "PhaseEstimator WARNING: Shifting phase estimation window to flows " << phasing_start_flow_ << "-" << phasing_end_flow_ << endl;
+        cerr << "PhaseEstimator WARNING: Shifting phase estimation window to flows " << phasing_start_flow_ << "-" << phasing_end_flow_ << endl;
+      }
+      // Check boundaries of estimation window and adjust if necessary,
+      // try to keep estimation window size if possible, but don't start before flow 20
+      if (phasing_end_flow_ > flow_order_.num_flows()) {
+        phasing_start_flow_ = max(20, (phasing_start_flow_ - phasing_end_flow_ + flow_order_.num_flows()) );
+        phasing_end_flow_   = flow_order_.num_flows();
+        cout << "PhaseEstimator WARNING: Shifting phase estimation window to flows " << phasing_start_flow_ << "-" << phasing_end_flow_ << endl;
+        cerr << "PhaseEstimator WARNING: Shifting phase estimation window to flows " << phasing_start_flow_ << "-" << phasing_end_flow_ << endl;
+      }
+    }
+  }
+
+  // ------------------------------------
 
   if (phasing_estimator_ == "override") {
-    // Nothing to do!
+    if (not have_phase_estimates_)
+      SetPhaseParameters(init_cf_, init_ie_, init_dr_);
 
   } else if (phasing_estimator_ == "spatial-refiner") {
 
@@ -183,7 +312,7 @@ void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::F
   int count = 0;
 
   for (int r = 0; r < result_regions_x_*result_regions_y_; r++) {
-    if (result_cf_[r] || result_ie_[r] || result_dr_[r]) {
+    if (result_cf_.at(r) || result_ie_.at(r) || result_dr_.at(r)) {
       average_cf_ += result_cf_[r];
       average_ie_ += result_ie_[r];
       average_dr_ += result_dr_[r];
@@ -195,8 +324,10 @@ void PhaseEstimator::DoPhaseEstimation(RawWells *wells, Mask *mask, const ion::F
     average_ie_ /= count;
     average_dr_ /= count;
   }
+  have_phase_estimates_ = true;
 }
 
+// ---------------------------------------------------------------------------
 
 void PhaseEstimator::ExportResultsToJson(Json::Value &json)
 {
@@ -216,58 +347,69 @@ void PhaseEstimator::ExportResultsToJson(Json::Value &json)
 }
 
 
-
+// ---------------------------------------------------------------------------
 
 float PhaseEstimator::GetWellCF(int x, int y) const
 {
-  if (train_subset_count_ == 1) {
+  assert(have_phase_estimates_);
+  if (train_subset_count_ < 2) {
     int result_size_y = ceil(chip_size_y_ / (double) result_regions_y_);
     int result_size_x = ceil(chip_size_x_ / (double) result_regions_x_);
     int region = (y / result_size_y) + (x / result_size_x) * result_regions_y_;
-    return result_cf_[region];
+    return result_cf_.at(region);
 
   } else {
     int my_subset = 1-get_subset(x,y);
-    int result_size_y = ceil(chip_size_y_ / (double) train_subset_regions_y_[my_subset]);
-    int result_size_x = ceil(chip_size_x_ / (double) train_subset_regions_x_[my_subset]);
+    int result_size_y = ceil(chip_size_y_ / (double) train_subset_regions_y_.at(my_subset));
+    int result_size_x = ceil(chip_size_x_ / (double) train_subset_regions_x_.at(my_subset));
     int region = (y / result_size_y) + (x / result_size_x) * train_subset_regions_y_[my_subset];
-    return train_subset_cf_[my_subset][region];
+    return train_subset_cf_.at(my_subset).at(region);
   }
 }
+
+// ---------------------------------------------------------------------------
 
 float PhaseEstimator::GetWellIE(int x, int y) const
 {
-  if (train_subset_count_ == 1) {
+  assert(have_phase_estimates_);
+  if (train_subset_count_ < 2) {
     int result_size_y = ceil(chip_size_y_ / (double) result_regions_y_);
     int result_size_x = ceil(chip_size_x_ / (double) result_regions_x_);
     int region = (y / result_size_y) + (x / result_size_x) * result_regions_y_;
-    return result_ie_[region];
+    return result_ie_.at(region);
 
   } else {
     int my_subset = 1-get_subset(x,y);
-    int result_size_y = ceil(chip_size_y_ / (double) train_subset_regions_y_[my_subset]);
-    int result_size_x = ceil(chip_size_x_ / (double) train_subset_regions_x_[my_subset]);
+    int result_size_y = ceil(chip_size_y_ / (double) train_subset_regions_y_.at(my_subset));
+    int result_size_x = ceil(chip_size_x_ / (double) train_subset_regions_x_.at(my_subset));
     int region = (y / result_size_y) + (x / result_size_x) * train_subset_regions_y_[my_subset];
-    return train_subset_ie_[my_subset][region];
+    return train_subset_ie_.at(my_subset).at(region);
   }
 }
+
+
+// ---------------------------------------------------------------------------
 
 float PhaseEstimator::GetWellDR(int x, int y) const
 {
-  if (train_subset_count_ == 1) {
+  assert(have_phase_estimates_);
+  if (train_subset_count_ < 2) {
     int result_size_y = ceil(chip_size_y_ / (double) result_regions_y_);
     int result_size_x = ceil(chip_size_x_ / (double) result_regions_x_);
     int region = (y / result_size_y) + (x / result_size_x) * result_regions_y_;
-    return result_dr_[region];
+    return result_dr_.at(region);
 
   } else {
     int my_subset = 1-get_subset(x,y);
-    int result_size_y = ceil(chip_size_y_ / (double) train_subset_regions_y_[my_subset]);
-    int result_size_x = ceil(chip_size_x_ / (double) train_subset_regions_x_[my_subset]);
+    int result_size_y = ceil(chip_size_y_ / (double) train_subset_regions_y_.at(my_subset));
+    int result_size_x = ceil(chip_size_x_ / (double) train_subset_regions_x_.at(my_subset));
     int region = (y / result_size_y) + (x / result_size_x) * train_subset_regions_y_[my_subset];
-    return train_subset_dr_[my_subset][region];
+    return train_subset_dr_.at(my_subset).at(region);
   }
 }
+
+
+// ---------------------------------------------------------------------------
 
 void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers)
 {
@@ -285,8 +427,9 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers
     }
   }
 
-  printf("Using numEstimatorFlows %d, chip is %d x %d, region is %d x %d, numRegions is %d x %d, numLevels %d\n",
-      flow_order_.num_flows(), chip_size_x_, chip_size_y_, region_size_x_, region_size_y_, num_regions_x_, num_regions_y_, num_levels);
+  printf("Using numEstimatorFlows %d, estimating flows %d-%d, chip is %d x %d, region is %d x %d, numRegions is %d x %d, numLevels %d\n",
+      flow_order_.num_flows(), phasing_start_flow_, phasing_end_flow_, chip_size_x_, chip_size_y_,
+      region_size_x_, region_size_y_, num_regions_x_, num_regions_y_, num_levels);
 
   // Step 1. Use mask to build region density map
 
@@ -305,9 +448,9 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers
   vector<Subblock> subblocks;
   subblocks.reserve(max_subblocks);
   subblocks.push_back(Subblock());
-  subblocks.back().cf = 0.0;
-  subblocks.back().ie = 0.0;
-  subblocks.back().dr = 0.0;
+  subblocks.back().cf = init_cf_;
+  subblocks.back().ie = init_ie_;
+  subblocks.back().dr = init_dr_;
   subblocks.back().begin_x = 0;
   subblocks.back().end_x = num_regions_x_;
   subblocks.back().begin_y = 0;
@@ -483,9 +626,7 @@ void PhaseEstimator::SpatialRefiner(RawWells *wells, Mask *mask, int num_workers
 }
 
 
-
-
-
+// ---------------------------------------------------------------------------
 
 size_t PhaseEstimator::LoadRegion(int region)
 {
@@ -518,7 +659,7 @@ size_t PhaseEstimator::LoadRegion(int region)
   for (int y = begin_y; y < end_y; y++) {
     for (int x = begin_x; x < end_x; x++) {
 
-      if (get_subset(x,y) != train_subset_)
+      if (train_subset_count_ > 0 and get_subset(x,y) != train_subset_)
         continue;
 
       if (!mask_->Match(x, y, MaskLive))
@@ -562,23 +703,47 @@ size_t PhaseEstimator::LoadRegion(int region)
       }
 
       region_reads_[region].push_back(BasecallerRead());
-      if (use_pid_norm_) {
-          region_reads_[region].back().SetDataAndKeyNormalizeNew(&well_buffer[0],
-              flow_order_.num_flows(), keys_[cls].flows(), keys_[cls].flows_length()-1, false /*true*/);
+
+      bool keypass = true;
+      if (key_norm_new_) {
+    	  keypass = region_reads_[region].back().SetDataAndKeyNormalizeNew(&well_buffer[0],
+              flow_order_.num_flows(), keys_[cls].flows(), keys_[cls].flows_length()-1, false);
       } else {
-          region_reads_[region].back().SetDataAndKeyNormalize(&well_buffer[0],
+    	  keypass = region_reads_[region].back().SetDataAndKeyNormalize(&well_buffer[0],
               flow_order_.num_flows(), keys_[cls].flows(), keys_[cls].flows_length()-1);
       }
 
-      bool keypass = true;
-      for (int flow = 0; flow < (keys_[cls].flows_length() - 1); flow++) {
-        if ((int) (region_reads_[region].back().raw_measurements[flow] + 0.5) != keys_[cls][flow])
-          keypass = false;
-        if (isnan(region_reads_[region].back().raw_measurements[flow]))
-          keypass = false;
-      }
+      //  *** Compute some metrics - overload read.penalty_residual to store them
+      if (keypass) {
+        unsigned int num_zeromer_flows = 0, num_neg_zeromer_flows = 0;
+        double       squared_dist_int = 0.0;
 
-      if (!keypass) {
+        for (int flow=phasing_start_flow_; flow < phasing_end_flow_; ++flow){
+          if (region_reads_[region].back().raw_measurements.at(flow) < 0.5) {
+            ++num_zeromer_flows;
+            if (region_reads_[region].back().raw_measurements.at(flow) < 0.0)
+              ++num_neg_zeromer_flows;
+          }
+          if (region_reads_[region].back().raw_measurements.at(flow) < inclusion_threshold_) {
+            double delta = region_reads_[region].back().raw_measurements.at(flow) -
+                     round(region_reads_[region].back().raw_measurements.at(flow));
+            squared_dist_int += delta * delta;
+          }
+        }
+
+        // Too few zero-mers or too much noise? Moving on along, don't waste time on investigating hopeless candidates.
+        if (num_zeromer_flows < 5 or (float)squared_dist_int > residual_threshold_ + 1.5)
+          keypass = false;
+        else {
+          // [0]=percent_neg_zeromer_flows  [1]=squared_dist_int
+          region_reads_[region].back().penalty_residual.assign(2, 0.0f);
+          region_reads_[region].back().penalty_residual.at(0) = (float)num_neg_zeromer_flows / (float)num_zeromer_flows;
+          region_reads_[region].back().penalty_residual.at(1) = squared_dist_int;
+        }
+      }
+      // ***
+
+      if (not keypass) {
         region_reads_[region].pop_back();
         continue;
       }
@@ -592,7 +757,33 @@ size_t PhaseEstimator::LoadRegion(int region)
   return timer.GetMicroSec();
 }
 
+// ---------------------------------------------------------------------------
 
+void PhaseEstimator::NormalizeBasecallerRead(DPTreephaser& treephaser, BasecallerRead& read, int start_flow, int end_flow)
+{
+    switch (norm_method_) {
+        case 0:
+            treephaser.Normalize(read, start_flow, end_flow);
+            break;
+        case 1:
+            treephaser.WindowedNormalize(read, (end_flow / windowSize_), windowSize_);
+            break;
+        case 2:
+            treephaser.PIDNormalize(read, start_flow, end_flow);
+            break;
+        case 3: // Variable per-read normalization based on the number of negative valued zero-mers
+            if (read.penalty_residual.at(0) >  maxfrac_negative_flows_)
+              treephaser.WindowedNormalize(read, (end_flow / windowSize_), windowSize_);
+            else
+              treephaser.Normalize(read, start_flow, end_flow);
+            break;
+        default:
+            cerr << "PhaseEstimator: Unknown normalization method " << norm_method_ << endl;
+            exit(EXIT_FAILURE);
+    }
+};
+
+// ---------------------------------------------------------------------------
 
 void *PhaseEstimator::EstimatorWorkerWrapper(void *arg)
 {
@@ -600,6 +791,8 @@ void *PhaseEstimator::EstimatorWorkerWrapper(void *arg)
   return NULL;
 }
 
+
+// ---------------------------------------------------------------------------
 
 void PhaseEstimator::EstimatorWorker()
 {
@@ -627,9 +820,9 @@ void PhaseEstimator::EstimatorWorker()
 
     // Processing
 
-    int numGlobalIterations = 1;  // 3 iterations at top level, 1 at all other levels
+    int numGlobalIterations = num_region_iterations_;  // 3 iterations at top level, 1 at all other levels
     if (s.level == 1)
-      numGlobalIterations = 3;
+      numGlobalIterations = num_fullchip_iterations_;
 
     for (int iGlobalIteration = 0; iGlobalIteration < numGlobalIterations; iGlobalIteration++) {
 
@@ -659,16 +852,20 @@ void PhaseEstimator::EstimatorWorker()
           for (int flow = 0; flow < flow_order_.num_flows(); flow++)
             R->normalized_measurements[flow] = R->raw_measurements[flow];
 
+          // Step 1: Solving and normalization half iteration
+
           treephaser.Solve    (*R, min(100, flow_order_.num_flows()));
-          use_pid_norm_ ? (void)treephaser.PIDNormalize(*R, 8, 40) : (void)treephaser.Normalize(*R, 11, 80);
-          treephaser.Solve    (*R, min(120, flow_order_.num_flows()));
-          use_pid_norm_ ? (void)treephaser.PIDNormalize(*R, 8, 80) : (void)treephaser.Normalize(*R, 11, 100);
+          NormalizeBasecallerRead(treephaser, *R, 20, min(80, flow_order_.num_flows()));
+          treephaser.Solve    (*R, min(phasing_end_flow_+20, flow_order_.num_flows()));
+          NormalizeBasecallerRead(treephaser, *R, phasing_start_flow_, phasing_end_flow_);
           treephaser.Solve    (*R, min((phasing_end_flow_+20), flow_order_.num_flows()));
 
           float metric = 0;
           for (int flow = phasing_start_flow_; flow < phasing_end_flow_ and flow < flow_order_.num_flows(); ++flow) {
-            if (R->normalized_measurements[flow] > 1.2)
+        	// Make sure the same flows get excluded than during parameter estimation
+            if (R->raw_measurements[flow] > inclusion_threshold_)
               continue;
+            // Comparing norm signal vs. prediction is a measure of individual read noise
             float delta = R->normalized_measurements[flow] - R->prediction[flow];
             if (!isnan(delta))
               metric += delta * delta;
@@ -690,12 +887,13 @@ void PhaseEstimator::EstimatorWorker()
       if (s.level > 1 and useful_reads.size() < min_reads_per_region_) // Not enough reads to even try
         break;
 
-      // Do estimation with reads collected, update estimates
+      // Step 2: Do estimation with reads collected, update estimates
+
       float parameters[3];
       parameters[0] = s.cf;
       parameters[1] = s.ie;
       parameters[2] = s.dr;
-      NelderMeadOptimization(useful_reads, treephaser, parameters, use_pid_norm_);
+      NelderMeadOptimization(useful_reads, treephaser, parameters);
       s.cf = parameters[0];
       s.ie = parameters[1];
       s.dr = parameters[2];
@@ -704,6 +902,7 @@ void PhaseEstimator::EstimatorWorker()
           s.level, s.pos_x, s.pos_y, s.begin_x, s.end_x, s.begin_y, s.end_y,
           (double)timer.GetMicroSec()/1000000.0, (double)iotimer/1000000.0, (int)useful_reads.size(),
           100.0*s.cf, 100.0*s.ie, 100.0*s.dr);
+      fflush(stdout);
     }
 
     if (useful_reads.size() >= 1000 or s.level == 1) {
@@ -734,7 +933,7 @@ void PhaseEstimator::EstimatorWorker()
 
     if (s.subblocks[0] == NULL or useful_reads.size() < 4*min_reads_per_region_) {
       // Do not subdivide this block
-      for (vector<int>::iterator region = s.sorted_regions.begin(); region != s.sorted_regions.end(); region++)
+      for (vector<int>::iterator region = s.sorted_regions.begin(); region != s.sorted_regions.end(); ++region)
         region_reads_[*region].clear();
 
       pthread_mutex_lock(&job_queue_mutex_);
@@ -761,8 +960,9 @@ void PhaseEstimator::EstimatorWorker()
 
 
 
+// ---------------------------------------------------------------------------
 
-float PhaseEstimator::EvaluateParameters(vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, const float *parameters, const bool usePIDNorm)
+float PhaseEstimator::EvaluateParameters(vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, const float *parameters)
 {
   float try_cf = parameters[0];
   float try_ie = parameters[1];
@@ -775,13 +975,19 @@ float PhaseEstimator::EvaluateParameters(vector<BasecallerRead *>& useful_reads,
   float metric = 0;
   for (vector<BasecallerRead *>::iterator read = useful_reads.begin(); read != useful_reads.end(); ++read) {
 
-    treephaser.Simulate(**read, 120);
-    float normalizer = (usePIDNorm ? treephaser.PIDNormalize(**read, 8, 100) : treephaser.Normalize(**read, 20, 100));
+    // Simulate phasing parameter
+    treephaser.Simulate(**read, phasing_end_flow_+20);
 
-    for (unsigned int flow = 20; flow < 100 and flow < (*read)->raw_measurements.size(); flow++) {
-      if ((*read)->raw_measurements[flow] > 1.2)
+    // Optionally determine optimal normalization for this parameter set?
+    if (norm_during_param_eval_)
+      NormalizeBasecallerRead(treephaser, **read, phasing_start_flow_, phasing_end_flow_);
+
+    // Determine squared distance penalty for this parameter set
+    for (int flow = phasing_start_flow_; flow < phasing_end_flow_ and flow < (int)(*read)->raw_measurements.size(); ++flow) {
+      if ((*read)->raw_measurements[flow] > inclusion_threshold_)
         continue;
-      float delta = (*read)->raw_measurements[flow] - (*read)->prediction[flow] * normalizer;
+      // Keep key normalized raw measurements as a constant and normalize predictions towards key normalized values
+      float delta = ((*read)->normalized_measurements[flow] - (*read)->prediction[flow]) * (*read)->multiplicative_correction[flow];
       metric += delta * delta;
     }
   }
@@ -789,18 +995,18 @@ float PhaseEstimator::EvaluateParameters(vector<BasecallerRead *>& useful_reads,
   return isnan(metric) ? 1e10 : metric;
 }
 
-
+// ---------------------------------------------------------------------------
 
 
 
 #define kReflectionAlpha    1.0
 #define kExpansionGamma     2.0
-#define kContractionRho     0.5
+#define kContractionRho     -0.5
 #define kReductionSigma     0.5
 #define kNumParameters      3
 #define kMaxEvaluations     50
 
-void PhaseEstimator::NelderMeadOptimization (vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, float *parameters, const bool usePIDNorm)
+void PhaseEstimator::NelderMeadOptimization (vector<BasecallerRead *>& useful_reads, DPTreephaser& treephaser, float *parameters)
 {
 
   int num_evaluations = 0;
@@ -835,7 +1041,7 @@ void PhaseEstimator::NelderMeadOptimization (vector<BasecallerRead *>& useful_re
         break;
     }
 
-    value[iVertex] = EvaluateParameters(useful_reads, treephaser, vertex[iVertex], usePIDNorm);
+    value[iVertex] = EvaluateParameters(useful_reads, treephaser, vertex[iVertex]);
     num_evaluations++;
 
     order[iVertex] = iVertex;
@@ -873,7 +1079,7 @@ void PhaseEstimator::NelderMeadOptimization (vector<BasecallerRead *>& useful_re
       reflection[iParam] = center[iParam] + kReflectionAlpha * (center[iParam] - vertex[worst][iParam]);
     }
 
-    float reflectionValue = EvaluateParameters(useful_reads, treephaser, reflection, usePIDNorm);
+    float reflectionValue = EvaluateParameters(useful_reads, treephaser, reflection);
     num_evaluations++;
 
     if (reflectionValue < value[best]) {    // Consider expansion:
@@ -881,7 +1087,7 @@ void PhaseEstimator::NelderMeadOptimization (vector<BasecallerRead *>& useful_re
       float expansion[kNumParameters];
       for (int iParam = 0; iParam < kNumParameters; iParam++)
         expansion[iParam] = center[iParam] + kExpansionGamma * (center[iParam] - vertex[worst][iParam]);
-      float expansionValue = EvaluateParameters(useful_reads, treephaser, expansion, usePIDNorm);
+      float expansionValue = EvaluateParameters(useful_reads, treephaser, expansion);
       num_evaluations++;
 
       if (expansionValue < reflectionValue) {   // Expansion indeed better than reflection
@@ -914,8 +1120,9 @@ void PhaseEstimator::NelderMeadOptimization (vector<BasecallerRead *>& useful_re
 
     float contraction[kNumParameters];
     for (int iParam = 0; iParam < kNumParameters; iParam++)
-      contraction[iParam] = vertex[worst][iParam] + kContractionRho * (center[iParam] - vertex[worst][iParam]);
-    float contractionValue = EvaluateParameters(useful_reads, treephaser, contraction, usePIDNorm);
+      //contraction[iParam] = vertex[worst][iParam] + kContractionRho * (center[iParam] - vertex[worst][iParam]);
+      contraction[iParam] = center[iParam] + kContractionRho * (center[iParam] - vertex[worst][iParam]);
+    float contractionValue = EvaluateParameters(useful_reads, treephaser, contraction);
     num_evaluations++;
 
     if (contractionValue < value[worst]) {  // Contraction was successful
@@ -944,7 +1151,7 @@ void PhaseEstimator::NelderMeadOptimization (vector<BasecallerRead *>& useful_re
       for (int iParam = 0; iParam < kNumParameters; iParam++)
         vertex[order[iVertex]][iParam] = vertex[best][iParam] + kReductionSigma * (vertex[order[iVertex]][iParam] - vertex[best][iParam]);
 
-      value[order[iVertex]] = EvaluateParameters(useful_reads, treephaser, vertex[order[iVertex]], usePIDNorm);
+      value[order[iVertex]] = EvaluateParameters(useful_reads, treephaser, vertex[order[iVertex]]);
       num_evaluations++;
 
       for (int xVertex = iVertex; xVertex > 0; xVertex--) {
@@ -961,10 +1168,11 @@ void PhaseEstimator::NelderMeadOptimization (vector<BasecallerRead *>& useful_re
     parameters[iParam] = vertex[order[0]][iParam];
 }
 
+// ---------------------------------------------------------------------------
 
 void PhaseEstimator::ExportTrainSubsetToJson(Json::Value &json)
 {
-    if (phasing_estimator_ == "spatial-refiner-2") {
+    if (train_subset_count_ > 1) {
         json["TrainSubsetCount"] = train_subset_count_;
 
         for(int i = 0; i < train_subset_count_; ++i)
@@ -982,83 +1190,100 @@ void PhaseEstimator::ExportTrainSubsetToJson(Json::Value &json)
     }
 }
 
+// ---------------------------------------------------------------------------
+
 bool PhaseEstimator::LoadPhaseEstimationTrainSubset(const string& phase_file_name)
 {
-	Json::Value json;
-	ifstream ifs(phase_file_name.c_str());
+    Json::Value json, temp_value;
+    ifstream ifs(phase_file_name.c_str());
 
-    if(ifs)
+    if (ifs.fail()) {
+        cerr << "PhaseEstimator ERROR: Unable to load phase estimates from file: " << phase_file_name << endl;
+        return false;
+    }
+
+    ifs >> json;
+    ifs.close();
+
+    if (json["TrainSubset"].isNull()) {
+    	cerr << "PhaseEstimator WARNING: No TrainSubset available in file: " << phase_file_name << endl;
+        return false;
+    }
+
+    train_subset_count_ = json["TrainSubset"]["TrainSubsetCount"].asInt();
+    if(train_subset_count_ < 1) {
+        cerr << "PhaseEstimator ERROR: TrainSubsetCount in file " << phase_file_name << " is less than 1." << endl;
+        return false;
+    } else if ((int)json["TrainSubset"]["CFbyRegion"].size() != train_subset_count_ or
+               (int)json["TrainSubset"]["IEbyRegion"].size() != train_subset_count_ or
+               (int)json["TrainSubset"]["CFbyRegion"].size() != train_subset_count_){
+    	cerr << "PhaseEstimator ERROR: Number of array elements in regions in does not match TrainSubsetCount." << endl;
+    	train_subset_count_ = 0;
+        return false;
+    }
+
+    train_subset_cf_.resize(train_subset_count_);
+    train_subset_ie_.resize(train_subset_count_);
+    train_subset_dr_.resize(train_subset_count_);
+    train_subset_regions_y_.resize(train_subset_count_);
+    train_subset_regions_x_.resize(train_subset_count_);
+
+    for(int i = 0; i < train_subset_count_; ++i)
     {
-		ifs >> json;	
-		ifs.close();
+        train_subset_regions_y_[i] = json["TrainSubset"]["RegionRows"][i].asInt();
+        train_subset_regions_x_[i] = json["TrainSubset"]["RegionCols"][i].asInt();
+        int n = train_subset_regions_y_[i] * train_subset_regions_x_[i];
 
-		train_subset_count_ = 0;
-		train_subset_count_ = json["TrainSubset"]["TrainSubsetCount"].asInt();
-		if(train_subset_count_ < 1)
-		{
-			cout << "PhaseEstimator ERROR: train_subset_count_ in file " << phase_file_name << " is less than 1." << endl;
-			return false;
-		}
+        if (n==0 or (int)json["TrainSubset"]["CFbyRegion"][i].size() != n or
+                    (int)json["TrainSubset"]["IEbyRegion"][i].size() != n or
+                    (int)json["TrainSubset"]["DRbyRegion"][i].size() != n ){
+        	cerr << "PhaseEstimator ERROR: Unexpected number of array elements for TrainSubset "<< i <<"." << endl;
+        	train_subset_count_ = 0;
+            return false;
+        }
 
-		train_subset_cf_.resize(train_subset_count_);
-		train_subset_ie_.resize(train_subset_count_);
-		train_subset_dr_.resize(train_subset_count_);
-		train_subset_regions_y_.resize(train_subset_count_);
-		train_subset_regions_x_.resize(train_subset_count_);
+        vector<float> cf;
+        vector<float> ie;
+        vector<float> dr;
 
-		for(int i = 0; i < train_subset_count_; ++i)
-		{
-			train_subset_regions_y_[i] = json["TrainSubset"]["RegionRows"][i].asInt();
-			train_subset_regions_x_[i] = json["TrainSubset"]["RegionCols"][i].asInt();
-			int n = train_subset_regions_y_[i] * train_subset_regions_x_[i];
+		for(int j = 0; j < n; ++j)
+        {
+            cf.push_back(json["TrainSubset"]["CFbyRegion"][i][j].asFloat());
+            ie.push_back(json["TrainSubset"]["IEbyRegion"][i][j].asFloat());
+            dr.push_back(json["TrainSubset"]["DRbyRegion"][i][j].asFloat());
+        }
 
-			vector<float> cf;
-			vector<float> ie;
-			vector<float> dr;
+        train_subset_cf_[i] = cf;
+        train_subset_ie_[i] = ie;
+        train_subset_dr_[i] = dr;
+    }
 
-			for(int j = 0; j < n; ++j)
-			{
-				cf.push_back(json["TrainSubset"]["CFbyRegion"][i][j].asFloat());
-				ie.push_back(json["TrainSubset"]["IEbyRegion"][i][j].asFloat());
-				dr.push_back(json["TrainSubset"]["DRbyRegion"][i][j].asFloat());
-			}
+    // Transfer one of the train subsets to the results structure
+    result_regions_y_ = train_subset_regions_y_[train_subset_count_ - 1];
+    result_regions_x_ = train_subset_regions_x_[train_subset_count_ - 1];
 
-			train_subset_cf_[i] = cf;
-			train_subset_ie_[i] = ie;
-			train_subset_dr_[i] = dr;
-		}
+    result_cf_ = train_subset_cf_[train_subset_count_ - 1];
+    result_ie_ = train_subset_ie_[train_subset_count_ - 1];
+    result_dr_ = train_subset_dr_[train_subset_count_ - 1];
+    average_cf_ = 0;
+    average_ie_ = 0;
+    average_dr_ = 0;
+    int count = 0;
 
-		result_regions_y_ = train_subset_regions_y_[train_subset_count_ - 1];
-		result_regions_x_ = train_subset_regions_x_[train_subset_count_ - 1];
-
-		result_cf_ = train_subset_cf_[train_subset_count_ - 1];
-		result_ie_ = train_subset_ie_[train_subset_count_ - 1];
-		result_dr_ = train_subset_dr_[train_subset_count_ - 1];
-        average_cf_ = 0;
-        average_ie_ = 0;
-        average_dr_ = 0;
-        int count = 0;
-
-        for (int r = 0; r < result_regions_x_*result_regions_y_; r++) {
-          if (result_cf_[r] || result_ie_[r] || result_dr_[r]) {
+    for (int r = 0; r < result_regions_x_*result_regions_y_; r++) {
+        if (result_cf_[r] || result_ie_[r] || result_dr_[r]) {
             average_cf_ += result_cf_[r];
             average_ie_ += result_ie_[r];
             average_dr_ += result_dr_[r];
-            count++;
-          }
+        count++;
         }
-        if (count > 0) {
-          average_cf_ /= count;
-          average_ie_ /= count;
-          average_dr_ /= count;
-        }
+    }
+    if (count > 0) {
+        average_cf_ /= count;
+        average_ie_ /= count;
+        average_dr_ /= count;
+    }
 		
-        cout << "PhaseEstimator: Successfully loaded phase estimates from file: " << phase_file_name << endl;
-		return true;
-	}
-	else
-	{
-		cerr << "PhaseEstimator: Unable to load phase estimates from file: " << phase_file_name << endl;
-		return false;
-	}
+    cout << "PhaseEstimator: Successfully loaded phase estimates from file: " << phase_file_name << endl;
+    return true;
 }

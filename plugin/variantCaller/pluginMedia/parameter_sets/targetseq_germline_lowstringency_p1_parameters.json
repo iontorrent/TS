@@ -3,10 +3,10 @@
         "name"          : "TargetSeq - Proton - Germ Line - Low Stringency",
         "tooltip"       : "Parameter settings optimized for high frequency variants and minimum false negatives on TargetSeq libraries and Proton chips",
         "configuration" : "germline_low_stringency_targetseq",
-        "ts_version"    : "4.4",
+        "ts_version"    : "4.6",
         "compatibility" : {
           "chip"        : ["proton_p1"],
-          "library"     : ["targetseq"],
+          "library"     : ["targetseq","wholegenome"],
           "frequency"   : ["germline"],
           "stringency"  : ["low"]
 
@@ -16,29 +16,29 @@
 
         "data_quality_stringency":5.0,
         "hp_max_length":8,
-        "filter_unusual_predictions":0.4,
+        "filter_unusual_predictions":0.25,
         "filter_insertion_predictions": 0.2,
         "filter_deletion_predictions": 0.2,
-        "indel_as_hpindel": 0,
+        "indel_as_hpindel": 1,
 
         "snp_min_cov_each_strand":0,
-        "snp_min_variant_score":10.0,
+        "snp_min_variant_score":15.0,
         "snp_min_allele_freq":0.10,
-        "snp_min_coverage":6,
-        "snp_strand_bias":0.95,
-        "snp_strand_bias_pval":1.0,
+        "snp_min_coverage":5,
+        "snp_strand_bias":0.98,
+        "snp_strand_bias_pval":0.01,
 
         "mnp_min_cov_each_strand":0,
-        "mnp_min_variant_score":10.0,
+        "mnp_min_variant_score":60.0,
         "mnp_min_allele_freq":0.10,
-        "mnp_min_coverage":6,
-        "mnp_strand_bias":0.95,
-        "mnp_strand_bias_pval":1.0,
+        "mnp_min_coverage":5,
+        "mnp_strand_bias":0.98,
+        "mnp_strand_bias_pval":0.01,
 
         "indel_min_cov_each_strand":5,
         "indel_min_variant_score":20.0,
-        "indel_min_allele_freq":0.15,
-        "indel_min_coverage":15,
+        "indel_min_allele_freq":0.25,
+        "indel_min_coverage":10,
         "indel_strand_bias":0.9,
         "indel_strand_bias_pval":1.0,
 
@@ -60,6 +60,7 @@
         "position_bias_pval":0.05,
         "position_bias_ref_fraction":0.05,
 
+        "sse_prob_threshold":0.2,
         "prediction_precision":1.0,
         "heavy_tailed":3,
         "suppress_recalibration":0
@@ -82,8 +83,8 @@
         "min_mapping_qv":4,
         "read_snp_limit":10,
         "read_max_mismatch_fraction":1.0,
-        "gen_min_alt_allele_freq":0.15,
+        "gen_min_alt_allele_freq":0.1,
         "gen_min_indel_alt_allele_freq":0.15,
-        "gen_min_coverage":6
+        "gen_min_coverage":5
     }
 }

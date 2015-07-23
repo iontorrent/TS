@@ -45,7 +45,9 @@ if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
 # http://software.intel.com/sites/products/documentation/doclib/stdxe/2013/composerxe/compiler/cpp-lin/GUID-B4670EED-D317-46D4-9635-618B36C827C3.htm # Code Generation Options
 # If you specify both the -ax and -m options, the baseline code will execute on non-Intel processors compatible with the setting specified for the -m option.
 elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
-    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -axAVX,SSE4.2 -msse3 -vec-report0")
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -axAVX,SSE4.2 -msse3 -opt-report0")
+elseif ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
+    set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
 else()
     set(ION_COMMON_FLAGS "${ION_COMMON_FLAGS} -msse3")
 endif()
@@ -54,88 +56,114 @@ message(STATUS "C compiler: ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}")
 message(STATUS "CXX compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "common compiler flags: ${ION_COMMON_FLAGS}")
 
+set(CUDA_PROPAGATE_HOST_FLAGS OFF)
+if (${LSB_RELEASE_CODENAME} STREQUAL "trusty")
+    # ,\"-Wall\",\"-Wextra\",\"-Werror\",\"-fPIC\",\"-mavx\",\"-O3\",\"-g\"
+    # ,\"-Wno-unused-parameter\",\"-Wno-write-strings\",\"-Wno-unused-variable\",\"-Wno-error=unused-but-set-variabl$
+    # ,\"-std=gnu++11\",\"-fpermissive\",\"-Wno-error=narrowing\",\"-Wno-unused-function\"
+    #SET( CUDA_NVCC_FLAGS "-std=c++11")
+endif()
+
+
+## NOTE: -O2 enables strict-aliasing, and code is not clean
+SET( CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}
+                     "-O2" "--compiler-options=-fno-strict-aliasing" "-g" "--use_fast_math"
+                     "-gencode=arch=compute_20,code=sm_20"
+                     "-gencode=arch=compute_30,code=sm_30"
+                     "-gencode=arch=compute_35,code=sm_35"
+                     "-gencode=arch=compute_50,code=sm_50"
+                     "-gencode=arch=compute_52,code=sm_52"
+                     "-gencode=arch=compute_52,code=compute_52"
+                     "-maxrregcount=48" )
+
+## If user set CXX on command line, make sure NVCC respects it
+## (necessary for compiling on systems where default compiler is not nvcc compatible)
+if($ENV{CXX} MATCHES ".+")
+    LIST(APPEND CUDA_NVCC_FLAGS --compiler-bindir $ENV{CXX})
+endif() #($ENV{CXX} MATCHES ".+")
+
+if( HAS_MALIGN_DOUBLE )
+    add_definitions(-malign-double) ## See CUDA 4.0 Release Nodes
+endif()
+
 
 # Add any C specific flags here
 set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter")
 
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
-    set(ION_C_FLAGS "${ION_C_FLAGS}") # -ansi -pedantic
-    if(GCC_C_VERSION VERSION_EQUAL 4.4 OR (GCC_C_VERSION VERSION_GREATER 4.4))
-        set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-unused-result")
+    # https://gcc.gnu.org/wiki/C11Status
+
+    set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-unused-result") # -ansi -pedantic
+    if(GCC_C_VERSION VERSION_EQUAL 4.4 OR (GCC_C_VERSION VERSION_GREATER 4.4 AND GCC_C_VERSION VERSION_LESS 4.6))
+        set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu99")
     endif()
-    if(GCC_C_VERSION VERSION_EQUAL 4.6 OR (GCC_C_VERSION VERSION_GREATER 4.6))
+    if(GCC_C_VERSION VERSION_EQUAL 4.6 OR (GCC_C_VERSION VERSION_GREATER 4.6 AND GCC_C_VERSION VERSION_LESS 4.7))
+        set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu99")
+        set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-error=unused-but-set-variable")
+    endif()
+    if(GCC_C_VERSION VERSION_EQUAL 4.7 OR (GCC_C_VERSION VERSION_GREATER 4.7))
+        set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu11")
         set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-error=unused-but-set-variable")
     endif()
 endif()
 
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
-    # undefined reference to inline function`tmap_reverse_compliment', http://clang.llvm.org/compatibility.html#inline
-    set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu89") # bad workaround for static-in-inline warning/error
-
-    set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-static-in-inline")
-#    set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-gnu")
+    set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu11")
     set(ION_C_FLAGS "${ION_C_FLAGS} -Wno-unused-function")
 endif()
 
 if ("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel")
-    set(ION_C_FLAGS "${ION_C_FLAGS} -wd10006") # 10006: ignoring unknown option '-Wno-unused-result'
+    set(ION_C_FLAGS "${ION_C_FLAGS} -std=gnu11")
 endif()
 
 
 # Add any C++ specific flags here
-set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-parameter -Wno-write-strings")
+set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-parameter")
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    # GNU specific flags
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-variable") # -ansi -pedantic
-    if (GCC_CXX_VERSION VERSION_EQUAL 4.6 OR (GCC_CXX_VERSION VERSION_GREATER 4.6))
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Woverloaded-virtual")
+
+    if(GCC_CXX_VERSION VERSION_EQUAL 4.4 OR (GCC_CXX_VERSION VERSION_GREATER 4.4 AND GCC_CXX_VERSION VERSION_LESS 4.6))
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++98")
+    endif()
+    if(GCC_CXX_VERSION VERSION_EQUAL 4.6 OR (GCC_CXX_VERSION VERSION_GREATER 4.6 AND GCC_CXX_VERSION VERSION_LESS 4.7))
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++98")
         set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-variable")
         set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-parameter")
     endif()
     if(GCC_CXX_VERSION VERSION_EQUAL 4.7 OR (GCC_CXX_VERSION VERSION_GREATER 4.7))
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=attributes")
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++11")
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-variable")
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=unused-but-set-parameter")
         set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=narrowing")
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=delete-non-virtual-dtor")
         set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-function")
     endif()
-    if(GCC_CXX_VERSION VERSION_EQUAL 4.8 OR GCC_CXX_VERSION VERSION_GREATER 4.8)
-        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=sizeof-pointer-memaccess")
+    if(GCC_CXX_VERSION VERSION_EQUAL 5.0 OR (GCC_CXX_VERSION VERSION_GREATER 5.0))
+        set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-error=bool-compare")
     endif()
 endif()
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-gnu")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++11")
+#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-gnu")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-private-field")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-value")
-    #set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-mismatched-tags")
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-overloaded-virtual")
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-char-subscripts")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-function")
     set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-unused-variable")
-
-    #TODO, remove asap
-#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-format")
-#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-sizeof-pointer-memaccess")
-#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-delete-non-virtual-dtor")
-#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-return-type")
-#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-non-literal-null-conversion")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-mismatched-tags")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-sign-compare")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-char-subscripts")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-c++11-narrowing")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -Wno-format")
 endif()
 
 # ICC workaround
-# /usr/include/c++/4.8$ sudo ln -s /usr/include/x86_64-linux-gnu/c++/4.8 x86_64-linux-gnu # on unstable
-# /usr/include/c++/4.7$ sudo ln -s /usr/include/x86_64-linux-gnu/c++/4.7 x86_64-linux-gnu # on testing
+# /usr/include/c++/4.8$ sudo ln -s /usr/include/x86_64-linux-gnu/c++/4.8 x86_64-linux-gnu
 
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel")
-#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++0x") # causes boost? error: more than one instance of overloaded function "isnan" matches the argument list:
-#    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++11") # same as older -std=c++0x # might trigger internal compiler error
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd10006") # 10006: ignoring unknown option '-Wno-unused-result'
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd171")  # 171: invalid type conversion: "__m128" to "v8hi"
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd192")  # 192: unrecognized character escape sequence
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd2089") #2089: definition of base class type not completed yet
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd1011") #1011: missing return statement at end of non-void function
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd488") #488: template parameter "eT2" is not used in declaring the parameter types of function template
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd1292") #1292: unknown attribute "__leaf__"
-    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd2722") #2722: list initialization syntax is a C++11 feature
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -std=c++11")
+    set(ION_CXX_FLAGS "${ION_CXX_FLAGS} -wd239")   # 239: floating point underflow
 endif()
 
 

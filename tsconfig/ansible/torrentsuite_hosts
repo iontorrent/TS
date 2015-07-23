@@ -1,5 +1,5 @@
 [headnode]
-LOCALHEADNODE #Replaced by postinst.in on install
+LOCALHEADNODE ansible_connection=local
 
 [computes]
 

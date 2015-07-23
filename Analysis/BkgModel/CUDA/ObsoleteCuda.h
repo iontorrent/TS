@@ -16,11 +16,7 @@ struct BkgModSingleFlowFitKrateParams
   float dmultX;
 };
 
-// please get rid of these soon - bkgmodel should treat these as global parameters
-// to support possible changes for Proton
-// we are experimenting with different sampling rates
-// please use the deltaFrameSeconds in time-compression as a central source for this conversion(?)
-#define FRAMESPERSEC 15.0f
+
 
 // this for example depends on well size
 #define n_to_uM_conv    (0.000062f)

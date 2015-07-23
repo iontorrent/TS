@@ -88,6 +88,7 @@ class EmptyTrace
     float ComputeDcOffsetEmpty ( float *bPtr, float t_start, float t_end );
 
     void  AccumulateEmptyTrace ( float *bPtr, float *tmp_shifted, float w );
+    void  AccumulateEmptyTrace ( double *bPtr, float *tmp_shifted, float w );
     void  ShiftMe ( float tshift, const TimeCompression &time_cp, 
                     const float *my_buff, float *out_buff, int flow_block_size ) const;
     bool ReferenceWell ( int ax, int ay, const Mask *bfmask );

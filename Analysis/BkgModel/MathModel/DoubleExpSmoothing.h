@@ -91,7 +91,6 @@ public:
 
     *(rp->*access_fn)() = prevS = newS;
     prevB = newB;
-    
   }
 
   void CMA( reg_params *rp )

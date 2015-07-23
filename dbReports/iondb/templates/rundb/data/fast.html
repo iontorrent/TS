@@ -64,11 +64,12 @@
 
 {% block content %}
 <div class="content">
-	<h1>Fast Data</h1>
+    <a href="{% url "results_list" %}" class="btn btn-default pull-right">View Reports</a>
+	<h1>Runs</h1>
     <ul class="pager">
-        {% if experiments.has_previous %}
+        {% if page_obj.has_previous %}
             <li class="previous">
-                <a href="?page={{ experiments.previous_page_number }}">&larr; Newer</a>
+                <a href="?page={{ page_obj.previous_page_number }}">&larr; Newer</a>
             </li>
         {% else %}
             <li class="previous disabled">
@@ -76,11 +77,11 @@
             </li>
         {% endif %}
         <li class="current">
-            Page {{ experiments.number }} of {{ experiments.paginator.num_pages }}
+            Page {{ page_obj.number }} of {{ paginator.num_pages }}
         </li>
-        {% if experiments.has_next %}
+        {% if page_obj.has_next %}
             <li class="next">
-                <a href="?page={{ experiments.next_page_number }}">Older &rarr;</a>
+                <a href="?page={{ page_obj.next_page_number }}">Older &rarr;</a>
             </li>
         {% else %}
             <li class="next disabled">
@@ -94,7 +95,7 @@
 				<th></th>
 				<th></th>
 				<th>Run Name</th>
-				<th>Run Date</th>
+				<th>Date</th>
 				<th>{% if show_status %}Status{% endif %}</th>
 				<th>Ref.</th>
 				<th>Barcode</th>
@@ -106,7 +107,7 @@
 			</tr>
 		</thead>
 		<tbody>
-			{% for exp in experiments %}
+			{% for exp in object_list %}
 				<tr>
 					<td>
 						{% if exp.star %}
@@ -155,9 +156,9 @@
 	</table>
 
     <ul class="pager">
-        {% if experiments.has_previous %}
+        {% if page_obj.has_previous %}
             <li class="previous">
-                <a href="?page={{ experiments.previous_page_number }}">&larr; Newer</a>
+                <a href="?page={{ page_obj.previous_page_number }}">&larr; Newer</a>
             </li>
         {% else %}
             <li class="previous disabled">
@@ -165,11 +166,11 @@
             </li>
         {% endif %}
         <li class="current">
-            Page {{ experiments.number }} of {{ experiments.paginator.num_pages }}
+            Page {{ page_obj.number }} of {{ paginator.num_pages }}
         </li>
-        {% if experiments.has_next %}
+        {% if page_obj.has_next %}
             <li class="next">
-                <a href="?page={{ experiments.next_page_number }}">Older &rarr;</a>
+                <a href="?page={{ page_obj.next_page_number }}">Older &rarr;</a>
             </li>
         {% else %}
             <li class="next disabled">

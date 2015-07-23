@@ -1,5 +1,5 @@
 /*
- * Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
+ * Copyright 1993-2015 NVIDIA Corporation.  All rights reserved.
  *
  * Please refer to the NVIDIA end user license agreement (EULA) associated
  * with this source code for terms and conditions that govern your use of
@@ -23,7 +23,7 @@
 #include <cuda_runtime.h>
 
 // includes
-#include <helper_functions.h>  // helper for shared functions common to CUDA SDK samples
+#include <helper_functions.h>  // helper for shared functions common to CUDA Samples
 #include <helper_cuda.h>       // helper functions for CUDA error checking and initialization
 
 #include <cuda.h>
@@ -32,7 +32,7 @@
 #include <iostream>
 #include <cassert>
 
-static char *sSDKsample = "CUDA Bandwidth Test";
+static const char *sSDKsample = "CUDA Bandwidth Test";
 
 // defines, project
 #define MEMCOPY_ITERATIONS  10
@@ -113,7 +113,23 @@ int main(int argc, char **argv)
 
     int iRetVal = runTest(argc, (const char **)argv);
 
+    if (iRetVal < 0)
+    {
+        checkCudaErrors(cudaSetDevice(0));
+
+        // cudaDeviceReset causes the driver to clean up all state. While
+        // not mandatory in normal operation, it is good practice.  It is also
+        // needed to ensure correct operation when the application is being
+        // profiled. Calling cudaDeviceReset causes all profile data to be
+        // flushed before the application exits
+        cudaDeviceReset();
+    }
+
     // finish
+    printf("%s\n", (iRetVal==0) ? "Result = PASS" : "Result = FAIL");
+
+    printf("\nNOTE: The CUDA Samples are not meant for performance measurements. Results may vary when GPU Boost is enabled.\n");
+
     exit((iRetVal==0) ? EXIT_SUCCESS : EXIT_FAILURE);
 }
 
@@ -218,15 +234,32 @@ int runTest(const int argc, const char **argv)
         if (error_id == cudaSuccess)
         {
             printf(" Device %d: %s\n", currentDevice, deviceProp.name);
-			if (deviceProp.computeMode == cudaComputeModeProhibited)
-			{
-				fprintf(stderr, "Error: device is running in <Compute Mode Prohibited>, no threads can use ::cudaSetDevice().\n");
-				exit(EXIT_FAILURE);
-			}
+
+            if (deviceProp.computeMode == cudaComputeModeProhibited)
+            {
+                fprintf(stderr, "Error: device is running in <Compute Mode Prohibited>, no threads can use ::cudaSetDevice().\n");
+                checkCudaErrors(cudaSetDevice(currentDevice));
+
+                // cudaDeviceReset causes the driver to clean up all state. While
+                // not mandatory in normal operation, it is good practice.  It is also
+                // needed to ensure correct operation when the application is being
+                // profiled. Calling cudaDeviceReset causes all profile data to be
+                // flushed before the application exits
+                cudaDeviceReset();
+                exit(EXIT_FAILURE);
+            }
         }
         else
         {
             printf("cudaGetDeviceProperties returned %d\n-> %s\n", (int)error_id, cudaGetErrorString(error_id));
+            checkCudaErrors(cudaSetDevice(currentDevice));
+
+            // cudaDeviceReset causes the driver to clean up all state. While
+            // not mandatory in normal operation, it is good practice.  It is also
+            // needed to ensure correct operation when the application is being
+            // profiled. Calling cudaDeviceReset causes all profile data to be
+            // flushed before the application exits
+            cudaDeviceReset();
             exit(EXIT_FAILURE);
         }
     }
@@ -380,9 +413,15 @@ int runTest(const int argc, const char **argv)
     }
 
     // Ensure that we reset all CUDA Devices in question
-    for (int nDevice = startDevice; nDevice < endDevice; nDevice++)
+    for (int nDevice = startDevice; nDevice <= endDevice; nDevice++)
     {
         cudaSetDevice(nDevice);
+
+        // cudaDeviceReset causes the driver to clean up all state. While
+        // not mandatory in normal operation, it is good practice.  It is also
+        // needed to ensure correct operation when the application is being
+        // profiled. Calling cudaDeviceReset causes all profile data to be
+        // flushed before the application exits
         cudaDeviceReset();
     }
 
@@ -679,7 +718,7 @@ testDeviceToHostTransfer(unsigned int memSize, memoryMode memMode, bool wc)
     }
 
     //calculate bandwidth in MB/s
-    bandwidthInMBs = (1e3f * memSize * (float)MEMCOPY_ITERATIONS) /
+    bandwidthInMBs = ((float)(1<<10) * memSize * (float)MEMCOPY_ITERATIONS) /
                      (elapsedTimeInMs * (float)(1 << 20));
 
     //clean up memory
@@ -802,7 +841,7 @@ testHostToDeviceTransfer(unsigned int memSize, memoryMode memMode, bool wc)
     sdkResetTimer(&timer);
 
     //calculate bandwidth in MB/s
-    bandwidthInMBs = (1e3f * memSize * (float)MEMCOPY_ITERATIONS) /
+    bandwidthInMBs = ((float)(1<<10) * memSize * (float)MEMCOPY_ITERATIONS) /
                      (elapsedTimeInMs * (float)(1 << 20));
 
     //clean up memory
@@ -893,7 +932,7 @@ testDeviceToDeviceTransfer(unsigned int memSize)
     }
 
     //calculate bandwidth in MB/s
-    bandwidthInMBs = 2.0f * (1e3f * memSize * (float)MEMCOPY_ITERATIONS) /
+    bandwidthInMBs = 2.0f * ((float)(1<<10) * memSize * (float)MEMCOPY_ITERATIONS) /
                      (elapsedTimeInMs * (float)(1 << 20));
 
     //clean up memory

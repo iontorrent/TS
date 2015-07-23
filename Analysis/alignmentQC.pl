@@ -89,34 +89,6 @@ print "Aligning $nReads reads from ".join(" and ",@{$opt->{"readFile"}})."\n";
 my $indexVersion = defined($opt->{"aligner-format-version"}) ? $opt->{"aligner-format-version"} : &getIndexVersion();
 my($refDir,$refInfo,$refFasta,$infoFile) = &findReference($opt->{"genome-path"},$opt->{"genome"},$opt->{"aligner"},$indexVersion);
 
-if( -f 'explog.txt') {
-  my $project = `grep ^Project: explog.txt|cut -f2- -d" "`; chomp $project;
-  print "Checking if $refDir/project/$project exists\n";
-  if ($project && -r "$refDir/project/$project") {
-    print "Found hard-coded genomes, checking if readFile pattern matches\n";
-    open(PROJ, "$refDir/project/$project");
-    my $readFileName = $opt->{"readFile"}[0];
-    $readFileName =~ s/.*\///;
-    while (<PROJ>) {
-      chomp;
-      my ($pattern, $genome) = split /\t/;
-      if ($readFileName =~ /^$pattern/) {
-        print "Attemping to change genome from ".$opt->{"genome"}." to $genome for ".$opt->{"readFile"}[0]."\n";
-        $opt->{"genome"} = $genome;
-        my ($newrefDir,$newrefInfo,$newrefFasta,$newinfoFile) = &findReference($opt->{"genome-path"},$opt->{"genome"},$opt->{"aligner"},$indexVersion);
-        if ($newrefDir) {
-          ($refDir,$refInfo,$refFasta,$infoFile) = ($newrefDir,$newrefInfo,$newrefFasta,$newinfoFile);
-          last;
-          }
-        else {
-          print "Cannot find hard-coded genome $genome\n";
-        }
-      }
-    }
-    close(PROJ);
-  }
-}
-
 print "Aligning to reference genome in $refDir\n";
 
 
@@ -187,11 +159,11 @@ if($opt->{"aligner"} eq "tmap") {
   $command .= " 2>> ".$opt->{"logfile"};
   if(0 == $opt->{"mark-duplicates"}) {
       $command .= " | samtools sort -m 1G -l1 -p".$opt->{"threads"}." - $bamBase";
-      #$command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamFile VERBOSITY=WARNING QUIET=TRUE SO=coordinate";
+      #$command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/picard.jar SortSam I=/dev/stdin O=$bamFile VERBOSITY=WARNING QUIET=TRUE SO=coordinate";
   }
   else {
       $command .= " | samtools sort -m 1G -l1 -p".$opt->{"threads"}." - $bamBase.tmp";
-      #$command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/SortSam.jar I=/dev/stdin O=$bamBase.tmp.bam VERBOSITY=WARNING QUIET=TRUE SO=coordinate";
+      #$command .= " | java -Xmx12G -jar /opt/picard/picard-tools-current/picard.jar SortSam I=/dev/stdin O=$bamBase.tmp.bam VERBOSITY=WARNING QUIET=TRUE SO=coordinate";
   }
   print "  $command\n";
   die "$0: Failure during read mapping\n" if(&executeSystemCall($command));

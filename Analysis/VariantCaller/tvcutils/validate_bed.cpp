@@ -68,6 +68,7 @@ void ValidateBedHelp()
  *  - Left align indels
  *  - Output VCF: Produce O* fields
  *  - Output VCF: Combine entries with common start
+ *  - Implements 4.0 internal spec https://jira.itw/wiki/pages/viewpage.action?title=BED+File+Formats+and+Examples&spaceKey=TSUD
  *
  * Possibilities:
  *  - With VCF, propagate select INFO fields that may have useful annotations

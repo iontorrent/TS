@@ -93,10 +93,11 @@ tmap_refseq_get_version_format(const char *v);
   @param  fn_fasta     the file name of the fasta file
   @param  compression  the type of compression, if any to be used
   @param  fwd_only     1 if to pack the forward sequence only, 0 otherwise
+  @param  old_v        1 if to produce a version number that is old enough so can be worked with any older version of tmap
   @return              the length of the reference sequence
   */
 uint64_t
-tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_only);
+tmap_refseq_fasta2pac(const char *fn_fasta, int32_t compression, int32_t fwd_only, int32_t old_v);
 
 /*! 
   @param  fn_fasta     the file name of the fasta file
@@ -169,7 +170,7 @@ tmap_refseq_destroy(tmap_refseq_t *refseq);
   @param  strand      the strand (0 - forward, 1 - reverse)
   @return             the one-based position, 0 if not found (i.e. overlaps two chromosomes)
   */
-inline tmap_bwt_int_t
+tmap_bwt_int_t
 tmap_refseq_pac2real(const tmap_refseq_t *refseq, tmap_bwt_int_t pacpos, uint32_t aln_length, uint32_t *seqid, uint32_t *pos, uint8_t *strand);
 
 /*! 
@@ -180,7 +181,7 @@ tmap_refseq_pac2real(const tmap_refseq_t *refseq, tmap_bwt_int_t pacpos, uint32_
   @param  target  the target in which to store the data (must be allocated with enough memory)
   @return         the length retrieved
   */
-inline int32_t
+int32_t
 tmap_refseq_subseq(const tmap_refseq_t *refseq, tmap_bwt_int_t pacpos, uint32_t length, uint8_t *target);
 
 /*! 
@@ -194,7 +195,7 @@ tmap_refseq_subseq(const tmap_refseq_t *refseq, tmap_bwt_int_t pacpos, uint32_t 
   @param  conv    the number of bases converted to ambiguity bases
   @return         the target sequence if successful, NULL otherwise
   */
-inline uint8_t*
+uint8_t*
 tmap_refseq_subseq2(const tmap_refseq_t *refseq, uint32_t seqid, uint32_t start, uint32_t end, uint8_t *target, int32_t to_n, int32_t *conv);
 
 /*! 
@@ -205,7 +206,7 @@ tmap_refseq_subseq2(const tmap_refseq_t *refseq, uint32_t seqid, uint32_t start,
   @param  end     the end position (one-based and inclusive)
   @return         zero if none were found, otherwise the one-based index into "amb_bases" array
   */
-inline int32_t
+int32_t
 tmap_refseq_amb_bases(const tmap_refseq_t *refseq, uint32_t seqid, uint32_t start, uint32_t end);
 
 /*! 

@@ -20,6 +20,7 @@ import logging
 from django.core import serializers
 from django.core.urlresolvers import reverse
 from django.db.models import Q
+from django.db.models import Count
 
 import os
 import string
@@ -30,12 +31,14 @@ import csv
 from django.core.exceptions import ValidationError
 
 from iondb.rundb.models import Sample, SampleSet, SampleSetItem, SampleAttribute, SampleGroupType_CV,  \
-    SampleAnnotation_CV, SampleAttributeDataType, SampleAttributeValue, PlannedExperiment, dnaBarcode, GlobalConfig
+    SampleAnnotation_CV, SampleAttributeDataType, SampleAttributeValue, PlannedExperiment, dnaBarcode, GlobalConfig, \
+    SamplePrepData, KitInfo
 
 #from iondb.rundb.api import SampleSetItemInfoResource
 
 from django.contrib.auth.models import User
 from django.conf import settings
+from django.views.generic.detail import DetailView
 
 import import_sample_processor
 import views_helper
@@ -69,6 +72,9 @@ def _get_sample_groupType_CV_list(request):
 
 
 def _get_sampleSet_list(request):
+    """
+    Returns a list of sample sets to which we can still add samples
+    """ 
     sampleSet_list = None    
     isSupported = GlobalConfig.get().enable_compendia_OCP
     
@@ -77,7 +83,13 @@ def _get_sampleSet_list(request):
     else:
         sampleSet_list = SampleSet.objects.all().exclude(SampleGroupType_CV__displayedName = "DNA_RNA").order_by("-lastModifiedDate", "displayedName")   
 
-    return sampleSet_list
+    #exclude sample sets that are of amps_on_chef_v1 AND already have 8 samples
+    annotated_list = sampleSet_list.exclude(status__in = ["voided", "libPrep_reserved"]).annotate(Count("samples"))
+    exclude_id_list = annotated_list.values_list("id", flat=True).filter(libraryPrepType = "amps_on_chef_v1", samples__count = 8)
+    available_sampleSet_list = annotated_list.exclude(pk__in = exclude_id_list)
+    logger.debug("_get_sampleSet_list() sampleSet_list.count=%d; available_sampleSet_list=%d" %(annotated_list.count(), available_sampleSet_list.count()))
+    
+    return available_sampleSet_list
 
 
 def _get_all_userTemplates(request):
@@ -170,7 +182,8 @@ def download_samplefile_format(request):
             , import_sample_processor.COLUMN_SAMPLE_DESCRIPTION
             , import_sample_processor.COLUMN_NUCLEOTIDE_TYPE
             , import_sample_processor.COLUMN_CANCER_TYPE
-            , import_sample_processor.COLUMN_CELLULARITY_PCT          
+            , import_sample_processor.COLUMN_CELLULARITY_PCT 
+            , import_sample_processor.COLUMN_PCR_PLATE_POSITION         
             , import_sample_processor.COLUMNS_BARCODE_KIT
             , import_sample_processor.COLUMN_BARCODE
             ]
@@ -189,16 +202,17 @@ def show_import_samplesetitems(request):
     """
     show the page to import samples from file for sample set creation 
     """
-    
     ctxd = {}
-
     sampleSet_list = _get_sampleSet_list(request)
-
     sampleGroupType_list = list(_get_sample_groupType_CV_list(request))
-    
+    libraryPrepType_choices = views_helper._get_libraryPrepType_choices(request)
+    libraryPrepKits = KitInfo.objects.filter(kitType='LibraryPrepKit', isActive=True)
+
     ctxd = {
             'sampleSet_list': sampleSet_list,
-            'sampleGroupType_list': sampleGroupType_list
+            'sampleGroupType_list': sampleGroupType_list,
+            'libraryPrepType_choices' : libraryPrepType_choices,
+            'libraryPrepKits': libraryPrepKits,
             }
     
     ctx = RequestContext(request, ctxd)
@@ -206,40 +220,36 @@ def show_import_samplesetitems(request):
 
 
 @login_required
-def show_add_sampleset(request):
+def show_edit_sampleset(request, _id=None):
     """
-    show the page to define new sample set  
-    """
-    
-    ctxd = {}
-    sampleGroupType_list = _get_sample_groupType_CV_list(request)
-    
-    ctxd = {
-            'sampleSet' : None,
-            'sampleGroupType_list': sampleGroupType_list,
-            'intent' : "add"
-            }
-
-    ctx = RequestContext(request, ctxd)
-    return render_to_response("rundb/sample/modal_add_sampleset.html", context_instance=ctx, mimetype="text/html")
-
-
-@login_required
-def show_edit_sampleset(request, _id):
-    """
-    show the sample set edit page
+    show the sample set add/edit page
     """
     ctxd = {}
-       
-    sampleSet = get_object_or_404(SampleSet, pk = _id)
+    if _id:
+        sampleSet = get_object_or_404(SampleSet, pk = _id)
+        intent = "edit"
+        editable = sampleSet.status in ['', 'created', 'libPrep_pending']
+    else:
+        sampleSet = None
+        intent = "add"
+        editable = True
+
     sampleGroupType_list = _get_sample_groupType_CV_list(request)
+    libraryPrepType_choices = views_helper._get_libraryPrepType_choices(request)
+    
+    if editable:
+        libraryPrepKits = KitInfo.objects.filter(kitType='LibraryPrepKit', isActive=True)
+    else:
+        libraryPrepKits = KitInfo.objects.filter(name=sampleSet.libraryPrepKitName)
     
     ctxd = {
             'sampleSet' : sampleSet,
             'sampleGroupType_list': sampleGroupType_list,
-            'intent' : "edit"
+            'libraryPrepType_choices' : libraryPrepType_choices,
+            'libraryPrepKits': libraryPrepKits,
+            'intent' : intent,
+            'editable': editable
             }
-
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/sample/modal_add_sampleset.html", context_instance=ctx, mimetype="text/html")
 
@@ -304,23 +314,44 @@ def save_sampleset(request):
 #            logger.debug("save_sampleset_sampleSet_groupType=%s" %(queryDict.get("groupType", None)))
 #            logger.debug("save_sampleset id=%s" %(queryDict.get("id", None)))
 
-            sampleSetName = queryDict.get("sampleSetName", "")
-            sampleSetDesc = queryDict.get("sampleSetDescription", "")
+            sampleSetName = queryDict.get("sampleSetName", "").strip()
+            sampleSetDesc = queryDict.get("sampleSetDescription", "").strip()
                 
             sampleSet_groupType_id = queryDict.get("groupType", None)
             if sampleSet_groupType_id == "0":
                 sampleSet_groupType_id = None
-                    
+
+            libraryPrepType = queryDict.get("libraryPrepType", "").strip()
+            if libraryPrepType and "chef" in libraryPrepType.lower():
+                libraryPrepInstrument = "chef"
+            else:
+                libraryPrepInstrument = ""
+
+            libraryPrepKitName = queryDict.get("libraryPrepKit","").strip()
+            pcrPlateSerialNum = queryDict.get("pcrPlateSerialNum", "").strip()
+            
             sampleSet_id = queryDict.get("id", None)
             currentDateTime = timezone.now()  #datetime.datetime.now()         
     
             try:    
                 if intent == "add":
+                    sampleSetStatus = "created"
+                    if sampleSet.libraryPrepInstrument == "chef":
+                        libraryPrepInstrumentData_obj = models.SamplePrepData.objects.create(samplePrepDataType = "lib_prep")
+                        sampleSetStatus = "libPrep_pending"
+                    else:
+                        libraryPrepInstrumentData_obj = None
+                        
                     sampleSet_kwargs = {
-                                        'displayedName' : sampleSetName.strip(),
-                                        'description' : sampleSetDesc.strip(),  
-                                        'status' : "created",
+                                        'displayedName' : sampleSetName,
+                                        'description' : sampleSetDesc,
+                                        'status' : sampleSetStatus,
                                         'SampleGroupType_CV_id' : sampleSet_groupType_id,
+                                        'libraryPrepType' : libraryPrepType,
+                                        'libraryPrepKitName': libraryPrepKitName,
+                                        'pcrPlateSerialNum' : pcrPlateSerialNum,
+                                        'libraryPrepInstrument' : libraryPrepInstrument, 
+                                        'libraryPrepInstrumentData' : libraryPrepInstrumentData_obj,                                        
                                         'creator' : user,          
                                         'creationDate' : currentDateTime,
                                         'lastModifiedUser' : user,                     
@@ -334,17 +365,40 @@ def save_sampleset(request):
                 else:
                     orig_sampleSet = get_object_or_404(SampleSet, pk = sampleSet_id)
                                                 
-                    if (orig_sampleSet.displayedName == sampleSetName.strip() and 
-                        orig_sampleSet.description == sampleSetDesc.strip() and
-                        orig_sampleSet.SampleGroupType_CV and str(orig_sampleSet.SampleGroupType_CV.id) == sampleSet_groupType_id):
+                    if (orig_sampleSet.displayedName == sampleSetName and
+                        orig_sampleSet.description == sampleSetDesc and
+                        orig_sampleSet.SampleGroupType_CV and str(orig_sampleSet.SampleGroupType_CV.id) == sampleSet_groupType_id and
+                        orig_sampleSet.libraryPrepType == libraryPrepType and
+                        orig_sampleSet.libraryPrepKitName == libraryPrepKitName and
+                        orig_sampleSet.pcrPlateSerialNum == pcrPlateSerialNum):
                         
                         logger.debug("views.save_sampleset() - NO UPDATE NEEDED!! sampleSet.id=%d" %(orig_sampleSet.id))
-                                                
-                    else:        
+                    else:
+                        sampleSetStatus = orig_sampleSet.status
+                        
+                        libraryPrepInstrumentData_obj = orig_sampleSet.libraryPrepInstrumentData
+                        #clean up the associated object if the sample set used to be "amps_on_chef" and now is not
+                        if libraryPrepInstrumentData_obj and not libraryPrepType:
+                            logger.debug("views - GOING TO DELETE orig_sampleSet orig_sampleSet.libraryPrepInstrumentData.id=%d" %(orig_sampleSet.libraryPrepInstrumentData.id))
+                            libraryPrepInstrumentData_obj.delete()
+                            if sampleSetStatus == "libPrep_pending":
+                                sampleSetStatus = "created"
+                        elif libraryPrepType  and not libraryPrepInstrumentData_obj:
+                            libraryPrepInstrumentData_obj = SamplePrepData.objects.create(samplePrepDataType = "lib_prep")
+                            logger.debug("views - orig_sampleSet.id=%d; GOING TO ADD libraryPrepInstrumentData_obj.id=%d" %(orig_sampleSet.id, libraryPrepInstrumentData_obj.id))
+                            if sampleSetStatus == "created":
+                                sampleSetStatus = "libPrep_pending"
+                            
                         sampleSet_kwargs = {
-                                            'displayedName' : sampleSetName.strip(),
-                                            'description' : sampleSetDesc.strip(),  
+                                            'displayedName' : sampleSetName,
+                                            'description' : sampleSetDesc,
                                             'SampleGroupType_CV_id' : sampleSet_groupType_id,
+                                            'libraryPrepType' : libraryPrepType,
+                                            'libraryPrepKitName': libraryPrepKitName,
+                                            'pcrPlateSerialNum' : pcrPlateSerialNum,
+                                            'libraryPrepInstrument' : libraryPrepInstrument,
+                                            'libraryPrepInstrumentData' :  libraryPrepInstrumentData_obj,  
+                                            'status' : sampleSetStatus,                                        
                                             'lastModifiedUser' : user,                     
                                             'lastModifiedDate' : currentDateTime                  
                                             }                        
@@ -376,7 +430,7 @@ def save_samplesetitem(request):
     """
     create or edit a new sample set item
     """
-     
+    
     if request.method == "POST":
         intent = request.POST.get('intent',None)
  
@@ -402,6 +456,17 @@ def save_samplesetitem(request):
 
         try:
             isValid, errorMessage = sample_validator.validate_barcoding(request, queryDict)
+        except:
+            logger.exception(format_exc())
+            transaction.rollback()            
+            return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")            
+            
+        if errorMessage:
+            transaction.rollback()
+            return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")
+
+        try:
+            isValid, errorMessage = sample_validator.validate_pcrPlate_position(request, queryDict)
         except:
             logger.exception(format_exc())
             transaction.rollback()            
@@ -556,7 +621,7 @@ def save_input_samples_for_sampleset(request):
                 return HttpResponse(json.dumps(["Error, Please select a sample set or add a new sample set first."]), mimetype="application/json")    
                             
             #a list of dictionaries
-            pending_sampleSetItem_list = request.session['input_samples']['pending_sampleSetItem_list']
+            pending_sampleSetItem_list = request.session['input_samples']['pending_sampleSetItem_list']            
             for pending_sampleSetItem in pending_sampleSetItem_list:
 
                 sampleDisplayedName = pending_sampleSetItem.get("displayedName", "").strip()
@@ -582,7 +647,8 @@ def save_input_samples_for_sampleset(request):
                 selectedBarcode = pending_sampleSetItem.get("barcode", "")
 
                 sampleNucleotideType = pending_sampleSetItem.get("nucleotideType", "")
-                
+                pcrPlateRow = pending_sampleSetItem.get("pcrPlateRow", "")
+
                 new_sample = views_helper._create_or_update_sample_for_sampleSetItem_with_values(request, user, sampleDisplayedName, sampleExternalId, sampleDesc, selectedBarcodeKit, selectedBarcode)
                             
                 isValid, errorMessage = views_helper._create_or_update_sampleAttributes_for_sampleSetItem_with_dict(request, user, new_sample, sampleAttribute_dict)
@@ -590,9 +656,9 @@ def save_input_samples_for_sampleset(request):
                     transaction.rollback()
                     #return HttpResponse(errorMessage, mimetype="text/html")
                     return HttpResponse(json.dumps([errorMessage]), mimetype="application/json")                
-                
+
                 views_helper._create_or_update_pending_sampleSetItem(request, user, sampleSet_ids, new_sample, sampleGender, sampleRelationshipRole, sampleRelationshipGroup, \
-                                                                     selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType)
+                                                                     selectedBarcodeKit, selectedBarcode, sampleCancerType, sampleCellularityPct, sampleNucleotideType, pcrPlateRow)
                    
             clear_samplesetitem_session(request)
                        
@@ -709,6 +775,12 @@ def save_import_samplesetitems(request):
             for k, v in errorMsg.items():
                 failed[k] = [v]
             # return HttpResponse(json.dumps({"status": ERROR_MSG_SAMPLE_IMPORT_VALIDATION, "failed" : {"Sample Set" : [errorMessage]}}), mimetype="text/html")
+
+        errorMsg = import_sample_processor.validate_pcrPlateRow_are_unique(rawSampleDataList)
+        if errorMsg:
+            for k, v in errorMsg.items():
+                failed[k] = [v]
+        
         logger.info("views.save_import_samples_for_sampleset() row_count=%d" %(row_count)) 
 
         destination.close()  # now close and remove the temp file
@@ -750,7 +822,12 @@ def save_import_samplesetitems(request):
             if errorMsg:
                 for k, v in errorMsg.items():
                     failed[k] = [v]
-              
+
+            errorMsg = import_sample_processor.validate_pcrPlateRow_for_existing_samples(rawSampleDataList, sampleSet_ids)
+            if errorMsg:
+                for k, v in errorMsg.items():
+                    failed[k] = [v]
+                
             if len(sampleSet_ids) == 0:
                 msgList = []
                 msgList.append("Error: There must be at least one valid sample set. Please select or input a sample set. ")
@@ -831,6 +908,7 @@ def show_add_pending_samplesetitem(request):
     barcodeInfo = list(dnaBarcode.objects.all().order_by('name', 'index'))
 
     nucleotideType_choices = views_helper._get_nucleotideType_choices(request)
+    pcrPlateRow_choices = views_helper._get_pcrPlateRow_choices(request) 
     
     ctxd = {
             'sampleSetItem' : None,
@@ -844,6 +922,7 @@ def show_add_pending_samplesetitem(request):
             'barcodeKits': barcodeKits,
             'barcodeInfo' : barcodeInfo,
             'nucleotideType_choices' : nucleotideType_choices,
+            'pcrPlateRow_choices' : pcrPlateRow_choices,
             ##'sampleAttributeValue_dict' : simplejson.dumps(sampleAttributeValue_dict),           
             'intent' : "add_pending"
             }
@@ -882,6 +961,7 @@ def show_edit_pending_samplesetitem(request, pending_sampleSetItemId):
     barcodeInfo = list(dnaBarcode.objects.all().order_by('name', 'index'))
 
     nucleotideType_choices = views_helper._get_nucleotideType_choices(request)          
+    pcrPlateRow_choices = views_helper._get_pcrPlateRow_choices(request) 
 
     ctxd = {
             'pending_sampleSetItem' : pending_sampleSetItem,
@@ -894,7 +974,8 @@ def show_edit_pending_samplesetitem(request, pending_sampleSetItemId):
             "selectedBarcodeKitName" : None,            
             'barcodeKits': barcodeKits,
             'barcodeInfo' : barcodeInfo, 
-            'nucleotideType_choices' : nucleotideType_choices,                               
+            'nucleotideType_choices' : nucleotideType_choices,
+            'pcrPlateRow_choices' : pcrPlateRow_choices,                               
             'intent' : "edit_pending"
             }
 
@@ -935,14 +1016,16 @@ def show_save_input_samples_for_sampleset(request):
     show the page to allow user to assign input samples to a sample set and trigger save
     """
     ctxd = {}
-
     sampleSet_list = _get_sampleSet_list(request)
-
     sampleGroupType_list = list(_get_sample_groupType_CV_list(request))
+    libraryPrepType_choices = views_helper._get_libraryPrepType_choices(request)
+    libraryPrepKits = KitInfo.objects.filter(kitType='LibraryPrepKit', isActive=True)
 
     ctxd = {
             'sampleSet_list': sampleSet_list,
-            'sampleGroupType_list': sampleGroupType_list
+            'sampleGroupType_list': sampleGroupType_list,
+            'libraryPrepType_choices' : libraryPrepType_choices,
+            'libraryPrepKits': libraryPrepKits,
             }
     
     ctx = RequestContext(request, ctxd)
@@ -1056,23 +1139,32 @@ def delete_sampleset(request, _id):
         msg = "Error, There are %d plans for this sample set. Sample set %s cannot be deleted." %(planCount, sampleSet.displayedName)
 
         ##return HttpResponse(json.dumps({"error": msg}), mimetype="text/html")
-        return HttpResponse(msg, mimetype="text/html")
+        return HttpResponse(msg, mimetype="text/html")    
     else:
-        
+        actions = []
+        actions.append(reverse('api_dispatch_detail', kwargs={'resource_name': _type, 'api_name': 'v1', 'pk': int(_id)}))
+        #need to delete placeholder samplePrepData if any
+        instrumentData_pk = None
+        if sampleSet.libraryPrepInstrumentData:
+            instrumentData_pk = sampleSet.libraryPrepInstrumentData.pk
+            instrumentData_resource = "sampleprepdata"
+            actions.append(reverse('api_dispatch_detail', kwargs={'resource_name': instrumentData_resource, 'api_name': 'v1', 'pk': int(instrumentData_pk)}))
+               
         _typeDescription = "Sample Set and " + str(sample_count) + " related Sample Association(s)" if sample_count > 0 else "Sample Set"
         ctx = RequestContext(request, {
             "id": _id, 
-            "ids": json.dumps([_id]), 
+            "ids": json.dumps([_id, int(instrumentData_pk)]) if instrumentData_pk else json.dumps([_id]), 
             "names": sampleSet.displayedName, 
             "method": "DELETE", 
             'methodDescription': 'Delete', 
             "readonly": False, 
             'type': _typeDescription, 
-            'action': reverse('api_dispatch_detail', kwargs={'resource_name': _type, 'api_name': 'v1', 'pk': int(_id)}), 
-            'actions': json.dumps([])
+            'action': actions[0], 
+            'actions': json.dumps(actions)
         })
         
         return render_to_response("rundb/common/modal_confirm_delete.html", context_instance=ctx)
+
 
 
 @login_required
@@ -1280,7 +1372,8 @@ def show_edit_sample_for_sampleset(request, sampleSetItemId):
     selectedBarcodeKit = sampleSetItem.dnabarcode.name if sampleSetItem.dnabarcode else None                
 
     nucleotideType_choices = views_helper._get_nucleotideType_choices(request)
-
+    pcrPlateRow_choices = views_helper._get_pcrPlateRow_choices(request) 
+    
     ctxd = {
             'sampleSetItem' : sampleSetItem,
             'sample_groupType_CV_list' : sample_groupType_CV_list,
@@ -1293,9 +1386,23 @@ def show_edit_sample_for_sampleset(request, sampleSetItemId):
             "selectedBarcodeKitName" : selectedBarcodeKit,            
             'barcodeKits': barcodeKits,
             'barcodeInfo' : barcodeInfo,
-            'nucleotideType_choices' : nucleotideType_choices,                                       
+            'nucleotideType_choices' : nucleotideType_choices,    
+            'pcrPlateRow_choices' : pcrPlateRow_choices,                                   
             'intent' : "edit"
             }
 
     ctx = RequestContext(request, ctxd)
     return render_to_response("rundb/sample/modal_add_samplesetitem.html", context_instance=ctx, mimetype="text/html")
+
+
+class LibraryPrepDetailView(DetailView):
+    model = SamplePrepData
+    template_name = 'rundb/sample/modal_libraryprep_detail.html'
+    context_object_name = 'data'
+
+def library_prep_summary(request, pk):
+    sampleSet = get_object_or_404(SampleSet, pk= pk)
+    if sampleSet.libraryPrepInstrumentData:
+        return LibraryPrepDetailView.as_view()(request, pk= sampleSet.libraryPrepInstrumentData.pk)
+    else:
+        return render_to_response("rundb/sample/modal_libraryprep_detail.html")

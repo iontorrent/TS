@@ -313,8 +313,8 @@ RawWells::~RawWells()
 
 void RawWells::Init ( const char *experimentPath, const char *rawWellsName, int rows, int cols, int flows )
 {
-  mSaveCopies = -1;
-  mSaveMultiplier = -1;
+  mSaveCopies = false;
+  mConvertWithCopies = true;
   mIsLegacy = false;
   WELL_NOT_LOADED = -1;
   WELL_NOT_SUBSET = -2;
@@ -388,24 +388,17 @@ void RawWells::WriteFlowgram ( size_t flow, size_t x, size_t y, float val )
   Set ( idx, flow, val );
 }
 
-void RawWells::WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies, float multiplier)
+void RawWells::WriteFlowgram(size_t flow, size_t x, size_t y, float val, float copies)
 {
   uint64_t idx = ToIndex ( x,y );
   Set ( idx, flow, val );
 
-  if(mWellsCopies.size() > 0)
+  if(mSaveCopies && mWellsCopies.size() > 0 && idx < mWellsCopies.size())
   {
     if(mWellsCopies[idx] < 0)
     {
       mWellsCopies[idx] = copies;
-      ++mSaveCopies;
     }
-  }
-
-  if(mSaveMultiplier == (int)flow)
-  {
-    mFlowMultiplier.push_back(multiplier);
-	++mSaveMultiplier;
   }
 }
 
@@ -853,28 +846,144 @@ void RawWells::WriteRanks()
   mRanks.Close();
 }
 
-void RawWells::SetSaveCopies(int saveCopies)
+void RawWells::SetSaveCopies(bool saveCopies)
 {
   mSaveCopies = saveCopies;
-  if(mSaveCopies >= 0)
+  if(mSaveCopies)
+  {
+    bool closeFile = false;
+    if ( mHFile == RWH5DataSet::EMPTY )
+    {
+      mHFile = H5Fopen ( mFilePath.c_str(), H5F_ACC_RDONLY, H5P_DEFAULT );
+      closeFile = true;
+    }
+
+    char name[10];
+    string sName;
+	H5G_info_t group_info;
+    group_info.nlinks = 0;
+	if(H5Gget_info(mHFile, &group_info) < 0)
+	{
+	  mSaveCopies = false;
+	  if(closeFile)
+      {
+        H5Fclose(mHFile);
+        mHFile = RWH5DataSet::EMPTY;
+      }
+
+	  cerr << "RawWells::SetSaveCopies() ERROR: fail to H5Gget_info" << endl;
+	  return;
+	}
+	else
+	{
+	  for(unsigned int i = 0; i < group_info.nlinks; ++i)
+	  {
+	    int size = H5Gget_objname_by_idx(mHFile, i, NULL, 0);
+	    if(H5Gget_objname_by_idx(mHFile, i, name, size + 1) >= 0)
+	    {
+		  sName = name;
+		  if(sName == "wells_copies")
+		  {
+		    break;
+		  }
+	    }
+	  }
+
+	  if(sName == "wells_copies")
+	  {
+	    mSaveCopies = false;
+		if(closeFile)
+		{
+		  H5Fclose(mHFile);
+		  mHFile = RWH5DataSet::EMPTY;
+		}
+
+	    cout << "RawWells::SetSaveCopies() WARNING: wells_copies already exists, skip writing wells copies." << endl;
+	    return;
+	  }
+    }
+	
+	if(closeFile)
+    {
+      H5Fclose(mHFile);
+      mHFile = RWH5DataSet::EMPTY;
+    }
+  }
+
+  if(mSaveCopies)
   {
     mWellsCopies.resize(mRows * mCols, -1);
   }
 }
 
-void RawWells::WriteWellsCopies()
+void RawWells::SetConvertWithCopies(bool withCopies)
 {
-  if(mSaveCopies < 0 || mWellsCopies.empty())
+	mConvertWithCopies = withCopies;
+}
+
+void RawWells::WriteWellsCopies()
+{  
+  if(mWellsCopies.empty())
   {
-	cerr << "RawWells WARNING: There is no wells copies data or the copies are not set. Can not save dataset wells_copies." << endl;
+	cerr << "RawWells WARNING: There is no wells copies data. Can not save dataset wells_copies." << endl;
   }
-  else
+
+  if(!mSaveCopies)
   {
+	cerr << "RawWells WriteWellsCopies() WARNING: Saving copies flag is set to false, skip writing wells_copies." << endl;
+	return;
+  }
+
+	mSaveCopies = false;
+
     bool closeFile = false;
     if ( mHFile == RWH5DataSet::EMPTY )
     {
       mHFile = H5Fopen ( mFilePath.c_str(), H5F_ACC_RDWR, H5P_DEFAULT );
       closeFile = true;
+    }
+
+    char name[10];
+    string sName;
+	H5G_info_t group_info;
+    group_info.nlinks = 0;
+	if(H5Gget_info(mHFile, &group_info) < 0)
+	{
+	  if(closeFile)
+      {
+        H5Fclose(mHFile);
+        mHFile = RWH5DataSet::EMPTY;
+      }
+
+	  cerr << "RawWells::WriteWellsCopies() ERROR: fail to H5Gget_info, skip writing wells_copies" << endl;
+	  return;
+	}
+	else
+	{
+	  for(unsigned int i = 0; i < group_info.nlinks; ++i)
+	  {
+	    int size = H5Gget_objname_by_idx(mHFile, i, NULL, 0);
+	    if(H5Gget_objname_by_idx(mHFile, i, name, size + 1) >= 0)
+	    {
+		  sName = name;
+		  if(sName == "wells_copies")
+		  {
+		    break;
+		  }
+	    }
+	  }
+
+	  if(sName == "wells_copies")
+	  {
+		if(closeFile)
+		{
+		  H5Fclose(mHFile);
+		  mHFile = RWH5DataSet::EMPTY;
+		}
+
+	    cout << "RawWells::WriteWellsCopies() WARNING: wells_copies already exists, skip writing wells_copies." << endl;
+	    return;
+	  }
     }
 
     hsize_t dimsf[2];
@@ -896,63 +1005,29 @@ void RawWells::WriteWellsCopies()
     }
 
     hid_t dsCopies = H5Dcreate2 ( mHFile, "wells_copies", H5T_NATIVE_FLOAT, dataspace, H5P_DEFAULT, plist, H5P_DEFAULT );
-    herr_t status = H5Dwrite ( dsCopies, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &mWellsCopies[0] );
-    if ( status < 0 )
+    if ( dsCopies < 0 )
     {
-	  cerr << "RawWells WARNING: Fail to write dataset wells_copies." << endl;
+	  H5Sclose (dataspace);
+      H5Pclose (plist);
+	  cerr << "RawWells::WriteWellsCopies() ERROR: Fail to create dataset wells_copies." << endl;
     }
-    H5Dclose (dsCopies);
-	H5Sclose ( dataspace );
-    H5Pclose (plist);
+	else
+	{
+      herr_t status = H5Dwrite ( dsCopies, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &mWellsCopies[0] );
+      if ( status < 0 )
+      {
+	    cerr << "RawWells::WriteWellsCopies() ERROR: Fail to write dataset wells_copies." << endl;
+      }
+      H5Dclose (dsCopies);
+	  H5Sclose (dataspace);
+      H5Pclose (plist);
+	}
 
     if(closeFile)
     {
       H5Fclose(mHFile);
       mHFile = RWH5DataSet::EMPTY;
     }
-
-    mSaveCopies = -1;
-  }
-}
-
-void RawWells::WriteFlowMultiplier()
-{
-  if(mSaveMultiplier < 0 || mFlowMultiplier.empty())
-  {
-	cerr << "RawWells WARNING: There is no flow multiplier data or the copies are not set. Can not save dataset flow_multiplier." << endl;
-  }
-  else
-  {
-    bool closeFile = false;
-    if ( mHFile == RWH5DataSet::EMPTY )
-    {
-      mHFile = H5Fopen ( mFilePath.c_str(), H5F_ACC_RDWR, H5P_DEFAULT );
-      closeFile = true;
-    }
-
-    hsize_t dimsf[1];
-    dimsf[0] = mFlowMultiplier.size();
-    hid_t dataspace = H5Screate_simple ( 1, dimsf, NULL );
-    hid_t plist = H5Pcreate ( H5P_DATASET_CREATE );
-
-    hid_t dsMultiplier = H5Dcreate2 ( mHFile, "flow_multiplier", H5T_NATIVE_FLOAT, dataspace, H5P_DEFAULT, plist, H5P_DEFAULT );
-    herr_t status = H5Dwrite ( dsMultiplier, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &mFlowMultiplier[0] );
-    if ( status < 0 )
-    {
-	  cerr << "RawWells WARNING: Fail to write dataset flow_multiplier." << endl;
-    }
-    H5Dclose (dsMultiplier);
-	H5Sclose ( dataspace );
-    H5Pclose (plist);
-
-    if(closeFile)
-    {
-      H5Fclose(mHFile);
-      mHFile = RWH5DataSet::EMPTY;
-    }
-
-    mSaveMultiplier = -1;
-  }
 }
 
 void RawWells::WriteStringVector ( hid_t h5File, const std::string &name, const char **values, int numValues )
@@ -1202,6 +1277,7 @@ void RawWells::OpenWellsToRead()
   hsize_t dims_out[3];           /* dataset dimensions */
   mWells.mDatatype  = H5Dget_type ( mWells.mDataset );  /* datatype handle */
 
+  mSaveAsUShort = false;
   if(H5Aexists( mWells.mDataset, "convert_low" ) > 0)
   {
     hid_t attrLower = H5Aopen( mWells.mDataset, "convert_low", H5T_NATIVE_FLOAT );
@@ -1250,6 +1326,77 @@ void RawWells::OpenWellsToRead()
     mChunk.flowStart = 0;
     mChunk.flowDepth = mFlows;
   }
+
+  mWellsCopies2.resize(mRows * mCols, 1.0);
+  if(mSaveAsUShort && mConvertWithCopies)
+  {
+    char name[10];
+    string sName;
+	H5G_info_t group_info;
+    group_info.nlinks = 0;
+	if(H5Gget_info(mHFile, &group_info) < 0)
+	{
+		cerr << "RawWells::OpenWellsToRead() WARNING: fail to H5Gget_info" << endl;
+	}
+	else
+	{
+		for(unsigned int i = 0; i < group_info.nlinks; ++i)
+		{
+		  int size = H5Gget_objname_by_idx(mHFile, i, NULL, 0);
+		  if(H5Gget_objname_by_idx(mHFile, i, name, size + 1) < 0)
+		  {
+			cerr << "RawWells::OpenWellsToRead() WARNING: 1.wells files does not have wells_copies saved." << endl;
+		  }
+		  else
+		  {
+			sName = name;
+			if(sName == "wells_copies")
+			{
+			  break;
+			}
+		  }
+		}
+
+		if(sName == "wells_copies")
+		{
+		  hid_t ds = H5Dopen2(mHFile, "wells_copies", H5P_DEFAULT);
+		  if(ds < 0)
+		  {
+			cerr << "RawWells::OpenWellsToRead() WARNING: 1.wells files does not have wells_copies." << endl;
+		  }
+		  else
+		  {
+			hid_t dataSpace = H5Dget_space(ds);
+			if(dataSpace < 0)
+			{
+			  H5Dclose(ds);
+			  cerr << "RawWells::OpenWellsToRead() WARNING: fail to H5Dget_space for dataset wells_copies." << endl;          
+			}
+			else
+			{
+			  hssize_t dsSize = H5Sget_simple_extent_npoints(dataSpace);
+			  H5Sclose(dataSpace);
+			  if(dsSize != (hssize_t)(mRows * mCols))
+			  {
+				H5Dclose(ds);
+				cerr << "RawWells::OpenWellsToRead() WARNING: dataset wells_copies size is " << dsSize << ", it is different from mRows * mCols = " << mRows * mCols << endl;          
+			  }
+			  else
+			  {
+				  herr_t ret = H5Dread(ds, H5T_NATIVE_FLOAT, H5S_ALL, H5S_ALL, H5P_DEFAULT, &mWellsCopies2[0]);
+				  H5Dclose(ds);
+				  if(ret < 0)
+				  {
+					mWellsCopies2.resize(mRows * mCols, 1.0);
+					cerr << "RawWells::OpenWellsToRead() WARNING: failto load dataset wells_copies." << endl;          
+				  }
+			   }
+			}
+		  }
+		}
+	}
+  }
+
   InitIndexes();
 }
 
@@ -1418,6 +1565,7 @@ void RawWells::ReadWells()
         // std::cout << "Just read: " << currentRowStart  << "," << currentRowEnd << "," <<
         //   currentColStart << "," << currentColEnd << " x " <<
         //   mChunk.flowDepth << " in: " << timer.GetMicroSec() << "um seconds" << endl;
+
         uint64_t localCount = 0;
         for ( size_t row = currentRowStart; row < currentRowEnd; row++ )
         {
@@ -1428,7 +1576,15 @@ void RawWells::ReadWells()
             {
               for ( size_t flow = mChunk.flowStart; flow < mChunk.flowStart + mChunk.flowDepth; flow++ )
               {
-                Set ( row, col, flow, inputBuffer[localCount * mChunk.flowDepth + flow] );
+				float val = inputBuffer[localCount * mChunk.flowDepth + flow];
+				if(mSaveAsUShort && mConvertWithCopies)
+				{
+					if(mWellsCopies2[ row * mCols + col] > 0)
+						val *= mWellsCopies2[ row * mCols + col];
+					else
+						val = -1.0;
+				}
+                Set ( row, col, flow, val );
               }
             }
             localCount++;
@@ -1795,6 +1951,12 @@ ChunkyWells::ChunkyWells(
 {
   // Now that we're initialized, let's set up the first flow.
   StartChunk( startingFlow );
+  pthread_mutex_init(&mMutex4Pending, NULL);
+}
+
+ChunkyWells::~ChunkyWells()
+{
+  pthread_mutex_destroy(&mMutex4Pending);
 }
 
 void ChunkyWells::StartChunk( int chunkStart )
@@ -1869,21 +2031,44 @@ void ChunkyWells::DoneUpThroughFlow( int flow )
   // Grab everything we've saved, then let the jobs continue.
   vector< FlowGram > localFlowgrams;
   swap( localFlowgrams, pendingFlowgrams );
+  vector< float > localCopies;
+  if(mSaveCopies)
+  {
+	swap( localCopies, pendingCopies );
+  }
 
   // We can be just another thread writing stuff out.
   // As an added bonus, if we do things this way, we can go through the flowgram filter again,
   // in case we've gotten more than one chunk ahead of ourselves.
+  int k = -1;
+  if(localCopies.size() == localFlowgrams.size())
+  {
+	  k = 0;
+  }
   for( size_t i = 0 ; i < localFlowgrams.size() ; ++i )
   {
     const FlowGram & fg = localFlowgrams[i];
-    
-    WriteFlowgram( fg.flow, fg.x, fg.y, fg.val );
+
+	if(k >= 0)
+	{
+		WriteFlowgram( fg.flow, fg.x, fg.y, fg.val, localCopies[k] );
+		++k;
+	}
+	else
+	{
+		WriteFlowgram( fg.flow, fg.x, fg.y, fg.val );
+	}
   }
 }
 
 void ChunkyWells::DoneUpThroughFlow( int flow, SemQueue* packQueue, SemQueue* writeQueue )
 {
   int nextFlow = mChunk.flowStart + mChunk.flowDepth;
+
+  // need not dequeue if we have not reached flow depth worth of flows
+  if (flow + 1 < nextFlow) {
+    return;
+  }
 
   ChunkFlowData* chunkData = NULL;
   while(NULL == chunkData)
@@ -1912,6 +2097,38 @@ void ChunkyWells::DoneUpThroughFlow( int flow, SemQueue* packQueue, SemQueue* wr
 
   // Get ready for the next chunk.
   StartChunkWithoutReopenHdf5( nextFlow );
+
+  // Grab everything we've saved, then let the jobs continue.
+  vector< FlowGram > localFlowgrams;
+  swap( localFlowgrams, pendingFlowgrams );
+  vector< float > localCopies;
+  if(mSaveCopies)
+  {
+	swap( localCopies, pendingCopies );
+  }
+
+  // We can be just another thread writing stuff out.
+  // As an added bonus, if we do things this way, we can go through the flowgram filter again,
+  // in case we've gotten more than one chunk ahead of ourselves.
+  int k = -1;
+  if(localCopies.size() == localFlowgrams.size())
+  {
+	  k = 0;
+  }
+  for( size_t i = 0 ; i < localFlowgrams.size() ; ++i )
+  {
+    const FlowGram & fg = localFlowgrams[i];
+
+	if(k >= 0)
+	{
+		WriteFlowgram( fg.flow, fg.x, fg.y, fg.val, localCopies[k] );
+		++k;
+	}
+	else
+	{
+		WriteFlowgram( fg.flow, fg.x, fg.y, fg.val );
+	}
+  }
 }
 
 void ChunkyWells::WriteFlowgram( size_t flow, size_t x, size_t y, float val )
@@ -1929,5 +2146,28 @@ void ChunkyWells::WriteFlowgram( size_t flow, size_t x, size_t y, float val )
   fg.y = y;
   fg.val = val;
 
+  pthread_mutex_lock(&mMutex4Pending);
   pendingFlowgrams.push_back( fg );
+  pthread_mutex_unlock(&mMutex4Pending);
+}
+
+void ChunkyWells::WriteFlowgram( size_t flow, size_t x, size_t y, float val, float copies )
+{
+  if ( flow < mChunk.flowStart + mChunk.flowDepth )
+  {
+    RawWells::WriteFlowgram( flow, x, y, val, copies );
+    return;
+  }
+
+  // Save it.
+  FlowGram fg;
+  fg.flow = flow;
+  fg.x = x;
+  fg.y = y;
+  fg.val = val;
+
+  pthread_mutex_lock(&mMutex4Pending);
+  pendingFlowgrams.push_back( fg );
+  pendingCopies.push_back( copies );
+  pthread_mutex_unlock(&mMutex4Pending);
 }

@@ -112,12 +112,12 @@ def addAutorunParams(plan=None):
       config['sampleid'] = 'No'
     # check for required targets file
     bedfile = plan['bedfile']
-    if bedfile == 'None': bedfile = ''
+    if bedfile.upper() == 'NONE': bedfile = ''
     config['targetregions'] = bedfile
     bedname = config['targetregions_id'] = fileName(bedfile)
     # catch no default reference Plan set up
     genome = pluginParams['genome_id']
-    if genome == 'None': genome = ''
+    if genome.upper() == 'NONE': genome = ''
     if not genome:
       raise Exception("CATCH: Cannot run plugin with no default reference.")
     # check for bacode-specific targets and detect barcode-specific mode
@@ -238,6 +238,9 @@ def run_plugin(skiprun=False,barcode=""):
       librarytype = libtype
     elif librarytype == 'RNA' and target != '':
       librarytype = 'AMPS_RNA'
+
+  # special override if the genome is hg19 so IGV can open the users annotated genome
+  if pluginParams['genome_id'] == "hg19": genome = "hg19"
 
   # link from source BAM since pipeline uses the name as output file stem
   linkbam = os.path.join(output_dir,output_prefix+".bam")

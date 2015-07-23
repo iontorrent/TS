@@ -25,7 +25,7 @@ def base_context_processor(request):
     if request.user:
         users = [request.user.username]
         if request.user.is_staff:
-            users.append('_StaffOnly')
+            users.append(models.Message.USER_STAFF)
         user_messages = models.Message.objects.filter(route__in=users).filter(Q(status="unread", expires="read") | ~Q(expires="read"))
         user_msglist = [resource.full_dehydrate(Bundle(message)) for message in user_messages]
         user_serialized_messages = resource.serialize(None, user_msglist, "application/json")

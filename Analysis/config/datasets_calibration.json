@@ -39,7 +39,7 @@
             "reference": "hg19", 
             "platform_unit": "Unspecified/IonLControl_0004", 
             "barcode_adapter": "GGTGAT"
-        }, 
+        },
         "IonLControl_0001": {
             "sample": "IonControl", 
             "index": 0, 

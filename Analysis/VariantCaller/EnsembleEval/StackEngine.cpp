@@ -419,14 +419,7 @@ void EnsembleEval::ScanSupportingEvidence(float &mean_ll_delta,  int i_allele) {
   mean_ll_delta = 0.0f;
   int count = 0;
   int ref_hyp = 1;
-  int alt_hyp = 2;
-
-  int i_ndx = 0;
-
-    ref_hyp = 1;
-    alt_hyp = i_allele+2; // alt_alleles = 0->n not counting ref >or< null, therefore alt-allele 0 = 2
-    i_ndx = 0;
-
+  int alt_hyp = i_allele + 2;  // alt_alleles = 0->n not counting ref >or< null, therefore alt-allele 0 = 2
 
   for (unsigned int i_read = 0; i_read < allele_eval.total_theory.my_hypotheses.size(); i_read++) {
     if (allele_eval.total_theory.my_hypotheses[i_read].success) {

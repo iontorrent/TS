@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <string.h>
+#include <getopt.h>
 
 #include "main.h"
 #include "ion_error.h"

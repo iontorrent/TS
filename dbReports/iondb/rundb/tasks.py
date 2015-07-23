@@ -46,7 +46,6 @@ import traceback
 import requests
 import feedparser
 import dateutil
-
 import urlparse
 from ion.utils.timeout import timeout
 from iondb.utils import raid as raid_utils
@@ -248,9 +247,9 @@ def unzipPlugin(zipfile, logger=None):
         from iondb.plugins.manager import pluginmanager
         script, islaunch = pluginmanager.find_pluginscript(plugin_temp_home, plugin_name)
         logger.debug("Got script: %s", script)
-        from ion.plugin.loader import cache
-        ret = cache.load_module(plugin_name, script)
-        cls = cache.get_plugin(plugin_name)
+        from ion.plugin.loader import cache as plugincache
+        ret = plugincache.load_module(plugin_name, script)
+        cls = plugincache.get_plugin(plugin_name)
         p = cls()
         final_name = p.name # what the plugin calls itself, regardless of ZIP file name
         logger.info("Plugin calls itself: '%s'", final_name)
@@ -274,6 +273,10 @@ def unzipPlugin(zipfile, logger=None):
         logger.info("Moving plugin from temp extract folder '%s' to final location: '%s'", plugin_temp_home, final_install_dir)
         shutil.move(plugin_temp_home, final_install_dir)
         delete_that_folder(scratch_path, "Deleting plugin install scratch folder")
+
+        # Moving files reverts owner to root, change back to ionadmin
+        fix_plugin_owner(final_install_dir)
+
     except (IOError, OSError):
         logger.exception("Failed to move plugin from temp extract folder '%s' to final location: '%s'", plugin_temp_home, final_install_dir)
         raise
@@ -414,6 +417,9 @@ def downloadPluginZeroInstall(url, plugin, logger=None):
         plugin.path = downloaded
         # assert launch.sh exists?
 
+    # Extraction can leave files owned by root, change back to ionadmin
+    fix_plugin_owner(plugin.path)
+
     plugin.status["result"] = "0install"
     # Other fields we can get from zeroinstall feed?
 
@@ -444,8 +450,39 @@ def downloadPluginArchive(url, plugin, logger=None):
     else:
         plugin.status["result"] = "failed to unzip"
 
-
     return True
+
+def fix_plugin_owner(target_path):
+    # Fix ownership - zeroinstall can leave files owned by root
+    try:
+        import pwd, grp
+        uid = pwd.getpwnam('ionadmin')[2]
+        gid = grp.getgrnam('ionadmin')[2]
+    except OSError:
+        uid = os.getuid()
+        gid = os.getgid()
+
+    logger.info("Changing plugin at '%s' to owner %d:%d", target_path, uid, gid)
+
+    #try:
+    #    os.chown(target_path, uid, gid)
+    #except (OSError, IOError) as e:
+    #    logger.warn("Failed to set time/owner attributes on '%s': %s", target_path , e)
+
+    file_walker = (
+        os.path.join(root, f)
+        for root, _, files in os.walk( target_path )
+        for f in files
+    )
+    for f in file_walker:
+        if not os.path.isfile(f):
+            continue
+        try:
+            os.chown(f, uid, gid)
+        except (OSError, IOError) as e:
+            # Non fatal if time and owner fail.
+            logger.warn("Failed to set time/owner attributes on '%s': %s", f , e)
+    return
 
 @app.task
 def downloadPlugin(url, plugin=None, zipFile=None):
@@ -476,6 +513,7 @@ def downloadPlugin(url, plugin=None, zipFile=None):
             from iondb.rundb import models
             models.Message.error(msg) # UI message
             return False
+
     else:
         # Extract zipfile
         scratch_path = os.path.join(settings.PLUGIN_PATH,"scratch")
@@ -493,6 +531,7 @@ def downloadPlugin(url, plugin=None, zipFile=None):
         plugin.name = ret['plugin']
         plugin.path = ret['path']
         plugin.status["installStatus"] = "installing from zip"
+
 
     # Now that it has been downloaded,
     # convert pre-plugin into real db plugin object
@@ -512,6 +551,62 @@ def downloadPlugin(url, plugin=None, zipFile=None):
     logger.info("Successfully downloaded and installed plugin %s v%s from '%s'", new_plugin.name, new_plugin.version, url)
 
     return new_plugin
+
+@app.task
+def downloadPublisher(url, zip_file=None):
+    from iondb.rundb.models import Message
+
+    #normalise the URL
+    if not zip_file:
+        url = urlparse.urlsplit(url).geturl()
+        ret = downloadChunks(url)
+        if not ret:
+            return False
+        (zip_file, url) = ret
+        pub_name = os.path.splitext(os.path.basename(url))[0]
+    else:
+        pub_name = os.path.splitext(os.path.basename(zip_file))[0]
+
+    # Extract zipfile - yes, plugins scratch folder, not publisher specific.
+    scratch_path = os.path.join(settings.PLUGIN_PATH, "scratch", "publisher-temp", pub_name)
+    zip_file = os.path.join(settings.PLUGIN_PATH, "scratch", zip_file)
+    try:
+        (prefix, files) = extract_zip(zip_file, scratch_path, auto_prefix=True, logger=logger)
+        if prefix:
+            # Good - ZIP has top level folder with publisher name, use that name instead.
+            pub_name = os.path.basename(prefix)
+            base_path = os.path.join(scratch_path, pub_name)
+        else:
+            base_path = scratch_path
+
+        # make sure we have a publisher_meta.json file
+        if not os.path.exists(os.path.join(base_path, 'publisher_meta.json')):
+            raise Exception('Missing publisher_meta.json!')
+
+        # Move from temp folder into publisher
+        pub_final_path = os.path.join("/results/publishers/", pub_name)
+        if os.path.exists(pub_final_path):
+            # existing publisher will be replaced
+            delete_that_folder(pub_final_path, "Error removing old copy of publisher at '%s'" % pub_final_path)
+        shutil.move(base_path, pub_final_path)
+
+        ## Rescan Publishers to complete install
+        from iondb.rundb import publishers
+        publishers.search_for_publishers()
+
+        msg = "Successfully downloaded and installed publisher %s from ZIP archive" % (pub_name,)
+        logger.info(msg)
+        Message.success(msg)
+    except Exception as err:
+        msg = "Failed to install publisher from %s. ERROR: %s" % (zip_file, err)
+        Message.error(msg)
+        logger.exception(msg)
+    finally:
+        #remove the zip file
+        os.unlink(zip_file)
+        delete_that_folder(scratch_path, "Error deleting temp publisher zip folder at '%s'" % scratch_path)
+
+    return
 
 @app.task
 def contact_info_flyaway():
@@ -846,7 +941,7 @@ def scheduled_update_check():
         upgrade_message = models.Message.objects.filter(tags__contains="new-upgrade")
         if packages:
             if not upgrade_message.all():
-                models.Message.info('There is an update available for your Torrent Server. <a class="btn btn-success" href="/admin/update">Update Now</a>', tags='new-upgrade', route='_StaffOnly')
+                models.Message.info('There is an update available for your Torrent Server. <a class="btn btn-success" href="/admin/update">Update Now</a>', tags='new-upgrade', route=models.Message.USER_STAFF)
             download_now = models.GlobalConfig.get().enable_auto_pkg_dl
             if download_now:
                 async = download_updates.delay()
@@ -890,13 +985,16 @@ def download_updates(auto_install=False):
         logger.error("TSConfig raised '%s' during a download" % err)
         models.GlobalConfig.objects.update(ts_update_status="Download failure")
         raise
+
+    logger.debug("Finished downloading %d packages" % len(downloaded))
     async = None
     if downloaded and auto_install:
+        new_tsconfig = tsconfig.TSexec_update_tsconfig()
+        if new_tsconfig:
+            logger.debug("Installed ion-tsconfig package")
         async = install_updates.delay()
-        logger.debug("Auto starting install of %d packages in task %s" %
-                     (len(downloaded), async.task_id))
-    else:
-        logger.debug("Finished downloading %d packages" % len(downloaded))
+        logger.debug("Auto starting install of %d packages in task %s" % (len(downloaded), async.task_id))
+
     return downloaded, async
 
 
@@ -911,10 +1009,10 @@ def _do_the_install():
 
         success = tsconfig.TSexec_update()
         if success:
-            tsconfig.set_state('F')
+            models.GlobalConfig.objects.update(ts_update_status="Finished installing")
             models.Message.success("Upgrade completed successfully!")
         else:
-            tsconfig.set_state('IF')
+            models.GlobalConfig.objects.update(ts_update_status="Install failure")
             models.Message.error("Upgrade failed during installation.")
         models.Message.objects.filter(expires="system-update-finished").delete()
         models.Message.objects.filter(tags__contains="new-upgrade").delete()
@@ -966,12 +1064,14 @@ def update_diskusage(fs_name):
 def post_update_diskusage(fs_name):
     '''Handler for update_diskusage task output'''
     from iondb.rundb import models
-    
+
     inode_threshold = 0.90
     critical_threshold = 99
     warning_threshold = 95
     friendly_threshold = 70
     fs = models.FileServer.objects.get(name = fs_name)
+    gc = models.GlobalConfig.get()
+    dmfs = models.DMFileSet.objects.filter(version=settings.RELVERSION)
 
     #========================================================================
     # TS-6669: Banner Message when disk usage gets critical
@@ -997,20 +1097,35 @@ def post_update_diskusage(fs_name):
         # Remove any message objects
         models.Message.objects.filter(tags__contains=crit_tag).delete()
         models.Message.objects.filter(tags__contains=warn_tag).delete()
-        
+
     #========================================================================
     # Banner Message when Disk Management is not enabled
     #========================================================================
     try:
         friendly_tag = "%s_dm_not_enabled" % (fs.name)
-        gc = models.GlobalConfig.get()
-        auto_action_enabled = gc.auto_archive_enable
-        if not auto_action_enabled and fs.percentfull > friendly_threshold:
+        if not gc.auto_archive_enable and fs.percentfull > friendly_threshold:
             msg = "Data Management Auto Actions are not enabled and %s is %0.2f%% full" % (fs.filesPrefix,fs.percentfull)
             logger.debug(msg+"   %s" % golink)
             message  = models.Message.objects.filter(tags__contains=friendly_tag)
             if not message:
-                models.Message.error(msg+"   %s" % golink,tags=friendly_tag, route='_StaffOnly')
+                models.Message.error(msg+"   %s" % golink,tags=friendly_tag, route=models.Message.USER_STAFF)
+                notify_diskfull(msg)
+        else:
+            models.Message.objects.filter(tags__contains=friendly_tag).delete()
+    except:
+        logger.error(traceback.format_exc())
+
+    #========================================================================
+    # Banner Message when Disk Management is enabled, but all auto-actions are disabled
+    #========================================================================
+    try:
+        friendly_tag = "%s_all_auto_actions_disabled" % (fs.name)
+        if gc.auto_archive_enable and dmfs.filter(auto_action="OFF").count() == 4:
+            msg = "All Data Management Auto Actions are disabled and %s is %0.2f%% full" % (fs.filesPrefix,fs.percentfull)
+            logger.debug(msg+"   %s" % golink)
+            message  = models.Message.objects.filter(tags__contains=friendly_tag)
+            if not message:
+                models.Message.error(msg+"   %s" % golink,tags=friendly_tag, route=models.Message.USER_STAFF)
                 notify_diskfull(msg)
         else:
             models.Message.objects.filter(tags__contains=friendly_tag).delete()
@@ -1028,7 +1143,7 @@ def post_update_diskusage(fs_name):
             logger.debug(msg+"   %s" % golink)
             message  = models.Message.objects.filter(tags__contains=inode_tag)
             if not message:
-                models.Message.error(msg, tags=inode_tag, route='_StaffOnly')
+                models.Message.error(msg, tags=inode_tag, route=models.Message.USER_STAFF)
                 notify_diskfull(msg)
         else:
             models.Message.objects.filter(tags__contains=inode_tag).delete()
@@ -1060,7 +1175,7 @@ def check_disk_space():
         else:
             # log the error
             logger.warn("File Server does not exist.  Name: %s Path:%s" % (fs.name, fs.filesPrefix))
-        
+
 #        raidinfo = async_result.get(timeout=60)
 #        fail_tag = "Failed getting disk usage for %s" % (fs.filesPrefix)
 #        if async_result.failed():
@@ -1071,7 +1186,7 @@ def check_disk_space():
 #            continue
 #        else:
 #            models.Message.objects.filter(tags__contains=fail_tag).delete()
-            
+
     #========================================================================
     # Check root partition free space
     #========================================================================
@@ -1280,20 +1395,24 @@ def install_reference(args, reference_id):
     full_path, monitor_id = args
     monitor = models.FileMonitor.objects.get(id=monitor_id)
     reference = models.ReferenceGenome.objects.get(id=reference_id)
-    reference.status = "preprocessing"
-    reference.save()
-    extracted_path = os.path.join(monitor.local_dir, "reference_contents")
-    extract_zip(full_path, extracted_path)
-    reference.reference_path = extracted_path
-    if reference.index_version == settings.TMAP_VERSION:
-        reference.status = "complete"
-        reference.enabled = True
-        reference.enable_genome()
+    if monitor.status == "Complete":
+        reference.status = "preprocessing"
+        reference.save()
+        extracted_path = os.path.join(monitor.local_dir, "reference_contents")
+        extract_zip(full_path, extracted_path)
+        reference.reference_path = extracted_path
+        if reference.index_version == settings.TMAP_VERSION:
+            reference.status = "complete"
+            reference.enabled = True
+            reference.enable_genome()
+        else:
+            reference.status = "queued"
+            result = build_tmap_index.delay(reference.id)
+            reference.celery_task_id = result.task_id
+        reference.save()
     else:
-        reference.status = "queued"
-        result = build_tmap_index.delay(reference.id)
-        reference.celery_task_id = result.task_id
-    reference.save()
+        reference.status = "download failed"
+        reference.save()
 
 
 @app.task
@@ -1484,15 +1603,15 @@ def lock_ion_apt_sources(enable=False):
             for line in fp.readlines():
                 if line.startswith('DISTRIB_CODENAME'):
                     return line.split('=')[1].strip()
-        return 'lucid'  # failsafe default which may work
+        return 'trusty'  # failsafe default which may work
 
     os_codename = get_distrib_name()
-
+    
     if enable:
         find_string = "updates\/software.*%s\/" % (os_codename)
-        replace_string = "updates\/software\/archive %s\/" % (ts_version)
+        replace_string = "updates\/software\/archive\/%s %s\/" % (ts_version, os_codename)
     else:
-        find_string = "updates\/software\/archive %s\/" % (ts_version)
+        find_string = "updates\/software\/archive\/%s.*" % (ts_version)
         replace_string = "updates\/software %s\/" % (os_codename)
     sed_string = "s/%s/%s/g" % (find_string, replace_string)
 
@@ -1521,14 +1640,14 @@ def post_run_nodetests(result):
     '''
     from iondb.rundb.models import Message
     logger.info(result)
-    
+
     if 'error' in  result:
         cluster_status = 'error'
     elif 'warning' in result:
         cluster_status = 'warning'
     else:
         cluster_status = 'good'
-        
+
     if cluster_status:
         message = Message.objects.filter(tags="cluster_alert")
         if 'error' in cluster_status or 'warning' in cluster_status:
@@ -1544,24 +1663,24 @@ def post_run_nodetests(result):
 def test_node_and_update_db(node, head_versions):
     '''run tests'''
     from iondb.rundb.configure.cluster_info import connect_nodetest, config_nodetest
-    
+
     logger.info("Testing node: %s" % node.name)
     node_status = connect_nodetest(node.name)
     if node_status['status'] == 'good':
         logger.info("Node: %s passed connect test" % node.name)
         node_status.update(config_nodetest(node.name, head_versions))
-        
+
     try:
         add_eventlog(node, node_status)
     except:
         # TODO
         pass
-    
+
     # update cruncher database entry
     node.state = node_status['status'][0].upper()
     node.info = node_status
     node.save()
-    
+
     return node_status['status']
 
 
@@ -1570,7 +1689,7 @@ def check_cluster_status():
     # run tests for cluster nodes and alert user with message banner of any problems
     from ion.utils.TSversion import findVersions
     from iondb.rundb.models import Cruncher
-    
+
     nodes = Cruncher.objects.all().order_by('pk')
     if not nodes:
         pass
@@ -1589,18 +1708,18 @@ def add_eventlog(node, new_status):
     #    node is new: no log entries exist
     #    node state or error messages changed
     #    any node test returns different status
-    
+
     # NOTE: ClusterInfoHistoryResource parses log messages for History page, if changing format you must update api.py
     '''
     from iondb.rundb.models import EventLog
     addlog = EventLog.objects.filter(object_pk=node.pk).count() == 0
-    
+
     if str(node.state) != str(new_status['status'][0].upper()):
         msg = "%s state changed from %s to %s<br>" % (node.name, node.get_state_display().title(), new_status['status'].title())
         addlog = True
     else:
         msg = "%s state is %s<br>" % (node.name, new_status['status'].title())
-    
+
     addlog = addlog or node.info.get('error','') != new_status.get('error','')
     addlog = addlog or node.info.get('version_test_errors', '') != new_status.get('version_test_errors', '')
     msg += "Error: %s %s<br>" % (new_status.get('error', ''), new_status.get('version_test_errors', ''))
@@ -1609,6 +1728,46 @@ def add_eventlog(node, new_status):
     for test_name, test_result in new_status.get('config_tests', []) + new_status.get('connect_tests', []):
         msg += "%s: %s<br>" % (test_name, test_result)
         addlog = addlog or old_test_results.get(test_name, '') != test_result
-    
+
     if addlog:
         EventLog.objects.add_entry(node, msg, username="system")
+
+
+def generate_TF_files(tfkey, tf_dir='/results/referenceLibrary/TestFragment'):
+    # Creates DefaultTFs.conf, and fasta and index files per TF key
+    from iondb.rundb.models import Template
+
+    tfconf_path = os.path.join(tf_dir, "DefaultTFs.conf")
+    fasta_filename = "DefaultTFs.fasta"
+    dest = os.path.join(tf_dir, tfkey)
+
+    tfs = Template.objects.filter(isofficial=True).order_by('name')
+    os.umask(0000)
+
+    # write conf file
+    lines = ["%s,%s,%s" % (tf.name, tf.key, tf.sequence,) for tf in tfs]
+    with open(tfconf_path, 'w') as f:
+        f.write('\n'.join(lines))
+
+    tfs = tfs.filter(key=tfkey)
+    if len(tfs) > 0:
+        if not os.path.exists(dest):
+            os.mkdir(dest)
+        
+        # write fasta file
+        fasta_path = os.path.join(dest, fasta_filename)
+        with open(fasta_path, 'w') as f:
+            for tf in tfs:
+                f.write('>%s\n' % tf.name)
+                f.write('%s\n' % tf.sequence.strip())
+        
+        # make faidx index file
+        subprocess.check_call("samtools faidx %s" % fasta_path, shell=True)
+        # make tmap index files
+        subprocess.check_call("tmap index -f %s" % fasta_path, shell=True)
+    else:
+        # remove key folder if this key no longer has any TFs
+        try:
+            shutil.rmtree(dest)
+        except OSError:
+            logger.error("Failed to delete folder %s" % dest)

@@ -1,5 +1,5 @@
 /*
-* Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
+* Copyright 1993-2013 NVIDIA Corporation.  All rights reserved.
 *
 * Please refer to the NVIDIA end user license agreement (EULA) associated
 * with this source code for terms and conditions that govern your use of
@@ -127,7 +127,7 @@ throw_it(const char *file, const int line, const std::string &msg)
 ////////////////////////////////////////////////////////////////////////////////
 template<class Std_Exception>
 Exception<Std_Exception>::Exception() :
-    Exception("Unknown Exception.\n")
+    Std_Exception("Unknown Exception.\n")
 { }
 
 ////////////////////////////////////////////////////////////////////////////////

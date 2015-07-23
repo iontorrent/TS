@@ -1,4 +1,5 @@
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+from __future__ import absolute_import
 from celery.schedules import crontab
 
 weekly_schedule = {

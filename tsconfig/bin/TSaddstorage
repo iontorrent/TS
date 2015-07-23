@@ -313,10 +313,11 @@ function print_help()
 {
     echo
     echo "Usage: TSaddstorage [options]"
-    echo -e "\t--stresstest <1m|4h|8h>     Run burn-in test on each enclosure"
-    echo -e "\t                            1m or 4h or 8h duration"
-    echo -e "\t-y                          Answer all queries in affirmative"
-    echo -e "\t-h|--help                   Print this help and exit"
+    echo -e "\t--info                           Print controller card info and exit"
+    echo -e "\t--stresstest <1m|4h|8h|24h|48h>  Run burn-in test on each enclosure"
+    echo -e "\t                                 1m or 4h or 8h or 24 or 48 duration"
+    echo -e "\t-y                                  Answer all queries in affirmative"
+    echo -e "\t-h|--help                        Print this help and exit"
     echo
 }
 
@@ -342,13 +343,24 @@ function proceed_query ()
 }
 
 #==============================================================================
+# Return list of required packages based on distribution
+#==============================================================================
+function get_required_pkgs()
+{
+    if [ "$(lsb_release -cs)" == "trusty" ]; then
+        echo "libdevmapper-event1.02.1 watershed megacli dkms lvm2 xfsprogs lsscsi"
+    else
+        echo "libdevmapper-event1.02.1 watershed megacli dkms lvm2 xfsprogs lsscsi megaraid-sas-dkms"
+    fi
+}
+#==============================================================================
 # Verify required packages and tools are available before proceeding
 #==============================================================================
 function check_prerequisites ()
 {
     fail=0
     # List of required debian packages
-    required=( libdevmapper-event1.02.1 watershed megacli dkms megaraid-sas-dkms lvm2 xfsprogs lsscsi )
+    required=( $(get_required_pkgs) )
     for pkg in ${required[@]}; do
         if [[ "ii" != "$(dpkg -l ${pkg}|tail -1|awk '{print $1}')" ]]; then
             echo "Cannot find $pkg package." >&2
@@ -379,7 +391,7 @@ function install_prerequisites()
 {
     # Stand-alone use case.  Deb files need to be co-located with this script.
     # Assume this script has been unpacked along with required deb packages
-    required=( libdevmapper-event1.02.1 watershed megacli dkms megaraid-sas-dkms lvm2 xfsprogs lsscsi )
+    required=( $(get_required_pkgs) )
     for pkgname in ${required[@]}; do
         if [[ "$(dpkg -l $pkgname|tail -1|awk '{print $1}')" == "ii" ]]; then
             #echo $pkgname is installed
@@ -443,8 +455,12 @@ trap 'error ${LINENO}' ERR
 # Check command line arguments
 FORCE_YES=0
 STRESS_TEST=0
+INFO_ONLY=False
 while [ $# != 0 ]; do
     case ${1,,} in
+        '--info')
+            INFO_ONLY=True
+        ;;
         '-y')
             # Answer affirmative for all user queries
             FORCE_YES=1
@@ -454,7 +470,7 @@ while [ $# != 0 ]; do
             STRESS_TEST=1
             shift
             case $1 in
-                '1m'|'4h'|'8h')
+                '1m'|'4h'|'8h'|'24h'|'48h')
                     TIMEOUT=$1
                 ;;
                 *)
@@ -480,6 +496,9 @@ sleep 1
 # Will exit if we don't have root privilege
 needs_root
 print_enclosure_info
+if [ $INFO_ONLY == True ]; then
+    exit
+fi
 sleep 1
 
 if is_perc_installed; then

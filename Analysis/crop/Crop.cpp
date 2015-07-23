@@ -27,13 +27,18 @@
 #include "Utils.h"
 #include "ImageTransformer.h"
 #include "ComparatorNoiseCorrector.h"
+#include "CorrNoiseCorrector.h"
 #include "Image/Vecs.h"
+#include "Image/AdvCompr.h"
+#include "PairPixelXtalkCorrector.h"
 
 static pthread_t thr[200];
 static uint32_t numDirs=0;
 static uint32_t numThreads=12;
 static char *OrigExpPath = NULL;
 static char *OrigDestPath = NULL;
+
+void T0Transform(Image *img);
 
 
 void DetermineCropWidthAndHeight ( int& cropx, int& cropy, int& cropw, int& croph, int w, int h )
@@ -86,6 +91,15 @@ void usage ( int cropx, int cropy, int cropw, int croph )
   fprintf ( stdout, "   -q\tPCA test type.\n" );
   fprintf ( stdout, "   -u\tPCA options.\n" );
   fprintf ( stdout, "   -i\tOverSample Values <combine> <skip>\n");
+  fprintf ( stdout, "   -C <agressive>\tEnable Column noise correction.\n" );
+  fprintf ( stdout, "   -D\tEnable thumbnail Column noise correction.\n" );
+  fprintf ( stdout, "   -E t0 transform\n" );
+  fprintf ( stdout, "   -F diff file\n" );
+  fprintf ( stdout, "   -G Subtract average\n" );
+  fprintf ( stdout, "   -I <chipType>  set chip type\n" );
+  fprintf ( stdout, "   -J apply row correction\n" );
+  fprintf ( stdout, "   -K apply col correction\n" );
+  fprintf ( stdout, "   -L <corr> apply xtalk correction\n" );
   fprintf ( stdout, "\n" );
   fprintf ( stdout, "usage:\n" );
   fprintf ( stdout, "   Crop -s /results/analysis/PGM/testRun1\n" );
@@ -118,11 +132,22 @@ typedef struct{
 	  char *expPath;
 	  char *destPath;
 	  char *oneFile;
-
+	  int doColumnCorrection;
+	  int doColumnCorrectionTn;
+	  int cncType;
+	  int T0Test;
+	  char *cmpFile;
+	  int subtractAverage;
+	  char *chipType;
+	  int applyRowCorrection;
+	  int applyColCorrection;
+	  float applyXtalkCorrection1;
+	  float applyXtalkCorrection2;
 } OptionsCls;
 
 void DoCrop(OptionsCls &options);
 void DoOverSampleSplit(OptionsCls &options);
+void SubtractOffMean(Image &loader);
 
 void InitOptionsCls(OptionsCls &options)
 {
@@ -133,7 +158,7 @@ void InitOptionsCls(OptionsCls &options)
 	options.useSeparatorT0File=true;
 	options.separatorIn = const_cast<char*> ( "./separator.summary.txt" );
 	options.t0In = const_cast<char*> ( "./T0file.txt" );
-	options.excludeMaskFile = "/opt/ion/config/exclusionMask_318.bin";
+	options.excludeMaskFile = const_cast<char*> ( "/opt/ion/config/exclusionMask_318.bin" );
 	options.expPath  = const_cast<char*> ( "." );
 	options.destPath = const_cast<char*> ( "./converted" );
 }
@@ -275,10 +300,74 @@ int main ( int argc, char *argv[] )
     	numThreads = atoi(argv[argcc]);
     	break;
 
-    default:
-      argcc++;
-      fprintf ( stdout, "\n" );
+    case 'C':
+    	options.doColumnCorrection=1;
+    	if(argv[argcc+1][0] != '-'){
+			argcc++;
+			if(argc <= argcc  || (argv[argcc][0] != '0' && argv[argcc][0] != '1')){
+				printf("Bad option on column noise correction\n");
+				exit(-1);
+			}
 
+			options.cncType = atoi(argv[argcc]);
+    	}
+    	break;
+
+    case 'D':
+    	options.doColumnCorrectionTn=1;
+    	break;
+
+    case 'E':
+    	options.T0Test=1;
+    	break;
+
+    case 'F':
+        argcc++;
+       options.cmpFile = argv[argcc];
+    	break;
+
+    case 'G':
+    	options.subtractAverage=1;
+    	break;
+
+    case 'I':
+    	if(argv[argcc+1][0] != '-'){
+			argcc++;
+			options.chipType = argv[argcc];
+    	}
+    	break;
+
+    case 'J':
+        options.applyRowCorrection = 1;
+    	break;
+
+    case 'K':
+        options.applyColCorrection = 1;
+    	break;
+
+    case 'L':
+    	if(argv[argcc+1][0] != '-'){
+			argcc++;
+			sscanf(argv[argcc],"%f",&options.applyXtalkCorrection1);
+    	}
+    	else
+    		options.applyXtalkCorrection1 = 0.2;
+    	break;
+
+    case 'M':
+    	if(argv[argcc+1][0] != '-'){
+			argcc++;
+			sscanf(argv[argcc],"%f",&options.applyXtalkCorrection2);
+    	}
+    	else
+    		options.applyXtalkCorrection2 = 0.2;
+    	break;
+
+    default:
+
+      fprintf ( stdout, "unknown option %s\n",argv[argcc] );
+      argcc++;
+      break;
     }
     argcc++;
   }
@@ -315,7 +404,7 @@ void DoOverSample(OptionsCls &options, Image &img)
     v8su maskV;
     v8su divV;
 
-    combineV = LD_VEC8SU(combine);
+    combineV = LD_VEC8SU((short unsigned int)combine);
     maskV = LD_VEC8SU(0x3fff);
     divV = LD_VEC8SU(4);
 
@@ -403,14 +492,15 @@ void DoCrop(OptionsCls &options)
 	  bool allocate = true;
 	  int nameListLen;
 	  char **nameList;
+	  int maxMode=2;
     //@WARNING: >must< copy beadfind_post_0000 if it exists, or Analysis will >fail to complete< on PGM run crops
     // This is an inobvious bug due to the fact that the Image routine "ReadyToLoad" checks for >the next< acq file
     // or explog_final.txt, >or< beadfind_post.  If none of those three exist, we wait forever.
     // not all runs appear to have explog_final.txt copied around, so can't depend on that.
-	  char *defaultNameList[] = {"beadfind_pre_0000.dat", "beadfind_pre_0001.dat", "beadfind_pre_0002.dat", "beadfind_pre_0003.dat",
-                               "beadfind_post_0000.dat", "beadfind_post_0001.dat", "beadfind_post_0002.dat", "beadfind_post_0003.dat",
-	                             "prerun_0000.dat", "prerun_0001.dat", "prerun_0002.dat", "prerun_0003.dat"
-	                            };
+	  const char* defaultNameList[] = {"beadfind_pre_0000.dat", "beadfind_pre_0001.dat", "beadfind_pre_0002.dat", "beadfind_pre_0003.dat",
+                                           "beadfind_post_0000.dat", "beadfind_post_0001.dat", "beadfind_post_0002.dat", "beadfind_post_0003.dat",
+	                                   "prerun_0000.dat", "prerun_0001.dat", "prerun_0002.dat", "prerun_0003.dat"
+	                                  };
 
 
 	  // if requested...do not bother waiting for the files to show up
@@ -420,9 +510,9 @@ void DoCrop(OptionsCls &options)
   if ( options.oneFile != NULL ) {
     nameList = &options.oneFile;
     nameListLen = 1;
-    mode = 1;
+    maxMode=1;
   } else {
-    nameList = defaultNameList;
+    nameList = const_cast<char**> ( defaultNameList );
     nameListLen = sizeof ( defaultNameList ) /sizeof ( defaultNameList[0] );
   }
 
@@ -445,7 +535,7 @@ void DoCrop(OptionsCls &options)
   if(system ( cmd ) != 0 )
 	  printf("failed to copy txt files from src\n");
   // Copy lsrowimage.txt file
-  char *filesToMove[] = {
+  const char *filesToMove[] = {
     "lsrowimage.dat",
     "gainimage.dat",
     "reimage.dat",
@@ -457,19 +547,22 @@ void DoCrop(OptionsCls &options)
       fprintf (stdout, "No %s file found\n",filesToMove[iFile]);
   }
   }
-  while ( mode < 2 ) {
-    if ( mode == 0 ) {
+  while ( mode < maxMode ) {
+    if ( mode == 1 ) {
       sprintf ( name, "%s/acq_%04d.dat", options.expPath, i );
       sprintf ( destName, "%s/acq_%04d.dat", options.destPath, i );
-    } else if ( mode == 1 ) {
-      if ( i >= nameListLen )
-        break;
+    } else if ( mode == 0 ) {
+      if ( i >= nameListLen ){
+        mode++;
+        i=0;
+        continue;
+      }
       sprintf ( name, "%s/%s", options.expPath, nameList[i] );
       sprintf ( destName, "%s/%s", options.destPath, nameList[i] );
     } else
       break;
 
-    if ( loader.LoadRaw ( name, 0, allocate, false ) ) {
+    if ( loader.LoadRaw ( name, 0, allocate, false, false ) ) {
       allocate = false;
       const RawImage *raw = loader.GetImage();
       DetermineCropWidthAndHeight ( options.cropx, options.cropy, options.cropw, options.croph, raw->cols, raw->rows );
@@ -482,7 +575,98 @@ void DoCrop(OptionsCls &options)
       if(options.OverSample_skip || options.OverSample_combine)
     	  DoOverSample(options,loader);
 
+      if(options.chipType)
+    	  ChipIdDecoder::SetGlobalChipId(options.chipType);
+
+      if(options.applyXtalkCorrection1){
+			PairPixelXtalkCorrector xtalkCorrector;
+			xtalkCorrector.Correct(loader.raw, options.applyXtalkCorrection1);
+      }
+
+      if(options.applyRowCorrection){
+    	  printf("Applying row noise correction\n");
+     		CorrNoiseCorrector rnc;
+      		rnc.CorrectCorrNoise(loader.raw,options.applyColCorrection?3:1,true,true,false );
+      }
+      else if(options.applyColCorrection){
+    	    printf("Applying column noise correction\n");
+     		CorrNoiseCorrector rnc;
+      		rnc.CorrectCorrNoise(loader.raw,0,true,true,false );
+      }
+
+      if(options.applyXtalkCorrection2){
+			PairPixelXtalkCorrector xtalkCorrector;
+			xtalkCorrector.Correct(loader.raw, options.applyXtalkCorrection2);
+      }
+
+      if(options.doColumnCorrectionTn)
+	  {
+		ComparatorNoiseCorrector cnc;
+		cnc.CorrectComparatorNoiseThumbnail(loader.raw, NULL, 50,50, false);
+	  } else if(options.doColumnCorrection){
+		ComparatorNoiseCorrector cnc;
+		bool beadfind = false;//((strstr(name,"beadfind_pre"))?true:false);
+		cnc.CorrectComparatorNoise(loader.raw, NULL, false, options.cncType,beadfind );
+	  }
+
+
+
+      if(options.cmpFile){
+    	  // subtract this file before continuing
+    	  Image loader2;
+
+    	  loader2.LoadRaw ( options.cmpFile, 0, allocate, 2 );
+
+          if(options.OverSample_skip || options.OverSample_combine)
+        	  DoOverSample(options,loader2);
+
+          if(options.doColumnCorrectionTn)
+    	  {
+    		ComparatorNoiseCorrector cnc;
+    		cnc.CorrectComparatorNoiseThumbnail(loader2.raw, NULL, 100,100, false);
+    	  } else if(options.doColumnCorrection){
+    		ComparatorNoiseCorrector cnc;
+    		bool beadfind = ((strstr(options.cmpFile,"beadfind_pre"))?true:false);
+    		cnc.CorrectComparatorNoise(loader2.raw, NULL, 0, options.cncType,beadfind );
+    	  }
+
+
+
+          {
+            	short int *rawPtr = loader.raw->image;
+              	short int *rawPtr2 = loader2.raw->image;
+          	int frameStride=loader.raw->cols*loader.raw->rows;
+
+          	for(int frame=0;frame<loader.raw->frames;frame++){
+          		for(int idx=0;idx<frameStride;idx++){
+          			*rawPtr -= *rawPtr2;
+          			*rawPtr += 8192;
+          			rawPtr++;
+          			rawPtr2++;
+          		}
+          	}
+          }
+          printf("subtracted %s from the file\n",options.cmpFile);
+      }
+
+      if(options.subtractAverage)
+      {
+          // subtract off the mean trace
+    	  SubtractOffMean(loader);
+    	  printf("subtracted mean from trace\n");
+
+      }
+
+      // testing of lossy compression
+      if(!options.pfc && ImageTransformer::PCATest[0]) {
+        AdvComprTest(name,&loader,ImageTransformer::PCATest,true );
+      }
+
       saver.SetData ( &loader );
+
+      if(options.T0Test)
+    	  saver.doT0Compression();
+
       if ( options.regBasedAcq && i == 0 ) {
 
         if ( options.excludeMask )
@@ -526,7 +710,7 @@ void DoCrop(OptionsCls &options)
       fflush ( stdout );
       i++;
     } else {
-      if ( ( mode == 1 && i >= 12 ) || ( mode == 0 ) ) {
+      if ( ( mode == 0 && i >= 12 ) || ( mode ==1 ) ) {
         mode++;
         i = 0;
         allocate = true;
@@ -549,6 +733,63 @@ void subWorker(int os, int skip, char *tmpExpPath, char *tmpDestPath)
 	DoCrop(LocalOptions);
 }
 
+void ZeroPinned(Image &loader)
+{
+	short int *rawPtr = loader.raw->image;
+	uint64_t avg;
+	int cnt=0;
+	short int avgs;
+	int frameStride = loader.raw->cols * loader.raw->rows;
+	char *pinned = (char *)malloc(frameStride);
+
+	memset(pinned,0,frameStride);
+
+	for (int frame = 0; frame < loader.raw->frames; frame++) {
+		rawPtr = loader.raw->image + frame*frameStride;
+		for (int idx = 0; idx < frameStride; idx++) {
+			if(*rawPtr < 5 || *rawPtr > 16380)
+				pinned[idx]=1;
+			rawPtr++;
+		}
+	}
+	for (int idx = 0; idx < frameStride; idx++) {
+		if(pinned[idx]){
+			cnt++;
+			rawPtr = loader.raw->image + idx;
+			for (int frame = 0; frame < loader.raw->frames; frame++) {
+				rawPtr[frame*frameStride] = 0;
+			}
+		}
+	}
+	free(pinned);
+	printf("pinned: %d out of %d\n",cnt,frameStride);
+}
+
+void SubtractOffMean(Image &loader)
+{
+	short int *rawPtr = loader.raw->image;
+	uint64_t avg;
+	short int avgs;
+	int frameStride = loader.raw->cols * loader.raw->rows;
+
+	printf("avg trace= ");
+	for (int frame = 0; frame < loader.raw->frames; frame++) {
+		avg=0;
+		rawPtr = loader.raw->image + frame*frameStride;
+		for (int idx = 0; idx < frameStride; idx++) {
+			avg += *rawPtr++;
+		}
+		avgs = (avg / frameStride);
+		printf(" %d",avgs);
+		rawPtr = loader.raw->image + frame*frameStride;
+		for (int idx = 0; idx < frameStride; idx++) {
+			*rawPtr = *rawPtr - avgs + 8192;
+			rawPtr++;
+		}
+	}
+	printf("\n");
+	ZeroPinned(loader);
+}
 
 
 
@@ -768,5 +1009,6 @@ void DoOverSampleSplit(OptionsCls &options)
 		}
 	}
 }
+
 
 

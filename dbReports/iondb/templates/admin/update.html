@@ -24,7 +24,6 @@
       float: left;
     }
     #update_control {
-      float: left;
       min-width: 580px;
     }
     #release_memo {
@@ -73,9 +72,11 @@
         <h2 id="update_status">Checking status</h2>
         <div id="update_actions">
           <p id="instructions">Your system will automatically check for updates periodically.  You can click Check below to manually check for new updates.</p>
+        {% if legacy_OS %}
         <div id="security_update_actions" title="All server packages with security updates will be installed when TS is updated">
           <div><input type="checkbox" id="checkbox_auto_security" /> Automatically install security updates when TS software is updated.</div>
         </div>
+        {% endif %}
         <div><input type="checkbox" id="auto_download" /> Automatically download but do not install updates.</div>
           <button id="check_update">Check</button>
           <button id="confirm_update" disabled="disabled">Update Server</button>
@@ -85,7 +86,8 @@
         </div>
         <div id="update_confirmation" style="display: none;">
           <p><strong>Are you sure you want to update?</strong></p>
-          <p>The system will be unavailable during the update.</p>
+          <p>The system will be unavailable during the update. <br>
+          <font color=red>All active analyses will be terminated immediately.</font></p>
           <button id="start_update">Update Now</button>
           <button id="cancel">Cancel</button>
         </div>

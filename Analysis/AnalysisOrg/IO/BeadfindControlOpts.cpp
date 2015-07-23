@@ -124,7 +124,7 @@ void BeadfindControlOpts::SetOpts(OptArgs &opts, Json::Value& json_params)
 	bfTfFilterQuantile = RetrieveParameterDouble(opts, json_params, '-', "beadfind-tf-filt", 1.0);
 	skipBeadfindSdRecover = RetrieveParameterInt(opts, json_params, '-', "beadfind-skip-sd-recover", 1);
 	beadfindThumbnail = RetrieveParameterInt(opts, json_params, '-', "beadfind-thumbnail", 0);
-        filterNoisyCols = RetrieveParameterString(opts, json_params, '-', "beadfind-filt-noisy-col", "none");
+  filterNoisyCols = RetrieveParameterString(opts, json_params, '-', "beadfind-filt-noisy-col", "none");
 	beadfindUseSepRef = RetrieveParameterBool(opts, json_params, '-', "beadfind-sep-ref", false);
 	beadfindSmoothTrace = RetrieveParameterBool(opts, json_params, '-', "beadfind-smooth-trace", false);
 	int defaultVal = 1;

@@ -116,7 +116,7 @@ sub checkInput {
   my $path = $0;
   $path =~ s/\/[^\/]+$//;
   my $command = "$path/validate_reference.pl -f $fastaFile 2>&1";
-  $command .= " -a > $fastaFile.fix" if $autoFix;
+  $command .= " -u -o -a > $fastaFile.fix" if $autoFix;
   my $returnString = "";
   my $returnErrString = "";
   my $origFastaFile = "";
@@ -312,7 +312,7 @@ sub executeSystemCall {
 sub makePicardDictFile {
   my($picardDir,$fastaFile,$outDir) = @_;
 
-  my $jarFile = "$picardDir/CreateSequenceDictionary.jar";
+  my $jarFile = "$picardDir/picard.jar CreateSequenceDictionary";
   if(! -e $picardDir) {
     return("$0: Picard dir $picardDir does not exist - unable to create Picard .dict file\n");
   } elsif(! -r $picardDir) {

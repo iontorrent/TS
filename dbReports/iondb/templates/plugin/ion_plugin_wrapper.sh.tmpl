@@ -28,7 +28,9 @@ if [ -e "/etc/environment" ]; then
     if [ ! -z "${http_proxy}" ]; then
         echo "Proxy: http_proxy=${http_proxy}"
         # Clone to HTTP_PROXY to aid consistent use
-        [ -z "${HTTP_PROXY}" ] && HTTP_PROXY="${http_proxy}"
+        if [ -z "${HTTP_PROXY}" ]; then
+            HTTP_PROXY="${http_proxy}"
+        fi
         if [ ! -z "${no_proxy}" ]; then
             echo "Proxy: no_proxy=${no_proxy}"
         else

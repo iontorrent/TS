@@ -42,9 +42,9 @@ class SpatialCorrelator
     void SetRegionData(RegionalizedData *_region_data, SlicedChipExtras *_region_data_extras);
     void MakeSignalMap(HplusMap &signal_map, int fnum);
     void NNAmplCorrect(int fnum, int flow_block_start);
-    void SimpleXtalk(int fnum);
+    void SimpleXtalk(int fnum, int flow_block_start);
     void AmplitudeCorrectAllFlows( int flow_block_size, int flow_block_start );
-
+    void BkgDistortion(int fnum, int flow_block_start);
 
 };
 

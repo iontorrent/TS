@@ -6,10 +6,15 @@ void RegionHelper::SetUpRegions (std::vector<Region>& regions, int rows, int col
 {
   int i,x,y;
 
+
   for (i = 0, x = 0; x < cols; x += xinc)
   {
     for (y = 0; y < rows; y += yinc)
     {
+  //for (i = 0,y = 0; y < rows; y += yinc)
+  //{
+    //for ( x = 0; x < cols; x += xinc)
+   // {
       regions[i].index = i;
       regions[i].col = x;
       regions[i].row = y;

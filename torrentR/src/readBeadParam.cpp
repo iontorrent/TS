@@ -4,7 +4,7 @@
 #include <iostream>
 #include <Rcpp.h>
 #include <hdf5.h>
-#include <H5File.h>
+#include <IonH5File.h>
 #include <SampleStats.h>
 #include <SampleQuantiles.h>
 #include <cstdlib>

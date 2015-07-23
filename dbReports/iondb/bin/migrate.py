@@ -5,7 +5,7 @@
 """
 This script will do PostgreSQL database migrations, when they are needed.
 """
-
+from __future__ import absolute_import
 from djangoinit import *
 from django import db
 from django.db import transaction, IntegrityError, DatabaseError

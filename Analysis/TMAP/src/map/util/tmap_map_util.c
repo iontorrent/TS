@@ -1003,7 +1003,7 @@ tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, 
 
   if (mapq == 0 && refseq->bed_exist) {
     int j = -1;
-    int overlap_s = 0, sec = 0;
+    // int overlap_s = 0, sec = 0;
     int sh_dis = 10000, sec_dis = 10000;
     for (i=0; i <sams->n; i++) {
       tmap_map_sam_t tmp_sam = sams->sams[i];
@@ -1038,6 +1038,7 @@ tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, 
 	}
 	*/
 	// Use the distance to 5' end start
+	//fprintf(stderr, "found %d %d\n", ampl_start, ampl_end);
 	int dis;
 	if (tmp_sam.strand == 0) dis = abs(ampl_start-start);
 	else dis = abs(ampl_end-end);
@@ -1051,6 +1052,7 @@ tmap_map_util_mapq(tmap_map_sams_t *sams, int32_t seq_len, tmap_map_opt_t *opt, 
       } 
     } // for
     if (j >= 0 && /*overlap_s - sec > 5*/ sec_dis - sh_dis > 1) { 
+	//fprintf(stderr, "Bump to 12 %d\n", j);
 	sams->sams[j].mapq = 12; 
 	// make the j unique best hit
 	for (i = 0; i < sams->n; i++) {
@@ -1277,10 +1279,10 @@ tmap_map_util_sw_gen_score_helper(tmap_refseq_t *refseq, tmap_map_sams_t *sams,
                          && sams->sams[end].seqid == sams->sams[end+1].seqid) {
                           tmap_map_util_sw_get_start_and_end_pos(&sams->sams[end+1], seq_len, strand, &start_pos_cur, &end_pos_cur);
 
-                          /*
-                             fprintf(stderr, "start_pos_cur=%u start_pos_prev=%u max_seed_band=%d\n",
-                             start_pos_cur, start_pos_prev, max_seed_band);
-                             */
+
+                             // fprintf(stderr, "start_pos_cur=%u start_pos_prev=%u max_seed_band=%d\n",
+                             // start_pos_cur, start_pos_prev, max_seed_band);
+
 
                           // consider start positions only
                           if(start_pos_cur - start_pos_prev <= max_seed_band) { // consider start positions only
@@ -1988,10 +1990,10 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
     old_score = 0;
     found = 0; 
     int worst = 0;
-    int ind = 0, nMM = 0, nc = 0, nqb = 0, ntb = 0, nCC, target_red;
+    int ind = 0, nMM = 0, /*nc = 0,*/ nqb = 0, ntb = 0, nCC, target_red = 0;
     int tb, qb, inc;
     int i_c;
-    int i, nn_cigar, total_scl;
+    int i, nn_cigar, total_scl = 0;
     if (0 != strand) { tb = qb = 0; inc = 1;}
     else {tb = tlen-1; qb = qlen-1; inc = -1;}
     for (i_c = 0; i_c < s->n_cigar; i_c++) {
@@ -2005,7 +2007,7 @@ tmap_map_util_end_repair(tmap_seq_t *seq, uint8_t *query, int32_t qlen,
 		if (old_score < worst) { worst = old_score; ind = i+1; nMM = found; target_red =ntb+1; nn_cigar = i_c; total_scl = nqb+1;}
 	    }
 	} else {
-	    if ((op == BAM_CDEL)) {
+	    if (op == BAM_CDEL) {
 		ntb += op_len;
 		tb += inc*op_len;
             } else if (op == BAM_CINS) {    
@@ -2466,7 +2468,8 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
                  tmap_map_opt_t *opt)
 {
   int32_t i, j, matrix[25], matrix_iupac[80];
-  int32_t start, end;
+  // int32_t start, end;
+  int32_t end;
   tmap_map_sams_t *sams_tmp = NULL;
   tmap_sw_param_t par, par_iupac;
   tmap_sw_path_t *path = NULL;
@@ -2499,11 +2502,11 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
     // ZZ: only disable 3' end softclip if the read aligned all the way close to the end of amplicon
     end = 0;
     while(end < sams->n) {
-      uint8_t strand, *query=NULL, *query_rc=NULL, *tmp_target=NULL;
-      int32_t qlen;
+      uint8_t strand; // *query=NULL, *query_rc=NULL, *tmp_target=NULL;
+      // int32_t qlen;
       tmap_map_sam_t tmp_sam;
-      int32_t query_start, query_end;
-      int32_t conv = 0;
+      // int32_t query_start, query_end;
+      // int32_t conv = 0;
 
       // do not band when generating the cigar
       tmp_sam = sams->sams[end];
@@ -2541,7 +2544,8 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
       }
   }
   
-  i = start = end = 0;
+  // i = start = end = 0;
+  i = end = 0;
   start_pos = end_pos = 0;
   while(end < sams->n) {
       uint8_t strand, *query=NULL, *query_rc=NULL, *tmp_target=NULL;
@@ -2719,7 +2723,7 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
 	     	// May need adjust start??
 	        target = tmp_target;
 	    	end++; i++;
-		start = end;
+		    // start = end;
       		// update aux data
       		tmap_map_sam_malloc_aux(s);
       		switch(s->algo_id) {
@@ -2890,7 +2894,7 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
           }
 
 #ifdef CHECK_SWCORE_PARAMS
-	  tmap_sw_param_t* pp = (0 < conv)? &par_iupac : &par);
+	  tmap_sw_param_t* pp = (0 < conv)? &par_iupac : &par;
 	  if (qlen != saved_query_len ||
 	      tlen != saved_target_len ||
 	      memcmp (saved_query_len, query, qlen) ||
@@ -2974,7 +2978,7 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
 		unsigned rr, cc;
 		for (rr = 0; rr != pp->row; ++rr)
 		{
-		  fprintf (stderr, "    %3d ", rr);
+		  fprintf (stderr, "    %3u ", rr);
 		  for (cc = 0; cc != pp->row; ++cc)
 		  {
 		      fprintf (stderr, "%5d", pp->matrix [pp->row*rr + cc]);
@@ -3432,10 +3436,10 @@ tmap_map_util_sw_gen_cigar(tmap_refseq_t *refseq,
 
       // update start/end
       end++;
-      start = end;
+      // start = end;
       target = tmp_target;
   }
-      
+
   // realloc
   tmap_map_sams_realloc(sams_tmp, i);
   

@@ -94,7 +94,7 @@ def printStartupMessage():
   printlog('  Plugin version:   %s' % pluginParams['cmdOptions'].version)
   printlog('  Launch mode:      %s' % config['launch_mode'])
   printlog('  Run is barcoded:  %s' % ('Yes' if pluginParams['barcoded'] else 'No'))
-  printlog('  Reference name:   %s' % pluginParams['genome_id'])
+  printlog('  Plan reference:   %s' % pluginParams['genome_id'])
   printlog('  Ignore rev reads: %s' % config['fwdonlyreads'])
   printlog('  Passing R-square: %s' % config['minrsquared'])
   printlog('  Min. read counts: %s' % config['mincounts'])
@@ -102,7 +102,7 @@ def printStartupMessage():
   printlog('  Barcodes checked: %s' % (config['barcode'] if config['barcode'] else 'All'))
   printlog('Data files used:')
   printlog('  Parameters:     %s' % pluginParams['jsonInput'])
-  printlog('  Reference:      %s' % pluginParams['reference'])
+  printlog('  Reference:      %s' % "ERCC92/ERCC92.fasta")
   printlog('  Root alignment: %s' % pluginParams['bamroot'])
   printlog('')
 
@@ -120,10 +120,16 @@ def run_plugin(skiprun=False,barcode=""):
   sample = sampleName(barcode,'None')
   fwd_reads = "-f" if config['fwdonlyreads'] == 'Yes' else ""
 
+  # before accepting given (unaligned) BAM, check if aligned BAM exists, which may have ERCC aligned already
+  alnbam = os.path.join( pluginParams['analysis_dir'], "rawlib.bam" )
+  if os.path.exists(alnbam):
+    printlog("Warning: Processed using mapped BAM file. (Possibly pre-aligned for ERCC reads.)")
+    bamfile = alnbam
+
   # link from source BAM since pipeline uses the name as output file stem
   linkbam = os.path.join(output_dir,output_prefix+".bam")
   createlink(bamfile,linkbam)
-  createlink(bamfile+'.bai',linkbam+'.bai')
+  #createlink(bamfile+'.bai',linkbam+'.bai')
   bamfile = linkbam
 
   # pluginParams['reference'] not used here - uses local ERCC reference when remapping is required
@@ -485,9 +491,9 @@ def loadPluginParams():
   jsonParams['runinfo'].get('url_root','.'),'plugin_out',pluginParams['plugin_name']+'_out' )
 
   # check for non-supported de novo runs
-  if not pluginParams['genome_id'] or not pluginParams['reference']:
-    printerr("Requires a reference sequence for coverage analysis.")
-    raise Exception("CATCH:Do not know how to analyze coverage without reference sequence for library '%s'"%pluginParams.get('genome_id',""))
+  #if not pluginParams['genome_id'] or not pluginParams['reference']:
+  #  printerr("Requires a reference sequence for coverage analysis.")
+  #  raise Exception("CATCH:Do not know how to analyze coverage without reference sequence for library '%s'"%pluginParams.get('genome_id',""))
 
   # set up for barcoded vs. non-barcodedruns
   pluginParams['bamfile'] = pluginParams['bamroot']
@@ -600,12 +606,18 @@ def runForBarcodes():
   bcoi = pluginParams['config']['barcode'].split(',')
   have_bcoi = (bcoi[0] != '' and bcoi[0] != 'All')
   numGoodBams = 0
+  numAnalBams = 0
   maxBarcodeLen = 0
   minFileSize = pluginParams['cmdOptions'].minbamsize
   (bcBamPath,bcBamRoot) = os.path.split(pluginParams['bamroot'])
   bcBamFile = []
   for barcode in barcodes:
-    bcbam = os.path.join( bcBamPath, "%s_%s"%(barcode,bcBamRoot) )
+    # before accepting given (unaligned) BAM, check if aligned BAM exists, which may have ERCC aligned already
+    bcbam = os.path.join( pluginParams['analysis_dir'], "%s_rawlib.bam"%barcode )
+    if not os.path.exists(bcbam):
+      bcbam = os.path.join( bcBamPath, "%s_%s"%(barcode,bcBamRoot) )
+    else:
+      numAnalBams += 1
     # special case for ERCC plugin: allows run on single specific barcode
     if have_bcoi and not barcode in bcoi:
       bcbam = ": Barcode excluded by user selection"
@@ -622,6 +634,8 @@ def runForBarcodes():
   ensureFilePrefix(maxBarcodeLen+1)
 
   printlog("Processing %d barcodes...\n" % numGoodBams)
+  if numAnalBams > 0:
+    printlog("Warning: %d barcodes will be processed using mapped BAM files. (Possibly pre-aligned for ERCC reads.)" % numAnalBams)
   pluginReport['num_barcodes_processed'] = numGoodBams
   pluginReport['num_barcodes_failed'] = 0
 

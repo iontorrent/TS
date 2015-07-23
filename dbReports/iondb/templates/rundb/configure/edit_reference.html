@@ -93,19 +93,19 @@
           {{ error|linebreaks }}
         {% endfor %}
         <p>
-          For additional information, check the online
-          <a href="/ion-docs/Home.html">help</a>
-          .
+          For additional information, check the online <a href="/ion-docs/Home.html">help</a>.
         </p>
-      {% elif status != "started" %}
-        <h2> Error </h2>
-        <p> The Genome info text file for <strong>{{ name }}</strong> could not
-          be opened from the filesystem. It may have manually been deleted.
-        </p>
+      {% elif "error" in status|lower or "failed" in status|lower %}
+        <h2> Error: {{status}} </h2>
+        <p> The Genome info text file for <strong>{{ name }}</strong> could not be opened from the filesystem.</p>
         <p> Please contact your Torrent Server Administrator.</p>
+      {% else %}
+        <h2> Genome Creation is in progress</h2>
+        <p> The Genome <strong>{{ name }}</strong> is still being created. This process may take a few hours.
+        </p>
       {% endif %}
 
-    <div class="form-actions">
+      <div class="form-actions">
         <a href="{% url "configure_references" %}" class="btn btn-primary">Back</a>
         <button class="btn pull-right" id="delete">Delete Genome</button>
         <div id="ask_delete_genome" style="display: none; margin-top:12px;">
@@ -116,16 +116,6 @@
         </div>
       </div>
     {% endif %}
-
-    {% ifequal status "started" %}
-
-      <h2> Genome Creation is in progress</h2>
-      <p> The Genome <strong>{{ name }}</strong> is still being created. This
-        process may take a few hours.
-      </p>
-    {% endifequal %}
-
-      
 
     {% if genome_dict %}
 

@@ -348,6 +348,8 @@ $(function () {
   };
 
   var baseRangeParam = {
+    outfile : '',
+    options : '',
     bbcfile : bbcFile,
     cbcfile : cbcFile,
     chrom : '',
@@ -373,6 +375,7 @@ $(function () {
     binend : 0,
     bedcoords : 0,
     headlines : 1,
+    startfield : 1,
     numfields : 7
   };
 

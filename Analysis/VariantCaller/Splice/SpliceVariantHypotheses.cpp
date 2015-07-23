@@ -8,12 +8,13 @@
 bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &my_ensemble,
                         const LocalReferenceContext &local_context, PersistingThreadObjects &thread_objects,
                         int &splice_start_flow, int &splice_end_flow, vector<string> &my_hypotheses,
-                        bool & changed_alignment, const InputStructures &global_context,
+                        vector<bool> & same_as_null_hypothesis, bool & changed_alignment, const InputStructures &global_context,
                         const ReferenceReader &ref_reader, int chr_idx)
 {
 
   // Hypotheses: 1) Null; read as called 2) Reference Hypothesis 3-?) Variant Hypotheses
   my_hypotheses.resize(my_ensemble.allele_identity_vector.size()+2);
+  same_as_null_hypothesis.assign(my_hypotheses.size(), false);
 
   // Set up variables to log the flows we splice into
   splice_start_flow = -1;
@@ -48,7 +49,7 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
   changed_alignment = false;
 
   // do realignment of a small region around variant if desired
-  if (my_ensemble.doRealignment) {  // XXX
+  if (my_ensemble.doRealignment) {
     pretty_alignment = SpliceDoRealignement(thread_objects, current_read, local_context.position0,
                                             changed_alignment, global_context.DEBUG, ref_reader, chr_idx);
     if (pretty_alignment.empty() and global_context.DEBUG > 0)
@@ -121,9 +122,11 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
   } // end of for loop over extended pretty alignment
 
   // Check whether the whole reference allele fit
+  // It seems that with primer trimming ion TVC, many a read throw this warning
   if (ref_idx < (int)(local_context.position0 + local_context.reference_allele.length())) {
     did_splicing = false;
-    cout << "Warning in Splicing: Reference allele "<< local_context.reference_allele << " did not fit into read " << current_read.alignment.Name << endl;
+    if (global_context.DEBUG>0)
+      cout << "Warning in Splicing: Reference allele "<< local_context.reference_allele << " did not fit into read " << current_read.alignment.Name << endl;
   }
 
   if (did_splicing) {
@@ -137,7 +140,7 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
     }
 
     // Get the main flows before and after splicing
-    splice_end_flow = GetSpliceFlows(current_read, global_context, my_hypotheses,
+    splice_end_flow = GetSpliceFlows(current_read, global_context, my_hypotheses, same_as_null_hypothesis,
                                      splice_start_idx, splice_end_idx, splice_start_flow);
     if (splice_start_flow < 0 or splice_end_flow <= splice_start_flow) {
       did_splicing = false;
@@ -146,17 +149,17 @@ bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &
     }
   }
 
-  // Check for non-ACGT bases in hypotheses strings
+  // Check for non-ACGT bases in hypotheses
   bool valid_bases = true;
   for (unsigned int i_hyp=0; i_hyp<my_hypotheses.size(); i_hyp++) {
-    unsigned int iBase = 0;
-    while (iBase<my_hypotheses[i_hyp].length() and valid_bases){
+	unsigned int iBase = 0;
+	while (iBase<my_hypotheses[i_hyp].length() and valid_bases){
       if (my_hypotheses[i_hyp].at(iBase) == 'A' or my_hypotheses[i_hyp].at(iBase) == 'C' or
           my_hypotheses[i_hyp].at(iBase) == 'G' or my_hypotheses[i_hyp].at(iBase) == 'T')
       iBase++;
       else
         valid_bases = false;
-  	}
+	}
   }
   if (not valid_bases){
     cerr << "Non-Fatal ERROR in Splicing for " << local_context.contigName << ":" << local_context.position0+1
@@ -292,8 +295,8 @@ bool SpliceAddVariantAlleles(const Alignment &current_read, const string& pretty
 
 
 int GetSpliceFlows(const Alignment &current_read, const InputStructures &global_context,
-                   vector<string> &my_hypotheses, int splice_start_idx,
-                   vector<int> splice_end_idx, int &splice_start_flow)
+                   vector<string> &my_hypotheses, vector<bool> & same_as_null_hypothesis,
+                   int splice_start_idx, vector<int> splice_end_idx, int &splice_start_flow)
 {
 
   int splice_end_flow = -1;
@@ -316,13 +319,14 @@ int GetSpliceFlows(const Alignment &current_read, const InputStructures &global_
     }
     splice_length[i_hyp] = splice_end_idx[i_hyp] - splice_start_idx -1;
   }
+
   if (current_read.is_reverse_strand) { // The same number of bases have been added beyond the window
     my_start_idx = my_hypotheses[0].length() - added_SC_bases -1 - splice_end_idx[0];
     if (global_context.DEBUG>2)
       cout << "--> reverse strand splicing:" << endl;
   }
   else if (global_context.DEBUG>2) {
-    cout << "--> forward strand splicing:" << endl;;
+    cout << "--> forward strand splicing:" << endl;
   }
 
   // --- Get splice start flow and adjust index of first spliced base
@@ -368,15 +372,21 @@ int GetSpliceFlows(const Alignment &current_read, const InputStructures &global_
         error_occurred = true;
         break;
       }
-      IncrementFlow(global_context.treePhaserFlowOrder,my_hypotheses[i_hyp][i_base], my_flow);
+      IncrementFlow(global_context.flow_order_vector.at(current_read.flow_order_index), my_hypotheses[i_hyp][i_base], my_flow);
     }
     if (my_flow > splice_end_flow)
       splice_end_flow = my_flow;
+
+    // Check if hypothesis is equal to the null hypothesis, i.e., the read as called
+    same_as_null_hypothesis[i_hyp] = i_hyp>0 and splice_length[i_hyp] == splice_length[0]
+      and my_hypotheses[i_hyp].compare(my_start_idx, splice_length[i_hyp], my_hypotheses[0], my_start_idx, splice_length[0]) == 0;
+
     // reverse verbose
     if (global_context.DEBUG>2)
       cout << "Hypothesis " << i_hyp << " splice_end_idx " << splice_end_idx[i_hyp] << " splice_length " << splice_length[i_hyp]
            << " my_start_idx " << my_start_idx << " my_end_idx " << my_end_idx
-           << " splice_start_flow " << splice_start_flow << " my_end_flow " << my_flow << endl;
+           << " splice_start_flow " << splice_start_flow << " my_end_flow " << my_flow
+           << " Spliced Bases: " << my_hypotheses[i_hyp].substr(my_start_idx, splice_length[i_hyp]) << endl;
   }
 
   if (error_occurred)

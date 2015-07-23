@@ -30,7 +30,7 @@
   @param  ...         arguments for the format
   @return             the populated BAM structure
   */
-inline bam1_t*
+bam1_t*
 tmap_sam_convert_unmapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t bidirectional, tmap_refseq_t *refseq,
                         uint32_t end_num, uint32_t m_unmapped, uint32_t m_prop, 
                         uint32_t m_strand, uint32_t m_seqid, uint32_t m_pos,
@@ -70,7 +70,7 @@ tmap_sam_convert_unmapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t b
   @return             the populated BAM structure
   @details            the format should not include the MD tag, which will be outputted automatically
   */
-inline bam1_t*
+bam1_t*
 tmap_sam_convert_mapped(tmap_seq_t *seq, int32_t sam_flowspace_tags, int32_t bidirectional, int32_t seq_eq, tmap_refseq_t *refseq,
                       uint8_t strand, uint32_t seqid, uint32_t pos, uint32_t t_len, int32_t secondary,
                       uint32_t end_num, uint32_t m_unmapped, uint32_t m_prop, double m_num_std, uint32_t m_strand,

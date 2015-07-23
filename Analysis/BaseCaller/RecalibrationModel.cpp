@@ -25,6 +25,7 @@ RecalibrationModel::RecalibrationModel()
     is_enabled_ = false;
     max_hp_calibrated_ = 0;
     recalModelHPThres = 4;
+    verbose_= true;
 }
 
 
@@ -51,6 +52,7 @@ double rGetParamsDbl(Json::Value& json, const string& key, double default_value)
 
 void RecalibrationModel::InitializeFromJSON(Json::Value &recal_params, string &my_block_key, bool spam_enabled, int over_flow_protect) {
   // this needs to signal when it fails in some way
+	verbose_ = spam_enabled;
   
     int flowStart, flowEnd, flowSpan, xMin, xMax, xSpan, yMin, yMax, ySpan, max_hp_calibrated;
     flowStart = rGetParamsInt(recal_params[my_block_key],"flowStart",0);
@@ -74,7 +76,8 @@ void RecalibrationModel::InitializeFromJSON(Json::Value &recal_params, string &m
     ySpan = rGetParamsInt(recal_params[my_block_key],"ySpan",0);
     //cout << ySpan << endl;
     max_hp_calibrated = rGetParamsInt(recal_params[my_block_key],"max_hp_calibrated",0);
-    stratification.SetupRegion(xMin, xMax, xSpan, yMin, yMax, ySpan);
+    stratification.SetupChipRegions(xMin, xMax, xSpan, yMin, yMax, ySpan);
+    stratification.SetupFlowRegions(flowStart,flowEnd, flowSpan);
     //calculate number of partitions and initialize the stratifiedAs and stratifiedBs
     SetupStratification(flowStart,flowEnd, flowSpan,xMin,xMax,xSpan,yMin,yMax,ySpan,max_hp_calibrated);
 
@@ -107,10 +110,12 @@ void RecalibrationModel::InitializeFromJSON(Json::Value &recal_params, string &m
         // note we only fill >in< flows fit by the recalibration model
         FillIndexes(offsetRegion,nucInd, refHP, flowStart, flowEnd, paramA, paramB);        
     }
-   // now we're done!
-   if (spam_enabled)
-    printf("Recalibration: enabled (using recalibration comment %s)\n\n", my_block_key.c_str());
-    // if something bad happened above, how do we find out?
+    // if something bad happened above, how do we find out? - We do some basic sanity checks
+    CheckArraySize();
+    // now we're done!
+    if (verbose_)
+      cout << "Recalibration: enabled (using recalibration comment " << my_block_key << ") in a "
+           << stratification.xCuts << 'x' << stratification.yCuts << 'x' << stratification.flowCuts << " grid." <<endl << endl;
     is_enabled_ = true;
 }
 
@@ -124,14 +129,14 @@ void RecalibrationModel::SetupStratification(int flowStart, int flowEnd, int flo
     stratifiedAs.resize(numRegionStratifications);
     stratifiedBs.resize(numRegionStratifications);
     for (int ind = 0; ind < numRegionStratifications; ++ind) {
-        stratifiedAs[ind].resize(numFlows);
-        stratifiedBs[ind].resize(numFlows);
+        stratifiedAs.at(ind).resize(numFlows);
+        stratifiedBs.at(ind).resize(numFlows);
         for (int flowInd = 0; flowInd < numFlows; flowInd++) {
-            stratifiedAs[ind][flowInd].resize(numNucs);
-            stratifiedBs[ind][flowInd].resize(numNucs);
+            stratifiedAs.at(ind).at(flowInd).resize(numNucs);
+            stratifiedBs.at(ind).at(flowInd).resize(numNucs);
             for (int nucInd = 0; nucInd < numNucs; ++nucInd) {
-                stratifiedAs[ind][flowInd][nucInd].assign(numHPs, 1.0);
-                stratifiedBs[ind][flowInd][nucInd].assign(numHPs, 0.0);
+                stratifiedAs.at(ind).at(flowInd).at(nucInd).assign(numHPs, 1.0);
+                stratifiedBs.at(ind).at(flowInd).at(nucInd).assign(numHPs, 0.0);
             }
         }
     }
@@ -183,7 +188,8 @@ bool RecalibrationModel::InitializeModel(string model_file_name, int model_thres
 
     int flowStart, flowEnd, flowSpan, xMin, xMax, xSpan, yMin, yMax, ySpan, max_hp_calibrated;
     model_file >> flowStart >> flowEnd >> flowSpan >> xMin >> xMax >> xSpan >> yMin >> yMax >> ySpan >>  max_hp_calibrated;
-    stratification.SetupRegion(xMin, xMax, xSpan, yMin, yMax, ySpan);
+    stratification.SetupChipRegions(xMin, xMax, xSpan, yMin, yMax, ySpan);
+    stratification.SetupFlowRegions(flowStart,flowEnd, flowSpan);
     //calculate number of partitions and initialize the stratifiedAs and stratifiedBs
     SetupStratification(flowStart,flowEnd, flowSpan,xMin,xMax,xSpan,yMin,yMax,ySpan,max_hp_calibrated);
 
@@ -194,16 +200,15 @@ bool RecalibrationModel::InitializeModel(string model_file_name, int model_thres
         char flowBase;
         model_file >> flowBase >> flowStart >> flowEnd >> xMin >> xMax >> yMin >> yMax >> refHP >> paramA >> paramB;
         //populate it to stratifiedAs and startifiedBs
-        int nucInd = NuctoInt(flowBase);
-        //boundary check
         int offsetRegion = stratification.OffsetRegion(xMin,yMin);
-        FillIndexes(offsetRegion,nucInd, refHP, flowStart, flowEnd, paramA, paramB);
+        FillIndexes(offsetRegion, NuctoInt(flowBase), refHP, flowStart, flowEnd, paramA, paramB);
     }
 
     model_file.close();
 
-    printf("Recalibration Model: enabled (using calibration file %s)\n", model_file_name.c_str());
-    printf(" - using calibration model for HPs %d and up.\n\n",recalModelHPThres);
+    cout << "Recalibration Model: enabled (using calibration file " << model_file_name << ")" << endl;
+    cout << " - using calibration model for HPs " << recalModelHPThres << " and up in a "
+           << stratification.xCuts << 'x' << stratification.yCuts << 'x' << stratification.flowCuts << " grid." << endl << endl;
     is_enabled_ = true;
     return is_enabled_;
 }
@@ -211,20 +216,24 @@ bool RecalibrationModel::InitializeModel(string model_file_name, int model_thres
 void RecalibrationModel::FillIndexes(int offsetRegion, int nucInd, int refHP, int flowStart, int flowEnd, float paramA, float paramB) {
     for (int flowInd = flowStart; flowInd < flowEnd; ++flowInd) {
         if (refHP < recalModelHPThres) continue;
-        stratifiedAs[offsetRegion][flowInd][nucInd][refHP] = paramA;
-        stratifiedBs[offsetRegion][flowInd][nucInd][refHP] = paramB;
+        stratifiedAs.at(offsetRegion).at(flowInd).at(nucInd).at(refHP) = paramA;
+        stratifiedBs.at(offsetRegion).at(flowInd).at(nucInd).at(refHP) = paramB;
     }
 }
 
-void RecalibrationModel::getAB(MultiAB &multi_ab, int x, int y) const {
+void RecalibrationModel::getAB(MultiAB &multi_ab, int x, int y) const
+{
      if (!is_enabled_) {
        multi_ab.Null();
     }
     int offsetRegion = stratification.OffsetRegion(x,y);
-    //dimension checking
     if (offsetRegion < 0 || offsetRegion >= (int)stratifiedAs.size() || offsetRegion>=(int)stratifiedBs.size())
     {
-        multi_ab.Null();
+        if (verbose_)
+    	    cerr << "RecalibrationModel::getAB ERROR: offsetRegion "
+                 << offsetRegion << " out of bounds " << stratifiedAs.size() << ',' << stratifiedBs.size()
+                 << " for well x=" << x << " y=" << y << endl;
+    	multi_ab.Null();
     }
     else{
       multi_ab.aPtr = &(stratifiedAs[offsetRegion]);
@@ -238,9 +247,13 @@ const vector<vector<vector<float> > > * RecalibrationModel::getAs(int x, int y) 
         return 0;
     }
     int offsetRegion = stratification.OffsetRegion(x,y);
-    //dimension checking
-    if (offsetRegion < 0 || offsetRegion >= (int)stratifiedAs.size())
+    if (offsetRegion < 0 || offsetRegion >= (int)stratifiedAs.size()) {
+    	if (verbose_)
+            cerr << "RecalibrationModel::getAs ERROR: offsetRegion "
+    	         << offsetRegion << " out of bounds " << stratifiedAs.size()
+    	         << " for well x=" << x << " y=" << y << endl;
         return 0;
+    }
     else
         return &(stratifiedAs[offsetRegion]);
 }
@@ -251,8 +264,13 @@ const vector<vector<vector<float> > > * RecalibrationModel::getBs(int x, int y) 
         return 0;
     }
     int offsetRegion = stratification.OffsetRegion(x,y);
-    if (offsetRegion < 0 || offsetRegion >= (int)stratifiedBs.size())
+    if (offsetRegion < 0 || offsetRegion >= (int)stratifiedBs.size()) {
+    	if (verbose_)
+    	     cerr << "RecalibrationModel::getBs ERROR: offsetRegion "
+                  << offsetRegion << " out of bounds " << stratifiedBs.size()
+                  << " for well x=" << x << " y=" << y << endl;
         return 0;
+    }
     else
         return &(stratifiedBs[offsetRegion]);
 }
@@ -332,10 +350,69 @@ void RecalibrationModel::SaveModelFileToBamComments(string model_file_name, vect
     }
 }
 
+// ----------------------------------------------------------------
 
+// Returning array sizes and doing sanity checks on constructed arrays!
+const vector<unsigned int> RecalibrationModel::CheckArraySize() const {
 
+  vector<unsigned int> my_size(4,0);
+  my_size[0] = stratifiedAs.size();
+  if (stratifiedBs.size() != my_size[0]) {
+    cerr << "ERROR in RecalibrationModel: stratifiedAs and stratifiedBs are different in size!"
+         << stratifiedAs.size() << " <-> " << stratifiedBs.size() <<endl;
+    exit(EXIT_FAILURE);
+  }
 
+  // 1) Loop over 'offset_regions' to check sizes
+  for (unsigned int or_idx=0; or_idx < my_size[0]; ++or_idx){
+    if (or_idx == 0)
+      my_size[1] = stratifiedAs.at(0).size();
 
+    if (stratifiedAs.at(or_idx).size() != my_size[1]) {
+      cerr << "ERROR in RecalibrationModel: stratifiedAs[0].size() and stratifiedAs[" << or_idx << "].size() are different!"
+           << stratifiedAs.at(0).size() << " <-> " << stratifiedAs.at(or_idx).size() <<endl;
+      exit(EXIT_FAILURE);
+    }
+    if (stratifiedBs.at(or_idx).size() != my_size[1]) {
+      cerr << "ERROR in RecalibrationModel: stratifiedAs[0].size() and stratifiedBs[" << or_idx << "].size() are different!"
+           << stratifiedAs.at(0).size() << " <-> " << stratifiedBs.at(or_idx).size() <<endl;
+      exit(EXIT_FAILURE);
+       }
+    // 2) Loop over 'flows' to check sizes
+    for (unsigned int f_idx=0; f_idx < my_size[1]; ++f_idx){
+      if (f_idx == 0)
+        my_size[2] = stratifiedAs.at(0).at(0).size();
+      if (stratifiedAs.at(or_idx).at(f_idx).size() != my_size[2]) {
+        cerr << "ERROR in RecalibrationModel: stratifiedAs[0][0].size() and stratifiedAs[" << or_idx << "]["<< f_idx << "].size() are different! "
+             << stratifiedAs.at(0).at(0).size() << " <-> " << stratifiedAs.at(or_idx).at(f_idx).size() <<endl;
+        exit(EXIT_FAILURE);
+      }
+      if (stratifiedBs.at(or_idx).at(f_idx).size() != my_size[2]) {
+        cerr << "ERROR in RecalibrationModel: stratifiedAs[0][0].size() and stratifiedBs[" << or_idx << "]["<< f_idx << "].size() are different! "
+             << stratifiedAs.at(0).at(0).size() << " <-> " << stratifiedBs.at(or_idx).at(f_idx).size() <<endl;
+        exit(EXIT_FAILURE);
+      }
+
+      // 3) Loop over 'nucs' to check sizes
+      for (unsigned int n_idx=0; n_idx < my_size[2]; ++n_idx){
+        if (n_idx == 0)
+          my_size[3] = stratifiedAs.at(0).at(0).at(0).size();
+        if (stratifiedAs.at(or_idx).at(f_idx).at(n_idx).size() != my_size[3]) {
+          cerr << "ERROR in RecalibrationModel: stratifiedAs[0][0][0].size() and stratifiedAs[" << or_idx << "]["<< f_idx << "][" << n_idx << "].size() are different! "
+               << stratifiedAs.at(0).at(0).at(0).size() << " <-> " << stratifiedAs.at(or_idx).at(f_idx).at(n_idx).size() <<endl;
+          exit(EXIT_FAILURE);
+        }
+        if (stratifiedAs.at(or_idx).at(f_idx).at(n_idx).size() != my_size[3]) {
+          cerr << "ERROR in RecalibrationModel: stratifiedAs[0][0][0].size() and stratifiedAs[" << or_idx << "]["<< f_idx << "][" << n_idx << "].size() are different! "
+               << stratifiedAs.at(0).at(0).at(0).size() << " <-> " << stratifiedAs.at(or_idx).at(f_idx).at(n_idx).size() <<endl;
+          exit(EXIT_FAILURE);
+        }
+      }
+    }
+  }
+
+  return my_size;
+}
 
 
 

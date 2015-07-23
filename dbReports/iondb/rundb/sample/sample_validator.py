@@ -9,11 +9,14 @@ import logging
 
 import re
 
-from iondb.rundb.models import SampleGroupType_CV, SampleAnnotation_CV, SampleSet, SampleSetItem
+from iondb.rundb.models import SampleGroupType_CV, SampleAnnotation_CV, SampleSet, SampleSetItem, Sample
 from iondb.utils import validation 
+
+import views_helper
 
 logger = logging.getLogger(__name__)
 
+MAX_LENGTH_SAMPLE_NAME = 127
 MAX_LENGTH_SAMPLE_DISPLAYED_NAME = 127
 MAX_LENGTH_SAMPLE_EXTERNAL_ID = 127
 MAX_LENGTH_SAMPLE_DESCRIPTION = 1024
@@ -27,6 +30,8 @@ MAX_LENGTH_SAMPLE_ATTRIBUTE_DESCRIPTION = 1024
 MAX_LENGTH_SAMPLE_ATTRIBUTE_VALUE = 1024
 MAX_LENGTH_SAMPLE_NUCLEOTIDE_TYPE = 64
 VALID_NUCLEOTIDE_TYPES = ["dna", "rna"]
+
+MAX_LENGTH_PCR_PLATE_SERIAL_NUM = 64
 
 ERROR_MSG_INVALID_DATATYPE = " should be a whole number. "
 ERROR_MSG_INVALID_PERCENTAGE = " should be a whole number between 0 to 100"
@@ -47,11 +52,13 @@ def validate_sampleSet(queryDict):
     sampleSetName = queryDict.get("sampleSetName", "").strip()
                 
     sampleSetDesc = queryDict.get("sampleSetDescription", "").strip()
+                
+    pcrPlateSerialNum = queryDict.get("pcrPlateSerialNum", "").strip()
 
-    return validate_sampleSet_values(sampleSetName, sampleSetDesc)    
+    return validate_sampleSet_values(sampleSetName, sampleSetDesc, pcrPlateSerialNum)    
 
 
-def validate_sampleSet_values(sampleSetName, sampleSetDesc, isNew = False):
+def validate_sampleSet_values(sampleSetName, sampleSetDesc, pcrPlateSerialNum, isNew = False):
     """ 
     validate the sampleSet input. 
     returns a boolean isValid and a text string for error message, None if input passes validation
@@ -84,6 +91,15 @@ def validate_sampleSet_values(sampleSetName, sampleSetDesc, isNew = False):
             errorMessage = validation.invalid_length_error("Error, Sample set description", MAX_LENGTH_SAMPLE_SET_DESCRIPTION) + ". It is currently %s characters long." % str(len(sampleSetDesc.strip()))
             return isValid, errorMessage
 
+    if validation.has_value(pcrPlateSerialNum):
+        if not validation.is_valid_chars(pcrPlateSerialNum):
+            return isValid, validation.invalid_chars_error("Error, Sample set PCR plate serial number")
+        
+        if not validation.is_valid_length(pcrPlateSerialNum, MAX_LENGTH_PCR_PLATE_SERIAL_NUM):
+            errorMessage = validation.invalid_length_error("Error, Sample PCR plate serial number", MAX_LENGTH_PCR_PLATE_SERIAL_NUM) + ". It is currently %s characters long." % str(len(pcrPlateSerialNum.strip()))
+            return isValid, errorMessage
+
+
     isValid = True
     return isValid, None
 
@@ -95,7 +111,7 @@ def validate_barcoding_samplesetitems(samplesetitems, barcodeKit, barcode, sampl
     
     for item in samplesetitems:        
         
-        ##logger.debug("validate_barcoding_samplesetitems() item=%s; barcode=%s; id_to_validate=%s" %(item, barcode, id_to_validate))
+        ##logger.debug("validate_barcoding_samplesetitems() item=%s; barcodeKit=%s; barcode=%s; id_to_validate=%s" %(item, barcodeKit, barcode, id_to_validate))
         item_id = None
         
         if type(item) == types.DictType:
@@ -110,14 +126,13 @@ def validate_barcoding_samplesetitems(samplesetitems, barcodeKit, barcode, sampl
                 continue
         else:
             dnabarcode = models.dnaBarcode.objects.filter(name = barcodeKit, id_str = barcode)
+            #don't bother to compare to its old self
             if int(item.pk) == int(samplesetitem_id):
                 barcode1 = None
-            else:
-                barcode1 = item.dnabarcode.name if item.dnabarcode else None      
-            if len(dnabarcode) > 0:
-                barcodeKit1 = dnabarcode[0].name
-            else:
                 barcodeKit1 = None
+            else:
+                barcode1 = item.dnabarcode.id_str if item.dnabarcode else None
+                barcodeKit1 = item.dnabarcode.name if item.dnabarcode else None
                 
             item_id = item.pk
 
@@ -130,7 +145,7 @@ def validate_barcoding_samplesetitems(samplesetitems, barcodeKit, barcode, sampl
         #ensure only 1 barcode id_str per sample
         if barcode and barcode1 and barcode == barcode1:
             isValid = False
-            errorMessage = "Error, A barcode can be assigned to only one sample in the sample set and %s has been assigned to another sample" %(barcode)
+            errorMessage = "Error, A barcode can be assigned to only one sample in the sample set. %s has been assigned to another sample" %(barcode)
             return isValid, errorMessage
         
     return isValid, errorMessage
@@ -144,44 +159,98 @@ def validate_barcoding_for_existing_sampleset(queryDict):
     return validate_barcoding_samplesetitems(samplesetitems, queryDict.get('barcodeKit', None), queryDict.get('barcode', None), samplesetitem_id)
 
 
-def validate_samplesetitem_update_for_existing_sampleset(sampleSetItem, sample, selectedDnaBarcode, selectedNucleotideType):
+def validate_pcrPlate_position_samplesetitems(samplesetitems, pcrPlateRow, samplesetitem_id, pending_id=None, sampleset = None):
+    isValid = True
+    errorMessage = None
+ 
+    id_to_validate = pending_id if pending_id else samplesetitem_id
+     
+    for item in samplesetitems:        
+        ##logger.debug("validate_pcrPlate_position_samplesetitems() item=%s; pcrPlateRow=%s; id_to_validate=%s; sampleset=%s" %(item, pcrPlateRow, id_to_validate, sampleset))
+        item_id = None
+
+        if type(item) == types.DictType:
+            pcrPlateRow1 = item.get("pcrPlateRow", "")
+            item_id = item.get('pending_id', None)
+        else:
+            pcrPlateRow1 = item.pcrPlateRow
+            item_id = item.pk
+        
+        #ensure only 1 pcr plate position per sample       
+        #also check if you are editing against your self
+        if pcrPlateRow and pcrPlateRow1 and pcrPlateRow.lower() == pcrPlateRow1.lower() and str(item_id) != str(id_to_validate):
+            isValid = False
+            errorMessage = "Error, A PCR plate position can only have one sample in it. Position %s has already been occupied by another sample" %(pcrPlateRow)
+
+            return isValid, errorMessage
+
+        if (sampleset and not pcrPlateRow and "amps_on_chef" in sampleset.libraryPrepType.lower()):
+            isValid = False
+            return isValid, "Error, A PCR plate position must be specified for AmpliSeq on Chef sample"
+                   
+    return isValid, errorMessage
+ 
+
+def validate_pcrPlate_position_for_existing_sampleset(queryDict):
+    samplesetitem_id = queryDict.get('id', None)
+    item = models.SampleSetItem.objects.get(pk=samplesetitem_id)
+    samplesetitems = item.sampleSet.samples.all()
+ 
+    return validate_pcrPlate_position_samplesetitems(samplesetitems, queryDict.get('pcrPlateRow', ""), samplesetitem_id, None, item.sampleSet)
+
+
+def validate_samplesetitem_update_for_existing_sampleset(sampleSetItem, sample, selectedDnaBarcode, selectedNucleotideType, selectedPcrPlateRow):
     """
     validate if the changed sampleSetItem will become identical to an existing one. Error off if identical 
     """
     isValid = True
     errorMessage = None
     
-    sampleSet = get_object_or_404(SampleSet, pk = sampleSetItem.sampleSet.id)        
+    sampleSet = get_object_or_404(SampleSet, pk = sampleSetItem.sampleSet.id)       
+    
+    if selectedPcrPlateRow:
+        sampleSetItems = SampleSetItem.objects.filter(sampleSet = sampleSet, pcrPlateRow = selectedPcrPlateRow)
+        
+        if sampleSetItem.id:
+            sampleSetItems = sampleSetItems.exclude(id = sampleSetItem.id)
+            
+        logger.debug("views_helper - pcrPlateRow _create_or_update_sampleSetItem sampleSetItem.id=%d sampleSetItems.count=%d" %(sampleSetItem.id, sampleSetItems.count()))
+        
+        if sampleSetItems.count() > 0: 
+            logger.debug("views_helper - _create_or_update_sampleSetItem DUPLICATE - SKIP UPDATE for sampleSetItem.id=%d" %(sampleSetItem.id))
+            isValid = False
+            errorMessage = "Error, A PCR plate position can only have one sample in it. Position %s has already been occupied by another sample" %(selectedPcrPlateRow)
+            return isValid, errorMessage
+     
     sampleSetItems = SampleSetItem.objects.filter(sampleSet = sampleSet, sample = sample)
-
 
     if selectedNucleotideType:
         sampleSetItems = sampleSetItems.filter(nucleotideType = selectedNucleotideType)
         
         if sampleSetItem.id:
             sampleSetItems = sampleSetItems.exclude(id = sampleSetItem.id)
-
+       
         logger.debug("views_helper - DNA/RNA _create_or_update_sampleSetItem sampleSetItem.id=%d sampleSetItems.count=%d" %(sampleSetItem.id, sampleSetItems.count()))
-
-        if sampleSetItems.count() > 0:
+        
+        if sampleSetItems.count() > 0: 
             logger.debug("views_helper - _create_or_update_sampleSetItem DUPLICATE - SKIP UPDATE for sampleSetItem.id=%d" %(sampleSetItem.id))
             isValid = False
             errorMessage = "Error, Another sample with the same name and DNA/RNA type already exists in this sample set"
 
-    if selectedDnaBarcode:
-        sampleSetItems = SampleSetItem.objects.filter(sampleSet = sampleSet, dnabarcode = selectedDnaBarcode)
+    if selectedDnaBarcode: 
+        sampleSetItems = SampleSetItem.objects.filter(sampleSet = sampleSet, dnabarcode = selectedDnaBarcode)     
         
         if sampleSetItem.id:
             sampleSetItems = sampleSetItems.exclude(id = sampleSetItem.id)
-
+        
         logger.debug("views_helper - BARCODE _create_or_update_sampleSetItem sampleSetItem.id=%d sampleSetItems.count=%d" %(sampleSetItem.id, sampleSetItems.count()))
-
-        #!!!could be same or different sample
-        if sampleSetItems.count() > 0:
+        
+        #!!!could be same or different sample  
+        if sampleSetItems.count() > 0: 
             logger.debug("views_helper - _create_or_update_sampleSetItem DUPLICATE - SKIP UPDATE for sampleSetItem.id=%d" %(sampleSetItem.id))
             isValid = False
             errorMessage = "Error, Another sample with the same barcode already exists in this sample set" 
-     
+ 
     return isValid, errorMessage
 
 
@@ -194,6 +263,14 @@ def validate_barcoding_for_new_sampleset(request, queryDict):
 
     return True, None
 
+def validate_pcrPlate_position_for_new_sampleset(request, queryDict):
+
+    if 'input_samples' in request.session:
+        if 'pending_sampleSetItem_list' in request.session["input_samples"] and len(request.session["input_samples"]['pending_sampleSetItem_list']) > 0:
+            samplesetitems = request.session["input_samples"]['pending_sampleSetItem_list']
+            return validate_pcrPlate_position_samplesetitems(samplesetitems,queryDict.get('pcrPlateRow', ""), None, pending_id=queryDict.get('pending_id', ""))
+
+    return True, None
 
 def validate_barcoding(request, queryDict):
     """
@@ -208,6 +285,18 @@ def validate_barcoding(request, queryDict):
         return validate_barcoding_for_existing_sampleset(queryDict)
     else:
         return validate_barcoding_for_new_sampleset(request, queryDict)
+
+def validate_pcrPlate_position(request, queryDict):
+    """
+        first we look at the session and retrieve the list of pending sampleset items 
+        and validate if PCR plate is unique
+    """
+    samplesetitem_id = queryDict.get('id', None)
+
+    if samplesetitem_id:
+        return validate_pcrPlate_position_for_existing_sampleset(queryDict)
+    else:
+        return validate_pcrPlate_position_for_new_sampleset(request, queryDict)
 
 
 def validate_sample_for_sampleSet(queryDict):
@@ -521,4 +610,117 @@ def validate_nucleotideType(nucleotideType, displayedName='Sample Nucleotide Typ
              
     return isValid, errors, input
 
-    
+def validate_sample_data(queryDict):
+    """
+    validate the sample attributes for REST creation/update
+    return a boolean isValid and a text string for error message, None if input passes validation
+    """
+    isValid = False
+    if not queryDict:
+        return isValid, "Error, No sample data to validate."
+
+    sampleName = queryDict.get("sampleName", "")
+    sampleDisplayedName = queryDict.get("sampleDisplayedName", "")
+
+    if sampleName is None and sampleDisplayedName is None:
+        return isValid, "Sample Name is missing. Require at least sample name or sample displayed name"
+
+    sampleName = sampleName.strip()
+    isValid, errorMessage = validate_sampleName(sampleName)
+    if not isValid:
+        return isValid, errorMessage
+
+    sampleDisplayedName = sampleDisplayedName.strip()
+    isValid, errorMessage = validate_sampleDisplayedName(sampleDisplayedName)
+    if not isValid:
+        return isValid, errorMessage
+
+    sampleExternalId = queryDict.get("sampleExternalId", "").strip()
+    isValid, errorMessage = validate_sampleExternalId(sampleExternalId)
+    if not isValid:
+        return isValid, errorMessage
+
+    sampleDesc = queryDict.get("sampleDescription", "").strip()
+    isValid, errorMessage = validate_sampleDescription(sampleDesc)
+    if not isValid:
+        return isValid, errorMessage
+
+    sampleStatus = queryDict.get("sampleStatus", "").strip()
+    isValid, errorMessage = validate_sampleStatus(sampleStatus)
+    if not isValid:
+        return isValid, errorMessage
+
+    isValid, errorMessage = validate_for_same_sampleName_displayedName(sampleDisplayedName,sampleName)
+    if not isValid:
+        return isValid, errorMessage
+
+
+    isValid = True
+    return isValid, None
+
+def validate_for_same_sampleName_displayedName(sampleDisplayedName,sampleName):
+    #Verify the sample name and displayed name are similar (allow spaces)
+    sampleDisplayedName = '_'.join(sampleDisplayedName.split())
+    isValid = False
+    if sampleName != sampleDisplayedName:
+        return isValid, "Sample name should match sample displayed name, with spaces allowed in the displayedName"
+
+    isValid = True
+    return isValid, None
+
+def validate_sampleStatus(sampleStatus):
+    displayedTerm = "Sample Status "
+    isValid = False
+
+    sample_default_status = Sample.ALLOWED_STATUS
+    sample_default_status = [sample[1] for sample in sample_default_status]
+    sample_default_status = [s.lower() for s in sample_default_status]
+
+    for default_sample in sample_default_status:
+        if sampleStatus.lower()==default_sample or sampleStatus == "":
+            isValid = True
+            return isValid, None
+
+    if not isValid:
+        sample_default_status_trim = ', '.join([sample for sample in sample_default_status])
+        return isValid, "The sample status(%s) is not valid. Default Values are: %s"  % (sampleStatus, sample_default_status_trim)
+
+def validate_sampleName(sampleName):
+    displayedTerm = "Sample name"
+
+    isValid, errorMessage = _validate_textValue_mandatory(sampleName, displayedTerm)
+
+    if not isValid:
+        return isValid, errorMessage
+
+    isValid, errorMessage =  _validate_textValue(sampleName, displayedTerm)
+    if not isValid:
+        return isValid, errorMessage
+
+    isValid, errorMessage = _validate_textValue_leadingChars(sampleName, displayedTerm)
+    if not isValid:
+        return isValid, errorMessage
+
+    if not validation.is_valid_length(sampleName.strip(), MAX_LENGTH_SAMPLE_NAME):
+        errorMessage = validation.invalid_length_error("Error, Sample name", MAX_LENGTH_SAMPLE_NAME) + ". It is currently %s characters long." % str(len(sampleName.strip()))
+        return isValid, errorMessage
+
+    return True, None
+
+def validate_pcrPlateRow(pcrPlateRow, displayedName='PCR Plate Position'):
+    """
+    validate PCR plate row case-insensitively with leading/trailing blanks in the input ignored
+    """
+    isValid = True      
+    errors = []
+    input = ""
+                    
+    if pcrPlateRow:
+        input = pcrPlateRow.strip().upper()
+
+        validValues = views_helper._get_pcrPlateRow_valid_values(None)
+        if not validation.is_valid_keyword(input, validValues):
+            errors.append(validation.invalid_keyword_error(displayedName, validValues))
+            isValid = False
+             
+    return isValid, errors, input

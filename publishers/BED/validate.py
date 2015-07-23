@@ -15,7 +15,7 @@ from iondb.bin.djangoinit import *
 from iondb.rundb import models
 from iondb.rundb.plan import ampliseq
 from iondb.utils import files as file_utils
-
+import shutil
 
 def register(upload_id, base_path, file, meta):
     full_path = os.path.join(base_path, file)
@@ -32,12 +32,17 @@ def register_bed_file(upload_id, base_path, meta, bed_name):
     register(upload_id, base_path, meta["reference"]+"/merged/plain/"+bed_name, meta)
     register(upload_id, base_path, meta["reference"]+"/merged/detail/"+bed_name, meta)
 
+def is_BED_encrypted(meta):
+    if 'key' in meta.get('pre_process_files'):
+        return True
+    return False 
 
 def validate(upload_id, base_path, meta, bed_file, bed_type):
     print("Validating %s file: %s" % (bed_type,bed_file))
     print
     path_end = '/'+meta["reference"]+"/unmerged/detail/"+bed_file
     data, response, raw = api.get("content", publisher_name='BED', format='json', path__endswith=path_end)
+
     if int(data['meta']['total_count']) > 0:
         if meta['is_ampliseq']:
             return data['objects'][0]['file']
@@ -58,6 +63,7 @@ def validate(upload_id, base_path, meta, bed_file, bed_type):
         os.makedirs(result_MD_dir)
     if not os.path.exists(result_MP_dir):
         os.makedirs(result_MP_dir)
+
     #output_log = os.path.join(base_path, bed_file+'.log')
     output_json = os.path.join(base_path, bed_file+'.json')
 
@@ -88,7 +94,7 @@ def validate(upload_id, base_path, meta, bed_file, bed_type):
     if os.path.exists(output_json):
       with open(output_json) as json_file:
         meta.update(json.load(json_file))
-    
+  
     if p.returncode != 0:
         sys.exit(p.returncode)
 
@@ -327,26 +333,34 @@ def main():
     primary_path = None
     secondary_path = None
 
-    if target_regions_bed:
-        primary_path = validate(args.upload_id, args.path, meta, target_regions_bed, 'target regions BED')
-    if hotspots_bed:
-        secondary_path = validate(args.upload_id, args.path, meta, hotspots_bed, 'hotspots BED')
+    if is_BED_encrypted(meta):
+        if target_regions_bed:
+            meta['design']['plan']['designed_bed']=''
+        if hotspots_bed:
+            meta['design']['plan']['hotspot_bed']=''
+        primary_path = "" 
+        secondary_path = ""
+    else:
+        if target_regions_bed:
+            primary_path = validate(args.upload_id, args.path, meta, target_regions_bed, 'target regions BED')
+        if hotspots_bed:
+            secondary_path = validate(args.upload_id, args.path, meta, hotspots_bed, 'hotspots BED')
 
-    meta["hotspot"] = False
-    if target_regions_bed and not primary_path:
-        register_bed_file(args.upload_id, args.path, meta, target_regions_bed)
-    if hotspots_bed:
-        meta["hotspot"] = True
-        if not secondary_path:
-            register_bed_file(args.upload_id, args.path, meta, hotspots_bed)
+        meta["hotspot"] = False
+        if target_regions_bed and not primary_path:
+            register_bed_file(args.upload_id, args.path, meta, target_regions_bed)
+        if hotspots_bed:
+            meta["hotspot"] = True
+            if not secondary_path:
+                register_bed_file(args.upload_id, args.path, meta, hotspots_bed)
 
     if meta['is_ampliseq']:
         try:
-            if target_regions_bed and not primary_path:
-                primary_path = os.path.join(args.path, meta["reference"]+"/unmerged/detail/"+target_regions_bed)
-            if hotspots_bed and not secondary_path:
-                secondary_path = os.path.join(args.path, meta["reference"]+"/unmerged/detail/"+hotspots_bed)
-
+            if not (is_BED_encrypted(meta)):
+                if target_regions_bed and not primary_path:
+                    primary_path = os.path.join(args.path, meta["reference"]+"/unmerged/detail/"+target_regions_bed)
+                if hotspots_bed and not secondary_path:
+                    secondary_path = os.path.join(args.path, meta["reference"]+"/unmerged/detail/"+hotspots_bed)
             plan_prototype = plan_json(meta, args.upload_id, primary_path, secondary_path)
             success, response, content = api.post("plannedexperiment", **plan_prototype)
             if not success:

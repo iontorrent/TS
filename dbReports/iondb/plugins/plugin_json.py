@@ -59,6 +59,7 @@ def get_runinfo(ion_params, primary_key, report_dir, plugin, plugin_out_dir, net
         "chipType": ion_params.get('chipType',''),
         "barcodeId": ion_params.get('barcodeId',''),
         "username": username,
+        "platform": ion_params.get('platform',''),
     }
     
     try:
@@ -81,7 +82,7 @@ def get_runplugin(ion_params, runlevel, blockId, block_dirs):
       
 def get_expmeta(ion_params, report_dir):
     from datetime import datetime
-    exp_json = json.loads(ion_params.get('exp_json','{}'))
+    exp_json = ion_params.get('exp_json',{})
     
     # compatibility fallback: expMeta.dat
     if not exp_json:        
@@ -100,13 +101,21 @@ def get_expmeta(ion_params, report_dir):
           pass
 
     ion_params_path = os.path.join(report_dir,'ion_params_00.json')
+    
+    chipBarcode = exp_json.get('chipBarcode')
+    if not chipBarcode:
+        # try to get from log
+        log = exp_json.get('log',{})
+        if log and not isinstance(log, dict): log = json.loads(log)
+        chipBarcode = log.get('chip_efuse')
+    
     d = {
         "run_name": exp_json.get('expName'),
         "run_date": exp_json.get('date'),
         "run_flows": exp_json.get('flows'),
         "instrument": exp_json.get('pgmName'),
         "chiptype": exp_json.get('chipType'),
-        "chipBarcode": exp_json.get('chipBarcode') if exp_json.get('chipBarcode') else json.loads(exp_json.get('log','{}')).get('chip_efuse'),
+        "chipBarcode": chipBarcode,
         "notes": exp_json.get('notes'),
         
         "barcodeId": ion_params.get('barcodeId'),
@@ -148,7 +157,7 @@ def get_plan(ion_params):
     plan = ion_params.get('plan',{})
     if not plan:
         return {}
-    exp = json.loads(ion_params.get('exp_json','{}'))
+    
     eas = ion_params.get('experimentAnalysisSettings', {})
     d = {
         "barcodeId": eas.get('barcodeKitName',''),
@@ -174,7 +183,7 @@ def get_plan(ion_params):
         "sampleSet_planTotal": plan.get("sampleSet_planTotal"),
         "sampleSet_uid": plan.get("sampleSet_uid"),
         
-        "sequencekitname": exp.get('sequencekitname',''), 
+        "sequencekitname": ion_params.get('exp_json',{}).get('sequencekitname',''), 
     }
     
     # compatibility: pre-EAS these attributes were part of Plan
@@ -202,7 +211,7 @@ def make_plugin_json(primary_key, report_dir, plugin, plugin_out_dir, net_locati
         ion_params,warn = getparameter(os.path.join(report_dir,'ion_params_00.json'))
     except:
         ion_params = getparameter_minimal(os.path.join(report_dir,'ion_params_00.json'))
-        
+
     json_obj={
         "runinfo":get_runinfo(ion_params, primary_key, report_dir, plugin, plugin_out_dir, net_location, url_root, username, runlevel, blockId),
         "runplugin":get_runplugin(ion_params, runlevel, blockId, block_dirs),

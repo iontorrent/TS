@@ -16,7 +16,7 @@
 #include "mixed.h"
 #include "OptArgs.h"
 
-class DPTreephaser;
+class  DPTreephaser;
 struct BasecallerRead;
 struct ProcessedRead;
 struct ReadFilteringHistory;
@@ -43,8 +43,8 @@ public:
   //! @param    flow_order          Flow order object, also stores number of flows
   //! @param    keys                Key sequences in use
   //! @param    mask                Mask object
-  BaseCallerFilters(OptArgs& opts, vector<string> & bam_comments, const ion::FlowOrder& flow_order,
-      const vector<KeySequence>& keys, const Mask& mask);
+  BaseCallerFilters(OptArgs& opts, vector<string> & bam_comments, const string & run_id,
+         const ion::FlowOrder& flow_order, const vector<KeySequence>& keys, const Mask& mask);
 
   //! @brief    Print usage
   static void PrintHelp();
@@ -139,11 +139,29 @@ public:
   void FilterBeverly                (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<float>& scaled_residual,
                                      const vector<int>& base_to_flow);
 
-  //! @brief    Apply quality trimmer to a valid read.
+  //! @brief    Entry point for quality trimmer to a valid read.
+  //! @param    read_index          Read index
+  //! @param    read_class          Read class, 0=library, 1=TFs
+  //! @param    sff_entry           Basecalling results for this read
+  void FilterQuality                (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality);
+
+  //! @brief    Entry point for quality trimmer to a valid read.
   //! @param    read_index          Read index
   //! @param    read_class          Read class, 0=library, 1=TFs
   //! @param    sff_entry           Basecalling results for this read
   void TrimQuality                  (int read_index, int read_class, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality);
+
+  //! @brief    Sliding window quality trimming algorithm.
+  //! @param    read_index          Read index
+  //! @param    sff_entry           Basecalling results for this read
+  //! @param    return value        Read trimming point
+  int TrimQuality_Windowed          (int read_index, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality);
+
+  //! @brief    Trimming by expected number of errors calculated from quality values.
+  //! @param    read_index          Read index
+  //! @param    sff_entry           Basecalling results for this read
+  //! @param    return value        Read trimming point
+  int TrimQuality_ExpectedErrors    (int read_index, ReadFilteringHistory& filter_history, const vector<uint8_t>& quality);
 
   //! @brief    Apply adapter trimmer to a valid read.
   //! @param    read_index          Read index
@@ -174,7 +192,7 @@ public:
 protected:
 
   // Write the bead adapters to comments for BAM header
-  void WriteAdaptersToBamComments(vector<string> &comments);
+  void WriteAdaptersToBamComments(vector<string> &comments, const string & run_id);
 
   //! @brief    Check input strings from non-ACGT characters
   void ValidateBaseStringVector(vector<string>& string_vector);
@@ -193,7 +211,6 @@ protected:
   vector<int>         filter_mask_;                       //!< Vector indicating filtering decision for each well on the chip
   int                 num_classes_;                       //!< Number of read classes. Currently must be 2: library and TFs.
   vector<KeySequence> keys_;                              //!< Key sequences for read classes.
-  bool                generate_bead_summary_;             //!< If true, beadSummary.filtered.txt will be generated.
 
   // Primary filters
   bool                filter_keypass_enabled_;            //!< Is keypass filter enabled?
@@ -209,20 +226,32 @@ protected:
 
   // Beverly filter
   bool                filter_beverly_enabled_;            //!< Is Beverly filter enabled?
-  float               filter_beverly_filter_ratio_;       //!< Fraction of  one-plus-two-mer outliers before Beverly filter considers trimming
-  float               filter_beverly_trim_ratio_;         //!< Fraction of onemer outliers before Beverly filter trims
-  int                 filter_beverly_min_read_length_;    //!< If Beverly filter trims and makes the read shorter than this, the read is filtered
+  vector<double>      filter_beverly_filter_trim_ratio_;  //!< Fractions of one-plus-two-mer outliers, onemer outliers before Beverly filter trims
+
+  // Quality Filter
+  bool                filter_quality_enabled_;            //!< Is quality read filter enabled?
+  double              filter_quality_offset_;             //!< Errors allowed per base for filtering based on expected errors
+  double              filter_quality_slope_;              //!< Error offset for filtering based on expected errors
+  double              filter_quality_quadr_;              //!< Extra Error offset for filtering based on expected errors
+
 
   // Adapter and quality trimming
+  int                 trim_min_read_len_;                 //!< If adapter or quality trimming makes the read shorter than this, the read is filtered
+
   vector<string>      trim_adapter_;                      //!< Adapter sequences
   double              trim_adapter_cutoff_;               //!< Adapter detection threshold
   double              trim_adapter_separation_;           //!< Minimum separation between found adapter sequences
   int                 trim_adapter_min_match_;            //!< Minimum number of overlapping adapter bases for detection
   int                 trim_adapter_mode_;                 //!< Selects algorithm and metric used for adapter detection
-  int                 trim_qual_window_size_;             //!< Size of averaging window used by quality trimmer
-  double              trim_qual_cutoff_;                  //!< Quality cutoff used by quality trimmer
-  int                 trim_min_read_len_;                 //!< If adapter or quality trimming makes the read shorter than this, the read is filtered
   vector<string>      trim_adapter_tf_;                   //!< Test Fragment adapter sequences. If empty, do not perform adapter trimming on TFs.
+
+  string              trim_qual_mode_;                    //!< Set quality trimming mode
+  int                 trim_qual_mode_enum_;               //!< Enumerator type of quality trimming mode
+  int                 trim_qual_window_size_;             //!< Size of averaging window used by sliding window quality trimmer
+  double              trim_qual_cutoff_;                  //!< Quality cutoff used by sliding window quality trimmer
+  double              trim_qual_slope_;                   //!< Expected number of errors allowed per base for expected error qv trimmer
+  double              trim_qual_offset_;                  //!< Offset for expected errors to allow for variation in expected qv trimmer
+  double              trim_qual_quadr_;                   //!< Extra  expected errors to allow for variation in expected qv trimmer
 
   // Avalanche filter (sort readlength filter, higher QV on shorter reads, and lower QV for longer reads)
   bool                filter_avalanche_enabled_;          //!< Is Avalanche filter enabled?

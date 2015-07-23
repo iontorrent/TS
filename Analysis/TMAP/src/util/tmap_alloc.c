@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "tmap_alloc.h"
+#include "tmap_error.h"
 
 /*
 inline void *

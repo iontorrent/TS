@@ -22,13 +22,13 @@ typedef struct {
   @param  mem  the initial memory to allocate for the string
   @return      a pointer to the initialized memory
  */
-inline tmap_string_t *
+tmap_string_t *
 tmap_string_init(int32_t mem);
 
 /*! 
   @param  str  a pointer to the string to destroy
  */
-inline void
+void
 tmap_string_destroy(tmap_string_t *str);
 
 /*! 
@@ -36,21 +36,21 @@ tmap_string_destroy(tmap_string_t *str);
   @param  dest  pointer to the destination string
   @param  src   pointer to the source string
 */
-inline void
+void
 tmap_string_copy(tmap_string_t *dest, tmap_string_t *src);
 
 /*! 
   @param  str  a pointer to the string to clone
   @return      a pointer to the cloned string
  */
-inline tmap_string_t *
+tmap_string_t *
 tmap_string_clone(tmap_string_t *str);
 
 /*! 
   @param  str  a pointer to the string to clone
   @return      a pointer to the cloned string
  */
-inline tmap_string_t *
+tmap_string_t *
 tmap_string_clone2(char *str);
 
 /*! 
@@ -60,14 +60,14 @@ tmap_string_clone2(char *str);
   @param  ...     the arguments to fill in the format
   @details        the first l characters will not be modified
  */
-inline void
+void
 tmap_string_lsprintf(tmap_string_t *dest, int32_t l, const char *format, ...);
 
 /*! 
   reverse the characters in the string
   @param  str  pointer to the string
 */
-inline void
+void
 tmap_string_reverse(tmap_string_t *str);
 
 /*! 

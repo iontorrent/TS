@@ -67,7 +67,7 @@ bool BaseCallerContext::WriteUnfilteredFilterStatus(const BaseCallerFiles & bc_f
     string filter_status_filename = bc_files.unfiltered_untrimmed_directory + string("/filterStatus.txt");
     filter_status.open(filter_status_filename.c_str());
     filter_status << "col" << "\t" << "row" << "\t" << "highRes" << "\t" << "valid" << endl;
-    for (set<unsigned int>::iterator I = unfiltered_set.begin(); I != unfiltered_set.end(); I++) {
+    for (set<unsigned int>::iterator I = unfiltered_set.begin(); I != unfiltered_set.end(); ++I) {
         int x = (*I) % chip_subset.GetChipSizeX();
         int y = (*I) / chip_subset.GetChipSizeX();
         filter_status << x << "\t" << y;
@@ -80,7 +80,7 @@ bool BaseCallerContext::WriteUnfilteredFilterStatus(const BaseCallerFiles & bc_f
     filter_status_filename = bc_files.unfiltered_trimmed_directory + string("/filterStatus.txt");
     filter_status.open(filter_status_filename.c_str());
     filter_status << "col" << "\t" << "row" << "\t" << "highRes" << "\t" << "valid" << endl;
-    for (set<unsigned int>::iterator I = unfiltered_set.begin(); I != unfiltered_set.end(); I++) {
+    for (set<unsigned int>::iterator I = unfiltered_set.begin(); I != unfiltered_set.end(); ++I) {
         int x = (*I) % chip_subset.GetChipSizeX();
         int y = (*I) / chip_subset.GetChipSizeX();
         filter_status << x << "\t" << y;
@@ -122,7 +122,7 @@ void BaseCallerParameters::PrintHelp()
     printf ("     --num-unfiltered        INT        number of subsampled unfiltered reads [100000]\n");
     printf ("     --keynormalizer         STRING     key normalization algorithm [keynorm-old]\n");
     printf ("     --dephaser              STRING     dephasing algorithm [treephaser-sse]\n");
-    printf ("     --window-size           INT        normalization window size (%d-%d) [%d]\n", kMinWindowSize_, kMaxWindowSize_, DPTreephaser::kWindowSizeDefault_);
+    printf ("     --window-size           INT        normalization window size (%d-%d) [%d]\n", DPTreephaser::kMinWindowSize_, DPTreephaser::kMaxWindowSize_, DPTreephaser::kWindowSizeDefault_);
     printf ("     --flow-signals-type     STRING     select content of FZ tag [none]\n");
     printf ("                                          \"none\" - FZ not generated\n");
     printf ("                                          \"wells\" - Raw values (unnormalized and not dephased)\n");
@@ -212,6 +212,7 @@ bool BaseCallerParameters::InitContextVarsFromOptArgs(OptArgs& opts){
     ion_run_to_readname (default_run_id, (char*)bc_files.output_directory.c_str(), bc_files.output_directory.length());
     context_vars.run_id                      = opts.GetFirstString ('-', "run-id", default_run_id);
 	num_threads_                             = opts.GetFirstInt    ('n', "num-threads", max(2*numCores(), 4));
+	num_bamwriter_threads_                   = opts.GetFirstInt    ('-', "num-threads-bamwriter", 6);
 
     context_vars.flow_signals_type           = opts.GetFirstString ('-', "flow-signals-type", "none");
     context_vars.extra_trim_left             = opts.GetFirstInt    ('-', "extra-trim-left", 0);

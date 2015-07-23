@@ -47,8 +47,8 @@ double
 tmap_time_realtime()
 {
   struct timeval tp;
-  struct timezone tzp;
-  if (gettimeofday(&tp, &tzp) != 0)
+  gettimeofday(&tp, NULL);
+  if (gettimeofday(&tp, NULL) != 0)
   {
     printf ("gettimeofday failed, errno is %d : %s\n", errno, strerror (errno));
     exit (1);

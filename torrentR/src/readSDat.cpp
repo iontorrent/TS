@@ -7,7 +7,7 @@
 #include <iterator>
 #include "Image.h"
 #include "SynchDatSerialize.h"
-#include "H5File.h"
+#include "IonH5File.h"
 
 using namespace std;
 

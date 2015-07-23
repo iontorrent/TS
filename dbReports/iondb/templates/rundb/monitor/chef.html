@@ -43,29 +43,39 @@
     {% if plans %}
     <div id="runs">
         <div class="row-fluid">
-            <div class="header-row">
-                <div class="span2"><h3>Date</h3></div>
-                <div class="span3"><h3>Plan</h3></div>
-                <div class="span2"><h3>Chef Instrument</h3></div>
-                <div class="span2"><h3>Stage Progress</h3></div>
-                <div class="span2"><h3>Stage Status</h3></div>
-            </div>
+            <table class="table table-striped">
+                <tr>
+                    <th>Last Updated</th>
+                    <th>Sample Set</th>
+                    <th>Plan</th>
+                    <th>Chef Instrument</th>
+                    <th>Library Prep Progress</th>
+                    <th>Library Prep Status</th>
+                    <th>Template Prep Progress</th>
+                    <th>Template Prep Status</th>
+                </tr>
+                {% for prepData in plans %}
+                    <tr>
+                        <td>{{ prepData.last_updated }}</td>
+                        <td style="word-wrap: break-word;">{{ prepData.sampleSetName }}</td>
+                        <td style="word-wrap: break-word;">{{ prepData.planName }}</td>
+                        <td style="word-wrap: break-word;">{{ prepData.instrumentName }}</td>
+                        <td>
+                            <div class="progress progress-striped" style="margin-bottom: 0;">
+                                <div class="bar" style="width: {{prepData.lib_prep_progress}}%;"></div>
+                            </div>
+                        </td>
+                        <td>{{ prepData.lib_prep_status }}</td>
+                        <td>
+                            <div class="progress progress-striped" style="margin-bottom: 0;">
+                                <div class="bar" style="width: {{prepData.template_prep_progress}}%;"></div>
+                            </div>
+                        </td>
+                        <td>{{ prepData.template_prep_status }}</td>
+                    </tr>
+                {% endfor %}
+            </table>
         </div>
-        {% for plan in plans %}
-        <div class="row-fluid">
-            <div class="run {% cycle '' 'alt-row' %}">
-                <div class="span2">{{ plan.experiment.chefLastUpdate }}</div>            
-                <div class="span3" style="word-wrap: break-word;">{{ plan.planName }}</div>
-                <div class="span2" style="word-wrap: break-word;">{{ plan.experiment.chefInstrumentName }}</div>
-                <div class="span2">
-                    <div class="progress progress-striped active" style="margin-bottom: 0;">
-                        <div class="bar" style="width: {{plan.experiment.chefProgress}}%;"></div>
-                    </div>
-                </div>
-                <div class="span2">{{ plan.experiment.chefStatus }}</div>
-            </div>
-        </div>
-        {% endfor %}
     </div>
     <div id="pagination" class="row-fluid">
         <div class="offset4 span1">

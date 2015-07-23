@@ -182,6 +182,7 @@ void WellXtalk::PackWellXtalkInfo(Json::Value &json)
   if (grid_type==2)
     json["GridType"] = "HexGridRow";
   json["Xtype"] = simple_xtalk ? "Simple" : "Distorted";
+  my_bkg_distortion.ToJSON(json["BkgDistortion"]);
 }
 
 void WellXtalk::SetGridFromType(){
@@ -214,6 +215,9 @@ void WellXtalk::UnpackWellXtalkInfo(Json::Value &json){
   // this is the chip type specified >in the cross-talk matrix<
   chip_type = json["ChipType"].asString(); // what chip type do we mean?
 
+  // set extra distortion from an uncorrected influence in the wells file
+  if (json.isMember("BkgDistortion"))
+    my_bkg_distortion.FromJSON(json["BkgDistortion"]);
  // assume simple xtalk, so no normalization
   simple_xtalk = true;
 }
@@ -232,6 +236,47 @@ void WellXtalk::ReadFromFile(std::string &my_file){
   LoadJson(in_json, my_file);
   UnpackWellXtalkInfo(in_json);
   TestWrite(); // echo what I read
+}
+
+
+void SimpleCorrector::FromJSON(Json::Value &json)
+{
+  additive_leakage = json["AdditiveLeakage"].asDouble();
+  additive_time_scale = json["AdditiveTimeScale"].asDouble();
+  additive_leak_offset = json["AdditiveLeakOffset"].asDouble();
+  multiplicative_distortion = json["MultiplicativeDistortion"].asDouble();
+}
+
+void SimpleCorrector::ToJSON(Json::Value &json)
+{
+  json["AdditiveLeakage"] = additive_leakage;
+  json["AdditiveTimeScale"] = additive_time_scale;
+  json["AdditiveLeakOffset"]  = additive_leak_offset;
+  json["MultiplicativeDistortion"] = multiplicative_distortion;
+}
+
+float SimpleCorrector::AdditiveDistortion(int flow_num, float region_mean_sig)
+{
+  //reason:  we see zero-mer signal rise above predicted values in a manner partially proportional to the mean signal.
+  // correcting this effect (which is caused somewhere previous in the pipeline) should compensate
+
+  float flow_modulus = flow_num/(flow_num+additive_time_scale);  // generate a slow, saturating function
+  float distortion_factor = additive_leakage*flow_modulus+additive_leak_offset; // make offset so that we don't start in flow 1
+  // we know that we are overcalling zero-mers due to an additive offset
+  // but that the key is correctly being fit
+  if (distortion_factor>0)
+    distortion_factor = 0; // cut off weirdness in early flows, which are fit all together in the first block
+
+  return(distortion_factor * region_mean_sig); // scale distortion to mean signal
+}
+
+float SimpleCorrector::MultiplicativeDistortion(int flow_num)
+{
+  // reduce by constant everything not in key
+  if (flow_num>8)
+    return(multiplicative_distortion);
+  else
+    return(1.0f);
 }
 
 float modulate_effect_by_flow(float start_frac, float flow_num, float offset)

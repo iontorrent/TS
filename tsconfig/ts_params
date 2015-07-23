@@ -33,3 +33,9 @@ TSCONFIG_CLUSTER_ADMIN=ionadmin # user with ssh-key on compute nodes for passwor
 if [ -r ${TSCONFIG_SRC_DIR}/ts_params.local ]; then
     source ${TSCONFIG_SRC_DIR}/ts_params.local
 fi
+# Ansible specific variables
+ANSIBLE_HOME=$TSCONFIG_SRC_DIR/ansible
+MY_HOSTS=torrentsuite_hosts
+if [ -r $ANSIBLE_HOME/torrentsuite_hosts_local ]; then
+    MY_HOSTS=torrentsuite_hosts_local
+fi

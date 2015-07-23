@@ -103,8 +103,46 @@ def chef(request):
     page = get_int(querydict, "page", 1)
 
     days_ago = datetime.datetime.now() - datetime.timedelta(days=days)
-    query = models.PlannedExperiment.objects.exclude(experiment__chefLastUpdate=None).exclude(planStatus = "run").filter(experiment__chefLastUpdate__gte=days_ago).order_by('experiment__chefLastUpdate')
-    chef_pager = Paginator(query, size, 0)
+
+    plans = models.PlannedExperiment.objects.exclude(planStatus = "run").filter(experiment__chefLastUpdate__gte=days_ago)
+    sampleSets = models.SampleSet.objects.filter(libraryPrepInstrumentData__lastUpdate__gte=days_ago)
+
+    libprep_done = []
+    chef_table = []
+    # planned runs may have both Template and Library prep data
+    for plan in plans:
+        data = {
+            'planName': plan.planDisplayedName,
+            'sampleSetName': plan.sampleSet.displayedName if plan.sampleSet else '',
+            'last_updated' : plan.experiment.chefLastUpdate,
+            'instrumentName': plan.experiment.chefInstrumentName,
+            'template_prep_progress': plan.experiment.chefProgress,
+            'template_prep_status': plan.experiment.chefStatus
+        }
+        if plan.sampleSet and plan.sampleSet.libraryPrepInstrumentData:
+            libprep_done.append(plan.sampleSet.pk)
+            data.update({
+            'lib_prep_progress': plan.sampleSet.libraryPrepInstrumentData.progress,
+            'lib_prep_status': plan.sampleSet.libraryPrepInstrumentData.instrumentStatus
+            })
+        chef_table.append(data)
+
+    # add sample sets with Library prep only
+    for sampleSet in sampleSets:
+        if sampleSet.pk not in libprep_done:
+            chef_table.append({
+                'planName': '',
+                'sampleSetName': sampleSet.displayedName,
+                'sample_prep_type': 'Library Prep',
+                'last_updated' : sampleSet.libraryPrepInstrumentData.lastUpdate,
+                'instrumentName': sampleSet.libraryPrepInstrumentData.instrumentName,
+                'lib_prep_progress': sampleSet.libraryPrepInstrumentData.progress,
+                'lib_prep_status': sampleSet.libraryPrepInstrumentData.instrumentStatus
+            })
+
+    chef_table = sorted(chef_table, key=lambda plan: plan['last_updated'], reverse=True)
+
+    chef_pager = Paginator(chef_table, size, 0)
     try:
         chef_page = chef_pager.page(page)
     except InvalidPage:

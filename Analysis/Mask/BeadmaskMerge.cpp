@@ -117,9 +117,15 @@ int main ( int argc, char *argv[] )
   }
 
 
-  char* size = GetProcessParam ( folders[0].c_str(), "Chip" );
-  int wt=atoi ( strtok ( size,"," ) );
+  const char* size = GetProcessParam ( folders[0].c_str(), "Chip" );
+  char* size_copy = strdup( size );
+  int wt=atoi ( strtok ( size_copy,"," ) );
   int ht=atoi ( strtok ( NULL, "," ) );
+  free ( size_copy );
+  if ( wt==0 || ht==0 ) {
+    fprintf ( stderr, "Incorrect Chip Dimensions [%s]\n", size);
+    exit ( 1 );
+  }
 
   Mask fullmask ( wt,ht );
 
@@ -171,17 +177,25 @@ int main ( int argc, char *argv[] )
 
         //fullmask.SetBarcodeId(x+xoffset,y+yoffset,mask); // same as next line
         fullmask[wt* ( yoffset+y ) +xoffset+x] = mask;
-
-        // apply exclusion mask
-        if ( applyExclusionMask  && ( excludeMask[yoffset+y][0] != excludeMask[yoffset+y][1] ) ) {
-          if ( (xoffset+x < excludeMask[yoffset+y][0]) || (xoffset+x > excludeMask[yoffset+y][1]) ) 
-            fullmask[wt* ( yoffset+y ) +xoffset+x] = MaskExclude;
-        }
       }
     }
     fclose ( fp );
   }
   
+  // apply exclusion mask
+  if ( applyExclusionMask ){
+    for ( int y = 0; y < ht; y++ ) {
+      for ( int x = 0; x < wt; x++ ) {
+        if ( excludeMask[y][0] == excludeMask[y][1] ){
+          fullmask[wt*y + x] = MaskExclude;
+        } else {
+          if ( (x < excludeMask[y][0]) || (x > excludeMask[y][1]) )
+            fullmask[wt*y + x] = MaskExclude;
+        }
+      }
+    }
+  }
+
   // write mask and stats files
   Region wholeChip(0, 0, wt, ht);
   std::string outputStatsFile = outputFileName;

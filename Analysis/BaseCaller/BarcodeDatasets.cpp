@@ -16,8 +16,8 @@
 #include "Utils.h"
 #include "IonErr.h"
 
-//void ValidateAndCanonicalizePath(string &path);   // Borrowed from BaseCaller.cpp
-// Removing OptArgs& opts from input and barcode list initialization as an option
+
+// -----------------------------------------------------------------------------------------
 
 BarcodeDatasets::BarcodeDatasets(const string& run_id, const string input_datasets_file)
   : datasets_json_(Json::objectValue), num_barcodes_(0), num_datasets_(0), num_read_groups_(0),
@@ -76,40 +76,6 @@ void BarcodeDatasets::LoadJson(const Json::Value& datasets_json, string data_sou
 
 // -----------------------------------------------------------------------------------------
 
-/* / Make sure calibration barcodes aqre named so that they are not filtered during barcode filtering.
-void BarcodeDatasets::NameSelectedSamples(BarcodeDatasets& in_datasets, string name)
-{
-  for (Json::Value::iterator in_rg = in_datasets.read_groups().begin(); in_rg != in_datasets.read_groups().end(); ++in_rg) {
-
-    if (not (*in_rg).isMember("barcode_sequence"))
-      continue;
-    string barcode_seq = (*in_rg)["barcode_sequence"].asString();
-    //cout << "Matching barcode " << (*in_rg)["barcode_name"].asString() <<": " << (*in_rg)["barcode_sequence"].asString() << endl;
-    bool found_match = false;
-
-    for (Json::Value::iterator my_rg = read_groups().begin(); my_rg != read_groups().end(); ++my_rg) {
-      if (not (*my_rg).isMember("barcode_sequence"))
-        continue;
-
-      if ((*my_rg)["barcode_sequence"].asString() == barcode_seq){
-        if ((*my_rg)["sample"].asString() == "none") {
-          (*my_rg)["sample"] = name;
-          cout << "BarcodeDatasets: Set sample name for barcode " << (*my_rg)["barcode_name"].asString() << " to " << name << endl;
-        }
-        found_match = true;
-        break;
-      }
-    }
-
-    if (not found_match){
-      cerr << "ERROR in BarcodeDatatsets: Requested barcode " << barcode_seq << " not found in datasets." << endl;
-      exit(EXIT_FAILURE);
-    }
-  }
-}; //*/
-
-// -----------------------------------------------------------------------------------------
-
 // This initializer makes the class usable when no additional information is available.
 // Essentially emulates current non-barcoded behavior
 
@@ -148,7 +114,7 @@ void BarcodeDatasets::InitializeNonbarcoded(const string& run_id)
 // -----------------------------------------------------------------------------------------
 // Need to make sure that control & template barcodes are not duplicates of each other
 
-void BarcodeDatasets::RemoveControlBarcodes(const Json::Value& control_datasets_json) // XXX later todo focus on std workflow now.
+void BarcodeDatasets::RemoveControlBarcodes(const Json::Value& control_datasets_json)
 {
   Json::Value new_dataset_json;
   new_dataset_json = datasets_json_;

@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"
@@ -178,8 +179,8 @@ tmap_sa_shm_unpack(uint8_t *buf)
   memcpy(&sa->n_sa, buf, sizeof(tmap_bwt_int_t)); buf += sizeof(tmap_bwt_int_t);
   // variable length data
   sa->sa = (tmap_bwt_int_t*)buf;
-  buf += sa->n_sa*sizeof(tmap_bwt_int_t);
-  
+  // buf += sa->n_sa*sizeof(tmap_bwt_int_t);
+
   sa->sa_intv_log2 = tmap_log2(sa->sa_intv);
 
   sa->is_shm = 1;

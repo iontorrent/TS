@@ -3,6 +3,7 @@
 #include <cstring>
 #include <sys/stat.h>
 #include "CrossTalkSpec.h"
+#include "Utils.h"
 
 using namespace std;
 
@@ -28,8 +29,15 @@ TraceCrossTalkSpecification::TraceCrossTalkSpecification()
     do_xtalk_correction = true;
     simple_model = false;
     rescale_flag = false;
+    if_block_analysis = false;
+    full_chip_x = 0;
+    full_chip_y = 0;
+    chipType = "";
+    chipType_loaded = "";
 }
 
+// modified json format to support per-block parameters
+/*
 void TraceCrossTalkSpecification::PackTraceXtalkInfo(Json::Value &json)
 {
   json["NeiAffected"] = nei_affected;
@@ -76,8 +84,165 @@ void TraceCrossTalkSpecification::WriteJson(const Json::Value & json, const std:
     std::cerr << "[TraceXtalk] Unable to write JSON file " << filename_json << std::endl;
   outJsonFile.close();
 }
+*/
 
+void TraceCrossTalkSpecification::LoadJson(Json::Value & json, const std::string& fname)
+{
+  std::ifstream inJsonFile(fname.c_str(), std::ios::in);
+  if (inJsonFile.good())
+    inJsonFile >> json;
+  else
+    std::cerr << "[TraceXtalk] Unable to read JSON file " << fname << std::endl;
+  inJsonFile.close();
+}
 
+void TraceCrossTalkSpecification::UnpackTraceXtalkInfo(Json::Value &json)
+{
+  // load chip_proprieties
+  chipType_loaded = json["chip_proprieties"]["chip_type"].asString(); // this is not used in any way
+
+  std::string grid_type = json["chip_proprieties"]["grid_type"].asString();
+  if (grid_type == "HexPackedColumnsOffset"){
+    three_series = false;
+    hex_packed = true;
+  }
+  if (grid_type == "HexPackedRowsOffset"){
+    three_series = true;
+    hex_packed = true;
+  }
+  if (grid_type == "SquareGrid"){
+    three_series = true;
+    hex_packed = false;
+  }
+
+  initial_phase = json["chip_proprieties"]["initial_phase"].asInt();
+  
+  int max_x = json["chip_proprieties"]["max_x"].asInt();
+  int max_y = json["chip_proprieties"]["max_y"].asInt();
+  if (if_block_analysis){
+    max_x = json["chip_proprieties"]["max_x_composite"].asInt();
+    max_y = json["chip_proprieties"]["max_y_composite"].asInt();
+  }
+
+  // load cross_talk_model
+  // These two possibly should be collapsed into "SimplePerBlock"
+  // Assumed json["parameters"]=="PerBlock"
+  std::string model_type = json["cross_talk_model"]["model"].asString();
+  if ( model_type == "Simple"){
+    simple_model = true;
+  } else { // "Complex"
+    simple_model = false;
+  }
+  
+  // do we need to add it to json? as optional?
+  rescale_flag = false;
+  //rescale_flag = json["cross_talk_model"]["rescale"].asBool();
+
+  int num_neighbor =  json["cross_talk_model"]["number_of_neighbors"].asInt();
+  Allocate(num_neighbor);
+ 
+  int num_blocks_x =  json["cross_talk_model"]["number_of_blocks_x"].asInt(); 
+  int num_blocks_y =  json["cross_talk_model"]["number_of_blocks_y"].asInt(); 
+
+  int block_x = 0;
+  int block_y = 0;
+  // this check does not make much sense, paranoia
+  if (max_x * max_y * num_blocks_x * num_blocks_y !=0){
+    block_x = full_chip_x / (max_x / num_blocks_x);
+    block_y = full_chip_y / (max_y / num_blocks_y);
+  }
+
+  // kudos for the style: assumed fixed order of blocks, these two lists are not used (still useful in R)
+  // json["cross_talk_model"]["blocks_x"] and json["cross_talk_model"]["blocks_y"]
+  int block_id = block_y + block_x * num_blocks_y;
+
+  // per neighbour paramters
+  for (int ni=0; ni<num_neighbor; ni++){ 
+    std::ostringstream neighbour_id;
+    neighbour_id << "neighbour_" << std::setfill('0') << std::setw(3) << ni;
+
+    cx[ni] = json["cross_talk_model"][neighbour_id.str()]["offset_x"].asInt();
+    cy[ni] = json["cross_talk_model"][neighbour_id.str()]["offset_y"].asInt();
+
+    multiplier[ni] = json["cross_talk_model"][neighbour_id.str()]["multipliers"][block_id].asDouble();
+
+    tau_top[ni] = 1.0f; 
+    tau_fluid[ni] = 1.0f;
+    if (!simple_model){
+      tau_top[ni] = json["cross_talk_model"][neighbour_id.str()]["tau_top"][block_id].asDouble();
+      tau_fluid[ni] = json["cross_talk_model"][neighbour_id.str()]["tau_fluid"][block_id].asDouble();
+    }
+  }
+}
+
+void TraceCrossTalkSpecification::PackTraceXtalkInfo(Json::Value &json)
+{
+  // global paramters
+  json["chip_proprieties"]["chip_type"] = chipType_loaded; // this is not used in any way
+  
+  json["chip_proprieties"]["grid_type"] = "debug me";
+  if ( !three_series && hex_packed )
+    json["chip_proprieties"]["grid_type"] = "HexPackedColumnsOffset";
+  if ( three_series && hex_packed )
+    json["chip_proprieties"]["grid_type"] = "HexPackedRowsOffset";
+  if ( three_series && !hex_packed )
+    json["chip_proprieties"]["grid_type"] = "SquareGrid";
+
+  json["chip_proprieties"]["initial_phase"] = initial_phase;
+
+  // absolute chip coordinates for this region
+  json["region_location"]["actual_chip_type"] = chipType; 
+  json["region_location"]["block_analysis"] = if_block_analysis;
+  json["region_location"]["x"] = full_chip_x;
+  json["region_location"]["y"] = full_chip_y;
+
+  // save in a single-block format with parameters from this region
+  if (simple_model)
+    json["cross_talk_model"]["model"] = "Simple"; 
+  else
+    json["cross_talk_model"]["model"] = "Complex";
+
+  json["cross_talk_model"]["parameters"] = "SingleRegion"; // same as PerBlock with a single bock
+  json["cross_talk_model"]["number_of_neighbors"] = nei_affected;
+  json["cross_talk_model"]["number_of_blocks_X"] = 1;
+  json["cross_talk_model"]["number_of_blocks_Y"] = 1;
+  json["cross_talk_model"]["blocks_x"][0] = 0;
+  json["cross_talk_model"]["blocks_y"][0] = 0;
+
+  // per neighbour paramters
+  for (int ni=0; ni<nei_affected; ni++){ 
+    std::ostringstream neighbour_id;
+    neighbour_id << "neighbour_" << std::setfill('0') << std::setw(3) << ni;
+    json["cross_talk_model"][neighbour_id.str()]["offset_x"] = cx[ni];
+    json["cross_talk_model"][neighbour_id.str()]["offset_y"] = cy[ni];
+    json["cross_talk_model"][neighbour_id.str()]["multipliers"][0] = multiplier[ni];
+    if (!simple_model){
+      json["cross_talk_model"][neighbour_id.str()]["tau_top"][0] = tau_top[ni];
+      json["cross_talk_model"][neighbour_id.str()]["tau_fluid"][0] = tau_fluid[ni];
+    }
+  }  
+}
+
+void TraceCrossTalkSpecification::SerializeJson(const Json::Value &json)
+{
+  std::cerr << json.toStyledString();
+}
+
+void TraceCrossTalkSpecification::TestWrite(){
+  Json::Value out_json;
+  PackTraceXtalkInfo( out_json );
+  SerializeJson( out_json );
+}
+
+void TraceCrossTalkSpecification::ReadCrossTalkFromFile( std::string &fname )
+{
+  std::cout << "Loading crosstalk for " << chipType << " from: " << fname << " at (" << full_chip_x << "," << full_chip_y << ")" << std::endl;
+  Json::Value in_json;
+  LoadJson( in_json, fname );
+  UnpackTraceXtalkInfo( in_json );
+  // echo loaded & computed parameters for each region, not practical unless debugging
+  // TestWrite(); 
+}
 
 void TraceCrossTalkSpecification::SetNewQuadGrid()
 {
@@ -262,6 +427,8 @@ void TraceCrossTalkSpecification::SetAggressiveHexGrid()
     ndx++;
 }
 
+/*
+// changed to json input format
 #define MAX_LINE_LEN    512
 void TraceCrossTalkSpecification::ReadCrossTalkFromFile(const char *fname)
 {
@@ -373,6 +540,7 @@ void TraceCrossTalkSpecification::ReadCrossTalkFromFile(const char *fname)
 
     delete [] line;
 }
+*/
 
 void TraceCrossTalkSpecification::NeighborByGridPhase(int &ncx, int &ncy, int cx, int cy, int cxd, int cyd, int phase)
 {
@@ -420,23 +588,59 @@ void TraceCrossTalkSpecification::NeighborByChipType(int &ncx, int &ncy, int bea
 
 
 
-void TraceCrossTalkSpecification::BootUpXtalkSpec(bool can_do_xtalk_correction, const char *chipType, const char *xtalk_name)
+void TraceCrossTalkSpecification::BootUpXtalkSpec( bool can_do_xtalk_correction, std::string &fname, 
+						    std::string &_chipType, bool _if_block_analysis, 
+						    int _full_chip_x, int _full_chip_y )
 {
-    if (can_do_xtalk_correction)
+  chipType = _chipType;
+  full_chip_x = _full_chip_x;
+  full_chip_y = _full_chip_y;
+  if_block_analysis = _if_block_analysis;
+
+  if (can_do_xtalk_correction)
     {
-        if (strlen(xtalk_name)>0)
+      if (fname.length()>0) 
         {
-            printf("Reading crosstalk for %s from: %s\n", chipType, xtalk_name);
-            ReadCrossTalkFromFile(xtalk_name);
+	  ReadCrossTalkFromFile( fname );
         } else {
-            if ((strcmp (chipType, "318") == 0)||(strcmp (chipType, "316v2") == 0))
+            if ( chipType == "318" || chipType == "316v2" )
                 SetNewHexGrid(); // find out who we really are!
-            else if(strcmp (chipType, "p1.0.19") == 0)
-                SetNewHexGridP0();
-            else if(strcmp (chipType, "p1.0.20") == 0)
-                SetNewHexGridP0();
-            else if (strcmp(chipType,"p1.1.17")==0)
+
+        else if( chipType == "p1.1.17" || chipType == "540" || chipType == "541" )
                 SetAggressiveHexGrid(); // 900 may have different cross-talk!
+
+	    else if( chipType == "p1.0.19") 
+                SetNewHexGridP0();
+
+	    // load  default json files for P-zero series
+	    else if( chipType == "p1.0.20" 
+		   ||  chipType == "530" 
+		   ||  chipType == "520" 
+           ||  chipType == "531"
+           ||  chipType == "521")
+	      {
+
+		string filename = "xtalk.trace.";
+		filename += chipType;
+		filename += ".json";
+
+		char *tmp_config_file = NULL;
+		tmp_config_file = GetIonConfigFile (filename.c_str());
+ 
+		// an ugly construction to be removed once all other hard-codded xtalk paramters are removed
+		if(tmp_config_file == NULL)
+		  {
+		    SetNewHexGridP0();
+		  }
+		else
+		  {
+		    filename = tmp_config_file;
+		    free(tmp_config_file);
+		    ReadCrossTalkFromFile( filename  );
+		  }
+		  
+	      }
+
             else
                 SetNewQuadGrid();
         }

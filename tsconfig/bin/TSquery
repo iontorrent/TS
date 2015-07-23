@@ -15,12 +15,10 @@ function print_help ()
 {
     echo
     echo "Usage: $0 [option]..."
-    echo -e "\t--eth-dev                 Specify eth device to query (default = eth0)"
+    echo -e "\t--eth-dev                 Specify eth device to query"
     echo -e "\t--debug, -d               Prints script commands when executing (set -x)"
     echo -e "\t--help, -h                Prints command line args"
     echo -e "\t--version, -v             Prints version"
-    echo
-    echo "Executing the command with no options will force prompting of each parameter"
     echo
 }
 
@@ -33,7 +31,7 @@ trap 'error ${LINENO}' ERR
 # Default settings
 #--------------------------------------
 version=`echo '$Revision$'|awk '{print $2}'`
-device='eth0'
+device=$(outbound_net_port)
 environment='/etc/environment'
 configfile=/etc/network/interfaces
 

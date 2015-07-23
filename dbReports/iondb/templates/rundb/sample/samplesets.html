@@ -102,13 +102,19 @@ background: #dbdbdb;
 <script id="ActionColumnTemplate" type="text/x-kendo-template">
 <div class="btn-group">
 	# var _id = id;# 
+	# var _status = status; #
 	<a class="btn dropdown-toggle" data-toggle="dropdown" href="\#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
 	<ul class="dropdown-menu pull-right">
 		<li>
 			<a href="#= '{% url "edit_sampleset" 999999 %}'.replace('999999',_id)#" class="edit_sampleset" data-toggle="modal">Edit Set</a>
 		</li>
+		# if (_status !== "libPrep_pending" && _status !== "voided") { #
+            <li>
+                <a data-id="#=_id#" data-name="#=name#" href="#= '{% url "sampleset_plan_run" 999999 %}'.replace('999999',_id)#" class="plan-run" data-toggle="modal">Plan Run</a>
+            </li>
+        # } #
 		<li>
-			<a data-id="#=_id#" data-name="#=name#" href="#= '{% url "sampleset_plan_run" 999999 %}'.replace('999999',_id)#" class="plan-run" data-toggle="modal">Plan Run</a>
+			<a href="#= '{% url "library_prep_summary" 999999 %}'.replace('999999',_id)#" class="libprep_summary" data-toggle="modal">Library Prep Summary</a>
 		</li>
 		<li class="divider"></li>		
 		<li>
@@ -138,6 +144,18 @@ background: #dbdbdb;
     #= data.nucleotideType.toUpperCase() #
 </script>
 
+<script id="LibPrepTypeColumnTemplate" type="text/x-kendo-template">
+    # var _libPrepType = data.libraryPrepType; #
+    # var _libraryPrepTypeDisplayedName = data.libraryPrepTypeDisplayedName; #
+    
+    <span rel="tooltip" title="#= _libraryPrepTypeDisplayedName#">
+    # if (_libPrepType == "amps_on_chef_v1") { #
+        <img src="{% static "resources/img/amps_ionChef_24x24.png"%}" width="24px" height="24px" />
+    # } else { #
+        #= _libraryPrepTypeDisplayedName #             
+    # } #
+    </span>
+</script>
 
 <!--20130712-TODO: NEED TO BE GENERALIZED #= data.attr_value_{{attribute.displayedName}}# -->
 
@@ -280,7 +298,35 @@ function CustomSampleAttributeTemplate_old(index) {
 						</div>
 					</div>
 				</div>
+            </div>
+
+			<div class="row-fluid">
+			     <div class="span12">
+                    <div class="input-append search-field" style="width: 450px;">
+                        <label for="searchText" class=" hide">Search</label>                                   
+                        <input id="search_text" type="text" placeholder="Search name or label" style="width: 200px;" />
+            
+                        <div class="btn-group" style="width: 150px;" >
+                            <label for="searchSubject" id="search_subject" class=" hide">sampleSetName</label> 
+                            
+                            <a id="search_subject_nav" class="btn dropdown-toggle" title="Search by name or code" data-toggle="dropdown" href="\\#"><i class="icon-search" border="0"></i><span class="caret"></span></a>
+            
+                            <ul id="sampleset_search_dropdown_menu" class="dropdown-menu pull-right search_subject_selection">
+                                <li><a href="#" class="search_sampleSetName"><span class="search_sampleSetName_selected icon-check"></span>Sample set name</a></li>
+                                <li><a href="#" class="search_combinedTubeLabel"><span class="search_combinedTubeLabel_selected icon-white"></span>Combined library tube label</a></li>
+                            </ul>
+                            
+                            <button id="search_text_go" class="btn search_trigger" type="button" style="margin: 0 0 0 -1px">Go</button>
+                            <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 15px">Clear</button>
+                        </div>
+                    </div>
+                        
+                    <!-- div class="search-field" style="width: 50px;">
+                        <button id="clear_filters" class="btn" type="button" style="margin: 0 0 0 15px">Clear</button>
+                    </div -->
+                </div>				
 			</div>
+
 			<div class="row-fluid">
 				<div class="span12">
 					<div id="sampleset_grid"></div>

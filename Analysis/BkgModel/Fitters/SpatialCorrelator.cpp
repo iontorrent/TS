@@ -82,8 +82,10 @@ void SpatialCorrelator::AmplitudeCorrectAllFlows( int flow_block_size, int flow_
   for (int fnum=0; fnum<flow_block_size; fnum++)
     if (!my_xtalk.simple_xtalk)
       NNAmplCorrect(fnum, flow_block_start);
-  else
-      SimpleXtalk(fnum);
+    else{
+      SimpleXtalk(fnum,flow_block_start);
+      BkgDistortion(fnum,flow_block_start);
+    }
   my_hplus.DeAllocate();
 }
 
@@ -139,18 +141,11 @@ void SpatialCorrelator::NNAmplCorrect(int fnum, int flow_block_start)
   }
 }
 
-void SpatialCorrelator::SimpleXtalk(int fnum){
+void SpatialCorrelator::SimpleXtalk(int fnum, int flow_block_start){
   // transform amplitudes into signal
    MakeSignalMap(my_hplus,fnum);
 
   my_hplus.NucId = region_data_extras->my_flow->flow_ndx_map[fnum];
-  //float flow_num = region_data->my_flow.buff_flow[fnum];
-  float distortion_factor = 0.0f;
-  /*if (true){
-    float flow_num = region_data->my_flow.buff_flow[fnum];
-    distortion_factor = 1.0f*(-0.1f+0.25f*flow_num/(flow_num+32.0f));
-  }*/
-  //reg_params *my_rp = &region_data->my_regions.rp;
 
   // as we fill in entries off the map with the region mean signal
   // we can generate an empty corrector by placing the estimating point completely outside the map
@@ -169,8 +164,6 @@ void SpatialCorrelator::SimpleXtalk(int fnum){
     // what is the correct buffering compensation here?
     float hplus_corrector = bead_corrector - empty_corrector;
 
-    // systematic shift in all intensities: fudge factor
-   hplus_corrector += distortion_factor*my_hplus.region_mean_sig;
 
     tbead->Ampl[fnum] -= hplus_corrector/tbead->Copies;
 
@@ -180,4 +173,35 @@ void SpatialCorrelator::SimpleXtalk(int fnum){
       tbead->Ampl[fnum] = 0.0f;
     }
   }
+
+}
+
+void SpatialCorrelator::BkgDistortion(int fnum, int flow_block_start)
+{
+  // further post-well correction
+  // recycles values already computed from MakeSignalMap
+
+  //float flow_num = region_data->my_flow.buff_flow[fnum];
+  float flow_num = flow_block_start+fnum;
+  float distortion_factor = 0.0f;
+  // this is put here because we are already looping over all beads
+  distortion_factor = my_xtalk.my_bkg_distortion.AdditiveDistortion(flow_num,my_hplus.region_mean_sig);
+  float multiplicative_distortion =my_xtalk.my_bkg_distortion.MultiplicativeDistortion(flow_num);
+
+  printf("Region: %d Flow: %d Distortion: %f\n",region_data->region->index,(int)flow_num, distortion_factor);
+  for (int ibd=0;ibd < region_data->my_beads.numLBeads;ibd++)
+  {
+    BeadParams *tbead = &region_data->my_beads.params_nn[ibd];
+    // systematic shift detected in intensities
+    // mostly proportional to mean signal (or possibly to out-of-phase signal)
+    // systematic shift in all intensities: fudge factor
+    tbead->Ampl[fnum] += distortion_factor/tbead->Copies;
+    tbead->Ampl[fnum] *= multiplicative_distortion; // currently a nop
+    if (tbead->Ampl[fnum]!=tbead->Ampl[fnum])
+    {
+      printf("NAN: corrected to zero at %d %d %d\n", tbead->y,tbead->x,fnum);
+      tbead->Ampl[fnum] = 0.0f;
+    }
+  }
+
 }

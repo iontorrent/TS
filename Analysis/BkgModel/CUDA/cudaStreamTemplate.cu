@@ -1,8 +1,4 @@
 
-// patch for CUDA5.0/GCC4.7
-#undef _GLIBCXX_ATOMIC_BUILTINS
-#undef _GLIBCXX_USE_INT128
-
 #include <iostream>
 
 #include "cudaStreamTemplate.h"

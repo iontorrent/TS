@@ -20,7 +20,9 @@ except:
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
 
     
-def validate_report(reportname, print_files = False):
+def validate_report(reportname,
+                    print_files = False,
+                    write_file = False):
     '''Validate cached.filelist for the given report'''
     try:
         result = models.Results.objects.get(resultsName=reportname)
@@ -31,10 +33,13 @@ def validate_report(reportname, print_files = False):
         print "Multiple objects were found for '%s'" % reportname
         return None
     
-    validate_result(result, print_files = print_files)
+    validate_result(result, print_files = print_files, write_file = write_file)
     
     
-def validate_result(result, filter_plugins = True, print_files = False):
+def validate_result(result,
+                    filter_plugins = True,
+                    print_files = False,
+                    write_file = False):
     '''Validate cached.filelist for the given result'''
         
     path_to_report_dir = result.get_report_dir()
@@ -63,8 +68,11 @@ def validate_result(result, filter_plugins = True, print_files = False):
     
     # Get a list of files on the filesystem currently
     dirs = [dmfs.result.get_report_dir(), dmfs.result.experiment.expDir]
-    current_fs_filelist = get_walk_filelist(dirs)
-
+    if write_file:
+        current_fs_filelist = get_walk_filelist(dirs, list_dir = os.getcwd(), save_list = True)
+    else:
+        current_fs_filelist = get_walk_filelist(dirs)
+                                        
     # Ignore plugin_out directories
     if filter_plugins:
         current_fs_filelist = [filename for filename in current_fs_filelist if not '/plugin_out' in filename]
@@ -128,6 +136,10 @@ CLI tool to validate existing cached.filelist files
                         action ='store_true',
                         default = False,
                         help = 'Print name of missing files')
+    parser.add_argument('--output',
+                        action ='store_true',
+                        default = False,
+                        help = 'Write the cached.filelist to local directory.  Only works with --report option.')
     args = parser.parse_args()
 
     # If no arguments given, print usage and exit
@@ -137,7 +149,9 @@ CLI tool to validate existing cached.filelist files
     
     if args.report:
         #evaluate a single report
-        sys.exit(validate_report(args.report, print_files = args.list))
+        sys.exit(validate_report(args.report,
+                                 print_files = args.list,
+                                 write_file = args.output))
     else:
         #evalute all reports marked Local
         sys.exit(main(max_items = int(args.max_items), print_files = args.list))

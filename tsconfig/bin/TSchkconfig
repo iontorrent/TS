@@ -103,15 +103,16 @@ fi
 #---	check for network config change	---#
 #------------------------------------------#
 if is_master; then
-	prevAddress=$(grep "ipaddress:" $TSCONFIG_DIR/$TSCONFIG_CONF|cut -f2 -d":")
-	currAddress=$(/sbin/ifconfig eth0 | awk '/inet / { print $2 } ' | sed -e s/addr://)
+    port=$(outbound_net_port)
+    prevAddress=$(grep "ipaddress:" $TSCONFIG_DIR/$TSCONFIG_CONF|cut -f2 -d":")
+    currAddress=$(/sbin/ifconfig $port | awk '/inet / { print $2 } ' | sed -e s/addr://)
     if [ "$prevAddress" == "" -o "$currAddress" == "" ]; then
     	log "Error determining IP addresses: prev:$prevAddress curr:$currAddress"
     else
         if [ $(echo "$prevAddress") != $(echo "$currAddress") ]; then
-	        log "Old: $prevAddress New: $currAddress"
-	        # update conf file with new ip
-	        sed -i "s/ipaddress:.*/ipaddress:$currAddress/" $TSCONFIG_DIR/$TSCONFIG_CONF
+	    log "Old: $prevAddress New: $currAddress"
+	    # update conf file with new ip
+	    sed -i "s/ipaddress:.*/ipaddress:$currAddress/" $TSCONFIG_DIR/$TSCONFIG_CONF
         else
     	    log "No change in IP detected:$currAddress"
         fi

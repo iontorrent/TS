@@ -15,7 +15,7 @@ import requests
 import tarfile
 
 class FileExporter(IonPlugin):
-        version = "4.4.3.0"
+        version = '4.6.0.0'
 	runtypes = [ RunType.FULLCHIP, RunType.THUMB, RunType.COMPOSITE ]
 	runlevels = [ RunLevel.DEFAULT ]
 	features = [ Feature.EXPORT ]
@@ -270,7 +270,9 @@ class FileExporter(IonPlugin):
 
 		# DEBUG: Print barcoded sampleID data.
 		try:
-			samples = json.loads(self.json_dat['plan']['barcodedSamples'])
+			samples = self.json_dat['plan']['barcodedSamples']
+			if samples and not isinstance(samples,dict):
+				samples = json.loads(samples)
 			print 'SAMPLEID DATA: %s'%samples
 			print 'TYPE: %s' % type(samples)
 		except KeyError:

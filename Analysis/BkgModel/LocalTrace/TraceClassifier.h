@@ -167,7 +167,7 @@ private:
   std::vector<int> mFinalValleys;
 
   void makeHistogram(float *sig, int nSig, int nBins);
-  float findThreshold(float *sig, int nSig, char *method, bool emptyonly=true);
+  float findThreshold(float *sig, int nSig, const char *method, bool emptyonly=true);
   int threshold_BMT_method(int order=1);
   int threshold_PVT_method(bool emptyonly=true);
   int averageTrueEmpties(float *sig, int nSig, float thresh, bool emptyonly);

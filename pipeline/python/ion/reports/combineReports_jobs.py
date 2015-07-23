@@ -9,10 +9,16 @@ import json
 import socket
 import re
 
-from ion.utils.blockprocessing import printtime
+from ion.utils.blockprocessing import printtime as _printtime
 from ion.utils.compress import make_zip
 os.environ['MPLCONFIGDIR'] = '/tmp'
 from ion.utils import ionstats_plots
+
+def printtime(message, *args):
+    try:
+        _printtime(message, *args)
+    except:
+        pass
 
 def merge_bam_files(bamfilelist, composite_bam_filepath, mark_duplicates, new_sample_name=''):
 
@@ -26,7 +32,7 @@ def merge_bam_files(bamfilelist, composite_bam_filepath, mark_duplicates, new_sa
             printtime("DEBUG: Calling '%s'" % cmd)
             subprocess.call(cmd,shell=True)
 
-        cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/MergeSamFiles.jar'
+        cmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/picard.jar MergeSamFiles'
         for bamfile in bamfilelist:
             cmd = cmd + ' I=%s.header.sam' % bamfile
         cmd = cmd + ' O=%s' % composite_header_filepath
@@ -51,7 +57,7 @@ def merge_bam_files(bamfilelist, composite_bam_filepath, mark_duplicates, new_sa
 
     try:
         # do BAM files merge
-        cmd = 'samtools merge -l1 -p8'
+        cmd = 'samtools merge -l1 -@8'
         if mark_duplicates:
             cmd += ' - '
         else:
@@ -72,7 +78,9 @@ def merge_bam_files(bamfilelist, composite_bam_filepath, mark_duplicates, new_sa
 
     try:
         if composite_bai_filepath:
-            cmd = 'samtools index %s %s' % (composite_bam_filepath,composite_bai_filepath)
+            # TODO: samtools 1.2: Samtools-htslib-API: bam_index_build2() not yet implemented
+            # cmd = 'samtools index %s %s' % (composite_bam_filepath,composite_bai_filepath)
+            cmd = 'samtools index %s' % (composite_bam_filepath)
             printtime("DEBUG: Calling '%s'" % cmd)
             subprocess.call(cmd,shell=True)
     except:

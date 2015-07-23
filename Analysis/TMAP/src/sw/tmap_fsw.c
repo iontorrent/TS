@@ -129,7 +129,7 @@ tmap_fsw_set_end_del(tmap_fsw_dpcell_t **dpcell, tmap_fsw_dpscore_t **dpscore,
   }
 }
 
-inline void
+void
 tmap_fsw_sub_core(uint8_t *seq, int32_t len,
                   uint8_t flow_base, uint8_t base_call, uint16_t flow_signal,
                   const tmap_fsw_param_t *ap,

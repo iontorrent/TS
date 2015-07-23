@@ -133,7 +133,7 @@ void tmap_sort_heapsort_##name(size_t lsize, type_t l[]) \
       tmp = *l; *l = l[i]; l[i] = tmp; tmap_sort_heapadjust_##name(0, i, l); \
   } \
 } \
-inline void __tmap_sort_insertsort_##name(type_t *s, type_t *t) \
+void __tmap_sort_insertsort_##name(type_t *s, type_t *t) \
 { \
   type_t *i, *j, swap_tmp; \
   for (i = s + 1; i < t; ++i) \

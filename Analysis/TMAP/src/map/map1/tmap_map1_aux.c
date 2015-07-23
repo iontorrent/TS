@@ -458,8 +458,8 @@ tmap_map1_sam_to_real(tmap_map_sams_t *sams, tmap_map1_aux_occ_t *occs, tmap_str
 
   //NB: do not use occs later
   free(occs);
-  occs = NULL;
-  
+  // occs = NULL;
+
   return sams_tmp;
 }
 

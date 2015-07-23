@@ -36,6 +36,11 @@ void realigner_set_debug (RealignProxy* r, uint8_t debug)
     r->set_debug ((bool) debug);
 }
 
+void realigner_set_log (RealignProxy* r, int posix_file_handle)
+{
+    r->set_log (posix_file_handle);
+}
+
 uint8_t  realigner_invalid_input_cigar (RealignProxy* r)
 {
     return r->invalid_input_cigar () ? 1 : 0;
@@ -55,6 +60,11 @@ void realigner_set_bandwidth (RealignProxy* r, int bandwidth)
 void realigner_set_clipping (RealignProxy* r, enum CLIPTYPE clipping)
 {
     r->set_clipping (clipping);
+}
+
+void realigner_set_gap_scale_mode (RealignProxy* r, int gap_scale_mode)
+{
+    r->set_gap_scale_mode (gap_scale_mode);
 }
 
 // alignment setup and run
@@ -86,16 +96,16 @@ uint8_t realigner_compute_alignment (RealignProxy* r,
     if (num_realign_not_clipped && clip_failed) ++(*num_realign_not_clipped);
     if (num_realign_sw_failures && alignment_failed) ++(*num_realign_sw_failures);
     if (num_realign_unclip_failures && unclip_failed) ++(*num_realign_unclip_failures);
-    
+
     return result;
 }
 
-char* qry_mem (struct RealignProxy* r, unsigned len)
+char* qry_mem (RealignProxy* r, unsigned len)
 {
     return r->qry_buf (len);
 }
 
-char* ref_mem (struct RealignProxy* r, unsigned len)
+char* ref_mem (RealignProxy* r, unsigned len)
 {
     return r->ref_buf (len);
 }

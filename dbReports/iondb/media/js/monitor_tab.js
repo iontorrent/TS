@@ -34,7 +34,9 @@ $(function(){
                 "usable_seq": met && qc && Math.round(qc.q0_reads / met.lib * 1000) / 10,
                 "progress_flows": (status == "Complete" ? exp.flows : status),
                 "progress_percent": status == "Complete" ? 100 : Math.round((status / exp.flows) * 100),
-                "is_proton" : exp.chipInstrumentType == "proton",
+                "is_proton" : exp.platform.toLowerCase() == "proton",
+                "is_s5" : exp.platform.toLowerCase() == "s5",
+                "other_instrument" : exp.platform.toLowerCase() == "pgm" || exp.platform=="",
                 "in_progress": status != "Complete"
             };
             console.log(context);

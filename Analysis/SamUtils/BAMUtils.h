@@ -593,7 +593,7 @@ private:
 	bool	iupac_flag;
 	bool	keep_iupac;
 	bool	truncate_soft_clipped;
-        bool    five_prime_justify; //whether or not to justify indels in the 5'
+    bool    five_prime_justify; //whether or not to justify indels in the 5'
 	//error table data members
 						 //len,  errors
 	std::tr1::unordered_map<int, int> error_table_mis;

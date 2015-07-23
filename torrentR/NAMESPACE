@@ -93,5 +93,6 @@ export(
   SimulateAndSolveSeq,
   readIonBamStack,
   normalizeRead,
-  flowAlignment
+  flowAlignment,
+  fitPhasingBurst
 )

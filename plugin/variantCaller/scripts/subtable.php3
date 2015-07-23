@@ -1,6 +1,10 @@
 <?php
 $dataFile = $_GET['dataFile'];
-$keyrows = $_GET['keyrows'];
+if (isset($_GET['keyrows'])) {
+  $keyrows = $_GET['keyrows'];
+} else {
+  $keyrows = $_GET['rows'];
+}
 
 $i = 0;
 $key = array();

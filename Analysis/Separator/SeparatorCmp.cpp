@@ -5,8 +5,8 @@
 #include "Mask.h"
 #include "NumericalComparison.h"
 #include "Utils.h"
-#include "H5File.h"
-#include "H5Arma.h"
+#include "IonH5File.h"
+#include "IonH5Arma.h"
 
 using namespace std;
 using namespace arma;

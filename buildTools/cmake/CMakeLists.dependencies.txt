@@ -99,33 +99,33 @@ option(ION_USE_SYSTEM_PICARD "Use picard system libraries" OFF)
 mark_as_advanced(ION_USE_SYSTEM_PICARD)
 
 if (${LSB_RELEASE_CODENAME} STREQUAL "lucid")
-    set(gpu_devdriver_version "340.32")
-    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-340.32-no-compat32.run")
-    set(cuda_proj_version "6.0.37-18176142")
-    set(cuda_toolkit_tar_file "cuda-linux64-rel-6.0.37-18176142.tar.gz")
-    set(cuda_toolkit_patch_file "cuda_toolkit-6.0.37.patch")
-    set(CUDA_VERSION "6.0")
+    set(gpu_devdriver_version "346.47")
+    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-346.47-no-compat32.run")
+    set(cuda_proj_version "7.0.28-19326674")
+    set(cuda_toolkit_tar_file "cuda-linux64-rel-7.0.28-19326674.tar.gz")
+    set(cuda_toolkit_patch_file "cuda_toolkit-7.0.18.patch")
+    set(CUDA_VERSION "7.0")
 elseif (${LSB_RELEASE_CODENAME} STREQUAL "oneiric")
-    set(gpu_devdriver_version "340.32")
-    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-340.32-no-compat32.run")
-    set(cuda_proj_version "6.0.37-18176142")
-    set(cuda_toolkit_tar_file "cuda-linux64-rel-6.0.37-18176142.tar.gz")
-    set(cuda_toolkit_patch_file "cuda_toolkit-6.0.37.patch")
-    set(CUDA_VERSION "6.0")
+    set(gpu_devdriver_version "346.47")
+    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-346.47-no-compat32.run")
+    set(cuda_proj_version "7.0.28-19326674")
+    set(cuda_toolkit_tar_file "cuda-linux64-rel-7.0.28-19326674.tar.gz")
+    set(cuda_toolkit_patch_file "cuda_toolkit-7.0.18.patch")
+    set(CUDA_VERSION "7.0")
 elseif (${LSB_RELEASE_CODENAME} STREQUAL "trusty")
-    set(gpu_devdriver_version "343.22")
-    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-343.22-no-compat32.run")
-    set(cuda_proj_version "6.5.14-18749181")
-    set(cuda_toolkit_tar_file "cuda-linux64-rel-6.5.14-18749181.tar.gz")
-    set(cuda_toolkit_patch_file "cuda_toolkit-6.5.14.patch")
-    set(CUDA_VERSION "6.5")
+    set(gpu_devdriver_version "346.47")
+    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-346.47-no-compat32.run")
+    set(cuda_proj_version "7.0.28-19326674")
+    set(cuda_toolkit_tar_file "cuda-linux64-rel-7.0.28-19326674.tar.gz")
+    set(cuda_toolkit_patch_file "cuda_toolkit-7.0.18.patch")
+    set(CUDA_VERSION "7.0")
 else()
-    set(gpu_devdriver_version "340.32")
-    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-340.32-no-compat32.run")
-    set(cuda_proj_version "6.0.37-18176142")
-    set(cuda_toolkit_tar_file "cuda-linux64-rel-6.0.37-18176142.tar.gz")
-    set(cuda_toolkit_patch_file "cuda_toolkit-6.0.37.patch")
-    set(CUDA_VERSION "6.0")
+    set(gpu_devdriver_version "346.47")
+    set(gpu_devdriver_file "devdriver_NVIDIA-Linux-x86_64-346.47-no-compat32.run")
+    set(cuda_proj_version "7.0.28-19326674")
+    set(cuda_toolkit_tar_file "cuda-linux64-rel-7.0.28-19326674.tar.gz")
+    set(cuda_toolkit_patch_file "cuda_toolkit-7.0.18.patch")
+    set(CUDA_VERSION "7.0")
 endif()
 
 set(cuda_toolkit "cuda_toolkit")
@@ -186,10 +186,10 @@ endif()
 
 if(NOT ION_USE_SYSTEM_HDF5)
   set(proj_name "hdf5")
-  set(proj_version "1.8.8")
+  set(proj_version "1.8.11")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}_proj
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/hdf5-1.8.8.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/hdf5-1.8.11.tar.gz"
 #    URL_MD5 1196e668f5592bfb50d1de162eb16cff
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
@@ -205,21 +205,45 @@ else()
   add_custom_target(hdf5_proj)
   set(HDF5_USE_STATIC_LIBRARIES True)
   find_package(HDF5 REQUIRED)
-  set(ION_HDF5_LIBS "hdf5 ${HDF5_LIBRARIES}")
+  if (${LSB_RELEASE_CODENAME} STREQUAL "trusty")
+    set(ION_HDF5_LIBS "hdf5;${HDF5_LIBRARIES}")
+  else()
+    set(ION_HDF5_LIBS "${HDF5_LIBRARIES}")
+  endif()
   message(STATUS "ION_HDF5_LIBS: ${ION_HDF5_LIBS}")
+  include_directories("${HDF5_INCLUDE_DIRS}")
+  message(STATUS "HDF5_INCLUDE_DIRS: ${HDF5_INCLUDE_DIRS}")
 endif()
 
+
 if(NOT ION_USE_SYSTEM_EIGEN)
-  include_directories("${ION_TS_EXTERNAL}/eigen-3.2")
+  set(proj_name "eigen")
+  set(proj_version "3.2.4")
+  set(proj_name_version "${proj_name}-${proj_version}")
+  ExternalProject_add(${proj_name}_proj
+    #URL "https://bitbucket.org/eigen/eigen/get/3.2.4.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/eigen-3.2.4.tar.gz"
+    #URL_MD5 9559c34af203dde5f3f1d976d859c5b3
+    PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
+    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
+    BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND ""
+    INSTALL_COMMAND ""
+  )
+  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}")
+else()
+  include_directories("/usr/include/eigen3/")
 endif()
+
 
 if(NOT ION_USE_SYSTEM_ARMADILLO)
   set(proj_name "armadillo")
-  set(proj_version "4.300.8+ion0")
+  set(proj_version "4.450.4+ion0")
   set(proj_name_version "${proj_name}-${proj_version}")
-  set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-4.300.8+ion0.patch")
+  set(ARMADILLO_PATCH "${PROJECT_SOURCE_DIR}/../external/armadillo-4.450.4+ion0.patch")
   ExternalProject_add(${proj_name}_proj
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/armadillo-4.300.8.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/armadillo-4.450.4.tar.gz"
     #URL_MD5 e8400bc7adb65fa0edc8c8ccb49b60eb
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
@@ -235,33 +259,6 @@ if(NOT ION_USE_SYSTEM_ARMADILLO)
   include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include")
 else()
   set(ION_ARMADILLO_LIBS "armadillo")
-endif()
-
-
-# wget https://github.com/samtools/htslib/archive/1.1.tar.gz
-# md5sum : d0be108a121ace289fc960b854625f84
-# tar xvzf 1.1.tar.gz
-# tar cvzf htslib-1.1.tar.gz htslib-1.1
-# md5sum : 69b7700beaa8f41cacf7192ca86c69d2
-if(NOT ION_USE_SYSTEM_HTSLIB)
-  set(proj_name "htslib")
-  set(proj_version "1.1")
-  set(proj_name_version "${proj_name}-${proj_version}")
-  ExternalProject_add(${proj_name}_proj
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/htslib-1.1.tar.gz"
-    #URL_MD5 c5e4b55e8b5ed0814ac95f9ea5ca03ae
-    PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
-    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
-    #BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
-    BUILD_IN_SOURCE 1
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND make
-    INSTALL_COMMAND ""
-  )
-  set(ION_HTSLIB_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/libhts.a")
-  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/")
-else()
-  set(ION_HTSLIB_LIBS "hts")
 endif()
 
 
@@ -302,23 +299,57 @@ include_directories("${PROJECT_SOURCE_DIR}")
 include_directories("${PROJECT_SOURCE_DIR}/../external/jsoncpp-src-amalgated0.6.0-rc1")
 
 
-if (NOT ION_USE_SYSTEM_SAMTOOLS)
-  set(proj_name "samtools")
-  set(proj_version "0.1.19+ion1")
+# wget https://github.com/samtools/htslib/archive/1.2.1.tar.gz
+# md5sum : 81f5f1aa17a188a6b6250ca67d83384d
+# tar xvzf 1.2.1.tar.gz
+# tar cvzf htslib-1.2.1.tar.gz htslib-1.2.1
+# md5sum : 028c9110bd80d40e13dbd8270ee7eb2b
+if(NOT ION_USE_SYSTEM_HTSLIB)
+  set(proj_name "htslib")
+  set(proj_version "1.2.1+ion0")
   set(proj_name_version "${proj_name}-${proj_version}")
-  ExternalProject_add(${proj_name}
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/samtools-0.1.19.tar.gz"
-    #URL_MD5 7373854ca343ebee6a52874fcfc3a4a4
+  ExternalProject_add(${proj_name}_proj
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/htslib-1.2.1.tar.gz"
+    #URL_MD5 028c9110bd80d40e13dbd8270ee7eb2b
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
-    BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
-    CMAKE_ARGS
-       -DBUILD_SHARED_LIBS:BOOL=OFF
-       -DCMAKE_INSTALL_PREFIX:PATH=${PROJECT_BINARY_DIR}/../${proj_name_version}-install
-    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/samtools-0.1.19+ion1.patch"
+    #BINARY_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
+    BUILD_IN_SOURCE 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND make
+    INSTALL_COMMAND ""
+    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/htslib-1.2+ion0.patch"
   )
-  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}-install/include")
-  set(ION_SAMTOOLS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-install/lib/libbam.a")
+  set(ION_HTSLIB_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}/libhts.a")
+  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}")
+else()
+  set(ION_HTSLIB_LIBS "hts")
+endif()
+
+
+# wget https://github.com/samtools/samtools/archive/1.2.tar.gz
+# md5sum 2748356ef392c0694ca1142de37cf2aa
+# tar xvzf 1.2.tar.gz
+# tar cvzf samtools-1.2.tar.gz samtools-1.2
+# md5sum f94f6ea20f5d581459f90daa39020a60
+if (NOT ION_USE_SYSTEM_SAMTOOLS)
+  set(proj_name "samtools")
+  set(proj_version "1.2+ion2")
+  set(proj_name_version "${proj_name}-${proj_version}")
+  ExternalProject_add(${proj_name}
+    DEPENDS htslib_proj
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/samtools-1.2.tar.gz"
+    #URL_MD5 f94f6ea20f5d581459f90daa39020a60
+    PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
+    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
+    BUILD_IN_SOURCE 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND make
+    INSTALL_COMMAND ""
+    PATCH_COMMAND patch -p1 -t -N < "${ION_TS_EXTERNAL}/samtools-1.2+ion2.patch"
+  )
+  include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}")
+  set(ION_SAMTOOLS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}/libbam.a")
 else()
     set(ION_SAMTOOLS_LIBS libbam.a)
     include_directories("/usr/include/samtools")
@@ -327,15 +358,15 @@ endif()
 
 if (NOT ION_USE_SYSTEM_PICARD)
   set(proj_name "picard")
-  set(proj_version "1.113")
+  set(proj_version "1.130")
   set(proj_name_version "${proj_name}-${proj_version}")
   ExternalProject_add(${proj_name}
-    URL "http://${ION_UPDATE_SERVER}/updates/software/external/picard-tools-1.113.tar.gz"
+    URL "http://${ION_UPDATE_SERVER}/updates/software/external/picard-tools-1.130.tar.gz"
     #URL_MD5 
     # in source build
     PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR "${PROJECT_BINARY_DIR}/../${proj_name_version}"
-    BINARY_DIR "${PROJECT_BINARY_DIR}/../${proj_name_version}-build"
+    #BINARY_DIR "${PROJECT_BINARY_DIR}/../${proj_name_version}-build"
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
     INSTALL_COMMAND ""
@@ -345,11 +376,12 @@ endif()
 
 if (NOT ION_USE_SYSTEM_BAMTOOLS)
     set(proj_name "bamtools")
-    set(revision_tag 67178ae187)#set date below accordingly
-    set(proj_version "2.3.0.20131211+git${revision_tag}")
+    set(revision_tag 6685b2f93f)#set date below accordingly
+    set(proj_version "2.3.0.20150527+git${revision_tag}")
     set(proj_name_version "${proj_name}-${proj_version}")
     ExternalProject_add(${proj_name}
-      URL "http://${ION_UPDATE_SERVER}/updates/software/external/bamtools-2.3.0.20131211+git67178ae187.tar.gz"
+
+      URL "http://${ION_UPDATE_SERVER}/updates/software/external/bamtools-2.3.0.20150527+git6685b2f93f.tar.gz"
 #      GIT_REPOSITORY "https://github.com/iontorrent/bamtools.git"
 #      GIT_TAG ${revision_tag}
       PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
@@ -375,9 +407,26 @@ endif()
     PREFIX          ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
     SOURCE_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}
     BINARY_DIR      ${PROJECT_BINARY_DIR}/../${proj_name_version}-build
-#    CMAKE_ARGS      
+#   CMAKE_ARGS      
     INSTALL_COMMAND ""
     PATCH_COMMAND patch -p0 -t -N < "${ION_TS_EXTERNAL}/kmeans-1.7+ion1.patch"
   )
   include_directories("${PROJECT_BINARY_DIR}/../${proj_name_version}/src")
   set(ION_KMEANS_LIBS "${PROJECT_BINARY_DIR}/../${proj_name_version}-build/libkmeans.a")
+
+
+set (proj_name "libStatGen")
+set (proj_version "1.0.12")
+set (proj_name_version "${proj_name}-${proj_version}")
+ExternalProject_add(${proj_name}
+    URL "http://genome.sph.umich.edu/w/images/0/09/LibStatGen.1.0.12.tgz"
+    PREFIX ${PROJECT_BINARY_DIR}/../${proj_name_version}-prefix
+    SOURCE_DIR ${PROJECT_BINARY_DIR}/../${proj_name_version}
+    BUILD_IN_SOURCE 1
+    CONFIGURE_COMMAND ""
+    BUILD_COMMAND make
+    INSTALL_COMMAND ""
+)
+set(ION_STATGEN_LIBS  "${PROJECT_BINARY_DIR}/../${proj_name_version}/libStatGen.a")
+set(ION_STATGEN_INCLUDES "${PROJECT_BINARY_DIR}/../${proj_name_version}/include")
+

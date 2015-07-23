@@ -5,6 +5,7 @@
 //! @brief    Streamed BAM reader
 
 #include "BAMWalkerEngine.h"
+#include <algorithm>
 
 #include <errno.h>
 #include <set>
@@ -33,6 +34,9 @@ BAMWalkerEngine::BAMWalkerEngine()
   first_useful_read_ = 0;
   bam_writing_enabled_ = false;
   pthread_mutex_init(&recycle_mutex_, NULL);
+  temp_read_size = 100;
+  temp_reads.resize(temp_read_size);
+  next_temp_read = NULL;
 }
 
 
@@ -43,7 +47,7 @@ BAMWalkerEngine::~BAMWalkerEngine()
 
 
 void BAMWalkerEngine::Initialize(const ReferenceReader& ref_reader, TargetsManager& targets_manager,
-    const vector<string>& bam_filenames, const string& postprocessed_bam)
+    const vector<string>& bam_filenames, const string& postprocessed_bam, int px)
 {
 
   InitializeBAMs(ref_reader, bam_filenames);
@@ -51,6 +55,7 @@ void BAMWalkerEngine::Initialize(const ReferenceReader& ref_reader, TargetsManag
   targets_manager_ = &targets_manager;
   next_target_ = &targets_manager_->merged.front();
   next_position_ = next_target_->begin;
+  prefix_exclude = px;
 
   // BAM writing init
   if (not postprocessed_bam.empty()) {
@@ -85,19 +90,55 @@ void BAMWalkerEngine::InitializeBAMs(const ReferenceReader& ref_reader, const ve
   }
 
   if (not bam_reader_.Open(bam_filenames)) {
-    cerr << "ERROR: Could not open input BAM file(s) : " << bam_reader_.GetErrorString();
+    cerr << "ERROR: Could not open input BAM file(s) : " << bam_reader_.GetErrorString() << endl;
     exit(1);
   }
   if (not bam_reader_.LocateIndexes()) {
-    cerr << "ERROR: Could not open BAM index file(s) : " << bam_reader_.GetErrorString();
+    cerr << "ERROR: Could not open BAM index file(s) : " << bam_reader_.GetErrorString() << endl;
     exit(1);
   }
 
-
+  // BAM multi reader combines the read group information of the different BAMs but does not merge comment sections
   bam_header_ = bam_reader_.GetHeader();
   if (!bam_header_.HasReadGroups()) {
     cerr << "ERROR: there is no read group in BAM files specified" << endl;
     exit(1);
+  }
+
+  // Manually merge comment sections of BAM files if we have more than one BAM file
+  if (bam_filenames.size() > 1) {
+
+    unsigned int num_duplicates = 0;
+    unsigned int num_merged = 0;
+
+    for (unsigned int bam_idx = 0; bam_idx < bam_filenames.size(); bam_idx++) {
+
+      BamReader reader;
+      if (not reader.Open(bam_filenames.at(bam_idx))) {
+        cerr << "TVC ERROR: Failed to open input BAM file " << reader.GetErrorString() << endl;
+    	 exit(1);
+      }
+      SamHeader header = reader.GetHeader();
+
+      for (unsigned int i_co = 0; i_co < header.Comments.size(); i_co++) {
+
+        // Step 1: Check if this comment is already part of the merged header
+    	unsigned int m_co = 0;
+    	while (m_co < bam_header_.Comments.size() and bam_header_.Comments.at(m_co) != header.Comments.at(i_co))
+    	  m_co++;
+
+    	if (m_co < bam_header_.Comments.size()){
+          num_duplicates++;
+          continue;
+    	}
+
+    	// Add comment line to merged header if it is a new one
+    	num_merged++;
+    	bam_header_.Comments.push_back(header.Comments.at(i_co));
+      }
+    }
+    // Verbose what we did
+    cout << "Merged " << num_merged << " unique comment lines into combined BAM header. Encountered " << num_duplicates << " duplicate comments." << endl;
   }
 
   //
@@ -194,6 +235,7 @@ void BAMWalkerEngine::SaveAlignments(Alignment* removal_list)
       continue;
     current_read->alignment.RemoveTag("ZM");
     current_read->alignment.RemoveTag("ZP");
+    current_read->alignment.RemoveTag("PG");
     bam_writer_.SaveAlignment(current_read->alignment);
   }
 }
@@ -261,7 +303,14 @@ void BAMWalkerEngine::RequestReadProcessingTask(Alignment* & new_read)
     new_read->Reset();
   } else {
     pthread_mutex_unlock(&recycle_mutex_);
-    new_read = new Alignment;
+    try {
+      new_read = new Alignment;
+    }
+    catch(std::bad_alloc& exc)
+    {
+      cerr << "ERROR: failed to allocate memory in reading BAM in BAMWalkerEngine::RequestReadProcessingTask" << endl;
+      exit(1);	
+    }
   }
   new_read->read_number = read_counter_++;
 
@@ -282,10 +331,50 @@ void BAMWalkerEngine::RequestReadProcessingTask(Alignment* & new_read)
   }
 
 }
+static int prefix_exclude_ = 6;
 
+static bool myorder(BamAlignment *A, BamAlignment *B)
+{
+    return (A->Name.substr(prefix_exclude_).compare(B->Name.substr(prefix_exclude_)) > 0);
+}
 bool BAMWalkerEngine::GetNextAlignmentCore(Alignment* new_read)
 {
-  return has_more_alignments_ = (bam_reader_.GetNextAlignmentCore(new_read->alignment) && new_read!=NULL && new_read->alignment.RefID>=0);
+  //return has_more_alignments_ = (bam_reader_.GetNextAlignmentCore(new_read->alignment) && new_read!=NULL && new_read->alignment.RefID>=0);
+  // maintain a list of all reads that are in order of read name if the position is the same, ZZ
+  if (temp_heap.size() == 0) {
+    int i = 0;
+    if (next_temp_read) {
+      temp_reads[0] = *next_temp_read;
+      i = 1;
+      next_temp_read = NULL;
+    }
+    temp_heap.clear();
+    do {
+	if (!bam_reader_.GetNextAlignmentCore(temp_reads[i])) break;
+	temp_reads[i].BuildCharData();
+	if (temp_reads[i].RefID < 0) break;
+	if (temp_reads[i].Position != temp_reads[0].Position or temp_reads[i].RefID != temp_reads[0].RefID) {
+	    next_temp_read = &temp_reads[i];
+	    break;
+	} 
+	i++;
+	if (i >= temp_read_size) {
+	    temp_read_size *= 2;
+	    temp_reads.resize(temp_read_size);
+	}
+    } while (1);
+    if (i == 0) return has_more_alignments_ = false;
+    for (int j = 0; j < i; j++) {
+	temp_heap.push_back(&temp_reads[j]);
+    }
+    if (temp_heap.size() > 1) {
+	prefix_exclude_ = prefix_exclude;
+        std::sort(temp_heap.begin(), temp_heap.end(), myorder); // sort into descending order by read Name
+    }
+  }
+  new_read->alignment = *(temp_heap.back()); // output read by ascending order of read Name using popback.
+  temp_heap.pop_back();
+  return has_more_alignments_ = true;
 }
 
 

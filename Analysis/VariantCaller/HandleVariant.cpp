@@ -30,6 +30,7 @@ void EnsembleEval::SpliceAllelesIntoReads(PersistingThreadObjects &thread_object
                                 allele_eval.total_theory.my_hypotheses[i_read].splice_start_flow,
                                 allele_eval.total_theory.my_hypotheses[i_read].splice_end_flow,
                                 allele_eval.total_theory.my_hypotheses[i_read].instance_of_read_by_state,
+                                allele_eval.total_theory.my_hypotheses[i_read].same_as_null_hypothesis,
                                 changed_alignment,
                                 global_context,
                                 ref_reader, chr_idx);
@@ -63,6 +64,7 @@ void EnsembleEval::SpliceAllelesIntoReads(PersistingThreadObjects &thread_object
                                       allele_eval.total_theory.my_hypotheses[i_read].splice_start_flow,
                                       allele_eval.total_theory.my_hypotheses[i_read].splice_end_flow,
                                       allele_eval.total_theory.my_hypotheses[i_read].instance_of_read_by_state,
+                                      allele_eval.total_theory.my_hypotheses[i_read].same_as_null_hypothesis,
                                       changed_alignment,
                                       global_context,
                                       ref_reader, chr_idx);

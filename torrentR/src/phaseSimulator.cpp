@@ -20,9 +20,9 @@ RcppExport SEXP phaseSimulator(SEXP Rseq, SEXP RflowCycle, SEXP RnucConc, SEXP R
     unsigned int extraTaps = (unsigned int) Rcpp::as<int>(RextraTaps);
     string drType          = Rcpp::as<string>(RdroopType);
     Rcpp::NumericMatrix cc(RnucConc);
-    Rcpp::NumericVector cf(Rcf);
-    Rcpp::NumericVector ie(Rie);
-    Rcpp::NumericVector dr(Rdr);
+    Rcpp::NumericMatrix cf(Rcf);
+    Rcpp::NumericMatrix ie(Rie);
+    Rcpp::NumericMatrix dr(Rdr);
     Rcpp::NumericVector hpScale(RhpScale);
   
     DroopType droopType;
@@ -45,15 +45,15 @@ RcppExport SEXP phaseSimulator(SEXP Rseq, SEXP RflowCycle, SEXP RnucConc, SEXP R
       string exception = "concentration matrix should have 4 columns\n";
       exceptionMesg = strdup(exception.c_str());
     } else {
-      weight_vec_t cfMod(cf.size());
-      for(int i=0; i<cf.size(); i++)
-        cfMod[i] = cf(i);
-      weight_vec_t ieMod(ie.size());
-      for(int i=0; i<ie.size(); i++)
-        ieMod[i] = ie(i);
-      weight_vec_t drMod(dr.size());
-      for(int i=0; i<dr.size(); i++)
-        drMod[i] = dr(i);
+      weight_vec_t cfMod(cf.ncol());
+      for(int i=0; i<cf.ncol(); i++)
+        cfMod[i] = cf(0,i);
+      weight_vec_t ieMod(ie.ncol());
+      for(int i=0; i<ie.ncol(); i++)
+        ieMod[i] = ie(0,i);
+      weight_vec_t drMod(dr.ncol());
+      for(int i=0; i<dr.ncol(); i++)
+        drMod[i] = dr(0,i);
       weight_vec_t hpScaleMod(hpScale.size());
       for(int i=0; i<hpScale.size(); i++)
         hpScaleMod[i] = hpScale(i);

@@ -25,7 +25,7 @@ typedef struct _tmap_sam_io_t {
   @param  fn  the input file name, or "-" for stdin
   @return     pointer to the initialized memory for reading in SAMs/BAMs
   */
-inline tmap_sam_io_t *
+tmap_sam_io_t *
 tmap_sam_io_init(const char *fn);
 
 /*! 
@@ -33,7 +33,7 @@ tmap_sam_io_init(const char *fn);
   @param  fn  the input file name, or "-" for stdin
   @return     pointer to the initialized memory for reading in SAMs/BAMs
   */
-inline tmap_sam_io_t *
+tmap_sam_io_t *
 tmap_bam_io_init(const char *fn);
 
 /*!
@@ -43,7 +43,7 @@ tmap_bam_io_init(const char *fn);
   @param  header  the output BAM Header
   @return  a pointer to the initialized memory for writing SAMs/BAMs
   */
-inline tmap_sam_io_t *
+tmap_sam_io_t *
 tmap_sam_io_init2(const char *fn, const char *mode,
                   bam_header_t *header);
 

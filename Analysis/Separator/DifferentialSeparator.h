@@ -2,23 +2,22 @@
 #ifndef DIFFERENTIALSEPARATOR_H
 #define DIFFERENTIALSEPARATOR_H
 
+#include <stddef.h>
 #include <string>
 #include <vector>
 #include <fstream>
 #include <armadillo>
 #include "Mask.h"
-#include "BFReference.h"
-//#include "KeyClassifier.h"
 #include "Separator.h"
 #include "RegionAvgKeyReporter.h"
 #include "TraceStore.h"
-#include "TraceStoreCol.h"
-#include "H5File.h"
+#include "IonH5File.h"
 #include "RawWells.h"
 #include "AdvCompr.h"
 #include "ImageNNAvg.h"
 #include "PJobQueue.h"
-#include "TauEFitter.h"
+#include "ZeromerDiff.h"
+
 #define FRAMEZERO 0
 #define FRAMELAST 100
 #define FIRSTDCFRAME 3
@@ -32,76 +31,54 @@ class DifSepOpt
   public:
     DifSepOpt()
     {
-      predictRow = 0;
-      predictHeight = 0;
-      predictCol = 0;
-      predictWidth = 0;
-
       maxKeyFlowLength = 7;
       flowOrder = "TACG";
-      reportStepSize = 0;
-      maxMad = 30;
-      bfThreshold = .5;
-      minSnr = 8;
-      minBfGoodWells = 100;
-      bfMeshStep = 50;
-      clusterMeshStep = 50;
-      clusterFineMeshStep = 10;
-      t0MeshStep = 50;
-      useMeshNeighbors = 1;
-      tauEEstimateStep = 50;
-      nCores = -1;
+      maxMad = 30;         // maximum mean abs dev to allow
+      bfThreshold = .5;    // responsibiltiy threshold from clustering to be called empty
+      minBfGoodWells = 100; // minimum number of wells in region to proceed
+      bfMeshStep = 50;      // step size of mesh processing for beadfind buffering 
+      clusterMeshStep = 50; // step size of mesh processing for beadfind clustering
+      clusterFineMeshStep = 10; // finer mesh step for averaging
+      t0MeshStep = 50;      // step size of mesh processing for t0 estimation
+      useMeshNeighbors = 1; // width of smoothing to be used for regions
+      tauEEstimateStep = 50; // step size of mesh processing for tauE
+      nCores = -1;           // number of cores to use for processing
 
-      minTauESnr = 6;
-      sigSdMult = 6;
-      doMeanFilter = true;
-      doSigVarFilter = true;
-      doMadFilter = true;
-      doRecoverSdFilter  = true;
-      doRemoveLowSignalFilter = true;
-      doEmptyCenterSignal = false;
-      regionXSize = 50;
+      minTauESnr = 6;  // threshold of "good" snr beads to use for estimation
+      doMadFilter = true; // filter out wells if they have too high of mean absolute deviation
+      doRecoverSdFilter  = true; // recover wells with high std deviation
+      doRemoveLowSignalFilter = true; // remove wells with low signal
+      regionXSize = 50; // region size of basic calculations
       regionYSize = 50;
-      mask = NULL;
-      justBeadfind = false;
-      clusterTrim = .01;
-      bfNeighbors = 3;
-      samplingStep = 10;
-      signalBased = true;
+
+      clusterTrim = .01; // how much to trim off ends of distributions before clustering
+      bfNeighbors = 3; // number of neighbors to do smoothing over
       help = false;
-      ignoreChecksumErrors = false;
-      minRatioLiveWell = .0001;
-      noduds = false;
+      ignoreChecksumErrors = false; // should we proceed processing even in the face of corrupt files?
+      minRatioLiveWell = .0001; // minimum ratio of non pinned wells to be live
+      noduds = false; // try to sequence all duds
 
       //filterLagOneSD = false;
-      smoothTrace = false;
-      iqrMult = 3;
-      tfFilterQuantile = .5;
-      libFilterQuantile = .5;
+      smoothTrace = false; // smooth the trace using pca
+      iqrMult = 3; // multipe of IQR to use for thresholds
       minTfPeakMax = 10.0f;
       minLibPeakMax = 10.0f;
-      useProjectedCurve = true;
-      outputDebug = 0;
-      percentReference = .01;
-      useSignalReference = 1;
-      doSdat = false;
-      sdatSuffix = "sdat";
-      useSeparatorRef = false;
-      isThumbnail = false;
-      doComparatorCorrect = false;
-      doGainCorrect = true;
-      sdAsBf = true;
-      bfMult = 1.0;
+      outputDebug = 0; // output level of debugging from beadfind-diagnostics level
+      percentReference = .01; // percentage of wells to use for initial reference set
+      useSignalReference = 1; // some different strategies of how to pick the initial reference set
+      useSeparatorRef = false; // just mark wells used fo reference in separator as Maskreference for analysis
+      isThumbnail = false; // is this a thumbnail set of dats (implicitly aligned to 100x100 regions)
+      doComparatorCorrect = false; // should we be doing comparator noise correction
+      doGainCorrect = true; // should we be using gain correction
+      sdAsBf = true; // should we use the sd signal for clustering
+      bfMult = 1.0; // multiply the bf signal
       aggressive_cnc = false;
-      referenceStep = 50;
-      referencePickStep = 25;
-      blobFilter = true;
-      blobFilterStep = 50;
-      predictFlowStart = -1;
-      predictFlowEnd = -1;
+      referenceStep = 50; // step for beadfind buffering metric
       gainMult = 1;
       skipBuffer = false;
       filterNoisyCols = "none";
+      col_pair_pixel_xtalk_correct = false;
+      pair_xtalk_fraction = 0;
     }
 
     Mask *mask;
@@ -111,12 +88,10 @@ class DifSepOpt
     string resultsDir;
     string flowOrder;
     string wellsReportFile;
-    int reportStepSize;
     string outData;
     string maskFile;
     double maxMad;
     double bfThreshold;
-    double minSnr;
     size_t minBfGoodWells;
     int bfMeshStep;
     int clusterMeshStep;
@@ -127,41 +102,31 @@ class DifSepOpt
     int nCores;
     int minTauESnr;
     int referenceStep;
-    int referencePickStep;
     double sigSdMult;
-    bool doMeanFilter;
     bool doSigVarFilter;
     bool doMadFilter;
-    bool doRecoverSdFilter;
     bool doRemoveLowSignalFilter;
     bool doEmptyCenterSignal;
+    bool doRecoverSdFilter;
     string bfType;
     string bfDat;
     string bfBgDat;
-    bool justBeadfind;
     int bfNeighbors;
     bool help;
     double clusterTrim;
-    int samplingStep;
     int regionXSize;
     int regionYSize;
-    bool signalBased;
     int ignoreChecksumErrors;
     double minRatioLiveWell;
     bool noduds;
-    //    bool filterLagOneSD;
     bool smoothTrace;
     float iqrMult;
-    float tfFilterQuantile;
-    float libFilterQuantile;
     bool useProjectedCurve;
     int outputDebug;
     float percentReference;
     int useSignalReference;
-    bool doSdat;
     float minTfPeakMax,minLibPeakMax;
     int blobFilterStep;
-    std::string sdatSuffix;
     bool useSeparatorRef;
     bool isThumbnail;
     bool doGainCorrect;
@@ -176,7 +141,9 @@ class DifSepOpt
     string predictRegion; // row, height, col width
     int gainMult;
     bool skipBuffer;
-  string  filterNoisyCols;
+    string  filterNoisyCols;
+    bool col_pair_pixel_xtalk_correct;
+    float pair_xtalk_fraction;
 };
 
 /**
@@ -306,9 +273,6 @@ class DifferentialSeparator : public AvgKeyIncorporation
     /** Utility function to print keys to stdout. */
     void PrintKey (const KeySeq &k, int kIx);
 
-    /** Don't do separation just clustering from beadfind statistic */
-    void DoJustBeadfind (DifSepOpt &opts, vector<float> &bfMetric);
-
     void CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, const std::string &file);
     void CalcBfT0(DifSepOpt &opts, std::vector<float> &t0vec, std::vector<float> &ssq, Image &img);
     void CalcAcqT0(DifSepOpt &opts, std::vector<float> &t0vec, std::vector<float> &ssq, const std::string &file);
@@ -344,8 +308,13 @@ class DifferentialSeparator : public AvgKeyIncorporation
                       arma::Mat<float> &M);
     void SpatialSummary(const std::string &h5_file_name, const std::string &h5path, 
                         DifSepOpt &opts, Mask &mask, int x_step, int y_step);
-    void HandleDebug(std::vector<KeyFit> &wells, DifSepOpt &opts, const std::string &h5SummaryRoot, 
-                     TraceSaver &saver, Mask &mask, TraceStoreCol &traceStore, GridMesh<MixModel> &modelMesh);
+    void HandleDebug(std::vector<KeyFit> &wells, 
+                     DifSepOpt &opts, const std::string &h5SummaryRoot, 
+                     TraceSaver &saver, Mask &mask, 
+                     TraceStoreCol &traceStore, GridMesh<MixModel> &modelMesh,
+                     float sdHigh, float sdLow,
+                     float madHigh, float bfHigh, 
+                     float bfLow, float peakLow);
     void OutputStats(DifSepOpt &opts, Mask &bfMask);
     void DoBeadfindFlowAndT0(DifSepOpt &opts, Mask &mask, const std::string &bfFile);
     int Run(DifSepOpt opts);
@@ -479,38 +448,63 @@ class DifferentialSeparator : public AvgKeyIncorporation
 
   private:
 
+    void OutputWellInfo (TraceStore &store,
+                         ZeromerDiff<float> &bg,
+                         const vector<KeyFit> &wells,
+                         int outlierType,
+                         int wellIdx,
+                         std::ostream &traceOut,
+                         std::ostream &refOut,
+                         std::ostream &bgOut);
+
+    void OutputOutliers (TraceStore &store,
+                         ZeromerDiff<float> bg,
+                         const vector<KeyFit> &wells,
+                         int outlierType,
+                         const vector<int> &outputIdx,
+                         std::ostream &traceOut,
+                         std::ostream &refOut,
+                         std::ostream &bgOut);
+
+    void OutputOutliers (DifSepOpt &opts, TraceStore &store,
+                         ZeromerDiff<float> bg,
+                         const vector<KeyFit> &wells,
+                         double sdNoKeyHighT, double sdKeyLowT,
+                         double madHighT, double bfNoKeyHighT, double bfKeyLowT,
+                         double lowKeySignalT);
+
     void ClusterWells(DifSepOpt &opts, TraceStoreCol &traceStore, Mask &mask, Mask &bfMask, 
                       float madThreshold, GridMesh<MixModel> &modelMesh);
-    void ClusterToSelectReference(DifSepOpt &opts, TraceStoreCol &traceStore,
-                                  GridMesh<MixModel> &modelMesh, GridMesh<struct FitTauEParams> &emptyEstimates);
+    void ClusterToSelectReference(DifSepOpt &opts, const std::string &h5SummaryRoot,
+                                  TraceSaver &saver, TraceStoreCol &traceStore,
+                                  GridMesh<MixModel> &modelMesh,
+                                  GridMesh<struct FitTauEParams> &emptyEstimates);
     void SetUp(DifSepOpt &opts, std::string &bfFile, arma::Col<int> &zeroFlows, 
                vector<int> &flowsAllZero, string &h5SummaryRoot);
     void SetupTraceStore(DifSepOpt &opts, TraceStoreCol &traceStore, std::vector<float> &ftime);
     RegionAvgKeyReporter<double> mRegionIncorpReporter;
-    Mask mMask;
-    Mask mBfMask;
-    std::vector<KeySeq> mKeys;
-    std::vector<float> mT0;
-    vector<KeyFit> mWells;
-    arma::Col<float> mTime;
-    vector<char> mFilteredWells;
-    vector<char> mRefWells;
-    vector<int> mBFTimePoints;
-    vector<float> mBfSdFrame;
-    vector<float> mBfSSQ;
-    vector<float> mAcqSSQ;
-    vector<float> mBfMetric;
-    vector<float> mTraceMad;
-    vector<float> mColNoise;
-    vector<float> mWellNoise;
-    vector<vector<float> > mBfConfidence;
-    std::map<std::string, Image *> mImageCache;
-    std::vector<std::vector<float> > mEmptyMetrics;
-    ClockTimer mTotalTimer;
-    PJobQueue mQueue;
+    Mask mMask;  // our internal working mask
+    Mask mBfMask; // external mask reported to rest of signal processing pipeline
+    std::vector<KeySeq> mKeys; // candidate keys
+    std::vector<float> mT0; // t0 for each well.
+    vector<KeyFit> mWells; // various fit stats for eah well
+    arma::Col<float> mTime; // time, constant currently
+    vector<char> mFilteredWells; // soft filtered wells.
+    vector<char> mRefWells; // reference wells to use for background
+    vector<int> mBFTimePoints; // timestampls for t0
+    vector<float> mBfSdFrame; // frame with maximal contrast between beads and empties for each well
+    vector<float> mBfSSQ; // sum of squares for beadfind t0
+    vector<float> mAcqSSQ; // sum of squres for acquistion t0
+    vector<float> mBfMetric; // beadfind buffering metric
+    vector<float> mTraceMad; // trace mean absolute deviation
+    vector<float> mColNoise; // column noise for each column
+    vector<float> mWellNoise; // well noise for each well
+    vector<vector<float> > mBfConfidence; // Confidence of clustering for each well for bf buffer and signal sd metrics
+    std::map<std::string, Image *> mImageCache; // cache images so don't have to reopen, currently unused
+    std::vector<std::vector<float> > mEmptyMetrics; // beadfind buffering and signal stats to select reference wells.
+    ClockTimer mTotalTimer; // some basic timing
+    PJobQueue mQueue; // queue of threads to batch up jobs
     size_t mNumWells;
-    //    ImageNNAvg mImageNN;
 };
-
 #endif // DIFFERENTIALSEPARATOR_H
 

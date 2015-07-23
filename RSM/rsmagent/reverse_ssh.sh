@@ -4,6 +4,8 @@
 #
 # $Id: reverse_ssh.sh 2163 2010-06-30 04:31:26Z bruce $
 #
+# Edited 5 Mar 2015 Thermo Fisher Scientific
+#
 # Description:
 #
 #   This script creates a secure shell listener session from the supplied
@@ -39,21 +41,33 @@
 function start_session
 {
   command="$1"
-  password="${2//\$/\\\$}" # Excape the dollar sign.
+  password="${2//\$/\\\$}" # Escape the dollar sign.
 
   /usr/bin/expect -c "
-  log_user 0
+  log_user 1
   set timeout 5
   spawn $command
   expect {
+	eof {
+		puts \"Connection failed.\"
+		exit
+	}
+
     -re \".*Are.*.*yes.*no.*\" {
       send \"yes\r\"
       exp_continue
     }
 
+    -re \"\r\nPermission denied, please try again.\r\r\.*@.*'s password:\" { 
+		puts \"\r\nConnection failed.\r\nBad username or password.\"
+		exit
+	}
+
     -re \".*assword:\" {
       send -- \"$password\r\"
+      exp_continue
     }
+
   }
   interact"
 }
@@ -141,7 +155,7 @@ remote_password="$7"
 # Create the 'preamble' that contains a known static portion of the 
 # connect command string used for searching process list output.
 
-preamble="ssh -q -N"
+preamble="ssh -N"
 
 # Determine if a similar command is already running (e.g. different port).
 

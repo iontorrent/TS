@@ -247,9 +247,7 @@ BAMReader::iterator::iterator(samfile_t* fp, lenvec& ref_lens) {
 	itr_file = fp;
 	tid_lens = ref_lens;
 	//std::cerr << "[BAMReader::iterator] itr_file->type: " << itr_file->type << std::endl;
-	if (itr_file->type == 2) {
-		is_bam = false;
-	} else if (itr_file->type&1) {
+	if (itr_file->file->is_bin) {
 		is_bam = true;
 	} else {
 		is_bam = false;
@@ -269,7 +267,7 @@ BAMReader::iterator::iterator(samfile_t* fp, int ref_index, const std::string& B
 BAMReader::iterator::iterator(samfile_t* fp, int ref_index, const std::string& BAM_file, coord_t begin, coord_t end, lenvec& ref_lens) {
 	_init(fp, ref_index, BAM_file);
 	assert(itr_file);
-	if (itr_file->type & 1) {
+	if (itr_file->file->is_bin) {
 		is_bam = true;
 	}
 	
@@ -416,10 +414,10 @@ void BAMReader::BAMHeader::init(bam_header_t* header) {
   header_ptr = header;
   
   //not sure what this one does, Heng Li's code:
-  if (header_ptr->l_text >= 3) {
-    if (header_ptr->dict == 0) 
-      header_ptr->dict = sam_header_parse2( header_ptr->text );
-  }
+  //if (header_ptr->l_text >= 3) {
+  //  if (header_ptr->sdict == 0)
+  //    header_ptr->sdict = sam_header_parse2( header_ptr->text );
+  //}
   int num_entries = 0;
   char type[2] = { 'R', 'G' };
   char key_tag[2] = { 'I', 'D' };
@@ -570,7 +568,7 @@ void BAMReader::BAMHeader::init(bam_header_t* header) {
 char** BAMReader::BAMHeader::parse_read_group( char** rg_list, char type[2], char key_tag[2], int* num_entries ) {
   if (rg_list != NULL)
     free(rg_list);
-  rg_list = sam_header2list( header_ptr->dict, type, key_tag, num_entries );
+  rg_list = sam_header2list( header_ptr->sdict, type, key_tag, num_entries );
   return rg_list;
 }
 

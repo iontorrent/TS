@@ -66,22 +66,19 @@ class single_flow_optimizer
 
     // picks from the below options
     int FitOneFlow (int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
-                                        int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
+                    int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
     // my different optimizers
     int FitStandardPath (int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
         int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
-    void FitKrateOneFlow(int fnum, float *evect, 
-                                            BeadParams *p, error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, 
-                                            int l_i_start, int flow_block_start, TimeCompression &time_c,
-                                            EmphasisClass &emphasis_data,RegionTracker &my_regions);
+    void FitKrateOneFlow(int fnum, float *evect, BeadParams *p, error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
+                         int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
     void FitThisOneFlow(int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
-                                           int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
-
+                        int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
                                     
     void FitProjection(int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, int NucID, float *lnucRise, int l_i_start,
-                                           int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
+                       int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions);
     void FitAlt(int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
-                                           int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions, bool krate_fit);
+                int flow_block_start, TimeCompression &time_c, EmphasisClass &emphasis_data,RegionTracker &my_regions, bool krate_fit);
                                            
     void FillDecisionThreshold(float nuc_threshold);
     

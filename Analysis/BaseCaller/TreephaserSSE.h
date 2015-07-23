@@ -42,7 +42,7 @@
 //#define STEP_SIZE 38
 //#define MAX_STEPS 24
 // MAX_STEPS set large enough to handle minimum window size
-#define MAX_STEPS (1+(MAX_VALS/kMinWindowSize_))
+#define MAX_STEPS (1+(MAX_VALS/DPTreephaser::kMinWindowSize_))
 #define MAX_PATHS 8
 
 #define MAX_PATH_DELAY 40
@@ -73,36 +73,37 @@ struct PathRec {
 class TreephaserSSE {
 public:
 
-
+  //! @brief      Default constructor
   TreephaserSSE();
-  TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize);
-  
-  void InitializeVariables();
 
-  //! @brief     Set flow order and initialize internal variables
+  //! @brief      Constructor
   //! @param[in]  flow_order  Flow order object
   //! @param[in]  windowSize  Size of the normalization window to use.
-  void SetFlowOrder(const ion::FlowOrder& flow_order, const int windowSize);
+  TreephaserSSE(const ion::FlowOrder& flow_order, const int windowSize);
 
-  //! @brief     Set the normalization window size
+  //! @brief      Set flow order and initialize internal variables
+  //! @param[in]  flow_order  Flow order object
+  void SetFlowOrder(const ion::FlowOrder& flow_order);
+
+  //! @brief      Set the normalization window size
   //! @param[in]  windowSize  Size of the normalization window to use.
-  inline void SetNormalizationWindowSize(const int windowSize) { windowSize_ = max(kMinWindowSize_, min(windowSize, kMaxWindowSize_));}
+  inline void SetNormalizationWindowSize(const int windowSize) { windowSize_ = max(DPTreephaser::kMinWindowSize_, min(windowSize, DPTreephaser::kMaxWindowSize_));}
 
   //! @brief     Set phasing model parameters
   void SetModelParameters(double cf, double ie);
 
-  //! @brief     Interface function similar to DPTreephaser Solve
+  //! @brief      Interface function similar to DPTreephaser Solve
   //! @param[out] read        Basecaller read to be solved
   //! @param[in]  begin_flow  Start solving at this flow
   //! @param[in]  end_flow    Do not solve for any flows past this one
   void SolveRead(BasecallerRead& read, int begin_flow, int end_flow);
 
-  //! @brief     Iterative solving and normalization routine
+  //! @brief      Iterative solving and normalization routine
   void NormalizeAndSolve(BasecallerRead& read);
   PathRec* parent;
   int best;
 
-  //! @brief     Set pointers to recalibration model
+  //! @brief      Set pointers to recalibration model
   bool SetAsBs(const vector<vector< vector<float> > > *As, const vector<vector< vector<float> > > *Bs){
     As_ = As;
     Bs_ = Bs;
@@ -117,7 +118,7 @@ public:
     return pm_model_available_;
   };
 
-  //! @brief     Disables and deletes the recalibration model information.
+  //! @brief     Disables the use of recalibration until a new model is set.
   void DisableRecalibration() {
     pm_model_available_ = false;
     recalibrate_predictions_ = false;
@@ -141,6 +142,9 @@ protected:
   void  RecalibratePredictions(PathRec *maxPathPtr);
   //! @brief     Resetting recalibration data structure
   void  ResetRecalibrationStructures(int num_flows);
+  //! @brief      Initialize floating point array variables with a value
+  void InitializeVariables(float init_val);
+
   void  sumNormMeasures();
   void  advanceState4(PathRec RESTRICT_PTR parent, int end);
   void  nextState(PathRec RESTRICT_PTR path, int nuc, int end);
@@ -148,7 +152,7 @@ protected:
   // There was a small penalty in making these arrays class members, as opposed to static variables
   ALIGN(64) short ts_NextNuc[4][MAX_VALS];
   ALIGN(64) float ts_Transition[4][MAX_VALS];
-  ALIGN(64) int ts_NextNuc4[MAX_VALS][4];
+  ALIGN(64) int   ts_NextNuc4[MAX_VALS][4];
   ALIGN(64) float ts_Transition4[MAX_VALS][4];
 
   ALIGN(64) float rd_NormMeasure[MAX_VALS];
@@ -159,11 +163,11 @@ protected:
   ALIGN(64) float ft_stepNorms[MAX_STEPS];
 
   ALIGN(64) float ad_MinFrac[4];
-  ALIGN(16) int ad_FlowEnd[4];
-  ALIGN(16) int ad_Idx[4];
-  ALIGN(16) int ad_End[4];
-  ALIGN(16) int ad_Beg[4];
-  ALIGN(16) char ad_Buf[4*MAX_VALS*4*sizeof(float)];
+  ALIGN(16) int   ad_FlowEnd[4];
+  ALIGN(16) int   ad_Idx[4];
+  ALIGN(16) int   ad_End[4];
+  ALIGN(16) int   ad_Beg[4];
+  ALIGN(16) char  ad_Buf[4*MAX_VALS*4*sizeof(float)];
 
   ion::FlowOrder      flow_order_;                //!< Sequence of nucleotide flows
 
@@ -175,15 +179,15 @@ protected:
   int ts_StepEnd[MAX_STEPS+1];
 
   
-  int windowSize_;                              //!< Adaptive normalization window size
-  double              my_cf_;                   //!< Stores the cf phasing parameter used to compute transitions
-  double              my_ie_;                   //!< Stores the ie phasing parameter used to compute transitions
+  int      windowSize_;                         //!< Adaptive normalization window size
+  double   my_cf_;                              //!< Stores the cf phasing parameter used to compute transitions
+  double   my_ie_;                              //!< Stores the ie phasing parameter used to compute transitions
   const vector< vector< vector<float> > > *As_; //!< Pointer to recalibration structure: multiplicative constant
   const vector< vector< vector<float> > > *Bs_; //!< Pointer to recalibration structure: additive constant
-  bool pm_model_available_;                     //!< Signals availability of a recalibration model
-  bool recalibrate_predictions_;                //!< Switch to use recalibration model during metric generation
-  bool skip_recal_during_normalization_;        //!< Switch to skip recalibration during the normalization phase
-  bool state_inphase_enabled_;                  //!< Switch to save inphase population of molecules
+  bool     pm_model_available_;                 //!< Signals availability of a recalibration model
+  bool     recalibrate_predictions_;            //!< Switch to use recalibration model during metric generation
+  bool     skip_recal_during_normalization_;    //!< Switch to skip recalibration during the normalization phase
+  bool     state_inphase_enabled_;              //!< Switch to save inphase population of molecules
 
 };
 

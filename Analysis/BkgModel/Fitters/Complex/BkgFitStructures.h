@@ -44,7 +44,7 @@ int GetNumParamsToFitForDescriptor(fit_descriptor *fd, int flow_key, int flow_bl
 int GetNumParDerivStepsForFitDescriptor(fit_descriptor* fd);
 
 //#define NUMERIC_PartialDeriv_CALC
-void BuildMatrix(BkgFitMatrixPacker *fit,bool accum, bool debug);
+void BuildMatrix(BkgFitMatrixPacker *fit, bool accum, bool debug);
 
 #endif // BKGFITSTRUCTURES_H
 

@@ -73,6 +73,8 @@ def get_raid_status_json(raidinfojson):
                 return WARN if value != 'Hotspare,SpunUp' else GOOD
             elif 'Unconfigured' in value:
                 return WARN if value != 'Unconfigured(good),SpunUp' else GOOD
+            elif 'copyback' in str(value).lower():
+                return WARN
             else:
                 return ERROR
         elif key == 'Drive Temperature':
@@ -152,7 +154,7 @@ def get_raid_status_json(raidinfojson):
                 "drives":           drive_status,
                 "logical_drives":   logical_drive_status
                 }
-            
+
             # list primary storage first, so it shows up in display first
             if filter(adapter.get('id').startswith, ["PERC H710", "PERC 6/i"]):
                 raid_status.insert(0, status_summary)
@@ -191,7 +193,7 @@ if __name__ == '__main__':
     parser.add_argument(dest = 'filename',
                         help = 'specify input file')
     args = parser.parse_args()
-    
+
     f = open(args.filename, "r")
     result = get_raid_status_json(f.read())
     print "Number of Enclosures: %d" % len(result)
@@ -211,4 +213,3 @@ if __name__ == '__main__':
                     print "%s [%d]: %s" % (thiskey, i, item)
             else:
                 print "%s: %s" % (thiskey, found)
-

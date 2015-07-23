@@ -772,7 +772,10 @@ class PlanDetailView(DetailView):
         context["chipTypeSecondaryPrefix"] = getChipDisplayedNameSecondaryPrefix(chipType[0]) if chipType else  plan.experiment.chipType
         context["chipTypeVersion"] = getChipDisplayedVersion(chipType[0]) if chipType else ""
 
+        context["isAmpsOnChef"] = True if plan.sampleSet and plan.sampleSet.libraryPrepType and "amps_on_chef" in plan.sampleSet.libraryPrepType else False
+                                                                                                    
         context['thumbnail'] = True if report_pk and result.isThumbnail else False
+        context['show_thumbnail'] = True if state != 'Plan' and (plan.experiment.getPlatform in ['s5', 'proton']) else False
         
         # IRU configuration
         iru_info = eas.selectedPlugins.get('IonReporterUploader',{}).get('userInput',{})

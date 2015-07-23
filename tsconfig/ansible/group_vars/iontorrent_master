@@ -6,10 +6,15 @@ ionmaster_syspkg_list:
     - postfix
     - rabbitmq-server
     - samba
+    - python-amqp
+    - postgresql
+
+# X server package list
+xserver_pkg_list:
     - nxclient
     - nxnode
     - nxserver
-    - python-amqp
+    - xfce4
 
 ionmaster_ionpkg_list:
     - ion-dbreports
@@ -18,7 +23,7 @@ ionmaster_ionpkg_list:
     - ion-pipeline
     - samtools
     - ion-torrentr
-#    - ion-docs
+    - ion-docs
     - ion-referencelibrary
     - ion-sampledata
     - ion-publishers
@@ -26,5 +31,5 @@ ionmaster_ionpkg_list:
     - ion-rsmts
 #    - ion-usbmount
     - ion-pgmupdates
-#    - ion-chefupdates
+    - ion-chefupdates
     - ion-onetouchupdater

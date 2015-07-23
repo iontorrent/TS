@@ -5,8 +5,8 @@
 #include "BfMetric.h"
 #include <Eigen/Dense>
 #include <Eigen/LU>
-#include "H5File.h"
-#include "H5Eigen.h"
+#include "IonH5File.h"
+#include "IonH5Eigen.h"
 #include "Stats.h"
 #include "ChipReduction.h"
 #include "SampleStats.h"

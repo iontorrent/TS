@@ -1,7 +1,6 @@
 #!/usr/bin/python
 # Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
 
-from ion.utils.blockprocessing import printtime
 
 import subprocess
 import os
@@ -10,21 +9,17 @@ import traceback
 import json
 import re
 import time
-import dateutil
-from shutil import move
+import dateutil.parser
 import math
 import shlex
 import copy
+from collections import defaultdict
 
-from ion.utils import TFPipeline
 from ion.utils.blockprocessing import isbadblock
-from ion.reports import MaskMerge
+from ion.utils.blockprocessing import printtime
 
 from ion.reports import mergeBaseCallerJson
 from ion.utils import blockprocessing
-from ion.utils import ionstats
-
-from ion.utils import ionstats_plots
 
 def basecaller_cmd(basecallerArgs,
                    SIGPROC_RESULTS,
@@ -61,7 +56,7 @@ def basecalling(
       libKey,
       tfKey,
       runID,
-      reverse_primer_dict,
+      adaptersequence,
       BASECALLER_RESULTS,
       barcodeId,
       barcodeInfo,
@@ -121,9 +116,6 @@ def basecalling(
         block_row_offset = 0
 
     try:
-        # 3' adapter details
-        adapter = reverse_primer_dict['sequence']
-        # TODO: provide barcode_filter via datasets.json
 
         cmd = basecaller_cmd(basecallerArgs,
                              SIGPROC_RESULTS,
@@ -134,7 +126,7 @@ def basecalling(
                              block_col_offset,
                              block_row_offset,
                              datasets_pipeline_path,
-                             adapter)
+                             adaptersequence)
 
         printtime("DEBUG: Calling '%s':" % cmd)
         proc = subprocess.Popen(shlex.split(cmd.encode('utf8')), shell=False, stderr=subprocess.PIPE, stdout=subprocess.PIPE)
@@ -154,15 +146,11 @@ def basecalling(
 
         if ret != 0:
             printtime('ERROR: BaseCaller failed with exit code: %d' % ret)
-            raise
-        #ignore rest of operations
-        if '--calibration-training' in basecallerArgs:
-            printtime('training mode: ignore filtering')
-            return
+            raise Exception("BaseCaller failed with exit code: %d" % ret)
     except:
         printtime('ERROR: BaseCaller failed')
         traceback.print_exc()
-        raise
+        raise Exception("BaseCaller failed")
 
 
     printtime("Finished basecaller processing")
@@ -194,6 +182,62 @@ def merge_barcoded_basecaller_bams(BASECALLER_RESULTS, basecaller_datasets, meth
     printtime("Finished basecaller barcode merging")
 
 
+##############################################################
+
+def initalize_combined_readgroup(combined_readgroup):
+    
+    combined_readgroup['Q20_bases'] = 0
+    combined_readgroup['total_bases'] = 0
+    combined_readgroup['read_count'] = 0
+    if "filtered" in combined_readgroup:
+        combined_readgroup['filtered'] = True if 'barcode_sequence' in combined_readgroup else False
+    else:
+        combined_readgroup['filtered'] = False
+    if "barcode_sequence" in combined_readgroup:
+        combined_readgroup['barcode_bias'] = [-1]
+        combined_readgroup['barcode_distance_hist'] = [0,0,0,0,0]
+        combined_readgroup['barcode_errors_hist'] = [0,0,0]
+        combined_readgroup['barcode_match_filtered'] = 0
+        combined_readgroup['num_blocks_filtered'] = 0
+
+
+def combine_read_groups(combined_readgroup, current_readgroup_dict, read_group):
+
+    combined_readgroup['Q20_bases'] += current_readgroup_dict.get(read_group,{}).get("Q20_bases",0)
+    combined_readgroup['total_bases'] += current_readgroup_dict.get(read_group,{}).get("total_bases",0)
+    combined_readgroup['read_count'] += current_readgroup_dict.get(read_group,{}).get("read_count",0)
+    combined_readgroup['filtered'] &= current_readgroup_dict.get(read_group,{}).get("filtered",True)
+    if current_readgroup_dict.get(read_group,{}).get("filtered",False):
+        combined_readgroup['num_blocks_filtered'] += 1
+    if "barcode_sequence" in combined_readgroup:
+        combined_readgroup['barcode_match_filtered'] += current_readgroup_dict.get(read_group,{}).get("barcode_match_filtered",0)
+        error_hist = current_readgroup_dict.get(read_group,{}).get("barcode_errors_hist",[0,0,0])
+        for hist_idx in range(len(error_hist)):
+            combined_readgroup['barcode_errors_hist'][hist_idx] += error_hist[hist_idx]
+        distance_hist = current_readgroup_dict.get(read_group,{}).get("barcode_distance_hist",[0,0,0,0,0])
+                
+        for hist_idx in range(len(distance_hist)):
+            combined_readgroup['barcode_distance_hist'][hist_idx] += distance_hist[hist_idx]
+        barcode_bias = current_readgroup_dict.get(read_group,{}).get("barcode_bias",[-1])
+        if (combined_readgroup['barcode_bias'] == [-1]) & (barcode_bias != [-1]):
+            combined_readgroup['barcode_bias'] = len(barcode_bias) * [0]
+        if barcode_bias != [-1]:
+            for bias_idx in range(len(barcode_bias)):
+                combined_readgroup['barcode_bias'][bias_idx] += barcode_bias[bias_idx] * current_readgroup_dict.get(read_group,{}).get("read_count",0)
+        
+        
+def compute_read_group_averages(combined_readgroup):
+    
+    if "barcode_sequence" in combined_readgroup:
+        if combined_readgroup['barcode_bias'] == [-1]:
+            combined_readgroup['barcode_bias'] = [0]
+        if combined_readgroup['read_count'] > 0:
+            for bias_idx in range(len(combined_readgroup['barcode_bias'])):
+                combined_readgroup['barcode_bias'][bias_idx] /= combined_readgroup['read_count']
+
+##############################################################
+
+
 def merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS):
 
     ########################################################
@@ -218,52 +262,33 @@ def merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS):
 
     combined_datasets_json = copy.deepcopy(block_datasets_json[0])
     
+    # Merging dataset entries
     for dataset_idx in range(len(combined_datasets_json['datasets'])):
         combined_datasets_json['datasets'][dataset_idx]['read_count'] = 0
         for current_datasets_json in block_datasets_json:
             combined_datasets_json['datasets'][dataset_idx]['read_count'] += current_datasets_json['datasets'][dataset_idx].get("read_count",0)
     
+    # Merging read group entries
     for read_group in combined_datasets_json['read_groups'].iterkeys():
-        combined_datasets_json['read_groups'][read_group]['Q20_bases'] = 0
-        combined_datasets_json['read_groups'][read_group]['total_bases'] = 0
-        combined_datasets_json['read_groups'][read_group]['read_count'] = 0
-        combined_datasets_json['read_groups'][read_group]['filtered'] = True if 'barcode_sequence' in combined_datasets_json['read_groups'][read_group] else False
-        if "barcode_sequence" in combined_datasets_json['read_groups'][read_group]:
-            combined_datasets_json['read_groups'][read_group]['barcode_bias'] = [-1]
-            combined_datasets_json['read_groups'][read_group]['barcode_distance_hist'] = [0,0,0,0,0]
-            combined_datasets_json['read_groups'][read_group]['barcode_errors_hist'] = [0,0,0]
-            combined_datasets_json['read_groups'][read_group]['barcode_match_filtered'] = 0
-            combined_datasets_json['read_groups'][read_group]['num_blocks_filtered'] = 0
-                  
+        initalize_combined_readgroup(combined_datasets_json['read_groups'][read_group])
         for current_datasets_json in block_datasets_json:
-            combined_datasets_json['read_groups'][read_group]['Q20_bases'] += current_datasets_json['read_groups'].get(read_group,{}).get("Q20_bases",0)
-            combined_datasets_json['read_groups'][read_group]['total_bases'] += current_datasets_json['read_groups'].get(read_group,{}).get("total_bases",0)
-            combined_datasets_json['read_groups'][read_group]['read_count'] += current_datasets_json['read_groups'].get(read_group,{}).get("read_count",0)
-            combined_datasets_json['read_groups'][read_group]['filtered'] &= current_datasets_json['read_groups'].get(read_group,{}).get("filtered",True)
-            if current_datasets_json['read_groups'].get(read_group,{}).get("filtered",False):
-                combined_datasets_json['read_groups'][read_group]['num_blocks_filtered'] += 1
-            if "barcode_sequence" in combined_datasets_json['read_groups'][read_group]:
-                combined_datasets_json['read_groups'][read_group]['barcode_match_filtered'] += current_datasets_json['read_groups'].get(read_group,{}).get("barcode_match_filtered",0)
-                error_hist = current_datasets_json['read_groups'].get(read_group,{}).get("barcode_errors_hist",[0,0,0])
-                for hist_idx in range(len(error_hist)):
-                    combined_datasets_json['read_groups'][read_group]['barcode_errors_hist'][hist_idx] += error_hist[hist_idx]
-                distance_hist = current_datasets_json['read_groups'].get(read_group,{}).get("barcode_distance_hist",[0,0,0,0,0])
-                for hist_idx in range(len(distance_hist)):
-                    combined_datasets_json['read_groups'][read_group]['barcode_distance_hist'][hist_idx] += distance_hist[hist_idx]
-                barcode_bias = current_datasets_json['read_groups'].get(read_group,{}).get("barcode_bias",[-1])
-                if (combined_datasets_json['read_groups'][read_group]['barcode_bias'] == [-1]) & (barcode_bias != [-1]):
-                    combined_datasets_json['read_groups'][read_group]['barcode_bias'] = len(barcode_bias) * [0]
-                if barcode_bias != [-1]:
-                    for bias_idx in range(len(barcode_bias)):
-                        combined_datasets_json['read_groups'][read_group]['barcode_bias'][bias_idx] += barcode_bias[bias_idx] * current_datasets_json['read_groups'].get(read_group,{}).get("read_count",0)
-        # After combining all the blocks
-        if "barcode_sequence" in combined_datasets_json['read_groups'][read_group]:
-            if combined_datasets_json['read_groups'][read_group]['barcode_bias'] == [-1]:
-                combined_datasets_json['read_groups'][read_group]['barcode_bias'] = [0]
-            if combined_datasets_json['read_groups'][read_group]['read_count'] > 0:
-                for bias_idx in range(len(combined_datasets_json['read_groups'][read_group]['barcode_bias'])):
-                    combined_datasets_json['read_groups'][read_group]['barcode_bias'][bias_idx] /= combined_datasets_json['read_groups'][read_group]['read_count']
-
+            combine_read_groups(combined_datasets_json['read_groups'][read_group], current_datasets_json['read_groups'], read_group)
+        compute_read_group_averages(combined_datasets_json['read_groups'][read_group])
+        
+    #And merging information for control barcode datasets & read groups if available
+    if "IonControl" in combined_datasets_json:
+        # Merging dataset entries
+        for dataset_idx in range(len(combined_datasets_json['IonControl']['datasets'])):
+            combined_datasets_json['IonControl']['datasets'][dataset_idx]['read_count'] = 0
+            for current_datasets_json in block_datasets_json:
+                combined_datasets_json['IonControl']['datasets'][dataset_idx]['read_count'] += current_datasets_json['IonControl']['datasets'][dataset_idx].get("read_count",0)
+        # Merging read group entries
+        for read_group in combined_datasets_json['IonControl']['read_groups'].iterkeys():
+            initalize_combined_readgroup(combined_datasets_json['IonControl']['read_groups'][read_group])
+            for current_datasets_json in block_datasets_json:
+                combine_read_groups(combined_datasets_json['IonControl']['read_groups'][read_group], current_datasets_json['IonControl']['read_groups'], read_group)
+            compute_read_group_averages(combined_datasets_json['IonControl']['read_groups'][read_group])
+        
     # Barcode filters -------------------------------------------------------
     # Potential filters 1) frequency filter 2) minreads filter 3) error histogram filter
     # No use to attempt filtering here if filtering is done per block or json entries are missing
@@ -296,50 +321,8 @@ def merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS):
         traceback.print_exc()
 
 
-def merge_basecaller_stats(dirs, BASECALLER_RESULTS):
+def merge_basecaller_json(dirs, BASECALLER_RESULTS):
 
-    merge_datasets_basecaller_json(dirs, BASECALLER_RESULTS)
-
-    ########################################################
-    # write composite return code                          #
-    ########################################################
-
-    try:
-        if len(dirs)==96:
-            composite_return_code=96
-            for subdir in dirs:
-
-                blockstatus_return_code_file = os.path.join(subdir,"blockstatus.txt")
-                if os.path.exists(blockstatus_return_code_file):
-
-                    with open(blockstatus_return_code_file, 'r') as f:
-                        text = f.read()
-                        if 'Basecaller=0' in text:
-                            composite_return_code-=1
-                        else:
-                            with open(os.path.join(subdir,"sigproc_results","analysis_return_code.txt"), 'r') as g:
-                                return_code_text = g.read()
-                                if return_code_text=="3" and subdir in ['block_X0_Y0','block_X14168_Y0','block_X0_Y9324','block_X14168_Y9324']:
-                                    printtime("INFO: suppress non-critical error in %s" % subdir)
-                                    composite_return_code-=1
-                                    
-
-            composite_return_code_file = os.path.join(BASECALLER_RESULTS,"composite_return_code.txt")
-            if not os.path.exists(composite_return_code_file):
-                printtime("DEBUG: create %s" % composite_return_code_file)
-                os.umask(0002)
-                f = open(composite_return_code_file, 'a')
-                f.write(str(composite_return_code))
-                f.close()
-            else:
-                printtime("DEBUG: skip generation of %s" % composite_return_code_file)
-    except:
-        traceback.print_exc()
-
-
-    ###############################################
-    # Merge BaseCaller.json files                 #
-    ###############################################
     printtime("Merging BaseCaller.json files")
 
     try:
@@ -361,27 +344,6 @@ def merge_basecaller_stats(dirs, BASECALLER_RESULTS):
         printtime("Merging BaseCaller.json files failed")
 
     printtime("Finished merging basecaller stats")
-
-
-def merge_bams(dirs, BASECALLER_RESULTS, basecaller_datasets, method):
-
-    for dataset in basecaller_datasets['datasets']:
-
-        try:
-            bamdir = BASECALLER_RESULTS
-            bamfile = dataset['basecaller_bam']
-            block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in dirs]
-            block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
-            composite_bam_filepath = os.path.join(bamdir, bamfile)
-            if block_bam_list:
-                composite_bai_filepath=""
-                mark_duplicates=False
-                blockprocessing.merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates, method)
-        except:
-            traceback.print_exc()
-            printtime("ERROR: merging %s unsuccessful" % bamfile)
-
-    printtime("Finished merging basecaller BAM files")
 
 
 
@@ -440,6 +402,7 @@ def generate_datasets_json(
     # Scenario 2. Barcodes present
     else:
         datasets["barcode_config"] = {}
+        # TODO: not needed for calibration
         datasets["datasets"].append({
             "dataset_name"      : sample + "/No_barcode_match",
             "file_prefix"       : "nomatch_rawlib",
@@ -463,31 +426,69 @@ def generate_datasets_json(
                 if barcode_name == 'no_barcode':
                     continue
 
-                # get per-barcode sample names and reference
-                bcsample = barcode_info['sample']
-                bcreference = barcode_info['referenceName']
-
-                datasets["datasets"].append({
-                    "dataset_name"      : bcsample + "/" + barcode_name,
-                    "file_prefix"       : '%s_rawlib' % barcode_name,
-                    "read_groups"       : [runID+"."+barcode_name,]
-                })
-
                 datasets["read_groups"][runID+"."+barcode_name] = {
                     "barcode_name"      : barcode_name,
                     "barcode_sequence"  : barcode_info['sequence'],
                     "barcode_adapter"   : barcode_info['adapter'],
                     "index"             : barcode_info['index'],
-                    "sample"            : bcsample,
+                    "sample"            : barcode_info['sample'],
                     #"library"           : library,
-                    "reference"         : bcreference,
+                    "reference"         : barcode_info['referenceName'],
                     "description"       : ''.join(ch for ch in notes if ch.isalnum() or ch == " "),
                     "platform_unit"     :  "%s/%s/%s" % (platform,chipType.replace('"',""),barcode_name)
                 }
-        
+
         except:
             print traceback.format_exc()
             datasets["read_groups"] = {}
+
+
+        try:
+
+            if 'calibration' in datasets_json_path:
+
+                # create groups of barcodes with same references
+
+                referencedict = defaultdict(list)
+
+                for barcode_name,barcode_info in sorted(barcodeInfo.iteritems()):
+
+                    if barcode_name == 'no_barcode':
+                        continue
+
+                    if barcode_info['referenceName']:
+                        if barcode_info['calibrate']:
+                            referencedict[barcode_info['referenceName']].append(barcode_name)
+                        else:
+                            referencedict['no_calibration'].append(barcode_name)
+                    else:
+                        # TODO: not needed for calibration
+                        referencedict['no_reference'].append(barcode_name)
+
+                for reference,bclist in referencedict.iteritems():
+                    datasets["datasets"].append({
+                        "dataset_name"      : reference,
+                        "file_prefix"       : '%s_rawlib' % reference,
+                        "read_groups"       : [runID+"."+barcode_name for barcode_name in bclist]
+                    })
+
+                print referencedict
+
+            else:
+
+                for barcode_name,barcode_info in sorted(barcodeInfo.iteritems()):
+
+                    if barcode_name == 'no_barcode':
+                        continue
+
+                    datasets["datasets"].append({
+                        "dataset_name"      : barcode_info['sample'] + "/" + barcode_name,
+                        "file_prefix"       : '%s_rawlib' % barcode_name,
+                        "read_groups"       : [runID+"."+barcode_name]
+                    })
+
+        except:
+            print traceback.format_exc()
             datasets["datasets"] = []
 
     f = open(datasets_json_path,"w")

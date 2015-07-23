@@ -1,6 +1,6 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "SlicedPrequel.h"
-#include "H5File.h"
+#include "IonH5File.h"
 
 using namespace std;
 

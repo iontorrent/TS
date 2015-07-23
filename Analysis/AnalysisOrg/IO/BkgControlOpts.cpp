@@ -13,7 +13,7 @@ using namespace std;
 
 SignalProcessingBlockControl::SignalProcessingBlockControl(){
   save_wells_flow = 60;
-  wellsCompression = 3;
+  wellsCompression = 0;
   restart = false;
   restart_from = "";
   restart_next = "";
@@ -27,7 +27,7 @@ void SignalProcessingBlockControl::PrintHelp()
 {
 	printf ("     SignalProcessingBlockControl\n");
     printf ("     --numcputhreads         INT               number of CPU threads [0]\n");
-    printf ("     --wells-compression     INT               set wells compression level [3]\n");
+    printf ("     --wells-compression     INT               set wells compression level [0]\n");
     printf ("     --wells-save-freq       INT               set saveWellsFrequency []\n");
     printf ("     --wells-save-flow       INT               set save_wells_flow (=saveWellsFrequency*20) [60]\n");
     printf ("     --sigproc-compute-flow  STRING            set flow block sequence []\n");
@@ -40,7 +40,7 @@ void SignalProcessingBlockControl::PrintHelp()
 
 void SignalProcessingBlockControl::SetOpts(OptArgs &opts, Json::Value& json_params)
 {
-	wellsCompression = RetrieveParameterInt(opts, json_params, '-', "wells-compression", 3);
+	wellsCompression = RetrieveParameterInt(opts, json_params, '-', "wells-compression", 0);
     ION_ASSERT(wellsCompression >= 0 && wellsCompression <= 10, "--wells-compression must be between (0,10) inclusive.");
 	fprintf(stdout, "wells compression: %d\n", wellsCompression);
 	int saveWellsFrequency = RetrieveParameterInt(opts, json_params, '-', "wells-save-freq", -1);
@@ -158,7 +158,7 @@ void BkgModelControlOpts::PrintHelp()
     printf ("     --mixed-model-option    INT               mixed model option of polyclonal filter [0]\n");
     printf ("     --mixed-stringency      DOUBLE            mixed stringency of polyclonal filter [0.5]\n");
 	printf ("     --nokey                 BOOL              nokey [false]\n");
-	printf ("     --xtalk-correction      BOOL              enable trace xtalk correction [false for Proton; true for PGM]\n");
+	printf ("     --xtalk-correction      BOOL              enable trace xtalk correction [false for Proton; true for P-zero and PGM]\n");
     printf ("     --n-unfiltered-lib      INT               number of unfiltered library random samples [100000]\n");
     printf ("     --bkg-dont-emphasize-by-compression INT   emphasize by compression [1]\n");
 	printf ("     --clonal-filter-bkgmodel            BOOL  enable polyclonal filter [false for Proton; true for PGM]\n");

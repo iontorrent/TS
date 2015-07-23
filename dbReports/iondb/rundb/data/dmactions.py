@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # Copyright (C) 2013 Ion Torrent Systems, Inc. All Rights Reserved
+
+from __future__ import absolute_import
 import os
 import sys
 import time
@@ -895,14 +897,11 @@ def _brokenlinks_delete(search_dirs):
 
 
 def _update_related_objects(user, user_comment, dmfilestat, action, msg, action_state=None):
-    '''When category is signal processing, make sure that all related results must be updated'''
+    '''Update related dmfilestats:
+        Signal Processing category - all SIG dmfilestats for this experiment
+        Basecalling Input catagory - BASE dmfilestats that have started from-basecalling for this result
+    '''
     logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra = logid)
-
-    # Double check the ftpStatus field is properly set
-    if dmfilestat.dmfileset.type == dmactions_types.SIG:
-        # check that experiment.ftpStatus field is now set to complete.
-        dmfilestat.result.experiment.ftpStatus = "Complete"
-        dmfilestat.result.experiment.save()
 
     # Change the action_state field, if it is provided
     if action_state is not None:
@@ -918,6 +917,36 @@ def _update_related_objects(user, user_comment, dmfilestat, action, msg, action_
     # add log entry
     msg = msg+"<br>User Comment: %s" % (user_comment)
     add_eventlog(dmfilestat, msg, user)
+
+    # Double check the ftpStatus field is properly set
+    if dmfilestat.dmfileset.type == dmactions_types.SIG:
+        # check that experiment.ftpStatus field is now set to complete.
+        dmfilestat.result.experiment.ftpStatus = "Complete"
+        dmfilestat.result.experiment.save()
+
+
+def _update_diskspace_and_diskusage(dmfilestat):
+    logger.debug("Function: %s()" % sys._getframe().f_code.co_name, extra = logid)
+
+    diskspace = update_diskspace(dmfilestat)
+    
+    # update diskusage on Experiment or Results object if data was deleted/moved
+    # See data/tasks.update_dmfilestat_diskusage() which also updates Exp & Results diskusage fields
+    if dmfilestat.dmfileset.type == dmactions_types.SIG:
+        dmfilestat.result.experiment.diskusage = diskspace if diskspace != None else 0
+        dmfilestat.result.experiment.save()
+    else:
+        result = dmfilestat.result
+        disk_total = 0
+        mylist = [
+            result.get_filestat(dmactions_types.BASE).diskspace,
+            result.get_filestat(dmactions_types.OUT).diskspace,
+            result.get_filestat(dmactions_types.INTR).diskspace
+        ]
+        for partial in mylist:
+            disk_total += int(partial) if partial != None else 0
+        result.diskusage = disk_total
+        result.save()
 
 
 def _action_complete_update(user, user_comment, dmfilestat, action):
@@ -936,32 +965,12 @@ def _action_complete_update(user, user_comment, dmfilestat, action):
         dmfilestat.save()
     elif action == TEST:
         return
-    
-    # Update disk usage values in dmfilestat objects after a delete or archive action.  Should be zero or close.
-    # update diskusage on Experiment or Results object if data was deleted/moved
+
     if action != EXPORT:
-        
-        diskspace = update_diskspace(dmfilestat)
-        
-        if dmfilestat.dmfileset.type == dmactions_types.SIG:
-            dmfilestat.result.experiment.diskusage = diskspace if diskspace != None else 0
-            dmfilestat.result.experiment.save()
-        else:
-            result = dmfilestat.result
-            disk_total = 0
-            mylist = [
-                result.get_filestat(dmactions_types.BASE).diskspace,
-                result.get_filestat(dmactions_types.OUT).diskspace,
-                result.get_filestat(dmactions_types.INTR).diskspace
-            ]
-            for partial in mylist:
-                disk_total += int(partial) if partial != None else 0
-            result.diskusage = disk_total
-            result.save()
-        # See data/tasks.update_dmfilestat_diskusage() which also updates Exp & Results diskusage fields
-        
+        _update_diskspace_and_diskusage(dmfilestat)
+
     _update_related_objects(user, user_comment, dmfilestat, action, msg, action_state)
-        
+
 
 def set_action_pending(user, user_comment, action, dmfilestat, backup_directory):
     '''Internal function to set dmfilestat action state'''

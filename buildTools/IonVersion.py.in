@@ -33,6 +33,6 @@ def IonVersionGetFullVersion():
     P = '''@CMAKE_PROJECT_NAME@ (@ION_VERSION_MAJOR@.@ION_VERSION_MINOR@.@ION_VERSION_RELEASE@)
 Build: @ION_VERSION_BUILDTAG@ (@ION_VERSION_BUILDNUM@)
 Source: @ION_VERSION_GITPATH@ (@ION_VERSION_GITHASH@)
-Copyright 2011 Ion Torrent Systems, Inc.'''
+Copyright 2011-2015 Ion Torrent Systems, Inc.'''
     return P
 

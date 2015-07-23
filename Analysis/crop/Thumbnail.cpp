@@ -9,6 +9,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <iostream>
+#include <sstream>
 
 #ifdef __linux__
 #include <sys/vfs.h>
@@ -161,6 +162,17 @@ int make_dir(const char *path, bool verbose=false, mode_t mode=0777)
     */
 }
 
+
+string make_subdir_name(int kernx, int kerny, int cropx, int cropy)
+{
+	stringstream ss;
+	ss << kernx << "x" << cropx;
+	if (kernx!=kerny || cropx!=cropy) 
+		ss << "_" << kerny << "x" << cropy;
+	return (ss.str());
+}
+
+
 string make_image_filename(const char *destPath, int k, int file_type)
 {
     char destName[MAX_PATH_LENGTH];
@@ -266,7 +278,7 @@ void usage ( int cropx, int cropy, int kernx, int kerny )
   fprintf ( stdout, "   -y\tNumber of blocks along y axis. Default is %d\n",cropy );
   fprintf ( stdout, "   -X\tkernel X size (multiple of 8). Default is %d\n",kernx );
   fprintf ( stdout, "   -Y\tkernel Y size (multiple of 8). Default is %d\n",kerny );
-  fprintf ( stdout, "   -t\tchip type 314, 316, or 318\n" );
+  fprintf ( stdout, "   -t\tchip type 314, 316, 318, or 900 (Proton thumbnail). Default is 900.\n" );
   fprintf ( stdout, "   -i\tInput directory containing raw data\n" );
   fprintf ( stdout, "   -o\tOutput directory.\n" );
   fprintf ( stdout, "   -f\tConverts only the one file named as an argument\n" );
@@ -286,7 +298,7 @@ void usage ( int cropx, int cropy, int kernx, int kerny )
 
 int main ( int argc, char *argv[] )
 {
-  int cropx = 2, cropy = 2; //number of regions - x direction and y direction
+  int cropx = 9, cropy = 9; //number of regions - x direction and y direction
   int kernx = 64, kerny = 64; //size of regions - x size and y size
   int region_len_x = 0;
   int region_len_y = 0;
@@ -387,15 +399,14 @@ int main ( int argc, char *argv[] )
 
   if (chipType==0)
   {
-      cout << "Unknown chipType, setting to default 314" << endl << flush;
-      chipType = 314;
+      cout << "Unknown chipType, setting to default 900 (thumbnail)" << endl << flush;
+      chipType = 900;
   }
 
+// Create results folder
   string dst = destPath;
-  dst += "/thumbnail";
+  dst += "/" + make_subdir_name(kernx,kerny,cropx,cropy);
   destPath = const_cast<char*> (dst.c_str());
-
-//  // Create results folder
   make_dir(destPath);
 
   // Initialize array of crop regions
@@ -420,7 +431,7 @@ int main ( int argc, char *argv[] )
     region_len_x = 3392 / cropx;
     region_len_y = 3792 / cropy;
   } else if ( chipType == 900 ) {
-      //[3392,3792]
+      //[3392,3792], [1200,800] for thumbnail
       region_len_x = 1200 / cropx;
       region_len_y = 800 / cropy;
   } else {
@@ -431,7 +442,7 @@ int main ( int argc, char *argv[] )
   if (!is_multipleOf(kernx,8))
   {
       int kernx_new = (kernx/8+1)*8;
-      printf ( "kernx=%d is not a multiple of 8, changing to %d", kernx, kernx_new);
+      printf ( "kernx=%d is not a multiple of 8, changing to %d ", kernx, kernx_new);
       fflush ( stdout );
       kernx = kernx_new;
   }
@@ -439,7 +450,7 @@ int main ( int argc, char *argv[] )
   if (!is_multipleOf(kerny,8))
   {
       int kerny_new = (kerny/8+1)*8;
-      printf ( "kerny=%d is not a multiple of 8, changing to %d", kerny, kerny_new);
+      printf ( "kerny=%d is not a multiple of 8, changing to %d ", kerny, kerny_new);
       fflush ( stdout );
       kerny = kerny_new;
   }

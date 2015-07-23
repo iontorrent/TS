@@ -1,67 +1,30 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <script type="text/javascript"
-          src="/site_media/jquery/js/jquery-1.6.1.min.js"></script>
-  <script type="text/javascript"
-          src="/site_media/jquery/js/jquery.form.js"></script>
-  <script type="text/javascript"
-          src="/site_media/jquery/js/form2object/form2object.js"></script>
-  <script type="text/javascript"
-          src="/site_media/jquery/js/form2object/jquery.toObject.js"></script>
-  <link type="text/css" href="/site_media/jquery/css/default.uni-form.css"
-        rel="Stylesheet"/>
-  <script type="text/javascript">
+
+<script type="text/javascript">
     $(function() {
-      $('#bedSimple').submit(function() {
-        formData = JSON.stringify($("#meta_form").toObject());
-        $("#meta").val(formData);
-        return true;
-      });
-      {% if not genome %}
-      $.getJSON("/rundb/api/v1/referencegenome/", function(result) {
-          $.each(result.objects, function(index, ref) {
-              $("#references").append('<option value="' + ref.short_name + '">'+ ref.name + '</option>');
-          });
-      });
-      {% endif %}
-      $('#hotspot_help_text').hide();
-      $('#hotspot_help_button').click(function(){
-        $('#hotspot_help_text').slideToggle(300);
-      });
+        $.getJSON("/rundb/api/v1/referencegenome/", function(result) {
+            $.each(result.objects, function(index, ref) {
+                $("#references").append('<option value="' + ref.short_name + '">'+ ref.name + '</option>');
+            });
+        });
     });
-  </script>
+</script>
 </head>
+
 <body>
-
-
-<form id="meta_form" onsubmit="return false;">
-{% if genome  %}
-  <h1>Upload a BED file for {{genome}}: </h1>
-{% else %}
-  <h1>Upload a BED file: </h1>
-{% endif %}
-  <label for="reference">Reference </label>
-  <select id="references" name="reference">
-    {% if genome %}
-    <option value="{{genome}}"> {{genome}} </option>
-    {% endif %}
-  </select>
-
-  <label for="hotspot" >Hotspot </label>
-  <input type="checkbox" name="hotspot" /> <a href="#" id="hotspot_help_button">?</a>
-</form>
-<p id="hotspot_help_text">A "HotSpot" type BED file defines regions or individual bases where variants are expected to occur.</p>
-<form id="bedSimple" method="POST" class="uniForm" enctype="multipart/form-data">
-    <div style="margin-top: 10px;">
-      <input id="file" type="file" name="file"/>
+<div id="main" class="container">
+    <h3>Upload new Target Regions file (BED) or Hotspot file (BED or VCF): </h3>
+    <div class="form-inline" style="margin:20px;">
+        <label for="reference" class="control-label">Reference </label>
+        <select id="references" name="reference"></select>
+        <label for="hotspot" class="control-label" style="margin-left: 10px">Hotspot </label>
+        <input type="checkbox" id="hotspot" name="hotspot" >
+        <a href="#" rel="tooltip" title="A 'HotSpot' type BED or VCF file defines regions and individual bases where variants are expected to occur.">?</a>
     </div>
-    <input id="meta" type="hidden" name="meta" value="{}" />
-    <div class="buttonHolder" id="upload_button">
-      <input id="upload" type="submit" value="Upload">
-    </div>
-</form>
-
-
+   
+    <input id="file" type="file" name="file" style="margin-left: 10px"/>
+</div>
 </body>
 </html>

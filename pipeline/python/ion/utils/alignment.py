@@ -8,69 +8,153 @@ from ion.utils import blockprocessing
 
 import traceback
 import os
-import ConfigParser
-import tempfile
-# matplotlib/numpy compatibility
-os.environ['HOME'] = tempfile.mkdtemp()
-from matplotlib import use
-use("Agg",warn=False)
-
 import subprocess
 import sys
 import time
-import json
-import math
-from collections import deque
-from urlparse import urlunsplit
+import multiprocessing
+import ionstats
 
-#from ion.reports.plotters import *
-from ion.utils.aggregate_alignment import *
-from ion.utils import ionstats_plots
-from ion.utils import ionstats
+
+def alignTFs(basecaller_bam_filename,bam_filename,fasta_path):
+
+    com1 = "tmap mapall -n 12 -f %s -r %s -Y -v stage1 map4" % (fasta_path, basecaller_bam_filename)
+    com2 = "samtools view -Sb -o %s - 2>> /dev/null" % bam_filename
+    p1 = subprocess.Popen(com1, stdout=subprocess.PIPE, shell=True)
+    p2 = subprocess.Popen(com2, stdin=p1.stdout, shell=True)
+    p2.communicate()
+    p1.communicate()
+
+    if p1.returncode != 0:
+        raise subprocess.CalledProcessError(p1.returncode, com1)
+    if p2.returncode != 0:
+        # Assumption: samtools view only fails when there are zero reads.
+        printtime("Command %s failed, presumably because there are no TF reads" % (com2))
+        raise Exception('No TF reads found')        
+        #raise subprocess.CalledProcessError(p2.returncode, com2)
 
 
 def align(
+    blocks,
+    alignerArgs,
+    ionstatsArgs,
     referenceName,
-    lib_path,
-    bidirectional,
-    mark_duplicates,
-    realign,
-    skip_sorting,
-    aligner_opts_extra,
+    basecaller_meta_information,
+    library_key,
+    graph_max_x,
+    readFile,
+    do_realign,
+    do_ionstats,
+    do_sorting,
+    do_mark_duplicates,
+    do_indexing,
     logfile,
     output_dir,
     output_basename):
-    #     Input -> output_basename.bam
-    #     Output -> output_dir/output_basename.bam
+    # Input  : readFile
+    # Output : output_dir/output_basename.bam
 
     try:
-        cmd = "alignmentQC.py"
-        cmd += " --logfile %s" % logfile
-        cmd += " --output-dir %s" % output_dir
-        cmd += " --input %s" % lib_path
-        cmd += " --genome %s" % referenceName
-        #cmd += " --max-plot-read-len %s" % str(int(800))
-        cmd += " --out-base-name %s" % output_basename
-        #cmd += " --skip-alignStats"
-        #cmd += " --threads 8"
-        #cmd += " --server-key 13"
 
-        if realign:
-            cmd += " --realign"
-        if skip_sorting:
-            cmd += " --skip-sorting"
-        if bidirectional:
-            cmd += ' --bidirectional'
-        if aligner_opts_extra:
-            cmd += ' --aligner-opts-extra "%s"' % aligner_opts_extra
-        if mark_duplicates:
-            cmd += ' --mark-duplicates'
+        if 'tmap' in alignerArgs:
+            aligner = 'tmap'
+            if '...' in alignerArgs:
+                alist = alignerArgs.split('...')
+                cmd = alist[0]
+                tmap_stage_options = alist[1]
+            else:
+                cmd = 'tmap mapall'
+                tmap_stage_options = 'stage1 map4'
+        elif 'bowtie2' in alignerArgs:
+            aligner = 'bowtie2'
+            cmd = alignerArgs
+        else:
+            printtime("ERROR: Aligner command not specified")
+            raise
+
+
+        threads = multiprocessing.cpu_count()
+        bamBase = os.path.normpath(output_dir + "/" + output_basename)
+        bamFile = bamBase + ".bam"
+
+        blocks=[] # TODO
+        if aligner == 'tmap':
+            referenceFastaFile = '/results/referenceLibrary/tmap-f3/' + referenceName + '/' + referenceName + '.fasta'
+            if blocks:
+                mergecmd = 'java -Xmx8g -jar /opt/picard/picard-tools-current/picard.jar MergeSamFiles'
+                bamdir = '.'
+                bamfile = readFile
+                block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in blocks]
+                block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
+                for bamfile in block_bam_list:
+                    mergecmd = mergecmd + ' I=%s' % bamfile
+                mergecmd = mergecmd + ' O=/dev/stdout'
+                mergecmd = mergecmd + ' VERBOSITY=WARNING' # suppress INFO on stderr
+                mergecmd = mergecmd + ' QUIET=true' # suppress job-summary on stderr
+                mergecmd = mergecmd + ' VALIDATION_STRINGENCY=SILENT'
+                cmd = mergecmd + " | " + cmd
+            cmd += " -n %d" % threads
+            cmd += " -f %s" % referenceFastaFile
+            if blocks:
+                cmd += " -i bam"
+            else:
+                cmd += " -r %s" % readFile
+            cmd += " -v"
+            cmd += " -Y"
+            cmd += " -u --prefix-exclude 5"  # random seed based on read name after ignoring first 5 characters
+            if do_realign:
+                cmd += " --do-realign"
+            cmd += " -o 2" # -o 0: SAM, -o 2: uncompressed BAM
+            cmd += " %s" % tmap_stage_options
+            cmd += " 2>> " + logfile
+
+        elif aligner == 'bowtie2':
+            referenceFastaDir  = '/results/referenceLibrary/bowtie2/' + referenceName + '/' + referenceName
+            cmd="java -Xmx8g -jar /opt/picard/picard-tools-current/picard.jar SamToFastq I=%s F=/dev/stdout" % readFile
+            cmd+=" | /results/plugins/bowtielauncher/bowtie2 -p%d -x %s -U /dev/stdin" % (threads, referenceFastaDir)
+            cmd+=" | samtools view -ubS -"
+
+        if do_ionstats:
+            bam_filenames=["/dev/stdin"]
+            ionstats_alignment_filename="%s.ionstats_alignment.json" % bamBase
+            ionstats_alignment_h5_filename="%s.ionstats_error_summary.h5" % bamBase
+
+            ionstats_cmd = ionstats.generate_ionstats_alignment_cmd(
+                               ionstatsArgs,
+                               bam_filenames,
+                               ionstats_alignment_filename,
+                               ionstats_alignment_h5_filename,
+                               basecaller_meta_information,
+                               library_key,
+                               graph_max_x)
+
+            cmd += " | tee >(%s)" % ionstats_cmd
+
+        if do_sorting:
+            if do_mark_duplicates:
+                #TODO: implement alternative, maybe with named pipes
+                cmd += " | samtools sort -m 1000M -l1 -@12 -o - -"
+                json_name = 'BamDuplicates.%s.json' % bamBase if bamBase!='rawlib' else 'BamDuplicates.json'
+                cmd = "BamDuplicates -i <(%s) -o %s -j %s" % (cmd, bamFile, json_name)
+            else:
+#                cmd += " | ( samtools sort -m 1000M -l1 -@12 - %s <&0 & )" % bamBase
+                cmd += " | samtools sort -m 1000M -l1 -@12 - %s" % bamBase
+        else:
+            cmd += " > %s.bam" % bamBase
+
 
         printtime("DEBUG: Calling '%s':" % cmd)
-        ret = subprocess.call(cmd,shell=True)
+        ret = subprocess.Popen(['/bin/bash', '-c', cmd]).wait()
         if ret != 0:
-            printtime("ERROR: alignmentQC.py failed, return code: %d" % ret)
+            printtime("ERROR: alignment failed, return code: %d" % ret)
             raise RuntimeError('exit code: %d' % ret)
+
+
+        # TODO: piping into samtools index or create index in sort process ?
+        if do_indexing and do_sorting:
+            cmd = "samtools index " + bamFile
+            print cmd
+            subprocess.call(cmd,shell=True)
+
     except:
         raise
 
@@ -97,385 +181,201 @@ def merge_barcoded_alignment_bams(ALIGNMENT_RESULTS, basecaller_datasets, method
 
     printtime("Finished barcode merging of %s" % ALIGNMENT_RESULTS)
 
-
-def alignment_unmapped_bam(
+# this becomes the main pipeline function
+#TODO : pass also block dirs for multi-bam tmap process
+def process_datasets(
+        blocks,
+        alignmentArgs,
+        ionstatsArgs,
         BASECALLER_RESULTS,
+        basecaller_meta_information,
+        library_key,
+        graph_max_x,
         basecaller_datasets,
         ALIGNMENT_RESULTS,
-        realign,
-        aligner_opts_extra,
-        mark_duplicates,
-        create_index,
-        bidirectional,
-        activate_barcode_filter,
+        do_realign,
+        do_ionstats,
+        do_mark_duplicates,
+        do_indexing,
         barcodeInfo):
 
     printtime("Attempt to align")
 
-    skip_sorting = False
-    
+    do_sorting = True
+
+    # compare with pipeline/python/ion/utils/ionstats.py
+    ionstats_basecaller_file_list = []
+    ionstats_alignment_file_list = []
+    ionstats_basecaller_filtered_file_list = []
+    ionstats_alignment_filtered_file_list = []
+
     for dataset in basecaller_datasets["datasets"]:
-
-        # filter out based on flag
-        if activate_barcode_filter:
-            keep_dataset = False
-            for rg_name in dataset["read_groups"]:
-                if not basecaller_datasets["read_groups"][rg_name].get('filtered',False):
-                    keep_dataset = True
-            if not keep_dataset:
-                continue
-
-        # needed for unfiltered data
-        if int(dataset["read_count"]) == 0:
-            continue
-
-        '''
-        sample, barcode = dataset['dataset_name'].split('/')
-        barcode_name = barcode.replace('No_barcode_match','no_barcode')
-        reference = barcodeInfo[barcode_name]['referenceName'] # TODO
-        '''
 
         read_group = dataset['read_groups'][0]
         reference = basecaller_datasets['read_groups'][read_group]['reference']
-        print '%s' % reference
-        if not reference:
-            continue
+        #print "DEBUG: reference: %s' % reference
 
-        try:
-            align(
-                reference,
-                os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']),
-                bidirectional,
-                mark_duplicates,
-                realign,
-                skip_sorting,
-                aligner_opts_extra,
-                logfile=os.path.join(ALIGNMENT_RESULTS,dataset['file_prefix']+'.alignmentQC_out.txt'),
-                output_dir=ALIGNMENT_RESULTS,
-                output_basename=dataset['file_prefix'])
-        except:
-            traceback.print_exc()
-
-        if create_index:
-            try:
-                composite_bam_filepath = os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam')
-                composite_bai_filepath = os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam.bai')
-                blockprocessing.create_index_file(composite_bam_filepath, composite_bai_filepath)
-            except:
-                traceback.print_exc()
-
-    printtime("**** Alignment completed ****")
-
-
-
-def create_ionstats(
-        BASECALLER_RESULTS,
-        ALIGNMENT_RESULTS,
-        basecaller_meta_information,
-        basecaller_datasets,
-        graph_max_x,
-        activate_barcode_filter,
-        evaluate_hp):
-
-    # TEST
-    basecaller_bam_file_list = []
-    alignment_bam_file_list = []
-
-
-    ionstats_alignment_file_list = []
-    if evaluate_hp:
-        ionstats_alignment_h5_file_list = []
-
-    ionstats_basecaller_file_list = []
-
-    for dataset in basecaller_datasets["datasets"]:
-
-        keep_dataset = False
+        filtered = True
         for rg_name in dataset["read_groups"]:
             if not basecaller_datasets["read_groups"][rg_name].get('filtered',False):
-                keep_dataset = True
-        filtered = not keep_dataset
-
-        # filter out based on flag
-        if activate_barcode_filter:
-            if filtered:
-                continue
+                filtered = False
 
         # skip non-existing bam file
         if int(dataset["read_count"]) == 0:
             continue
 
-        read_group = dataset['read_groups'][0]
-        reference = basecaller_datasets['read_groups'][read_group]['reference']
-        if reference and not filtered:
-
-            # TEST
-            alignment_bam_file_list.append(os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam'))
-
-            ionstats.generate_ionstats_alignment(
-                [os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam')],
-                os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_alignment.json'),
-                os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5') if evaluate_hp else None,
-                basecaller_meta_information if evaluate_hp else None,
-                graph_max_x)
-
-            ionstats_alignment_file_list.append(os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_alignment.json'))
-            if evaluate_hp:
-                ionstats_alignment_h5_file_list.append(os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5'))
-        else:
-
-            # TEST
-            basecaller_bam_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']))
-
-            ionstats.generate_ionstats_basecaller(
-                [os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])],
-                os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
-                graph_max_x)
-
-            ionstats_basecaller_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'))
-
-
-    # Merge ionstats files from individual (barcoded) datasets
-    if len(ionstats_alignment_file_list) > 0:
-        ionstats.reduce_stats(ionstats_alignment_file_list,os.path.join(ALIGNMENT_RESULTS,'ionstats_alignment.json'))
-    else: # barcode classification filtered all barcodes or no reads available
-        # TODO: ionstats needs to produce initial json file
-        try:
-            #cmd = "echo $'@HD\tVN:1.5\tSO:coordinate\n@SQ\tSN:ref\tLN:4\n@RG\tID:filename\tSM:filename' | samtools view -F4 -S -b - > empty_dummy.bam"
-            cmd  = "echo  '@HD\tVN:1.5\tSO:coordinate\n@SQ\tSN:ref\tLN:4\n@RG\tID:filename\tSM:filename' | samtools view -F4 -S -b - > empty_dummy.bam"
-
-            printtime("DEBUG: Calling '%s':" % cmd)
-            ret = subprocess.call(cmd,shell=True)
-            if ret != 1:
-                printtime("ERROR: empty bam file generation failed, return code: %d" % ret)
-                raise RuntimeError('exit code: %d' % ret)
-
-            ionstats.generate_ionstats_alignment(
-                ['empty_dummy.bam'],
-                os.path.join(ALIGNMENT_RESULTS, 'ionstats_alignment.json'),
-                os.path.join(ALIGNMENT_RESULTS, 'ionstats_error_summary.h5') if evaluate_hp else None,
-                basecaller_meta_information if evaluate_hp else None,
-                graph_max_x)
-
-        except:
-            pass
-
-    if len(ionstats_basecaller_file_list) > 0:
-        ionstats.reduce_stats(ionstats_basecaller_file_list,os.path.join(BASECALLER_RESULTS,'ionstats_tmp_basecaller.json'))
-    else: # barcode classification filtered all barcodes or no reads available
-        # TODO: ionstats needs to produce initial json file
-        try:
-            #cmd = "echo $'@HD\tVN:1.5\tSO:coordinate\n@SQ\tSN:ref\tLN:4\n@RG\tID:filename\tSM:filename' | samtools view -F4 -S -b - > empty_dummy.bam"
-            cmd  = "echo  '@HD\tVN:1.5\tSO:coordinate\n@SQ\tSN:ref\tLN:4\n@RG\tID:filename\tSM:filename' | samtools view -F4 -S -b - > empty_dummy.bam"
-
-            printtime("DEBUG: Calling '%s':" % cmd)
-            ret = subprocess.call(cmd,shell=True)
-            if ret != 1:
-                printtime("ERROR: empty bam file generation failed, return code: %d" % ret)
-                raise RuntimeError('exit code: %d' % ret)
-
-            ionstats.generate_ionstats_basecaller(
-                ['empty_dummy.bam'],
-                os.path.join(BASECALLER_RESULTS, 'ionstats_tmp_basecaller.json'),
-                graph_max_x)
-        except:
-            pass
-
-
-    ionstatslist = []
-    a = os.path.join(ALIGNMENT_RESULTS,'ionstats_alignment.json')
-    b = os.path.join(BASECALLER_RESULTS,'ionstats_tmp_basecaller.json')
-    if os.path.exists(a):
-        ionstatslist.append(a)
-    if os.path.exists(b):
-        ionstatslist.append(b)
-    if len(ionstatslist) > 0:
-        ionstats.reduce_stats( ionstatslist, os.path.join(BASECALLER_RESULTS,'ionstats_basecaller_with_aligninfos.json'))
-        ionstats.reduce_stats( reversed(ionstatslist), os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'))
-    if evaluate_hp and len(ionstats_alignment_h5_file_list) > 0 and basecaller_meta_information:
-        ionstats.reduce_stats_h5(ionstats_alignment_h5_file_list,os.path.join(ALIGNMENT_RESULTS,'ionstats_error_summary.h5'))
-
-    '''
-    # TEST: TS-8745, single call to ionstats alignment operating on all the per-barcode BAMs at once
-    if len(alignment_bam_file_list) > 0:
-        ionstats.generate_ionstats_alignment(
-                alignment_bam_file_list,
-                os.path.join(ALIGNMENT_RESULTS, 'test_ionstats_alignment.json'),
-                os.path.join(ALIGNMENT_RESULTS, 'test_ionstats_error_summary.h5'),
-                basecaller_meta_information,
-                graph_max_x)
-    # TODO: ionstats basecaller doesn't support multiple input files
-    if len(basecaller_bam_file_list) > 0:
-        ionstats.generate_ionstats_basecaller(
-                basecaller_bam_file_list,
-                os.path.join(ALIGNMENT_RESULTS, 'test2_ionstats_basecaller.json'),
-                os.path.join(ALIGNMENT_RESULTS, 'test2_ionstats_error_summary.h5'), # TODO, not needed
-                basecaller_meta_information,
-                graph_max_x)
-    '''
-
-def plot_main_report_histograms(BASECALLER_RESULTS,ALIGNMENT_RESULTS,basecaller_datasets,graph_max_x):
-
-    ionstats_folder = BASECALLER_RESULTS
-    ionstats_file = 'ionstats_basecaller.json'
-
-    # Plot new read length histogram
-    ionstats_plots.read_length_histogram(
-        os.path.join(ionstats_folder,ionstats_file),
-        os.path.join(BASECALLER_RESULTS,'readLenHisto2.png'),
-        graph_max_x)
-
-    for dataset in basecaller_datasets["datasets"]:
-
-        keep_dataset = False
-        for rg_name in dataset["read_groups"]:
-            if not basecaller_datasets["read_groups"][rg_name].get('filtered',False):
-                keep_dataset = True
-        if not keep_dataset:
-            continue
-
-        read_group = dataset['read_groups'][0]
-        reference = basecaller_datasets['read_groups'][read_group]['reference']
-
         if reference:
-            ionstats_folder = ALIGNMENT_RESULTS
-            ionstats_file = 'ionstats_alignment.json'
-        else:
-            ionstats_folder = BASECALLER_RESULTS
-            ionstats_file = 'ionstats_basecaller.json'
 
-        # Plot read length sparkline
-        ionstats_plots.read_length_sparkline(
-            os.path.join(ionstats_folder, dataset['file_prefix']+'.'+ionstats_file),
-            os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.sparkline.png'),
-            graph_max_x)
-
-        # Plot higher detail barcode specific histogram
-        ionstats_plots.old_read_length_histogram(
-            os.path.join(ionstats_folder, dataset['file_prefix']+'.'+ionstats_file),
-            os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.read_len_histogram.png'),
-            graph_max_x)
-
-
-def create_plots(ionstats_filepath,flows):
-
-    try:
-        graph_max_x = int(50 * math.ceil(0.014 * int(flows)))
-    except:
-        graph_max_x = 800
-
-    # Use ionstats alignment results to generate plots
-    ionstats_plots.alignment_rate_plot2(ionstats_filepath,'alignment_rate_plot.png', graph_max_x)
-
-    ionstats_plots.base_error_plot(ionstats_filepath,'base_error_plot.png', graph_max_x)
-
-    ionstats_plots.old_aq_length_histogram(ionstats_filepath,'Filtered_Alignments_Q10.png', 'AQ10', 'red')
-    ionstats_plots.old_aq_length_histogram(ionstats_filepath,'Filtered_Alignments_Q17.png', 'AQ17', 'yellow')
-    ionstats_plots.old_aq_length_histogram(ionstats_filepath,'Filtered_Alignments_Q20.png', 'AQ20', 'green')
-    ionstats_plots.old_aq_length_histogram(ionstats_filepath,'Filtered_Alignments_Q47.png', 'AQ47', 'purple')
-
-
-def merge_ionstats(dirs, BASECALLER_RESULTS, ALIGNMENT_RESULTS, basecaller_datasets):
-
-    # Merge *ionstats_alignment.json files across blocks
-
-    # DEBUG: check if merging is commutative
-
-    try:
-        # DEBUG
-        composite_filename_list = []
-        composite_h5_filename_list = []
-
-        for dataset in basecaller_datasets["datasets"]:
-
-            # filter out based on flag
-            keep_dataset = False
-            for rg_name in dataset["read_groups"]:
-                if not basecaller_datasets["read_groups"][rg_name].get('filtered',False):
-                    keep_dataset = True
-            if not keep_dataset:
-                printtime("INFO: filter out %s" % rg_name)
-                continue
-
-            read_group = dataset['read_groups'][0]
-            reference = basecaller_datasets['read_groups'][read_group]['reference']
-
-            if reference:
-                ionstats_folder = ALIGNMENT_RESULTS
-                ionstats_file = 'ionstats_alignment.json'
-            else:
-                ionstats_folder = BASECALLER_RESULTS
-                ionstats_file = 'ionstats_basecaller.json'
-
-            block_filename_list = [os.path.join(dir,ionstats_folder,dataset['file_prefix']+'.'+ionstats_file) for dir in dirs]
-            block_filename_list = [filename for filename in block_filename_list if os.path.exists(filename)] # TODO, remove this check and provide list with valid blocks
-            composite_filename = os.path.join(ionstats_folder, dataset['file_prefix']+'.composite_allblocks_'+ionstats_file)
-            ionstats.reduce_stats(block_filename_list, composite_filename)
-            composite_filename_list.append(composite_filename)
-
-            if reference:
-                block_h5_filename_list = [os.path.join(dir,ALIGNMENT_RESULTS,dataset['file_prefix']+'.ionstats_error_summary.h5') for dir in dirs]
-                block_h5_filename_list = [filename for filename in block_h5_filename_list if os.path.exists(filename)]  # TODO, remove this check and provide list with valid blocks
-                composite_h5_filename = os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_error_summary.h5')
-                ionstats.reduce_stats_h5(block_h5_filename_list, composite_h5_filename)
-                composite_h5_filename_list.append(composite_h5_filename)
-
-
-        block_filename_list = [os.path.join(dir,ALIGNMENT_RESULTS,'ionstats_alignment.json') for dir in dirs]
-        block_filename_list = [filename for filename in block_filename_list if os.path.exists(filename)]
-        composite_filename = os.path.join(ALIGNMENT_RESULTS, 'composite_allblocks_ionstats_alignment.json')
-        ionstats.reduce_stats(block_filename_list, composite_filename)
-
-        block_h5_filename_list = [os.path.join(dir,ALIGNMENT_RESULTS,'ionstats_error_summary.h5') for dir in dirs]
-        block_h5_filename_list = [filename for filename in block_h5_filename_list if os.path.exists(filename)]
-        composite_filename = os.path.join(ALIGNMENT_RESULTS, 'ionstats_error_summary.h5') # composite_allblocks
-        if len(block_h5_filename_list):
-            ionstats.reduce_stats_h5(block_h5_filename_list, composite_filename)
-
-        # DEBUG: this is used to check if merging is commutative, the length check is necessary in case  all datasets are 'filtered' (e.g.)
-        if len(composite_filename_list) > 0:
-            ionstats.reduce_stats(composite_filename_list,os.path.join(ALIGNMENT_RESULTS,'composite_allbarcodes_ionstats_alignment.json'))
-        if len(composite_h5_filename_list) > 0:
-            ionstats.reduce_stats_h5(composite_h5_filename_list,os.path.join(ALIGNMENT_RESULTS,'composite_allbarcodes_ionstats_error_summary.h5'))
-
-    except:
-        printtime("ERROR: Failed to merge ionstats_alignment.json")
-        traceback.print_exc()
-
-
-
-def merge_bams(dirs, BASECALLER_RESULTS, ALIGNMENT_RESULTS, basecaller_datasets, mark_duplicates):
-
-    for dataset in basecaller_datasets['datasets']:
-
-        try:
-            read_group = dataset['read_groups'][0]
-            reference = basecaller_datasets['read_groups'][read_group]['reference']
-
-            filtered = True
-            for rg_name in dataset["read_groups"]:
-                if not basecaller_datasets["read_groups"][rg_name].get('filtered',False):
-                    filtered = False
-
-            if reference and not filtered:
-                bamdir = ALIGNMENT_RESULTS
-                bamfile = dataset['file_prefix']+'.bam'
-            else:
+            # merge unmapped bam files TODO move into align
+            try:
                 bamdir = BASECALLER_RESULTS
                 bamfile = dataset['basecaller_bam']
-            block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in dirs]
-            block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
-            composite_bam_filepath = os.path.join(bamdir, bamfile)
-            if block_bam_list:
-                if reference and not filtered:
-                    composite_bai_filepath = composite_bam_filepath+'.bai'
-                    blockprocessing.merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates)
-                else:
+                block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in blocks]
+                block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
+                composite_bam_filepath = os.path.join(bamdir, bamfile)
+                if block_bam_list:
                     composite_bai_filepath=""
-                    blockprocessing.merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates=False, method='samtools')
+                    mark_duplicates=False
+                    method='samtools'
+                    blockprocessing.merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates, method)
+            except:
+                traceback.print_exc()
+                printtime("ERROR: merging %s unsuccessful" % bamfile)
 
-        except:
-            print traceback.format_exc()
-            printtime("ERROR: merging %s unsuccessful" % bamfile)
 
+            try:
+                align(
+                    blocks,
+                    alignmentArgs,
+                    ionstatsArgs,
+                    reference,
+                    basecaller_meta_information,
+                    library_key,
+                    graph_max_x,
+                    os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam']),
+                    do_realign,
+                    do_ionstats,
+                    do_sorting,
+                    do_mark_duplicates,
+                    do_indexing,
+                    logfile=os.path.join(ALIGNMENT_RESULTS,dataset['file_prefix']+'.alignmentQC_out.txt'),
+                    output_dir=ALIGNMENT_RESULTS,
+                    output_basename=dataset['file_prefix'])
+            except:
+                traceback.print_exc()
+
+            if filtered:
+                ionstats_alignment_filtered_file_list.append(os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_alignment.json'))
+            else:
+                ionstats_alignment_file_list.append(os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.ionstats_alignment.json'))
+
+            '''
+            if do_indexing:
+                try:
+                    composite_bam_filepath = os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam')
+                    composite_bai_filepath = os.path.join(ALIGNMENT_RESULTS, dataset['file_prefix']+'.bam.bai')
+                    blockprocessing.create_index_file(composite_bam_filepath, composite_bai_filepath)
+                except:
+                    traceback.print_exc()
+            '''
+
+        else:
+
+            # merge unmapped bam file without reference
+            try:
+                bamdir = BASECALLER_RESULTS
+                bamfile = dataset['basecaller_bam']
+                block_bam_list = [os.path.join(blockdir, bamdir, bamfile) for blockdir in blocks]
+                block_bam_list = [block_bam_filename for block_bam_filename in block_bam_list if os.path.exists(block_bam_filename)]
+                composite_bam_filepath = os.path.join(bamdir, bamfile)
+                if block_bam_list:
+                    composite_bai_filepath=""
+                    mark_duplicates=False
+                    method='samtools'
+                    blockprocessing.merge_bam_files(block_bam_list, composite_bam_filepath, composite_bai_filepath, mark_duplicates, method)
+            except:
+                traceback.print_exc()
+                printtime("ERROR: merging %s unsuccessful" % bamfile)
+
+
+            if do_ionstats:
+                # TODO: move ionstats basecaller into basecaller
+                ionstats.generate_ionstats_basecaller(
+                    [os.path.join(BASECALLER_RESULTS, dataset['basecaller_bam'])],
+                    os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'),
+                    library_key,
+                    graph_max_x)
+
+                if filtered:
+                    ionstats_basecaller_filtered_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'))
+                else:
+                    ionstats_basecaller_file_list.append(os.path.join(BASECALLER_RESULTS, dataset['file_prefix']+'.ionstats_basecaller.json'))
+
+    if do_ionstats:
+
+        # Merge ionstats files from individual (barcoded) datasets
+        if len(ionstats_alignment_file_list) > 0:
+            ionstats.reduce_stats(ionstats_alignment_file_list,os.path.join(ALIGNMENT_RESULTS,'ionstats_alignment.json'))
+        else: # barcode classification filtered all barcodes or no reads available
+            # TODO: ionstats needs to produce initial json file
+            try:
+                #cmd = "echo $'@HD\tVN:1.5\tSO:coordinate\n@SQ\tSN:ref\tLN:4\n@RG\tID:filename\tSM:filename' | samtools view -F4 -S -b - > empty_dummy.bam"
+                cmd  = "echo  '@HD\tVN:1.5\tSO:coordinate\n@SQ\tSN:ref\tLN:4\n@RG\tID:filename\tSM:filename' | samtools view -F4 -S -b - > empty_dummy.bam"
+
+                printtime("DEBUG: Calling '%s':" % cmd)
+                ret = subprocess.call(cmd,shell=True)
+                if ret != 0:
+                    printtime("ERROR: empty bam file generation failed, return code: %d" % ret)
+                    raise RuntimeError('exit code: %d' % ret)
+
+                ionstats.generate_ionstats_alignment(
+                    ionstatsArgs,
+                    ['empty_dummy.bam'],
+                    os.path.join(ALIGNMENT_RESULTS, 'ionstats_alignment.json'),
+                    os.path.join(ALIGNMENT_RESULTS, 'ionstats_error_summary.h5'),
+                    basecaller_meta_information,
+                    library_key,
+                    graph_max_x)
+
+            except:
+                raise
+
+        if len(ionstats_basecaller_file_list) > 0:
+            ionstats.reduce_stats(ionstats_basecaller_file_list,os.path.join(BASECALLER_RESULTS,'ionstats_tmp_basecaller.json'))
+        else: # barcode classification filtered all barcodes or no reads available
+            # TODO: ionstats needs to produce initial json file
+            try:
+                #cmd = "echo $'@HD\tVN:1.5\tSO:coordinate\n@SQ\tSN:ref\tLN:4\n@RG\tID:filename\tSM:filename' | samtools view -F4 -S -b - > empty_dummy.bam"
+                cmd  = "echo  '@HD\tVN:1.5\tSO:coordinate\n@SQ\tSN:ref\tLN:4\n@RG\tID:filename\tSM:filename' | samtools view -F4 -S -b - > empty_dummy.bam"
+
+                printtime("DEBUG: Calling '%s':" % cmd)
+                ret = subprocess.call(cmd,shell=True)
+                if ret != 0:
+                    printtime("ERROR: empty bam file generation failed, return code: %d" % ret)
+                    raise RuntimeError('exit code: %d' % ret)
+
+                ionstats.generate_ionstats_basecaller(
+                    ['empty_dummy.bam'],
+                    os.path.join(BASECALLER_RESULTS, 'ionstats_tmp_basecaller.json'),
+                    library_key,
+                    graph_max_x)
+            except:
+                raise
+
+
+        ionstatslist = []
+        a = os.path.join(ALIGNMENT_RESULTS,'ionstats_alignment.json')
+        b = os.path.join(BASECALLER_RESULTS,'ionstats_tmp_basecaller.json')
+        if os.path.exists(a):
+            ionstatslist.append(a)
+        if os.path.exists(b):
+            ionstatslist.append(b)
+        if len(ionstatslist) > 0:
+            ionstats.reduce_stats( ionstatslist, os.path.join(BASECALLER_RESULTS,'ionstats_basecaller_with_aligninfos.json'))
+            ionstats.reduce_stats( reversed(ionstatslist), os.path.join(BASECALLER_RESULTS,'ionstats_basecaller.json'))
+#        if len(ionstats_alignment_h5_file_list) > 0:
+#            ionstats.reduce_stats_h5(ionstats_alignment_h5_file_list,os.path.join(ALIGNMENT_RESULTS,'ionstats_error_summary.h5'))
+
+
+    printtime("**** Alignment completed ****")
 

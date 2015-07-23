@@ -71,6 +71,7 @@ def makeCSA(reportDir, rawDataDir, csa_file_name=None):
                 'separator.trace.txt',
                 'sigproc.log',
                 'BkgModelFilterData.h5',
+                'pinsPerFlow.txt',
                 # Basecaller files
                 '*ionstats_alignment.json',
                 '*ionstats_basecaller.json',
@@ -206,3 +207,10 @@ def make_ssa():
                 logger.warn(traceback.format_exc())
     archive.close()
     return path, archive_name
+
+if __name__ == '__main__':
+    # Command line to make CSA for debugging code purposes.
+    import sys
+    reportDir = sys.argv[1]
+    rawDataDir = sys.argv[2]
+    makeCSA(reportDir, rawDataDir)

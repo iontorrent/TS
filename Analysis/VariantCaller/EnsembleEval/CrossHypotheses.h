@@ -68,10 +68,11 @@ public:
 // handle auxiliary variables for one read's associated hypothesis evaluation
 class CrossHypotheses{
 public:
-  vector<string> instance_of_read_by_state;  // this read, modified by each state of a variant
-  vector<vector<float> > predictions;
-  vector<vector<float> > normalized;
+  vector<string> instance_of_read_by_state;       // this read, modified by each state of a variant
+  vector<vector<float> > predictions;             // Predicted signal for flows
+  vector<vector<float> > normalized;              // Normalized signal for flows
   vector<int>            state_spread;
+  vector<bool>           same_as_null_hypothesis; // indicates whether a ref or alt hypothesis equals the read as called
 
   HiddenBasis delta_state;
   bool use_correlated_likelihood;

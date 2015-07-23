@@ -1,0 +1,211 @@
+#!/bin/bash
+# Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved
+# 1 - Edit /usr/share/ion-tsconfig/ansible/group_vars/all_local (create it if it does not exist)
+# 2 - If cmd arg is to Remove, then change STATIC_IP: False
+# 3 - Run ansible-playbook config_network.yml
+
+#
+# Purpose: Configure Torrent Server primary ethernet adapter for static IP.
+#
+# Method: Have command line options to define required parameters - if variables
+# are not defined, use prompt to get user input.
+#
+# Return:  Error Codes
+#   0  - Success
+#   1  - Unknown command line option
+#   10 - User aborted
+#   11 - Bad IP address
+#   12 - Bad subnet netmask
+#   13 - Bad network ID
+#   14 - Bad broadcast IP
+#   15 - Bad gateway/router IP
+
+#--------------------------------------
+# Include function definition file
+#--------------------------------------
+TSCONFIG_SRC_DIR='/usr/share/ion-tsconfig'
+source $TSCONFIG_SRC_DIR/ts_params||source ../ts_params||true
+source $TSCONFIG_SRC_DIR/ts_functions||source ../ts_functions||true
+
+#--------------------------------------
+# Functions
+#--------------------------------------
+function network_functionality ()
+{
+    network_test_results=$(mktemp -t init_netstat.XXXXX)
+    if network_tests $1 >> ${network_test_results}; then
+        net_stat='good'
+    else
+        net_stat='bad'
+    fi
+}
+
+function print_help ()
+{
+    echo
+    echo "Usage: TSstaticip [option]..."
+    echo -e "\t--ip                          Define host IP address"
+    echo -e "\t--nm                          Define subnet mask (netmask)"
+    echo -e "\t--gw                          Define gateway/router IP address"
+    echo -e "\t--device                      Define the ethernet port to configure"
+    echo -e "\t--remove                      Sets up dhcp, removing any static IP settings"
+    echo -e "\t--debug, -d                   Prints script commands when executing (set -x)"
+    echo -e "\t--demo                        Prints what changes would be executed only.  No changes are made"
+    echo -e "\t--help, -h                    Prints command line args"
+    echo -e "\t--version, -v                 Prints version"
+    echo
+    echo "Executing the command with no options will force prompting of each parameter"
+    echo
+}
+
+#--------------------------------------
+# Trap exit
+#--------------------------------------
+trap 'error ${LINENO}' ERR
+
+#--------------------------------------
+# Default settings
+#--------------------------------------
+version=`echo '$Revision$'|awk '{print $2}'`
+device=$(outbound_net_port)
+DEBUG=False
+REMOVE=False
+CONFIG_FILENAME="${ANSIBLE_HOME}/group_vars/all_local"
+
+# Log command line arguments
+cmdline=${@}
+
+if [ $# == 0 ]; then
+    print_help
+    exit
+fi
+
+#--------------------------------------
+# command line argument parsing
+#--------------------------------------
+#---    We convert all arguments to lower case  ---#
+while [ $# != 0 ]; do
+    case ${1,,} in
+        '--help'|'-h')
+            print_help
+            exit 0
+        ;;
+        
+        '--version'|'-v')
+            echo "`basename $0` version $version"
+            if [ -f /opt/ion/bin/ion-tsconfig.version.env ]; then
+                source /opt/ion/bin/ion-tsconfig.version.env
+                IonVersionGetFullVersion ion-tsconfig
+            fi
+            exit 0
+        ;;
+        
+        '--debug'|'-d')
+        set -x
+        ;;
+        
+        '--device')
+        shift
+        device=$1
+        ;;
+        
+        '--demo'|'--dry-run')
+        DEBUG=True
+        ;;
+        
+        '--ip'|'-ip')
+        shift
+        ipaddress=$1
+        if ! is_valid_ipaddress $ipaddress; then
+            echo "Exiting $0 early due to error"
+            error ${LINENO} "Invalid IP address $ipaddress" 11
+        fi
+        ;;
+        
+        '--nm'|'-nm')
+        shift
+        netmask=$1
+        if ! is_valid_netmask $netmask; then
+            echo "Exiting $0 early due to error"
+            error ${LINENO} "Invalid netmask address $netmask" 12
+        fi
+        ;;
+        
+        '--gw'|'-gw')
+        shift
+        gateway=$1
+        if ! is_valid_ipaddress $gateway; then
+            echo "Exiting $0 early due to error"
+            error ${LINENO} "Invalid gateway address $gateway" 15
+        fi
+        ;;
+        
+        '--remove')
+        REMOVE=True
+        ;;
+        
+        *)
+        log "Unknown option: $1"
+        echo "Unknown option: $1.  Exiting"
+        echo "Use TSstaticip --help for options."
+        exit 1
+        ;;
+    esac
+    shift
+done
+
+#--------------------------------------
+# Must be root to edit network config file
+#--------------------------------------
+needs_root
+
+# Log command line arguments
+log $cmdline
+
+if [ ! -r $CONFIG_FILENAME ]; then
+    cp -p ${ANSIBLE_HOME}/group_vars/all $CONFIG_FILENAME
+fi
+
+#--------------------------------------
+# Process a remove request first, then exit
+#--------------------------------------
+if [ $REMOVE == True ]; then
+    #--------------------------------------
+    #Remove the static IP and restore to dhcp
+    #--------------------------------------
+    if [ $DEBUG == False ]; then
+        sed -i 's/STATIC_IP:.*$/STATIC_IP: False/' $CONFIG_FILENAME
+    else
+        echo "CMD: sed -i 's/STATIC_IP:.*$/STATIC_IP: False/' $CONFIG_FILENAME"
+    fi
+else
+    #--------------------------------------
+    # Set static ip settings
+    #--------------------------------------
+    if [ $DEBUG == False ]; then
+        sed -i "s/STATIC_IP:.*$/STATIC_IP: True/" $CONFIG_FILENAME
+        sed -i "s/static_ip:.*$/static_ip: $ipaddress/" $CONFIG_FILENAME
+        sed -i "s/static_nm:.*$/static_nm: $netmask/" $CONFIG_FILENAME
+        sed -i "s/static_gw:.*$/static_gw: $gateway/" $CONFIG_FILENAME
+    else
+        echo "CMD:sed -i 's/STATIC_IP:.*$/STATIC_IP: True/' $CONFIG_FILENAME"
+        echo "CMD:sed -i 's/static_ip:.*$/static_ip: $ipaddress/' $CONFIG_FILENAME"
+        echo "CMD:sed -i 's/static_nm:.*$/static_nm: $netmask/' $CONFIG_FILENAME"
+        echo "CMD:sed -i 's/static_gw:.*$/static_gw: $gateway/' $CONFIG_FILENAME"
+    fi
+fi
+
+
+#-------------------------------------------------------------------------
+# Run ansible playbook and restart networking
+#-------------------------------------------------------------------------
+if [ $DEBUG == False ]; then
+    cd $ANSIBLE_HOME
+    ansible-playbook -i ${ANSIBLE_HOME}/${MY_HOSTS} roles/fileserver/tasks/config_network.yml --sudo
+else
+    echo "CMD: ansible-playbook -i ${ANSIBLE_HOME}/${MY_HOSTS} roles/fileserver/tasks/config_network.yml --sudo"
+fi
+
+exit
+
+

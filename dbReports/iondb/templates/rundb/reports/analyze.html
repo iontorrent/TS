@@ -43,7 +43,7 @@
                             {{ rpf.report_name.errors }}
                         </div>
                     </div>
-                    {% if isProton %}
+                    {% if has_thumbnail %}
                     <div class="control-group">
                         <label for="id_do_thumbnail" class="control-label">Thumbnail only</label>
                         <div class="controls">
@@ -57,10 +57,10 @@
                         <div class="controls">
                             {{ rpf.blockArgs }}
                             <label for="fromRaw" class="checkbox inline" rel="tooltip" title='Start from .dat files'>
-                                <input type="radio" id="fromRaw" name="pipetype" value="fromRaw" {% if not isProton %}checked="checked"{% endif %}/ >
+                                <input type="radio" id="fromRaw" name="pipetype" value="fromRaw" {% if not has_thumbnail %}checked="checked"{% endif %}/ >
                                 Signal Processing</label>
                             <label for="fromWells" class="checkbox inline" rel="tooltip" title='Start from previous analysis 1.wells files'>
-                                <input type="radio" id="fromWells" name="pipetype" value="fromWells" {% if isProton %}checked="checked"{% endif %}/>
+                                <input type="radio" id="fromWells" name="pipetype" value="fromWells" {% if has_thumbnail %}checked="checked"{% endif %}/>
                                 Base Calling</label>
                         </div>
                     </div>
@@ -71,7 +71,7 @@
                             {{ rpf.previousReport.errors }}
                         </div>
                     </div>
-                    {% if isProton %}
+                    {% if has_thumbnail %}
                     <div class="control-group thumb fromWells" id="previousThumbReport" >
                         <label for="id_previousThumbReport" class="control-label">Use data from previous thumbnail</label>
                         <div class="controls">
@@ -94,13 +94,6 @@
                         <div class="controls">
                             {{ rpf.tfKey }}
                             {{ rpf.tfKey.errors }}
-                        </div>
-                    </div>
-                    <div class="control-group">
-                        <label for="id_tf_config" class="control-label" rel="tooltip" title='File that specifies test fragment information'>TF Config</label>
-                        <div class="controls">
-                            {{ rpf.tf_config }}
-                            {{ rpf.tf_config.errors }}
                         </div>
                     </div>
                     <div class="control-group">
@@ -295,8 +288,15 @@
                                 {{ rpf.alignmentArgs.errors }}
                             </div>
                         </div>
+                        <div class="control-group">
+                            <label for="id_ionstatsArgs" class="control-label">Ionstats Args</label>
+                            <div class="controls">
+                                {{ rpf.ionstatsArgs }}
+                                {{ rpf.ionstatsArgs.errors }}
+                            </div>
+                        </div>
                     </div>
-                    {% if isProton %}
+                    {% if has_thumbnail %}
                     <div class="span12 thumb">
                         <div class="control-group">
                             <label for="id_thumbnailBeadfindArgs" class="control-label">Thumbnail Beadfind args</label>
@@ -338,6 +338,13 @@
                             <div class="controls">
                                 {{ rpf.thumbnailAlignmentArgs }}
                                 {{ rpf.thumbnailAlignmentArgs.errors }}
+                            </div>
+                        </div>
+                        <div class="control-group">
+                            <label for="id_thumbnailIonstatsArgs" class="control-label">Thumbnail Ionstats args</label>
+                            <div class="controls">
+                                {{ rpf.thumbnailIonstatsArgs }}
+                                {{ rpf.thumbnailIonstatsArgs.errors }}
                             </div>
                         </div>
                     </div>

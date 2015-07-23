@@ -46,6 +46,7 @@
                 "python-simplejson",
                 "python-calabash",
                 "python-jsonpipe",
+                "python-h5py",
                 "python-rpy2",
                 "python-django",
                 "python-gnuplot",

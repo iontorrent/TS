@@ -2,20 +2,22 @@
 #ifndef COMPARATORNOISECORRECTOR_H
 #define COMPARATORNOISECORRECTOR_H
 
+#include "RandSchrange.h"
+#include <stddef.h>
 
 #ifdef BB_DC
 typedef short int Mask;
 
-typedef struct RawImage {
+typedef struct  {
 	int rows;
 	int cols;
-};
+	short int *image;
+	int frames;
+}RawImage;
 
 #else
 #include "Mask.h"
 #include "RawImage.h"
-#include "RandSchrange.h"
-#include <stddef.h>
 #endif
 
 #define MAX_CNC_THREADS 256
@@ -34,7 +36,7 @@ public:
      */
     void CorrectComparatorNoise(short *image, int rows, int cols, int frames,
     		Mask *mask,bool verbose,bool aggressive_correction, bool beadfind_image = false,
-    		int threadNum=-1);
+    		int threadNum=-1, int regionXSize=0, int regionYSize=0);
     void CorrectComparatorNoiseThumbnail(RawImage *raw,Mask *mask, int regionXSize, int regionYSize, bool verbose);
     void CorrectComparatorNoiseThumbnail(short *image, int rows, int cols, int frames, Mask *mask, int regionXSize, int regionYSize, bool verbose);
 	void justGenerateMask(RawImage *raw, int threadNum);
@@ -50,7 +52,25 @@ public:
       rows=0;
       cols=0;
       frames=0;
+      ncomp=4;
       image=NULL;
+      sumTime=0;
+      applyTime = 0;
+      tm1=0;
+      tm2=0;
+      tm2_1=0;
+      tm2_2=0;
+      tm2_3=0;
+      nnsubTime=0;
+      mskTime=0;
+      regionXSize=0;
+      regionYSize=0;
+      allocTime=0;
+      maskTime=0;
+      mainTime=0;
+      aggTime=0;
+      totalTime=0;
+
       initVars();
     }
 
@@ -59,11 +79,10 @@ public:
 
 protected:
    void CorrectComparatorNoise_internal(bool verbose,
-		   bool aggressive_correction,int row_start=-1,int row_end=-1);
+		   bool aggressive_correction,int row_start=-1,int row_end=-1, bool hfonly=false);
 
 private:
-   int  DiscoverComparatorPhase(float *psigs,int n_comparators,int nframes, bool hfonly);
-   int  DiscoverComparatorPhase_tn(float *psigs,int n_comparators,int nframes, bool hfonly);
+   int  DiscoverComparatorPhase(float *psigs,int n_comparators);
     void NNSubtractComparatorSigs(float *pnn,float *psigs,int *mask,int span,int n_comparators,int nframes,float *hfnoise=NULL);
     void HighPassFilter(float *pnn,int n_comparators,int nframes,int span);
     void CalcComparatorSigRMS(float *prms,float *pnn,int n_comparators,int nframes);
@@ -78,16 +97,24 @@ private:
     void SumColumns(int row_start, int row_end);
     void SetMeanToZero(float *inp);
     void ApplyCorrection(int  phase, int row_start, int row_end, short int *correction);
-    void TransposeData();
+    void TransposeData(int phase);
     void BuildCorrection(bool hfonly);
-    
+    void DebugSaveComparatorNoise(int time);
+    void DebugSaveComparatorMask(int time);
+    void DebugSaveComparatorSigs(int time);
+    void DebugSaveComparatorRMS(int time);
+    void DebugSaveAvgNum();
+    void DebugSaveCorrection(int row_start, int row_end);
+    void ResetMask();
+    void ClearPinned();
+
     // list of allocated structures
     float *mComparator_sigs; // [cols*frames*4];
     int    mComparator_sigs_len; // [cols*frames*4];
-    float *mComparator_noise; // [cols*frames*2];
-    int    mComparator_noise_len; // [cols*frames*2];
-    float *mComparator_hf_noise; // [cols*frames*2];
-    int    mComparator_hf_noise_len; // [cols*frames*2];
+    float *mComparator_noise; // [cols*frames*4];
+    int    mComparator_noise_len; // [cols*frames*4];
+    float *mComparator_hf_noise; // [cols*frames*4];
+    int    mComparator_hf_noise_len; // [cols*frames*4];
     float *mComparator_rms; //[cols*2];
     int    mComparator_rms_len; //[cols*2];
     int   *mComparator_mask; //[cols*2];
@@ -109,24 +136,24 @@ private:
     {
         mComparator_sigs = NULL; // [cols*frames*4];
         mComparator_sigs_len = ALLIGN_LEN(cols*frames*4*sizeof(mComparator_sigs[0])); // [cols*frames*4];
-        mComparator_noise = NULL; // [cols*frames*2];
-        mComparator_noise_len = ALLIGN_LEN(cols*frames*2*sizeof(mComparator_sigs[0])); // [cols*frames*2];
-        mComparator_hf_noise = NULL; // [cols*frames*2];
-        mComparator_hf_noise_len = ALLIGN_LEN(cols*frames*2*sizeof(mComparator_hf_noise[0])); // [cols*frames*2];
-        mComparator_rms = NULL; //[cols*2];
-        mComparator_rms_len = ALLIGN_LEN(cols*2*sizeof(mComparator_rms[0])); //[cols*2];
-        mComparator_mask = NULL; //[cols*2];
-        mComparator_mask_len = ALLIGN_LEN(cols*2*sizeof(mComparator_mask[0])); //[cols*2];
-        mComparator_hf_rms = NULL; //[cols*2];
-        mComparator_hf_rms_len = ALLIGN_LEN(cols*2*sizeof(mComparator_hf_rms[0])); //[cols*2];
-        mComparator_hf_mask = NULL; //[cols*2];
-        mComparator_hf_mask_len = ALLIGN_LEN(cols*2*sizeof(mComparator_hf_mask[0])); //[cols*2];
+        mComparator_noise = NULL; // [cols*frames*4];
+        mComparator_noise_len = ALLIGN_LEN(cols*frames*4*sizeof(mComparator_sigs[0])); // [cols*frames*4];
+        mComparator_hf_noise = NULL; // [cols*frames*4];
+        mComparator_hf_noise_len = ALLIGN_LEN(cols*frames*4*sizeof(mComparator_hf_noise[0])); // [cols*frames*4];
+        mComparator_rms = NULL; //[cols*4];
+        mComparator_rms_len = ALLIGN_LEN(cols*4*sizeof(mComparator_rms[0])); //[cols*4];
+        mComparator_mask = NULL; //[cols*4];
+        mComparator_mask_len = ALLIGN_LEN(cols*4*sizeof(mComparator_mask[0])); //[cols*4];
+        mComparator_hf_rms = NULL; //[cols*4];
+        mComparator_hf_rms_len = ALLIGN_LEN(cols*4*sizeof(mComparator_hf_rms[0])); //[cols*4];
+        mComparator_hf_mask = NULL; //[cols*4];
+        mComparator_hf_mask_len = ALLIGN_LEN(cols*4*sizeof(mComparator_hf_mask[0])); //[cols*4];
         mPcomp = NULL; //[frames];
         mPcomp_len = ALLIGN_LEN(frames*sizeof(mPcomp[0])); //[frames];
         mAvg_num = NULL; //[cols*frames*4];
         mAvg_num_len = ALLIGN_LEN(cols*frames*4*sizeof(mAvg_num[0])); //[cols*frames*4];
-        mCorrection = NULL; // [cols*frames*2]
-        mCorrection_len = ALLIGN_LEN(cols*frames*2*sizeof(mCorrection[0])); // [cols*frames*2]
+        mCorrection = NULL; // [cols*frames*4]
+        mCorrection_len = ALLIGN_LEN(cols*frames*4*sizeof(mCorrection[0])); // [cols*frames*4]
         mMask = NULL; // [cols*rows];
         mMask_len = ALLIGN_LEN(cols*rows*sizeof(mMask[0])); // [cols*rows];
 
@@ -136,9 +163,26 @@ private:
     int rows;
     int cols;
     int frames;
+    int ncomp;
     RandSchrange mRand;
     int mMaskGenerated;
+    int regionXSize;
+    int regionYSize;
 
+    double sumTime;
+    double applyTime;
+    double tm1;
+    double tm2;
+    double tm2_1;
+    double tm2_2;
+    double tm2_3;
+    double nnsubTime;
+    double mskTime;
+    double allocTime;
+    double maskTime;
+    double mainTime;
+    double aggTime;
+    double totalTime;
 
     //    RandSchrange mRand;
     int mSigsSize;

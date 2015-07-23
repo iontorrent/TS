@@ -46,7 +46,7 @@ void PIDloop::Initialize(const float initVal)
 //! @return Next time-ordered filtered sample
 float PIDloop::Step(const float val)
 {
-    register float et = val - yt_;
+    float et = val - yt_;
 
     // apply limiting to error signal (anti-windup guard)
     if (et < -kSaturation)
@@ -70,7 +70,7 @@ float PIDloop::Step(const float val)
 //! @return Next time-ordered filtered sample (extrapolated)
 float PIDloop::Step()
 {
-    register float et = st_ - yt_;
+    float et = st_ - yt_;
 
     // apply limiting to error signal (anti-windup guard)
     if (et < -kSaturation)

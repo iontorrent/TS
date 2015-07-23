@@ -1,5 +1,5 @@
 /**
- * Copyright 1993-2012 NVIDIA Corporation.  All rights reserved.
+ * Copyright 1993-2013 NVIDIA Corporation.  All rights reserved.
  *
  * Please refer to the NVIDIA end user license agreement (EULA) associated
  * with this source code for terms and conditions that govern your use of
@@ -78,7 +78,7 @@ namespace nv
         size_t fsize = 0;
 
         // read files as binary to prevent problems from newline translation
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 
         if (fopen_s(&shaderFile, filename, "rb") != 0)
 #else
@@ -219,7 +219,7 @@ namespace nv
         size_t fsize = 0;
 
         // read files as binary to prevent problems from newline translation
-#ifdef _WIN32
+#if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
 
         if (fopen_s(&shaderFile, filename, "rb") != 0)
 #else
@@ -254,6 +254,4 @@ namespace nv
     }
 
 } // nv namespace
-
 #endif
-

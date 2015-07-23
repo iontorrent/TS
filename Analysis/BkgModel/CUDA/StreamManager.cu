@@ -1,7 +1,4 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
-// patch for CUDA5.0/GCC4.7
-#undef _GLIBCXX_ATOMIC_BUILTINS
-#undef _GLIBCXX_USE_INT128
 
 #include <iostream>
 
@@ -64,7 +61,7 @@ cudaSimpleStreamExecutionUnit::~cudaSimpleStreamExecutionUnit()
   _resource->release();
 }
 
-void cudaSimpleStreamExecutionUnit::setName(char * name)
+void cudaSimpleStreamExecutionUnit::setName(std::string name)
 {
   _name = name;
 }
@@ -294,7 +291,6 @@ cudaSimpleStreamManager::~cudaSimpleStreamManager()
   cout << outputStr.str();
 
 }
-
 
 
 

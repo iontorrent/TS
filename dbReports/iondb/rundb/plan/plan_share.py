@@ -9,10 +9,11 @@ import socket
 import time
 
 from iondb.rundb.models import SharedServer, PlannedExperiment, PlannedExperimentQC, QCType, dnaBarcode, User, \
-        Sample, SampleSet, SampleSetItem, Content, Plugin, EventLog
+        Sample, SampleSet, SampleSetItem, Content, Plugin, EventLog, SamplePrepData
 from django.core.serializers.json import DjangoJSONEncoder
 
 from iondb.plugins.launch_utils import find_IRU_account
+from ion import version as TS_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,8 @@ def create_associated_objects(status, plan, obj_dict, user):
         set_dict = obj_dict['sampleSet']
         try:
             set_dict['creator_id'] = set_dict['lastModifiedUser_id'] = user.pk
+            libraryPrep_dict = set_dict.pop('libraryPrepInstrumentData')
+
             sampleSet,created = SampleSet.objects.get_or_create(displayedName=set_dict['displayedName'], defaults=set_dict)
             sampleSet.plans.add(plan)
             for setitem_dict in obj_dict.get('sampleSetItems',[]):
@@ -78,6 +81,15 @@ def create_associated_objects(status, plan, obj_dict, user):
                
                 setitem_dict['creator_id'] = setitem_dict['lastModifiedUser_id'] = user.pk
                 item,created = SampleSetItem.objects.get_or_create(sample=sample, sampleSet=sampleSet, defaults=setitem_dict)
+
+            if libraryPrep_dict:
+                if not sampleSet.libraryPrepInstrumentData:
+                    sampleSet.libraryPrepInstrumentData = SamplePrepData.objects.create(**libraryPrep_dict)
+                    sampleSet.save()
+                else:
+                    for field, value in libraryPrep_dict.items():
+                        setattr(sampleSet.libraryPrepInstrumentData, field, value)
+                    sampleSet.libraryPrepInstrumentData.save()
             
             status.update(msg='....processed SampleSet: %s' % sampleSet.displayedName)
         except Exception as err:
@@ -90,60 +102,6 @@ def create_associated_objects(status, plan, obj_dict, user):
         starttime = time.time()
 
     return True
-
-def update_bedfiles(obj, bedfiles=None, targetKey='targetRegionBedFile', hotspotKey='hotSpotRegionBedFile'):
-
-    def find_bedfile(filename, reference):
-        content_objs = Content.objects.filter(publisher__name="BED", path__contains="/unmerged/detail/") \
-                .filter(path__contains=reference).filter(path__contains=filename)
-        
-        for filepath in content_objs.values_list('file', flat=True):
-            if filename == os.path.basename(filepath):
-                return filepath
-        return ''
-    
-    # initialize bedfiles
-    if not bedfiles:
-        bedfiles = {
-            "missing": [],
-            "found": [],
-            "found_files": {}
-        }
-    
-    # locate bedfiles by filename and reference
-    if isinstance(obj,dict):
-        isdict = True
-        old_target = obj.get(targetKey)
-        old_hotspot = obj.get(hotspotKey)
-        reference = obj.get('reference')
-    else:
-        isdict = False
-        old_target = getattr(obj, targetKey)
-        old_hotspot = getattr(obj, hotspotKey)
-        reference = getattr(obj, 'reference')
-    
-    to_find = {}
-    if old_target:
-        to_find[targetKey] = ( os.path.basename(old_target), reference )
-    if old_hotspot:
-        to_find[hotspotKey] = ( os.path.basename(old_hotspot), reference )
-    
-    for key, value in to_find.items():
-        if value in bedfiles['missing']:
-            new_path = ''
-        elif value in bedfiles['found']:
-            new_path = bedfiles['found_files'].get(value[0])
-        else:
-            new_path = find_bedfile(*value)
-            if new_path:
-                bedfiles['found'].append(value)
-                bedfiles['found_files'][value[0]] = new_path
-            else:
-                bedfiles['missing'].append(value)
-
-        setattr(obj, key, new_path) if not isdict else obj.update({key: new_path})
-
-    return bedfiles
 
 
 def update_transferred_plan(plan, request):
@@ -158,25 +116,11 @@ def update_transferred_plan(plan, request):
     obj_dict = json.loads(request.body)
     
     status = Status()
+    eas = plan.latest_eas
     
     # create Samples, etc.
     create_associated_objects(status, plan, obj_dict, request.user)
-    
-    # bedfiles
-    eas = plan.latest_eas
-    bedfiles = update_bedfiles(eas)
-    
-    if eas.barcodedSamples:
-        for bcsample in eas.barcodedSamples.values():
-            for info in bcsample.get('barcodeSampleInfo',{}).values():
-                bedfiles = update_bedfiles(info, bedfiles)
 
-    if len(bedfiles['found']) > 0:
-        status.update(msg='....found BED files: '+', '.join(zip(*bedfiles['found'])[0]))
-    if len(bedfiles['missing']) > 0:
-        for filename,reference in bedfiles['missing']:
-            status.update(error='Unable to find bedfile: %s for reference: %s' % (filename,reference))
-    
     # Ion Reporter account id needs to be updated
     if 'IonReporterUploader' in eas.selectedPlugins:
         accountId = None
@@ -261,6 +205,7 @@ def get_associated_objects_json(plan):
     if sampleSet:
         obj_dict['sampleSet'] = get_obj_dict(sampleSet)
         obj_dict['sampleSet']['SampleGroupType_CV_id'] = sampleSet.SampleGroupType_CV_id
+        obj_dict['sampleSet']['libraryPrepInstrumentData'] = get_obj_dict(sampleSet.libraryPrepInstrumentData) if sampleSet.libraryPrepInstrumentData else {}
         obj_dict['sampleSetItems'] = []
         for setitem in sampleSet.samples.filter(sample__in=samples):
             setitem_dict = get_obj_dict(setitem)
@@ -297,6 +242,9 @@ def mark_plan_transferred(plan, location, username, status):
         'error': status.error.replace('<p>','').replace('</p>',' ')
     }
     plan.save()
+    # also update status for experiment obj
+    plan.experiment.status = 'transferred'
+    plan.experiment.save()
 
 
 def check_for_existing_plan(plan, session, status):
@@ -352,6 +300,9 @@ def transfer_plan(plan, serialized, server_name, username):
     
     # set up communication
     session, version = setup_session(server_name)
+    if version != TS_VERSION:
+        status.update(error='Unable to transfer plan: Torrent Suite version %s does not match %s software version %s.' % (TS_VERSION, server_name, version))
+        return status.to_dict()
     
     if debug:
         starttime = time.time()
@@ -375,7 +326,7 @@ def transfer_plan(plan, serialized, server_name, username):
             # parse validation errors
             errjson = json.loads(r.json()['error'][3:-2])
             for k,v in errjson.items():
-                status.update(error='Error: %s' % (', '.join(v)))
+                status.update(error='Error: %s' % (json.dumps(v)))
             return status.to_dict()
         except:
             r.raise_for_status()

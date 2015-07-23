@@ -33,7 +33,7 @@ using namespace arma;
 #define unlikely(x)     __builtin_expect((x),0)
 #define likely(x)       __builtin_expect((x),1)
 #define all(c) (c).begin(), (c).end()
-#define ALWAYS_INLINE __attribute__((always_inline))
+#define ALWAYS_INLINE inline __attribute__((always_inline))
 
 typedef int16_t i16;
 typedef int32_t i32;
@@ -264,7 +264,10 @@ static void mulAndOrthError(fmat &score, fvec &orthError, const fmat &basisGood,
 
     const u16 *dataPtr = data16.colptr(0);    
     //#pragma omp parallel for
-    rep(i, N) {		
+    rep(i, N) {
+#ifndef __INTEL_COMPILER
+// ICC has issues with tmpScore[ii].v lines (variable length arrays)
+// ICC has issues with type conversion: "__m128" to "v8hi"
         // ---- unpack and convert one row of data to float into local buffer -----
         v4sf rowV[L8*2];        
         rep(k, L8) {
@@ -275,8 +278,6 @@ static void mulAndOrthError(fmat &score, fvec &orthError, const fmat &basisGood,
         for (int k = L; k % 8 != 0; ++k) ((float*)rowV)[k] = 0.0f;
         // -------------------------------------------------------------------------
 
-#ifndef __INTEL_COMPILER
-// ICC has issues with tmpScore[ii].v lines (variable length arrays)
         // -------------------------- calculate score ------------------------------
         //f4vector tmpScore[ RANK_GOOD ];
         f4vector tmpScore[ basisGood.n_cols ];

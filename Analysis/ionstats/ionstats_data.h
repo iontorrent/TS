@@ -105,6 +105,7 @@ public:
   void Initialize(unsigned int max_hp, vector<unsigned int> &o, vector<unsigned int> &d);
   void Initialize(unsigned int max_hp);
   void Add(vector<char> &ref_hp_nuc, vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, bool ignore_terminal_hp=true);
+  void Add(vector<char> &ref_hp_nuc, vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> & ref_hp_flow, vector<uint16_t> & zeromer_insertion_flow, vector<uint16_t> & zeromer_insertion_len, string &flow_order, bool ignore_terminal_hp=true);
   int MergeFrom(HpData &other);
 
   void writeH5(hid_t &file_id, string group_name);
@@ -152,7 +153,8 @@ public:
 
   void Initialize(unsigned int max_hp, unsigned int n_flow, vector<unsigned int> &o, vector<unsigned int> &d);
   void Add(ReadAlignmentErrors &e);
-  void Add(vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow);
+  void Add(vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, bool ignore_terminal_hp=true);
+  void Add(vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, vector<uint16_t> & zeromer_insertion_flow, bool ignore_terminal_hp=true);
   int MergeFrom(RegionalSummary &other);
 
   void writeH5(hid_t &file_id, string group_name);
@@ -199,9 +201,12 @@ public:
   void Initialize(unsigned int n_flow, unsigned int read_buffer_size = 1e5, unsigned int h5_group_counter = 0);
   void InitializeNewH5(string h5_out_file);
   void CloseH5(void);
-  int Add(string &id, ReadAlignmentErrors &e, vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow);
+  int Add(string &id, ReadAlignmentErrors &e, vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, bool ignore_terminal_hp=true);
+  int Add(string &id, ReadAlignmentErrors &e, vector<uint16_t> &ref_hp_len, vector<int16_t> &ref_hp_err, vector<uint16_t> &ref_hp_flow, vector<uint16_t> & zeromer_insertion_flow, vector<uint16_t> & zeromer_insertion_len, bool ignore_terminal_hp=true);
   void FlushToH5Buffered();
   void FlushToH5Forced();
+  bool BufferFull()  { return(n_read_ == read_buffer_size_); };
+  bool BufferEmpty() { return(n_read_ == 0); };
 
   string                 h5_out_file()      { return h5_out_file_; }
   unsigned int           read_buffer_size() { return read_buffer_size_; }

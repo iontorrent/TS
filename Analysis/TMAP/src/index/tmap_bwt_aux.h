@@ -31,7 +31,7 @@ tmap_bwt_aux_set_mask();
   @param  c    base in two-bit integer format
   @details     more efficient version of bwt_occ but requires that k <= l (not checked)
   */
-inline tmap_bwt_int_t 
+tmap_bwt_int_t
 tmap_bwt_aux_2occ(const tmap_bwt_t *bwt, tmap_bwt_int_t k, tmap_bwt_int_t *l, uint8_t c);
 
 #endif // TMAP_BWT_AUX_H

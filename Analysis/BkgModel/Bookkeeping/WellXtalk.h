@@ -49,6 +49,36 @@ private:
   }
 };
 
+class SimpleCorrector{
+public:
+  float additive_leakage; // how much mean signal leaks through in a flow i.e. 0.1 = 10%
+  float additive_time_scale; // how quickly we approach max leakage - should possibly be spline?
+  float additive_leak_offset; // leakage offset - don't start immediately
+  float multiplicative_distortion; // mimic 'key' normalization rescaling done by previous additive offset
+  SimpleCorrector(){
+    additive_leakage = 0.0f;
+    additive_time_scale = 32.0f;
+    additive_leak_offset = 0.0f;
+    multiplicative_distortion = 1.0f;
+  };
+  void FromJSON(Json::Value &json);
+  void ToJSON(Json::Value &json);
+  float AdditiveDistortion(int flow_num, float region_mean_sig);
+  float MultiplicativeDistortion(int flow_num);
+private:
+  friend class boost::serialization::access;
+  template<class Archive>
+  void serialize(Archive &ar, const unsigned int version)
+  {
+    ar
+        & additive_leakage
+        & additive_time_scale
+        & additive_leak_offset
+        & multiplicative_distortion;
+  }
+
+};
+
 
 class WellXtalk{
 public:
@@ -62,6 +92,9 @@ public:
 
   TerribleConstants my_empirical_function;
   bool simple_xtalk;
+
+  SimpleCorrector my_bkg_distortion;
+
   // 0=SquareGrid, 1=HexGridCol 2=HexGridRow
   int grid_type;
   std::string chip_type; // what to report as the chip type in the file
@@ -100,6 +133,7 @@ private:
         &nn_span_y
         &map_span
         & my_empirical_function
+        & my_bkg_distortion
         & grid_type
         & chip_type
         & simple_xtalk;

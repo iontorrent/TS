@@ -212,7 +212,7 @@ def pretty(d, indent=0):
 
 def updateruninfo(request):
     '''Replaces crawler.py code
-    Ensure this function/action is indempotent'''
+    Ensure this function/action is idempotent'''
 
     folder = request.POST.get('datapath')
     logger.debug("updateruninfo looking at %s" % folder)
@@ -304,13 +304,14 @@ def get_planned_exp_objects(d, folder):
                 
                 planObj.latestEAS = easObj
                 planObj.save()
-
-            sampleSetObj = planObj.sampleSet
-            if sampleSetObj:
-                logger.debug("crawler going to mark planObj.name=%s; sampleSet.id=%d as run" %(planObj.planDisplayedName, sampleSetObj.id))
-
-                sampleSetObj.status = "run"
-                sampleSetObj.save()
+                
+            #skip setting the sampleSet to run since a sampleSet can have multiple plans and sequencing runs associated with it
+#             sampleSetObj = planObj.sampleSet
+#             if sampleSetObj:
+#                 logger.debug("crawler going to mark planObj.name=%s; sampleSet.id=%d as run" %(planObj.planDisplayedName, sampleSetObj.id))
+# 
+#                 sampleSetObj.status = "run"
+#                 sampleSetObj.save()
 
 
         except:

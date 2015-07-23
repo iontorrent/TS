@@ -1,0 +1,15 @@
+# Sentry/raven config
+try:
+    import iondb.version as version
+
+    SENTRY_RELEASE = 'v' + '.'.join(
+        [version.IonVersionGetMajor(), version.IonVersionGetMinor(), version.IonVersionGetRelease(),
+         version.IonVersionGetGitHash()])
+except:
+    SENTRY_RELEASE = ''
+
+RAVEN_CONFIG = {
+    'dsn': 'http://c52ae5b190b145e190666d386f6deebc:de5578699f8047eba100ee2afee5a920@sentry.itw/2',
+    'release': SENTRY_RELEASE,
+    'site': "{{ansible_fqdn}}"
+}

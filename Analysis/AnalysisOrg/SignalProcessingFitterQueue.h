@@ -3,13 +3,22 @@
 #define SIGNALPROCESSINGFITTERQUEUE_H
 
 #include <boost/serialization/utility.hpp>
-#include "cudaWrapper.h"
 #include "WorkerInfoQueue.h"
+#include "RingBuffer.h"
 #include "SignalProcessingMasterFitter.h"
+#include "RawWells.h"
 
 typedef std::pair<int, int> beadRegion;
 typedef std::vector<beadRegion> regionProcessOrderVector;
 bool sortregionProcessOrderVector (const beadRegion& r1, const beadRegion& r2);
+
+struct BkgFitWorkerGpuInfo
+{
+  int gpu_index;
+  void* queue;
+  void* fallbackQueue;
+};
+
 
 struct ProcessorQueue
 {
@@ -56,15 +65,6 @@ struct ProcessorQueue
     int numWorkers,
     std::vector<int> &gpus
    );
-  /*std::vector<BkgFitWorkerGpuInfo>& GetGpuInfo() {
-	  std::vector<BkgFitWorkerGpuInfo>::iterator iter;
-	  for(iter = gpu_info.begin(); iter!=gpu_info.end(); iter++)
-	  {
-		  (*iter).queue = GetGpuQueue();
-		  (*iter).fallbackQueue = GetCpuQueue();
-	  }
-	  return gpu_info;
-  }*/
   WorkerInfoQueue* GetCpuQueue() { return fitting_queues[CPU_QUEUE]; }
   WorkerInfoQueue* GetGpuQueue() { return fitting_queues[GPU_QUEUE]; }
 
@@ -93,6 +93,9 @@ struct BkgModelWorkInfo
   PolyclonalFilterOpts polyclonal_filter_opts;
   master_fit_type_table *table;
   const CommandLineOpts *inception_state;
+  const std::vector<float> *smooth_t0_est;
+  void ** SampleCollection; // pointer to pointer so all bkinfo objects point to the same dynamically generated sample-collection
+  RingBuffer<float> *gpuAmpEstPerFlow;
 };
 
 
@@ -105,7 +108,7 @@ struct BkgModelImgToTraceInfoGPU
   int regionMaxY;
   Image * img;
   Mask * bfmask;
-  std::vector<float> * smooth_t0_est;
+  const std::vector<float> *smooth_t0_est;
   BkgModelWorkInfo * BkgInfo;
 };
 
@@ -148,7 +151,7 @@ struct ImageInitBkgWorkInfo
   PoissonCDFApproxMemo *math_poiss;
   SignalProcessingMasterFitter **signal_proc_fitters;
   RegionalizedData **sliced_chip;
-  struct SlicedChipExtras *sliced_chip_extras;
+  SlicedChipExtras *sliced_chip_extras;
   GlobalDefaultsForBkgModel *global_defaults;
   std::set<int> *sample;
   std::vector<float> *tauB;
@@ -156,6 +159,20 @@ struct ImageInitBkgWorkInfo
 
   bool restart;
   int16_t *washout_flow;
+};
+
+// Some information needed by the helper thread which coordinates the handshake 
+// between GPU and CPU for writing amplitudes estimates to rawwell buffers
+struct GPUFlowByFlowPipelineInfo
+{
+  RingBuffer<float> *ampEstimatesBuf;
+  std::vector<SignalProcessingMasterFitter*> *fitters;
+  ProcessorQueue *pq;
+  int startingFlow;
+  int endingFlow;  
+  SemQueue *packQueue;
+  SemQueue *writeQueue;
+  ChunkyWells *rawWells;
 };
 
 void* BkgFitWorkerCpu (void *arg);

@@ -1,9 +1,5 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 
-// patch for CUDA5.0/GCC4.7
-#undef _GLIBCXX_ATOMIC_BUILTINS
-#undef _GLIBCXX_USE_INT128
-
 #include "StreamingKernels.h"
 #include "CudaUtils.h" // for cuda < 5.0 this has to be included ONLY here!
 #include "MathModel/PoissonCdf.h"
@@ -3284,7 +3280,6 @@ __global__ void PreSingleFitProcessing_k(// Here FL stands for flows
 )
 {
   int bead_ndx = blockIdx.x * blockDim.x + threadIdx.x;
-  
   if(bead_ndx >= num_beads) return;
 
   num_beads = ((num_beads+32-1)/32) * 32;
@@ -3401,6 +3396,7 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
   float* pPhi, // N
   float* sbg, // FLxF 
   float* fgbuffers, // FLxFxN
+  bead_state *pState,
 
   // other inputs 
   int startingFlowNum, // starting flow number to calculate absolute flow num
@@ -3419,6 +3415,8 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
   
   if(bead_ndx >= num_beads) return;
 
+  if (pState[bead_ndx].pinned || pState[bead_ndx].corrupt) return;
+
   num_beads = ((num_beads+32-1)/32) * 32;
 
   int NucId;
@@ -3433,28 +3431,15 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
   nei_xtalk += bead_ndx;
   NucId = CP[sId].flowIdxMap[currentFlowIteration];  //CP_SINGLEFLOWFIT
 
-  if (CP[sId].fit_taue) { //CP_SINGLEFLOWFIT
-    Rval = pR[bead_ndx];
-    if (Rval)
-      Rval = CP[sId].NucModifyRatio[NucId] /(CP[sId].NucModifyRatio[NucId] + //CP_SINGLEFLOWFIT //CP_SINGLEFLOWFIT
-                (1.0f - (CP[sId].RatioDrift *  //CP_SINGLEFLOWFIT
-                (startingFlowNum + currentFlowIteration)/SCALEOFBUFFERINGCHANGE))*
-                (1.0f / Rval - 1.0f));
-      // taub calculation..Will go into a device function
-      tau = Rval ? (CP[sId].tauE / Rval) : CP[sId].min_tauB; //CP_SINGLEFLOWFIT
-      clamp_streaming(tau, CP[sId].min_tauB, CP[sId].max_tauB);
-    }
-  else {
-       ComputeEtbR_dev(Rval, &CP[sId], pR[bead_ndx], pCopies[bead_ndx], pPhi[bead_ndx], 
-                             sId, NucId, startingFlowNum + currentFlowIteration); //CP_SINGLEFLOWFIT
-       ComputeTauB_dev(tau, &CP[sId], Rval, sId); //CP_SINGLEFLOWFIT                      
-  }
+  ComputeEtbR_dev(Rval, &CP[sId], pR[bead_ndx], pCopies[bead_ndx], pPhi[bead_ndx], 
+  	sId, NucId, startingFlowNum + currentFlowIteration); //CP_SINGLEFLOWFIT
+  ComputeTauB_dev(tau, &CP[sId], Rval, sId); //CP_SINGLEFLOWFIT                      
 
   // Calculate approximate incorporation signal
   int f = 0;
   float one_over_two_taub = 1.0f / (2.0f*tau);
-  float xt = CP[sId].deltaFrames[0]*one_over_two_taub; //CP_SINGLEFLOWFIT
-  incorp_rise[0] = (1.0f+xt)*fgbuffers[0] - (Rval+xt)*sbg[0];
+  float xt = CP[sId].deltaFrames[f]*one_over_two_taub; //CP_SINGLEFLOWFIT
+  incorp_rise[f] = (1.0f+xt)*fgbuffers[f] - (Rval+xt)*sbg[f];
   f++;
   for (;f<num_frames; ++f) {
     xt = CP[sId].deltaFrames[f]*one_over_two_taub; //CP_SINGLEFLOWFIT
@@ -3463,62 +3448,214 @@ __global__ void NeighbourContributionToXtalk_k(// Here FL stands for flows
   }
 
   // calculate contribution to xtalk from this bead as a neighbour in the grid
-  float old_tautop = 0, old_taufluid = 0;
-  for (int i=0; i<CP_XTALKPARAMS[sId].neis; ++i) {
-    bool changed = false;
-    // Calculate lost hydrogen using tau_top
-    if (old_tautop != CP_XTALKPARAMS[sId].tau_top[i]) {
-      f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
-      one_over_two_taub = 1.0f / (2.0f*CP_XTALKPARAMS[sId].tau_top[i]);
-      xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
-      lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads]*xt;
-      f++;
-      for (;f<num_frames; ++f) {
-        xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
-        lost_hydrogen[f*num_beads] = (incorp_rise[f*num_beads] - incorp_rise[(f-1)*num_beads] + 
-              (1.0f-(CP[sId].deltaFrames[f]*one_over_two_taub))*lost_hydrogen[(f-1)*num_beads])*xt; //CP_SINGLEFLOWFIT
+  
+  if (!CP_XTALKPARAMS[sId].simpleXtalk) {
+    float old_tautop = 0, old_taufluid = 0;
+    for (int i=0; i<CP_XTALKPARAMS[sId].neis; ++i) {
+      bool changed = false;
+      // Calculate lost hydrogen using tau_top
+      if (old_tautop != CP_XTALKPARAMS[sId].tau_top[i]) {
+        f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
+	one_over_two_taub = 1.0f / (2.0f*CP_XTALKPARAMS[sId].tau_top[i]);
+	xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+	lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads]*xt;
+	f++;
+	for (;f<num_frames; ++f) {
+	  xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+		lost_hydrogen[f*num_beads] = (incorp_rise[f*num_beads] - incorp_rise[(f-1)*num_beads] + 
+				(1.0f-(CP[sId].deltaFrames[f]*one_over_two_taub))*lost_hydrogen[(f-1)*num_beads])*xt; //CP_SINGLEFLOWFIT
+	}
+
+	for (f = CP[sId].start[currentFlowIteration];f<num_frames; ++f) { //CP_SINGLEFLOWFIT
+	  lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads] - lost_hydrogen[f*num_beads];
+	}
+	changed = true;
       }
 
-      for (f = CP[sId].start[currentFlowIteration];f<num_frames; ++f) { //CP_SINGLEFLOWFIT
-        lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads] - lost_hydrogen[f*num_beads];
+      // Calculate ions from bulk
+      if (changed || ( !changed && (old_taufluid != CP_XTALKPARAMS[sId].tau_fluid[i]))) {
+        f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
+	one_over_two_taub = 1.0f / (2.0f*CP_XTALKPARAMS[sId].tau_fluid[i]);
+	xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+	bulk_signal[f*num_beads] = lost_hydrogen[f*num_beads]*xt;
+	f++;
+	for (;f<num_frames; ++f) {
+	  xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+		bulk_signal[f*num_beads] = (lost_hydrogen[f*num_beads] - lost_hydrogen[(f-1)*num_beads] + 
+				(1.0f-(CP[sId].deltaFrames[f]*one_over_two_taub))*bulk_signal[(f-1)*num_beads])*xt; //CP_SINGLEFLOWFIT
+	}
       }
-      changed = true;
+
+      // Scale down the ion by neighbour multiplier
+      for (f=0; f<CP[sId].start[currentFlowIteration]; ++f) { //CP_SINGLEFLOWFIT
+        *nei_xtalk = 0; 
+	nei_xtalk += num_beads;
+      } 
+      for (; f<num_frames; ++f) {
+        *nei_xtalk = bulk_signal[f*num_beads] * CP_XTALKPARAMS[sId].multiplier[i]; 
+	nei_xtalk += num_beads;
+      }
+      old_tautop = CP_XTALKPARAMS[sId].tau_top[i];
+      old_taufluid = CP_XTALKPARAMS[sId].tau_fluid[i];
+    }
+  }
+  else {
+    // Calculate lost hydrogen
+    f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
+    xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+    lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads]*xt;
+    f++;
+    for (;f<num_frames; ++f) {
+      xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+      lost_hydrogen[f*num_beads] = (incorp_rise[f*num_beads] - incorp_rise[(f-1)*num_beads] + 
+      		(1.0f-(CP[sId].deltaFrames[f]*one_over_two_taub))*lost_hydrogen[(f-1)*num_beads])*xt; //CP_SINGLEFLOWFIT
+    }
+
+    for (f = CP[sId].start[currentFlowIteration];f<num_frames; ++f) { //CP_SINGLEFLOWFIT
+      lost_hydrogen[f*num_beads] = incorp_rise[f*num_beads] - lost_hydrogen[f*num_beads];
     }
 
     // Calculate ions from bulk
-    if (changed || ( !changed && (old_taufluid != CP_XTALKPARAMS[sId].tau_fluid[i]))) {
-      f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
-      one_over_two_taub = 1.0f / (2.0f*CP_XTALKPARAMS[sId].tau_fluid[i]);
+    float taue = Rval * tau;
+    f = CP[sId].start[currentFlowIteration]; //CP_SINGLEFLOWFIT
+    one_over_two_taub = 1.0f / (2.0f*taue);
+    xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
+    bulk_signal[f*num_beads] = lost_hydrogen[f*num_beads]*xt;
+    f++;
+    for (;f<num_frames; ++f) {
       xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
-      bulk_signal[f*num_beads] = lost_hydrogen[f*num_beads]*xt;
-      f++;
-      for (;f<num_frames; ++f) {
-        xt = 1.0f/(1.0f + (CP[sId].deltaFrames[f]*one_over_two_taub)); //CP_SINGLEFLOWFIT
-        bulk_signal[f*num_beads] = (lost_hydrogen[f*num_beads] - lost_hydrogen[(f-1)*num_beads] + 
+      bulk_signal[f*num_beads] = (lost_hydrogen[f*num_beads] - lost_hydrogen[(f-1)*num_beads] + 
            (1.0f-(CP[sId].deltaFrames[f]*one_over_two_taub))*bulk_signal[(f-1)*num_beads])*xt; //CP_SINGLEFLOWFIT
+    }
+  
+    // Scale down the ion by neighbour multiplier
+    for (int i=0; i<CP_XTALKPARAMS[sId].neis; ++i) {
+      for (f=0; f<num_frames; ++f) {
+        if (f < CP[sId].start[currentFlowIteration])
+          *nei_xtalk = 0;
+        else 
+          *nei_xtalk = bulk_signal[f*num_beads] * CP_XTALKPARAMS[sId].multiplier[i]; 
+        nei_xtalk += num_beads;
       }
     }
-    // Scale down the ion by neighbour multiplier
-    for (f=0; f<CP[sId].start[currentFlowIteration]; ++f) { //CP_SINGLEFLOWFIT
-      *nei_xtalk = 0; 
-      nei_xtalk += num_beads;
-    } 
-    for (; f<num_frames; ++f) {
-      *nei_xtalk = bulk_signal[f*num_beads] * CP_XTALKPARAMS[sId].multiplier[i]; 
-      nei_xtalk += num_beads;
+  }
+
+}
+
+__global__ void XtalkAccumulation_k(
+  bead_state *pState,
+  int num_beads,
+  int num_frames,
+  int* neiIdxMap, // MAX_XTALK_NEIGHBOURS x N 
+  float* nei_xtalk, // neixNxF
+  float* xtalk, // NxF
+  int sId
+)
+{
+  int bead_ndx = blockIdx.x * blockDim.x + threadIdx.x;
+  
+  if(bead_ndx >= num_beads) return;
+  
+
+  int orig_beads = num_beads;
+  num_beads = ((num_beads+32-1)/32) * 32;
+
+  int beadFrameProduct = num_beads*num_frames;
+  xtalk += bead_ndx;
+  neiIdxMap += bead_ndx;
+
+  // Accumulate crosstalk from neighbours
+  int i,f;
+  for (f=0; f<num_frames; ++f) {
+    xtalk[f*num_beads] = 0;
+  }
+  
+  for (i=0; i<CP_XTALKPARAMS[sId].neis; ++i) {
+    int neiIdx = neiIdxMap[i*orig_beads];
+    if (neiIdx != -1) {
+
+      if (pState[neiIdx].pinned || pState[neiIdx].corrupt) continue;
+
+      for (int f=0; f<num_frames; ++f) {
+        xtalk[f*num_beads] += nei_xtalk[i*beadFrameProduct + f*num_beads + neiIdx];          
+      }
     }
-    old_tautop = CP_XTALKPARAMS[sId].tau_top[i];
-    old_taufluid = CP_XTALKPARAMS[sId].tau_fluid[i];
   }
 }
 
-__global__ void XtalkAccumulationAndSignalCorrection_k(// Here FL stands for flows
+__global__ 
+void CalculateGenericXtalkForSimpleModel_k(
+  int num_beads,
+  int num_frames,
+  //int regW,
+  //int regH,
+  bead_state *pState,
+  int *sampNeiIdxMap,
+  float* nei_xtalk,
+  float* xtalk, // FxN
+  float* genericXtalk,
+  int sId)
+{
+  __shared__ float smBuffer[MAX_UNCOMPRESSED_FRAMES_GPU];
+
+  int sampNum = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if (sampNum >= (GENERIC_SIMPLE_XTALK_SAMPLE)) return;
+
+  num_beads = ((num_beads+32-1)/32) * 32;
+
+
+  if (CP_XTALKPARAMS[sId].simpleXtalk) {
+    //Accumulate xtalk signal for the sample
+    int i,f;
+    for (f=0; f<num_frames; ++f) {
+      xtalk[f*GENERIC_SIMPLE_XTALK_SAMPLE + sampNum] = 0;
+    }
+
+    sampNeiIdxMap += sampNum;
+    int beadFrameProduct = num_beads * num_frames; 
+    for (i=0; i<CP_XTALKPARAMS[sId].neis; ++i) {
+      int neiIdx = sampNeiIdxMap[i*GENERIC_SIMPLE_XTALK_SAMPLE];
+      if (neiIdx != -1) {
+
+        if (pState[neiIdx].pinned || pState[neiIdx].corrupt) continue;
+
+        for (int f=0; f<num_frames; ++f) {
+          xtalk[f*GENERIC_SIMPLE_XTALK_SAMPLE + sampNum] += nei_xtalk[i*beadFrameProduct + f*num_beads + neiIdx];             }
+      }
+    }
+    __syncthreads();
+  }
+
+  if (sampNum > 0) return;
+
+  // calculate xtalk for GENERIC_SIMPLE_XTALK_SAMPLE beads
+  for (int i=0; i<(MAX_UNCOMPRESSED_FRAMES_GPU); ++i) {
+    smBuffer[i] = 0;
+  }
+
+  if (CP_XTALKPARAMS[sId].simpleXtalk) {
+    for (int f=0; f<num_frames; ++f) {
+      for (int i=0; i<(GENERIC_SIMPLE_XTALK_SAMPLE); ++i) {
+        smBuffer[f] += xtalk[i];
+      }
+      xtalk += GENERIC_SIMPLE_XTALK_SAMPLE;
+    }
+  }
+
+  float scaling = 1.0f / (GENERIC_SIMPLE_XTALK_SAMPLE);
+  for (int f=0; f<num_frames; ++f) {
+    genericXtalk[f] = smBuffer[f] * scaling;  
+  }
+ 
+} 
+
+__global__ void ComputeXtalkAndZeromerCorrectedTrace_k(// Here FL stands for flows
   int currentFlowIteration,
   float* fgbuffers, // FLxFxN
   int num_beads, // 4
   int num_frames, // 4
-  int* neiIdxMap, // MAX_XTALK_NEIGHBOURS x N
-  float* nei_xtalk, // neixNxF
+  float* genericXtalk, // neixNxF
   float* xtalk, // FLxN
   float* pCopies, // N
   float* pR, // N
@@ -3535,31 +3672,15 @@ __global__ void XtalkAccumulationAndSignalCorrection_k(// Here FL stands for flo
   
   if(bead_ndx >= num_beads) return;
 
-  int orig_beads = num_beads;
   num_beads = ((num_beads+32-1)/32) * 32;
 
-  int beadFrameProduct = num_beads*num_frames;
   xtalk += bead_ndx;
   fgbuffers += bead_ndx;
-  neiIdxMap += bead_ndx;
   pPCA_vals += bead_ndx;
 
-  // Accumulate crosstalk from neighbours
-  int i,f;
-  for (f=0; f<num_frames; ++f) {
-    xtalk[f*num_beads] = 0;
-  }
-  for (i=0; i<CP_XTALKPARAMS[sId].neis; ++i) {
-    int neiIdx = neiIdxMap[i*orig_beads];
-    if (neiIdx != -1) {
-      for (int f=0; f<num_frames; ++f) {
-        xtalk[f*num_beads] += nei_xtalk[i*beadFrameProduct + f*num_beads + neiIdx];          
-      }
-    }
-  }
-        
+  int i;
+  
   float Rval, tau, SP;
-//  float darkness = CP[sId].darkness[0]; //CP_SINGLEFLOWFIT
   float gain = pgain[bead_ndx];
   int NucId = CP[sId].flowIdxMap[currentFlowIteration];  //CP_SINGLEFLOWFIT
 
@@ -3587,15 +3708,16 @@ __global__ void XtalkAccumulationAndSignalCorrection_k(// Here FL stands for flo
     aval = CP[sId].deltaFrames[i]/(2.0f * tau); //CP_SINGLEFLOWFIT
 
     // calculate new dv
-    curSbgVal = sbg[i] + *xtalk;
+    curSbgVal = sbg[i] + *xtalk - genericXtalk[i];
     dvn = (Rval*curSbgVal - dv_rs/tau - dv*aval) / (1.0f + aval);
     dv_rs += (dv+dvn) * CP[sId].deltaFrames[i] * 0.5f; //CP_SINGLEFLOWFIT
     dv = dvn;
-    *fgbuffers = *fgbuffers - ((dv+curSbgVal)*gain + ApplyDarkMatterToFrame(et, pPCA_vals, i, num_frames, num_beads, sId));//darkness*et[i]);
+    *fgbuffers = *fgbuffers - ((dv+curSbgVal)*gain + ApplyDarkMatterToFrame(et, pPCA_vals, i, num_frames, num_beads, sId));
     fgbuffers += num_beads;
     xtalk += num_beads;
   }
 }
+
 
 __global__
 void ExponentialTailFitting_k(
@@ -5186,6 +5308,7 @@ void StreamingKernels::NeighbourContributionToXtalk(
   float* sbg, // FLxF 
   float* fgbuffers, // FLxFxN
   // other inputs 
+  bead_state *pState,
   int startingFlowNum, // starting flow number to calculate absolute flow num
   int currentFlowIteration,
   int num_beads, // 4
@@ -5205,6 +5328,7 @@ void StreamingKernels::NeighbourContributionToXtalk(
     pPhi,
     sbg, // FLxF 
     fgbuffers, // FLxFxN
+    pState,
     startingFlowNum, // starting flow number to calculate absolute flow num
     currentFlowIteration,
     num_beads, // 4
@@ -5216,7 +5340,35 @@ void StreamingKernels::NeighbourContributionToXtalk(
 }
 
 
-void StreamingKernels::XtalkAccumulationAndSignalCorrection(// Here FL stands for flows
+void StreamingKernels::XtalkAccumulation(
+  dim3 grid, 
+  dim3 block, 
+  int smem, 
+  cudaStream_t stream,
+  bead_state *pState,
+  int num_beads, // 4
+  int num_frames, // 4
+  int* neiIdxMap, // MAX_XTALK_NEIGHBOURS x N
+  float* nei_xtalk, // neixNxF
+  float* xtalk, // NxF
+  int sId
+)
+{
+  XtalkAccumulation_k<<< 
+    grid, 
+    block, 
+    smem, 
+    stream >>>(
+    pState,
+    num_beads, // 4
+    num_frames, // 4
+    neiIdxMap,
+    nei_xtalk,
+    xtalk,
+    sId);
+}
+
+void StreamingKernels::ComputeXtalkAndZeromerCorrectedTrace(// Here FL stands for flows
   dim3 grid, 
   dim3 block, 
   int smem, 
@@ -5225,8 +5377,7 @@ void StreamingKernels::XtalkAccumulationAndSignalCorrection(// Here FL stands fo
   float* fgbuffers, // FLxFxN
   int num_beads, // 4
   int num_frames, // 4
-  int* neiIdxMap, // MAX_XTALK_NEIGHBOURS x N
-  float* nei_xtalk, // neixNxF
+  float* genericXtalk, // neixNxF
   float* xtalk, // FLxN
   float* pCopies, // N
   float* pR, // N
@@ -5239,7 +5390,7 @@ void StreamingKernels::XtalkAccumulationAndSignalCorrection(// Here FL stands fo
   int sId
 )
 {
-  XtalkAccumulationAndSignalCorrection_k<<< 
+  ComputeXtalkAndZeromerCorrectedTrace_k<<< 
     grid, 
     block, 
     smem, 
@@ -5248,8 +5399,7 @@ void StreamingKernels::XtalkAccumulationAndSignalCorrection(// Here FL stands fo
     fgbuffers, // FLxFxN
     num_beads, // 4
     num_frames, // 4
-    neiIdxMap,
-    nei_xtalk,
+    genericXtalk,
     xtalk,
     pCopies, // N
     pR, // N
@@ -5261,6 +5411,39 @@ void StreamingKernels::XtalkAccumulationAndSignalCorrection(// Here FL stands fo
     flowNum, // starting flow number to calculate absolute flow num
     sId 
     );
+}
+
+void StreamingKernels::CalculateGenericXtalkForSimpleModel(
+  dim3 grid, 
+  dim3 block, 
+  int smem, 
+  cudaStream_t stream,
+  int num_beads, // 4
+  int num_frames, // 4
+ // int regW,
+ // int regH,
+  bead_state *pState,
+  int* sampNeiIdxMap,
+  float* nei_xtalk,
+  float* xtalk, // NxF
+  float* genericXtalk, // GENERIC_SIMPLE_XTALK_SAMPLE x F
+  int sId)
+{
+  CalculateGenericXtalkForSimpleModel_k<<<
+    grid, 
+    block, 
+    smem, 
+    stream >>>(
+    num_beads,
+    num_frames,
+    //regW,
+    //regH,
+    pState,
+    sampNeiIdxMap,
+    nei_xtalk,
+    xtalk, // FLxN
+    genericXtalk, 
+    sId);
 }
 
 

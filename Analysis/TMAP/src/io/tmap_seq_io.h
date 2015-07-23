@@ -35,14 +35,14 @@ typedef struct {
   @param  compression  the compression type
   @return              pointer to the initialized memory for reading/writing sequences
   */
-inline tmap_seq_io_t *
+tmap_seq_io_t *
 tmap_seq_io_init(const char *fn, int8_t seq_type, int32_t out_type, int32_t compression);
 
 /*! 
   destroys input/output structure
   @param  io  a pointer to the sequence structure
   */
-inline void
+void
 tmap_seq_io_destroy(tmap_seq_io_t *io);
 
 /*! 
@@ -51,7 +51,7 @@ tmap_seq_io_destroy(tmap_seq_io_t *io);
   @param  seq    the sequence structure in which to store the data
   @return        the length of the sequence read, -1 indicates an a EOF, -2 indicates a truncated quality string
   */
-inline int
+int
 tmap_seq_io_read(tmap_seq_io_t *io, tmap_seq_t *seq);
 
 /*! 

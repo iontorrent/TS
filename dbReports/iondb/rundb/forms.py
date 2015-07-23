@@ -128,6 +128,7 @@ class RunParamsForm(forms.Form):
     recalibArgs = CmdlineArgsField()
     basecallerArgs = CmdlineArgsField()
     alignmentArgs = CmdlineArgsField()
+    ionstatsArgs = CmdlineArgsField()
 
     thumbnailBeadfindArgs = CmdlineArgsField()
     thumbnailAnalysisArgs = CmdlineArgsField()
@@ -135,14 +136,13 @@ class RunParamsForm(forms.Form):
     thumbnailRecalibArgs = CmdlineArgsField()
     thumbnailBasecallerArgs = CmdlineArgsField()
     thumbnailAlignmentArgs = CmdlineArgsField()
+    thumbnailIonstatsArgs = CmdlineArgsField()
 
     blockArgs = forms.CharField(max_length=128, required=False, widget=forms.HiddenInput)
 
     libraryKey = forms.CharField(max_length=128, required=False, initial="TCAG", widget=forms.TextInput(attrs={'size':'60', 'class': 'input-xlarge'}))
     tfKey= forms.CharField(max_length=128, required=False,initial="ATCG", widget=forms.TextInput(attrs={'size':'60', 'class': 'input-xlarge'}))
 
-    tf_config = forms.FileField(required=False, widget=forms.FileInput(attrs={'size':'60', 'class':'input-file'}))
-    
     # unused?
     align_full = forms.BooleanField(required=False, initial=False)
 
@@ -337,20 +337,23 @@ class NetworkConfigForm(forms.Form):
     proxy_password = forms.CharField(required=False)
 
     def get_network_settings(self):
-        """Usage: ./TSquery [options]
-             --all, -a           Output all information (default)
-             --proxy_info        Output just proxy http info
-             --eth_info          Output just ethernet info
-             --eth-dev           Specify eth device to query (default = eth0)
-             --json              Output json format
-             --outputfile, -o    Write output to file
+        """Usage: /usr/sbin/TSquery [option]...
+        --eth-dev                 Specify eth device to query
+        --debug, -d               Prints script commands when executing (set -x)
+        --help, -h                Prints command line args
+        --version, -v             Prints version
+
         Outputs:
-        http_proxy:not set
-        network_device:eth0
-        network_mode:dhcp
-        network_address:10.0.2.15
-        network_subnet:255.255.255.0
-        network_gateway:10.0.2.2
+            proxy_address:
+            proxy_port:
+            proxy_username:
+            proxy_password:
+            network_device:
+            network_mode:
+            network_address:10.25.3.211
+            network_subnet:255.255.254.0
+            network_gateway:10.25.3.1
+            network_nameservers:10.25.3.2,10.45.16.11
         """
         settings = {
                 "mode":"",

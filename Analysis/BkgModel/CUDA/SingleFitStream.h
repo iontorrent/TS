@@ -85,10 +85,14 @@ class SimpleSingleFitStream : public cudaSimpleStreamExecutionUnit
   //host xtalk pointers
   TMemSegment<ConstXtalkParams> _hConstXtalkP; //ConstXtalkParams*
   TMemSegment<int> _hNeiIdxMap; //int*
+  TMemSegment<int> _hSampleNeiIdxMap; //int*
+
   //device Xtalk pointers
   TMemSegment<float> _dNeiContribution; //float*
   TMemSegment<float> _dXtalk; //float*
   TMemSegment<int> _dNeiIdxMap; //int*
+  TMemSegment<int> _dSampleNeiIdxMap; //int*
+  TMemSegment<float> _dGenericXtalk; //float*
   TMemSegment<float> _dXtalkScratch; //float*
 
 protected:

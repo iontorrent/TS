@@ -172,10 +172,10 @@ int main ( int argc, char *argv[] )
   i = 0;
   bool allocate = true;
   char **nameList;
-  char *defaultNameList[] = {"beadfind_post_0000.dat", "beadfind_post_0001.dat", "beadfind_post_0002.dat", "beadfind_post_0003.dat",
-                             "beadfind_pre_0000.dat", "beadfind_pre_0001.dat", "beadfind_pre_0002.dat", "beadfind_pre_0003.dat",
-                             "prerun_0000.dat", "prerun_0001.dat", "prerun_0002.dat", "prerun_0003.dat", "prerun_0004.dat"
-                            };
+  const char *defaultNameList[] = {"beadfind_post_0000.dat", "beadfind_post_0001.dat", "beadfind_post_0002.dat", "beadfind_post_0003.dat",
+                                   "beadfind_pre_0000.dat", "beadfind_pre_0001.dat", "beadfind_pre_0002.dat", "beadfind_pre_0003.dat",
+                                   "prerun_0000.dat", "prerun_0001.dat", "prerun_0002.dat", "prerun_0003.dat", "prerun_0004.dat"
+                                  };
   int nameListLen;
 
 
@@ -189,7 +189,7 @@ int main ( int argc, char *argv[] )
     nameListLen = 1;
     mode = 1;
   } else {
-    nameList = defaultNameList;
+    nameList =  const_cast<char**> ( defaultNameList );
     nameListLen = sizeof ( defaultNameList ) /sizeof ( defaultNameList[0] );
   }
 

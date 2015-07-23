@@ -53,7 +53,7 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 
 
-def search_for_publishers(config, pub_dir="/results/publishers/"):
+def search_for_publishers(pub_dir="/results/publishers/"):
     """
     Searches for new publishers, reads their publisher_meta.json, and makes any
     necessary updates to the publisher's record.
@@ -118,12 +118,6 @@ def purge_publishers():
 # ============================================================================
 # Content Upload Publication
 # ============================================================================
-
-
-class ContentUploadFileForm(forms.Form):
-    publisher = forms.ModelChoiceField(queryset=models.Publisher.objects.all())
-    file  = forms.FileField()
-    meta = forms.CharField(widget=forms.HiddenInput)
 
 
 class PublisherContentUploadValidator(forms.Form):
@@ -227,7 +221,7 @@ def new_upload(pub, file_name, meta_data=None):
         logger.exception("File error while saving new %s upload" % pub)
         upload.status = "Error: %s" % err
         upload.save()
-        return None
+        raise
     return upload
 
 
@@ -316,7 +310,7 @@ def run_pub_scripts(pub, upload):
         upload.status = "Error: processing failed."
         upload.save()
 
-@login_required
+
 def edit_upload(pub, upload, meta=None):
     """Editing is the process which converts an uploaded file into one or more
     files of published content.
@@ -325,33 +319,39 @@ def edit_upload(pub, upload, meta=None):
     async_upload = run_pub_scripts.delay(pub, upload)
     return upload, async_upload
 
-@login_required
-def upload_view(request):
-    """Display a list of available publishers to upload files.
-    """
-    pubs = models.Publisher.objects.all()
-    return render_to_response('rundb/ion_publisher_upload.html', {'pubs': pubs})
 
 @login_required
-def publisher_upload(request, pub_name, frame=False):
+def publisher_upload(request, pub_name):
     """Display the publishers upload.html template on a GET of the page.
     If the view is POSTed to, the pass the uploaded data to the publisher.
     """
     pub = models.Publisher.objects.get(name=pub_name)
+    
     if request.method == 'POST':
-        form = PublisherContentUploadValidator(request.POST, request.FILES)
-        if form.is_valid():
-            upload, async = edit_upload(pub, form.cleaned_data['file'],
-                                 form.cleaned_data['meta'])
-
+        meta = request.POST.dict()
+        files = request.FILES.values()
+        
+        if len(files) == 0:
+            return render_to_json({"error":"Error: No file selected for upload"})
         else:
-            logger.warning(form.errors)
+            try:
+                upload, async = edit_upload(pub, files[0], json.dumps(meta))
+                return render_to_json({"status": upload.status, "id": upload.id})
+            except Exception as e:
+                return render_to_json({"error":str(e)})
     else:
-        if frame:
-            genome = request.GET.get('genome',False)
-            uploader = os.path.join(pub.path, "upload.html")
-            return render_to_response(uploader, {"genome": genome})
-    return render_to_response("rundb/ion_publisher_frame.html", {"pub":pub})
+        action = request.get_full_path()
+        error = ''
+        contents = ''
+        try:
+            path = os.path.join(pub.path, 'upload.html')
+            with open(path,'r') as f:
+                contents = f.read()
+        except:
+            error = "Error: Unable to read %s" % path
+        
+        ctx = RequestContext(request, {"contents":contents, "action":action, "error":error})
+        return render_to_response('rundb/configure/modal_publisher_upload.html', context_instance = ctx)
 
 @login_required
 def publisher_api_upload(request, pub_name):
@@ -411,12 +411,7 @@ def upload_status(request, contentupload_id, frame=False):
         #file_log = str(err)
         pass
         
-    upload_type = 'Target Regions'
-    if upload.meta.get('hotspot',False):
-        upload_type = 'Hotspots'
-    if upload.meta.get('is_ampliseq',False):
-        upload_type = 'AmpliSeq ZIP'
-    
+    upload_type = upload.upload_type()
     upload_date = upload.meta.get('upload_date','Unknown')
     
     try:
@@ -585,9 +580,9 @@ def content_add(request, hotspot=False):
 @login_required
 def list_content(request):
     publishers = models.Publisher.objects.all()
-    pubs = dict((p.name, list(p.contents.all())) for p in publishers)
-    return render_to_response('rundb/ion_publisher_list_content.html',
-                    {"pubs": pubs})
+    selected = request.GET.get('from','')
+    ctxd = {"publishers": publishers, "selected": selected}
+    return render_to_response('rundb/configure/contentupload_history.html', ctxd)
 
 
 def post_multipart(host, selector, fields, files):

@@ -11,10 +11,10 @@ urlpatterns = patterns(
     url(r'^$', 'views.show_samplesets', name="samplesets"),
     
     url(r'^sampleset/import/$', 'views.show_import_samplesetitems', name="import_samples"),     
-    url(r'^sampleset/import/add_sampleset/$', 'views.show_add_sampleset', name="add_sampleset"),    
     url(r'^sampleset/import/save/$', 'views.save_import_samplesetitems', name="save_import_samples"),   
     url(r'^sampleset/import/download/$', 'views.download_samplefile_format', name="download_samplefile_format"),
         
+    url(r'^sampleset/add/$', 'views.show_edit_sampleset', name='add_sampleset'),
     url(r'^sampleset/(\d+)/edit/$', 'views.show_edit_sampleset', name='edit_sampleset'),
     url(r'^sampleset/edited/$', 'views.save_sampleset', name='save_sampleset'),   
     url(r'^sampleset/added/$', 'views.save_sampleset', name='save_sampleset'), 
@@ -45,5 +45,7 @@ urlpatterns = patterns(
 
     url(r'^samplesetitem/input_save/$', 'views.show_save_input_samples_for_sampleset', name="show_save_input_samples"),
     url(r'^samplesetitem/input/save/$', 'views.save_input_samples_for_sampleset', name="save_input_samples"),  
-    url(r'^samplesetitem/input/clear/$', 'views.clear_input_samples_for_sampleset', name="clear_input_samples")              
+    url(r'^samplesetitem/input/clear/$', 'views.clear_input_samples_for_sampleset', name="clear_input_samples"),
+
+    url(r'^libraryprepsummary/(?P<pk>\d+)/$', 'views.library_prep_summary', name='library_prep_summary'),
 )

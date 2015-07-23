@@ -6,6 +6,7 @@
 #include <time.h>
 #include <stdint.h>
 #include <config.h>
+#include <getopt.h>
 
 #include "../util/tmap_error.h"
 #include "../util/tmap_alloc.h"

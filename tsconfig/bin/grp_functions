@@ -5,7 +5,6 @@
 # GLOBAL VARIABLES
 #==============================================================================
 USER=ionadmin
-TOOL='pdsh'
 
 #==============================================================================
 # FUNCTIONS
@@ -80,15 +79,15 @@ END
 #=============================================================================
 function address_test()
 {
-	nodename=$1
+        nodename=$1
     echo -n $FUNCNAME:>&1
     ip=$(nslookup $nodename|grep ^Address|grep -v '#'|awk '{print $2}')
     if [[ -z $ip ]] ;then
-    	echo failure>&1
+        echo failure>&1
         echo "Cannot resolve hostname $nodename to an IP address">&2
         return 1
     else
-    	#echo $ip>&1
+        #echo $ip>&1
     	echo success>&1
         return 0
     fi
@@ -98,10 +97,10 @@ function address_test()
 #=============================================================================
 function network_test()
 {
-	nodename=$1
+        nodename=$1
     echo -n $FUNCNAME:>&1
 
-	if ! ping -n -q -c 3 $nodename 2>/dev/null 1>&2; then
+    if ! ping -n -q -c 3 $nodename 2>/dev/null 1>&2; then
     	echo failure >&1
         echo "No response (ping) from server $nodename">&2
         return 1
@@ -116,7 +115,7 @@ function network_test()
 #=============================================================================
 function access_test()
 {
-	nodename=$1
+        nodename=$1
     echo -n $FUNCNAME:>&1
 
     if ssh -o PasswordAuthentication=no ${USER}@$nodename "hostname -f" >/dev/null; then

@@ -32,7 +32,7 @@ import re
 import logging
 import urllib
 
-from ion.utils.TSversion import findUpdates
+from ion.utils.TSversion import findUpdates, findOSversion
 
 logger = logging.getLogger(__name__)
 
@@ -44,9 +44,16 @@ def script(script_text, shell_bool = True):
     return output, errors
 
 
+def outbound_net_port():
+    '''Returns the ethernet device associated with the default route'''
+    stdout, stderr = script("/sbin/route|awk '/default/{print $8}'")
+    port = stdout.strip()
+    return port
+
+
 def mac_address():
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', 'eth0'))
+    info = fcntl.ioctl(s.fileno(), 0x8927,  struct.pack('256s', outbound_net_port()))
     return ''.join(['%02x:' % ord(char) for char in info[18:24]])[:-1]
 
 
@@ -186,18 +193,18 @@ def how_am_i(request):
     """Perform a series of network status checks on the torrent server itself
     """
     result = {
-        "eth0": None,
+        "eth_device": None,
         "route": None,
         "ip_addr": None,
     }
     try:
-        stdout, stderr = script("/sbin/ifconfig eth0")
+        stdout, stderr = script("PORT=$(route|awk '/default/{print $8}') && /sbin/ifconfig $PORT")
         for line in stdout.splitlines():
             m = re.search(r"inet addr:(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})", line)
             if m:
                 result["ip_addr"] = m.group(1)
             elif "UP" in line and "MTU" in line:
-                result["eth0"] = True
+                result["eth_device"] = True
         stdout, stderr = script("/bin/netstat -r")
         result["route"] = "default" in stdout
     except Exception as err:
@@ -368,7 +375,6 @@ def update(request):
         return http.HttpResponse(data, content_type="application/json")
     elif request.method=="GET":
         about, meta_version = findUpdates()
-        # don't use cached method here, update page needs current info
         config = GlobalConfig.objects.filter()[0]
         config_dict = model_to_dict(config)
         try:
@@ -387,6 +393,7 @@ def update(request):
             "admin/update.html",
             {"about": about, "meta": meta_version,
              "show_available": config.ts_update_status not in ['No updates', 'Finished installing'],
+             "legacy_OS": findOSversion().get('RELEASE') == '10.04',
              "global_config_json": json.dumps(config_dict),
              "allow_update": allow_update},
             RequestContext(request, {}),
@@ -587,7 +594,7 @@ class PluginResultAdmin(admin.ModelAdmin):
     list_display = ('result', 'plugin', 'state', 'path', 'duration', 'total_size')
     list_display_links = ('path',)
     list_filter = ('state',)
-    search_fields = ('result', 'plugin')
+    search_fields = ('result__resultsName', 'plugin__name')
     readonly_fields = ('result', 'plugin', 'duration', 'path', 'total_size')
     fields = ('result', ('plugin', 'state'), ('starttime', 'endtime', 'duration'), ('path','total_size'), 'store',)
     ordering = ( "-id", )
@@ -656,6 +663,7 @@ class GlobalConfigAdmin(admin.ModelAdmin):
 
 class ChipAdmin(admin.ModelAdmin):
     list_display = ('name','description','instrumentType', 'isActive', 'slots')
+    ordering = ("name",)
     formfield_overrides = {
         models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}
     }
@@ -749,6 +757,7 @@ class EventLogAdmin(admin.ModelAdmin):
 
 class AnalysisArgsAdmin(admin.ModelAdmin):
     list_display = ('name','chipType','chip_default', 'sequenceKitName', 'templateKitName', 'libraryKitName', 'samplePrepKitName')
+    ordering = ( "chipType", "-chip_default", "name")
     formfield_overrides = {
         models.CharField: {'widget': Textarea(attrs={'size':'512','rows':4,'cols':80})}
     }
@@ -758,7 +767,8 @@ class CruncherAdmin(admin.ModelAdmin):
     list_filter = ('state',)
 
 class KitInfoAdmin(admin.ModelAdmin):
-    list_display = ('name', 'description', 'kitType', 'instrumentType','isActive')
+    list_display = ('name', 'description', 'kitType', 'templatingSize', 'flowCount','uid', 'categories', 'isActive', 'instrumentType', 'samplePrep_instrumentType')
+    ordering = ( "kitType", "name",)
     list_filter = ('kitType',)
     
 class RigAdmin(admin.ModelAdmin):

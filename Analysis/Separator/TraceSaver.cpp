@@ -3,7 +3,7 @@
 #include "TraceSaver.h"
 #include <Eigen/Dense>
 #include <Eigen/LU>
-#include "H5Eigen.h"
+#include "IonH5Eigen.h"
 
 void TraceSaver::StoreResults(int row_start, int row_end, int col_start, int col_end,
                               int flow_start, int flow_end, EvaluateKey &evaluator) {

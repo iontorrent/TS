@@ -79,7 +79,7 @@ void DumpStartingStateOfProgram (int argc, const char *argv[], time_t analysis_s
     printf ("\n");
     printf ("Hostname = %s\n", my_host_name);
     printf ("Start Time = %s", ctime (&analysis_start_time));
-    printf ("Version = %s-%s (%s) (%s)\n",
+    printf ("Version = %s.%s (%s) (%s)\n",
             IonVersion::GetVersion().c_str(), IonVersion::GetRelease().c_str(),
             IonVersion::GetGitHash().c_str(), IonVersion::GetBuildNum().c_str());
     printf ("Command line = ");
@@ -104,7 +104,7 @@ void DumpStartingStateOfProgram (int argc, const char *argv[], time_t analysis_s
 //! @brief    Shortcut: Print message with time elapsed from start
 //! @ingroup  BaseCaller
 
-void ReportState(time_t analysis_start_time, char *my_state)
+void ReportState(time_t analysis_start_time, const char *my_state)
 {
     time_t analysis_current_time;
     time(&analysis_current_time);
@@ -216,7 +216,10 @@ int main (int argc, const char *argv[])
     Json::Value basecaller_json(Json::objectValue);
     DumpStartingStateOfProgram (argc,argv,analysis_start_time, basecaller_json["BaseCaller"]);
 
-    /*---   Parse command line options  ---*/
+    //
+    // Step 1. Process Command Line Options & Initialize Modules
+    //
+
     BaseCallerParameters bc_params;
     OptArgs opts, null_opts;
     opts.ParseCmdLine(argc, argv);
@@ -265,7 +268,8 @@ int main (int argc, const char *argv[])
 
     BarcodeDatasets datasets(bc.run_id, bc_params.GetFiles().lib_datasets_file);
     // Check if any of the template barcodes is equal to a control barcode
-    datasets.RemoveControlBarcodes(datasets_calibration.json());
+    if (datasets_calibration.DatasetInUse())
+      datasets.RemoveControlBarcodes(datasets_calibration.json());
     datasets.GenerateFilenames("Library","basecaller_bam",".basecaller.bam",bc_params.GetFiles().output_directory);
 
     BarcodeDatasets datasets_tf(bc.run_id);
@@ -278,7 +282,7 @@ int main (int argc, const char *argv[])
 
     // *** Initialize remaining modules of BaseCallerContext
     vector<string> bam_comments;
-    BaseCallerFilters filters(opts, bam_comments, bc.flow_order, bc.keys, mask);
+    BaseCallerFilters filters(opts, bam_comments, bc.run_id, bc.flow_order, bc.keys, mask);
     bc.filters = &filters;
 
     BaseCallerMetricSaver metric_saver(opts, bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY(), bc.flow_order.num_flows(),
@@ -292,7 +296,7 @@ int main (int argc, const char *argv[])
     bc.quality_generator.Init(opts, chip_type, bc_params.GetFiles().input_directory, bc_params.GetFiles().output_directory, bc.recalibration.is_enabled());
 
     // Phase estimator
-    bc.estimator.InitializeFromOptArgs(opts, bc.chip_subset);
+    bc.estimator.InitializeFromOptArgs(opts, bc.chip_subset, bc.keynormalizer);
     // Barcode classification
     BarcodeClassifier barcodes(opts, datasets, bc.flow_order, bc.keys, bc_params.GetFiles().output_directory,
     		                   bc.chip_subset.GetChipSizeX(), bc.chip_subset.GetChipSizeY());
@@ -313,7 +317,7 @@ int main (int argc, const char *argv[])
 
 
     //
-    // Step 0. Filter training and phase estimation
+    // Step 2. Filter training and phase estimation
     //
 
     // Find distribution of clonal reads for use in read filtering:
@@ -344,59 +348,36 @@ int main (int argc, const char *argv[])
 
 
     //
-    // Step 1. Open wells and output BAM files & initialize writers
+    // Step 3. Open wells and output BAM files & initialize writers
     //
 
     // Library data set writer - always
-    bc.lib_writer.Open(bc_params.GetFiles().output_directory, datasets, bc.chip_subset.NumRegions(), bc.flow_order,
-                       bc.keys[0].bases(), bc.filters->GetLibBeadAdapters(), "BaseCaller",
-                       basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString(),
-                       basecaller_json["BaseCaller"]["command_line"].asString(),
-                       basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-                       false, bam_comments);
+    bc.lib_writer.Open(bc_params.GetFiles().output_directory, datasets, 0, bc.chip_subset.NumRegions(),
+                 bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(),
+                 bc_params.NumBamWriterThreads(), basecaller_json, bam_comments);
 
     // Calibration reads data set writer - if applicable
-    if (bc.have_calibration_panel) {
-        bc.calib_writer.Open(bc_params.GetFiles().output_directory, datasets_calibration, bc.chip_subset.NumRegions(), bc.flow_order,
-                          bc.keys[0].bases(), bc.filters->GetLibBeadAdapters(), "BaseCaller",
-                          basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString(),
-                          basecaller_json["BaseCaller"]["command_line"].asString(),
-                          basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-                          false, bam_comments);
-    }
+    if (bc.have_calibration_panel)
+      bc.calib_writer.Open(bc_params.GetFiles().output_directory, datasets_calibration, 0, bc.chip_subset.NumRegions(),
+                     bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(),
+                     bc_params.NumBamWriterThreads(), basecaller_json, bam_comments);
 
     // Test fragments data set writer - if applicable
-    if (bc.process_tfs) {
-        bc.tf_writer.Open(bc_params.GetFiles().output_directory, datasets_tf, bc.chip_subset.NumRegions(), bc.flow_order,
-                          bc.keys[1].bases(), bc.filters->GetTFBeadAdapters(), "BaseCaller",
-                          basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString(),
-                          basecaller_json["BaseCaller"]["command_line"].asString(),
-                          basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-                          false, bam_comments);
-    }
+    if (bc.process_tfs)
+      bc.tf_writer.Open(bc_params.GetFiles().output_directory, datasets_tf, 1, bc.chip_subset.NumRegions(),
+                  bc.flow_order, bc.keys[1].bases(), filters.GetTFBeadAdapters(),
+                  bc_params.NumBamWriterThreads(), basecaller_json, bam_comments);
 
     // Unfiltered / unfiltered untrimmed data set writers - if applicable
     if (!bc.unfiltered_set.empty()) {
+    	bc.unfiltered_writer.Open(bc_params.GetFiles().unfiltered_untrimmed_directory, datasets_unfiltered_untrimmed, -1,
+                      bc.chip_subset.NumRegions(), bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(),
+                      bc_params.NumBamWriterThreads(), basecaller_json, bam_comments);
 
-        bc.unfiltered_writer.Open(bc_params.GetFiles().unfiltered_untrimmed_directory, datasets_unfiltered_untrimmed, bc.chip_subset.NumRegions(),
-                                  bc.flow_order, bc.keys[0].bases(), bc.filters->GetLibBeadAdapters(), "BaseCaller",
-                                  basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString(),
-                                  basecaller_json["BaseCaller"]["command_line"].asString(),
-                                  basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-                                  true, bam_comments);
-
-        bc.unfiltered_trimmed_writer.Open(bc_params.GetFiles().unfiltered_trimmed_directory, datasets_unfiltered_trimmed, bc.chip_subset.NumRegions(),
-                                          bc.flow_order, bc.keys[0].bases(), bc.filters->GetLibBeadAdapters(), "BaseCaller",
-                                          basecaller_json["BaseCaller"]["version"].asString() + "/" + basecaller_json["BaseCaller"]["git_hash"].asString(),
-                                          basecaller_json["BaseCaller"]["command_line"].asString(),
-                                          basecaller_json["BaseCaller"]["start_time"].asString(), basecaller_json["BaseCaller"]["chip_type"].asString(),
-                                          true, bam_comments);
+        bc.unfiltered_trimmed_writer.Open(bc_params.GetFiles().unfiltered_trimmed_directory, datasets_unfiltered_trimmed, -1,
+                              bc.chip_subset.NumRegions(), bc.flow_order, bc.keys[0].bases(), filters.GetLibBeadAdapters(),
+                              bc_params.NumBamWriterThreads(), basecaller_json, bam_comments);
     }
-
-
-    //
-    // Step 3. Open miscellaneous results files
-    //
 
     //
     // Step 4. Execute threaded basecalling
@@ -660,15 +641,19 @@ void * BasecallerWorker(void *input)
                 //
 
                 BasecallerRead read;
+                bool key_pass = true;
                 if (bc.keynormalizer == "keynorm-new") {
-                    read.SetDataAndKeyNormalizeNew(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1, true);
+                  key_pass = read.SetDataAndKeyNormalizeNew(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1, false);
                 } else { // if (bc.keynormalizer == "keynorm-old") {
-                    read.SetDataAndKeyNormalize(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1);
+                  key_pass = read.SetDataAndKeyNormalize(&wells_measurements[0], wells_measurements.size(), bc.keys[read_class].flows(), bc.keys[read_class].flows_length() - 1);
                 }
 
+                // Get rid of outliers quickly
                 bc.filters->FilterHighPPFAndPolyclonal (read_index, read_class, processed_read.filter, read.raw_measurements, bc.polyclonal_filter);
-                if (!is_random_unfiltered and !bc.filters->IsValid(read_index))// No reason to waste more time
-                    continue;
+                if (not key_pass)
+                  bc.filters->FilterFailedKeypass (read_index, read_class, processed_read.filter, read.sequence);
+                if (!is_random_unfiltered and !bc.filters->IsValid(read_index)) // No reason to waste more time
+                  continue;
 
                 // Check if this read is either from the calibration panel or from the random calibration set
                 if(bc.calibration_training and bc.have_calibration_panel) {
@@ -829,6 +814,7 @@ void * BasecallerWorker(void *input)
                 bc.filters->FilterFailedKeypass (read_index, read_class, processed_read.filter, read.sequence);
                 bc.filters->FilterHighResidual  (read_index, read_class, processed_read.filter, residual);
                 bc.filters->FilterBeverly       (read_index, read_class, processed_read.filter, scaled_residual, base_to_flow);
+                bc.filters->FilterQuality       (read_index, read_class, processed_read.filter, quality);
                 bc.filters->TrimAdapter         (read_index, read_class, processed_read, scaled_residual, base_to_flow, treephaser, read);
                 bc.filters->TrimQuality         (read_index, read_class, processed_read.filter, quality);
                 bc.filters->TrimAvalanche       (read_index, read_class, processed_read.filter, quality);
@@ -864,8 +850,24 @@ void * BasecallerWorker(void *input)
                 if (processed_read.filter.n_bases_filtered > 0)
                     max_flow = min(bc.flow_order.num_flows(), base_to_flow[processed_read.filter.n_bases_filtered-1] + 16);
 
-                for (int flow = 0; flow < max_flow; ++flow)
-                    flowgram2.push_back(2*(int16_t)(128*min(max(-128.0f, read.normalized_measurements[flow]), 128.0f) ));
+                vector<int> out_of_boud_flows;
+                for (int flow = 0; flow < max_flow; ++flow){
+                    float temp_flowgram = 128*read.normalized_measurements[flow];
+                    if (temp_flowgram < -16383.0f or temp_flowgram > 16383.0f) {
+                        out_of_boud_flows.push_back(flow);
+                        temp_flowgram = min(max(-16383.0f,temp_flowgram), 16383.0f);
+                    }
+                    //flowgram2.push_back(2*(int16_t)(128*read.normalized_measurements[flow]));
+                    flowgram2.push_back(2*(int16_t)temp_flowgram);
+                }
+                // Do not spam stderr
+                /*if (out_of_boud_flows.size() > 0) {
+                  cerr << "BaseCaller WARNING: Normalized signal out of bounds in well y="
+                       << y << ", x=" << x << ", in flows ";
+                  for (unsigned int flow = 0; flow < out_of_boud_flows.size()-1; ++flow)
+                    cerr << out_of_boud_flows.at(flow) << ',';
+                  cerr << out_of_boud_flows.at(out_of_boud_flows.size()-1) << endl;
+                } */
                 processed_read.bam.AddTag("ZM", flowgram2);
                 //flowgram2.push_back(1*(int16_t)(256*read.normalized_measurements[flow]));
                 //flowgram2.push_back(2*(int16_t)(128*read.normalized_measurements[flow]));

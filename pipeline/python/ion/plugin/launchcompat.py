@@ -66,7 +66,7 @@ class IonLaunchPlugin(IonPlugin):
         # Leading values ignored, usually '#VERSION' or '# VERSION'
         # Must be all-caps VERSION
         # Digits, dots, letters, hyphen, underscore (1.0.2-beta1_rc2)
-        VERSION=re.compile(r'VERSION\s*=\s*\"?([\d\.\w\-\_]+)\"?')
+        VERSION=re.compile(r'VERSION\s*=\s*\"?\'?([\d\.\w\-\_]+)\"?\'?')
         for line in cls.getContent():
             m = VERSION.search(line)
             if m:

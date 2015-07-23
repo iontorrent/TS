@@ -417,7 +417,7 @@ function ActualRestoreForm() {
     if (!("tooltip" in restore_form_data["meta"]))
       restore_form_data["meta"]["tooltip"] = "Legacy";
     if (!("ts_version" in restore_form_data["meta"]))
-      restore_form_data["meta"]["ts_version"] = "4.4";
+      restore_form_data["meta"]["ts_version"] = "4.6";
     //if (!("repository_id" in restore_form_data["meta"]))
     //  restore_form_data["meta"]["repository_id"] = "";
     if (!("compatibility" in restore_form_data["meta"]))
@@ -635,7 +635,7 @@ function RetrieveAmpliseqPanelInfo() {
                 if (!("configuration" in new_config["meta"]) || new_config["meta"]["configuration"] == "custom")
                     new_config["meta"]["configuration"] = "";
                 if (!("ts_version" in new_config["meta"]))
-                    new_config["meta"]["ts_version"] = "4.4";
+                    new_config["meta"]["ts_version"] = "4.6";
                 //if (!("repository_id" in new_config["meta"]))
                 //    new_config["meta"]["repository_id"] = "";
                 new_config["meta"]["compatibility"] = {
@@ -689,10 +689,12 @@ function GetBarcodedness() {
         console.log("Success: Got barcodedness info");
         LoadingPhaseCompleted();
     }).fail(function () {
-        barcoded = false;
-	barcodedness_info_loaded = true;
-        console.log("No barcodedness info found; assume not barcoded");
+	barcoded = false;
+        barcodedness_info_loaded = true;
+	console.log("No barcodedness info found; assume not barcoded");
         LoadingPhaseCompleted();
+        //console.log("ERROR: Failed to get barcodedness info");
+        //LoadingPhaseFailed();
     });
 }
 
@@ -851,7 +853,7 @@ $(function () {
         if (!("configuration" in new_config["meta"]))
           new_config["meta"]["configuration"] = "";
         if (!("ts_version" in new_config["meta"]))
-          new_config["meta"]["ts_version"] = "4.4";
+          new_config["meta"]["ts_version"] = "4.6";
         //if (!("repository_id" in new_config["meta"]))
         //  new_config["meta"]["repository_id"] = "";
         //if (!("compatibility" in new_config["meta"]))
@@ -956,7 +958,7 @@ $(function () {
 <div class="container">
 <div class="row-fluid" style="margin-bottom:0px">
 <div class="span8">
-<h3>Torrent Variant Caller 4.4</h3>
+<h3>Torrent Variant Caller 4.6</h3>
 </div>
   <div class="span4 hide_until_loaded" style="margin-top:14px;display:none">
       <input id="postbutton" class="btn btn-primary exclude-from-plan" style="float:right" type="submit" value="Submit">
@@ -991,11 +993,11 @@ $(function () {
     <div class="span9" id="libraryGroup">
         <div style="float:left;margin-right:30px">
         <label>
-            <input class="libraryGroup" type="radio" name="librarytype" style="vertical-align:baseline" value="wholegenome" checked>
+            <input class="libraryGroup" type="radio" name="librarytype" style="vertical-align:baseline" value="wholegenome">
             Whole Genome
         </label></div>
         <div style="float:left;margin-right:30px"><label>
-            <input class="libraryGroup" type="radio" id="ampliseq" style="vertical-align:baseline" name="librarytype" value="ampliseq">
+            <input class="libraryGroup" type="radio" id="ampliseq" style="vertical-align:baseline" name="librarytype" value="ampliseq" checked>
             AmpliSeq
         </label></div>
         <div style="float:left;margin-right:30px"><label>
@@ -1372,8 +1374,8 @@ $(function () {
 <div id="json_result"></div>
 
 <div>
-    <h4>About Torrent Variant Caller 4.4</h4>
-    <p>TVC 4.4 analyzes mapped reads covering each individual reference base
+    <h4>About Torrent Variant Caller 4.6</h4>
+    <p>TVC 4.6 analyzes mapped reads covering each individual reference base
        to deduce whether there is sufficient statistical evidence to support calling
        a SNP or INDEL at a given position.
        The analysis can be restricted to a subset of the genome by defining targeted regions.

@@ -248,23 +248,23 @@ if __name__ == '__main__':
             print "STATUS: Error"
             sys.exit(1)
 
-    testpath = os.path.join(test_dir, 'analysis.bfmask.bin')
-    if not os.path.isfile(testpath):
-        testpath = os.path.join(test_dir, 'bfmask.bin')
+        testpath = os.path.join(test_dir, 'analysis.bfmask.bin')
         if not os.path.isfile(testpath):
-            print "Does not exist: %s" % testpath
-            print "Cannot basecall without bfmask.bin from signal processing"
-            print "STATUS: Error"
-            sys.exit(1)
-
-    testpath = os.path.join(test_dir, 'analysis.bfmask.stats')
-    if not os.path.isfile(testpath):
-        testpath = os.path.join(test_dir, 'bfmask.stats')
+            testpath = os.path.join(test_dir, 'bfmask.bin')
+            if not os.path.isfile(testpath):
+                print "Does not exist: %s" % testpath
+                print "Cannot basecall without bfmask.bin from signal processing"
+                print "STATUS: Error"
+                sys.exit(1)
+    
+        testpath = os.path.join(test_dir, 'analysis.bfmask.stats')
         if not os.path.isfile(testpath):
-            print "Does not exist: %s" % testpath
-            print "Cannot basecall without bfmask.stats from signal processing"
-            print "STATUS: Error"
-            sys.exit(1)
+            testpath = os.path.join(test_dir, 'bfmask.stats')
+            if not os.path.isfile(testpath):
+                print "Does not exist: %s" % testpath
+                print "Cannot basecall without bfmask.stats from signal processing"
+                print "STATUS: Error"
+                sys.exit(1)
 
     # Missing these files just means key signal graph will not be generated
     testpath = os.path.join(test_dir, 'avgNukeTrace_ATCG.txt')

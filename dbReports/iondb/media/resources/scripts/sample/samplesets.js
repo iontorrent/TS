@@ -158,9 +158,19 @@ function bindActions(source) {
             $('.myBusyDiv').empty();
             $('body').remove('.myBusyDiv');
             delete busyDiv;
-        });        
-
+        });
     });
+    
+    $(".libprep_summary").click(function(e){
+		e.preventDefault();
+		var url = $(this).attr('href');
+		console.log('here', url)
+	    $('body #modal_libraryprep_detail').remove();
+	    $.get(url, function(data) {
+	       $('body').append(data);
+	       $('#modal_libraryprep_detail').modal("show");
+	    });
+	});
 }
 
 
@@ -318,7 +328,7 @@ $(document).ready(function() {
             type : "json",
             transport : {
                 read : {
-                    url : "/rundb/api/v1/sampleset/?order_by=-lastModifiedDate",
+                    url : "/rundb/api/v1/sampleset/?order_by=-lastModifiedDate&status__in=created,planned,libPrep_pending,libPrep_reserved,libPrep_done,run,,",
                     contentType : 'application/json; charset=utf-8',
                     type : 'GET',
                     dataType : 'json'
@@ -376,13 +386,33 @@ $(document).ready(function() {
                         status : {
                         	type : "string",
                         	editable : false
-                        }                        
+                        },
+                        libraryPrepType : {
+                            type : "string",
+                            editable : false                        
+                        },
+                        libraryPrepTypeDisplayedName : {
+                            type : "string",
+                            editable : false
+                        },
+                        pcrPlateSerialNum : {
+                            type : "string",
+                            editable : false                        
+                        },
+                        combinedLibraryTubeLabel : {
+                            type : "string",
+                            editable : false                        
+                        },
+                        libraryPrepKitName: {
+                            type : "string"
+                        },
                     }
                 }
             },
             pageSize: 50,
 			serverPaging : true,
 			serverSorting : false,
+			serverFiltering : true,
         },
         sortable: {
         	mode: "multiple",
@@ -417,6 +447,19 @@ $(document).ready(function() {
         	field : "sampleGroupTypeName",
         	title : "Grouping"
         }, {
+            field : "libraryPrepType",
+            title : "Lib Prep Type",
+            template : kendo.template($('#LibPrepTypeColumnTemplate').html())
+        }, {
+            field : "libraryPrepKitName",
+            title : "Lib Prep Kit"
+        }, {
+            field : "pcrPlateSerialNum",
+            title : "PCR Plate Serial #"
+        }, {
+            field : "combinedLibraryTubeLabel",
+            title : "Combined Tube Label"
+        }, {       
         	field : "status",
         	title : "Status"        		
 //        	title : "Grouping",
@@ -436,6 +479,27 @@ $(document).ready(function() {
     $(document).bind('modal_confirm_delete_done', function () {
     	refreshKendoGrid('#sampleset_grid');
 	});
+
+    $('.search_trigger').click(function (e) { filter(e); });
+
+    $('#clear_filters').click(function () { console.log("going to reload!!"); window.location.reload(true); });
+    
+    $(function () {  
+        $('#search_subject_nav').click(function(e) { 
+            $("#sampleset_search_dropdown_menu").show();
+        });
+    });	
+    $(function () {      
+        $('.search_sampleSetName').click(function(e) {
+            set_search_subject_sampleSetName(e);
+        });    
+    });    
+
+    $(function () {
+        $('.search_combinedTubeLabel').click(function(e) {
+            set_search_subject_combinedTubeLabel(e);
+        });
+    });      	
 }); 
 
 
@@ -549,7 +613,10 @@ function detailInit(e) {
 						},
                         nucleotideType: {
                             type : "string"
-                        }
+                        },
+                        pcrPlateRow: {
+                            type : "string"
+                        }                        
 					}
 				}
 			},
@@ -665,6 +732,10 @@ function getColumns() {
          sortable: true,
          //template: kendo.template($('#sample_id_kendo_template').html())
      } , {
+         field: "pcrPlateRow",
+         title: "PCR Plate Position",        
+         sortable: true     
+     } , {
          field: "dnabarcodeKit",
          title: "Barcode Kit",        
          sortable: false         
@@ -753,4 +824,56 @@ function relationshipGroupDropDownSelector(container, options) {
                 dataType : 'json'
 			}
 		});
+}
+
+function set_search_subject_sampleSetName(e) {
+    e.preventDefault();        
+    $('.search_sampleSetName_selected').removeClass("icon-white icon-check"); 
+    $('.search_sampleSetName_selected').addClass("icon-check");
+    $('.search_combinedTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_combinedTubeLabel_selected').addClass("icon-white");
+                   
+    $("label[for='searchSubject']").text("sampleSetName");  
+    $("#search_subject_nav").attr("title", "Search by sample set name"); 
+    $("#sampleset_search_dropdown_menu").toggle();                   
+} 
+
+function set_search_subject_combinedTubeLabel(e) {
+    e.preventDefault();
+    $('.search_sampleSetName_selected').removeClass("icon-white icon-check");
+    $('.search_sampleSetName_selected').addClass("icon-white");
+    $('.search_combinedTubeLabel_selected').removeClass("icon-white icon-check");
+    $('.search_combinedTubeLabel_selected').addClass("icon-check");
+
+    $("label[for='searchSubject']").text("combinedTubeLabel");
+    $("#search_subject_nav").attr("title", "Search by combined library tube label");
+    $("#sampleset_search_dropdown_menu").toggle();
+}
+
+function filter(e){
+    e.preventDefault();
+    e.stopPropagation();
+
+    var subjectToSearch = $("label[for='searchSubject']").text();
+    var searchText = $("#search_text").val();
+    console.log("filter - subjectToSearch=", subjectToSearch, "; searchText=", searchText);
+    
+    if (subjectToSearch == "sampleSetName") {
+    $("#sampleset_grid").data("kendoGrid").dataSource.filter([
+        {
+            field: "displayedName",
+            operator: "__icontains",
+            value: $("#search_text").val()
+        }
+    ]);
+    }
+    else if (subjectToSearch == "combinedTubeLabel") {
+    $("#sampleset_grid").data("kendoGrid").dataSource.filter([
+        {
+            field: "combinedLibraryTubeLabel",
+            operator: "__icontains",
+            value: $("#search_text").val()
+        }
+    ]);
+    }
 }

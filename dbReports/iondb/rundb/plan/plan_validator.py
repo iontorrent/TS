@@ -2,7 +2,8 @@
 
 from iondb.rundb.models import Chip, RunType, KitInfo, ApplicationGroup, SampleGroupType_CV, dnaBarcode, ReferenceGenome, ApplProduct
 from iondb.utils import validation
-
+from iondb.rundb.plan.views_helper import dict_bed_hotspot
+import os
 import logging
 logger = logging.getLogger(__name__)
 
@@ -149,7 +150,7 @@ def validate_reference(referenceName, displayedName='Reference'):
         input = referenceName.strip()
 
         selectedRefs = ReferenceGenome.objects.filter(name = input)
-            
+
         if selectedRefs:
             ref_short_name = selectedRefs[0].short_name 
         else:
@@ -353,13 +354,13 @@ def validate_application_group_for_runType(value, runType, displayedName="Applic
     
     if value:
         value = value.strip()
-        applicationGroups = ApplicationGroup.objects.filter(name__iexact = value)
+        applicationGroups = ApplicationGroup.objects.filter(name__iexact = value) | ApplicationGroup.objects.filter(description__iexact = value)
         if applicationGroups:
             applicationGroup = applicationGroups[0]
             if runType:
                 runTypeObjs = RunType.objects.filter(runType__iexact = runType)
                 if runTypeObjs:
-                    associations = runTypeObjs[0].applicationGroups.filter(name__iexact = value)
+                    associations = runTypeObjs[0].applicationGroups.filter(name=applicationGroup.name)
                     if not associations:
                         errors.append("%s %s not valid for Run Type %s" %(displayedName, value, runType))
         else:
@@ -426,7 +427,6 @@ def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleoti
                 applProduct = applProducts[0]
                 if applProduct:
                     isRequired = applProduct.isTargetRegionBEDFileSelectionRequiredForRefSelection
-                                 
                     if isRequired and not validation.has_value(value):
                         #skip for now
                         if runType == "AMPS_DNA_RNA" and nucleotideType and nucleotideType.upper() == "RNA":                        
@@ -435,11 +435,34 @@ def validate_targetRegionBedFile_for_runType(value, runType, reference, nucleoti
                             logger.debug("plan_validator.validate_targetRegionBedFile_for_runType() ALLOW MISSING targetRegionBed for runType=%s; applicationGroupName=%s" %(runType, applicationGroupName))                            
                         else:    
                             errors.append("%s is required for this application" %(displayedName))
+                    elif value:
+                        if not os.path.isfile(value):
+                            errors.append("Missing or Invalid %s - %s" % (displayedName, value))
             else:
                 errors.append("%s Application %s not found" %(displayedName, runType))
         else:
-            errors.append("%s Run type is missing" %(displayedName))  
+            errors.append("%s Run type is missing" %(displayedName))
     
     ##logger.debug("EXIT plan_validator.validate_targetRegionBedFile_for_runType() errors=%s" %(errors))
                       
+    return errors
+
+def validate_hotspot_bed(hotSpotRegionBedFile):
+    """
+    validate hotSpot BED file case-insensitively with leading/trailing blanks in the input ignored
+    """
+    errors = []
+    if hotSpotRegionBedFile:
+        bedFileDict = dict_bed_hotspot()
+        value = hotSpotRegionBedFile.strip()
+
+        isValidated = False
+        for bedFile in bedFileDict.get("hotspotFiles"):
+            if value == bedFile.file or value == bedFile.path:
+                isValidated = True
+        if not isValidated:
+            errors.append("%s hotSpotRegionBedFile is missing" %(hotSpotRegionBedFile))
+
+    logger.debug("plan_validator.validate_hotspot_bed() value=%s;" %(value))
+
     return errors

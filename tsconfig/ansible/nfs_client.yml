@@ -1,9 +1,12 @@
 ---
 # file: nfs_client.yml
 - hosts: headnode:computes
-  vars_files:
-    - vars/nfs_client
   roles:
     - nfs_client
   tags:
     - nfs_client
+  vars_files:
+    - [ "group_vars/all_local", "group_vars/all" ]
+  vars:
+    - startline: "#start TSconfig added mountpoints"
+    - endline: "#end TSconfig added mountpoints"

@@ -30,6 +30,7 @@ struct ConstParams : public reg_params
 
 struct ConstXtalkParams 
 {
+  bool simpleXtalk;
   int neis;
   float multiplier[MAX_XTALK_NEIGHBOURS];
   float tau_top[MAX_XTALK_NEIGHBOURS];

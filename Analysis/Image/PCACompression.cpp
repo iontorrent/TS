@@ -12,7 +12,7 @@ int PCACompr::Compress()
 {
 	int total_iter = 0;
 	int nvect;
-	int order = 0;
+	int order = 3;
 //   double start=PCATimer();
 
 //	parent->hdr.nPcaVec = 0;
@@ -163,6 +163,7 @@ void PCACompr::ComputeEmphasisVector(float *gv, float mult, float adder, float w
 
 	  for (int i=0;i < npts;i++)
 		 gv[i]/=gvssq;
+//		  gv[i]=1.0f;
 }
 float PCACompr::SubtractVector(int nvect, int skip)
 

@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+
+# Configuration file for /sbin/dhclient, which is included in Debian's
+#	dhcp3-client package.
+
+option rfc3442-classless-static-routes code 121 = array of unsigned integer 8;
+
+{% if ansible_distribution_release == 'lucid' %}
+send host-name "<hostname>";
+{% else %}
+send host-name = gethostname();
+{% endif %}
+
+interface "{{ansible_default_ipv4.interface|default(default_interface)}}"
+{
+request subnet-mask, broadcast-address, time-offset, routers,
+        domain-name, domain-name-servers, domain-search, host-name,
+        netbios-name-servers, netbios-scope, interface-mtu,
+        rfc3442-classless-static-routes, ntp-servers;
+}
+        

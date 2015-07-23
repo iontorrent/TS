@@ -3,13 +3,6 @@
 #	---------------------------------------------------------------------
 #	Functions
 #	---------------------------------------------------------------------
-# Checks if an ethernet port exists
-function valid_port ()
-{
-	grep -q $1 /proc/net/dev
-	valid=$?
-	return $valid
-}
 #	---------------------------------------------------------------------
 #	Collect Torrent Server configuration information
 #	---------------------------------------------------------------------
@@ -56,17 +49,15 @@ echo
 echo "=================================================================="
 echo "Network Configuration:"
 echo
-interfaces=( 0 1 2 3 4 )
+interfaces=$(ls -1 /sys/class/net|grep -v 'lo')
 for i in ${interfaces[@]}; do
-	if (valid_port eth${i}); then
-		/sbin/ifconfig eth${i}|grep 'inet addr'; fi
+    /sbin/ifconfig $i|grep 'inet addr'|sed -e 's/^[ ]*//'
 done
 echo
 echo "=================================================================="
 echo "MAC Addresses:"
 for i in ${interfaces[@]}; do
-	if (valid_port eth${i}); then
-		echo "eth${i}: " `/sbin/ifconfig eth${i}|grep HWaddr|awk '{print $5}'`; fi
+    echo "$i: " `/sbin/ifconfig $i|grep HWaddr|awk '{print $5}'`
 done
 echo
 echo "=================================================================="
@@ -108,12 +99,14 @@ echo "DNS/DHCP:"
 echo "/etc/hosts file:"
 cat /etc/hosts
 echo
-echo "/etc/dhcp3/dhcpd.conf file:"
-if [ -r /etc/dhcp3/dhcpd.conf ];then
-	cat /etc/dhcp3/dhcpd.conf
+conf_file=$(find /etc -type f -name dhcpd.conf|head -1)
+if [ -z $conf_file ]; then
+    echo "No dhcp config files found"
 else
-	echo "No such file"
+    echo $conf_file:
+    cat $conf_file
 fi
+
 echo
 echo "=================================================================="
 echo "Required processes"

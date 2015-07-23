@@ -102,6 +102,24 @@ void BkgFitterTracker::UnSpinGPUThreads ()
 
   }
 }
+
+void BkgFitterTracker::UnSpinCPUBkgModelThreads ()
+{
+  if (analysis_queue.GetCpuQueue())
+  {
+    WorkerInfoQueueItem item;
+    item.finished = true;
+    item.private_data = NULL;
+    for (int i=0;i < analysis_compute_plan.numBkgWorkers;i++)
+      analysis_queue.GetCpuQueue()->PutItem (item);
+    analysis_queue.GetCpuQueue()->WaitTillDone();
+
+    delete analysis_queue.GetCpuQueue();
+    analysis_queue.SetCpuQueue(NULL);
+
+  }
+}
+
 /*
 void BkgFitterTracker::UnSpinMultiFlowFitGpuThreads ()
 {
@@ -133,6 +151,7 @@ BkgFitterTracker::BkgFitterTracker (int numRegions) :
   bkinfo = NULL;
   all_emptytrace_track = NULL;
   bestRegion_region = NULL;
+  ampEstBufferForGPU = NULL;
 }
 
 void BkgFitterTracker::AllocateSlicedChipScratchSpace( int global_flow_max )
@@ -181,6 +200,9 @@ BkgFitterTracker::~BkgFitterTracker()
 {
   DeleteFitters();
   numFitters = 0;
+
+  if (ampEstBufferForGPU)
+    delete ampEstBufferForGPU;
 }
 
 void BkgFitterTracker::PlanComputation (BkgModelControlOpts &bkg_control /*, int flow_max,
@@ -402,10 +424,20 @@ void BkgFitterTracker::ThreadedInitialization (
 
 
 // call the fitters for each region
-void BkgFitterTracker::ExecuteFitForFlow (int flow, ImageTracker &my_img_set, bool last, 
-  int flow_key, master_fit_type_table *table,
-  const CommandLineOpts * inception_state )
+void BkgFitterTracker::ExecuteFitForFlow (
+    int flow, 
+    ImageTracker &my_img_set, 
+    bool last, 
+    int flow_key, 
+    master_fit_type_table *table,
+    const CommandLineOpts *inception_state )
 {
+
+
+  int maxFrames = 0;
+  for (int r = 0; r < numFitters; r++)
+    maxFrames = std::max(signal_proc_fitters[analysis_compute_plan.region_order[r].first]->get_time_c_npts(),maxFrames);
+  GpuMultiFlowFitControl::SetMaxFrames(maxFrames);
 
   int flow_buffer_for_flow = my_img_set.FlowBufferFromFlow(flow);
   for (int r = 0; r < numFitters; r++)
@@ -624,4 +656,71 @@ void BkgFitterTracker::DetermineAndSetGPUAllocationAndKernelParams(
   cout << "CUDA: worst case per region beads: "<< maxBeads << " frames: " << maxFrames << endl;
   configureKernelExecution(bkg_control.gpuControl, global_max_flow_key, global_max_flow_max);
 
+}
+
+
+// GPU Block level signal processing
+void BkgFitterTracker::ExecuteGPUBlockLevelSignalProcessing(
+    int flow, 
+    int flow_block_size,
+    ImageTracker &my_img_set, 
+    bool last, 
+    int flow_key, 
+    master_fit_type_table *table,
+    const CommandLineOpts *inception_state,
+    const std::vector<float> *smooth_t0_est)
+{
+
+  int maxFrames = 0;
+  for (int r = 0; r < numFitters; r++)
+    maxFrames = std::max(signal_proc_fitters[analysis_compute_plan.region_order[r].first]->get_time_c_npts(),maxFrames);
+  GpuMultiFlowFitControl::SetMaxFrames(maxFrames);
+
+  int flow_buffer_for_flow = my_img_set.FlowBufferFromFlow(flow);
+  for (int r = 0; r < numFitters; r++)
+  {
+
+
+    // these get free'd by the thread that processes them
+    bkinfo[r].type = MULTI_FLOW_REGIONAL_FIT;
+    bkinfo[r].bkgObj = signal_proc_fitters[analysis_compute_plan.region_order[r].first];
+    bkinfo[r].flow = flow;
+    bkinfo[r].flow_key = flow_key;
+    bkinfo[r].table = table;
+    bkinfo[r].doingSdat = my_img_set.doingSdat;
+    bkinfo[r].inception_state = inception_state;
+    bkinfo[r].smooth_t0_est = smooth_t0_est;
+    bkinfo[r].gpuAmpEstPerFlow = ampEstBufferForGPU;
+    if (bkinfo[r].doingSdat)
+    {
+      bkinfo[r].sdat = & (my_img_set.sdat[flow_buffer_for_flow]);
+    }
+    else
+    {
+      bkinfo[r].img = & (my_img_set.img[flow_buffer_for_flow]);
+    }
+    bkinfo[r].last = last;
+    bkinfo[r].pq = &analysis_queue;
+    analysis_queue.item.finished = false;
+    analysis_queue.item.private_data = (void *) &bkinfo[r];
+  }
+
+  int deviceId = analysis_compute_plan.valid_devices[0];
+   
+
+  if (!ProcessProtonBlockImageOnGPU(bkinfo, flow_block_size,deviceId)) {
+    std::cout << "=======================================" << std::endl;
+    std::cout << "GPU block processing  failed at flow " << flow << std::endl;       
+    std::cout << "Exiting..." << std::endl;
+    std::cout << "=======================================" << std::endl;
+    exit(1);
+  }  
+}
+
+void BkgFitterTracker::CreateRingBuffer(
+  int numBuffers,
+  int bufSize)
+{
+  if (!ampEstBufferForGPU)
+    ampEstBufferForGPU = new RingBuffer<float>(numBuffers, bufSize);
 }

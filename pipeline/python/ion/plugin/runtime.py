@@ -37,33 +37,55 @@ class IonPluginRuntime(object):
 
     call = subprocess.call
 
-    def get_apiurl(self):
-        ## FIXME - get from  startplugin.json, django settings, or cluster_settings
-        base_url = 'http://localhost'
-        api_url = base_url + '/rundb/api/v1/'
+    def get_apiurl(resource, params={}, api_version='v1'):
+        """Preprocess URL and return url, params, and headers. Override to change auth method."""
+        runinfo = self.startplugin.get('runinfo', {})
+        api_url = runinfo.get('api_url', "http://localhost/rundb/api")
 
-        return api_url
+        # Authentication via api_key as GET parameter
+        api_key = runinfo.get('api_key')
+        prpk = runinfo.get('pluginresult') or runinfo.get('plugin', {}).get('pluginresult')
+        params.update({'pluginresult': prpk, 'api_key': api_key})
+
+        headers = {'content-type': 'application/json'}
+
+        query_url = '/'.join(s + '/' for s in (api_url, api_version, resource))
+        return (query_url, { 'params': params, 'headers': headers, })
 
 
-    def get_restobj(self, resource, **kwargs):
-        api_url = self.get_apiurl()
-        query_url = api_url + resource + '/'
+    def get_restobj(self, resource, params={}, timeout=30, attempts=5):
+        (url, args) = get_apiurl(resource, params)
+        while True:
+            try:
+                response = requests.get(url, timeout=timeout, verify=False, **args)
+                response.raise_for_status()
+                break
+            except (requests.exceptions.HTTPError) as e:
+                self.log.exception("Failed")
+                return None
+            except (requests.exceptions.Timeout, requests.ConnectionError) as e:
+                self.log.warn("%s", e)
+                if type(e) == requests.exceptions.Timeout:
+                    self.log.info("Increasing timeout by 5 seconds for this request.")
+                    timeout += 5
+                attempts -= 1
+                if attempts <= 0:
+                    return None
 
-        pk = kwargs.pop('pk', None)
-        if pk: query_url += pk + '/'
-        if kwargs: query_url += '?' + urlencode(kwargs)
-
-        h = httplib2.Http()
-        headers = {"Content-type": "application/json","Accept": "application/json"}
-        (resp, content) = h.request(query_url, "GET", headers=headers)
-        status = resp.status
-        if int(status) not in [200,202,304]:
-            self.log.error("REST query status: '%s'\n%s", status, content)
-            return None
-
+        try:
+            # May fail for NaN in JSON content
+            content = response.json()
+        except ValueError:
+            content = response.content
         return content
 
-    #@lazyprop
+    @property
     def startplugin(self):
-        pass
-    
+        try:
+            with open('startplugin.json', 'r') as fh:
+                spj = json.load(fh)
+            return spj
+        except:
+            self.log.exception("Error reading start plugin json")
+        return {}
+

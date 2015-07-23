@@ -84,6 +84,7 @@ void RegionTracker::InitModelRegionParams (float t_mid_nuc_start,float sigma_sta
   rp.SetStandardValue (t_mid_nuc_start,sigma_start, global_defaults.region_param_start.dntp_uM,
                        global_defaults.signal_process_control.fitting_taue,
                        global_defaults.signal_process_control.use_alternative_etbR_equation,
+                       global_defaults.signal_process_control.use_log_taub,
                        global_defaults.signal_process_control.hydrogenModelType, flow_block_size);
   rp.SetTshift(global_defaults.region_param_start.tshift_default);
   reg_params_setKrate (&rp,global_defaults.region_param_start.krate_default);
@@ -94,6 +95,7 @@ void RegionTracker::InitModelRegionParams (float t_mid_nuc_start,float sigma_sta
     reg_params_setBuffModel (&rp,global_defaults.region_param_start.tau_E_default);
   else
     reg_params_setBuffModel (&rp,global_defaults.region_param_start.tau_R_m_default,global_defaults.region_param_start.tau_R_o_default);
+  reg_params_setBuffRange (&rp,global_defaults.region_param_start.min_tauB_default,global_defaults.region_param_start.max_tauB_default,global_defaults.region_param_start.mid_tauB_default);
 
   reg_params_setSigmaMult (&rp,global_defaults.region_param_start.sigma_mult_default);
   reg_params_setT_mid_nuc_delay (&rp,global_defaults.region_param_start.t_mid_nuc_delay_default);

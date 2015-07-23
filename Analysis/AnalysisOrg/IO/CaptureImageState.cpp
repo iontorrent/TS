@@ -1,8 +1,8 @@
 /* Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved */
 
 #include "CaptureImageState.h"
-#include "H5File.h"
-#include "H5Arma.h"
+#include "IonH5File.h"
+#include "IonH5Arma.h"
 #include "ImageTransformer.h"
 #include "Vecs.h"
 #include <malloc.h>

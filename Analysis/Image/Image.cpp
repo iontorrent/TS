@@ -277,15 +277,15 @@ void Image::SetOffsetFromChipOrigin ( const char *filepath )
 // the argumant defaults are in the .h file.  tikSmoother defaults to NULL, which we count on later.
 
 // this is the original prototype
-bool Image::LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly )
+bool Image::LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly, bool timeTransform )
 {
-  return ( LoadRaw ( rawFileName, frames, allocate, headerOnly, static_cast<TikhonovSmoother*> ( NULL ) ) );
+  return ( LoadRaw ( rawFileName, frames, allocate, headerOnly, timeTransform, static_cast<TikhonovSmoother*> ( NULL ) ) );
 }
 
 // this is for calling LoadRaw in ImageLoader
 bool Image::LoadRaw ( const char *rawFileName, TikhonovSmoother *tikSmoother )
 {
-  return ( LoadRaw ( rawFileName, 0, true, false, tikSmoother ) );
+  return ( LoadRaw ( rawFileName, 0, true, 0, tikSmoother ) );
 }
 
 double TinyTimer()
@@ -380,7 +380,7 @@ bool Image::LoadRaw_noWait_noSem ( const char *rawFileName, int frames, bool all
 
 
 // This is the actual function
-bool Image::LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly, TikhonovSmoother *tikSmoother )
+bool Image::LoadRaw ( const char *rawFileName, int frames, bool allocate, bool headerOnly, bool timeTransform, TikhonovSmoother *tikSmoother )
 {
 //  _file_hdr hdr;
 //  int offset=0;
@@ -402,7 +402,7 @@ bool Image::LoadRaw ( const char *rawFileName, int frames, bool allocate, bool h
     return ( false );
 
   //int rc =
-  ActuallyLoadRaw ( rawFileName,frames,headerOnly );
+  ActuallyLoadRaw ( rawFileName,frames,headerOnly, timeTransform );
   
   //TimeStampReporting ( rc );
 
@@ -467,7 +467,7 @@ void Image::InitFromSdat(SynchDat *sdat) {
   }
 }
 
-int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOnly )
+int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOnly, bool timeTransform )
 {
   int rc;
   raw->channels = 4;
@@ -501,6 +501,11 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
 		  IonImageSem::Give();
 	  }
 	  double startT = TinyTimer();
+	  int saved_rows=raw->rows;
+	  int saved_cols=raw->cols;
+	  int saved_frames=raw->frames;
+	  int saved_uncompframes=raw->uncompFrames;
+	  int saved_ImageState=raw->imageState;
 
     rc = deInterlace_c ( ( char * ) rawFileName,&raw->image,&raw->timestamps,
                          &raw->rows,&raw->cols,&raw->frames,&raw->uncompFrames,
@@ -509,6 +514,34 @@ int Image::ActuallyLoadRaw ( const char *rawFileName, int frames,  bool headerOn
                          ImageCropping::chipSubRegion.col+ImageCropping::chipSubRegion.w,ImageCropping::chipSubRegion.row+ImageCropping::chipSubRegion.h,
                          ignoreChecksumErrors, &raw->imageState );
 
+    // testing of lossy compression
+//    printf("loaded %s ts[0]=%d\n",rawFileName,raw->timestamps[0]);
+    if(!headerOnly && timeTransform && rc != 0 && raw->timestamps[0] > 0 && (raw->timestamps[0] < 60 || raw->timestamps[0] > 72))
+    {
+        // more than 10% off from 15fps
+    	// use PCA to time-transform this file to 15fps
+    	AdvComprTest(rawFileName,this,(char *)"7"); // 7 is write a file that's pca compressed and time transformed
+    	free(raw->timestamps);
+    	raw->timestamps=NULL;
+    	free(raw->image);
+    	raw->image=NULL;
+    	raw->rows=saved_rows;
+    	raw->cols=saved_cols;
+    	raw->frames=saved_frames;
+    	raw->uncompFrames=saved_uncompframes;
+    	raw->imageState = saved_ImageState;
+    	char newFname[2048];
+    	strcpy(newFname,rawFileName);
+    	char *ptr = strstr(newFname,".dat");
+    	if(ptr)
+    		sprintf(ptr,"_testPCA.dat");
+        rc = deInterlace_c ( ( char * ) newFname,&raw->image,&raw->timestamps,
+                             &raw->rows,&raw->cols,&raw->frames,&raw->uncompFrames,
+                             0,0,
+                             ImageCropping::chipSubRegion.col,ImageCropping::chipSubRegion.row,
+                             ImageCropping::chipSubRegion.col+ImageCropping::chipSubRegion.w,ImageCropping::chipSubRegion.row+ImageCropping::chipSubRegion.h,
+                             ignoreChecksumErrors, &raw->imageState );
+    }
 
 
     if ( ImageCropping::chipSubRegion.h != 0 )
@@ -1120,7 +1153,7 @@ void Image::GenerateCumulativeSumMatrix ( int64_t *workTotal, unsigned int *work
   int64_t *lWorkTotalPtr;
   short *fptr;
   short *Rfptr;
-  register uint16_t lmsk,*rMaskPtr;
+  uint16_t lmsk,*rMaskPtr;
 
   memset ( workNum  ,0,sizeof ( unsigned int ) *raw->rows*raw->cols );
   memset ( workTotal,0,sizeof ( int64_t ) *raw->rows*raw->cols );
@@ -1199,7 +1232,7 @@ void Image::ApplyLocalReferenceToWholeChip ( int64_t *workTotal, unsigned int *w
   short *fptr;
   fptr = &raw->image[frame*raw->frameStride];
   short *Rfptr;
-  register uint16_t lmsk,*rMaskPtr;
+  uint16_t lmsk,*rMaskPtr;
     int typical_value = WholeFrameMean ( workTotal,workNum );
     
   // now, compute background for each live bead
@@ -1324,7 +1357,7 @@ void Image::GenerateCumulativeSumMatrixInRegion ( Region &reg, int64_t *workTota
   int64_t *lWorkTotalPtr;
   short *fptr;
 
-  register uint16_t lmsk;
+  uint16_t lmsk;
 
   memset ( workNum  ,0,sizeof ( unsigned int ) *raw->rows*raw->cols );
   memset ( workTotal,0,sizeof ( int64_t ) *raw->rows*raw->cols );
@@ -1404,7 +1437,7 @@ void Image::ApplyLocalReferenceInRegion ( Region &reg, int64_t *workTotal, unsig
   int typical_value= FindMeanValueInRegion ( reg,workTotal,workNum );
 
   short *fptr;
-  register uint16_t lmsk;
+  uint16_t lmsk;
 
   // now, compute background for each live bead
   fptr = &raw->image[frame*raw->frameStride];
@@ -1592,7 +1625,7 @@ void Image::CalcBeadfindMetric_1 ( Mask *mask, Region region, char *idStr, int f
   }
 }
 
-void Image::CalcBeadfindMetricRegionMean ( Mask *mask, Region region, char *idStr, int frameStart, int frameEnd )
+void Image::CalcBeadfindMetricRegionMean ( Mask *mask, Region region, const char *idStr, int frameStart, int frameEnd )
 {
   //  printf ( "gathering regional mean...\n" );
   if ( !results )

@@ -255,15 +255,22 @@
 	}
 	
 	$("#modal_dm_actions .autoExempt").click(function (e) {
+		var that = $(this);
 		var pks = $(this).data('pks');
 		var category = $(this).closest('tr').find('[name=file_category]').prop('id');
-		var data = "reportpk=" + pks + "&keep=" + $(this).is(':checked');
+		var checked = $(this).is(':checked');
+		var data = "reportpk=" + pks + "&keep=" + checked;
 		if(category == 'signal-processing-input') data+= "&type=sig";
 		if(category == 'basecalling-input') data+= "&type=base";
 		if(category == 'output-files') data+= "&type=out";
 		if(category == 'intermediate-files') data+= "&type=intr";
 		
-		$.post($(this).attr('href'), data);
+		$.post($(this).attr('href'), data, function(data){
+			$('#modal_dm_actions #modal-error-messages').empty().hide();
+		}).fail(function(data) {
+			$('#modal_dm_actions #modal-error-messages').empty().append('<p class="error">ERROR: ' + data.responseText + '</p>').show();
+			that.prop('checked', !checked);
+		});
 	});
 	
 	// allow second modal popup window

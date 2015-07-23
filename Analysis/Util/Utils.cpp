@@ -16,7 +16,7 @@
 #include <time.h>
 #include <iostream>
 #include <unistd.h> // getpid
-#include <math.h>   // isnan
+#include <cmath>   // isnan
 
 using namespace std;
 
@@ -582,7 +582,7 @@ bool IsValid (const double *vals, int numVals)
   int i;
   for (i=0;i<numVals;i++)
   {
-    if (isnan (vals[i]))
+    if (std::isnan (vals[i]))
       return false;
   }
   return true;

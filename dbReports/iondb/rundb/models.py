@@ -16,6 +16,7 @@ Personal Genome Machine experiments. This information includes...
 ``models`` also contains information about infrastructure that supports
 the data gathering and analysis.
 """
+from __future__ import absolute_import
 import datetime
 import re
 import os
@@ -58,6 +59,7 @@ from django.utils.functional import cached_property
 from django.utils import timezone
 from django.core import urlresolvers
 from django.core.cache import cache
+from django.db import transaction
 from django.db.models.signals import post_save, pre_delete, post_delete, m2m_changed
 from django.dispatch import receiver
 from distutils.version import LooseVersion
@@ -127,6 +129,7 @@ class KitInfo(models.Model):
     ALLOWED_KIT_TYPES = (
         ('SequencingKit', 'SequencingKit'),
         ('LibraryKit', 'LibraryKit'),
+        ('LibraryPrepKit', "LibraryPrepKit"), 
         ('TemplatingKit', 'TemplatingKit'),
         ('AdapterKit', "AdapterKit"),
         ('ControlSequenceKit', "ControlSequenceKit"),
@@ -163,7 +166,8 @@ class KitInfo(models.Model):
     ALLOWED_INSTRUMENT_TYPES = (
         ('', 'Any'),
         ('pgm', 'PGM'),
-        ('proton', 'Proton')
+        ('proton', 'Proton'),
+        ('S5', 'S5')        
     )
     #compatible instrument type
     instrumentType = models.CharField(max_length=64, choices=ALLOWED_INSTRUMENT_TYPES, default='', blank=True)
@@ -186,6 +190,9 @@ class KitInfo(models.Model):
         ("multipleTemplatingSize;supportLibraryReadLength", "Hi-Q templating kit categories"),
         #("readLengthDerivableFromFlows;flowsDerivableFromReadLength;", "Non-Hi-Q sequencing kit categories"),
         ("readLengthDerivableFromFlows;", "Non-Hi-Q sequencing kit categories"),
+        ("s5v1Kit", "S5 v1 kit categories"),
+        ("s5v1Kit;flowOverridable;", "S5 v1 kit categories with special flow count handling"),
+        ("s5v1Install", "S5 v1 install categories"),        
     )    
     categories = models.CharField(max_length=256, choices=ALLOWED_CATEGORIES, default='', blank=True, null=True)
     libraryReadLength = models.PositiveIntegerField(default = 0)
@@ -398,39 +405,41 @@ class PlannedExperimentManager(models.Manager):
         #PDD-TODO: remove the x_ prefix. the x_ prefix is just a reminder what the obsolete attributes to remove during the next phase
 
         extra_kwargs = {}
-        extra_kwargs['x_autoAnalyze'] = kwargs.pop('x_autoAnalyze', True)
-        extra_kwargs['x_usePreBeadfind'] = kwargs.pop('x_usePreBeadfind', True)
-        extra_kwargs['x_star'] = kwargs.pop('x_star', False)
-        extra_kwargs['x_barcodedSamples'] = kwargs.pop('x_barcodedSamples', {})
-        extra_kwargs['x_barcodeId'] = kwargs.pop('x_barcodeId', "")
-        extra_kwargs['x_bedfile'] = kwargs.pop('x_bedfile', "")
-        extra_kwargs['x_chipType'] = kwargs.pop('x_chipType', "")
-        extra_kwargs['x_flows'] = kwargs.pop('x_flows', None)
-        extra_kwargs['x_forward3primeadapter'] = kwargs.pop('x_forward3primeadapter', "")
-        ###'_isReverseRun':  = self.isReverseRun
-        extra_kwargs['x_library'] = kwargs.pop('x_library', "")
-        extra_kwargs['x_libraryKey'] = kwargs.pop('x_libraryKey', "")
-        extra_kwargs['tfKey'] = kwargs.pop('tfKey', "")
-        extra_kwargs['x_librarykitname'] = kwargs.pop('x_librarykitname', "")
-        extra_kwargs['x_notes'] = kwargs.pop('x_notes', "")
-        extra_kwargs['x_regionfile'] = kwargs.pop('x_regionfile', "")
-        extra_kwargs['x_sample'] = kwargs.pop('x_sample', "")
-        extra_kwargs['x_sample_external_id'] = kwargs.pop('x_sample_external_id', "")
-        extra_kwargs['x_sample_description'] = kwargs.pop('x_sample_description', "")
-        extra_kwargs['x_sampleDisplayedName'] = kwargs.pop('x_sampleDisplayedName', "")
-        extra_kwargs['x_selectedPlugins'] = kwargs.pop('x_selectedPlugins', {})
-        extra_kwargs['x_sequencekitname'] = kwargs.pop('x_sequencekitname', "")
-        extra_kwargs['x_variantfrequency'] = kwargs.pop('x_variantfrequency', "")
-        extra_kwargs['x_isDuplicateReads'] = kwargs.pop('x_isDuplicateReads', False)
-        extra_kwargs['x_base_recalibration_mode'] = kwargs.pop('x_base_recalibration_mode', "no_recal")
-        extra_kwargs['x_realign'] = kwargs.pop('x_realign', False)
+        # Experiment
+        extra_kwargs['autoAnalyze'] = kwargs.pop('x_autoAnalyze', True)
+        extra_kwargs['usePreBeadfind'] = kwargs.pop('x_usePreBeadfind', True)
+        extra_kwargs['star'] = kwargs.pop('x_star', False)
+        extra_kwargs['chipType'] = kwargs.pop('x_chipType', "")
+        extra_kwargs['flows'] = kwargs.pop('x_flows', "0")
+        extra_kwargs['notes'] = kwargs.pop('x_notes', "")
+        extra_kwargs['sequencekitname'] = kwargs.pop('x_sequencekitname', "")
+        extra_kwargs['platform'] = kwargs.pop('x_platform', "")
         extra_kwargs['x_isSaveBySample'] = kwargs.pop('x_isSaveBySample', False)
-        extra_kwargs['x_numberOfChips'] = kwargs.pop('x_numberOfChips', 1),
-        extra_kwargs['x_platform'] = kwargs.pop('x_platform', "")
 
-        extra_kwargs['x_mixedTypeRNA_bedfile'] = kwargs.pop("x_mixedTypeRNA_bedfile", "")
-        extra_kwargs['x_mixedTypeRNA_library'] = kwargs.pop("x_mixedTypeRNA_library", "")
-        extra_kwargs['x_mixedTypeRNA_regionfile'] = kwargs.pop("x_mixedTypeRNA_regionfile", "")
+        # EAS
+        extra_kwargs['barcodedSamples'] = kwargs.pop('x_barcodedSamples', {})
+        extra_kwargs['barcodeKitName'] = kwargs.pop('x_barcodeId', "")
+        extra_kwargs['targetRegionBedFile'] = kwargs.pop('x_bedfile', "")
+        extra_kwargs['hotSpotRegionBedFile'] = kwargs.pop('x_regionfile', "")
+        extra_kwargs['libraryKey'] = kwargs.pop('x_libraryKey', "")
+        extra_kwargs['tfKey'] = kwargs.pop('tfKey', "")
+        extra_kwargs['threePrimeAdapter'] = kwargs.pop('x_forward3primeadapter', "")
+        extra_kwargs['reference'] = kwargs.pop('x_library', "")
+        extra_kwargs['selectedPlugins'] = kwargs.pop('x_selectedPlugins', {})
+        extra_kwargs['libraryKitName'] = kwargs.pop('x_librarykitname', "")
+        extra_kwargs['variantfrequency'] = kwargs.pop('x_variantfrequency', "")
+        extra_kwargs['isDuplicateReads'] = kwargs.pop('x_isDuplicateReads', False)
+        extra_kwargs['base_recalibration_mode'] = kwargs.pop('x_base_recalibration_mode', "no_recal")
+        extra_kwargs['realign'] = kwargs.pop('x_realign', False)
+        extra_kwargs['mixedTypeRNA_reference'] = kwargs.pop("x_mixedTypeRNA_library", "")
+        extra_kwargs['mixedTypeRNA_targetRegionBedFile'] = kwargs.pop("x_mixedTypeRNA_bedfile", "")
+        extra_kwargs['mixedTypeRNA_hotSpotRegionBedFile'] = kwargs.pop("x_mixedTypeRNA_regionfile", "")
+
+        # Sample
+        extra_kwargs['sample'] = kwargs.pop('x_sample', "")
+        extra_kwargs['sample_external_id'] = kwargs.pop('x_sample_external_id', "")
+        extra_kwargs['sample_description'] = kwargs.pop('x_sample_description', "")
+        extra_kwargs['sampleDisplayedName'] = kwargs.pop('x_sampleDisplayedName', "")
 
         logger.info("EXIT PlannedExpeirmentManager.extract_extra_kwargs... extra_kwargs=%s" %(extra_kwargs))
 
@@ -545,10 +554,10 @@ class PlannedExperiment(models.Model):
     expName = models.CharField(max_length=128,blank=True)
 
     #Pre-Run/Beadfind
-    usePreBeadfind = models.BooleanField()
+    usePreBeadfind = models.BooleanField(default = True)
 
     #Post-Run/Beadfind
-    usePostBeadfind = models.BooleanField()
+    usePostBeadfind = models.BooleanField(default = True)
 
     #cycles
     cycles = models.IntegerField(blank=True,null=True)
@@ -556,7 +565,7 @@ class PlannedExperiment(models.Model):
     #autoName string
     autoName = models.CharField(max_length=512, blank=True, null=True)
 
-    preAnalysis = models.BooleanField()
+    preAnalysis = models.BooleanField(default = True)
 
     #RunType -- this is from a list of possible types (aka application)
     runType = models.CharField(max_length=512, blank=False, null=False, default="GENS")
@@ -1052,7 +1061,7 @@ class PlannedExperiment(models.Model):
                 super(PlannedExperiment, self).save()
 
                 if (self.sampleSet):
-                        if (self.sampleSet.status == "" or self.sampleSet.status == "created"):
+                        if (self.sampleSet.status in ["", "created"]):
                             self.sampleSet.status = "planned"
                             self.sampleSet.save()
 
@@ -1069,17 +1078,13 @@ class PlannedExperiment(models.Model):
 
         # ===================== Experiment ==================================
         exp_kwargs = {
-            'autoAnalyze' : kwargs.get('x_autoAnalyze', True),
-            'usePreBeadfind' : kwargs.get('x_usePreBeadfind', True),
-            'star' : kwargs.get('x_star', False),
-            'chipType' : kwargs.get('x_chipType', ""),
-            'flows' : kwargs.get('x_flows', "0"),
-            'isReverseRun' : kwargs.get('x_isReverseRun', False),
-            'notes' : kwargs.get('x_notes', ""),
             'runMode' : self.runMode,
-            'sequencekitname' : kwargs.get('x_sequencekitname', ""),
-            'platform': kwargs.get('x_platform', ""),
+            'status'  : self.planStatus
         }
+        exp_keys = ['autoAnalyze', 'usePreBeadfind', 'star', 'chipType', 'flows', 'notes', 'sequencekitname', 'platform']
+        for key in exp_keys:
+            if key in kwargs:
+                exp_kwargs[key] = kwargs[key]
 
         #there must be one experiment for each plan
         try:
@@ -1092,7 +1097,6 @@ class PlannedExperiment(models.Model):
             # creating new experiment
             exp_kwargs.update({
                 'date' : timezone.now(),
-                'status' : self.planStatus,
                 'expDir' : '',
                 #temp expName value below will be replaced in crawler
                 'expName' : self.planGUID,
@@ -1105,6 +1109,7 @@ class PlannedExperiment(models.Model):
                 'seqKitBarcode' : '',
                 'sequencekitbarcode' : '',
                 'reagentBarcode' : '',
+                'flows': exp_kwargs.get('flows', '0'),
                 'cycles' : 0,
                 'expCompInfo' : '',
                 'baselineRun' : '',
@@ -1131,28 +1136,18 @@ class PlannedExperiment(models.Model):
         logger.debug("PDD models.save_plannedExperiment_association() AFTER saving experiment_id=%d" %(experiment.id))
 
         # ===================== ExperimentAnalysisSettings =====================
-        eas_kwargs = {
-            'barcodedSamples' : kwargs.get('x_barcodedSamples', {}),
-            'barcodeKitName' : kwargs.get('x_barcodeId', ""),
-            'hotSpotRegionBedFile' : kwargs.get('x_regionfile', ""),
-            'libraryKey' : kwargs.get('x_libraryKey', ""),
-            'tfKey' : kwargs.get('tfKey', ""),
-            'libraryKitName' : kwargs.get('x_librarykitname', ""),
-            'reference' : kwargs.get('x_library', ""),
-            'selectedPlugins' : kwargs.get('x_selectedPlugins', {}),
-            'status' : self.planStatus,
-            'targetRegionBedFile' : kwargs.get('x_bedfile', ""),
-            'threePrimeAdapter' : kwargs.get('x_forward3primeadapter' ""),
-            'isDuplicateReads' : kwargs.get('x_isDuplicateReads', False),
-            'base_recalibration_mode' : kwargs.get('x_base_recalibration_mode', "no_recal"),
-            'realign' : kwargs.get('x_realign', False),
-            "mixedTypeRNA_reference" : kwargs.get('x_mixedTypeRNA_library', ""),
-            "mixedTypeRNA_targetRegionBedFile" : kwargs.get('x_mixedTypeRNA_bedfile', ""),
-            "mixedTypeRNA_hotSpotRegionBedFile" : kwargs.get('x_mixedTypeRNA_regionfile', ""),
-        }
+        eas_kwargs = { 'status' : self.planStatus }
+        eas_keys = [
+            'barcodedSamples','barcodeKitName','targetRegionBedFile','hotSpotRegionBedFile','libraryKey','tfKey','threePrimeAdapter',
+            'reference','selectedPlugins','isDuplicateReads','base_recalibration_mode','realign','libraryKitName',
+            "mixedTypeRNA_reference","mixedTypeRNA_targetRegionBedFile","mixedTypeRNA_hotSpotRegionBedFile",
+        ]
+        for key in eas_keys:
+            if key in kwargs:
+                eas_kwargs[key] = kwargs[key]
         
         # add default cmdline args
-        args = self.get_default_cmdline_args(libraryKitName=eas_kwargs['libraryKitName'])
+        args = self.get_default_cmdline_args(libraryKitName=eas_kwargs.get('libraryKitName',''))
         eas_kwargs.update(args)
 
         eas, eas_created = experiment.get_or_create_EAS(editable=True)
@@ -1168,7 +1163,7 @@ class PlannedExperiment(models.Model):
         if not self.isReusable:
             #if this is not a template need to create/update single sample or multiple barcoded samples
             samples_kwargs = []
-            barcodedSamples = kwargs.get('x_barcodedSamples', {})
+            barcodedSamples = kwargs.get('barcodedSamples', {})
 
             if barcodedSamples:
                 barcodedSampleDict = json_field.loads(barcodedSamples)
@@ -1191,8 +1186,8 @@ class PlannedExperiment(models.Model):
                 logger.debug("PDD models.save_plannedExperiment_association() barcoded samples kwargs=")
                 logger.debug(samples_kwargs)
             else:
-                displayedName = kwargs.get('x_sampleDisplayedName', "")
-                name = kwargs.get('x_sample', "") or displayedName
+                displayedName = kwargs.get('sampleDisplayedName', "")
+                name = kwargs.get('sample', "") or displayedName
 
                 if name:
                     samples_kwargs.append({
@@ -1200,8 +1195,8 @@ class PlannedExperiment(models.Model):
                         'displayedName' : displayedName or name,
                         'date' : self.date,
                         'status' : self.planStatus,
-                        'externalId': kwargs.get('x_sample_external_id', ""),
-                        'description': kwargs.get('x_sample_description', "")
+                        'externalId': kwargs.get('sample_external_id', ""),
+                        'description': kwargs.get('sample_description', "")
                     })
                     logger.debug("PDD models.save_plannedExperiment_association() samples kwargs=")
                     logger.debug(samples_kwargs)
@@ -1262,21 +1257,7 @@ class PlannedExperiment(models.Model):
         if args:
             args_dict = args.get_args()
         else:
-            args_dict = {
-                'beadfindargs':   'justBeadFind',
-                'analysisargs':   'Analysis',
-                'basecallerargs': 'BaseCaller',
-                'prebasecallerargs': 'BaseCaller',
-                'calibrateargs': 'calibrate',
-                'alignmentargs': '',
-                'thumbnailbeadfindargs':    'justBeadFind',
-                'thumbnailanalysisargs':    'Analysis',
-                'thumbnailbasecallerargs':  'BaseCaller',
-                'prethumbnailbasecallerargs':  'BaseCaller',
-                'thumbnailcalibrateargs': 'calibrate',
-                'thumbnailalignmentargs': ''
-            }
-            logger.error('No default command line args found for chip type = %s' % chipType)
+            args_dict = {}
 
         return args_dict
 
@@ -1401,7 +1382,8 @@ class Experiment(models.Model):
     ALLOWED_PLATFORM_TYPES = (
         ('', 'Unspecified'),
         ('PGM', 'PGM'),
-        ('PROTON', 'Proton')
+        ('PROTON', 'Proton'),
+        ('S5', 'S5')
     )
     
     platform = models.CharField(max_length=128, choices=ALLOWED_PLATFORM_TYPES, blank=True, default='')
@@ -1442,8 +1424,13 @@ class Experiment(models.Model):
 
     chefExtraInfo_1 = models.CharField(max_length=128, blank=True, default='')
     chefExtraInfo_2 = models.CharField(max_length=128, blank=True, default='')
+    chefScriptVersion = models.CharField(max_length=64, blank=True, default='')
 
     def __unicode__(self): return self.expName
+
+    @property
+    def has_status(self):
+        ftp =  self.ftpStatus != "Complete" or self.ftpStatus == ''
 
     def runtype(self):
         runType = self.log.get("runtype","")
@@ -1553,13 +1540,18 @@ class Experiment(models.Model):
                 logger.debug('No ExperimentAnalysisSettings found for experiment id=%d' % self.pk)
 
                 # generate blank EAS
+                gc = GlobalConfig.objects.get()
                 default_eas_kwargs = {
                               'date' : timezone.now(),
                               'experiment' : self,
-                              'libraryKey' : GlobalConfig.get().default_library_key,
+                              'libraryKey' : gc.default_library_key,
+                              'tfKey'      : gc.default_test_fragment_key,
                               'isEditable' : True,
                               'isOneTimeOverride' : False,
                               'status' : 'run',
+                              'isDuplicateReads': gc.mark_duplicates,
+                              'base_recalibration_mode': gc.base_recalibration_mode,
+                              'realign': gc.realign
                               }
                 eas = ExperimentAnalysisSettings(**default_eas_kwargs)
                 eas.save()
@@ -1654,9 +1646,26 @@ class Experiment(models.Model):
             #if somehow the chip is not in the chip table but it starts with p...
             if (self.chipType[:1].lower() == 'p'):
                 return True
-
         return False
 
+    @cached_property
+    def getPlatform(self):
+        if self.platform:
+            return self.platform.__str__().lower()
+        else:
+            if self.chipType:
+                chips = Chip.objects.filter(name = self.chipType)
+                if chips:
+                    chip = chips[0]
+                    return chip.instrumentType.__str__().lower()
+                else:
+                    chipPrefix = self.chipType[:3]
+                    chips = Chip.objects.filter(name = chipPrefix)
+                    if chips:
+                        chip = chips[0]
+                        return chip.instrumentType.__str__().lower()
+            return ""
+            
     def location(self):
         return self._location
 
@@ -1961,18 +1970,84 @@ class SampleSet(models.Model):
     #planned status      : means the sample set has at least one plan created for it but is not yet used
     #run status          : means the sample set has at least one plan that with "planExecuted" set to True
     ALLOWED_SAMPLESET_STATUS = (
-        ('', 'Undefined'),
+        ('', 'Unspecified'),
         ('created', 'Created'),
         ('planned', 'Planned'),
-        ('run', 'Run')
+        ('libPrep_pending', "Pending for Library Prep"),
+        ('libPrep_reserved', "Reserved for Library Prep"),
+        ('libPrep_done', "Done for Library Prep"),
+        ('voided', "Aborted during Library Prep"),
+        ('run', 'Run')  #Status run is now for backward compatibility only. Since a sample set can be sequenced multiple time, status run is not totally correct
     )
 
     status = models.CharField(max_length=512, blank=True, choices=ALLOWED_SAMPLESET_STATUS, default='')
 
+    ALLOWED_LIBRARY_PREP_INSTRUMENTS = (
+        ('', 'Unspecified'),
+        ('chef', 'Ion Chef'),
+    )
+    libraryPrepInstrument = models.CharField(max_length=64, blank=True, choices=ALLOWED_LIBRARY_PREP_INSTRUMENTS, default='')
+
+    pcrPlateSerialNum = models.CharField(max_length = 64, default='', blank = True, null = True)
+    
+    ALLOWED_LIBRARY_PREP_TYPES = (
+        ('', 'Unspecified'),
+#         ('amps_on_chef_v1', 'AmpliSeq on Chef'),
+    )
+    libraryPrepType = models.CharField(max_length=64, blank=True, choices=ALLOWED_LIBRARY_PREP_TYPES, default='')
+    libraryPrepPlateType = models.CharField(max_length=64, blank=True, default='')
+    combinedLibraryTubeLabel = models.CharField(max_length=64, blank=True, default='')
+
+    libraryPrepInstrumentData = models.ForeignKey("SamplePrepData", related_name = "libraryPrepData_sampleSet", null = True)
+    libraryPrepKitName = models.CharField(max_length=512, blank=True, null=True)
 
     def __unicode__(self):
         return u'%s' % (self.displayedName)
 
+
+class SamplePrepData(models.Model):    
+    instrumentName = models.CharField(max_length=200, blank=True, default='')
+    instrumentStatus = models.CharField(max_length=256, blank=True, default='')
+    
+    lastUpdate = models.DateTimeField(null=True, blank=True)
+    
+    ALLOWED_SAMPLE_PREP_DATA_TYPES = (
+        ('', 'Unspecified'),
+        ('lib_prep', 'Library Prep'),
+        ('template_prep', 'Template Prep'),        
+    )
+    samplePrepDataType = models.CharField(max_length=64, blank=True, choices=ALLOWED_SAMPLE_PREP_DATA_TYPES, default='')
+    
+    progress = models.FloatField(default=0.0, blank=True)
+    message = models.TextField(blank=True, default='')
+    logPath = models.CharField(max_length=512, blank=True, null=True)
+    
+    tipRackBarcode = models.CharField(max_length=64, blank=True, default='')
+    kitType = models.CharField(max_length=64, blank=True, default='')
+    
+    reagentsPart = models.CharField(max_length=64, blank=True, default='')
+    reagentsLot = models.CharField(max_length=64, blank=True, default='')
+    reagentsExpiration = models.CharField(max_length=64, blank=True, default='')    
+
+    solutionsPart = models.CharField(max_length=64, blank=True, default='')
+    solutionsLot = models.CharField(max_length=64, blank=True, default='')
+    solutionsExpiration = models.CharField(max_length=64, blank=True, default='')
+
+    packageVer = models.CharField(max_length=64, blank=True, default='')
+    scriptVersion = models.CharField(max_length=64, blank=True, default='')
+
+
+    def __unicode__(self):
+        return u'%s/%d' % (self.instrumentName, self.pk)
+
+    def __iter__(self):
+        for field_name in self._meta.get_all_field_names():
+            try:
+                value = getattr(self, field_name)
+            except:
+                value = None
+            yield (field_name, value)
+    
 class SampleSetItem(models.Model):
     #reference Sample but Sample class is defined after SampleSetItem!!!
 
@@ -2008,11 +2083,32 @@ class SampleSetItem(models.Model):
 
     nucleotideType = models.CharField(max_length=64, choices=ALLOWED_NUCLEOTIDE_TYPES, default='', blank=True)
 
-    # #optional sample-dnabarcode.id_str assignment
-    #removed by Sam Mohamed, we are replacing with a foreign key to the
-    #dnaBarcode table
-    # barcode = models.CharField(max_length = 128, blank = True, null = True)
+    pcrPlateColumn = models.CharField(max_length = 10, default='', blank = True, null = True)
+    pcrPlateRow = models.CharField(max_length = 10, default='', blank = True, null = True)
 
+    ALLOWED_AMPLISEQ_PCR_PLATE_ROWS_V1 = (
+        ('A', 'A'),
+        ('B', 'B'),
+        ('C', 'C'),
+        ('D', 'D'),
+        ('E', 'E'),
+        ('F', 'F'),
+        ('G', 'G'),
+        ('H', 'H')         
+    )
+
+    ALLOWED_AMPLISEQ_PCR_PLATE_COLUMNS_V1 = (
+        ('1', '1')
+    )
+                                             
+    @staticmethod
+    def get_ampliseq_plate_v1_row_choices():
+        return SampleSetItem.ALLOWED_AMPLISEQ_PCR_PLATE_ROWS_V1
+                                             
+    @staticmethod
+    def get_ampliseq_plate_v1_column_choices():
+        return SampleSetItem.ALLOWED_AMPLISEQ_PCR_PLATE_COLUMNS_V1
+    
     @staticmethod
     def get_nucleotideType_choices():
         return SampleSetItem.ALLOWED_NUCLEOTIDE_TYPES
@@ -2255,11 +2351,15 @@ class Results(models.Model, Lookup):
         return False
 
     @cached_property
+    def getPlatform(self):
+        if self.experiment:
+            return self.experiment.getPlatform
+        return None
+   
+
+    @cached_property
     def isThumbnail(self):
-        if self.isProton:
-            return bool(self.metaData and self.metaData.get("thumb", False))
-        else:
-            return False
+        return bool(self.metaData and self.metaData.get("thumb", False))
 
     #a place for plugins to store information
     # NB: These two functions facilitate compatibility with earlier model,
@@ -2316,7 +2416,7 @@ class Results(models.Model, Lookup):
             if not webPath:
                 logger.warning("Bam link, webpath missing for " + bamFile)
                 return False
-            return os.path.join(webPath , bamFile)
+            return os.path.join(webPath , 'download_links', bamFile)
         else:
             logger.warning("Bam link, Report Storage: %s, Location: %s", self.reportstorage, self._location)
             return False
@@ -2769,8 +2869,20 @@ class Location(models.Model):
 
     @classmethod
     def getdefault(cls):
-        '''Raises DoesNotExist exception when there is no default object'''
-        return cls.objects.filter(defaultlocation=True)[:1].get()
+        ''' Return default location. Raises exception if no default is specified and there is more than one Location object'''
+        loc = cls.objects.filter(defaultlocation=True)
+        if loc:
+            loc = loc[0]
+        else:
+            try:
+                loc = cls.objects.get()
+            except Location.MultipleObjectsReturned:
+                raise Location.MultipleObjectsReturned("Multiple Location objects found! Please specify default Location.")
+            except Location.DoesNotExist:
+                raise Location.DoesNotExist("No Location object exist! Please specify default Location.")
+
+        return loc
+
 
     def save(self, *args, **kwargs):
         """make sure only one location is checked."""
@@ -3110,6 +3222,24 @@ class Template(models.Model):
     def __unicode__(self):
         return self.name
 
+    def save(self, *args, **kwargs):
+        try:
+            with transaction.commit_on_success():
+                super(Template, self).save(*args, **kwargs)
+                tasks.generate_TF_files(self.key)
+        except:
+            logger.exception('Failed saving Test Fragment %s' % self.name)
+            raise
+
+    def delete(self, *args, **kwargs):
+        try:
+            with transaction.commit_on_success():
+                super(Template, self).delete(*args, **kwargs)
+                tasks.generate_TF_files(self.key)
+        except:
+            logger.exception('Failed deleting Test Fragment %s' % self.name)
+            raise
+
 # Backup objects are obsolete, replaced by DMFileStat, DMFileSet; not removing the class for Data Management update from pre-TS3.6 servers
 class Backup(models.Model):
     experiment = models.ForeignKey(Experiment)
@@ -3135,7 +3265,8 @@ class Chip(models.Model):
     ALLOWED_INSTRUMENT_TYPES = (
         ('', "Undefined"),
         ('pgm', 'PGM'),
-        ('proton', 'Proton')
+        ('proton', 'Proton'),
+        ('S5', 'S5') 
     )
     #compatible instrument type
     instrumentType = models.CharField(max_length=64, choices=ALLOWED_INSTRUMENT_TYPES, default='', blank=True)
@@ -3919,6 +4050,19 @@ class ContentUpload(models.Model):
 
     def __unicode__(self): return u'ContentUpload %d' % self.id
 
+    def upload_type(self):
+        # TODO this can go into a separate field
+        upload_type = 'Unknown'
+        meta = self.meta
+        if meta:
+            upload_type = meta.get('upload_type', 'Custom (%s)' % self.publisher.name)
+            if meta.get('is_ampliseq', False):
+                upload_type = 'AmpliSeq ZIP'
+            elif 'hotspot' in meta:
+                upload_type = 'Hotspots' if meta['hotspot'] else 'Target Regions'
+        
+        return upload_type
+
 
 @receiver(post_delete, sender=ContentUpload, dispatch_uid="delete_upload")
 def on_contentupload_delete(sender, instance, **kwargs):
@@ -4151,6 +4295,9 @@ class Message(models.Model):
     tags = models.TextField(blank=True, default="")
     status = models.TextField(blank=True, default="unread")
     time = models.DateTimeField(auto_now_add=True)
+
+    # Special users, can be specified in route
+    USER_STAFF = "_StaffOnly"
 
     # Message alert levels
     DEBUG    = 10
@@ -4482,12 +4629,14 @@ class AnalysisArgs(models.Model):
             'prebasecallerargs': self.prebasecallerargs,
             'calibrateargs': self.calibrateargs,
             'alignmentargs': self.alignmentargs,
+            'ionstatsargs': self.ionstatsargs,
             'thumbnailbeadfindargs':    self.thumbnailbeadfindargs,
             'thumbnailanalysisargs':    self.thumbnailanalysisargs,
             'thumbnailbasecallerargs':  self.thumbnailbasecallerargs,
             'prethumbnailbasecallerargs':  self.prethumbnailbasecallerargs,
             'thumbnailcalibrateargs': self.thumbnailcalibrateargs,
-            'thumbnailalignmentargs': self.thumbnailalignmentargs
+            'thumbnailalignmentargs': self.thumbnailalignmentargs,
+            'thumbnailionstatsargs': self.thumbnailionstatsargs
         }
         return args
 
@@ -4622,7 +4771,7 @@ class SharedServer(models.Model):
     password = models.CharField(max_length=64)
     active = models.BooleanField(default=True)
     comments = models.TextField(blank=True)
-
+    
     def setup_session(self):
         import requests
         

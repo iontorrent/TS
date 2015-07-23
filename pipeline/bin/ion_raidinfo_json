@@ -100,7 +100,7 @@ function get_lv_drv_ids()
 {
     enc_id=$1
     adp=$2
-    MegaCli64 -LDPDInfo -a$adp|egrep '(Enclosure Device ID|Virtual Drive)'|grep Enclosure.*$enc_id -B1|awk '/^Virtual/{print $3}'
+    MegaCli64 -LDPDInfo -a$adp $MEGALOG|egrep '(Enclosure Device ID|Virtual Drive)'|grep Enclosure.*$enc_id -B1|awk '/^Virtual/{print $3}'
 }
 #==============================================================================
 #==============================================================================

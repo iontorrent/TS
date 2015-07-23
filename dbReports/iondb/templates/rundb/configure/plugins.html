@@ -54,7 +54,10 @@
         <div id="grid"></div>
     </div>
     <div class="content">
-        <h1>Publishers</h1>
+        <div class="clearfix">
+            <h1 class="pull-left">Publishers</h1>
+            <a href="{% url "configure_publisher_install" %}" class="btn pull-right install_upgrade_publisher">Install or Upgrade Publisher</a>
+        </div>
         {% if publishers %}
         <table id="publishers" class="data-table">
             <thead>
@@ -63,8 +66,9 @@
                   <th>Version</th>
                   <th>Path</th>
                   <th>Date</th>
+                  <th>Action</th>
                 </tr>
-            </thead
+            </thead>
             <tbody>
                 {% for p in publishers %}
                 <tr id="{{p.pk}}_row">
@@ -72,6 +76,19 @@
                     <td>{{p.version}}</td>
                     <td>{{p.path}}</td>
                     <td>{{p.date|date:"M d Y"}}</td>
+                    <td>
+                        <div class="btn-group">
+                            <a class="btn dropdown-toggle" data-toggle="dropdown" href="#"><img src="{% static "resources/img/gear-active.png"%}" border="0"><span class="caret"></span></a>
+                            <ul class="dropdown-menu pull-right">
+                                <li>
+                                    <a href="/rundb/publish/{{p.name}}" class="publisher_upload">Upload</a>
+                                </li>
+                                <li>
+                                    <a href="/rundb/published/?from={{p.name}}">History</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -279,7 +296,7 @@ $(document).ready(function(){
         }
         , height: '446'
         , groupable: false
-        , scrollable: true
+        , scrollable: { virtual: true }
         , selectable: false
         , sortable: true
         , pageable: false
@@ -440,14 +457,49 @@ $(document).ready(function(){
             $('#error-messages').empty().show();
             $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
             console.log("error:", data);
-
         })
         .always(function(data) { /*console.log("complete:", data);*/ });
-
     });
+
+    $('.install_upgrade_publisher').click(function (e) {
+        e.preventDefault();
+        $('#error-messages').hide().empty();
+
+        url = $(this).attr('href');
+        // alert(url);
+        $.get(url, function(data) {
+            return false;
+        }).done(function(data) {
+            console.log("success:",  url);
+            $('body').append(data);
+            $('#modal_configure_publisher_install').modal('show');
+        })
+        .fail(function(data) {
+            $('#error-messages').empty().show();
+            $('#error-messages').append('<p class="error">ERROR: ' + data.responseText + '</p>');
+            console.log("error:", data);
+        })
+        .always(function(data) { /*console.log("complete:", data);*/ });
+    });
+    
+    $('.publisher_upload').click(function(e) {
+        e.preventDefault();
+        var url = $(this).attr('href');
+        $('body #modal_publisher_upload').remove();
+        $.get(url, function(data) {
+           $('body').append(data);
+           $("#modal_publisher_upload").modal("show");
+        });
+    });
+    
     $(document).bind('modal_confirm_plugin_uninstall_done modal_confirm_plugin_configure_done modal_configure_plugins_plugin_install_done', function(e) {
         console.log(e.target, e.relatedTarget);
         refreshKendoGrid($(e.target).data('source'));
+    });
+
+    $(document).bind('modal_configure_publisher_install_done', function(e) {
+        console.log(e.target, e.relatedTarget);
+        setTimeout(function(){ window.location.reload(true); }, 1000);
     });
 
 });

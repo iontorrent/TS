@@ -22,6 +22,28 @@ void DBG_PRINTF(...){}
 
 bool getTagParanoid(BamTools::BamAlignment &alignment, const std::string &tag, int64_t &value);
 
+class Stats{
+
+public:
+    typedef std::map< std::string, double > ValueType;
+    typedef std::map< int, ValueType > AdaptorStatsType;
+
+    AdaptorStatsType Value;
+
+    Stats(){}
+    void increment( int adaptorId, const std::string& key ){
+        if( Value[adaptorId].count(key)>0 )
+            Value[adaptorId][key] += 1;
+        else
+            Value[adaptorId][key] = 1;
+    }
+    double val( int adaptorId, const std::string& key ){
+        if( Value[adaptorId].count(key)>0 )
+            return Value[adaptorId][key];
+        return 0;
+    }
+};
+
 //Algorithm:
 //Handle forward and reverse strands separately
 //________________________________________________________________________________________________________
@@ -63,9 +85,12 @@ class AlignCache{
         StrandMapType revStrand;
     };
 
+    //First index - adapter
+    //Second index - "start position"
     //convention: for both forward and reverse strands "key" is the "start position" of the read  (forward read "start position" ----- "end position")
     //Note that for reverse strand "start position" is the larger position                                  ( reverse read "end position" ------ "start position")
-    typedef std::map< int, AlignStore > AlignStoreType;
+    typedef std::map< int, AlignStore > AdaptorAlignStoreType;
+    typedef std::map< int, AdaptorAlignStoreType > AlignStoreType;
     AlignStoreType alignStore;
     struct ProcessedReadStore{
         int numUnprocessedRevReads;
@@ -77,22 +102,37 @@ class AlignCache{
 
     int32_t curRefId, curPos;
 
-    void MarkDuplicates(int32_t refId, int32_t pos );
-    void MarkDuplicatesStrand(int32_t pos, StrandMapType& alignStore, bool isReverse, char *str);
+    void MarkDuplicates(int32_t refId, int32_t aId, int32_t pos );
+    void MarkDuplicatesStrand(int32_t pos, int32_t aId, StrandMapType& alignStore, bool isReverse, const char *str);
     //void MarkDuplicatesRev(int32_t pos);
+    void ClearProcessedReads( int32_t end_pos );
     void WriteData(int32_t refId, int32_t pos );
 
 
     inline int adaptorFlow( BamAlignment& al ){
-        std::vector<int> pcr_duplicate_signature(3,0);
-        if( al.HasTag("ZC") )
-            al.GetTag("ZC",pcr_duplicate_signature);
-        return pcr_duplicate_signature[1]; //entry 2 - last insert flow.
+        std::vector<int> pcr_duplicate_signature;
+        int flow = 0;
 
-//        int64_t adapterFlow=0;
-//        if( al.HasTag("ZG") )
-//            getTagParanoid(al,"ZG", adapterFlow);
-//        return adapterFlow;
+        if( al.HasTag("ZC") ){
+            al.GetTag("ZC",pcr_duplicate_signature);
+            if(pcr_duplicate_signature.size()>=1)
+                flow = pcr_duplicate_signature[1]; //entry 2 - last insert flow.
+        }
+        return flow;
+    }
+
+    inline int adaptorId( BamAlignment& al ){
+        std::vector<int> pcr_duplicate_signature;
+        int id = 0;
+        //TODO: currently reads without adaptor are handled as if they had adaptor 0.
+        //This doesn't handle the case when the read without an adaptor is longer than any read with adaptor 0,
+        //but shorter than a read with a different adaptor. This a corner case that is complicated to handle.
+        if( al.HasTag("ZC") ){
+            al.GetTag("ZC",pcr_duplicate_signature);
+            if(pcr_duplicate_signature.size()>=4)
+                id = pcr_duplicate_signature[3];
+        }
+        return id;
     }
 
     inline int lastFlow( BamAlignment& al ){
@@ -119,6 +159,7 @@ class AlignCache{
 
 public:
     int nTotalReads, nTotalMappedReads, nDuplicates, nWithAdaptor;
+    Stats stats;
     AlignCache( BamWriter& _writer ) : writer(&_writer), curRefId(-1), curPos(-1), saveDups(false), nTotalReads(0), nTotalMappedReads(0), nDuplicates(0), nWithAdaptor(0) {}
     void NewAlignment( BamAlignment& al );
     void FlushData(void) { FlushData(0, std::numeric_limits<int32_t>::max(), true); }
@@ -133,7 +174,7 @@ inline void outputDupString( std::stringstream& duplicateStream, const char* al 
     duplicateStream << thisRow << " " << thisCol << " ";
 }
 
-void AlignCache::MarkDuplicatesStrand( int32_t pos, StrandMapType& strand, bool isReverse, char* str )
+void AlignCache::MarkDuplicatesStrand( int32_t pos, int32_t aId, StrandMapType& strand, bool isReverse, const char* str )
 {
 
     if( strand.size()==0) return;
@@ -156,6 +197,7 @@ void AlignCache::MarkDuplicatesStrand( int32_t pos, StrandMapType& strand, bool 
     processedReadStore[al_first.Position].readList.push_back(al_first);
     nWithAdaptor += hasAdaptor? 1 : 0;
     nTotalMappedReads += (al_first.IsMapped())?1:0;
+    stats.increment(aId, "MappedReads");
 
     if( saveDups )
         outputDupString( duplicateStream, al_first.Name.c_str() );
@@ -179,7 +221,7 @@ void AlignCache::MarkDuplicatesStrand( int32_t pos, StrandMapType& strand, bool 
 
             if( not ( hasAdaptor && (lastFlow(currAlignment)<maxFlow) ) && currAlignment.IsMapped() ){
                 currAlignment.SetIsDuplicate(true);
-                ++nDuplicates;
+                ++nDuplicates; stats.increment(aId, "Duplicates");
                 DBG_PRINTF("%s: %d %d %c %d\tDup Shorter/No adaptr\t\t%s\n", str, currAlignment.Position, GetEndPosition(currAlignment), hasAdaptor?'T':'F',lastFlow(currAlignment), currAlignment.Name.c_str());
                 if( saveDups ){
                     outputDupString( duplicateStream, currAlignment.Name.c_str() );
@@ -195,6 +237,7 @@ void AlignCache::MarkDuplicatesStrand( int32_t pos, StrandMapType& strand, bool 
             processedReadStore[currAlignment.Position].readList.push_back( currAlignment );
             nWithAdaptor += hasAdaptor? 1 : 0;
             nTotalMappedReads += (currAlignment.IsMapped())?1:0;
+            stats.increment(aId, "MappedReads");
             ++it;
         }
     }
@@ -204,6 +247,13 @@ void AlignCache::MarkDuplicatesStrand( int32_t pos, StrandMapType& strand, bool 
     }
 }
 
+void AlignCache::ClearProcessedReads( int32_t end_pos )
+{
+    for( AlignStoreType::iterator adaptorIt = alignStore.begin(); adaptorIt != alignStore.end(); ++adaptorIt ){ //iterate over all adaptors
+        AdaptorAlignStoreType& adaptorAlignStore = adaptorIt->second;
+        adaptorAlignStore.erase( adaptorAlignStore.begin(), adaptorAlignStore.lower_bound( end_pos ) );
+    }
+}
 
 void AlignCache::WriteData( int32_t refId, int32_t pos  )
 {
@@ -221,38 +271,41 @@ void AlignCache::WriteData( int32_t refId, int32_t pos  )
         }
 
         for(std::list<BamAlignment>::iterator read_it = readList.begin(); read_it!= readList.end(); ++read_it ){
-            DBG_PRINTF("\t\t\tSaving %s\n", read_it->Name.c_str());
+            DBG_PRINTF("\t\t\tSaving %s: %s\n", read_it->Name.c_str(), read_it->IsDuplicate()?"Dup":"");
             writer->SaveAlignment( *read_it );
         }
     }
     processedReadStore.erase(processedReadStore.begin(), it);
-    alignStore.erase(alignStore.begin(), alignStore.lower_bound( it->first ));
+    ClearProcessedReads( it->first );
 }
 
-void AlignCache::MarkDuplicates(int32_t refId, int32_t pos  )
+void AlignCache::MarkDuplicates(int32_t refId, int32_t aId, int32_t pos  )
 {
     if( refId == -1 ) //unaligned content
         return;
 
-    MarkDuplicatesStrand(pos, alignStore[pos].fwdStrand, false, "Fwd");
-    MarkDuplicatesStrand(pos, alignStore[pos].revStrand, true, "Rev");
+    MarkDuplicatesStrand( pos, aId, alignStore[aId][pos].fwdStrand, false, "Fwd" );
+    MarkDuplicatesStrand( pos, aId, alignStore[aId][pos].revStrand, true, "Rev" );
 }
 
 void AlignCache::FlushData( int32_t refId, int32_t pos, bool reset )
 {
-    if( alignStore.empty() )
-        return;
+    for( AlignStoreType::iterator adaptorIt = alignStore.begin(); adaptorIt != alignStore.end(); ++adaptorIt ){ //iterate over all adaptors
+        int aId = adaptorIt->first;
+        AdaptorAlignStoreType& adaptorAlignStore = adaptorIt->second;
 
-    AlignStoreType::iterator it = alignStore.begin();
-    AlignStoreType::iterator end = alignStore.upper_bound( pos );
+        if( adaptorAlignStore.empty() )
+            continue;
 
-    for( ; it != end; it = alignStore.upper_bound( it->first ) ){
-        DBG_PRINTF("Processing pos: %d\n", it->first);
-        MarkDuplicates( refId, it->first);
+        AdaptorAlignStoreType::iterator it = adaptorAlignStore.begin();
+        AdaptorAlignStoreType::iterator end = adaptorAlignStore.upper_bound( pos );
+
+        for( ; it != end; it = adaptorAlignStore.upper_bound( it->first ) ){
+            DBG_PRINTF("Processing pos: %d, Adaptor: %d\n", it->first, aId);
+            MarkDuplicates( refId, aId, it->first );
+        }
     }
-
     WriteData( refId, pos );
-
     if( reset ){
         processedReadStore.clear();
     }
@@ -269,14 +322,16 @@ void AlignCache::NewAlignment( BamAlignment& al )
     if( al.IsDuplicate() )
         DBG_PRINTF("Reads already marked as duplicates.");
 
+    int aId = adaptorId(al);
+
     if( al.IsReverseStrand() ){
-        alignStore[GetEndPosition(al)].revStrand.insert(std::pair<int, BamAlignment>(lastFlow(al), al ));
-        DBG_PRINTF("\tAdding REV Pos: %d, End: %d, Flow: %d\n", al.Position, GetEndPosition(al), lastFlow(al));
+        alignStore[aId][GetEndPosition(al)].revStrand.insert(std::pair<int, BamAlignment>(lastFlow(al), al ));
+        DBG_PRINTF("\tAdding %s REV Pos: %d, End: %d, Flow: %d, Adaptor: %d\n", al.Name.c_str(), al.Position, GetEndPosition(al), lastFlow(al), aId);
         processedReadStore[al.Position].numUnprocessedRevReads += 1;
     }
     else{
-        alignStore[al.Position].fwdStrand.insert(std::pair<int, BamAlignment>(lastFlow(al), al ));
-        DBG_PRINTF("\tAdding FWD Pos: %d, End: %d, Flow: %d\n", al.Position, GetEndPosition(al), lastFlow(al));
+        alignStore[aId][al.Position].fwdStrand.insert(std::pair<int, BamAlignment>(lastFlow(al), al ));
+        DBG_PRINTF("\tAdding %s FWD Pos: %d, End: %d, Flow: %d, Adaptor: %d\n", al.Name.c_str(), al.Position, GetEndPosition(al), lastFlow(al), aId);
     }
 
     if( curRefId != al.RefID || curPos != al.Position ){
@@ -286,7 +341,6 @@ void AlignCache::NewAlignment( BamAlignment& al )
 
     curRefId = al.RefID;
     curPos = al.Position;
-
 }
 
 void PrintHelp()
@@ -305,6 +359,31 @@ void PrintHelp()
   printf ("\n");
 
   exit (EXIT_SUCCESS);
+}
+
+void SaveStatistics( std::string path, AlignCache& cache ){
+    Json::Value BamDuplicates_json(Json::objectValue);
+    BamDuplicates_json["total_reads"] = cache.nTotalReads;
+    BamDuplicates_json["total_mapped_reads"] = cache.nTotalMappedReads;
+    BamDuplicates_json["duplicate_reads"] = cache.nDuplicates;
+    BamDuplicates_json["reads_with_adaptor"] = cache.nWithAdaptor;
+    BamDuplicates_json["fraction_duplicates"] = (float)cache.nDuplicates/(cache.nTotalMappedReads+1.);
+    BamDuplicates_json["fraction_with_adaptor"] = (float)cache.nWithAdaptor/(cache.nTotalMappedReads+1.);
+
+    for( Stats::AdaptorStatsType::iterator it = cache.stats.Value.begin(); it != cache.stats.Value.end(); ++it ){
+        int aID = it->first;
+        Stats::ValueType& values = it->second;
+        char tmpstr[256];
+        sprintf(tmpstr,"Adapter_%d",aID);
+
+        BamDuplicates_json["Adapters"][tmpstr]["total_reads"] = values["MappedReads"];
+        BamDuplicates_json["Adapters"][tmpstr]["duplicate_reads"] = values["Duplicates"];
+        BamDuplicates_json["Adapters"][tmpstr]["fraction_duplicates"] = values["Duplicates"]/(values["MappedReads"]+1);
+    }
+
+    std::ofstream out(path.c_str(), std::ios::out);
+    if( out.good() )
+        out<<BamDuplicates_json.toStyledString();
 }
 
 int main( int argc, const char* argv[] )
@@ -350,9 +429,6 @@ int main( int argc, const char* argv[] )
         DBG_PRINTF("Cannot open output bam file: %s\n", outputFile.c_str());
     }
     
-   
-    writer.SetNumThreads( 6 );
-
     AlignCache cache(writer);
     cache.OutputDuplicates( saveDuplicates );
     BamAlignment al;
@@ -370,18 +446,7 @@ int main( int argc, const char* argv[] )
     reader.Close();
     writer.Close();
 
-    Json::Value BamDuplicates_json(Json::objectValue);
-    BamDuplicates_json["total_reads"] = cache.nTotalReads;
-    BamDuplicates_json["total_mapped_reads"] = cache.nTotalMappedReads;
-    BamDuplicates_json["duplicate_reads"] = cache.nDuplicates;
-    BamDuplicates_json["reads_with_adaptor"] = cache.nWithAdaptor;
-    BamDuplicates_json["fraction_duplicates"] = (float)cache.nDuplicates/(cache.nTotalMappedReads+1.);
-    BamDuplicates_json["fraction_with_adaptor"] = (float)cache.nWithAdaptor/(cache.nTotalMappedReads+1.);
-
-    std::ofstream out((outputDir+"/"+outputJSON).c_str(), std::ios::out);
-    if( out.good() )
-        out<<BamDuplicates_json.toStyledString();
-
+    SaveStatistics( (outputDir+"/"+outputJSON).c_str(), cache );
     return 0;
 }
 

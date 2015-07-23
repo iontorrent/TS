@@ -6,6 +6,7 @@
 // operating with the TMAP data structures
 
 #include <stdint.h>
+#include <ostream>
 #include "realign_cliptype.h"
 
 class RealignProxy
@@ -16,12 +17,14 @@ public:
     // general setup
     virtual void set_verbose (bool verbose) = 0;
     virtual void set_debug (bool debug) = 0;
+    virtual void set_log (int posix_handle) = 0;
     virtual bool invalid_input_cigar () const = 0;
 
     // parameters setup
     virtual void set_scores (int mat, int mis, int gip, int gep) = 0;
     virtual void set_bandwidth (int bandwidth) = 0;
     virtual void set_clipping (CLIPTYPE clipping) = 0;
+    virtual void set_gap_scale_mode (int gap_scale_mode) = 0;
 
     // alignment setup and run
     virtual bool compute_alignment (const char* q_seq,

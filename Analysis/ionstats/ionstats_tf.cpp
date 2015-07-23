@@ -80,16 +80,14 @@ void PopulateReferenceSequences(map<string,string> &tf_sequences, const string &
 
 
 
-int IonstatsTestFragments(int argc, const char *argv[])
+int IonstatsTestFragments(OptArgs &opts)
 {
-  OptArgs opts;
-  opts.ParseCmdLine(argc, argv);
   string input_bam_filename   = opts.GetFirstString('i', "input", "");
   string fasta_filename       = opts.GetFirstString('r', "ref", "");
   string output_json_filename = opts.GetFirstString('o', "output", "ionstats_tf.json");
   int histogram_length        = opts.GetFirstInt   ('h', "histogram-length", 400);
 
-  if(argc < 2 or input_bam_filename.empty() or fasta_filename.empty()) {
+  if(input_bam_filename.empty() or fasta_filename.empty()) {
     IonstatsTestFragmentsHelp();
     return 1;
   }
@@ -266,9 +264,10 @@ int IonstatsTestFragments(int argc, const char *argv[])
         MD_len[MD_idx] -= advance;
 
       } else {
-        printf("ionstats tf: Unexpected OP combination: %s Cigar=%c, MD=%c !\n",
+        fprintf(stderr, "ionstats tf: Unexpected OP combination: %s Cigar=%c, MD=%c !\n",
             alignment.Name.c_str(), alignment.CigarData[cigar_idx].Type, MD_op[MD_idx]);
-        break;
+        exit(1);
+        //break;
       }
 
       if (num_errors*10 <= num_bases)   AQ10_bases = num_bases;
@@ -322,7 +321,7 @@ int IonstatsTestFragments(int argc, const char *argv[])
   //
 
   Json::Value output_json(Json::objectValue);
-  output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
+  //output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
   output_json["meta"]["format_name"] = "ionstats_tf";
   output_json["meta"]["format_version"] = "1.0";
 
@@ -436,7 +435,7 @@ int IonstatsTestFragmentsReduce(const string& output_json_filename, const vector
 
 
   Json::Value output_json(Json::objectValue);
-  output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
+  //output_json["meta"]["creation_date"] = get_time_iso_string(time(NULL));
   output_json["meta"]["format_name"] = "ionstats_tf";
   output_json["meta"]["format_version"] = "1.0";
 

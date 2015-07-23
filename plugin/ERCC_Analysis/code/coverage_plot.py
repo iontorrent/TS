@@ -32,7 +32,7 @@ def empty_ranges(contig):
 
 def plot_coverage(contig, starts, display = False, path='coverage.png'):
   plt.clf()
-  
+
   # Find the regions with no coverage
   ranges = empty_ranges(contig)
 
@@ -45,22 +45,24 @@ def plot_coverage(contig, starts, display = False, path='coverage.png'):
   fig.set_size_inches(8, 2, forward=True)
 
 
-  plt.subplot(121) 
+  axStarts = plt.subplot(121) 
 
-  axStarts = plt.gca() 
   for loc, spine in axStarts.spines.iteritems():
     spine.set_linewidth(0.5)
     spine.set_antialiased(True)
   
   axStarts.set_xlim(0, xlim)
-  axStarts.set_yscale('log')
+  axStarts.set_yscale('log',nonposy='clip')
+
+  # add 1 to counts so 0 starts is distinguished from 1 starts
+  starts = np.array([start+1 for start in starts])
   axStarts.grid(True,color='gray', aa=True)
   axStarts.axhline(1.0, color='gray', aa=True, linewidth=0.5)
+
   axStarts.bar(x, starts, linewidth=0, width=2, aa=True)
   plt.title('Start Points',fontsize='small')
 
-  plt.subplot(122) 
-  axContig = plt.gca() 
+  axContig = plt.subplot(122) 
   # Plot the contig as a bar chart
   for loc, spine in axContig.spines.iteritems():
     spine.set_linewidth(0.5)
@@ -68,17 +70,20 @@ def plot_coverage(contig, starts, display = False, path='coverage.png'):
   
   axContig.set_xlim(0,xlim)
   axContig.grid(True, color='gray', aa=True)
-  axContig.axvspan(len(contig), xlim, color='gray', alpha=.5)
+  axContig.axvspan(len(contig), xlim, color='gray', alpha=0.5)
   plt.title('Coverage',fontsize='small')
 
   # Add red bars to the x-axis where there is no coverage
   for start, stop in ranges:
-    axContig.axvspan(start, stop, 0.0, 0.02, color='red',alpha='.5', zorder=10)
+    axContig.axvspan(start, stop, 0.0, 0.02, color='red',alpha=0.5, zorder=10)
   axContig.bar(x, contig, linewidth=0, width=2, zorder=10, aa=True)
   if display:
     plt.show()
   else:
-    plt.savefig(open(path, 'wb'), format='png')
-
+    try:
+      plt.savefig(open(path, 'wb'), format='png')
+    except ValueError:
+#      pass
+      raise
   return
 

@@ -77,6 +77,9 @@ static void OverrideDefaultsForBkgModel (GlobalDefaultsForBkgModel &global_defau
   if (bkg_control.use_alternative_etbR_equation)
     global_defaults.SetUse_alternative_etbR_equation(true); 
 
+  if (bkg_control.use_log_taub)
+    global_defaults.SetUse_log_taub(true);
+
   if (bkg_control.psp4_dev!=0)
     global_defaults.Setpsp4_dev(bkg_control.psp4_dev); 
 

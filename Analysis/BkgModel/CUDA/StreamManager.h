@@ -102,7 +102,7 @@ public:
   void * getJobData();
   bool checkComplete();  
  
-  void setName(char *);
+  void setName(std::string);
   string getName();
   string getLogHeader();
 

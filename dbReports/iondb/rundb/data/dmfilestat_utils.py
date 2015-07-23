@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Copyright (C) 2014 Ion Torrent Systems, Inc. All Rights Reserved
+from __future__ import absolute_import
 import os
 import errno
 
@@ -22,6 +23,15 @@ def calculate_diskspace_by_path(dmfilestats, fs_path):
         Intermediate Files: PGM and thumbnail almost all Intermediate files are in report dir
         Intermediate Files: Proton fullchip about 2% in expDir, the rest in report
     '''
+    def unique_experiment(values):
+        uvalues = []
+        pks = []
+        for v in values:
+            if v['result__experiment__pk'] not in pks:
+                pks.append(v['result__experiment__pk'])
+                uvalues.append(v)
+        return uvalues
+
     
     ret = {}
 
@@ -36,7 +46,7 @@ def calculate_diskspace_by_path(dmfilestats, fs_path):
 
         if dmtype == dmactions_types.SIG:
             values = expDir_objs.filter(dmfileset__type=dmtype).values('result__experiment__pk', 'diskspace').distinct()
-            ret[dmtype] = sum(v['diskspace'] for v in values if v['diskspace'])
+            ret[dmtype] = sum(v['diskspace'] for v in unique_experiment(values) if v['diskspace'])
                 
         if dmtype == dmactions_types.OUT:
             ret[dmtype] = reportDir_objs.filter(dmfileset__type=dmtype).aggregate(sum=Sum('diskspace'))['sum'] or 0
@@ -44,7 +54,7 @@ def calculate_diskspace_by_path(dmfilestats, fs_path):
         if dmtype == dmactions_types.BASE:
             # Proton fullchip sets are in exp folder            
             values = expDir_objs.filter(dmfileset__type=dmtype, pk__in=proton_filestats).values('result__experiment__pk', 'diskspace').distinct()
-            proton_diskspace = sum(v['diskspace'] for v in values if v['diskspace'])
+            proton_diskspace = sum(v['diskspace'] for v in unique_experiment(values) if v['diskspace'])
             
             # PGM and thumbnail Basecalling Input are in report folder
             objs = reportDir_objs.filter(dmfileset__type=dmtype).exclude(pk__in=proton_filestats)

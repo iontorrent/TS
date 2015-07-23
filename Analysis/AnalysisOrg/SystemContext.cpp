@@ -223,6 +223,7 @@ char *SystemContext::experimentDir (char *rawdataDir, char *dirOut)
   char *expDir = NULL;
   char *timeStamp = NULL;
   char *sPtr = NULL;
+  std::string description;
   time_t now;
   struct tm  *tm = NULL;
 
@@ -237,13 +238,13 @@ char *SystemContext::experimentDir (char *rawdataDir, char *dirOut)
     sPtr = strchr (sPtr, '_');
     if (!sPtr)
     {
-      sPtr = "analysis";
+      description = "analysis";
       break;
     }
     sPtr++;
   }
-  if (sPtr[strlen (sPtr)-1] == '/')   // Strip a trailing slash too
-    sPtr[strlen (sPtr)-1] = '\0';
+  std::string::iterator it = description.end() - 1;   // Strip a trailing slash too
+  if (*it == '/') description.erase(it);
 
   // Generate a timestamp string
   time (&now);
@@ -251,10 +252,10 @@ char *SystemContext::experimentDir (char *rawdataDir, char *dirOut)
   timeStamp = (char *) malloc (sizeof (char) * 18);
   snprintf (timeStamp, 18, "_%d_%02d_%02d_%d",1900 + tm->tm_year, tm->tm_mon+1, tm->tm_mday, 3600 * tm->tm_hour + 60 * tm->tm_min + tm->tm_sec);
 
-  int strSize = strlen (dirOut) + strlen (timeStamp) + strlen (sPtr) +2;
+  int strSize = strlen (dirOut) + strlen (timeStamp) + description.length() +2;
   expDir = (char *) malloc (sizeof (char) * strSize);
   if (expDir != NULL)
-    snprintf (expDir, strSize, "%s/%s%s", dirOut,sPtr,timeStamp);
+    snprintf (expDir, strSize, "%s/%s%s", dirOut, description.c_str(),timeStamp);
 
   free (timeStamp);
 
@@ -320,8 +321,8 @@ void SystemContext::CopyTmpWellFileToPermanent ( char *results_folder)
 {
   // defaults moved here because never changed
 
-  static char *wellfileIndex = "1";
-  static char *wellfileExt = "wells";
+  static const char *wellfileIndex = "1";
+  static const char *wellfileExt = "wells";
 
   if (LOCAL_WELLS_FILE)
   {

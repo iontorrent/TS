@@ -14,15 +14,23 @@ typedef enum
   ChipId1_1_17  = 5,
   ChipId1_0_19  = 6,
   ChipId2_2_1  = 7,
-  ChipId1_2_18  = 8,
-  ChipId_old_P1 = 9,
-  ChipId1_0_20  = 10
-
+  ChipId2_2_2  = 8,
+  ChipId1_2_18  = 9,
+  ChipId_old_P1 = 10,
+  ChipId1_0_20  = 11,
+  ChipId550 = 12,
+  ChipId540 = 13,
+  ChipId530 = 14,
+  ChipId520 = 15,
+  ChipId551 = 16,
+  ChipId541 = 17,
+  ChipId531 = 18,
+  ChipId521 = 19
 } ChipIdEnum;
 
 typedef struct
 {
-  char *id_str;
+  const char *id_str;
   ChipIdEnum id;
 } ChipIdDecodeArrayType;
 
@@ -34,6 +42,13 @@ class ChipIdDecoder
     static void SetGlobalChipId (const char* id_str_from_explog);
     static char *GetChipType(void);
     static bool IsProtonChip();
+    static bool IsPzero();
+    static bool IsPone();
+    static bool IsPtwo();
+    static bool IsChip314();
+    static bool IsChip316();
+    static bool IsChip316v2();
+    static bool IsChip318();
     static bool IsLargePGMChip();
     static bool BigEnoughForGPU();
     static bool NeedsNighborPixelCorrection();

@@ -112,7 +112,8 @@ void single_flow_optimizer::FitKrateOneFlow(int fnum, float *evect, BeadParams *
   oneFlowFitKrate->calc_trace.SetWellRegionParams (p,&my_regions.rp,fnum,
                                                    NucID, flow_block_start + fnum,
                                                    l_i_start,lnucRise);
-
+  if (my_regions.rp.use_log_taub)
+      oneFlowFitKrate->calc_trace.GuessLogTaub(signal_corrected,p,fnum,&my_regions.rp);   // replaces tauB in setWellRegionParams()
   oneFlowFitKrate->SetFvalCacheEnable (use_fval_cache);
 
   p->kmult[fnum] = local_min_param[KMULT];
@@ -171,7 +172,8 @@ void single_flow_optimizer::FitThisOneFlow (int fnum, float *evect, BeadParams *
   oneFlowFit->calc_trace.SetWellRegionParams (p,&my_regions.rp,fnum,
                                               NucID, flow_block_start + fnum,
                                               l_i_start,lnucRise);
-
+  if (my_regions.rp.use_log_taub)
+      oneFlowFit->calc_trace.GuessLogTaub(signal_corrected,p,fnum,&my_regions.rp);   // replaces tauB in setWellRegionParams()
   oneFlowFit->SetFvalCacheEnable (use_fval_cache);
   oneFlowFit->InitParams();
   oneFlowFit->calc_trace.ResetEval();
@@ -197,10 +199,9 @@ void single_flow_optimizer::FitProjection (int fnum, float *evect, BeadParams *p
   ProjectionFit->calc_trace.SetWellRegionParams (p,&my_regions.rp,fnum,
                                                  NucID, flow_block_start + fnum,
                                                  l_i_start,lnucRise);
-
+  if (my_regions.rp.use_log_taub)
+      ProjectionFit->calc_trace.GuessLogTaub(signal_corrected,p,fnum,&my_regions.rp);   // replaces tauB in setWellRegionParams()
   ProjectionFit->SetFvalCacheEnable (use_fval_cache);
-
-
   ProjectionFit->ProjectionSearch (signal_corrected);
 
   p->Ampl[fnum] = ProjectionFit->paramA;
@@ -209,7 +210,6 @@ void single_flow_optimizer::FitProjection (int fnum, float *evect, BeadParams *p
   // re-calculate residual based on a the highest hp weighting vector (which is the most flat)
   ProjectionFit->SetWeightVector (emphasis_data.EmphasisVectorByHomopolymer[emphasis_data.numEv-1]);
   err_t->mean_residual_error[fnum] = sqrt (ProjectionFit->GetMeanSquaredError (signal_corrected,use_fval_cache)); // backwards compatibility
-
 }
 
 void single_flow_optimizer::FitAlt (int fnum, float *evect, BeadParams *p,  error_track *err_t, float *signal_corrected, float *signal_predicted, int NucID, float *lnucRise, int l_i_start,
@@ -221,6 +221,8 @@ void single_flow_optimizer::FitAlt (int fnum, float *evect, BeadParams *p,  erro
   AltFit->calc_trace.SetWellRegionParams (p,&my_regions.rp,fnum,
                                           NucID, flow_block_start + fnum,
                                           l_i_start,lnucRise);
+  if (my_regions.rp.use_log_taub)
+    AltFit->calc_trace.GuessLogTaub(signal_corrected,p,fnum,&my_regions.rp);   // replaces tauB in setWellRegionParams()
 
   AltFit->calc_trace.ResetEval();
   AltFit->Defaults(); // reset to defaults
@@ -330,6 +332,7 @@ int single_flow_optimizer::FitOneFlow (int fnum, float *evect, BeadParams *p,  e
     krate_fit = krate_fit || var_kmult_only;
     FitAlt (fnum,evect,p, err_t, signal_corrected,signal_predicted, NucID, lnucRise, l_i_start,flow_block_start,time_c,emphasis_data,my_regions,krate_fit);
     fitType = krate_fit ? 1:0;
+    fitType += 2; // diff from FitStandardPath
   }
   return (fitType);
 }

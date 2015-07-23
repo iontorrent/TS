@@ -450,6 +450,9 @@ def _validate_template_kit(input, selectedTemplate, planObj):
             
             if selectedKit.kitType == "IonChefPrepKit":
                 planObj.get_planObj().planStatus = "pending"
+            else:
+                planObj.get_planObj().planStatus = "planned"
+             
         except:
             errorMsg = input + " not found."
     else:

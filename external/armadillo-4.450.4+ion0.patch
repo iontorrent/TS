@@ -1,0 +1,74 @@
+--- CMakeLists.txt	2014-10-12 07:40:24.000000000 -0400
++++ CMakeLists.txt	2014-10-20 17:49:27.474200193 -0400
+@@ -28,13 +28,20 @@
+ 
+ project(armadillo CXX)
+ 
+-set(ARMA_USE_LAPACK    false)
+-set(ARMA_USE_BLAS      false)
+-set(ARMA_USE_ATLAS     false)
+-set(ARMA_USE_HDF5_ALT  false)
+-set(ARMA_USE_ARPACK    false)
+-set(ARMA_USE_CXX11_RNG false)
+-set(ARMA_USE_WRAPPER   true )
++option(ARMA_USE_LAPACK "Use LAPACK libraries" OFF)
++mark_as_advanced(ARMA_USE_LAPACK)
++option(ARMA_USE_BLAS "Use BLAS libraries" OFF)
++mark_as_advanced(ARMA_USE_BLAS)
++option(ARMA_USE_ATLAS "Use ATLAS libraries" OFF)
++mark_as_advanced(ARMA_USE_ATLAS)
++option(ARMA_USE_HDF5_ALT "Use HDF5 libraries" OFF)
++mark_as_advanced(ARMA_USE_HDF5_ALT)
++option(ARMA_USE_ARPACK "Use ARPACK libraries" OFF)
++mark_as_advanced(ARMA_USE_ARPACK)
++option(ARMA_USE_CXX11_RNG "Use CXX11_RNG libraries" OFF)
++mark_as_advanced(ARMA_USE_CXX11_RNG)
++option(ARMA_USE_WRAPPER "Use WRAPPER libraries" OFF)
++mark_as_advanced(ARMA_USE_WRAPPER)
+ option(BUILD_SHARED_LIBS "build shared library" ON)
+ 
+ ## NOTE:
+@@ -66,6 +73,13 @@
+ ## Find LAPACK and BLAS libraries, or their optimised versions
+ ##
+ 
++option(ARMA_USE_MKL "Use MKL libraries" OFF)
++mark_as_advanced(ARMA_USE_MKL)
++option(ARMA_USE_ACMLMP "Use ACMLMP libraries" OFF)
++mark_as_advanced(ARMA_USE_ACMLMP)
++option(ARMA_USE_ACML "Use ACML libraries" OFF)
++mark_as_advanced(ARMA_USE_ACML)
++
+ if(APPLE)
+   set(ARMA_OS macos)
+   
+@@ -79,13 +93,22 @@
+ else()
+   set(ARMA_OS unix)
+   
+-  include(ARMA_FindMKL)
+-  include(ARMA_FindACMLMP)
+-  include(ARMA_FindACML)
+-  
+-  message(STATUS "   MKL_FOUND   = ${MKL_FOUND}")
+-  message(STATUS "ACMLMP_FOUND   = ${ACMLMP_FOUND}")
+-  message(STATUS "  ACML_FOUND   = ${ACML_FOUND}")
++
++  if(ARMA_USE_MKL)
++    include(ARMA_FindMKL)
++    message(STATUS "MKL_FOUND     = ${MKL_FOUND}")
++  endif()
++
++  if(ARMA_USE_ACMLMP)
++    include(ARMA_FindACMLMP)
++    message(STATUS "ACMLMP_FOUND  = ${ACMLMP_FOUND}")
++  endif()
++
++  if(ARMA_USE_ACML)  
++    include(ARMA_FindACML)
++    message(STATUS "ACML_FOUND    = ${ACML_FOUND}")
++  endif()
++
+   
+   if(MKL_FOUND OR ACMLMP_FOUND OR ACML_FOUND)
+     

@@ -122,12 +122,12 @@ void VariantAssist::randperm(vector<unsigned int> &v, RandSchrange& rand_generat
   }
 }
 
-float VariantAssist::partial_sum(vector<float> &v, size_t n) {
+double VariantAssist::partial_sum(vector<double> &v, size_t n) {
   assert (n <= v.size());
   if(n==0)
-    return std::numeric_limits<float>::quiet_NaN();
+    return std::numeric_limits<double>::quiet_NaN();
 
-  float total = 0;
+  double total = 0;
   for (size_t i=0; i<n; i++)
       total += v[i];
   return (total) ;
@@ -138,10 +138,10 @@ float VariantAssist::partial_sum(vector<float> &v, size_t n) {
 // If any values are tied, tiedrank computes their average rank.
 // The tied rank is an adjustment for ties required by the nonparametric test
 // using Mann-Whitney U (ranksum test) and computation of rho
-void VariantAssist::tiedrank(vector<float> &vals)
+void VariantAssist::tiedrank(vector<double> &vals)
 {
   size_t n = vals.size();
-  vector<float *>p(n);
+  vector<double *>p(n);
 
   for(size_t i = 0; i < n; ++i)
   {
@@ -152,7 +152,7 @@ void VariantAssist::tiedrank(vector<float> &vals)
   while(i < n)
   {
     size_t j = i;
-    float tiedrank =  i+1.0;
+    double tiedrank =  i+1.0;
     while (  (j<(n-1)) && (*p[j] == *p[j+1]) ){
       j++;
       tiedrank += j+1.0;
@@ -167,8 +167,8 @@ void VariantAssist::tiedrank(vector<float> &vals)
 
 // Wilcoxon 2-sample or Mann_Whitney U statistic, 1-sided version
 // small values test whether ranks(var) < rank(ref)
-int VariantAssist::MannWhitneyU(vector<float> &ref, vector<float> &var, bool debug){
-   vector<float> both(ref.size() + var.size());
+double VariantAssist::MannWhitneyU(vector<float> &ref, vector<float> &var, bool debug){
+   vector<double> both(ref.size() + var.size());
    for (unsigned int i = 0; i < ref.size(); i++)
      both[i] = ref[i];
    for (unsigned int i = ref.size(); i < both.size(); i++)
@@ -183,22 +183,36 @@ int VariantAssist::MannWhitneyU(vector<float> &ref, vector<float> &var, bool deb
     }
     fprintf(stdout, "\n");
    }
-   
-   int U = ref.size()*var.size() + (ref.size()*(ref.size()+1))/2.0 - (int)VariantAssist::partial_sum(both, ref.size());
-   assert (U >= 0);
+
+   double maxU = (double)ref.size()*(double)var.size() + (double)ref.size()*(((double)ref.size()+1))/2.0;
+   double U = maxU - VariantAssist::partial_sum(both, ref.size());
+   if ((U < 0) || (U > maxU)) {
+     fprintf(stdout, "Warning: overflow in VariantAssist::MannWhitneyU; ");
+     fprintf(stdout, "ref.size()=%lu; ", ref.size());
+     fprintf(stdout, "var.size()=%lu; ", var.size());
+     fprintf(stdout, "both.size()=%lu; ", both.size());
+     fprintf(stdout, "partial_sum=%f; ", VariantAssist::partial_sum(both, ref.size()));
+     double newU = (U < 0) ? 0 : maxU;
+     fprintf(stdout, "U=%f is set to %f\n", U, newU);
+     U = newU;
+   }
    return(U);
  }
 
 // rho = estimate of P(ref) > var) + 0.5 P(var = ref)
-float VariantAssist::MannWhitneyURho(vector<float> &ref, vector<float> &var, bool debug) {
-  float U1 =  MannWhitneyU(ref, var, debug);
-  float U2 = ref.size()*var.size()-U1; // large U2 means ranks(ref) > ranks(var)
+double VariantAssist::MannWhitneyURho(vector<float> &ref, vector<float> &var, bool debug) {
+  double U1 =  MannWhitneyU(ref, var, debug);
+  double U2 = (double)ref.size()*(double)var.size()-U1; // large U2 means ranks(ref) > ranks(var)
 
-  float rho = U2/(ref.size()*var.size());
+  double rho = U2/((double)ref.size()*(double)var.size());
   if (debug) {
     fprintf(stdout, "U1=%f, U2=%f, rho=%f\n", U1, U2, rho);
   }
-  assert(rho >= 0);
+  if (rho < 0) {
+    fprintf(stdout, "Warning: overflow in VariantAssist::MannWhitneyRho; ");
+    fprintf(stdout, "rho=%f is set to 0\n", rho);     
+    rho = 0;
+  }
   return (rho);
 }
 
@@ -381,7 +395,7 @@ void MultiBook::ComputePositionBias(int i_alt)
     fprintf(stdout, "\n");
   }
   
-  float observed = VariantAssist::MannWhitneyURho(to_ref, to_var, debug);
+  double observed = VariantAssist::MannWhitneyURho(to_ref, to_var, debug);
 
   RandSchrange rand_generator;
   rand_generator.SetSeed(1);
@@ -412,7 +426,7 @@ void MultiBook::ComputePositionBias(int i_alt)
       }
       fprintf(stdout, "\n");
     }
-    float bootstrap =  VariantAssist::MannWhitneyURho(to_ref, to_var, (debug && i<10));
+    double bootstrap =  VariantAssist::MannWhitneyURho(to_ref, to_var, (debug && i<10));
     if (debug && i<10) {
       fprintf(stdout, "bootstrap: %f\n", bootstrap);
     }

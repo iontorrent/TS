@@ -46,7 +46,25 @@
         </div>
         <div class="input-append search-field">
             <button id="clear_filters" class="btn" type="button" style="margin-left:15px">Clear Filters</button>
-        </div>    
+        </div>
+        <div class="pull-right">
+            <button id="clear_history" href='{% url "api_dispatch_clear" resource_name="clusterinfohistory" api_name="v1" %}' class="btn btn-danger" type="button" style="margin:15px 15px 0 0;">Clear History</button>
+            <script type="text/javascript" src="{% static "resources/scripts/bootbox.min.js"%}"></script>
+            <script type='text/javascript'>
+                $('#clear_history').click(function(){
+                    var url = $(this).attr('href');
+                    bootbox.confirm('<b>Are you sure you want to delete all Cluster Info logs?</b>', function(result){
+                        if(result){
+                            $.get(url).done(function(data){
+                                console.log('success:', url, data);
+                                refreshKendoGrid('#log_grid');
+                            });
+                        }
+                    });
+                    return false;
+                });
+            </script>
+        </div>
     </div>
     <div id="log_grid"></div>
 </div>

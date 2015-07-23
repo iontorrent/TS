@@ -82,9 +82,9 @@ struct BaseCallerFiles
 
 struct BCwellSampling
 {
-    int       num_unfiltered;        //!< Reservoir subsamplt a number of be written out unfiltered.
-    int       downsample_size;       //!< Reservoir subsample a number of the wells on the chip.
-    float     downsample_fraction;   //!< Reservoir subsample a fraction of the wells on the chip.
+    int       num_unfiltered;        //!< Reservoir sampled number of wells to be written out unfiltered.
+    int       downsample_size;       //!< Reservoir sampled number of the wells on the chip.
+    float     downsample_fraction;   //!< Reservoir sampled fraction of the wells on the chip.
 
     int       calibration_training;  //!< Number of wells to be sampled for calibration training
     bool      have_calib_panel;      //!< Inidactes the presence of a calibration panel in this run
@@ -180,7 +180,8 @@ struct BaseCallerContext {
 class BaseCallerParameters {
 public:
     BaseCallerParameters() {
-      num_threads_ = 1;
+      num_threads_              = 1;
+      num_bamwriter_threads_    = 1;
       bc_files.options_set      = false;
       sampling_opts.options_set = false;
       context_vars.options_set  = false;
@@ -216,13 +217,15 @@ public:
       return sampling_opts;
     };
 
-    int NumThreads() const { return num_threads_; };
+    int NumThreads()          const { return num_threads_; };
+    int NumBamWriterThreads() const { return num_bamwriter_threads_; };
 
 private:
-    int             num_threads_;
-    BaseCallerFiles bc_files;
-    BCcontextVars   context_vars;
-    BCwellSampling  sampling_opts;
+    int                 num_threads_;              //!< NUmber of worker threads to do base calling
+    int                 num_bamwriter_threads_;    //!< Number of threads one bam writer object uses
+    BaseCallerFiles     bc_files;
+    BCcontextVars       context_vars;
+    BCwellSampling      sampling_opts;
 };
 
 

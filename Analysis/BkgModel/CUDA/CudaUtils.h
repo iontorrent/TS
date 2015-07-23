@@ -3,12 +3,8 @@
 #ifndef CUDAUTILS_H
 #define CUDAUTILS_H
 
-// patch for CUDA5.0/GCC4.7
-#undef _GLIBCXX_ATOMIC_BUILTINS
-#undef _GLIBCXX_USE_INT128
-
 #include "CudaConstDeclare.h"
-#include "StreamingKernels.h"
+//#include "StreamingKernels.h"
 
 __device__
 float erf_approx_streaming (float x);
@@ -20,10 +16,10 @@ __device__
 float poiss_cdf_approx_float4 (float x, const float4* ptr, float occ_l, float occ_r);
 
 
-extern __device__
+__device__
 const float*  precompute_pois_params_streaming (int n);
 
-extern __device__
+__device__
 const float4*  precompute_pois_LUT_params_streaming (int il, int ir);
 
 
@@ -37,6 +33,54 @@ void clamp_streaming ( double &x, double a, double b);
 
 __device__
 void clamp_streaming ( float &x, float a, float b);
+
+
+__device__
+float erf_approx_streaming (float x);
+
+
+__device__ 
+void compare_poisson_cdf_table(const float * ptrR, const float* ptrL, const float4 * ptrLUT, float x);
+
+__device__
+const float*  precompute_pois_params_streaming (int n);
+
+
+__device__
+float ApplyDarkMatterToFrame(
+    float * darkMatter,
+    float * pca_val,
+    int frame,
+    int num_frames,
+    int num_beads,  
+    int sId 
+  );
+
+// compute tmid muc. This routine mimics CPU routine in BookKeeping/RegionaParams.cpp
+__device__
+void ComputeMidNucTime_dev(float& tmid, const ConstParams* pCP, int nucId, int fnum);
+
+__device__
+void ComputeTauB_dev(float& tauB, const ConstParams* pCP , float etbR, int sId);
+
+__device__ 
+void ComputeEtbR_dev(
+    float& etbR,
+    const ConstParams* pCP, 
+    float R, 
+    float Copies, 
+    float phi,
+    int sId, 
+    int nucid, 
+    int absFnum );
+
+__device__
+void ComputeSP_dev(
+    float& SP, 
+    const ConstParams *pCP, 
+    float Copies, 
+    int absFnum, 
+    int sId);
 
 
 __device__
@@ -97,7 +141,7 @@ float poiss_cdf_approx_float4 (float x, const float4* ptr, float occ_l, float oc
 //    idelta = 1.0f;
   }
   float ifrac = 1.0f-idelta;
- 
+
 #if __CUDA_ARCH__ >= 350
   float4 mixLUT = __ldg(ptr + left);
 #else
@@ -105,15 +149,15 @@ float poiss_cdf_approx_float4 (float x, const float4* ptr, float occ_l, float oc
 #endif
 /*
       x = ptrR[right];
-      y = ptrL[right]; 
+      y = ptrL[right];
 
-      z = ptrR[left]; 
-      w = ptrL[left]; 
+      z = ptrR[left];
+      w = ptrL[left];
 */
 
 #ifndef CREATE_POISSON_LUT_ON_DEVICE
   //using _mm128 type casted as float4 --> reverse order of x,y,z,w ---> w,z,y,x
-   ret = ( ifrac * ( occ_l * mixLUT.w + occ_r * mixLUT.z ) + idelta * (occ_l * mixLUT.y + occ_r * mixLUT.x )); 
+   ret = ( ifrac * ( occ_l * mixLUT.w + occ_r * mixLUT.z ) + idelta * (occ_l * mixLUT.y + occ_r * mixLUT.x ));
 
 /*
     if ( (left >= 0) && (left < MAX_POISSON_TABLE_ROW-1))
@@ -138,7 +182,7 @@ float poiss_cdf_approx_float4 (float x, const float4* ptr, float occ_l, float oc
 
 
   #else
-   ret = ( ifrac * ( occ_l * mixLUT.x + occ_r * mixLUT.y ) + idelta * (occ_l * mixLUT.z + occ_r * mixLUT.w )); 
+   ret = ( ifrac * ( occ_l * mixLUT.x + occ_r * mixLUT.y ) + idelta * (occ_l * mixLUT.z + occ_r * mixLUT.w ));
 #endif
 
   return ret;
@@ -179,7 +223,7 @@ float poiss_cdf_approx_streaming (float x, const float* ptr)
   return ret;
 }
 
-__device__ 
+__device__
 void compare_poisson_cdf_table(const float * ptrR, const float* ptrL, const float4 * ptrLUT, float x)
 {
 
@@ -191,17 +235,17 @@ void compare_poisson_cdf_table(const float * ptrR, const float* ptrL, const floa
     if ( (left >= 0) && (right < MAX_POISSON_TABLE_ROW))
     {
       cdf.x = ptrR[right];
-      cdf.y = ptrL[right]; 
-      cdf.z = ptrR[left]; 
-      cdf.w = ptrL[left]; 
+      cdf.y = ptrL[right];
+      cdf.z = ptrR[left];
+      cdf.w = ptrL[left];
     }
     else
     {
       if (left < 0){
         cdf.x = ptrR[0];
         cdf.y = ptrL[0];
-        cdf.z = ptrR[0]; 
-        cdf.w = ptrL[0]; 
+        cdf.z = ptrR[0];
+        cdf.w = ptrL[0];
       }else{
         cdf.x = ptrR[MAX_POISSON_TABLE_ROW - 1];
         cdf.y = ptrL[MAX_POISSON_TABLE_ROW - 1];
@@ -209,7 +253,7 @@ void compare_poisson_cdf_table(const float * ptrR, const float* ptrL, const floa
         cdf.w = ptrL[MAX_POISSON_TABLE_ROW - 1];
    }
   }
-  
+
   int max_dim_minus_one = MAX_POISSON_TABLE_ROW - 1;
   left = (left < max_dim_minus_one )?(left):(max_dim_minus_one);
 #if __CUDA_ARCH__ >= 350
@@ -217,12 +261,12 @@ void compare_poisson_cdf_table(const float * ptrR, const float* ptrL, const floa
 #else
   float4 mixLUT = ptrLUT[left];
 #endif
-                    
+
 if( cdf.x != mixLUT.x || cdf.y != mixLUT.y || cdf.z != mixLUT.z || cdf.w != mixLUT.w  )
-   printf("ERROR %d %d: %f %f %f %f, %f %f %f %f\n", left, right, cdf.x,cdf.y,cdf.z,cdf.w, mixLUT.x,mixLUT.y,mixLUT.z,mixLUT.w); 
+   printf("ERROR %d %d: %f %f %f %f, %f %f %f %f\n", left, right, cdf.x,cdf.y,cdf.z,cdf.w, mixLUT.x,mixLUT.y,mixLUT.z,mixLUT.w);
 
 //if( cdf.x == mixLUT.x && cdf.y == mixLUT.y && cdf.z == mixLUT.z && cdf.w == mixLUT.w  )
-//   printf("PASS %d %d: %f %f %f %f, %f %f %f %f\n", left, right, cdf.x,cdf.y,cdf.z,cdf.w, mixLUT.x,mixLUT.y,mixLUT.z,mixLUT.w); 
+//   printf("PASS %d %d: %f %f %f %f, %f %f %f %f\n", left, right, cdf.x,cdf.y,cdf.z,cdf.w, mixLUT.x,mixLUT.y,mixLUT.z,mixLUT.w);
 
 
 }
@@ -233,7 +277,7 @@ const float*  precompute_pois_params_streaming (int n)
 {
 
   const float* ptr = POISS_APPROX_TABLE_CUDA_BASE + n * MAX_POISSON_TABLE_ROW;
-  return ptr;  
+  return ptr;
 }
 
 __device__
@@ -247,7 +291,7 @@ const float4*  precompute_pois_LUT_params_streaming (int il, int ir)
 
   const float4* ptr =  POISS_APPROX_LUT_CUDA_BASE + n * MAX_POISSON_TABLE_ROW;
 
-  return ptr;  
+  return ptr;
 }
 
 
@@ -280,8 +324,8 @@ float ApplyDarkMatterToFrame(
     float * pca_val,
     int frame,
     int num_frames,
-    int num_beads,  
-    int sId 
+    int num_beads,
+    int sId
   )
 {
   if( !CP[sId].useDarkMatterPCA)
@@ -317,26 +361,26 @@ void ComputeTauB_dev(float& tauB, const ConstParams* pCP , float etbR, int sId) 
   clamp_streaming(tauB, pCP->min_tauB, pCP->max_tauB);
 }
 
-__device__ 
+__device__
 void ComputeEtbR_dev(
     float& etbR,
-    const ConstParams* pCP, 
-    float R, 
-    float Copies, 
+    const ConstParams* pCP,
+    float R,
+    float Copies,
     float phi,
-    int sId, 
-    int nucid, 
+    int sId,
+    int nucid,
     int absFnum ) {
   if (CP[sId].fit_taue) { //CP_MULTIFLOWFIT
     etbR = R;
     if (etbR)
-      etbR = pCP->NucModifyRatio[nucid] /(pCP->NucModifyRatio[nucid] + 
+      etbR = pCP->NucModifyRatio[nucid] /(pCP->NucModifyRatio[nucid] +
                (1.0f - (pCP->RatioDrift * (absFnum)/SCALEOFBUFFERINGCHANGE))*
                (1.0f / etbR - 1.0f));
   }
   else {
     if ( !CP[sId].use_alternative_etbR_equation ){
-      etbR = R*pCP->NucModifyRatio[nucid] + 
+      etbR = R*pCP->NucModifyRatio[nucid] +
         (1.0f - R*pCP->NucModifyRatio[nucid])*
         pCP->RatioDrift*(absFnum)/SCALEOFBUFFERINGCHANGE;
     }
@@ -352,13 +396,17 @@ void ComputeEtbR_dev(
 
 __device__
 void ComputeSP_dev(
-    float& SP, 
-    const ConstParams *pCP, 
-    float Copies, 
-    int absFnum, 
+    float& SP,
+    const ConstParams *pCP,
+    float Copies,
+    int absFnum,
     int sId) {
   SP = (float)(COPYMULTIPLIER * Copies) * pow(pCP->CopyDrift,absFnum);
 }
+
+
+
+
 
 
 

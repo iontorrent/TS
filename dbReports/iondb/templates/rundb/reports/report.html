@@ -187,31 +187,35 @@ report
 					</div><!-- row-fluid -->
           {% endif %}
 
-		  {% if reference %}
-				{% if barcodedSamples_reference_names and barcodedSamples_reference_name_count > 1 %}
-                    <h2><span rel="tooltip" data-placement="right" title="Metrics for sequence data after aligning reads to barcoded samples' reference sequences 
+		  {% if isToShowAlignmentStats %}
+		      {% if reference %}
+					   {% if barcodedSamples_reference_names and barcodedSamples_reference_name_count > 1 %}
+                            <h2><span rel="tooltip" data-placement="right" title="Metrics for sequence data after aligning reads to barcoded samples' reference sequences 
 ">Aligned to {{reference.name}} (and other references)</span></h2>
-                {% else %}
-					<h2><span rel="tooltip" data-placement="right" title="Metrics for sequence data after aligning reads to a reference sequence  
+                        {% else %}
+					       <h2><span rel="tooltip" data-placement="right" title="Metrics for sequence data after aligning reads to a reference sequence  
 ">Aligned to {{reference.name}}</span></h2>
-                {% endif %}
+                        {% endif %}
 
-				<div class="row-fluid aligned">		
-					{#map#}
-					{% include "rundb/reports/blocks/map.html" %}	
+					<div class="row-fluid aligned">		
+						{#map#}
+						{% include "rundb/reports/blocks/map.html" %}	
 
-					{#raw accuracy#}
-					{% include "rundb/reports/blocks/raw.html" %}
+						{#raw accuracy#}
+						{% include "rundb/reports/blocks/raw.html" %}
 
-					{#alignment#}
-					{% include "rundb/reports/blocks/alignment.html" %}
+						{#alignment#}
+						{% include "rundb/reports/blocks/alignment.html" %}
 
-				</div><!-- row-fluid -->
-		{% else %}
-            <h2><span rel="tooltip" title="Metrics for sequence data after aligning reads to a reference sequence
+					</div><!-- row-fluid -->
+			  {% else %}
+                    <h2><span rel="tooltip" title="Metrics for sequence data after aligning reads to a reference sequence
 ">{% if barcodedSamples_reference_names and barcodedSamples_reference_name_count > 1 %}Aligned to multiple references){% else %}No Alignment Reference selected{% endif %}</span></h2>			  
-        {% endif %}
-
+              {% endif %}
+              			
+          {% else %}
+                <h2><span rel="tooltip" title="Metrics for sequence data after aligning reads to a reference sequence">{{alternateAlignmentStatsMessage}}</span></h2>
+          {% endif %}
 
 				</div><!-- section -->
 			</section><!-- RunSummary -->

@@ -28,6 +28,8 @@
 #include "parson.h"
 
 #include "AlarmMgr.h"
+#include "list.h"
+#include "readhostlist.h"
 
 #define DEFAULT_OWNER "drm-data_source"
 
@@ -45,11 +47,15 @@
 #define LOC_FILE		SPOOL_DIR "/loc.txt"
 #define RAIDINFO_FILE	SPOOL_DIR "/raidstatus.json"
 #define LINELEN 128
+#define RSSH_RESULTS_FILE "/tmp/rsshResults"
+#define RSSH_CMD_FILE "/tmp/rsshcmd"
+#define OS_VERSION_SIZE 32
 
 typedef enum {
 	STATUS_HD = 0,
 	STATUS_EVENT,
 	STATUS_VERSIONS,
+	STATUS_OS_VERSION,
 	STATUS_SERVICES,
 	STATUS_FILESERVERS,
 	STATUS_INSTRS,
@@ -123,22 +129,23 @@ int verbose = 0;
 unsigned long pingRate = 30;
 time_t curTime, timeNow;
 AeInt32 iDeviceId, iServerId;
-static int nextPort = 15000;
 static double percentFull = -1.0;
 static time_t lastVersionModTime = 0;
 static time_t lastContactInfoTime = 0;
 static time_t lastLocationInfoTime = 0;
 static int wantConfigUpdate = 1;
 static char const * const gpuErrorFile = "/var/spool/ion/gpuErrors";
+static char savedOsVersion[LINELEN] = {0};
 
 UpdateItem updateItem[] = {
 		{STATUS_VERSIONS, 120, 0},		// check every 2 min but only send updates if versions have changed
-		{STATUS_CONTACTINFO, 120, 00},	// check every 2 min but only send updates if contact info has changed
+		{STATUS_CONTACTINFO, 120, 0},	// check every 2 min but only send updates if contact info has changed
 		{STATUS_LOCATIONINFO,120, 0},	// check every 2 min but only send updates if location info has changed
 		{STATUS_EXPERIMENT, 120, 0},
 		{STATUS_SERVICES, 360, 0},		// send status of all servers every 6 minutes, even if no change
 		{STATUS_FILESERVERS, 600, 0},
 		{STATUS_INSTRS, 3600, 0},
+		{STATUS_OS_VERSION, 3600, 0},
 		//{STATUS_NETWORK, 3600, 0},
 		{STATUS_RAIDINFO,  600, 0},
 		{STATUS_GPU, 120, 0},
@@ -167,6 +174,7 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId, AeFileStat **ppFile, AeChar **
 static void OnFileUploadEnd(AeInt32 iDeviceId, AeBool bOK, AePointer pUserData);
 static void SendLocationInfo(AeDRMDataItem *dataItem);
 void *locationThreadTask(void *args __attribute__((unused)));
+int ReadOsVersion(char *OsVersion, const size_t OsVersionSize);
 
 void trimTrailingWhitespace(char *inputBuf)
 {
@@ -432,10 +440,25 @@ void GetSoftwareVersion(char *softwareComponent, char *subcat, AeDRMDataItem *it
 	}
 }
 
-void sigint_handler(int sig __attribute__((unused)))
+void sigint_handler(const int sig)
 {
 	printf("Got interrupt request (signal %d), will process after timeout expires.\n", sig);
 	running = 0;
+}
+
+void sigusr_handler(const int sig)
+{
+	if (verbose) {
+		verbose = 0;
+		AeDRMSetLogLevel(AeLogWarning);
+	}
+	else {
+		++verbose;
+		AeDRMSetLogLevel(AeLogDebug);
+	}
+
+	printf("Got SIGUSR1 (signal %d), setting verbose flag to '%s'.\n",
+			sig, verbose ? "on" : "off");
 }
 
 void setUpSignalHandling()
@@ -457,6 +480,12 @@ void setUpSignalHandling()
 	//if (rc)
 	//	fprintf(stderr, "%s: sigaction: %s\n", __FUNCTION__, strerror(errno));
 	rc = sigaction(SIGTERM, &act, NULL);
+	if (rc)
+		fprintf(stderr, "%s: sigaction: %s\n", __FUNCTION__, strerror(errno));
+
+	act.sa_handler = sigusr_handler;
+	act.sa_flags = SA_RESTART;
+	rc = sigaction(SIGUSR1, &act, NULL);
 	if (rc)
 		fprintf(stderr, "%s: sigaction: %s\n", __FUNCTION__, strerror(errno));
 }
@@ -634,8 +663,8 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 {
 	char cmd[CMD_LENGTH];
 	int ret = 0;
-	int rc;
-	int gpuFound, allRevsValid;
+	int rc = 0;
+	int gpuFound = 0, allRevsValid = 0;
 	static int prevGpuFound = 0, prevAllRevsValid = 0;
 
 	AeGetCurrentTime(&dataItem->value.timeStamp);
@@ -674,6 +703,23 @@ int UpdateDataItem(StatusType status, AeDRMDataItem *dataItem)
 			lastVersionModTime = buf.st_mtime;
 			GenerateVersionInfo();
 			SendVersionInfo(dataItem);
+			// no need to set ret to 1, we have already posted the data
+		}
+	} break;
+
+	case STATUS_OS_VERSION: {
+		// report Ubuntu version from /etc/lsb-release (10.04, 14.04, etc.)
+		char OsVersion[OS_VERSION_SIZE] = {0};
+		int rc = ReadOsVersion(OsVersion, OS_VERSION_SIZE);
+
+		if (rc == 0 && strcmp(OsVersion, savedOsVersion) != 0) {
+			snprintf(savedOsVersion, LINELEN, "%s", OsVersion);
+			AeGetCurrentTime(&dataItem->value.timeStamp);
+			dataItem->pName = "TS.Version.OS";
+			dataItem->value.data.pString = savedOsVersion;
+			dataItem->value.iType = AeDRMDataString;
+			dataItem->value.iQuality = AeDRMDataGood;
+			AeDRMPostDataItem(iDeviceId, iServerId, AeDRMQueuePriorityNormal, dataItem);
 			// no need to set ret to 1, we have already posted the data
 		}
 	} break;
@@ -889,6 +935,35 @@ void GenerateVersionInfo()
 	rc = system(cmd);
 	if (rc == -1)
 		printf("%s: system: %s\n", __FUNCTION__, strerror(errno));
+}
+
+// returns 0 for success or non-zero for failure (standard C convention for return values)
+int ReadOsVersion(char *OsVersion, const size_t OsVersionSize)
+{
+	if (!OsVersion || OsVersionSize < 6)
+		return 1; // fail, invalid inputs
+
+	*OsVersion = '\0';
+	int success = 1; // init to 1, meaning fail, os version not updated
+
+	FILE *fp = fopen("/etc/lsb-release", "rb");
+	if (fp) {
+		char line[LINELEN];
+		while (fgets(line, LINELEN, fp)) {
+			if (strstr(line, "DISTRIB_RELEASE")) {
+				char *equalsign = strchr(line, '=');
+				if (equalsign) {
+					trimTrailingWhitespace(line);
+					snprintf(OsVersion, OsVersionSize, "%s", equalsign + 1);
+					success = 0; // success, os version updated
+					break;
+				}
+			}
+		}
+		fclose(fp);
+	}
+
+	return success;
 }
 
 void SendFileServerStatus(AeDRMDataItem *dataItem)
@@ -1433,10 +1508,124 @@ static AeBool OnFileUploadBegin(AeInt32 iDeviceId __attribute__((unused)),
 	return AeTrue;
 }
 
+pid_t findPidForName(char const * const name)
+{
+	pid_t pidout = -1;
+	DIR* dir = opendir("/proc");
+	if (!dir) {
+		printf("%s: opendir: %s\n", __FUNCTION__, strerror(errno));
+		return -1;
+	}
+
+	struct dirent *entry = NULL;
+	do {
+		entry = readdir(dir);
+		if (!entry)
+			break;
+		// We only want to search the directories with numbers (i.e., process IDs) for names.
+		char* endptr;
+		pid_t pid = strtol(entry->d_name, &endptr, 10);
+		// if endptr is not a null character, the directory name is not entirely numeric, so skip it.
+		if (*endptr != '\0')
+			continue;
+
+		char buf[512];
+		snprintf(buf, sizeof(buf), "/proc/%d/comm", pid);
+		FILE* fp = fopen(buf, "r");
+		if (fp) {
+			memset(buf, 0, 512);
+			int rc __attribute__((unused)) = fread(buf, sizeof(char), 37, fp);
+			if (strstr(buf, name)) {
+				entry = NULL; // exit the do-while loop
+				pidout = pid;
+			}
+			fclose(fp);
+		}
+	} while (entry);
+
+	closedir(dir);
+	return pidout;
+}
+
+static int rsshConnection(char const * const rsshCmd,
+						  char const * const remoteHost,
+						  const int remoteConnectionPort,
+						  char const * const user,
+						  char const * const pass)
+{
+	int retval = 0; // init to failure case
+#define CMDLEN 1024
+	char cmd[CMDLEN];
+	int remoteTunnelPort = 0;
+
+	srand(time(NULL));
+	remoteTunnelPort = 15000 + (rand() % 1024);
+
+	if (verbose)
+		printf("%s: %s to %s:%d on port %d\n", __FUNCTION__,
+				rsshCmd, remoteHost, remoteConnectionPort, remoteTunnelPort);
+
+	// Create a file to upload to the Axeda Enterprise server
+	FILE *fp = fopen(RSSH_CMD_FILE, "w");
+	if (fp == NULL) {
+		printf("%s: failed to open " RSSH_CMD_FILE "\n", __FUNCTION__);
+		return 0; // fail
+	}
+
+	if (0 == strcmp(rsshCmd, "start")) {
+		// Create a file containing the port info the caller needs to connect
+		fprintf(fp, "ssh -l rsshUser %s\r\nthen run:\r\n"
+				"ssh -l ionadmin -p %d -o NoHostAuthenticationForLocalhost=yes -o StrictHostKeyChecking=no localhost\r\n",
+				remoteHost, remoteTunnelPort);
+	}
+	else {
+		fprintf(fp, "Dummy file to close reverse SSH session\r\n");
+	}
+	fclose(fp);
+
+	snprintf(cmd, CMDLEN, "script -f -c \"%s/reverse_ssh.sh %s 22 %d %d %s %s %s\" " RSSH_RESULTS_FILE " &",
+			 BIN_DIR, rsshCmd, remoteConnectionPort, remoteTunnelPort, remoteHost, user, pass);
+
+	if (verbose > 0)
+		printf("System cmd executing: %s\n", cmd);
+	int rc = system(cmd);
+	if (rc == -1)
+		printf("%s: system: fork failed.\n", __FUNCTION__);
+	retval = 1;
+/*
+	if (0 == strcmp(rsshCmd, "start")) {
+		// Wait a little  bit, then check process table to see if reverse_ssh.sh is still running (success)
+		// or has exited (failure).  (We don't get a success or failure indication from the script.)
+		sleep(3);
+		pid_t rsshPid = findPidForName("reverse_ssh.sh");
+
+		if (rsshPid == -1) {
+			printf("*** SSH connection to %s port %d failed\n", remoteHost, remoteConnectionPort);
+			retval = 0; // fail
+
+			// Add information on the reason for the failure to the file we upload.
+			rc = system("cat " RSSH_RESULTS_FILE " >> " RSSH_CMD_FILE);
+			if (rc == -1)
+				printf("%s: system: fork failed.\n", __FUNCTION__);
+		}
+		else {
+			printf("*** SSH connection to %s port %d succeeded\n", remoteHost, remoteConnectionPort);
+			retval = 1; // success
+		}
+	}
+	else {
+		printf("*** SSH connection to %s port %d terminated\n", remoteHost, remoteConnectionPort);
+		retval = 1; // success
+	}
+*/
+	return retval;
+}
+
 /******************************************************************************/
 static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 		AeFileStat **ppFile, AeChar **ppData, AeInt32 *piSize, AePointer pUserData)
 {
+	char const * const listFile = "/opt/ion/RSM/rsshHosts.conf";
 	AeDemoUpload *pUpload;
 
 	*ppFile = NULL;
@@ -1455,6 +1644,7 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 	if (pUpload->iCurFileHandle == AeFileInvalidHandle)	{
 		/* inspect file name and perform special actions prior to file delivery */
 		int rsshfile = 0;
+		int rsshSuccess = 0;
 		if (strstr(pUpload->ppUploads[pUpload->iUploadIdx]->pName, "rssh") != 0) {
 			// parse out the info from the 'command' file name
 			// expected file names are:
@@ -1464,9 +1654,7 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 			char *user;
 			char *pass;
 			char tokens[1024];
-			char cmd[1024];
-			int rc;
-			strncpy(tokens, pUpload->ppUploads[pUpload->iUploadIdx]->pName, sizeof(cmd));
+			snprintf(tokens, sizeof(tokens), "%s", pUpload->ppUploads[pUpload->iUploadIdx]->pName);
 			strtok(tokens, "-"); /* we don't care about the /rssh- part */
 			rsshCmd = strtok(NULL, "-");
 			user = strtok(NULL, "-");
@@ -1474,36 +1662,41 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 
 			// execute the rssh command
 			if (rsshCmd && pass && user) {
-				srand(time(NULL));
-				nextPort = 15000 + (rand() % 1024);
-
-				// create a file containing the port info the caller needs to connect
-				FILE *fp = fopen("/tmp/rsshcmd", "w");
-				// fprintf(fp, "RSSH command: %s to rssh.iontorrent.net on port %d\n", rsshCmd, nextPort);
-				fprintf(fp, "ssh rssh.iontorrent.net as rsshUser, then run:\n"
-						"ssh -l ionadmin -p %d -o NoHostAuthenticationForLocalhost=yes -o StrictHostKeyChecking=no localhost",
-						nextPort);
-				fclose(fp);
-
-				snprintf(cmd, 1024, "script -c \"%s/reverse_ssh.sh %s 22 22 %d rssh.iontorrent.net %s %s\" /dev/null &",
-						BIN_DIR, rsshCmd, nextPort, user, pass);
-				if (verbose > 0)
-					printf("System cmd executing: %s\n", cmd);
-				rc = system(cmd);
-				if (rc == -1)
-					printf("%s: system: %s\n", __FUNCTION__, strerror(errno));
-
 				rsshfile = 1;
+
+				// Re-read the list of rssh hosts for every rssh request.
+				list_t *hosts = list_create();
+				readHostList(listFile, hosts);
+				list_t *hptr = hosts;
+				while (hptr) {
+					host_t *h = (host_t *)(hptr->item);
+					if (h) {
+						rsshSuccess = rsshConnection(rsshCmd, h->name, h->port, user, pass);
+					}
+					if (rsshSuccess) {
+						break;	// use the first successful connection
+					}
+					hptr = hptr->next;
+				}
+				hptr = hosts;
+				while (hptr) {
+					freeHost(hptr->item);
+					hptr = hptr->next;
+				}
+				list_free(hosts);
 			}
 		}
 
-		/* open file */
-		if (rsshfile == 1)
-			pUpload->iCurFileHandle = AeFileOpen("/tmp/rsshcmd", AE_OPEN_READ_ONLY);
-		else
+		// open file
+		if (rsshfile == 1) {
+			pUpload->iCurFileHandle = AeFileOpen(RSSH_CMD_FILE, AE_OPEN_READ_ONLY);
+		}
+		else {
 			pUpload->iCurFileHandle = AeFileOpen(pUpload->ppUploads[pUpload->iUploadIdx]->pName, AE_OPEN_READ_ONLY);
-		if (pUpload->iCurFileHandle == AeFileInvalidHandle)
+		}
+		if (pUpload->iCurFileHandle == AeFileInvalidHandle) {
 			return AeFalse;
+		}
 
 		pUpload->curFileStat.pName = pUpload->ppUploads[pUpload->iUploadIdx]->pName;
 		pUpload->curFileStat.iType = AeFileTypeRegular;
@@ -1514,8 +1707,9 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 #else
 					AeFileGetSize64
 #endif
-					("/tmp/rsshcmd");
-		} else {
+					(RSSH_CMD_FILE);
+		}
+		else {
 			pUpload->curFileStat.iSize =
 #ifndef ENABLE_LARGEFILE64
 					AeFileGetSize
@@ -1531,10 +1725,10 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 
 	/* try to read another portion of the file */
 	*piSize = AeFileRead(pUpload->iCurFileHandle, pUpload->pBuffer, sizeof(pUpload->pBuffer));
-	if (*piSize < 0)
+	if (*piSize < 0) {
 		return AeFalse;
-	else if (*piSize == 0)
-	{
+	}
+	else if (*piSize == 0) {
 		AeFileClose(pUpload->iCurFileHandle);
 		pUpload->iCurFileHandle = AeFileInvalidHandle;
 
@@ -1543,8 +1737,9 @@ static AeBool OnFileUploadData(AeInt32 iDeviceId __attribute__((unused)),
 
 		pUpload->iUploadIdx += 1;
 	}
-	else if (*piSize > 0)
+	else if (*piSize > 0) {
 		*ppData = pUpload->pBuffer;
+	}
 
 	return AeTrue;
 }
@@ -1573,4 +1768,3 @@ void *locationThreadTask(void *args __attribute__((unused)))
 	locationThreadExited = 1;
 	return NULL;
 }
-

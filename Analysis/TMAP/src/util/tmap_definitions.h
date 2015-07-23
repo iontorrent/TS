@@ -249,7 +249,7 @@ tmap_reads_format_to_seq_type(int32_t reads_format);
   @param  v  the value to take the log 2
   @return    log of the value, base two
   */
-inline uint32_t 
+uint32_t
 tmap_log2(uint32_t v);
 
 /*! 
@@ -258,7 +258,7 @@ tmap_log2(uint32_t v);
   @param  type    the type of file based on this reference sequence
   @return         a pointer to the file name string
   */
-inline char *
+char *
 tmap_get_file_name(const char *prefix, int32_t type);
 
 /*! 
@@ -290,7 +290,7 @@ tmap_get_reads_file_format_string(int format);
   @param  seq  the string to reverse
   @param  len  the length of the string
   */
-inline void
+void
 tmap_reverse(char *seq, int32_t len);
 
 /*!
@@ -298,7 +298,7 @@ tmap_reverse(char *seq, int32_t len);
   @param  seq  the string to reverse
   @param  len  the length of the string
   */
-inline void
+void
 tmap_reverse_int(uint8_t *seq, int32_t len);
 
 /*!
@@ -306,7 +306,7 @@ tmap_reverse_int(uint8_t *seq, int32_t len);
   @param  seq  the character DNA sequence
   @param  len  the length of the DNA sequence
   */
-inline void
+void
 tmap_reverse_compliment(char *seq, int32_t len); 
 
 /*!
@@ -314,7 +314,7 @@ tmap_reverse_compliment(char *seq, int32_t len);
   @param  seq  the integer DNA sequence
   @param  len  the length of the DNA sequence
   */
-inline void
+void
 tmap_reverse_compliment_int(uint8_t *seq, int32_t len);
 
 /*!
@@ -322,7 +322,7 @@ tmap_reverse_compliment_int(uint8_t *seq, int32_t len);
   @param  seq  the character DNA sequence
   @param  len  the length of the DNA sequence
   */
-inline void
+void
 tmap_compliment(char *seq, int32_t len); 
 
 /*!
@@ -330,7 +330,7 @@ tmap_compliment(char *seq, int32_t len);
   @param  seq  the character DNA sequence
   @param  len  the length of the DNA sequence
   */
-inline void
+void
 tmap_to_int(char *seq, int32_t len); 
 
 /*!
@@ -338,7 +338,7 @@ tmap_to_int(char *seq, int32_t len);
   @param  seq  the character integer DNA sequence
   @param  len  the length of the DNA sequence
   */
-inline void
+void
 tmap_to_char(char *seq, int32_t len); 
 
 /*!
@@ -357,7 +357,7 @@ tmap_chomp(char *str);
   @param  high2  the higher interval end
   @return        -1 if high1 < low2, 1 if high2 < low1, 0 otherwise
   */
-inline int32_t
+int32_t
 tmap_interval_overlap(uint32_t low1, uint32_t high1, uint32_t low2, uint32_t high2);
 
 /*!

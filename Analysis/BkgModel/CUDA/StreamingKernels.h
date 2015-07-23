@@ -192,6 +192,7 @@ void NeighbourContributionToXtalk(
   float* pPhi, // N
   float* sbg, // FLxF 
   float* fgbuffers, // FLxFxN
+  bead_state* pState,
   // other inputs 
   int startingFlowNum, // starting flow number to calculate absolute flow num
   int currentFlowIteration,
@@ -202,25 +203,54 @@ void NeighbourContributionToXtalk(
   int sId =0
 );
 
-void XtalkAccumulationAndSignalCorrection(// Here FL stands for flows
+void XtalkAccumulation(
   dim3 grid, 
   dim3 block, 
   int smem, 
-  cudaStream_t stream,// Here FL stands for flows
-  int currentFlowIteration,
-  float* fgbuffers, // FLxFxN
+  cudaStream_t stream,
+  bead_state* pState,
   int num_beads, // 4
   int num_frames, // 4
   int* neiIdxMap, // MAX_XTALK_NEIGHBOURS x N
   float* nei_xtalk, // neixNxF
-  float* xtalk, // FLxN
+  float* xtalk, // NxF
+  int sId
+);
+
+void CalculateGenericXtalkForSimpleModel(
+  dim3 grid, 
+  dim3 block, 
+  int smem, 
+  cudaStream_t stream,
+  int num_beads, // 4
+  int num_frames, // 4
+//  int regW,
+//  int regH,
+  bead_state* pState,
+  int* sampNeiIdxMap,
+  float* nei_xtalk,
+  float* xtalk, // NxF
+  float* genericXtalk, // GENERIC_SIMPLE_XTALK_SAMPLE x F
+  int sId);
+
+void ComputeXtalkAndZeromerCorrectedTrace(
+  dim3 grid, 
+  dim3 block, 
+  int smem, 
+  cudaStream_t stream,
+  int currentFlowIteration,
+  float* fgbuffers, // FLxFxN
+  int num_beads, // 4
+  int num_frames, // 4
+  float* genericXtalk, // neixNxF
+  float* xtalk, // NxF
   float* pCopies, // N
   float* pR, // N
-  float* pPhi, // N
+  float* pPhi,// N
   float* pgain, // N
   float* sbg, // FLxF 
   float* dark_matter, // FLxF
-  float* pPCA_vals,
+  float* pPCA_vals, 
   int flowNum, // starting flow number to calculate absolute flow num
   int sId
 );

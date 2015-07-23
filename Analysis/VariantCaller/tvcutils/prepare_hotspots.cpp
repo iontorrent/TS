@@ -534,18 +534,17 @@ int PrepareHotspots(int argc, const char *argv[])
       int ref_end = A->ref.size();
       int alt_end = A->alt.size();
 
-      // Option 1: trim all trailing bases
+      // Option 1: trim all trailing bases;
 
       //while(ref_end and alt_end and A->ref[ref_end-1] == A->alt[alt_end-1]) {
       //  --ref_end;
       //  --alt_end;
       //}
 
-      // Option 2: trim all leading basees
+      // Option 2: trim all leading basees;
 
       //while (ref_start < ref_end and ref_start < alt_end and A->ref[ref_start] == A->alt[ref_start])
       //  ++ref_start;
-
 
       // Option 3: trim anchor base if vcf
 
@@ -559,19 +558,67 @@ int PrepareHotspots(int argc, const char *argv[])
       A->alt = A->alt.substr(ref_start, alt_end-ref_start);
       ref_end -= ref_start;
       alt_end -= ref_start;
-
       // Left align
       if (left_alignment) {
-        while (A->pos > 0) {
-          char nuc = ref_index[chr_idx].base(A->pos-1);
-          if (ref_end > 0 and A->ref[ref_end-1] != nuc)
-            break;
-          if (alt_end > 0 and A->alt[alt_end-1] != nuc)
-            break;
-          A->ref = string(1,nuc) + A->ref;
-          A->alt = string(1,nuc) + A->alt;
-          A->pos--;
-        }
+	string trailing;
+	int can_do = 0, need_do = 0;
+	int ref_end_orig= ref_end, alt_end_orig = alt_end;
+	while(ref_end and alt_end and A->ref[ref_end-1] == A->alt[alt_end-1]) {
+	    ref_end--; alt_end--;
+	} 
+	if (ref_end == 0 || alt_end == 0) {
+	    can_do = need_do = 1; // indel type, ZZ
+	} else {
+	    int tmp_start = ref_start;
+	    int ref_end_0 = ref_end, alt_end_0 = alt_end; // end after remove trailing match ZZ
+	    while (tmp_start < ref_end and tmp_start < alt_end and A->ref[tmp_start] == A->alt[tmp_start])
+     		++tmp_start;
+	    if (tmp_start == ref_end || tmp_start == alt_end) {
+		can_do = 1; need_do = 0; // indel but indel is not at the left. ZZ
+	    } else {
+		ref_end--; alt_end--;
+		while(ref_end and alt_end and A->ref[ref_end-1] == A->alt[alt_end-1]) {
+            	    ref_end--; alt_end--;
+        	}
+		if (ref_end == 0 || alt_end == 0) {
+		   // complex with 1 bp MM at right end
+		    can_do = need_do = 1;
+		    if (ref_end + alt_end == 0) need_do = 0; // SNP
+		} else {
+		  int tmp_start0 = tmp_start; // start after removing leading matches
+		  tmp_start++;
+		  while (tmp_start < ref_end_orig and tmp_start < alt_end_orig and A->ref[tmp_start] == A->alt[tmp_start])
+			tmp_start++;
+		  if (tmp_start >= ref_end_0 || tmp_start >= alt_end_0 || ref_end <= tmp_start0 || alt_end <= tmp_start0) {
+			// 1MM plus indel in middle, by definition cannot move the indel left enough to change A->pos
+		    	can_do = 1; need_do = 0;
+		  } // else real complex 
+		}
+	    }
+	}
+	if (!can_do or !need_do) {
+	    // do nothing
+	    // if !can_do need add some more DP
+	    ref_end = ref_end_orig;
+	    alt_end = alt_end_orig;
+	} else {
+	 // left align the indel part, here either ref_end = 0 or alt_end = 0
+          while (A->pos > 0) {
+            char nuc = ref_index[chr_idx].base(A->pos-1);
+            if (ref_end > 0 and A->ref[ref_end-1] != nuc)
+              break;
+            if (alt_end > 0 and A->alt[alt_end-1] != nuc)
+              break;
+            A->ref = string(1,nuc) + A->ref;
+            A->alt = string(1,nuc) + A->alt;
+            A->pos--;
+          }
+	  if (ref_end != ref_end_orig) {
+	    // trailing part is aligned, the whole ref and alt need to be kept.
+	    ref_end = A->ref.size();
+	    alt_end = A->alt.size();
+	  } 
+       }
       }
       A->ref.resize(ref_end);
       A->alt.resize(alt_end);

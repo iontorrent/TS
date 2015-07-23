@@ -1,10 +1,11 @@
 #!/bin/bash
-# Copyright (C) 2012 Ion Torrent Systems, Inc. All Rights Reserved
+# Copyright (C) 2015 Ion Torrent Systems, Inc. All Rights Reserved
 #
 # Purpose: Provide functions necessary to initialize Torrent Server hardware
 #
 #
 set -e
+set -u
 
 #---                                    ---#
 #--- Function Declarations              ---#
@@ -12,15 +13,20 @@ set -e
 function print_help()
 {
     echo
+    echo "If no arguments are given, configuration will continue based on the detected hardware type."
+    echo
     echo "Usage: TSinit [options]"
-    echo -e "\t--proton-config               Create /results and /rawdata partition"
-    echo -e "\t--pgm-config                  Create /results partition"
-    echo -e "\t--dev device_name             Specify device to partition, (default: /dev/sdb)"
-    echo -e "\t--test-results directory      Specify mountpoint instead of /results (for testing only)"
-    echo -e "\t--test-rawdata directory      Specify mountpoint instead of /rawdata (for testing only)"
-    echo -e "\t-d,--debug                    Enable debug print (set -x)"
+    echo -e "\t--hdwr <name>                 Specify platform name (T620, T630, T620-PGM, T430)"
+    echo -e "\t--deviceid device_name        Specify device to partition"
+    echo -e "\t--debug, -d                   Enable debug print (set -x)"
+    echo -e "\t--nodelete                    Disable deleting existing contents of partitions after copying"
+    echo -e "\t--test                        No changes are made to the system, commands are printed"
     echo -e "\t--help, -h                    Prints command line args"
     echo -e "\t--version                     Prints version"
+    echo
+    echo -e "\tLegacy Options:"
+    echo -e "\t--proton-config               Create /results and /rawdata partition on /dev/sdb"
+    echo -e "\t--pgm-config                  Create /results partition on /dev/sdb"
     echo
     echo
 }
@@ -44,10 +50,38 @@ function migrate_contents()
 
     mkdir -p /mnt/tmp_$mtpoint
     mount $device /mnt/tmp_$mtpoint
+    #Original data is copied to the new device
     rsync -av $mtpoint/ /mnt/tmp_$mtpoint
     umount $device
     rmdir /mnt/tmp_$mtpoint
-    rm -rf $mtpoint/*
+    if $DELETE_DATA; then
+        echo "Yes, we are deleting original data after copying"
+        #NOTE! Original data is destroyed here!
+        rm -rf $mtpoint/*
+    else
+        echo "No, we are not deleting original data after copying"
+        echo "You must manually delete that data"
+        echo "It will remain hidden under the mountpoint otherwise"
+    fi
+}
+
+#--------------------------------------------------------------
+# Copy the contents of an existing directory to the given device.
+# If directory does not exist, just mount device at the directory.
+#--------------------------------------------------------------
+function copy_and_mount()
+{
+    deviceid=$1
+    mtpt=$2
+    
+    if [ ! -d $mtpt ]; then
+        #Directory does not exist so just create it as the mountpoint
+        #This is a degenerate case however...
+        mkdir -p $mtpt
+    else
+        cmd="migrate_contents ${deviceid} $mtpt"
+        exec_cmd "$cmd"
+    fi
 }
 
 function get_uuid()
@@ -61,52 +95,172 @@ function get_uuid()
     echo $uuid
 }
 
+function get_hardware_name()
+{
+    if ! dmidecode -s system-product-name|sed 's/\s*$//'; then
+        echo -e "Must be root.  Try again using sudo" >&2
+        exit 1
+    fi
+}
+
+function exec_cmd()
+{
+    if $DEBUG; then
+        echo "$1"
+    else
+        if ! $1; then
+            echo "TSinit: Error detected."
+            echo "Command was '$1'."
+            echo "Exiting"
+            exit
+        fi
+    fi
+}
+
+#--------------------------------------------------------------
+# Add UUID of LV to fstab. 
+#--------------------------------------------------------------
+function add_to_fstab()
+{
+    dev_part=$1
+    mnt_pt=$2
+    filename=/etc/fstab
+    fs=$(blkid -o value -s TYPE ${dev_part})
+    
+    if ! grep -q "$dev_part" $filename; then
+        echo -e "${dev_part}\t${mnt_pt}\t$fs\tdefaults\t0\t0" >> $filename
+    else
+        echo "Device $dev_part already exists in $filename!"
+    fi
+    
+
+#    dev_UUID=$(blkid -o value -s UUID ${dev_part})
+#    if ! grep -q "$dev_UUID" $filename; then
+#        echo -e "UUID=$dev_UUID\t$mnt_pt\t$fs\tdefaults\t0\t0" >> $filename
+#    else
+#        echo "Device with UUID $dev_UUID already exists in $filename!"
+#    fi
+}
+
+function edit_swap_fstab()
+{
+    dev_part=$1
+    filename=/etc/fstab
+    #Remove any lines containing the string 'swap'
+    #sed -i '/swap/d' $filename
+    echo -e "$dev_part\tnone\tswap\tsw\t0\t0" >> $filename
+    
+#    fs=$(blkid -o value -s TYPE ${dev_part})
+#    dev_UUID=$(blkid -o value -s UUID ${dev_part})
+#    echo -e "UUID=$dev_UUID\tnone\tswap\tsw\t0\t0" >> $filename
+}
+
+function cleanup_partition()
+{
+    devid=$1
+    # undo logical partitions
+    if ! pvdisplay ${devid} >/dev/null 2>&1; then
+        echo "Device ${devid} is clean"
+    else
+        echo "Device ${devid} will be wiped of LVM"
+        vgname=$(pvdisplay ${devid} | awk '/VG Name/{print $3}')
+        for item in $(lvdisplay $vgname | awk '/LV Path/{print $3}'); do
+            echo $item
+            if [ "swap" == "$()" ]; then swapoff $item || true; fi
+            if ! lvremove -f $item; then
+                exit
+            fi
+        done
+        vgremove $vgname
+        pvremove ${devid}
+    fi
+}
+
+function hack_tmp_permissions()
+{
+    #mount the new tmp partition temporarily to set its permissions
+    mkdir -p /mnt/xtmp
+    mount /dev/mapper/data-tmp /mnt/xtmp
+    chmod 1777 /mnt/xtmp
+    umount /mnt/xtmp
+    rmdir /mnt/xtmp
+}
+
 #---                                    ---#
 #--- Variable Declarations              ---#
 #---                                    ---#
-version=`echo '$Revision: 30408 $'|awk '{print $2}'`
-SETUP_RESULTS_PARTITION=0
-SETUP_RAWDATA_PARTITION=0
+version="4.6.0"
+SETUP_RESULTS_PARTITION=false
+SETUP_RAWDATA_PARTITION=false
 results_mtpt="/results"
 rawdata_mtpt="/rawdata"
+home_mtpt="/home"
+partid=1
+DELETE_DATA=true
+DEBUG=false
 
 #---                                    ---#
 #--- Command Line Options Parsing       ---#
 #---                                    ---#
 
 #--- If no args given, print help and exit ---#
-if [ $# == 0 ]; then
-    print_help
-    exit 0
-fi
-
-#Default device to partition is
-dev="/dev/sdb"
+#if [ $# == 0 ]; then
+#    print_help
+#    exit 0
+#fi
 
 #---    We convert all arguments to lower case  ---#
 while [ $# != 0 ]; do
     case ${1,,} in
+        #---------------------------------------
+        # Legacy Options
+        #---------------------------------------
         '--proton-config')
-            SETUP_RESULTS_PARTITION=1
-            SETUP_RAWDATA_PARTITION=1
+            hardware_name="PowerEdge T620"
         ;;
         '--pgm-config')
-            SETUP_RESULTS_PARTITION=1
+            # Force configuring a single /results partition
+            hardware_name="Precision WorkStation T7500"
         ;;
-        '--dev')
+        #---------------------------------------
+        # Latest options
+        #---------------------------------------
+        '--hdwr')
             shift
-            dev=$1
+            hdwr_entry=$1
+            case ${hdwr_entry} in
+                'T620')
+                hardware_name="PowerEdge T620"
+                ;;
+                'T620-PGM')
+                # Force configuring a single /results partition
+                hardware_name="Precision WorkStation T7500"
+                ;;
+                'T430')
+                hardware_name="PowerEdge T430"
+                ;;
+                'T630')
+                hardware_name="PowerEdge T630"
+                ;;
+                *)
+                echo "Unsupported hardware type: '$hdwr_entry'"
+                exit 1
+                ;;
+            esac
         ;;
-        '--test-results')
+        '--deviceid')
             shift
-            results_mtpt=$1
+            deviceid=$1
         ;;
-        '--test-rawdata')
-            shift
-            rawdata_mtpt=$1
+        '--test')
+            DEBUG=true
+            echo -e "\n* * * DEBUG is enabled.  No actions will be taken * * *\n"
         ;;
         '-d'|'--debug')
-        	set -x
+            set -x
+        ;;
+        '--nodelete')
+            DELETE_DATA=false
         ;;
         '--help'|'-h'|\?)
             print_help
@@ -118,7 +272,7 @@ while [ $# != 0 ]; do
                 source /opt/ion/bin/ion-tsconfig.version.env
                 IonVersionGetFullVersion ion-tsconfig
             fi
-			exit 0
+	    exit 0
         ;;
         *)
         echo "Unknown option: $1.  Exiting"
@@ -129,159 +283,319 @@ while [ $# != 0 ]; do
     shift
 done
 
+hardware_name=${hardware_name-$(get_hardware_name)}
+
 #---                                    ---#
 #--- Main Execution                     ---#
 #---                                    ---#
-if [ $SETUP_RESULTS_PARTITION -eq 1 -a $SETUP_RAWDATA_PARTITION -eq 1 ]; then
+#Determine action based on hardware type
+case $hardware_name in
+    'Precision WorkStation T7500')
+        # LUCID Single Partition
+        SETUP_RESULTS_PARTITION=true
+        deviceid=${deviceid-'/dev/sdb'}    # If passed as an argument, use it.  Else default to sdb
+        LEGACY=true
+    ;;
+    'PowerEdge T620')
+        # Lucid Dual Partition
+        SETUP_RESULTS_PARTITION=true
+        SETUP_RAWDATA_PARTITION=true
+        SPLIT_PARTITION=true
+        deviceid=${deviceid-'/dev/sdb'}    # If passed as an argument, use it.  Else defaults to sdb
+        LEGACY=true
+    ;;
+    'PowerEdge T630'|'PowerEdge T430')
+        # TRUSTY Single Partition
+        SETUP_RESULTS_PARTITION=true
+        deviceid=${deviceid-'/dev/sdc'}    # If passed as an argument, use it.  Else defaults to sdd
+        LEGACY=false
+    ;;
+    *)
+        echo "Unknown hardware: '$hardware_name'"
+        exit 0
+    ;;
+esac
 
-    # Must have root permissions to continue
-    needs_root
+# Must have root permissions to continue
+needs_root
 
-    #
-    # Sets up a new partition on dedicated hardware for Torrent Server
-    #
-    #   - check for /dev/sdb1 and exit if it doesn't exist
-    #   - display partition info
-    #   - create GPT partition and format as ext4
-    #   - copy /results on /dev/sda1 to /results on /dev/sdb1
-    #   - Delete all files in /results on /dev/sda1
-    #   - mount /dev/sdb1 at /results
-    #   (See jira issue TS-3559 for more details)
+# install pre-requisites: parted
+if ! dpkg -l parted|grep -q ^ii; then
+    echo "Missing package will be installed: parted"
+    apt-get install parted
+fi
 
-    if ! test -b ${dev}; then
-        echo "Device: $dev does not exist.  Exiting."
+#Default device to partition is
+if ! $DEBUG; then
+    if ! test -b ${deviceid}; then
+        echo "Device: $deviceid does not exist.  Exiting."
         exit
-    fi
-
-    # install pre-requisites: parted
-    if ! dpkg -l parted|grep -q ^ii; then
-        apt-get install parted
-    fi
-
-    # Get user confirmation
-    echo
-    echo
-    echo "This will create two partitions on ${dev} and format and mount"
-    echo "them at $results_mtpt and $rawdata_mtpt mountpoints."
-    echo "The contents of the current $results_mtpt will migrate to the new partition."
-    echo
-    echo "WARNING!  Any data on partition ${dev} will be deleted"
-    echo "Continue only if you are sure you want to reformat ${dev}"
-    read -p"Type yes to continue: " usrin
-    if [ "${usrin,,}" != "yes" ]; then
-        exit
-    fi
-
-    # Create GPT partition table and two primary partitions
-    parted ${dev} mklabel gpt
-    parted ${dev} mkpart primary 0% 40%
-    parted ${dev} mkpart primary 40% 100%
-
-
-    # Format the partition with ext4 filesystem
-    # Note: will not work for filesystems > 16TB, using Ubuntu 10.04 mkfs package.
-    if ! mkfs.ext4 ${dev}1; then
-        echo "there was an error in mkfs.ext4 formatting ${dev}1 "
-        exit 1
-    fi
-    if ! mkfs.ext4 ${dev}2; then
-        echo "there was an error in mkfs.ext4 formatting ${dev}2"
-        exit 1
-    fi
-
-    # Prepare raw data directory
-    mkdir -p $rawdata_mtpt
-    chmod 777 $rawdata_mtpt
-    mount ${dev}2 $rawdata_mtpt
-    echo "${dev}2 has been mounted at $rawdata_mtpt"
-
-    # Move contents of current /results directory to new partition
-    if [ -d $results_mtpt ]; then
-        migrate_contents ${dev}1 $results_mtpt
-    else
-        mkdir -p $results_mtpt
-        chmod 777 $results_mtpt
-    fi
-
-    mount ${dev}1 $results_mtpt
-    echo "${dev}1 has been mounted at $results_mtpt"
-
-    #Edit /etc/fstab to automount at boot
-    uuid1=$(get_uuid ${dev}1)
-    if ! grep $uuid1 /etc/fstab; then
-        echo -e "$uuid1\t${results_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
-    fi
-    uuid2=$(get_uuid ${dev}2)
-    if ! grep $uuid2 /etc/fstab; then
-        echo -e "$uuid2\t${rawdata_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
-    fi
-
-elif [ $SETUP_RESULTS_PARTITION -eq 1 -a $SETUP_RAWDATA_PARTITION -eq 0 ]; then
-
-    # Must have root permissions to continue
-    needs_root
-
-    #
-    # Sets up a new partition on dedicated hardware for Torrent Server
-    #
-    #   - check for /dev/sdb1 and exit if it doesn't exist
-    #   - display partition info
-    #   - create GPT partition and format as ext4
-    #   - copy /results on /dev/sda1 to /results on /dev/sdb1
-    #   - Delete all files in /results on /dev/sda1
-    #   - mount /dev/sdb1 at /results
-    #   (See jira issue TS-3559 for more details)
-
-    if ! test -b ${dev}; then
-        echo "Device: $dev does not exist.  Exiting."
-        exit
-    fi
-
-    # install pre-requisites: parted
-    if ! dpkg -l parted|grep -q ^ii; then
-        apt-get install parted
-    fi
-
-    # Get user confirmation
-    echo
-    echo
-    echo "This will create a single partition on ${dev} and format and mount"
-    echo "it at $results_mtpt mountpoint.  The contents of the current $results_mtpt will"
-    echo "migrate to the new partition."
-    echo
-    echo "WARNING!  Any data on partition ${dev} will be deleted"
-    echo "Continue only if you are sure you want to reformat ${dev}"
-    read -p"Type yes to continue: " usrin
-    if [ "${usrin,,}" != "yes" ]; then
-        exit
-    fi
-
-    # Create GPT partition table and one primary partition
-    parted ${dev} mklabel gpt
-    parted ${dev} mkpart primary 0% 100%
-
-    # Format the partition with ext4 filesystem
-    # Note: will not work for filesystems > 16TB, using Ubuntu 10.04 mkfs package.
-    if ! mkfs.ext4 ${dev}1; then
-        echo "there was an error in mkfs.ext4 formatting ${dev}1 "
-        exit 1
-    fi
-
-    # Move contents of current /results directory to new partition
-    if [ -d $results_mtpt ]; then
-        migrate_contents ${dev}1 $results_mtpt
-    else
-        mkdir -p $results_mtpt
-        chmod 777 $results_mtpt
-    fi
-    mount ${dev}1 $results_mtpt
-    echo "${dev}1 has been mounted at $results_mtpt"
-
-    #Edit /etc/fstab to automount at boot
-    uuid1=$(get_uuid ${dev}1)
-    if ! grep $uuid1 /etc/fstab; then
-        echo -e "$uuid1\t${results_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
     fi
 fi
-echo -e "\nTSinit is finished\n"
+
+echo -e "\nHardware Type is $hardware_name\n"
+
+if $LEGACY; then
+    if [ $SETUP_RESULTS_PARTITION = true -a $SETUP_RAWDATA_PARTITION = true ]; then
+    
+        
+    
+        #
+        # Sets up a new partition on dedicated hardware for Torrent Server
+        #
+        #   - check for /dev/sdb1 and exit if it doesn't exist
+        #   - display partition info
+        #   - create GPT partition and format as ext4
+        #   - copy /results on /dev/sda1 to /results on /dev/sdb1
+        #   - Delete all files in /results on /dev/sda1
+        #   - mount /dev/sdb1 at /results
+        #   (See jira issue TS-3559 for more details)
+   
+        # Get user confirmation
+        echo
+        echo "This will create two partitions on ${deviceid} and format and mount"
+        echo "them at $results_mtpt and $rawdata_mtpt mountpoints."
+        echo "The contents of the current $results_mtpt will migrate to the new partition."
+        echo
+        echo "WARNING!  Any data on partition ${deviceid} will be deleted"
+        echo "Continue only if you are sure you want to reformat ${deviceid}"
+        read -p"Type yes to continue: " usrin
+        if [ "${usrin,,}" != "yes" ]; then
+            exit
+        fi
+    
+        if $DEBUG; then
+            echo "Bailing out now since --test is not enabled for legacy mode. Apologies."
+            exit 0
+        fi
+        
+        # Create GPT partition table and two primary partitions
+        parted ${deviceid} mklabel gpt
+        parted ${deviceid} mkpart primary 0% 40%
+        parted ${deviceid} mkpart primary 40% 100%
+    
+    
+        # Format the partition with ext4 filesystem
+        # Note: will not work for filesystems > 16TB, using Ubuntu 10.04 mkfs package.
+        if ! mkfs.ext4 ${deviceid}1; then
+            echo "there was an error in mkfs.ext4 formatting ${deviceid}1 "
+            exit 1
+        fi
+        if ! mkfs.ext4 ${deviceid}2; then
+            echo "there was an error in mkfs.ext4 formatting ${deviceid}2"
+            exit 1
+        fi
+    
+        # Prepare raw data directory
+        mkdir -p $rawdata_mtpt
+        chmod 777 $rawdata_mtpt
+        mount ${deviceid}2 $rawdata_mtpt
+        echo "${deviceid}2 has been mounted at $rawdata_mtpt"
+    
+        # Move contents of current /results directory to new partition
+        if [ -d $results_mtpt ]; then
+            migrate_contents ${deviceid}1 $results_mtpt
+        else
+            mkdir -p $results_mtpt
+            chmod 777 $results_mtpt
+        fi
+    
+        mount ${deviceid}1 $results_mtpt
+        echo "${deviceid}1 has been mounted at $results_mtpt"
+    
+        #Edit /etc/fstab to automount at boot
+        uuid1=$(get_uuid ${deviceid}1)
+        if ! grep $uuid1 /etc/fstab; then
+            echo -e "$uuid1\t${results_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
+        fi
+        uuid2=$(get_uuid ${deviceid}2)
+        if ! grep $uuid2 /etc/fstab; then
+            echo -e "$uuid2\t${rawdata_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
+        fi
+    
+    elif [ $SETUP_RESULTS_PARTITION = true -a $SETUP_RAWDATA_PARTITION = false ]; then
+    
+        # Must have root permissions to continue
+        needs_root
+    
+        #
+        # Sets up a new partition on dedicated hardware for Torrent Server
+        #
+        #   - check for /dev/sdb1 and exit if it doesn't exist
+        #   - display partition info
+        #   - create GPT partition and format as ext4
+        #   - copy /results on /dev/sda1 to /results on /dev/sdb1
+        #   - Delete all files in /results on /dev/sda1
+        #   - mount /dev/sdb1 at /results
+        #   (See jira issue TS-3559 for more details)
+
+        # Get user confirmation
+        echo
+        echo "This will create a single partition on ${deviceid} and format and mount"
+        echo "it at $results_mtpt mountpoint.  The contents of the current $results_mtpt will"
+        echo "migrate to the new partition."
+        echo
+        echo "WARNING!  Any data on partition ${deviceid} will be deleted"
+        echo "Continue only if you are sure you want to reformat ${deviceid}"
+        read -p"Type yes to continue: " usrin
+        if [ "${usrin,,}" != "yes" ]; then
+            exit
+        fi
+    
+        if $DEBUG; then
+            echo "Bailing out now since --test is not enabled for legacy mode. Apologies."
+            exit 0
+        fi
+    
+        # Create GPT partition table and one primary partition
+        parted ${deviceid} mklabel gpt
+        parted ${deviceid} mkpart primary 0% 100%
+    
+        # Format the partition with ext4 filesystem
+        # Note: will not work for filesystems > 16TB, using Ubuntu 10.04 mkfs package.
+        if ! mkfs.ext4 ${deviceid}1; then
+            echo "there was an error in mkfs.ext4 formatting ${deviceid}1 "
+            exit 1
+        fi
+    
+        # Move contents of current /results directory to new partition
+        if [ -d $results_mtpt ]; then
+            migrate_contents ${deviceid}1 $results_mtpt
+        else
+            mkdir -p $results_mtpt
+            chmod 777 $results_mtpt
+        fi
+        mount ${deviceid}1 $results_mtpt
+        echo "${deviceid}1 has been mounted at $results_mtpt"
+    
+        #Edit /etc/fstab to automount at boot
+        uuid1=$(get_uuid ${deviceid}1)
+        if ! grep $uuid1 /etc/fstab; then
+            echo -e "$uuid1\t${results_mtpt}\text4\tdefaults\t0 0" >> /etc/fstab
+        fi
+    fi
+else
+    #------------------------
+    # Get user confirmation
+    #------------------------
+    echo
+    echo "This will create a single partition on ${deviceid}."
+    echo "ALL EXISTING DATA WILL BE LOST!"
+    echo "Four Logical Volumes will be created:"
+    echo "/results, /home, /tmp, swap"
+    echo "The current contents of /results and /home will be copied to the new volumes"
+    echo
+    echo "WARNING!  Any data on partition ${deviceid} will be deleted"
+    echo "Continue only if you are sure you want to reformat ${deviceid}"
+    echo "and migrate current /results and /home to the new partitions."
+    read -p"Type yes to continue: " usrin
+    if [ "${usrin,,}" != "yes" ]; then
+        exit
+    fi
+    
+    #--------------------------------------------------------------------------
+    #If partition has been formatted, need to clean it up first
+    #--------------------------------------------------------------------------
+    cmd="cleanup_partition ${deviceid}${partid}"
+    exec_cmd "$cmd"
+    
+    #------------------------
+    # Create partition table
+    #------------------------
+    cmd="parted -s -a optimal ${deviceid} mktable gpt"
+    exec_cmd "$cmd"
+    #------------------------
+    # Create a single partition
+    #------------------------
+    cmd="parted -s -a optimal ${deviceid} mkpart logical 0% 100%"
+    exec_cmd "$cmd"
+    #------------------------
+    # Mark it for use as LVM
+    #------------------------
+    cmd="parted -s -a optimal ${deviceid} set 1 LVM on"
+    exec_cmd "$cmd"
+    
+    #------------------------
+    #LVM configuration
+    #------------------------
+    cmd="pvcreate ${deviceid}${partid}"
+    exec_cmd "$cmd"
+    cmd="vgcreate data ${deviceid}${partid}"
+    exec_cmd "$cmd"
+    cmd="lvcreate --size 20GB --name home data"
+    exec_cmd "$cmd"
+    cmd="lvcreate --size 100GB --name tmp data"
+    exec_cmd "$cmd"
+    cmd="lvcreate --size 130GB --name swap data"
+    exec_cmd "$cmd"
+    cmd="lvcreate --extents 100%FREE --name results data"
+    exec_cmd "$cmd"
+    
+    #-------------------
+    #Create filesystems
+    #-------------------
+    cmd="mkfs -t ext4 /dev/data/home"
+    exec_cmd "$cmd"
+    cmd="mkfs -t ext4 /dev/data/tmp"
+    exec_cmd "$cmd"
+    cmd="mkfs -t ext4 /dev/data/results"
+    exec_cmd "$cmd"
+    cmd="mkswap /dev/data/swap"
+    exec_cmd "$cmd"
+    
+    #---------------------------------------------------
+    # Permissions on /tmp and /results
+    #---------------------------------------------------
+    cmd="chmod 1777 /tmp"
+    exec_cmd "$cmd"
+    cmd="chmod 0777 /results"
+    exec_cmd "$cmd"
+    cmd="hack_tmp_permissions"
+    exec_cmd "$cmd"
+    
+    #---------------------------------------------------
+    #Copy existing /results, /home to new partitions
+    #---------------------------------------------------
+    cmd="copy_and_mount /dev/data/results $results_mtpt"
+    exec_cmd "$cmd"
+    cmd="copy_and_mount /dev/data/home $home_mtpt"
+    exec_cmd "$cmd"
+    
+    #---------------------------------------------------
+    # Edit /etc/fstab
+    #---------------------------------------------------
+    cmd="add_to_fstab /dev/data/home /home"
+    exec_cmd "$cmd"
+    cmd="add_to_fstab /dev/data/tmp /tmp"
+    exec_cmd "$cmd"
+    cmd="add_to_fstab /dev/data/results /results"
+    exec_cmd "$cmd"
+    cmd="edit_swap_fstab /dev/data/swap"
+    exec_cmd "$cmd"
+    
+    #---------------------------------------------------
+    # We are finished.  Exit banner
+    #---------------------------------------------------
+    echo -e "\nTSinit is finished\n"
+    echo -e "The server must be rebooted for the new settings to take effect.\n"
+fi
+
 exit
+
+#
+# script to undo the partitioning and LVM management
+# Unmount any mounted LV first
+#sudo umount /dev/data/<fill in the blank>
+#
+# Pass the device id as an argument
+# Probably /dev/sdc1
+#
+##!/bin/bash
+#set -x
+#set -e
+#set -u
+#deviceid=$1
+#swapoff /dev/data/swap||true
+#lvremove -f /dev/data/tmp /dev/data/results /dev/data/swap /dev/data/home
+#vgremove -f data
+#pvremove -ff ${deviceid}

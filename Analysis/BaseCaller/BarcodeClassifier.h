@@ -60,6 +60,9 @@ public:
   int  SignalSpaceClassification(const BasecallerRead& basecaller_read, float& best_distance, int& best_errors,
                                  vector<float>& best_bias, int& filtered_zero_errors);
 
+  int  ProportionalSignalClassification(const BasecallerRead& basecaller_read, float& best_distance, int& best_errors,
+                                 vector<float>& best_bias, int& filtered_zero_errors);
+
   void ClassifyAndTrimBarcode(int read_index, ProcessedRead &processed_read, const BasecallerRead& basecaller_read, const vector<int>& base_to_flow);
 
   bool MatchesBarcodeSignal(const BasecallerRead& basecaller_read);

@@ -27,13 +27,13 @@ typedef struct {
   initializes sequence read structure
   @return     pointer to the initialized memory 
   */
-inline tmap_sam_t *
+tmap_sam_t *
 tmap_sam_init();
 
 /*! 
   @param  sam  a pointer to the sequence structure
   */
-inline void
+void
 tmap_sam_destroy(tmap_sam_t *sam);
 
 /*! 
@@ -41,7 +41,7 @@ tmap_sam_destroy(tmap_sam_t *sam);
   @param  sam  pointer to the sequence read structure to be copied  
   @return     pointer to the initialized memory 
   */
-inline tmap_sam_t *
+tmap_sam_t *
 tmap_sam_clone(tmap_sam_t *sam);
 
 /*! 
@@ -83,14 +83,14 @@ tmap_sam_to_char(tmap_sam_t *sam);
   gets the read's bases
   @param  sam  a pointer to a sequence structure
  */
-inline tmap_string_t *
+tmap_string_t *
 tmap_sam_get_bases(tmap_sam_t *sam);
 
 /*!
   gets the read's qualities
   @param  sam  a pointer to a sequence structure
  */
-inline tmap_string_t *
+tmap_string_t *
 tmap_sam_get_qualities(tmap_sam_t *sam);
 
 /*!

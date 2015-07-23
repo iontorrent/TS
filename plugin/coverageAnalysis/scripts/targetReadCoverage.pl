@@ -107,7 +107,7 @@ $maxMrgSep -= $endOvlp;
 my $samopt= ($nondupreads ? "-F 0x704" : "-F 0x304").($uniquereads ? " -q 1" : "");
 
 # make quick test to see if this is a valid bam file
-open( BAMTEST, "samtools view \"$bamfile\" |" ) || die "Cannot open BAM file '$bamfile'.";
+open( BAMTEST, "samtools view \"$bamfile\" 2> /dev/null |" ) || die "Cannot open BAM file '$bamfile'.";
 unless(<BAMTEST>) {
   print STDERR "Error: BAM file missing, empty or badly formatted.\n";
   exit 1;
@@ -223,7 +223,7 @@ while(1) {
   my (@targFwdReads,@targRevReads,@targFwdE2E,@targRevE2E,@targOvpReads);
   unless( $nobai ) {
     # process BAM reads covering these merged targets
-    open( MAPPINGS, "samtools view $samopt \"$bamfile\" \"$lastChr:$mrgSrt-$mrgEnd\" 2>&1 |" )
+    open( MAPPINGS, "samtools view $samopt \"$bamfile\" \"$lastChr:$mrgSrt-$mrgEnd\" 2> /dev/null |" )
       || die "Failed to pipe reads from $bamfile for regions in $bedfile\n";
     my $firstRegion = 0, $lastEnd = $targEnds[$nTrgs-1];
     while( <MAPPINGS> ) {

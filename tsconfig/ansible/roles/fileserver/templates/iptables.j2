@@ -1,0 +1,49 @@
+#iptables.rules for Torrent Server
+*nat
+:PREROUTING ACCEPT [22:1936]
+:POSTROUTING ACCEPT [2:127]
+:OUTPUT ACCEPT [2:127]
+{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != ansible_default_ipv4.interface|default(default_interface) %}
+-A POSTROUTING -s {{ b_subnet }}.{{loop.index + class_c}}.0/24 -o {{ ansible_default_ipv4.interface|default(default_interface) }} -j MASQUERADE
+{% endfor %}
+
+COMMIT
+*filter
+:INPUT DROP [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [3:364]
+-A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -i lo -j ACCEPT
+-A INPUT -p icmp -j ACCEPT
+
+#Allow SSH and Torrent Browser access
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 22 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 80 -j ACCEPT
+
+#Uncomment the line below to allow connections on port 443/HTTPS
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 443 -j ACCEPT
+{# When there are compute nodes, we need to allow access for gridengine traffic #}
+{% if groups.computes|length > 0 %}
+
+#Allow Gridengine traffic from compute nodes
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 6444 -j ACCEPT
+-A INPUT -p tcp -m state --state NEW -m tcp --dport 6445 -j ACCEPT
+{%endif%}
+
+{% for interface in ansible_interfaces|sort if ('eth' in interface or interface[0] == 'p') and interface != ansible_default_ipv4.interface|default(default_interface) %}
+{% if loop.first %}
+#Allow all traffic from instrument subnets
+{% endif %}
+-A INPUT -s {{ b_subnet }}.{{loop.index + class_c}}.0/24 -j ACCEPT
+{% endfor %}
+
+{% if S5_virtual_guest|bool %}
+#Allow all traffic on VM system
+-A INPUT -s 192.168.122.1 -j ACCEPT
+{% endif %}
+
+{% if compute_subnet is defined and compute_subnet is not none %}
+#Allow all traffic on cluster subnet
+-A INPUT -s {{compute_subnet}} -j ACCEPT
+{% endif %}
+COMMIT

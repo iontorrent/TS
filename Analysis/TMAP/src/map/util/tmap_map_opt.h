@@ -104,6 +104,15 @@ enum {
 };
 
 /*!
+  The hp gap scaling mode
+  */
+enum {
+    TMAP_CONTEXT_GAP_SCALE_NONE = 0,
+    TMAP_CONTEXT_GAP_SCALE_GEP = 1,
+    TMAP_CONTEXT_GAP_SCALE_BOTH = 2
+};
+
+/*!
   The various option types
   */
 enum {
@@ -114,6 +123,7 @@ enum {
     TMAP_MAP_OPT_TYPE_STRING,
     TMAP_MAP_OPT_TYPE_NONE
 };
+
 
 /*!
   The print function for the options
@@ -222,9 +232,18 @@ typedef struct __tmap_map_opt_t {
 
     int32_t do_hp_weight; /*!< perform realignment with context-specific gap scores */
     // int32_t context_noclip; /*!< perform realignment with context-specific gap scores */
+    int32_t gap_scale_mode; /*!< determines gap scaling mode (none, gep-only, gip-and-gep */
+    int32_t context_mat_score; /*!< context realignment match score */
+    int32_t context_mis_score; /*!< context realignment mismatch score */
+    int32_t context_gip_score; /*!< context realignment gap opening score */
+    int32_t context_gep_score; /*!< context realignment gap extension score */
+    int32_t context_extra_bandwidth; /*!< context realignment DP matrix extra band width */
+    int32_t context_debug_log; /*!< output detailed log of alignment operation into log */
 
     // DVK: tandem repeat end-clipping
     int32_t do_repeat_clip; /*!< clip tandem repeats at the alignment ends */
+    // int32_t repclip_overlap; /*! repeat clipping is not performed if read overlaps amplicon end by this number of bases (or more) */
+    int32_t repclip_continuation; /*! repeat clipping performed only if repeat continues past the end of the read into the reference by at least 1 period */
 
     // DVK: alignment length filtering
     int32_t min_al_len; /*!< minimal alignment length to report, -1 to disable */

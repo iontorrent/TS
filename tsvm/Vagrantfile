@@ -17,6 +17,7 @@ NFS = true
 INSTALL_ION = true
 # Set to true to setup simple server (edited by tsvm-setup script)
 BASIC = false
+# (edited by tsvm-setup script)
 OUTBOUND_PORT = 'eth0'
 # set this to the IP address of your LAN's router (edited by tsvm-setup script)
 default_router = '8.8.8.8'
@@ -32,27 +33,27 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   config.vm.box_url = "http://" + BOX_URL + "/boxes/lucid64_TS.box"
   config.ssh.username = 'ionadmin'
   config.ssh.private_key_path = './.private_key_rsa'
-  
+
   config.vm.network :forwarded_port, guest: 80, host: 8082
   config.vm.network :public_network, :bridge => OUTBOUND_PORT
-  
+
   # change/ensure the default route via the local network's WAN router,
   # useful for public_network/bridged mode
   config.vm.provision :shell, :inline => "ip route delete default 2>&1 >/dev/null || true; ip route add default via #{default_router}"
-  
+
   if NFS
     config.vm.network :private_network, ip: "192.168.35.10"
   end
-  
+
   config.ssh.forward_agent = true
 
   # Disable syncing by default
   #config.vm.synced_folder ".", "/vagrant", :disabled => true
-  
+
   if BASIC
     config.vm.host_name = "ts-vm-#{TS_VERSION}" ## IMPORTANT - must set hostname or postfix fails to install later
   else
-    
+
     if not NFS
       # Share the host's data folders - using vboxsf
       if File.exists?("/results")
@@ -72,22 +73,22 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
 
     config.vm.host_name = "ts-vm-#{host}" ## IMPORTANT - must set hostname or postfix fails to install later
-    
+
   end
-  
+
   config.vm.provider :virtualbox do |vb|
     # Don't boot with headless mode
     #vb.gui = true
-    
+
     # Set the name of the VM for VirtualBox
     vb.customize ["modifyvm", :id, "--name", "TS-VM-#{TS_VERSION}"]
-    
+
     # Use VBoxManage to customize the VM. For example to change memory:
     USABLE_RAM = 512
     vb.customize ["modifyvm", :id, "--memory", "#{USABLE_RAM}"]
     USABLE_CORES = 1
     vb.customize ["modifyvm", :id, "--cpus", "#{USABLE_CORES}"]
-    
+
     vb.customize ["modifyvm", :id, "--nictype1", "virtio"]
     vb.customize ["modifyvm", :id, "--nictype2", "virtio"]
     vb.customize ["modifyvm", :id, "--acpi", "on"]
@@ -105,23 +106,23 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   if INSTALL_ION
     #config.vm.provision :shell, :inline => 'apt-get update && apt-get install squid-deb-proxy-client --no-upgrade -y'
     #config.vm.provision :shell, :inline => 'echo "Acquire::http::Pipeline-Depth 0;" > /etc/apt/apt.conf.d/99hashsumerrorfix.conf' # Work around broken proxy? Avoids 'Hash Sum error'
-  
+
     # SETUP APT REPOSITORY LOCATION - DEPLOY
     ION_APT = "deb http://updates.ite/updates/software/ lucid-beta/"
     config.vm.provision :shell, :inline => "echo \"" + ION_APT + "\" > /etc/apt/sources.list.d/ionupdates.list"
     # SETUP APT REPOSITORY LOCATION - DEVELOPMENT
     #config.vm.provision :shell, :inline => 'echo "deb http://updates.ite/updates/software lucid-alpha/" > /etc/apt/sources.list.d/iontorrent.list'
     #config.vm.provision :shell, :inline => 'echo "deb http://updates.ite/updates/software lucid-dev/" >> /etc/apt/sources.list.d/iontorrent.list'
-  
+
     config.vm.provision :shell, :inline => 'apt-get -qq update'
-  
+
     # Bootstrap server to latest release of the Ion TS Platform
     #config.vm.provision :shell, :inline => 'apt-get install build-essential python-pkg-resources --no-upgrade -y'
     config.vm.provision :shell, :inline => 'apt-get install ion-tsconfig -y --force-yes'
     config.vm.provision :shell, :inline => 'TSconfig --configure-server --skip-pgm-config --skip-init --configure-ntp'
-  
+
     config.vm.provision :shell, :path => './tsvm-postprov.sh', :args => "#{host} #{TS_VERSION} #{timezone} #{BASIC}"
-    
+
     config.vm.provision :shell, :inline => 'apt-get -qq clean'
   end
 end

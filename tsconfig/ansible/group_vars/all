@@ -1,18 +1,84 @@
 ---
 # Variables applicable to all
 
-ion_build_flag: "/"
+#==============================================================================
+# Expert users only - edit at your own risk
+# To prevent deletion of customizations, copy this file to all_local and edit
+#==============================================================================
+#----------------------------------------------------------------------------
+# Only evaluated in the iontorrent_master role
+# Set to False to suppress installation of X server related packages.  Needed
+# to support remote desktop, nothing more.
+#----------------------------------------------------------------------------
+install_xserver: True
 
-ion_repository_hostname: ionupdates.com
+#----------------------------------------------------------------------------
+# To enable NFS mounts, add mount definitions per format specified
+# Note first example mounts headnode's /results drive.
+#----------------------------------------------------------------------------
+nas_mounts:
+#  - { name: "{{groups.headnode[0]}}", directory: /results, mountpoint: /results }
+#  - { name: ion-nas4, directory: /results, mountpoint: /results4 }
+#  - { name: devbox-bpp, directory: /results, mountpoint: /results4 }
 
-ion_repository_directory: software
+#----------------------------------------------------------------------------
+# Enable exporting of /results and /rawdata if it exists from the headnode
+#----------------------------------------------------------------------------
+export_results: False
 
+#----------------------------------------------------------------------------
+# Static IP Configuration
+# Set static ip information here, do not manually edit /etc/network/interfaces
+# Set STATIC_IP value to True
+# NOTE: default static settings are for S5 TSVM
+#----------------------------------------------------------------------------
+STATIC_IP: False
+static_ip: 192.168.122.249
+static_nm: 255.255.255.0
+static_gw: 192.168.122.1
+#dns_nameserver: 192.168.122.1
+
+#----------------------------------------------------------------------------
+# Private subnet specification
+#----------------------------------------------------------------------------
+# default class b subnet
+b_subnet: "192.168"
+# b_subnet: "10.10"
+# b_subnet: "172.16"
+# This is the starting number for the class c subnet
+class_c: 200
+# Classless Inter-Domain Routing.  used in /etc/exports
+CIDR: 16
+
+#----------------------------------------------------------------------------
+# Define cluster compute nodes' subnet address to allow traffic thru firewall
+# This address will be used in a iptables rule:
+# -A INPUT -s {{compute_subnet}} -j ACCEPT
+#----------------------------------------------------------------------------
+compute_subnet: 
+
+#----------------------------------------------------------------------------
+# sudo password for compute nodes (yes this is cleartext)
 # Setting this over-rides whats passed at command line
-#ansible_sudo_pass: ionadmin
+# Only needed if there are compute nodes
+#----------------------------------------------------------------------------
+ansible_sudo_pass: ionadmin
+
+#----------------------------------------------------------------------------
+# Gridengine queue slot definition
+#----------------------------------------------------------------------------
+queues: 
+  - { name: all.q, slots: 1}
+  - { name: plugin.q, slots: 1}
+  - { name: thumbnail.q, slots: 1}
+  - { name: tl.q, slots: 10}
+  
+#==============================================================================
+# End of user customizable section
+#==============================================================================
+
 
 tsconfig_dir: /etc/torrentserver
-
-ionaptrepo_file: /etc/apt/sources.list.d/iontorrent.list
 
 postgres_sysctl_file: /etc/sysctl.d/10-postgresql-shm.conf
 
@@ -21,6 +87,13 @@ grub_config_file: /etc/default/grub
 security_limits_file: /etc/security/limits.conf
 
 MAX_FILES_OPEN: 8192
+
+default_interface: eth0
+
+# crypted password created with:
+# python -c "from passlib.hash import sha512_crypt; import getpass; print sha512_crypt.encrypt(getpass.getpass())"
+ftp_username: ionguest
+ftp_password: $6$rounds=100000$VJCOLFxX2iyrQpAI$696ZB6F6KrW59Xd.GtkGNVPf.GJPRFruN7PoMptbl7MIg/c99xeUg1/.XNctkLISjwRvLC3B/s.V/vL6loX3V1
 
 common_syspkg_list:
     - traceroute
@@ -42,8 +115,6 @@ common_syspkg_list:
     - binutils
     - sshpass
     - tk8.5
-    - libmotif-dev
-    - libxpm-dev
     - libboost-all-dev
     - iptables
     - ntp
@@ -54,9 +125,12 @@ common_syspkg_list:
     - libxml2-dev
     - python-simplejson
     - python-calabash
+    - python-h5py
     - python-jsonpipe
     - python-rpy2
     - python-gnuplot
+    - python-pysam
+    - python-psutil
     - perl
     - perl-doc
     - default-jre
@@ -66,4 +140,3 @@ common_syspkg_list:
     - tmpreaper
     - timelimit
     - dkms
-#    - megaraid-sas-dkms

@@ -104,7 +104,7 @@ class cudaAllocationError: public cudaExceptionDebug
 
   virtual const char* what() const throw()
   {
-    //Print();
+    Print();
     return "CUDA EXCEPTION: could not allocate memory";
   }
 
@@ -117,7 +117,7 @@ class cudaNotEnoughMemForStream: public cudaExceptionDebug
 public:
   virtual const char* what() const throw()
   {
-    //Print();
+    Print();
     return "CUDA EXCEPTION: Not enough memory for context and at least one stream!";
   }
 
@@ -131,7 +131,7 @@ class cudaExecutionException: public cudaExceptionDebug
 
   virtual const char* what() const throw()
   {
-    //Print();
+    Print();
     return "CUDA EXCEPTION: Error occured during job Execution!";
   }
 

@@ -111,3 +111,15 @@ class PluginsStepData(AbstractStepData):
                 else:
                     retval[values[PluginFieldNames.PLUGIN].name][PluginFieldNames.USER_INPUT] = ''
         return retval
+
+    def isVariantCallerSelected(self):
+        for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
+            if values[PluginFieldNames.PLUGIN].name == "variantCaller" and values[PluginFieldNames.SELECTED]: 
+                return True
+        return False
+
+    def isVariantCallerConfigured(self):
+        for plugin_id, values in self.savedObjects[PluginFieldNames.PLUGINS].items():
+            if values[PluginFieldNames.PLUGIN].name == "variantCaller" and values[PluginFieldNames.CONFIG]: 
+                return True
+        return False

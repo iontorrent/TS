@@ -36,6 +36,9 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <fcntl.h>
+#include <sys/select.h>
+#include <sys/time.h>
 
 #ifndef _WIN32
 #include <netdb.h>

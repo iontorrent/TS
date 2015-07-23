@@ -82,6 +82,10 @@ class Acq {
 		    uint32_t ow, 
 		    uint32_t oh); 
 
+            // to compress image
+            void doT0Compression();
+            void getAverageTrace(double *avg_trace, FILE *fp);
+
 	protected:
 
 		Image *image;
@@ -101,6 +105,10 @@ class Acq {
                 std::vector<float> region_acq_start;
                 std::vector<float> region_acq_end;
                 std::vector<int> excludedRegions;
+
+        static int t0est_start;
+        static int t0est_end;
+        static int slower_frames;
 };
 extern int PrevFrameSubtract(uint32_t w, uint32_t h, int16_t *framePtr, int16_t *prevFramePtr,
 		int16_t *results, uint64_t *out_len, uint32_t *comprType);

@@ -36,6 +36,8 @@ class OrderedVCFWriter;
 class SampleManager;
 class MetricsManager;
 
+// ==============================================================================
+
 struct VariantCallerContext {
 
   ExtendParameters *  parameters;                   //! Raw parameters, retrieved from command line and json
@@ -55,10 +57,11 @@ struct VariantCallerContext {
   pthread_cond_t      alignment_tail_cond;          //! Conditional variable for blocking until the final alignments are processed
 
   int                 candidate_counter;            //! Number of candidates generated so far
-  int                 candidate_dot;                //! Number of candidates that will trigger printing next "."
+  //int                 candidate_dot;                //! Number of candidates that will trigger printing next "."
+  time_t              dot_time;                     //! Time that will trigger printing next '.'
 };
 
-// -------------------------------------------------------------------
+// ==============================================================================
 
 struct VariantSpecificParams {
   VariantSpecificParams() :
@@ -114,6 +117,8 @@ struct VariantSpecificParams {
   char  black_strand;
 };
 
+// ==============================================================================
+
 struct VariantCandidate {
   VariantCandidate(vcf::VariantCallFile& initializer) : variant(initializer), position_upper_bound(0) {}
   vcf::Variant variant;
@@ -122,7 +127,7 @@ struct VariantCandidate {
 };
 
 
-// -------------------------------------------------------------------
+// ==============================================================================
 
 
 class RecalibrationHandler{
@@ -134,7 +139,7 @@ class RecalibrationHandler{
     map<string, RecalibrationModel> bam_header_recalibration; // look up the proper recalibration handler by run id + block coordinates
     multimap<string,pair<int,int> > block_hash;  // from run id, find appropriate block coordinates available
     
- void ReadRecalibrationFromComments(const SamHeader &samHeader, int max_flows_protect);
+ void ReadRecalibrationFromComments(const SamHeader &samHeader, const map<string, int> &max_flows_by_run_id);
  
 //  vector<vector<vector<float> > > * getAs(string &found_key, int x, int y){return(recalModel.getAs(x,y));};
 //  vector<vector<vector<float> > > * getBs(string &found_key, int x, int y){return(recalModel.getBs(x,y));};
@@ -146,27 +151,31 @@ class RecalibrationHandler{
   RecalibrationHandler(){use_recal_model_only = false; is_live = false; };
 };
 
+// ==============================================================================
 //Input Structures
+
 class InputStructures {
 public:
 
-  ion::FlowOrder treePhaserFlowOrder;
-  string         flowOrder;
-  uint16_t       nFlows;
-  vector<string> bamFlowOrderVector;
+  // ols stuff to be replaced - one-by one
+  //ion::FlowOrder treePhaserFlowOrder;
 
-  bool           use_SSE_basecaller;
-  bool           apply_normalization;
-  bool           resolve_clipped_bases;
-  int            DEBUG;
 
-  bool flowSigPresent;
-  string flowKey;
-  KeySequence key;
+  // Key and barcode sequence are read group specific
+  // whereas flow order and recalibration are chip specific
+  vector<ion::FlowOrder >   flow_order_vector;
+  map<string, int>          flow_order_index_by_run_id;
+  map<string, int>          num_flows_by_run_id;
+  map<string, string>       key_by_read_group;
+
+  bool                      use_SSE_basecaller;
+  //bool                      apply_normalization;
+  bool                      resolve_clipped_bases;
+  int                       DEBUG;
 
   // Reusable objects
-  TIonMotifSet ErrorMotifs;
-  RecalibrationHandler do_recal;
+  TIonMotifSet              ErrorMotifs;
+  RecalibrationHandler      do_recal;
 
 
   InputStructures();
@@ -176,20 +185,61 @@ public:
   void DetectFlowOrderzAndKeyFromBam(const SamHeader &samHeader);
 };
 
-// -------------------------------------------------------------------
+// ==============================================================================
 
-// A collections of objects that are shared and reused thoughout the execution of one tread
+// A collections of objects that are shared and reused throughout the execution of one tread
 class PersistingThreadObjects {
 public:
 
-	PersistingThreadObjects(const InputStructures &global_context)
-    : realigner(50, 1), dpTreephaser(global_context.treePhaserFlowOrder, 50),
-      treephaser_sse(global_context.treePhaserFlowOrder, 50)  {}
-	~PersistingThreadObjects() { };
+    PersistingThreadObjects(const InputStructures &global_context);
+    ~PersistingThreadObjects() { };
 
-	Realigner         realigner;      // realignment tool
-  DPTreephaser      dpTreephaser;   // c++ treephaser
-  TreephaserSSE     treephaser_sse; // vectorized treephaser
+    //@brief Interface for setting the phasing model parameters
+    void SetModelParameters(const int & flow_order_index, const vector<float> & phase_params) {
+      if (use_SSE_basecaller)
+        treephaserSSE_vector.at(flow_order_index).SetModelParameters(phase_params.at(0), phase_params.at(1));
+      else
+        dpTreephaser_vector.at(flow_order_index).SetModelParameters(phase_params.at(0), phase_params.at(1), phase_params.at(2));
+    };
+
+    //@brief Interface for setting the phasing model parameters
+    void DisableRecalibration(const int & flow_order_index)
+    {
+       if (use_SSE_basecaller)
+         treephaserSSE_vector.at(flow_order_index).DisableRecalibration();
+       else
+         dpTreephaser_vector.at(flow_order_index).DisableRecalibration();
+    };
+
+    //@brief Interface set the calibration coefficients
+    bool SetAsBs(const int & flow_order_index, const vector<vector< vector<float> > > *As, const vector<vector< vector<float> > > *Bs)
+    {
+      if (use_SSE_basecaller)
+        return (treephaserSSE_vector.at(flow_order_index).SetAsBs(As, Bs));
+      else
+        return (dpTreephaser_vector.at(flow_order_index).SetAsBs(As, Bs));
+    };
+
+    //@brief Interface for simulating and solving read bases
+    void SolveRead(const int & flow_order_index, BasecallerRead& read, const int & begin_flow, const int & end_flow){
+      if (use_SSE_basecaller)
+        treephaserSSE_vector.at(flow_order_index).SolveRead(read, begin_flow, end_flow);
+      else
+        dpTreephaser_vector.at(flow_order_index).Solve(read, end_flow, begin_flow);
+    };
+
+
+    bool                   use_SSE_basecaller;    // Switch that tells us which basecaller is active
+
+    Realigner              realigner;             // realignment tool
+    vector<DPTreephaser >  dpTreephaser_vector;   // c++ treephaser
+    vector<TreephaserSSE>  treephaserSSE_vector;  // vectorized treephaser
+
+
+
+
+
+
 };
 
 

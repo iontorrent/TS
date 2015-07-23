@@ -49,7 +49,7 @@ tmap_bwtl_seq2bwtl(int32_t len, const uint8_t *seq);
   @param  c     base in two-bit integer format
   @return       the next occurrence given the base
   */
-inline uint32_t 
+uint32_t
 tmap_bwtl_occ(const tmap_bwtl_t *bwtl, uint32_t k, uint8_t c);
 
 /*! 
@@ -58,7 +58,7 @@ tmap_bwtl_occ(const tmap_bwtl_t *bwtl, uint32_t k, uint8_t c);
   @param  k     previous occurrence
   @param  cnt   pointer to the next occurrences for all four bases
   */
-inline void 
+void
 tmap_bwtl_occ4(const tmap_bwtl_t *bwtl, uint32_t k, uint32_t cnt[4]);
 
 /*! 
@@ -70,7 +70,7 @@ tmap_bwtl_occ4(const tmap_bwtl_t *bwtl, uint32_t k, uint32_t cnt[4]);
   @param  cntl  next lower occurrences
   @details      more efficient version of bwt_occ4 but requires that k <= l (not checked)
   */
-inline void 
+void
 tmap_bwtl_2occ4(const tmap_bwtl_t *bwtl, uint32_t k, uint32_t l, uint32_t cntk[4], uint32_t cntl[4]);
 
 /*! 

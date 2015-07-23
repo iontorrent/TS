@@ -1,7 +1,7 @@
 /* Copyright (C) 2010 Ion Torrent Systems, Inc. All Rights Reserved */
 #include "ImageSpecClass.h"
 #include "SynchDatSerialize.h"
-#include "H5File.h"
+#include "IonH5File.h"
 
 ImageSpecClass::ImageSpecClass()
 : rows(0)

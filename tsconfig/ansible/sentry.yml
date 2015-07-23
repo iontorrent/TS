@@ -1,0 +1,45 @@
+---
+# file: ansible/sentry.yml
+- hosts: headnode
+  tasks:
+    - name: Install python-raven client package
+      apt: name=python-raven state=present update_cache=yes force=yes
+      
+    - name: Sentry config file
+      template: src=files/sentry_settings.j2 dest=/opt/ion/iondb/sentry_settings.py owner=www-data group=www-data mode=0664
+      
+    - name: Edit local_settings.py
+      lineinfile: dest=/opt/ion/iondb/local_settings.py
+                    insertafter=EOF
+                    line="# START ANSIBLE EDITED SENTRY BLOCK"
+    - name: Edit local_settings.py
+      lineinfile: "dest=/opt/ion/iondb/local_settings.py insertafter='# START ANSIBLE EDITED SENTRY BLOCK' line='try:'"
+    - name: Edit local_settings.py
+      lineinfile: "dest=/opt/ion/iondb/local_settings.py
+                    insertafter='try:'
+                    line='    from iondb.sentry_settings import *'"
+    - name: Edit local_settings.py
+      lineinfile: "dest=/opt/ion/iondb/local_settings.py
+                    insertafter='    from iondb.sentry_settings import *'
+                    line='except ImportError:'"
+    - name: Edit local_settings.py
+      lineinfile: "dest=/opt/ion/iondb/local_settings.py
+                    insertafter='except ImportError:'
+                    line='    pass'"
+    - name: Edit local_settings.py
+      lineinfile: dest=/opt/ion/iondb/local_settings.py
+                    insertafter='    pass'
+                    line="# END ANSIBLE EDITED SENTRY BLOCK"
+    - name: Update JS_EXTRA in local_settings.py
+      lineinfile: dest=/opt/ion/iondb/local_settings.py
+                    insertafter=EOF
+                    regexp='.*JS_EXTRA.*'
+                    line='JS_EXTRA = True'
+                    
+    - name: Overwriting /opt/ion/iondb/templates/rundb/common/js_extra.html
+      template: src=files/js_extra.html dest=/opt/ion/iondb/templates/rundb/common/js_extra.html owner=www.data group=www-data mode=664
+      ignore_errors: Yes
+      
+    - name: Restart apache2
+      service: name=apache2 state=restarted
+      

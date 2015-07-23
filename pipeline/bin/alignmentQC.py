@@ -203,7 +203,7 @@ if __name__ == '__main__':
         command += " 2>> " + options.logfile
     elif options.aligner == 'bowtie2':
         fastqpipe = bamBase + '.fastqfifo'
-        command="java -Xmx8g -jar /opt/picard/picard-tools-current/SamToFastq.jar I=%s F=%s" % (options.readFile, fastqpipe)
+        command="java -Xmx8g -jar /opt/picard/picard-tools-current/picard.jar SamToFastq I=%s F=%s" % (options.readFile, fastqpipe)
         command+=" | /results/plugins/bowtielauncher/bowtie2 -p%d -x %s -U %s" % (options.threads, refFasta, fastqpipe)
         command+=" | samtools view -ubS -"
     else:
@@ -212,8 +212,8 @@ if __name__ == '__main__':
 
     if not options.skip_sorting:
         # bug same as in http://abrt.fedoraproject.org/faf/problems/932874/
-        # command += " | samtools sort -m 12G -l1 -p%d -" % options.threads
-        command += " | samtools sort -m 2G -l1 -p3 -"
+        # command += " | samtools sort -m 12G -l1 -@%d -" % options.threads
+        command += " | samtools sort -m 2G -l1 -@3 -"
     else:
         command += " >"
 

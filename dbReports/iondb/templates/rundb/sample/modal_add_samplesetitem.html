@@ -20,7 +20,7 @@
         	{% endif %}
         </h3>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" style="max-height: 480px;">
         <div class="workflow-step " style="display: block;">
             <div id="error-messages" class="format-errors alert alert-error hide" style="margin-left: 4%;"></div>
             
@@ -73,7 +73,41 @@
 
 					</div>
 				</div>	
-	            
+                                            
+                <div class="control-group">
+                    <label class="control-label" for="pcrPlateRow">PCR Plate Position</label>
+                    <div class="controls">
+                        <select id="pcrPlateRow" name="pcrPlateRow"style="height:28px;">
+                            <option value="" >.....</option>                 
+                            {% if intent == "edit" %}
+                                {% for pcrPlateRow, displayed_pcrPlateRow in pcrPlateRow_choices.items %}
+                                    {% ifequal sampleSetItem.pcrPlateRow pcrPlateRow %}
+                                        <option SELECTED value="{{sampleSetItem.pcrPlateRow}}">{{displayed_pcrPlateRow}}</option>
+                                    {% else %}
+                                        <option value="{{pcrPlateRow}}" >{{displayed_pcrPlateRow}}</option>
+                                    {% endifequal %}
+                                {% endfor %}                             
+                            {% elif intent == "edit_pending" %}  
+                                {% for pcrPlateRow, displayed_pcrPlateRow in pcrPlateRow_choices.items %}
+                                    {% ifequal pending_sampleSetItem.pcrPlateRow pcrPlateRow %}
+                                        <option SELECTED value="{{pending_sampleSetItem.pcrPlateRow}}">{{displayed_pcrPlateRow}}</option>
+                                    {% else %}
+                                        <option value="{{pcrPlateRow}}" >{{displayed_pcrPlateRow}}</option>
+                                    {% endifequal %}
+                                {% endfor %}                                                        
+                            {% else %}           
+                                {% for pcrPlateRow, displayed_pcrPlateRow in pcrPlateRow_choices.items %}
+                                    <option value="{{pcrPlateRow}}" >{{displayed_pcrPlateRow}}</option>
+                                {% endfor %}                                              
+                            {% endif %}
+                            </select>
+    
+                        <div class="help-block">
+                        </div>
+                        
+                    </div>
+                </div>
+                
 				<div class="control-group">
 					<label class="control-label" for="barcodeKit">Barcode Kit</label>
 					<div class="controls">
@@ -166,7 +200,7 @@
                     </div>
                     
                     <div class="control-group">
-                        <label class="control-label" for="gender">DNA/RNA</label>
+                        <label class="control-label" for="nucleotideType">DNA/RNA</label>
                         <div class="controls">
                             <select id="nucleotideType" name="nucleotideType"style="height:28px;">
                             <option value="" >.....</option>                 
@@ -483,6 +517,7 @@
   	            		refreshKendoGrid("#input_samplesetitem_grid");
   	            	}
   	            	else {
+  	            		refreshKendoGrid(".samples");
   	            		refreshKendoGrid("#samplesetitem_attribute_grid");
   	            	}
                 }else {

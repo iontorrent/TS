@@ -379,12 +379,13 @@ void *process_sff_pairs(void *ptr)
 	
 	int left_clip = 0, right_clip = 0, left_clip_orig = 0, right_clip_orig = 0, nbases = 0;
     int left_clip_rev = 0, right_clip_rev = 0, nbases_rev = 0;
-    char *name = '\0', *name_rev = '\0';
-    ion_string_t *bases = '\0', *bases_rev = '\0';
-    ion_string_t *quality = '\0', *quality_rev = '\0';
-    uint8_t *flow_index = '\0', *flow_index_rev ='\0';
-    uint16_t *flow = '\0', *flow_rev = '\0';
-    int *flow_index_sum = '\0', *flow_index_rev_sum = '\0';
+    // TODO
+    char *name = (char*)'\0', *name_rev = (char*)'\0';
+    ion_string_t *bases = (ion_string_t *)'\0', *bases_rev = (ion_string_t *)'\0';
+    ion_string_t *quality = (ion_string_t *)'\0', *quality_rev = (ion_string_t *)'\0';
+    uint8_t *flow_index = (uint8_t *)'\0', *flow_index_rev = (uint8_t *)'\0';
+    uint16_t *flow = (uint16_t *)'\0', *flow_rev = (uint16_t *)'\0';
+    int *flow_index_sum = (int *)'\0', *flow_index_rev_sum = (int *)'\0';
 	
 	Alignment *alignment;
 	SmithWaterman *aligner = new SmithWaterman();
@@ -1454,8 +1455,8 @@ int getNextSFFPair( int numReads, bool *fwd_present, bool *rev_present, BamReade
    //sff_read_header *prev_rev_read_header;
    //sff_read_data *prev_fwd_read_data;
    //sff_read_data *prev_rev_read_data;
-   char *name_fwd = '\0';
-   char *name_rev = '\0';
+   char *name_fwd = (char*)'\0';
+   char *name_rev = (char*)'\0';
    int fwd_x = 0;
    int fwd_y = 0;
    int rev_x = 0;
@@ -1920,13 +1921,12 @@ int getNextSFFPair( int numReads, bool *fwd_present, bool *rev_present, BamReade
 }
 
 void output_fastq_entry(FILE *fp, char * name, std::string bases,  int left_trim) {
-  register int j;
   uint8_t quality_char;
   std::string out = bases.substr(left_trim);
   int nbases = out.length();
   if (nbases != 0) {
 	fprintf(fp,"@%s\n%s\n+\n", name, out.c_str());
-	 for (j = 0; j < nbases; j++) {
+	 for (int j = 0; j < nbases; j++) {
 				  quality_char = 66;
                // quality_char = (quality[j] <= 93 ? quality[j] : 93) + 33;
                 fprintf(fp, "%c", (char) quality_char );
@@ -1945,7 +1945,7 @@ construct_fastq_entry(FILE *fp,
 			   uint16_t *flow, uint16_t *flow_rev,
 			   int nflows,
 			   uint8_t *flow_index, uint8_t *flow_index_rev) {
-    register int j;
+    int j;
     uint8_t quality_char;
     uint8_t flow_char;
     if (nbases != 0) {
@@ -3198,7 +3198,7 @@ bool build_strand_bias_map(std::string strand_bias_file, std::tr1::unordered_map
                  std::set<int> myset;
                  myset.clear();
                  myset.insert(flow_index);
-                 (*bias_map).insert (std::make_pair<std::string,std::set<int> >(read_name,myset));
+                 (*bias_map).insert (std::make_pair(read_name,myset));
              }
            }
         }

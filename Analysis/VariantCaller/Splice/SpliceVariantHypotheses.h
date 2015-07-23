@@ -24,7 +24,7 @@ class EnsembleEval;
 bool SpliceVariantHypotheses(const Alignment &current_read, const EnsembleEval &my_ensemble,
                         const LocalReferenceContext &local_context, PersistingThreadObjects &thread_objects,
                         int &splice_start_flow, int &splice_end_flow, vector<string> &my_hypotheses,
-                        bool & changed_alignment, const InputStructures &global_context,
+                        vector<bool> & same_as_null_hypothesis, bool & changed_alignment, const InputStructures &global_context,
                         const ReferenceReader &ref_reader, int chr_idx);
 
 
@@ -43,8 +43,8 @@ void IncrementFlow(const ion::FlowOrder &flow_order, const char &nuc, int &flow)
 void IncrementFlows(const ion::FlowOrder &flow_order, const char &nuc, vector<int> &flows);
 
 int GetSpliceFlows(const Alignment &current_read, const InputStructures &global_context,
-                   vector<string> &my_hypotheses, int splice_start_idx, vector<int> splice_end_idx,
-                   int &splice_start_flow);
+                   vector<string> &my_hypotheses, vector<bool> & same_as_null_hypothesis,
+                   int splice_start_idx, vector<int> splice_end_idx, int &splice_start_flow);
 
 string SpliceDoRealignement (PersistingThreadObjects &thread_objects, const Alignment &current_read, long variant_position,
 		                     bool &changed_alignment, int DEBUG, const ReferenceReader &ref_reader, int chr_idx);

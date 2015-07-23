@@ -60,7 +60,7 @@ int FastQToQual(char c, int qual_offset)
 	return c - qual_offset;
 }
 
-static char *hackkey = "TCAG";
+static const char *hackkey = "TCAG";
 static int hackkeylen = 4;
 
 int main(int argc, char *argv[])
@@ -349,7 +349,7 @@ int main(int argc, char *argv[])
 
 		//	debug print - keypass reads written to the fastq file
 		if (fpq) {
-		  static char *printkey = "All";
+		  static const char *printkey = "All";
 		  if (keyPass) printkey = hackkey;		  
 			fprintf (stdout, "Keypass Reads(%s) = %d\n", printkey, numKeypassedReads);
 			fprintf (stdout, "Total Reads = %d\n", numReads);
